@@ -367,10 +367,13 @@ class PdfDocument:
         if len(segmented_page.textline_cells) > 0:
             return
 
+        self._create_word_cells(segmented_page, _loglevel)
+
         sanitizer = pdf_sanitizer(level=_loglevel)
 
         char_data = []
-        for item in segmented_page.char_cells:
+        # Note: We build the lines from the word level cells.
+        for item in segmented_page.word_cells:
             item_dict = item.model_dump(mode="json", by_alias=True, exclude_none=True)
 
             # TODO changing representation for the C++ parser, need to update on C++ code.
