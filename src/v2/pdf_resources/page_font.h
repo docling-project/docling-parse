@@ -23,8 +23,6 @@ namespace pdflib
 
     nlohmann::json get();
 
-    double get_unit();
-
     std::string get_encoding_name();
     font_encoding_name get_encoding();
 
@@ -63,6 +61,7 @@ namespace pdflib
     void init_base_font();
     void init_font_name();
     void init_font_bbox();
+    void init_font_matrix();
 
     //void init_fontfile3();
     
@@ -112,6 +111,7 @@ namespace pdflib
     std::string base_font;
 
     std::array<double, 4> font_bbox;
+    std::array<double, 6> font_matrix;
 
     double ascent;
     double descent;
@@ -235,19 +235,6 @@ namespace pdflib
   nlohmann::json pdf_resource<PAGE_FONT>::get()
   {
     return json_font;
-  }
-
-  double pdf_resource<PAGE_FONT>::get_unit()
-  {
-    if(subtype==TYPE_3)
-      {
-	double unit = 1.0; // 1000.0	
-	LOG_S(WARNING) << "font-scale of the unit for TYPE_3: " << unit;
-	
-        return unit;
-      }
-
-    return 1.0;
   }
 
   std::string pdf_resource<PAGE_FONT>::get_encoding_name()
@@ -611,6 +598,7 @@ namespace pdflib
 
     init_font_name();
     init_font_bbox();
+    init_font_matrix();
 
     //init_fontfile3();
       
@@ -891,6 +879,37 @@ namespace pdflib
   }
 
 
+  void pdf_resource<PAGE_FONT>::init_font_matrix()
+  {
+    LOG_S(INFO) << __FUNCTION__;// << "\t" << json_font.dump(2);
+
+    std::vector<std::string> keys_0 = {"/FontMatrix"};
+
+    if(utils::json::has(keys_0, json_font))
+      {
+        //assert(subtype==TYPE_3);
+        auto result = utils::json::get(keys_0, json_font);
+
+        for(int d=0; d<6; d++)
+          {
+            font_matrix[d] = result[d].get<double>();
+          }
+      }
+    else
+      {
+        LOG_S(INFO) << "using default font-matrix";
+        font_matrix = {0.001, 0, 0, 0.001, 0, 0};
+      }
+
+    LOG_S(INFO) << " -> font-matrix: ["
+                << font_matrix[0] << ", "
+                << font_matrix[1] << ", "
+                << font_matrix[2] << ", "
+                << font_matrix[3] << ", "
+                << font_matrix[4] << ", "
+                << font_matrix[5] << "]";
+  }
+
 
   /*
   void pdf_resource<PAGE_FONT>::init_fontfile3()
@@ -1166,7 +1185,15 @@ namespace pdflib
         {
           LOG_S(WARNING) << "'xheight' was not explicitely defined ...";
         }
-    }    
+    }
+
+    if (font_matrix[3] != 0.001)
+      {
+        ascent = ascent * font_matrix[3] * 1000.0;
+        descent = descent * font_matrix[3] * 1000.0;
+        capheight = capheight * font_matrix[3] * 1000.0;
+        xheight = xheight * font_matrix[3] * 1000.0;
+      }
   }
 
   void pdf_resource<PAGE_FONT>::init_default_width()
@@ -1305,6 +1332,8 @@ namespace pdflib
 	  }
 	
         numb_to_widths[ind] = values[cnt++];
+        if (font_matrix[0] != 0.001)
+          numb_to_widths[ind] *= font_matrix[0] * 1000.0;
 	//LOG_S(INFO) << "index: " << ind << " -> width: " << numb_to_widths.at(ind);
       }
   }
@@ -1383,6 +1412,8 @@ namespace pdflib
               {
 		//LOG_S(WARNING) << "\t" << id << " -> " << w;
                 numb_to_widths[id] = w;
+                if (font_matrix[0] != 0.001)
+                  numb_to_widths[id] *= font_matrix[0] * 1000.0;
               }
           }
         else if(ws[l].is_array())
@@ -1404,6 +1435,8 @@ namespace pdflib
 		//LOG_S(WARNING) << "\t" << beg+k  << " -> " << w[k];
 
                 numb_to_widths[beg+k] = w[k];
+                if (font_matrix[0] != 0.001)
+                  numb_to_widths[beg+k] *= font_matrix[0] * 1000.0;
               }
           }
         else if(ws[l].is_null())

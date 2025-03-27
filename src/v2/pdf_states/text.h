@@ -262,11 +262,7 @@ namespace pdflib
     font_name = instructions[0].to_utf8_string();
     font_size = instructions[1].to_double();
     
-    if(page_fonts.count(font_name)>0)
-      {
-        font_size *= page_fonts[font_name].get_unit();
-      }
-    else
+    if(page_fonts.count(font_name) == 0)
       {
         LOG_S(ERROR) << "unknown page-font: '" << font_name << "'";
 
