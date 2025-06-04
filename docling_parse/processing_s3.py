@@ -171,7 +171,7 @@ def fetch_files_from_s3(
                 data = response["Body"].read()
 
                 # Generate a hash (e.g., SHA-256)
-                hash_object = hashlib.sha256(data)
+                hash_object = hashlib.sha256(data, usedforsecurity=False)
                 file_hash = hash_object.hexdigest()
 
                 local_file = os.path.join(local_dir, f"{file_hash}.pdf")
@@ -248,7 +248,7 @@ def retrieve_file(s3_client, task):
     task.data = BytesIO(response["Body"].read())  # response["Body"].read()
 
     # Generate a hash (e.g., SHA-256)
-    hash_object = hashlib.sha256(task.data.read())
+    hash_object = hashlib.sha256(task.data.read(), usedforsecurity=False)
     task.file_hash = str(hash_object.hexdigest())
 
     return task

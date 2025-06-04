@@ -455,7 +455,7 @@ class DoclingPdfParser:
             success = self._load_document(key=key, filename=str(path_or_stream))
 
         elif isinstance(path_or_stream, BytesIO):
-            hasher = hashlib.md5()
+            hasher = hashlib.md5(usedforsecurity=False)
 
             while chunk := path_or_stream.read(8192):
                 hasher.update(chunk)

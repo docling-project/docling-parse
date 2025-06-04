@@ -73,7 +73,7 @@ def fetch_files_from_disk(directory, recursive, task_queue):
 
         file_name = str(Path(filename).resolve())
 
-        hash_object = hashlib.sha256(filename.encode())
+        hash_object = hashlib.sha256(filename.encode(), usedforsecurity=False)
         file_hash = hash_object.hexdigest()
 
         # Create a FileTask object
