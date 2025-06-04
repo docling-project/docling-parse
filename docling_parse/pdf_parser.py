@@ -486,7 +486,7 @@ class DoclingPdfParser:
         Returns:
             bool: True if the document was successfully loaded, False otherwise.)")
         """
-        return self.parser.load_document(key=key, filename=filename)
+        return self.parser.load_document(key=key, filename=filename.encode("utf8"))
 
     def _load_document_from_bytesio(self, key: str, data: BytesIO) -> bool:
         """Load a document by key from a BytesIO-like object.

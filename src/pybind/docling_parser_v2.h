@@ -3,6 +3,11 @@
 #ifndef PYBIND_PDF_PARSER_V2_H
 #define PYBIND_PDF_PARSER_V2_H
 
+#ifdef _WIN32
+#include <locale>
+#include <codecvt>
+#endif
+
 #include <pybind/docling_resources.h>
 
 #include <v2.h>
@@ -178,7 +183,17 @@ namespace docling
 
   bool docling_parser_v2::load_document(std::string key, std::string filename)
   {
-    if (std::filesystem::exists(filename))
+#ifdef _WIN32
+    std::cout << "Using WIN32 fix!" << std::endl;
+    // Convert UTF-8 string to UTF-16 wstring
+    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+    std::wstring wide_filename = converter.from_bytes(filename);
+    std::filesystem::path path_filename(wide_filename);
+#else
+    std::filesystem::path path_filename(filename);
+#endif
+
+    if (std::filesystem::exists(path_filename))
       {
         //key2doc[key] = std::filesystem::path(filename);
 	key2doc[key] = std::make_shared<decoder_type>();
