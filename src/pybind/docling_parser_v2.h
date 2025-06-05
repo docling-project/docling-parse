@@ -184,7 +184,6 @@ namespace docling
   bool docling_parser_v2::load_document(std::string key, std::string filename)
   {
 #ifdef _WIN32
-    std::cout << "Using WIN32 fix!" << std::endl;
     // Convert UTF-8 string to UTF-16 wstring
     std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
     std::wstring wide_filename = converter.from_bytes(filename);
