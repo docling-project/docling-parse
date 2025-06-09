@@ -246,6 +246,29 @@ namespace pdflib
         crop_bbox = media_bbox;
       }
 
+    if(crop_bbox[0]<media_bbox[0] or
+       crop_bbox[2]>media_bbox[2] or
+       crop_bbox[1]<media_bbox[1] or
+       crop_bbox[3]>media_bbox[3])
+      {
+        LOG_S(ERROR) << "The crop-box is larger than the media-box, \n"
+		     << "crop-box: {"
+		     << crop_bbox[0] << ", "
+		     << crop_bbox[1] << ", "
+		     << crop_bbox[2] << ", "
+		     << crop_bbox[3] << "}\n"
+		     << "media-box: {"
+		     << media_bbox[0] << ", "
+		     << media_bbox[1] << ", "
+		     << media_bbox[2] << ", "
+		     << media_bbox[3] << "}\n";
+
+	crop_bbox[0] = std::max(crop_bbox[0], media_bbox[0]);
+	crop_bbox[1] = std::max(crop_bbox[1], media_bbox[1]);
+	crop_bbox[2] = std::min(crop_bbox[2], media_bbox[2]);
+	crop_bbox[3] = std::min(crop_bbox[3], media_bbox[3]);	
+      }
+    
     if(json_resources.count("/BleedBox"))
       {        
         for(int d=0; d<4; d++)
