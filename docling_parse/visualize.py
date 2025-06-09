@@ -145,8 +145,10 @@ def visualise_py(
         pdf_page: SegmentedPdfPage = pdf_doc.get_page(page_no=page_no)
 
         if os.path.exists(str(output_dir)):
-            pdf_page.save_as_json(f"{output_dir}/{os.path.basename(pdf_path)}.page_{page_no}.json")
-        
+            pdf_page.save_as_json(
+                Path(f"{output_dir}/{os.path.basename(pdf_path)}.page_{page_no}.json")
+            )
+
         if category in ["all", "char"]:
 
             img = pdf_page.render_as_image(
