@@ -318,11 +318,13 @@ class PdfDocument:
         self, page: dict, create_words: bool, create_textlines: bool
     ) -> SegmentedPdfPage:
 
+        char_cells = self._to_cells(page["cells"])
         segmented_page = SegmentedPdfPage(
             dimension=self._to_page_geometry(page["dimension"]),
-            char_cells=self._to_cells(page["cells"]),
+            char_cells=char_cells,
             word_cells=[],
             textline_cells=[],
+            has_chars=len(char_cells) > 0,
             bitmap_resources=self._to_bitmap_resources(page["images"]),
             lines=self._to_lines(page["lines"]),
         )
@@ -360,6 +362,8 @@ class PdfDocument:
             cell = PdfTextCell.model_validate(item)
             segmented_page.word_cells.append(cell)
 
+        segmented_page.has_words = len(segmented_page.word_cells) > 0
+
     def _create_textline_cells(
         self, segmented_page: SegmentedPdfPage, _loglevel: str = "fatal"
     ):
@@ -389,6 +393,8 @@ class PdfDocument:
         for item in data:
             cell = PdfTextCell.model_validate(item)
             segmented_page.textline_cells.append(cell)
+
+        segmented_page.has_lines = len(segmented_page.textline_cells) > 0
 
     def _to_parsed_document(
         self,
