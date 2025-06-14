@@ -503,6 +503,7 @@ namespace pdflib
 	  }
 	else
 	  {
+	    /*
 	    std::string notdef="GLYPH<"+std::to_string(c)+">";
 	    
 	    unknown_numbs[c] += 1;
@@ -513,6 +514,14 @@ namespace pdflib
 			 << " (corresponding font: " << fontname << ")";
 	    
 	    return notdef;
+	    */
+
+	    LOG_S(WARNING) << " Symbol not found in special font: " << c
+			   << "; Encoding: "  << to_string(encoding)
+			   << "; font-name: " << font_name
+			   << " (corresponding font: " << fontname << ")";
+
+	    return get_character_from_encoding(c);	    
 	  }
       }
     else
