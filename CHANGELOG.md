@@ -1,3 +1,10 @@
+## [v4.0.5](https://github.com/docling-project/docling-parse/releases/tag/v4.0.5) - 2025-06-13
+
+### Fix
+
+* GLYPH issue with encodings ([#128](https://github.com/docling-project/docling-parse/issues/128)) ([`4393fe8`](https://github.com/docling-project/docling-parse/commit/4393fe8d843b6cbb7ac2aa881ff3687ca8c3a4d5))
+* Set flags for SegmentedPage correctly ([#127](https://github.com/docling-project/docling-parse/issues/127)) ([`0197102`](https://github.com/docling-project/docling-parse/commit/01971026d93bb09f1ea038e3506aaf80c217fca1))
+
 ## [v4.0.4](https://github.com/docling-project/docling-parse/releases/tag/v4.0.4) - 2025-06-10
 
 ### Fix
