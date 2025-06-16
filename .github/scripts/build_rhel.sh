@@ -3,9 +3,6 @@
 set -e  # trigger failure on error - do not remove!
 set -x  # display command on output
 
-# Build the Python package with uv
-uv build
-
 sudo -E XDG_RUNTIME_DIR= podman build --progress=plain \
              --build-arg USE_SYSTEM_DEPS="$USE_SYSTEM_DEPS" \
              -f - . <<EOF
@@ -31,7 +28,6 @@ sudo -E XDG_RUNTIME_DIR= podman build --progress=plain \
 
     COPY ./ /src
 
-    RUN python3.11 build.py
     RUN uv build
 
     ENV USE_SYSTEM_DEPS=on
