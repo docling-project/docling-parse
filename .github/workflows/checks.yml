@@ -19,7 +19,6 @@ jobs:
       - name: Sync and install with uv
         run: |
           uv sync --frozen --all-extras
-          uv pip install -r requirements-dev.txt
           ls -l
           ls -l docling_parse
       - name: Run styling check
