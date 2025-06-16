@@ -4,16 +4,13 @@ version = "4.0.4"
 description = "Simple package to extract text with coordinates from programmatic PDFs"
 authors = [
     {name = "Peter Staar", email = "taa@zurich.ibm.com"},
-]
-maintainers = [
-    {name = "Peter Staar", email = "taa@zurich.ibm.com"},
     {name = "Christoph Auer", email = "cau@zurich.ibm.com"},
     {name = "Michele Dolfi", email = "dol@zurich.ibm.com"},
     {name = "Panos Vagenas", email = "pva@zurich.ibm.com"},
     {name = "Maxim Lysak", email = "mly@zurich.ibm.com"},
 ]
-license = {text = "MIT"}
 readme = "README.md"
+license = {text = "MIT"}
 requires-python = ">=3.9"
 keywords = ["docling", "pdf", "parser"]
 classifiers = [
@@ -35,34 +32,12 @@ dependencies = [
     "pywin32>=305; sys_platform == 'win32'",
 ]
 
-[project.optional-dependencies]
-dev = [
-    "pytest>=7.4.2",
-    "black[jupyter]>=24.4.2",
-    "python-semantic-release>=7.32.2",
-    "pre-commit>=3.7.1",
-    "isort>=5.10.1",
-    "mypy>=1.13.0",
-    "tqdm>=4.67.0",
-    "boto>=2.49.0",
-    "boto3>=1.35.67",
-    "autoflake>=2.3.1"
-]
-build = [
-    "cibuildwheel>=2.19.2",
-    "wheel>=0.43.0",
-    "delocate>=0.11.0"
-]
-test = [
-    "pytest>=7.4.2"
-]
-
 [project.urls]
-Repository = "https://github.com/docling-project/docling-parse"
 Homepage = "https://github.com/docling-project/docling-parse"
+Repository = "https://github.com/docling-project/docling-parse"
 
 [build-system]
-requires = ["setuptools>=61", "pybind11>=2.13.1"]
+requires = ["setuptools>=65", "wheel", "pybind11>=2.13.1"]
 build-backend = "setuptools.build_meta"
 
 [tool.uv]
@@ -70,7 +45,17 @@ package = true
 default-groups = "all"
 
 [tool.setuptools.packages.find]
-include = ["docling*"]
+include = ["docling_parse*"]
+
+[tool.setuptools.package-data]
+"docling_parse" = [
+    "*.so", "*.pyd", "*.dll",
+    "pdf_resources/*",
+    "pdf_resources_v2/*"
+]
+
+[tool.setuptools.exclude-package-data]
+"docling_parse" = ["*.pyc", "__pycache__"]
 
 [tool.black]
 line-length = 88
@@ -101,7 +86,11 @@ show_error_codes = true
 python_version = "3.9"
 
 [[tool.mypy.overrides]]
-module = ["tabulate.*", "botocore.*", "boto3.*"]
+module = [
+    "tabulate.*",
+    "botocore.*",
+    "boto3.*"
+]
 ignore_missing_imports = true
 
 [tool.semantic_release]

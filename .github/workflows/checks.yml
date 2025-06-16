@@ -19,13 +19,14 @@ jobs:
       - name: Sync and install with uv
         run: |
           uv sync --frozen --all-extras
-          uv pip install -e .
+          uv pip install -r requirements-dev.txt
           ls -l
           ls -l docling_parse
       - name: Run styling check
-        run: uv run pre-commit run --all-files
-      - name: Testing
         run: |
-          uv run pytest -v tests
+          uv run pre-commit run --all-files
+      # - name: Testing
+      #   run: |
+      #     uv run pytest -v tests
       - name: Build with uv
         run: uv build

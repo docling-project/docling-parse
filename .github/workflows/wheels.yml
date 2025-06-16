@@ -120,7 +120,7 @@ jobs:
           uv run python --version
           uv run python --version | grep ${{ matrix.python-version }} 
           cat ./pyproject.toml
-          uv pip install .[build]
+          uv pip install -r requirements-build.txt
           python -m cibuildwheel --output-dir ./wheelhouse
           echo "step 1"
           ls -l wheelhouse
@@ -171,7 +171,7 @@ jobs:
           uv run python --version
           uv run python --version | grep ${{ matrix.python-version }} 
           cat ./pyproject.toml
-          uv pip install .[build]
+          uv pip install -r requirements-build.txt
           python -m cibuildwheel --output-dir ./wheelhouse
           echo "step 1"
           ls -l wheelhouse
@@ -217,7 +217,7 @@ jobs:
           uv run python --version
           uv run python --version | grep ${{ matrix.python-version }} 
           cat ./pyproject.toml
-          uv pip install .[build]
+          uv pip install -r requirements-build.txt
           python -m cibuildwheel --output-dir ./wheelhouse
           ls -l ./wheelhouse
           for file in ./wheelhouse/*.whl; do
