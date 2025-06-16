@@ -119,9 +119,9 @@ jobs:
           echo "Building platform_id: ${{ matrix.os.platform_id }}"
           uv run python --version
           uv run python --version | grep ${{ matrix.python-version }} 
-          uv pip install --system build
           cat ./pyproject.toml
-          uv run python -m cibuildwheel --output-dir wheelhouse
+          uv pip install .[build]
+          python -m cibuildwheel --output-dir ./wheelhouse
           echo "step 1"
           ls -l wheelhouse
           uv run wheel tags --remove --platform-tag macosx_${{ matrix.os.min_macos_version }}_0_x86_64 ./wheelhouse/*.whl
@@ -170,9 +170,9 @@ jobs:
           echo "Building platform_id: ${{ matrix.os.platform_id }}"
           uv run python --version
           uv run python --version | grep ${{ matrix.python-version }} 
-          uv pip install --system build
           cat ./pyproject.toml
-          uv run python -m cibuildwheel --output-dir wheelhouse
+          uv pip install .[build]
+          python -m cibuildwheel --output-dir ./wheelhouse
           echo "step 1"
           ls -l wheelhouse
           uv run wheel tags --remove --platform-tag macosx_${{ matrix.os.min_macos_version }}_0_arm64 ./wheelhouse/*.whl
@@ -216,9 +216,9 @@ jobs:
           echo "Building platform_id: ${{ matrix.os.platform_id }}"
           uv run python --version
           uv run python --version | grep ${{ matrix.python-version }} 
-          uv pip install --system build
           cat ./pyproject.toml
-          uv run python -m cibuildwheel --output-dir ./wheelhouse
+          uv pip install .[build]
+          python -m cibuildwheel --output-dir ./wheelhouse
           ls -l ./wheelhouse
           for file in ./wheelhouse/*.whl; do
             echo "Inspecting $file"

@@ -16,9 +16,10 @@ jobs:
         uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install with uv
+      - name: Sync and install with uv
         run: |
           uv sync --frozen --all-extras
+          uv pip install -e .
           ls -l
           ls -l docling_parse
       - name: Run styling check
