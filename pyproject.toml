@@ -46,7 +46,7 @@ default-groups = "all"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["docling_parse*"]
+include = ["docling_parse"]
 
 [tool.setuptools.package-data]
 "docling_parse" = [

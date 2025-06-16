@@ -41,9 +41,7 @@ sudo -E XDG_RUNTIME_DIR= podman build --progress=plain \
             /src/docling_parse*.tar.gz \
         && pip3.11 install /dist/docling_parse*.whl \
         && python3.11 -c 'from docling_parse.pdf_parsers import pdf_parser_v1, pdf_parser_v2'
-    
-    RUN uv pip install -e .
-    
+
     COPY ./tests /src/tests
 
     RUN pip3.11 install pytest \
