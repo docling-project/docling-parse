@@ -22,7 +22,7 @@ sudo -E XDG_RUNTIME_DIR= podman build --progress=plain \
 
     RUN dnf install -y --nodocs \
             autoconf automake binutils cmake gcc gcc-c++ git glibc-devel glibc-headers glibc-static kernel-devel libtool libstdc++-devel make ninja-build pkgconfig zlib-devel \
-            python3.13 python3.13-pip python3.13-devel \
+            python3.11 python3.11-pip python3.11-devel \
             libjpeg-turbo-devel libpng-devel qpdf-devel json-devel utf8cpp-devel loguru-devel cxxopts-devel \
         && dnf clean all
 
@@ -35,15 +35,15 @@ sudo -E XDG_RUNTIME_DIR= podman build --progress=plain \
     # pre-install build requirements + wheel for "--no-build-isolation"
     # build docling-parse wheel in an isolated network namespace (unshare -rn)
     # install the wheel and its dependencies
-    RUN pip3.13 install uv pybind11 wheel \
-        && unshare -rn pip3.13 wheel \
+    RUN pip3.11 install uv pybind11 wheel \
+        && unshare -rn pip3.11 wheel \
             --no-deps --no-build-isolation -w /dist/ \
             /src/docling_parse*.tar.gz \
-        && pip3.13 install /dist/docling_parse*.whl \
-        && python3.13 -c 'from docling_parse.pdf_parsers import pdf_parser_v1, pdf_parser_v2'
+        && pip3.11 install /dist/docling_parse*.whl \
+        && python3.11 -c 'from docling_parse.pdf_parsers import pdf_parser_v1, pdf_parser_v2'
     
     COPY ./tests /src/tests
 
-    RUN pip3.13 install pytest \
+    RUN pip3.11 install pytest \
         && pytest
 EOF
