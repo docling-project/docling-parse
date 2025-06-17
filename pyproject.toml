@@ -2,7 +2,6 @@
 name = "docling-parse"
 version = "4.0.4"
 description = "Simple package to extract text with coordinates from programmatic PDFs"
-license = "MIT"
 keywords = ["docling", "pdf", "parser"]
 classifiers = [
     "Operating System :: MacOS :: MacOS X",
@@ -30,6 +29,9 @@ dependencies = [
     "docling-core>=2.23.0",
     "pywin32>=305; sys_platform == 'win32'",
 ]
+
+[project.license]
+text = "MIT"
 
 [project.urls]
 Homepage = "https://github.com/docling-project/docling-parse"
