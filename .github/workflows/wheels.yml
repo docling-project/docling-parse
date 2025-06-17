@@ -120,8 +120,6 @@ jobs:
           uv run python --version
           uv run python --version | grep ${{ matrix.python-version }} 
           cat ./pyproject.toml
-          rm -rf ./build
-          uv pip install --group build .
           python -m cibuildwheel --output-dir ./wheelhouse
           echo "step 1"
           ls -l wheelhouse
@@ -172,8 +170,6 @@ jobs:
           uv run python --version
           uv run python --version | grep ${{ matrix.python-version }} 
           cat ./pyproject.toml
-          rm -rf ./build
-          uv pip install --group build .
           python -m cibuildwheel --output-dir ./wheelhouse
           echo "step 1"
           ls -l wheelhouse
@@ -219,8 +215,6 @@ jobs:
           uv run python --version
           uv run python --version | grep ${{ matrix.python-version }} 
           cat ./pyproject.toml
-          rm -rf ./build
-          uv pip install --group build .
           python -m cibuildwheel --output-dir ./wheelhouse
           ls -l ./wheelhouse
           for file in ./wheelhouse/*.whl; do
@@ -280,10 +274,10 @@ jobs:
           ASM_NASM: "C:/nasm/nasm.exe"
         shell: pwsh
         run: |
-          Remove-Item -Recurse -Force "C:\Strawberry\"
+          if (Test-Path "C:\Strawberry\") {
+              Remove-Item -Recurse -Force "C:\Strawberry\"
+          }
           $env:CMAKE_ARGS = "-DZLIB_LIBRARY=C:/windows-libs/external-libs/lib-mingw64/libz.a -DZLIB_INCLUDE_DIR=C:/windows-libs/external-libs/include -DJPEG_LIBRARY=C:/windows-libs/external-libs/lib-mingw64/libjpeg.a -DJPEG_INCLUDE_DIR=C:/windows-libs/external-libs/include"
-          Remove-Item -Recurse -Force ".\build"
-          uv pip install --group build .
           uv run python -m cibuildwheel --output-dir .\wheelhouse
           Get-ChildItem -Path .\wheelhouse -Filter *.whl | Format-List
           Get-ChildItem -Path .\wheelhouse -Filter *.whl | ForEach-Object {
