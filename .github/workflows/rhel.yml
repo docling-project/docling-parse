@@ -1,15 +1,33 @@
 on:
   workflow_call:
 
+# jobs:
+#   run-checks:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@v4
+#       - name: Install uv and python
+#         uses: astral-sh/setup-uv@v5
+#       - name: Install podman
+#         run: sudo apt-get update && sudo apt-get install -y podman
+#       - name: Run build in docker
+#         run: ./.github/scripts/build_rhel.sh
+#         shell: bash
+
 jobs:
   run-checks:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install uv and python
-        uses: astral-sh/setup-uv@v5
-      - name: Install podman
-        run: sudo apt-get update && sudo apt-get install -y podman
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install podman and uv
+        run: sudo apt-get update && sudo apt-get install -y podman uv
+
       - name: Run build in docker
         run: ./.github/scripts/build_rhel.sh
         shell: bash

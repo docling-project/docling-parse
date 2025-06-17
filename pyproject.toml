@@ -14,6 +14,7 @@ classifiers = [
     "Programming Language :: Python :: 3"
 ]
 readme = "README.md"
+license = "MIT"
 authors = [
     {name = "Peter Staar", email = "taa@zurich.ibm.com"},
     {name = "Christoph Auer", email = "cau@zurich.ibm.com"},
@@ -29,10 +30,6 @@ dependencies = [
     "docling-core>=2.23.0",
     "pywin32>=305; sys_platform == 'win32'",
 ]
-
-[project.license]
-text = "MIT"
-
 [project.urls]
 Homepage = "https://github.com/docling-project/docling-parse"
 Repository = "https://github.com/docling-project/docling-parse"
