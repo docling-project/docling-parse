@@ -16,11 +16,11 @@ on:
 
 jobs:
   run-checks:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - name: Install uv and set python 3.11
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v6
         with:
           python-version: '3.11'
       - name: Install podman and uv
