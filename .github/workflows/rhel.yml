@@ -19,11 +19,11 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: Install uv and set python 3.11
+      - name: Setup uv with python 3.11
         uses: astral-sh/setup-uv@v5
         with:
-          python-version: '3.11'
-      - name: Install podman and uv
+          python-version: 3.11
+      - name: Install podman
         run: sudo apt-get update && sudo apt-get install -y podman
       - name: Run build in docker
         run: ./.github/scripts/build_rhel.sh
