@@ -1,0 +1,5 @@
+include build.py
+include CMakeLists.txt
+recursive-include app *
+recursive-include cmake *
+recursive-include src *

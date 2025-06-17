@@ -1,4 +1,5 @@
-cmake_minimum_required(VERSION 3.12..3.26)
+# cmake_minimum_required(VERSION 3.12..3.26)
+cmake_minimum_required(VERSION 3.12)
 
 project(docling_parse VERSION 1.0.0 LANGUAGES CXX C)
 #set(CMAKE_VERBOSE_MAKEFILE off)

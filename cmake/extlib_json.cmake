@@ -16,8 +16,8 @@ else()
     include(CMakeParseArguments)
 
     set(JSON_URL https://github.com/nlohmann/json.git)
-    set(JSON_TAG v3.11.3)
-
+    # set(JSON_TAG v3.11.3)
+    set(JSON_TAG v3.12.0)
     ExternalProject_Add(extlib_json
         
         PREFIX extlib_json

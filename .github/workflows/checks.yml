@@ -24,8 +24,8 @@ jobs:
       - name: Run styling check
         run: |
           uv run pre-commit run --all-files
-      # - name: Testing
-      #   run: |
-      #     uv run pytest -v tests
+      - name: Testing
+        run: |
+          uv run pytest -v tests
       - name: Build with uv
         run: uv build
