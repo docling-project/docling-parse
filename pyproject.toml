@@ -14,7 +14,9 @@ classifiers = [
     "Programming Language :: Python :: 3"
 ]
 readme = "README.md"
-license = "MIT"
+
+license = { text = "MIT" }
+
 authors = [
     {name = "Peter Staar", email = "taa@zurich.ibm.com"},
     {name = "Christoph Auer", email = "cau@zurich.ibm.com"},
