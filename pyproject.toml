@@ -2,6 +2,7 @@
 name = "docling-parse"
 version = "4.0.4"
 description = "Simple package to extract text with coordinates from programmatic PDFs"
+license = "MIT"
 keywords = ["docling", "pdf", "parser"]
 classifiers = [
     "Operating System :: MacOS :: MacOS X",
@@ -14,9 +15,6 @@ classifiers = [
     "Programming Language :: Python :: 3"
 ]
 readme = "README.md"
-
-license = { file = "LICENSE" }
-
 authors = [
     {name = "Peter Staar", email = "taa@zurich.ibm.com"},
     {name = "Christoph Auer", email = "cau@zurich.ibm.com"},
