@@ -1555,10 +1555,12 @@ namespace pdflib
     if(cmap_initialized) // we found a `ToUnicode` before. No need to go deeper! 
       {
 	LOG_S(WARNING) << "We found a `ToUnicode` before. No need to go deeper!";
-	return;
+	// return;
       }
-    else if(subtype==TYPE_0 and desc_font!=NULL and 
-	    cids.has(encoding_name) )
+    //else
+
+    if(subtype==TYPE_0 and desc_font!=NULL and 
+       cids.has(encoding_name) )
       {
 	try
 	  {
