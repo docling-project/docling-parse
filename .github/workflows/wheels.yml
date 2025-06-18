@@ -74,7 +74,6 @@ jobs:
         id: py
         with:
           python-version: ${{ matrix.python-version }}
-          update-environment: false
 
       - name: Set up custom PATH and set py version to cpXYZ [windows]
         if: ${{matrix.os.platform_id == 'win_amd64'}}

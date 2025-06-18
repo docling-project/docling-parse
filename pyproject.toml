@@ -15,7 +15,7 @@ classifiers = [
 ]
 readme = "README.md"
 
-license = { text = "MIT" }
+license = { file = "LICENSE" }
 
 authors = [
     {name = "Peter Staar", email = "taa@zurich.ibm.com"},
@@ -76,6 +76,7 @@ default-groups = "all"
 include-package-data = true
 
 [tool.setuptools.packages.find]
+where = [".", "docling_parse*"]
 include = ["docling_parse*"]
 
 [tool.setuptools.package-data]
