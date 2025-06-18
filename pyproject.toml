@@ -36,8 +36,8 @@ Repository = "https://github.com/docling-project/docling-parse"
 
 [build-system]
 requires = [
-    "setuptools>=65",
-    "pybind11>=2.13.1",
+    "setuptools>=77.0.3",
+    "pybind11>=2.13.6",
     "cibuildwheel>=2.19.2,<3.0.0",
     "wheel>=0.43.0,<1.0.0",
     "delocate>=0.11.0,<1.0.0",
@@ -47,8 +47,8 @@ build-backend = "setuptools.build_meta"
 
 [dependency-groups]
 build = [
-    "setuptools>=65",
-    "pybind11>=2.13.1",
+    "setuptools>=77.0.3",
+    "pybind11>=2.13.6",
     "cibuildwheel>=2.19.2,<3.0.0",
     "wheel>=0.43.0,<1.0.0",
     "delocate>=0.11.0,<1.0.0",
