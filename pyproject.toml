@@ -1,6 +1,6 @@
 [project]
 name = "docling-parse"
-version = "4.0.4"
+version = "4.0.5"
 description = "Simple package to extract text with coordinates from programmatic PDFs"
 license = "MIT"
 keywords = ["docling", "pdf", "parser"]
@@ -27,7 +27,7 @@ dependencies = [
     "tabulate>=0.9.0,<1.0.0",
     "pillow>=10.0.0,<12.0.0",
     "pydantic>=2.0.0",
-    "docling-core>=2.23.0",
+    "docling-core>=2.29.0",
     "pywin32>=305; sys_platform == 'win32'",
 ]
 [project.urls]

@@ -559,7 +559,7 @@ namespace pdflib
             LOG_S(ERROR) << "Symbol not found: " << int(c)
                          << "; Encoding: "  << to_string(encoding)
                          << "; font-name: " << font_name;
-
+	    
             return notdef;
           }
       }
