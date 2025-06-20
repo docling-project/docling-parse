@@ -23274,11 +23274,11 @@
       },
       "timings": {
         "decode_annots": 0.0,
-        "decode_contents": 0.005003,
+        "decode_contents": 0.004962,
         "decode_dimensions": 1e-06,
-        "decode_page": 0.008624,
-        "decode_resources": 0.000641,
-        "sanitise_contents": 0.000102
+        "decode_page": 0.008361,
+        "decode_resources": 0.000639,
+        "sanitise_contents": 9.6e-05
       }
     },
     {
@@ -34527,11 +34527,11 @@
       },
       "timings": {
         "decode_annots": 0.0,
-        "decode_contents": 0.011512,
+        "decode_contents": 0.011385,
         "decode_dimensions": 0.0,
-        "decode_page": 0.030073,
-        "decode_resources": 0.001045,
-        "sanitise_contents": 0.00026
+        "decode_page": 0.028855,
+        "decode_resources": 0.001043,
+        "sanitise_contents": 0.000269
       }
     },
     {
@@ -112221,25 +112221,25 @@
       },
       "timings": {
         "decode_annots": 0.0,
-        "decode_contents": 0.008337,
+        "decode_contents": 0.007942,
         "decode_dimensions": 0.0,
-        "decode_page": 0.02557,
-        "decode_resources": 0.000787,
-        "sanitise_contents": 0.000991
+        "decode_page": 0.024228,
+        "decode_resources": 0.00076,
+        "sanitise_contents": 0.000975
       }
     }
   ],
   "timings": {
     "decode_annots": 0.0,
-    "decode_contents": 0.024852,
+    "decode_contents": 0.024288999999999998,
     "decode_dimensions": 1e-06,
-    "decode_document": 0.066054,
-    "decode_page": 0.06426699999999999,
-    "decode_resources": 0.002473,
-    "decoding page 0": 0.008764,
-    "decoding page 1": 0.030224,
-    "decoding page 2": 0.026771,
-    "process_document_from_bytesio": 0.002311,
-    "sanitise_contents": 0.0013529999999999998
+    "decode_document": 0.063199,
+    "decode_page": 0.061444,
+    "decode_resources": 0.002442,
+    "decoding page 0": 0.008491,
+    "decoding page 1": 0.028995,
+    "decoding page 2": 0.025416,
+    "process_document_from_bytesio": 0.002493,
+    "sanitise_contents": 0.00134
   }
 }
