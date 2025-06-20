@@ -387,12 +387,12 @@ namespace pdflib
             }
           else
             {
-              LOG_S(WARNING) << "could not decode character with value=" << c
+              LOG_S(ERROR) << "could not decode character with value=" << c
 			     << " for encoding=" << to_string(encoding)
 			     << ", fontname=" << font_name
 			     << " and subtype=" << subtype;
 	      
-	      result = "glyph<c="+std::to_string(c)+",font="+font_name+">";
+	      result = "GLYPH<c="+std::to_string(c)+",font="+font_name+">";
             }
 
           return result;
@@ -429,11 +429,11 @@ namespace pdflib
             }
 	  else
 	    {
-	      LOG_S(WARNING) << "could not decode character with value=" << c
+	      LOG_S(ERROR) << "could not decode character with value=" << c
 			     << " for encoding=" << to_string(encoding)
 			     << ", fontname=" << font_name
 			     << " and subtype=" << subtype;
-	      return "glyph<c="+std::to_string(c)+",font="+font_name+">";
+	      return "GLYPH<c="+std::to_string(c)+",font="+font_name+">";
 	    }
 	}
 	break;
@@ -445,7 +445,7 @@ namespace pdflib
                        << ", fontname=" << font_name
                        << " and subtype=" << subtype;
 
-          return std::string("glyph<UNKNOWN>");
+          return std::string("GLYPH<UNKNOWN>");
         }
       }
   }
