@@ -337,8 +337,9 @@ class PdfDocument:
         return segmented_page
 
     def _create_word_cells(
-        self, segmented_page: SegmentedPdfPage, #_loglevel: str = "fatal"
-        _loglevel: str = "info"
+        self,
+        segmented_page: SegmentedPdfPage,  # _loglevel: str = "fatal"
+        _loglevel: str = "info",
     ):
 
         if len(segmented_page.word_cells) > 0:
@@ -366,8 +367,9 @@ class PdfDocument:
         segmented_page.has_words = len(segmented_page.word_cells) > 0
 
     def _create_textline_cells(
-        self, segmented_page: SegmentedPdfPage, # _loglevel: str = "fatal"
-        _loglevel: str = "info"
+        self,
+        segmented_page: SegmentedPdfPage,  # _loglevel: str = "fatal"
+        _loglevel: str = "info",
     ):
 
         if len(segmented_page.textline_cells) > 0:
