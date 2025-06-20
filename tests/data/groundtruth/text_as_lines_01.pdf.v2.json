@@ -55667,11 +55667,11 @@
       },
       "timings": {
         "decode_annots": 0.0,
-        "decode_contents": 0.007822,
+        "decode_contents": 0.008328,
         "decode_dimensions": 0.0,
-        "decode_page": 0.020061,
-        "decode_resources": 0.001477,
-        "sanitise_contents": 0.001103
+        "decode_page": 0.020874,
+        "decode_resources": 0.001504,
+        "sanitise_contents": 0.00078
       }
     },
     {
@@ -404501,11 +404501,11 @@
       },
       "timings": {
         "decode_annots": 0.0,
-        "decode_contents": 0.047995,
+        "decode_contents": 0.053739,
         "decode_dimensions": 0.0,
-        "decode_page": 0.059171,
-        "decode_resources": 0.001495,
-        "sanitise_contents": 0.000453
+        "decode_page": 0.065807,
+        "decode_resources": 0.001603,
+        "sanitise_contents": 0.000477
       }
     },
     {
@@ -679173,25 +679173,25 @@
       },
       "timings": {
         "decode_annots": 0.0,
-        "decode_contents": 0.036813,
+        "decode_contents": 0.040885,
         "decode_dimensions": 1e-06,
-        "decode_page": 0.047799,
-        "decode_resources": 0.000987,
-        "sanitise_contents": 0.000806
+        "decode_page": 0.052793,
+        "decode_resources": 0.001037,
+        "sanitise_contents": 0.000659
       }
     }
   ],
   "timings": {
     "decode_annots": 0.0,
-    "decode_contents": 0.09263,
+    "decode_contents": 0.102952,
     "decode_dimensions": 1e-06,
-    "decode_document": 0.13416,
-    "decode_page": 0.127031,
-    "decode_resources": 0.003959,
-    "decoding page 0": 0.020868,
-    "decoding page 1": 0.061868,
-    "decoding page 2": 0.050302,
-    "process_document_from_bytesio": 2.5e-05,
-    "sanitise_contents": 0.002362
+    "decode_document": 0.146936,
+    "decode_page": 0.13947400000000001,
+    "decode_resources": 0.004144,
+    "decoding page 0": 0.021738,
+    "decoding page 1": 0.068575,
+    "decoding page 2": 0.055293,
+    "process_document_from_bytesio": 3.4e-05,
+    "sanitise_contents": 0.0019159999999999997
   }
 }

@@ -196,7 +196,11 @@ namespace pdflib
 		
 		cells[j].active = false;
 		LOG_S(INFO) << " -> merging cell-" << i << " with " << j << " '" << cells[j].text << "'"<< ": " << cells[i].text;
-	      }		
+	      }
+	    else
+	      {
+		break;
+	      }
 	  }
       }
 
