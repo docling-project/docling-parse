@@ -41593,12 +41593,12 @@
         ]
       },
       "timings": {
-        "decode_annots": 4.1e-05,
-        "decode_contents": 0.005492,
+        "decode_annots": 3.7e-05,
+        "decode_contents": 0.00512,
         "decode_dimensions": 1e-06,
-        "decode_page": 0.022001,
-        "decode_resources": 0.000364,
-        "sanitise_contents": 0.015139
+        "decode_page": 0.015286,
+        "decode_resources": 0.000433,
+        "sanitise_contents": 0.002257
       }
     },
     {
@@ -68415,12 +68415,12 @@
         ]
       },
       "timings": {
-        "decode_annots": 2.1e-05,
-        "decode_contents": 0.00364,
+        "decode_annots": 1.9e-05,
+        "decode_contents": 0.003367,
         "decode_dimensions": 0.0,
-        "decode_page": 0.011987,
-        "decode_resources": 0.000336,
-        "sanitise_contents": 0.007292
+        "decode_page": 0.008305,
+        "decode_resources": 0.000374,
+        "sanitise_contents": 0.001112
       }
     },
     {
@@ -102180,12 +102180,12 @@
         ]
       },
       "timings": {
-        "decode_annots": 0.000201,
-        "decode_contents": 0.005492,
+        "decode_annots": 0.000141,
+        "decode_contents": 0.004972,
         "decode_dimensions": 0.0,
-        "decode_page": 0.016148,
-        "decode_resources": 0.000326,
-        "sanitise_contents": 0.006377
+        "decode_page": 0.013056,
+        "decode_resources": 0.000347,
+        "sanitise_contents": 0.002158
       }
     },
     {
@@ -166064,12 +166064,12 @@
         ]
       },
       "timings": {
-        "decode_annots": 2.7e-05,
-        "decode_contents": 0.009388,
-        "decode_dimensions": 1e-06,
-        "decode_page": 0.056135,
-        "decode_resources": 0.000489,
-        "sanitise_contents": 0.045445
+        "decode_annots": 1.8e-05,
+        "decode_contents": 0.008124,
+        "decode_dimensions": 0.0,
+        "decode_page": 0.03975,
+        "decode_resources": 0.000443,
+        "sanitise_contents": 0.013237
       }
     },
     {
@@ -275568,17 +275568,17 @@
             [
               20.999,
               357.576,
-              294.709,
+              181.879,
               366.888,
               20.999,
               357.576,
-              294.709,
+              181.879,
               357.576,
-              294.709,
+              181.879,
               366.888,
               20.999,
               366.888,
-              "carburant diesel et d'autres types de carburants. Les produits ",
+              "carburant diesel et d'autres types de",
               -1,
               2.78,
               "/MacRomanEncoding",
@@ -275608,6 +275608,29 @@
               "MACROMAN",
               "/TT1",
               "/AAAAAB+Helvetica-Bold",
+              false,
+              true
+            ],
+            [
+              184.659,
+              357.576,
+              294.709,
+              366.888,
+              184.659,
+              357.576,
+              294.709,
+              357.576,
+              294.709,
+              366.888,
+              184.659,
+              366.888,
+              "carburants. Les produits ",
+              -1,
+              2.78,
+              "/MacRomanEncoding",
+              "MACROMAN",
+              "/TT2",
+              "/AAAAAC+Helvetica",
               false,
               true
             ],
@@ -277994,28 +278017,28 @@
         ]
       },
       "timings": {
-        "decode_annots": 1.5e-05,
-        "decode_contents": 0.015681,
-        "decode_dimensions": 1e-06,
-        "decode_page": 0.143075,
-        "decode_resources": 0.000696,
-        "sanitise_contents": 0.12604
+        "decode_annots": 9e-06,
+        "decode_contents": 0.014222,
+        "decode_dimensions": 0.0,
+        "decode_page": 0.073176,
+        "decode_resources": 0.000617,
+        "sanitise_contents": 0.007129
       }
     }
   ],
   "timings": {
-    "decode_annots": 0.000305,
-    "decode_contents": 0.039693000000000006,
-    "decode_dimensions": 3e-06,
-    "decode_document": 0.254646,
-    "decode_page": 0.249346,
-    "decode_resources": 0.002211,
-    "decoding page 0": 0.02261,
-    "decoding page 1": 0.012449,
-    "decoding page 2": 0.016768,
-    "decoding page 3": 0.057177,
-    "decoding page 4": 0.145016,
-    "process_document_from_bytesio": 0.001777,
-    "sanitise_contents": 0.200293
+    "decode_annots": 0.00022400000000000002,
+    "decode_contents": 0.035805000000000003,
+    "decode_dimensions": 1e-06,
+    "decode_document": 0.154887,
+    "decode_page": 0.149573,
+    "decode_resources": 0.0022140000000000003,
+    "decoding page 0": 0.015922,
+    "decoding page 1": 0.008794,
+    "decoding page 2": 0.013534,
+    "decoding page 3": 0.040833,
+    "decoding page 4": 0.075116,
+    "process_document_from_bytesio": 0.002015,
+    "sanitise_contents": 0.025893
   }
 }

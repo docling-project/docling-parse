@@ -132537,17 +132537,17 @@
             [
               370.254,
               138.487,
-              436.195,
+              400.055,
               146.395,
               370.254,
               138.487,
-              436.195,
+              400.055,
               138.487,
-              436.195,
+              400.055,
               146.395,
               370.254,
               146.395,
-              "Formula List-item",
+              "Formula",
               -1,
               0.0,
               "",
@@ -132577,6 +132577,29 @@
               "STANDARD",
               "/F134",
               "/RWPIRK+LinLibertineT",
+              false,
+              true
+            ],
+            [
+              404.256,
+              138.487,
+              436.195,
+              146.395,
+              404.256,
+              138.487,
+              436.195,
+              138.487,
+              436.195,
+              146.395,
+              404.256,
+              146.395,
+              "List-item",
+              -1,
+              0.0,
+              "",
+              "STANDARD",
+              "/F148",
+              "/TKQZJF+LinLibertineTI",
               false,
               true
             ],
@@ -133159,25 +133182,25 @@
         ]
       },
       "timings": {
-        "decode_annots": 2.2e-05,
-        "decode_contents": 0.002619,
+        "decode_annots": 2e-05,
+        "decode_contents": 0.002408,
         "decode_dimensions": 1e-06,
-        "decode_page": 0.218772,
-        "decode_resources": 0.002104,
-        "sanitise_contents": 0.213136
+        "decode_page": 0.108923,
+        "decode_resources": 0.002076,
+        "sanitise_contents": 0.024735
       }
     }
   ],
   "timings": {
-    "decode_annots": 2.2e-05,
-    "decode_contents": 0.002619,
+    "decode_annots": 2e-05,
+    "decode_contents": 0.002408,
     "decode_dimensions": 1e-06,
-    "decode_document": 0.227092,
-    "decode_page": 0.218772,
-    "decode_resources": 0.002104,
-    "decoding page 0": 0.598219,
-    "decoding page 1": 0.220887,
-    "process_document_from_bytesio": 0.000136,
-    "sanitise_contents": 0.213136
+    "decode_document": 0.117794,
+    "decode_page": 0.108923,
+    "decode_resources": 0.002076,
+    "decoding page 0": 0.494604,
+    "decoding page 1": 0.111292,
+    "process_document_from_bytesio": 0.000116,
+    "sanitise_contents": 0.024735
   }
 }

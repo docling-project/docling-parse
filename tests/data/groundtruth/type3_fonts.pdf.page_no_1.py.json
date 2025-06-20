@@ -93871,6 +93871,9 @@
       "font_name": "/BAAAAA+Open-Sans-Light"
     }
   ],
+  "has_chars": true,
+  "has_words": true,
+  "has_lines": true,
   "lines": [
     {
       "index": 0,

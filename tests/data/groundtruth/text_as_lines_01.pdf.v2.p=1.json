@@ -179616,17 +179616,17 @@
             [
               362.027,
               767.269,
-              526.115,
+              511.13,
               787.782,
               362.027,
               767.269,
-              526.115,
+              511.13,
               767.269,
-              526.115,
+              511.13,
               787.782,
               362.027,
               787.782,
-              " Zestawy r\u00f3wnoleg e",
+              " Zestawy r\u00f3wnoleg",
               -1,
               4.802,
               "/MacRomanEncoding",
@@ -179656,6 +179656,29 @@
               "STANDARD",
               "/Tc8",
               "/AAAAAI+Swis721CnPL-Bold",
+              false,
+              true
+            ],
+            [
+              516.965,
+              767.269,
+              526.115,
+              787.782,
+              516.965,
+              767.269,
+              526.115,
+              767.269,
+              526.115,
+              787.782,
+              516.965,
+              787.782,
+              "e",
+              -1,
+              4.802,
+              "/MacRomanEncoding",
+              "MACROMAN",
+              "/Tc7",
+              "/AAAAAH+Swis721CnPL-Bold",
               false,
               true
             ]
@@ -348814,24 +348837,24 @@
       },
       "timings": {
         "decode_annots": 0.0,
-        "decode_contents": 0.050448,
-        "decode_dimensions": 1e-06,
-        "decode_page": 0.062217,
-        "decode_resources": 0.001198,
-        "sanitise_contents": 0.001357
+        "decode_contents": 0.04934,
+        "decode_dimensions": 0.0,
+        "decode_page": 0.060245,
+        "decode_resources": 0.001207,
+        "sanitise_contents": 0.000512
       }
     }
   ],
   "timings": {
     "decode_annots": 0.0,
-    "decode_contents": 0.050448,
-    "decode_dimensions": 1e-06,
-    "decode_document": 0.066291,
-    "decode_page": 0.062217,
-    "decode_resources": 0.001198,
-    "decoding page 0": 0.032749,
-    "decoding page 1": 0.064858,
-    "process_document_from_bytesio": 3.1e-05,
-    "sanitise_contents": 0.001357
+    "decode_contents": 0.04934,
+    "decode_dimensions": 0.0,
+    "decode_document": 0.06446,
+    "decode_page": 0.060245,
+    "decode_resources": 0.001207,
+    "decoding page 0": 0.021403,
+    "decoding page 1": 0.063046,
+    "process_document_from_bytesio": 2.3e-05,
+    "sanitise_contents": 0.000512
   }
 }
