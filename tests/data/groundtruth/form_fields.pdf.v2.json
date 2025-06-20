@@ -41593,12 +41593,12 @@
         ]
       },
       "timings": {
-        "decode_annots": 4.1e-05,
-        "decode_contents": 0.005492,
+        "decode_annots": 3.5e-05,
+        "decode_contents": 0.005058,
         "decode_dimensions": 1e-06,
-        "decode_page": 0.022001,
-        "decode_resources": 0.000364,
-        "sanitise_contents": 0.015139
+        "decode_page": 0.019082,
+        "decode_resources": 0.000384,
+        "sanitise_contents": 0.006372
       }
     },
     {
@@ -68415,12 +68415,12 @@
         ]
       },
       "timings": {
-        "decode_annots": 2.1e-05,
-        "decode_contents": 0.00364,
+        "decode_annots": 1.9e-05,
+        "decode_contents": 0.003455,
         "decode_dimensions": 0.0,
-        "decode_page": 0.011987,
-        "decode_resources": 0.000336,
-        "sanitise_contents": 0.007292
+        "decode_page": 0.010658,
+        "decode_resources": 0.000349,
+        "sanitise_contents": 0.003328
       }
     },
     {
@@ -102180,12 +102180,12 @@
         ]
       },
       "timings": {
-        "decode_annots": 0.000201,
-        "decode_contents": 0.005492,
+        "decode_annots": 0.000139,
+        "decode_contents": 0.004932,
         "decode_dimensions": 0.0,
-        "decode_page": 0.016148,
-        "decode_resources": 0.000326,
-        "sanitise_contents": 0.006377
+        "decode_page": 0.013727,
+        "decode_resources": 0.000353,
+        "sanitise_contents": 0.002751
       }
     },
     {
@@ -107010,7 +107010,7 @@
               691.803,
               414.996,
               691.803,
-              "\u00d7",
+              "!",
               -1,
               3.336,
               "",
@@ -108689,7 +108689,7 @@
               658.805,
               414.996,
               658.805,
-              "\u00d7",
+              "!",
               -1,
               3.336,
               "",
@@ -114623,7 +114623,7 @@
               586.802,
               414.996,
               586.802,
-              "\u00d7",
+              "!",
               -1,
               3.336,
               "",
@@ -164225,7 +164225,7 @@
               691.803,
               414.996,
               691.803,
-              "\u00d7",
+              "!",
               -1,
               3.336,
               "",
@@ -164409,7 +164409,7 @@
               658.805,
               414.996,
               658.805,
-              "\u00d7",
+              "!",
               -1,
               3.336,
               "",
@@ -164616,7 +164616,7 @@
               586.802,
               414.996,
               586.802,
-              "\u00d7",
+              "!",
               -1,
               3.336,
               "",
@@ -166064,12 +166064,12 @@
         ]
       },
       "timings": {
-        "decode_annots": 2.7e-05,
-        "decode_contents": 0.009388,
-        "decode_dimensions": 1e-06,
-        "decode_page": 0.056135,
-        "decode_resources": 0.000489,
-        "sanitise_contents": 0.045445
+        "decode_annots": 1.8e-05,
+        "decode_contents": 0.007917,
+        "decode_dimensions": 0.0,
+        "decode_page": 0.045246,
+        "decode_resources": 0.000458,
+        "sanitise_contents": 0.018541
       }
     },
     {
@@ -277994,28 +277994,28 @@
         ]
       },
       "timings": {
-        "decode_annots": 1.5e-05,
-        "decode_contents": 0.015681,
-        "decode_dimensions": 1e-06,
-        "decode_page": 0.143075,
-        "decode_resources": 0.000696,
-        "sanitise_contents": 0.12604
+        "decode_annots": 8e-06,
+        "decode_contents": 0.013938,
+        "decode_dimensions": 0.0,
+        "decode_page": 0.119339,
+        "decode_resources": 0.00053,
+        "sanitise_contents": 0.052986
       }
     }
   ],
   "timings": {
-    "decode_annots": 0.000305,
-    "decode_contents": 0.039693000000000006,
-    "decode_dimensions": 3e-06,
-    "decode_document": 0.254646,
-    "decode_page": 0.249346,
-    "decode_resources": 0.002211,
-    "decoding page 0": 0.02261,
-    "decoding page 1": 0.012449,
-    "decoding page 2": 0.016768,
-    "decoding page 3": 0.057177,
-    "decoding page 4": 0.145016,
-    "process_document_from_bytesio": 0.001777,
-    "sanitise_contents": 0.200293
+    "decode_annots": 0.00021899999999999998,
+    "decode_contents": 0.0353,
+    "decode_dimensions": 1e-06,
+    "decode_document": 0.213057,
+    "decode_page": 0.20805200000000001,
+    "decode_resources": 0.0020740000000000003,
+    "decoding page 0": 0.019703,
+    "decoding page 1": 0.011093,
+    "decoding page 2": 0.014204,
+    "decoding page 3": 0.046301,
+    "decoding page 4": 0.121299,
+    "process_document_from_bytesio": 0.001598,
+    "sanitise_contents": 0.083978
   }
 }

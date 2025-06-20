@@ -7,7 +7,7 @@
   },
   "info": {
     "#-pages": 1,
-    "filename": "tests/data/regression/type3_fonts.pdf"
+    "filename": ""
   },
   "pages": [
     {
@@ -64353,24 +64353,24 @@
         ]
       },
       "timings": {
-        "decode_annots": 9e-06,
-        "decode_contents": 0.014957,
-        "decode_dimensions": 2e-06,
-        "decode_page": 0.061479,
-        "decode_resources": 0.01781,
-        "sanitise_contents": 0.009326
+        "decode_annots": 2e-06,
+        "decode_contents": 0.008333,
+        "decode_dimensions": 0.0,
+        "decode_page": 0.043197,
+        "decode_resources": 0.006466,
+        "sanitise_contents": 0.012281
       }
     }
   ],
   "timings": {
-    "decode_annots": 9e-06,
-    "decode_contents": 0.014957,
-    "decode_dimensions": 2e-06,
-    "decode_document": 0.067007,
-    "decode_page": 0.061479,
-    "decode_resources": 0.01781,
-    "decoding page 0": 0.063962,
-    "process_document_from_file": 0.000464,
-    "sanitise_contents": 0.009326
+    "decode_annots": 2e-06,
+    "decode_contents": 0.008333,
+    "decode_dimensions": 0.0,
+    "decode_document": 0.045274,
+    "decode_page": 0.043197,
+    "decode_resources": 0.006466,
+    "decoding page 0": 0.044252,
+    "process_document_from_bytesio": 3.2e-05,
+    "sanitise_contents": 0.012281
   }
 }
