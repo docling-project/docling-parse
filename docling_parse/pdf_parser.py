@@ -338,8 +338,8 @@ class PdfDocument:
 
     def _create_word_cells(
         self,
-        segmented_page: SegmentedPdfPage,  # _loglevel: str = "fatal"
-        _loglevel: str = "info",
+        segmented_page: SegmentedPdfPage,
+        _loglevel: str = "fatal",
     ):
 
         if len(segmented_page.word_cells) > 0:
@@ -368,8 +368,8 @@ class PdfDocument:
 
     def _create_textline_cells(
         self,
-        segmented_page: SegmentedPdfPage,  # _loglevel: str = "fatal"
-        _loglevel: str = "info",
+        segmented_page: SegmentedPdfPage,
+        _loglevel: str = "fatal",
     ):
 
         if len(segmented_page.textline_cells) > 0:
