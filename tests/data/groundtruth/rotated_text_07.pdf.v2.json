@@ -73090,23 +73090,23 @@
       },
       "timings": {
         "decode_annots": 0.0,
-        "decode_contents": 0.009061,
+        "decode_contents": 0.009259,
         "decode_dimensions": 0.0,
-        "decode_page": 0.027279,
-        "decode_resources": 0.000761,
-        "sanitise_contents": 0.000436
+        "decode_page": 0.026421,
+        "decode_resources": 0.000789,
+        "sanitise_contents": 0.000399
       }
     }
   ],
   "timings": {
     "decode_annots": 0.0,
-    "decode_contents": 0.009061,
+    "decode_contents": 0.009259,
     "decode_dimensions": 0.0,
-    "decode_document": 0.028598,
-    "decode_page": 0.027279,
-    "decode_resources": 0.000761,
-    "decoding page 0": 0.028519,
-    "process_document_from_bytesio": 3e-05,
-    "sanitise_contents": 0.000436
+    "decode_document": 0.027686,
+    "decode_page": 0.026421,
+    "decode_resources": 0.000789,
+    "decoding page 0": 0.027591,
+    "process_document_from_bytesio": 1.9e-05,
+    "sanitise_contents": 0.000399
   }
 }

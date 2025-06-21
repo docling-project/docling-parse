@@ -55667,11 +55667,11 @@
       },
       "timings": {
         "decode_annots": 0.0,
-        "decode_contents": 0.008328,
+        "decode_contents": 0.008121,
         "decode_dimensions": 0.0,
-        "decode_page": 0.020874,
-        "decode_resources": 0.001504,
-        "sanitise_contents": 0.00078
+        "decode_page": 0.020969,
+        "decode_resources": 0.001559,
+        "sanitise_contents": 0.000826
       }
     },
     {
@@ -404501,11 +404501,11 @@
       },
       "timings": {
         "decode_annots": 0.0,
-        "decode_contents": 0.053739,
+        "decode_contents": 0.053268,
         "decode_dimensions": 0.0,
-        "decode_page": 0.065807,
-        "decode_resources": 0.001603,
-        "sanitise_contents": 0.000477
+        "decode_page": 0.064313,
+        "decode_resources": 0.001277,
+        "sanitise_contents": 0.000436
       }
     },
     {
@@ -679173,25 +679173,25 @@
       },
       "timings": {
         "decode_annots": 0.0,
-        "decode_contents": 0.040885,
-        "decode_dimensions": 1e-06,
-        "decode_page": 0.052793,
-        "decode_resources": 0.001037,
-        "sanitise_contents": 0.000659
+        "decode_contents": 0.040133,
+        "decode_dimensions": 0.0,
+        "decode_page": 0.051331,
+        "decode_resources": 0.001039,
+        "sanitise_contents": 0.000639
       }
     }
   ],
   "timings": {
     "decode_annots": 0.0,
-    "decode_contents": 0.102952,
-    "decode_dimensions": 1e-06,
-    "decode_document": 0.146936,
-    "decode_page": 0.13947400000000001,
-    "decode_resources": 0.004144,
-    "decoding page 0": 0.021738,
-    "decoding page 1": 0.068575,
-    "decoding page 2": 0.055293,
-    "process_document_from_bytesio": 3.4e-05,
-    "sanitise_contents": 0.0019159999999999997
+    "decode_contents": 0.101522,
+    "decode_dimensions": 0.0,
+    "decode_document": 0.144302,
+    "decode_page": 0.13661299999999998,
+    "decode_resources": 0.003875,
+    "decoding page 0": 0.021839,
+    "decoding page 1": 0.06715,
+    "decoding page 2": 0.054038,
+    "process_document_from_bytesio": 2.4e-05,
+    "sanitise_contents": 0.0019010000000000001
   }
 }

@@ -387,12 +387,12 @@ namespace pdflib
             }
           else
             {
-              LOG_S(WARNING) << "could not decode character with value=" << c
+              LOG_S(ERROR) << "could not decode character with value=" << c
 			     << " for encoding=" << to_string(encoding)
 			     << ", fontname=" << font_name
 			     << " and subtype=" << subtype;
 	      
-	      result = "glyph<c="+std::to_string(c)+",font="+font_name+">";
+	      result = "GLYPH<c="+std::to_string(c)+",font="+font_name+">";
             }
 
           return result;
@@ -429,11 +429,11 @@ namespace pdflib
             }
 	  else
 	    {
-	      LOG_S(WARNING) << "could not decode character with value=" << c
+	      LOG_S(ERROR) << "could not decode character with value=" << c
 			     << " for encoding=" << to_string(encoding)
 			     << ", fontname=" << font_name
 			     << " and subtype=" << subtype;
-	      return "glyph<c="+std::to_string(c)+",font="+font_name+">";
+	      return "GLYPH<c="+std::to_string(c)+",font="+font_name+">";
 	    }
 	}
 	break;
@@ -445,7 +445,7 @@ namespace pdflib
                        << ", fontname=" << font_name
                        << " and subtype=" << subtype;
 
-          return std::string("glyph<UNKNOWN>");
+          return std::string("GLYPH<UNKNOWN>");
         }
       }
   }
@@ -503,6 +503,7 @@ namespace pdflib
 	  }
 	else
 	  {
+	    /*
 	    std::string notdef="GLYPH<"+std::to_string(c)+">";
 	    
 	    unknown_numbs[c] += 1;
@@ -513,6 +514,14 @@ namespace pdflib
 			 << " (corresponding font: " << fontname << ")";
 	    
 	    return notdef;
+	    */
+
+	    LOG_S(WARNING) << " Symbol not found in special font: " << c
+			   << "; Encoding: "  << to_string(encoding)
+			   << "; font-name: " << font_name
+			   << " (corresponding font: " << fontname << ")";
+
+	    return get_character_from_encoding(c);	    
 	  }
       }
     else
@@ -1546,10 +1555,12 @@ namespace pdflib
     if(cmap_initialized) // we found a `ToUnicode` before. No need to go deeper! 
       {
 	LOG_S(WARNING) << "We found a `ToUnicode` before. No need to go deeper!";
-	return;
+	// return;
       }
-    else if(subtype==TYPE_0 and desc_font!=NULL and 
-	    cids.has(encoding_name) )
+    //else
+
+    if(subtype==TYPE_0 and desc_font!=NULL and 
+       cids.has(encoding_name) )
       {
 	try
 	  {
