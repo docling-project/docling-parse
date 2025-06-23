@@ -1555,7 +1555,7 @@ namespace pdflib
     if(cmap_initialized) // we found a `ToUnicode` before. No need to go deeper! 
       {
 	LOG_S(WARNING) << "We found a `ToUnicode` before. No need to go deeper!";
-	// return;
+	return;
       }
     //else
 
