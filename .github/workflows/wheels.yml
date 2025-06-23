@@ -269,7 +269,11 @@ jobs:
         shell: pwsh
         run: |
           New-Item -Path 'C:\nasm' -ItemType Directory -Force
-          Invoke-WebRequest -Uri 'https://fossies.org/windows/misc/nasm-2.16.03-win64.zip/nasm-2.16.03/nasm.exe' -OutFile 'C:\nasm\nasm.exe'
+          Invoke-WebRequest -Uri 'https://www.nasm.us/pub/nasm/releasebuilds/2.16.03/win64/nasm-2.16.03-win64.zip' -OutFile 'C:\nasm-2.16.03-win64.zip'
+          Expand-Archive -Path 'C:\nasm-2.16.03-win64.zip' -DestinationPath 'C:\nasm-temp' -Force
+          Copy-Item -Path 'C:\nasm-temp\nasm-2.16.03\nasm.exe' -Destination 'C:\nasm\nasm.exe'
+          Remove-Item -Path 'C:\nasm-2.16.03-win64.zip' -Force
+          Remove-Item -Path 'C:\nasm-temp' -Recurse -Force
           nasm -v
 
       - name: Build wheels
