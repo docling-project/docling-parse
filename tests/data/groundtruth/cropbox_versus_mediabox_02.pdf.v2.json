@@ -23274,11 +23274,11 @@
       },
       "timings": {
         "decode_annots": 0.0,
-        "decode_contents": 0.005592,
+        "decode_contents": 0.005326,
         "decode_dimensions": 1e-06,
-        "decode_page": 0.00913,
-        "decode_resources": 0.000672,
-        "sanitise_contents": 0.000107
+        "decode_page": 0.008976,
+        "decode_resources": 0.000662,
+        "sanitise_contents": 9.1e-05
       }
     },
     {
@@ -34527,11 +34527,11 @@
       },
       "timings": {
         "decode_annots": 0.0,
-        "decode_contents": 0.012104,
+        "decode_contents": 0.012314,
         "decode_dimensions": 0.0,
-        "decode_page": 0.03022,
-        "decode_resources": 0.001004,
-        "sanitise_contents": 0.000117
+        "decode_page": 0.030502,
+        "decode_resources": 0.00106,
+        "sanitise_contents": 0.000116
       }
     },
     {
@@ -112221,25 +112221,25 @@
       },
       "timings": {
         "decode_annots": 0.0,
-        "decode_contents": 0.008294,
+        "decode_contents": 0.008572,
         "decode_dimensions": 0.0,
-        "decode_page": 0.025622,
-        "decode_resources": 0.000731,
-        "sanitise_contents": 0.000788
+        "decode_page": 0.025952,
+        "decode_resources": 0.000765,
+        "sanitise_contents": 0.000762
       }
     }
   ],
   "timings": {
     "decode_annots": 0.0,
-    "decode_contents": 0.02599,
+    "decode_contents": 0.026212,
     "decode_dimensions": 1e-06,
-    "decode_document": 0.066817,
-    "decode_page": 0.064972,
-    "decode_resources": 0.002407,
-    "decoding page 0": 0.009265,
-    "decoding page 1": 0.030361,
-    "decoding page 2": 0.026839,
-    "process_document_from_bytesio": 0.002555,
-    "sanitise_contents": 0.0010119999999999999
+    "decode_document": 0.06743,
+    "decode_page": 0.06543,
+    "decode_resources": 0.002487,
+    "decoding page 0": 0.009114,
+    "decoding page 1": 0.030646,
+    "decoding page 2": 0.027285,
+    "process_document_from_bytesio": 0.002297,
+    "sanitise_contents": 0.000969
   }
 }
