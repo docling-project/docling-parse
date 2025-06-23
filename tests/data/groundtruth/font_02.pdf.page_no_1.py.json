@@ -51005,16 +51005,16 @@
       "rect": {
         "r_x0": 72.0,
         "r_y0": 541.352,
-        "r_x1": 308.071,
-        "r_y1": 541.348,
-        "r_x2": 308.071,
-        "r_y2": 553.243,
+        "r_x1": 292.47,
+        "r_y1": 541.352,
+        "r_x2": 292.47,
+        "r_y2": 553.246,
         "r_x3": 72.0,
         "r_y3": 553.246,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "4. Incubate all of the reaction tubes for 1 hour at 37  C.  ",
-      "orig": "4. Incubate all of the reaction tubes for 1 hour at 37  C.  ",
+      "text": "4. Incubate all of the reaction tubes for 1 hour at 37 ",
+      "orig": "4. Incubate all of the reaction tubes for 1 hour at 37 ",
       "text_direction": "left_to_right",
       "confidence": 1.0,
       "from_ocr": false,
@@ -51061,18 +51061,18 @@
         "a": 255
       },
       "rect": {
-        "r_x0": 71.999,
-        "r_y0": 515.672,
-        "r_x1": 512.91,
-        "r_y1": 515.668,
-        "r_x2": 512.91,
-        "r_y2": 527.563,
-        "r_x3": 71.999,
-        "r_y3": 527.566,
+        "r_x0": 295.92,
+        "r_y0": 541.348,
+        "r_x1": 308.071,
+        "r_y1": 541.348,
+        "r_x2": 308.071,
+        "r_y2": 553.243,
+        "r_x3": 295.92,
+        "r_y3": 553.243,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "NOTE: Your instructor will freeze your completed restriction digests at -20  C until the next lab period.  ",
-      "orig": "NOTE: Your instructor will freeze your completed restriction digests at -20  C until the next lab period.  ",
+      "text": "C.  ",
+      "orig": "C.  ",
       "text_direction": "left_to_right",
       "confidence": 1.0,
       "from_ocr": false,
@@ -51083,6 +51083,35 @@
     },
     {
       "index": 8,
+      "rgba": {
+        "r": 0,
+        "g": 0,
+        "b": 0,
+        "a": 255
+      },
+      "rect": {
+        "r_x0": 71.999,
+        "r_y0": 515.672,
+        "r_x1": 392.546,
+        "r_y1": 515.672,
+        "r_x2": 392.546,
+        "r_y2": 527.566,
+        "r_x3": 71.999,
+        "r_y3": 527.566,
+        "coord_origin": "BOTTOMLEFT"
+      },
+      "text": "NOTE: Your instructor will freeze your completed restriction digests at -20 ",
+      "orig": "NOTE: Your instructor will freeze your completed restriction digests at -20 ",
+      "text_direction": "left_to_right",
+      "confidence": 1.0,
+      "from_ocr": false,
+      "rendering_mode": -1,
+      "widget": false,
+      "font_key": "/TT2",
+      "font_name": "/IVHLVN+Cambria"
+    },
+    {
+      "index": 9,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -51111,7 +51140,36 @@
       "font_name": "/IVHLVN+Cambria"
     },
     {
-      "index": 9,
+      "index": 10,
+      "rgba": {
+        "r": 0,
+        "g": 0,
+        "b": 0,
+        "a": 255
+      },
+      "rect": {
+        "r_x0": 396.0,
+        "r_y0": 515.668,
+        "r_x1": 512.91,
+        "r_y1": 515.668,
+        "r_x2": 512.91,
+        "r_y2": 527.563,
+        "r_x3": 396.0,
+        "r_y3": 527.563,
+        "coord_origin": "BOTTOMLEFT"
+      },
+      "text": "C until the next lab period.  ",
+      "orig": "C until the next lab period.  ",
+      "text_direction": "left_to_right",
+      "confidence": 1.0,
+      "from_ocr": false,
+      "rendering_mode": -1,
+      "widget": false,
+      "font_key": "/TT2",
+      "font_name": "/IVHLVN+Cambria"
+    },
+    {
+      "index": 11,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -51140,7 +51198,7 @@
       "font_name": "/ESBWRV+Cambria-Bold"
     },
     {
-      "index": 10,
+      "index": 12,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -51169,7 +51227,7 @@
       "font_name": "/IVHLVN+Cambria"
     },
     {
-      "index": 11,
+      "index": 13,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -51198,7 +51256,7 @@
       "font_name": "/IQGUVN+SymbolMT"
     },
     {
-      "index": 12,
+      "index": 14,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -51227,7 +51285,7 @@
       "font_name": "/IPNJVN+ArialMT"
     },
     {
-      "index": 13,
+      "index": 15,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -51256,7 +51314,7 @@
       "font_name": "/IVHLVN+Cambria"
     },
     {
-      "index": 14,
+      "index": 16,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -51285,7 +51343,7 @@
       "font_name": "/IQGUVN+SymbolMT"
     },
     {
-      "index": 15,
+      "index": 17,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -51314,7 +51372,7 @@
       "font_name": "/IPNJVN+ArialMT"
     },
     {
-      "index": 16,
+      "index": 18,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -51343,7 +51401,7 @@
       "font_name": "/IVHLVN+Cambria"
     },
     {
-      "index": 17,
+      "index": 19,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -51372,7 +51430,7 @@
       "font_name": "/KPUMXJ+CambriaMath"
     },
     {
-      "index": 18,
+      "index": 20,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -51401,7 +51459,7 @@
       "font_name": "/IVHLVN+Cambria"
     },
     {
-      "index": 19,
+      "index": 21,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -51430,7 +51488,7 @@
       "font_name": "/IVHLVN+Cambria"
     },
     {
-      "index": 20,
+      "index": 22,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -51459,7 +51517,7 @@
       "font_name": "/IQGUVN+SymbolMT"
     },
     {
-      "index": 21,
+      "index": 23,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -51488,7 +51546,7 @@
       "font_name": "/IPNJVN+ArialMT"
     },
     {
-      "index": 22,
+      "index": 24,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -51517,7 +51575,7 @@
       "font_name": "/IVHLVN+Cambria"
     },
     {
-      "index": 23,
+      "index": 25,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -51546,7 +51604,7 @@
       "font_name": "/IQGUVN+SymbolMT"
     },
     {
-      "index": 24,
+      "index": 26,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -51575,7 +51633,7 @@
       "font_name": "/IPNJVN+ArialMT"
     },
     {
-      "index": 25,
+      "index": 27,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -51604,7 +51662,7 @@
       "font_name": "/IVHLVN+Cambria"
     },
     {
-      "index": 26,
+      "index": 28,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -51633,7 +51691,7 @@
       "font_name": "/KPUMXJ+CambriaMath"
     },
     {
-      "index": 27,
+      "index": 29,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -51662,7 +51720,7 @@
       "font_name": "/CDTQPZ+CambriaMath"
     },
     {
-      "index": 28,
+      "index": 30,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -51691,7 +51749,7 @@
       "font_name": "/IVHLVN+Cambria"
     },
     {
-      "index": 29,
+      "index": 31,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -51720,7 +51778,7 @@
       "font_name": "/ESBWRV+Cambria-Bold"
     },
     {
-      "index": 30,
+      "index": 32,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -51749,7 +51807,7 @@
       "font_name": "/IVHLVN+Cambria"
     },
     {
-      "index": 31,
+      "index": 33,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -51778,7 +51836,7 @@
       "font_name": "/KPUMXJ+CambriaMath"
     },
     {
-      "index": 32,
+      "index": 34,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -51807,7 +51865,7 @@
       "font_name": "/CDTQPZ+CambriaMath"
     },
     {
-      "index": 33,
+      "index": 35,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -51836,7 +51894,7 @@
       "font_name": "/IVHLVN+Cambria"
     },
     {
-      "index": 34,
+      "index": 36,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -51865,7 +51923,7 @@
       "font_name": "/IVHLVN+Cambria"
     },
     {
-      "index": 35,
+      "index": 37,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -51894,7 +51952,7 @@
       "font_name": "/IVHLVN+Cambria"
     },
     {
-      "index": 36,
+      "index": 38,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -51923,7 +51981,7 @@
       "font_name": "/IVHLVN+Cambria"
     },
     {
-      "index": 37,
+      "index": 39,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -51952,7 +52010,7 @@
       "font_name": "/KPUMXJ+CambriaMath"
     },
     {
-      "index": 38,
+      "index": 40,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -51981,7 +52039,7 @@
       "font_name": "/CDTQPZ+CambriaMath"
     },
     {
-      "index": 39,
+      "index": 41,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -52010,7 +52068,7 @@
       "font_name": "/IVHLVN+Cambria"
     },
     {
-      "index": 40,
+      "index": 42,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -52039,7 +52097,7 @@
       "font_name": "/IVHLVN+Cambria"
     },
     {
-      "index": 41,
+      "index": 43,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -52068,7 +52126,7 @@
       "font_name": "/IVHLVN+Cambria"
     },
     {
-      "index": 42,
+      "index": 44,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -52097,7 +52155,7 @@
       "font_name": "/IVHLVN+Cambria"
     },
     {
-      "index": 43,
+      "index": 45,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -52126,7 +52184,7 @@
       "font_name": "/IVHLVN+Cambria"
     },
     {
-      "index": 44,
+      "index": 46,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -52155,7 +52213,7 @@
       "font_name": "/IVHLVN+Cambria"
     },
     {
-      "index": 45,
+      "index": 47,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -52184,7 +52242,7 @@
       "font_name": "/IQGUVN+SymbolMT"
     },
     {
-      "index": 46,
+      "index": 48,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -52213,7 +52271,7 @@
       "font_name": "/IPNJVN+ArialMT"
     },
     {
-      "index": 47,
+      "index": 49,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -52242,7 +52300,7 @@
       "font_name": "/IVHLVN+Cambria"
     },
     {
-      "index": 48,
+      "index": 50,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -52271,7 +52329,7 @@
       "font_name": "/IVHLVN+Cambria"
     },
     {
-      "index": 49,
+      "index": 51,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -52300,7 +52358,7 @@
       "font_name": "/IQGUVN+SymbolMT"
     },
     {
-      "index": 50,
+      "index": 52,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -52329,7 +52387,7 @@
       "font_name": "/IPNJVN+ArialMT"
     },
     {
-      "index": 51,
+      "index": 53,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -52358,7 +52416,7 @@
       "font_name": "/IVHLVN+Cambria"
     },
     {
-      "index": 52,
+      "index": 54,
       "rgba": {
         "r": 0,
         "g": 0,

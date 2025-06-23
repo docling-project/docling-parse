@@ -255,8 +255,8 @@ namespace pdflib
                   }
                 else
                   {
-                    LOG_S(WARNING) << "ignoring cid: " << cid << "\tname: " << name;
-                    cid2utf8[cid] = "glyph<cid:"+std::to_string(cid)+">";
+                    LOG_S(ERROR) << "ignoring cid: " << cid << "\tname: " << name;
+                    cid2utf8[cid] = "GLYPH<cid:"+std::to_string(cid)+">";
                   }
               }
           }
