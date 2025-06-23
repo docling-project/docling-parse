@@ -7,7 +7,7 @@
   },
   "info": {
     "#-pages": 3,
-    "filename": ""
+    "filename": "tests/data/regression/text_as_lines_01.pdf"
   },
   "pages": [
     {
@@ -55667,23 +55667,23 @@
       },
       "timings": {
         "decode_annots": 0.0,
-        "decode_contents": 0.00831,
+        "decode_contents": 0.007717,
         "decode_dimensions": 0.0,
-        "decode_page": 0.020945,
-        "decode_resources": 0.001566,
-        "sanitise_contents": 0.000761
+        "decode_page": 0.019721,
+        "decode_resources": 0.00147,
+        "sanitise_contents": 0.00073
       }
     }
   ],
   "timings": {
     "decode_annots": 0.0,
-    "decode_contents": 0.00831,
+    "decode_contents": 0.007717,
     "decode_dimensions": 0.0,
-    "decode_document": 0.021926,
-    "decode_page": 0.020945,
-    "decode_resources": 0.001566,
-    "decoding page 0": 0.021781,
-    "process_document_from_bytesio": 2.4e-05,
-    "sanitise_contents": 0.000761
+    "decode_document": 0.020809,
+    "decode_page": 0.019721,
+    "decode_resources": 0.00147,
+    "decoding page 0": 0.020567,
+    "process_document_from_file": 0.000656,
+    "sanitise_contents": 0.00073
   }
 }

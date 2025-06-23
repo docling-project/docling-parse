@@ -1488,7 +1488,7 @@
   },
   "info": {
     "#-pages": 3,
-    "filename": ""
+    "filename": "tests/data/regression/cropbox_versus_mediabox_02.pdf"
   },
   "pages": [
     {
@@ -14721,29 +14721,6 @@
               true
             ],
             [
-              332.852,
-              252.689,
-              387.821,
-              292.989,
-              332.852,
-              252.689,
-              387.821,
-              252.689,
-              387.821,
-              292.989,
-              332.852,
-              292.989,
-              "599",
-              0,
-              7.508,
-              "/WinAnsiEncoding",
-              "WINANSI",
-              "/T1_3",
-              "/VYIYVW+IKEASans-Heavy",
-              false,
-              true
-            ],
-            [
               430.987,
               10.482,
               524.747,
@@ -14918,29 +14895,6 @@
               31.027,
               145.902,
               " ",
-              0,
-              16.575,
-              "/WinAnsiEncoding",
-              "WINANSI",
-              "/T1_4",
-              "/WYIYVW+IKEASans-Bold",
-              false,
-              true
-            ],
-            [
-              30.061,
-              88.974,
-              235.854,
-              145.902,
-              30.061,
-              88.974,
-              235.854,
-              94.399,
-              235.854,
-              125.052,
-              30.061,
-              145.902,
-              "HOME ",
               0,
               16.575,
               "/WinAnsiEncoding",
@@ -23274,23 +23228,23 @@
       },
       "timings": {
         "decode_annots": 0.0,
-        "decode_contents": 0.005245,
+        "decode_contents": 0.005059,
         "decode_dimensions": 1e-06,
-        "decode_page": 0.008965,
-        "decode_resources": 0.000696,
-        "sanitise_contents": 9.1e-05
+        "decode_page": 0.009678,
+        "decode_resources": 0.001644,
+        "sanitise_contents": 8.7e-05
       }
     }
   ],
   "timings": {
     "decode_annots": 0.0,
-    "decode_contents": 0.005245,
+    "decode_contents": 0.005059,
     "decode_dimensions": 1e-06,
-    "decode_document": 0.009219,
-    "decode_page": 0.008965,
-    "decode_resources": 0.000696,
-    "decoding page 0": 0.009101,
-    "process_document_from_bytesio": 0.002338,
-    "sanitise_contents": 9.1e-05
+    "decode_document": 0.009928,
+    "decode_page": 0.009678,
+    "decode_resources": 0.001644,
+    "decoding page 0": 0.009805,
+    "process_document_from_file": 0.006011,
+    "sanitise_contents": 8.7e-05
   }
 }

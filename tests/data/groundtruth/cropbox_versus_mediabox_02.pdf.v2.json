@@ -14721,29 +14721,6 @@
               true
             ],
             [
-              332.852,
-              252.689,
-              387.821,
-              292.989,
-              332.852,
-              252.689,
-              387.821,
-              252.689,
-              387.821,
-              292.989,
-              332.852,
-              292.989,
-              "599",
-              0,
-              7.508,
-              "/WinAnsiEncoding",
-              "WINANSI",
-              "/T1_3",
-              "/VYIYVW+IKEASans-Heavy",
-              false,
-              true
-            ],
-            [
               430.987,
               10.482,
               524.747,
@@ -14918,29 +14895,6 @@
               31.027,
               145.902,
               " ",
-              0,
-              16.575,
-              "/WinAnsiEncoding",
-              "WINANSI",
-              "/T1_4",
-              "/WYIYVW+IKEASans-Bold",
-              false,
-              true
-            ],
-            [
-              30.061,
-              88.974,
-              235.854,
-              145.902,
-              30.061,
-              88.974,
-              235.854,
-              94.399,
-              235.854,
-              125.052,
-              30.061,
-              145.902,
-              "HOME ",
               0,
               16.575,
               "/WinAnsiEncoding",
@@ -23274,11 +23228,11 @@
       },
       "timings": {
         "decode_annots": 0.0,
-        "decode_contents": 0.005326,
+        "decode_contents": 0.004998,
         "decode_dimensions": 1e-06,
-        "decode_page": 0.008976,
-        "decode_resources": 0.000662,
-        "sanitise_contents": 9.1e-05
+        "decode_page": 0.008574,
+        "decode_resources": 0.000654,
+        "sanitise_contents": 9.2e-05
       }
     },
     {
@@ -34527,11 +34481,11 @@
       },
       "timings": {
         "decode_annots": 0.0,
-        "decode_contents": 0.012314,
-        "decode_dimensions": 0.0,
-        "decode_page": 0.030502,
-        "decode_resources": 0.00106,
-        "sanitise_contents": 0.000116
+        "decode_contents": 0.011476,
+        "decode_dimensions": 1e-06,
+        "decode_page": 0.029811,
+        "decode_resources": 0.001018,
+        "sanitise_contents": 0.000114
       }
     },
     {
@@ -94806,29 +94760,6 @@
               true
             ],
             [
-              319.169,
-              540.403,
-              383.347,
-              546.096,
-              319.169,
-              540.403,
-              383.347,
-              540.403,
-              383.347,
-              546.096,
-              319.169,
-              546.096,
-              "LIVING ROOM 4",
-              0,
-              1.848,
-              "",
-              "STANDARD",
-              "/x_6_F2_2323",
-              "/NAPAHA+IKEASans-Heavy",
-              false,
-              true
-            ],
-            [
               319.164,
               530.541,
               493.387,
@@ -112221,25 +112152,25 @@
       },
       "timings": {
         "decode_annots": 0.0,
-        "decode_contents": 0.008572,
+        "decode_contents": 0.008122,
         "decode_dimensions": 0.0,
-        "decode_page": 0.025952,
-        "decode_resources": 0.000765,
-        "sanitise_contents": 0.000762
+        "decode_page": 0.025366,
+        "decode_resources": 0.00072,
+        "sanitise_contents": 0.000767
       }
     }
   ],
   "timings": {
     "decode_annots": 0.0,
-    "decode_contents": 0.026212,
-    "decode_dimensions": 1e-06,
-    "decode_document": 0.06743,
-    "decode_page": 0.06543,
-    "decode_resources": 0.002487,
-    "decoding page 0": 0.009114,
-    "decoding page 1": 0.030646,
-    "decoding page 2": 0.027285,
-    "process_document_from_bytesio": 0.002297,
-    "sanitise_contents": 0.000969
+    "decode_contents": 0.024596,
+    "decode_dimensions": 2e-06,
+    "decode_document": 0.065551,
+    "decode_page": 0.063751,
+    "decode_resources": 0.002392,
+    "decoding page 0": 0.008712,
+    "decoding page 1": 0.029983,
+    "decoding page 2": 0.026581,
+    "process_document_from_bytesio": 0.00225,
+    "sanitise_contents": 0.000973
   }
 }

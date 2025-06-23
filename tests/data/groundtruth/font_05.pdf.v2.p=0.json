@@ -7,7 +7,7 @@
   },
   "info": {
     "#-pages": 1,
-    "filename": ""
+    "filename": "tests/data/regression/font_05.pdf"
   },
   "pages": [
     {
@@ -59290,23 +59290,23 @@
       },
       "timings": {
         "decode_annots": 0.0,
-        "decode_contents": 0.004559,
+        "decode_contents": 0.001153,
         "decode_dimensions": 1e-06,
-        "decode_page": 0.025593,
-        "decode_resources": 0.000418,
-        "sanitise_contents": 0.001732
+        "decode_page": 0.020731,
+        "decode_resources": 0.000431,
+        "sanitise_contents": 0.001549
       }
     }
   ],
   "timings": {
     "decode_annots": 0.0,
-    "decode_contents": 0.004559,
+    "decode_contents": 0.001153,
     "decode_dimensions": 1e-06,
-    "decode_document": 0.026795,
-    "decode_page": 0.025593,
-    "decode_resources": 0.000418,
-    "decoding page 0": 0.026639,
-    "process_document_from_bytesio": 1.2e-05,
-    "sanitise_contents": 0.001732
+    "decode_document": 0.021779,
+    "decode_page": 0.020731,
+    "decode_resources": 0.000431,
+    "decoding page 0": 0.021684,
+    "process_document_from_file": 0.000302,
+    "sanitise_contents": 0.001549
   }
 }

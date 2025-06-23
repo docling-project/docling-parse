@@ -19,7 +19,7 @@ from pydantic import TypeAdapter
 
 from docling_parse.pdf_parser import DoclingPdfParser, PdfDocument
 
-GENERATE = False
+GENERATE = True
 
 GROUNDTRUTH_FOLDER = "tests/data/groundtruth/"
 REGRESSION_FOLDER = "tests/data/regression/*.pdf"
@@ -237,9 +237,35 @@ def test_reference_documents_from_filenames():
 
             if GENERATE or (not os.path.exists(fname)):
                 pred_page.save_as_json(fname)
+
+                for unit in [TextCellUnit.CHAR, TextCellUnit.WORD, TextCellUnit.LINE]:
+                    lines = pred_page.export_to_textlines(
+                        cell_unit=unit,
+                        add_fontkey=True,
+                        add_fontname=False,
+                    )
+                    _fname = fname + f".{unit}.txt"
+                    with open(_fname, "w") as fw:
+                        fw.write("\n".join(lines))                                
             else:
                 # print(f"loading from {fname}")
 
+                for unit in [TextCellUnit.CHAR, TextCellUnit.WORD, TextCellUnit.LINE]:
+                    _lines = pred_page.export_to_textlines(
+                        cell_unit=unit,
+                        add_fontkey=True,
+                        add_fontname=False,
+                    )
+                    
+                    _fname = fname + f".{unit}.txt"
+                    with open(_fname, "r") as fr:
+                        lines = fr.readlines()
+
+                    olines = "".join(lines)
+                    _olines = "\n".join(_lines)
+
+                    assert olines==_olines, "olines==_olines"
+                        
                 true_page = SegmentedPdfPage.load_from_json(fname)
                 verify_SegmentedPdfPage(true_page, pred_page, filename=fname)
 
@@ -251,19 +277,23 @@ def test_reference_documents_from_filenames():
             # img.show()
 
         toc: PdfTableOfContents = pdf_doc.get_table_of_contents()
+        """
         if toc is not None:
             data = toc.export_to_dict()
             print("data: \n", json.dumps(data, indent=2))
         else:
             print(f"toc: {toc}")
-
+        """
+        
         meta = pdf_doc.get_meta()
+        """
         if meta is not None:
             for key, val in meta.data.items():
                 print(f" => {key}: {val}")
         else:
             print(f"meta: {meta}")
-
+        """
+        
     assert True
 
 

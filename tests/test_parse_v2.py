@@ -13,10 +13,12 @@ import io
 import json
 import os
 
+from pathlib import Path
+
 from docling_parse.pdf_parsers import pdf_parser_v2  # type: ignore[import]
 
 # from docling_parse.utils import create_pil_image_of_page_v2
-
+# from docling_core.types.doc.page import TextCellUnit, ParsedPdfDocument
 
 def verify_annots(true_annots, pred_annots):
 
@@ -215,7 +217,7 @@ def test_reference_documents_from_filenames_with_keys():
         if GENERATE or (not os.path.exists(fname)):
             with open(fname, "w") as fw:
                 fw.write(json.dumps(pred_doc, indent=2))
-
+                
             assert True
         else:
             with open(fname, "r") as fr:

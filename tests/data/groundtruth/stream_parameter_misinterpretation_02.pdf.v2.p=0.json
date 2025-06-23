@@ -7,7 +7,7 @@
   },
   "info": {
     "#-pages": 1,
-    "filename": ""
+    "filename": "tests/data/regression/stream_parameter_misinterpretation_02.pdf"
   },
   "pages": [
     {
@@ -61000,23 +61000,23 @@
       },
       "timings": {
         "decode_annots": 0.0,
-        "decode_contents": 0.004629,
+        "decode_contents": 0.004442,
         "decode_dimensions": 1e-06,
-        "decode_page": 0.021383,
-        "decode_resources": 0.000437,
-        "sanitise_contents": 0.001279
+        "decode_page": 0.030167,
+        "decode_resources": 0.0102,
+        "sanitise_contents": 0.001216
       }
     }
   ],
   "timings": {
     "decode_annots": 0.0,
-    "decode_contents": 0.004629,
+    "decode_contents": 0.004442,
     "decode_dimensions": 1e-06,
-    "decode_document": 0.022488,
-    "decode_page": 0.021383,
-    "decode_resources": 0.000437,
-    "decoding page 0": 0.022425,
-    "process_document_from_bytesio": 0.000555,
-    "sanitise_contents": 0.001279
+    "decode_document": 0.031211,
+    "decode_page": 0.030167,
+    "decode_resources": 0.0102,
+    "decoding page 0": 0.031148,
+    "process_document_from_file": 0.001,
+    "sanitise_contents": 0.001216
   }
 }

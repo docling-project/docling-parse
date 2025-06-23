@@ -162,6 +162,7 @@ namespace pdflib
 							       double space_width_factor_for_merge,
 							       double space_width_factor_for_merge_with_space)
   {
+    // take care for left to right printing
     for(int i=0; i<cells.size(); i++)
       {
 	if(not cells[i].active)
@@ -169,7 +170,7 @@ namespace pdflib
 	    continue;
 	  }
 	LOG_S(INFO) << "start merging cell-" << i << ": '" << cells[i].text << "'";
-	    
+
 	for(int j=i+1; j<cells.size(); j++)
 	  {
 	    if(not cells[j].active)
@@ -203,6 +204,49 @@ namespace pdflib
 	      }
 	  }
       }
+
+    // take care for right to left printing
+    for(int i=cells.size()-1; i>=0; i--)
+      {
+	if(not cells[i].active)
+	  {
+	    continue;
+	  }
+	LOG_S(INFO) << "start merging cell-" << i << ": '" << cells[i].text << "'";
+
+	for(int j=i-1; j>=0; j--)
+	  {
+	    if(not cells[j].active)
+	      {
+		break;
+	      }
+	    
+	    if(enforce_same_font and cells[i].font_name!=cells[j].font_name)
+	      {
+		break;
+	      }
+	    
+	    if(not cells[i].has_same_reading_orientation(cells[j]))
+	      {
+		break;
+	      }
+	    
+	    double delta_0 = cells[i].average_char_width()*space_width_factor_for_merge;
+	    double delta_1 = cells[i].average_char_width()*space_width_factor_for_merge_with_space;
+	    
+	    if(cells[j].is_adjacent_to(cells[i], delta_0))
+	      {
+		cells[i].merge_with(cells[j], delta_1);
+		
+		cells[i].active = false;
+		LOG_S(INFO) << " -> merging cell-" << i << " with " << j << " '" << cells[j].text << "'"<< ": " << cells[i].text;
+	      }
+	    else
+	      {
+		break;
+	      }
+	  }
+      }    
 
     pdf_resource<PAGE_CELLS> cells_;
     for(int i=0; i<cells.size(); i++)

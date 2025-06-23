@@ -333,7 +333,7 @@
   },
   "info": {
     "#-pages": 5,
-    "filename": ""
+    "filename": "tests/data/regression/form_fields.pdf"
   },
   "pages": [
     {
@@ -27150,25 +27150,25 @@
         ]
       },
       "timings": {
-        "decode_annots": 2.2e-05,
-        "decode_contents": 0.003625,
-        "decode_dimensions": 0.0,
-        "decode_page": 0.008244,
-        "decode_resources": 0.000388,
-        "sanitise_contents": 0.000663
+        "decode_annots": 2.3e-05,
+        "decode_contents": 0.003549,
+        "decode_dimensions": 1e-06,
+        "decode_page": 0.008177,
+        "decode_resources": 0.000394,
+        "sanitise_contents": 0.000639
       }
     }
   ],
   "timings": {
-    "decode_annots": 2.2e-05,
-    "decode_contents": 0.003625,
-    "decode_dimensions": 0.0,
-    "decode_document": 0.009451,
-    "decode_page": 0.008244,
-    "decode_resources": 0.000388,
-    "decoding page 0": 0.014851,
-    "decoding page 1": 0.00869,
-    "process_document_from_bytesio": 0.001745,
-    "sanitise_contents": 0.000663
+    "decode_annots": 2.3e-05,
+    "decode_contents": 0.003549,
+    "decode_dimensions": 1e-06,
+    "decode_document": 0.009359,
+    "decode_page": 0.008177,
+    "decode_resources": 0.000394,
+    "decoding page 0": 0.014455,
+    "decoding page 1": 0.008644,
+    "process_document_from_file": 0.006261,
+    "sanitise_contents": 0.000639
   }
 }

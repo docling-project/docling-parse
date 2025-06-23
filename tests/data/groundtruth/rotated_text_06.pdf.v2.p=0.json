@@ -7,7 +7,7 @@
   },
   "info": {
     "#-pages": 1,
-    "filename": ""
+    "filename": "tests/data/regression/rotated_text_06.pdf"
   },
   "pages": [
     {
@@ -26147,23 +26147,23 @@
       },
       "timings": {
         "decode_annots": 0.0,
-        "decode_contents": 0.004992,
-        "decode_dimensions": 0.0,
-        "decode_page": 0.011492,
-        "decode_resources": 0.000283,
-        "sanitise_contents": 0.000682
+        "decode_contents": 0.004795,
+        "decode_dimensions": 1e-06,
+        "decode_page": 0.011015,
+        "decode_resources": 0.00027,
+        "sanitise_contents": 0.000634
       }
     }
   ],
   "timings": {
     "decode_annots": 0.0,
-    "decode_contents": 0.004992,
-    "decode_dimensions": 0.0,
-    "decode_document": 0.012066,
-    "decode_page": 0.011492,
-    "decode_resources": 0.000283,
-    "decoding page 0": 0.011958,
-    "process_document_from_bytesio": 0.000665,
-    "sanitise_contents": 0.000682
+    "decode_contents": 0.004795,
+    "decode_dimensions": 1e-06,
+    "decode_document": 0.011535,
+    "decode_page": 0.011015,
+    "decode_resources": 0.00027,
+    "decoding page 0": 0.011468,
+    "process_document_from_file": 0.001102,
+    "sanitise_contents": 0.000634
   }
 }

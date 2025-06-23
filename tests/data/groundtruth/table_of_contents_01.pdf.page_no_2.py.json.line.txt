@@ -1,0 +1,83 @@
+(108.00, 754.57) (126.82, 754.57) (126.82, 763.12) (108.00, 763.12)       /F81 IBM
+(399.97, 754.57) (504.00, 754.57) (504.00, 763.12) (399.97, 763.12)       /F81 Granite Language Models
+(186.85, 627.76) (197.88, 627.76) (197.88, 636.74) (186.85, 636.74)       /Tc1 0.2
+(186.85, 648.60) (197.88, 648.60) (197.88, 657.57) (186.85, 657.57)       /Tc1 0.6
+(194.22, 669.35) (197.88, 669.35) (197.88, 678.32) (194.22, 678.32)       /Tc1 1
+(185.01, 675.96) (225.49, 675.96) (225.49, 684.93) (185.01, 684.93)       /Tc1 Human Exams
+(242.68, 649.94) (283.16, 649.94) (283.16, 658.91) (242.68, 658.91)       /Tc1 Commonsense
+(253.73, 610.70) (279.48, 610.70) (279.48, 619.67) (253.73, 619.67)       /Tc1 Reading
+(242.68, 602.66) (290.52, 602.66) (290.52, 611.64) (242.68, 611.64)       /Tc1 Comprehension
+(188.70, 580.58) (221.81, 580.58) (221.81, 589.55) (188.70, 589.55)       /Tc1 Reasoning
+(153.12, 606.68) (167.82, 606.68) (167.82, 615.65) (153.12, 615.65)       /Tc1 Code
+(153.12, 649.94) (167.82, 649.94) (167.82, 658.91) (153.12, 658.91)       /Tc1 Math
+(180.91, 692.17) (229.51, 692.17) (229.51, 703.21) (180.91, 703.21)       /Tc2 Base Models
+(130.95, 564.85) (182.47, 564.85) (182.47, 573.82) (130.95, 573.82)       /Tc1 Granite-3.0-8B
+(195.23, 564.85) (239.39, 564.85) (239.39, 573.82) (195.23, 573.82)       /Tc1 Llama-3.1-8B
+(252.15, 564.85) (288.94, 564.85) (288.94, 573.82) (252.15, 573.82)       /Tc1 Mistral-7B
+(198.40, 548.15) (208.35, 548.15) (208.35, 555.85) (198.40, 555.85)       /F81 (a)
+(388.61, 624.70) (399.63, 624.70) (399.63, 633.68) (388.61, 633.68)       /Tc1 0.2
+(388.61, 643.70) (399.63, 643.70) (399.63, 652.67) (388.61, 652.67)       /Tc1 0.6
+(395.97, 662.69) (399.63, 662.69) (399.63, 671.66) (395.97, 671.66)       /Tc1 1
+(386.76, 677.16) (427.24, 677.16) (427.24, 686.14) (386.76, 686.14)       /Tc1 Instruction
+(390.45, 669.22) (423.56, 669.22) (423.56, 678.19) (390.45, 678.19)       /Tc1 Following
+(434.90, 653.15) (468.02, 653.15) (468.02, 662.12) (434.90, 662.12)       /Tc1 Reasoning
+(446.46, 625.21) (490.62, 625.21) (490.62, 634.18) (446.46, 634.18)       /Tc1 Multilingual
+(434.90, 597.35) (445.93, 597.35) (445.93, 606.32) (434.90, 606.32)       /Tc1 RAG
+(399.65, 581.28) (414.36, 581.28) (414.36, 590.25) (399.65, 590.25)       /Tc1 Code
+(331.26, 597.35) (379.10, 597.35) (379.10, 606.32) (331.26, 606.32)       /Tc1 Cybersecurity
+(338.11, 629.22) (367.55, 629.22) (367.55, 638.20) (338.11, 638.20)       /Tc1 Function
+(339.95, 621.27) (365.71, 621.27) (365.71, 630.25) (339.95, 630.25)       /Tc1 Calling
+(357.03, 653.15) (379.10, 653.15) (379.10, 662.12) (357.03, 662.12)       /Tc1 Safety
+(374.04, 692.20) (440.30, 692.20) (440.30, 703.25) (374.04, 703.25)       /Tc2 Instruct Models
+(332.91, 564.80) (384.43, 564.80) (384.43, 573.77) (332.91, 573.77)       /Tc1 Granite-3.0-8B
+(397.19, 564.80) (441.35, 564.80) (441.35, 573.77) (397.19, 573.77)       /Tc1 Llama-3.1-8B
+(454.11, 564.80) (490.90, 564.80) (490.90, 573.77) (454.11, 573.77)       /Tc1 Mistral-7B
+(400.11, 548.15) (410.56, 548.15) (410.56, 555.85) (400.11, 555.85)       /F81 (b)
+(108.00, 523.74) (505.74, 523.74) (505.74, 532.29) (108.00, 532.29)       /F81 Figure 3: The relative performance of Granite-3.0-8B and baseline models across different domains.
+(108.00, 512.78) (413.26, 512.78) (413.26, 521.33) (108.00, 521.33)       /F81 See Table 8 and Table 9 for details of benchmarks included in each category.
+(108.30, 478.09) (114.28, 478.09) (114.28, 488.35) (108.30, 488.35)       /F81 1
+(126.83, 478.09) (205.99, 478.59) (205.99, 486.80) (126.83, 488.35)       /F81 INTRODUCTION
+(107.69, 459.77) (505.74, 459.77) (505.74, 468.33) (107.69, 468.33)       /F81 The adoption of large language models (LLMs) across different applications has spread quickly.
+(107.53, 448.81) (504.35, 448.81) (504.35, 457.37) (107.53, 457.37)       /F81 While commercial options that are consumer-facing via a web interface or API call are widely
+(108.00, 437.86) (323.77, 437.86) (323.77, 446.41) (108.00, 446.41)       /F81 available, there is a demand for on-premise models.
+(329.47, 437.86) (504.00, 437.86) (504.00, 446.41) (329.47, 446.41)       /F81 For accessibility, being able to fine-tune a
+(108.00, 426.90) (456.53, 426.90) (456.53, 435.45) (108.00, 435.45)       /F81 pretrained LLM for on-premise use requires models with lower hardware requirements.
+(107.69, 409.96) (504.67, 409.96) (504.67, 418.51) (107.69, 418.51)       /F81 There are many lightweight models like Gemma (Team et al., 2024) and Llama (Dubey et al., 2024)
+(108.00, 399.00) (504.00, 399.00) (504.00, 407.55) (108.00, 407.55)       /F81 that perform well and fit the bill. However, in an enterprise setting, the adoption of LLMs can have
+(108.00, 388.04) (504.00, 388.04) (504.00, 396.60) (108.00, 396.60)       /F81 further constraints. The provenance and transparency around data usage and processing can have
+(108.00, 377.08) (504.00, 377.08) (504.00, 385.64) (108.00, 385.64)       /F81 legal and compliance implications. In particular, the license that an LLM is released under can also
+(108.00, 366.12) (368.92, 366.12) (368.92, 374.68) (108.00, 374.68)       /F81 restrict companies from using a model on their specific use cases.
+(108.00, 349.19) (224.14, 349.19) (224.14, 357.74) (108.00, 357.74)       /F81 In this report, we present the
+(226.65, 349.17) (275.73, 349.17) (275.73, 358.13) (226.65, 358.13)       /F90 Granite 3.0
+(278.25, 349.19) (505.65, 349.19) (505.65, 357.74) (278.25, 357.74)       /F81 family of language models natively supporting multilin-
+(108.00, 338.23) (504.00, 338.23) (504.00, 346.78) (108.00, 346.78)       /F81 guality, coding, reasoning, and tool usage, including the potential to be run on constrained compute
+(108.00, 327.27) (504.00, 327.27) (504.00, 335.82) (108.00, 335.82)       /F81 resources. All the models are publicly released under an Apache 2.0 license for both research and
+(108.00, 316.31) (504.00, 316.31) (504.00, 324.86) (108.00, 324.86)       /F81 commercial use. The models' data curation and training procedures were designed for enterprise
+(108.00, 305.35) (504.00, 305.35) (504.00, 313.90) (108.00, 313.90)       /F81 usage and customization in mind, with a process that evaluates datasets for governance, risk and
+(108.00, 294.39) (504.00, 294.39) (504.00, 302.95) (108.00, 302.95)       /F81 compliance (GRC) criteria, in addition to IBM's standard data clearance process and document
+(108.00, 283.44) (446.13, 283.44) (446.13, 291.99) (108.00, 291.99)       /F81 quality checks. Specifically, Granite 3.0 includes 4 different models of varying sizes:
+(135.40, 261.96) (138.88, 261.96) (138.88, 270.52) (135.40, 270.52)       /F81 •
+(143.87, 261.95) (206.12, 261.95) (206.12, 270.90) (143.87, 270.90)       /F90 Dense Models:
+(209.21, 261.96) (473.94, 261.96) (473.94, 270.52) (209.21, 270.52)       /F81 2B and 8B parameter models, trained on 12 trillion tokens in total.
+(135.40, 245.93) (138.88, 245.93) (138.88, 254.48) (135.40, 254.48)       /F81 •
+(143.87, 245.91) (287.09, 245.91) (287.09, 254.87) (143.87, 254.87)       /F90 Mixture-of-Expert (MoE) Models:
+(290.18, 245.93) (504.00, 245.93) (504.00, 254.48) (290.18, 254.48)       /F81 Sparse 1B and 3B MoE models, with 400M and 800M
+(143.87, 234.97) (423.62, 234.97) (423.62, 243.52) (143.87, 243.52)       /F81 activated parameters respectively, trained on 10 trillion tokens in total.
+(107.64, 213.50) (504.00, 213.50) (504.00, 222.05) (107.64, 222.05)       /F81 Accordingly, these models provide a range of options with different compute requirements to choose
+(108.00, 202.54) (504.00, 202.54) (504.00, 211.09) (108.00, 211.09)       /F81 from, with appropriate trade-offs with their performance on downstream tasks. At each scale, we
+(108.00, 191.58) (505.99, 191.58) (505.99, 200.13) (108.00, 200.13)       /F81 release a base model - checkpoints of models after pretraining, as well as instruct checkpoints -
+(108.00, 180.62) (504.00, 180.62) (504.00, 189.17) (108.00, 189.17)       /F81 models finetuned for dialogue, instruction-following, helpfulness, and safety. The base models are
+(108.00, 169.66) (504.00, 169.66) (504.00, 178.21) (108.00, 178.21)       /F81 trained from scratch with a two-stage training procedure. In stage 1, our dense and MoE models are
+(108.00, 158.70) (504.00, 158.70) (504.00, 167.25) (108.00, 167.25)       /F81 trained on 10 trillion and 8 trillion tokens, respectively. Stage 1 training data consists of unstructured
+(108.00, 147.74) (505.25, 147.74) (505.25, 156.29) (108.00, 156.29)       /F81 multilingual language data from diverse sources across academia, the internet, enterprise (e.g.,
+(108.00, 136.78) (505.25, 136.78) (505.25, 145.34) (108.00, 145.34)       /F81 financial, legal), and code, including publicly available datasets with permissive licenses. In stage 2,
+(107.64, 125.83) (504.00, 125.83) (504.00, 134.38) (107.64, 134.38)       /F81 we train on a mixture of 2 trillion tokens of data. Some of the data sources for stage 2 are the same as
+(108.00, 114.87) (504.00, 114.87) (504.00, 123.42) (108.00, 123.42)       /F81 the stage 1 data sources, mixed with a small amount of high-quality open-source and synthetic corpora
+(107.64, 103.91) (210.45, 103.91) (210.45, 112.46) (107.64, 112.46)       /F81 with permissive licenses.
+(215.65, 103.91) (504.00, 103.91) (504.00, 112.46) (215.65, 112.46)       /F81 The data mixtures are derived through a data mixture search focusing
+(108.00, 092.95) (310.43, 092.95) (310.43, 101.50) (108.00, 101.50)       /F81 on robustness across different domains and tasks.
+(314.78, 092.95) (504.00, 092.95) (504.00, 101.50) (314.78, 101.50)       /F81 The instruct models are derived by supervised
+(108.00, 081.99) (504.00, 081.99) (504.00, 090.54) (108.00, 090.54)       /F81 fine-tuning (SFT) of the pre-trained checkpoints, followed by model alignment using reinforcement
+(108.00, 071.03) (504.00, 071.03) (504.00, 079.58) (108.00, 079.58)       /F81 learning (PPO, BRAIn (Pandey et al., 2024)). We find that both SFT and PPO/BRAIn are important
+(108.00, 060.07) (502.62, 060.07) (502.62, 068.62) (108.00, 068.62)       /F81 for improved performance on downstream automatic evaluations, including better chat capabilities.
+(303.51, 030.18) (308.49, 030.18) (308.49, 038.74) (303.51, 038.74)       /F81 2
