@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-GENERATE = True
+GENERATE = False
 VISUALISE_TESTS = False
 
 GROUNDTRUTH_FOLDER = "tests/data/groundtruth/"
