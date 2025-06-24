@@ -1488,7 +1488,7 @@
   },
   "info": {
     "#-pages": 3,
-    "filename": "tests/data/regression/cropbox_versus_mediabox_02.pdf"
+    "filename": ""
   },
   "pages": [
     {
@@ -12737,24 +12737,24 @@
       },
       "timings": {
         "decode_annots": 0.0,
-        "decode_contents": 0.011339,
-        "decode_dimensions": 1e-06,
-        "decode_page": 0.029004,
-        "decode_resources": 0.000991,
-        "sanitise_contents": 0.000109
+        "decode_contents": 0.012133,
+        "decode_dimensions": 0.0,
+        "decode_page": 0.030463,
+        "decode_resources": 0.001055,
+        "sanitise_contents": 0.000129
       }
     }
   ],
   "timings": {
     "decode_annots": 0.0,
-    "decode_contents": 0.011339,
-    "decode_dimensions": 1e-06,
-    "decode_document": 0.029493,
-    "decode_page": 0.029004,
-    "decode_resources": 0.000991,
-    "decoding page 0": 0.009805,
-    "decoding page 1": 0.029142,
-    "process_document_from_file": 0.006011,
-    "sanitise_contents": 0.000109
+    "decode_contents": 0.012133,
+    "decode_dimensions": 0.0,
+    "decode_document": 0.030992,
+    "decode_page": 0.030463,
+    "decode_resources": 0.001055,
+    "decoding page 0": 0.009162,
+    "decoding page 1": 0.030607,
+    "process_document_from_bytesio": 0.002419,
+    "sanitise_contents": 0.000129
   }
 }

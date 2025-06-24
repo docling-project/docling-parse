@@ -14699,18 +14699,18 @@
             ],
             [
               322.161,
-              265.981,
-              333.34,
-              289.475,
+              252.689,
+              387.821,
+              292.989,
               322.161,
               265.981,
-              333.34,
-              265.981,
-              333.34,
-              289.475,
+              387.821,
+              252.689,
+              387.821,
+              292.989,
               322.161,
               289.475,
-              "$",
+              "$ 599",
               0,
               4.377,
               "/WinAnsiEncoding",
@@ -14884,17 +14884,17 @@
             [
               31.027,
               88.974,
-              47.602,
+              235.854,
               145.902,
               31.027,
               88.974,
-              47.602,
-              88.974,
-              47.602,
-              145.902,
+              235.854,
+              94.399,
+              235.854,
+              125.052,
               31.027,
               145.902,
-              " ",
+              "  HOME ",
               0,
               16.575,
               "/WinAnsiEncoding",
@@ -23228,11 +23228,11 @@
       },
       "timings": {
         "decode_annots": 0.0,
-        "decode_contents": 0.004998,
+        "decode_contents": 0.005094,
         "decode_dimensions": 1e-06,
-        "decode_page": 0.008574,
-        "decode_resources": 0.000654,
-        "sanitise_contents": 9.2e-05
+        "decode_page": 0.008746,
+        "decode_resources": 0.000641,
+        "sanitise_contents": 9.8e-05
       }
     },
     {
@@ -34481,11 +34481,11 @@
       },
       "timings": {
         "decode_annots": 0.0,
-        "decode_contents": 0.011476,
-        "decode_dimensions": 1e-06,
-        "decode_page": 0.029811,
-        "decode_resources": 0.001018,
-        "sanitise_contents": 0.000114
+        "decode_contents": 0.012053,
+        "decode_dimensions": 0.0,
+        "decode_page": 0.030385,
+        "decode_resources": 0.001067,
+        "sanitise_contents": 0.000125
       }
     },
     {
@@ -94739,17 +94739,17 @@
             [
               312.912,
               540.403,
-              314.76,
+              383.347,
               546.096,
               312.912,
               540.403,
-              314.76,
+              383.347,
               540.403,
-              314.76,
+              383.347,
               546.096,
               312.912,
               546.096,
-              " ",
+              "  LIVING ROOM 4",
               0,
               1.848,
               "",
@@ -112152,25 +112152,25 @@
       },
       "timings": {
         "decode_annots": 0.0,
-        "decode_contents": 0.008122,
+        "decode_contents": 0.008458,
         "decode_dimensions": 0.0,
-        "decode_page": 0.025366,
-        "decode_resources": 0.00072,
-        "sanitise_contents": 0.000767
+        "decode_page": 0.025639,
+        "decode_resources": 0.000796,
+        "sanitise_contents": 0.000801
       }
     }
   ],
   "timings": {
     "decode_annots": 0.0,
-    "decode_contents": 0.024596,
-    "decode_dimensions": 2e-06,
-    "decode_document": 0.065551,
-    "decode_page": 0.063751,
-    "decode_resources": 0.002392,
-    "decoding page 0": 0.008712,
-    "decoding page 1": 0.029983,
-    "decoding page 2": 0.026581,
-    "process_document_from_bytesio": 0.00225,
-    "sanitise_contents": 0.000973
+    "decode_contents": 0.025605,
+    "decode_dimensions": 1e-06,
+    "decode_document": 0.066621,
+    "decode_page": 0.06477,
+    "decode_resources": 0.002504,
+    "decoding page 0": 0.008899,
+    "decoding page 1": 0.030535,
+    "decoding page 2": 0.0269,
+    "process_document_from_bytesio": 0.002309,
+    "sanitise_contents": 0.001024
   }
 }

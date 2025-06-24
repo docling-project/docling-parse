@@ -60150,18 +60150,18 @@
         "a": 255
       },
       "rect": {
-        "r_x0": 323.266,
+        "r_x0": 242.54,
         "r_y0": 681.359,
         "r_x1": 473.25,
         "r_y1": 681.359,
         "r_x2": 473.25,
         "r_y2": 689.897,
-        "r_x3": 323.266,
+        "r_x3": 242.54,
         "r_y3": 689.897,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "........................................................",
-      "orig": "........................................................",
+      "text": "......................................................................................",
+      "orig": "......................................................................................",
       "text_direction": "left_to_right",
       "confidence": 1.0,
       "from_ocr": false,
@@ -60172,35 +60172,6 @@
     },
     {
       "index": 5,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 242.54,
-        "r_y0": 681.359,
-        "r_x1": 323.208,
-        "r_y1": 681.359,
-        "r_x2": 323.208,
-        "r_y2": 689.897,
-        "r_x3": 242.54,
-        "r_y3": 689.897,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "..............................",
-      "orig": "..............................",
-      "text_direction": "left_to_right",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/G2",
-      "font_name": "/AAAAAC+ArialMT"
-    },
-    {
-      "index": 6,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -60229,7 +60200,7 @@
       "font_name": "/AAAAAC+ArialMT"
     },
     {
-      "index": 7,
+      "index": 6,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -60258,7 +60229,7 @@
       "font_name": "/AAAAAC+ArialMT"
     },
     {
-      "index": 8,
+      "index": 7,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -60287,65 +60258,7 @@
       "font_name": "/AAAAAC+ArialMT"
     },
     {
-      "index": 9,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 442.158,
-        "r_y0": 134.661,
-        "r_x1": 473.121,
-        "r_y1": 134.661,
-        "r_x2": 473.121,
-        "r_y2": 146.615,
-        "r_x3": 442.158,
-        "r_y3": 146.615,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "\u0627\u0644\u0645\u0640\u0640\u0646\u0640\u0640\u0640\u0640",
-      "orig": "\u0627\u0644\u0645\u0640\u0640\u0646\u0640\u0640\u0640\u0640",
-      "text_direction": "right_to_left",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/G2",
-      "font_name": "/AAAAAC+ArialMT"
-    },
-    {
-      "index": 10,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 439.259,
-        "r_y0": 134.661,
-        "r_x1": 442.059,
-        "r_y1": 134.661,
-        "r_x2": 442.059,
-        "r_y2": 146.615,
-        "r_x3": 439.259,
-        "r_y3": 146.615,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "\u0640",
-      "orig": "\u0640",
-      "text_direction": "right_to_left",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/G2",
-      "font_name": "/AAAAAC+ArialMT"
-    },
-    {
-      "index": 11,
+      "index": 8,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -60355,16 +60268,16 @@
       "rect": {
         "r_x0": 425.703,
         "r_y0": 134.661,
-        "r_x1": 439.176,
+        "r_x1": 473.121,
         "r_y1": 134.661,
-        "r_x2": 439.176,
+        "r_x2": 473.121,
         "r_y2": 146.615,
         "r_x3": 425.703,
         "r_y3": 146.615,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "\u0627\u0631\u0629",
-      "orig": "\u0627\u0631\u0629",
+      "text": "\u0627\u0644\u0645\u0640\u0640\u0646\u0640\u0640\u0640\u0640\u0640\u0627\u0631\u0629",
+      "orig": "\u0627\u0644\u0645\u0640\u0640\u0646\u0640\u0640\u0640\u0640\u0640\u0627\u0631\u0629",
       "text_direction": "right_to_left",
       "confidence": 1.0,
       "from_ocr": false,
@@ -60374,7 +60287,7 @@
       "font_name": "/AAAAAC+ArialMT"
     },
     {
-      "index": 12,
+      "index": 9,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -60403,7 +60316,7 @@
       "font_name": "/AAAAAC+ArialMT"
     },
     {
-      "index": 13,
+      "index": 10,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -60432,7 +60345,7 @@
       "font_name": "/AAAAAC+ArialMT"
     },
     {
-      "index": 14,
+      "index": 11,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -60461,7 +60374,7 @@
       "font_name": "/AAAAAC+ArialMT"
     },
     {
-      "index": 15,
+      "index": 12,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -60490,7 +60403,7 @@
       "font_name": "/AAAAAE+SakkalMajalla"
     },
     {
-      "index": 16,
+      "index": 13,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -60519,7 +60432,7 @@
       "font_name": "/AAAAAC+ArialMT"
     },
     {
-      "index": 17,
+      "index": 14,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -60548,7 +60461,7 @@
       "font_name": "/AAAAAC+ArialMT"
     },
     {
-      "index": 18,
+      "index": 15,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -60577,7 +60490,7 @@
       "font_name": "/AAAAAC+ArialMT"
     },
     {
-      "index": 19,
+      "index": 16,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -60606,7 +60519,7 @@
       "font_name": "/AAAAAE+SakkalMajalla"
     },
     {
-      "index": 20,
+      "index": 17,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -60635,7 +60548,7 @@
       "font_name": "/AAAAAC+ArialMT"
     },
     {
-      "index": 21,
+      "index": 18,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -60664,7 +60577,7 @@
       "font_name": "/AAAAAE+SakkalMajalla"
     },
     {
-      "index": 22,
+      "index": 19,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -60693,7 +60606,7 @@
       "font_name": "/AAAAAC+ArialMT"
     },
     {
-      "index": 23,
+      "index": 20,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -60722,7 +60635,7 @@
       "font_name": "/AAAAAI+Arial-BoldMT"
     },
     {
-      "index": 24,
+      "index": 21,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -60751,7 +60664,7 @@
       "font_name": "/AAAAAK+TimesNewRomanPS-BoldMT"
     },
     {
-      "index": 25,
+      "index": 22,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -60780,7 +60693,7 @@
       "font_name": "/AAAAAK+TimesNewRomanPS-BoldMT"
     },
     {
-      "index": 26,
+      "index": 23,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -60809,7 +60722,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 27,
+      "index": 24,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -60838,7 +60751,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 28,
+      "index": 25,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -60867,7 +60780,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 29,
+      "index": 26,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -60896,7 +60809,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 30,
+      "index": 27,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -60925,7 +60838,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 31,
+      "index": 28,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -60954,7 +60867,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 32,
+      "index": 29,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -60983,7 +60896,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 33,
+      "index": 30,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -61012,7 +60925,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 34,
+      "index": 31,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -61041,7 +60954,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 35,
+      "index": 32,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -61070,7 +60983,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 36,
+      "index": 33,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -61099,7 +61012,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 37,
+      "index": 34,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -61128,7 +61041,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 38,
+      "index": 35,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -61157,7 +61070,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 39,
+      "index": 36,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -61186,7 +61099,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 40,
+      "index": 37,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -61215,7 +61128,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 41,
+      "index": 38,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -61244,7 +61157,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 42,
+      "index": 39,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -61273,7 +61186,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 43,
+      "index": 40,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -61302,7 +61215,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 44,
+      "index": 41,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -61331,7 +61244,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 45,
+      "index": 42,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -61360,7 +61273,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 46,
+      "index": 43,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -61389,7 +61302,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 47,
+      "index": 44,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -61418,7 +61331,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 48,
+      "index": 45,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -61447,7 +61360,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 49,
+      "index": 46,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -61476,7 +61389,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 50,
+      "index": 47,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -61505,7 +61418,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 51,
+      "index": 48,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -61534,7 +61447,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 52,
+      "index": 49,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -61563,7 +61476,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 53,
+      "index": 50,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -61592,7 +61505,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 54,
+      "index": 51,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -61621,7 +61534,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 55,
+      "index": 52,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -61650,7 +61563,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 56,
+      "index": 53,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -61679,7 +61592,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 57,
+      "index": 54,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -61708,7 +61621,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 58,
+      "index": 55,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -61737,7 +61650,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 59,
+      "index": 56,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -61766,7 +61679,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 60,
+      "index": 57,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -61795,7 +61708,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 61,
+      "index": 58,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -61824,7 +61737,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 62,
+      "index": 59,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -61853,7 +61766,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 63,
+      "index": 60,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -61882,7 +61795,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 64,
+      "index": 61,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -61911,7 +61824,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 65,
+      "index": 62,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -61940,7 +61853,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 66,
+      "index": 63,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -61969,7 +61882,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 67,
+      "index": 64,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -61998,7 +61911,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 68,
+      "index": 65,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62027,7 +61940,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 69,
+      "index": 66,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62056,7 +61969,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 70,
+      "index": 67,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62085,7 +61998,7 @@
       "font_name": "/AAAAAK+TimesNewRomanPS-BoldMT"
     },
     {
-      "index": 71,
+      "index": 68,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62114,7 +62027,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 72,
+      "index": 69,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62143,7 +62056,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 73,
+      "index": 70,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62172,7 +62085,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 74,
+      "index": 71,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62201,7 +62114,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 75,
+      "index": 72,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62230,7 +62143,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 76,
+      "index": 73,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62259,7 +62172,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 77,
+      "index": 74,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62288,7 +62201,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 78,
+      "index": 75,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62317,7 +62230,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 79,
+      "index": 76,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62346,7 +62259,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 80,
+      "index": 77,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62375,7 +62288,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 81,
+      "index": 78,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62404,7 +62317,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 82,
+      "index": 79,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62433,7 +62346,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 83,
+      "index": 80,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62462,7 +62375,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 84,
+      "index": 81,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62491,7 +62404,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 85,
+      "index": 82,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62520,7 +62433,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 86,
+      "index": 83,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62549,7 +62462,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 87,
+      "index": 84,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62578,7 +62491,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 88,
+      "index": 85,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62607,7 +62520,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 89,
+      "index": 86,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62636,7 +62549,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 90,
+      "index": 87,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62665,7 +62578,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 91,
+      "index": 88,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62694,7 +62607,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 92,
+      "index": 89,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62723,7 +62636,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 93,
+      "index": 90,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62752,7 +62665,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 94,
+      "index": 91,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62781,7 +62694,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 95,
+      "index": 92,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62810,7 +62723,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 96,
+      "index": 93,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62839,7 +62752,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 97,
+      "index": 94,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62868,7 +62781,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 98,
+      "index": 95,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62897,7 +62810,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 99,
+      "index": 96,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62926,7 +62839,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 100,
+      "index": 97,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62955,7 +62868,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 101,
+      "index": 98,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62984,7 +62897,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 102,
+      "index": 99,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63013,7 +62926,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 103,
+      "index": 100,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63042,7 +62955,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 104,
+      "index": 101,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63071,7 +62984,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 105,
+      "index": 102,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63100,7 +63013,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 106,
+      "index": 103,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63129,7 +63042,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 107,
+      "index": 104,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63158,7 +63071,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 108,
+      "index": 105,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63187,7 +63100,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 109,
+      "index": 106,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63216,7 +63129,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 110,
+      "index": 107,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63245,7 +63158,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 111,
+      "index": 108,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63274,7 +63187,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 112,
+      "index": 109,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63303,7 +63216,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 113,
+      "index": 110,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63332,7 +63245,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 114,
+      "index": 111,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63361,7 +63274,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 115,
+      "index": 112,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63390,7 +63303,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 116,
+      "index": 113,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63419,7 +63332,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 117,
+      "index": 114,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63448,7 +63361,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 118,
+      "index": 115,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63477,7 +63390,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 119,
+      "index": 116,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63506,7 +63419,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 120,
+      "index": 117,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63535,7 +63448,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 121,
+      "index": 118,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63564,7 +63477,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 122,
+      "index": 119,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63593,7 +63506,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 123,
+      "index": 120,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63622,7 +63535,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 124,
+      "index": 121,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63651,7 +63564,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 125,
+      "index": 122,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63680,7 +63593,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 126,
+      "index": 123,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63709,7 +63622,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 127,
+      "index": 124,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63738,7 +63651,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 128,
+      "index": 125,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63767,7 +63680,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 129,
+      "index": 126,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63796,7 +63709,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 130,
+      "index": 127,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63825,7 +63738,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 131,
+      "index": 128,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63854,7 +63767,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 132,
+      "index": 129,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63883,7 +63796,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 133,
+      "index": 130,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63912,7 +63825,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 134,
+      "index": 131,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63941,7 +63854,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 135,
+      "index": 132,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63970,7 +63883,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 136,
+      "index": 133,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63999,7 +63912,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 137,
+      "index": 134,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64028,7 +63941,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 138,
+      "index": 135,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64057,7 +63970,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 139,
+      "index": 136,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64086,7 +63999,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 140,
+      "index": 137,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64115,7 +64028,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 141,
+      "index": 138,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64144,7 +64057,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 142,
+      "index": 139,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64173,7 +64086,7 @@
       "font_name": "/AAAAAK+TimesNewRomanPS-BoldMT"
     },
     {
-      "index": 143,
+      "index": 140,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64202,7 +64115,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 144,
+      "index": 141,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64231,7 +64144,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 145,
+      "index": 142,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64260,7 +64173,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 146,
+      "index": 143,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64289,7 +64202,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 147,
+      "index": 144,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64318,7 +64231,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 148,
+      "index": 145,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64347,7 +64260,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 149,
+      "index": 146,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64376,7 +64289,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 150,
+      "index": 147,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64405,7 +64318,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 151,
+      "index": 148,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64434,7 +64347,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 152,
+      "index": 149,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64463,7 +64376,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 153,
+      "index": 150,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64492,7 +64405,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 154,
+      "index": 151,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64521,7 +64434,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 155,
+      "index": 152,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64550,7 +64463,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 156,
+      "index": 153,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64579,7 +64492,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 157,
+      "index": 154,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64608,7 +64521,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 158,
+      "index": 155,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64637,7 +64550,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 159,
+      "index": 156,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64666,7 +64579,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 160,
+      "index": 157,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64695,7 +64608,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 161,
+      "index": 158,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64724,7 +64637,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 162,
+      "index": 159,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64753,7 +64666,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 163,
+      "index": 160,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64782,7 +64695,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 164,
+      "index": 161,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64811,7 +64724,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 165,
+      "index": 162,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64840,7 +64753,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 166,
+      "index": 163,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64869,7 +64782,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 167,
+      "index": 164,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64898,7 +64811,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 168,
+      "index": 165,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64927,7 +64840,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 169,
+      "index": 166,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64956,7 +64869,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 170,
+      "index": 167,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64985,7 +64898,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 171,
+      "index": 168,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -65014,7 +64927,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 172,
+      "index": 169,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -65043,7 +64956,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 173,
+      "index": 170,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -65072,7 +64985,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 174,
+      "index": 171,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -65101,7 +65014,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 175,
+      "index": 172,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -65130,7 +65043,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 176,
+      "index": 173,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -65159,7 +65072,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 177,
+      "index": 174,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -65188,7 +65101,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 178,
+      "index": 175,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -65217,7 +65130,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 179,
+      "index": 176,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -65246,7 +65159,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 180,
+      "index": 177,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -65275,7 +65188,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 181,
+      "index": 178,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -65304,7 +65217,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 182,
+      "index": 179,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -65333,7 +65246,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 183,
+      "index": 180,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -65362,7 +65275,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 184,
+      "index": 181,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -65391,7 +65304,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 185,
+      "index": 182,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -65420,7 +65333,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 186,
+      "index": 183,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -65449,7 +65362,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 187,
+      "index": 184,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -65478,7 +65391,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 188,
+      "index": 185,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -65507,7 +65420,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 189,
+      "index": 186,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -65536,7 +65449,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 190,
+      "index": 187,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -65565,7 +65478,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 191,
+      "index": 188,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -65594,7 +65507,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 192,
+      "index": 189,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -65623,7 +65536,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 193,
+      "index": 190,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -65652,7 +65565,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 194,
+      "index": 191,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -65681,7 +65594,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 195,
+      "index": 192,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -65710,210 +65623,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 196,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 470.661,
-        "r_y0": 343.329,
-        "r_x1": 473.261,
-        "r_y1": 343.329,
-        "r_x2": 473.261,
-        "r_y2": 354.43,
-        "r_x3": 470.661,
-        "r_y3": 354.43,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "\u0627",
-      "orig": "\u0627",
-      "text_direction": "right_to_left",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/G2",
-      "font_name": "/AAAAAC+ArialMT"
-    },
-    {
-      "index": 197,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 462.934,
-        "r_y0": 343.329,
-        "r_x1": 470.596,
-        "r_y1": 343.329,
-        "r_x2": 470.596,
-        "r_y2": 354.43,
-        "r_x3": 462.934,
-        "r_y3": 354.43,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "\u0644\u0645",
-      "orig": "\u0644\u0645",
-      "text_direction": "right_to_left",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/G2",
-      "font_name": "/AAAAAC+ArialMT"
-    },
-    {
-      "index": 198,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 460.515,
-        "r_y0": 343.329,
-        "r_x1": 463.116,
-        "r_y1": 343.329,
-        "r_x2": 463.116,
-        "r_y2": 354.43,
-        "r_x3": 460.515,
-        "r_y3": 354.43,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "\u0640",
-      "orig": "\u0640",
-      "text_direction": "right_to_left",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/G2",
-      "font_name": "/AAAAAC+ArialMT"
-    },
-    {
-      "index": 199,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 457.134,
-        "r_y0": 343.329,
-        "r_x1": 460.437,
-        "r_y1": 343.329,
-        "r_x2": 460.437,
-        "r_y2": 354.43,
-        "r_x3": 457.134,
-        "r_y3": 354.43,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "\u0642",
-      "orig": "\u0642",
-      "text_direction": "right_to_left",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/G2",
-      "font_name": "/AAAAAC+ArialMT"
-    },
-    {
-      "index": 200,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 454.477,
-        "r_y0": 343.329,
-        "r_x1": 457.077,
-        "r_y1": 343.329,
-        "r_x2": 457.077,
-        "r_y2": 354.43,
-        "r_x3": 454.477,
-        "r_y3": 354.43,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "\u0640",
-      "orig": "\u0640",
-      "text_direction": "right_to_left",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/G2",
-      "font_name": "/AAAAAC+ArialMT"
-    },
-    {
-      "index": 201,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 442.641,
-        "r_y0": 343.329,
-        "r_x1": 454.347,
-        "r_y1": 343.329,
-        "r_x2": 454.347,
-        "r_y2": 354.43,
-        "r_x3": 442.641,
-        "r_y3": 354.43,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "\u062f\u0645\u0640",
-      "orig": "\u062f\u0645\u0640",
-      "text_direction": "right_to_left",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/G2",
-      "font_name": "/AAAAAC+ArialMT"
-    },
-    {
-      "index": 202,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 437.33,
-        "r_y0": 343.329,
-        "r_x1": 442.58,
-        "r_y1": 343.329,
-        "r_x2": 442.58,
-        "r_y2": 354.43,
-        "r_x3": 437.33,
-        "r_y3": 354.43,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "\u0640\u0640",
-      "orig": "\u0640\u0640",
-      "text_direction": "right_to_left",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/G2",
-      "font_name": "/AAAAAC+ArialMT"
-    },
-    {
-      "index": 203,
+      "index": 193,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -65923,16 +65633,16 @@
       "rect": {
         "r_x0": 432.717,
         "r_y0": 343.329,
-        "r_x1": 437.428,
+        "r_x1": 473.261,
         "r_y1": 343.329,
-        "r_x2": 437.428,
+        "r_x2": 473.261,
         "r_y2": 354.43,
         "r_x3": 432.717,
         "r_y3": 354.43,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "\u0629",
-      "orig": "\u0629",
+      "text": "\u0627\u0644\u0645\u0640\u0642\u0640\u062f\u0645\u0640\u0640\u0640\u0629",
+      "orig": "\u0627\u0644\u0645\u0640\u0642\u0640\u062f\u0645\u0640\u0640\u0640\u0629",
       "text_direction": "right_to_left",
       "confidence": 1.0,
       "from_ocr": false,
@@ -65942,7 +65652,7 @@
       "font_name": "/AAAAAC+ArialMT"
     },
     {
-      "index": 204,
+      "index": 194,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -65971,7 +65681,7 @@
       "font_name": "/AAAAAC+ArialMT"
     },
     {
-      "index": 205,
+      "index": 195,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -66000,7 +65710,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 206,
+      "index": 196,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -66029,7 +65739,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 207,
+      "index": 197,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -66058,7 +65768,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 208,
+      "index": 198,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -66087,7 +65797,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 209,
+      "index": 199,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -66116,7 +65826,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 210,
+      "index": 200,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -66145,7 +65855,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 211,
+      "index": 201,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -66174,7 +65884,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 212,
+      "index": 202,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -66203,7 +65913,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 213,
+      "index": 203,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -66232,7 +65942,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 214,
+      "index": 204,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -66261,7 +65971,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 215,
+      "index": 205,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -66290,7 +66000,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 216,
+      "index": 206,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -66319,7 +66029,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 217,
+      "index": 207,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -66348,7 +66058,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 218,
+      "index": 208,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -66377,7 +66087,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 219,
+      "index": 209,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -66406,7 +66116,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 220,
+      "index": 210,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -66435,7 +66145,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 221,
+      "index": 211,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -66464,7 +66174,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 222,
+      "index": 212,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -66493,7 +66203,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 223,
+      "index": 213,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -66522,7 +66232,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 224,
+      "index": 214,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -66551,7 +66261,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 225,
+      "index": 215,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -66580,7 +66290,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 226,
+      "index": 216,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -66609,7 +66319,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 227,
+      "index": 217,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -66638,7 +66348,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 228,
+      "index": 218,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -66667,7 +66377,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 229,
+      "index": 219,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -66696,7 +66406,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 230,
+      "index": 220,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -66725,7 +66435,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 231,
+      "index": 221,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -66754,7 +66464,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 232,
+      "index": 222,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -66783,7 +66493,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 233,
+      "index": 223,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -66812,7 +66522,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 234,
+      "index": 224,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -66841,7 +66551,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 235,
+      "index": 225,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -66870,7 +66580,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 236,
+      "index": 226,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -66899,7 +66609,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 237,
+      "index": 227,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -66928,7 +66638,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 238,
+      "index": 228,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -66957,36 +66667,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 239,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 225.148,
-        "r_y0": 296.221,
-        "r_x1": 228.847,
-        "r_y1": 296.221,
-        "r_x2": 228.847,
-        "r_y2": 307.739,
-        "r_x3": 225.148,
-        "r_y3": 307.739,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "\u060c",
-      "orig": "\u060c",
-      "text_direction": "right_to_left",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/G6",
-      "font_name": "/AAAAAG+SimplifiedArabic"
-    },
-    {
-      "index": 240,
+      "index": 229,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -66996,16 +66677,16 @@
       "rect": {
         "r_x0": 207.975,
         "r_y0": 296.221,
-        "r_x1": 225.216,
+        "r_x1": 228.847,
         "r_y1": 296.221,
-        "r_x2": 225.216,
+        "r_x2": 228.847,
         "r_y2": 307.739,
         "r_x3": 207.975,
         "r_y3": 307.739,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "\u062d\u064a\u062b",
-      "orig": "\u062d\u064a\u062b",
+      "text": "\u060c\u062d\u064a\u062b",
+      "orig": "\u060c\u062d\u064a\u062b",
       "text_direction": "right_to_left",
       "confidence": 1.0,
       "from_ocr": false,
@@ -67015,7 +66696,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 241,
+      "index": 230,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -67044,7 +66725,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 242,
+      "index": 231,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -67073,7 +66754,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 243,
+      "index": 232,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -67102,7 +66783,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 244,
+      "index": 233,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -67131,7 +66812,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 245,
+      "index": 234,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -67160,7 +66841,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 246,
+      "index": 235,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -67189,7 +66870,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 247,
+      "index": 236,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -67218,7 +66899,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 248,
+      "index": 237,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -67247,7 +66928,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 249,
+      "index": 238,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -67276,7 +66957,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 250,
+      "index": 239,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -67305,7 +66986,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 251,
+      "index": 240,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -67334,7 +67015,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 252,
+      "index": 241,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -67363,7 +67044,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 253,
+      "index": 242,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -67392,7 +67073,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 254,
+      "index": 243,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -67421,7 +67102,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 255,
+      "index": 244,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -67450,7 +67131,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 256,
+      "index": 245,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -67479,7 +67160,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 257,
+      "index": 246,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -67508,7 +67189,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 258,
+      "index": 247,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -67537,7 +67218,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 259,
+      "index": 248,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -67566,7 +67247,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 260,
+      "index": 249,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -67595,7 +67276,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 261,
+      "index": 250,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -67624,7 +67305,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 262,
+      "index": 251,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -67653,7 +67334,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 263,
+      "index": 252,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -67682,7 +67363,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 264,
+      "index": 253,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -67711,7 +67392,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 265,
+      "index": 254,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -67740,7 +67421,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 266,
+      "index": 255,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -67769,7 +67450,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 267,
+      "index": 256,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -67798,7 +67479,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 268,
+      "index": 257,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -67827,7 +67508,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 269,
+      "index": 258,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -67856,7 +67537,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 270,
+      "index": 259,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -67885,7 +67566,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 271,
+      "index": 260,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -67914,7 +67595,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 272,
+      "index": 261,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -67943,7 +67624,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 273,
+      "index": 262,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -67972,7 +67653,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 274,
+      "index": 263,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -68001,7 +67682,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 275,
+      "index": 264,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -68030,7 +67711,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 276,
+      "index": 265,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -68059,7 +67740,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 277,
+      "index": 266,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -68088,7 +67769,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 278,
+      "index": 267,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -68117,7 +67798,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 279,
+      "index": 268,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -68146,7 +67827,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 280,
+      "index": 269,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -68175,7 +67856,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 281,
+      "index": 270,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -68204,7 +67885,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 282,
+      "index": 271,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -68233,7 +67914,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 283,
+      "index": 272,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -68262,7 +67943,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 284,
+      "index": 273,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -68291,7 +67972,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 285,
+      "index": 274,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -68320,7 +68001,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 286,
+      "index": 275,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -68349,7 +68030,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 287,
+      "index": 276,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -68378,7 +68059,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 288,
+      "index": 277,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -68407,7 +68088,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 289,
+      "index": 278,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -68436,7 +68117,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 290,
+      "index": 279,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -68465,7 +68146,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 291,
+      "index": 280,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -68494,7 +68175,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 292,
+      "index": 281,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -68523,7 +68204,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 293,
+      "index": 282,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -68552,7 +68233,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 294,
+      "index": 283,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -68581,7 +68262,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 295,
+      "index": 284,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -68610,7 +68291,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 296,
+      "index": 285,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -68639,7 +68320,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 297,
+      "index": 286,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -68668,7 +68349,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 298,
+      "index": 287,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -68697,7 +68378,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 299,
+      "index": 288,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -68726,7 +68407,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 300,
+      "index": 289,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -68755,7 +68436,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 301,
+      "index": 290,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -68784,7 +68465,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 302,
+      "index": 291,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -68813,7 +68494,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 303,
+      "index": 292,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -68842,7 +68523,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 304,
+      "index": 293,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -68871,7 +68552,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 305,
+      "index": 294,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -68900,7 +68581,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 306,
+      "index": 295,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -68929,7 +68610,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 307,
+      "index": 296,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -68958,7 +68639,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 308,
+      "index": 297,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -68968,16 +68649,16 @@
       "rect": {
         "r_x0": 243.446,
         "r_y0": 207.794,
-        "r_x1": 246.89,
+        "r_x1": 255.226,
         "r_y1": 207.794,
-        "r_x2": 246.89,
+        "r_x2": 255.226,
         "r_y2": 219.312,
         "r_x3": 243.446,
         "r_y3": 219.312,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "\u0629\u0629\u0629\u0629",
-      "orig": "\u0629\u0629\u0629\u0629",
+      "text": "\u0627\u0633\u0629\u0629\u0629\u0629",
+      "orig": "\u0627\u0633\u0629\u0629\u0629\u0629",
       "text_direction": "right_to_left",
       "confidence": 1.0,
       "from_ocr": false,
@@ -68987,36 +68668,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 309,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 246.554,
-        "r_y0": 207.794,
-        "r_x1": 255.226,
-        "r_y1": 207.794,
-        "r_x2": 255.226,
-        "r_y2": 219.312,
-        "r_x3": 246.554,
-        "r_y3": 219.312,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "\u0627\u0633",
-      "orig": "\u0627\u0633",
-      "text_direction": "right_to_left",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/G6",
-      "font_name": "/AAAAAG+SimplifiedArabic"
-    },
-    {
-      "index": 310,
+      "index": 298,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -69045,7 +68697,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 311,
+      "index": 299,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -69074,7 +68726,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 312,
+      "index": 300,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -69103,7 +68755,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 313,
+      "index": 301,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -69132,7 +68784,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 314,
+      "index": 302,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -69161,7 +68813,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 315,
+      "index": 303,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -69190,7 +68842,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 316,
+      "index": 304,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -69219,7 +68871,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 317,
+      "index": 305,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -69248,7 +68900,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 318,
+      "index": 306,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -69277,7 +68929,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 319,
+      "index": 307,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -69306,7 +68958,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 320,
+      "index": 308,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -69335,7 +68987,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 321,
+      "index": 309,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -69364,7 +69016,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 322,
+      "index": 310,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -69393,7 +69045,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 323,
+      "index": 311,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -69422,7 +69074,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 324,
+      "index": 312,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -69451,7 +69103,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 325,
+      "index": 313,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -69480,7 +69132,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 326,
+      "index": 314,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -69509,7 +69161,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 327,
+      "index": 315,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -69538,7 +69190,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 328,
+      "index": 316,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -69567,7 +69219,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 329,
+      "index": 317,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -69596,7 +69248,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 330,
+      "index": 318,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -69625,7 +69277,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 331,
+      "index": 319,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -69654,7 +69306,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 332,
+      "index": 320,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -69683,7 +69335,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 333,
+      "index": 321,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -69712,7 +69364,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 334,
+      "index": 322,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -69741,7 +69393,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 335,
+      "index": 323,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -69770,7 +69422,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 336,
+      "index": 324,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -69799,7 +69451,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 337,
+      "index": 325,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -69828,7 +69480,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 338,
+      "index": 326,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -69857,7 +69509,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 339,
+      "index": 327,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -69886,7 +69538,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 340,
+      "index": 328,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -69915,7 +69567,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 341,
+      "index": 329,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -69944,7 +69596,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 342,
+      "index": 330,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -69973,7 +69625,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 343,
+      "index": 331,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -70002,7 +69654,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 344,
+      "index": 332,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -70031,7 +69683,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 345,
+      "index": 333,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -70060,7 +69712,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 346,
+      "index": 334,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -70089,7 +69741,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 347,
+      "index": 335,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -70118,7 +69770,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 348,
+      "index": 336,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -70147,7 +69799,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 349,
+      "index": 337,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -70302,18 +69954,18 @@
         "a": 255
       },
       "rect": {
-        "r_x0": 323.266,
+        "r_x0": 242.54,
         "r_y0": 681.359,
         "r_x1": 473.25,
         "r_y1": 681.359,
         "r_x2": 473.25,
         "r_y2": 689.897,
-        "r_x3": 323.266,
+        "r_x3": 242.54,
         "r_y3": 689.897,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "........................................................",
-      "orig": "........................................................",
+      "text": "......................................................................................",
+      "orig": "......................................................................................",
       "text_direction": "left_to_right",
       "confidence": 1.0,
       "from_ocr": false,
@@ -70324,35 +69976,6 @@
     },
     {
       "index": 5,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 242.54,
-        "r_y0": 681.359,
-        "r_x1": 323.208,
-        "r_y1": 681.359,
-        "r_x2": 323.208,
-        "r_y2": 689.897,
-        "r_x3": 242.54,
-        "r_y3": 689.897,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "..............................",
-      "orig": "..............................",
-      "text_direction": "left_to_right",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/G2",
-      "font_name": "/AAAAAC+ArialMT"
-    },
-    {
-      "index": 6,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -70381,7 +70004,7 @@
       "font_name": "/AAAAAB+Arial-BoldMT"
     },
     {
-      "index": 7,
+      "index": 6,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -70410,7 +70033,7 @@
       "font_name": "/AAAAAC+ArialMT"
     },
     {
-      "index": 8,
+      "index": 7,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -70439,7 +70062,7 @@
       "font_name": "/AAAAAC+ArialMT"
     },
     {
-      "index": 9,
+      "index": 8,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -70468,7 +70091,7 @@
       "font_name": "/AAAAAC+ArialMT"
     },
     {
-      "index": 10,
+      "index": 9,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -70497,7 +70120,7 @@
       "font_name": "/AAAAAD+TimesNewRomanPSMT"
     },
     {
-      "index": 11,
+      "index": 10,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -70526,181 +70149,7 @@
       "font_name": "/AAAAAD+TimesNewRomanPSMT"
     },
     {
-      "index": 12,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 442.158,
-        "r_y0": 134.661,
-        "r_x1": 473.121,
-        "r_y1": 134.661,
-        "r_x2": 473.121,
-        "r_y2": 146.615,
-        "r_x3": 442.158,
-        "r_y3": 146.615,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "\u0627\u0644\u0645\u0640\u0640\u0646\u0640\u0640\u0640\u0640",
-      "orig": "\u0627\u0644\u0645\u0640\u0640\u0646\u0640\u0640\u0640\u0640",
-      "text_direction": "right_to_left",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/G2",
-      "font_name": "/AAAAAC+ArialMT"
-    },
-    {
-      "index": 13,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 439.259,
-        "r_y0": 134.661,
-        "r_x1": 442.059,
-        "r_y1": 134.661,
-        "r_x2": 442.059,
-        "r_y2": 146.615,
-        "r_x3": 439.259,
-        "r_y3": 146.615,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "\u0640",
-      "orig": "\u0640",
-      "text_direction": "right_to_left",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/G2",
-      "font_name": "/AAAAAC+ArialMT"
-    },
-    {
-      "index": 14,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 425.703,
-        "r_y0": 134.661,
-        "r_x1": 439.176,
-        "r_y1": 134.661,
-        "r_x2": 439.176,
-        "r_y2": 146.615,
-        "r_x3": 425.703,
-        "r_y3": 146.615,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "\u0627\u0631\u0629",
-      "orig": "\u0627\u0631\u0629",
-      "text_direction": "right_to_left",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/G2",
-      "font_name": "/AAAAAC+ArialMT"
-    },
-    {
-      "index": 15,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 418.94,
-        "r_y0": 134.985,
-        "r_x1": 425.778,
-        "r_y1": 134.985,
-        "r_x2": 425.778,
-        "r_y2": 145.231,
-        "r_x3": 418.94,
-        "r_y3": 145.231,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "\u060c ",
-      "orig": "\u060c ",
-      "text_direction": "right_to_left",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/G2",
-      "font_name": "/AAAAAC+ArialMT"
-    },
-    {
-      "index": 16,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 394.785,
-        "r_y0": 134.985,
-        "r_x1": 418.901,
-        "r_y1": 134.985,
-        "r_x2": 418.901,
-        "r_y2": 145.231,
-        "r_x3": 394.785,
-        "r_y3": 145.231,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "\u0627\u0644\u0645\u062c\u0644\u0640\u062f",
-      "orig": "\u0627\u0644\u0645\u062c\u0644\u0640\u062f",
-      "text_direction": "right_to_left",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/G2",
-      "font_name": "/AAAAAC+ArialMT"
-    },
-    {
-      "index": 17,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 391.645,
-        "r_y0": 134.985,
-        "r_x1": 394.868,
-        "r_y1": 134.985,
-        "r_x2": 394.868,
-        "r_y2": 145.231,
-        "r_x3": 391.645,
-        "r_y3": 145.231,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": " ",
-      "orig": " ",
-      "text_direction": "left_to_right",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/G2",
-      "font_name": "/AAAAAC+ArialMT"
-    },
-    {
-      "index": 18,
+      "index": 11,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -70710,17 +70159,17 @@
       "rect": {
         "r_x0": 387.78,
         "r_y0": 134.985,
-        "r_x1": 391.641,
-        "r_y1": 134.985,
-        "r_x2": 391.641,
-        "r_y2": 145.231,
+        "r_x1": 473.121,
+        "r_y1": 134.661,
+        "r_x2": 473.121,
+        "r_y2": 146.615,
         "r_x3": 387.78,
         "r_y3": 145.231,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "(",
-      "orig": "(",
-      "text_direction": "left_to_right",
+      "text": "\u0627\u0644\u0645\u0640\u0640\u0646\u0640\u0640\u0640\u0640\u0640\u0627\u0631\u0629\u060c \u0627\u0644\u0645\u062c\u0644\u0640\u062f (",
+      "orig": "\u0627\u0644\u0645\u0640\u0640\u0646\u0640\u0640\u0640\u0640\u0640\u0627\u0631\u0629\u060c \u0627\u0644\u0645\u062c\u0644\u0640\u062f (",
+      "text_direction": "right_to_left",
       "confidence": 1.0,
       "from_ocr": false,
       "rendering_mode": -1,
@@ -70729,7 +70178,7 @@
       "font_name": "/AAAAAC+ArialMT"
     },
     {
-      "index": 19,
+      "index": 12,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -70758,94 +70207,7 @@
       "font_name": "/AAAAAE+SakkalMajalla"
     },
     {
-      "index": 20,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 366.021,
-        "r_y0": 134.985,
-        "r_x1": 376.637,
-        "r_y1": 134.985,
-        "r_x2": 376.637,
-        "r_y2": 145.231,
-        "r_x3": 366.021,
-        "r_y3": 145.231,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": ")\u060c ",
-      "orig": ")\u060c ",
-      "text_direction": "right_to_left",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/G2",
-      "font_name": "/AAAAAC+ArialMT"
-    },
-    {
-      "index": 21,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 344.04,
-        "r_y0": 134.985,
-        "r_x1": 365.953,
-        "r_y1": 134.985,
-        "r_x2": 365.953,
-        "r_y2": 145.231,
-        "r_x3": 344.04,
-        "r_y3": 145.231,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "\u0627\u0644\u0640\u0639\u0640\u062f\u062f",
-      "orig": "\u0627\u0644\u0640\u0639\u0640\u062f\u062f",
-      "text_direction": "right_to_left",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/G2",
-      "font_name": "/AAAAAC+ArialMT"
-    },
-    {
-      "index": 22,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 340.9,
-        "r_y0": 134.985,
-        "r_x1": 344.123,
-        "r_y1": 134.985,
-        "r_x2": 344.123,
-        "r_y2": 145.231,
-        "r_x3": 340.9,
-        "r_y3": 145.231,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": " ",
-      "orig": " ",
-      "text_direction": "left_to_right",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/G2",
-      "font_name": "/AAAAAC+ArialMT"
-    },
-    {
-      "index": 23,
+      "index": 13,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -70855,17 +70217,17 @@
       "rect": {
         "r_x0": 337.035,
         "r_y0": 134.985,
-        "r_x1": 340.896,
+        "r_x1": 376.637,
         "r_y1": 134.985,
-        "r_x2": 340.896,
+        "r_x2": 376.637,
         "r_y2": 145.231,
         "r_x3": 337.035,
         "r_y3": 145.231,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "(",
-      "orig": "(",
-      "text_direction": "left_to_right",
+      "text": ")\u060c \u0627\u0644\u0640\u0639\u0640\u062f\u062f (",
+      "orig": ")\u060c \u0627\u0644\u0640\u0639\u0640\u062f\u062f (",
+      "text_direction": "right_to_left",
       "confidence": 1.0,
       "from_ocr": false,
       "rendering_mode": -1,
@@ -70874,7 +70236,7 @@
       "font_name": "/AAAAAC+ArialMT"
     },
     {
-      "index": 24,
+      "index": 14,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -70903,7 +70265,7 @@
       "font_name": "/AAAAAE+SakkalMajalla"
     },
     {
-      "index": 25,
+      "index": 15,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -70932,7 +70294,7 @@
       "font_name": "/AAAAAC+ArialMT"
     },
     {
-      "index": 26,
+      "index": 16,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -70961,7 +70323,7 @@
       "font_name": "/AAAAAE+SakkalMajalla"
     },
     {
-      "index": 27,
+      "index": 17,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -70990,7 +70352,7 @@
       "font_name": "/AAAAAC+ArialMT"
     },
     {
-      "index": 28,
+      "index": 18,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -71019,7 +70381,7 @@
       "font_name": "/AAAAAC+ArialMT"
     },
     {
-      "index": 29,
+      "index": 19,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -71048,7 +70410,7 @@
       "font_name": "/AAAAAC+ArialMT"
     },
     {
-      "index": 30,
+      "index": 20,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -71077,36 +70439,7 @@
       "font_name": "/AAAAAF+SimplifiedArabic-Bold"
     },
     {
-      "index": 31,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 246.163,
-        "r_y0": 134.985,
-        "r_x1": 268.946,
-        "r_y1": 134.985,
-        "r_x2": 268.946,
-        "r_y2": 145.231,
-        "r_x3": 246.163,
-        "r_y3": 145.231,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "       ",
-      "orig": "       ",
-      "text_direction": "left_to_right",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/G2",
-      "font_name": "/AAAAAC+ArialMT"
-    },
-    {
-      "index": 32,
+      "index": 21,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -71116,16 +70449,16 @@
       "rect": {
         "r_x0": 11.038,
         "r_y0": 134.985,
-        "r_x1": 246.057,
+        "r_x1": 268.946,
         "r_y1": 134.985,
-        "r_x2": 246.057,
+        "r_x2": 268.946,
         "r_y2": 145.231,
         "r_x3": 11.038,
         "r_y3": 145.231,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "                                                                         ",
-      "orig": "                                                                         ",
+      "text": "                                                                                ",
+      "orig": "                                                                                ",
       "text_direction": "left_to_right",
       "confidence": 1.0,
       "from_ocr": false,
@@ -71135,7 +70468,7 @@
       "font_name": "/AAAAAC+ArialMT"
     },
     {
-      "index": 33,
+      "index": 22,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -71164,36 +70497,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 34,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 122.441,
-        "r_y0": 131.841,
-        "r_x1": 138.47,
-        "r_y1": 131.841,
-        "r_x2": 138.47,
-        "r_y2": 144.649,
-        "r_x3": 122.441,
-        "r_y3": 144.649,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "38",
-      "orig": "38",
-      "text_direction": "left_to_right",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/TT2",
-      "font_name": "/AAAAAI+Arial-BoldMT"
-    },
-    {
-      "index": 35,
+      "index": 23,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -71203,16 +70507,16 @@
       "rect": {
         "r_x0": 114.228,
         "r_y0": 131.841,
-        "r_x1": 118.257,
+        "r_x1": 138.47,
         "r_y1": 131.841,
-        "r_x2": 118.257,
+        "r_x2": 138.47,
         "r_y2": 144.649,
         "r_x3": 114.228,
         "r_y3": 144.649,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": " ",
-      "orig": " ",
+      "text": "  38",
+      "orig": "  38",
       "text_direction": "left_to_right",
       "confidence": 1.0,
       "from_ocr": false,
@@ -71222,36 +70526,7 @@
       "font_name": "/AAAAAI+Arial-BoldMT"
     },
     {
-      "index": 36,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 273.004,
-        "r_y0": 647.233,
-        "r_x1": 323.378,
-        "r_y1": 647.233,
-        "r_x2": 323.378,
-        "r_y2": 658.358,
-        "r_x3": 273.004,
-        "r_y3": 658.358,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "Abstract",
-      "orig": "Abstract",
-      "text_direction": "left_to_right",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/TT4",
-      "font_name": "/AAAAAK+TimesNewRomanPS-BoldMT"
-    },
-    {
-      "index": 37,
+      "index": 24,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -71261,16 +70536,16 @@
       "rect": {
         "r_x0": 265.516,
         "r_y0": 647.233,
-        "r_x1": 268.898,
+        "r_x1": 323.378,
         "r_y1": 647.233,
-        "r_x2": 268.898,
+        "r_x2": 323.378,
         "r_y2": 658.358,
         "r_x3": 265.516,
         "r_y3": 658.358,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": " ",
-      "orig": " ",
+      "text": "  Abstract",
+      "orig": "  Abstract",
       "text_direction": "left_to_right",
       "confidence": 1.0,
       "from_ocr": false,
@@ -71280,7 +70555,7 @@
       "font_name": "/AAAAAK+TimesNewRomanPS-BoldMT"
     },
     {
-      "index": 38,
+      "index": 25,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -71309,7 +70584,7 @@
       "font_name": "/AAAAAL+TimesNewRomanPS-BoldMT"
     },
     {
-      "index": 39,
+      "index": 26,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -71338,7 +70613,7 @@
       "font_name": "/AAAAAK+TimesNewRomanPS-BoldMT"
     },
     {
-      "index": 40,
+      "index": 27,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -71367,7 +70642,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 41,
+      "index": 28,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -71396,7 +70671,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 42,
+      "index": 29,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -71425,7 +70700,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 43,
+      "index": 30,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -71454,7 +70729,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 44,
+      "index": 31,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -71483,7 +70758,7 @@
       "font_name": "/AAAAAK+TimesNewRomanPS-BoldMT"
     },
     {
-      "index": 45,
+      "index": 32,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -71512,7 +70787,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 46,
+      "index": 33,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -71541,7 +70816,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 47,
+      "index": 34,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -71570,7 +70845,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 48,
+      "index": 35,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -71599,7 +70874,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 49,
+      "index": 36,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -71628,7 +70903,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 50,
+      "index": 37,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -71657,7 +70932,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 51,
+      "index": 38,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -71686,7 +70961,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 52,
+      "index": 39,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -71715,7 +70990,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 53,
+      "index": 40,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -71744,7 +71019,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 54,
+      "index": 41,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -71773,7 +71048,7 @@
       "font_name": "/AAAAAK+TimesNewRomanPS-BoldMT"
     },
     {
-      "index": 55,
+      "index": 42,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -71802,7 +71077,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 56,
+      "index": 43,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -71831,7 +71106,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 57,
+      "index": 44,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -71860,7 +71135,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 58,
+      "index": 45,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -71889,7 +71164,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 59,
+      "index": 46,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -71918,7 +71193,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 60,
+      "index": 47,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -71947,7 +71222,7 @@
       "font_name": "/AAAAAN+TimesNewRomanPSMT"
     },
     {
-      "index": 61,
+      "index": 48,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -71976,181 +71251,7 @@
       "font_name": "/AAAAAK+TimesNewRomanPS-BoldMT"
     },
     {
-      "index": 62,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 470.661,
-        "r_y0": 343.329,
-        "r_x1": 473.261,
-        "r_y1": 343.329,
-        "r_x2": 473.261,
-        "r_y2": 354.43,
-        "r_x3": 470.661,
-        "r_y3": 354.43,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "\u0627",
-      "orig": "\u0627",
-      "text_direction": "right_to_left",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/G2",
-      "font_name": "/AAAAAC+ArialMT"
-    },
-    {
-      "index": 63,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 463.173,
-        "r_y0": 343.329,
-        "r_x1": 466.664,
-        "r_y1": 343.329,
-        "r_x2": 466.664,
-        "r_y2": 354.43,
-        "r_x3": 463.173,
-        "r_y3": 354.43,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": " ",
-      "orig": " ",
-      "text_direction": "left_to_right",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/G2",
-      "font_name": "/AAAAAC+ArialMT"
-    },
-    {
-      "index": 64,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 460.515,
-        "r_y0": 343.329,
-        "r_x1": 463.116,
-        "r_y1": 343.329,
-        "r_x2": 463.116,
-        "r_y2": 354.43,
-        "r_x3": 460.515,
-        "r_y3": 354.43,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "\u0640",
-      "orig": "\u0640",
-      "text_direction": "right_to_left",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/G2",
-      "font_name": "/AAAAAC+ArialMT"
-    },
-    {
-      "index": 65,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 457.134,
-        "r_y0": 343.329,
-        "r_x1": 460.437,
-        "r_y1": 343.329,
-        "r_x2": 460.437,
-        "r_y2": 354.43,
-        "r_x3": 457.134,
-        "r_y3": 354.43,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "\u0642",
-      "orig": "\u0642",
-      "text_direction": "right_to_left",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/G2",
-      "font_name": "/AAAAAC+ArialMT"
-    },
-    {
-      "index": 66,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 454.477,
-        "r_y0": 343.329,
-        "r_x1": 457.077,
-        "r_y1": 343.329,
-        "r_x2": 457.077,
-        "r_y2": 354.43,
-        "r_x3": 454.477,
-        "r_y3": 354.43,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "\u0640",
-      "orig": "\u0640",
-      "text_direction": "right_to_left",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/G2",
-      "font_name": "/AAAAAC+ArialMT"
-    },
-    {
-      "index": 67,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 442.641,
-        "r_y0": 343.329,
-        "r_x1": 454.347,
-        "r_y1": 343.329,
-        "r_x2": 454.347,
-        "r_y2": 354.43,
-        "r_x3": 442.641,
-        "r_y3": 354.43,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "\u062f\u0645\u0640",
-      "orig": "\u062f\u0645\u0640",
-      "text_direction": "right_to_left",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/G2",
-      "font_name": "/AAAAAC+ArialMT"
-    },
-    {
-      "index": 68,
+      "index": 49,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -72160,45 +71261,16 @@
       "rect": {
         "r_x0": 437.568,
         "r_y0": 343.329,
-        "r_x1": 441.06,
+        "r_x1": 473.261,
         "r_y1": 343.329,
-        "r_x2": 441.06,
+        "r_x2": 473.261,
         "r_y2": 354.43,
         "r_x3": 437.568,
         "r_y3": 354.43,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": " ",
-      "orig": " ",
-      "text_direction": "left_to_right",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/G2",
-      "font_name": "/AAAAAC+ArialMT"
-    },
-    {
-      "index": 69,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 437.33,
-        "r_y0": 343.329,
-        "r_x1": 442.58,
-        "r_y1": 343.329,
-        "r_x2": 442.58,
-        "r_y2": 354.43,
-        "r_x3": 437.33,
-        "r_y3": 354.43,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "\u0640\u0640",
-      "orig": "\u0640\u0640",
+      "text": "\u0627\u0644\u0645  \u0640\u0642\u0640\u062f\u0645\u0640  ",
+      "orig": "\u0627\u0644\u0645  \u0640\u0642\u0640\u062f\u0645\u0640  ",
       "text_direction": "right_to_left",
       "confidence": 1.0,
       "from_ocr": false,
@@ -72208,36 +71280,7 @@
       "font_name": "/AAAAAC+ArialMT"
     },
     {
-      "index": 70,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 429.336,
-        "r_y0": 343.329,
-        "r_x1": 437.428,
-        "r_y1": 343.329,
-        "r_x2": 437.428,
-        "r_y2": 354.43,
-        "r_x3": 429.336,
-        "r_y3": 354.43,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "\u0629 ",
-      "orig": "\u0629 ",
-      "text_direction": "right_to_left",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/G2",
-      "font_name": "/AAAAAC+ArialMT"
-    },
-    {
-      "index": 71,
+      "index": 50,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -72247,17 +71290,17 @@
       "rect": {
         "r_x0": 425.954,
         "r_y0": 343.329,
-        "r_x1": 429.446,
+        "r_x1": 442.58,
         "r_y1": 343.329,
-        "r_x2": 429.446,
+        "r_x2": 442.58,
         "r_y2": 354.43,
         "r_x3": 425.954,
         "r_y3": 354.43,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": ":",
-      "orig": ":",
-      "text_direction": "left_to_right",
+      "text": "\u0640\u0640\u0629 :",
+      "orig": "\u0640\u0640\u0629 :",
+      "text_direction": "right_to_left",
       "confidence": 1.0,
       "from_ocr": false,
       "rendering_mode": -1,
@@ -72266,7 +71309,7 @@
       "font_name": "/AAAAAC+ArialMT"
     },
     {
-      "index": 72,
+      "index": 51,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -72295,210 +71338,7 @@
       "font_name": "/AAAAAC+ArialMT"
     },
     {
-      "index": 73,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 436.119,
-        "r_y0": 318.444,
-        "r_x1": 444.557,
-        "r_y1": 318.444,
-        "r_x2": 444.557,
-        "r_y2": 329.961,
-        "r_x3": 436.119,
-        "r_y3": 329.961,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "\u0625\u0627",
-      "orig": "\u0625\u0627",
-      "text_direction": "right_to_left",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/G6",
-      "font_name": "/AAAAAG+SimplifiedArabic"
-    },
-    {
-      "index": 74,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 432.225,
-        "r_y0": 318.444,
-        "r_x1": 435.901,
-        "r_y1": 318.444,
-        "r_x2": 435.901,
-        "r_y2": 329.961,
-        "r_x3": 432.225,
-        "r_y3": 329.961,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": " ",
-      "orig": " ",
-      "text_direction": "left_to_right",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/G6",
-      "font_name": "/AAAAAG+SimplifiedArabic"
-    },
-    {
-      "index": 75,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 246.405,
-        "r_y0": 318.444,
-        "r_x1": 431.696,
-        "r_y1": 318.444,
-        "r_x2": 431.696,
-        "r_y2": 329.961,
-        "r_x3": 246.405,
-        "r_y3": 329.961,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "\u0644\u0644\u062a\u0642\u0629\u062f\u062c \u0627\u0644\u0639\u0644\u0645\u064a \u0641\u064a \u0647\u0629 \u0627 \u0627\u0644\u0639\u0635\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0631 \u0641\u0648 \u0627\u0626\u0629\u062f \u0643\u0627\u064a\u0631 \u0629 \u0645\u0635\u0647\u0629\u0627 \u0623\u0646\u0629",
-      "orig": "\u0644\u0644\u062a\u0642\u0629\u062f\u062c \u0627\u0644\u0639\u0644\u0645\u064a \u0641\u064a \u0647\u0629 \u0627 \u0627\u0644\u0639\u0635\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0631 \u0641\u0648 \u0627\u0626\u0629\u062f \u0643\u0627\u064a\u0631 \u0629 \u0645\u0635\u0647\u0629\u0627 \u0623\u0646\u0629",
-      "text_direction": "right_to_left",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/G6",
-      "font_name": "/AAAAAG+SimplifiedArabic"
-    },
-    {
-      "index": 76,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 242.057,
-        "r_y0": 318.444,
-        "r_x1": 246.405,
-        "r_y1": 318.444,
-        "r_x2": 246.405,
-        "r_y2": 329.961,
-        "r_x3": 242.057,
-        "r_y3": 329.961,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "\u0629",
-      "orig": "\u0629",
-      "text_direction": "right_to_left",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/G6",
-      "font_name": "/AAAAAG+SimplifiedArabic"
-    },
-    {
-      "index": 77,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 238.192,
-        "r_y0": 318.444,
-        "r_x1": 241.868,
-        "r_y1": 318.444,
-        "r_x2": 241.868,
-        "r_y2": 329.961,
-        "r_x3": 238.192,
-        "r_y3": 329.961,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": " ",
-      "orig": " ",
-      "text_direction": "left_to_right",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/G6",
-      "font_name": "/AAAAAG+SimplifiedArabic"
-    },
-    {
-      "index": 78,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 172.713,
-        "r_y0": 318.444,
-        "r_x1": 238.059,
-        "r_y1": 318.444,
-        "r_x2": 238.059,
-        "r_y2": 329.961,
-        "r_x3": 172.713,
-        "r_y3": 329.961,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "\u0645\u0643\u0635\u0635\u0629\u0627 \u0645\u0646 \u0627\u0644\u062a\u0646\u0644 ",
-      "orig": "\u0645\u0643\u0635\u0635\u0629\u0627 \u0645\u0646 \u0627\u0644\u062a\u0646\u0644 ",
-      "text_direction": "right_to_left",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/G6",
-      "font_name": "/AAAAAG+SimplifiedArabic"
-    },
-    {
-      "index": 79,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 168.848,
-        "r_y0": 318.444,
-        "r_x1": 172.523,
-        "r_y1": 318.444,
-        "r_x2": 172.523,
-        "r_y2": 329.961,
-        "r_x3": 168.848,
-        "r_y3": 329.961,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": " ",
-      "orig": " ",
-      "text_direction": "left_to_right",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/G6",
-      "font_name": "/AAAAAG+SimplifiedArabic"
-    },
-    {
-      "index": 80,
+      "index": 52,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -72508,16 +71348,16 @@
       "rect": {
         "r_x0": 119.301,
         "r_y0": 318.444,
-        "r_x1": 168.705,
+        "r_x1": 444.557,
         "r_y1": 318.444,
-        "r_x2": 168.705,
+        "r_x2": 444.557,
         "r_y2": 329.961,
         "r_x3": 119.301,
         "r_y3": 329.961,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "\u0645\u0646 \u0627\u0644\u062a\u0642\u0629\u062f \u0631 \u0627\u062a ",
-      "orig": "\u0645\u0646 \u0627\u0644\u062a\u0642\u0629\u062f \u0631 \u0627\u062a ",
+      "text": "\u0625\u0627 \u0644\u0644\u062a\u0642\u0629\u062f\u062c \u0627\u0644\u0639\u0644\u0645\u064a \u0641\u064a \u0647\u0629 \u0627 \u0627\u0644\u0639\u0635\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0631 \u0641\u0648 \u0627\u0626\u0629\u062f \u0643\u0627\u064a\u0631 \u0629 \u0645\u0635\u0647\u0629\u0627 \u0623\u0646\u0629\u0629 \u0645\u0643\u0635\u0635\u0629\u0627 \u0645\u0646 \u0627\u0644\u062a\u0646\u0644  \u0645\u0646 \u0627\u0644\u062a\u0642\u0629\u062f \u0631 \u0627\u062a ",
+      "orig": "\u0625\u0627 \u0644\u0644\u062a\u0642\u0629\u062f\u062c \u0627\u0644\u0639\u0644\u0645\u064a \u0641\u064a \u0647\u0629 \u0627 \u0627\u0644\u0639\u0635\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0631 \u0641\u0648 \u0627\u0626\u0629\u062f \u0643\u0627\u064a\u0631 \u0629 \u0645\u0635\u0647\u0629\u0627 \u0623\u0646\u0629\u0629 \u0645\u0643\u0635\u0635\u0629\u0627 \u0645\u0646 \u0627\u0644\u062a\u0646\u0644  \u0645\u0646 \u0627\u0644\u062a\u0642\u0629\u062f \u0631 \u0627\u062a ",
       "text_direction": "right_to_left",
       "confidence": 1.0,
       "from_ocr": false,
@@ -72527,7 +71367,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 81,
+      "index": 53,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -72556,7 +71396,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 82,
+      "index": 54,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -72585,7 +71425,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 83,
+      "index": 55,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -72593,18 +71433,18 @@
         "a": 255
       },
       "rect": {
-        "r_x0": 225.148,
+        "r_x0": 119.059,
         "r_y0": 296.221,
         "r_x1": 228.847,
         "r_y1": 296.221,
         "r_x2": 228.847,
         "r_y2": 307.739,
-        "r_x3": 225.148,
+        "r_x3": 119.059,
         "r_y3": 307.739,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "\u060c",
-      "orig": "\u060c",
+      "text": "\u060c\u062d\u064a\u062b \u0634\u0629\u0629\u0629\u0647\u062f \u0642\u0641\u0641 \u0629 \u0647\u0627\u0626\u0644  \u0634\u0629\u0629\u0629\u0645\u0644\u062a ",
+      "orig": "\u060c\u062d\u064a\u062b \u0634\u0629\u0629\u0629\u0647\u062f \u0642\u0641\u0641 \u0629 \u0647\u0627\u0626\u0644  \u0634\u0629\u0629\u0629\u0645\u0644\u062a ",
       "text_direction": "right_to_left",
       "confidence": 1.0,
       "from_ocr": false,
@@ -72614,36 +71454,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 84,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 204.114,
-        "r_y0": 296.221,
-        "r_x1": 225.216,
-        "r_y1": 296.221,
-        "r_x2": 225.216,
-        "r_y2": 307.739,
-        "r_x3": 204.114,
-        "r_y3": 307.739,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "\u062d\u064a\u062b ",
-      "orig": "\u062d\u064a\u062b ",
-      "text_direction": "right_to_left",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/G6",
-      "font_name": "/AAAAAG+SimplifiedArabic"
-    },
-    {
-      "index": 85,
+      "index": 56,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -72652,104 +71463,17 @@
       },
       "rect": {
         "r_x0": 119.059,
-        "r_y0": 296.221,
-        "r_x1": 203.861,
-        "r_y1": 296.221,
-        "r_x2": 203.861,
-        "r_y2": 307.739,
-        "r_x3": 119.059,
-        "r_y3": 307.739,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "\u0634\u0629\u0629\u0629\u0647\u062f \u0642\u0641\u0641 \u0629 \u0647\u0627\u0626\u0644  \u0634\u0629\u0629\u0629\u0645\u0644\u062a ",
-      "orig": "\u0634\u0629\u0629\u0629\u0647\u062f \u0642\u0641\u0641 \u0629 \u0647\u0627\u0626\u0644  \u0634\u0629\u0629\u0629\u0645\u0644\u062a ",
-      "text_direction": "right_to_left",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/G6",
-      "font_name": "/AAAAAG+SimplifiedArabic"
-    },
-    {
-      "index": 86,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 241.815,
         "r_y0": 274.22,
         "r_x1": 472.753,
         "r_y1": 274.22,
         "r_x2": 472.753,
         "r_y2": 285.738,
-        "r_x3": 241.815,
-        "r_y3": 285.738,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "\u0643\u0627\u0641  \u0627\u0644\u0645\u062c\u0627\u0644\u0627\u062a \u0648 \u0627\u0629\u0646\u0634\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0644  \u0627\u0644\u0645\u0646\u062a\u0644\u0641  \u0639\u0627\u0645  \u0648 \u0627\u0644\u0631 \u064a\u0627 \u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u064a  \u0628\u0646\u0627 \u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629 ",
-      "orig": "\u0643\u0627\u0641  \u0627\u0644\u0645\u062c\u0627\u0644\u0627\u062a \u0648 \u0627\u0629\u0646\u0634\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0644  \u0627\u0644\u0645\u0646\u062a\u0644\u0641  \u0639\u0627\u0645  \u0648 \u0627\u0644\u0631 \u064a\u0627 \u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u064a  \u0628\u0646\u0627 \u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629 ",
-      "text_direction": "right_to_left",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/G6",
-      "font_name": "/AAAAAG+SimplifiedArabic"
-    },
-    {
-      "index": 87,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 238.192,
-        "r_y0": 274.22,
-        "r_x1": 241.868,
-        "r_y1": 274.22,
-        "r_x2": 241.868,
-        "r_y2": 285.738,
-        "r_x3": 238.192,
-        "r_y3": 285.738,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": " ",
-      "orig": " ",
-      "text_direction": "left_to_right",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/G6",
-      "font_name": "/AAAAAG+SimplifiedArabic"
-    },
-    {
-      "index": 88,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 119.059,
-        "r_y0": 274.22,
-        "r_x1": 237.937,
-        "r_y1": 274.22,
-        "r_x2": 237.937,
-        "r_y2": 285.738,
         "r_x3": 119.059,
         "r_y3": 285.738,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "\u0628\u062d\u064a\u062b \u064a\u0639\u0644\u064a\u0635\u0627 \u0627\u0644\u0642\u062f\u0631 \u0629 \u0644\u0644\u062a\u0639\u0631 \u0641 \u0639\u0644\u0649 ",
-      "orig": "\u0628\u062d\u064a\u062b \u064a\u0639\u0644\u064a\u0635\u0627 \u0627\u0644\u0642\u062f\u0631 \u0629 \u0644\u0644\u062a\u0639\u0631 \u0641 \u0639\u0644\u0649 ",
+      "text": "\u0643\u0627\u0641  \u0627\u0644\u0645\u062c\u0627\u0644\u0627\u062a \u0648 \u0627\u0629\u0646\u0634\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0644  \u0627\u0644\u0645\u0646\u062a\u0644\u0641  \u0639\u0627\u0645  \u0648 \u0627\u0644\u0631 \u064a\u0627 \u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u064a  \u0628\u0646\u0627 \u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629  \u0628\u062d\u064a\u062b \u064a\u0639\u0644\u064a\u0635\u0627 \u0627\u0644\u0642\u062f\u0631 \u0629 \u0644\u0644\u062a\u0639\u0631 \u0641 \u0639\u0644\u0649 ",
+      "orig": "\u0643\u0627\u0641  \u0627\u0644\u0645\u062c\u0627\u0644\u0627\u062a \u0648 \u0627\u0629\u0646\u0634\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0644  \u0627\u0644\u0645\u0646\u062a\u0644\u0641  \u0639\u0627\u0645  \u0648 \u0627\u0644\u0631 \u064a\u0627 \u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u064a  \u0628\u0646\u0627 \u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629  \u0628\u062d\u064a\u062b \u064a\u0639\u0644\u064a\u0635\u0627 \u0627\u0644\u0642\u062f\u0631 \u0629 \u0644\u0644\u062a\u0639\u0631 \u0641 \u0639\u0644\u0649 ",
       "text_direction": "right_to_left",
       "confidence": 1.0,
       "from_ocr": false,
@@ -72759,7 +71483,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 89,
+      "index": 57,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -72788,7 +71512,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 90,
+      "index": 58,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -72817,7 +71541,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 91,
+      "index": 59,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -72846,7 +71570,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 92,
+      "index": 60,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -72875,7 +71599,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 93,
+      "index": 61,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -72904,36 +71628,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 94,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 303.923,
-        "r_y0": 207.794,
-        "r_x1": 472.97,
-        "r_y1": 207.794,
-        "r_x2": 472.97,
-        "r_y2": 219.312,
-        "r_x3": 303.923,
-        "r_y3": 219.312,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "\u0646\u062a\u064a\u062c  \u0627\u0644\u0627\u0633\u0629\u0629\u0629\u0629\u062a\u0646\u062f\u0627\u062c \u0627\u0644\u0645\u0627\u0627\u0644\u064a \u0644\u0644\u062a\u0643\u0635\u0648\u0644\u0648 \u062c\u064a\u0627 \u0648 \u0627\u0629\u062c\u0647\u0641 \u0629 \u0627\u0644",
-      "orig": "\u0646\u062a\u064a\u062c  \u0627\u0644\u0627\u0633\u0629\u0629\u0629\u0629\u062a\u0646\u062f\u0627\u062c \u0627\u0644\u0645\u0627\u0627\u0644\u064a \u0644\u0644\u062a\u0643\u0635\u0648\u0644\u0648 \u062c\u064a\u0627 \u0648 \u0627\u0629\u062c\u0647\u0641 \u0629 \u0627\u0644",
-      "text_direction": "right_to_left",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/G6",
-      "font_name": "/AAAAAG+SimplifiedArabic"
-    },
-    {
-      "index": 95,
+      "index": 62,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -72943,16 +71638,16 @@
       "rect": {
         "r_x0": 299.333,
         "r_y0": 207.794,
-        "r_x1": 303.902,
+        "r_x1": 472.97,
         "r_y1": 207.794,
-        "r_x2": 303.902,
+        "r_x2": 472.97,
         "r_y2": 219.312,
         "r_x3": 299.333,
         "r_y3": 219.312,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "\u0645",
-      "orig": "\u0645",
+      "text": "\u0646\u062a\u064a\u062c  \u0627\u0644\u0627\u0633\u0629\u0629\u0629\u0629\u062a\u0646\u062f\u0627\u062c \u0627\u0644\u0645\u0627\u0627\u0644\u064a \u0644\u0644\u062a\u0643\u0635\u0648\u0644\u0648 \u062c\u064a\u0627 \u0648 \u0627\u0629\u062c\u0647\u0641 \u0629 \u0627\u0644\u0645",
+      "orig": "\u0646\u062a\u064a\u062c  \u0627\u0644\u0627\u0633\u0629\u0629\u0629\u0629\u062a\u0646\u062f\u0627\u062c \u0627\u0644\u0645\u0627\u0627\u0644\u064a \u0644\u0644\u062a\u0643\u0635\u0648\u0644\u0648 \u062c\u064a\u0627 \u0648 \u0627\u0629\u062c\u0647\u0641 \u0629 \u0627\u0644\u0645",
       "text_direction": "right_to_left",
       "confidence": 1.0,
       "from_ocr": false,
@@ -72962,7 +71657,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 96,
+      "index": 63,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -72991,7 +71686,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 97,
+      "index": 64,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -73020,7 +71715,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 98,
+      "index": 65,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -73049,65 +71744,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 99,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 126.062,
-        "r_y0": 207.794,
-        "r_x1": 162.909,
-        "r_y1": 207.794,
-        "r_x2": 162.909,
-        "r_y2": 219.312,
-        "r_x3": 126.062,
-        "r_y3": 219.312,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "\u0645\u0648 \u0629\u0629\u0629\u0629\u0648 \u0639\u064a\u0627",
-      "orig": "\u0645\u0648 \u0629\u0629\u0629\u0629\u0648 \u0639\u064a\u0627",
-      "text_direction": "right_to_left",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/G6",
-      "font_name": "/AAAAAG+SimplifiedArabic"
-    },
-    {
-      "index": 100,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 122.683,
-        "r_y0": 207.794,
-        "r_x1": 126.381,
-        "r_y1": 207.794,
-        "r_x2": 126.381,
-        "r_y2": 219.312,
-        "r_x3": 122.683,
-        "r_y3": 219.312,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "\u060c",
-      "orig": "\u060c",
-      "text_direction": "right_to_left",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/G6",
-      "font_name": "/AAAAAG+SimplifiedArabic"
-    },
-    {
-      "index": 101,
+      "index": 66,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -73117,45 +71754,16 @@
       "rect": {
         "r_x0": 119.301,
         "r_y0": 207.794,
-        "r_x1": 122.976,
+        "r_x1": 162.909,
         "r_y1": 207.794,
-        "r_x2": 122.976,
+        "r_x2": 162.909,
         "r_y2": 219.312,
         "r_x3": 119.301,
         "r_y3": 219.312,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": " ",
-      "orig": " ",
-      "text_direction": "left_to_right",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/G6",
-      "font_name": "/AAAAAG+SimplifiedArabic"
-    },
-    {
-      "index": 102,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 464.622,
-        "r_y0": 185.784,
-        "r_x1": 473.283,
-        "r_y1": 185.784,
-        "r_x2": 473.283,
-        "r_y2": 197.302,
-        "r_x3": 464.622,
-        "r_y3": 197.302,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "\u0627\u0644 ",
-      "orig": "\u0627\u0644 ",
+      "text": "\u0645\u0648 \u0629\u0629\u0629\u0629\u0648 \u0639\u064a\u0627\u060c ",
+      "orig": "\u0645\u0648 \u0629\u0629\u0629\u0629\u0648 \u0639\u064a\u0627\u060c ",
       "text_direction": "right_to_left",
       "confidence": 1.0,
       "from_ocr": false,
@@ -73165,36 +71773,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 103,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 457.134,
-        "r_y0": 185.784,
-        "r_x1": 464.612,
-        "r_y1": 185.784,
-        "r_x2": 464.612,
-        "r_y2": 197.302,
-        "r_x3": 457.134,
-        "r_y3": 197.302,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "\u0644",
-      "orig": "\u0644",
-      "text_direction": "right_to_left",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/G6",
-      "font_name": "/AAAAAG+SimplifiedArabic"
-    },
-    {
-      "index": 104,
+      "index": 67,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -73204,17 +71783,17 @@
       "rect": {
         "r_x0": 453.511,
         "r_y0": 185.784,
-        "r_x1": 457.186,
+        "r_x1": 473.283,
         "r_y1": 185.784,
-        "r_x2": 457.186,
+        "r_x2": 473.283,
         "r_y2": 197.302,
         "r_x3": 453.511,
         "r_y3": 197.302,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": " ",
-      "orig": " ",
-      "text_direction": "left_to_right",
+      "text": "\u0627\u0644 \u0644 ",
+      "orig": "\u0627\u0644 \u0644 ",
+      "text_direction": "right_to_left",
       "confidence": 1.0,
       "from_ocr": false,
       "rendering_mode": -1,
@@ -73223,7 +71802,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 105,
+      "index": 68,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -73252,7 +71831,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 106,
+      "index": 69,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -73281,7 +71860,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 107,
+      "index": 70,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -73310,65 +71889,7 @@
       "font_name": "/AAAAAG+SimplifiedArabic"
     },
     {
-      "index": 108,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 233.118,
-        "r_y0": 163.561,
-        "r_x1": 472.949,
-        "r_y1": 163.561,
-        "r_x2": 472.949,
-        "r_y2": 175.079,
-        "r_x3": 233.118,
-        "r_y3": 175.079,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "\u0627\u0644 \u0627\u062a\u064a  \u0641\u064a \u0627\u0644\u062a\u063a\u0644\u0628 \u0639\u0644\u0649 \u0627\u0644\u0645\u0642\u0627\u0648\u0645\u0627\u062a \u0627\u0644\u0646\u0627\u0631 \u062c\u064a  \u0627\u0644\u0645\u0624\u062b\u0631 \u0629 \u0648\u0644\u0635\u0627\u0644\u062d \u0627\u0644\u0625\u0646\u062c\u0627 ",
-      "orig": "\u0627\u0644 \u0627\u062a\u064a  \u0641\u064a \u0627\u0644\u062a\u063a\u0644\u0628 \u0639\u0644\u0649 \u0627\u0644\u0645\u0642\u0627\u0648\u0645\u0627\u062a \u0627\u0644\u0646\u0627\u0631 \u062c\u064a  \u0627\u0644\u0645\u0624\u062b\u0631 \u0629 \u0648\u0644\u0635\u0627\u0644\u062d \u0627\u0644\u0625\u0646\u062c\u0627 ",
-      "text_direction": "right_to_left",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/G6",
-      "font_name": "/AAAAAG+SimplifiedArabic"
-    },
-    {
-      "index": 109,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 229.738,
-        "r_y0": 163.561,
-        "r_x1": 233.436,
-        "r_y1": 163.561,
-        "r_x2": 233.436,
-        "r_y2": 175.079,
-        "r_x3": 229.738,
-        "r_y3": 175.079,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": ".",
-      "orig": ".",
-      "text_direction": "left_to_right",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/G6",
-      "font_name": "/AAAAAG+SimplifiedArabic"
-    },
-    {
-      "index": 110,
+      "index": 71,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -73378,17 +71899,17 @@
       "rect": {
         "r_x0": 223.941,
         "r_y0": 163.561,
-        "r_x1": 227.616,
+        "r_x1": 472.949,
         "r_y1": 163.561,
-        "r_x2": 227.616,
+        "r_x2": 472.949,
         "r_y2": 175.079,
         "r_x3": 223.941,
         "r_y3": 175.079,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": " ",
-      "orig": " ",
-      "text_direction": "left_to_right",
+      "text": "\u0627\u0644 \u0627\u062a\u064a  \u0641\u064a \u0627\u0644\u062a\u063a\u0644\u0628 \u0639\u0644\u0649 \u0627\u0644\u0645\u0642\u0627\u0648\u0645\u0627\u062a \u0627\u0644\u0646\u0627\u0631 \u062c\u064a  \u0627\u0644\u0645\u0624\u062b\u0631 \u0629 \u0648\u0644\u0635\u0627\u0644\u062d \u0627\u0644\u0625\u0646\u062c\u0627 .  ",
+      "orig": "\u0627\u0644 \u0627\u062a\u064a  \u0641\u064a \u0627\u0644\u062a\u063a\u0644\u0628 \u0639\u0644\u0649 \u0627\u0644\u0645\u0642\u0627\u0648\u0645\u0627\u062a \u0627\u0644\u0646\u0627\u0631 \u062c\u064a  \u0627\u0644\u0645\u0624\u062b\u0631 \u0629 \u0648\u0644\u0635\u0627\u0644\u062d \u0627\u0644\u0625\u0646\u062c\u0627 .  ",
+      "text_direction": "right_to_left",
       "confidence": 1.0,
       "from_ocr": false,
       "rendering_mode": -1,

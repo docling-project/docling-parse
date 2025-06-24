@@ -39894,18 +39894,18 @@
         "a": 255
       },
       "rect": {
-        "r_x0": 99.24,
+        "r_x0": 81.36,
         "r_y0": 395.043,
         "r_x1": 104.009,
         "r_y1": 395.043,
         "r_x2": 104.009,
         "r_y2": 408.003,
-        "r_x3": 99.24,
+        "r_x3": 81.36,
         "r_y3": 408.003,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "(",
-      "orig": "(",
+      "text": "2024(",
+      "orig": "2024(",
       "text_direction": "left_to_right",
       "confidence": 1.0,
       "from_ocr": false,
@@ -39916,35 +39916,6 @@
     },
     {
       "index": 126,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 81.36,
-        "r_y0": 395.043,
-        "r_x1": 99.348,
-        "r_y1": 395.043,
-        "r_x2": 99.348,
-        "r_y2": 408.003,
-        "r_x3": 81.36,
-        "r_y3": 408.003,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "2024",
-      "orig": "2024",
-      "text_direction": "left_to_right",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/F3",
-      "font_name": "/ASTNQM+Tajawal-Regular"
-    },
-    {
-      "index": 127,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -39973,36 +39944,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 128,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 422.83,
-        "r_y0": 376.323,
-        "r_x1": 440.883,
-        "r_y1": 376.323,
-        "r_x2": 440.883,
-        "r_y2": 389.283,
-        "r_x3": 422.83,
-        "r_y3": 389.283,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "2026",
-      "orig": "2026",
-      "text_direction": "left_to_right",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/F3",
-      "font_name": "/ASTNQM+Tajawal-Regular"
-    },
-    {
-      "index": 129,
+      "index": 127,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -40012,16 +39954,16 @@
       "rect": {
         "r_x0": 417.91,
         "r_y0": 376.323,
-        "r_x1": 422.679,
+        "r_x1": 440.883,
         "r_y1": 376.323,
-        "r_x2": 422.679,
+        "r_x2": 440.883,
         "r_y2": 389.283,
         "r_x3": 417.91,
         "r_y3": 389.283,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": ")",
-      "orig": ")",
+      "text": ")2026",
+      "orig": ")2026",
       "text_direction": "left_to_right",
       "confidence": 1.0,
       "from_ocr": false,
@@ -40031,7 +39973,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 130,
+      "index": 128,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -40060,7 +40002,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 131,
+      "index": 129,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -40089,7 +40031,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 132,
+      "index": 130,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -40118,7 +40060,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 133,
+      "index": 131,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -40147,7 +40089,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 134,
+      "index": 132,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -40176,7 +40118,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 135,
+      "index": 133,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -40205,7 +40147,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 136,
+      "index": 134,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -40234,7 +40176,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 137,
+      "index": 135,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -40263,7 +40205,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 138,
+      "index": 136,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -40292,7 +40234,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 139,
+      "index": 137,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -40321,7 +40263,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 140,
+      "index": 138,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -40350,7 +40292,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 141,
+      "index": 139,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -40379,7 +40321,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 142,
+      "index": 140,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -40408,7 +40350,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 143,
+      "index": 141,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -40437,7 +40379,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 144,
+      "index": 142,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -40466,7 +40408,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 145,
+      "index": 143,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -40495,7 +40437,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 146,
+      "index": 144,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -40524,7 +40466,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 147,
+      "index": 145,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -40553,7 +40495,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 148,
+      "index": 146,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -40582,7 +40524,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 149,
+      "index": 147,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -40611,7 +40553,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 150,
+      "index": 148,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -40640,7 +40582,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 151,
+      "index": 149,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -40669,7 +40611,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 152,
+      "index": 150,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -40698,7 +40640,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 153,
+      "index": 151,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -40727,7 +40669,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 154,
+      "index": 152,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -40756,7 +40698,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 155,
+      "index": 153,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -40785,7 +40727,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 156,
+      "index": 154,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -40814,7 +40756,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 157,
+      "index": 155,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -40843,7 +40785,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 158,
+      "index": 156,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -40872,7 +40814,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 159,
+      "index": 157,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -40901,7 +40843,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 160,
+      "index": 158,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -40930,7 +40872,7 @@
       "font_name": "/AJEQRB+Tajawal-Regular"
     },
     {
-      "index": 161,
+      "index": 159,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -40959,7 +40901,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 162,
+      "index": 160,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -40988,7 +40930,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 163,
+      "index": 161,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -41017,7 +40959,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 164,
+      "index": 162,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -41046,7 +40988,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 165,
+      "index": 163,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -41075,7 +41017,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 166,
+      "index": 164,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -41104,7 +41046,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 167,
+      "index": 165,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -41133,7 +41075,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 168,
+      "index": 166,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -41162,7 +41104,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 169,
+      "index": 167,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -41191,7 +41133,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 170,
+      "index": 168,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -41220,7 +41162,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 171,
+      "index": 169,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -41249,7 +41191,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 172,
+      "index": 170,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -41278,7 +41220,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 173,
+      "index": 171,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -41307,7 +41249,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 174,
+      "index": 172,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -41336,7 +41278,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 175,
+      "index": 173,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -41365,7 +41307,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 176,
+      "index": 174,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -41394,7 +41336,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 177,
+      "index": 175,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -41423,7 +41365,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 178,
+      "index": 176,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -41452,7 +41394,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 179,
+      "index": 177,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -41481,7 +41423,7 @@
       "font_name": "/BBOMLU+Tajawal-Medium"
     },
     {
-      "index": 180,
+      "index": 178,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -41510,7 +41452,7 @@
       "font_name": "/BBOMLU+Tajawal-Medium"
     },
     {
-      "index": 181,
+      "index": 179,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -41539,7 +41481,7 @@
       "font_name": "/BBOMLU+Tajawal-Medium"
     },
     {
-      "index": 182,
+      "index": 180,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -41568,7 +41510,7 @@
       "font_name": "/BBOMLU+Tajawal-Medium"
     },
     {
-      "index": 183,
+      "index": 181,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -41578,16 +41520,16 @@
       "rect": {
         "r_x0": 370.971,
         "r_y0": 320.283,
-        "r_x1": 379.525,
+        "r_x1": 397.993,
         "r_y1": 320.283,
-        "r_x2": 379.525,
+        "r_x2": 397.993,
         "r_y2": 333.243,
         "r_x3": 370.971,
         "r_y3": 333.243,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "\u0640\u0640\u0640\u0627",
-      "orig": "\u0640\u0640\u0640\u0627",
+      "text": "\u0646\u0633\u0640\u0640\u0640\u0640\u0627",
+      "orig": "\u0646\u0633\u0640\u0640\u0640\u0640\u0627",
       "text_direction": "right_to_left",
       "confidence": 1.0,
       "from_ocr": false,
@@ -41597,36 +41539,7 @@
       "font_name": "/BBOMLU+Tajawal-Medium"
     },
     {
-      "index": 184,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 378.747,
-        "r_y0": 320.283,
-        "r_x1": 397.993,
-        "r_y1": 320.283,
-        "r_x2": 397.993,
-        "r_y2": 333.243,
-        "r_x3": 378.747,
-        "r_y3": 333.243,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "\u0646\u0633\u0640",
-      "orig": "\u0646\u0633\u0640",
-      "text_direction": "right_to_left",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/F1",
-      "font_name": "/BBOMLU+Tajawal-Medium"
-    },
-    {
-      "index": 185,
+      "index": 182,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -41655,7 +41568,7 @@
       "font_name": "/BBOMLU+Tajawal-Medium"
     },
     {
-      "index": 186,
+      "index": 183,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -41684,7 +41597,7 @@
       "font_name": "/BBOMLU+Tajawal-Medium"
     },
     {
-      "index": 187,
+      "index": 184,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -41694,16 +41607,16 @@
       "rect": {
         "r_x0": 372.876,
         "r_y0": 307.803,
-        "r_x1": 406.948,
+        "r_x1": 436.937,
         "r_y1": 307.803,
-        "r_x2": 406.948,
+        "r_x2": 436.937,
         "r_y2": 320.763,
         "r_x3": 372.876,
         "r_y3": 320.763,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0631",
-      "orig": "\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0631",
+      "text": "\u0627\u0644\u0645\u0635\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0631",
+      "orig": "\u0627\u0644\u0645\u0635\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0640\u0631",
       "text_direction": "right_to_left",
       "confidence": 1.0,
       "from_ocr": false,
@@ -41713,36 +41626,7 @@
       "font_name": "/BBOMLU+Tajawal-Medium"
     },
     {
-      "index": 188,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 406.287,
-        "r_y0": 307.803,
-        "r_x1": 436.937,
-        "r_y1": 307.803,
-        "r_x2": 436.937,
-        "r_y2": 320.763,
-        "r_x3": 406.287,
-        "r_y3": 320.763,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "\u0627\u0644\u0645\u0635\u0640",
-      "orig": "\u0627\u0644\u0645\u0635\u0640",
-      "text_direction": "right_to_left",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/F1",
-      "font_name": "/BBOMLU+Tajawal-Medium"
-    },
-    {
-      "index": 189,
+      "index": 185,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -41771,7 +41655,7 @@
       "font_name": "/BBOMLU+Tajawal-Medium"
     },
     {
-      "index": 190,
+      "index": 186,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -41800,7 +41684,7 @@
       "font_name": "/BBOMLU+Tajawal-Medium"
     },
     {
-      "index": 191,
+      "index": 187,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -41829,7 +41713,7 @@
       "font_name": "/BBOMLU+Tajawal-Medium"
     },
     {
-      "index": 192,
+      "index": 188,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -41858,7 +41742,7 @@
       "font_name": "/BBOMLU+Tajawal-Medium"
     },
     {
-      "index": 193,
+      "index": 189,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -41887,7 +41771,7 @@
       "font_name": "/BBOMLU+Tajawal-Medium"
     },
     {
-      "index": 194,
+      "index": 190,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -41916,7 +41800,7 @@
       "font_name": "/BBOMLU+Tajawal-Medium"
     },
     {
-      "index": 195,
+      "index": 191,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -41945,7 +41829,7 @@
       "font_name": "/BBOMLU+Tajawal-Medium"
     },
     {
-      "index": 196,
+      "index": 192,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -42042,18 +41926,18 @@
         "a": 255
       },
       "rect": {
-        "r_x0": 88.056,
+        "r_x0": 67.992,
         "r_y0": 619.303,
         "r_x1": 398.928,
         "r_y1": 619.303,
         "r_x2": 398.928,
         "r_y2": 632.263,
-        "r_x3": 88.056,
+        "r_x3": 67.992,
         "r_y3": 632.263,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "\u0641\u0625\u0646 \u0627\u0644\u062d\u0643\u0648\u0645\u0629 \u0627\u0644\u0645\u0635\u0631\u064a\u0629 \u062a\u0636\u0639 \u0635\u0648\u0648  \u0639\u064a\u064a\u0647\u0627\u0648\u062e \u0644\u0648\u0627\u0644 \u0627\u0644\u0645\u0631 \u0627\u0648\u0629 \u0627\u0644\u0645 ",
-      "orig": "\u0641\u0625\u0646 \u0627\u0644\u062d\u0643\u0648\u0645\u0629 \u0627\u0644\u0645\u0635\u0631\u064a\u0629 \u062a\u0636\u0639 \u0635\u0648\u0648  \u0639\u064a\u064a\u0647\u0627\u0648\u062e \u0644\u0648\u0627\u0644 \u0627\u0644\u0645\u0631 \u0627\u0648\u0629 \u0627\u0644\u0645 ",
+      "text": "\u0641\u0625\u0646 \u0627\u0644\u062d\u0643\u0648\u0645\u0629 \u0627\u0644\u0645\u0635\u0631\u064a\u0629 \u062a\u0636\u0639 \u0635\u0648\u0648  \u0639\u064a\u064a\u0647\u0627\u0648\u062e \u0644\u0648\u0627\u0644 \u0627\u0644\u0645\u0631 \u0627\u0648\u0629 \u0627\u0644\u0645 \u0628\u0627\u0648\u0629 ",
+      "orig": "\u0641\u0625\u0646 \u0627\u0644\u062d\u0643\u0648\u0645\u0629 \u0627\u0644\u0645\u0635\u0631\u064a\u0629 \u062a\u0636\u0639 \u0635\u0648\u0648  \u0639\u064a\u064a\u0647\u0627\u0648\u062e \u0644\u0648\u0627\u0644 \u0627\u0644\u0645\u0631 \u0627\u0648\u0629 \u0627\u0644\u0645 \u0628\u0627\u0648\u0629 ",
       "text_direction": "right_to_left",
       "confidence": 1.0,
       "from_ocr": false,
@@ -42064,35 +41948,6 @@
     },
     {
       "index": 3,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 67.992,
-        "r_y0": 619.303,
-        "r_x1": 88.08,
-        "r_y1": 619.303,
-        "r_x2": 88.08,
-        "r_y2": 632.263,
-        "r_x3": 67.992,
-        "r_y3": 632.263,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "\u0628\u0627\u0648\u0629 ",
-      "orig": "\u0628\u0627\u0648\u0629 ",
-      "text_direction": "right_to_left",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/F3",
-      "font_name": "/ASTNQM+Tajawal-Regular"
-    },
-    {
-      "index": 4,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -42121,7 +41976,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 5,
+      "index": 4,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -42150,7 +42005,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 6,
+      "index": 5,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -42179,7 +42034,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 7,
+      "index": 6,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -42208,7 +42063,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 8,
+      "index": 7,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -42237,36 +42092,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 9,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 89.136,
-        "r_y0": 575.503,
-        "r_x1": 375.733,
-        "r_y1": 575.503,
-        "r_x2": 375.733,
-        "r_y2": 588.463,
-        "r_x3": 89.136,
-        "r_y3": 588.463,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "\u0648\u0636\u0639 \u0645\u0627\u0641 \u0628\u0647\u062e\u0621 \u0627\u0644\u0625\u0646\u0633\u062e\u0646 \u0627\u0644\u0645\u0635\u0631\u064a \u064a\u0627\u0649 \u0631\u0639\u0633 \u0642\u062e\u0626\u0645\u0648\u0629 \u0627\u0644\u0623\u0648\u0644\u0648\u064a\u0648",
-      "orig": "\u0648\u0636\u0639 \u0645\u0627\u0641 \u0628\u0647\u062e\u0621 \u0627\u0644\u0625\u0646\u0633\u062e\u0646 \u0627\u0644\u0645\u0635\u0631\u064a \u064a\u0627\u0649 \u0631\u0639\u0633 \u0642\u062e\u0626\u0645\u0648\u0629 \u0627\u0644\u0623\u0648\u0644\u0648\u064a\u0648",
-      "text_direction": "right_to_left",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/F3",
-      "font_name": "/ASTNQM+Tajawal-Regular"
-    },
-    {
-      "index": 10,
+      "index": 8,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -42276,16 +42102,16 @@
       "rect": {
         "r_x0": 67.992,
         "r_y0": 575.503,
-        "r_x1": 89.026,
+        "r_x1": 375.733,
         "r_y1": 575.503,
-        "r_x2": 89.026,
+        "r_x2": 375.733,
         "r_y2": 588.463,
         "r_x3": 67.992,
         "r_y3": 588.463,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "\u062e\u062a\u060c ",
-      "orig": "\u062e\u062a\u060c ",
+      "text": "\u0648\u0636\u0639 \u0645\u0627\u0641 \u0628\u0647\u062e\u0621 \u0627\u0644\u0625\u0646\u0633\u062e\u0646 \u0627\u0644\u0645\u0635\u0631\u064a \u064a\u0627\u0649 \u0631\u0639\u0633 \u0642\u062e\u0626\u0645\u0648\u0629 \u0627\u0644\u0623\u0648\u0644\u0648\u064a\u0648\u062e\u062a\u060c ",
+      "orig": "\u0648\u0636\u0639 \u0645\u0627\u0641 \u0628\u0647\u062e\u0621 \u0627\u0644\u0625\u0646\u0633\u062e\u0646 \u0627\u0644\u0645\u0635\u0631\u064a \u064a\u0627\u0649 \u0631\u0639\u0633 \u0642\u062e\u0626\u0645\u0648\u0629 \u0627\u0644\u0623\u0648\u0644\u0648\u064a\u0648\u062e\u062a\u060c ",
       "text_direction": "right_to_left",
       "confidence": 1.0,
       "from_ocr": false,
@@ -42295,7 +42121,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 11,
+      "index": 9,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -42324,7 +42150,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 12,
+      "index": 10,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -42353,7 +42179,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 13,
+      "index": 11,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -42361,18 +42187,18 @@
         "a": 255
       },
       "rect": {
-        "r_x0": 80.736,
+        "r_x0": 67.992,
         "r_y0": 509.953,
         "r_x1": 437.058,
         "r_y1": 509.953,
         "r_x2": 437.058,
         "r_y2": 522.913,
-        "r_x3": 80.736,
+        "r_x3": 67.992,
         "r_y3": 522.913,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "\u0645\u062d\u0648\u062f\u062f\u0627\u062a \u0627\u0644\u0623\u0645\u0648\u0646 \u0627\u0644 \u0648\u0648\u0645\u0627 \u0627\u0644\u0645\u0635\u0648\u0631\u064a \u0641\u0648\u0627 \u0636\u0648\u0648\u0621 \u0627\u0644\u0644\u062d\u0648\u062f\u064a\u062e\u062a \u0627\u0644\u0625\u0642\u0627\u064a\u0645\u064a\u0648\u0629 \u0648\u0627\u0644\u062f\u0648\u0644\u064a\u0648",
-      "orig": "\u0645\u062d\u0648\u062f\u062f\u0627\u062a \u0627\u0644\u0623\u0645\u0648\u0646 \u0627\u0644 \u0648\u0648\u0645\u0627 \u0627\u0644\u0645\u0635\u0648\u0631\u064a \u0641\u0648\u0627 \u0636\u0648\u0648\u0621 \u0627\u0644\u0644\u062d\u0648\u062f\u064a\u062e\u062a \u0627\u0644\u0625\u0642\u0627\u064a\u0645\u064a\u0648\u0629 \u0648\u0627\u0644\u062f\u0648\u0644\u064a\u0648",
+      "text": "\u0645\u062d\u0648\u062f\u062f\u0627\u062a \u0627\u0644\u0623\u0645\u0648\u0646 \u0627\u0644 \u0648\u0648\u0645\u0627 \u0627\u0644\u0645\u0635\u0648\u0631\u064a \u0641\u0648\u0627 \u0636\u0648\u0648\u0621 \u0627\u0644\u0644\u062d\u0648\u062f\u064a\u062e\u062a \u0627\u0644\u0625\u0642\u0627\u064a\u0645\u064a\u0648\u0629 \u0648\u0627\u0644\u062f\u0648\u0644\u064a\u0648\u0629\u060c ",
+      "orig": "\u0645\u062d\u0648\u062f\u062f\u0627\u062a \u0627\u0644\u0623\u0645\u0648\u0646 \u0627\u0644 \u0648\u0648\u0645\u0627 \u0627\u0644\u0645\u0635\u0648\u0631\u064a \u0641\u0648\u0627 \u0636\u0648\u0648\u0621 \u0627\u0644\u0644\u062d\u0648\u062f\u064a\u062e\u062a \u0627\u0644\u0625\u0642\u0627\u064a\u0645\u064a\u0648\u0629 \u0648\u0627\u0644\u062f\u0648\u0644\u064a\u0648\u0629\u060c ",
       "text_direction": "right_to_left",
       "confidence": 1.0,
       "from_ocr": false,
@@ -42382,7 +42208,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 14,
+      "index": 12,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -42391,75 +42217,17 @@
       },
       "rect": {
         "r_x0": 67.992,
-        "r_y0": 509.953,
-        "r_x1": 80.693,
-        "r_y1": 509.953,
-        "r_x2": 80.693,
-        "r_y2": 522.913,
-        "r_x3": 67.992,
-        "r_y3": 522.913,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "\u0629\u060c ",
-      "orig": "\u0629\u060c ",
-      "text_direction": "right_to_left",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/F3",
-      "font_name": "/ASTNQM+Tajawal-Regular"
-    },
-    {
-      "index": 15,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 86.256,
         "r_y0": 488.113,
         "r_x1": 436.992,
         "r_y1": 488.113,
         "r_x2": 436.992,
         "r_y2": 501.073,
-        "r_x3": 86.256,
-        "r_y3": 501.073,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "\u0648\u0645\u0648\u0627\u0635\u0648\u0648\u0627\u0629 \u0648\u0627\u0648\u0648\u0648\u062f \u062a\u0644\u0648\u0648\u0648\u064a\u0631 \u0627\u0644\u0645\u0627\u0648\u0648\u062e\u0631 \u0629 \u0627\u0644\u0633\u064a\u062e\u0633\u0648\u0648\u064a\u0629\u060c \u0648\u0627\u0633\u0648\u0648\u0644\u0645\u0631\u0627\u0631 \u0645\u0644\u062e\u0628\u0639\u0648\u0648\u0629 \u0645\u0627 \u0648 \u0648",
-      "orig": "\u0648\u0645\u0648\u0627\u0635\u0648\u0648\u0627\u0629 \u0648\u0627\u0648\u0648\u0648\u062f \u062a\u0644\u0648\u0648\u0648\u064a\u0631 \u0627\u0644\u0645\u0627\u0648\u0648\u062e\u0631 \u0629 \u0627\u0644\u0633\u064a\u062e\u0633\u0648\u0648\u064a\u0629\u060c \u0648\u0627\u0633\u0648\u0648\u0644\u0645\u0631\u0627\u0631 \u0645\u0644\u062e\u0628\u0639\u0648\u0648\u0629 \u0645\u0627 \u0648 \u0648",
-      "text_direction": "right_to_left",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/F3",
-      "font_name": "/ASTNQM+Tajawal-Regular"
-    },
-    {
-      "index": 16,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 67.992,
-        "r_y0": 488.113,
-        "r_x1": 86.168,
-        "r_y1": 488.113,
-        "r_x2": 86.168,
-        "r_y2": 501.073,
         "r_x3": 67.992,
         "r_y3": 501.073,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "\u062e\u062a ",
-      "orig": "\u062e\u062a ",
+      "text": "\u0648\u0645\u0648\u0627\u0635\u0648\u0648\u0627\u0629 \u0648\u0627\u0648\u0648\u0648\u062f \u062a\u0644\u0648\u0648\u0648\u064a\u0631 \u0627\u0644\u0645\u0627\u0648\u0648\u062e\u0631 \u0629 \u0627\u0644\u0633\u064a\u062e\u0633\u0648\u0648\u064a\u0629\u060c \u0648\u0627\u0633\u0648\u0648\u0644\u0645\u0631\u0627\u0631 \u0645\u0644\u062e\u0628\u0639\u0648\u0648\u0629 \u0645\u0627 \u0648 \u0648\u062e\u062a ",
+      "orig": "\u0648\u0645\u0648\u0627\u0635\u0648\u0648\u0627\u0629 \u0648\u0627\u0648\u0648\u0648\u062f \u062a\u0644\u0648\u0648\u0648\u064a\u0631 \u0627\u0644\u0645\u0627\u0648\u0648\u062e\u0631 \u0629 \u0627\u0644\u0633\u064a\u062e\u0633\u0648\u0648\u064a\u0629\u060c \u0648\u0627\u0633\u0648\u0648\u0644\u0645\u0631\u0627\u0631 \u0645\u0644\u062e\u0628\u0639\u0648\u0648\u0629 \u0645\u0627 \u0648 \u0648\u062e\u062a ",
       "text_direction": "right_to_left",
       "confidence": 1.0,
       "from_ocr": false,
@@ -42469,7 +42237,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 17,
+      "index": 13,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -42498,7 +42266,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 18,
+      "index": 14,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -42527,6 +42295,122 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
+      "index": 15,
+      "rgba": {
+        "r": 0,
+        "g": 0,
+        "b": 0,
+        "a": 255
+      },
+      "rect": {
+        "r_x0": 284.16,
+        "r_y0": 422.593,
+        "r_x1": 437.302,
+        "r_y1": 422.593,
+        "r_x2": 437.302,
+        "r_y2": 435.553,
+        "r_x3": 284.16,
+        "r_y3": 435.553,
+        "coord_origin": "BOTTOMLEFT"
+      },
+      "text": "\u0627\u0644\u0645\u0648\u0627\u060c\u0647\u0629 \u0648\u0627\u0644\u0633\u0627\u0645 \u0627\u0644\u0645\u062c\u0644\u0645\u0639\u0627.",
+      "orig": "\u0627\u0644\u0645\u0648\u0627\u060c\u0647\u0629 \u0648\u0627\u0644\u0633\u0627\u0645 \u0627\u0644\u0645\u062c\u0644\u0645\u0639\u0627.",
+      "text_direction": "right_to_left",
+      "confidence": 1.0,
+      "from_ocr": false,
+      "rendering_mode": -1,
+      "widget": false,
+      "font_key": "/F3",
+      "font_name": "/ASTNQM+Tajawal-Regular"
+    },
+    {
+      "index": 16,
+      "rgba": {
+        "r": 0,
+        "g": 0,
+        "b": 0,
+        "a": 255
+      },
+      "rect": {
+        "r_x0": 99.24,
+        "r_y0": 395.043,
+        "r_x1": 440.452,
+        "r_y1": 395.043,
+        "r_x2": 440.452,
+        "r_y2": 408.003,
+        "r_x3": 99.24,
+        "r_y3": 408.003,
+        "coord_origin": "BOTTOMLEFT"
+      },
+      "text": "\u0648\u0648\u0641 \u064b\u062e \u0644\u0645\u062e \u0633\u0628\u0642\u060c \u064a\u0633\u0648\u0644\u0627\u062f  \u0628\u0631\u0646\u0648\u062e\u0645\u0627 \u0627\u0644\u062d\u0643\u0648\u0645\u0648\u0629 \u0627\u0644\u0645\u0635\u0648\u0631\u064a\u0629 \u0644\u0648\u0627\u0644 \u0627\u0644 \u0644\u0648\u0631  (",
+      "orig": "\u0648\u0648\u0641 \u064b\u062e \u0644\u0645\u062e \u0633\u0628\u0642\u060c \u064a\u0633\u0648\u0644\u0627\u062f  \u0628\u0631\u0646\u0648\u062e\u0645\u0627 \u0627\u0644\u062d\u0643\u0648\u0645\u0648\u0629 \u0627\u0644\u0645\u0635\u0648\u0631\u064a\u0629 \u0644\u0648\u0627\u0644 \u0627\u0644 \u0644\u0648\u0631  (",
+      "text_direction": "right_to_left",
+      "confidence": 1.0,
+      "from_ocr": false,
+      "rendering_mode": -1,
+      "widget": false,
+      "font_key": "/F3",
+      "font_name": "/ASTNQM+Tajawal-Regular"
+    },
+    {
+      "index": 17,
+      "rgba": {
+        "r": 0,
+        "g": 0,
+        "b": 0,
+        "a": 255
+      },
+      "rect": {
+        "r_x0": 74.52,
+        "r_y0": 395.043,
+        "r_x1": 99.348,
+        "r_y1": 395.043,
+        "r_x2": 99.348,
+        "r_y2": 408.003,
+        "r_x3": 74.52,
+        "r_y3": 408.003,
+        "coord_origin": "BOTTOMLEFT"
+      },
+      "text": "- 2024",
+      "orig": "- 2024",
+      "text_direction": "left_to_right",
+      "confidence": 1.0,
+      "from_ocr": false,
+      "rendering_mode": -1,
+      "widget": false,
+      "font_key": "/F3",
+      "font_name": "/ASTNQM+Tajawal-Regular"
+    },
+    {
+      "index": 18,
+      "rgba": {
+        "r": 0,
+        "g": 0,
+        "b": 0,
+        "a": 255
+      },
+      "rect": {
+        "r_x0": 414.79,
+        "r_y0": 376.323,
+        "r_x1": 440.883,
+        "r_y1": 376.323,
+        "r_x2": 440.883,
+        "r_y2": 389.283,
+        "r_x3": 414.79,
+        "r_y3": 389.283,
+        "coord_origin": "BOTTOMLEFT"
+      },
+      "text": " )2026",
+      "orig": " )2026",
+      "text_direction": "left_to_right",
+      "confidence": 1.0,
+      "from_ocr": false,
+      "rendering_mode": -1,
+      "widget": false,
+      "font_key": "/F3",
+      "font_name": "/ASTNQM+Tajawal-Regular"
+    },
+    {
       "index": 19,
       "rgba": {
         "r": 0,
@@ -42535,18 +42419,18 @@
         "a": 255
       },
       "rect": {
-        "r_x0": 287.64,
-        "r_y0": 422.593,
-        "r_x1": 437.302,
-        "r_y1": 422.593,
-        "r_x2": 437.302,
-        "r_y2": 435.553,
-        "r_x3": 287.64,
-        "r_y3": 435.553,
+        "r_x0": 110.52,
+        "r_y0": 376.323,
+        "r_x1": 414.435,
+        "r_y1": 376.323,
+        "r_x2": 414.435,
+        "r_y2": 389.283,
+        "r_x3": 110.52,
+        "r_y3": 389.283,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "\u0627\u0644\u0645\u0648\u0627\u060c\u0647\u0629 \u0648\u0627\u0644\u0633\u0627\u0645 \u0627\u0644\u0645\u062c\u0644\u0645\u0639\u0627",
-      "orig": "\u0627\u0644\u0645\u0648\u0627\u060c\u0647\u0629 \u0648\u0627\u0644\u0633\u0627\u0645 \u0627\u0644\u0645\u062c\u0644\u0645\u0639\u0627",
+      "text": "\u062a\u062d \u064a\u0642 \u0639\u0631\u0628\u0639\u0629 \u0639\u0647\u062f\u0627  \u0627\u0633\u0644\u0631\u0627\u062a\u064a\u062c\u064a\u0629 \u0631\u0626\u064a\u0633\u0629\u060c \u0648\u0647\u0627 \u064a\u0627\u0649 \u0627\u0644\u0647\u062d\u0648 \u0627\u0644\u0622\u062a\u0627:",
+      "orig": "\u062a\u062d \u064a\u0642 \u0639\u0631\u0628\u0639\u0629 \u0639\u0647\u062f\u0627  \u0627\u0633\u0644\u0631\u0627\u062a\u064a\u062c\u064a\u0629 \u0631\u0626\u064a\u0633\u0629\u060c \u0648\u0647\u0627 \u064a\u0627\u0649 \u0627\u0644\u0647\u062d\u0648 \u0627\u0644\u0622\u062a\u0627:",
       "text_direction": "right_to_left",
       "confidence": 1.0,
       "from_ocr": false,
@@ -42564,19 +42448,19 @@
         "a": 255
       },
       "rect": {
-        "r_x0": 284.16,
-        "r_y0": 422.593,
-        "r_x1": 287.581,
-        "r_y1": 422.593,
-        "r_x2": 287.581,
-        "r_y2": 435.553,
-        "r_x3": 284.16,
-        "r_y3": 435.553,
+        "r_x0": 67.992,
+        "r_y0": 250.133,
+        "r_x1": 436.821,
+        "r_y1": 250.133,
+        "r_x2": 436.821,
+        "r_y2": 263.093,
+        "r_x3": 67.992,
+        "r_y3": 263.093,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": ".",
-      "orig": ".",
-      "text_direction": "left_to_right",
+      "text": "\u062a\u062c\u062f\u0631 \u0627\u0644\u0625 \u062e\u0631  \u0625\u0644\u0649 \u0639\u0646\u0647 \u0642\u062f \u062a\u0644 \u062a\u062d\u062f\u064a\u062f \u0645\u0633\u0648\u0644\u0627\u062f\u0641\u062e\u062a \u0627\u0644\u0628\u0631\u0646\u0648\u062e\u0645\u0627 \u0628\u062e\u062d\u0633\u0648\u0644\u0647\u062e\u062f \u0628\u0627\u0648\u0643\u0644 ",
+      "orig": "\u062a\u062c\u062f\u0631 \u0627\u0644\u0625 \u062e\u0631  \u0625\u0644\u0649 \u0639\u0646\u0647 \u0642\u062f \u062a\u0644 \u062a\u062d\u062f\u064a\u062f \u0645\u0633\u0648\u0644\u0627\u062f\u0641\u062e\u062a \u0627\u0644\u0628\u0631\u0646\u0648\u062e\u0645\u0627 \u0628\u062e\u062d\u0633\u0648\u0644\u0647\u062e\u062f \u0628\u0627\u0648\u0643\u0644 ",
+      "text_direction": "right_to_left",
       "confidence": 1.0,
       "from_ocr": false,
       "rendering_mode": -1,
@@ -42586,296 +42470,6 @@
     },
     {
       "index": 21,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 107.16,
-        "r_y0": 395.043,
-        "r_x1": 440.452,
-        "r_y1": 395.043,
-        "r_x2": 440.452,
-        "r_y2": 408.003,
-        "r_x3": 107.16,
-        "r_y3": 408.003,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "\u0648\u0648\u0641 \u064b\u062e \u0644\u0645\u062e \u0633\u0628\u0642\u060c \u064a\u0633\u0648\u0644\u0627\u062f  \u0628\u0631\u0646\u0648\u062e\u0645\u0627 \u0627\u0644\u062d\u0643\u0648\u0645\u0648\u0629 \u0627\u0644\u0645\u0635\u0648\u0631\u064a\u0629 \u0644\u0648\u0627\u0644 \u0627\u0644 \u0644\u0648\u0631 ",
-      "orig": "\u0648\u0648\u0641 \u064b\u062e \u0644\u0645\u062e \u0633\u0628\u0642\u060c \u064a\u0633\u0648\u0644\u0627\u062f  \u0628\u0631\u0646\u0648\u062e\u0645\u0627 \u0627\u0644\u062d\u0643\u0648\u0645\u0648\u0629 \u0627\u0644\u0645\u0635\u0648\u0631\u064a\u0629 \u0644\u0648\u0627\u0644 \u0627\u0644 \u0644\u0648\u0631 ",
-      "text_direction": "right_to_left",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/F3",
-      "font_name": "/ASTNQM+Tajawal-Regular"
-    },
-    {
-      "index": 22,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 99.24,
-        "r_y0": 395.043,
-        "r_x1": 104.009,
-        "r_y1": 395.043,
-        "r_x2": 104.009,
-        "r_y2": 408.003,
-        "r_x3": 99.24,
-        "r_y3": 408.003,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "(",
-      "orig": "(",
-      "text_direction": "left_to_right",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/F3",
-      "font_name": "/ASTNQM+Tajawal-Regular"
-    },
-    {
-      "index": 23,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 81.36,
-        "r_y0": 395.043,
-        "r_x1": 99.348,
-        "r_y1": 395.043,
-        "r_x2": 99.348,
-        "r_y2": 408.003,
-        "r_x3": 81.36,
-        "r_y3": 408.003,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "2024",
-      "orig": "2024",
-      "text_direction": "left_to_right",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/F3",
-      "font_name": "/ASTNQM+Tajawal-Regular"
-    },
-    {
-      "index": 24,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 74.52,
-        "r_y0": 395.043,
-        "r_x1": 78.097,
-        "r_y1": 395.043,
-        "r_x2": 78.097,
-        "r_y2": 408.003,
-        "r_x3": 74.52,
-        "r_y3": 408.003,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "-",
-      "orig": "-",
-      "text_direction": "left_to_right",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/F3",
-      "font_name": "/ASTNQM+Tajawal-Regular"
-    },
-    {
-      "index": 25,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 422.83,
-        "r_y0": 376.323,
-        "r_x1": 440.883,
-        "r_y1": 376.323,
-        "r_x2": 440.883,
-        "r_y2": 389.283,
-        "r_x3": 422.83,
-        "r_y3": 389.283,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "2026",
-      "orig": "2026",
-      "text_direction": "left_to_right",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/F3",
-      "font_name": "/ASTNQM+Tajawal-Regular"
-    },
-    {
-      "index": 26,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 414.79,
-        "r_y0": 376.323,
-        "r_x1": 422.679,
-        "r_y1": 376.323,
-        "r_x2": 422.679,
-        "r_y2": 389.283,
-        "r_x3": 414.79,
-        "r_y3": 389.283,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": " )",
-      "orig": " )",
-      "text_direction": "left_to_right",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/F3",
-      "font_name": "/ASTNQM+Tajawal-Regular"
-    },
-    {
-      "index": 27,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 113.4,
-        "r_y0": 376.323,
-        "r_x1": 414.435,
-        "r_y1": 376.323,
-        "r_x2": 414.435,
-        "r_y2": 389.283,
-        "r_x3": 113.4,
-        "r_y3": 389.283,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "\u062a\u062d \u064a\u0642 \u0639\u0631\u0628\u0639\u0629 \u0639\u0647\u062f\u0627  \u0627\u0633\u0644\u0631\u0627\u062a\u064a\u062c\u064a\u0629 \u0631\u0626\u064a\u0633\u0629\u060c \u0648\u0647\u0627 \u064a\u0627\u0649 \u0627\u0644\u0647\u062d\u0648 \u0627\u0644\u0622\u062a\u0627",
-      "orig": "\u062a\u062d \u064a\u0642 \u0639\u0631\u0628\u0639\u0629 \u0639\u0647\u062f\u0627  \u0627\u0633\u0644\u0631\u0627\u062a\u064a\u062c\u064a\u0629 \u0631\u0626\u064a\u0633\u0629\u060c \u0648\u0647\u0627 \u064a\u0627\u0649 \u0627\u0644\u0647\u062d\u0648 \u0627\u0644\u0622\u062a\u0627",
-      "text_direction": "right_to_left",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/F3",
-      "font_name": "/ASTNQM+Tajawal-Regular"
-    },
-    {
-      "index": 28,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 110.52,
-        "r_y0": 376.323,
-        "r_x1": 113.423,
-        "r_y1": 376.323,
-        "r_x2": 113.423,
-        "r_y2": 389.283,
-        "r_x3": 110.52,
-        "r_y3": 389.283,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": ":",
-      "orig": ":",
-      "text_direction": "left_to_right",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/F3",
-      "font_name": "/ASTNQM+Tajawal-Regular"
-    },
-    {
-      "index": 29,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 115.18,
-        "r_y0": 250.133,
-        "r_x1": 436.821,
-        "r_y1": 250.133,
-        "r_x2": 436.821,
-        "r_y2": 263.093,
-        "r_x3": 115.18,
-        "r_y3": 263.093,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "\u062a\u062c\u062f\u0631 \u0627\u0644\u0625 \u062e\u0631  \u0625\u0644\u0649 \u0639\u0646\u0647 \u0642\u062f \u062a\u0644 \u062a\u062d\u062f\u064a\u062f \u0645\u0633\u0648\u0644\u0627\u062f\u0641\u062e\u062a \u0627\u0644\u0628\u0631\u0646\u0648\u062e\u0645\u0627 \u0628\u062e\u062d\u0633\u0648\u0644\u0647\u062e",
-      "orig": "\u062a\u062c\u062f\u0631 \u0627\u0644\u0625 \u062e\u0631  \u0625\u0644\u0649 \u0639\u0646\u0647 \u0642\u062f \u062a\u0644 \u062a\u062d\u062f\u064a\u062f \u0645\u0633\u0648\u0644\u0627\u062f\u0641\u062e\u062a \u0627\u0644\u0628\u0631\u0646\u0648\u062e\u0645\u0627 \u0628\u062e\u062d\u0633\u0648\u0644\u0647\u062e",
-      "text_direction": "right_to_left",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/F3",
-      "font_name": "/ASTNQM+Tajawal-Regular"
-    },
-    {
-      "index": 30,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 67.992,
-        "r_y0": 250.133,
-        "r_x1": 115.192,
-        "r_y1": 250.133,
-        "r_x2": 115.192,
-        "r_y2": 263.093,
-        "r_x3": 67.992,
-        "r_y3": 263.093,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "\u062f \u0628\u0627\u0648\u0643\u0644 ",
-      "orig": "\u062f \u0628\u0627\u0648\u0643\u0644 ",
-      "text_direction": "right_to_left",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/F3",
-      "font_name": "/ASTNQM+Tajawal-Regular"
-    },
-    {
-      "index": 31,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -42904,7 +42498,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 32,
+      "index": 22,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -42933,7 +42527,7 @@
       "font_name": "/AJEQRB+Tajawal-Regular"
     },
     {
-      "index": 33,
+      "index": 23,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -42962,36 +42556,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 34,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 91.176,
-        "r_y0": 212.673,
-        "r_x1": 437.027,
-        "r_y1": 212.673,
-        "r_x2": 437.027,
-        "r_y2": 225.633,
-        "r_x3": 91.176,
-        "r_y3": 225.633,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "\u0627\u0644\u0648\u0648\u060c\u0647\u0627\u060c \u0648\u0645\u0633\u0648\u0644\u0627\u062f\u0641\u062e\u062a \u0627\u0644\u0648\u0648 \u0627\u0631\u0627\u062a\u060c \u0648\u0627\u0644\u0628\u0631\u0646\u0648\u062e\u0645\u0627 \u0627\u0644\u0648\u0648\u060c\u0647\u0627 \u0644\u064a\u0635\u0648\u0627 \u062e\u062a \u0627\u0644\u0627\u064a\u0643",
-      "orig": "\u0627\u0644\u0648\u0648\u060c\u0647\u0627\u060c \u0648\u0645\u0633\u0648\u0644\u0627\u062f\u0641\u062e\u062a \u0627\u0644\u0648\u0648 \u0627\u0631\u0627\u062a\u060c \u0648\u0627\u0644\u0628\u0631\u0646\u0648\u062e\u0645\u0627 \u0627\u0644\u0648\u0648\u060c\u0647\u0627 \u0644\u064a\u0635\u0648\u0627 \u062e\u062a \u0627\u0644\u0627\u064a\u0643",
-      "text_direction": "right_to_left",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/F3",
-      "font_name": "/ASTNQM+Tajawal-Regular"
-    },
-    {
-      "index": 35,
+      "index": 24,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -43001,16 +42566,16 @@
       "rect": {
         "r_x0": 67.992,
         "r_y0": 212.673,
-        "r_x1": 91.126,
+        "r_x1": 437.027,
         "r_y1": 212.673,
-        "r_x2": 91.126,
+        "r_x2": 437.027,
         "r_y2": 225.633,
         "r_x3": 67.992,
         "r_y3": 225.633,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "\u0627\u064a\u0648\u0629\u060c ",
-      "orig": "\u0627\u064a\u0648\u0629\u060c ",
+      "text": "\u0627\u0644\u0648\u0648\u060c\u0647\u0627\u060c \u0648\u0645\u0633\u0648\u0644\u0627\u062f\u0641\u062e\u062a \u0627\u0644\u0648\u0648 \u0627\u0631\u0627\u062a\u060c \u0648\u0627\u0644\u0628\u0631\u0646\u0648\u062e\u0645\u0627 \u0627\u0644\u0648\u0648\u060c\u0647\u0627 \u0644\u064a\u0635\u0648\u0627 \u062e\u062a \u0627\u0644\u0627\u064a\u0643\u0627\u064a\u0648\u0629\u060c ",
+      "orig": "\u0627\u0644\u0648\u0648\u060c\u0647\u0627\u060c \u0648\u0645\u0633\u0648\u0644\u0627\u062f\u0641\u062e\u062a \u0627\u0644\u0648\u0648 \u0627\u0631\u0627\u062a\u060c \u0648\u0627\u0644\u0628\u0631\u0646\u0648\u062e\u0645\u0627 \u0627\u0644\u0648\u0648\u060c\u0647\u0627 \u0644\u064a\u0635\u0648\u0627 \u062e\u062a \u0627\u0644\u0627\u064a\u0643\u0627\u064a\u0648\u0629\u060c ",
       "text_direction": "right_to_left",
       "confidence": 1.0,
       "from_ocr": false,
@@ -43020,36 +42585,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 36,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 276.12,
-        "r_y0": 193.953,
-        "r_x1": 437.291,
-        "r_y1": 193.953,
-        "r_x2": 437.291,
-        "r_y2": 206.913,
-        "r_x3": 276.12,
-        "r_y3": 206.913,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "\u0648\u0645\u0628\u0644\u0627\u0641 \u0627\u062d\u0633\u0644\u0631\u0627\u062a\u064a\u062c\u064a\u062e\u062a \u0627\u0644\u0648\u060c\u0647\u064a\u0629",
-      "orig": "\u0648\u0645\u0628\u0644\u0627\u0641 \u0627\u062d\u0633\u0644\u0631\u0627\u062a\u064a\u062c\u064a\u062e\u062a \u0627\u0644\u0648\u060c\u0647\u064a\u0629",
-      "text_direction": "right_to_left",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/F3",
-      "font_name": "/ASTNQM+Tajawal-Regular"
-    },
-    {
-      "index": 37,
+      "index": 25,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -43059,17 +42595,17 @@
       "rect": {
         "r_x0": 272.64,
         "r_y0": 193.953,
-        "r_x1": 276.061,
+        "r_x1": 437.291,
         "r_y1": 193.953,
-        "r_x2": 276.061,
+        "r_x2": 437.291,
         "r_y2": 206.913,
         "r_x3": 272.64,
         "r_y3": 206.913,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": ".",
-      "orig": ".",
-      "text_direction": "left_to_right",
+      "text": "\u0648\u0645\u0628\u0644\u0627\u0641 \u0627\u062d\u0633\u0644\u0631\u0627\u062a\u064a\u062c\u064a\u062e\u062a \u0627\u0644\u0648\u060c\u0647\u064a\u0629.",
+      "orig": "\u0648\u0645\u0628\u0644\u0627\u0641 \u0627\u062d\u0633\u0644\u0631\u0627\u062a\u064a\u062c\u064a\u062e\u062a \u0627\u0644\u0648\u060c\u0647\u064a\u0629.",
+      "text_direction": "right_to_left",
       "confidence": 1.0,
       "from_ocr": false,
       "rendering_mode": -1,
@@ -43078,7 +42614,7 @@
       "font_name": "/ASTNQM+Tajawal-Regular"
     },
     {
-      "index": 38,
+      "index": 26,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -43107,7 +42643,7 @@
       "font_name": "/BBOMLU+Tajawal-Medium"
     },
     {
-      "index": 39,
+      "index": 27,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -43136,7 +42672,7 @@
       "font_name": "/BBOMLU+Tajawal-Medium"
     },
     {
-      "index": 40,
+      "index": 28,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -43165,7 +42701,7 @@
       "font_name": "/BBOMLU+Tajawal-Medium"
     },
     {
-      "index": 41,
+      "index": 29,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -43194,7 +42730,7 @@
       "font_name": "/BBOMLU+Tajawal-Medium"
     },
     {
-      "index": 42,
+      "index": 30,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -43223,7 +42759,7 @@
       "font_name": "/BBOMLU+Tajawal-Medium"
     },
     {
-      "index": 43,
+      "index": 31,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -43252,36 +42788,7 @@
       "font_name": "/BBOMLU+Tajawal-Medium"
     },
     {
-      "index": 44,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 85.416,
-        "r_y0": 320.623,
-        "r_x1": 160.441,
-        "r_y1": 320.623,
-        "r_x2": 160.441,
-        "r_y2": 333.583,
-        "r_x3": 85.416,
-        "r_y3": 333.583,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "\u062a\u062d\u0642\u064a\u0642 \u0627\u0638\u0633\u062a\u0642",
-      "orig": "\u062a\u062d\u0642\u064a\u0642 \u0627\u0638\u0633\u062a\u0642",
-      "text_direction": "right_to_left",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/F1",
-      "font_name": "/BBOMLU+Tajawal-Medium"
-    },
-    {
-      "index": 45,
+      "index": 32,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -43291,16 +42798,16 @@
       "rect": {
         "r_x0": 69.096,
         "r_y0": 320.623,
-        "r_x1": 85.413,
+        "r_x1": 160.441,
         "r_y1": 320.623,
-        "r_x2": 85.413,
+        "r_x2": 160.441,
         "r_y2": 333.583,
         "r_x3": 69.096,
         "r_y3": 333.583,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "\u0631\u0627\u0631 ",
-      "orig": "\u0631\u0627\u0631 ",
+      "text": "\u062a\u062d\u0642\u064a\u0642 \u0627\u0638\u0633\u062a\u0642\u0631\u0627\u0631 ",
+      "orig": "\u062a\u062d\u0642\u064a\u0642 \u0627\u0638\u0633\u062a\u0642\u0631\u0627\u0631 ",
       "text_direction": "right_to_left",
       "confidence": 1.0,
       "from_ocr": false,
@@ -43310,7 +42817,7 @@
       "font_name": "/BBOMLU+Tajawal-Medium"
     },
     {
-      "index": 46,
+      "index": 33,
       "rgba": {
         "r": 0,
         "g": 0,

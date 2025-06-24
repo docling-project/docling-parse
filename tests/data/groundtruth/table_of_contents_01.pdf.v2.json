@@ -40706,12 +40706,12 @@
         ]
       },
       "timings": {
-        "decode_annots": 4e-06,
-        "decode_contents": 0.006058,
-        "decode_dimensions": 1e-06,
-        "decode_page": 0.014817,
-        "decode_resources": 0.002053,
-        "sanitise_contents": 0.000893
+        "decode_annots": 3e-06,
+        "decode_contents": 0.006036,
+        "decode_dimensions": 0.0,
+        "decode_page": 0.015432,
+        "decode_resources": 0.002151,
+        "sanitise_contents": 0.001051
       }
     },
     {
@@ -131027,12 +131027,12 @@
         ]
       },
       "timings": {
-        "decode_annots": 7e-06,
-        "decode_contents": 0.007823,
+        "decode_annots": 8e-06,
+        "decode_contents": 0.008235,
         "decode_dimensions": 0.0,
-        "decode_page": 0.036321,
-        "decode_resources": 0.00168,
-        "sanitise_contents": 0.002324
+        "decode_page": 0.038358,
+        "decode_resources": 0.001757,
+        "sanitise_contents": 0.002537
       }
     },
     {
@@ -201981,12 +201981,12 @@
         ]
       },
       "timings": {
-        "decode_annots": 1.8e-05,
-        "decode_contents": 0.00179,
+        "decode_annots": 1.9e-05,
+        "decode_contents": 0.001952,
         "decode_dimensions": 0.0,
-        "decode_page": 0.028024,
-        "decode_resources": 0.002357,
-        "sanitise_contents": 0.001895
+        "decode_page": 0.028808,
+        "decode_resources": 0.001858,
+        "sanitise_contents": 0.002018
       }
     },
     {
@@ -271301,17 +271301,17 @@
             [
               235.611,
               508.455,
-              238.057,
+              299.016,
               517.007,
               235.611,
               508.455,
-              238.057,
+              299.016,
               508.455,
-              238.057,
+              299.016,
               517.007,
               235.611,
               517.007,
-              ".",
+              ". Given an input",
               -1,
               2.446,
               "",
@@ -271508,17 +271508,17 @@
             [
               442.415,
               497.496,
-              444.873,
+              504.0,
               506.048,
               442.415,
               497.496,
-              444.873,
+              504.0,
               497.496,
-              444.873,
+              504.0,
               506.048,
               442.415,
               506.048,
-              ",",
+              ", we are using a",
               -1,
               2.458,
               "",
@@ -272727,17 +272727,17 @@
             [
               380.698,
               408.002,
-              383.238,
+              418.9,
               416.554,
               380.698,
               408.002,
-              383.238,
+              418.9,
               408.002,
-              383.238,
+              418.9,
               416.554,
               380.698,
               416.554,
-              ",",
+              ", and Top",
               -1,
               2.54,
               "",
@@ -272888,17 +272888,17 @@
             [
               225.943,
               397.044,
-              228.434,
+              414.047,
               405.596,
               225.943,
               397.044,
-              228.434,
+              414.047,
               397.044,
-              228.434,
+              414.047,
               405.596,
               225.943,
               405.596,
-              ".",
+              ". The final output of the SMoE is then given by",
               -1,
               2.491,
               "",
@@ -274682,17 +274682,17 @@
             [
               323.956,
               60.072,
-              326.464,
+              503.996,
               68.624,
               323.956,
               60.072,
-              326.464,
+              503.996,
               60.072,
-              326.464,
+              503.996,
               68.624,
               323.956,
               68.624,
-              ".",
+              ". Intuitively, this loss penalises over-usage of",
               -1,
               2.508,
               "",
@@ -274821,27 +274821,27 @@
         ]
       },
       "timings": {
-        "decode_annots": 1.9e-05,
-        "decode_contents": 0.00195,
+        "decode_annots": 2e-05,
+        "decode_contents": 0.002097,
         "decode_dimensions": 0.0,
-        "decode_page": 0.029594,
-        "decode_resources": 0.002759,
-        "sanitise_contents": 0.001933
+        "decode_page": 0.03071,
+        "decode_resources": 0.002812,
+        "sanitise_contents": 0.001971
       }
     }
   ],
   "timings": {
-    "decode_annots": 4.8e-05,
-    "decode_contents": 0.017621,
-    "decode_dimensions": 1e-06,
-    "decode_document": 0.114062,
-    "decode_page": 0.108756,
-    "decode_resources": 0.008849,
-    "decoding page 0": 0.015442,
-    "decoding page 1": 0.037691,
-    "decoding page 2": 0.029262,
-    "decoding page 3": 0.030873,
-    "process_document_from_bytesio": 0.001005,
-    "sanitise_contents": 0.007045
+    "decode_annots": 5e-05,
+    "decode_contents": 0.018319999999999996,
+    "decode_dimensions": 0.0,
+    "decode_document": 0.119073,
+    "decode_page": 0.113308,
+    "decode_resources": 0.008578,
+    "decoding page 0": 0.016107,
+    "decoding page 1": 0.039803,
+    "decoding page 2": 0.030132,
+    "decoding page 3": 0.032123,
+    "process_document_from_bytesio": 0.001003,
+    "sanitise_contents": 0.007577
   }
 }

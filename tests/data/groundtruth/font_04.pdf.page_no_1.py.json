@@ -16944,16 +16944,16 @@
       "rect": {
         "r_x0": 219.9,
         "r_y0": 747.253,
-        "r_x1": 246.9,
+        "r_x1": 266.904,
         "r_y1": 747.253,
-        "r_x2": 246.9,
+        "r_x2": 266.904,
         "r_y2": 762.661,
         "r_x3": 219.9,
         "r_y3": 762.661,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "3,850",
-      "orig": "3,850",
+      "text": "3,850 \u00c1o",
+      "orig": "3,850 \u00c1o",
       "text_direction": "left_to_right",
       "confidence": 1.0,
       "from_ocr": false,
@@ -16964,35 +16964,6 @@
     },
     {
       "index": 7,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 252.3,
-        "r_y0": 747.253,
-        "r_x1": 266.904,
-        "r_y1": 747.253,
-        "r_x2": 266.904,
-        "r_y2": 762.661,
-        "r_x3": 252.3,
-        "r_y3": 762.661,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "\u00c1o",
-      "orig": "\u00c1o",
-      "text_direction": "left_to_right",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/F1",
-      "font_name": "/BAAAAA+LiberationSerif"
-    },
-    {
-      "index": 8,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -17021,7 +16992,7 @@
       "font_name": "/BAAAAA+LiberationSerif"
     },
     {
-      "index": 9,
+      "index": 8,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -17050,7 +17021,7 @@
       "font_name": "/BAAAAA+LiberationSerif"
     },
     {
-      "index": 10,
+      "index": 9,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -17079,7 +17050,7 @@
       "font_name": "/BAAAAA+LiberationSerif"
     },
     {
-      "index": 11,
+      "index": 10,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -17108,7 +17079,7 @@
       "font_name": "/BAAAAA+LiberationSerif"
     },
     {
-      "index": 12,
+      "index": 11,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -17118,16 +17089,16 @@
       "rect": {
         "r_x0": 219.9,
         "r_y0": 713.653,
-        "r_x1": 246.9,
+        "r_x1": 297.888,
         "r_y1": 713.653,
-        "r_x2": 246.9,
+        "r_x2": 297.888,
         "r_y2": 729.061,
         "r_x3": 219.9,
         "r_y3": 729.061,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "4,200",
-      "orig": "4,200",
+      "text": "4,200 Nh\u1eadt B\u1ea3n",
+      "orig": "4,200 Nh\u1eadt B\u1ea3n",
       "text_direction": "left_to_right",
       "confidence": 1.0,
       "from_ocr": false,
@@ -17137,36 +17108,7 @@
       "font_name": "/BAAAAA+LiberationSerif"
     },
     {
-      "index": 13,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 252.3,
-        "r_y0": 713.653,
-        "r_x1": 297.888,
-        "r_y1": 713.653,
-        "r_x2": 297.888,
-        "r_y2": 729.061,
-        "r_x3": 252.3,
-        "r_y3": 729.061,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "Nh\u1eadt B\u1ea3n",
-      "orig": "Nh\u1eadt B\u1ea3n",
-      "text_direction": "left_to_right",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/F1",
-      "font_name": "/BAAAAA+LiberationSerif"
-    },
-    {
-      "index": 14,
+      "index": 12,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -17195,7 +17137,7 @@
       "font_name": "/BAAAAA+LiberationSerif"
     },
     {
-      "index": 15,
+      "index": 13,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -17224,7 +17166,7 @@
       "font_name": "/BAAAAA+LiberationSerif"
     },
     {
-      "index": 16,
+      "index": 14,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -17253,7 +17195,7 @@
       "font_name": "/BAAAAA+LiberationSerif"
     },
     {
-      "index": 17,
+      "index": 15,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -17282,7 +17224,7 @@
       "font_name": "/BAAAAA+LiberationSerif"
     },
     {
-      "index": 18,
+      "index": 16,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -17311,7 +17253,7 @@
       "font_name": "/BAAAAA+LiberationSerif"
     },
     {
-      "index": 19,
+      "index": 17,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -17321,16 +17263,16 @@
       "rect": {
         "r_x0": 225.9,
         "r_y0": 680.053,
-        "r_x1": 246.9,
+        "r_x1": 280.92,
         "r_y1": 680.053,
-        "r_x2": 246.9,
+        "r_x2": 280.92,
         "r_y2": 695.461,
         "r_x3": 225.9,
         "r_y3": 695.461,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "5,15",
-      "orig": "5,15",
+      "text": "5,15 Nepal",
+      "orig": "5,15 Nepal",
       "text_direction": "left_to_right",
       "confidence": 1.0,
       "from_ocr": false,
@@ -17340,36 +17282,7 @@
       "font_name": "/BAAAAA+LiberationSerif"
     },
     {
-      "index": 20,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 252.3,
-        "r_y0": 680.053,
-        "r_x1": 280.92,
-        "r_y1": 680.053,
-        "r_x2": 280.92,
-        "r_y2": 695.461,
-        "r_x3": 252.3,
-        "r_y3": 695.461,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "Nepal",
-      "orig": "Nepal",
-      "text_direction": "left_to_right",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/F1",
-      "font_name": "/BAAAAA+LiberationSerif"
-    },
-    {
-      "index": 21,
+      "index": 18,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -17398,7 +17311,7 @@
       "font_name": "/BAAAAA+LiberationSerif"
     },
     {
-      "index": 22,
+      "index": 19,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -17427,7 +17340,7 @@
       "font_name": "/BAAAAA+LiberationSerif"
     },
     {
-      "index": 23,
+      "index": 20,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -17456,7 +17369,7 @@
       "font_name": "/BAAAAA+LiberationSerif"
     },
     {
-      "index": 24,
+      "index": 21,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -17485,7 +17398,7 @@
       "font_name": "/BAAAAA+LiberationSerif"
     },
     {
-      "index": 25,
+      "index": 22,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -17514,7 +17427,7 @@
       "font_name": "/BAAAAA+LiberationSerif"
     },
     {
-      "index": 26,
+      "index": 23,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -17543,7 +17456,7 @@
       "font_name": "/BAAAAA+LiberationSerif"
     },
     {
-      "index": 27,
+      "index": 24,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -17572,7 +17485,7 @@
       "font_name": "/BAAAAA+LiberationSerif"
     },
     {
-      "index": 28,
+      "index": 25,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -17601,7 +17514,7 @@
       "font_name": "/BAAAAA+LiberationSerif"
     },
     {
-      "index": 29,
+      "index": 26,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -17630,7 +17543,7 @@
       "font_name": "/BAAAAA+LiberationSerif"
     },
     {
-      "index": 30,
+      "index": 27,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -17659,7 +17572,7 @@
       "font_name": "/BAAAAA+LiberationSerif"
     },
     {
-      "index": 31,
+      "index": 28,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -17688,7 +17601,7 @@
       "font_name": "/BAAAAA+LiberationSerif"
     },
     {
-      "index": 32,
+      "index": 29,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -17717,7 +17630,7 @@
       "font_name": "/BAAAAA+LiberationSerif"
     },
     {
-      "index": 33,
+      "index": 30,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -17746,7 +17659,7 @@
       "font_name": "/BAAAAA+LiberationSerif"
     },
     {
-      "index": 34,
+      "index": 31,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -17775,7 +17688,7 @@
       "font_name": "/BAAAAA+LiberationSerif"
     },
     {
-      "index": 35,
+      "index": 32,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -17804,7 +17717,7 @@
       "font_name": "/BAAAAA+LiberationSerif"
     },
     {
-      "index": 36,
+      "index": 33,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -17833,7 +17746,7 @@
       "font_name": "/BAAAAA+LiberationSerif"
     },
     {
-      "index": 37,
+      "index": 34,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -17862,7 +17775,7 @@
       "font_name": "/BAAAAA+LiberationSerif"
     },
     {
-      "index": 38,
+      "index": 35,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -17891,7 +17804,7 @@
       "font_name": "/BAAAAA+LiberationSerif"
     },
     {
-      "index": 39,
+      "index": 36,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -17920,7 +17833,7 @@
       "font_name": "/BAAAAA+LiberationSerif"
     },
     {
-      "index": 40,
+      "index": 37,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -17930,16 +17843,16 @@
       "rect": {
         "r_x0": 219.9,
         "r_y0": 579.253,
-        "r_x1": 246.9,
+        "r_x1": 276.288,
         "r_y1": 579.253,
-        "r_x2": 246.9,
+        "r_x2": 276.288,
         "r_y2": 594.661,
         "r_x3": 219.9,
         "r_y3": 594.661,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "4,500",
-      "orig": "4,500",
+      "text": "4,500 Ph\u00e1p",
+      "orig": "4,500 Ph\u00e1p",
       "text_direction": "left_to_right",
       "confidence": 1.0,
       "from_ocr": false,
@@ -17949,36 +17862,7 @@
       "font_name": "/BAAAAA+LiberationSerif"
     },
     {
-      "index": 41,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 252.3,
-        "r_y0": 579.253,
-        "r_x1": 276.288,
-        "r_y1": 579.253,
-        "r_x2": 276.288,
-        "r_y2": 594.661,
-        "r_x3": 252.3,
-        "r_y3": 594.661,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "Ph\u00e1p",
-      "orig": "Ph\u00e1p",
-      "text_direction": "left_to_right",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/F1",
-      "font_name": "/BAAAAA+LiberationSerif"
-    },
-    {
-      "index": 42,
+      "index": 38,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -18007,7 +17891,7 @@
       "font_name": "/BAAAAA+LiberationSerif"
     },
     {
-      "index": 43,
+      "index": 39,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -18036,7 +17920,7 @@
       "font_name": "/BAAAAA+LiberationSerif"
     },
     {
-      "index": 44,
+      "index": 40,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -18065,7 +17949,7 @@
       "font_name": "/BAAAAA+LiberationSerif"
     },
     {
-      "index": 45,
+      "index": 41,
       "rgba": {
         "r": 0,
         "g": 0,

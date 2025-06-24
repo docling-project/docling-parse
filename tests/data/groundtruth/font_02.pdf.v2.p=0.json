@@ -7,7 +7,7 @@
   },
   "info": {
     "#-pages": 1,
-    "filename": "tests/data/regression/font_02.pdf"
+    "filename": ""
   },
   "pages": [
     {
@@ -35506,23 +35506,23 @@
       },
       "timings": {
         "decode_annots": 0.0,
-        "decode_contents": 0.001087,
+        "decode_contents": 0.001199,
         "decode_dimensions": 0.0,
-        "decode_page": 0.012516,
-        "decode_resources": 0.001578,
-        "sanitise_contents": 0.000936
+        "decode_page": 0.012674,
+        "decode_resources": 0.001699,
+        "sanitise_contents": 0.001093
       }
     }
   ],
   "timings": {
     "decode_annots": 0.0,
-    "decode_contents": 0.001087,
+    "decode_contents": 0.001199,
     "decode_dimensions": 0.0,
-    "decode_document": 0.013189,
-    "decode_page": 0.012516,
-    "decode_resources": 0.001578,
-    "decoding page 0": 0.013065,
-    "process_document_from_file": 0.000418,
-    "sanitise_contents": 0.000936
+    "decode_document": 0.013385,
+    "decode_page": 0.012674,
+    "decode_resources": 0.001699,
+    "decoding page 0": 0.01327,
+    "process_document_from_bytesio": 1.6e-05,
+    "sanitise_contents": 0.001093
   }
 }

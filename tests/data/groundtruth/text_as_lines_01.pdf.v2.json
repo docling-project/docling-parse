@@ -55667,11 +55667,11 @@
       },
       "timings": {
         "decode_annots": 0.0,
-        "decode_contents": 0.007751,
+        "decode_contents": 0.008016,
         "decode_dimensions": 0.0,
-        "decode_page": 0.019578,
-        "decode_resources": 0.001499,
-        "sanitise_contents": 0.00074
+        "decode_page": 0.020937,
+        "decode_resources": 0.001546,
+        "sanitise_contents": 0.000858
       }
     },
     {
@@ -404501,11 +404501,11 @@
       },
       "timings": {
         "decode_annots": 0.0,
-        "decode_contents": 0.048124,
+        "decode_contents": 0.051388,
         "decode_dimensions": 0.0,
-        "decode_page": 0.058969,
-        "decode_resources": 0.001185,
-        "sanitise_contents": 0.000411
+        "decode_page": 0.062674,
+        "decode_resources": 0.001194,
+        "sanitise_contents": 0.000437
       }
     },
     {
@@ -679173,25 +679173,25 @@
       },
       "timings": {
         "decode_annots": 0.0,
-        "decode_contents": 0.037621,
+        "decode_contents": 0.038895,
         "decode_dimensions": 1e-06,
-        "decode_page": 0.049833,
-        "decode_resources": 0.001028,
-        "sanitise_contents": 0.000611
+        "decode_page": 0.050375,
+        "decode_resources": 0.001033,
+        "sanitise_contents": 0.000679
       }
     }
   ],
   "timings": {
     "decode_annots": 0.0,
-    "decode_contents": 0.093496,
+    "decode_contents": 0.098299,
     "decode_dimensions": 1e-06,
-    "decode_document": 0.135686,
-    "decode_page": 0.12838,
-    "decode_resources": 0.003712,
-    "decoding page 0": 0.020373,
-    "decoding page 1": 0.061723,
-    "decoding page 2": 0.052383,
-    "process_document_from_bytesio": 3.1e-05,
-    "sanitise_contents": 0.0017620000000000001
+    "decode_document": 0.141408,
+    "decode_page": 0.133986,
+    "decode_resources": 0.0037730000000000003,
+    "decoding page 0": 0.021799,
+    "decoding page 1": 0.065424,
+    "decoding page 2": 0.05296,
+    "process_document_from_bytesio": 2.6e-05,
+    "sanitise_contents": 0.001974
   }
 }

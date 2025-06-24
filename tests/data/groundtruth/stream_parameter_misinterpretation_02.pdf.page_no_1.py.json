@@ -80249,16 +80249,16 @@
       "rect": {
         "r_x0": 550.11,
         "r_y0": 241.808,
-        "r_x1": 565.67,
+        "r_x1": 574.998,
         "r_y1": 241.808,
-        "r_x2": 565.67,
+        "r_x2": 574.998,
         "r_y2": 249.188,
         "r_x3": 550.11,
         "r_y3": 249.188,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "3,00",
-      "orig": "3,00",
+      "text": "3,00%",
+      "orig": "3,00%",
       "text_direction": "left_to_right",
       "confidence": 1.0,
       "from_ocr": false,
@@ -80269,35 +80269,6 @@
     },
     {
       "index": 295,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 567.886,
-        "r_y0": 241.808,
-        "r_x1": 574.998,
-        "r_y1": 241.808,
-        "r_x2": 574.998,
-        "r_y2": 249.188,
-        "r_x3": 567.886,
-        "r_y3": 249.188,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "%",
-      "orig": "%",
-      "text_direction": "left_to_right",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/F3",
-      "font_name": "/ArialMT"
-    },
-    {
-      "index": 296,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -80326,7 +80297,7 @@
       "font_name": "/Arial-BoldMT"
     },
     {
-      "index": 297,
+      "index": 296,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -80355,7 +80326,7 @@
       "font_name": "/Arial-BoldMT"
     },
     {
-      "index": 298,
+      "index": 297,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -80384,7 +80355,7 @@
       "font_name": "/Arial-BoldMT"
     },
     {
-      "index": 299,
+      "index": 298,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -80413,7 +80384,7 @@
       "font_name": "/Arial-BoldMT"
     },
     {
-      "index": 300,
+      "index": 299,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -80442,7 +80413,7 @@
       "font_name": "/ArialMT"
     },
     {
-      "index": 301,
+      "index": 300,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -80471,7 +80442,7 @@
       "font_name": "/ArialMT"
     },
     {
-      "index": 302,
+      "index": 301,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -80500,7 +80471,7 @@
       "font_name": "/ArialMT"
     },
     {
-      "index": 303,
+      "index": 302,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -80529,7 +80500,7 @@
       "font_name": "/ArialMT"
     },
     {
-      "index": 304,
+      "index": 303,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -80558,7 +80529,7 @@
       "font_name": "/ArialMT"
     },
     {
-      "index": 305,
+      "index": 304,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -80587,7 +80558,7 @@
       "font_name": "/ArialMT"
     },
     {
-      "index": 306,
+      "index": 305,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -80616,7 +80587,7 @@
       "font_name": "/ArialMT"
     },
     {
-      "index": 307,
+      "index": 306,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -80645,7 +80616,7 @@
       "font_name": "/ArialMT"
     },
     {
-      "index": 308,
+      "index": 307,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -80674,7 +80645,7 @@
       "font_name": "/ArialMT"
     },
     {
-      "index": 309,
+      "index": 308,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -80703,7 +80674,7 @@
       "font_name": "/ArialMT"
     },
     {
-      "index": 310,
+      "index": 309,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -80732,7 +80703,7 @@
       "font_name": "/ArialMT"
     },
     {
-      "index": 311,
+      "index": 310,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -80761,7 +80732,7 @@
       "font_name": "/ArialMT"
     },
     {
-      "index": 312,
+      "index": 311,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -80790,7 +80761,7 @@
       "font_name": "/ArialMT"
     },
     {
-      "index": 313,
+      "index": 312,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -80819,7 +80790,7 @@
       "font_name": "/ArialMT"
     },
     {
-      "index": 314,
+      "index": 313,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -80848,7 +80819,7 @@
       "font_name": "/ArialMT"
     },
     {
-      "index": 315,
+      "index": 314,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -80877,7 +80848,7 @@
       "font_name": "/ArialMT"
     },
     {
-      "index": 316,
+      "index": 315,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -80906,7 +80877,7 @@
       "font_name": "/Arial-BoldMT"
     },
     {
-      "index": 317,
+      "index": 316,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -80935,7 +80906,7 @@
       "font_name": "/Arial-BoldMT"
     },
     {
-      "index": 318,
+      "index": 317,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -80964,7 +80935,7 @@
       "font_name": "/Arial-BoldMT"
     },
     {
-      "index": 319,
+      "index": 318,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -80993,7 +80964,7 @@
       "font_name": "/Arial-BoldMT"
     },
     {
-      "index": 320,
+      "index": 319,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -81022,7 +80993,7 @@
       "font_name": "/ArialMT"
     },
     {
-      "index": 321,
+      "index": 320,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -81051,7 +81022,7 @@
       "font_name": "/ArialMT"
     },
     {
-      "index": 322,
+      "index": 321,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -81080,7 +81051,7 @@
       "font_name": "/ArialMT"
     },
     {
-      "index": 323,
+      "index": 322,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -81109,7 +81080,7 @@
       "font_name": "/ArialMT"
     },
     {
-      "index": 324,
+      "index": 323,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -81138,7 +81109,7 @@
       "font_name": "/ArialMT"
     },
     {
-      "index": 325,
+      "index": 324,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -81167,7 +81138,7 @@
       "font_name": "/ArialMT"
     },
     {
-      "index": 326,
+      "index": 325,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -81196,7 +81167,7 @@
       "font_name": "/ArialMT"
     },
     {
-      "index": 327,
+      "index": 326,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -81225,7 +81196,7 @@
       "font_name": "/ArialMT"
     },
     {
-      "index": 328,
+      "index": 327,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -81254,7 +81225,7 @@
       "font_name": "/ArialMT"
     },
     {
-      "index": 329,
+      "index": 328,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -81283,7 +81254,7 @@
       "font_name": "/ArialMT"
     },
     {
-      "index": 330,
+      "index": 329,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -81312,7 +81283,7 @@
       "font_name": "/ArialMT"
     },
     {
-      "index": 331,
+      "index": 330,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -81341,7 +81312,7 @@
       "font_name": "/ArialMT"
     },
     {
-      "index": 332,
+      "index": 331,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -81370,7 +81341,7 @@
       "font_name": "/ArialMT"
     },
     {
-      "index": 333,
+      "index": 332,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -81399,7 +81370,7 @@
       "font_name": "/ArialMT"
     },
     {
-      "index": 334,
+      "index": 333,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -81428,7 +81399,7 @@
       "font_name": "/ArialMT"
     },
     {
-      "index": 335,
+      "index": 334,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -81457,7 +81428,7 @@
       "font_name": "/ArialMT"
     },
     {
-      "index": 336,
+      "index": 335,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -81486,7 +81457,7 @@
       "font_name": "/ArialMT"
     },
     {
-      "index": 337,
+      "index": 336,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -81515,7 +81486,7 @@
       "font_name": "/ArialMT"
     },
     {
-      "index": 338,
+      "index": 337,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -81544,7 +81515,7 @@
       "font_name": "/ArialMT"
     },
     {
-      "index": 339,
+      "index": 338,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -81573,7 +81544,7 @@
       "font_name": "/ArialMT"
     },
     {
-      "index": 340,
+      "index": 339,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -81602,7 +81573,7 @@
       "font_name": "/ArialMT"
     },
     {
-      "index": 341,
+      "index": 340,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -81631,7 +81602,7 @@
       "font_name": "/Arial-BoldMT"
     },
     {
-      "index": 342,
+      "index": 341,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -81660,7 +81631,7 @@
       "font_name": "/Arial-BoldMT"
     },
     {
-      "index": 343,
+      "index": 342,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -81689,7 +81660,7 @@
       "font_name": "/Arial-BoldMT"
     },
     {
-      "index": 344,
+      "index": 343,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -81718,7 +81689,7 @@
       "font_name": "/ArialMT"
     },
     {
-      "index": 345,
+      "index": 344,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -81747,7 +81718,7 @@
       "font_name": "/Arial-BoldMT"
     },
     {
-      "index": 346,
+      "index": 345,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -81776,7 +81747,7 @@
       "font_name": "/ArialMT"
     },
     {
-      "index": 347,
+      "index": 346,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -81805,7 +81776,7 @@
       "font_name": "/Arial-BoldMT"
     },
     {
-      "index": 348,
+      "index": 347,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -81834,7 +81805,7 @@
       "font_name": "/ArialMT"
     },
     {
-      "index": 349,
+      "index": 348,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -81863,7 +81834,7 @@
       "font_name": "/Arial-BoldMT"
     },
     {
-      "index": 350,
+      "index": 349,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -81892,7 +81863,7 @@
       "font_name": "/ArialMT"
     },
     {
-      "index": 351,
+      "index": 350,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -81921,7 +81892,7 @@
       "font_name": "/Arial-BoldMT"
     },
     {
-      "index": 352,
+      "index": 351,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -81950,7 +81921,7 @@
       "font_name": "/ArialMT"
     },
     {
-      "index": 353,
+      "index": 352,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -81979,7 +81950,7 @@
       "font_name": "/ArialMT"
     },
     {
-      "index": 354,
+      "index": 353,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -82008,7 +81979,7 @@
       "font_name": "/ArialMT"
     },
     {
-      "index": 355,
+      "index": 354,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -82037,7 +82008,7 @@
       "font_name": "/ArialMT"
     },
     {
-      "index": 356,
+      "index": 355,
       "rgba": {
         "r": 0,
         "g": 0,

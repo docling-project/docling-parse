@@ -1,0 +1,5449 @@
+{
+  "info": {
+    "histograms": {
+      "mean-char-height": {
+        "/AAAAAB+Arial-BoldMT": 4.832458423967505,
+        "/AAAAAC+ArialMT": 5.836325419775242,
+        "/AAAAAD+TimesNewRomanPSMT": 6.95229754924185,
+        "/AAAAAE+SakkalMajalla": 10.02698046629074,
+        "/AAAAAF+SimplifiedArabic-Bold": 19.28153589424536,
+        "/AAAAAG+SimplifiedArabic": 8.11186221260485,
+        "/AAAAAI+Arial-BoldMT": 10.79247687125771,
+        "/AAAAAK+TimesNewRomanPS-BoldMT": 9.7908200288612,
+        "/AAAAAL+TimesNewRomanPS-BoldMT": 11.76549116419634,
+        "/AAAAAN+TimesNewRomanPSMT": 7.573192127149206
+      },
+      "mean-char-width": {
+        "/AAAAAB+Arial-BoldMT": 2.063291148804657,
+        "/AAAAAC+ArialMT": 2.356248786238927,
+        "/AAAAAD+TimesNewRomanPSMT": 1.570082833122646,
+        "/AAAAAE+SakkalMajalla": 4.99356879695669,
+        "/AAAAAF+SimplifiedArabic-Bold": 3.675411363651137,
+        "/AAAAAG+SimplifiedArabic": 2.012352831720467,
+        "/AAAAAI+Arial-BoldMT": 6.657137876982686,
+        "/AAAAAK+TimesNewRomanPS-BoldMT": 6.225248591522345,
+        "/AAAAAL+TimesNewRomanPS-BoldMT": 2.657056058764254,
+        "/AAAAAN+TimesNewRomanPSMT": 4.238164264382497
+      },
+      "number-of-chars": {
+        "/AAAAAB+Arial-BoldMT": 67,
+        "/AAAAAC+ArialMT": 309,
+        "/AAAAAD+TimesNewRomanPSMT": 2,
+        "/AAAAAE+SakkalMajalla": 7,
+        "/AAAAAF+SimplifiedArabic-Bold": 1,
+        "/AAAAAG+SimplifiedArabic": 1256,
+        "/AAAAAI+Arial-BoldMT": 3,
+        "/AAAAAK+TimesNewRomanPS-BoldMT": 13,
+        "/AAAAAL+TimesNewRomanPS-BoldMT": 1,
+        "/AAAAAN+TimesNewRomanPSMT": 1081
+      }
+    },
+    "styles": [
+      "/AAAAAB+Arial-BoldMT",
+      "/AAAAAC+ArialMT",
+      "/AAAAAD+TimesNewRomanPSMT",
+      "/AAAAAE+SakkalMajalla",
+      "/AAAAAF+SimplifiedArabic-Bold",
+      "/AAAAAG+SimplifiedArabic",
+      "/AAAAAI+Arial-BoldMT",
+      "/AAAAAK+TimesNewRomanPS-BoldMT",
+      "/AAAAAL+TimesNewRomanPS-BoldMT",
+      "/AAAAAN+TimesNewRomanPSMT"
+    ]
+  },
+  "pages": [
+    {
+      "cells": [
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              119.3008,
+              696.26447,
+              122.52406,
+              709.21545
+            ],
+            "device": [
+              119.3008,
+              693.80646,
+              161.42339,
+              706.75745
+            ]
+          },
+          "content": {
+            "rnormalized": " \u0629\u064a\u0643\u064a\u0646\u0627\u0643\u064a\u0645\u0644\u0627"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAB+Arial-BoldMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              234.28284,
+              696.26447,
+              237.50609,
+              709.21545
+            ],
+            "device": [
+              234.28284,
+              693.80646,
+              273.25177,
+              706.75745
+            ]
+          },
+          "content": {
+            "rnormalized": " \u062a\u0627\u0631\u064a\u063a\u062a\u0645\u0644\u0627"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAB+Arial-BoldMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              346.11121,
+              696.26447,
+              349.33447,
+              709.21545
+            ],
+            "device": [
+              346.11121,
+              693.80646,
+              369.05661,
+              706.75745
+            ]
+          },
+          "content": {
+            "rnormalized": " \u0636\u0639\u0628"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAB+Arial-BoldMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              442.02042,
+              696.26447,
+              445.24368,
+              709.21545
+            ],
+            "device": [
+              442.02042,
+              693.80646,
+              473.2558,
+              706.75745
+            ]
+          },
+          "content": {
+            "rnormalized": " \u0629\u0640\u0640\u0633\u0627\u0631\u062f"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAB+Arial-BoldMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              323.26633,
+              682.97919,
+              344.5228,
+              693.77167
+            ],
+            "device": [
+              242.54002,
+              680.93085,
+              473.22101,
+              691.72333
+            ]
+          },
+          "content": {
+            "rnormalized": "......................................................................................"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAC+ArialMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              239.15833,
+              682.97919,
+              239.6337,
+              695.93018
+            ],
+            "device": [
+              179.85919,
+              680.52118,
+              239.6337,
+              693.47217
+            ]
+          },
+          "content": {
+            "rnormalized": "\u062f\u0648\u064a\u0632\u0644\u0627 \u062d\u0644\u0627\u0641 \u062f\u0627\u064a\u0632 "
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAB+Arial-BoldMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              442.15765,
+              136.92941,
+              444.9577,
+              152.03889
+            ],
+            "device": [
+              425.70322,
+              134.06172,
+              473.12073,
+              149.1712
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0629\u0631\u0627\u0640\u0640\u0640\u0640\u0640\u0646\u0640\u0640\u0645\u0644\u0627"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAC+ArialMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              418.93979,
+              136.92941,
+              425.6947,
+              149.8804
+            ],
+            "device": [
+              387.77972,
+              134.47139,
+              425.6947,
+              147.42238
+            ]
+          },
+          "content": {
+            "rnormalized": "( \u062f\u0640\u0644\u062c\u0645\u0644\u0627 \u060c"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAC+ArialMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              376.64905,
+              136.92941,
+              387.76001,
+              155.82642
+            ],
+            "device": [
+              376.64905,
+              129.99014,
+              387.76001,
+              148.88715
+            ]
+          },
+          "content": {
+            "rnormalized": "23"
+          },
+          "enumeration": {
+            "match": 8,
+            "type": 0
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAE+SakkalMajalla",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              366.02081,
+              136.92941,
+              376.55319,
+              149.8804
+            ],
+            "device": [
+              337.03473,
+              134.47139,
+              376.55319,
+              147.42238
+            ]
+          },
+          "content": {
+            "rnormalized": "( \u062f\u062f\u0640\u0639\u0640\u0644\u0627 \u060c)"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAC+ArialMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              331.47903,
+              136.92941,
+              336.95743,
+              155.82642
+            ],
+            "device": [
+              331.47903,
+              129.99014,
+              336.95743,
+              148.88715
+            ]
+          },
+          "content": {
+            "rnormalized": "4"
+          },
+          "enumeration": {
+            "match": 8,
+            "type": 0
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAE+SakkalMajalla",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              320.58994,
+              136.92941,
+              321.0769,
+              149.8804
+            ],
+            "device": [
+              323.74362,
+              134.47139,
+              328.47415,
+              147.42238
+            ]
+          },
+          "content": {
+            "rnormalized": "\u060c )"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAC+ArialMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              301.99054,
+              136.92941,
+              315.76474,
+              153.12683
+            ],
+            "device": [
+              301.99054,
+              130.98146,
+              320.58804,
+              147.17889
+            ]
+          },
+          "content": {
+            "rnormalized": "2017"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAE+SakkalMajalla",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              298.12573,
+              136.92941,
+              302.04465,
+              149.8804
+            ],
+            "device": [
+              298.12573,
+              134.47139,
+              302.04465,
+              147.42238
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0645"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAC+ArialMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              288.22214,
+              136.92941,
+              288.70911,
+              149.8804
+            ],
+            "device": [
+              288.22214,
+              134.47139,
+              295.22519,
+              147.42238
+            ]
+          },
+          "content": {
+            "rnormalized": "     "
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAC+ArialMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              246.1633,
+              136.92941,
+              246.65025,
+              149.8804
+            ],
+            "device": [
+              246.1633,
+              134.47139,
+              265.96664,
+              147.42238
+            ]
+          },
+          "content": {
+            "rnormalized": "             "
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAC+ArialMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              11.037724,
+              136.92941,
+              17.785686,
+              149.8804
+            ],
+            "device": [
+              11.037724,
+              134.47139,
+              153.00003,
+              147.42238
+            ]
+          },
+          "content": {
+            "rnormalized": "                             "
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAC+ArialMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              152.76814,
+              136.92941,
+              156.14212,
+              149.8804
+            ],
+            "device": [
+              152.76814,
+              134.47139,
+              246.20761,
+              147.42238
+            ]
+          },
+          "content": {
+            "rnormalized": "                    "
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAC+ArialMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              122.44096,
+              134.27235,
+              138.38332,
+              150.46109
+            ],
+            "device": [
+              122.44096,
+              131.19983,
+              138.38332,
+              147.38855
+            ]
+          },
+          "content": {
+            "rnormalized": "38"
+          },
+          "enumeration": {
+            "match": 8,
+            "type": 0
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAI+Arial-BoldMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              273.00443,
+              649.40363,
+              282.77081,
+              664.37781
+            ],
+            "device": [
+              273.00443,
+              646.48187,
+              323.37839,
+              661.45605
+            ]
+          },
+          "content": {
+            "rnormalized": "Abstract"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAK+TimesNewRomanPS-BoldMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              145.62984,
+              628.87183,
+              152.71887,
+              640.63727
+            ],
+            "device": [
+              145.62984,
+              626.57611,
+              152.71887,
+              638.34161
+            ]
+          },
+          "content": {
+            "rnormalized": "T"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAK+TimesNewRomanPS-BoldMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              152.6638,
+              628.87183,
+              160.93257,
+              640.63727
+            ],
+            "device": [
+              152.6638,
+              626.57611,
+              475.43289,
+              638.34161
+            ]
+          },
+          "content": {
+            "rnormalized": "his study aimed at determining the explosive power of gymnastics athletes "
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAN+TimesNewRomanPSMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              122.44096,
+              612.90045,
+              127.1599,
+              624.66589
+            ],
+            "device": [
+              122.44096,
+              610.6048,
+              134.75069,
+              622.37024
+            ]
+          },
+          "content": {
+            "rnormalized": "and"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAN+TimesNewRomanPSMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              122.44096,
+              612.90045,
+              127.1599,
+              624.66589
+            ],
+            "device": [
+              142.95718,
+              610.6048,
+              475.31989,
+              622.37024
+            ]
+          },
+          "content": {
+            "rnormalized": "identifying its relationship to mechanical variables during the first flight and "
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAN+TimesNewRomanPSMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              122.44096,
+              597.19965,
+              125.39561,
+              608.96509
+            ],
+            "device": [
+              122.44096,
+              594.90399,
+              186.22041,
+              606.66943
+            ]
+          },
+          "content": {
+            "rnormalized": "the entrance on"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAN+TimesNewRomanPSMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              122.44096,
+              597.19965,
+              125.39561,
+              608.96509
+            ],
+            "device": [
+              194.72435,
+              594.90399,
+              245.74791,
+              606.66943
+            ]
+          },
+          "content": {
+            "rnormalized": "the vaulting"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAN+TimesNewRomanPSMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              122.44096,
+              597.19965,
+              125.39561,
+              608.96509
+            ],
+            "device": [
+              254.25183,
+              594.90399,
+              280.81335,
+              606.66943
+            ]
+          },
+          "content": {
+            "rnormalized": "table."
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAN+TimesNewRomanPSMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              122.44096,
+              597.19965,
+              125.39561,
+              608.96509
+            ],
+            "device": [
+              289.31729,
+              594.90399,
+              373.50827,
+              606.66943
+            ]
+          },
+          "content": {
+            "rnormalized": "A secondary aim was"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAN+TimesNewRomanPSMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              122.44096,
+              597.19965,
+              125.39561,
+              608.96509
+            ],
+            "device": [
+              382.01221,
+              594.90399,
+              390.51614,
+              606.66943
+            ]
+          },
+          "content": {
+            "rnormalized": "to"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAN+TimesNewRomanPSMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              122.44096,
+              597.19965,
+              125.39561,
+              608.96509
+            ],
+            "device": [
+              399.02005,
+              594.90399,
+              475.55542,
+              606.66943
+            ]
+          },
+          "content": {
+            "rnormalized": "compare explosive "
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAN+TimesNewRomanPSMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              122.44096,
+              581.25726,
+              140.74278,
+              593.02277
+            ],
+            "device": [
+              122.44096,
+              578.96161,
+              380.29166,
+              590.72705
+            ]
+          },
+          "content": {
+            "rnormalized": "power and mechanical variables of two gymnastics athletes. "
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAN+TimesNewRomanPSMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              142.97278,
+              554.68671,
+              151.34396,
+              567.52173
+            ],
+            "device": [
+              142.97278,
+              552.18231,
+              151.34396,
+              565.01733
+            ]
+          },
+          "content": {
+            "rnormalized": "A"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAK+TimesNewRomanPS-BoldMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              151.45604,
+              554.68671,
+              154.1131,
+              566.45215
+            ],
+            "device": [
+              151.45604,
+              552.39099,
+              475.48975,
+              564.15649
+            ]
+          },
+          "content": {
+            "rnormalized": " descriptive approach was used for the purposes of this study. Two students "
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAN+TimesNewRomanPSMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              122.44096,
+              538.24194,
+              130.11455,
+              550.00745
+            ],
+            "device": [
+              122.44096,
+              535.94629,
+              475.40469,
+              547.71173
+            ]
+          },
+          "content": {
+            "rnormalized": "who were enrolled in the course of gymnastics (2) at the University of Jordan, and "
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAN+TimesNewRomanPSMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              122.44096,
+              522.5412,
+              130.11455,
+              534.30664
+            ],
+            "device": [
+              122.44096,
+              520.24548,
+              196.50159,
+              532.01093
+            ]
+          },
+          "content": {
+            "rnormalized": "were participants"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAN+TimesNewRomanPSMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              122.44096,
+              522.5412,
+              130.11455,
+              534.30664
+            ],
+            "device": [
+              205.2146,
+              520.24548,
+              213.92761,
+              532.01093
+            ]
+          },
+          "content": {
+            "rnormalized": "in"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAN+TimesNewRomanPSMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              122.44096,
+              522.5412,
+              130.11455,
+              534.30664
+            ],
+            "device": [
+              222.64062,
+              520.24548,
+              260.51291,
+              532.01093
+            ]
+          },
+          "content": {
+            "rnormalized": "Jordanian"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAN+TimesNewRomanPSMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              122.44096,
+              522.5412,
+              130.11455,
+              534.30664
+            ],
+            "device": [
+              269.22592,
+              520.24548,
+              374.11887,
+              532.01093
+            ]
+          },
+          "content": {
+            "rnormalized": "Gymnastic National Team,"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAN+TimesNewRomanPSMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              122.44096,
+              522.5412,
+              130.11455,
+              534.30664
+            ],
+            "device": [
+              382.83188,
+              520.24548,
+              449.25504,
+              532.01093
+            ]
+          },
+          "content": {
+            "rnormalized": "were recruited."
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAN+TimesNewRomanPSMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              122.44096,
+              522.5412,
+              130.11455,
+              534.30664
+            ],
+            "device": [
+              457.96805,
+              520.24548,
+              475.3941,
+              532.01093
+            ]
+          },
+          "content": {
+            "rnormalized": "The "
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAN+TimesNewRomanPSMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              122.44096,
+              506.59879,
+              132.47403,
+              518.3642
+            ],
+            "device": [
+              122.44096,
+              504.30307,
+              475.45404,
+              516.06854
+            ]
+          },
+          "content": {
+            "rnormalized": "participants were recorded, on the 7$^{th}$ of April 2016, at the distance of 5.5 meters "
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAN+TimesNewRomanPSMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              122.44096,
+              490.6564,
+              125.98016,
+              502.42188
+            ],
+            "device": [
+              122.44096,
+              488.36072,
+              226.37036,
+              500.12616
+            ]
+          },
+          "content": {
+            "rnormalized": "far away from the spring"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAN+TimesNewRomanPSMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              122.44096,
+              490.6564,
+              125.98016,
+              502.42188
+            ],
+            "device": [
+              235.03114,
+              488.36072,
+              256.68311,
+              500.12616
+            ]
+          },
+          "content": {
+            "rnormalized": "board"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAN+TimesNewRomanPSMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              122.44096,
+              490.6564,
+              125.98016,
+              502.42188
+            ],
+            "device": [
+              265.34387,
+              488.36072,
+              344.36002,
+              500.12616
+            ]
+          },
+          "content": {
+            "rnormalized": "at sagittal plane."
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAN+TimesNewRomanPSMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              122.44096,
+              490.6564,
+              125.98016,
+              502.42188
+            ],
+            "device": [
+              353.02081,
+              488.36072,
+              435.29825,
+              500.12616
+            ]
+          },
+          "content": {
+            "rnormalized": "The researcher used"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAN+TimesNewRomanPSMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              122.44096,
+              490.6564,
+              125.98016,
+              502.42188
+            ],
+            "device": [
+              443.95901,
+              488.36072,
+              475.34088,
+              500.12616
+            ]
+          },
+          "content": {
+            "rnormalized": "Kiovea "
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAN+TimesNewRomanPSMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              122.44096,
+              474.71405,
+              131.29428,
+              486.47952
+            ],
+            "device": [
+              122.44096,
+              472.41837,
+              279.04321,
+              484.18381
+            ]
+          },
+          "content": {
+            "rnormalized": "program for the movement analysis. "
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAN+TimesNewRomanPSMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              142.97278,
+              455.12912,
+              151.34396,
+              467.96417
+            ],
+            "device": [
+              142.97278,
+              452.62473,
+              151.34396,
+              465.45978
+            ]
+          },
+          "content": {
+            "rnormalized": "D"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAK+TimesNewRomanPS-BoldMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              151.45604,
+              455.12912,
+              154.41069,
+              466.89459
+            ],
+            "device": [
+              151.45604,
+              452.83344,
+              475.34103,
+              464.59888
+            ]
+          },
+          "content": {
+            "rnormalized": "ifferent body angles at pivoting on spring board and first flight were found "
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAN+TimesNewRomanPSMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              122.44096,
+              438.70367,
+              130.11455,
+              450.46915
+            ],
+            "device": [
+              122.44096,
+              436.40796,
+              475.36227,
+              448.17343
+            ]
+          },
+          "content": {
+            "rnormalized": "which resulted in dissimilar height of canter of gravity. Results also showed that "
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAN+TimesNewRomanPSMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              122.44096,
+              422.76132,
+              132.47403,
+              434.52679
+            ],
+            "device": [
+              122.44096,
+              420.46561,
+              475.53247,
+              432.23108
+            ]
+          },
+          "content": {
+            "rnormalized": "being at the appropriate angles during touching the spring board, vaulting table, and "
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAN+TimesNewRomanPSMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              122.44096,
+              406.81897,
+              125.98016,
+              418.58444
+            ],
+            "device": [
+              122.44096,
+              404.52325,
+              475.44055,
+              416.28873
+            ]
+          },
+          "content": {
+            "rnormalized": "first flight without bending body joints cause amount movement toward correct "
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAN+TimesNewRomanPSMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              122.44096,
+              390.87662,
+              130.70973,
+              402.64206
+            ],
+            "device": [
+              122.44096,
+              388.5809,
+              239.39987,
+              400.34637
+            ]
+          },
+          "content": {
+            "rnormalized": "kinetic direction smoothly. "
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAN+TimesNewRomanPSMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              470.66064,
+              345.43607,
+              473.26071,
+              359.46631
+            ],
+            "device": [
+              470.66064,
+              342.77322,
+              473.26071,
+              356.80344
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0627"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAC+ArialMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              463.17258,
+              345.43607,
+              464.15231,
+              359.46631
+            ],
+            "device": [
+              463.17258,
+              342.77322,
+              464.15231,
+              356.80344
+            ]
+          },
+          "content": {
+            "rnormalized": " \u0645"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAC+ArialMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 90,
+          "box": {
+            "baseline": [
+              466.86539,
+              345.43607,
+              467.99585,
+              359.46631
+            ],
+            "device": [
+              466.86539,
+              342.77322,
+              467.99585,
+              356.80344
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0644"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAC+ArialMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              460.5155,
+              345.43607,
+              463.11557,
+              359.46631
+            ],
+            "device": [
+              442.64075,
+              342.77322,
+              463.11557,
+              356.80344
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0640\u0645\u062f\u0640\u0642\u0640"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAC+ArialMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 90,
+          "box": {
+            "baseline": [
+              436.19907,
+              345.436,
+              437.56818,
+              359.46637
+            ],
+            "device": [
+              436.19907,
+              342.77316,
+              437.56818,
+              356.8035
+            ]
+          },
+          "content": {
+            "rnormalized": " \u0640"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAC+ArialMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 90,
+          "box": {
+            "baseline": [
+              438.84937,
+              345.43607,
+              439.97983,
+              359.46631
+            ],
+            "device": [
+              438.84937,
+              342.77322,
+              439.97983,
+              356.80344
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0640"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAC+ArialMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              429.33612,
+              345.43607,
+              437.31714,
+              359.46631
+            ],
+            "device": [
+              425.95441,
+              342.77322,
+              437.31714,
+              356.80344
+            ]
+          },
+          "content": {
+            "rnormalized": ": \u0629"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAC+ArialMT",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              436.11887,
+              321.7641,
+              444.49701,
+              340.98767
+            ],
+            "device": [
+              436.11887,
+              316.22195,
+              444.49701,
+              335.44553
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0627\u0625"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              246.40485,
+              321.7641,
+              247.22806,
+              340.98767
+            ],
+            "device": [
+              246.40485,
+              316.22195,
+              278.64899,
+              335.44553
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0629\u0646\u0623 \u0627\u0629\u0647\u0635\u0645 \u0629"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              275.83154,
+              321.7641,
+              281.50122,
+              340.98767
+            ],
+            "device": [
+              275.83154,
+              316.22195,
+              431.69543,
+              335.44553
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0631\u064a\u0627\u0643 \u062f\u0629\u0626\u0627\u0648\u0641 \u0631\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0635\u0639\u0644\u0627 \u0627 \u0629\u0647 \u064a\u0641 \u064a\u0645\u0644\u0639\u0644\u0627 \u062c\u062f\u0629\u0642\u062a\u0644\u0644"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              242.05693,
+              321.7641,
+              246.40485,
+              340.98767
+            ],
+            "device": [
+              242.05693,
+              316.22195,
+              246.40485,
+              335.44553
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0629"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              238.19212,
+              321.7641,
+              238.68373,
+              340.98767
+            ],
+            "device": [
+              172.71251,
+              316.22195,
+              238.68373,
+              335.44553
+            ]
+          },
+          "content": {
+            "rnormalized": " \u0644\u0646\u062a\u0644\u0627 \u0646\u0645 \u0627\u0629\u0635\u0635\u0643\u0645 "
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              119.3008,
+              321.7641,
+              122.97624,
+              340.98767
+            ],
+            "device": [
+              119.3008,
+              316.22195,
+              133.04022,
+              335.44553
+            ]
+          },
+          "content": {
+            "rnormalized": " \u062a\u0627"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              129.90973,
+              321.7641,
+              135.57941,
+              340.98767
+            ],
+            "device": [
+              129.90973,
+              316.22195,
+              168.70471,
+              335.44553
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0631 \u062f\u0629\u0642\u062a\u0644\u0627 \u0646\u0645"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              228.77164,
+              299.54141,
+              232.44707,
+              318.76498
+            ],
+            "device": [
+              228.77164,
+              293.9993,
+              235.41525,
+              313.22287
+            ]
+          },
+          "content": {
+            "rnormalized": "  "
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              232.63258,
+              299.54141,
+              238.30226,
+              318.76498
+            ],
+            "device": [
+              232.63258,
+              293.9993,
+              271.37482,
+              313.22287
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0631\u064a\u0648\u0644\u062a \u0628\u0639\u0644\u0627"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              232.63258,
+              299.54141,
+              238.30226,
+              318.76498
+            ],
+            "device": [
+              279.12326,
+              293.9993,
+              282.9975,
+              313.22287
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0643"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              232.63258,
+              299.54141,
+              238.30226,
+              318.76498
+            ],
+            "device": [
+              290.74594,
+              293.9993,
+              364.3562,
+              313.22287
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0648\u0627\u062d\u064a \u0644 \u0644\u0627 \u0632\u0627\u0648\u0629\u0627 \u0649\u0644\u0639"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              232.63258,
+              299.54141,
+              238.30226,
+              318.76498
+            ],
+            "device": [
+              372.10464,
+              293.9993,
+              418.59534,
+              313.22287
+            ]
+          },
+          "content": {
+            "rnormalized": "\u064a\u0639\u0648\u0629\u0629\u0629 \u0648\u0645\u0644\u0627\u0648"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              232.63258,
+              299.54141,
+              238.30226,
+              318.76498
+            ],
+            "device": [
+              426.34378,
+              293.9993,
+              472.83447,
+              313.22287
+            ]
+          },
+          "content": {
+            "rnormalized": "\u064a\u0629\u0629\u0629\u0635\u0646\u0629\u0629\u0629\u0634\u0644\u0627"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              225.14838,
+              299.54141,
+              228.847,
+              318.76498
+            ],
+            "device": [
+              225.14838,
+              293.9993,
+              228.847,
+              313.22287
+            ]
+          },
+          "content": {
+            "rnormalized": "\u060c"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              207.97507,
+              299.54141,
+              212.80995,
+              318.76498
+            ],
+            "device": [
+              207.97507,
+              293.9993,
+              212.80995,
+              313.22287
+            ]
+          },
+          "content": {
+            "rnormalized": "\u062b"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 90,
+          "box": {
+            "baseline": [
+              215.58107,
+              299.54141,
+              216.18391,
+              318.76498
+            ],
+            "device": [
+              215.58104,
+              293.9993,
+              216.18394,
+              313.22287
+            ]
+          },
+          "content": {
+            "rnormalized": "\u064a"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              219.07095,
+              299.54141,
+              221.78406,
+              318.76498
+            ],
+            "device": [
+              219.07095,
+              293.9993,
+              221.78406,
+              313.22287
+            ]
+          },
+          "content": {
+            "rnormalized": "\u062d"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              119.05925,
+              299.54141,
+              122.73469,
+              318.76498
+            ],
+            "device": [
+              119.05925,
+              293.9993,
+              146.62503,
+              313.22287
+            ]
+          },
+          "content": {
+            "rnormalized": " \u062a\u0644\u0645\u0629\u0629\u0629\u0634"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              119.05925,
+              299.54141,
+              122.73469,
+              318.76498
+            ],
+            "device": [
+              153.51648,
+              293.9993,
+              174.19083,
+              313.22287
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0644\u0626\u0627\u0647 \u0629"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              171.40816,
+              299.54141,
+              177.07784,
+              318.76498
+            ],
+            "device": [
+              171.40816,
+              293.9993,
+              203.86098,
+              313.22287
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0641\u0641\u0642 \u062f\u0647\u0629\u0629\u0629\u0634"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              241.81538,
+              277.54095,
+              246.9865,
+              296.76453
+            ],
+            "device": [
+              241.81538,
+              271.99881,
+              274.52289,
+              291.22238
+            ]
+          },
+          "content": {
+            "rnormalized": " \u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629 \u0627\u0646\u0628"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              241.81538,
+              277.54095,
+              246.9865,
+              296.76453
+            ],
+            "device": [
+              278.88388,
+              271.99881,
+              309.41089,
+              291.22238
+            ]
+          },
+          "content": {
+            "rnormalized": "\u064a\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629 \u0627\u064a"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              307.30069,
+              277.54095,
+              312.9704,
+              296.76453
+            ],
+            "device": [
+              307.30069,
+              271.99881,
+              320.5369,
+              291.22238
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0631\u0644\u0627\u0648"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              307.30069,
+              277.54095,
+              312.9704,
+              296.76453
+            ],
+            "device": [
+              327.15497,
+              271.99881,
+              337.08212,
+              291.22238
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0645\u0627\u0639"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              307.30069,
+              277.54095,
+              312.9704,
+              296.76453
+            ],
+            "device": [
+              343.70023,
+              271.99881,
+              366.86356,
+              291.22238
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0641\u0644\u062a\u0646\u0645\u0644\u0627"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              307.30069,
+              277.54095,
+              312.9704,
+              296.76453
+            ],
+            "device": [
+              373.48166,
+              271.99881,
+              456.20786,
+              291.22238
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0644\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0629\u0634\u0646\u0629\u0627\u0648 \u062a\u0644\u0627\u0627\u062c\u0645\u0644\u0627"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              307.30069,
+              277.54095,
+              312.9704,
+              296.76453
+            ],
+            "device": [
+              462.82593,
+              271.99881,
+              472.75308,
+              291.22238
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0641\u0627\u0643"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              119.05925,
+              277.54095,
+              122.73469,
+              296.76453
+            ],
+            "device": [
+              119.05925,
+              271.99881,
+              150.65411,
+              291.22238
+            ]
+          },
+          "content": {
+            "rnormalized": " \u0649\u0644\u0639 \u0641"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              148.50914,
+              277.54095,
+              154.17882,
+              296.76453
+            ],
+            "device": [
+              148.50914,
+              271.99881,
+              173.25168,
+              291.22238
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0631\u0639\u062a\u0644\u0644 \u0629"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              170.46899,
+              277.54095,
+              176.13867,
+              296.76453
+            ],
+            "device": [
+              170.46899,
+              271.99881,
+              237.93701,
+              291.22238
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0631\u062f\u0642\u0644\u0627 \u0627\u0635\u064a\u0644\u0639\u064a \u062b\u064a\u062d\u0628"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              470.90219,
+              255.3183,
+              473.30225,
+              274.54187
+            ],
+            "device": [
+              470.90219,
+              249.77614,
+              473.30225,
+              268.99973
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0627"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              332.44525,
+              255.3183,
+              336.14389,
+              274.54187
+            ],
+            "device": [
+              332.44525,
+              249.77614,
+              352.75781,
+              268.99973
+            ]
+          },
+          "content": {
+            "rnormalized": ". \u0629\u062a\u0627"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              332.44525,
+              255.3183,
+              336.14389,
+              274.54187
+            ],
+            "device": [
+              360.88284,
+              249.77614,
+              385.2579,
+              268.99973
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0633\u0645\u0648 \u064a\u0643"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              383.10132,
+              255.3183,
+              388.77103,
+              274.54187
+            ],
+            "device": [
+              383.10132,
+              249.77614,
+              440.06885,
+              268.99973
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0631\u062d\u0644\u0627 \u0632\u0627\u0648\u0629\u0627 \u064a\u0641"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              383.10132,
+              255.3183,
+              388.77103,
+              274.54187
+            ],
+            "device": [
+              448.8331,
+              249.77614,
+              470.74368,
+              268.99973
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0632\u0627\u0644\u062e\u0629"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              118.8177,
+              233.33717,
+              122.49313,
+              252.56075
+            ],
+            "device": [
+              118.8177,
+              227.79501,
+              133.47307,
+              247.01862
+            ]
+          },
+          "content": {
+            "rnormalized": " \u0627\u0627\u0643"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              118.8177,
+              233.33717,
+              122.49313,
+              252.56075
+            ],
+            "device": [
+              140.80075,
+              227.79501,
+              144.4646,
+              247.01862
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0628"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              118.8177,
+              233.33717,
+              122.49313,
+              252.56075
+            ],
+            "device": [
+              151.79228,
+              227.79501,
+              225.06915,
+              247.01862
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0641\u062f\u0629\u0629\u0635\u0644\u0627 \u0629\u062f\u064a\u0644\u0648 \u0646\u0643\u062a \u0645\u0644"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              118.8177,
+              233.33717,
+              122.49313,
+              252.56075
+            ],
+            "device": [
+              232.39684,
+              227.79501,
+              254.37988,
+              247.01862
+            ]
+          },
+          "content": {
+            "rnormalized": "\u064a\u0629\u0629 \u0627\u064a"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              252.2697,
+              233.33717,
+              257.93939,
+              252.56075
+            ],
+            "device": [
+              252.2697,
+              227.79501,
+              349.7905,
+              247.01862
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0631\u0644\u0627 \u0628\u0627\u0639\u0644\u0629\u0627 \u0627\u0644\u062a\u0646\u0645 \u064a\u0641 \u062a\u0627"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              346.90347,
+              233.33717,
+              352.57318,
+              252.56075
+            ],
+            "device": [
+              346.90347,
+              227.79501,
+              444.12271,
+              247.01862
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0631\u0648\u0644\u062a \u0646\u0645 \u062f\u0647\u0629\u0629\u0634 \u0627\u0645\u0648 \u0645\u0644\u0627\u0639\u0644\u0627\u0641"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              303.92294,
+              211.11449,
+              315.66812,
+              230.33807
+            ],
+            "device": [
+              303.92294,
+              205.57234,
+              315.66812,
+              224.79593
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0644\u0627 \u0629"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              312.86227,
+              211.11449,
+              318.53195,
+              230.33807
+            ],
+            "device": [
+              312.86227,
+              205.57234,
+              452.53052,
+              224.79593
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0641\u0647\u062c\u0629\u0627\u0648 \u0627\u064a\u062c\u0648\u0644\u0648\u0635\u0643\u062a\u0644\u0644 \u064a\u0644\u0627\u0627\u0645\u0644\u0627 \u062c\u0627\u062f\u0646\u062a\u0629\u0629\u0629\u0629\u0629\u0633\u0644\u0627\u0627"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              312.86227,
+              211.11449,
+              318.53195,
+              230.33807
+            ],
+            "device": [
+              459.34363,
+              205.57234,
+              472.96979,
+              224.79593
+            ]
+          },
+          "content": {
+            "rnormalized": "\u062c\u064a\u062a\u0646"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              299.33347,
+              211.11449,
+              303.90167,
+              230.33807
+            ],
+            "device": [
+              299.33347,
+              205.57234,
+              303.90167,
+              224.79593
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0645"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              163.05049,
+              211.11449,
+              166.72592,
+              230.33807
+            ],
+            "device": [
+              171.56854,
+              205.57234,
+              175.82756,
+              224.79593
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0643"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              173.67099,
+              211.11449,
+              179.34067,
+              230.33807
+            ],
+            "device": [
+              173.67099,
+              205.57234,
+              201.16141,
+              224.79593
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0631\u062d\u0644\u0627 \u0632\u0627"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              198.29758,
+              211.11449,
+              203.96725,
+              230.33807
+            ],
+            "device": [
+              198.29758,
+              205.57234,
+              226.76192,
+              224.79593
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0641\u062c\u0623 \u0642\u0626\u0627\u0642\u0648"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              198.29758,
+              211.11449,
+              203.96725,
+              230.33807
+            ],
+            "device": [
+              233.08733,
+              205.57234,
+              255.22626,
+              224.79593
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0629\u0629\u0629\u0629\u0629\u0633\u0627"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              252.33923,
+              211.11449,
+              258.00894,
+              230.33807
+            ],
+            "device": [
+              252.33923,
+              205.57234,
+              286.55441,
+              224.79593
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0631\u0648 \u064a\u0641 \u064a"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              284.43262,
+              211.11449,
+              290.10233,
+              230.33807
+            ],
+            "device": [
+              284.43262,
+              205.57234,
+              299.25034,
+              224.79593
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0631 \u0646"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 90,
+          "box": {
+            "baseline": [
+              124.7985,
+              211.11449,
+              126.30577,
+              230.33807
+            ],
+            "device": [
+              124.79852,
+              205.57234,
+              126.30576,
+              224.79593
+            ]
+          },
+          "content": {
+            "rnormalized": " \u0627"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 90,
+          "box": {
+            "baseline": [
+              127.63914,
+              211.11449,
+              128.72899,
+              230.33807
+            ],
+            "device": [
+              127.63915,
+              205.57234,
+              128.72899,
+              224.79593
+            ]
+          },
+          "content": {
+            "rnormalized": "\u064a"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              131.60445,
+              211.11449,
+              133.78419,
+              230.33807
+            ],
+            "device": [
+              131.60445,
+              205.57234,
+              137.04224,
+              224.79593
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0639 \u0648"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 90,
+          "box": {
+            "baseline": [
+              137.91187,
+              211.11449,
+              141.00751,
+              230.33807
+            ],
+            "device": [
+              137.91187,
+              205.57234,
+              141.00751,
+              224.79593
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0629"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              153.28607,
+              211.11449,
+              154.37596,
+              230.33807
+            ],
+            "device": [
+              153.28607,
+              205.57234,
+              154.37596,
+              224.79593
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0648"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              158.34126,
+              211.11449,
+              158.99054,
+              230.33807
+            ],
+            "device": [
+              158.34126,
+              205.57234,
+              158.99054,
+              224.79593
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0645"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              122.68251,
+              211.11449,
+              126.38114,
+              230.33807
+            ],
+            "device": [
+              122.68251,
+              205.57234,
+              126.38114,
+              224.79593
+            ]
+          },
+          "content": {
+            "rnormalized": "\u060c"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              464.62189,
+              189.10439,
+              468.52921,
+              208.32796
+            ],
+            "device": [
+              453.51053,
+              183.56224,
+              473.2829,
+              202.78583
+            ]
+          },
+          "content": {
+            "rnormalized": " \u0644 \u0644\u0627"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              119.3008,
+              189.10439,
+              122.97624,
+              208.32796
+            ],
+            "device": [
+              119.3008,
+              183.56224,
+              130.07204,
+              202.78583
+            ]
+          },
+          "content": {
+            "rnormalized": "  "
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              127.74155,
+              189.10439,
+              132.75035,
+              208.32796
+            ],
+            "device": [
+              127.74155,
+              183.56224,
+              186.50304,
+              202.78583
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0648\u0642\u0644\u0627 \u0631\u0627\u0645\u0627\u062a\u0629\u0629\u0629\u0633\u0627\u0648"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              127.74155,
+              189.10439,
+              132.75035,
+              208.32796
+            ],
+            "device": [
+              193.84824,
+              183.56224,
+              226.90157,
+              202.78583
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0644\u0627\u063a\u062a\u0629\u0629\u0629\u0633\u0627"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              127.74155,
+              189.10439,
+              132.75035,
+              208.32796
+            ],
+            "device": [
+              234.24675,
+              183.56224,
+              322.38898,
+              202.78583
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0644\u0627\u062e \u0646\u0645\u060c \u0628\u0627\u0639\u0644\u0627\u0644 \u064a\u0635\u0641\u0644\u0627\u0648 \u064a\u0643"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              320.23242,
+              189.10439,
+              325.90213,
+              208.32796
+            ],
+            "device": [
+              320.23242,
+              183.56224,
+              452.93073,
+              202.78583
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0631\u062d\u0644\u0627 \u0632\u0627\u0648\u0629\u0627 \u062a\u0627\u064a\u0648\u062a\u0629\u0629\u0629\u0633\u0645 \u0631\u0648\u0644\u062a \u0649\u0644\u0625 \u0648\u0623"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              233.3611,
+              166.88171,
+              237.03654,
+              186.10529
+            ],
+            "device": [
+              240.87157,
+              161.33955,
+              297.2001,
+              180.56316
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0627\u062c\u0646\u0644\u0625\u0627 \u062d\u0644\u0627\u0635\u0644\u0648 \u0629"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              294.41742,
+              166.88171,
+              300.0871,
+              186.10529
+            ],
+            "device": [
+              294.41742,
+              161.33955,
+              318.06311,
+              180.56316
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0631\u062b\u0624\u0645\u0644\u0627"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              294.41742,
+              166.88171,
+              300.0871,
+              186.10529
+            ],
+            "device": [
+              325.94501,
+              161.33955,
+              333.8269,
+              180.56316
+            ]
+          },
+          "content": {
+            "rnormalized": "\u064a\u062c"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              331.31091,
+              166.88171,
+              336.98062,
+              186.10529
+            ],
+            "device": [
+              331.31091,
+              161.33955,
+              472.94849,
+              180.56316
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0631\u0627\u0646\u0644\u0627 \u062a\u0627\u0645\u0648\u0627\u0642\u0645\u0644\u0627 \u0649\u0644\u0639 \u0628\u0644\u063a\u062a\u0644\u0627 \u064a\u0641 \u064a\u062a\u0627 \u0644\u0627"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              229.73784,
+              166.88171,
+              233.43646,
+              186.10529
+            ],
+            "device": [
+              229.73784,
+              161.33955,
+              233.43646,
+              180.56316
+            ]
+          },
+          "content": {
+            "rnormalized": "."
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        }
+      ],
+      "dimensions": {
+        "bbox": [
+          0,
+          0,
+          595.27557,
+          841.88977
+        ],
+        "height": 841.88977,
+        "width": 595.27557
+      },
+      "height": 841.88977,
+      "horizontal-lines": [
+        {
+          "x0": 121.2332,
+          "x1": 474.76703,
+          "y": 676.69891
+        },
+        {
+          "x0": 121.2332,
+          "x1": 474.76703,
+          "y": 677.42358
+        },
+        {
+          "x0": 121.2332,
+          "x1": 474.76703,
+          "y": 678.14819
+        },
+        {
+          "x0": 121.2332,
+          "x1": 474.76703,
+          "y": 679.59747
+        },
+        {
+          "x0": 147.32069,
+          "x1": 474.76697,
+          "y": 129.92439
+        },
+        {
+          "x0": 147.32069,
+          "x1": 474.76697,
+          "y": 150.69777
+        },
+        {
+          "x0": 147.32069,
+          "x1": 474.76697,
+          "y": 152.14709
+        },
+        {
+          "x0": 147.32069,
+          "x1": 474.76697,
+          "y": 153.59641
+        },
+        {
+          "x0": 147.32069,
+          "x1": 474.76697,
+          "y": 150.6978
+        },
+        {
+          "x0": 147.32069,
+          "x1": 474.76697,
+          "y": 151.42245
+        },
+        {
+          "x0": 120.9917,
+          "x1": 474.52551,
+          "y": 548.16492
+        },
+        {
+          "x0": 120.9917,
+          "x1": 474.52551,
+          "y": 565.55658
+        },
+        {
+          "x0": 120.9917,
+          "x1": 474.52551,
+          "y": 532.44482
+        },
+        {
+          "x0": 120.9917,
+          "x1": 474.52551,
+          "y": 548.1698
+        },
+        {
+          "x0": 120.9917,
+          "x1": 474.52551,
+          "y": 516.50238
+        },
+        {
+          "x0": 120.9917,
+          "x1": 474.52551,
+          "y": 532.44476
+        },
+        {
+          "x0": 120.9917,
+          "x1": 474.52551,
+          "y": 500.56
+        },
+        {
+          "x0": 120.9917,
+          "x1": 474.52551,
+          "y": 516.50238
+        },
+        {
+          "x0": 120.9917,
+          "x1": 474.52551,
+          "y": 484.61771
+        },
+        {
+          "x0": 120.9917,
+          "x1": 474.52551,
+          "y": 500.56006
+        },
+        {
+          "x0": 120.9917,
+          "x1": 474.52551,
+          "y": 468.67529
+        },
+        {
+          "x0": 120.9917,
+          "x1": 474.52551,
+          "y": 484.61765
+        },
+        {
+          "x0": 120.9917,
+          "x1": 474.52551,
+          "y": 466.01831
+        },
+        {
+          "x0": 120.9917,
+          "x1": 474.52551,
+          "y": 468.67538
+        },
+        {
+          "x0": 120.9917,
+          "x1": 474.52551,
+          "y": 448.6073
+        },
+        {
+          "x0": 120.9917,
+          "x1": 474.52551,
+          "y": 466.02313
+        },
+        {
+          "x0": 120.9917,
+          "x1": 474.52551,
+          "y": 432.66489
+        },
+        {
+          "x0": 120.9917,
+          "x1": 474.52551,
+          "y": 448.60724
+        },
+        {
+          "x0": 120.9917,
+          "x1": 474.52551,
+          "y": 416.7226
+        },
+        {
+          "x0": 120.9917,
+          "x1": 474.52551,
+          "y": 432.66495
+        },
+        {
+          "x0": 120.9917,
+          "x1": 474.52551,
+          "y": 400.78021
+        },
+        {
+          "x0": 120.9917,
+          "x1": 474.52551,
+          "y": 416.72256
+        },
+        {
+          "x0": 120.9917,
+          "x1": 474.52551,
+          "y": 385.07941
+        },
+        {
+          "x0": 120.9917,
+          "x1": 474.52551,
+          "y": 400.78021
+        },
+        {
+          "x0": 120.9917,
+          "x1": 474.52551,
+          "y": 372.73129
+        },
+        {
+          "x0": 120.9917,
+          "x1": 474.52551,
+          "y": 385.07455
+        }
+      ],
+      "ignored-cells": [
+        {
+          "angle": 90,
+          "box": {
+            "baseline": [
+              137.91187,
+              211.11449,
+              141.00751,
+              230.33807
+            ],
+            "device": [
+              137.91187,
+              205.57234,
+              141.00751,
+              224.79593
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0629"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 90,
+          "box": {
+            "baseline": [
+              138.86261,
+              211.11449,
+              141.95827,
+              230.33807
+            ],
+            "device": [
+              138.86261,
+              205.57234,
+              141.95827,
+              224.79593
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0629"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 90,
+          "box": {
+            "baseline": [
+              139.58147,
+              211.11449,
+              142.67712,
+              230.33807
+            ],
+            "device": [
+              139.58147,
+              205.57234,
+              142.67712,
+              224.79593
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0629"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        },
+        {
+          "angle": 90,
+          "box": {
+            "baseline": [
+              140.53223,
+              211.11449,
+              143.62787,
+              230.33807
+            ],
+            "device": [
+              140.53223,
+              205.57234,
+              143.62787,
+              224.79593
+            ]
+          },
+          "content": {
+            "rnormalized": "\u0629"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAG+SimplifiedArabic",
+            "size": 1
+          }
+        }
+      ],
+      "images": [],
+      "paths": [
+        {
+          "bbox": [
+            121.2332,
+            676.69891,
+            474.76703,
+            677.42358
+          ],
+          "sub-paths": [
+            0,
+            5
+          ],
+          "type": "unknown",
+          "x-values": [
+            121.2332,
+            474.76703,
+            474.76703,
+            121.2332,
+            121.2332
+          ],
+          "y-values": [
+            676.69891,
+            676.69891,
+            677.42358,
+            677.42358,
+            676.69891
+          ]
+        },
+        {
+          "bbox": [
+            121.2332,
+            678.14819,
+            474.76703,
+            679.59747
+          ],
+          "sub-paths": [
+            0,
+            5
+          ],
+          "type": "unknown",
+          "x-values": [
+            121.2332,
+            474.76703,
+            474.76703,
+            121.2332,
+            121.2332
+          ],
+          "y-values": [
+            678.14819,
+            678.14819,
+            679.59747,
+            679.59747,
+            678.14819
+          ]
+        },
+        {
+          "bbox": [
+            147.32069,
+            129.92439,
+            474.76697,
+            150.69777
+          ],
+          "sub-paths": [
+            0,
+            5
+          ],
+          "type": "unknown",
+          "x-values": [
+            147.32069,
+            474.76697,
+            474.76697,
+            147.32069,
+            147.32069
+          ],
+          "y-values": [
+            129.92439,
+            129.92439,
+            150.69777,
+            150.69777,
+            129.92439
+          ]
+        },
+        {
+          "bbox": [
+            147.32069,
+            152.14709,
+            474.76697,
+            153.59641
+          ],
+          "sub-paths": [
+            0,
+            5
+          ],
+          "type": "unknown",
+          "x-values": [
+            147.32069,
+            474.76697,
+            474.76697,
+            147.32069,
+            147.32069
+          ],
+          "y-values": [
+            152.14709,
+            152.14709,
+            153.59641,
+            153.59641,
+            152.14709
+          ]
+        },
+        {
+          "bbox": [
+            147.32069,
+            150.6978,
+            474.76697,
+            151.42245
+          ],
+          "sub-paths": [
+            0,
+            5
+          ],
+          "type": "unknown",
+          "x-values": [
+            147.32069,
+            474.76697,
+            474.76697,
+            147.32069,
+            147.32069
+          ],
+          "y-values": [
+            150.6978,
+            150.6978,
+            151.42245,
+            151.42245,
+            150.6978
+          ]
+        },
+        {
+          "bbox": [
+            120.9917,
+            548.16492,
+            474.52551,
+            565.55658
+          ],
+          "sub-paths": [
+            0,
+            5
+          ],
+          "type": "unknown",
+          "x-values": [
+            120.9917,
+            474.52551,
+            474.52551,
+            120.9917,
+            120.9917
+          ],
+          "y-values": [
+            548.16492,
+            548.16492,
+            565.55658,
+            565.55658,
+            548.16492
+          ]
+        },
+        {
+          "bbox": [
+            120.9917,
+            532.44482,
+            474.52551,
+            548.1698
+          ],
+          "sub-paths": [
+            0,
+            5
+          ],
+          "type": "unknown",
+          "x-values": [
+            120.9917,
+            474.52551,
+            474.52551,
+            120.9917,
+            120.9917
+          ],
+          "y-values": [
+            532.44482,
+            532.44482,
+            548.1698,
+            548.1698,
+            532.44482
+          ]
+        },
+        {
+          "bbox": [
+            120.9917,
+            516.50238,
+            474.52551,
+            532.44476
+          ],
+          "sub-paths": [
+            0,
+            5
+          ],
+          "type": "unknown",
+          "x-values": [
+            120.9917,
+            474.52551,
+            474.52551,
+            120.9917,
+            120.9917
+          ],
+          "y-values": [
+            516.50238,
+            516.50238,
+            532.44476,
+            532.44476,
+            516.50238
+          ]
+        },
+        {
+          "bbox": [
+            120.9917,
+            500.56,
+            474.52551,
+            516.50238
+          ],
+          "sub-paths": [
+            0,
+            5
+          ],
+          "type": "unknown",
+          "x-values": [
+            120.9917,
+            474.52551,
+            474.52551,
+            120.9917,
+            120.9917
+          ],
+          "y-values": [
+            500.56,
+            500.56,
+            516.50238,
+            516.50238,
+            500.56
+          ]
+        },
+        {
+          "bbox": [
+            120.9917,
+            484.61771,
+            474.52551,
+            500.56006
+          ],
+          "sub-paths": [
+            0,
+            5
+          ],
+          "type": "unknown",
+          "x-values": [
+            120.9917,
+            474.52551,
+            474.52551,
+            120.9917,
+            120.9917
+          ],
+          "y-values": [
+            484.61771,
+            484.61771,
+            500.56006,
+            500.56006,
+            484.61771
+          ]
+        },
+        {
+          "bbox": [
+            120.9917,
+            468.67529,
+            474.52551,
+            484.61765
+          ],
+          "sub-paths": [
+            0,
+            5
+          ],
+          "type": "unknown",
+          "x-values": [
+            120.9917,
+            474.52551,
+            474.52551,
+            120.9917,
+            120.9917
+          ],
+          "y-values": [
+            468.67529,
+            468.67529,
+            484.61765,
+            484.61765,
+            468.67529
+          ]
+        },
+        {
+          "bbox": [
+            120.9917,
+            466.01831,
+            474.52551,
+            468.67538
+          ],
+          "sub-paths": [
+            0,
+            5
+          ],
+          "type": "unknown",
+          "x-values": [
+            120.9917,
+            474.52551,
+            474.52551,
+            120.9917,
+            120.9917
+          ],
+          "y-values": [
+            466.01831,
+            466.01831,
+            468.67538,
+            468.67538,
+            466.01831
+          ]
+        },
+        {
+          "bbox": [
+            120.9917,
+            448.6073,
+            474.52551,
+            466.02313
+          ],
+          "sub-paths": [
+            0,
+            5
+          ],
+          "type": "unknown",
+          "x-values": [
+            120.9917,
+            474.52551,
+            474.52551,
+            120.9917,
+            120.9917
+          ],
+          "y-values": [
+            448.6073,
+            448.6073,
+            466.02313,
+            466.02313,
+            448.6073
+          ]
+        },
+        {
+          "bbox": [
+            120.9917,
+            432.66489,
+            474.52551,
+            448.60724
+          ],
+          "sub-paths": [
+            0,
+            5
+          ],
+          "type": "unknown",
+          "x-values": [
+            120.9917,
+            474.52551,
+            474.52551,
+            120.9917,
+            120.9917
+          ],
+          "y-values": [
+            432.66489,
+            432.66489,
+            448.60724,
+            448.60724,
+            432.66489
+          ]
+        },
+        {
+          "bbox": [
+            120.9917,
+            416.7226,
+            474.52551,
+            432.66495
+          ],
+          "sub-paths": [
+            0,
+            5
+          ],
+          "type": "unknown",
+          "x-values": [
+            120.9917,
+            474.52551,
+            474.52551,
+            120.9917,
+            120.9917
+          ],
+          "y-values": [
+            416.7226,
+            416.7226,
+            432.66495,
+            432.66495,
+            416.7226
+          ]
+        },
+        {
+          "bbox": [
+            120.9917,
+            400.78021,
+            474.52551,
+            416.72256
+          ],
+          "sub-paths": [
+            0,
+            5
+          ],
+          "type": "unknown",
+          "x-values": [
+            120.9917,
+            474.52551,
+            474.52551,
+            120.9917,
+            120.9917
+          ],
+          "y-values": [
+            400.78021,
+            400.78021,
+            416.72256,
+            416.72256,
+            400.78021
+          ]
+        },
+        {
+          "bbox": [
+            120.9917,
+            385.07941,
+            474.52551,
+            400.78021
+          ],
+          "sub-paths": [
+            0,
+            5
+          ],
+          "type": "unknown",
+          "x-values": [
+            120.9917,
+            474.52551,
+            474.52551,
+            120.9917,
+            120.9917
+          ],
+          "y-values": [
+            385.07941,
+            385.07941,
+            400.78021,
+            400.78021,
+            385.07941
+          ]
+        },
+        {
+          "bbox": [
+            120.9917,
+            372.73129,
+            474.52551,
+            385.07455
+          ],
+          "sub-paths": [
+            0,
+            5
+          ],
+          "type": "unknown",
+          "x-values": [
+            120.9917,
+            474.52551,
+            474.52551,
+            120.9917,
+            120.9917
+          ],
+          "y-values": [
+            372.73129,
+            372.73129,
+            385.07455,
+            385.07455,
+            372.73129
+          ]
+        }
+      ],
+      "vertical-lines": [
+        {
+          "x": 474.76703,
+          "y0": 676.69891,
+          "y1": 677.42358
+        },
+        {
+          "x": 121.2332,
+          "y0": 676.69891,
+          "y1": 677.42358
+        },
+        {
+          "x": 474.76703,
+          "y0": 678.14819,
+          "y1": 679.59747
+        },
+        {
+          "x": 121.2332,
+          "y0": 678.14819,
+          "y1": 679.59747
+        },
+        {
+          "x": 474.76697,
+          "y0": 129.92439,
+          "y1": 150.69777
+        },
+        {
+          "x": 147.32069,
+          "y0": 129.92439,
+          "y1": 150.69777
+        },
+        {
+          "x": 474.76697,
+          "y0": 152.14709,
+          "y1": 153.59641
+        },
+        {
+          "x": 147.32069,
+          "y0": 152.14709,
+          "y1": 153.59641
+        },
+        {
+          "x": 474.76697,
+          "y0": 150.6978,
+          "y1": 151.42245
+        },
+        {
+          "x": 147.32069,
+          "y0": 150.6978,
+          "y1": 151.42245
+        },
+        {
+          "x": 474.52551,
+          "y0": 548.16492,
+          "y1": 565.55658
+        },
+        {
+          "x": 120.9917,
+          "y0": 548.16492,
+          "y1": 565.55658
+        },
+        {
+          "x": 474.52551,
+          "y0": 532.44482,
+          "y1": 548.1698
+        },
+        {
+          "x": 120.9917,
+          "y0": 532.44482,
+          "y1": 548.1698
+        },
+        {
+          "x": 474.52551,
+          "y0": 516.50238,
+          "y1": 532.44476
+        },
+        {
+          "x": 120.9917,
+          "y0": 516.50238,
+          "y1": 532.44476
+        },
+        {
+          "x": 474.52551,
+          "y0": 500.56,
+          "y1": 516.50238
+        },
+        {
+          "x": 120.9917,
+          "y0": 500.56,
+          "y1": 516.50238
+        },
+        {
+          "x": 474.52551,
+          "y0": 484.61771,
+          "y1": 500.56006
+        },
+        {
+          "x": 120.9917,
+          "y0": 484.61771,
+          "y1": 500.56006
+        },
+        {
+          "x": 474.52551,
+          "y0": 468.67529,
+          "y1": 484.61765
+        },
+        {
+          "x": 120.9917,
+          "y0": 468.67529,
+          "y1": 484.61765
+        },
+        {
+          "x": 474.52551,
+          "y0": 466.01831,
+          "y1": 468.67538
+        },
+        {
+          "x": 120.9917,
+          "y0": 466.01831,
+          "y1": 468.67538
+        },
+        {
+          "x": 474.52551,
+          "y0": 448.6073,
+          "y1": 466.02313
+        },
+        {
+          "x": 120.9917,
+          "y0": 448.6073,
+          "y1": 466.02313
+        },
+        {
+          "x": 474.52551,
+          "y0": 432.66489,
+          "y1": 448.60724
+        },
+        {
+          "x": 120.9917,
+          "y0": 432.66489,
+          "y1": 448.60724
+        },
+        {
+          "x": 474.52551,
+          "y0": 416.7226,
+          "y1": 432.66495
+        },
+        {
+          "x": 120.9917,
+          "y0": 416.7226,
+          "y1": 432.66495
+        },
+        {
+          "x": 474.52551,
+          "y0": 400.78021,
+          "y1": 416.72256
+        },
+        {
+          "x": 120.9917,
+          "y0": 400.78021,
+          "y1": 416.72256
+        },
+        {
+          "x": 474.52551,
+          "y0": 385.07941,
+          "y1": 400.78021
+        },
+        {
+          "x": 120.9917,
+          "y0": 385.07941,
+          "y1": 400.78021
+        },
+        {
+          "x": 474.52551,
+          "y0": 372.73129,
+          "y1": 385.07455
+        },
+        {
+          "x": 120.9917,
+          "y0": 372.73129,
+          "y1": 385.07455
+        }
+      ],
+      "width": 595.27557
+    }
+  ]
+}

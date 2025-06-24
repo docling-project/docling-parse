@@ -254,7 +254,7 @@
   },
   "info": {
     "#-pages": 4,
-    "filename": "tests/data/regression/table_of_contents_01.pdf"
+    "filename": ""
   },
   "pages": [
     {
@@ -40706,24 +40706,24 @@
         ]
       },
       "timings": {
-        "decode_annots": 3e-06,
-        "decode_contents": 0.005883,
+        "decode_annots": 4e-06,
+        "decode_contents": 0.006107,
         "decode_dimensions": 0.0,
-        "decode_page": 0.015365,
-        "decode_resources": 0.002197,
-        "sanitise_contents": 0.000914
+        "decode_page": 0.015535,
+        "decode_resources": 0.002155,
+        "sanitise_contents": 0.001051
       }
     }
   ],
   "timings": {
-    "decode_annots": 3e-06,
-    "decode_contents": 0.005883,
+    "decode_annots": 4e-06,
+    "decode_contents": 0.006107,
     "decode_dimensions": 0.0,
-    "decode_document": 0.01638,
-    "decode_page": 0.015365,
-    "decode_resources": 0.002197,
-    "decoding page 0": 0.015993,
-    "process_document_from_file": 0.00152,
-    "sanitise_contents": 0.000914
+    "decode_document": 0.016432,
+    "decode_page": 0.015535,
+    "decode_resources": 0.002155,
+    "decoding page 0": 0.016213,
+    "process_document_from_bytesio": 0.000989,
+    "sanitise_contents": 0.001051
   }
 }
