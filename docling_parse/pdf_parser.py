@@ -1,9 +1,10 @@
 """Parser for PDF files"""
 
+import asyncio
 import hashlib
 from io import BytesIO
 from pathlib import Path
-from typing import Dict, Iterator, List, Optional, Tuple, Union
+from typing import Dict, Iterator, List, Optional, Tuple, Union, Any
 
 from docling_core.types.doc.base import BoundingBox, CoordOrigin
 from docling_core.types.doc.page import (
@@ -26,6 +27,8 @@ from docling_parse.pdf_parsers import pdf_parser_v2  # type: ignore[import]
 from docling_parse.pdf_parsers import pdf_sanitizer  # type: ignore[import]
 
 
+
+
 class PdfDocument:
 
     def iterate_pages(
@@ -33,6 +36,12 @@ class PdfDocument:
     ) -> Iterator[Tuple[int, SegmentedPdfPage]]:
         for page_no in range(self.number_of_pages()):
             yield page_no + 1, self.get_page(page_no + 1)
+
+    async def iterate_pages_async(
+        self,
+    ) -> Iterator[Tuple[int, SegmentedPdfPage]]:
+        for page_no in range(self.number_of_pages()):
+            yield page_no + 1, await self.get_page_async(page_no + 1)
 
     def __init__(
         self,
@@ -46,6 +55,7 @@ class PdfDocument:
         self._pages: Dict[int, SegmentedPdfPage] = {}
         self._toc: Optional[PdfTableOfContents] = None
         self._meta: Optional[PdfMetaData] = None
+
 
     def is_loaded(self) -> bool:
         return self._parser.is_loaded(key=self._key)
@@ -143,6 +153,36 @@ class PdfDocument:
 
         return SegmentedPdfPage()
 
+    async def get_page_async(
+        self, page_no: int, create_words: bool = True, create_textlines: bool = True
+    ) -> SegmentedPdfPage:
+        if page_no in self._pages.keys():
+            return self._pages[page_no]
+        else:
+            if 1 <= page_no <= self.number_of_pages():
+                doc_dict = await asyncio.to_thread(
+                    self._parser.parse_pdf_from_key_on_page,
+                    key=self._key,
+                    page=page_no - 1,
+                    page_boundary=self._boundary_type.value,  # Convert enum to string
+                    do_sanitization=False,
+                )
+
+                for pi, page in enumerate(
+                    doc_dict["pages"]
+                ):  # only one page is expected
+
+                    self._pages[page_no] = self._to_segmented_page(
+                        page=page["original"],
+                        create_words=create_words,
+                        create_textlines=create_textlines,
+                    )  # put on cache
+                    return self._pages[page_no]
+
+        raise ValueError(
+            f"incorrect page_no: {page_no} for key={self._key} (min:1, max:{self.number_of_pages()})"
+        )
+
     def load_all_pages(self, create_words: bool = True, create_lines: bool = True):
         doc_dict = self._parser.parse_pdf_from_key(
             key=self._key, page_boundary=self._boundary_type, do_sanitization=False
@@ -150,6 +190,22 @@ class PdfDocument:
         for pi, page in enumerate(doc_dict["pages"]):
             assert "original" in page, "'original' in page"
 
+            # will need to be changed once we remove the original/sanitized from C++
+            self._pages[pi + 1] = self._to_segmented_page(
+                page["original"],
+                create_words=create_words,
+                create_textlines=create_lines,
+            )  # put on cache
+
+    async def load_all_pages_async(self, create_words: bool = True, create_lines: bool = True):
+        doc_dict = await asyncio.to_thread(
+            self._parser.parse_pdf_from_key,
+            key=self._key, 
+            page_boundary=self._boundary_type.value,  # Convert enum to string
+            do_sanitization=False
+        )
+        
+        for pi, page in enumerate(doc_dict["pages"]):
             # will need to be changed once we remove the original/sanitized from C++
             self._pages[pi + 1] = self._to_segmented_page(
                 page["original"],
@@ -477,6 +533,46 @@ class DoclingPdfParser:
             )
             if not lazy:  # eagerly parse the pages at init time if desired
                 result_doc.load_all_pages()
+
+            return result_doc
+        else:
+            raise RuntimeError(f"Failed to load document with key {key}")
+
+    async def load_async(
+        self,
+        path_or_stream: Union[str, Path, BytesIO],
+        lazy: bool = True,
+        boundary_type: PdfPageBoundaryType = PdfPageBoundaryType.CROP_BOX,
+    ) -> PdfDocument:
+
+        if isinstance(path_or_stream, str):
+            path_or_stream = Path(path_or_stream)
+
+        if isinstance(path_or_stream, Path):
+            key = f"key={str(path_or_stream)}"  # use filepath as internal handle
+            success = await asyncio.to_thread(
+                self._load_document, key=key, filename=str(path_or_stream)
+            )
+
+        elif isinstance(path_or_stream, BytesIO):
+            hasher = hashlib.sha256(usedforsecurity=False)
+
+            while chunk := path_or_stream.read(8192):
+                hasher.update(chunk)
+            path_or_stream.seek(0)
+            hash = hasher.hexdigest()
+
+            key = f"key={hash}"  # use md5 hash as internal handle
+            success = await asyncio.to_thread(
+                self._load_document_from_bytesio, key=key, data=path_or_stream
+            )
+
+        if success:
+            result_doc = PdfDocument(
+                parser=self.parser, key=key, boundary_type=boundary_type
+            )
+            if not lazy:  # eagerly parse the pages at init time if desired
+                await result_doc.load_all_pages_async()
 
             return result_doc
         else:

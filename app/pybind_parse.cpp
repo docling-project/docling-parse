@@ -252,6 +252,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
 	 },
 	 pybind11::arg("key"),
 	 pybind11::arg("filename"),
+         pybind11::call_guard<pybind11::gil_scoped_release>(),
 	 R"(
     Load a document by key and filename.
 
@@ -268,6 +269,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
 	 },
 	 pybind11::arg("key"),
 	 pybind11::arg("bytes_io"),
+         pybind11::call_guard<pybind11::gil_scoped_release>(),
 	 R"(
     Load a document by key from a BytesIO-like object.
 
@@ -310,6 +312,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
 	   return self.get_annotations(key);
 	 },
 	 pybind11::arg("key"),
+         pybind11::call_guard<pybind11::gil_scoped_release>(),
 	 R"(
     Retrieve annotations for the document identified by its unique key and return them as JSON.
 
@@ -324,6 +327,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
 	   return self.get_table_of_contents(key);
 	 },
 	 pybind11::arg("key"),
+         pybind11::call_guard<pybind11::gil_scoped_release>(),
 	 R"(
     Retrieve the table of contents for the document identified by its unique key and return it as JSON.
 
@@ -338,6 +342,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
 	   return self.get_meta_xml(key);
 	 },
 	 pybind11::arg("key"),
+         pybind11::call_guard<pybind11::gil_scoped_release>(),
 	 R"(
     Retrieve the meta data in string or None.
 
@@ -357,6 +362,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
 	 pybind11::arg("key"),
 	 pybind11::arg("page_boundary") = "crop_box", // media_box
 	 pybind11::arg("do_sanitization") = true, // media_box
+         pybind11::call_guard<pybind11::gil_scoped_release>(),
 	 R"(
     Parse the PDF document identified by its unique key and return a JSON representation.
 
@@ -380,6 +386,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
 	 pybind11::arg("page"),
 	 pybind11::arg("page_boundary") = "crop_box", // media_box
 	 pybind11::arg("do_sanitization") = true, // media_box
+         pybind11::call_guard<pybind11::gil_scoped_release>(),
 	 R"(
     Parse a specific page of the PDF document identified by its unique key and return a JSON representation.
 
@@ -417,6 +424,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
 	 pybind11::arg("enforce_same_font")=true,
 	 pybind11::arg("space_width_factor_for_merge")=1.5,
 	 pybind11::arg("space_width_factor_for_merge_with_space")=0.33,
+         pybind11::call_guard<pybind11::gil_scoped_release>(),
 	 R"(
 Sanitize table cells with specified parameters and return the processed JSON.
 
@@ -457,6 +465,7 @@ Sanitize table cells with specified parameters and return the processed JSON.
 	 pybind11::arg("enforce_same_font")=true,
 	 pybind11::arg("space_width_factor_for_merge")=1.5,
 	 pybind11::arg("space_width_factor_for_merge_with_space")=0.33,
+         pybind11::call_guard<pybind11::gil_scoped_release>(),
 	 R"(
     Sanitize table cells in a given bounding box with specified parameters and return the processed JSON.
 
