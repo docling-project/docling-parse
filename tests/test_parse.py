@@ -1,4 +1,16 @@
 #!/usr/bin/env python
+"""
+Test suite for PDF parsing functionality.
+
+This module includes tests for both synchronous and asynchronous PDF parsing.
+The async tests serve two purposes:
+1. Verify that the async interface works correctly for sequential operations
+2. Demonstrate thread-safety issues in the C-backend when parallel page loading is attempted
+
+The parallel loading test is expected to fail due to lack of thread synchronization
+in the underlying C++ implementation, which is the intended behavior to expose this issue.
+"""
+import asyncio
 import glob
 import os
 import re
@@ -351,3 +363,148 @@ def test_serialize_and_reload():
     reloaded_pages: Dict[int, SegmentedPdfPage] = page_adapter.validate_json(json_pages)
 
     assert reloaded_pages == pdf_doc._pages
+
+
+async def test_async_parallel_page_loading():
+    """Test async interface with parallel page loading to trigger C-backend thread parallelism.
+    
+    NOTE: This test is expected to crash due to thread-safety issues in the C-backend
+    when multiple pages are loaded in parallel. The goal is to expose this problem
+    and demonstrate the need for proper thread synchronization in the C++ implementation.
+    """
+    filename = "tests/data/cases/2206.01062.pdf"
+    
+    parser = DoclingPdfParser(loglevel="fatal")
+    
+    # Load document asynchronously
+    pdf_doc: PdfDocument = await parser.load_async(
+        path_or_stream=filename, 
+        lazy=True,
+        boundary_type=PdfPageBoundaryType.CROP_BOX
+    )
+    
+    assert pdf_doc is not None
+    assert pdf_doc.number_of_pages() == 9
+    
+    print(f"Document loaded successfully with {pdf_doc.number_of_pages()} pages")
+    print("Attempting parallel page loading (expected to trigger thread-safety issues)...")
+    
+    # Load all pages in parallel using asyncio.gather
+    page_numbers = list(range(1, pdf_doc.number_of_pages() + 1))
+    
+    # Create tasks for parallel page loading
+    page_tasks = [
+        pdf_doc.get_page_async(page_no=page_no, create_words=True, create_textlines=True)
+        for page_no in page_numbers
+    ]
+    
+    print(f"Created {len(page_tasks)} parallel tasks for pages {page_numbers}")
+    print("Executing parallel page loading (this may crash due to C-backend thread-safety issues)...")
+    
+    try:
+        # Execute all page loading tasks in parallel
+        pages = await asyncio.gather(*page_tasks)
+        
+        # If we reach here, the parallel loading succeeded (unexpected)
+        print("WARNING: Parallel loading succeeded - this may indicate thread-safety has been fixed")
+        
+        # Verify all pages were loaded correctly
+        assert len(pages) == 9
+        
+        for i, page in enumerate(pages):
+            assert isinstance(page, SegmentedPdfPage)
+            assert len(page.char_cells) > 0  # Should have some text content
+            
+            # Verify the page was cached in the document
+            cached_page = pdf_doc._pages[i + 1]
+            assert cached_page == page
+        
+        print("All pages loaded and verified successfully")
+        
+        # Test async iteration as well
+        async_pages = []
+        async for page_no, page in pdf_doc.iterate_pages_async():
+            async_pages.append((page_no, page))
+        
+        assert len(async_pages) == 9
+        
+        # Verify async iteration returns the same pages
+        for i, (page_no, page) in enumerate(async_pages):
+            assert page_no == i + 1
+            assert page == pages[i]
+            
+        print("Async iteration test completed successfully")
+        
+    except Exception as e:
+        print(f"Parallel loading failed as expected: {type(e).__name__}: {e}")
+        print("This failure indicates thread-safety issues in the C-backend")
+        print("The C++ implementation needs proper synchronization for concurrent page parsing")
+        # Re-raise to make the test fail
+        raise
+
+
+def test_async_parallel_page_loading_sync_wrapper():
+    """Synchronous wrapper for the async test to integrate with pytest.
+    
+    This test is expected to fail due to thread-safety issues in the C-backend
+    when multiple pages are parsed concurrently. The failure demonstrates the
+    need for proper thread synchronization in the underlying C++ implementation.
+    """
+    try:
+        asyncio.run(test_async_parallel_page_loading())
+    except Exception as e:
+        print(f"\nTest failed as expected: {type(e).__name__}: {e}")
+        print("This confirms thread-safety issues in the C-backend")
+        # Re-raise to make the test fail
+        raise
+
+
+async def test_async_sequential_page_loading():
+    """Test async interface with sequential page loading to verify async functionality works correctly."""
+    filename = "tests/data/cases/2206.01062.pdf"
+    
+    parser = DoclingPdfParser(loglevel="fatal")
+    
+    # Load document asynchronously
+    pdf_doc: PdfDocument = await parser.load_async(
+        path_or_stream=filename, 
+        lazy=True,
+        boundary_type=PdfPageBoundaryType.CROP_BOX
+    )
+    
+    assert pdf_doc is not None
+    assert pdf_doc.number_of_pages() == 9
+    
+    # Load pages sequentially using async
+    pages = []
+    for page_no in range(1, pdf_doc.number_of_pages() + 1):
+        page = await pdf_doc.get_page_async(page_no=page_no, create_words=True, create_textlines=True)
+        pages.append(page)
+    
+    # Verify all pages were loaded correctly
+    assert len(pages) == 9
+    
+    for i, page in enumerate(pages):
+        assert isinstance(page, SegmentedPdfPage)
+        assert len(page.char_cells) > 0  # Should have some text content
+        
+        # Verify the page was cached in the document
+        cached_page = pdf_doc._pages[i + 1]
+        assert cached_page == page
+    
+    # Test async iteration
+    async_pages = []
+    async for page_no, page in pdf_doc.iterate_pages_async():
+        async_pages.append((page_no, page))
+    
+    assert len(async_pages) == 9
+    
+    # Verify async iteration returns the same pages
+    for i, (page_no, page) in enumerate(async_pages):
+        assert page_no == i + 1
+        assert page == pages[i]
+
+
+def test_async_sequential_page_loading_sync_wrapper():
+    """Synchronous wrapper for the sequential async test."""
+    asyncio.run(test_async_sequential_page_loading())
