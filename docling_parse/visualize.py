@@ -76,6 +76,13 @@ def parse_args():
         help="Enable interactive mode (default: False)",
     )
 
+    # Add an optional boolean argument for enforcing same-font
+    parser.add_argument(
+        "--enforce-same-font",
+        action="store_true",
+        help="Enable interactive mode (default: False)",
+    )
+
     # Add an argument for the output directory, defaulting to "./tmp"
     parser.add_argument(
         "-o",
@@ -115,18 +122,21 @@ def parse_args():
         int(args.page),
         args.display_text,
         args.log_text,
+        args.enforce_same_font,
         args.page_boundary,
         args.category,
     )
 
 
 def visualise_py(
+    *,
     log_level: str,
     pdf_path: str,
     interactive: str,
     output_dir: Path,
     display_text: bool,
     log_text: bool,
+    enforce_same_font: bool,
     page_boundary: str = "crop_box",  # media_box
     category: str = "char",  # "both", "sanitized", "original"
     page_num: int = -1,
@@ -142,7 +152,12 @@ def visualise_py(
     for page_no in page_nos:
         print(f"parsing {pdf_path} on page: {page_no}")
 
-        pdf_page: SegmentedPdfPage = pdf_doc.get_page(page_no=page_no)
+        pdf_page: SegmentedPdfPage = pdf_doc.get_page(
+            page_no=page_no,
+            create_words=True,
+            create_textlines=True,
+            enforce_same_font=enforce_same_font,
+        )
 
         if os.path.exists(str(output_dir)):
             pdf_page.save_as_json(
@@ -234,6 +249,7 @@ def main():
         page_num,
         display_text,
         log_text,
+        enforce_same_font,
         page_boundary,
         category,
     ) = parse_args()
@@ -247,6 +263,7 @@ def main():
         output_dir=output_dir,
         display_text=display_text,
         log_text=log_text,
+        enforce_same_font=enforce_same_font,
         page_boundary=page_boundary,
         category=category,
         page_num=page_num,

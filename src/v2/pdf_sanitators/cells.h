@@ -26,6 +26,23 @@ namespace pdflib
     
   private:
 
+    bool applicable_for_merge(pdf_resource<PAGE_CELL>& cell_i,
+			      pdf_resource<PAGE_CELL>& cell_j,
+			      bool enforce_same_font);
+
+    void contract_cells_into_lines_right_to_left(pdf_resource<PAGE_CELLS>& cells,
+						 double horizontal_cell_tolerance,
+						 bool enforce_same_font,
+						 double space_width_factor_for_merge,
+						 double space_width_factor_for_merge_with_space);
+
+    void contract_cells_into_lines_left_to_right(pdf_resource<PAGE_CELLS>& cells,
+						 double horizontal_cell_tolerance,
+						 bool enforce_same_font,
+						 double space_width_factor_for_merge,
+						 double space_width_factor_for_merge_with_space,
+						 bool allow_reverse);
+    
     // linear
     void contract_cells_into_lines_v1(pdf_resource<PAGE_CELLS>& cells,
 				      double horizontal_cell_tolerance=1.0,
@@ -154,13 +171,62 @@ namespace pdflib
 				 enforce_same_font,
 				 space_width_factor_for_merge,
 				 space_width_factor_for_merge_with_space);
+
+    /*
+    contract_cells_into_lines_v2(cells,
+				 horizontal_cell_tolerance,
+				 enforce_same_font,
+				 space_width_factor_for_merge,
+				 space_width_factor_for_merge_with_space);
+    */
   }
 
+  bool pdf_sanitator<PAGE_CELLS>::applicable_for_merge(pdf_resource<PAGE_CELL>& cell_i,
+						       pdf_resource<PAGE_CELL>& cell_j,
+						       bool enforce_same_font)
+  {
+    if(not cell_i.active)
+      {
+	return false;
+      }
+    
+    if(not cell_j.active)
+      {
+	return false;
+      }
+    
+    if(enforce_same_font and cell_i.font_name!=cell_j.font_name)
+      {
+	return false;
+      }
+	    
+    if(not cell_i.has_same_reading_orientation(cell_j))
+      {
+	return false;
+      }
+
+    return true;
+  }
+  
   void pdf_sanitator<PAGE_CELLS>::contract_cells_into_lines_v1(pdf_resource<PAGE_CELLS>& cells,
 							       double horizontal_cell_tolerance,
 							       bool enforce_same_font,
 							       double space_width_factor_for_merge,
 							       double space_width_factor_for_merge_with_space)
+  {
+    contract_cells_into_lines_left_to_right(cells, horizontal_cell_tolerance, enforce_same_font, space_width_factor_for_merge, space_width_factor_for_merge_with_space, false);
+    
+    contract_cells_into_lines_right_to_left(cells, horizontal_cell_tolerance, enforce_same_font, space_width_factor_for_merge, space_width_factor_for_merge_with_space);
+    
+    contract_cells_into_lines_left_to_right(cells, horizontal_cell_tolerance, enforce_same_font, space_width_factor_for_merge, space_width_factor_for_merge_with_space, true);
+  }
+  
+  void pdf_sanitator<PAGE_CELLS>::contract_cells_into_lines_left_to_right(pdf_resource<PAGE_CELLS>& cells,
+									  double horizontal_cell_tolerance,
+									  bool enforce_same_font,
+									  double space_width_factor_for_merge,
+									  double space_width_factor_for_merge_with_space,
+									  bool allow_reverse)
   {
     // take care for left to right printing
     for(int i=0; i<cells.size(); i++)
@@ -173,17 +239,7 @@ namespace pdflib
 
 	for(int j=i+1; j<cells.size(); j++)
 	  {
-	    if(not cells[j].active)
-	      {
-		break;
-	      }
-	    
-	    if(enforce_same_font and cells[i].font_name!=cells[j].font_name)
-	      {
-		break;
-	      }
-	    
-	    if(not cells[i].has_same_reading_orientation(cells[j]))
+	    if(not applicable_for_merge(cells[i], cells[j], enforce_same_font))
 	      {
 		break;
 	      }
@@ -198,6 +254,13 @@ namespace pdflib
 		cells[j].active = false;
 		LOG_S(INFO) << " -> merging cell-" << i << " with " << j << " '" << cells[j].text << "'"<< ": " << cells[i].text;
 	      }
+	    else if(allow_reverse and cells[j].is_adjacent_to(cells[i], delta_0))
+	      {
+		cells[j].merge_with(cells[i], delta_1);
+		
+		cells[i].active = false;
+		LOG_S(INFO) << " -> merging reverse cell-" << j << " with " << i << " '" << cells[i].text << "'"<< ": " << cells[j].text;
+	      }	    
 	    else
 	      {
 		break;
@@ -205,6 +268,21 @@ namespace pdflib
 	  }
       }
 
+    {
+      auto it = std::remove_if(cells.begin(), cells.end(), 
+                        [](const pdf_resource<PAGE_CELL>& cell) {
+                            return !cell.active;
+                        });
+      cells.erase(it, cells.end());
+    }    
+  }
+  
+  void pdf_sanitator<PAGE_CELLS>::contract_cells_into_lines_right_to_left(pdf_resource<PAGE_CELLS>& cells,
+									  double horizontal_cell_tolerance,
+									  bool enforce_same_font,
+									  double space_width_factor_for_merge,
+									  double space_width_factor_for_merge_with_space)
+  {    
     // take care for right to left printing
     for(int i=cells.size()-1; i>=0; i--)
       {
@@ -216,17 +294,7 @@ namespace pdflib
 
 	for(int j=i-1; j>=0; j--)
 	  {
-	    if(not cells[j].active)
-	      {
-		break;
-	      }
-	    
-	    if(enforce_same_font and cells[i].font_name!=cells[j].font_name)
-	      {
-		break;
-	      }
-	    
-	    if(not cells[i].has_same_reading_orientation(cells[j]))
+	    if(not applicable_for_merge(cells[i], cells[j], enforce_same_font))
 	      {
 		break;
 	      }
@@ -236,7 +304,7 @@ namespace pdflib
 	    
 	    if(cells[j].is_adjacent_to(cells[i], delta_0))
 	      {
-		cells[i].merge_with(cells[j], delta_1);
+		cells[j].merge_with(cells[i], delta_1);
 		
 		cells[i].active = false;
 		LOG_S(INFO) << " -> merging cell-" << i << " with " << j << " '" << cells[j].text << "'"<< ": " << cells[i].text;
@@ -248,16 +316,13 @@ namespace pdflib
 	  }
       }    
 
-    pdf_resource<PAGE_CELLS> cells_;
-    for(int i=0; i<cells.size(); i++)
-      {
-	if(cells[i].active)
-	  {
-	    cells_.push_back(cells[i]);
-	  }
-      }
-
-    cells = cells_;    
+    {
+      auto it = std::remove_if(cells.begin(), cells.end(), 
+                        [](const pdf_resource<PAGE_CELL>& cell) {
+                            return !cell.active;
+                        });
+      cells.erase(it, cells.end());
+    }    
   }
 
   void pdf_sanitator<PAGE_CELLS>::contract_cells_into_lines_v2(pdf_resource<PAGE_CELLS>& cells,

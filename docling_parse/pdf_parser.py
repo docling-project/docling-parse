@@ -115,7 +115,12 @@ class PdfDocument:
         return result
 
     def get_page(
-        self, page_no: int, create_words: bool = True, create_textlines: bool = True
+        self,
+        page_no: int,
+        *,
+        create_words: bool = True,
+        create_textlines: bool = True,
+        enforce_same_font: bool = True,
     ) -> SegmentedPdfPage:
         if page_no in self._pages.keys():
             return self._pages[page_no]
@@ -134,6 +139,7 @@ class PdfDocument:
                         page=page["original"],
                         create_words=create_words,
                         create_textlines=create_textlines,
+                        enforce_same_font=enforce_same_font,
                     )  # put on cache
                     return self._pages[page_no]
 
@@ -315,7 +321,12 @@ class PdfDocument:
         return result
 
     def _to_segmented_page(
-        self, page: dict, create_words: bool, create_textlines: bool
+        self,
+        page: dict,
+        *,
+        create_words: bool,
+        create_textlines: bool,
+        enforce_same_font: bool = True,
     ) -> SegmentedPdfPage:
 
         char_cells = self._to_cells(page["cells"])
@@ -330,14 +341,22 @@ class PdfDocument:
         )
 
         if create_words:
-            self._create_word_cells(segmented_page)
+            self._create_word_cells(segmented_page, enforce_same_font=enforce_same_font)
 
         if create_textlines:
-            self._create_textline_cells(segmented_page)
+            self._create_textline_cells(
+                segmented_page, enforce_same_font=enforce_same_font
+            )
+
         return segmented_page
 
     def _create_word_cells(
-        self, segmented_page: SegmentedPdfPage, _loglevel: str = "fatal"
+        self,
+        segmented_page: SegmentedPdfPage,
+        *,
+        space_width_factor_for_merge: float = 0.33,
+        enforce_same_font: bool = True,
+        _loglevel: str = "fatal",
     ):
 
         if len(segmented_page.word_cells) > 0:
@@ -355,7 +374,11 @@ class PdfDocument:
 
         sanitizer.set_char_cells(data=char_data)
 
-        data = sanitizer.create_word_cells(space_width_factor_for_merge=0.33)
+        # data = sanitizer.create_word_cells(space_width_factor_for_merge=0.33)
+        data = sanitizer.create_word_cells(
+            space_width_factor_for_merge=space_width_factor_for_merge,
+            enforce_same_font=enforce_same_font,
+        )
 
         segmented_page.word_cells = []
         for item in data:
@@ -365,9 +388,14 @@ class PdfDocument:
         segmented_page.has_words = len(segmented_page.word_cells) > 0
 
     def _create_textline_cells(
-        self, segmented_page: SegmentedPdfPage, _loglevel: str = "fatal"
+        self,
+        segmented_page: SegmentedPdfPage,
+        *,
+        space_width_factor_for_merge: float = 1.0,
+        space_width_factor_for_merge_with_space: float = 0.33,
+        enforce_same_font: bool = True,
+        _loglevel: str = "fatal",
     ):
-
         if len(segmented_page.textline_cells) > 0:
             return
 
@@ -387,7 +415,12 @@ class PdfDocument:
 
         sanitizer.set_char_cells(data=char_data)
 
-        data = sanitizer.create_line_cells()
+        # data = sanitizer.create_line_cells()
+        data = sanitizer.create_line_cells(
+            space_width_factor_for_merge=space_width_factor_for_merge,
+            space_width_factor_for_merge_with_space=space_width_factor_for_merge_with_space,
+            enforce_same_font=enforce_same_font,
+        )
 
         segmented_page.textline_cells = []
         for item in data:

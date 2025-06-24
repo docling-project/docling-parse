@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 import glob
-import json
 import os
 import re
 from typing import Dict, List, Union
@@ -246,7 +245,7 @@ def test_reference_documents_from_filenames():
                     )
                     _fname = fname + f".{unit}.txt"
                     with open(_fname, "w") as fw:
-                        fw.write("\n".join(lines))                                
+                        fw.write("\n".join(lines))
             else:
                 # print(f"loading from {fname}")
 
@@ -256,7 +255,7 @@ def test_reference_documents_from_filenames():
                         add_fontkey=True,
                         add_fontname=False,
                     )
-                    
+
                     _fname = fname + f".{unit}.txt"
                     with open(_fname, "r") as fr:
                         lines = fr.readlines()
@@ -264,8 +263,8 @@ def test_reference_documents_from_filenames():
                     olines = "".join(lines)
                     _olines = "\n".join(_lines)
 
-                    assert olines==_olines, "olines==_olines"
-                        
+                    assert olines == _olines, "olines==_olines"
+
                 true_page = SegmentedPdfPage.load_from_json(fname)
                 verify_SegmentedPdfPage(true_page, pred_page, filename=fname)
 
@@ -284,8 +283,8 @@ def test_reference_documents_from_filenames():
         else:
             print(f"toc: {toc}")
         """
-        
-        meta = pdf_doc.get_meta()
+
+        pdf_doc.get_meta()
         """
         if meta is not None:
             for key, val in meta.data.items():
@@ -293,7 +292,7 @@ def test_reference_documents_from_filenames():
         else:
             print(f"meta: {meta}")
         """
-        
+
     assert True
 
 
