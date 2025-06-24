@@ -1,3 +1,13 @@
+## [v4.1.0](https://github.com/docling-project/docling-parse/releases/tag/v4.1.0) - 2025-06-24
+
+### Feature
+
+* Fixed char ordering in text lines ([#138](https://github.com/docling-project/docling-parse/issues/138)) ([`8872e73`](https://github.com/docling-project/docling-parse/commit/8872e736bf97ecede88a3999a9530b87956586fb))
+
+### Fix
+
+* Glyph issue with encodings ([#129](https://github.com/docling-project/docling-parse/issues/129)) ([`6397287`](https://github.com/docling-project/docling-parse/commit/63972876e81531634dcab913bead26ddced6135b))
+
 ## [v4.0.5](https://github.com/docling-project/docling-parse/releases/tag/v4.0.5) - 2025-06-13
 
 ### Fix

@@ -1,0 +1,151 @@
+(053.80, 723.51) (246.24, 723.51) (246.24, 731.44) (053.80, 731.44)      /F219 KDD '22, August 14-18, 2022, Washington, DC, USA
+(253.14, 723.51) (558.20, 723.51) (558.20, 731.44) (253.14, 731.44)      /F219 Birgit Pfitzmann, Christoph Auer, Michele Dolfi, Ahmed S. Nassar, and Peter Staar
+(053.80, 696.13) (059.41, 696.13) (059.41, 705.20) (053.80, 705.20)      /F138 1
+(070.31, 696.13) (156.53, 696.13) (156.53, 705.20) (070.31, 705.20)      /F138 INTRODUCTION
+(053.80, 672.78) (303.02, 672.78) (303.02, 680.59) (053.80, 680.59)      /F134 Despite the substantial improvements achieved with machine-learning
+(053.53, 661.83) (295.56, 661.83) (295.56, 669.63) (053.53, 669.63)      /F134 (ML) approaches and deep neural networks in recent years, docu-
+(053.80, 650.87) (294.05, 650.87) (294.05, 658.67) (053.80, 658.67)      /F134 ment conversion remains a challenging problem, as demonstrated
+(053.80, 639.91) (294.05, 639.91) (294.05, 647.71) (053.80, 647.71)      /F134 by the numerous public competitions held on this topic [1-4]. The
+(053.80, 628.95) (294.04, 628.95) (294.04, 636.75) (053.80, 636.75)      /F134 challenge originates from the huge variability in PDF documents
+(053.80, 617.99) (294.05, 617.99) (294.05, 625.79) (053.80, 625.79)      /F134 regarding layout, language and formats (scanned, programmatic
+(053.80, 607.03) (294.05, 607.03) (294.05, 614.83) (053.80, 614.83)      /F134 or a combination of both). Engineering a single ML model that can
+(053.80, 596.07) (294.28, 596.07) (294.28, 603.87) (053.80, 603.87)      /F134 be applied on all types of documents and provides high-quality
+(053.80, 585.11) (295.43, 585.11) (295.43, 592.91) (053.80, 592.91)      /F134 layout segmentation remains to this day extremely challenging [5].
+(053.53, 574.15) (294.37, 574.15) (294.37, 581.96) (053.53, 581.96)      /F134 To highlight the variability in document layouts, we show a few
+(053.80, 563.20) (275.48, 563.20) (275.48, 571.00) (053.80, 571.00)      /F134 example documents from the DocLayNet dataset in Figure 1.
+(063.76, 552.24) (295.56, 552.24) (295.56, 560.04) (063.76, 560.04)      /F134 Akeyproblem in the process of document conversion is to under-
+(053.80, 541.28) (294.05, 541.28) (294.05, 549.08) (053.80, 549.08)      /F134 stand the structure of a single document page, i.e. which segments
+(053.80, 530.32) (294.05, 530.32) (294.05, 538.12) (053.80, 538.12)      /F134 of text should be grouped together in a unit. To train models for this
+(053.80, 519.36) (295.56, 519.36) (295.56, 527.16) (053.80, 527.16)      /F134 task, there are currently two large datasets available to the com-
+(053.80, 508.40) (294.04, 508.40) (294.04, 516.20) (053.80, 516.20)      /F134 munity, PubLayNet [6] and DocBank [7]. They were introduced
+(053.80, 497.44) (295.56, 497.44) (295.56, 505.24) (053.80, 505.24)      /F134 in 2019 and 2020 respectively and significantly accelerated the im-
+(053.80, 486.48) (294.05, 486.48) (294.05, 494.29) (053.80, 494.29)      /F134 plementation of layout detection and segmentation models due to
+(053.80, 475.52) (294.04, 475.52) (294.04, 483.33) (053.80, 483.33)      /F134 their sizes of 300K and 500K ground-truth pages. These sizes were
+(053.80, 464.57) (295.56, 464.57) (295.56, 472.37) (053.80, 472.37)      /F134 achieved by leveraging an automation approach. The benefit of au-
+(053.80, 453.61) (294.05, 453.61) (294.05, 461.41) (053.80, 461.41)      /F134 tomated ground-truth generation is obvious: one can generate large
+(053.80, 442.65) (294.05, 442.65) (294.05, 450.45) (053.80, 450.45)      /F134 ground-truth datasets at virtually no cost. However, the automation
+(053.80, 431.69) (294.05, 431.69) (294.05, 439.49) (053.80, 439.49)      /F134 introduces a constraint on the variability in the dataset, because
+(053.80, 420.73) (294.05, 420.73) (294.05, 428.53) (053.80, 428.53)      /F134 corresponding structured source data must be available. PubLayNet
+(053.80, 409.77) (295.56, 409.77) (295.56, 417.57) (053.80, 417.57)      /F134 and DocBank were both generated from scientific document repos-
+(053.80, 398.81) (260.88, 398.81) (260.88, 406.61) (053.80, 406.61)      /F134 itories (PubMed and arXiv), which provide XML or L A T E X
+(266.10, 398.81) (295.43, 398.81) (295.43, 406.61) (266.10, 406.61)      /F134 sources.
+(053.53, 387.85) (294.22, 387.85) (294.22, 395.65) (053.53, 395.65)      /F134 Those scientific documents present a limited variability in their
+(053.80, 376.89) (294.27, 376.89) (294.27, 384.70) (053.80, 384.70)      /F134 layouts, because they are typeset in uniform templates provided by
+(053.80, 365.94) (295.04, 365.94) (295.04, 373.74) (053.80, 373.74)      /F134 the publishers. Obviously, documents such as technical manuals,
+(053.80, 354.98) (294.05, 354.98) (294.05, 362.78) (053.80, 362.78)      /F134 annual company reports, legal text, government tenders, etc. have
+(053.57, 344.02) (294.05, 344.02) (294.05, 351.82) (053.57, 351.82)      /F134 very different and partially unique layouts. As a consequence, the
+(053.80, 333.06) (294.22, 333.06) (294.22, 340.86) (053.80, 340.86)      /F134 layout predictions obtained from models trained on PubLayNet or
+(053.80, 322.10) (295.42, 322.10) (295.42, 329.90) (053.80, 329.90)      /F134 DocBank is very reasonable when applied on scientific documents.
+(053.80, 311.14) (125.53, 311.14) (125.53, 318.94) (053.80, 318.94)      /F134 However, for more
+(128.61, 311.10) (153.77, 311.10) (153.77, 319.00) (128.61, 319.00)      /F148 artistic
+(157.15, 311.14) (165.16, 311.14) (165.16, 318.94) (157.15, 318.94)      /F134 or
+(168.25, 311.10) (201.49, 311.10) (201.49, 319.00) (168.25, 319.00)      /F148 free-style
+(204.79, 311.14) (294.21, 311.14) (294.21, 318.94) (204.79, 318.94)      /F134 layouts, we see sub-par
+(053.80, 300.18) (294.05, 300.18) (294.05, 307.98) (053.80, 307.98)      /F134 prediction quality from these models, which we demonstrate in
+(053.80, 289.22) (089.08, 289.22) (089.08, 297.02) (053.80, 297.02)      /F134 Section 5.
+(063.76, 278.26) (295.56, 278.26) (295.56, 286.07) (063.76, 286.07)      /F134 In this paper, we present the DocLayNet dataset. It provides page-
+(053.80, 267.31) (294.21, 267.31) (294.21, 275.11) (053.80, 275.11)      /F134 by-page layout annotation ground-truth using bounding-boxes for
+(053.59, 256.35) (294.05, 256.35) (294.05, 264.15) (053.59, 264.15)      /F134 11 distinct class labels on 80863 unique document pages, of which
+(053.80, 245.39) (294.21, 245.39) (294.21, 253.19) (053.80, 253.19)      /F134 a fraction carry double- or triple-annotations. DocLayNet is similar
+(053.80, 234.43) (294.05, 234.43) (294.05, 242.23) (053.80, 242.23)      /F134 in spirit to PubLayNet and DocBank and will likewise be made
+(053.80, 223.47) (134.29, 223.47) (134.29, 231.27) (053.80, 231.27)      /F134 available to the public
+(134.29, 227.09) (137.67, 227.09) (137.67, 233.42) (134.29, 233.42)      /F134 1
+(140.42, 223.47) (294.05, 223.47) (294.05, 231.27) (140.42, 231.27)      /F134 in order to stimulate the document-layout
+(053.80, 212.51) (295.11, 212.51) (295.11, 220.31) (053.80, 220.31)      /F134 analysis community. It distinguishes itself in the following aspects:
+(064.71, 199.19) (074.22, 199.19) (074.22, 206.99) (064.71, 206.99)      /F134 (1)
+(078.21, 199.14) (146.40, 199.14) (146.40, 207.05) (078.21, 207.05)      /F148 Human Annotation
+(146.42, 199.19) (295.03, 199.19) (295.03, 206.99) (146.42, 206.99)      /F134 : In contrast to PubLayNet and DocBank,
+(077.88, 188.23) (295.56, 188.23) (295.56, 196.03) (077.88, 196.03)      /F134 we relied on human annotation instead of automation ap-
+(078.21, 177.27) (200.64, 177.27) (200.64, 185.07) (078.21, 185.07)      /F134 proaches to generate the data set.
+(064.71, 166.31) (074.22, 166.31) (074.22, 174.11) (064.71, 174.11)      /F134 (2)
+(078.21, 166.27) (167.92, 166.27) (167.92, 174.17) (078.21, 174.17)      /F148 Large Layout Variability
+(168.34, 166.31) (294.26, 166.31) (294.26, 174.11) (168.34, 174.11)      /F134 : We include diverse and complex
+(078.21, 155.35) (245.46, 155.35) (245.46, 163.15) (078.21, 163.15)      /F134 layouts from a large variety of public sources.
+(064.71, 144.39) (074.22, 144.39) (074.22, 152.19) (064.71, 152.19)      /F134 (3)
+(078.21, 144.35) (143.52, 144.35) (143.52, 152.26) (078.21, 152.26)      /F148 Detailed Label Set
+(144.02, 144.39) (294.05, 144.39) (294.05, 152.19) (144.02, 152.19)      /F134 : We define 11 class labels to distinguish
+(078.21, 133.43) (294.68, 133.43) (294.68, 141.24) (078.21, 141.24)      /F134 layout features in high detail. PubLayNet provides 5 labels;
+(078.21, 122.47) (276.34, 122.47) (276.34, 130.28) (078.21, 130.28)      /F134 DocBank provides 13, although not a superset of ours.
+(064.71, 111.52) (074.22, 111.52) (074.22, 119.32) (064.71, 119.32)      /F134 (4)
+(078.21, 111.47) (163.78, 111.47) (163.78, 119.38) (078.21, 119.38)      /F148 Redundant Annotations
+(163.99, 111.52) (295.56, 111.52) (295.56, 119.32) (163.99, 119.32)      /F134 : A fraction of the pages in the Do-
+(078.21, 100.56) (295.43, 100.56) (295.43, 108.36) (078.21, 108.36)      /F134 cLayNet data set carry more than one human annotation.
+(053.67, 086.34) (056.22, 086.34) (056.22, 091.10) (053.67, 091.10)      /F134 1
+(056.72, 083.37) (216.03, 083.37) (216.03, 089.44) (056.72, 089.44)      /F134 https://developer.ibm.com/exchanges/data/all/doclaynet
+(342.10, 696.40) (558.43, 696.40) (558.43, 704.21) (342.10, 704.21)      /F134 This enables experimentation with annotation uncertainty
+(342.36, 685.45) (445.84, 685.45) (445.84, 693.25) (342.36, 693.25)      /F134 and quality control analysis.
+(328.87, 674.49) (338.38, 674.49) (338.38, 682.29) (328.87, 682.29)      /F134 (5)
+(342.36, 674.44) (487.25, 674.44) (487.25, 682.35) (342.36, 682.35)      /F148 Pre-defined Train-, Test- & Validation-set
+(487.76, 674.49) (558.20, 674.49) (558.20, 682.29) (487.76, 682.29)      /F134 : Like DocBank, we
+(342.36, 663.53) (559.72, 663.53) (559.72, 671.33) (342.36, 671.33)      /F134 provide fixed train-, test- & validation-sets to ensure propor-
+(342.36, 652.57) (558.20, 652.57) (558.20, 660.37) (342.36, 660.37)      /F134 tional representation of the class-labels. Further, we prevent
+(342.36, 641.61) (558.20, 641.61) (558.20, 649.41) (342.36, 649.41)      /F134 leakage of unique layouts across sets, which has a large effect
+(342.36, 630.65) (438.06, 630.65) (438.06, 638.45) (342.36, 638.45)      /F134 on model accuracy scores.
+(327.92, 615.79) (559.19, 615.79) (559.19, 623.59) (327.92, 623.59)      /F134 All aspects outlined above are detailed in Section 3. In Section 4,
+(317.62, 604.83) (558.20, 604.83) (558.20, 612.63) (317.62, 612.63)      /F134 we will elaborate on how we designed and executed this large-scale
+(317.95, 593.88) (558.20, 593.88) (558.20, 601.68) (317.95, 601.68)      /F134 human annotation campaign. We will also share key insights and
+(317.95, 582.92) (558.21, 582.92) (558.21, 590.72) (317.95, 590.72)      /F134 lessons learned that might prove helpful for other parties planning
+(317.95, 571.96) (434.95, 571.96) (434.95, 579.76) (317.95, 579.76)      /F134 to set up annotation campaigns.
+(327.92, 561.00) (558.20, 561.00) (558.20, 568.80) (327.92, 568.80)      /F134 In Section 5, we will present baseline accuracy numbers for a
+(317.73, 550.04) (558.20, 550.04) (558.20, 557.84) (317.73, 557.84)      /F134 variety of object detection methods (Faster R-CNN, Mask R-CNN
+(317.95, 539.08) (558.20, 539.08) (558.20, 546.88) (317.95, 546.88)      /F134 and YOLOv5) trained on DocLayNet. We further show how the
+(317.95, 528.12) (558.21, 528.12) (558.21, 535.92) (317.95, 535.92)      /F134 model performance is impacted by varying the DocLayNet dataset
+(317.95, 517.16) (558.20, 517.16) (558.20, 524.96) (317.95, 524.96)      /F134 size, reducing the label set and modifying the train/test-split. Last
+(317.95, 506.20) (558.20, 506.20) (558.20, 514.00) (317.95, 514.00)      /F134 but not least, we compare the performance of models trained on
+(317.95, 495.25) (558.20, 495.25) (558.20, 503.05) (317.95, 503.05)      /F134 PubLayNet, DocBank and DocLayNet and demonstrate that a model
+(317.95, 484.29) (559.58, 484.29) (559.58, 492.09) (317.95, 492.09)      /F134 trained on DocLayNet provides overall more robust layout recovery.
+(317.95, 460.79) (323.56, 460.79) (323.56, 469.85) (317.95, 469.85)      /F138 2
+(334.47, 460.79) (421.74, 460.79) (421.74, 469.85) (334.47, 469.85)      /F138 RELATED WORK
+(317.52, 437.44) (559.71, 437.44) (559.71, 445.24) (317.52, 445.24)      /F134 While early approaches in document-layout analysis used rule-
+(317.95, 426.48) (558.20, 426.48) (558.20, 434.28) (317.95, 434.28)      /F134 based algorithms and heuristics [8], the problem is lately addressed
+(317.62, 415.52) (559.72, 415.52) (559.72, 423.32) (317.62, 423.32)      /F134 with deep learning methods. The most common approach is to lever-
+(317.95, 404.56) (558.43, 404.56) (558.43, 412.36) (317.95, 412.36)      /F134 age object detection models [9-15]. In the last decade, the accuracy
+(317.95, 393.60) (559.19, 393.60) (559.19, 401.40) (317.95, 401.40)      /F134 and speed of these models has increased dramatically. Furthermore,
+(317.95, 382.64) (558.21, 382.64) (558.21, 390.44) (317.95, 390.44)      /F134 most state-of-the-art object detection methods can be trained and
+(317.95, 371.68) (558.20, 371.68) (558.20, 379.48) (317.95, 379.48)      /F134 applied with very little work, thanks to a standardisation effort
+(317.95, 360.72) (558.21, 360.72) (558.21, 368.52) (317.95, 368.52)      /F134 of the ground-truth data format [16] and common deep-learning
+(317.95, 349.76) (558.20, 349.76) (558.20, 357.57) (317.95, 357.57)      /F134 frameworks [17]. Reference data sets such as PubLayNet [6] and
+(317.95, 338.81) (559.72, 338.81) (559.72, 346.61) (317.95, 346.61)      /F134 DocBank provide their data in the commonly accepted COCO for-
+(317.95, 327.85) (350.91, 327.85) (350.91, 335.65) (317.95, 335.65)      /F134 mat [16].
+(327.92, 316.89) (558.20, 316.89) (558.20, 324.69) (327.92, 324.69)      /F134 Lately, new types of ML models for document-layout analysis
+(317.95, 305.93) (558.21, 305.93) (558.21, 313.73) (317.95, 313.73)      /F134 have emerged in the community [18-21]. These models do not
+(317.95, 294.97) (558.21, 294.97) (558.21, 302.77) (317.95, 302.77)      /F134 approach the problem of layout analysis purely based on an image
+(317.95, 284.01) (559.19, 284.01) (559.19, 291.81) (317.95, 291.81)      /F134 representation of the page, as computer vision methods do. Instead,
+(317.95, 273.05) (558.20, 273.05) (558.20, 280.85) (317.95, 280.85)      /F134 they combine the text tokens and image representation of a page
+(317.95, 262.09) (558.21, 262.09) (558.21, 269.89) (317.95, 269.89)      /F134 in order to obtain a segmentation. While the reported accuracies
+(317.95, 251.13) (558.20, 251.13) (558.20, 258.94) (317.95, 258.94)      /F134 appear to be promising, a broadly accepted data format which links
+(317.95, 240.18) (503.33, 240.18) (503.33, 247.98) (317.95, 247.98)      /F134 geometric and textual features has yet to establish.
+(317.95, 216.68) (323.56, 216.68) (323.56, 225.74) (317.95, 225.74)      /F138 3
+(334.47, 216.68) (477.46, 216.68) (477.46, 225.74) (334.47, 225.74)      /F138 THE DOCLAYNET DATASET
+(317.95, 193.32) (558.20, 193.32) (558.20, 201.13) (317.95, 201.13)      /F134 DocLayNet contains 80863 PDF pages. Among these, 7059 carry two
+(317.95, 182.37) (558.20, 182.37) (558.20, 190.17) (317.95, 190.17)      /F134 instances of human annotations, and 1591 carry three. This amounts
+(317.95, 171.41) (559.71, 171.41) (559.71, 179.21) (317.95, 179.21)      /F134 to 91104 total annotation instances. The annotations provide lay-
+(317.95, 160.45) (559.71, 160.45) (559.71, 168.25) (317.95, 168.25)      /F134 out information in the shape of labeled, rectangular bounding-
+(317.95, 149.49) (539.92, 149.49) (539.92, 157.29) (317.95, 157.29)      /F134 boxes. We define 11 distinct labels for layout features, namely
+(542.16, 149.45) (559.10, 149.45) (559.10, 157.35) (542.16, 157.35)      /F148 Cap-
+(317.95, 138.49) (331.86, 138.49) (331.86, 146.40) (317.95, 146.40)      /F148 tion
+(331.86, 138.53) (333.84, 138.53) (333.84, 146.33) (331.86, 146.33)      /F134 ,
+(336.06, 138.49) (366.05, 138.49) (366.05, 146.40) (336.06, 146.40)      /F148 Footnote
+(366.05, 138.53) (368.03, 138.53) (368.03, 146.33) (366.05, 146.33)      /F134 ,
+(370.25, 138.49) (400.06, 138.49) (400.06, 146.40) (370.25, 146.40)      /F148 Formula
+(400.06, 138.53) (402.03, 138.53) (402.03, 146.33) (400.06, 146.33)      /F134 ,
+(404.26, 138.49) (436.19, 138.49) (436.19, 146.40) (404.26, 146.40)      /F148 List-item
+(436.19, 138.53) (438.17, 138.53) (438.17, 146.33) (436.19, 146.33)      /F134 ,
+(440.40, 138.49) (480.61, 138.49) (480.61, 146.40) (440.40, 146.40)      /F148 Page-footer
+(480.61, 138.53) (482.59, 138.53) (482.59, 146.33) (480.61, 146.33)      /F134 ,
+(484.81, 138.49) (528.38, 138.49) (528.38, 146.40) (484.81, 146.40)      /F148 Page-header
+(528.38, 138.53) (530.35, 138.53) (530.35, 146.33) (528.38, 146.33)      /F134 ,
+(532.58, 138.49) (557.21, 138.49) (557.21, 146.40) (532.58, 146.40)      /F148 Picture
+(557.21, 138.53) (559.19, 138.53) (559.19, 146.33) (557.21, 146.33)      /F134 ,
+(317.95, 127.53) (368.79, 127.53) (368.79, 135.44) (317.95, 135.44)      /F148 Section-header
+(368.79, 127.57) (370.72, 127.57) (370.72, 135.37) (368.79, 135.37)      /F134 ,
+(372.90, 127.53) (391.57, 127.53) (391.57, 135.44) (372.90, 135.44)      /F148 Table
+(391.57, 127.57) (393.51, 127.57) (393.51, 135.37) (391.57, 135.37)      /F134 ,
+(395.68, 127.53) (410.24, 127.53) (410.24, 135.44) (395.68, 135.44)      /F148 Text
+(410.23, 127.57) (427.57, 127.57) (427.57, 135.37) (410.23, 135.37)      /F134 , and
+(429.74, 127.53) (445.51, 127.53) (445.51, 135.44) (429.74, 135.44)      /F148 Title
+(445.51, 127.57) (558.20, 127.57) (558.20, 135.37) (445.51, 135.37)      /F134 . Our reasoning for picking this
+(317.95, 116.61) (472.22, 116.61) (472.22, 124.41) (317.95, 124.41)      /F134 particular label set is detailed in Section 4.
+(327.92, 105.65) (558.20, 105.65) (558.20, 113.45) (327.92, 113.45)      /F134 In addition to open intellectual property constraints for the
+(317.95, 094.69) (558.20, 094.69) (558.20, 102.50) (317.95, 102.50)      /F134 source documents, we required that the documents in DocLayNet
+(317.95, 083.74) (558.20, 083.74) (558.20, 091.54) (317.95, 091.54)      /F134 adhere to a few conditions. Firstly, we kept scanned documents

@@ -18,8 +18,8 @@ else()
   include(CMakeParseArguments)
 
   set(QPDF_URL https://github.com/qpdf/qpdf.git)
-  set(QPDF_TAG v11.9.1 )
-  
+  #set(QPDF_TAG v11.9.1 )
+  set(QPDF_TAG v11.10.0 )
   set(QPDF_LIB ${EXTERNALS_PREFIX_PATH}/lib/libqpdf.a)
   set(JPEG_LIB ${EXTERNALS_PREFIX_PATH}/lib/libjpeg.a)
 

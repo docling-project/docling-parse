@@ -1,20 +1,10 @@
-[tool.poetry]
+[project]
 name = "docling-parse"
-version = "4.0.5"
+version = "4.1.0"
 description = "Simple package to extract text with coordinates from programmatic PDFs"
-authors = ["Peter Staar <taa@zurich.ibm.com>"]
-maintainers = [
-    "Peter Staar <taa@zurich.ibm.com>",
-    "Christoph Auer <cau@zurich.ibm.com>",
-    "Michele Dolfi <dol@zurich.ibm.com>",
-    "Panos Vagenas <pva@zurich.ibm.com>",
-    "Maxim Lysak <mly@zurich.ibm.com>",
-]
-repository = "https://github.com/docling-project/docling-parse"
-homepage = "https://github.com/docling-project/docling-parse"
-keywords= ["docling", "pdf", "parser"]
+license = "MIT"
+keywords = ["docling", "pdf", "parser"]
 classifiers = [
-    "License :: OSI Approved :: MIT License",
     "Operating System :: MacOS :: MacOS X",
     "Operating System :: POSIX :: Linux",
     "Operating System :: Microsoft :: Windows",
@@ -24,61 +14,79 @@ classifiers = [
     "Programming Language :: C++",
     "Programming Language :: Python :: 3"
 ]
-license = "MIT"
 readme = "README.md"
-packages = [{include = "docling_parse"}]
-include = [
-    {path = "docling_parse/*.so", format = "wheel"},
-    {path = "docling_parse/*.pyd", format = "wheel"},
-    {path = "docling_parse/*.dll", format = "wheel"},
-    {path = "docling_parse/pdf_resources", format = ["sdist", "wheel"]},
-    {path = "docling_parse/pdf_resources", format = ["sdist", "wheel"]},
-    {path = "docling_parse/pdf_resources_v2", format = ["sdist", "wheel"]},
-    {path = "CMakeLists.txt", format = "sdist"},
-    {path = "build.py", format = "sdist"},
-    {path = "*.md", format = "sdist"},
-    {path = "poetry.lock", format = "sdist"},
-    {path = "app/*.cpp", format = "sdist"},
-    {path = "cmake/", format = "sdist"},
-    {path = "app/", format = "sdist"},
-    {path = "src/", format = "sdist"},
-    {path = "tests/", format = "sdist"},
+authors = [
+    {name = "Peter Staar", email = "taa@zurich.ibm.com"},
+    {name = "Christoph Auer", email = "cau@zurich.ibm.com"},
+    {name = "Michele Dolfi", email = "dol@zurich.ibm.com"},
+    {name = "Panos Vagenas", email = "pva@zurich.ibm.com"},
+    {name = "Maxim Lysak", email = "mly@zurich.ibm.com"},
 ]
-build = "build.py"
-
-[tool.poetry.dependencies]
-python = "^3.9"
-tabulate = ">=0.9.0,<1.0.0"
-pywin32 = { version = ">=305", markers = "sys_platform == 'win32'" }
-pillow = ">=10.0.0,<12.0.0"
-pydantic = "^2.0.0"
-docling-core = "^2.29.0"
-
-[tool.poetry.group.dev.dependencies]
-pytest = "^7.4.2"
-black = {extras = ["jupyter"], version = "^24.4.2"}
-python-semantic-release = "^7.32.2"
-pre-commit = "^3.7.1"
-isort = "^5.10.1"
-mypy = "^1.13.0"
-tqdm = "^4.67.0"
-boto = "^2.49.0"
-boto3 = "^1.35.67"
-autoflake = "^2.3.1"
-pytest-asyncio = "0.23.8"
-pybind11 = "^2.13.6"
-
-[tool.poetry.group.build.dependencies]
-cibuildwheel = "^2.19.2"
-wheel = "^0.43.0"
-delocate = "^0.11.0"
-
-[tool.poetry.group.test.dependencies]
-pytest = "^7.4.2"
+requires-python = ">=3.9"
+dependencies = [
+    "tabulate>=0.9.0,<1.0.0",
+    "pillow>=10.0.0,<12.0.0",
+    "pydantic>=2.0.0",
+    "docling-core>=2.29.0",
+    "pywin32>=305; sys_platform == 'win32'",
+]
+[project.urls]
+Homepage = "https://github.com/docling-project/docling-parse"
+Repository = "https://github.com/docling-project/docling-parse"
 
 [build-system]
-requires = ["poetry-core", "pybind11>=2.13.1"]
-build-backend = "poetry.core.masonry.api"
+requires = [
+    "setuptools>=77.0.3",
+    "pybind11>=2.13.6",
+    "cibuildwheel>=2.19.2,<3.0.0",
+    "wheel>=0.43.0,<1.0.0",
+    "delocate>=0.11.0,<1.0.0",
+    "cmake>=3.27.0,<4.0.0"
+]
+build-backend = "setuptools.build_meta"
+
+[dependency-groups]
+build = [
+    "setuptools>=77.0.3",
+    "pybind11>=2.13.6",
+    "cibuildwheel>=2.19.2,<3.0.0",
+    "wheel>=0.43.0,<1.0.0",
+    "delocate>=0.11.0,<1.0.0",
+    "cmake>=3.27.0,<4.0.0"
+]
+dev = [
+    "pytest>=7.4.2,<8.0.0",
+    "black[jupyter]>=24.4.2,<25.0.0",
+    "python-semantic-release>=7.32.2,<8.0.0",
+    "pre-commit>=3.7.1,<4.0.0",
+    "isort>=5.10.1,<6.0.0",
+    "mypy>=1.13.0,<2.0.0",
+    "tqdm>=4.67.0,<5.0.0",
+    "boto>=2.49.0,<3.0.0",
+    "boto3>=1.35.67,<2.0.0",
+    "autoflake>=2.3.1,<3.0.0",
+    "pytest-asyncio>=0.23.8",
+]
+[tool.uv]
+package = true
+default-groups = "all"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = [".", "docling_parse*"]
+include = ["docling_parse*"]
+
+[tool.setuptools.package-data]
+"docling_parse" = [
+    "*.so", "*.pyd", "*.dll",
+    "pdf_resources/*",
+    "pdf_resources_v2/*"
+]
+
+[tool.setuptools.exclude-package-data]
+"docling_parse" = ["*.pyc", "__pycache__"]
 
 [tool.black]
 line-length = 88
@@ -89,7 +97,7 @@ preview = true
 [tool.isort]
 profile = "black"
 line_length = 88
-py_version=310
+py_version = 310
 multi_line_output = 3
 include_trailing_comma = true
 
@@ -103,34 +111,22 @@ recursive = true
 
 [tool.mypy]
 pretty = true
-# strict = true
 no_implicit_optional = true
 namespace_packages = true
 show_error_codes = true
 python_version = "3.9"
-# plugins = ["pydantic.mypy"]
-
-#[mypy-docling_parse.*]
-#ignore_missing_imports = True
 
 [[tool.mypy.overrides]]
 module = [
     "tabulate.*",
     "botocore.*",
-    "boto3.*",
+    "boto3.*"
 ]
 ignore_missing_imports = true
 
-
 [tool.semantic_release]
-# for default values check:
-# https://github.com/python-semantic-release/python-semantic-release/blob/v7.32.2/semantic_release/defaults.cfg
-
 version_source = "tag_only"
 branch = "main"
-
-# configure types which should trigger minor and patch version bumps respectively
-# (note that they must be a subset of the configured allowed types):
 parser_angular_allowed_types = "build,chore,ci,docs,feat,fix,perf,style,refactor,test"
 parser_angular_minor_types = "feat"
 parser_angular_patch_types = "fix,perf"

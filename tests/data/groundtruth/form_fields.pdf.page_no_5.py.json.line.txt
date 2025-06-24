@@ -1,0 +1,143 @@
+(229.64, 752.15) (382.36, 752.15) (382.36, 763.38) (229.64, 763.38)       /TT1 Renseignements généraux
+(021.00, 730.14) (191.54, 730.14) (191.54, 740.43) (021.00, 740.43)       /TT1 Admissibilité au remboursement
+(021.00, 716.58) (257.77, 716.58) (257.77, 725.89) (021.00, 725.89)       /TT2 Vous pourriez obtenir un remboursement de la partie 
+(021.00, 705.58) (251.66, 705.58) (251.66, 714.89) (021.00, 714.89)       /TT2 provinciale de la TVH que vous avez payée sur des 
+(251.66, 705.57) (294.44, 705.57) (294.44, 714.92) (251.66, 714.92)       /TT1 produits 
+(021.00, 694.57) (078.25, 694.57) (078.25, 703.92) (021.00, 703.92)       /TT1 admissibles
+(078.25, 694.58) (091.03, 694.58) (091.03, 703.89) (078.25, 703.89)       /TT2  si 
+(091.03, 694.57) (121.03, 694.57) (121.03, 703.92) (091.03, 703.92)       /TT1 toutes
+(121.03, 694.58) (297.21, 694.58) (297.21, 703.89) (121.03, 703.89)       /TT2  les conditions suivantes sont remplies :
+(027.00, 676.61) (184.20, 677.11) (184.20, 686.42) (027.00, 685.92)       /TT2 ¥ Vous êtes un résident du Canada.
+(027.00, 661.61) (253.67, 662.11) (253.67, 671.42) (027.00, 670.92)       /TT2 ¥ Vous avez acheté les produits dans une province 
+(033.00, 651.11) (277.55, 651.11) (277.55, 660.42) (033.00, 660.42)       /TT2 participante et vous avez payé la TVH sur ces produits.
+(027.00, 634.61) (280.88, 635.11) (280.88, 644.42) (027.00, 643.92)       /TT2 ¥ Vous avez acheté les produits pour les consommer, les 
+(033.00, 624.11) (292.54, 624.11) (292.54, 633.42) (033.00, 633.42)       /TT2 utiliser ou les fournir exclusivement (généralement à 90 % 
+(033.00, 613.11) (245.00, 613.11) (245.00, 622.42) (033.00, 622.42)       /TT2 ou plus) à l'extérieur de la province participante.
+(027.00, 598.61) (246.12, 599.11) (246.12, 608.42) (027.00, 607.92)       /TT2 ¥ Vous avez transféré les produits d'une province 
+(033.00, 588.11) (280.92, 588.11) (280.92, 597.42) (033.00, 597.42)       /TT2 participante dans une autre province ou dans une autre 
+(033.00, 577.11) (287.02, 577.11) (287.02, 586.42) (033.00, 586.42)       /TT2 région du Canada dans les 30 jours suivant la date où ils 
+(033.00, 566.11) (299.25, 566.11) (299.25, 575.42) (033.00, 575.42)       /TT2 vous ont été livrés (toute période pendant laquelle les biens 
+(033.00, 555.11) (294.81, 555.11) (294.81, 564.42) (033.00, 564.42)       /TT2 étaient entreposés dans la province participante avant que 
+(033.00, 544.11) (284.46, 544.11) (284.46, 553.42) (033.00, 553.42)       /TT2 vous ne les retiriez n'est pas comptée dans les 30 jours).
+(027.00, 529.61) (282.00, 530.11) (282.00, 539.42) (027.00, 538.92)       /TT2 ¥ Vous avez payé les taxes provinciales applicables de la 
+(033.00, 519.11) (287.27, 519.11) (287.27, 528.42) (033.00, 528.42)       /TT2 province non participante ou de l'autre région du Canada 
+(033.00, 508.11) (181.41, 508.11) (181.41, 517.42) (033.00, 517.42)       /TT2 où les produits ont été transférés.
+(027.00, 493.61) (249.21, 494.58) (249.21, 503.89) (027.00, 502.92)       /TT2 ¥ Si vous êtes un consommateur du bien (sauf les 
+(249.21, 494.57) (297.57, 494.57) (297.57, 503.92) (249.21, 503.92)       /TT1 véhicules 
+(033.00, 483.57) (131.36, 483.57) (131.36, 492.92) (033.00, 492.92)       /TT1 à moteur déterminés
+(131.36, 483.58) (288.65, 483.58) (288.65, 492.89) (131.36, 492.89)       /TT2 ), vous résidez dans la province ou 
+(033.00, 472.58) (281.47, 472.58) (281.47, 481.89) (033.00, 481.89)       /TT2 autre région du Canada où vous avez apporté les biens.
+(027.00, 457.61) (030.50, 457.61) (030.50, 466.92) (027.00, 466.92)       /TT2 ¥
+(033.00, 458.57) (093.57, 458.57) (093.57, 467.92) (033.00, 467.92)       /TT1 Chaque reçu
+(093.57, 458.58) (273.65, 458.58) (273.65, 467.89) (093.57, 467.89)       /TT2  indique un montant minimum de la taxe 
+(033.00, 447.58) (113.59, 447.58) (113.59, 456.89) (033.00, 456.89)       /TT2 admissible de 5 $.
+(027.00, 430.61) (030.50, 430.61) (030.50, 439.92) (027.00, 439.92)       /TT2 ¥
+(033.00, 431.57) (206.91, 431.57) (206.91, 440.92) (033.00, 440.92)       /TT1 Le montant total du remboursement 
+(206.91, 431.58) (253.05, 431.58) (253.05, 440.89) (206.91, 440.89)       /TT2 de la taxe 
+(033.00, 420.58) (170.29, 420.58) (170.29, 429.89) (033.00, 429.89)       /TT2 admissible est de 25 $ ou plus.
+(021.00, 401.58) (039.90, 401.58) (039.90, 410.89) (021.00, 410.89)       /TT2 Les 
+(039.90, 401.57) (139.93, 401.57) (139.93, 410.92) (039.90, 410.92)       /TT1 produits admissibles
+(139.93, 401.58) (279.44, 401.58) (279.44, 410.89) (139.93, 410.89)       /TT2  comprennent tous les produits 
+(021.00, 390.58) (294.13, 390.58) (294.13, 399.89) (021.00, 399.89)       /TT2 sauf les produits soumis à l'accise tels que la bière, la liqueur 
+(021.00, 379.58) (267.77, 379.58) (267.77, 388.89) (021.00, 388.89)       /TT2 de malt, les spiritueux, le vin, le tabac, les cigarettes, le 
+(021.00, 368.58) (260.82, 368.58) (260.82, 377.89) (021.00, 377.89)       /TT2 cannabis et les produits de vapotage, ou l'essence, le 
+(021.00, 357.58) (181.88, 357.58) (181.88, 366.89) (021.00, 366.89)       /TT2 carburant diesel et d'autres types de
+(181.88, 357.57) (184.66, 357.57) (184.66, 366.92) (181.88, 366.92)       /TT1  
+(184.66, 357.58) (294.71, 357.58) (294.71, 366.89) (184.66, 366.89)       /TT2 carburants. Les produits 
+(021.00, 346.58) (076.01, 346.58) (076.01, 355.89) (021.00, 355.89)       /TT2 admissibles 
+(076.01, 346.57) (139.35, 346.57) (139.35, 355.92) (076.01, 355.92)       /TT1 comprennent
+(139.35, 346.58) (296.63, 346.58) (296.63, 355.89) (139.35, 355.89)       /TT2  les véhicules à moteur déterminés.
+(021.00, 329.58) (036.56, 329.58) (036.56, 338.89) (021.00, 338.89)       /TT2 Un 
+(036.56, 329.57) (172.16, 329.57) (172.16, 338.92) (036.56, 338.92)       /TT1 véhicule à moteur déterminé
+(172.16, 329.58) (284.99, 329.58) (284.99, 338.89) (172.16, 338.89)       /TT2  comprend la plupart des 
+(021.00, 318.58) (259.42, 318.58) (259.42, 327.89) (021.00, 327.89)       /TT2 véhicules à moteur, y compris la plupart des voitures, 
+(021.00, 307.58) (156.05, 307.58) (156.05, 316.89) (021.00, 316.89)       /TT2 tracteurs et motocyclettes. Un 
+(156.05, 307.57) (241.08, 307.57) (241.08, 316.92) (156.05, 316.92)       /TT1 véhicule à moteur
+(241.08, 307.58) (281.66, 307.58) (281.66, 316.89) (241.08, 316.89)       /TT2  désigne 
+(021.00, 296.58) (297.78, 296.58) (297.78, 305.89) (021.00, 305.89)       /TT2 tout véhicule qui doit être immatriculé dans votre province afin 
+(021.00, 285.58) (181.62, 285.58) (181.62, 294.89) (021.00, 294.89)       /TT2 de pouvoir être utilisé sur les routes.
+(021.00, 262.14) (220.28, 262.14) (220.28, 272.43) (021.00, 272.43)       /TT1 Documents à joindre à votre demande
+(021.00, 248.11) (283.34, 248.11) (283.34, 257.42) (021.00, 257.42)       /TT2 Joignez les renseignements et documents suivants à votre 
+(021.00, 237.11) (068.25, 237.11) (068.25, 246.42) (021.00, 246.42)       /TT2 demande :
+(027.00, 217.61) (211.98, 218.11) (211.98, 227.42) (027.00, 226.92)       /TT2 ¥ les copies des reçus pour chaque achat;
+(027.00, 202.61) (288.67, 203.11) (288.67, 212.42) (027.00, 211.92)       /TT2 ¥ la preuve de paiement des taxes provinciales applicables;
+(027.00, 187.61) (274.77, 188.11) (274.77, 197.42) (027.00, 196.92)       /TT2 ¥ si le produit admissible était entreposé, les copies des 
+(033.00, 177.11) (236.68, 177.11) (236.68, 186.42) (033.00, 186.42)       /TT2 reçus afin de justifier la date de l'entreposage.
+(027.00, 160.61) (268.91, 161.11) (268.91, 170.42) (027.00, 169.92)       /TT2 ¥ dans le cas d'un véhicule à moteur déterminé qui est 
+(033.00, 150.11) (234.20, 150.11) (234.20, 159.42) (033.00, 159.42)       /TT2 immatriculé dans une province, une copie de 
+(033.00, 139.11) (287.23, 139.11) (287.23, 148.42) (033.00, 148.42)       /TT2 l'immatriculation du véhicule de la province dans laquelle 
+(033.00, 128.11) (143.61, 128.11) (143.61, 137.42) (033.00, 137.42)       /TT2 le véhicule a été introduit
+(021.00, 110.58) (275.02, 110.58) (275.02, 119.89) (021.00, 119.89)       /TT2 Votre demande de remboursement peut être retardée ou 
+(021.00, 099.58) (282.79, 099.58) (282.79, 108.89) (021.00, 108.89)       /TT2 refusée si les documents requis ne sont pas envoyés avec 
+(021.00, 088.58) (090.48, 088.58) (090.48, 097.89) (021.00, 097.89)       /TT2 votre demande.
+(027.00, 071.57) (078.68, 071.57) (078.68, 080.92) (027.00, 080.92)       /TT1 Remarque 
+(027.00, 060.58) (288.78, 060.58) (288.78, 069.89) (027.00, 069.89)       /TT2 Les reçus et les documents justificatifs envoyés avec cette 
+(027.00, 049.58) (158.17, 049.58) (158.17, 058.89) (027.00, 058.89)       /TT2 demande de remboursement 
+(158.17, 049.57) (252.09, 049.57) (252.09, 058.92) (158.17, 058.92)       /TT1 ne vous seront pas 
+(027.00, 038.58) (074.80, 038.58) (074.80, 047.89) (027.00, 047.89)       /TT2 retournés. 
+(074.80, 038.57) (143.87, 038.57) (143.87, 047.92) (074.80, 047.92)       /TT1 N'envoyez pas
+(143.87, 038.58) (232.79, 038.58) (232.79, 047.89) (143.87, 047.89)       /TT2  les reçus originaux.
+(315.00, 730.14) (417.69, 730.14) (417.69, 740.43) (315.00, 740.43)       /TT1 Délai de production
+(315.00, 716.11) (586.80, 716.11) (586.80, 725.42) (315.00, 725.42)       /TT2 Vous devez demander ce remboursement au plus tard un an 
+(315.00, 705.11) (592.33, 705.11) (592.33, 714.42) (315.00, 714.42)       /TT2 suivant le jour où vous avez transféré les produits admissibles 
+(315.00, 694.11) (434.50, 694.11) (434.50, 703.42) (315.00, 703.42)       /TT2 de la province participante.
+(315.00, 673.14) (448.85, 673.14) (448.85, 683.43) (315.00, 683.43)       /TT1 Restriction de production
+(315.00, 659.58) (587.32, 659.58) (587.32, 668.89) (315.00, 668.89)       /TT2 Si vous êtes un particulier (y compris un propriétaire unique), 
+(315.00, 648.58) (552.60, 648.58) (552.60, 657.89) (315.00, 657.89)       /TT2 vous ne pouvez soumettre qu'une seule demande de 
+(315.00, 637.58) (549.76, 637.58) (549.76, 646.89) (315.00, 646.89)       /TT2 remboursement au cours d'un trimestre civil. Si vous 
+(549.76, 637.57) (581.04, 637.57) (581.04, 646.92) (549.76, 646.92)       /TT1 n'êtes 
+(315.00, 626.57) (332.23, 626.57) (332.23, 635.92) (315.00, 635.92)       /TT1 pas
+(332.23, 626.58) (584.58, 626.58) (584.58, 635.89) (332.23, 635.89)       /TT2  un particulier ou un propriétaire unique, vous ne pouvez 
+(315.00, 615.58) (593.71, 615.58) (593.71, 624.89) (315.00, 624.89)       /TT2 soumettre qu'une seule demande de remboursement au cours 
+(315.00, 604.58) (379.70, 604.58) (379.70, 613.89) (315.00, 613.89)       /TT2 d'un mois civil.
+(315.00, 587.11) (575.67, 587.11) (575.67, 596.42) (315.00, 596.42)       /TT2 Si vous désirez produire une demande de remboursement 
+(315.00, 576.11) (577.04, 576.11) (577.04, 585.42) (315.00, 585.42)       /TT2 pour plus d'une visite dans une province participante, vous 
+(315.00, 565.11) (550.08, 565.11) (550.08, 574.42) (315.00, 574.42)       /TT2 devez combiner vos visites sur un seul formulaire de 
+(315.00, 554.11) (359.47, 554.11) (359.47, 563.42) (315.00, 563.42)       /TT2 demande.
+(315.00, 532.14) (472.72, 532.14) (472.72, 542.43) (315.00, 542.43)       /TT1 Remplir ce formulaire en ligne
+(315.00, 518.58) (580.11, 518.58) (580.11, 527.89) (315.00, 527.89)       /TT2 Si vous êtes un inscrit à la TPS/TVH, vous pouvez produire 
+(315.00, 507.58) (570.12, 507.58) (570.12, 516.89) (315.00, 516.89)       /TT2 votre demande de remboursement en ligne en utilisant le 
+(315.00, 496.58) (575.10, 496.58) (575.10, 505.89) (315.00, 505.89)       /TT2 service ˙ Produire un remboursement ¨ dans Mon dossier 
+(315.00, 485.58) (378.05, 485.58) (378.05, 494.89) (315.00, 494.89)       /TT2 d'entreprise à 
+(378.05, 485.57) (559.22, 485.57) (559.22, 494.92) (378.05, 494.92)       /TT1 canada.ca/mon-dossier-entreprise-arc
+(559.22, 485.58) (575.90, 485.58) (575.90, 494.89) (559.22, 494.89)       /TT2  ou 
+(315.00, 474.58) (421.16, 474.58) (421.16, 483.89) (315.00, 483.89)       /TT2 Représenter un client à 
+(421.16, 474.57) (574.54, 474.57) (574.54, 483.92) (421.16, 483.92)       /TT1 canada.ca/impots-representants
+(574.54, 474.58) (577.32, 474.58) (577.32, 483.89) (574.54, 483.89)       /TT2 .
+(315.00, 455.58) (558.44, 455.58) (558.44, 464.89) (315.00, 464.89)       /TT2 Si vous êtes un particulier, vous pouvez produire votre 
+(315.00, 444.58) (593.45, 444.58) (593.45, 453.89) (315.00, 453.89)       /TT2 demande de remboursement en ligne en utilisant Mon Dossier 
+(315.00, 433.58) (323.34, 433.58) (323.34, 442.89) (315.00, 442.89)       /TT2 à 
+(323.34, 433.57) (434.49, 433.57) (434.49, 442.92) (323.34, 442.92)       /TT1 canada.ca/mon-dossier
+(434.49, 433.58) (437.27, 433.58) (437.27, 442.89) (434.49, 442.89)       /TT2 .
+(315.00, 416.58) (593.46, 416.58) (593.46, 425.89) (315.00, 425.89)       /TT2 Si vous produisez votre demande de remboursement en ligne, 
+(315.00, 405.58) (370.27, 405.58) (370.27, 414.89) (315.00, 414.89)       /TT2 vous n'avez 
+(370.27, 405.57) (387.50, 405.57) (387.50, 414.92) (370.27, 414.92)       /TT1 pas
+(387.50, 405.58) (570.38, 405.58) (570.38, 414.89) (387.50, 414.89)       /TT2  besoin de produire une demande papier.
+(315.00, 382.14) (546.69, 382.14) (546.69, 392.43) (315.00, 392.43)       /TT1 Où envoyer ce formulaire si vous produisez 
+(315.00, 370.14) (421.98, 370.14) (421.98, 380.43) (315.00, 380.43)       /TT1 une demande papier
+(315.00, 356.11) (490.09, 356.11) (490.09, 365.42) (315.00, 365.42)       /TT2 Envoyer votre demande par la poste à :
+(345.00, 338.57) (573.40, 338.57) (573.40, 347.92) (345.00, 347.92)       /TT1 Traitement des remboursements de la TPS/TVH 
+(345.00, 327.57) (479.08, 327.57) (479.08, 336.92) (345.00, 336.92)       /TT1 Centre fiscal de l'Atlantique 
+(345.00, 316.57) (432.26, 316.57) (432.26, 325.92) (345.00, 325.92)       /TT1 275, chemin Pope 
+(345.00, 305.57) (467.82, 305.57) (467.82, 314.92) (345.00, 314.92)       /TT1 Summerside PE  C1N 6C6
+(315.00, 283.62) (409.76, 283.62) (409.76, 293.91) (315.00, 293.91)       /TT1 Livres et registres
+(315.00, 269.58) (582.88, 269.58) (582.88, 278.89) (315.00, 278.89)       /TT2 Vous devez conserver les documents originaux et les livres, 
+(315.00, 258.58) (577.89, 258.58) (577.89, 267.89) (315.00, 267.89)       /TT2 registres et factures qui se rapportent à ce remboursement 
+(315.00, 247.58) (407.28, 247.58) (407.28, 256.89) (315.00, 256.89)       /TT2 pour une période de 
+(407.28, 247.57) (421.18, 247.57) (421.18, 256.92) (407.28, 256.92)       /TT1 six
+(421.18, 247.58) (558.17, 247.58) (558.17, 256.89) (421.18, 256.89)       /TT2  ans suivant la fin de l'année à 
+(315.00, 236.58) (575.12, 236.58) (575.12, 245.89) (315.00, 245.89)       /TT2 laquelle ils se rapportent, puisque ce remboursement peut 
+(315.00, 225.58) (537.82, 225.58) (537.82, 234.89) (315.00, 234.89)       /TT2 faire l'objet d'une vérification à une date ultérieure.
+(315.00, 202.14) (453.95, 202.14) (453.95, 212.43) (315.00, 212.43)       /TT1 Si vous avez besoin d'aide
+(315.00, 188.58) (437.83, 188.58) (437.83, 197.89) (315.00, 197.89)       /TT2 Pour en savoir plus, allez à 
+(437.83, 188.57) (525.08, 188.57) (525.08, 197.92) (437.83, 197.92)       /TT1 canada.ca/tps-tvh 
+(525.08, 188.58) (587.33, 188.58) (587.33, 197.89) (525.08, 197.89)       /TT2 ou composez 
+(315.00, 177.58) (322.78, 177.58) (322.78, 186.89) (315.00, 186.89)       /TT2 le
+(322.78, 177.57) (396.71, 177.57) (396.71, 186.92) (322.78, 186.92)       /TT1  1-800-959-7775
+(396.71, 177.58) (399.49, 177.58) (399.49, 186.89) (396.71, 186.89)       /TT2 .
+(315.00, 158.58) (538.98, 158.58) (538.98, 167.89) (315.00, 167.89)       /TT2 Pour obtenir nos formulaires et publications, allez  
+(315.00, 147.58) (323.34, 147.58) (323.34, 156.89) (315.00, 156.89)       /TT2 à 
+(323.34, 147.57) (472.82, 147.57) (472.82, 156.92) (323.34, 156.92)       /TT1 canada.ca/publications-tps-tvh.
+(021.00, 019.09) (074.35, 019.09) (074.35, 026.54) (021.00, 026.54)       /TT2 GST495 F (24)
+(547.86, 019.46) (591.00, 019.46) (591.00, 026.91) (547.86, 026.91)       /TT2 Page 5 de 5
+(495.00, 774.00) (591.00, 774.00) (591.00, 789.00) (495.00, 789.00)  Form-font /Off

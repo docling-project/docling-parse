@@ -5609,8 +5609,8 @@
         "r_y3": 691.803,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "!",
-      "orig": "!",
+      "text": "\u00d7",
+      "orig": "\u00d7",
       "text_direction": "left_to_right",
       "confidence": 1.0,
       "from_ocr": false,
@@ -7726,8 +7726,8 @@
         "r_y3": 658.805,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "!",
-      "orig": "!",
+      "text": "\u00d7",
+      "orig": "\u00d7",
       "text_direction": "left_to_right",
       "confidence": 1.0,
       "from_ocr": false,
@@ -15208,8 +15208,8 @@
         "r_y3": 586.802,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "!",
-      "orig": "!",
+      "text": "\u00d7",
+      "orig": "\u00d7",
       "text_direction": "left_to_right",
       "confidence": 1.0,
       "from_ocr": false,
@@ -77821,8 +77821,8 @@
         "r_y3": 691.803,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "!",
-      "orig": "!",
+      "text": "\u00d7",
+      "orig": "\u00d7",
       "text_direction": "left_to_right",
       "confidence": 1.0,
       "from_ocr": false,
@@ -78401,8 +78401,8 @@
         "r_y3": 658.805,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "!",
-      "orig": "!",
+      "text": "\u00d7",
+      "orig": "\u00d7",
       "text_direction": "left_to_right",
       "confidence": 1.0,
       "from_ocr": false,
@@ -79938,8 +79938,8 @@
         "r_y3": 586.802,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "!",
-      "orig": "!",
+      "text": "\u00d7",
+      "orig": "\u00d7",
       "text_direction": "left_to_right",
       "confidence": 1.0,
       "from_ocr": false,
@@ -90119,8 +90119,8 @@
         "r_y3": 691.803,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "!",
-      "orig": "!",
+      "text": "\u00d7",
+      "orig": "\u00d7",
       "text_direction": "left_to_right",
       "confidence": 1.0,
       "from_ocr": false,
@@ -90140,16 +90140,16 @@
       "rect": {
         "r_x0": 426.77,
         "r_y0": 680.857,
-        "r_x1": 446.23,
-        "r_y1": 680.857,
-        "r_x2": 446.23,
-        "r_y2": 690.169,
+        "r_x1": 458.004,
+        "r_y1": 680.629,
+        "r_x2": 458.004,
+        "r_y2": 691.803,
         "r_x3": 426.77,
         "r_y3": 690.169,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "8/13",
-      "orig": "8/13",
+      "text": "8/13 =",
+      "orig": "8/13 =",
       "text_direction": "left_to_right",
       "confidence": 1.0,
       "from_ocr": false,
@@ -90160,35 +90160,6 @@
     },
     {
       "index": 10,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 450.996,
-        "r_y0": 680.629,
-        "r_x1": 458.004,
-        "r_y1": 680.629,
-        "r_x2": 458.004,
-        "r_y2": 691.803,
-        "r_x3": 450.996,
-        "r_y3": 691.803,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "=",
-      "orig": "=",
-      "text_direction": "left_to_right",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/TT2",
-      "font_name": "/AAAAAC+Helvetica"
-    },
-    {
-      "index": 11,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -90217,7 +90188,7 @@
       "font_name": "/AAAAAC+Helvetica"
     },
     {
-      "index": 12,
+      "index": 11,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -90246,7 +90217,7 @@
       "font_name": "/AAAAAB+Helvetica-Bold"
     },
     {
-      "index": 13,
+      "index": 12,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -90275,7 +90246,7 @@
       "font_name": "/AAAAAC+Helvetica"
     },
     {
-      "index": 14,
+      "index": 13,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -90304,7 +90275,7 @@
       "font_name": "/AAAAAC+Helvetica"
     },
     {
-      "index": 15,
+      "index": 14,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -90333,7 +90304,7 @@
       "font_name": "/AAAAAC+Helvetica"
     },
     {
-      "index": 16,
+      "index": 15,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -90351,8 +90322,8 @@
         "r_y3": 658.805,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "!",
-      "orig": "!",
+      "text": "\u00d7",
+      "orig": "\u00d7",
       "text_direction": "left_to_right",
       "confidence": 1.0,
       "from_ocr": false,
@@ -90362,7 +90333,7 @@
       "font_name": "/AAAAAD+Helvetica"
     },
     {
-      "index": 17,
+      "index": 16,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -90391,7 +90362,7 @@
       "font_name": "/AAAAAC+Helvetica"
     },
     {
-      "index": 18,
+      "index": 17,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -90420,7 +90391,7 @@
       "font_name": "/AAAAAC+Helvetica"
     },
     {
-      "index": 19,
+      "index": 18,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -90449,7 +90420,7 @@
       "font_name": "/AAAAAB+Helvetica-Bold"
     },
     {
-      "index": 20,
+      "index": 19,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -90478,7 +90449,7 @@
       "font_name": "/AAAAAB+Helvetica-Bold"
     },
     {
-      "index": 21,
+      "index": 20,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -90507,7 +90478,7 @@
       "font_name": "/AAAAAC+Helvetica"
     },
     {
-      "index": 22,
+      "index": 21,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -90536,7 +90507,7 @@
       "font_name": "/AAAAAC+Helvetica"
     },
     {
-      "index": 23,
+      "index": 22,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -90565,7 +90536,7 @@
       "font_name": "/AAAAAC+Helvetica"
     },
     {
-      "index": 24,
+      "index": 23,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -90594,7 +90565,7 @@
       "font_name": "/AAAAAC+Helvetica"
     },
     {
-      "index": 25,
+      "index": 24,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -90612,8 +90583,8 @@
         "r_y3": 586.802,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "!",
-      "orig": "!",
+      "text": "\u00d7",
+      "orig": "\u00d7",
       "text_direction": "left_to_right",
       "confidence": 1.0,
       "from_ocr": false,
@@ -90623,7 +90594,7 @@
       "font_name": "/AAAAAD+Helvetica"
     },
     {
-      "index": 26,
+      "index": 25,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -90633,45 +90604,16 @@
       "rect": {
         "r_x0": 426.77,
         "r_y0": 575.856,
-        "r_x1": 446.23,
-        "r_y1": 575.856,
-        "r_x2": 446.23,
-        "r_y2": 585.168,
-        "r_x3": 426.77,
-        "r_y3": 585.168,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "2/15",
-      "orig": "2/15",
-      "text_direction": "left_to_right",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": -1,
-      "widget": false,
-      "font_key": "/TT2",
-      "font_name": "/AAAAAC+Helvetica"
-    },
-    {
-      "index": 27,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 450.996,
-        "r_y0": 575.628,
         "r_x1": 458.004,
         "r_y1": 575.628,
         "r_x2": 458.004,
         "r_y2": 586.802,
-        "r_x3": 450.996,
-        "r_y3": 586.802,
+        "r_x3": 426.77,
+        "r_y3": 585.168,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "=",
-      "orig": "=",
+      "text": "2/15 =",
+      "orig": "2/15 =",
       "text_direction": "left_to_right",
       "confidence": 1.0,
       "from_ocr": false,
@@ -90681,7 +90623,7 @@
       "font_name": "/AAAAAC+Helvetica"
     },
     {
-      "index": 28,
+      "index": 26,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -90710,7 +90652,7 @@
       "font_name": "/AAAAAC+Helvetica"
     },
     {
-      "index": 29,
+      "index": 27,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -90739,7 +90681,7 @@
       "font_name": "/AAAAAB+Helvetica-Bold"
     },
     {
-      "index": 30,
+      "index": 28,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -90768,7 +90710,7 @@
       "font_name": "/AAAAAC+Helvetica"
     },
     {
-      "index": 31,
+      "index": 29,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -90797,7 +90739,7 @@
       "font_name": "/AAAAAB+Helvetica-Bold"
     },
     {
-      "index": 32,
+      "index": 30,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -90826,7 +90768,7 @@
       "font_name": "/AAAAAC+Helvetica"
     },
     {
-      "index": 33,
+      "index": 31,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -90855,7 +90797,7 @@
       "font_name": "/AAAAAB+Helvetica-Bold"
     },
     {
-      "index": 34,
+      "index": 32,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -90884,7 +90826,7 @@
       "font_name": "/AAAAAC+Helvetica"
     },
     {
-      "index": 35,
+      "index": 33,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -90913,7 +90855,7 @@
       "font_name": "/AAAAAC+Helvetica"
     },
     {
-      "index": 36,
+      "index": 34,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -90942,7 +90884,7 @@
       "font_name": "/AAAAAC+Helvetica"
     },
     {
-      "index": 37,
+      "index": 35,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -90971,7 +90913,7 @@
       "font_name": "/AAAAAB+Helvetica-Bold"
     },
     {
-      "index": 38,
+      "index": 36,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -91000,7 +90942,7 @@
       "font_name": "/AAAAAC+Helvetica"
     },
     {
-      "index": 39,
+      "index": 37,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -91029,7 +90971,7 @@
       "font_name": "/AAAAAC+Helvetica"
     },
     {
-      "index": 40,
+      "index": 38,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -91058,7 +91000,7 @@
       "font_name": "/AAAAAC+Helvetica"
     },
     {
-      "index": 41,
+      "index": 39,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -91087,7 +91029,7 @@
       "font_name": "/AAAAAC+Helvetica"
     },
     {
-      "index": 42,
+      "index": 40,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -91116,7 +91058,7 @@
       "font_name": "/AAAAAC+Helvetica"
     },
     {
-      "index": 43,
+      "index": 41,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -91145,7 +91087,7 @@
       "font_name": "/AAAAAC+Helvetica"
     },
     {
-      "index": 44,
+      "index": 42,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -91174,7 +91116,7 @@
       "font_name": "/AAAAAC+Helvetica"
     },
     {
-      "index": 45,
+      "index": 43,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -91203,7 +91145,7 @@
       "font_name": "/AAAAAC+Helvetica"
     },
     {
-      "index": 46,
+      "index": 44,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -91232,7 +91174,7 @@
       "font_name": "/AAAAAC+Helvetica"
     },
     {
-      "index": 47,
+      "index": 45,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -91261,7 +91203,7 @@
       "font_name": "/AAAAAC+Helvetica"
     },
     {
-      "index": 48,
+      "index": 46,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -91290,7 +91232,7 @@
       "font_name": "/AAAAAC+Helvetica"
     },
     {
-      "index": 49,
+      "index": 47,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -91319,7 +91261,7 @@
       "font_name": "/AAAAAC+Helvetica"
     },
     {
-      "index": 50,
+      "index": 48,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -91348,7 +91290,7 @@
       "font_name": "/AAAAAC+Helvetica"
     },
     {
-      "index": 51,
+      "index": 49,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -91377,7 +91319,7 @@
       "font_name": "/AAAAAC+Helvetica"
     },
     {
-      "index": 52,
+      "index": 50,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -91406,7 +91348,7 @@
       "font_name": "/AAAAAC+Helvetica"
     },
     {
-      "index": 53,
+      "index": 51,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -91435,7 +91377,7 @@
       "font_name": "/AAAAAC+Helvetica"
     },
     {
-      "index": 54,
+      "index": 52,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -91464,7 +91406,7 @@
       "font_name": "/AAAAAC+Helvetica"
     },
     {
-      "index": 55,
+      "index": 53,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -91493,7 +91435,7 @@
       "font_name": "/AAAAAC+Helvetica"
     },
     {
-      "index": 56,
+      "index": 54,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -91522,7 +91464,7 @@
       "font_name": "/AAAAAC+Helvetica"
     },
     {
-      "index": 57,
+      "index": 55,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -91551,7 +91493,7 @@
       "font_name": "/AAAAAC+Helvetica"
     },
     {
-      "index": 58,
+      "index": 56,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -91580,7 +91522,7 @@
       "font_name": "/AAAAAC+Helvetica"
     },
     {
-      "index": 59,
+      "index": 57,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -91609,7 +91551,7 @@
       "font_name": "/AAAAAB+Helvetica-Bold"
     },
     {
-      "index": 60,
+      "index": 58,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -91638,7 +91580,7 @@
       "font_name": "/AAAAAC+Helvetica"
     },
     {
-      "index": 61,
+      "index": 59,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -91667,7 +91609,7 @@
       "font_name": "/AAAAAC+Helvetica"
     },
     {
-      "index": 62,
+      "index": 60,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -91696,7 +91638,7 @@
       "font_name": "/AAAAAC+Helvetica"
     },
     {
-      "index": 63,
+      "index": 61,
       "rgba": {
         "r": 0,
         "g": 0,

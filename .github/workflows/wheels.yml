@@ -12,19 +12,18 @@ env:
 jobs:
   build_sdist:
     name: Build sdist artifacts
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Setup Python
-        uses: actions/setup-python@v5
-      - name: Install poetry
+      - name: Install uv and set the python version
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Build sdist
         run: |
-          pipx install poetry
-      - name: Build sdit
-        run: |
-          poetry build -f sdist
+          uv build
           ls ./dist
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -44,11 +43,11 @@ jobs:
         python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
 
         os:
-          - name: "ubuntu-22.04"
+          - name: "ubuntu-24.04"
             platform: "linux"
             platform_id: "manylinux_x86_64"
 
-          - name: "ubuntu-22.04-arm"
+          - name: "ubuntu-24.04-arm"
             platform: "linux"
             platform_id: "manylinux_aarch64"
 
@@ -70,23 +69,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - name: Install uv and set the python version
+        uses: astral-sh/setup-uv@v5
         id: py
         with:
           python-version: ${{ matrix.python-version }}
-          update-environment: false
-
-      - name: Install Poetry
-        run: |
-          which python
-          python --version
-          which python3
-          python3 --version
-          echo "pythonpath: ${{ steps.py.outputs.python-path }}"
-          ${{ steps.py.outputs.python-path }} --version
-          pipx install poetry==1.8.4
-          poetry env use ${{ steps.py.outputs.python-path }}
 
       - name: Set up custom PATH and set py version to cpXYZ [windows]
         if: ${{matrix.os.platform_id == 'win_amd64'}}
@@ -124,32 +111,33 @@ jobs:
           BUILD_THREADS: "4"
           PYTORCH_MPS_HIGH_WATERMARK_RATIO: "0.0"
         run: |
-          PY_CACHE_TAG=$(poetry run python -c 'import sys;print(sys.implementation.cache_tag)')
+          PY_CACHE_TAG=$(uv run python -c 'import sys;print(sys.implementation.cache_tag)')
           echo "Building wheel ${CIBW_BUILD} ${{ env.CIBW_BUILD }}"
           echo "Building cp: ${{ env.python_cp_version }}"
           echo "Building cache_tag: ${PY_CACHE_TAG}"
           echo "Building platform_id: ${{ matrix.os.platform_id }}"
-          poetry run python --version
-          poetry run python --version | grep ${{ matrix.python-version }} 
-          poetry install --no-root --only=build
+          uv run python --version
+          uv run python --version | grep ${{ matrix.python-version }} 
           cat ./pyproject.toml
-          poetry run python -m cibuildwheel --output-dir wheelhouse
+          uv pip install --group build
+          rm -rf ./build || true
+          python -m cibuildwheel --output-dir ./wheelhouse
           echo "step 1"
           ls -l wheelhouse
-          poetry run wheel tags --remove --platform-tag macosx_${{ matrix.os.min_macos_version }}_0_x86_64 ./wheelhouse/*.whl
+          uv run wheel tags --remove --platform-tag macosx_${{ matrix.os.min_macos_version }}_0_x86_64 ./wheelhouse/*.whl
           rm -f ./wheelhouse/*arm64.whl
           echo "step 2"
           ls -l wheelhouse
-          poetry run delocate-wheel --require-archs x86_64 -v ./wheelhouse/*.whl
+          uv run delocate-wheel --require-archs x86_64 -v ./wheelhouse/*.whl
           echo "step 3"
           ls -l wheelhouse
           for file in ./wheelhouse/*.whl; do
             echo "Inspecting $file"
-            poetry run python -m zipfile --list "$file"
+            uv run python -m zipfile --list "$file"
             echo "Checking if .so is contained in the wheel"
-            poetry run python -m zipfile --list "$file" | grep \\.so
+            uv run python -m zipfile --list "$file" | grep \\.so
             echo "Checking if the correct python version is contained in the wheel"
-            poetry run python -m zipfile --list "$file" | grep ${PY_CACHE_TAG}
+            uv run python -m zipfile --list "$file" | grep ${PY_CACHE_TAG}
           done
           mkdir -p ./dist
           cp wheelhouse/*.whl ./dist/
@@ -175,32 +163,33 @@ jobs:
           PYTORCH_MPS_HIGH_WATERMARK_RATIO: "0.0"
           CUDA_VISIBLE_DEVICES: "cpu"
         run: |
-          PY_CACHE_TAG=$(poetry run python -c 'import sys;print(sys.implementation.cache_tag)')
+          PY_CACHE_TAG=$(uv run python -c 'import sys;print(sys.implementation.cache_tag)')
           echo "Building wheel ${CIBW_BUILD} ${{ env.CIBW_BUILD }}"
           echo "Building cp: ${{ env.python_cp_version }}"
           echo "Building cache_tag: ${PY_CACHE_TAG}"
           echo "Building platform_id: ${{ matrix.os.platform_id }}"
-          poetry run python --version
-          poetry run python --version | grep ${{ matrix.python-version }} 
-          poetry install --no-root --only=build
+          uv run python --version
+          uv run python --version | grep ${{ matrix.python-version }} 
           cat ./pyproject.toml
-          poetry run python -m cibuildwheel --output-dir wheelhouse
+          uv pip install --group build
+          rm -rf ./build || true
+          python -m cibuildwheel --output-dir ./wheelhouse
           echo "step 1"
           ls -l wheelhouse
-          poetry run wheel tags --remove --platform-tag macosx_${{ matrix.os.min_macos_version }}_0_arm64 ./wheelhouse/*.whl
+          uv run wheel tags --remove --platform-tag macosx_${{ matrix.os.min_macos_version }}_0_arm64 ./wheelhouse/*.whl
           rm -f ./wheelhouse/*x86_64.whl
           echo "step 2"
           ls -l wheelhouse
-          poetry run delocate-wheel --require-archs arm64 -v ./wheelhouse/*.whl
+          uv run delocate-wheel --require-archs arm64 -v ./wheelhouse/*.whl
           echo "step 3"
           ls -l wheelhouse
           for file in ./wheelhouse/*.whl; do
             echo "Inspecting $file"
-            poetry run python -m zipfile --list "$file"
+            uv run python -m zipfile --list "$file"
             echo "Checking if .so is contained in the wheel"
-            poetry run python -m zipfile --list "$file" | grep \\.so
+            uv run python -m zipfile --list "$file" | grep \\.so
             echo "Checking if the correct python version is contained in the wheel"
-            poetry run python -m zipfile --list "$file" | grep ${PY_CACHE_TAG}
+            uv run python -m zipfile --list "$file" | grep ${PY_CACHE_TAG}
           done
           mkdir -p ./dist
           cp wheelhouse/*.whl ./dist/
@@ -222,23 +211,24 @@ jobs:
           CIBW_BUILD_VERBOSITY: 3
           BUILD_THREADS: "8"
         run: |
-          PY_CACHE_TAG=$(poetry run python -c 'import sys;print(sys.implementation.cache_tag)')
+          PY_CACHE_TAG=$(uv run python -c 'import sys;print(sys.implementation.cache_tag)')
           echo "Building cp: ${{ env.python_cp_version }}"
           echo "Building cache_tag: ${PY_CACHE_TAG}"
           echo "Building platform_id: ${{ matrix.os.platform_id }}"
-          poetry run python --version
-          poetry run python --version | grep ${{ matrix.python-version }} 
-          poetry install --no-root --only=build
+          uv run python --version
+          uv run python --version | grep ${{ matrix.python-version }} 
           cat ./pyproject.toml
-          poetry run python -m cibuildwheel --output-dir ./wheelhouse
+          uv pip install --group build
+          rm -rf ./build || true
+          python -m cibuildwheel --output-dir ./wheelhouse
           ls -l ./wheelhouse
           for file in ./wheelhouse/*.whl; do
             echo "Inspecting $file"
-            poetry run python -m zipfile --list "$file"
+            uv run python -m zipfile --list "$file"
             echo "Checking if .so is contained in the wheel"
-            poetry run python -m zipfile --list "$file" | grep \\.so
+            uv run python -m zipfile --list "$file" | grep \\.so
             echo "Checking if the correct python version is contained in the wheel"
-            poetry run python -m zipfile --list "$file" | grep ${PY_CACHE_TAG}
+            uv run python -m zipfile --list "$file" | grep ${PY_CACHE_TAG}
           done
           mkdir -p ./dist
           cp wheelhouse/*.whl ./dist/
@@ -269,7 +259,11 @@ jobs:
         shell: pwsh
         run: |
           New-Item -Path 'C:\nasm' -ItemType Directory -Force
-          Invoke-WebRequest -Uri 'https://fossies.org/windows/misc/nasm-2.16.03-win64.zip/nasm-2.16.03/nasm.exe' -OutFile 'C:\nasm\nasm.exe'
+          Invoke-WebRequest -Uri 'https://www.nasm.us/pub/nasm/releasebuilds/2.16.03/win64/nasm-2.16.03-win64.zip' -OutFile 'C:\nasm-2.16.03-win64.zip'
+          Expand-Archive -Path 'C:\nasm-2.16.03-win64.zip' -DestinationPath 'C:\nasm-temp' -Force
+          Copy-Item -Path 'C:\nasm-temp\nasm-2.16.03\nasm.exe' -Destination 'C:\nasm\nasm.exe'
+          Remove-Item -Path 'C:\nasm-2.16.03-win64.zip' -Force
+          Remove-Item -Path 'C:\nasm-temp' -Recurse -Force
           nasm -v
 
       - name: Build wheels
@@ -289,15 +283,20 @@ jobs:
           ASM_NASM: "C:/nasm/nasm.exe"
         shell: pwsh
         run: |
-          Remove-Item -Recurse -Force "C:\Strawberry\"
+          if (Test-Path "C:\Strawberry\") {
+              Remove-Item -Recurse -Force "C:\Strawberry\"
+          }
           $env:CMAKE_ARGS = "-DZLIB_LIBRARY=C:/windows-libs/external-libs/lib-mingw64/libz.a -DZLIB_INCLUDE_DIR=C:/windows-libs/external-libs/include -DJPEG_LIBRARY=C:/windows-libs/external-libs/lib-mingw64/libjpeg.a -DJPEG_INCLUDE_DIR=C:/windows-libs/external-libs/include"
-          poetry install --no-interaction --no-root --only=build
-          poetry run python -m cibuildwheel --output-dir .\wheelhouse
+          uv pip install --group build
+          if (Test-Path ".\build") {
+              Remove-Item -Recurse -Force ".\build"
+          }
+          uv run python -m cibuildwheel --output-dir .\wheelhouse
           Get-ChildItem -Path .\wheelhouse -Filter *.whl | Format-List
           Get-ChildItem -Path .\wheelhouse -Filter *.whl | ForEach-Object {
               $file = $_.FullName
               Write-Output "Inspecting $file"
-              poetry run python -m zipfile --list "$file"
+              uv run python -m zipfile --list "$file"
           }
           if (-not (Test-Path -Path .\dist)) {
               New-Item -Path .\dist -ItemType Directory
@@ -317,7 +316,7 @@ jobs:
     needs:
       - build_sdist
       - build_wheels
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment:
       name: pypi
       url: https://pypi.org/p/docling-parse

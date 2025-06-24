@@ -19,8 +19,8 @@ else()
     include(CMakeParseArguments)
 
     set(UTF8_URL https://github.com/nemtrif/utfcpp.git)
-    set(UTF8_TAG v4.0.5)
-
+    # set(UTF8_TAG v4.0.5)
+    set(UTF8_TAG v4.0.6)
     ExternalProject_Add(extlib_utf8
         PREFIX extlib_utf8
 

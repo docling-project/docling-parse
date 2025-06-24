@@ -32,6 +32,7 @@ namespace pdflib
     itr_type end() { return cells.end(); }
 
     itr_type erase(itr_type itr) { return cells.erase(itr); }
+    itr_type erase(itr_type itr_0, itr_type itr_1) { return cells.erase(itr_0, itr_1); }
 
     pdf_resource<PAGE_CELL>& at(std::size_t i) { return cells.at(i); }
     

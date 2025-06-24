@@ -3,8 +3,8 @@
 set -e  # trigger failure on error - do not remove!
 set -x  # display command on output
 
-# Build the Python package with Poetry
-poetry build -f sdist
+# Build the Python package with uv
+uv build --sdist
 
 sudo -E XDG_RUNTIME_DIR= podman build --progress=plain \
              --build-arg USE_SYSTEM_DEPS="$USE_SYSTEM_DEPS" \
@@ -35,7 +35,8 @@ sudo -E XDG_RUNTIME_DIR= podman build --progress=plain \
     # pre-install build requirements + wheel for "--no-build-isolation"
     # build docling-parse wheel in an isolated network namespace (unshare -rn)
     # install the wheel and its dependencies
-    RUN pip3.11 install poetry-core pybind11 wheel \
+    RUN pip3.11 install --upgrade pip \
+        && pip3.11 install --upgrade --ignore-installed "setuptools>=77.0.3" "wheel>=0.43.0,<1.0.0" "pybind11>=2.13.6" \
         && unshare -rn pip3.11 wheel \
             --no-deps --no-build-isolation -w /dist/ \
             /src/docling_parse*.tar.gz \

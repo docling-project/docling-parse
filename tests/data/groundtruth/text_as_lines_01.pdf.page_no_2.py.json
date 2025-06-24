@@ -14914,16 +14914,16 @@
       "rect": {
         "r_x0": 362.027,
         "r_y0": 767.269,
-        "r_x1": 526.115,
+        "r_x1": 511.13,
         "r_y1": 767.269,
-        "r_x2": 526.115,
+        "r_x2": 511.13,
         "r_y2": 787.782,
         "r_x3": 362.027,
         "r_y3": 787.782,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": " Zestawy r\u00f3wnoleg e",
-      "orig": " Zestawy r\u00f3wnoleg e",
+      "text": " Zestawy r\u00f3wnoleg",
+      "orig": " Zestawy r\u00f3wnoleg",
       "text_direction": "left_to_right",
       "confidence": 1.0,
       "from_ocr": false,
@@ -14960,6 +14960,35 @@
       "widget": false,
       "font_key": "/Tc8",
       "font_name": "/AAAAAI+Swis721CnPL-Bold"
+    },
+    {
+      "index": 31,
+      "rgba": {
+        "r": 0,
+        "g": 0,
+        "b": 0,
+        "a": 255
+      },
+      "rect": {
+        "r_x0": 516.965,
+        "r_y0": 767.269,
+        "r_x1": 526.115,
+        "r_y1": 767.269,
+        "r_x2": 526.115,
+        "r_y2": 787.782,
+        "r_x3": 516.965,
+        "r_y3": 787.782,
+        "coord_origin": "BOTTOMLEFT"
+      },
+      "text": "e",
+      "orig": "e",
+      "text_direction": "left_to_right",
+      "confidence": 1.0,
+      "from_ocr": false,
+      "rendering_mode": -1,
+      "widget": false,
+      "font_key": "/Tc7",
+      "font_name": "/AAAAAH+Swis721CnPL-Bold"
     }
   ],
   "has_chars": true,

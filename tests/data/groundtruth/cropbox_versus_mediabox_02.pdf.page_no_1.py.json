@@ -7418,16 +7418,16 @@
       "rect": {
         "r_x0": 322.161,
         "r_y0": 265.981,
-        "r_x1": 333.34,
-        "r_y1": 265.981,
-        "r_x2": 333.34,
-        "r_y2": 289.475,
+        "r_x1": 387.821,
+        "r_y1": 252.689,
+        "r_x2": 387.821,
+        "r_y2": 292.989,
         "r_x3": 322.161,
         "r_y3": 289.475,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "$",
-      "orig": "$",
+      "text": "$ 599",
+      "orig": "$ 599",
       "text_direction": "left_to_right",
       "confidence": 1.0,
       "from_ocr": false,
@@ -7438,35 +7438,6 @@
     },
     {
       "index": 2,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 332.852,
-        "r_y0": 252.689,
-        "r_x1": 387.821,
-        "r_y1": 252.689,
-        "r_x2": 387.821,
-        "r_y2": 292.989,
-        "r_x3": 332.852,
-        "r_y3": 292.989,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "599",
-      "orig": "599",
-      "text_direction": "left_to_right",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": 0,
-      "widget": false,
-      "font_key": "/T1_3",
-      "font_name": "/VYIYVW+IKEASans-Heavy"
-    },
-    {
-      "index": 3,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -7495,7 +7466,7 @@
       "font_name": "/VYIYVW+IKEASans-Heavy"
     },
     {
-      "index": 4,
+      "index": 3,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -7524,7 +7495,7 @@
       "font_name": "/WYIYVW+IKEASans-Bold"
     },
     {
-      "index": 5,
+      "index": 4,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -7553,7 +7524,7 @@
       "font_name": "/VYIYVW+IKEASans-Heavy"
     },
     {
-      "index": 6,
+      "index": 5,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -7582,7 +7553,7 @@
       "font_name": "/TYIYVW+IKEASans-Regular"
     },
     {
-      "index": 7,
+      "index": 6,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -7611,7 +7582,7 @@
       "font_name": "/VYIYVW+IKEASans-Heavy"
     },
     {
-      "index": 8,
+      "index": 7,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -7640,7 +7611,7 @@
       "font_name": "/TYIYVW+IKEASans-Regular"
     },
     {
-      "index": 9,
+      "index": 8,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -7669,7 +7640,7 @@
       "font_name": "/TYIYVW+IKEASans-Regular"
     },
     {
-      "index": 10,
+      "index": 9,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -7679,45 +7650,16 @@
       "rect": {
         "r_x0": 31.027,
         "r_y0": 88.974,
-        "r_x1": 47.602,
-        "r_y1": 88.974,
-        "r_x2": 47.602,
-        "r_y2": 145.902,
-        "r_x3": 31.027,
-        "r_y3": 145.902,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": " ",
-      "orig": " ",
-      "text_direction": "left_to_right",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": 0,
-      "widget": false,
-      "font_key": "/T1_4",
-      "font_name": "/WYIYVW+IKEASans-Bold"
-    },
-    {
-      "index": 11,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 30.061,
-        "r_y0": 88.974,
         "r_x1": 235.854,
         "r_y1": 94.399,
         "r_x2": 235.854,
         "r_y2": 125.052,
-        "r_x3": 30.061,
+        "r_x3": 31.027,
         "r_y3": 145.902,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "HOME ",
-      "orig": "HOME ",
+      "text": "  HOME ",
+      "orig": "  HOME ",
       "text_direction": "left_to_right",
       "confidence": 1.0,
       "from_ocr": false,
@@ -7727,7 +7669,7 @@
       "font_name": "/WYIYVW+IKEASans-Bold"
     },
     {
-      "index": 12,
+      "index": 10,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -7756,7 +7698,7 @@
       "font_name": "/TYIYVW+IKEASans-Regular"
     },
     {
-      "index": 13,
+      "index": 11,
       "rgba": {
         "r": 0,
         "g": 0,

@@ -26,12 +26,36 @@ namespace pdflib
     
   private:
 
-    void contract_cells_into_lines_v2(pdf_resource<PAGE_CELLS>& cells,
+    bool applicable_for_merge(pdf_resource<PAGE_CELL>& cell_i,
+			      pdf_resource<PAGE_CELL>& cell_j,
+			      bool enforce_same_font);
+
+    void contract_cells_into_lines_right_to_left(pdf_resource<PAGE_CELLS>& cells,
+						 double horizontal_cell_tolerance,
+						 bool enforce_same_font,
+						 double space_width_factor_for_merge,
+						 double space_width_factor_for_merge_with_space);
+
+    void contract_cells_into_lines_left_to_right(pdf_resource<PAGE_CELLS>& cells,
+						 double horizontal_cell_tolerance,
+						 bool enforce_same_font,
+						 double space_width_factor_for_merge,
+						 double space_width_factor_for_merge_with_space,
+						 bool allow_reverse);
+    
+    // linear
+    void contract_cells_into_lines_v1(pdf_resource<PAGE_CELLS>& cells,
 				      double horizontal_cell_tolerance=1.0,
 				      bool enforce_same_font=true,
 				      double space_width_factor_for_merge=1.5,
 				      double space_width_factor_for_merge_with_space=0.33);
 
+    // quadratic
+    void contract_cells_into_lines_v2(pdf_resource<PAGE_CELLS>& cells,
+				      double horizontal_cell_tolerance=1.0,
+				      bool enforce_same_font=true,
+				      double space_width_factor_for_merge=1.5,
+				      double space_width_factor_for_merge_with_space=0.33);
     
   private:
 
@@ -142,145 +166,164 @@ namespace pdflib
 						double space_width_factor_for_merge,
 						double space_width_factor_for_merge_with_space)
   {
+    contract_cells_into_lines_v1(cells,
+				 horizontal_cell_tolerance,
+				 enforce_same_font,
+				 space_width_factor_for_merge,
+				 space_width_factor_for_merge_with_space);
+
+    /*
     contract_cells_into_lines_v2(cells,
 				 horizontal_cell_tolerance,
 				 enforce_same_font,
 				 space_width_factor_for_merge,
 				 space_width_factor_for_merge_with_space);
+    */
   }
 
-  /*
+  bool pdf_sanitator<PAGE_CELLS>::applicable_for_merge(pdf_resource<PAGE_CELL>& cell_i,
+						       pdf_resource<PAGE_CELL>& cell_j,
+						       bool enforce_same_font)
+  {
+    if(not cell_i.active)
+      {
+	return false;
+      }
+    
+    if(not cell_j.active)
+      {
+	return false;
+      }
+    
+    if(enforce_same_font and cell_i.font_name!=cell_j.font_name)
+      {
+	return false;
+      }
+	    
+    if(not cell_i.has_same_reading_orientation(cell_j))
+      {
+	return false;
+      }
+
+    return true;
+  }
+  
   void pdf_sanitator<PAGE_CELLS>::contract_cells_into_lines_v1(pdf_resource<PAGE_CELLS>& cells,
 							       double horizontal_cell_tolerance,
 							       bool enforce_same_font,
 							       double space_width_factor_for_merge,
 							       double space_width_factor_for_merge_with_space)
   {
-    while(true)
-      {
-        bool erased_cell=false;
-        
-        for(int i=0; i<cells.size(); i++)
-          {
-	    if(not cells[i].active)
-	      {
-		continue;
-	      }
-
-	    for(int j=i+1; j<cells.size(); j++)
-	      {
-		if(cells[j].active)
-		  {
-		    if(case_0(cells[i], cells[j],
-			      horizontal_cell_tolerance,
-			      enforce_same_font,
-			      space_width_factor_for_merge))
-		      {
-			cells[j].active = false;
-			erased_cell     = true;
-		      }
-		    else
-		      {
-			break;
-		      }
-		  }
-	      }
-	  }
-
-        if(not erased_cell)
-          {
-            break;
-          }
-      }
-
-    pdf_resource<PAGE_CELLS> cells_;
+    contract_cells_into_lines_left_to_right(cells, horizontal_cell_tolerance, enforce_same_font, space_width_factor_for_merge, space_width_factor_for_merge_with_space, false);
+    
+    contract_cells_into_lines_right_to_left(cells, horizontal_cell_tolerance, enforce_same_font, space_width_factor_for_merge, space_width_factor_for_merge_with_space);
+    
+    contract_cells_into_lines_left_to_right(cells, horizontal_cell_tolerance, enforce_same_font, space_width_factor_for_merge, space_width_factor_for_merge_with_space, true);
+  }
+  
+  void pdf_sanitator<PAGE_CELLS>::contract_cells_into_lines_left_to_right(pdf_resource<PAGE_CELLS>& cells,
+									  double horizontal_cell_tolerance,
+									  bool enforce_same_font,
+									  double space_width_factor_for_merge,
+									  double space_width_factor_for_merge_with_space,
+									  bool allow_reverse)
+  {
+    // take care for left to right printing
     for(int i=0; i<cells.size(); i++)
       {
-	if(cells[i].active)
+	if(not cells[i].active)
 	  {
-	    cells_.push_back(cells[i]);
+	    continue;
+	  }
+	LOG_S(INFO) << "start merging cell-" << i << ": '" << cells[i].text << "'";
+
+	for(int j=i+1; j<cells.size(); j++)
+	  {
+	    if(not applicable_for_merge(cells[i], cells[j], enforce_same_font))
+	      {
+		break;
+	      }
+	    
+	    double delta_0 = cells[i].average_char_width()*space_width_factor_for_merge;
+	    double delta_1 = cells[i].average_char_width()*space_width_factor_for_merge_with_space;
+	    
+	    if(cells[i].is_adjacent_to(cells[j], delta_0))
+	      {
+		cells[i].merge_with(cells[j], delta_1);
+		
+		cells[j].active = false;
+		LOG_S(INFO) << " -> merging cell-" << i << " with " << j << " '" << cells[j].text << "'"<< ": " << cells[i].text;
+	      }
+	    else if(allow_reverse and cells[j].is_adjacent_to(cells[i], delta_0))
+	      {
+		cells[j].merge_with(cells[i], delta_1);
+		
+		cells[i].active = false;
+		LOG_S(INFO) << " -> merging reverse cell-" << j << " with " << i << " '" << cells[i].text << "'"<< ": " << cells[j].text;
+	      }	    
+	    else
+	      {
+		break;
+	      }
 	  }
       }
 
-    cells = cells_;
+    {
+      auto it = std::remove_if(cells.begin(), cells.end(), 
+                        [](const pdf_resource<PAGE_CELL>& cell) {
+                            return !cell.active;
+                        });
+      cells.erase(it, cells.end());
+    }    
   }
-
-  bool pdf_sanitator<PAGE_CELLS>::case_0(pdf_resource<PAGE_CELL>& cell_i,
-					 pdf_resource<PAGE_CELL>& cell_j,
-					 double horizontal_cell_tolerance,
-					 bool enforce_same_font,
-					 double space_width_factor_for_merge,
-					 double space_width_factor_for_merge_with_space)
-  {
-    std::string font_i = cell_i.font_name;
-    std::string font_j = cell_j.font_name;
-
-    if(enforce_same_font and (font_i!=font_j))
+  
+  void pdf_sanitator<PAGE_CELLS>::contract_cells_into_lines_right_to_left(pdf_resource<PAGE_CELLS>& cells,
+									  double horizontal_cell_tolerance,
+									  bool enforce_same_font,
+									  double space_width_factor_for_merge,
+									  double space_width_factor_for_merge_with_space)
+  {    
+    // take care for right to left printing
+    for(int i=cells.size()-1; i>=0; i--)
       {
-	return false;
-      }
-
-    std::string text_i = cell_i.text;
-    std::string text_j = cell_j.text;
-
-    int num_chars_i = utils::string::count_unicode_characters(text_i);
-    //int num_chars_j = utils::string::count_unicode_characters(text_j);
-    
-    double len_i = std::sqrt(std::pow(cell_i.r_x1-cell_i.r_x0, 2) + std::pow(cell_i.r_y1-cell_i.r_y0, 2));
-    //double len_j = std::sqrt(std::pow(cell_j.r_x1-cell_j.r_x0, 2) + std::pow(cell_j.r_y1-cell_j.r_y0, 2));
-
-    double space_width_i = num_chars_i>0? len_i/num_chars_i : 0.0;
-    //double space_width_j = num_chars_j>0? len_j/num_chars_j : 0.0;
-
-    double space_width = cell_i.space_width;
-
-    std::array<double, 4> bbox_i = {cell_i.x0, cell_i.y0, cell_i.x1, cell_i.y1};
-    std::array<double, 4> bbox_j = {cell_j.x0, cell_j.y0, cell_j.x1, cell_j.y1};
-
-    
-    //LOG_S(INFO) << "l-cell: " << std::setw(10) << std::setprecision(3) //<< std::setfill('0')
-    //<< "font-sw: " << cell_i.space_width << ", computed sw: " << space_width_i << ", "
-    //<< "bbox: " << bbox_i[0] << ", " << bbox_i[1] << ", " << bbox_i[2] << ", " << bbox_i[3] << ": "
-    //<< cell_i.text << ", " << font_i;
-    //LOG_S(INFO) << "r-cell: " << std::setw(10) << std::setprecision(3) //<< std::setfill('0')
-    //<< "font-sw: " << cell_j.space_width << ", computed sw: " << space_width_j << ", "
-    //<< "bbox: " << bbox_j[0] << ", " << bbox_j[1] << ", " << bbox_j[2] << ", " << bbox_j[3] << ": "
-    //<< cell_j.text << ", " << font_j;
-    
-    space_width = space_width_i;
-    
-    if(std::abs(bbox_i[1]-bbox_j[1])<horizontal_cell_tolerance and 
-       (bbox_i[0]<bbox_j[0]) and 
-       (bbox_j[0]-bbox_i[2]) <= space_width_factor_for_merge*space_width)
-      {
-	cell_i.x1 = cell_j.x1;
-	cell_i.y1 = std::max(cell_i.y1, cell_j.y1);
-	
-	cell_i.r_x1 = cell_j.r_x1;
-	cell_i.r_y1 = cell_j.r_y1;
-	
-	cell_i.r_x2 = cell_j.r_x2;
-	cell_i.r_y2 = cell_j.r_y2;
-      
-	if( (bbox_j[0]-bbox_i[2]) <= space_width*space_width_factor_for_merge_with_space)
+	if(not cells[i].active)
 	  {
-	    //LOG_S(INFO) << " => merged without space!";
-	    cell_i.text += cell_j.text;
+	    continue;
 	  }
-	else
+	LOG_S(INFO) << "start merging cell-" << i << ": '" << cells[i].text << "'";
+
+	for(int j=i-1; j>=0; j--)
 	  {
-	    //LOG_S(INFO) << " => merged with space!";
-	    cell_i.text += " " + cell_j.text;
+	    if(not applicable_for_merge(cells[i], cells[j], enforce_same_font))
+	      {
+		break;
+	      }
+	    
+	    double delta_0 = cells[i].average_char_width()*space_width_factor_for_merge;
+	    double delta_1 = cells[i].average_char_width()*space_width_factor_for_merge_with_space;
+	    
+	    if(cells[j].is_adjacent_to(cells[i], delta_0))
+	      {
+		cells[j].merge_with(cells[i], delta_1);
+		
+		cells[i].active = false;
+		LOG_S(INFO) << " -> merging cell-" << i << " with " << j << " '" << cells[j].text << "'"<< ": " << cells[i].text;
+	      }
+	    else
+	      {
+		break;
+	      }
 	  }
+      }    
 
-	return true;
-      }
-
-    //LOG_S(INFO) << " => not merged";
-
-    return false;
+    {
+      auto it = std::remove_if(cells.begin(), cells.end(), 
+                        [](const pdf_resource<PAGE_CELL>& cell) {
+                            return !cell.active;
+                        });
+      cells.erase(it, cells.end());
+    }    
   }
-  */
 
   void pdf_sanitator<PAGE_CELLS>::contract_cells_into_lines_v2(pdf_resource<PAGE_CELLS>& cells,
 							       double horizontal_cell_tolerance,
@@ -298,7 +341,8 @@ namespace pdflib
 	      {
 		continue;
 	      }
-
+	    LOG_S(INFO) << "start merging cell-" << i << ": '" << cells[i].text << "'";
+	    
 	    for(int j=i+1; j<cells.size(); j++)
 	      {
 		if(not cells[j].active)
@@ -324,7 +368,9 @@ namespace pdflib
 		    cells[i].merge_with(cells[j], delta_1);
 
 		    cells[j].active = false;
-		    erased_cell = true;		    
+		    erased_cell = true;
+
+		    LOG_S(INFO) << " -> merging cell-" << i << " with " << j << " '" << cells[j].text << "'"<< ": " << cells[i].text;
 		  }		
 	      }
 	  }
@@ -347,35 +393,6 @@ namespace pdflib
     cells = cells_;    
   }
   
-  /*
-  void pdf_sanitator<PAGE_CELLS>::contract_cells(pdf_resource<PAGE_CELL>& cell_i,
-                                                 pdf_resource<PAGE_CELL>& cell_j)
-  {
-    std::array<double, 4> bbox_i = {cell_i.x0, cell_i.y0, cell_i.x1, cell_i.y1};
-    std::array<double, 4> bbox_j = {cell_j.x0, cell_j.y0, cell_j.x1, cell_j.y1};
-
-    //if(std::abs(bbox_i[1]-bbox_j[1])<1.e-3 and 
-    //(bbox_i[0]<bbox_j[0] and std::abs(bbox_i[2]-bbox_j[0])<=10))
-    {
-      cell_i.x1 = cell_j.x1;
-      cell_i.y1 = std::max(cell_i.y1, cell_j.y1);
-      
-      cell_i.r_x1 = cell_j.r_x1;
-      cell_i.r_y1 = cell_j.r_y1;
-      
-      cell_i.r_x2 = cell_j.r_x2;
-      cell_i.r_y2 = cell_j.r_y2;
-      
-      cell_i.text += cell_j.text;
-
-      cell_j.active = false
-      //return true;
-    }
-
-    //return false;
-  }
-  */
-
 }
 
 #endif

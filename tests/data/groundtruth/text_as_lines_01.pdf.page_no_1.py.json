@@ -61938,16 +61938,16 @@
       "rect": {
         "r_x0": 297.19,
         "r_y0": 681.095,
-        "r_x1": 392.799,
+        "r_x1": 301.618,
         "r_y1": 681.095,
-        "r_x2": 392.799,
+        "r_x2": 301.618,
         "r_y2": 690.803,
         "r_x3": 297.19,
         "r_y3": 690.803,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "T oczenie i podwy szanie ci",
-      "orig": "T oczenie i podwy szanie ci",
+      "text": "T",
+      "orig": "T",
       "text_direction": "left_to_right",
       "confidence": 1.0,
       "from_ocr": false,
@@ -61994,6 +61994,35 @@
         "a": 255
       },
       "rect": {
+        "r_x0": 303.524,
+        "r_y0": 681.095,
+        "r_x1": 359.276,
+        "r_y1": 681.095,
+        "r_x2": 359.276,
+        "r_y2": 690.803,
+        "r_x3": 303.524,
+        "r_y3": 690.803,
+        "coord_origin": "BOTTOMLEFT"
+      },
+      "text": "oczenie i podwy",
+      "orig": "oczenie i podwy",
+      "text_direction": "left_to_right",
+      "confidence": 1.0,
+      "from_ocr": false,
+      "rendering_mode": -1,
+      "widget": false,
+      "font_key": "/Tc2",
+      "font_name": "/AAAAAC+Swis721CnPL-Roman"
+    },
+    {
+      "index": 4,
+      "rgba": {
+        "r": 0,
+        "g": 0,
+        "b": 0,
+        "a": 255
+      },
+      "rect": {
         "r_x0": 359.276,
         "r_y0": 681.095,
         "r_x1": 362.803,
@@ -62015,7 +62044,36 @@
       "font_name": "/AAAAAD+Swis721CnPL-Roman"
     },
     {
-      "index": 4,
+      "index": 5,
+      "rgba": {
+        "r": 0,
+        "g": 0,
+        "b": 0,
+        "a": 255
+      },
+      "rect": {
+        "r_x0": 362.803,
+        "r_y0": 681.095,
+        "r_x1": 392.799,
+        "r_y1": 681.095,
+        "r_x2": 392.799,
+        "r_y2": 690.803,
+        "r_x3": 362.803,
+        "r_y3": 690.803,
+        "coord_origin": "BOTTOMLEFT"
+      },
+      "text": "szanie ci",
+      "orig": "szanie ci",
+      "text_direction": "left_to_right",
+      "confidence": 1.0,
+      "from_ocr": false,
+      "rendering_mode": -1,
+      "widget": false,
+      "font_key": "/Tc2",
+      "font_name": "/AAAAAC+Swis721CnPL-Roman"
+    },
+    {
+      "index": 6,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62044,7 +62102,7 @@
       "font_name": "/AAAAAD+Swis721CnPL-Roman"
     },
     {
-      "index": 5,
+      "index": 7,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62073,7 +62131,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 6,
+      "index": 8,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62102,7 +62160,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 7,
+      "index": 9,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62112,16 +62170,16 @@
       "rect": {
         "r_x0": 297.189,
         "r_y0": 658.204,
-        "r_x1": 377.23,
+        "r_x1": 347.011,
         "r_y1": 658.204,
-        "r_x2": 377.23,
+        "r_x2": 347.011,
         "r_y2": 667.913,
         "r_x3": 297.189,
         "r_y3": 667.913,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "\u2022 budynk\u00f3w u yteczno",
-      "orig": "\u2022 budynk\u00f3w u yteczno",
+      "text": "\u2022 budynk\u00f3w u",
+      "orig": "\u2022 budynk\u00f3w u",
       "text_direction": "left_to_right",
       "confidence": 1.0,
       "from_ocr": false,
@@ -62131,7 +62189,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 8,
+      "index": 10,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62160,7 +62218,36 @@
       "font_name": "/AAAAAD+Swis721CnPL-Roman"
     },
     {
-      "index": 9,
+      "index": 11,
+      "rgba": {
+        "r": 0,
+        "g": 0,
+        "b": 0,
+        "a": 255
+      },
+      "rect": {
+        "r_x0": 350.538,
+        "r_y0": 658.204,
+        "r_x1": 377.23,
+        "r_y1": 658.204,
+        "r_x2": 377.23,
+        "r_y2": 667.913,
+        "r_x3": 350.538,
+        "r_y3": 667.913,
+        "coord_origin": "BOTTOMLEFT"
+      },
+      "text": "yteczno",
+      "orig": "yteczno",
+      "text_direction": "left_to_right",
+      "confidence": 1.0,
+      "from_ocr": false,
+      "rendering_mode": -1,
+      "widget": false,
+      "font_key": "/Tc2",
+      "font_name": "/AAAAAC+Swis721CnPL-Roman"
+    },
+    {
+      "index": 12,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62189,7 +62276,7 @@
       "font_name": "/AAAAAD+Swis721CnPL-Roman"
     },
     {
-      "index": 10,
+      "index": 13,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62218,7 +62305,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 11,
+      "index": 14,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62228,16 +62315,16 @@
       "rect": {
         "r_x0": 297.189,
         "r_y0": 646.759,
-        "r_x1": 424.44,
-        "r_y1": 646.758,
-        "r_x2": 424.44,
-        "r_y2": 656.467,
+        "r_x1": 330.034,
+        "r_y1": 646.759,
+        "r_x2": 330.034,
+        "r_y2": 656.468,
         "r_x3": 297.189,
         "r_y3": 656.468,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "\u2022 wodoci g\u00f3w miejskich i wiejskich,",
-      "orig": "\u2022 wodoci g\u00f3w miejskich i wiejskich,",
+      "text": "\u2022 wodoci",
+      "orig": "\u2022 wodoci",
       "text_direction": "left_to_right",
       "confidence": 1.0,
       "from_ocr": false,
@@ -62247,7 +62334,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 12,
+      "index": 15,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62276,7 +62363,7 @@
       "font_name": "/AAAAAD+Swis721CnPL-Roman"
     },
     {
-      "index": 13,
+      "index": 16,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62284,18 +62371,18 @@
         "a": 255
       },
       "rect": {
-        "r_x0": 297.188,
-        "r_y0": 635.313,
-        "r_x1": 394.154,
-        "r_y1": 635.313,
-        "r_x2": 394.154,
-        "r_y2": 645.022,
-        "r_x3": 297.188,
-        "r_y3": 645.022,
+        "r_x0": 334.094,
+        "r_y0": 646.759,
+        "r_x1": 424.44,
+        "r_y1": 646.758,
+        "r_x2": 424.44,
+        "r_y2": 656.467,
+        "r_x3": 334.094,
+        "r_y3": 656.468,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "\u2022 instalacji przemys owych,",
-      "orig": "\u2022 instalacji przemys owych,",
+      "text": "g\u00f3w miejskich i wiejskich,",
+      "orig": "g\u00f3w miejskich i wiejskich,",
       "text_direction": "left_to_right",
       "confidence": 1.0,
       "from_ocr": false,
@@ -62305,7 +62392,36 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 14,
+      "index": 17,
+      "rgba": {
+        "r": 0,
+        "g": 0,
+        "b": 0,
+        "a": 255
+      },
+      "rect": {
+        "r_x0": 297.188,
+        "r_y0": 635.313,
+        "r_x1": 366.99,
+        "r_y1": 635.313,
+        "r_x2": 366.99,
+        "r_y2": 645.022,
+        "r_x3": 297.188,
+        "r_y3": 645.022,
+        "coord_origin": "BOTTOMLEFT"
+      },
+      "text": "\u2022 instalacji przemys",
+      "orig": "\u2022 instalacji przemys",
+      "text_direction": "left_to_right",
+      "confidence": 1.0,
+      "from_ocr": false,
+      "rendering_mode": -1,
+      "widget": false,
+      "font_key": "/Tc2",
+      "font_name": "/AAAAAC+Swis721CnPL-Roman"
+    },
+    {
+      "index": 18,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62334,7 +62450,36 @@
       "font_name": "/AAAAAD+Swis721CnPL-Roman"
     },
     {
-      "index": 15,
+      "index": 19,
+      "rgba": {
+        "r": 0,
+        "g": 0,
+        "b": 0,
+        "a": 255
+      },
+      "rect": {
+        "r_x0": 368.895,
+        "r_y0": 635.313,
+        "r_x1": 394.154,
+        "r_y1": 635.313,
+        "r_x2": 394.154,
+        "r_y2": 645.022,
+        "r_x3": 368.895,
+        "r_y3": 645.022,
+        "coord_origin": "BOTTOMLEFT"
+      },
+      "text": "owych,",
+      "orig": "owych,",
+      "text_direction": "left_to_right",
+      "confidence": 1.0,
+      "from_ocr": false,
+      "rendering_mode": -1,
+      "widget": false,
+      "font_key": "/Tc2",
+      "font_name": "/AAAAAC+Swis721CnPL-Roman"
+    },
+    {
+      "index": 20,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62363,7 +62508,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 16,
+      "index": 21,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62392,7 +62537,7 @@
       "font_name": "/AAAAAB+Swis721PL-Roman"
     },
     {
-      "index": 17,
+      "index": 22,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62421,7 +62566,7 @@
       "font_name": "/AAAAAE+Swis721PL-Bold"
     },
     {
-      "index": 18,
+      "index": 23,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62450,7 +62595,7 @@
       "font_name": "/AAAAAF+Swis721PL-Bold"
     },
     {
-      "index": 19,
+      "index": 24,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62479,7 +62624,7 @@
       "font_name": "/AAAAAE+Swis721PL-Bold"
     },
     {
-      "index": 20,
+      "index": 25,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62508,7 +62653,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 21,
+      "index": 26,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62537,7 +62682,7 @@
       "font_name": "/AAAAAD+Swis721CnPL-Roman"
     },
     {
-      "index": 22,
+      "index": 27,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62566,7 +62711,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 23,
+      "index": 28,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62595,7 +62740,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 24,
+      "index": 29,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62624,7 +62769,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 25,
+      "index": 30,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62653,7 +62798,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 26,
+      "index": 31,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62682,7 +62827,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 27,
+      "index": 32,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62711,7 +62856,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 28,
+      "index": 33,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62740,7 +62885,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 29,
+      "index": 34,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62769,7 +62914,7 @@
       "font_name": "/AAAAAD+Swis721CnPL-Roman"
     },
     {
-      "index": 30,
+      "index": 35,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62798,7 +62943,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 31,
+      "index": 36,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62827,7 +62972,7 @@
       "font_name": "/AAAAAD+Swis721CnPL-Roman"
     },
     {
-      "index": 32,
+      "index": 37,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62856,7 +63001,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 33,
+      "index": 38,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62885,7 +63030,7 @@
       "font_name": "/AAAAAD+Swis721CnPL-Roman"
     },
     {
-      "index": 34,
+      "index": 39,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62914,7 +63059,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 35,
+      "index": 40,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62943,7 +63088,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 36,
+      "index": 41,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -62972,7 +63117,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 37,
+      "index": 42,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63001,7 +63146,7 @@
       "font_name": "/AAAAAD+Swis721CnPL-Roman"
     },
     {
-      "index": 38,
+      "index": 43,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63030,7 +63175,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 39,
+      "index": 44,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63059,7 +63204,7 @@
       "font_name": "/AAAAAD+Swis721CnPL-Roman"
     },
     {
-      "index": 40,
+      "index": 45,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63088,7 +63233,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 41,
+      "index": 46,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63117,7 +63262,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 42,
+      "index": 47,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63146,7 +63291,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 43,
+      "index": 48,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63175,7 +63320,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 44,
+      "index": 49,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63204,7 +63349,7 @@
       "font_name": "/AAAAAD+Swis721CnPL-Roman"
     },
     {
-      "index": 45,
+      "index": 50,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63233,7 +63378,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 46,
+      "index": 51,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63262,7 +63407,7 @@
       "font_name": "/AAAAAD+Swis721CnPL-Roman"
     },
     {
-      "index": 47,
+      "index": 52,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63291,7 +63436,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 48,
+      "index": 53,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63320,7 +63465,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 49,
+      "index": 54,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63349,7 +63494,7 @@
       "font_name": "/AAAAAE+Swis721PL-Bold"
     },
     {
-      "index": 50,
+      "index": 55,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63378,7 +63523,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 51,
+      "index": 56,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63407,7 +63552,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 52,
+      "index": 57,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63436,7 +63581,7 @@
       "font_name": "/AAAAAD+Swis721CnPL-Roman"
     },
     {
-      "index": 53,
+      "index": 58,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63465,7 +63610,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 54,
+      "index": 59,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63494,7 +63639,7 @@
       "font_name": "/AAAAAD+Swis721CnPL-Roman"
     },
     {
-      "index": 55,
+      "index": 60,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63523,7 +63668,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 56,
+      "index": 61,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63552,7 +63697,7 @@
       "font_name": "/AAAAAD+Swis721CnPL-Roman"
     },
     {
-      "index": 57,
+      "index": 62,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63581,7 +63726,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 58,
+      "index": 63,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63610,7 +63755,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 59,
+      "index": 64,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63639,7 +63784,7 @@
       "font_name": "/AAAAAD+Swis721CnPL-Roman"
     },
     {
-      "index": 60,
+      "index": 65,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63649,16 +63794,16 @@
       "rect": {
         "r_x0": 426.222,
         "r_y0": 344.585,
-        "r_x1": 501.662,
+        "r_x1": 458.749,
         "r_y1": 344.585,
-        "r_x2": 501.662,
+        "r_x2": 458.749,
         "r_y2": 354.294,
         "r_x3": 426.222,
         "r_y3": 354.294,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "cym prac  pomp jest ",
-      "orig": "cym prac  pomp jest ",
+      "text": "cym prac",
+      "orig": "cym prac",
       "text_direction": "left_to_right",
       "confidence": 1.0,
       "from_ocr": false,
@@ -63668,7 +63813,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 61,
+      "index": 66,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63697,7 +63842,36 @@
       "font_name": "/AAAAAD+Swis721CnPL-Roman"
     },
     {
-      "index": 62,
+      "index": 67,
+      "rgba": {
+        "r": 0,
+        "g": 0,
+        "b": 0,
+        "a": 255
+      },
+      "rect": {
+        "r_x0": 462.809,
+        "r_y0": 344.585,
+        "r_x1": 501.662,
+        "r_y1": 344.585,
+        "r_x2": 501.662,
+        "r_y2": 354.294,
+        "r_x3": 462.809,
+        "r_y3": 354.294,
+        "coord_origin": "BOTTOMLEFT"
+      },
+      "text": " pomp jest ",
+      "orig": " pomp jest ",
+      "text_direction": "left_to_right",
+      "confidence": 1.0,
+      "from_ocr": false,
+      "rendering_mode": -1,
+      "widget": false,
+      "font_key": "/Tc2",
+      "font_name": "/AAAAAC+Swis721CnPL-Roman"
+    },
+    {
+      "index": 68,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63726,7 +63900,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 63,
+      "index": 69,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63755,7 +63929,7 @@
       "font_name": "/AAAAAD+Swis721CnPL-Roman"
     },
     {
-      "index": 64,
+      "index": 70,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63784,7 +63958,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 65,
+      "index": 71,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63794,16 +63968,16 @@
       "rect": {
         "r_x0": 296.641,
         "r_y0": 321.695,
-        "r_x1": 349.634,
+        "r_x1": 326.024,
         "r_y1": 321.695,
-        "r_x2": 349.634,
+        "r_x2": 326.024,
         "r_y2": 331.404,
         "r_x3": 296.641,
         "r_y3": 331.404,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "\u2022 sygna  steruj",
-      "orig": "\u2022 sygna  steruj",
+      "text": "\u2022 sygna",
+      "orig": "\u2022 sygna",
       "text_direction": "left_to_right",
       "confidence": 1.0,
       "from_ocr": false,
@@ -63813,7 +63987,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 66,
+      "index": 72,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63842,7 +64016,36 @@
       "font_name": "/AAAAAD+Swis721CnPL-Roman"
     },
     {
-      "index": 67,
+      "index": 73,
+      "rgba": {
+        "r": 0,
+        "g": 0,
+        "b": 0,
+        "a": 255
+      },
+      "rect": {
+        "r_x0": 327.929,
+        "r_y0": 321.695,
+        "r_x1": 349.634,
+        "r_y1": 321.695,
+        "r_x2": 349.634,
+        "r_y2": 331.404,
+        "r_x3": 327.929,
+        "r_y3": 331.404,
+        "coord_origin": "BOTTOMLEFT"
+      },
+      "text": " steruj",
+      "orig": " steruj",
+      "text_direction": "left_to_right",
+      "confidence": 1.0,
+      "from_ocr": false,
+      "rendering_mode": -1,
+      "widget": false,
+      "font_key": "/Tc2",
+      "font_name": "/AAAAAC+Swis721CnPL-Roman"
+    },
+    {
+      "index": 74,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63871,7 +64074,7 @@
       "font_name": "/AAAAAD+Swis721CnPL-Roman"
     },
     {
-      "index": 68,
+      "index": 75,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63900,7 +64103,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 69,
+      "index": 76,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63929,7 +64132,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 70,
+      "index": 77,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63958,7 +64161,7 @@
       "font_name": "/AAAAAD+Swis721CnPL-Roman"
     },
     {
-      "index": 71,
+      "index": 78,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -63987,7 +64190,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 72,
+      "index": 79,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64016,7 +64219,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 73,
+      "index": 80,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64045,7 +64248,7 @@
       "font_name": "/AAAAAD+Swis721CnPL-Roman"
     },
     {
-      "index": 74,
+      "index": 81,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64074,7 +64277,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 75,
+      "index": 82,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64103,7 +64306,7 @@
       "font_name": "/AAAAAB+Swis721PL-Roman"
     },
     {
-      "index": 76,
+      "index": 83,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64132,7 +64335,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 77,
+      "index": 84,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64161,7 +64364,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 78,
+      "index": 85,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64190,7 +64393,7 @@
       "font_name": "/AAAAAD+Swis721CnPL-Roman"
     },
     {
-      "index": 79,
+      "index": 86,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64219,7 +64422,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 80,
+      "index": 87,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64248,7 +64451,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 81,
+      "index": 88,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64277,7 +64480,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 82,
+      "index": 89,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64306,7 +64509,7 @@
       "font_name": "/AAAAAD+Swis721CnPL-Roman"
     },
     {
-      "index": 83,
+      "index": 90,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64335,7 +64538,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 84,
+      "index": 91,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64364,7 +64567,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 85,
+      "index": 92,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64393,7 +64596,7 @@
       "font_name": "/AAAAAD+Swis721CnPL-Roman"
     },
     {
-      "index": 86,
+      "index": 93,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64422,7 +64625,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 87,
+      "index": 94,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64451,7 +64654,7 @@
       "font_name": "/AAAAAD+Swis721CnPL-Roman"
     },
     {
-      "index": 88,
+      "index": 95,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64480,7 +64683,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 89,
+      "index": 96,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64509,7 +64712,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 90,
+      "index": 97,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64538,7 +64741,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 91,
+      "index": 98,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64567,7 +64770,7 @@
       "font_name": "/AAAAAD+Swis721CnPL-Roman"
     },
     {
-      "index": 92,
+      "index": 99,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64596,7 +64799,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 93,
+      "index": 100,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64606,16 +64809,16 @@
       "rect": {
         "r_x0": 295.689,
         "r_y0": 162.571,
-        "r_x1": 341.034,
+        "r_x1": 324.008,
         "r_y1": 162.571,
-        "r_x2": 341.034,
-        "r_y2": 172.279,
+        "r_x2": 324.008,
+        "r_y2": 172.28,
         "r_x3": 295.689,
         "r_y3": 172.28,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "\u2022 oszcz dno",
-      "orig": "\u2022 oszcz dno",
+      "text": "\u2022 oszcz",
+      "orig": "\u2022 oszcz",
       "text_direction": "left_to_right",
       "confidence": 1.0,
       "from_ocr": false,
@@ -64625,7 +64828,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 94,
+      "index": 101,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64654,7 +64857,36 @@
       "font_name": "/AAAAAD+Swis721CnPL-Roman"
     },
     {
-      "index": 95,
+      "index": 102,
+      "rgba": {
+        "r": 0,
+        "g": 0,
+        "b": 0,
+        "a": 255
+      },
+      "rect": {
+        "r_x0": 328.014,
+        "r_y0": 162.571,
+        "r_x1": 341.034,
+        "r_y1": 162.571,
+        "r_x2": 341.034,
+        "r_y2": 172.279,
+        "r_x3": 328.014,
+        "r_y3": 172.279,
+        "coord_origin": "BOTTOMLEFT"
+      },
+      "text": "dno",
+      "orig": "dno",
+      "text_direction": "left_to_right",
+      "confidence": 1.0,
+      "from_ocr": false,
+      "rendering_mode": -1,
+      "widget": false,
+      "font_key": "/Tc2",
+      "font_name": "/AAAAAC+Swis721CnPL-Roman"
+    },
+    {
+      "index": 103,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64683,7 +64915,7 @@
       "font_name": "/AAAAAD+Swis721CnPL-Roman"
     },
     {
-      "index": 96,
+      "index": 104,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64712,7 +64944,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 97,
+      "index": 105,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64722,16 +64954,16 @@
       "rect": {
         "r_x0": 295.688,
         "r_y0": 151.126,
-        "r_x1": 427.57,
+        "r_x1": 378.694,
         "r_y1": 151.125,
-        "r_x2": 427.57,
-        "r_y2": 160.833,
+        "r_x2": 378.694,
+        "r_y2": 160.834,
         "r_x3": 295.688,
         "r_y3": 160.834,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "\u2022 bezawaryjna i bezobs ugowa praca,",
-      "orig": "\u2022 bezawaryjna i bezobs ugowa praca,",
+      "text": "\u2022 bezawaryjna i bezobs",
+      "orig": "\u2022 bezawaryjna i bezobs",
       "text_direction": "left_to_right",
       "confidence": 1.0,
       "from_ocr": false,
@@ -64741,7 +64973,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 98,
+      "index": 106,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64770,7 +65002,7 @@
       "font_name": "/AAAAAD+Swis721CnPL-Roman"
     },
     {
-      "index": 99,
+      "index": 107,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64778,18 +65010,18 @@
         "a": 255
       },
       "rect": {
-        "r_x0": 295.688,
-        "r_y0": 139.68,
-        "r_x1": 322.994,
-        "r_y1": 139.68,
-        "r_x2": 322.994,
-        "r_y2": 149.389,
-        "r_x3": 295.688,
-        "r_y3": 149.389,
+        "r_x0": 380.6,
+        "r_y0": 151.125,
+        "r_x1": 427.57,
+        "r_y1": 151.125,
+        "r_x2": 427.57,
+        "r_y2": 160.833,
+        "r_x3": 380.6,
+        "r_y3": 160.834,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "\u2022 atwo",
-      "orig": "\u2022 atwo",
+      "text": "ugowa praca,",
+      "orig": "ugowa praca,",
       "text_direction": "left_to_right",
       "confidence": 1.0,
       "from_ocr": false,
@@ -64799,7 +65031,36 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 100,
+      "index": 108,
+      "rgba": {
+        "r": 0,
+        "g": 0,
+        "b": 0,
+        "a": 255
+      },
+      "rect": {
+        "r_x0": 295.688,
+        "r_y0": 139.68,
+        "r_x1": 301.06,
+        "r_y1": 139.68,
+        "r_x2": 301.06,
+        "r_y2": 149.389,
+        "r_x3": 295.688,
+        "r_y3": 149.389,
+        "coord_origin": "BOTTOMLEFT"
+      },
+      "text": "\u2022",
+      "orig": "\u2022",
+      "text_direction": "left_to_right",
+      "confidence": 1.0,
+      "from_ocr": false,
+      "rendering_mode": -1,
+      "widget": false,
+      "font_key": "/Tc2",
+      "font_name": "/AAAAAC+Swis721CnPL-Roman"
+    },
+    {
+      "index": 109,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64828,7 +65089,36 @@
       "font_name": "/AAAAAD+Swis721CnPL-Roman"
     },
     {
-      "index": 101,
+      "index": 110,
+      "rgba": {
+        "r": 0,
+        "g": 0,
+        "b": 0,
+        "a": 255
+      },
+      "rect": {
+        "r_x0": 306.223,
+        "r_y0": 139.68,
+        "r_x1": 322.994,
+        "r_y1": 139.68,
+        "r_x2": 322.994,
+        "r_y2": 149.389,
+        "r_x3": 306.223,
+        "r_y3": 149.389,
+        "coord_origin": "BOTTOMLEFT"
+      },
+      "text": "atwo",
+      "orig": "atwo",
+      "text_direction": "left_to_right",
+      "confidence": 1.0,
+      "from_ocr": false,
+      "rendering_mode": -1,
+      "widget": false,
+      "font_key": "/Tc2",
+      "font_name": "/AAAAAC+Swis721CnPL-Roman"
+    },
+    {
+      "index": 111,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64857,7 +65147,7 @@
       "font_name": "/AAAAAD+Swis721CnPL-Roman"
     },
     {
-      "index": 102,
+      "index": 112,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64867,16 +65157,16 @@
       "rect": {
         "r_x0": 331.224,
         "r_y0": 139.68,
-        "r_x1": 463.855,
+        "r_x1": 401.325,
         "r_y1": 139.679,
-        "r_x2": 463.855,
+        "r_x2": 401.325,
         "r_y2": 149.388,
         "r_x3": 331.224,
         "r_y3": 149.389,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": " zainstalowania, obs ugi i konserwacji,",
-      "orig": " zainstalowania, obs ugi i konserwacji,",
+      "text": " zainstalowania, obs",
+      "orig": " zainstalowania, obs",
       "text_direction": "left_to_right",
       "confidence": 1.0,
       "from_ocr": false,
@@ -64886,7 +65176,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 103,
+      "index": 113,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64915,7 +65205,7 @@
       "font_name": "/AAAAAD+Swis721CnPL-Roman"
     },
     {
-      "index": 104,
+      "index": 114,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64923,18 +65213,18 @@
         "a": 255
       },
       "rect": {
-        "r_x0": 295.688,
-        "r_y0": 128.235,
-        "r_x1": 355.09,
-        "r_y1": 128.234,
-        "r_x2": 355.09,
-        "r_y2": 137.943,
-        "r_x3": 295.688,
-        "r_y3": 137.944,
+        "r_x0": 403.23,
+        "r_y0": 139.679,
+        "r_x1": 463.855,
+        "r_y1": 139.679,
+        "r_x2": 463.855,
+        "r_y2": 149.388,
+        "r_x3": 403.23,
+        "r_y3": 149.388,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "\u2022 ma e gabaryty,",
-      "orig": "\u2022 ma e gabaryty,",
+      "text": "ugi i konserwacji,",
+      "orig": "ugi i konserwacji,",
       "text_direction": "left_to_right",
       "confidence": 1.0,
       "from_ocr": false,
@@ -64944,7 +65234,36 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 105,
+      "index": 115,
+      "rgba": {
+        "r": 0,
+        "g": 0,
+        "b": 0,
+        "a": 255
+      },
+      "rect": {
+        "r_x0": 295.688,
+        "r_y0": 128.235,
+        "r_x1": 315.176,
+        "r_y1": 128.235,
+        "r_x2": 315.176,
+        "r_y2": 137.944,
+        "r_x3": 295.688,
+        "r_y3": 137.944,
+        "coord_origin": "BOTTOMLEFT"
+      },
+      "text": "\u2022 ma",
+      "orig": "\u2022 ma",
+      "text_direction": "left_to_right",
+      "confidence": 1.0,
+      "from_ocr": false,
+      "rendering_mode": -1,
+      "widget": false,
+      "font_key": "/Tc2",
+      "font_name": "/AAAAAC+Swis721CnPL-Roman"
+    },
+    {
+      "index": 116,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -64973,7 +65292,36 @@
       "font_name": "/AAAAAD+Swis721CnPL-Roman"
     },
     {
-      "index": 106,
+      "index": 117,
+      "rgba": {
+        "r": 0,
+        "g": 0,
+        "b": 0,
+        "a": 255
+      },
+      "rect": {
+        "r_x0": 317.081,
+        "r_y0": 128.235,
+        "r_x1": 355.09,
+        "r_y1": 128.234,
+        "r_x2": 355.09,
+        "r_y2": 137.943,
+        "r_x3": 317.081,
+        "r_y3": 137.944,
+        "coord_origin": "BOTTOMLEFT"
+      },
+      "text": "e gabaryty,",
+      "orig": "e gabaryty,",
+      "text_direction": "left_to_right",
+      "confidence": 1.0,
+      "from_ocr": false,
+      "rendering_mode": -1,
+      "widget": false,
+      "font_key": "/Tc2",
+      "font_name": "/AAAAAC+Swis721CnPL-Roman"
+    },
+    {
+      "index": 118,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -65002,7 +65350,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 107,
+      "index": 119,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -65031,7 +65379,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 108,
+      "index": 120,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -65041,16 +65389,16 @@
       "rect": {
         "r_x0": 91.575,
         "r_y0": 463.943,
-        "r_x1": 230.541,
-        "r_y1": 463.941,
-        "r_x2": 230.541,
-        "r_y2": 477.076,
+        "r_x1": 152.922,
+        "r_y1": 463.943,
+        "r_x2": 152.922,
+        "r_y2": 477.078,
         "r_x3": 91.575,
         "r_y3": 477.078,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "OBSZAR U YTKOWANIA",
-      "orig": "OBSZAR U YTKOWANIA",
+      "text": "OBSZAR U",
+      "orig": "OBSZAR U",
       "text_direction": "left_to_right",
       "confidence": 1.0,
       "from_ocr": false,
@@ -65060,7 +65408,7 @@
       "font_name": "/AAAAAB+Swis721PL-Roman"
     },
     {
-      "index": 109,
+      "index": 121,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -65089,7 +65437,36 @@
       "font_name": "/AAAAAG+Swis721PL-Roman"
     },
     {
-      "index": 110,
+      "index": 122,
+      "rgba": {
+        "r": 0,
+        "g": 0,
+        "b": 0,
+        "a": 255
+      },
+      "rect": {
+        "r_x0": 160.292,
+        "r_y0": 463.943,
+        "r_x1": 230.541,
+        "r_y1": 463.941,
+        "r_x2": 230.541,
+        "r_y2": 477.076,
+        "r_x3": 160.292,
+        "r_y3": 477.078,
+        "coord_origin": "BOTTOMLEFT"
+      },
+      "text": "YTKOWANIA",
+      "orig": "YTKOWANIA",
+      "text_direction": "left_to_right",
+      "confidence": 1.0,
+      "from_ocr": false,
+      "rendering_mode": -1,
+      "widget": false,
+      "font_key": "/Tc1",
+      "font_name": "/AAAAAB+Swis721PL-Roman"
+    },
+    {
+      "index": 123,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -65118,7 +65495,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 111,
+      "index": 124,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -65147,7 +65524,7 @@
       "font_name": "/AAAAAD+Swis721CnPL-Roman"
     },
     {
-      "index": 112,
+      "index": 125,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -65176,7 +65553,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 113,
+      "index": 126,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -65205,7 +65582,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 114,
+      "index": 127,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -65234,7 +65611,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 115,
+      "index": 128,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -65263,7 +65640,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 116,
+      "index": 129,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -65292,7 +65669,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 117,
+      "index": 130,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -65302,16 +65679,16 @@
       "rect": {
         "r_x0": 53.356,
         "r_y0": 418.27,
-        "r_x1": 269.231,
-        "r_y1": 418.268,
-        "r_x2": 269.231,
-        "r_y2": 427.977,
+        "r_x1": 75.773,
+        "r_y1": 418.27,
+        "r_x2": 75.773,
+        "r_y2": 427.979,
         "r_x3": 53.356,
         "r_y3": 427.979,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "Max. ci . robocze                                      1.0 MPa i/lub 1,6 MPa ",
-      "orig": "Max. ci . robocze                                      1.0 MPa i/lub 1,6 MPa ",
+      "text": "Max. ci",
+      "orig": "Max. ci",
       "text_direction": "left_to_right",
       "confidence": 1.0,
       "from_ocr": false,
@@ -65321,7 +65698,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 118,
+      "index": 131,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -65350,7 +65727,36 @@
       "font_name": "/AAAAAD+Swis721CnPL-Roman"
     },
     {
-      "index": 119,
+      "index": 132,
+      "rgba": {
+        "r": 0,
+        "g": 0,
+        "b": 0,
+        "a": 255
+      },
+      "rect": {
+        "r_x0": 78.957,
+        "r_y0": 418.27,
+        "r_x1": 269.231,
+        "r_y1": 418.268,
+        "r_x2": 269.231,
+        "r_y2": 427.977,
+        "r_x3": 78.957,
+        "r_y3": 427.979,
+        "coord_origin": "BOTTOMLEFT"
+      },
+      "text": ". robocze                                      1.0 MPa i/lub 1,6 MPa ",
+      "orig": ". robocze                                      1.0 MPa i/lub 1,6 MPa ",
+      "text_direction": "left_to_right",
+      "confidence": 1.0,
+      "from_ocr": false,
+      "rendering_mode": -1,
+      "widget": false,
+      "font_key": "/Tc2",
+      "font_name": "/AAAAAC+Swis721CnPL-Roman"
+    },
+    {
+      "index": 133,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -65379,7 +65785,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 120,
+      "index": 134,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -65408,7 +65814,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 121,
+      "index": 135,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -65437,7 +65843,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 122,
+      "index": 136,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -65466,7 +65872,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 123,
+      "index": 137,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -65495,7 +65901,7 @@
       "font_name": "/AAAAAD+Swis721CnPL-Roman"
     },
     {
-      "index": 124,
+      "index": 138,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -65524,7 +65930,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 125,
+      "index": 139,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -65553,7 +65959,7 @@
       "font_name": "/AAAAAD+Swis721CnPL-Roman"
     },
     {
-      "index": 126,
+      "index": 140,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -65582,7 +65988,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 127,
+      "index": 141,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -65611,7 +66017,7 @@
       "font_name": "/AAAAAC+Swis721CnPL-Roman"
     },
     {
-      "index": 128,
+      "index": 142,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -65621,16 +66027,16 @@
       "rect": {
         "r_x0": 66.403,
         "r_y0": 767.265,
-        "r_x1": 230.811,
+        "r_x1": 210.573,
         "r_y1": 767.265,
-        "r_x2": 230.811,
+        "r_x2": 210.573,
         "r_y2": 787.778,
         "r_x3": 66.403,
         "r_y3": 787.778,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "Zestawy r\u00f3wnoleg e ",
-      "orig": "Zestawy r\u00f3wnoleg e ",
+      "text": "Zestawy r\u00f3wnoleg",
+      "orig": "Zestawy r\u00f3wnoleg",
       "text_direction": "left_to_right",
       "confidence": 1.0,
       "from_ocr": false,
@@ -65640,7 +66046,7 @@
       "font_name": "/AAAAAH+Swis721CnPL-Bold"
     },
     {
-      "index": 129,
+      "index": 143,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -65669,7 +66075,36 @@
       "font_name": "/AAAAAI+Swis721CnPL-Bold"
     },
     {
-      "index": 130,
+      "index": 144,
+      "rgba": {
+        "r": 0,
+        "g": 0,
+        "b": 0,
+        "a": 255
+      },
+      "rect": {
+        "r_x0": 216.407,
+        "r_y0": 767.265,
+        "r_x1": 230.811,
+        "r_y1": 767.265,
+        "r_x2": 230.811,
+        "r_y2": 787.778,
+        "r_x3": 216.407,
+        "r_y3": 787.778,
+        "coord_origin": "BOTTOMLEFT"
+      },
+      "text": "e ",
+      "orig": "e ",
+      "text_direction": "left_to_right",
+      "confidence": 1.0,
+      "from_ocr": false,
+      "rendering_mode": -1,
+      "widget": false,
+      "font_key": "/Tc7",
+      "font_name": "/AAAAAH+Swis721CnPL-Bold"
+    },
+    {
+      "index": 145,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -65698,7 +66133,7 @@
       "font_name": "/AAAAAH+Swis721CnPL-Bold"
     },
     {
-      "index": 131,
+      "index": 146,
       "rgba": {
         "r": 0,
         "g": 0,
@@ -65727,7 +66162,7 @@
       "font_name": "/AAAAAH+Swis721CnPL-Bold"
     },
     {
-      "index": 132,
+      "index": 147,
       "rgba": {
         "r": 0,
         "g": 0,

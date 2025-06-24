@@ -249,7 +249,7 @@ namespace docling
     // do a deep copy
     word_cells = char_cells;
 
-    LOG_S(INFO) << "#-wordcells: " << word_cells.size();
+    LOG_S(INFO) << "#-word cells: " << word_cells.size();
     
     // remove all spaces 
     auto itr = word_cells.begin();
@@ -265,7 +265,7 @@ namespace docling
 	  }
       }
 
-    LOG_S(INFO) << "#-wordcells: " << word_cells.size();
+    LOG_S(INFO) << "#-word cells: " << word_cells.size();
     
     // > space_width_factor_for_merge, so nothing gets merged with a space
     double space_width_factor_for_merge_with_space = 2.0*space_width_factor_for_merge; 
