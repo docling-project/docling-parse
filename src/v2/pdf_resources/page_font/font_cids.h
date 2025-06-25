@@ -4,9 +4,10 @@
 #define PDF_PAGE_FONT_CIDS_H
 
 #include <fstream>
-
 #include <set>
 #include <map>
+#include <mutex>
+#include <atomic>
 
 namespace pdflib
 {
@@ -33,7 +34,8 @@ namespace pdflib
 
   private:
 
-    bool initialized;
+    static std::atomic<bool> initialized;
+    static std::mutex init_mutex;
     std::string directory;
 
     std::map<std::string, int>                       ro_2_sup;
@@ -46,8 +48,11 @@ namespace pdflib
     std::map<std::string, font_cid> cids;
   };
 
-  font_cids::font_cids():
-    initialized(false)
+  // Static member definitions
+  std::atomic<bool> font_cids::initialized(false);
+  std::mutex font_cids::init_mutex;
+
+  font_cids::font_cids()
   {}
 
   font_cids::~font_cids()
@@ -86,7 +91,17 @@ namespace pdflib
 
   void font_cids::initialise(std::string dirname)
   {
-    if(initialized)
+    // Use double-checked locking pattern for thread-safe initialization
+    if(initialized.load(std::memory_order_acquire))
+      {
+	LOG_S(WARNING) << "skipping font_cids::initialise, already initialized ...";
+	return;
+      }
+    
+    std::lock_guard<std::mutex> lock(init_mutex);
+    
+    // Check again after acquiring lock
+    if(initialized.load(std::memory_order_acquire))
       {
 	LOG_S(WARNING) << "skipping font_cids::initialise, already initialized ...";
 	return;
@@ -135,7 +150,7 @@ namespace pdflib
 	  }
       }
 
-    initialized = true;
+    initialized.store(true, std::memory_order_release);
   }
 
   bool font_cids::decode_cmap_resource(std::string cmap_name)

@@ -11,6 +11,7 @@
 #include <pybind/docling_resources.h>
 
 #include <v2.h>
+#include <mutex>
 
 namespace docling
 {
@@ -79,7 +80,13 @@ namespace docling
     std::string pdf_resources_dir;
 
     std::map<std::string, decoder_ptr_type> key2doc;
+    
+    // Thread-safety for QPDF document access
+    static std::mutex qpdf_mutex;
   };
+
+  // Static member definition
+  std::mutex docling_parser_v2::qpdf_mutex;
 
   docling_parser_v2::docling_parser_v2():
     docling_resources(),
@@ -326,6 +333,9 @@ namespace docling
   {
     LOG_S(INFO) << __FUNCTION__;
     
+    // Lock QPDF access to prevent concurrent document access
+    std::lock_guard<std::mutex> lock(qpdf_mutex);
+    
     auto itr = key2doc.find(key);
     if(itr==key2doc.end())
       {
@@ -352,6 +362,9 @@ namespace docling
 							       bool do_sanitization)
   {
     LOG_S(INFO) << __FUNCTION__;
+    
+    // Lock QPDF access to prevent concurrent document access
+    std::lock_guard<std::mutex> lock(qpdf_mutex);
     
     auto itr = key2doc.find(key);
     if(itr==key2doc.end())

@@ -5,6 +5,8 @@
 
 #include <set>
 #include <map>
+#include <mutex>
+#include <atomic>
 
 //#include <filesystem>
 
@@ -43,15 +45,19 @@ namespace pdflib
 
   private:
 
-    bool initialized;
+    static std::atomic<bool> initialized;
+    static std::mutex init_mutex;
     
     std::set<std::string> core_14_fonts;
 
     std::map<std::string, base_font_type> name_to_basefont;
   };
 
-  base_fonts::base_fonts():
-    initialized(false)
+  // Static member definitions
+  std::atomic<bool> base_fonts::initialized(false);
+  std::mutex base_fonts::init_mutex;
+
+  base_fonts::base_fonts()
   {}
 
   base_fonts::~base_fonts()
@@ -160,7 +166,17 @@ namespace pdflib
   template<typename glyphs_type>
   void base_fonts::initialise(std::string dirname, glyphs_type& glyphs)
   {
-    if(initialized)
+    // Use double-checked locking pattern for thread-safe initialization
+    if(initialized.load(std::memory_order_acquire))
+      {
+	LOG_S(WARNING) << "skipping base_fonts::initialise, already initialized ...";
+	return;
+      }
+    
+    std::lock_guard<std::mutex> lock(init_mutex);
+    
+    // Check again after acquiring lock
+    if(initialized.load(std::memory_order_acquire))
       {
 	LOG_S(WARNING) << "skipping base_fonts::initialise, already initialized ...";
 	return;
@@ -226,7 +242,7 @@ namespace pdflib
 	  }
       }
 
-    initialized = true;
+    initialized.store(true, std::memory_order_release);
   }
 
   std::string base_fonts::read_fontname(std::string filename)

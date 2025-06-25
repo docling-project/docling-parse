@@ -3,6 +3,9 @@
 #ifndef PDF_PAGE_FONT_ENCODINGS_H
 #define PDF_PAGE_FONT_ENCODINGS_H
 
+#include <mutex>
+#include <atomic>
+
 namespace pdflib
 {
 
@@ -21,13 +24,17 @@ namespace pdflib
 
   private:
 
-    bool initialized;
+    static std::atomic<bool> initialized;
+    static std::mutex init_mutex;
     
     std::map<font_encoding_name, font_encoding> name_to_encoding;
   };
 
-  font_encodings::font_encodings():
-    initialized(false)
+  // Static member definitions
+  std::atomic<bool> font_encodings::initialized(false);
+  std::mutex font_encodings::init_mutex;
+
+  font_encodings::font_encodings()
   {}
 
   font_encodings::~font_encodings()
@@ -41,7 +48,17 @@ namespace pdflib
   template<typename glyphs_type>
   void font_encodings::initialise(std::string dirname, glyphs_type& glyphs)
   {
-    if(initialized)
+    // Use double-checked locking pattern for thread-safe initialization
+    if(initialized.load(std::memory_order_acquire))
+      {
+	LOG_S(WARNING) << "skipping font_encodings::initialise, already initialized ...";
+	return;
+      }
+    
+    std::lock_guard<std::mutex> lock(init_mutex);
+    
+    // Check again after acquiring lock
+    if(initialized.load(std::memory_order_acquire))
       {
 	LOG_S(WARNING) << "skipping font_encodings::initialise, already initialized ...";
 	return;
@@ -60,7 +77,7 @@ namespace pdflib
         encoding.initialise(item.first, dirname+"/"+item.second, glyphs);
       }
 
-    initialized = true;
+    initialized.store(true, std::memory_order_release);
   }
 
 }

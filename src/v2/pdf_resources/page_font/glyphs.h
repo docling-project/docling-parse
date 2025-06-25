@@ -4,9 +4,10 @@
 #define PDF_PAGE_FONT_GLYPHS_H
 
 #include <fstream>
-
 #include <set>
 #include <map>
+#include <mutex>
+#include <atomic>
 
 namespace pdflib
 {
@@ -39,7 +40,8 @@ namespace pdflib
     
   private:
 
-    bool initialized;
+    static std::atomic<bool> initialized;
+    static std::mutex init_mutex;
     
     std::set<std::string> unknown_glyphs;
 
@@ -47,8 +49,11 @@ namespace pdflib
     std::map<std::string, std::string> name_to_utf8;
   };
 
-  font_glyphs::font_glyphs():
-    initialized(false)
+  // Static member definitions
+  std::atomic<bool> font_glyphs::initialized(false);
+  std::mutex font_glyphs::init_mutex;
+
+  font_glyphs::font_glyphs()
   {}
 
   font_glyphs::~font_glyphs()
@@ -106,7 +111,17 @@ namespace pdflib
 
   void font_glyphs::initialise(std::string dirname)
   {
-    if(initialized)
+    // Use double-checked locking pattern for thread-safe initialization
+    if(initialized.load(std::memory_order_acquire))
+      {
+	LOG_S(WARNING) << "skipping font_glyphs::initialise, already initialized ...";
+	return;
+      }
+    
+    std::lock_guard<std::mutex> lock(init_mutex);
+    
+    // Check again after acquiring lock
+    if(initialized.load(std::memory_order_acquire))
       {
 	LOG_S(WARNING) << "skipping font_glyphs::initialise, already initialized ...";
 	return;
@@ -141,7 +156,7 @@ namespace pdflib
         read_file_uni(fpath);
       }
 
-    initialized = true;
+    initialized.store(true, std::memory_order_release);
   }
 
   void font_glyphs::read_file_hex(std::string filename)

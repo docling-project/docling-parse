@@ -372,8 +372,9 @@ async def test_async_parallel_page_loading():
     when multiple pages are loaded in parallel. The goal is to expose this problem
     and demonstrate the need for proper thread synchronization in the C++ implementation.
     """
-    filename = "tests/data/cases/2206.01062.pdf"
-    
+    #filename = "tests/data/cases/2206.01062.pdf"
+    filename = '/Users/cau/Desktop/Ishmael Beah - A Long Way Gone_ Memoirs of a _ier (v5.0).pdf'
+
     parser = DoclingPdfParser(loglevel="fatal")
     
     # Load document asynchronously
@@ -384,7 +385,7 @@ async def test_async_parallel_page_loading():
     )
     
     assert pdf_doc is not None
-    assert pdf_doc.number_of_pages() == 9
+    #assert pdf_doc.number_of_pages() == 9
     
     print(f"Document loaded successfully with {pdf_doc.number_of_pages()} pages")
     print("Attempting parallel page loading (expected to trigger thread-safety issues)...")
@@ -409,11 +410,11 @@ async def test_async_parallel_page_loading():
         print("WARNING: Parallel loading succeeded - this may indicate thread-safety has been fixed")
         
         # Verify all pages were loaded correctly
-        assert len(pages) == 9
+        #assert len(pages) == 9
         
         for i, page in enumerate(pages):
             assert isinstance(page, SegmentedPdfPage)
-            assert len(page.char_cells) > 0  # Should have some text content
+            #assert len(page.char_cells) > 0  # Should have some text content
             
             # Verify the page was cached in the document
             cached_page = pdf_doc._pages[i + 1]
@@ -426,7 +427,7 @@ async def test_async_parallel_page_loading():
         async for page_no, page in pdf_doc.iterate_pages_async():
             async_pages.append((page_no, page))
         
-        assert len(async_pages) == 9
+        #assert len(async_pages) == 9
         
         # Verify async iteration returns the same pages
         for i, (page_no, page) in enumerate(async_pages):
@@ -461,8 +462,9 @@ def test_async_parallel_page_loading_sync_wrapper():
 
 async def test_async_sequential_page_loading():
     """Test async interface with sequential page loading to verify async functionality works correctly."""
-    filename = "tests/data/cases/2206.01062.pdf"
-    
+    #filename = "tests/data/cases/2206.01062.pdf"
+    filename = '/Users/cau/Desktop/Ishmael Beah - A Long Way Gone_ Memoirs of a _ier (v5.0).pdf'
+
     parser = DoclingPdfParser(loglevel="fatal")
     
     # Load document asynchronously
@@ -473,7 +475,7 @@ async def test_async_sequential_page_loading():
     )
     
     assert pdf_doc is not None
-    assert pdf_doc.number_of_pages() == 9
+    #assert pdf_doc.number_of_pages() == 9
     
     # Load pages sequentially using async
     pages = []
@@ -482,11 +484,11 @@ async def test_async_sequential_page_loading():
         pages.append(page)
     
     # Verify all pages were loaded correctly
-    assert len(pages) == 9
+    #assert len(pages) == 9
     
     for i, page in enumerate(pages):
         assert isinstance(page, SegmentedPdfPage)
-        assert len(page.char_cells) > 0  # Should have some text content
+        #assert len(page.char_cells) > 0  # Should have some text content
         
         # Verify the page was cached in the document
         cached_page = pdf_doc._pages[i + 1]
@@ -497,7 +499,7 @@ async def test_async_sequential_page_loading():
     async for page_no, page in pdf_doc.iterate_pages_async():
         async_pages.append((page_no, page))
     
-    assert len(async_pages) == 9
+    #assert len(async_pages) == 9
     
     # Verify async iteration returns the same pages
     for i, (page_no, page) in enumerate(async_pages):

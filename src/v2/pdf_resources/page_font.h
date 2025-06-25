@@ -3,6 +3,10 @@
 #ifndef PDF_PAGE_FONT_RESOURCE_H
 #define PDF_PAGE_FONT_RESOURCE_H
 
+#include <mutex>
+#include <atomic>
+#include <thread>
+
 namespace pdflib
 {
 
@@ -92,6 +96,10 @@ namespace pdflib
     static font_cids      cids;
     static font_encodings encodings;
     static base_fonts     bfonts;
+    
+    // Thread-safety for font cache initialization
+    static std::once_flag init_flag;
+    static std::atomic<bool> initialized;
 
   private:
 
@@ -148,6 +156,10 @@ namespace pdflib
   font_cids      pdf_resource<PAGE_FONT>::cids = font_cids();
   font_encodings pdf_resource<PAGE_FONT>::encodings = font_encodings();
   base_fonts     pdf_resource<PAGE_FONT>::bfonts = base_fonts();
+  
+  // Thread-safety initialization
+  std::once_flag pdf_resource<PAGE_FONT>::init_flag;
+  std::atomic<bool> pdf_resource<PAGE_FONT>::initialized(false);
 
   pdf_resource<PAGE_FONT>::pdf_resource()
   {}
@@ -167,70 +179,80 @@ namespace pdflib
   void pdf_resource<PAGE_FONT>::initialise(nlohmann::json                 data,
 					   std::map<std::string, double>& timings)
   {
-    LOG_S(INFO) << __FUNCTION__ << ": " << data.dump(2);
-    
-    std::string PDFS_RESOURCES_DIR = "../docling_parse/pdf_resources_v2/";
-    LOG_S(INFO) << "default pdf-resource-dir: " << PDFS_RESOURCES_DIR;
-    
-    //if(data.count(RESOURCE_DIR_KEY)==0)
-    //{
-    //LOG_S(WARNING) << "resource-dir-key is missing '" << RESOURCE_DIR_KEY << "' in data: \n" << data.dump(2);
-    //}
-    
-    //std::string pdf_resources_dir = data.value("pdf-resource-directory", PDFS_RESOURCES_DIR);
-    std::string pdf_resources_dir = data.value(RESOURCE_DIR_KEY, PDFS_RESOURCES_DIR);
-    pdf_resources_dir += (pdf_resources_dir.back()=='/'? "" : "/");
-    
-    std::string glyphs_dir, cids_dir, encodings_dir, bfonts_dir;
-    
-    if(utils::filesystem::is_dir(pdf_resources_dir))
-      {
-	LOG_S(INFO) << "pdf_resources_dir: " << pdf_resources_dir;
-
-	glyphs_dir    = pdf_resources_dir+"glyphs/";
-	cids_dir      = pdf_resources_dir+"cmap-resources/";
-	encodings_dir = pdf_resources_dir+"encodings/";
-	bfonts_dir    = pdf_resources_dir+"fonts/";	
-      }
-    else
-      {
-	std::string message = "no existing pdf_resources_dir: " +  pdf_resources_dir; 
-	LOG_S(ERROR) << message;
-	throw std::logic_error(message);
-      }
-    
-    utils::timer timer;
-    
-    {
-      timer.reset();
-
-      glyphs.initialise(glyphs_dir);
-
-      timings["init-glyphs"] = timer.get_time();
-    }
-
-    {
-      timer.reset();
+    // Use std::call_once to ensure thread-safe initialization
+    std::call_once(init_flag, [&]() {
+      LOG_S(INFO) << __FUNCTION__ << ": " << data.dump(2);
       
-      cids.initialise(cids_dir);
+      std::string PDFS_RESOURCES_DIR = "../docling_parse/pdf_resources_v2/";
+      LOG_S(INFO) << "default pdf-resource-dir: " << PDFS_RESOURCES_DIR;
       
-      timings["init-cids"] = timer.get_time();
-    }
+      //if(data.count(RESOURCE_DIR_KEY)==0)
+      //{
+      //LOG_S(WARNING) << "resource-dir-key is missing '" << RESOURCE_DIR_KEY << "' in data: \n" << data.dump(2);
+      //}
+      
+      //std::string pdf_resources_dir = data.value("pdf-resource-directory", PDFS_RESOURCES_DIR);
+      std::string pdf_resources_dir = data.value(RESOURCE_DIR_KEY, PDFS_RESOURCES_DIR);
+      pdf_resources_dir += (pdf_resources_dir.back()=='/'? "" : "/");
+      
+      std::string glyphs_dir, cids_dir, encodings_dir, bfonts_dir;
+      
+      if(utils::filesystem::is_dir(pdf_resources_dir))
+        {
+	  LOG_S(INFO) << "pdf_resources_dir: " << pdf_resources_dir;
 
-    {
-      timer.reset();
+	  glyphs_dir    = pdf_resources_dir+"glyphs/";
+	  cids_dir      = pdf_resources_dir+"cmap-resources/";
+	  encodings_dir = pdf_resources_dir+"encodings/";
+	  bfonts_dir    = pdf_resources_dir+"fonts/";	
+        }
+      else
+        {
+	  std::string message = "no existing pdf_resources_dir: " +  pdf_resources_dir; 
+	  LOG_S(ERROR) << message;
+	  throw std::logic_error(message);
+        }
+      
+      utils::timer timer;
+      
+      {
+        timer.reset();
 
-      encodings.initialise(encodings_dir, glyphs);
+        glyphs.initialise(glyphs_dir);
 
-      timings["init-encodings"] = timer.get_time();
-    }
+        timings["init-glyphs"] = timer.get_time();
+      }
 
-    {
-      timer.reset();
+      {
+        timer.reset();
+        
+        cids.initialise(cids_dir);
+        
+        timings["init-cids"] = timer.get_time();
+      }
 
-      bfonts.initialise(bfonts_dir, glyphs);
+      {
+        timer.reset();
 
-      timings["init-bfonts"] = timer.get_time();
+        encodings.initialise(encodings_dir, glyphs);
+
+        timings["init-encodings"] = timer.get_time();
+      }
+
+      {
+        timer.reset();
+
+        bfonts.initialise(bfonts_dir, glyphs);
+
+        timings["init-bfonts"] = timer.get_time();
+      }
+      
+      initialized.store(true, std::memory_order_release);
+    });
+    
+    // Wait for initialization to complete
+    while (!initialized.load(std::memory_order_acquire)) {
+      std::this_thread::yield();
     }
   }
 
