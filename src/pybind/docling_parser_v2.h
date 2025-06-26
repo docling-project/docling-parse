@@ -80,13 +80,9 @@ namespace docling
     std::string pdf_resources_dir;
 
     std::map<std::string, decoder_ptr_type> key2doc;
-    
-    // Thread-safety for QPDF document access
-    static std::mutex qpdf_mutex;
   };
 
-  // Static member definition
-  std::mutex docling_parser_v2::qpdf_mutex;
+
 
   docling_parser_v2::docling_parser_v2():
     docling_resources(),
@@ -101,6 +97,7 @@ namespace docling
     data[RESOURCE_DIR_KEY] = pdf_resources_dir;
 
     std::map<std::string, double> timings = {};
+    // Eagerly initialize font resources at parser construction to enable parallel document loading
     pdflib::pdf_resource<pdflib::PAGE_FONT>::initialise(data, timings);
   }
 
@@ -119,6 +116,7 @@ namespace docling
     data[RESOURCE_DIR_KEY] = pdf_resources_dir;
 
     std::map<std::string, double> timings = {};
+    // Eagerly initialize font resources at parser construction to enable parallel document loading
     pdflib::pdf_resource<pdflib::PAGE_FONT>::initialise(data, timings);
   }
   
@@ -333,9 +331,6 @@ namespace docling
   {
     LOG_S(INFO) << __FUNCTION__;
     
-    // Lock QPDF access to prevent concurrent document access
-    std::lock_guard<std::mutex> lock(qpdf_mutex);
-    
     auto itr = key2doc.find(key);
     if(itr==key2doc.end())
       {
@@ -344,6 +339,11 @@ namespace docling
       }
     
     auto& decoder = itr->second;
+    
+    // Lock this specific document to prevent concurrent access to same document
+    // while allowing different documents to be processed in parallel
+    auto lock = decoder->get_lock();
+    
     decoder->decode_document(page_boundary, do_sanitization);
 
     LOG_S(INFO) << "decoding done for key: " << key;
@@ -363,9 +363,6 @@ namespace docling
   {
     LOG_S(INFO) << __FUNCTION__;
     
-    // Lock QPDF access to prevent concurrent document access
-    std::lock_guard<std::mutex> lock(qpdf_mutex);
-    
     auto itr = key2doc.find(key);
     if(itr==key2doc.end())
       {
@@ -374,6 +371,10 @@ namespace docling
       }
 
     auto& decoder = itr->second;
+    
+    // Lock this specific document to prevent concurrent access to same document
+    // while allowing different documents to be processed in parallel
+    auto lock = decoder->get_lock();
     
     std::vector<int> pages = {page};
     decoder->decode_document(pages, page_boundary, do_sanitization);

@@ -14,6 +14,7 @@ import asyncio
 import glob
 import os
 import re
+import time
 from typing import Dict, List, Union
 
 from docling_core.types.doc.page import (
@@ -510,3 +511,250 @@ async def test_async_sequential_page_loading():
 def test_async_sequential_page_loading_sync_wrapper():
     """Synchronous wrapper for the sequential async test."""
     asyncio.run(test_async_sequential_page_loading())
+
+
+async def test_async_parallel_document_loading():
+    """Test async interface with parallel document loading.
+    
+    This test loads all documents from test/data/cases/ in parallel to evaluate
+    thread-safety when multiple documents are loaded concurrently.
+    """
+    cases_folder = "tests/data/cases/*.pdf"
+    pdf_docs = sorted(glob.glob(cases_folder))
+    
+    assert len(pdf_docs) > 0, "No PDF documents found in cases folder"
+    
+    print(f"\nTesting parallel loading of {len(pdf_docs)} documents from cases folder...")
+    
+    parser = DoclingPdfParser(loglevel="fatal")
+    
+    start_time = time.time()
+    
+    # Create tasks for parallel document loading
+    load_tasks = [
+        parser.load_async(
+            path_or_stream=pdf_path,
+            lazy=False,  # Load all pages immediately
+            boundary_type=PdfPageBoundaryType.CROP_BOX
+        )
+        for pdf_path in pdf_docs
+    ]
+    
+    print(f"Created {len(load_tasks)} parallel document loading tasks")
+    print("Executing parallel document loading...")
+    
+    try:
+        # Execute all document loading tasks in parallel
+        documents = await asyncio.gather(*load_tasks)
+        
+        parallel_time = time.time() - start_time
+        
+        print(f"Parallel loading completed in {parallel_time:.3f} seconds")
+        
+        # Verify all documents were loaded correctly
+        assert len(documents) == len(pdf_docs)
+        
+        total_pages = 0
+        for i, (pdf_doc, pdf_path) in enumerate(zip(documents, pdf_docs)):
+            assert isinstance(pdf_doc, PdfDocument)
+            assert pdf_doc.number_of_pages() > 0
+            
+            # Load and verify first page of each document
+            first_page = next(iter(pdf_doc.iterate_pages()))[1]
+            assert isinstance(first_page, SegmentedPdfPage)
+            
+            total_pages += pdf_doc.number_of_pages()
+            print(f"  Document {i+1}: {os.path.basename(pdf_path)} - {pdf_doc.number_of_pages()} pages")
+        
+        print(f"Successfully loaded {len(documents)} documents with {total_pages} total pages")
+        
+        return parallel_time, len(documents), total_pages
+        
+    except Exception as e:
+        print(f"Parallel document loading failed: {type(e).__name__}: {e}")
+        raise
+
+
+async def test_async_serial_document_loading():
+    """Test async interface with serial document loading.
+    
+    This test loads all documents from test/data/cases/ sequentially for comparison
+    with the parallel loading performance.
+    """
+    cases_folder = "tests/data/cases/*.pdf"
+    pdf_docs = sorted(glob.glob(cases_folder))
+    
+    assert len(pdf_docs) > 0, "No PDF documents found in cases folder"
+    
+    print(f"\nTesting serial loading of {len(pdf_docs)} documents from cases folder...")
+    
+    parser = DoclingPdfParser(loglevel="fatal")
+    
+    start_time = time.time()
+    
+    documents = []
+    
+    # Load documents sequentially
+    for i, pdf_path in enumerate(pdf_docs):
+        print(f"Loading document {i+1}/{len(pdf_docs)}: {os.path.basename(pdf_path)}")
+        
+        pdf_doc = await parser.load_async(
+            path_or_stream=pdf_path,
+            lazy=False,  # Load all pages immediately
+            boundary_type=PdfPageBoundaryType.CROP_BOX
+        )
+        
+        documents.append(pdf_doc)
+    
+    serial_time = time.time() - start_time
+    
+    print(f"Serial loading completed in {serial_time:.3f} seconds")
+    
+    # Verify all documents were loaded correctly
+    assert len(documents) == len(pdf_docs)
+    
+    total_pages = 0
+    for i, (pdf_doc, pdf_path) in enumerate(zip(documents, pdf_docs)):
+        assert isinstance(pdf_doc, PdfDocument)
+        assert pdf_doc.number_of_pages() > 0
+        
+        # Load and verify first page of each document
+        first_page = next(iter(pdf_doc.iterate_pages()))[1]
+        assert isinstance(first_page, SegmentedPdfPage)
+        
+        total_pages += pdf_doc.number_of_pages()
+        print(f"  Document {i+1}: {os.path.basename(pdf_path)} - {pdf_doc.number_of_pages()} pages")
+    
+    print(f"Successfully loaded {len(documents)} documents with {total_pages} total pages")
+    
+    return serial_time, len(documents), total_pages
+
+
+async def test_async_document_loading_comparison():
+    """Compare parallel vs serial document loading performance."""
+    print("\n" + "="*80)
+    print("DOCUMENT LOADING PERFORMANCE COMPARISON")
+    print("="*80)
+    
+    # Test serial loading
+    serial_time, num_docs, total_pages = await test_async_serial_document_loading()
+    
+    # Test parallel loading
+    parallel_time, num_docs_parallel, total_pages_parallel = await test_async_parallel_document_loading()
+    
+    # Verify consistency
+    assert num_docs == num_docs_parallel
+    assert total_pages == total_pages_parallel
+    
+    # Calculate performance metrics
+    speedup = serial_time / parallel_time if parallel_time > 0 else float('inf')
+    efficiency = speedup / num_docs * 100  # Percentage of ideal speedup
+    
+    print("\n" + "="*80)
+    print("PERFORMANCE RESULTS")
+    print("="*80)
+    print(f"Documents processed: {num_docs}")
+    print(f"Total pages: {total_pages}")
+    print(f"Serial loading time: {serial_time:.3f} seconds")
+    print(f"Parallel loading time: {parallel_time:.3f} seconds")
+    print(f"Speedup: {speedup:.2f}x")
+    print(f"Efficiency: {efficiency:.1f}% (vs ideal {num_docs}x speedup)")
+    
+    if speedup > 1.0:
+        print("✅ Parallel loading is faster than serial loading")
+    elif speedup < 0.9:
+        print("❌ Parallel loading is significantly slower than serial loading")
+    else:
+        print("⚠️  Parallel and serial loading have similar performance")
+    
+    print("="*80)
+
+
+def test_async_document_loading_comparison_sync_wrapper():
+    """Synchronous wrapper for the document loading comparison test."""
+    asyncio.run(test_async_document_loading_comparison())
+
+
+async def test_async_same_document_parallel_loading():
+    """Test loading the same document multiple times in parallel to isolate I/O effects.
+    
+    This test eliminates file system variability by loading the same document
+    multiple times, focusing on C-backend parallelization performance.
+    """
+    # Use one of the larger documents for more meaningful timing
+    test_document = "tests/data/cases/case_04.pdf"  # 646KB document
+    num_instances = 9  # Same number as the document comparison test
+    
+    print(f"\n" + "="*80)
+    print("SAME DOCUMENT PARALLEL LOADING TEST")
+    print("="*80)
+    print(f"Loading {test_document} {num_instances} times")
+    
+    parser = DoclingPdfParser(loglevel="fatal")
+    
+    # Serial loading
+    print(f"\nSerial loading ({num_instances} instances)...")
+    start_time = time.time()
+    
+    serial_docs = []
+    for i in range(num_instances):
+        pdf_doc = await parser.load_async(
+            path_or_stream=test_document,
+            lazy=False,
+            boundary_type=PdfPageBoundaryType.CROP_BOX
+        )
+        serial_docs.append(pdf_doc)
+    
+    serial_time = time.time() - start_time
+    print(f"Serial loading completed in {serial_time:.3f} seconds")
+    
+    # Parallel loading
+    print(f"\nParallel loading ({num_instances} instances)...")
+    start_time = time.time()
+    
+    load_tasks = [
+        parser.load_async(
+            path_or_stream=test_document,
+            lazy=False,
+            boundary_type=PdfPageBoundaryType.CROP_BOX
+        )
+        for _ in range(num_instances)
+    ]
+    
+    parallel_docs = await asyncio.gather(*load_tasks)
+    parallel_time = time.time() - start_time
+    print(f"Parallel loading completed in {parallel_time:.3f} seconds")
+    
+    # Verify results
+    assert len(serial_docs) == len(parallel_docs) == num_instances
+    
+    # Calculate metrics
+    speedup = serial_time / parallel_time if parallel_time > 0 else float('inf')
+    efficiency = speedup / num_instances * 100
+    
+    print(f"\n" + "="*80)
+    print("SAME DOCUMENT PARALLEL LOADING RESULTS")
+    print("="*80)
+    print(f"Document: {os.path.basename(test_document)}")
+    print(f"Instances loaded: {num_instances}")
+    print(f"Pages per instance: {serial_docs[0].number_of_pages()}")
+    print(f"Serial loading time: {serial_time:.3f} seconds")
+    print(f"Parallel loading time: {parallel_time:.3f} seconds")
+    print(f"Speedup: {speedup:.2f}x")
+    print(f"Efficiency: {efficiency:.1f}% (vs ideal {num_instances}x speedup)")
+    
+    if speedup > 1.5:
+        print("✅ Good parallelization - bottleneck likely in file I/O")
+    elif speedup > 1.0:
+        print("⚠️  Modest parallelization - C-backend may have synchronization overhead")
+    else:
+        print("❌ Poor parallelization - likely GIL or resource contention issues")
+    
+    print("="*80)
+    
+    return speedup, efficiency
+
+
+def test_async_same_document_parallel_loading_sync_wrapper():
+    """Synchronous wrapper for the same document parallel loading test."""
+    asyncio.run(test_async_same_document_parallel_loading())

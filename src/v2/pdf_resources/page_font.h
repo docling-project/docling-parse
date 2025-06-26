@@ -98,7 +98,6 @@ namespace pdflib
     static base_fonts     bfonts;
     
     // Thread-safety for font cache initialization
-    static std::once_flag init_flag;
     static std::atomic<bool> initialized;
 
   private:
@@ -158,7 +157,6 @@ namespace pdflib
   base_fonts     pdf_resource<PAGE_FONT>::bfonts = base_fonts();
   
   // Thread-safety initialization
-  std::once_flag pdf_resource<PAGE_FONT>::init_flag;
   std::atomic<bool> pdf_resource<PAGE_FONT>::initialized(false);
 
   pdf_resource<PAGE_FONT>::pdf_resource()
@@ -179,8 +177,15 @@ namespace pdflib
   void pdf_resource<PAGE_FONT>::initialise(nlohmann::json                 data,
 					   std::map<std::string, double>& timings)
   {
-    // Use std::call_once to ensure thread-safe initialization
-    std::call_once(init_flag, [&]() {
+    // Eager initialization - always initialize if not already done
+    // This ensures resources are available for parallel document loading
+    if (!initialized.load()) {
+      // Use a static mutex to ensure thread-safe initialization
+      static std::mutex init_mutex;
+      std::lock_guard<std::mutex> lock(init_mutex);
+      
+      // Double-check pattern to avoid unnecessary initialization
+      if (!initialized.load()) {
       LOG_S(INFO) << __FUNCTION__ << ": " << data.dump(2);
       
       std::string PDFS_RESOURCES_DIR = "../docling_parse/pdf_resources_v2/";
@@ -247,12 +252,8 @@ namespace pdflib
         timings["init-bfonts"] = timer.get_time();
       }
       
-      initialized.store(true, std::memory_order_release);
-    });
-    
-    // Wait for initialization to complete
-    while (!initialized.load(std::memory_order_acquire)) {
-      std::this_thread::yield();
+        initialized.store(true, std::memory_order_release);
+      }
     }
   }
 

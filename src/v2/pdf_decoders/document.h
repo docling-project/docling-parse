@@ -4,6 +4,7 @@
 #define PDF_DOCUMENT_DECODER_H
 
 #include <qpdf/QPDF.hh>
+#include <mutex>
 //#include <qpdf/QPDFPageObjectHelper.hh>
 
 namespace pdflib
@@ -33,6 +34,9 @@ namespace pdflib
     void decode_document(std::string page_boundary, bool do_sanitization);
 
     void decode_document(std::vector<int>& page_numbers, std::string page_boundary, bool do_sanitization);
+    
+    // Thread-safe document access methods
+    std::lock_guard<std::mutex> get_lock() const { return std::lock_guard<std::mutex>(document_mutex); }
 
   private:
 
@@ -57,6 +61,10 @@ namespace pdflib
     //nlohmann::json json_toc; // table-of-contents
     nlohmann::json json_annots;
     nlohmann::json json_document;
+    
+    // Per-document mutex to prevent concurrent access to same document
+    // while allowing different documents to be processed in parallel
+    mutable std::mutex document_mutex;
   };
 
   pdf_decoder<DOCUMENT>::pdf_decoder():
