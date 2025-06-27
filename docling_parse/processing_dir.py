@@ -1,15 +1,20 @@
 import argparse
+import asyncio
 import glob
 import hashlib
 import logging
 import os
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from queue import Queue
 
+from docling_core.types.doc.page import PdfPageBoundaryType
 from tabulate import tabulate
 
-from docling_parse import pdf_parser_v2  # type: ignore[attr-defined]
+from docling_parse.pdf_parser import DoclingPdfParser, PdfDocument
+
+# from docling_parse import pdf_parser_v2  # type: ignore[attr-defined]
 
 # Configure logging
 logging.basicConfig(
@@ -69,6 +74,14 @@ def fetch_files_from_disk(directory, recursive, task_queue):
     """Recursively fetch files from disk and add them to the queue."""
     logging.info(f"Fetching file keys from disk: {directory}")
 
+    if os.path.exists(directory) and os.path.isfile(directory):
+        # Create a FileTask object
+        hash_object = hashlib.sha256(directory.encode(), usedforsecurity=False)
+        file_hash = hash_object.hexdigest()
+
+        task = FileTask(folder_name=directory, file_name=directory, file_hash=file_hash)
+        task_queue.put(task)
+
     for filename in sorted(glob.glob(os.path.join(directory, "*.pdf"))):
 
         file_name = str(Path(filename).resolve())
@@ -84,8 +97,11 @@ def fetch_files_from_disk(directory, recursive, task_queue):
     logging.info("Done with queue")
 
 
-def process_files_from_queue(file_queue: Queue, page_level: bool, loglevel: str):
-    """Process files from the queue."""
+async def async_process_files_from_queue(
+    file_queue: Queue, page_level: bool, loglevel: str, sync: bool
+):
+
+    parser = DoclingPdfParser(loglevel="fatal")
 
     overview = []
 
@@ -95,74 +111,107 @@ def process_files_from_queue(file_queue: Queue, page_level: bool, loglevel: str)
         if task is None:  # End of queue signal
             break
 
-        logging.info(
-            f"Queue-size [{file_queue.qsize()}], Processing task: {task.file_name}"
-        )
+        # logging.info(
+        print(f"Queue-size [{file_queue.qsize()}], Processing task: {task.file_name}")
 
         try:
-            parser = pdf_parser_v2(loglevel)
+            start_time = time.time()
 
-            parser.load_document(task.file_hash, str(task.file_name))
+            # Load document asynchronously
+            pdf_doc: PdfDocument = await parser.load_async(
+                path_or_stream=task.file_name,
+                lazy=True,
+                boundary_type=PdfPageBoundaryType.CROP_BOX,
+            )
+            assert pdf_doc is not None
 
-            num_pages = parser.number_of_pages(task.file_hash)
-            logging.info(f" => #-pages of {task.file_name}: {num_pages}")
+            num_pages = pdf_doc.number_of_pages()
 
-            overview.append([str(task.file_name), num_pages, -1, True])
+            if sync:
+                # Load pages sequentially using async
+                pages = []
+                for page_no in range(1, pdf_doc.number_of_pages() + 1):
+                    page = await pdf_doc.get_page_async(
+                        page_no=page_no, create_words=True, create_textlines=True
+                    )
+                    pages.append(page)
 
-            if page_level:
-                # Parse page by page to minimize memory footprint
-                for page in range(0, num_pages):
-                    fname = f"{task.file_name}-page-{page:03}.json"
-
-                    try:
-                        json_doc = parser.parse_pdf_from_key_on_page(
-                            task.file_hash, page
-                        )
-
-                        """
-                        with open(os.path.join(directory, fname), "w") as fw:
-                            fw.write(json.dumps(json_doc, indent=2))
-                        """
-
-                        overview.append([fname, num_pages, page, True])
-                    except Exception as exc:
-                        overview.append([fname, num_pages, page, False])
-                        logging.error(
-                            f"problem with parsing {task.file_name} on page {page}: {exc}"
-                        )
             else:
+                # Load all pages in parallel using asyncio.gather
+                page_numbers = list(range(1, pdf_doc.number_of_pages() + 1))
 
-                parser.parse_pdf_from_key(task.file_hash)
+                # Create tasks for parallel page loading
+                page_tasks = [
+                    pdf_doc.get_page_async(
+                        page_no=page_no, create_words=True, create_textlines=True
+                    )
+                    for page_no in page_numbers
+                ]
+                print(f"number of tasks: {len(page_tasks)}")
+
+                # Execute all page loading tasks in parallel
+                # pages = await asyncio.gather(*page_tasks)
+                # pages = await asyncio.gather(page_tasks[0:4])
+
+                STEP = 2
+                for i in range(0, len(page_tasks), STEP):
+                    print(i)
+                    sublist = page_tasks[i : i + STEP]
+                    pages = await asyncio.gather(*sublist)
 
                 """
-                # with open(os.path.join(task.folder_name, f"{task.file_name}.json"), "w") as fw:
-                with open(f"{task.file_name}.json", "w") as fw:
-                    fw.write(json.dumps(json_doc, indent=2))
+                for page_task in page_tasks:
+                    print(page_task)
+                    await page_task
                 """
 
-                overview.append([str(task.file_name), num_pages, -1, True])
+            end_time = time.time()
 
-            # Unload the (QPDF) document and buffers
-            parser.unload_document(task.file_hash)
+            elapsed_time = end_time - start_time
+            print(f"Elapsed time on tasks: {elapsed_time:.2f} seconds")
+
+            overview.append(
+                [os.path.basename(str(task.file_name)), num_pages, elapsed_time, True]
+            )
 
         except Exception as exc:
             logging.error(exc)
-            overview.append([str(task.file_name), -1, -1, False])
+            overview.append([os.path.basename(str(task.file_name)), -1, -1, False])
 
     return overview
+
+
+def process_files_from_queue(
+    file_queue: Queue, page_level: bool, loglevel: str, sync: bool
+):
+    return asyncio.run(
+        async_process_files_from_queue(file_queue, page_level, loglevel, sync=sync)
+    )
 
 
 def main():
 
     directory, recursive, loglevel, page_level_parsing = parse_arguments()
 
+    """
     task_queue = Queue()
-
     fetch_files_from_disk(directory, recursive, task_queue)
 
-    overview = process_files_from_queue(task_queue, page_level_parsing, loglevel)
+    overview_sync = process_files_from_queue(task_queue, page_level_parsing, loglevel, sync=True)
+    print(tabulate(overview_sync, headers=["filename", "#-pages", "total-time", "success"]))
+    """
 
-    print(tabulate(overview, headers=["filename", "success", "page-number", "#-pages"]))
+    task_queue = Queue()
+    fetch_files_from_disk(directory, recursive, task_queue)
+
+    overview_async = process_files_from_queue(
+        task_queue, page_level_parsing, loglevel, sync=False
+    )
+    print(
+        tabulate(
+            overview_async, headers=["filename", "#-pages", "total-time", "success"]
+        )
+    )
 
     logging.info("All files processed successfully.")
 
