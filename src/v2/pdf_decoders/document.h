@@ -307,7 +307,6 @@ namespace pdflib
     
     bool set_timer=true; // make sure we override all timings for this page-set
     
-    //for(auto page_number:page_numbers)
     for(int l=0; l<page_numbers.size(); l++)
       {
 	int page_number = page_numbers.at(l);
@@ -318,16 +317,9 @@ namespace pdflib
 	  {
 	    utils::timer page_timer;
 	    
-	    //pdf_decoder<PAGE> page_decoder(pages.at(page_number));
-	    
 	    std::vector<QPDFObjectHandle> page_handles = individual_pages.at(page_number).getAllPages();
-	    //QPDFObjectHandle page_handle = page_handels.at(0).
-	    {
-	      //std::lock_guard<std::mutex> lock(mtx);
-	      
-	    }
+	    assert(page_handles.size()==1);
 	    
-	    //pdf_decoder<PAGE> page_decoder(pages.at(page_number));
 	    pdf_decoder<PAGE> page_decoder(page_handles.at(0));
 	    
 	    auto timings_ = page_decoder.decode_page(page_boundary, do_sanitization);
