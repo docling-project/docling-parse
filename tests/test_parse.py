@@ -373,8 +373,12 @@ async def test_async_parallel_page_loading():
     and demonstrate the need for proper thread synchronization in the C++ implementation.
     """
     filename = "tests/data/cases/2206.01062.pdf"
+    print(f"testing on {filename}")
     
-    parser = DoclingPdfParser(loglevel="info")
+    import time
+    start_time = time.time()
+    
+    parser = DoclingPdfParser(loglevel="fatal")
     
     # Load document asynchronously
     pdf_doc: PdfDocument = await parser.load_async(
@@ -393,21 +397,30 @@ async def test_async_parallel_page_loading():
     page_numbers = list(range(1, pdf_doc.number_of_pages() + 1))
 
     # Create tasks for parallel page loading
-    # MAX_TASKS = 2
     page_tasks = [
         pdf_doc.get_page_async(page_no=page_no, create_words=True, create_textlines=True)
-        for page_no in page_numbers #[0:MAX_TASKS]
+        for page_no in page_numbers
     ]
     
     print(f"Created {len(page_tasks)} parallel tasks for pages {page_numbers}")
     print("Executing parallel page loading (this may crash due to C-backend thread-safety issues)...")
 
     try:
+        start_time_tasks = time.time()
+        
         # Execute all page loading tasks in parallel
         pages = await asyncio.gather(*page_tasks)
         
         # If we reach here, the parallel loading succeeded (unexpected)
         print("WARNING: Parallel loading succeeded - this may indicate thread-safety has been fixed")
+
+        end_time = time.time()        
+
+        elapsed_time = end_time - start_time_tasks
+        print(f"Elapsed time on tasks: {elapsed_time:.2f} seconds")
+        
+        elapsed_time = end_time - start_time
+        print(f"Elapsed total time: {elapsed_time:.2f} seconds")
         
         # Verify all pages were loaded correctly
         assert len(pages) == 9 #MAX_TASKS
@@ -462,8 +475,12 @@ def test_async_parallel_page_loading_sync_wrapper():
 async def test_async_sequential_page_loading():
     """Test async interface with sequential page loading to verify async functionality works correctly."""
     filename = "tests/data/cases/2206.01062.pdf"
+    print(f"testing on {filename}")
     
-    parser = DoclingPdfParser(loglevel="info")
+    import time
+    start_time = time.time()
+    
+    parser = DoclingPdfParser(loglevel="fatal")
     
     # Load document asynchronously
     pdf_doc: PdfDocument = await parser.load_async(
@@ -474,12 +491,22 @@ async def test_async_sequential_page_loading():
     
     assert pdf_doc is not None
     assert pdf_doc.number_of_pages() == 9
+
+    start_time_tasks = time.time()
     
     # Load pages sequentially using async
     pages = []
     for page_no in range(1, pdf_doc.number_of_pages() + 1):
         page = await pdf_doc.get_page_async(page_no=page_no, create_words=True, create_textlines=True)
         pages.append(page)
+
+    end_time = time.time()        
+
+    elapsed_time = end_time - start_time_tasks
+    print(f"Elapsed time on tasks: {elapsed_time:.2f} seconds")
+
+    elapsed_time = end_time - start_time
+    print(f"Elapsed total time: {elapsed_time:.2f} seconds")
     
     # Verify all pages were loaded correctly
     assert len(pages) == 9
