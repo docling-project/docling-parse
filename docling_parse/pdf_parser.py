@@ -4,7 +4,7 @@ import asyncio
 import hashlib
 from io import BytesIO
 from pathlib import Path
-from typing import Dict, Iterator, List, Optional, Tuple, Union, Any
+from typing import AsyncIterator, Dict, Iterator, List, Optional, Tuple, Union
 
 from docling_core.types.doc.base import BoundingBox, CoordOrigin
 from docling_core.types.doc.page import (
@@ -27,8 +27,6 @@ from docling_parse.pdf_parsers import pdf_parser_v2  # type: ignore[import]
 from docling_parse.pdf_parsers import pdf_sanitizer  # type: ignore[import]
 
 
-
-
 class PdfDocument:
 
     def iterate_pages(
@@ -39,7 +37,7 @@ class PdfDocument:
 
     async def iterate_pages_async(
         self,
-    ) -> Iterator[Tuple[int, SegmentedPdfPage]]:
+    ) -> AsyncIterator[Tuple[int, SegmentedPdfPage]]:
         for page_no in range(self.number_of_pages()):
             yield page_no + 1, await self.get_page_async(page_no + 1)
 
@@ -55,7 +53,6 @@ class PdfDocument:
         self._pages: Dict[int, SegmentedPdfPage] = {}
         self._toc: Optional[PdfTableOfContents] = None
         self._meta: Optional[PdfMetaData] = None
-
 
     def is_loaded(self) -> bool:
         return self._parser.is_loaded(key=self._key)
@@ -203,14 +200,16 @@ class PdfDocument:
                 create_textlines=create_lines,
             )  # put on cache
 
-    async def load_all_pages_async(self, create_words: bool = True, create_lines: bool = True):
+    async def load_all_pages_async(
+        self, create_words: bool = True, create_lines: bool = True
+    ):
         doc_dict = await asyncio.to_thread(
             self._parser.parse_pdf_from_key,
-            key=self._key, 
+            key=self._key,
             page_boundary=self._boundary_type.value,  # Convert enum to string
-            do_sanitization=False
+            do_sanitization=False,
         )
-        
+
         for pi, page in enumerate(doc_dict["pages"]):
             # will need to be changed once we remove the original/sanitized from C++
             self._pages[pi + 1] = self._to_segmented_page(
