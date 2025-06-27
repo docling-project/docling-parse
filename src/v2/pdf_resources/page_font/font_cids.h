@@ -122,7 +122,7 @@ namespace pdflib
 	for(auto file:files)
 	  {
 	    std::string key = "/"+file;
-	    LOG_S(INFO) << __FUNCTION__ << "\t" << file;
+	    //LOG_S(INFO) << __FUNCTION__ << "\t" << file;
 	    
 	    cmap_2_columns[key]  = (itr->second);
 	    cmap_2_columns[file] = (itr->second);
@@ -132,6 +132,8 @@ namespace pdflib
 	    
 	    cmap_2_filename[key]  = cdir+"/"+file;
 	    cmap_2_filename[file] = cdir+"/"+file;
+
+	    LOG_S(INFO) << "registering the font-cid " << key << " at " << file;    
 	  }
       }
 
@@ -153,6 +155,8 @@ namespace pdflib
 	std::vector<std::string> columns = cmap_2_columns[cmap_name];
 	std::string cid2code = cmap_2_cid2code[cmap_name];
 	std::string filename = cmap_2_filename[cmap_name];
+
+	LOG_S(INFO) << "reading the font-cid " << cmap_name << " at " << filename;    
 	
 	font_cid& cid = cids[cmap_name];
 	cid.decode_cmap_resource(filename, cid2code, columns);

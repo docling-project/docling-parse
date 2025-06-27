@@ -172,11 +172,9 @@ namespace pdflib
     LOG_S(INFO) << "standard-fonts: " << standard.size();
     for(auto path:standard)
       {
-	LOG_S(INFO) << "\t file-name: " << path;
-
         std::string fontname = read_fontname(path);
-	//LOG_S(INFO) << "\t font-name: " << fontname;
-
+	LOG_S(INFO) << "\t registering font " << fontname << "at " << path;
+	
 	base_font bf(path, glyphs);	
 	name_to_basefont.emplace(std::pair<std::string, base_font>(fontname, bf));	
 
@@ -193,7 +191,7 @@ namespace pdflib
 
 	if(name_to_basefont.count(fontname)==0)
 	  {
-	    LOG_S(INFO) << "\t reading font " << fontname << "at " << path;
+	    LOG_S(INFO) << "\t registering font " << fontname << "at " << path;
 	    
 	    base_font bf(path, glyphs);
 	    name_to_basefont.emplace(std::pair<std::string, base_font>(fontname, bf));	
@@ -211,11 +209,10 @@ namespace pdflib
     for(auto path:tex)
       {
         std::string fontname = read_fontname(path);
-	//LOG_S(INFO) << "\t font-name: " << fontname;
 
 	if(name_to_basefont.count(fontname)==0)
 	  {
-	    LOG_S(INFO) << "\t reading font " << fontname << "at " << path;
+	    LOG_S(INFO) << "\t registering font " << fontname << "at " << path;
 
 	    base_font bf(path, glyphs);
 	    name_to_basefont.emplace(std::pair<std::string, base_font>(fontname, bf));	
@@ -231,6 +228,8 @@ namespace pdflib
 
   std::string base_fonts::read_fontname(std::string filename)
   {
+    //LOG_S(INFO) << "\t reading font with filename " << filename;
+    
     std::string fontname = "unknown";
 
     std::ifstream file(filename.c_str());

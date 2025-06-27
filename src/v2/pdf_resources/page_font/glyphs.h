@@ -39,6 +39,8 @@ namespace pdflib
     
   private:
 
+    // std::mutex mtx;
+    
     bool initialized;
     
     std::set<std::string> unknown_glyphs;
@@ -96,16 +98,20 @@ namespace pdflib
   std::string font_glyphs::operator[](std::string key)
   {
     if(name_to_utf8.count(key)==1)
-      return name_to_utf8[key];
-
+      {
+	return name_to_utf8[key];
+      }
+    
     LOG_S(ERROR) << "could not find a glyph with name=" << key;
     unknown_glyphs.insert(key);
 
-    return "glyph["+key+"]";
+    return "GLYPH<"+key+">";
   }
 
   void font_glyphs::initialise(std::string dirname)
   {
+    // std::lock_guard<std::mutex> lock(mtx);
+    
     if(initialized)
       {
 	LOG_S(WARNING) << "skipping font_glyphs::initialise, already initialized ...";

@@ -11,6 +11,8 @@
 #include <regex>
 #include <fstream>
 #include <iostream>
+#include <mutex>
+#include <thread>
 
 #ifdef _WIN32
 #include <share.h> // to define _SH_DENYNO for loguru

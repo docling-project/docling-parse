@@ -26,6 +26,8 @@ namespace pdflib
 
   private:
 
+    std::mutex mtx;
+    
     font_encoding_name name;
     
     std::map<uint32_t, std::string> numb_to_name;
@@ -48,6 +50,8 @@ namespace pdflib
                                  std::string file_name,
                                  glyphs_type& glyphs)
   {
+    std::lock_guard<std::mutex> lock(mtx);
+    
     LOG_S(WARNING) << __FUNCTION__ << ": " << file_name;
 
     name = name_;

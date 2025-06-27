@@ -56,6 +56,8 @@ namespace pdflib
 
     for(auto item:items)
       {
+	LOG_S(INFO) << "reading the font-encodings " << item.first << " at " << item.second;    
+	
         font_encoding& encoding = name_to_encoding[item.first];
         encoding.initialise(item.first, dirname+"/"+item.second, glyphs);
       }

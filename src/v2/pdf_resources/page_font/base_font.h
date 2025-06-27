@@ -35,12 +35,12 @@ namespace pdflib
 
     std::array<double, 4> get_font_bbox();
 
-    //private:
-
     void initialise();
 
   private:
 
+    std::mutex mtx;
+    
     std::string filename;
     font_glyphs& glyphs;
 
@@ -220,13 +220,15 @@ namespace pdflib
 
   void base_font::initialise()
   {
+    std::lock_guard<std::mutex> lock(mtx);
+    
     if(initialised)
       {
 	return;
       }
     initialised = true;
 
-    LOG_S(WARNING) << "initialising base-font: " << filename;
+    LOG_S(WARNING) << "initialising base-font by reading file: " << filename;
     
     std::ifstream file(filename.c_str());
 

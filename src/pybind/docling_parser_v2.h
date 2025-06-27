@@ -351,7 +351,7 @@ namespace docling
 							       std::string page_boundary,
 							       bool do_sanitization)
   {
-    LOG_S(INFO) << __FUNCTION__;
+    LOG_S(INFO) << __FUNCTION__ << " with key: " << key << ", page: " << page;
     
     auto itr = key2doc.find(key);
     if(itr==key2doc.end())

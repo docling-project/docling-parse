@@ -38,6 +38,8 @@ namespace pdflib
 
   private:
 
+    std::mutex mtx;
+    
     std::map<uint32_t, uint32_t>    cmap2cid;
     std::map<uint32_t, std::string> cid2utf8;
 
@@ -272,6 +274,8 @@ namespace pdflib
                                       std::string              cid2code,
                                       std::vector<std::string> columns)
   {
+    std::lock_guard<std::mutex> lock(mtx);
+    
     LOG_S(INFO) << __FUNCTION__;
 
     {
@@ -308,6 +312,8 @@ namespace pdflib
 
   void font_cid::decode_widths(std::map<uint32_t, double>& numb_to_widths)
   {
+    std::lock_guard<std::mutex> lock(mtx);
+    
     LOG_S(INFO) << __FUNCTION__;
 
     std::map<uint32_t, double> numb_to_widths_ = numb_to_widths;

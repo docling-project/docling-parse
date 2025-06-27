@@ -374,7 +374,7 @@ async def test_async_parallel_page_loading():
     """
     filename = "tests/data/cases/2206.01062.pdf"
     
-    parser = DoclingPdfParser(loglevel="fatal")
+    parser = DoclingPdfParser(loglevel="info")
     
     # Load document asynchronously
     pdf_doc: PdfDocument = await parser.load_async(
@@ -391,16 +391,17 @@ async def test_async_parallel_page_loading():
     
     # Load all pages in parallel using asyncio.gather
     page_numbers = list(range(1, pdf_doc.number_of_pages() + 1))
-    
+
     # Create tasks for parallel page loading
+    # MAX_TASKS = 2
     page_tasks = [
         pdf_doc.get_page_async(page_no=page_no, create_words=True, create_textlines=True)
-        for page_no in page_numbers
+        for page_no in page_numbers #[0:MAX_TASKS]
     ]
     
     print(f"Created {len(page_tasks)} parallel tasks for pages {page_numbers}")
     print("Executing parallel page loading (this may crash due to C-backend thread-safety issues)...")
-    
+
     try:
         # Execute all page loading tasks in parallel
         pages = await asyncio.gather(*page_tasks)
@@ -409,7 +410,7 @@ async def test_async_parallel_page_loading():
         print("WARNING: Parallel loading succeeded - this may indicate thread-safety has been fixed")
         
         # Verify all pages were loaded correctly
-        assert len(pages) == 9
+        assert len(pages) == 9 #MAX_TASKS
         
         for i, page in enumerate(pages):
             assert isinstance(page, SegmentedPdfPage)
@@ -442,7 +443,6 @@ async def test_async_parallel_page_loading():
         # Re-raise to make the test fail
         raise
 
-
 def test_async_parallel_page_loading_sync_wrapper():
     """Synchronous wrapper for the async test to integrate with pytest.
     
@@ -463,7 +463,7 @@ async def test_async_sequential_page_loading():
     """Test async interface with sequential page loading to verify async functionality works correctly."""
     filename = "tests/data/cases/2206.01062.pdf"
     
-    parser = DoclingPdfParser(loglevel="fatal")
+    parser = DoclingPdfParser(loglevel="info")
     
     # Load document asynchronously
     pdf_doc: PdfDocument = await parser.load_async(
