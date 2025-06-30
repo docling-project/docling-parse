@@ -913,7 +913,8 @@ namespace pdf_lib
 
       //std::cout << name << "\n";
       
-      if(bbox.isInitialized())
+      //if(bbox.isInitialized())
+      if(bbox) // using the new explicit bool() operator
         {
           if(not fm.ascent)
             {
