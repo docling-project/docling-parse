@@ -329,12 +329,14 @@ namespace pdflib
 
 	    {
 	      std::lock_guard<std::mutex> lock(mtx);
-	      json_pages[l] = page_decoder.get();
 
 	      std::stringstream ss;
-	      ss << "decoding page " << page_number;
+	      ss << "decoding page: " << page_number;
 	      
-	      timings[ss.str()] = page_timer.get_time();
+	      LOG_S(INFO) << ss.str();
+	      
+	      json_pages[l] = page_decoder.get();
+	      timings[ss.str()] = page_timer.get_time();	      
 	    }
 	  }
 	else

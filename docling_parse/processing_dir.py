@@ -101,7 +101,7 @@ async def async_process_files_from_queue(
     file_queue: Queue, page_level: bool, loglevel: str, sync: bool
 ):
 
-    parser = DoclingPdfParser(loglevel="fatal")
+    parser = DoclingPdfParser(loglevel=loglevel)
 
     overview = []
 
@@ -112,7 +112,7 @@ async def async_process_files_from_queue(
             break
 
         # logging.info(
-        print(f"Queue-size [{file_queue.qsize()}], Processing task: {task.file_name}")
+        print(f"Queue-size [{file_queue.qsize()}], Processing task (sync: {sync}): {task.file_name}")
 
         try:
             start_time = time.time()
@@ -153,7 +153,7 @@ async def async_process_files_from_queue(
                 # pages = await asyncio.gather(*page_tasks)
                 # pages = await asyncio.gather(page_tasks[0:4])
 
-                STEP = 2
+                STEP = 1
                 for i in range(0, len(page_tasks), STEP):
                     print(i)
                     sublist = page_tasks[i : i + STEP]
