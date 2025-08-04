@@ -257,8 +257,11 @@ def test_reference_documents_from_filenames():
                     )
 
                     _fname = fname + f".{unit}.txt"
+
+                    lines = []
                     with open(_fname, "r") as fr:
-                        lines = fr.readlines()
+                        for line in fr:
+                            lines.append(line.removesuffix("\n"))
 
                     assert len(lines) == len(
                         _lines
