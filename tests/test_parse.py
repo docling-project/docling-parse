@@ -260,10 +260,19 @@ def test_reference_documents_from_filenames():
                     with open(_fname, "r") as fr:
                         lines = fr.readlines()
 
-                    olines = "".join(lines)
-                    _olines = "\n".join(_lines)
+                    assert len(lines) == len(
+                        _lines
+                    ), f"len(lines) == len(_lines) => {len(lines)} == {len(_lines)}"
 
-                    assert olines == _olines, "olines==_olines"
+                    for i, line in enumerate(lines):
+                        assert (
+                            line == _lines[i]
+                        ), f"line == _lines[i] => {line} == {_lines[i]}"
+
+                    # olines = "".join(lines)
+                    # _olines = "\n".join(_lines)
+
+                    # assert olines == _olines, "olines==_olines"
 
                 true_page = SegmentedPdfPage.load_from_json(fname)
                 verify_SegmentedPdfPage(true_page, pred_page, filename=fname)
