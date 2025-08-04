@@ -1,13 +1,13 @@
-(292.81, 106.64) (302.41, 106.64) (302.41, 115.81) (292.81, 115.81)      /T1_0 51
-(136.92, 680.69) (458.27, 680.69) (458.27, 689.75) (136.92, 689.75)      /T1_1 IN THE NAME OF ALLAH, THE ALL-MERCIFUL, THE MOST MERCIFUL
-(130.86, 658.68) (466.79, 658.68) (466.79, 668.77) (130.86, 668.77)      /T1_0 All praise be to Allah, the Lord of all the worlds, and blessings and peace be 
-(135.42, 642.68) (459.79, 642.68) (459.79, 652.77) (135.42, 652.77)      /T1_0 upon our master, Muhammad, and his household and all his companions
-(267.00, 571.85) (328.22, 571.85) (328.22, 590.00) (267.00, 590.00)      /T1_2 Preface
-(134.62, 538.08) (477.52, 538.08) (477.52, 549.08) (134.62, 549.08)      /T1_0 The purpose of this standard is to explain the Shari'ah rulings relating to 
-(120.44, 522.08) (477.50, 522.08) (477.50, 533.08) (120.44, 533.08)      /T1_0 trading in currencies, as well as the conditions and precepts laid down by 
-(120.44, 506.08) (477.50, 506.08) (477.50, 517.08) (120.44, 517.08)      /T1_0 the Shari'ah as to what is permissible in currency trading and what is not. 
-(120.44, 490.08) (477.48, 490.08) (477.48, 501.08) (120.44, 501.08)      /T1_0 The standard also explains some of the practices being applied by Islamic 
-(120.44, 474.08) (222.75, 474.08) (222.75, 485.08) (120.44, 485.08)      /T1_0 financial Institutions.
-(222.74, 479.29) (230.94, 479.29) (230.94, 485.70) (222.74, 485.70)      /T1_0 (1)
-(120.44, 161.28) (477.01, 161.28) (477.01, 170.45) (120.44, 170.45)      /T1_0 (1) The word (Institution/Institutions) is used here to refer, in short, to Islamic financial 
+(292.81, 106.64) (302.41, 106.64) (302.41, 115.81) (292.81, 115.81)      /T1_0 51	<|special_separator|>
+(136.92, 680.69) (458.27, 680.69) (458.27, 689.75) (136.92, 689.75)      /T1_1 IN THE NAME OF ALLAH, THE ALL-MERCIFUL, THE MOST MERCIFUL	<|special_separator|>
+(130.86, 658.68) (466.79, 658.68) (466.79, 668.77) (130.86, 668.77)      /T1_0 All praise be to Allah, the Lord of all the worlds, and blessings and peace be 	<|special_separator|>
+(135.42, 642.68) (459.79, 642.68) (459.79, 652.77) (135.42, 652.77)      /T1_0 upon our master, Muhammad, and his household and all his companions	<|special_separator|>
+(267.00, 571.85) (328.22, 571.85) (328.22, 590.00) (267.00, 590.00)      /T1_2 Preface	<|special_separator|>
+(134.62, 538.08) (477.52, 538.08) (477.52, 549.08) (134.62, 549.08)      /T1_0 The purpose of this standard is to explain the Shari'ah rulings relating to 	<|special_separator|>
+(120.44, 522.08) (477.50, 522.08) (477.50, 533.08) (120.44, 533.08)      /T1_0 trading in currencies, as well as the conditions and precepts laid down by 	<|special_separator|>
+(120.44, 506.08) (477.50, 506.08) (477.50, 517.08) (120.44, 517.08)      /T1_0 the Shari'ah as to what is permissible in currency trading and what is not. 	<|special_separator|>
+(120.44, 490.08) (477.48, 490.08) (477.48, 501.08) (120.44, 501.08)      /T1_0 The standard also explains some of the practices being applied by Islamic 	<|special_separator|>
+(120.44, 474.08) (222.75, 474.08) (222.75, 485.08) (120.44, 485.08)      /T1_0 financial Institutions.	<|special_separator|>
+(222.74, 479.29) (230.94, 479.29) (230.94, 485.70) (222.74, 485.70)      /T1_0 (1)	<|special_separator|>
+(120.44, 161.28) (477.01, 161.28) (477.01, 170.45) (120.44, 170.45)      /T1_0 (1) The word (Institution/Institutions) is used here to refer, in short, to Islamic financial 	<|special_separator|>
 (134.62, 149.28) (280.25, 149.28) (280.25, 158.45) (134.62, 158.45)      /T1_0 institutions including Islamic Banks.

@@ -234,6 +234,8 @@ def test_reference_documents_from_filenames():
                 GROUNDTRUTH_FOLDER, rname + f".page_no_{page_no}.py.json"
             )
 
+            SPECIAL_SEPERATOR = "\t<|special_separator|>\n"
+
             if GENERATE or (not os.path.exists(fname)):
                 pred_page.save_as_json(fname)
 
@@ -245,7 +247,7 @@ def test_reference_documents_from_filenames():
                     )
                     _fname = fname + f".{unit}.txt"
                     with open(_fname, "w") as fw:
-                        fw.write("\n".join(lines))
+                        fw.write(SPECIAL_SEPERATOR.join(lines))
             else:
                 # print(f"loading from {fname}")
 
@@ -260,22 +262,17 @@ def test_reference_documents_from_filenames():
 
                     lines = []
                     with open(_fname, "r") as fr:
-                        for line in fr:
-                            lines.append(line.removesuffix("\n"))
+                        content = fr.read()
+                        lines = content.split(SPECIAL_SEPERATOR)
 
                     assert len(lines) == len(
                         _lines
-                    ), f"len(lines) == len(_lines) => {len(lines)} == {len(_lines)}"
+                    ), f"len(lines) == len(_lines) => {len(lines)} == {len(_lines)} from {_fname}"
 
                     for i, line in enumerate(lines):
                         assert (
                             line == _lines[i]
                         ), f"line == _lines[i] => {line} == {_lines[i]}"
-
-                    # olines = "".join(lines)
-                    # _olines = "\n".join(_lines)
-
-                    # assert olines == _olines, "olines==_olines"
 
                 true_page = SegmentedPdfPage.load_from_json(fname)
                 verify_SegmentedPdfPage(true_page, pred_page, filename=fname)

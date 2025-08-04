@@ -1,43 +1,43 @@
-(390.02, 037.52) (394.02, 037.52) (394.02, 044.83) (390.02, 044.83)      /T1_0 9
-(295.49, 597.55) (365.67, 597.55) (365.67, 604.87) (295.49, 604.87)      /T1_0 2. The Lost Homeland
-(056.69, 573.16) (368.45, 573.16) (368.45, 583.22) (056.69, 583.22)      /T1_0 This description told me that Steinkirche was somewhere in the vicinity 
-(056.69, 559.96) (368.40, 559.96) (368.40, 570.02) (056.69, 570.02)      /T1_0 of  Strehlen.  Then,  according  to  Elfriede's  stories  about  walking  her 
-(056.69, 546.76) (368.43, 546.76) (368.43, 556.82) (056.69, 556.82)      /T1_0 animals, ducks, geese and a goat to the railway station to meet visitors, 
-(056.69, 533.56) (368.46, 533.56) (368.46, 543.62) (056.69, 543.62)      /T1_0 a station once existed near the village. I wondered whether it had survived 
-(056.69, 520.36) (368.42, 520.36) (368.42, 530.42) (056.69, 530.42)      /T1_0 the bombing. I have seen films of the utter devastation along the Oder 
-(056.69, 507.16) (368.47, 507.16) (368.47, 517.22) (056.69, 517.22)      /T1_0 River in early May 1945, just before the War in Europe ended. Did the 
-(056.69, 493.96) (368.43, 493.96) (368.43, 504.02) (056.69, 504.02)      /T1_0 railway still pass Steinkirche? My mother's father had been a railway line 
-(056.69, 480.76) (368.42, 480.76) (368.42, 490.82) (056.69, 490.82)      /T1_0 pointsman, a signal attendant. From a station close to home he would 
-(056.69, 467.56) (292.18, 467.56) (292.18, 477.62) (056.69, 477.62)      /T1_0 have undertaken the long journeys his work demanded.
-(056.69, 445.86) (368.46, 445.86) (368.46, 455.92) (056.69, 455.92)      /T1_0 I went back to the old German maps in the National Library and located 
-(056.69, 432.66) (368.41, 432.66) (368.41, 442.72) (056.69, 442.72)      /T1_0 Steinkirche on one of several contiguous contour maps perhaps designed 
-(056.69, 419.46) (368.42, 419.46) (368.42, 429.52) (056.69, 429.52)      /T1_0 for military purposes. They covered Lower Silesia in 1938 in·remarkable 
-(056.69, 406.26) (368.39, 406.26) (368.39, 416.32) (056.69, 416.32)      /T1_0 detail,  although  such  detail  also  helped  obscure  the  printed  names 
-(056.69, 393.06) (368.43, 393.06) (368.43, 403.12) (056.69, 403.12)      /T1_0 of  villages,  which  were  lost  in  the  depictions  of  miniature  hills,  rivers, 
-(056.69, 379.86) (222.14, 379.86) (222.14, 389.92) (056.69, 389.92)      /T1_0 quarries, castles, lakes and even houses.
-(056.69, 358.15) (368.45, 358.15) (368.45, 368.21) (056.69, 368.21)      /T1_0 Eventually I did locate the village through this superb map. Steinkirche 
-(056.69, 344.95) (368.45, 344.95) (368.45, 355.01) (056.69, 355.01)      /T1_0 was off the main road near the second railway station south of Strehlen, 
-(056.69, 331.75) (368.42, 331.75) (368.42, 341.81) (056.69, 341.81)      /T1_0 probably on a hill, something my mother had never mentioned. If one 
-(056.69, 318.55) (368.38, 318.55) (368.38, 328.61) (056.69, 328.61)      /T1_0 passed  it,  one  could  also  locate  it  as  station  number  two  of  the  seven 
-(056.69, 305.35) (368.43, 305.35) (368.43, 315.41) (056.69, 315.41)      /T1_0 between  Strehlen  and  Milnsterberg,  on  the  railway  running  south  of 
-(056.69, 292.15) (368.43, 292.15) (368.43, 302.21) (056.69, 302.21)      /T1_0 Breslau  towards  the  Carpathian  Mountains.  Then  I  noted  the  Polish 
-(056.69, 278.95) (365.69, 278.95) (365.69, 289.01) (056.69, 289.01)      /T1_0 names for the two townships south of Wroclaw (Breslau). In the German-
-(056.69, 265.75) (296.08, 265.75) (296.08, 275.81) (056.69, 275.81)      /T1_0 to-Polish Gazeteer they are given as Strzelin and Ziebice.
-(056.69, 244.05) (368.37, 244.05) (368.37, 254.11) (056.69, 254.11)      /T1_0 My intention was to take a train or a car to the new Polish ex-Steinkirche, 
-(056.69, 230.85) (368.46, 230.85) (368.46, 240.91) (056.69, 240.91)      /T1_0 visit  it  discreetly,  and  search  the  old  cemetery  for  family  connections. 
-(056.69, 217.65) (368.44, 217.65) (368.44, 227.71) (056.69, 227.71)      /T1_0 I wanted to photograph my two-year-old granddaughter beside my own 
-(056.69, 204.45) (368.40, 204.45) (368.40, 214.51) (056.69, 214.51)      /T1_0 grandfather Friedrich's grave. I wanted to look for other evidence of family 
-(056.69, 191.25) (368.38, 191.25) (368.38, 201.31) (056.69, 201.31)      /T1_0 history, and just savour the atmosphere of the place. I also wanted to see 
-(056.69, 178.05) (224.01, 178.05) (224.01, 188.11) (056.69, 188.11)      /T1_0 what had happened to Neumarkt Platz.
-(056.69, 156.34) (368.47, 156.34) (368.47, 166.41) (056.69, 166.41)      /T1_0 It was difficult to achieve anything in a hurry. In London, my daughter, 
-(056.69, 143.14) (368.42, 143.14) (368.42, 153.21) (056.69, 153.21)      /T1_0 granddaughter and I visited the office of the Polish Consulate. Tourist 
-(056.69, 129.94) (368.44, 129.94) (368.44, 140.01) (056.69, 140.01)      /T1_0 brochures were generously given to us, but none of the authoritative road 
-(056.69, 116.74) (368.45, 116.74) (368.45, 126.81) (056.69, 126.81)      /T1_0 maps of Poland showed the villages between Strzelin and Ziebice. Did our 
-(056.69, 103.54) (213.49, 103.54) (213.49, 113.61) (056.69, 113.61)      /T1_0 village still exist? And by what name?
-(056.69, 081.84) (368.44, 081.84) (368.44, 091.90) (056.69, 091.90)      /T1_0 After flying to Berlin, we set out in a hire car for Wroclaw on 13 September 
-(056.69, 068.64) (368.41, 068.64) (368.41, 078.70) (056.69, 078.70)      /T1_0 2003.  Beside  the  Hitler-era  Autobahn,  there  are  still  extensive  forests, 
-(056.69, 055.44) (115.18, 055.44) (115.18, 065.50) (056.69, 065.50)      /T1_0 between  flat 
-(119.70, 055.44) (167.23, 055.44) (167.23, 065.50) (119.70, 065.50)      /T1_0 farmlands. 
-(171.75, 055.44) (181.33, 055.44) (181.33, 065.50) (171.75, 065.50)      /T1_0 It 
-(185.84, 055.44) (203.85, 055.44) (203.85, 065.50) (185.84, 065.50)      /T1_0 was 
+(390.02, 037.52) (394.02, 037.52) (394.02, 044.83) (390.02, 044.83)      /T1_0 9	<|special_separator|>
+(295.49, 597.55) (365.67, 597.55) (365.67, 604.87) (295.49, 604.87)      /T1_0 2. The Lost Homeland	<|special_separator|>
+(056.69, 573.16) (368.45, 573.16) (368.45, 583.22) (056.69, 583.22)      /T1_0 This description told me that Steinkirche was somewhere in the vicinity 	<|special_separator|>
+(056.69, 559.96) (368.40, 559.96) (368.40, 570.02) (056.69, 570.02)      /T1_0 of  Strehlen.  Then,  according  to  Elfriede's  stories  about  walking  her 	<|special_separator|>
+(056.69, 546.76) (368.43, 546.76) (368.43, 556.82) (056.69, 556.82)      /T1_0 animals, ducks, geese and a goat to the railway station to meet visitors, 	<|special_separator|>
+(056.69, 533.56) (368.46, 533.56) (368.46, 543.62) (056.69, 543.62)      /T1_0 a station once existed near the village. I wondered whether it had survived 	<|special_separator|>
+(056.69, 520.36) (368.42, 520.36) (368.42, 530.42) (056.69, 530.42)      /T1_0 the bombing. I have seen films of the utter devastation along the Oder 	<|special_separator|>
+(056.69, 507.16) (368.47, 507.16) (368.47, 517.22) (056.69, 517.22)      /T1_0 River in early May 1945, just before the War in Europe ended. Did the 	<|special_separator|>
+(056.69, 493.96) (368.43, 493.96) (368.43, 504.02) (056.69, 504.02)      /T1_0 railway still pass Steinkirche? My mother's father had been a railway line 	<|special_separator|>
+(056.69, 480.76) (368.42, 480.76) (368.42, 490.82) (056.69, 490.82)      /T1_0 pointsman, a signal attendant. From a station close to home he would 	<|special_separator|>
+(056.69, 467.56) (292.18, 467.56) (292.18, 477.62) (056.69, 477.62)      /T1_0 have undertaken the long journeys his work demanded.	<|special_separator|>
+(056.69, 445.86) (368.46, 445.86) (368.46, 455.92) (056.69, 455.92)      /T1_0 I went back to the old German maps in the National Library and located 	<|special_separator|>
+(056.69, 432.66) (368.41, 432.66) (368.41, 442.72) (056.69, 442.72)      /T1_0 Steinkirche on one of several contiguous contour maps perhaps designed 	<|special_separator|>
+(056.69, 419.46) (368.42, 419.46) (368.42, 429.52) (056.69, 429.52)      /T1_0 for military purposes. They covered Lower Silesia in 1938 in·remarkable 	<|special_separator|>
+(056.69, 406.26) (368.39, 406.26) (368.39, 416.32) (056.69, 416.32)      /T1_0 detail,  although  such  detail  also  helped  obscure  the  printed  names 	<|special_separator|>
+(056.69, 393.06) (368.43, 393.06) (368.43, 403.12) (056.69, 403.12)      /T1_0 of  villages,  which  were  lost  in  the  depictions  of  miniature  hills,  rivers, 	<|special_separator|>
+(056.69, 379.86) (222.14, 379.86) (222.14, 389.92) (056.69, 389.92)      /T1_0 quarries, castles, lakes and even houses.	<|special_separator|>
+(056.69, 358.15) (368.45, 358.15) (368.45, 368.21) (056.69, 368.21)      /T1_0 Eventually I did locate the village through this superb map. Steinkirche 	<|special_separator|>
+(056.69, 344.95) (368.45, 344.95) (368.45, 355.01) (056.69, 355.01)      /T1_0 was off the main road near the second railway station south of Strehlen, 	<|special_separator|>
+(056.69, 331.75) (368.42, 331.75) (368.42, 341.81) (056.69, 341.81)      /T1_0 probably on a hill, something my mother had never mentioned. If one 	<|special_separator|>
+(056.69, 318.55) (368.38, 318.55) (368.38, 328.61) (056.69, 328.61)      /T1_0 passed  it,  one  could  also  locate  it  as  station  number  two  of  the  seven 	<|special_separator|>
+(056.69, 305.35) (368.43, 305.35) (368.43, 315.41) (056.69, 315.41)      /T1_0 between  Strehlen  and  Milnsterberg,  on  the  railway  running  south  of 	<|special_separator|>
+(056.69, 292.15) (368.43, 292.15) (368.43, 302.21) (056.69, 302.21)      /T1_0 Breslau  towards  the  Carpathian  Mountains.  Then  I  noted  the  Polish 	<|special_separator|>
+(056.69, 278.95) (365.69, 278.95) (365.69, 289.01) (056.69, 289.01)      /T1_0 names for the two townships south of Wroclaw (Breslau). In the German-	<|special_separator|>
+(056.69, 265.75) (296.08, 265.75) (296.08, 275.81) (056.69, 275.81)      /T1_0 to-Polish Gazeteer they are given as Strzelin and Ziebice.	<|special_separator|>
+(056.69, 244.05) (368.37, 244.05) (368.37, 254.11) (056.69, 254.11)      /T1_0 My intention was to take a train or a car to the new Polish ex-Steinkirche, 	<|special_separator|>
+(056.69, 230.85) (368.46, 230.85) (368.46, 240.91) (056.69, 240.91)      /T1_0 visit  it  discreetly,  and  search  the  old  cemetery  for  family  connections. 	<|special_separator|>
+(056.69, 217.65) (368.44, 217.65) (368.44, 227.71) (056.69, 227.71)      /T1_0 I wanted to photograph my two-year-old granddaughter beside my own 	<|special_separator|>
+(056.69, 204.45) (368.40, 204.45) (368.40, 214.51) (056.69, 214.51)      /T1_0 grandfather Friedrich's grave. I wanted to look for other evidence of family 	<|special_separator|>
+(056.69, 191.25) (368.38, 191.25) (368.38, 201.31) (056.69, 201.31)      /T1_0 history, and just savour the atmosphere of the place. I also wanted to see 	<|special_separator|>
+(056.69, 178.05) (224.01, 178.05) (224.01, 188.11) (056.69, 188.11)      /T1_0 what had happened to Neumarkt Platz.	<|special_separator|>
+(056.69, 156.34) (368.47, 156.34) (368.47, 166.41) (056.69, 166.41)      /T1_0 It was difficult to achieve anything in a hurry. In London, my daughter, 	<|special_separator|>
+(056.69, 143.14) (368.42, 143.14) (368.42, 153.21) (056.69, 153.21)      /T1_0 granddaughter and I visited the office of the Polish Consulate. Tourist 	<|special_separator|>
+(056.69, 129.94) (368.44, 129.94) (368.44, 140.01) (056.69, 140.01)      /T1_0 brochures were generously given to us, but none of the authoritative road 	<|special_separator|>
+(056.69, 116.74) (368.45, 116.74) (368.45, 126.81) (056.69, 126.81)      /T1_0 maps of Poland showed the villages between Strzelin and Ziebice. Did our 	<|special_separator|>
+(056.69, 103.54) (213.49, 103.54) (213.49, 113.61) (056.69, 113.61)      /T1_0 village still exist? And by what name?	<|special_separator|>
+(056.69, 081.84) (368.44, 081.84) (368.44, 091.90) (056.69, 091.90)      /T1_0 After flying to Berlin, we set out in a hire car for Wroclaw on 13 September 	<|special_separator|>
+(056.69, 068.64) (368.41, 068.64) (368.41, 078.70) (056.69, 078.70)      /T1_0 2003.  Beside  the  Hitler-era  Autobahn,  there  are  still  extensive  forests, 	<|special_separator|>
+(056.69, 055.44) (115.18, 055.44) (115.18, 065.50) (056.69, 065.50)      /T1_0 between  flat 	<|special_separator|>
+(119.70, 055.44) (167.23, 055.44) (167.23, 065.50) (119.70, 065.50)      /T1_0 farmlands. 	<|special_separator|>
+(171.75, 055.44) (181.33, 055.44) (181.33, 065.50) (171.75, 065.50)      /T1_0 It 	<|special_separator|>
+(185.84, 055.44) (203.85, 055.44) (203.85, 065.50) (185.84, 065.50)      /T1_0 was 	<|special_separator|>
 (208.36, 055.44) (368.42, 055.44) (368.42, 065.50) (208.36, 065.50)      /T1_0 raining  when  we  entered  Poland. 

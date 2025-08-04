@@ -1,62 +1,62 @@
-(482.75, 760.57) (529.98, 760.57) (529.98, 769.92) (482.75, 769.92)       /TT1 Protégé B
-(529.98, 760.79) (591.00, 760.79) (591.00, 769.17) (529.98, 769.17)       /TT2  une fois rempli
-(023.00, 736.66) (229.72, 736.66) (229.72, 747.88) (023.00, 747.88)       /TT1 Partie D - Calcul du remboursement
-(035.00, 711.14) (390.77, 711.14) (390.77, 721.43) (035.00, 721.43)       /TT1 Produits admissibles transférés dans une province non participante
-(573.89, 681.63) (581.11, 681.63) (581.11, 690.98) (573.89, 690.98)       /TT1 A
-(035.00, 690.11) (281.78, 690.11) (281.78, 699.42) (035.00, 699.42)       /TT2 Pour les produits au taux de 13 %, inscrivez le montant 
-(035.00, 679.11) (074.46, 679.11) (074.46, 688.42) (035.00, 688.42)       /TT2 de TVH :
-(403.72, 681.61) (409.28, 681.61) (409.28, 690.92) (403.72, 690.92)       /TT2 $
-(415.00, 680.63) (422.00, 680.63) (422.00, 691.80) (415.00, 691.80)       /TT3 ×
-(426.77, 680.86) (458.00, 680.63) (458.00, 691.80) (426.77, 690.17)       /TT2 8/13 =
-(559.72, 681.61) (565.28, 681.61) (565.28, 690.92) (559.72, 690.92)       /TT2 $
-(573.89, 648.63) (581.11, 648.63) (581.11, 657.98) (573.89, 657.98)       /TT1 B
-(035.00, 657.11) (281.78, 657.11) (281.78, 666.42) (035.00, 666.42)       /TT2 Pour les produits au taux de 15 %, inscrivez le montant 
-(035.00, 646.11) (074.46, 646.11) (074.46, 655.42) (035.00, 655.42)       /TT2 de TVH :
-(403.72, 648.61) (409.28, 648.61) (409.28, 657.92) (403.72, 657.92)       /TT2 $
-(415.00, 647.63) (422.00, 647.63) (422.00, 658.80) (415.00, 658.80)       /TT3 ×
-(423.99, 647.86) (458.00, 647.63) (458.00, 658.80) (423.99, 657.17)       /TT2 10/15 =
-(559.72, 648.61) (565.28, 648.61) (565.28, 657.92) (559.72, 657.92)       /TT2 $
-(035.00, 618.14) (570.51, 618.14) (570.51, 628.43) (035.00, 628.43)       /TT1 Produits admissibles transférés dans une province participante dont le taux de la TVH est moins élevé
-(573.89, 576.63) (581.11, 576.63) (581.11, 585.98) (573.89, 585.98)       /TT1 C
-(035.00, 596.61) (287.59, 596.61) (287.59, 605.92) (035.00, 605.92)       /TT2 Pour les produits transférés d'une province qui a un taux 
-(035.00, 585.61) (276.24, 585.61) (276.24, 594.92) (035.00, 594.92)       /TT2 de TVH de 15 % à une province qui a un taux de TVH 
-(035.00, 574.61) (207.85, 574.61) (207.85, 583.92) (035.00, 583.92)       /TT2 de 13 %, inscrivez le montant de TVH :
-(403.72, 576.61) (409.28, 576.61) (409.28, 585.92) (403.72, 585.92)       /TT2 $
-(415.00, 575.63) (422.00, 575.63) (422.00, 586.80) (415.00, 586.80)       /TT3 ×
-(426.77, 575.86) (458.00, 575.63) (458.00, 586.80) (426.77, 585.17)       /TT2 2/15 =
-(559.72, 576.61) (565.28, 576.61) (565.28, 585.92) (559.72, 585.92)       /TT2 $
-(573.89, 543.63) (581.11, 543.63) (581.11, 552.98) (573.89, 552.98)       /TT1 D
-(035.00, 552.58) (134.49, 552.58) (134.49, 561.89) (035.00, 561.89)       /TT2 Additionnez les lignes 
-(134.49, 552.57) (141.71, 552.57) (141.71, 561.92) (134.49, 561.92)       /TT1 A
-(141.71, 552.58) (152.83, 552.58) (152.83, 561.89) (141.71, 561.89)       /TT2  à 
-(152.83, 552.57) (160.05, 552.57) (160.05, 561.92) (152.83, 561.92)       /TT1 C
-(160.05, 552.58) (415.72, 552.58) (415.72, 561.89) (160.05, 561.89)       /TT2 . Ce résultat est le montant total de votre remboursement 
-(035.00, 541.58) (227.33, 541.58) (227.33, 550.89) (035.00, 550.89)       /TT2 de la taxe, ce qui doit être supérieur à 25 $.
-(559.72, 543.61) (565.28, 543.61) (565.28, 552.92) (559.72, 552.92)       /TT2 $
-(023.00, 511.65) (143.69, 511.65) (143.69, 522.88) (023.00, 522.88)       /TT1 Partie E - Attestation
-(035.00, 489.11) (586.09, 489.11) (586.09, 498.42) (035.00, 498.42)       /TT2 J'atteste que les renseignements fournis dans cette demande et dans tout document joint sont exacts et complets et que les 
-(035.00, 478.11) (583.82, 478.11) (583.82, 487.42) (035.00, 487.42)       /TT2 montants demandés comme remboursement n'ont pas déjà été remboursés, crédités ou versés au demandeur identifié à la 
-(035.00, 467.11) (555.49, 467.11) (555.49, 476.42) (035.00, 476.42)       /TT2 partie A et n'ont pas déjà été demandés comme crédits de taxe sur les intrants dans la déclaration de la TPS/TVH du 
-(035.00, 456.11) (091.14, 456.11) (091.14, 465.42) (035.00, 465.42)       /TT2 demandeur. 
-(035.00, 435.11) (576.30, 435.11) (576.30, 444.42) (035.00, 444.42)       /TT2 J'atteste également que le demandeur n'a pas le droit de demander les montants comme crédit de taxe sur les intrants ou 
-(035.00, 424.11) (581.32, 424.11) (581.32, 433.42) (035.00, 433.42)       /TT2 d'obtenir autrement un remboursement ou une remise des montants et que le demandeur n'a pas reçu de note de crédit, ni 
-(035.00, 413.11) (585.30, 413.11) (585.30, 422.42) (035.00, 422.42)       /TT2 émis de note de débit pour un remboursement, un ajustement ou un crédit pour tout montant demandé dans cette demande 
-(035.00, 402.11) (121.70, 402.11) (121.70, 411.42) (035.00, 411.42)       /TT2 de remboursement.
-(083.37, 363.58) (195.62, 363.58) (195.62, 372.89) (083.37, 372.89)       /TT2 Nom (en lettres moulées)
-(345.50, 363.58) (365.50, 363.58) (365.50, 372.89) (345.50, 372.89)       /TT2 Titre
-(037.42, 320.61) (133.58, 320.61) (133.58, 329.92) (037.42, 329.92)       /TT2 Numéro de téléphone
-(155.72, 321.58) (181.29, 321.58) (181.29, 330.89) (155.72, 330.89)       /TT2 Poste
-(204.48, 321.11) (458.51, 321.11) (458.51, 330.42) (204.48, 330.42)       /TT2 Signature du demandeur ou de son représentant autorisé
-(466.99, 321.57) (580.94, 321.57) (580.94, 330.89) (466.99, 330.89)       /TT2      Année       Mois   Jour 
-(021.00, 294.96) (581.82, 294.96) (581.82, 302.41) (021.00, 302.41)       /TT2 Les renseignements personnels (y compris le NAS) sont recueillis et utilisés aux fins d'appliquer ou d'exécuter la partie IX de la Loi sur la taxe d'accise, et des 
-(021.00, 285.96) (553.60, 285.96) (553.60, 293.41) (021.00, 293.41)       /TT2 programmes et activités connexes incluant l'administration de la taxe, les remboursements, les choix, la vérification, l'observation et la perception. Les 
-(021.00, 276.96) (579.93, 276.96) (579.93, 284.41) (021.00, 284.41)       /TT2 renseignements recueillis peuvent être communiqués à une autre institution gouvernementale fédérale, provinciale, territoriale, autochtone ou étrangère dans 
-(021.00, 267.96) (579.63, 267.96) (579.63, 275.41) (021.00, 275.41)       /TT2 la mesure où le droit l'autorise. Le défaut de fournir ces renseignements pourrait entraîner un paiement d'intérêts ou de pénalités, ou d'autres mesures. Selon 
-(021.00, 258.96) (551.20, 258.96) (551.20, 266.41) (021.00, 266.41)       /TT2 la Loi sur la protection des renseignements personnels, les particuliers ont le droit à la protection, à l'accès et à la correction de leurs renseignements 
-(021.00, 249.96) (569.25, 249.96) (569.25, 257.41) (021.00, 257.41)       /TT2 personnels et de déposer une plainte auprès du Commissaire à la protection de la vie privée du Canada concernant le traitement de leurs renseignements 
-(021.00, 240.96) (365.14, 240.96) (365.14, 248.41) (021.00, 248.41)       /TT2 personnels. Consultez le Fichier de renseignements personnels ARC PPU 241 sur Info Source à 
-(365.14, 240.95) (464.29, 240.95) (464.29, 248.43) (365.14, 248.43)       /TT1 canada.ca/arc-info-source
-(464.29, 240.96) (466.51, 240.96) (466.51, 248.41) (464.29, 248.41)       /TT2 .
-(021.00, 019.09) (074.35, 019.09) (074.35, 026.54) (021.00, 026.54)       /TT2 GST495 F (24)
-(547.86, 019.46) (591.00, 019.46) (591.00, 026.91) (547.86, 026.91)       /TT2 Page 4 de 5
+(482.75, 760.57) (529.98, 760.57) (529.98, 769.92) (482.75, 769.92)       /TT1 Protégé B	<|special_separator|>
+(529.98, 760.79) (591.00, 760.79) (591.00, 769.17) (529.98, 769.17)       /TT2  une fois rempli	<|special_separator|>
+(023.00, 736.66) (229.72, 736.66) (229.72, 747.88) (023.00, 747.88)       /TT1 Partie D - Calcul du remboursement	<|special_separator|>
+(035.00, 711.14) (390.77, 711.14) (390.77, 721.43) (035.00, 721.43)       /TT1 Produits admissibles transférés dans une province non participante	<|special_separator|>
+(573.89, 681.63) (581.11, 681.63) (581.11, 690.98) (573.89, 690.98)       /TT1 A	<|special_separator|>
+(035.00, 690.11) (281.78, 690.11) (281.78, 699.42) (035.00, 699.42)       /TT2 Pour les produits au taux de 13 %, inscrivez le montant 	<|special_separator|>
+(035.00, 679.11) (074.46, 679.11) (074.46, 688.42) (035.00, 688.42)       /TT2 de TVH :	<|special_separator|>
+(403.72, 681.61) (409.28, 681.61) (409.28, 690.92) (403.72, 690.92)       /TT2 $	<|special_separator|>
+(415.00, 680.63) (422.00, 680.63) (422.00, 691.80) (415.00, 691.80)       /TT3 ×	<|special_separator|>
+(426.77, 680.86) (458.00, 680.63) (458.00, 691.80) (426.77, 690.17)       /TT2 8/13 =	<|special_separator|>
+(559.72, 681.61) (565.28, 681.61) (565.28, 690.92) (559.72, 690.92)       /TT2 $	<|special_separator|>
+(573.89, 648.63) (581.11, 648.63) (581.11, 657.98) (573.89, 657.98)       /TT1 B	<|special_separator|>
+(035.00, 657.11) (281.78, 657.11) (281.78, 666.42) (035.00, 666.42)       /TT2 Pour les produits au taux de 15 %, inscrivez le montant 	<|special_separator|>
+(035.00, 646.11) (074.46, 646.11) (074.46, 655.42) (035.00, 655.42)       /TT2 de TVH :	<|special_separator|>
+(403.72, 648.61) (409.28, 648.61) (409.28, 657.92) (403.72, 657.92)       /TT2 $	<|special_separator|>
+(415.00, 647.63) (422.00, 647.63) (422.00, 658.80) (415.00, 658.80)       /TT3 ×	<|special_separator|>
+(423.99, 647.86) (458.00, 647.63) (458.00, 658.80) (423.99, 657.17)       /TT2 10/15 =	<|special_separator|>
+(559.72, 648.61) (565.28, 648.61) (565.28, 657.92) (559.72, 657.92)       /TT2 $	<|special_separator|>
+(035.00, 618.14) (570.51, 618.14) (570.51, 628.43) (035.00, 628.43)       /TT1 Produits admissibles transférés dans une province participante dont le taux de la TVH est moins élevé	<|special_separator|>
+(573.89, 576.63) (581.11, 576.63) (581.11, 585.98) (573.89, 585.98)       /TT1 C	<|special_separator|>
+(035.00, 596.61) (287.59, 596.61) (287.59, 605.92) (035.00, 605.92)       /TT2 Pour les produits transférés d'une province qui a un taux 	<|special_separator|>
+(035.00, 585.61) (276.24, 585.61) (276.24, 594.92) (035.00, 594.92)       /TT2 de TVH de 15 % à une province qui a un taux de TVH 	<|special_separator|>
+(035.00, 574.61) (207.85, 574.61) (207.85, 583.92) (035.00, 583.92)       /TT2 de 13 %, inscrivez le montant de TVH :	<|special_separator|>
+(403.72, 576.61) (409.28, 576.61) (409.28, 585.92) (403.72, 585.92)       /TT2 $	<|special_separator|>
+(415.00, 575.63) (422.00, 575.63) (422.00, 586.80) (415.00, 586.80)       /TT3 ×	<|special_separator|>
+(426.77, 575.86) (458.00, 575.63) (458.00, 586.80) (426.77, 585.17)       /TT2 2/15 =	<|special_separator|>
+(559.72, 576.61) (565.28, 576.61) (565.28, 585.92) (559.72, 585.92)       /TT2 $	<|special_separator|>
+(573.89, 543.63) (581.11, 543.63) (581.11, 552.98) (573.89, 552.98)       /TT1 D	<|special_separator|>
+(035.00, 552.58) (134.49, 552.58) (134.49, 561.89) (035.00, 561.89)       /TT2 Additionnez les lignes 	<|special_separator|>
+(134.49, 552.57) (141.71, 552.57) (141.71, 561.92) (134.49, 561.92)       /TT1 A	<|special_separator|>
+(141.71, 552.58) (152.83, 552.58) (152.83, 561.89) (141.71, 561.89)       /TT2  à 	<|special_separator|>
+(152.83, 552.57) (160.05, 552.57) (160.05, 561.92) (152.83, 561.92)       /TT1 C	<|special_separator|>
+(160.05, 552.58) (415.72, 552.58) (415.72, 561.89) (160.05, 561.89)       /TT2 . Ce résultat est le montant total de votre remboursement 	<|special_separator|>
+(035.00, 541.58) (227.33, 541.58) (227.33, 550.89) (035.00, 550.89)       /TT2 de la taxe, ce qui doit être supérieur à 25 $.	<|special_separator|>
+(559.72, 543.61) (565.28, 543.61) (565.28, 552.92) (559.72, 552.92)       /TT2 $	<|special_separator|>
+(023.00, 511.65) (143.69, 511.65) (143.69, 522.88) (023.00, 522.88)       /TT1 Partie E - Attestation	<|special_separator|>
+(035.00, 489.11) (586.09, 489.11) (586.09, 498.42) (035.00, 498.42)       /TT2 J'atteste que les renseignements fournis dans cette demande et dans tout document joint sont exacts et complets et que les 	<|special_separator|>
+(035.00, 478.11) (583.82, 478.11) (583.82, 487.42) (035.00, 487.42)       /TT2 montants demandés comme remboursement n'ont pas déjà été remboursés, crédités ou versés au demandeur identifié à la 	<|special_separator|>
+(035.00, 467.11) (555.49, 467.11) (555.49, 476.42) (035.00, 476.42)       /TT2 partie A et n'ont pas déjà été demandés comme crédits de taxe sur les intrants dans la déclaration de la TPS/TVH du 	<|special_separator|>
+(035.00, 456.11) (091.14, 456.11) (091.14, 465.42) (035.00, 465.42)       /TT2 demandeur. 	<|special_separator|>
+(035.00, 435.11) (576.30, 435.11) (576.30, 444.42) (035.00, 444.42)       /TT2 J'atteste également que le demandeur n'a pas le droit de demander les montants comme crédit de taxe sur les intrants ou 	<|special_separator|>
+(035.00, 424.11) (581.32, 424.11) (581.32, 433.42) (035.00, 433.42)       /TT2 d'obtenir autrement un remboursement ou une remise des montants et que le demandeur n'a pas reçu de note de crédit, ni 	<|special_separator|>
+(035.00, 413.11) (585.30, 413.11) (585.30, 422.42) (035.00, 422.42)       /TT2 émis de note de débit pour un remboursement, un ajustement ou un crédit pour tout montant demandé dans cette demande 	<|special_separator|>
+(035.00, 402.11) (121.70, 402.11) (121.70, 411.42) (035.00, 411.42)       /TT2 de remboursement.	<|special_separator|>
+(083.37, 363.58) (195.62, 363.58) (195.62, 372.89) (083.37, 372.89)       /TT2 Nom (en lettres moulées)	<|special_separator|>
+(345.50, 363.58) (365.50, 363.58) (365.50, 372.89) (345.50, 372.89)       /TT2 Titre	<|special_separator|>
+(037.42, 320.61) (133.58, 320.61) (133.58, 329.92) (037.42, 329.92)       /TT2 Numéro de téléphone	<|special_separator|>
+(155.72, 321.58) (181.29, 321.58) (181.29, 330.89) (155.72, 330.89)       /TT2 Poste	<|special_separator|>
+(204.48, 321.11) (458.51, 321.11) (458.51, 330.42) (204.48, 330.42)       /TT2 Signature du demandeur ou de son représentant autorisé	<|special_separator|>
+(466.99, 321.57) (580.94, 321.57) (580.94, 330.89) (466.99, 330.89)       /TT2      Année       Mois   Jour 	<|special_separator|>
+(021.00, 294.96) (581.82, 294.96) (581.82, 302.41) (021.00, 302.41)       /TT2 Les renseignements personnels (y compris le NAS) sont recueillis et utilisés aux fins d'appliquer ou d'exécuter la partie IX de la Loi sur la taxe d'accise, et des 	<|special_separator|>
+(021.00, 285.96) (553.60, 285.96) (553.60, 293.41) (021.00, 293.41)       /TT2 programmes et activités connexes incluant l'administration de la taxe, les remboursements, les choix, la vérification, l'observation et la perception. Les 	<|special_separator|>
+(021.00, 276.96) (579.93, 276.96) (579.93, 284.41) (021.00, 284.41)       /TT2 renseignements recueillis peuvent être communiqués à une autre institution gouvernementale fédérale, provinciale, territoriale, autochtone ou étrangère dans 	<|special_separator|>
+(021.00, 267.96) (579.63, 267.96) (579.63, 275.41) (021.00, 275.41)       /TT2 la mesure où le droit l'autorise. Le défaut de fournir ces renseignements pourrait entraîner un paiement d'intérêts ou de pénalités, ou d'autres mesures. Selon 	<|special_separator|>
+(021.00, 258.96) (551.20, 258.96) (551.20, 266.41) (021.00, 266.41)       /TT2 la Loi sur la protection des renseignements personnels, les particuliers ont le droit à la protection, à l'accès et à la correction de leurs renseignements 	<|special_separator|>
+(021.00, 249.96) (569.25, 249.96) (569.25, 257.41) (021.00, 257.41)       /TT2 personnels et de déposer une plainte auprès du Commissaire à la protection de la vie privée du Canada concernant le traitement de leurs renseignements 	<|special_separator|>
+(021.00, 240.96) (365.14, 240.96) (365.14, 248.41) (021.00, 248.41)       /TT2 personnels. Consultez le Fichier de renseignements personnels ARC PPU 241 sur Info Source à 	<|special_separator|>
+(365.14, 240.95) (464.29, 240.95) (464.29, 248.43) (365.14, 248.43)       /TT1 canada.ca/arc-info-source	<|special_separator|>
+(464.29, 240.96) (466.51, 240.96) (466.51, 248.41) (464.29, 248.41)       /TT2 .	<|special_separator|>
+(021.00, 019.09) (074.35, 019.09) (074.35, 026.54) (021.00, 026.54)       /TT2 GST495 F (24)	<|special_separator|>
+(547.86, 019.46) (591.00, 019.46) (591.00, 026.91) (547.86, 026.91)       /TT2 Page 4 de 5	<|special_separator|>
 (495.00, 774.00) (591.00, 774.00) (591.00, 789.00) (495.00, 789.00)  Form-font /Off

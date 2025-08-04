@@ -1,46 +1,46 @@
-(025.51, 771.59) (090.85, 771.59) (090.85, 775.98) (025.51, 775.98)        /F4 3/18/24, 12:26 PM
-(283.15, 771.59) (425.36, 771.59) (425.36, 775.98) (283.15, 775.98)        /F4 Stafford County, VA Code of Ordinances
-(025.51, 017.09) (066.85, 017.09) (066.85, 021.48) (025.51, 021.48)        /F4 about:blank
-(566.46, 017.09) (586.48, 017.09) (586.48, 021.48) (566.46, 021.48)        /F4 1/291
-(060.97, 253.77) (070.66, 253.77) (070.66, 262.19) (060.97, 262.19)        /F5 (a)
-(060.50, 205.43) (070.66, 205.43) (070.66, 213.84) (060.50, 213.84)        /F5 (b)
-(027.75, 751.50) (159.99, 751.50) (159.99, 759.91) (027.75, 759.91)        /F5 Chapter 28 - ZONING ORDINANCE
-(059.38, 734.38) (092.26, 734.38) (092.26, 738.20) (059.38, 738.20)        /F6 Footnotes:
-(059.38, 722.45) (070.58, 722.45) (070.58, 726.26) (059.38, 726.26)        /F6 --- (
-(070.59, 722.45) (074.46, 722.45) (074.46, 726.26) (070.59, 726.26)        /F7 1
-(074.47, 722.45) (085.67, 722.45) (085.67, 726.26) (074.47, 726.26)        /F6 ) ---
-(059.38, 710.51) (109.36, 710.51) (109.36, 714.32) (059.38, 714.32)        /F7 Editor's note-
-(109.43, 710.51) (562.79, 710.51) (562.79, 714.33) (109.43, 714.33)        /F6  Ordinance No. 094-29, adopted Aug. 9, 1994, repealed and replaced ch. 28 in its entirety, as set out herein. Formerly, ch. 28 consisted of §§ 28-
-(059.38, 698.58) (537.74, 698.58) (537.74, 702.39) (059.38, 702.39)        /F6 1-28-331, which pertained to zoning. See the Code Comparative Table for derivative history. Sections have been renumbered in order to conform to the
-(059.38, 686.64) (370.59, 686.64) (370.59, 690.46) (059.38, 690.46)        /F6 numbering style of this Code. See history note following each section for specific derivation thereof.
-(059.38, 674.70) (122.22, 674.70) (122.22, 678.51) (059.38, 678.51)        /F7 Cross reference- 
-(122.28, 674.70) (545.33, 674.70) (545.33, 678.52) (122.28, 678.52)        /F6 Planning commission, § 2-16 et seq.; buildings and building regulations, ch. 6; erosion and sediment control, ch. 11; fire prevention and
-(059.38, 662.77) (556.64, 662.77) (556.64, 666.58) (059.38, 666.58)        /F6 protection, ch. 12; solid waste, ch. 21; subdivisions, ch. 22; vegetation, ch. 24; water, sewers and sewage disposal, ch. 25; wetlands zoning ordinance, § 27-16
-(059.38, 650.83) (080.63, 650.83) (080.63, 654.65) (059.38, 654.65)        /F6 et seq.
-(059.38, 638.89) (135.22, 638.89) (135.22, 642.71) (059.38, 642.71)        /F7 State Law reference- 
-(135.28, 638.90) (421.10, 638.90) (421.10, 642.71) (135.28, 642.71)        /F6 Zoning, Code of Virginia, § 15.1-486 et seq.; codification of zoning ordinances, § 15.1-37.3.
-(027.75, 594.54) (177.52, 594.54) (177.52, 602.95) (027.75, 602.95)        /F5 ARTICLE I. - PURPOSE AND AUTHORITY
-(027.75, 549.18) (111.99, 549.18) (111.99, 557.60) (027.75, 557.60)        /F5 Sec. 28-1. - Short title.
-(046.85, 525.91) (568.49, 525.91) (568.49, 534.32) (046.85, 534.32)        /F5 This chapter of the Code of the County of Stafford, Virginia, may also be known as the "Stafford County Zoning Ordinance," or simply
-(034.91, 510.39) (127.29, 510.39) (127.29, 518.80) (034.91, 518.80)        /F5 the "zoning ordinance."
-(034.91, 488.91) (169.70, 488.91) (169.70, 497.32) (034.91, 497.32)        /F5 (Ord. No. 094-29, § 28-101, 8-9-94)
-(027.75, 458.47) (106.20, 458.47) (106.20, 466.88) (027.75, 466.88)        /F5 Sec. 28-2. - Purpose.
-(046.85, 434.60) (567.41, 434.60) (567.41, 443.01) (046.85, 443.01)        /F5 The purpose of this chapter is to promote the health, safety, and general welfare of the residents of Stafford County, Virginia, and to
-(034.91, 419.08) (572.85, 419.08) (572.85, 427.50) (034.91, 427.50)        /F5 accomplish the objectives and purposes of Code of Virginia § 15.1-427 and the provisions of article 8, chapter 11, title 15.1 of the Code of
-(034.91, 404.16) (066.61, 404.16) (066.61, 412.58) (034.91, 412.58)        /F5 Virginia.
-(034.91, 382.68) (169.70, 382.68) (169.70, 391.09) (034.91, 391.09)        /F5 (Ord. No. 094-29, § 28-102, 8-9-94)
-(027.75, 352.24) (110.05, 352.24) (110.05, 360.65) (027.75, 360.65)        /F5 Sec. 28-3. - Authority.
-(046.85, 328.37) (488.02, 328.37) (488.02, 336.78) (046.85, 336.78)        /F5 The provisions of this chapter are adopted pursuant to the authority of the Code of Virginia (1950), as amended.
-(034.91, 306.89) (169.70, 306.89) (169.70, 315.30) (034.91, 315.30)        /F5 (Ord. No. 094-29, § 28-103, 8-9-94)
-(027.75, 276.45) (120.80, 276.45) (120.80, 284.86) (027.75, 284.86)        /F5 Sec. 28-4. - Applicability.
-(076.69, 253.77) (567.07, 253.77) (567.07, 262.19) (076.69, 262.19)        /F5 No building, structure, or land within the jurisdictional territory of Stafford County, Virginia, shall hereafter be used, changed
-(076.69, 238.85) (562.56, 238.85) (562.56, 247.26) (076.69, 247.26)        /F5 in use, developed or occupied, and no building or structure, or any part thereof, shall hereafter be erected, constructed, re-
-(076.69, 223.34) (519.72, 223.34) (519.72, 231.75) (076.69, 231.75)        /F5 constructed, moved, or structurally altered, except in conformance with the regulations specified in this chapter.
-(076.69, 205.43) (564.57, 205.43) (564.57, 213.84) (076.69, 213.84)        /F5 No yard or lot existing at the time of the adoption of this chapter shall be reduced in dimension or area below the minimum
-(076.69, 189.92) (561.28, 189.92) (561.28, 198.33) (076.69, 198.33)        /F5 requirements set forth in this chapter. Yards or lots created after the effective date of this chapter shall meet the minimum
-(076.69, 174.40) (459.82, 174.40) (459.82, 182.81) (076.69, 182.81)        /F5 requirements established by this chapter, subject to the provisions of Code of Virginia § 15.1-492.
-(034.91, 156.50) (169.70, 156.50) (169.70, 164.91) (034.91, 164.91)        /F5 (Ord. No. 094-29, § 28-104, 8-9-94)
-(027.75, 126.66) (100.23, 126.66) (100.23, 135.07) (027.75, 135.07)        /F5 Sec. 28-5. - Repeal.
-(046.85, 102.78) (572.88, 102.78) (572.88, 111.20) (046.85, 111.20)        /F5 Chapter 28 as in effect prior to [August 9, 1994,] the date of adoption of this chapter is hereby repealed, and replaced by this chapter.
-(034.91, 081.30) (169.70, 081.30) (169.70, 089.71) (034.91, 089.71)        /F5 (Ord. No. 094-29, § 28-105, 8-9-94)
+(025.51, 771.59) (090.85, 771.59) (090.85, 775.98) (025.51, 775.98)        /F4 3/18/24, 12:26 PM	<|special_separator|>
+(283.15, 771.59) (425.36, 771.59) (425.36, 775.98) (283.15, 775.98)        /F4 Stafford County, VA Code of Ordinances	<|special_separator|>
+(025.51, 017.09) (066.85, 017.09) (066.85, 021.48) (025.51, 021.48)        /F4 about:blank	<|special_separator|>
+(566.46, 017.09) (586.48, 017.09) (586.48, 021.48) (566.46, 021.48)        /F4 1/291	<|special_separator|>
+(060.97, 253.77) (070.66, 253.77) (070.66, 262.19) (060.97, 262.19)        /F5 (a)	<|special_separator|>
+(060.50, 205.43) (070.66, 205.43) (070.66, 213.84) (060.50, 213.84)        /F5 (b)	<|special_separator|>
+(027.75, 751.50) (159.99, 751.50) (159.99, 759.91) (027.75, 759.91)        /F5 Chapter 28 - ZONING ORDINANCE	<|special_separator|>
+(059.38, 734.38) (092.26, 734.38) (092.26, 738.20) (059.38, 738.20)        /F6 Footnotes:	<|special_separator|>
+(059.38, 722.45) (070.58, 722.45) (070.58, 726.26) (059.38, 726.26)        /F6 --- (	<|special_separator|>
+(070.59, 722.45) (074.46, 722.45) (074.46, 726.26) (070.59, 726.26)        /F7 1	<|special_separator|>
+(074.47, 722.45) (085.67, 722.45) (085.67, 726.26) (074.47, 726.26)        /F6 ) ---	<|special_separator|>
+(059.38, 710.51) (109.36, 710.51) (109.36, 714.32) (059.38, 714.32)        /F7 Editor's note-	<|special_separator|>
+(109.43, 710.51) (562.79, 710.51) (562.79, 714.33) (109.43, 714.33)        /F6  Ordinance No. 094-29, adopted Aug. 9, 1994, repealed and replaced ch. 28 in its entirety, as set out herein. Formerly, ch. 28 consisted of §§ 28-	<|special_separator|>
+(059.38, 698.58) (537.74, 698.58) (537.74, 702.39) (059.38, 702.39)        /F6 1-28-331, which pertained to zoning. See the Code Comparative Table for derivative history. Sections have been renumbered in order to conform to the	<|special_separator|>
+(059.38, 686.64) (370.59, 686.64) (370.59, 690.46) (059.38, 690.46)        /F6 numbering style of this Code. See history note following each section for specific derivation thereof.	<|special_separator|>
+(059.38, 674.70) (122.22, 674.70) (122.22, 678.51) (059.38, 678.51)        /F7 Cross reference- 	<|special_separator|>
+(122.28, 674.70) (545.33, 674.70) (545.33, 678.52) (122.28, 678.52)        /F6 Planning commission, § 2-16 et seq.; buildings and building regulations, ch. 6; erosion and sediment control, ch. 11; fire prevention and	<|special_separator|>
+(059.38, 662.77) (556.64, 662.77) (556.64, 666.58) (059.38, 666.58)        /F6 protection, ch. 12; solid waste, ch. 21; subdivisions, ch. 22; vegetation, ch. 24; water, sewers and sewage disposal, ch. 25; wetlands zoning ordinance, § 27-16	<|special_separator|>
+(059.38, 650.83) (080.63, 650.83) (080.63, 654.65) (059.38, 654.65)        /F6 et seq.	<|special_separator|>
+(059.38, 638.89) (135.22, 638.89) (135.22, 642.71) (059.38, 642.71)        /F7 State Law reference- 	<|special_separator|>
+(135.28, 638.90) (421.10, 638.90) (421.10, 642.71) (135.28, 642.71)        /F6 Zoning, Code of Virginia, § 15.1-486 et seq.; codification of zoning ordinances, § 15.1-37.3.	<|special_separator|>
+(027.75, 594.54) (177.52, 594.54) (177.52, 602.95) (027.75, 602.95)        /F5 ARTICLE I. - PURPOSE AND AUTHORITY	<|special_separator|>
+(027.75, 549.18) (111.99, 549.18) (111.99, 557.60) (027.75, 557.60)        /F5 Sec. 28-1. - Short title.	<|special_separator|>
+(046.85, 525.91) (568.49, 525.91) (568.49, 534.32) (046.85, 534.32)        /F5 This chapter of the Code of the County of Stafford, Virginia, may also be known as the "Stafford County Zoning Ordinance," or simply	<|special_separator|>
+(034.91, 510.39) (127.29, 510.39) (127.29, 518.80) (034.91, 518.80)        /F5 the "zoning ordinance."	<|special_separator|>
+(034.91, 488.91) (169.70, 488.91) (169.70, 497.32) (034.91, 497.32)        /F5 (Ord. No. 094-29, § 28-101, 8-9-94)	<|special_separator|>
+(027.75, 458.47) (106.20, 458.47) (106.20, 466.88) (027.75, 466.88)        /F5 Sec. 28-2. - Purpose.	<|special_separator|>
+(046.85, 434.60) (567.41, 434.60) (567.41, 443.01) (046.85, 443.01)        /F5 The purpose of this chapter is to promote the health, safety, and general welfare of the residents of Stafford County, Virginia, and to	<|special_separator|>
+(034.91, 419.08) (572.85, 419.08) (572.85, 427.50) (034.91, 427.50)        /F5 accomplish the objectives and purposes of Code of Virginia § 15.1-427 and the provisions of article 8, chapter 11, title 15.1 of the Code of	<|special_separator|>
+(034.91, 404.16) (066.61, 404.16) (066.61, 412.58) (034.91, 412.58)        /F5 Virginia.	<|special_separator|>
+(034.91, 382.68) (169.70, 382.68) (169.70, 391.09) (034.91, 391.09)        /F5 (Ord. No. 094-29, § 28-102, 8-9-94)	<|special_separator|>
+(027.75, 352.24) (110.05, 352.24) (110.05, 360.65) (027.75, 360.65)        /F5 Sec. 28-3. - Authority.	<|special_separator|>
+(046.85, 328.37) (488.02, 328.37) (488.02, 336.78) (046.85, 336.78)        /F5 The provisions of this chapter are adopted pursuant to the authority of the Code of Virginia (1950), as amended.	<|special_separator|>
+(034.91, 306.89) (169.70, 306.89) (169.70, 315.30) (034.91, 315.30)        /F5 (Ord. No. 094-29, § 28-103, 8-9-94)	<|special_separator|>
+(027.75, 276.45) (120.80, 276.45) (120.80, 284.86) (027.75, 284.86)        /F5 Sec. 28-4. - Applicability.	<|special_separator|>
+(076.69, 253.77) (567.07, 253.77) (567.07, 262.19) (076.69, 262.19)        /F5 No building, structure, or land within the jurisdictional territory of Stafford County, Virginia, shall hereafter be used, changed	<|special_separator|>
+(076.69, 238.85) (562.56, 238.85) (562.56, 247.26) (076.69, 247.26)        /F5 in use, developed or occupied, and no building or structure, or any part thereof, shall hereafter be erected, constructed, re-	<|special_separator|>
+(076.69, 223.34) (519.72, 223.34) (519.72, 231.75) (076.69, 231.75)        /F5 constructed, moved, or structurally altered, except in conformance with the regulations specified in this chapter.	<|special_separator|>
+(076.69, 205.43) (564.57, 205.43) (564.57, 213.84) (076.69, 213.84)        /F5 No yard or lot existing at the time of the adoption of this chapter shall be reduced in dimension or area below the minimum	<|special_separator|>
+(076.69, 189.92) (561.28, 189.92) (561.28, 198.33) (076.69, 198.33)        /F5 requirements set forth in this chapter. Yards or lots created after the effective date of this chapter shall meet the minimum	<|special_separator|>
+(076.69, 174.40) (459.82, 174.40) (459.82, 182.81) (076.69, 182.81)        /F5 requirements established by this chapter, subject to the provisions of Code of Virginia § 15.1-492.	<|special_separator|>
+(034.91, 156.50) (169.70, 156.50) (169.70, 164.91) (034.91, 164.91)        /F5 (Ord. No. 094-29, § 28-104, 8-9-94)	<|special_separator|>
+(027.75, 126.66) (100.23, 126.66) (100.23, 135.07) (027.75, 135.07)        /F5 Sec. 28-5. - Repeal.	<|special_separator|>
+(046.85, 102.78) (572.88, 102.78) (572.88, 111.20) (046.85, 111.20)        /F5 Chapter 28 as in effect prior to [August 9, 1994,] the date of adoption of this chapter is hereby repealed, and replaced by this chapter.	<|special_separator|>
+(034.91, 081.30) (169.70, 081.30) (169.70, 089.71) (034.91, 089.71)        /F5 (Ord. No. 094-29, § 28-105, 8-9-94)	<|special_separator|>
 (027.75, 050.86) (155.49, 050.86) (155.49, 059.28) (027.75, 059.28)        /F5 Sec. 28-6. - Conict of provisions.

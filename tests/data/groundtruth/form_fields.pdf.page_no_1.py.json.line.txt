@@ -1,51 +1,51 @@
-(482.75, 757.57) (529.98, 757.57) (529.98, 766.92) (482.75, 766.92)       /TT1 Protégé B
-(529.98, 757.79) (591.00, 757.79) (591.00, 766.17) (529.98, 766.17)       /TT2  une fois rempli
-(131.72, 718.18) (484.17, 718.18) (484.17, 731.27) (131.72, 731.27)       /TT1 Demande de remboursement de la partie provinciale 
-(181.90, 703.19) (430.09, 703.19) (430.09, 716.28) (181.90, 716.28)       /TT1 de la taxe de vente harmonisée (TVH)
-(502.01, 679.96) (570.21, 679.96) (570.21, 687.41) (502.01, 687.41)       /TT2 N'inscrivez rien ici. 
-(021.00, 674.11) (444.48, 674.11) (444.48, 683.42) (021.00, 683.42)       /TT2 Remplissez ce formulaire pour demander un remboursement si vous avez payé la TVH sur des 
-(021.00, 663.11) (372.26, 663.11) (372.26, 672.42) (021.00, 672.42)       /TT2 produits (les biens meubles corporels) achetés dans une province participante  
-(021.00, 652.11) (384.38, 652.11) (384.38, 661.42) (021.00, 661.42)       /TT2 (l'ºle-du-Prince-Édouard, le Nouveau-Brunswick, la Nouvelle-Écosse, l'Ontario ou  
-(021.00, 641.11) (427.85, 641.11) (427.85, 650.42) (021.00, 650.42)       /TT2 Terre-Neuve-et-Labrador), et transférés dans une province non participante ou autre région 
-(021.00, 630.11) (414.54, 630.11) (414.54, 639.42) (021.00, 639.42)       /TT2 du Canada ou dans une autre province participante dont le taux de TVH est moins élevé.
-(027.00, 611.57) (078.68, 611.57) (078.68, 620.92) (027.00, 620.92)       /TT1 Remarque 
-(027.00, 600.57) (090.51, 600.57) (090.51, 609.92) (027.00, 609.92)       /TT1 N'utilisez pas
-(090.51, 600.58) (579.61, 600.58) (579.61, 609.89) (090.51, 609.89)       /TT2  ce formulaire pour demander un remboursement de TVH que vous avez payée sur des services ou des biens 
-(027.00, 589.58) (557.22, 589.58) (557.22, 598.89) (027.00, 598.89)       /TT2 meubles incorporels acquis dans une province participante. Utilisez plutôt le formulaire GST189, Demande générale de 
-(027.00, 578.58) (252.64, 578.58) (252.64, 587.89) (027.00, 587.89)       /TT2 remboursement de la TPS/TVH (code de motif 13).
-(021.00, 560.11) (329.41, 560.11) (329.41, 569.42) (021.00, 569.42)       /TT2 Cette demande de remboursement peut faire l'objet d'une vérification.
-(021.00, 542.11) (178.85, 542.11) (178.85, 551.42) (021.00, 551.42)       /TT2 Pour en savoir plus, lisez la page 5.
-(023.00, 511.66) (242.38, 511.66) (242.38, 522.88) (023.00, 522.88)       /TT1 Partie A - Identification du demandeur
-(035.00, 488.61) (226.17, 488.61) (226.17, 497.92) (035.00, 497.92)       /TT2 Nom de famille du demandeur (particuliers 
-(035.00, 477.61) (244.47, 477.61) (244.47, 486.92) (035.00, 486.92)       /TT2 seulement), de l'entreprise ou de l'organisation 
-(035.00, 466.61) (224.16, 466.61) (224.16, 475.92) (035.00, 475.92)       /TT2 (inscrivez le nom commercial, s'il y a lieu) :
-(035.00, 444.11) (241.74, 444.11) (241.74, 453.42) (035.00, 453.42)       /TT2 Prénom et initiales du demandeur (particuliers 
-(035.00, 433.11) (090.02, 433.11) (090.02, 442.42) (035.00, 442.42)       /TT2 seulement) :
-(035.00, 408.61) (186.08, 408.61) (186.08, 417.92) (035.00, 417.92)       /TT2 Numéro d'entreprise (s'il y a lieu) :
-(035.00, 381.61) (246.09, 381.61) (246.09, 390.92) (035.00, 390.92)       /TT2 Numéro d'assurance social (NAS) (s'il y a lieu) :
-(035.00, 351.14) (213.50, 351.14) (213.50, 361.43) (035.00, 361.43)       /TT1 Renseignements supplémentaires
-(035.00, 330.11) (230.09, 330.11) (230.09, 339.42) (035.00, 339.42)       /TT2 Cette demande modifie-t-elle une demande 
-(035.00, 319.11) (090.59, 319.11) (090.59, 328.42) (035.00, 328.42)       /TT2 précédente?
-(279.00, 322.08) (294.56, 322.08) (294.56, 331.39) (279.00, 331.39)       /TT2 Oui
-(348.00, 322.08) (366.34, 322.08) (366.34, 331.39) (348.00, 331.39)       /TT2 Non
-(035.00, 294.61) (162.30, 294.61) (162.30, 303.92) (035.00, 303.92)       /TT2 Langue de correspondance :
-(279.00, 295.08) (317.34, 295.08) (317.34, 304.39) (279.00, 304.39)       /TT2 Français
-(348.00, 295.08) (380.79, 295.08) (380.79, 304.39) (348.00, 304.39)       /TT2 Anglais
-(035.00, 264.14) (119.97, 264.14) (119.97, 274.43) (035.00, 274.43)       /TT1 Adresse postale
-(035.00, 242.08) (172.19, 242.08) (172.19, 251.39) (035.00, 251.39)       /TT2 N¡ d'unité - n¡ et rue, CP, RR :
-(035.00, 215.08) (059.45, 215.08) (059.45, 224.39) (035.00, 224.39)       /TT2 Ville :
-(035.00, 187.08) (155.05, 187.08) (155.05, 196.39) (035.00, 196.39)       /TT2 Province, territoire ou état :
-(035.00, 161.08) (126.16, 161.08) (126.16, 170.39) (035.00, 170.39)       /TT2 Code postal ou ZIP :
-(035.00, 134.08) (062.79, 134.08) (062.79, 143.39) (035.00, 143.39)       /TT2 Pays :
-(023.00, 094.07) (115.23, 094.07) (115.23, 103.42) (023.00, 103.42)       /TT1 ¸ USAGE INTERNE
-(023.00, 077.11) (033.00, 077.11) (033.00, 086.42) (023.00, 086.42)       /TT2 IC
-(199.78, 077.11) (214.22, 077.11) (214.22, 086.42) (199.78, 086.42)       /TT2 NC
-(021.00, 019.09) (074.35, 019.09) (074.35, 026.54) (021.00, 026.54)       /TT2 GST495 F (24)
-(246.21, 019.09) (365.79, 019.09) (365.79, 026.54) (246.21, 026.54)       /TT2 (This form is available in English.)
-(406.86, 019.46) (450.00, 019.46) (450.00, 026.91) (406.86, 026.91)       /TT2 Page 1 de 5
-(495.00, 774.00) (591.00, 774.00) (591.00, 789.00) (495.00, 789.00)  Form-font /Off
-(262.00, 406.00) (485.00, 406.00) (485.00, 423.00) (262.00, 423.00)  Form-font 123456789RTABCD
-(262.00, 379.00) (395.00, 379.00) (395.00, 396.00) (262.00, 396.00)  Form-font 
-(261.00, 211.00) (585.00, 211.00) (585.00, 228.00) (261.00, 228.00)  Form-font granville
-(261.00, 157.00) (342.00, 157.00) (342.00, 174.00) (261.00, 174.00)  Form-font 
+(482.75, 757.57) (529.98, 757.57) (529.98, 766.92) (482.75, 766.92)       /TT1 Protégé B	<|special_separator|>
+(529.98, 757.79) (591.00, 757.79) (591.00, 766.17) (529.98, 766.17)       /TT2  une fois rempli	<|special_separator|>
+(131.72, 718.18) (484.17, 718.18) (484.17, 731.27) (131.72, 731.27)       /TT1 Demande de remboursement de la partie provinciale 	<|special_separator|>
+(181.90, 703.19) (430.09, 703.19) (430.09, 716.28) (181.90, 716.28)       /TT1 de la taxe de vente harmonisée (TVH)	<|special_separator|>
+(502.01, 679.96) (570.21, 679.96) (570.21, 687.41) (502.01, 687.41)       /TT2 N'inscrivez rien ici. 	<|special_separator|>
+(021.00, 674.11) (444.48, 674.11) (444.48, 683.42) (021.00, 683.42)       /TT2 Remplissez ce formulaire pour demander un remboursement si vous avez payé la TVH sur des 	<|special_separator|>
+(021.00, 663.11) (372.26, 663.11) (372.26, 672.42) (021.00, 672.42)       /TT2 produits (les biens meubles corporels) achetés dans une province participante  	<|special_separator|>
+(021.00, 652.11) (384.38, 652.11) (384.38, 661.42) (021.00, 661.42)       /TT2 (l'ºle-du-Prince-Édouard, le Nouveau-Brunswick, la Nouvelle-Écosse, l'Ontario ou  	<|special_separator|>
+(021.00, 641.11) (427.85, 641.11) (427.85, 650.42) (021.00, 650.42)       /TT2 Terre-Neuve-et-Labrador), et transférés dans une province non participante ou autre région 	<|special_separator|>
+(021.00, 630.11) (414.54, 630.11) (414.54, 639.42) (021.00, 639.42)       /TT2 du Canada ou dans une autre province participante dont le taux de TVH est moins élevé.	<|special_separator|>
+(027.00, 611.57) (078.68, 611.57) (078.68, 620.92) (027.00, 620.92)       /TT1 Remarque 	<|special_separator|>
+(027.00, 600.57) (090.51, 600.57) (090.51, 609.92) (027.00, 609.92)       /TT1 N'utilisez pas	<|special_separator|>
+(090.51, 600.58) (579.61, 600.58) (579.61, 609.89) (090.51, 609.89)       /TT2  ce formulaire pour demander un remboursement de TVH que vous avez payée sur des services ou des biens 	<|special_separator|>
+(027.00, 589.58) (557.22, 589.58) (557.22, 598.89) (027.00, 598.89)       /TT2 meubles incorporels acquis dans une province participante. Utilisez plutôt le formulaire GST189, Demande générale de 	<|special_separator|>
+(027.00, 578.58) (252.64, 578.58) (252.64, 587.89) (027.00, 587.89)       /TT2 remboursement de la TPS/TVH (code de motif 13).	<|special_separator|>
+(021.00, 560.11) (329.41, 560.11) (329.41, 569.42) (021.00, 569.42)       /TT2 Cette demande de remboursement peut faire l'objet d'une vérification.	<|special_separator|>
+(021.00, 542.11) (178.85, 542.11) (178.85, 551.42) (021.00, 551.42)       /TT2 Pour en savoir plus, lisez la page 5.	<|special_separator|>
+(023.00, 511.66) (242.38, 511.66) (242.38, 522.88) (023.00, 522.88)       /TT1 Partie A - Identification du demandeur	<|special_separator|>
+(035.00, 488.61) (226.17, 488.61) (226.17, 497.92) (035.00, 497.92)       /TT2 Nom de famille du demandeur (particuliers 	<|special_separator|>
+(035.00, 477.61) (244.47, 477.61) (244.47, 486.92) (035.00, 486.92)       /TT2 seulement), de l'entreprise ou de l'organisation 	<|special_separator|>
+(035.00, 466.61) (224.16, 466.61) (224.16, 475.92) (035.00, 475.92)       /TT2 (inscrivez le nom commercial, s'il y a lieu) :	<|special_separator|>
+(035.00, 444.11) (241.74, 444.11) (241.74, 453.42) (035.00, 453.42)       /TT2 Prénom et initiales du demandeur (particuliers 	<|special_separator|>
+(035.00, 433.11) (090.02, 433.11) (090.02, 442.42) (035.00, 442.42)       /TT2 seulement) :	<|special_separator|>
+(035.00, 408.61) (186.08, 408.61) (186.08, 417.92) (035.00, 417.92)       /TT2 Numéro d'entreprise (s'il y a lieu) :	<|special_separator|>
+(035.00, 381.61) (246.09, 381.61) (246.09, 390.92) (035.00, 390.92)       /TT2 Numéro d'assurance social (NAS) (s'il y a lieu) :	<|special_separator|>
+(035.00, 351.14) (213.50, 351.14) (213.50, 361.43) (035.00, 361.43)       /TT1 Renseignements supplémentaires	<|special_separator|>
+(035.00, 330.11) (230.09, 330.11) (230.09, 339.42) (035.00, 339.42)       /TT2 Cette demande modifie-t-elle une demande 	<|special_separator|>
+(035.00, 319.11) (090.59, 319.11) (090.59, 328.42) (035.00, 328.42)       /TT2 précédente?	<|special_separator|>
+(279.00, 322.08) (294.56, 322.08) (294.56, 331.39) (279.00, 331.39)       /TT2 Oui	<|special_separator|>
+(348.00, 322.08) (366.34, 322.08) (366.34, 331.39) (348.00, 331.39)       /TT2 Non	<|special_separator|>
+(035.00, 294.61) (162.30, 294.61) (162.30, 303.92) (035.00, 303.92)       /TT2 Langue de correspondance :	<|special_separator|>
+(279.00, 295.08) (317.34, 295.08) (317.34, 304.39) (279.00, 304.39)       /TT2 Français	<|special_separator|>
+(348.00, 295.08) (380.79, 295.08) (380.79, 304.39) (348.00, 304.39)       /TT2 Anglais	<|special_separator|>
+(035.00, 264.14) (119.97, 264.14) (119.97, 274.43) (035.00, 274.43)       /TT1 Adresse postale	<|special_separator|>
+(035.00, 242.08) (172.19, 242.08) (172.19, 251.39) (035.00, 251.39)       /TT2 N¡ d'unité - n¡ et rue, CP, RR :	<|special_separator|>
+(035.00, 215.08) (059.45, 215.08) (059.45, 224.39) (035.00, 224.39)       /TT2 Ville :	<|special_separator|>
+(035.00, 187.08) (155.05, 187.08) (155.05, 196.39) (035.00, 196.39)       /TT2 Province, territoire ou état :	<|special_separator|>
+(035.00, 161.08) (126.16, 161.08) (126.16, 170.39) (035.00, 170.39)       /TT2 Code postal ou ZIP :	<|special_separator|>
+(035.00, 134.08) (062.79, 134.08) (062.79, 143.39) (035.00, 143.39)       /TT2 Pays :	<|special_separator|>
+(023.00, 094.07) (115.23, 094.07) (115.23, 103.42) (023.00, 103.42)       /TT1 ¸ USAGE INTERNE	<|special_separator|>
+(023.00, 077.11) (033.00, 077.11) (033.00, 086.42) (023.00, 086.42)       /TT2 IC	<|special_separator|>
+(199.78, 077.11) (214.22, 077.11) (214.22, 086.42) (199.78, 086.42)       /TT2 NC	<|special_separator|>
+(021.00, 019.09) (074.35, 019.09) (074.35, 026.54) (021.00, 026.54)       /TT2 GST495 F (24)	<|special_separator|>
+(246.21, 019.09) (365.79, 019.09) (365.79, 026.54) (246.21, 026.54)       /TT2 (This form is available in English.)	<|special_separator|>
+(406.86, 019.46) (450.00, 019.46) (450.00, 026.91) (406.86, 026.91)       /TT2 Page 1 de 5	<|special_separator|>
+(495.00, 774.00) (591.00, 774.00) (591.00, 789.00) (495.00, 789.00)  Form-font /Off	<|special_separator|>
+(262.00, 406.00) (485.00, 406.00) (485.00, 423.00) (262.00, 423.00)  Form-font 123456789RTABCD	<|special_separator|>
+(262.00, 379.00) (395.00, 379.00) (395.00, 396.00) (262.00, 396.00)  Form-font 	<|special_separator|>
+(261.00, 211.00) (585.00, 211.00) (585.00, 228.00) (261.00, 228.00)  Form-font granville	<|special_separator|>
+(261.00, 157.00) (342.00, 157.00) (342.00, 174.00) (261.00, 174.00)  Form-font 	<|special_separator|>
 (261.00, 130.00) (432.00, 130.00) (432.00, 147.00) (261.00, 147.00)  Form-font 
