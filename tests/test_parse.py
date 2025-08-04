@@ -272,7 +272,7 @@ def test_reference_documents_from_filenames():
                     for i, line in enumerate(lines):
                         assert (
                             line == _lines[i]
-                        ), f"line == _lines[i] => {line} == {_lines[i]}"
+                        ), f"line == _lines[i] => {line} == {_lines[i]} in line {i} for {_fname}"
 
                 true_page = SegmentedPdfPage.load_from_json(fname)
                 verify_SegmentedPdfPage(true_page, pred_page, filename=fname)
