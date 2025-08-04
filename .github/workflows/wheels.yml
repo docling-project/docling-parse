@@ -61,7 +61,7 @@ jobs:
             min_macos_version: "14"
             platform_id: "macosx_arm64"
 
-          - name: "windows-latest"
+          - name: "windows-2025"
             platform: "windows"
             platform_id: "win_amd64"      
 
