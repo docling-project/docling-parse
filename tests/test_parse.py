@@ -244,6 +244,8 @@ def test_reference_documents_from_filenames():
                         cell_unit=unit,
                         add_fontkey=True,
                         add_fontname=False,
+                        add_location=True,
+                        add_text_direction=False,
                     )
                     _fname = fname + f".{unit}.txt"
                     with open(_fname, "w") as fw:
@@ -256,6 +258,8 @@ def test_reference_documents_from_filenames():
                         cell_unit=unit,
                         add_fontkey=True,
                         add_fontname=False,
+                        add_location=True,
+                        add_text_direction=False,
                     )
 
                     _fname = fname + f".{unit}.txt"
