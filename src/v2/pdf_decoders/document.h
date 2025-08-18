@@ -29,11 +29,15 @@ namespace pdflib
     
     bool process_document_from_file(std::string& _filename);
     bool process_document_from_bytesio(std::string& _buffer);
-
+    
     void decode_document(std::string page_boundary, bool do_sanitization);
 
     void decode_document(std::vector<int>& page_numbers, std::string page_boundary, bool do_sanitization);
 
+    bool unload_pages();
+
+    bool unload_page(int page_number);
+    
   private:
 
     void update_qpdf_logger();
@@ -232,7 +236,7 @@ namespace pdflib
       {
 	utils::timer page_timer;
 	
-        pdf_decoder<PAGE> page_decoder(page);
+        pdf_decoder<PAGE> page_decoder(page, page_number);
 
         auto timings_ = page_decoder.decode_page(page_boundary, do_sanitization);
 	update_timings(timings_, set_timer);
@@ -271,7 +275,7 @@ namespace pdflib
 	  {
 	    utils::timer page_timer;
 	    
-	    pdf_decoder<PAGE> page_decoder(pages.at(page_number));
+	    pdf_decoder<PAGE> page_decoder(pages.at(page_number), page_number);
 	    
 	    auto timings_ = page_decoder.decode_page(page_boundary, do_sanitization);
 	    
@@ -313,6 +317,45 @@ namespace pdflib
       }    
   }
 
+  bool pdf_decoder<DOCUMENT>::unload_page(int page_number)
+  {
+    if(not json_document.contains("pages"))
+      {
+	LOG_S(WARNING) << "json_document does not have `pages`";        
+	return false;
+      }
+
+    nlohmann::json& json_pages = json_document["pages"];
+    
+    for(int l=0; l<json_pages.size(); l++)
+      {
+	if((json_pages[l].is_object()) and
+	   (json_pages[l].contains("page_number")) and 
+	   (json_pages[l]["page_number"]==page_number))
+	  {
+	    json_pages[l].clear();
+
+	    nlohmann::json none;
+	    json_pages[l] = none;
+	  }
+      }
+
+    return true;
+  }
+
+  bool pdf_decoder<DOCUMENT>::unload_pages()
+  {
+    if(not json_document.contains("pages"))
+      {
+	LOG_S(WARNING) << "json_document does not have `pages`";        
+	return false;
+      }
+
+    json_document["pages"] = nlohmann::json::array({});
+
+    return true;
+  }
+    
 }
 
 #endif

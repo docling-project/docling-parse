@@ -16,9 +16,11 @@ namespace pdflib
   {
   public:
 
-    pdf_decoder(QPDFObjectHandle page);
+    pdf_decoder(QPDFObjectHandle page, int page_num);
     ~pdf_decoder();
 
+    int get_page_number();
+    
     nlohmann::json get();
 
     std::map<std::string, double> decode_page(std::string page_boundary, bool do_sanitization);
@@ -49,6 +51,9 @@ namespace pdflib
   private:
 
     QPDFObjectHandle qpdf_page;
+
+    int page_number;
+    
     QPDFObjectHandle qpdf_parent_resources;
     QPDFObjectHandle qpdf_resources;
     QPDFObjectHandle qpdf_grphs;
@@ -81,19 +86,27 @@ namespace pdflib
     std::map<std::string, double> timings;
   };
 
-  pdf_decoder<PAGE>::pdf_decoder(QPDFObjectHandle page):
-    qpdf_page(page)
+  pdf_decoder<PAGE>::pdf_decoder(QPDFObjectHandle page, int page_num):
+    qpdf_page(page),
+    page_number(page_num)    
   {
   }
 
   pdf_decoder<PAGE>::~pdf_decoder()
   {
   }
+
+  int pdf_decoder<PAGE>::get_page_number()
+  {
+    return page_number;
+  }
   
   nlohmann::json pdf_decoder<PAGE>::get()
   {
     nlohmann::json result;
     {
+      result["page_number"] = page_number;
+      
       result["annotations"] = json_annots;
       
       nlohmann::json& timings_ = result["timings"];

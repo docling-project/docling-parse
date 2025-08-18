@@ -35,6 +35,8 @@ namespace docling
     bool load_document_from_bytesio(std::string key, pybind11::object bytes_io);
 
     bool unload_document(std::string key);
+    bool unload_document_pages(std::string key);
+    bool unload_document_page(std::string key, int page_num);
 
     void unload_documents();
 
@@ -254,6 +256,40 @@ namespace docling
     return false;    
   }
 
+  bool docling_parser_v2::unload_document_page(std::string key, int page_num)
+  {
+    auto itr = key2doc.find(key);
+
+    if(itr!=key2doc.end())
+      {
+	decoder_ptr_type decoder_ptr = itr->second;
+	decoder_ptr->unload_page(page_num);
+      }
+    else
+      {
+	LOG_S(ERROR) << "key not found: " << key;	
+      }
+    
+    return false;    
+  }
+
+  bool docling_parser_v2::unload_document_pages(std::string key)
+  {
+    auto itr = key2doc.find(key);
+
+    if(itr!=key2doc.end())
+      {
+	decoder_ptr_type decoder_ptr = itr->second;
+	decoder_ptr->unload_pages();
+      }
+    else
+      {
+	LOG_S(ERROR) << "key not found: " << key;	
+      }
+    
+    return false;    
+  }
+  
   void docling_parser_v2::unload_documents()
   {
     key2doc.clear();
