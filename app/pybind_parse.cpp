@@ -291,6 +291,33 @@ PYBIND11_MODULE(pdf_parsers, m) {
     Returns:
         bool: True if the document was successfully unloaded, False otherwise.)")
 
+    .def("unload_document_pages",
+	 [](docling::docling_parser_v2 &self, const std::string &key) -> bool {
+	   return self.unload_document(key);
+	 },
+	 R"(
+    Unload the only the cached pages of the document by its unique key.
+
+    Parameters:
+        key (str): The unique key of the document to unload.
+
+    Returns:
+        bool: True if the document was successfully unloaded, False otherwise.)")
+
+    .def("unload_document_page",
+	 [](docling::docling_parser_v2 &self, const std::string &key, const int page_number) -> bool {
+	   return self.unload_document_page(key, page_number);
+	 },
+	 R"(
+    Unload a single page of the document by its unique key and page_number.
+
+    Parameters:
+        key (str): The unique key of the document to unload.
+        page_number (int): The page number of the document to unload.
+
+    Returns:
+        bool: True if the document was successfully unloaded, False otherwise.)")
+    
     .def("number_of_pages",
 	 [](docling::docling_parser_v2 &self, const std::string &key) -> int {
 	   return self.number_of_pages(key);
