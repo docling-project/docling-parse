@@ -63,7 +63,7 @@ class PdfDocument:
         for page_no in range(page_range[0], page_range[1]):
             if page_no in self._pages:
                 del self._pages[page_no]
-                
+
     def number_of_pages(self) -> int:
         if self.is_loaded():
             return self._parser.number_of_pages(key=self._key)
