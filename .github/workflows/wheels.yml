@@ -332,6 +332,12 @@ jobs:
       - name: List dist/
         run: |
           ls ./dist
+      - name: Remove non-manylinux Linux wheels if found
+        run: |
+          rm -f ./dist/*-linux_x86_64.whl
+      - name: List dist/
+        run: |
+          ls ./dist
       - name: Sign the dists with Sigstore
         uses: sigstore/gh-action-sigstore-python@v3.0.0
         with:
