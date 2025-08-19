@@ -99,7 +99,6 @@ options:
   -p PDF, --pdf PDF  Path to the PDF file
 ```
 
-
 ## Performance Benchmarks
 
 ### Characteristics of different parser versions
@@ -185,21 +184,25 @@ If you dont have an input file, then a template input file will be printed on th
 
 To build the package, simply run (make sure [uv](https://docs.astral.sh/uv/) is [installed](https://docs.astral.sh/uv/getting-started/installation)),
 
-```
+```sh
 uv sync
+```
+
+The latter will only work after a clean `git clone`. If you are developing and updating C++ code, please use,
+
+```sh
+uv pip install --force-reinstall --no-deps -e .
 ```
 
 To test the package, run:
 
-```
+```sh
 uv run pytest ./tests -v -s
 ```
-
 
 ## Contributing
 
 Please read [Contributing to Docling Parse](https://github.com/docling-project/docling-parse/blob/main/CONTRIBUTING.md) for details.
-
 
 ## References
 
