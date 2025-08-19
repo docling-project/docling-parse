@@ -19,7 +19,7 @@ jobs:
         with:
           fetch-depth: 0  # for fetching tags, required for semantic-release
       - name: Install uv and set the python version
-        uses: ./.astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v5
       - name: Check version of potential release
         id: version_check
         run: |
@@ -45,7 +45,7 @@ jobs:
           token: ${{ steps.app-token.outputs.token }}
           fetch-depth: 0  # for fetching tags, required for semantic-release
       - name: Install uv and set the python version
-        uses: ./.astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v5
       - name: Run release script
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
