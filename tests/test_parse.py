@@ -288,6 +288,9 @@ def test_reference_documents_from_filenames():
             img = pred_page.render_as_image(cell_unit=TextCellUnit.LINE)
             # img.show()
 
+            print(f"unloading page: {page_no}")
+            pdf_doc.unload_pages(page_range=(page_no, page_no+1))
+
         toc: PdfTableOfContents = pdf_doc.get_table_of_contents()
         """
         if toc is not None:
