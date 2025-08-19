@@ -237,8 +237,9 @@ def visualise_py(
                 print(f"text-lines (sanitized, page_no: {page_no}):")
                 print("\n".join(lines))
 
-        pdf_doc.unload_pages(page_range=(page_no, page_no+1))
-        
+        pdf_doc.unload_pages(page_range=(page_no, page_no + 1))
+
+
 def main():
 
     (

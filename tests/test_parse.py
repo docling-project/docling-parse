@@ -289,7 +289,7 @@ def test_reference_documents_from_filenames():
             # img.show()
 
             print(f"unloading page: {page_no}")
-            pdf_doc.unload_pages(page_range=(page_no, page_no+1))
+            pdf_doc.unload_pages(page_range=(page_no, page_no + 1))
 
         toc: PdfTableOfContents = pdf_doc.get_table_of_contents()
         """
