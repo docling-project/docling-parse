@@ -911,11 +911,9 @@ namespace pdf_lib
       std::string name = _handle.getKey("/Subtype").getName();
       logging_lib::info("pdf-parser") << __FILE__ << ":" << __LINE__ << "\t detected /Subtype: " << name;
 
-      //std::cout << name << "\n";
-      
-      //if(bbox.isInitialized())
-      if(bbox) // use the new `bool()`
-        {
+      //if(bbox) // use the new `bool()`      
+      if(bbox.isInitialized())
+	{
           if(not fm.ascent)
             {
               fm.ascent = bbox.getArrayItem(3).getNumericValue();
