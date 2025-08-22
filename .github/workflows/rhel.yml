@@ -5,9 +5,9 @@ on:
 #   run-checks:
 #     runs-on: ubuntu-latest
 #     steps:
-#       - uses: actions/checkout@v4
+#       - uses: actions/checkout@v5
 #       - name: Install uv and python
-#         uses: astral-sh/setup-uv@v5
+#         uses: astral-sh/setup-uv@v6
 #       - name: Install podman
 #         run: sudo apt-get update && sudo apt-get install -y podman
 #       - name: Run build in docker
@@ -18,9 +18,9 @@ jobs:
   run-checks:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Setup uv with python 3.11
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v6
         with:
           python-version: 3.11
       - name: Install podman
