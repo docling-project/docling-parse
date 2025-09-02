@@ -1,0 +1,132 @@
+#!/usr/bin/env python
+import glob
+import os
+import re
+from typing import Dict, List, Union
+from pathlib import Path
+
+from datetime import datetime
+
+from docling_core.types.doc.page import (
+    BitmapResource,
+    PdfLine,
+    PdfPageBoundaryType,
+    PdfTableOfContents,
+    PdfTextCell,
+    SegmentedPdfPage,
+    TextCell,
+    TextCellUnit,
+)
+from pydantic import TypeAdapter, BaseModel
+
+from docling_parse.pdf_parser import DoclingPdfParser, PdfDocument
+
+from docling_parse.pdf_parsers import pdf_parser_v2  # type: ignore[import]
+
+class DocumentTiming(BaseModel):
+
+    filename: Path
+    num_pages: int = -1
+    total_time: float = 0.0
+    load_time: float = 0.0
+    iterate_time: float = 0.0
+    page_times: list[float] = []
+
+def test_performance_pdf_parse_v2(ifolder: Path, lazy: bool = True, loglevel: str = "fatal") -> list[DocumentTiming]:
+    
+    pdf_docs = sorted(glob.glob(str(ifolder)))
+
+    assert len(pdf_docs) > 0, "len(pdf_docs)==0 -> nothing to test"
+
+    timings = []
+    
+    for pdf_doc_path in pdf_docs:
+        print(f"parsing {pdf_doc_path}")
+
+        if not str(pdf_doc_path).endswith(".pdf"):
+            continue
+
+        doc_key = str(pdf_doc_path)
+        
+        timing = DocumentTiming(filename=pdf_doc_path)
+
+        start_0_time = datetime.now()
+        
+        parser = pdf_parser_v2(level="fatal")
+        parser.load_document(doc_key, str(pdf_doc_path))
+
+        pred_doc = parser.parse_pdf_from_key(doc_key)
+        
+        parser.unload_document(doc_key)
+
+        elapsed = datetime.now() - start_0_time                        
+        timing.total_time = elapsed.total_seconds()
+
+        timings.append(timing)
+
+    return timings
+        
+def test_performance_pdf_parse_py(ifolder: Path, lazy: bool = True, loglevel: str = "fatal") -> list[DocumentTiming]:
+
+    pdf_docs = sorted(glob.glob(str(ifolder)))
+
+    assert len(pdf_docs) > 0, "len(pdf_docs)==0 -> nothing to test"
+
+    timings = []
+    
+    for pdf_doc_path in pdf_docs:
+        print(f"parsing {pdf_doc_path}")
+
+        if not str(pdf_doc_path).endswith(".pdf"):
+            continue
+
+        timing = DocumentTiming(filename=pdf_doc_path)
+
+        start_0_time = datetime.now()
+
+        parser = DoclingPdfParser(loglevel=loglevel)
+        
+        pdf_doc: PdfDocument = parser.load(
+            path_or_stream=pdf_doc_path,
+            boundary_type=PdfPageBoundaryType.CROP_BOX,  # default: CROP_BOX
+            lazy=lazy,
+        )  # default: True
+        assert pdf_doc is not None
+
+        elapsed = datetime.now() - start_0_time                        
+        timing.load_time = elapsed.total_seconds()        
+        
+        start_1_time = datetime.now()
+        timing.num_pages = 0
+        for page_no, pred_page in pdf_doc.iterate_pages():
+            timing.num_pages += 1
+
+            elapsed = datetime.now() - start_1_time
+            timing.page_times.append(elapsed.total_seconds())
+            
+            start_1_time = datetime.now()
+
+        elapsed = datetime.now() - start_0_time                        
+        timing.total_time = elapsed.total_seconds()
+
+        timing.iterate_time = timing.total_time - timing.load_time
+        timings.append(timing)
+
+    return timings
+        
+def main():
+
+    ifolder=Path("./timings/*.pdf")
+
+    timings = test_performance_pdf_parse_v2(ifolder=ifolder)
+
+    for _ in timings:
+        print(_)
+    
+    timings = test_performance_pdf_parse_py(ifolder=ifolder)
+
+    for _ in timings:
+        print(_)
+            
+if __name__ == "__main__":
+    main()
