@@ -409,7 +409,9 @@ namespace docling
     auto& decoder = itr->second;
     
     std::vector<int> pages = {page};
-    decoder->decode_document(pages, page_boundary, do_sanitization,
+    decoder->decode_document(pages,
+			     page_boundary,
+			     do_sanitization,
 			     keep_char_cells,
 			     keep_lines,
 			     keep_bitmaps,

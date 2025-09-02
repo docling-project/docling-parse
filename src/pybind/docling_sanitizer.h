@@ -38,16 +38,16 @@ namespace docling
     pdflib::pdf_sanitator<pdflib::PAGE_CELLS> cell_sanitizer;
 
     pdflib::pdf_resource<pdflib::PAGE_CELLS> char_cells;
-    //pdflib::pdf_resource<pdflib::PAGE_CELLS> word_cells;
-    //pdflib::pdf_resource<pdflib::PAGE_CELLS> line_cells;    
+    pdflib::pdf_resource<pdflib::PAGE_CELLS> word_cells;
+    pdflib::pdf_resource<pdflib::PAGE_CELLS> line_cells;    
   };
 
   docling_sanitizer::docling_sanitizer():
     cell_sanitizer(),
 
-    char_cells()//,
-    //word_cells(),
-    //line_cells()    
+    char_cells(),
+    word_cells(),
+    line_cells()    
   {}
 
   docling_sanitizer::docling_sanitizer(std::string level)
@@ -286,10 +286,12 @@ namespace docling
     return to_records("word");
     */
 
-    return cell_sanitizer.create_word_cells(char_cells,
+    word_cells = cell_sanitizer.create_word_cells(char_cells,
 					    horizontal_cell_tolerance,
 					    enforce_same_font,
 					    space_width_factor_for_merge);
+
+    return cell_sanitizer.to_records(word_cells);
   }
 
   nlohmann::json docling_sanitizer::create_line_cells(double horizontal_cell_tolerance,
@@ -316,11 +318,13 @@ namespace docling
     return to_records("line");
     */
 
-    return cell_sanitizer.create_line_cells(char_cells,
-					    horizontal_cell_tolerance,
-					    enforce_same_font,
-					    space_width_factor_for_merge,
-					    space_width_factor_for_merge_with_space);
+    line_cells = cell_sanitizer.create_line_cells(char_cells,
+						  horizontal_cell_tolerance,
+						  enforce_same_font,
+						  space_width_factor_for_merge,
+						  space_width_factor_for_merge_with_space);
+
+    return cell_sanitizer.to_records(line_cells);
   }  
 
   

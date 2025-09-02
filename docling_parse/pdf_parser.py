@@ -31,6 +31,9 @@ class PdfDocument:
     def iterate_pages(
         self,
         *,
+        keep_chars: bool = True,
+        keep_lines: bool = True,
+        keep_bitmaps: bool = True,
         create_words: bool = True,
         create_textlines: bool = True,
         enforce_same_font: bool = True,
@@ -38,6 +41,9 @@ class PdfDocument:
         for page_no in range(self.number_of_pages()):
             yield page_no + 1, self.get_page(
                 page_no + 1,
+                keep_chars=keep_chars,
+                keep_lines=keep_lines,
+                keep_bitmaps=keep_bitmaps,
                 create_words=create_words,
                 create_textlines=create_textlines,
                 enforce_same_font=enforce_same_font,
@@ -134,6 +140,9 @@ class PdfDocument:
         self,
         page_no: int,
         *,
+        keep_chars: bool = True,
+        keep_lines: bool = True,
+        keep_bitmaps: bool = True,
         create_words: bool = True,
         create_textlines: bool = True,
         enforce_same_font: bool = True,
@@ -142,17 +151,26 @@ class PdfDocument:
             return self._pages[page_no]
         else:
             if 1 <= page_no <= self.number_of_pages():
+                
                 doc_dict = self._parser.parse_pdf_from_key_on_page(
                     key=self._key,
                     page=page_no - 1,
                     page_boundary=self._boundary_type,
                     do_sanitization=False,
+                    keep_char_cells=keep_chars,
+                    keep_lines=keep_lines,
+                    keep_bitmaps=keep_bitmaps,
+                    create_word_cells=create_words,
+                    create_line_cells=create_textlines,
                 )
                 for pi, page in enumerate(
                     doc_dict["pages"]
                 ):  # only one page is expected
                     self._pages[page_no] = self._to_segmented_page(
                         page=page["original"],
+                        keep_chars=keep_chars,
+                        keep_lines=keep_lines,
+                        keep_bitmaps=keep_bitmaps,
                         create_words=create_words,
                         create_textlines=create_textlines,
                         enforce_same_font=enforce_same_font,
@@ -290,14 +308,14 @@ class PdfDocument:
 
         return result
     """
-    
+
     def _to_cells(self, cells: dict) -> List[Union[PdfTextCell, TextCell]]:
         assert "data" in cells, '"data" in cells'
         assert "header" in cells, '"header" in cells'
-        
+
         data = cells["data"]
         header = cells["header"]
-        
+
         # Pre-compute header indices as local variables
         r_x0_idx = header.index("r_x0")
         r_y0_idx = header.index("r_y0")
@@ -313,11 +331,11 @@ class PdfDocument:
         widget_idx = header.index("widget")
         left_to_right_idx = header.index("left_to_right")
         rendering_mode_idx = header.index("rendering-mode")
-        
+
         # Pre-allocate list with exact size
         data_len = len(data)
         result: List[Union[PdfTextCell, TextCell]] = [None] * data_len
-    
+
         for ind, row in enumerate(data):
             rect = BoundingRectangle(
                 r_x0=row[r_x0_idx],
@@ -329,7 +347,7 @@ class PdfDocument:
                 r_x3=row[r_x3_idx],
                 r_y3=row[r_y3_idx],
             )
-            
+
             result[ind] = PdfTextCell(
                 rect=rect,
                 text=row[text_idx],
@@ -345,10 +363,9 @@ class PdfDocument:
                 index=ind,
                 rendering_mode=row[rendering_mode_idx],
             )
-            
+
         return result
-    
-    
+
     def _to_bitmap_resources(self, images: dict) -> List[BitmapResource]:
 
         assert "data" in images, '"data" in images'
@@ -400,6 +417,9 @@ class PdfDocument:
         self,
         page: dict,
         *,
+        keep_chars: bool = True,
+        keep_lines: bool = True,
+        keep_bitmaps: bool = True,
         create_words: bool,
         create_textlines: bool,
         enforce_same_font: bool = True,
@@ -427,32 +447,47 @@ class PdfDocument:
             )
         """
 
-        keep_chars: bool = False
-        keep_lines: bool = False
-        keep_bitmap_resources: bool = False
-        
         char_cells = []
         if keep_chars:
-            chars = self._to_cells(page["cells"])
+            assert "cells" in page
+            char_cells = self._to_cells(page["cells"])
 
         lines = []
         if keep_lines:
+            assert "lines" in page
             lines = self._to_lines(page["lines"])
-            
+
         bitmap_resources = []
-        if keep_bitmap_resources:
+        if keep_bitmaps:
+            assert "images" in page
             bitmap_resources = self._to_bitmap_resources(page["images"])
-            
+
         segmented_page = SegmentedPdfPage(
             dimension=self._to_page_geometry(page["dimension"]),
             char_cells=char_cells,
             word_cells=[],
             textline_cells=[],
             has_chars=len(char_cells) > 0,
-            bitmap_resources= [], # self._to_bitmap_resources(page["images"]),
-            lines= [], # self._to_lines(page["lines"]),
+            bitmap_resources=bitmap_resources,  # self._to_bitmap_resources(page["images"]),
+            lines=lines,  # self._to_lines(page["lines"]),
         )
-        
+
+        if create_words and ("word_cells" in page):
+            segmented_page.word_cells = self._to_cells(page["word_cells"])
+        elif create_words:
+            self._create_word_cells(segmented_page, enforce_same_font=enforce_same_font)
+        else:
+            logger.error("")
+
+        if create_textlines and ("word_cells" in page):
+            segmented_page.textline_cells = self._to_cells(page["line_cells"])
+        elif create_textlines:
+            self._create_textline_cells(
+                segmented_page, enforce_same_font=enforce_same_font
+            )
+        else:
+            logger.error("")
+            
         return segmented_page
 
     def _create_word_cells(

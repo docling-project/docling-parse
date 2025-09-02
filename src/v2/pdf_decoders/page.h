@@ -111,6 +111,12 @@ namespace pdflib
                                         bool keep_bitmaps,
                                         bool do_sanitization)
   {
+    LOG_S(INFO) << "pdf_decoder<PAGE>::get "
+		<< "keep_char_cells: " << keep_char_cells << ", "
+		<< "keep_lines: " << keep_lines << ", "
+		<< "keep_bitmaps: " << keep_bitmaps << ", "
+		<< "do_sanitization: " << do_sanitization << ", ";
+    
     nlohmann::json result;
     {
       result["page_number"] = page_number;
@@ -134,16 +140,28 @@ namespace pdflib
           {
             original["images"] = page_images.get();
           }
-
+	else
+	  {
+	    LOG_S(WARNING) << "skipping the serialization of `images` to json!";
+	  }
+	
         if(keep_char_cells)
           {
             original["cells"] = page_cells.get();
           }
+	else
+	  {
+	    LOG_S(WARNING) << "skipping the serialization of `cells` to json!";
+	  }	
 
         if(keep_lines)
           {
             original["lines"] = page_lines.get();
           }
+	else
+	  {
+	    LOG_S(WARNING) << "skipping the serialization of `lines` to json!";
+	  }	
       }
 
       if(do_sanitization)
@@ -167,6 +185,10 @@ namespace pdflib
               sanitized["lines"] = lines.get();
             }
         }
+      	else
+	  {
+	    LOG_S(WARNING) << "skipping the serialization of `sanitzed` page to json!";
+	  }	
     }
 
     return result;
