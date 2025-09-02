@@ -1,26 +1,12 @@
 #!/usr/bin/env python
 import glob
-import os
-import re
-from typing import Dict, List, Union
+from datetime import datetime
 from pathlib import Path
 
-from datetime import datetime
-
-from docling_core.types.doc.page import (
-    BitmapResource,
-    PdfLine,
-    PdfPageBoundaryType,
-    PdfTableOfContents,
-    PdfTextCell,
-    SegmentedPdfPage,
-    TextCell,
-    TextCellUnit,
-)
-from pydantic import TypeAdapter, BaseModel
+from docling_core.types.doc.page import PdfPageBoundaryType
+from pydantic import BaseModel
 
 from docling_parse.pdf_parser import DoclingPdfParser, PdfDocument
-
 from docling_parse.pdf_parsers import pdf_parser_v2  # type: ignore[import]
 
 
@@ -59,7 +45,7 @@ def test_performance_pdf_parse_v2(
         parser = pdf_parser_v2(level="fatal")
         parser.load_document(doc_key, str(pdf_doc_path))
 
-        pred_doc = parser.parse_pdf_from_key(doc_key)
+        parser.parse_pdf_from_key(doc_key)
 
         parser.unload_document(doc_key)
 
@@ -72,7 +58,12 @@ def test_performance_pdf_parse_v2(
 
 
 def test_performance_pdf_parse_py(
-    ifolder: Path, lazy: bool = True, loglevel: str = "fatal"
+    ifolder: Path,
+    create_words: bool = True,
+    create_textlines: bool = True,
+    enforce_same_font: bool = True,
+    lazy: bool = True,
+    loglevel: str = "fatal",
 ) -> list[DocumentTiming]:
 
     pdf_docs = sorted(glob.glob(str(ifolder)))
@@ -105,11 +96,11 @@ def test_performance_pdf_parse_py(
 
         start_1_time = datetime.now()
         timing.num_pages = 0
-        for page_no, pred_page in pdf_doc.iterate_pages():
+        for page_no, pred_page in pdf_doc.iterate_pages(create_words=create_words, create_textlines=create_textlines, enforce_same_font=enforce_same_font):
             timing.num_pages += 1
 
             elapsed = datetime.now() - start_1_time
-            timing.page_times.append(elapsed.total_seconds())
+            # timing.page_times.append(elapsed.total_seconds())
 
             start_1_time = datetime.now()
 
@@ -131,7 +122,24 @@ def main():
     for _ in timings:
         print(_)
 
-    timings = test_performance_pdf_parse_py(ifolder=ifolder)
+    timings = test_performance_pdf_parse_py(
+        ifolder=ifolder,
+        create_words=False,
+        create_textlines=False,
+        enforce_same_font=False,
+    )
+
+    for _ in timings:
+        print(_)
+
+    exit(-1)
+        
+    timings = test_performance_pdf_parse_py(
+        ifolder=ifolder,
+        create_words=True,
+        create_textlines=True,
+        enforce_same_font=True,
+    )
 
     for _ in timings:
         print(_)

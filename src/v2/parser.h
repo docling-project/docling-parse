@@ -208,8 +208,21 @@ namespace plib
       }
     else
       {
+	bool keep_char_cells = true;
+	bool keep_lines = true;
+	bool keep_bitmaps = true;
+	bool create_word_cells = true;
+	bool create_line_cells = true;
+	
         std::vector<int> page_numbers = task["page-numbers"];
-        document_decoder.decode_document(page_numbers, page_boundary, do_sanitization);
+        document_decoder.decode_document(page_numbers,
+					 page_boundary,
+					 do_sanitization,
+					 keep_char_cells,
+					 keep_lines,
+					 keep_bitmaps,
+					 create_word_cells,
+					 create_line_cells);
       }
 
     nlohmann::json json_document = document_decoder.get();

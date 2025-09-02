@@ -14,6 +14,20 @@ namespace pdflib
     pdf_sanitator();
     ~pdf_sanitator();
 
+    nlohmann::json to_records(pdf_resource<PAGE_CELLS>& cells);
+
+    nlohmann::json create_word_cells(pdf_resource<PAGE_CELLS>& cells,
+				     double horizontal_cell_tolerance=1.00,
+				     bool enforce_same_font=true,
+				     double space_width_factor_for_merge=0.05);
+
+    nlohmann::json create_line_cells(pdf_resource<PAGE_CELLS>& cells,
+				     double horizontal_cell_tolerance=1.00,
+				     bool enforce_same_font=true,
+				     double space_width_factor_for_merge=1.00,
+				     double space_width_factor_for_merge_with_space=0.33);
+
+    
     void remove_duplicate_chars(pdf_resource<PAGE_CELLS>& cells, double eps=1.0e-1);
     
     void sanitize_bbox(pdf_resource<PAGE_CELLS>& cells,
@@ -23,6 +37,8 @@ namespace pdflib
 		       double space_width_factor_for_merge_with_space); //=0.33);
 
     void sanitize_text(pdf_resource<PAGE_CELLS>& cells);
+
+
     
   private:
 
@@ -67,6 +83,122 @@ namespace pdflib
   pdf_sanitator<PAGE_CELLS>::~pdf_sanitator()
   {}
 
+  nlohmann::json pdf_sanitator<PAGE_CELLS>::to_records(pdf_resource<PAGE_CELLS>& cells)
+  {
+    LOG_S(INFO) << __FUNCTION__;
+
+    nlohmann::json result = nlohmann::json::array({});
+    
+    int order = 0;
+    for(auto itr=cells.begin(); itr!=cells.end(); itr++)
+      {
+	pdflib::pdf_resource<pdflib::PAGE_CELL>& cell = *itr;
+
+	if(not cell.active)
+	  {
+	    continue;
+	  }
+	
+	nlohmann::json item = nlohmann::json::object({});
+
+	{
+	  nlohmann::json rect = nlohmann::json::object({});
+
+	  rect["r_x0"] = cell.r_x0; rect["r_y0"] = cell.r_y0;
+	  rect["r_x1"] = cell.r_x1; rect["r_y1"] = cell.r_y1;
+	  rect["r_x2"] = cell.r_x2; rect["r_y2"] = cell.r_y2;
+	  rect["r_x3"] = cell.r_x3; rect["r_y3"] = cell.r_y3;
+
+	  item["index"] = (order++);
+	  
+	  item["rect"] = rect;
+
+	  item["text"] = cell.text;
+	  item["orig"] = cell.text;
+
+	  item["font_key"] = cell.font_key;
+	  item["font_name"] = cell.font_name;
+
+	  item["rendering_mode"] = cell.rendering_mode;
+
+	  item["widget"] = cell.widget;
+	  item["left_to_right"] = cell.left_to_right;
+	}
+
+	result.push_back(item);
+      }
+    
+    return result;
+  }
+  
+  nlohmann::json pdf_sanitator<PAGE_CELLS>::create_word_cells(pdf_resource<PAGE_CELLS>& char_cells,
+							      double horizontal_cell_tolerance,
+							      bool enforce_same_font,
+							      double space_width_factor_for_merge)
+  {
+    LOG_S(INFO) << __FUNCTION__;
+
+    // do a deep copy
+    pdf_resource<PAGE_CELLS> word_cells;
+    word_cells = char_cells;
+
+    LOG_S(INFO) << "#-word cells: " << word_cells.size();
+    
+    // remove all spaces 
+    auto itr = word_cells.begin();
+    while(itr!=word_cells.end())
+      {
+	if(utils::string::is_space(itr->text))
+	  {
+	    itr = word_cells.erase(itr);	    
+	  }
+	else
+	  {
+	    itr++;
+	  }
+      }
+
+    LOG_S(INFO) << "#-word cells: " << word_cells.size();
+    
+    // > space_width_factor_for_merge, so nothing gets merged with a space
+    double space_width_factor_for_merge_with_space = 2.0*space_width_factor_for_merge; 
+    
+    sanitize_bbox(word_cells,
+		  horizontal_cell_tolerance,
+		  enforce_same_font,
+		  space_width_factor_for_merge,
+		  space_width_factor_for_merge_with_space);
+
+    LOG_S(INFO) << "#-wordcells: " << word_cells.size();
+
+    return to_records(word_cells);
+  }
+
+  nlohmann::json pdf_sanitator<PAGE_CELLS>::create_line_cells(pdf_resource<PAGE_CELLS>& char_cells,
+							      double horizontal_cell_tolerance,
+							      bool enforce_same_font,
+							      double space_width_factor_for_merge,
+							      double space_width_factor_for_merge_with_space)
+  {
+    LOG_S(INFO) << __FUNCTION__ << " -> char_cells: " << char_cells.size();
+
+    // do a deep copy
+    pdf_resource<PAGE_CELLS> line_cells;
+    line_cells = char_cells;
+
+    LOG_S(INFO) << "initial line-cells: " << line_cells.size();
+    
+    sanitize_bbox(line_cells,
+		  horizontal_cell_tolerance,
+		  enforce_same_font,
+		  space_width_factor_for_merge,
+		  space_width_factor_for_merge_with_space);
+    
+    LOG_S(INFO) << "initial line-cells: " << line_cells.size();
+
+    return to_records(line_cells);
+  }  
+  
   void pdf_sanitator<PAGE_CELLS>::remove_duplicate_chars(pdf_resource<PAGE_CELLS>& cells, double eps)
   {
     while(true)
