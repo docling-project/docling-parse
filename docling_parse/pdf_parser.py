@@ -348,7 +348,7 @@ class PdfDocument:
         )
 
         # FIXME: this might be inefficient ...
-        
+
         if create_words:
             self._create_word_cells(segmented_page, enforce_same_font=enforce_same_font)
 
