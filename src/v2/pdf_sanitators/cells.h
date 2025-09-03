@@ -17,15 +17,15 @@ namespace pdflib
     nlohmann::json to_records(pdf_resource<PAGE_CELLS>& cells);
 
     pdf_resource<PAGE_CELLS> create_word_cells(pdf_resource<PAGE_CELLS>& cells,
-					       double horizontal_cell_tolerance=1.00,
-					       bool enforce_same_font=true,
-					       double space_width_factor_for_merge=0.05);
+					       double horizontal_cell_tolerance, //=1.00,
+					       bool enforce_same_font, //=true,
+					       double space_width_factor_for_merge); //=0.05);
 
     pdf_resource<PAGE_CELLS> create_line_cells(pdf_resource<PAGE_CELLS>& cells,
-					       double horizontal_cell_tolerance=1.00,
-					       bool enforce_same_font=true,
-					       double space_width_factor_for_merge=1.00,
-					       double space_width_factor_for_merge_with_space=0.33);
+					       double horizontal_cell_tolerance, //=1.00,
+					       bool enforce_same_font, //=true,
+					       double space_width_factor_for_merge, //=1.00,
+					       double space_width_factor_for_merge_with_space); //=0.33);
 
     
     void remove_duplicate_chars(pdf_resource<PAGE_CELLS>& cells, double eps=1.0e-1);
@@ -137,7 +137,8 @@ namespace pdflib
 									double space_width_factor_for_merge)
   {
     LOG_S(INFO) << __FUNCTION__;
-
+    LOG_S(INFO) << "space_width_factor_for_merge (create_word_cells): " << space_width_factor_for_merge;
+    
     // do a deep copy
     pdf_resource<PAGE_CELLS> word_cells;
     word_cells = char_cells;
@@ -182,7 +183,9 @@ namespace pdflib
 									double space_width_factor_for_merge_with_space)
   {
     LOG_S(INFO) << __FUNCTION__ << " -> char_cells: " << char_cells.size();
-
+    LOG_S(INFO) << "space_width_factor_for_merge (create_line_cells): " << space_width_factor_for_merge;
+    LOG_S(INFO) << "space_width_factor_for_merge_with_space (create_line_cells): " << space_width_factor_for_merge_with_space;
+    
     // do a deep copy
     pdf_resource<PAGE_CELLS> line_cells;
     line_cells = char_cells;

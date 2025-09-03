@@ -66,7 +66,7 @@ def test_performance_pdf_parse_py(
     create_textlines: bool = True,
     enforce_same_font: bool = True,
     lazy: bool = True,
-    loglevel: str = "fatal",
+    loglevel: str = "error",
 ) -> list[DocumentTiming]:
 
     pdf_docs = sorted(glob.glob(str(ifolder)))
@@ -110,9 +110,11 @@ def test_performance_pdf_parse_py(
             timing.num_pages += 1
 
             elapsed = datetime.now() - start_1_time
-            # timing.page_times.append(elapsed.total_seconds())
+            timing.page_times.append(elapsed.total_seconds())
 
             start_1_time = datetime.now()
+
+            break
 
         elapsed = datetime.now() - start_0_time
         timing.total_time = elapsed.total_seconds()
@@ -132,6 +134,7 @@ def main():
     for _ in timings:
         print(_)
 
+    # Optimized
     timings = test_performance_pdf_parse_py(
         ifolder=ifolder,
         keep_chars=False,
@@ -145,6 +148,7 @@ def main():
     for _ in timings:
         print(_)
 
+    # Optoimized for time, not memory
     timings = test_performance_pdf_parse_py(
         ifolder=ifolder,
         keep_chars=True,
@@ -152,6 +156,20 @@ def main():
         keep_bitmaps=True,
         create_words=True,
         create_textlines=True,
+        enforce_same_font=True,
+    )
+
+    for _ in timings:
+        print(_)
+
+    # Original ...
+    timings = test_performance_pdf_parse_py(
+        ifolder=ifolder,
+        keep_chars=True,
+        keep_lines=True,
+        keep_bitmaps=True,
+        create_words=False,
+        create_textlines=False,
         enforce_same_font=True,
     )
 

@@ -310,16 +310,32 @@ namespace pdflib
 	    if(create_word_cells)
 	      {
 		LOG_S(INFO) << "creating word-cells in `original` (2)";        
+
+		double horizontal_cell_tolerance=1.00;
+		bool enforce_same_font=true;
+		double space_width_factor_for_merge=0.33;
 		
-		pdf_resource<PAGE_CELLS> word_cells = sanitizer.create_word_cells(page_decoder.get_page_cells());
+		pdf_resource<PAGE_CELLS> word_cells = sanitizer.create_word_cells(page_decoder.get_page_cells(),
+										  horizontal_cell_tolerance,
+										  enforce_same_font,
+										  space_width_factor_for_merge);
 		page["original"]["word_cells"] = word_cells.get();
 	      }
 
 	    if(create_line_cells)
 	      {
 		LOG_S(INFO) << "creating line-cells in `original` (2)";        
+
+		double horizontal_cell_tolerance=1.00;
+		bool enforce_same_font=true;
+		double space_width_factor_for_merge=1.00;
+		double space_width_factor_for_merge_with_space=0.33;
 		
-		pdf_resource<PAGE_CELLS> line_cells = sanitizer.create_line_cells(page_decoder.get_page_cells());
+		pdf_resource<PAGE_CELLS> line_cells = sanitizer.create_line_cells(page_decoder.get_page_cells(),
+										  horizontal_cell_tolerance,
+										  enforce_same_font,
+										  space_width_factor_for_merge,
+										  space_width_factor_for_merge_with_space);
 		page["original"]["line_cells"] = line_cells.get();
 	      }	    
 	    

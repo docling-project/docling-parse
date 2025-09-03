@@ -481,14 +481,14 @@ class PdfDocument:
 
         if create_words and ("word_cells" in page):
             segmented_page.word_cells = self._to_cells(page["word_cells"])
-        elif create_words:
+        elif keep_chars:
             self._create_word_cells(segmented_page, enforce_same_font=enforce_same_font)
         else:
             logging.warning("No `words` will be created for segmented_page")
 
         if create_textlines and ("word_cells" in page):
             segmented_page.textline_cells = self._to_cells(page["line_cells"])
-        elif create_textlines:
+        elif keep_chars:
             self._create_textline_cells(
                 segmented_page, enforce_same_font=enforce_same_font
             )
@@ -505,7 +505,6 @@ class PdfDocument:
         enforce_same_font: bool = True,
         _loglevel: str = "fatal",
     ):
-
         if len(segmented_page.word_cells) > 0:
             return
 

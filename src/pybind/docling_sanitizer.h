@@ -287,9 +287,9 @@ namespace docling
     */
 
     word_cells = cell_sanitizer.create_word_cells(char_cells,
-					    horizontal_cell_tolerance,
-					    enforce_same_font,
-					    space_width_factor_for_merge);
+						  horizontal_cell_tolerance,
+						  enforce_same_font,
+						  space_width_factor_for_merge);
 
     return cell_sanitizer.to_records(word_cells);
   }
