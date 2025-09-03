@@ -423,12 +423,12 @@ PYBIND11_MODULE(pdf_parsers, m) {
     pybind11::arg("key"),
     pybind11::arg("page"),
     pybind11::arg("page_boundary") = "crop_box", // media_box
-    pybind11::arg("do_sanitization") = false, // media_box
-    pybind11::arg("keep_char_cells") = true, // media_box
-    pybind11::arg("keep_lines") = true, // media_box
-    pybind11::arg("keep_bitmaps") = true, // media_box
-    pybind11::arg("create_word_cells") = true, // media_box
-    pybind11::arg("create_line_cells") = true, // media_box
+    pybind11::arg("do_sanitization") = true,
+    pybind11::arg("keep_char_cells") = true,
+    pybind11::arg("keep_lines") = true,
+    pybind11::arg("keep_bitmaps") = true,
+    pybind11::arg("create_word_cells") = true,
+    pybind11::arg("create_line_cells") = true,
 	 R"(
     Parse a specific page of the PDF document identified by its unique key and return a JSON representation.
 

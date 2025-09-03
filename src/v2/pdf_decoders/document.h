@@ -232,6 +232,10 @@ namespace pdflib
   {
     LOG_S(INFO) << "start decoding all pages ...";        
     utils::timer timer;
+
+    bool keep_char_cells = true;
+    bool keep_lines = true; 
+    bool keep_bitmaps = true;
     
     nlohmann::json& json_pages = json_document["pages"];
     json_pages = nlohmann::json::array({});
@@ -249,7 +253,7 @@ namespace pdflib
 	update_timings(timings_, set_timer);
 	set_timer = false;
 
-        json_pages.push_back(page_decoder.get());
+        json_pages.push_back(page_decoder.get(keep_char_cells, keep_lines, keep_bitmaps, do_sanitization));
 
 	std::stringstream ss;
 	ss << "decoding page " << page_number++;

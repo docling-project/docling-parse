@@ -99,13 +99,14 @@ def test_performance_pdf_parse_py(
 
         start_1_time = datetime.now()
         timing.num_pages = 0
-        for page_no, pred_page in pdf_doc.iterate_pages(keep_chars=keep_chars,
-                                                        keep_lines=keep_lines,
-                                                        keep_bitmaps=keep_bitmaps,
-                                                        create_words=create_words,
-                                                        create_textlines=create_textlines,
-                                                        enforce_same_font=enforce_same_font,
-                                                        ):
+        for page_no, pred_page in pdf_doc.iterate_pages(
+            keep_chars=keep_chars,
+            keep_lines=keep_lines,
+            keep_bitmaps=keep_bitmaps,
+            create_words=create_words,
+            create_textlines=create_textlines,
+            enforce_same_font=enforce_same_font,
+        ):
             timing.num_pages += 1
 
             elapsed = datetime.now() - start_1_time
@@ -126,18 +127,16 @@ def main():
 
     ifolder = Path("./timings/*.pdf")
 
-    """
     timings = test_performance_pdf_parse_v2(ifolder=ifolder)
 
     for _ in timings:
         print(_)
-    """
-    
+
     timings = test_performance_pdf_parse_py(
         ifolder=ifolder,
-        keep_chars = True,
-        keep_lines = True,
-        keep_bitmaps = True,        
+        keep_chars=False,
+        keep_lines=False,
+        keep_bitmaps=False,
         create_words=True,
         create_textlines=True,
         enforce_same_font=False,
@@ -146,10 +145,11 @@ def main():
     for _ in timings:
         print(_)
 
-    exit(-1)
-
     timings = test_performance_pdf_parse_py(
         ifolder=ifolder,
+        keep_chars=True,
+        keep_lines=True,
+        keep_bitmaps=True,
         create_words=True,
         create_textlines=True,
         enforce_same_font=True,

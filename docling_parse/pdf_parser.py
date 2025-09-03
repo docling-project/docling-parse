@@ -146,17 +146,18 @@ class PdfDocument:
         create_words: bool = True,
         create_textlines: bool = True,
         enforce_same_font: bool = True,
+        do_sanitization: bool = False,
     ) -> SegmentedPdfPage:
         if page_no in self._pages.keys():
             return self._pages[page_no]
         else:
             if 1 <= page_no <= self.number_of_pages():
-                
+
                 doc_dict = self._parser.parse_pdf_from_key_on_page(
                     key=self._key,
                     page=page_no - 1,
                     page_boundary=self._boundary_type,
-                    do_sanitization=False,
+                    do_sanitization=do_sanitization,
                     keep_char_cells=keep_chars,
                     keep_lines=keep_lines,
                     keep_bitmaps=keep_bitmaps,
@@ -487,7 +488,7 @@ class PdfDocument:
             )
         else:
             logger.error("")
-            
+
         return segmented_page
 
     def _create_word_cells(
