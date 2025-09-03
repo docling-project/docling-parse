@@ -1,6 +1,7 @@
 """Parser for PDF files"""
 
 import hashlib
+import logging
 from io import BytesIO
 from pathlib import Path
 from typing import Dict, Iterator, List, Optional, Tuple, Union
@@ -24,6 +25,11 @@ from docling_core.types.doc.page import (
 
 from docling_parse.pdf_parsers import pdf_parser_v2  # type: ignore[import]
 from docling_parse.pdf_parsers import pdf_sanitizer  # type: ignore[import]
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
 
 class PdfDocument:
@@ -335,7 +341,7 @@ class PdfDocument:
 
         # Pre-allocate list with exact size
         data_len = len(data)
-        result: List[Union[PdfTextCell, TextCell]] = [None] * data_len
+        result: List[Union[PdfTextCell, TextCell]] = [None] * data_len  # type: ignore
 
         for ind, row in enumerate(data):
             rect = BoundingRectangle(
@@ -478,7 +484,7 @@ class PdfDocument:
         elif create_words:
             self._create_word_cells(segmented_page, enforce_same_font=enforce_same_font)
         else:
-            logger.error("")
+            logging.warning("No `words` will be created for segmented_page")
 
         if create_textlines and ("word_cells" in page):
             segmented_page.textline_cells = self._to_cells(page["line_cells"])
@@ -487,7 +493,7 @@ class PdfDocument:
                 segmented_page, enforce_same_font=enforce_same_font
             )
         else:
-            logger.error("")
+            logging.warning("No `text_lines` will be created for segmented_page")
 
         return segmented_page
 

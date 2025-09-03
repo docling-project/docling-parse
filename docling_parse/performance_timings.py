@@ -12,7 +12,7 @@ from docling_parse.pdf_parsers import pdf_parser_v2  # type: ignore[import]
 
 class DocumentTiming(BaseModel):
 
-    filename: Path
+    filename: str
     num_pages: int = -1
     total_time: float = 0.0
     load_time: float = 0.0
