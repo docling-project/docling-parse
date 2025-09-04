@@ -584,14 +584,14 @@ Sanitize table cells with specified parameters and return the processed JSON.
 	 [](docling::docling_sanitizer &self,
 	    double horizontal_cell_tolerance,
 	    bool enforce_same_font,
-	    double space_width_factor_for_merge = 1.0) -> nlohmann::json {
+	    double space_width_factor_for_merge/* = 1.0*/) -> nlohmann::json {
 	   return self.create_word_cells(horizontal_cell_tolerance,
 					 enforce_same_font,
 					 space_width_factor_for_merge);
 	 },
-	 pybind11::arg("horizontal_cell_tolerance")=1.0,
-	 pybind11::arg("enforce_same_font")=true,
-	 pybind11::arg("space_width_factor_for_merge")=0.33,
+	 pybind11::arg("horizontal_cell_tolerance"), // =1.0,
+	 pybind11::arg("enforce_same_font"), //=true,
+	 pybind11::arg("space_width_factor_for_merge"), //=0.33,
 	 R"(
     Create word cells
 
@@ -607,17 +607,17 @@ Sanitize table cells with specified parameters and return the processed JSON.
 	 [](docling::docling_sanitizer &self,
 	    double horizontal_cell_tolerance,
 	    bool enforce_same_font,
-	    double space_width_factor_for_merge = 1.0,
-	    double space_width_factor_for_merge_with_space = 0.33) -> nlohmann::json {
+	    double space_width_factor_for_merge /*= 1.0*/,
+	    double space_width_factor_for_merge_with_space /*= 0.33*/) -> nlohmann::json {
 	   return self.create_line_cells(horizontal_cell_tolerance,
 					 enforce_same_font,
 					 space_width_factor_for_merge,
 					 space_width_factor_for_merge_with_space);
 	 },
-	 pybind11::arg("horizontal_cell_tolerance")=1.0,
-	 pybind11::arg("enforce_same_font")=true,
-	 pybind11::arg("space_width_factor_for_merge")=1.0,
-	 pybind11::arg("space_width_factor_for_merge_with_space")=0.33,
+	 pybind11::arg("horizontal_cell_tolerance"), //=1.0,
+	 pybind11::arg("enforce_same_font"), //=true,
+	 pybind11::arg("space_width_factor_for_merge"), //=1.0,
+	 pybind11::arg("space_width_factor_for_merge_with_space"), //=0.33,
 	 R"(
     Create line cells
 

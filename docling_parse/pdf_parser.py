@@ -442,7 +442,9 @@ class PdfDocument:
             segmented_page.word_cells = self._to_cells(page["word_cells"])
             segmented_page.has_words = len(segmented_page.word_cells) > 0
         elif keep_chars:
-            logging.warning("`words` will be created for segmented_page in an inefficient way!")
+            logging.warning(
+                "`words` will be created for segmented_page in an inefficient way!"
+            )
             self._create_word_cells(segmented_page, enforce_same_font=enforce_same_font)
         else:
             logging.warning("No `words` will be created for segmented_page")
@@ -451,7 +453,9 @@ class PdfDocument:
             segmented_page.textline_cells = self._to_cells(page["line_cells"])
             segmented_page.has_lines = len(segmented_page.textline_cells) > 0
         elif keep_chars:
-            logging.warning("`text_lines` will be created for segmented_page in an inefficient way!")
+            logging.warning(
+                "`text_lines` will be created for segmented_page in an inefficient way!"
+            )
             self._create_textline_cells(
                 segmented_page, enforce_same_font=enforce_same_font
             )
@@ -464,6 +468,7 @@ class PdfDocument:
         self,
         segmented_page: SegmentedPdfPage,
         *,
+        horizontal_cell_tolerance: float = 1.0,
         space_width_factor_for_merge: float = 0.33,
         enforce_same_font: bool = True,
         _loglevel: str = "fatal",
@@ -485,6 +490,7 @@ class PdfDocument:
 
         # data = sanitizer.create_word_cells(space_width_factor_for_merge=0.33)
         data = sanitizer.create_word_cells(
+            horizontal_cell_tolerance=horizontal_cell_tolerance,
             space_width_factor_for_merge=space_width_factor_for_merge,
             enforce_same_font=enforce_same_font,
         )
@@ -500,6 +506,7 @@ class PdfDocument:
         self,
         segmented_page: SegmentedPdfPage,
         *,
+        horizontal_cell_tolerance: float = 1.0,
         space_width_factor_for_merge: float = 1.0,
         space_width_factor_for_merge_with_space: float = 0.33,
         enforce_same_font: bool = True,
@@ -526,6 +533,7 @@ class PdfDocument:
 
         # data = sanitizer.create_line_cells()
         data = sanitizer.create_line_cells(
+            horizontal_cell_tolerance=horizontal_cell_tolerance,
             space_width_factor_for_merge=space_width_factor_for_merge,
             space_width_factor_for_merge_with_space=space_width_factor_for_merge_with_space,
             enforce_same_font=enforce_same_font,
