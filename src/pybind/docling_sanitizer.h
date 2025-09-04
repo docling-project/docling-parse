@@ -20,18 +20,14 @@ namespace docling
 
     bool set_char_cells(nlohmann::json& data);
 
-    //bool set_char_cells(pdflib::pdf_resource<pdflib::PAGE_CELLS>& char_cells_) { char_cells = char_cells_; }
+    nlohmann::json create_word_cells(double horizontal_cell_tolerance, //=1.00,
+				     bool enforce_same_font, //=true,
+				     double space_width_factor_for_merge); //=0.05);
 
-    //nlohmann::json to_records(std::string label);
-
-    nlohmann::json create_word_cells(double horizontal_cell_tolerance=1.00,
-				     bool enforce_same_font=true,
-				     double space_width_factor_for_merge=0.05);
-
-    nlohmann::json create_line_cells(double horizontal_cell_tolerance=1.00,
-				     bool enforce_same_font=true,
-				     double space_width_factor_for_merge=1.00,
-				     double space_width_factor_for_merge_with_space=0.33);
+    nlohmann::json create_line_cells(double horizontal_cell_tolerance, //=1.00,
+				     bool enforce_same_font, //=true,
+				     double space_width_factor_for_merge, //=1.00,
+				     double space_width_factor_for_merge_with_space); //=0.33);
     
   private:
 
@@ -326,8 +322,6 @@ namespace docling
 
     return cell_sanitizer.to_records(line_cells);
   }  
-
-  
   
 }
 
