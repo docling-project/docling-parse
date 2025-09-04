@@ -275,47 +275,6 @@ class PdfDocument:
             bleed_bbox=bleed_bbox,
         )
 
-    """
-    def _to_cells(self, cells: dict) -> List[Union[PdfTextCell, TextCell]]:
-
-        assert "data" in cells, '"data" in cells'
-        assert "header" in cells, '"header" in cells'
-
-        data = cells["data"]
-        header = cells["header"]
-
-        result: List[Union[PdfTextCell, TextCell]] = []
-        for ind, row in enumerate(data):
-            rect = BoundingRectangle(
-                r_x0=row[header.index(f"r_x0")],
-                r_y0=row[header.index(f"r_y0")],
-                r_x1=row[header.index(f"r_x1")],
-                r_y1=row[header.index(f"r_y1")],
-                r_x2=row[header.index(f"r_x2")],
-                r_y2=row[header.index(f"r_y2")],
-                r_x3=row[header.index(f"r_x3")],
-                r_y3=row[header.index(f"r_y3")],
-            )
-            cell = PdfTextCell(
-                rect=rect,
-                text=row[header.index(f"text")],
-                orig=row[header.index(f"text")],
-                font_key=row[header.index(f"font-key")],
-                font_name=row[header.index(f"font-name")],
-                widget=row[header.index(f"widget")],
-                text_direction=(
-                    TextDirection.LEFT_TO_RIGHT
-                    if row[header.index(f"left_to_right")]
-                    else TextDirection.RIGHT_TO_LEFT
-                ),
-                index=ind,
-                rendering_mode=row[header.index(f"rendering-mode")],
-            )
-            result.append(cell)
-
-        return result
-    """
-
     def _to_cells(self, cells: dict) -> List[Union[PdfTextCell, TextCell]]:
         assert "data" in cells, '"data" in cells'
         assert "header" in cells, '"header" in cells'
