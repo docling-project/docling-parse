@@ -446,8 +446,8 @@ class PdfDocument:
                 "`words` will be created for segmented_page in an inefficient way!"
             )
             self._create_word_cells(segmented_page, enforce_same_font=enforce_same_font)
-        else:
-            logging.warning("No `words` will be created for segmented_page")
+        # else:
+        #    logging.warning("No `words` will be created for segmented_page")
 
         if create_textlines and ("line_cells" in page):
             segmented_page.textline_cells = self._to_cells(page["line_cells"])
@@ -459,8 +459,8 @@ class PdfDocument:
             self._create_textline_cells(
                 segmented_page, enforce_same_font=enforce_same_font
             )
-        else:
-            logging.warning("No `text_lines` will be created for segmented_page")
+        # else:
+        #    logging.warning("No `text_lines` will be created for segmented_page")
 
         return segmented_page
 
