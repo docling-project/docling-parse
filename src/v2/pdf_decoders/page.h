@@ -198,10 +198,19 @@ namespace pdflib
   {
     utils::timer timer;
 
-    json_page = to_json(qpdf_page);
+    {
+      //utils::timer _;
+      json_page = to_json(qpdf_page);
+      //std::cout << "json_page: " << _.get_time() << "\n";
+    }
 
-    json_annots = extract_annots_in_json(qpdf_page);
+    {
+      //utils::timer _;
+      json_annots = extract_annots_in_json(qpdf_page);
+      //std::cout << "json_annots: " << _.get_time() << "\n";
+    }
 
+    /*
     try
       {
         LOG_S(INFO) << "json_page: \n" << json_page.dump(2);
@@ -211,32 +220,58 @@ namespace pdflib
         LOG_S(ERROR) << "could not dump the json-representation of the page with error: "
                      << e.what();
       }
-
+    */
+    
     decode_dimensions();
 
-    decode_resources();
+    {
+      //utils::timer _;
+      decode_resources();
+      //std::cout << "decode_resources: " << _.get_time() << "\n";
+    }
 
-    decode_contents();
+    {
+      //utils::timer _;      
+      decode_contents();
+      //std::cout << "decode_contents: " << _.get_time() << "\n";
+    }
 
-    decode_annots();
+    {
+      //utils::timer _;
+      decode_annots();
+      //std::cout << "decode_annots: " << _.get_time() << "\n";
+    }
 
     rotate_contents();
 
     // fix the orientiation
     {
+      //utils::timer _;
+      
       pdf_sanitator<PAGE_DIMENSION> sanitator(page_dimension);
 
       sanitator.sanitize(page_boundary); // update the top-level bbox
       sanitator.sanitize(page_cells, page_boundary);
       sanitator.sanitize(page_lines, page_boundary);
       sanitator.sanitize(page_images, page_boundary);
+
+      //std::cout << "pdf_sanitator<PAGE_DIMENSION>: " << _.get_time() << "\n";
     }
 
     {
       pdf_sanitator<PAGE_CELLS> sanitator;
 
-      sanitator.remove_duplicate_chars(page_cells, 0.5);
-      sanitator.sanitize_text(page_cells);
+      {
+	//utils::timer _;
+	sanitator.remove_duplicate_chars(page_cells, 0.5);
+	//std::cout << "pdf_sanitator<PAGE_CELLS>::remove_duplicate_chars " << _.get_time() << "\n";
+      }
+      
+      {
+	//utils::timer _;
+	sanitator.sanitize_text(page_cells);	
+	//std::cout << "pdf_sanitator<PAGE_CELLS>::sanitize_text " << _.get_time() << "\n";
+      }
     }
 
     if(do_sanitization)
@@ -274,7 +309,7 @@ namespace pdflib
         auto parent = qpdf_page.getKey("/Parent");
         if(parent.hasKey("/Resources"))
           {
-            LOG_S(INFO) << "parent of page has resources!: " << json_parent_resources.dump(2);
+            //LOG_S(INFO) << "parent of page has resources!: " << json_parent_resources.dump(2);
 
             qpdf_parent_resources = parent.getKey("/Resources");
             json_parent_resources = to_json(qpdf_parent_resources); //json_page["/Resources"];

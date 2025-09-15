@@ -298,11 +298,16 @@ namespace pdflib
 	    utils::timer page_timer;
 	    
 	    pdf_decoder<PAGE> page_decoder(pages.at(page_number), page_number);
-	    
-	    auto timings_ = page_decoder.decode_page(page_boundary, do_sanitization);
-	    
-	    update_timings(timings_, set_timer);
-	    set_timer=false;
+
+	    {
+	      //utils::timer decode_timer;	      
+	      auto timings_ = page_decoder.decode_page(page_boundary, do_sanitization);
+
+	      //std::cout << "decode_timer: " << decode_timer.get_time() << "\n";
+	      
+	      update_timings(timings_, set_timer);
+	      set_timer=false;
+	    }
 
 	    nlohmann::json page = page_decoder.get(keep_char_cells, keep_lines, keep_bitmaps, do_sanitization);
 
@@ -324,6 +329,8 @@ namespace pdflib
 
 	    if(create_line_cells)
 	      {
+		//utils::timer line_cells_timer;
+		
 		LOG_S(INFO) << "creating line-cells in `original` (2)";        
 
 		double horizontal_cell_tolerance=1.00;
@@ -337,6 +344,7 @@ namespace pdflib
 										  space_width_factor_for_merge,
 										  space_width_factor_for_merge_with_space);
 		page["original"]["line_cells"] = line_cells.get();
+		//std::cout << "line_cells: " << line_cells_timer.get_time() << "\n";
 	      }	    
 	    
 	    json_pages.push_back(page);

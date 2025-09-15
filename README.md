@@ -191,7 +191,8 @@ uv sync
 The latter will only work after a clean `git clone`. If you are developing and updating C++ code, please use,
 
 ```sh
-uv pip install --force-reinstall --no-deps -e .
+# uv pip install --force-reinstall --no-deps -e .
+rm -rf .venv; uv venv; uv pip install --force-reinstall --no-deps -e ".[perf-tools]"
 ```
 
 To test the package, run:

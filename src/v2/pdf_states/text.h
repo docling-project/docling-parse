@@ -467,7 +467,7 @@ namespace pdflib
                                  int stack_size,
                                  std::vector<pdf_resource<PAGE_CELL> >& cells)
   {
-    LOG_S(INFO) << __FUNCTION__ << " with text='" << text << "', width=" << width;
+    // LOG_S(INFO) << __FUNCTION__ << " with text='" << text << "', width=" << width;
 
     bool left_to_right = (not utils::string::is_right_to_left(text));
     
@@ -475,6 +475,7 @@ namespace pdflib
     double font_ascent  = font.get_ascent();
     double font_capheight  = font.get_capheight();
 
+    /*
     if(left_to_right)
       {
 	LOG_S(INFO) << "font_descent: " << font_descent << ", "
@@ -491,14 +492,17 @@ namespace pdflib
 		       << "capheight/ascent: " << font_capheight/font_ascent << ", "
 		       << "left_to_right: " << left_to_right << ", text: " << text;
       }
+    */
     
     double space_width=0;
     {
       double w0 = font.get_space_width();
       double w1 = (w0 / 1000.0 * font_size * h_scaling);// + (char_spacing+word_spacing)*h_scaling;
 
+      /*
       LOG_S(INFO) << __FUNCTION__ << " -> w0: " << w0 << ", w1: " << w1 << ", "
 		  << "font_size: " << font_size << ", h_scaling: " << h_scaling;
+      */
       
       std::array<double, 8> rect = compute_rect(font_descent, font_ascent, w1);
       space_width = std::sqrt((rect[2]-rect[0])*(rect[2]-rect[0])+
@@ -576,21 +580,21 @@ namespace pdflib
 
   std::vector<std::pair<uint32_t, std::string> > pdf_state<TEXT>::analyse_string(qpdf_instruction instruction)
   {
-    LOG_S(INFO) << __FUNCTION__ << " fontname: " << font_name << ", key: " << instruction.key << " => val: " << instruction.val;
+    //LOG_S(INFO) << __FUNCTION__ << " fontname: " << font_name << ", key: " << instruction.key << " => val: " << instruction.val;
 
     auto& font = page_fonts[font_name];
 
     font_encoding_name encoding = font.get_encoding();
 
     std::string values = instruction.to_char_string();
-    LOG_S(INFO) << "values: " << values.size() << "\t" << values;
+    //LOG_S(INFO) << "values: " << values.size() << "\t" << values;
 
     std::vector<std::pair<uint32_t, std::string> > result;
 
     if(encoding == IDENTITY_H or
        encoding == IDENTITY_V  ) // 2-byte string
       {
-	LOG_S(INFO) << "detected encoding: " << to_string(encoding);
+	//LOG_S(INFO) << "detected encoding: " << to_string(encoding);
 
         //assert(values.size()%2==0);
 
@@ -632,7 +636,7 @@ namespace pdflib
       }
     else if(encoding == CMAP_RESOURCES)
       {
-	LOG_S(INFO) << "detected encoding: " << to_string(encoding);
+	//LOG_S(INFO) << "detected encoding: " << to_string(encoding);
 
 	int l=0; 
 
@@ -685,7 +689,7 @@ namespace pdflib
       }
     else
       {
-	LOG_S(INFO) << "detected encoding: " << to_string(encoding);
+	//LOG_S(INFO) << "detected encoding: " << to_string(encoding);
 
         for(int l=0; l<values.size(); l+=1)
           {
@@ -694,7 +698,7 @@ namespace pdflib
             v += values[l];
 
             std::pair<uint32_t, std::string> item(c,v);
-	    LOG_S(INFO) << item.first << ": " << item.second;
+	    //LOG_S(INFO) << item.first << ": " << item.second;
 	    
             result.push_back(item);
           }

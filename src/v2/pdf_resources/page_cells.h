@@ -35,14 +35,19 @@ namespace pdflib
     itr_type erase(itr_type itr_0, itr_type itr_1) { return cells.erase(itr_0, itr_1); }
 
     pdf_resource<PAGE_CELL>& at(std::size_t i) { return cells.at(i); }
+
+    void remove_inactive_cells();
     
   private:
 
     std::vector<pdf_resource<PAGE_CELL> > cells;
   };
 
-  pdf_resource<PAGE_CELLS>::pdf_resource()
-  {}
+  pdf_resource<PAGE_CELLS>::pdf_resource():
+    cells(0) // 0 elements
+  {
+    cells.reserve(1000000); // Reserve space for 1M elements
+  }
 
   pdf_resource<PAGE_CELLS>::~pdf_resource()
   {}
@@ -124,6 +129,38 @@ namespace pdflib
     cells.push_back(cell);
   }
 
+  void pdf_resource<PAGE_CELLS>::remove_inactive_cells()
+  {
+    /*
+    auto itr=cells.begin();
+    while(itr!=cells.end())
+      {
+	if(itr->active)
+	  {
+	    itr++;
+	  }
+	else
+	  {
+	    itr = cells.erase(itr);
+	  }
+      }
+    */
+
+    std::size_t write_pos = 0;
+    for(std::size_t read_pos = 0; read_pos < cells.size(); ++read_pos)
+      {
+        if(cells[read_pos].active)
+	  {
+            if(write_pos != read_pos)
+	      {
+                cells[write_pos] = std::move(cells[read_pos]);
+	      }
+            ++write_pos;
+	  }
+      }
+    cells.resize(write_pos);    
+  }
+  
 }
 
 #endif

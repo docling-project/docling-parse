@@ -203,7 +203,8 @@ namespace pdflib
     //return to_records(line_cells);
     return line_cells;
   }  
-  
+
+  /*
   void pdf_sanitator<PAGE_CELLS>::remove_duplicate_chars(pdf_resource<PAGE_CELLS>& cells, double eps)
   {
     while(true)
@@ -216,14 +217,14 @@ namespace pdflib
 	      {
 		continue;
 	      }
-
+	    
 	    for(int j=i+1; j<cells.size(); j++)
 	      {
 		if(not cells[j].active)
 		  {
 		    continue;
 		  }
-
+		
 		if(cells[i].font_name==cells[j].font_name and
 		   cells[i].text==cells[j].text and
 		   utils::values::distance(cells[i].r_x0, cells[i].r_y0, cells[j].r_x0, cells[j].r_y0)<eps and
@@ -236,7 +237,6 @@ namespace pdflib
 				   << "with r_2: (" << cells[i].r_x2 << ", " << cells[i].r_y2 << ") "
 				   << "with r'_0: (" << cells[j].r_x0 << ", " << cells[j].r_y0 << ") "
 				   << "with r'_2: (" << cells[j].r_x2 << ", " << cells[j].r_y2 << ") ";
-
 		    
 		    cells[j].active = false;
 		    erased_cell = true;		    
@@ -261,7 +261,66 @@ namespace pdflib
 
     cells = cells_;        
   }
+  */
 
+  void pdf_sanitator<PAGE_CELLS>::remove_duplicate_chars(pdf_resource<PAGE_CELLS>& cells, double eps)
+  {
+    for(int i=0; i<cells.size(); i++)
+      {
+	if(not cells[i].active)
+	  {
+	    continue;
+	  }
+	
+	//for(int j=i+1; j<cells.size(); j++)
+	//{
+	int j = i+1;
+	
+	if(j+1>=cells.size() or (not cells[j].active))
+	  {
+	    continue;
+	  }
+		
+	if(cells[i].font_name==cells[j].font_name and
+	   cells[i].text==cells[j].text and
+	   utils::values::distance(cells[i].r_x0, cells[i].r_y0, cells[j].r_x0, cells[j].r_y0)<eps and
+	   utils::values::distance(cells[i].r_x1, cells[i].r_y1, cells[j].r_x1, cells[j].r_y1)<eps and
+	   utils::values::distance(cells[i].r_x2, cells[i].r_y2, cells[j].r_x2, cells[j].r_y2)<eps and
+	   utils::values::distance(cells[i].r_x3, cells[i].r_y3, cells[j].r_x3, cells[j].r_y3)<eps)
+	  {
+	    LOG_S(WARNING) << "removing duplicate char with text: '" << cells[j].text << "' "
+			   << "with r_0: (" << cells[i].r_x0 << ", " << cells[i].r_y0 << ") "
+			   << "with r_2: (" << cells[i].r_x2 << ", " << cells[i].r_y2 << ") "
+			   << "with r'_0: (" << cells[j].r_x0 << ", " << cells[j].r_y0 << ") "
+			   << "with r'_2: (" << cells[j].r_x2 << ", " << cells[j].r_y2 << ") ";
+	    
+	    cells[j].active = false;
+	    //erased_cell = true;		    
+	  }		
+	//}
+	//}
+	
+	//if(not erased_cell)
+	//{
+	//break;
+	//}
+      }
+
+    /*
+    pdf_resource<PAGE_CELLS> cells_;
+    for(int i=0; i<cells.size(); i++)
+      {
+	if(cells[i].active)
+	  {
+	    cells_.push_back(cells[i]);
+	  }
+      }
+
+    cells = cells_;
+    */
+    cells.remove_inactive_cells();
+  }
+  
   void pdf_sanitator<PAGE_CELLS>::sanitize_text(pdf_resource<PAGE_CELLS>& cells)
   {
     for(int i=0; i<cells.size(); i++)
