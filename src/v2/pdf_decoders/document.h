@@ -324,6 +324,10 @@ namespace pdflib
 										  horizontal_cell_tolerance,
 										  enforce_same_font,
 										  space_width_factor_for_merge);
+
+		// quadratic: might be slower ...
+		sanitizer.remove_duplicate_cells(word_cells, 0.5, true);
+		
 		page["original"]["word_cells"] = word_cells.get();
 	      }
 
@@ -343,6 +347,9 @@ namespace pdflib
 										  enforce_same_font,
 										  space_width_factor_for_merge,
 										  space_width_factor_for_merge_with_space);
+		// quadratic: might be slower ...
+		sanitizer.remove_duplicate_cells(line_cells, 0.5, true);
+		
 		page["original"]["line_cells"] = line_cells.get();
 		//std::cout << "line_cells: " << line_cells_timer.get_time() << "\n";
 	      }	    

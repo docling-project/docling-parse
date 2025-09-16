@@ -152,7 +152,7 @@ namespace pdflib
                                        nlohmann::json&  json_xobject_,
                                        QPDFObjectHandle qpdf_xobject_)
   {
-    LOG_S(INFO) << __FUNCTION__;
+    LOG_S(INFO) << __FUNCTION__ << ": " << xobject_key_;
 
     xobject_key  = xobject_key_;
 
@@ -161,7 +161,7 @@ namespace pdflib
 
     parse();
 
-    LOG_S(INFO) << json_xobject.dump(2);
+    // LOG_S(INFO) << json_xobject.dump(2);
   }
 
   void pdf_resource<PAGE_XOBJECT>::parse()
@@ -172,7 +172,7 @@ namespace pdflib
       qpdf_xobject_dict = qpdf_xobject.getDict();
       json_xobject_dict = to_json(qpdf_xobject_dict);
 
-      LOG_S(INFO) << "xobject-dict: " << json_xobject_dict.dump(2);
+      // LOG_S(INFO) << "xobject-dict: " << json_xobject_dict.dump(2);
     }
 
     {

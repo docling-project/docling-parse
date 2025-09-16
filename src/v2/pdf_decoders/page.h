@@ -263,7 +263,8 @@ namespace pdflib
 
       {
 	//utils::timer _;
-	sanitator.remove_duplicate_chars(page_cells, 0.5);
+	//sanitator.remove_adjacent_chars(page_cells, 0.5);
+	sanitator.remove_adjacent_cells(page_cells, 0.5);
 	//std::cout << "pdf_sanitator<PAGE_CELLS>::remove_duplicate_chars " << _.get_time() << "\n";
       }
       

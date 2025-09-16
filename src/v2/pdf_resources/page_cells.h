@@ -157,6 +157,10 @@ namespace pdflib
 	      }
             ++write_pos;
 	  }
+	else
+	  {
+	    LOG_S(WARNING) << "removing inactive cell (text: " << cells[read_pos].text << ")";
+	  }
       }
     cells.resize(write_pos);    
   }

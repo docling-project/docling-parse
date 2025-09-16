@@ -505,7 +505,7 @@ namespace pdflib
                   this->Q();                
                 }
 
-                LOG_S(INFO) << "ending the execution of FORM XObject with name" << xobj_name;
+                LOG_S(INFO) << "ending the execution of FORM XObject with name `" << xobj_name << "`";
               }
               break;
 
