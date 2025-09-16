@@ -85,19 +85,17 @@ namespace pdflib
         LOG_S(INFO) << "decoding xobject: " << pair.key() << "\t" << (++cnt) << "/" << len;
         
         std::string key = pair.key();
+	nlohmann::json& val = pair.value();
+	
 	if(page_xobjects.count(key)>0)
 	  {
-	    // LOG_S(ERROR) << key << "is already in page_xobjects, skipping ...";
+	    LOG_S(ERROR) << key << "is already in page_xobjects, overwriting ...";
 	  }
-	else
-	  {
-	    nlohmann::json& val = pair.value();
 	    
-	    pdf_resource<PAGE_XOBJECT> page_xobject;
-	    page_xobject.set(key, val, qpdf_xobjects.getKey(key));
-	    
-	    page_xobjects[key] = page_xobject;
-	  }
+	pdf_resource<PAGE_XOBJECT> page_xobject;
+	page_xobject.set(key, val, qpdf_xobjects.getKey(key));
+	
+	page_xobjects[key] = page_xobject;
       }
   }
 
