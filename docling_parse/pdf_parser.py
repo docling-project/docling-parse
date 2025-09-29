@@ -602,7 +602,10 @@ class DoclingPdfParser:
         lazy: bool = True,
         boundary_type: PdfPageBoundaryType = PdfPageBoundaryType.CROP_BOX,
     ) -> PdfDocument:
-
+        
+        success=False
+        key=None
+        
         if isinstance(path_or_stream, str):
             path_or_stream = Path(path_or_stream)
 
@@ -630,7 +633,10 @@ class DoclingPdfParser:
 
             return result_doc
         else:
-            raise RuntimeError(f"Failed to load document with key {key}")
+            if key:
+                raise RuntimeError(f"Failed to load document with key {key}")
+            else:
+                raise RuntimeError(f"Receive path_or_stream type: {type(path_or_stream)}, only support string, Path or BytesIO")
 
     def _load_document(self, key: str, filename: str) -> bool:
         """Load a document by key and filename.
