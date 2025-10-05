@@ -632,17 +632,18 @@ class DoclingPdfParser:
         else:
             raise RuntimeError(f"Failed to load document with key {key}")
 
-    def _load_document(self, key: str, filename: str) -> bool:
+    def _load_document(self, key: str, filename: str, password: Optional[str] = None) -> bool:
         """Load a document by key and filename.
 
         Parameters:
             key (str): The unique key to identify the document.
             filename (str): The path to the document file to load.
+            password (str, optional): Optional password for password-protected files
 
         Returns:
             bool: True if the document was successfully loaded, False otherwise.)")
         """
-        return self.parser.load_document(key=key, filename=filename.encode("utf8"))
+        return self.parser.load_document(key=key, filename=filename.encode("utf8"), password=password)
 
     def _load_document_from_bytesio(self, key: str, data: BytesIO) -> bool:
         """Load a document by key from a BytesIO-like object.

@@ -196,7 +196,16 @@ namespace plib
         return false;
       }
 
-    if(not document_decoder.process_document_from_file(inp_filename))
+    std::optional<std::string> password;
+    if (input_file["password"].is_null())
+      {
+        password = std::nullopt;
+      }
+    else
+      {
+        password = input_file["password"];
+      }
+    if(not document_decoder.process_document_from_file(inp_filename, password))
       {
         LOG_S(ERROR) << "aborting the parse of file "<< inp_filename;
         return false;

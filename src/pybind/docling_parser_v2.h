@@ -3,6 +3,7 @@
 #ifndef PYBIND_PDF_PARSER_V2_H
 #define PYBIND_PDF_PARSER_V2_H
 
+#include <optional>
 #ifdef _WIN32
 #include <locale>
 #include <codecvt>
@@ -31,7 +32,7 @@ namespace docling
     bool is_loaded(std::string key);
     std::vector<std::string> list_loaded_keys();
 
-    bool load_document(std::string key, std::string filename);
+    bool load_document(std::string key, std::string filename, std::optional<std::string> password);
     bool load_document_from_bytesio(std::string key, pybind11::object bytes_io);
 
     bool unload_document(std::string key);
@@ -188,7 +189,7 @@ namespace docling
     return (key2doc.count(key)==1);
   }
 
-  bool docling_parser_v2::load_document(std::string key, std::string filename)
+  bool docling_parser_v2::load_document(std::string key, std::string filename, std::optional<std::string> password)
   {
 #ifdef _WIN32
     // Convert UTF-8 string to UTF-16 wstring
@@ -203,7 +204,7 @@ namespace docling
       {
         //key2doc[key] = std::filesystem::path(filename);
 	key2doc[key] = std::make_shared<decoder_type>();
-	key2doc.at(key)->process_document_from_file(filename);
+	key2doc.at(key)->process_document_from_file(filename, password);
 	return true;
       }
 

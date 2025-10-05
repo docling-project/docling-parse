@@ -3,6 +3,7 @@
 #ifndef PDF_DOCUMENT_DECODER_H
 #define PDF_DOCUMENT_DECODER_H
 
+#include <optional>
 #include <qpdf/QPDF.hh>
 //#include <qpdf/QPDFPageObjectHelper.hh>
 
@@ -27,7 +28,7 @@ namespace pdflib
     nlohmann::json get_meta_xml() { return json_annots["meta_xml"]; }
     nlohmann::json get_table_of_contents() { return json_annots["table_of_contents"]; }
     
-    bool process_document_from_file(std::string& _filename);
+    bool process_document_from_file(std::string& _filename, std::optional<std::string>& password);
     bool process_document_from_bytesio(std::string& _buffer);
     
     void decode_document(std::string page_boundary, bool do_sanitization);
@@ -150,7 +151,7 @@ namespace pdflib
     return json_document;
   }
 
-  bool pdf_decoder<DOCUMENT>::process_document_from_file(std::string& _filename)
+  bool pdf_decoder<DOCUMENT>::process_document_from_file(std::string& _filename, std::optional<std::string>& password)
   {
     filename = _filename; // save it    
     LOG_S(INFO) << "start processing '" << filename << "' by qpdf ...";        
@@ -159,7 +160,11 @@ namespace pdflib
     
     try
       {
-        qpdf_document.processFile(filename.c_str());
+        if (password.has_value()) {
+          qpdf_document.processFile(filename.c_str(), password.value().c_str());
+        } else {
+          qpdf_document.processFile(filename.c_str());
+        }
         LOG_S(INFO) << "filename: " << filename << " processed by qpdf!";        
 
         qpdf_root  = qpdf_document.getRoot();

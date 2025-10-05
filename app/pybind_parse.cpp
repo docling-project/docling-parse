@@ -1,5 +1,6 @@
 //-*-C++-*-
 
+#include <optional>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <pybind11/buffer_info.h>
@@ -247,17 +248,24 @@ PYBIND11_MODULE(pdf_parsers, m) {
         List[str]: A list of keys for the currently loaded documents.)")
     
     .def("load_document",
-	 [](docling::docling_parser_v2 &self, const std::string &key, const std::string &filename) -> bool {
-	   return self.load_document(key, filename);
+	 [](
+        docling::docling_parser_v2 &self,
+        const std::string &key,
+        const std::string &filename,
+        std::optional<std::string>& password
+     ) -> bool {
+	   return self.load_document(key, filename, password);
 	 },
 	 pybind11::arg("key"),
 	 pybind11::arg("filename"),
+     pybind11::arg("password") = pybind11::none(),
 	 R"(
     Load a document by key and filename.
 
     Parameters:
         key (str): The unique key to identify the document.
         filename (str): The path to the document file to load.
+        password (str, optional): Optional password for password-protected files
 
     Returns:
         bool: True if the document was successfully loaded, False otherwise.)")

@@ -1,6 +1,7 @@
 //-*-C++-*-
 
 #include "v2.h"
+#include <optional>
 
 void set_loglevel(std::string level)
 {
@@ -82,6 +83,7 @@ int main(int argc, char* argv[]) {
       ("c,config", "Config file", cxxopts::value<std::string>())
       ("create-config", "Create config file", cxxopts::value<std::string>())
       ("p,page", "Pages to process (default: -1 for all)", cxxopts::value<int>()->default_value("-1"))
+      ("password", "Password for accessing encrypted, password-protected files", cxxopts::value<std::string>())
       ("o,output", "Output file", cxxopts::value<std::string>())
       ("l,loglevel", "loglevel [error;warning;success;info]", cxxopts::value<std::string>())
       ("h,help", "Print usage");
@@ -144,6 +146,7 @@ int main(int argc, char* argv[]) {
 
       std::string ifile = result["input"].as<std::string>();
       std::string ofile = ifile+".json";
+      std::optional<std::string> password;
 
       int page = result["page"].as<int>();
       LOG_F(INFO, "Page to process: %d", page);
@@ -156,8 +159,15 @@ int main(int argc, char* argv[]) {
         LOG_F(INFO, "No output file found, defaulting to %s", ofile.c_str());
       }
 
+      if (result.count("password")) {
+        password = result["password"].as<std::string>();
+      } else {
+        password = std::nullopt;
+      }
+
       auto config = create_config(ifile, ofile, page);
       LOG_S(INFO) << "config: \n" << config.dump(2);
+      config["password"] = password;
 
       utils::timer timer;
 
