@@ -601,6 +601,7 @@ class DoclingPdfParser:
         path_or_stream: Union[str, Path, BytesIO],
         lazy: bool = True,
         boundary_type: PdfPageBoundaryType = PdfPageBoundaryType.CROP_BOX,
+        password: Optional[str] = None
     ) -> PdfDocument:
 
         if isinstance(path_or_stream, str):
@@ -608,7 +609,7 @@ class DoclingPdfParser:
 
         if isinstance(path_or_stream, Path):
             key = f"key={str(path_or_stream)}"  # use filepath as internal handle
-            success = self._load_document(key=key, filename=str(path_or_stream))
+            success = self._load_document(key=key, filename=str(path_or_stream), password=password)
 
         elif isinstance(path_or_stream, BytesIO):
             hasher = hashlib.sha256(usedforsecurity=False)
