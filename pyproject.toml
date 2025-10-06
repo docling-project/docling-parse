@@ -45,7 +45,7 @@ requires = [
 ]
 build-backend = "setuptools.build_meta"
 
-[dependency-groups]
+[project.optional-dependencies]
 build = [
     "setuptools>=77.0.3",
     "pybind11>=2.13.6",
@@ -72,7 +72,6 @@ perf-test = [
     "pypdfium2>=4.30.0",
 ]
 
-[project.optional-dependencies]
 perf-tools = [
     "pdfplumber>=0.11.7",
     "pymupdf>=1.26.4",
