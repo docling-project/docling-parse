@@ -351,6 +351,8 @@ namespace pdflib
 	std::stringstream ss;
 	ss << "defaulting to media-box";	
         LOG_S(INFO) << ss.str();
+
+	crop_bbox = media_bbox;
 	
         bbox = media_bbox;
         initialised = true;
@@ -360,6 +362,9 @@ namespace pdflib
 	std::stringstream ss;
 	ss << "defaulting to art-box";	
         LOG_S(INFO) << ss.str();
+
+	crop_bbox = art_bbox;
+	media_bbox = art_bbox;
 	
         bbox = art_bbox;
         initialised = true;
@@ -367,11 +372,7 @@ namespace pdflib
     else if((not initialised) and json_resources.count("/BleedBox"))
       {
 	std::stringstream ss;
-	ss << "defaulting to bleed-box: "
-	   << bleed_bbox[0]<< ", "
-	   << bleed_bbox[1]<< ", "
-	   << bleed_bbox[2]<< ", "
-	   << bleed_bbox[3]<< "]";
+	ss << "defaulting to bleed-box";	
         LOG_S(INFO) << ss.str();
 	
 	crop_bbox = bleed_bbox;
@@ -386,8 +387,8 @@ namespace pdflib
 	ss << "defaulting to trim-box";	
         LOG_S(INFO) << ss.str();
 
-	crop_bbox = bleed_bbox;
-	media_bbox = bleed_bbox;
+	crop_bbox = trim_bbox;
+	media_bbox = trim_bbox;
 	
         bbox = trim_bbox;
         initialised = true;
