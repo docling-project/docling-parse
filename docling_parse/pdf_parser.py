@@ -601,7 +601,7 @@ class DoclingPdfParser:
         path_or_stream: Union[str, Path, BytesIO],
         lazy: bool = True,
         boundary_type: PdfPageBoundaryType = PdfPageBoundaryType.CROP_BOX,
-        password: Optional[str] = None
+        password: Optional[str] = None,
     ) -> PdfDocument:
 
         if isinstance(path_or_stream, str):
@@ -609,7 +609,9 @@ class DoclingPdfParser:
 
         if isinstance(path_or_stream, Path):
             key = f"key={str(path_or_stream)}"  # use filepath as internal handle
-            success = self._load_document(key=key, filename=str(path_or_stream), password=password)
+            success = self._load_document(
+                key=key, filename=str(path_or_stream), password=password
+            )
 
         elif isinstance(path_or_stream, BytesIO):
             hasher = hashlib.sha256(usedforsecurity=False)
@@ -633,7 +635,9 @@ class DoclingPdfParser:
         else:
             raise RuntimeError(f"Failed to load document with key {key}")
 
-    def _load_document(self, key: str, filename: str, password: Optional[str] = None) -> bool:
+    def _load_document(
+        self, key: str, filename: str, password: Optional[str] = None
+    ) -> bool:
         """Load a document by key and filename.
 
         Parameters:
@@ -644,7 +648,9 @@ class DoclingPdfParser:
         Returns:
             bool: True if the document was successfully loaded, False otherwise.)")
         """
-        return self.parser.load_document(key=key, filename=filename.encode("utf8"), password=password)
+        return self.parser.load_document(
+            key=key, filename=filename.encode("utf8"), password=password
+        )
 
     def _load_document_from_bytesio(self, key: str, data: BytesIO) -> bool:
         """Load a document by key from a BytesIO-like object.

@@ -154,7 +154,9 @@ def visualise_py(
 ):
     parser = DoclingPdfParser(loglevel=log_level)
 
-    pdf_doc: PdfDocument = parser.load(path_or_stream=pdf_path, lazy=True, password=password)
+    pdf_doc: PdfDocument = parser.load(
+        path_or_stream=pdf_path, lazy=True, password=password
+    )
 
     page_nos = [page_num]
     if page_num == -1:
