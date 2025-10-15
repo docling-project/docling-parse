@@ -1,0 +1,44 @@
+(290.38, 575.59) (342.85, 575.59) (342.85, 584.09) (290.38, 584.09)        /F5 Introduction   |   ix	<|special_separator|>
+(104.64, 003.16) (292.22, 003.16) (292.22, 013.70) (104.64, 013.70)        /F1 Review proof only - not for circulation	<|special_separator|>
+(054.00, 546.67) (345.59, 546.67) (345.59, 556.85) (054.00, 556.85)       /TT2 alongside state-of-the-art functional and genetic test results 	<|special_separator|>
+(054.00, 532.67) (345.61, 532.67) (345.61, 542.85) (054.00, 542.85)       /TT2 to uncover what's really going on. Based on all this data, we 	<|special_separator|>
+(054.00, 518.67) (345.60, 518.67) (345.60, 528.85) (054.00, 528.85)       /TT2 create ultra-personalized health programmes incorporating 	<|special_separator|>
+(054.00, 504.67) (345.60, 504.67) (345.60, 514.85) (054.00, 514.85)       /TT2 therapeutic  supplements,  diet  and  lifestyle  change  and 	<|special_separator|>
+(054.00, 490.67) (208.85, 490.67) (208.85, 500.85) (054.00, 500.85)       /TT2 stress-management techniques. 	<|special_separator|>
+(054.00, 467.67) (345.61, 467.67) (345.61, 477.85) (054.00, 477.85)       /TT2 The  results  we  see  never  cease  to  amaze  me  and  I  am 	<|special_separator|>
+(054.00, 453.67) (296.85, 453.67) (296.85, 463.85) (054.00, 463.85)       /TT2 humbled every time we receive feedback like this:	<|special_separator|>
+(072.00, 429.67) (327.61, 429.67) (327.61, 439.85) (072.00, 439.85)       /TT2 I've  got  so  much  more  energy.  My  depressive 	<|special_separator|>
+(072.00, 415.67) (241.20, 415.67) (241.20, 425.85) (072.00, 425.85)       /TT2 feelings  and  brain  fog  have  signi	<|special_separator|>
+(241.21, 415.67) (247.86, 415.67) (247.86, 425.85) (241.21, 425.85)       /TT3 fi	<|special_separator|>
+(244.53, 415.67) (327.60, 415.67) (327.60, 425.85) (244.53, 425.85)       /TT2  cantly  reduced. 	<|special_separator|>
+(072.00, 401.67) (327.61, 401.67) (327.61, 411.85) (072.00, 411.85)       /TT2 I'm sleeping better and doing more exercise, which 	<|special_separator|>
+(072.00, 387.67) (327.61, 387.67) (327.61, 397.85) (072.00, 397.85)       /TT2 I  really  enjoy.  My  mood  is  overall  more  positive 	<|special_separator|>
+(072.00, 373.67) (327.60, 373.67) (327.60, 383.85) (072.00, 383.85)       /TT2 and I feel excited for the future. Thank you, Rachel. 	<|special_separator|>
+(072.00, 359.67) (108.43, 359.67) (108.43, 369.85) (072.00, 369.85)       /TT2 (Becky)	<|special_separator|>
+(072.00, 335.67) (327.61, 335.67) (327.61, 345.85) (072.00, 345.85)       /TT2 My mood has lifted, and I am able to focus again 	<|special_separator|>
+(072.00, 321.67) (327.61, 321.67) (327.61, 331.85) (072.00, 331.85)       /TT2 at  work.  I  feel  less  bloated  and  my  IBS  symptoms 	<|special_separator|>
+(072.00, 307.67) (122.68, 307.67) (122.68, 317.85) (072.00, 317.85)       /TT2 have signi	<|special_separator|>
+(122.68, 307.67) (129.33, 307.67) (129.33, 317.85) (122.68, 317.85)       /TT3 fi	<|special_separator|>
+(126.00, 307.67) (327.59, 307.67) (327.59, 317.85) (126.00, 317.85)       /TT2  cantly improved. But by far the biggest 	<|special_separator|>
+(072.00, 293.67) (327.61, 293.67) (327.61, 303.85) (072.00, 303.85)       /TT2 win for me is the improvement in my overall energy 	<|special_separator|>
+(072.00, 279.67) (327.59, 279.67) (327.59, 289.85) (072.00, 289.85)       /TT2 levels. I am able to get up in the morning and feel 	<|special_separator|>
+(072.00, 265.67) (327.59, 265.67) (327.59, 275.85) (072.00, 275.85)       /TT2 energised. Working with Rachel was the best thing I 	<|special_separator|>
+(072.00, 251.67) (154.51, 251.67) (154.51, 261.85) (072.00, 261.85)       /TT2 ever did. (Abbie)	<|special_separator|>
+(054.00, 228.67) (156.54, 228.67) (156.54, 238.85) (054.00, 238.85)       /TT2 I love what I do. I'm 	<|special_separator|>
+(156.79, 228.67) (163.45, 228.67) (163.45, 238.85) (156.79, 238.85)       /TT3 fi	<|special_separator|>
+(160.12, 228.67) (345.59, 228.67) (345.59, 238.85) (160.12, 238.85)       /TT2  nally channelling all that energy and 	<|special_separator|>
+(054.00, 214.67) (345.59, 214.67) (345.59, 224.85) (054.00, 224.85)       /TT2 brain power into something I care deeply about. However, 	<|special_separator|>
+(054.00, 200.67) (345.60, 200.67) (345.60, 210.85) (054.00, 210.85)       /TT2 it  wasn't long before I realized that I wanted to do more. 	<|special_separator|>
+(054.00, 186.67) (345.60, 186.67) (345.60, 196.85) (054.00, 196.85)       /TT2 I  wanted  to  help  more  women  like  Becky  and  Abbie  to 	<|special_separator|>
+(054.00, 172.67) (083.49, 172.67) (083.49, 182.85) (054.00, 182.85)       /TT2 step o	<|special_separator|>
+(083.49, 172.67) (090.65, 172.67) (090.65, 182.85) (083.49, 182.85)       /TT1 ff	<|special_separator|>
+(087.07, 172.67) (345.60, 172.67) (345.60, 182.85) (087.07, 182.85)       /TT2   the emotional rollercoaster of burnout; to wake up 	<|special_separator|>
+(054.00, 158.67) (345.59, 158.67) (345.59, 168.85) (054.00, 168.85)       /TT2 feeling  energized  and  thinking  clearly;  to  give  them  back 	<|special_separator|>
+(054.00, 144.68) (249.33, 144.68) (249.33, 154.85) (054.00, 154.85)       /TT2 their mood mojo and enable them to ful	<|special_separator|>
+(249.33, 144.68) (255.98, 144.68) (255.98, 154.85) (249.33, 154.85)       /TT3 fi	<|special_separator|>
+(252.65, 144.68) (345.60, 144.68) (345.60, 154.85) (252.65, 154.85)       /TT2  l their career (and 	<|special_separator|>
+(054.00, 130.68) (124.61, 130.68) (124.61, 140.85) (054.00, 140.85)       /TT2 life) potential. 	<|special_separator|>
+(054.00, 107.67) (345.60, 107.67) (345.60, 117.85) (054.00, 117.85)       /TT2 That  was  when  I  decided  to  write  this  book. Although  a 	<|special_separator|>
+(054.00, 093.67) (345.59, 093.67) (345.59, 103.85) (054.00, 103.85)       /TT2 book can never replicate the clinic experience, it is my hope 	<|special_separator|>
+(054.00, 079.68) (345.59, 079.68) (345.59, 089.85) (054.00, 089.85)       /TT2 that  in  sharing  my  knowledge of burnout, its root causes 	<|special_separator|>
+(054.00, 065.68) (345.60, 065.68) (345.60, 075.85) (054.00, 075.85)       /TT2 and how it can be managed naturally, I can help women 
