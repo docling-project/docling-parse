@@ -602,7 +602,7 @@ wheels = [
 [[package]]
 name = "docling-core"
 version = "2.48.4"
-source = { git = "https://github.com/docling-project/docling-core/?rev=py314#ce7e66b223e98738a3e173fb0ac1eff0e45403d2" }
+source = { git = "https://github.com/docling-project/docling-core/?branch=py314#ce7e66b223e98738a3e173fb0ac1eff0e45403d2" }
 dependencies = [
     { name = "jsonref" },
     { name = "jsonschema" },
@@ -666,7 +666,7 @@ perf-test = [
 
 [package.metadata]
 requires-dist = [
-    { name = "docling-core", git = "https://github.com/docling-project/docling-core/?rev=py314" },
+    { name = "docling-core", git = "https://github.com/docling-project/docling-core/?branch=py314" },
     { name = "pdfplumber", marker = "extra == 'perf-tools'", specifier = ">=0.11.7" },
     { name = "pillow", specifier = ">=10.0.0,<13.0.0" },
     { name = "pydantic", specifier = ">=2.0.0" },

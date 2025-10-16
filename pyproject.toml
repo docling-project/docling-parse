@@ -89,7 +89,7 @@ package = true
 default-groups = "all"
 
 [tool.uv.sources]
-docling-core = { git = "https://github.com/docling-project/docling-core/", rev = "py314" }
+docling-core = { git = "https://github.com/docling-project/docling-core/", branch = "py314" }
 
 
 [tool.setuptools]
