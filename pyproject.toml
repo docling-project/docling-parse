@@ -44,7 +44,7 @@ Repository = "https://github.com/docling-project/docling-parse"
 requires = [
     "setuptools>=77.0.3",
     "pybind11>=2.13.6",
-    "cibuildwheel>=2.19.2,<3.0.0",
+    "cibuildwheel>=2.19.2,<4.0.0",
     "wheel>=0.43.0,<1.0.0",
     "delocate>=0.11.0,<1.0.0",
     "cmake>=3.27.0,<4.0.0"
@@ -55,14 +55,14 @@ build-backend = "setuptools.build_meta"
 build = [
     "setuptools>=77.0.3",
     "pybind11>=2.13.6",
-    "cibuildwheel>=2.19.2,<3.0.0",
+    "cibuildwheel>=2.19.2,<4.0.0",
     "wheel>=0.43.0,<1.0.0",
     "delocate>=0.11.0,<1.0.0",
     "cmake>=3.27.0,<4.0.0"
 ]
 dev = [
     "pytest>=7.4.2,<8.0.0",
-    "black[jupyter]>=24.4.2,<25.0.0",
+    "black[jupyter]>=24.4.2,<26.0.0",
     "python-semantic-release>=7.32.2,<8.0.0",
     "pre-commit>=3.7.1,<4.0.0",
     "isort>=5.10.1,<6.0.0",
@@ -107,7 +107,7 @@ include = ["docling_parse*"]
 
 [tool.black]
 line-length = 88
-target-version = ["py39", "py310", "py311", "py312", "py313"]
+target-version = ["py39", "py310", "py311", "py312", "py313", "py314"]
 include = '\.pyi?$'
 preview = true
 
