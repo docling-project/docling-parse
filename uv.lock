@@ -730,7 +730,8 @@ provides-extras = ["perf-tools"]
 
 [package.metadata.requires-dev]
 build = [
-    { name = "cibuildwheel", specifier = ">=2.19.2,<4.0.0" },
+    { name = "cibuildwheel", marker = "python_full_version < '3.11'", specifier = ">=2.19.2,<3.0.0" },
+    { name = "cibuildwheel", marker = "python_full_version >= '3.11'", specifier = ">=2.19.2,<4.0.0" },
     { name = "cmake", specifier = ">=3.27.0,<4.0.0" },
     { name = "delocate", specifier = ">=0.11.0,<1.0.0" },
     { name = "pybind11", specifier = ">=2.13.6" },
