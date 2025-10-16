@@ -88,10 +88,6 @@ perf-tools = [
 package = true
 default-groups = "all"
 
-[tool.uv.sources]
-docling-core = { git = "https://github.com/docling-project/docling-core/", branch = "py314" }
-
-
 [tool.setuptools]
 include-package-data = true
 

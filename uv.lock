@@ -601,8 +601,8 @@ wheels = [
 
 [[package]]
 name = "docling-core"
-version = "2.48.4"
-source = { git = "https://github.com/docling-project/docling-core/?branch=py314#ce7e66b223e98738a3e173fb0ac1eff0e45403d2" }
+version = "2.49.0"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "jsonref" },
     { name = "jsonschema" },
@@ -615,6 +615,10 @@ dependencies = [
     { name = "tabulate" },
     { name = "typer" },
     { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ce/7f/1552500d2a197f69cb9cf69bf022e5021e8c914a00e1f5fbc87752e8e500/docling_core-2.49.0.tar.gz", hash = "sha256:7c0f39d58a06192c25aa043141cd8f87ac6a8d2c5eab5137344e1476dd13eacb", size = 161454, upload-time = "2025-10-16T14:43:03.218Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/05/cd/84034624d6c5a1484f694d16069be56c00117898ee4f43c9a3bf45061b31/docling_core-2.49.0-py3-none-any.whl", hash = "sha256:65605c0546548800dcc3cc4eb6eec24f1a4fa8c9bcd4257722894838588e41ed", size = 164457, upload-time = "2025-10-16T14:43:01.808Z" },
 ]
 
 [[package]]
@@ -666,7 +670,7 @@ perf-test = [
 
 [package.metadata]
 requires-dist = [
-    { name = "docling-core", git = "https://github.com/docling-project/docling-core/?branch=py314" },
+    { name = "docling-core", specifier = ">=2.44.1" },
     { name = "pdfplumber", marker = "extra == 'perf-tools'", specifier = ">=0.11.7" },
     { name = "pillow", specifier = ">=10.0.0,<13.0.0" },
     { name = "pydantic", specifier = ">=2.0.0" },
