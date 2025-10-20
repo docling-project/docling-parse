@@ -229,7 +229,7 @@ namespace pdflib
   void pdf_resource<PAGE_DIMENSION>::execute(nlohmann::json& json_resources,
 					     QPDFObjectHandle qpdf_resources)
   {
-    LOG_S(INFO) << __FUNCTION__;
+    LOG_S(INFO) << __FUNCTION__ << ": " << json_resources.dump(2);
 
     if(json_resources.count("/Rotate"))
       {
@@ -337,15 +337,62 @@ namespace pdflib
       }
     
     if((not initialised) and json_resources.count("/CropBox"))
-      {        
+      {
+	std::stringstream ss;
+	ss << "defaulting to crop-box";	
+        LOG_S(INFO) << ss.str();
+	
         bbox = crop_bbox;
         initialised = true;
       }    
-    else if(not initialised)
+    //else if(not initialised)
+    else if((not initialised) and json_resources.count("/MediaBox"))
       {
+	std::stringstream ss;
+	ss << "defaulting to media-box";	
+        LOG_S(INFO) << ss.str();
+
+	crop_bbox = media_bbox;
+	
         bbox = media_bbox;
         initialised = true;
       }
+    else if((not initialised) and json_resources.count("/ArtBox"))
+      {
+	std::stringstream ss;
+	ss << "defaulting to art-box";	
+        LOG_S(INFO) << ss.str();
+
+	crop_bbox = art_bbox;
+	media_bbox = art_bbox;
+	
+        bbox = art_bbox;
+        initialised = true;
+      }    
+    else if((not initialised) and json_resources.count("/BleedBox"))
+      {
+	std::stringstream ss;
+	ss << "defaulting to bleed-box";	
+        LOG_S(INFO) << ss.str();
+	
+	crop_bbox = bleed_bbox;
+	media_bbox = bleed_bbox;
+	
+        bbox = bleed_bbox;
+        initialised = true;
+      }
+    else if((not initialised) and json_resources.count("/TrimBox"))
+      {
+	std::stringstream ss;
+	ss << "defaulting to trim-box";	
+        LOG_S(INFO) << ss.str();
+
+	crop_bbox = trim_bbox;
+	media_bbox = trim_bbox;
+	
+        bbox = trim_bbox;
+        initialised = true;
+      }    
     else
       {
 	std::stringstream ss;

@@ -1,5 +1,5 @@
 include CMakeLists.txt
-include build.py
+include local_build.py
 include *.md
 include uv.lock
 include LICENSE
