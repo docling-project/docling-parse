@@ -1,7 +1,6 @@
 //-*-C++-*-
 
 #include "v2.h"
-#include <optional>
 
 void set_loglevel(std::string level)
 {
@@ -159,15 +158,11 @@ int main(int argc, char* argv[]) {
         LOG_F(INFO, "No output file found, defaulting to %s", ofile.c_str());
       }
 
-      if (result.count("password")) {
-        password = result["password"].as<std::string>();
-      } else {
-        password = std::nullopt;
-      }
-
       auto config = create_config(ifile, ofile, page);
       LOG_S(INFO) << "config: \n" << config.dump(2);
-      config["password"] = password;
+      if (result.count("password")) {
+        config["password"] = result["password"].as<std::string>();
+      }
 
       utils::timer timer;
 
