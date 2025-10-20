@@ -145,7 +145,6 @@ int main(int argc, char* argv[]) {
 
       std::string ifile = result["input"].as<std::string>();
       std::string ofile = ifile+".json";
-      std::optional<std::string> password;
 
       int page = result["page"].as<int>();
       LOG_F(INFO, "Page to process: %d", page);
