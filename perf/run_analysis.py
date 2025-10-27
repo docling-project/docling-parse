@@ -7,9 +7,11 @@ Inputs
   Each CSV must have headers: ["filename", "page_number", "elapsed_sec", "success", "error"].
 
 Outputs (saved under --outdir, default: perf/out)
-- histograms.pdf: One page per parser with a histogram of elapsed_sec for successful rows.
-- scatters.pdf: Pairwise scatter plots between parsers using only rows where both succeeded,
-  including a least-squares linear fit (y = m x + b); slope m indicates relative speed.
+- histograms.pdf: A single page with overlaid histograms of elapsed_sec for all parsers (success only),
+  with both axes on logarithmic scales and statistics in the legend.
+- scatters.pdf: Pairwise density plots (2D histograms) between parsers using only rows where both succeeded,
+  with both axes on logarithmic scales and density color-scaled logarithmically; includes a least-squares
+  linear fit in log-log space and y = x reference.
 - success_matrix.pdf: 2 x N heatmap of success/fail counts per parser.
 
 Notes
@@ -34,6 +36,7 @@ try:
     matplotlib.use("Agg")  # headless
     import matplotlib.pyplot as plt
     from matplotlib.backends.backend_pdf import PdfPages
+    from matplotlib.colors import LogNorm
 except Exception as e:  # pragma: no cover
     print("matplotlib is required to run this script: {}".format(e), file=sys.stderr)
     sys.exit(2)
@@ -129,34 +132,87 @@ def ensure_outdir(path: str) -> None:
 
 def build_histograms(pdata: Dict[str, List[Record]], outdir: str) -> str:
     outpath = os.path.join(outdir, "histograms.pdf")
+
+    # Collect per-parser values and overall range (success-only, finite, >0 for log scale)
+    per_parser_vals: Dict[str, List[float]] = {}
+    all_vals: List[float] = []
+    for parser, records in pdata.items():
+        vals = [
+            r.elapsed_sec
+            for r in records
+            if r.success and math.isfinite(r.elapsed_sec) and r.elapsed_sec > 0.0
+        ]
+        if vals:
+            per_parser_vals[parser] = vals
+            all_vals.extend(vals)
+
     with PdfPages(outpath) as pdf:
-        for parser, records in pdata.items():
-            vals = [r.elapsed_sec for r in records if r.success and math.isfinite(r.elapsed_sec)]
+        # Handle case where nothing to plot
+        if not all_vals:
+            fig, ax = plt.subplots(figsize=(7, 5))
+            ax.axis("off")
+            ax.text(0.5, 0.5, "No successful rows with positive elapsed_sec", ha="center", va="center")
+            pdf.savefig(fig)
+            plt.close(fig)
+            return outpath
+
+        # Determine global log-spaced bins
+        xmin = min(all_vals)
+        xmax = max(all_vals)
+        # Guard against degenerate ranges
+        if xmin <= 0.0:
+            xmin = min(v for v in all_vals if v > 0.0)
+        if xmax <= xmin:
+            xmax = xmin * 1.0001
+
+        # Build log-spaced bin edges without numpy
+        n_bins = 40
+        a = math.log10(xmin)
+        b = math.log10(xmax)
+        step = (b - a) / n_bins
+        bins = [10 ** (a + i * step) for i in range(n_bins + 1)]
+
+        # Create a single figure with overlaid histograms
+        fig, ax = plt.subplots(figsize=(8.5, 6.0))
+
+        # Use matplotlib default color cycle
+        for i, (parser, vals) in enumerate(per_parser_vals.items()):
             if not vals:
-                # Create an empty page noting no data
-                fig, ax = plt.subplots(figsize=(7, 5))
-                ax.axis("off")
-                ax.text(0.5, 0.5, f"{parser}: no successful rows", ha="center", va="center")
-                pdf.savefig(fig)
-                plt.close(fig)
                 continue
             vmin, vmax = min(vals), max(vals)
             vmean = mean(vals)
             vmedian = median(vals)
-
-            fig, ax = plt.subplots(figsize=(7, 5))
-            ax.hist(vals, bins="auto", color="#4477aa", edgecolor="white")
-            ax.set_xlabel("elapsed_sec (s)")
-            ax.set_ylabel("count")
-            ax.grid(True, alpha=0.3)
-            title = (
-                f"{parser} elapsed_sec (success only)\n"
-                f"min={vmin:.3f}s  max={vmax:.3f}s  mean={vmean:.3f}s  median={vmedian:.3f}s  n={len(vals)}"
+            label = (
+                f"{parser}: n={len(vals)}; "
+                f"min={vmin:.3g}s, max={vmax:.3g}s, mean={vmean:.3g}s, med={vmedian:.3g}s"
             )
-            ax.set_title(title)
-            fig.tight_layout()
-            pdf.savefig(fig)
-            plt.close(fig)
+            # Stepfilled with transparency so overlaps are visible; use log y by axis scaling below
+            ax.hist(
+                vals,
+                bins=bins,
+                alpha=0.35,
+                edgecolor="white",
+                linewidth=0.6,
+                histtype="stepfilled",
+                label=label,
+            )
+
+        ax.set_xscale("log")
+        ax.set_yscale("log")
+        # Avoid zero or sub-1 bottom on log scale for counts
+        ymin, ymax = ax.get_ylim()
+        if ymin <= 0:
+            ax.set_ylim(bottom=1)
+
+        ax.set_xlabel("elapsed_sec (s)")
+        ax.set_ylabel("count (log)")
+        ax.grid(True, which="both", alpha=0.3)
+        ax.set_title("Elapsed time histograms (success only)")
+        ax.legend(loc="best", fontsize=8)
+
+        fig.tight_layout()
+        pdf.savefig(fig)
+        plt.close(fig)
     return outpath
 
 
@@ -192,30 +248,83 @@ def build_pairwise_scatters(pdata: Dict[str, List[Record]], outdir: str) -> str:
                     if not r2:
                         continue
                     if r1.success and r2.success and math.isfinite(r1.elapsed_sec) and math.isfinite(r2.elapsed_sec):
-                        xs.append(r1.elapsed_sec)
-                        ys.append(r2.elapsed_sec)
+                        # Only positive values are usable for log scales
+                        if r1.elapsed_sec > 0.0 and r2.elapsed_sec > 0.0:
+                            xs.append(r1.elapsed_sec)
+                            ys.append(r2.elapsed_sec)
 
                 fig, ax = plt.subplots(figsize=(6.5, 6.0))
                 if xs:
-                    ax.scatter(xs, ys, s=10, alpha=0.6, color="#66aa55", edgecolor="none")
-                    # Linear fit y ~ m x + b
-                    m, b, r2 = linear_fit(xs, ys)
+                    # Build log-spaced bins for both axes without numpy
+                    def make_log_bins(values: List[float], n_bins: int = 60) -> List[float]:
+                        vmin = min(values)
+                        vmax = max(values)
+                        # Guard against degenerate ranges
+                        if vmin <= 0.0:
+                            vmin = min(v for v in values if v > 0.0)
+                        if vmax <= vmin:
+                            vmax = vmin * 1.0001
+                        a = math.log10(vmin)
+                        b = math.log10(vmax)
+                        step = (b - a) / n_bins
+                        return [10 ** (a + i * step) for i in range(n_bins + 1)]
+
+                    xbins = make_log_bins(xs)
+                    ybins = make_log_bins(ys)
+
+                    # 2D histogram with logarithmic color normalization; mask zero-count bins
+                    h = ax.hist2d(
+                        xs,
+                        ys,
+                        bins=[xbins, ybins],
+                        norm=LogNorm(),
+                        cmap="viridis",
+                        cmin=1,
+                    )
+                    cbar = plt.colorbar(h[3], ax=ax, fraction=0.046, pad=0.04)
+                    cbar.set_label("count (log scaled)")
+
+                    # Linear fit on log10 values: log10(y) ~ m * log10(x) + b
+                    lx = [math.log10(v) for v in xs]
+                    ly = [math.log10(v) for v in ys]
+                    m, b, r2 = linear_fit(lx, ly)
+                    C = 10 ** b  # so y ≈ C * x^m
+                    info = f"n={len(xs)}  slope(log)={m:.3f}  R^2={r2:.3f}"
+
+                    # Set axes to logarithmic scales
+                    ax.set_xscale("log")
+                    ax.set_yscale("log")
+
+                    # Overlay y = x reference within the common range
+                    xmin, xmax = min(xs), max(xs)
+                    ymin, ymax = min(ys), max(ys)
+                    lo = max(xmin, ymin)
+                    hi = min(xmax, ymax)
+                    if lo < hi:
+                        ax.plot([lo, hi], [lo, hi], color="#999999", lw=1, ls="--", alpha=0.7)
+
+                    # Overlay fit curve (straight line in log-log): y = C * x^m
                     if math.isfinite(m) and math.isfinite(b):
-                        # Plot fit line across the x-range
-                        xmin, xmax = min(xs), max(xs)
-                        xr = xmax - xmin if xmax > xmin else 1.0
-                        x0 = xmin - 0.02 * xr
-                        x1 = xmax + 0.02 * xr
-                        ax.plot([x0, x1], [m * x0 + b, m * x1 + b], color="#cc3344", lw=2, label=f"fit: y={m:.3f}x+{b:.3f}")
-                        ax.legend(loc="upper left")
-                    ax.plot([0, max(xs + ys)], [0, max(xs + ys)], color="#999999", lw=1, ls="--", alpha=0.6)
-                    info = f"n={len(xs)}  slope={m:.3f}  R^2={r2:.3f}"
+                        x0, x1 = xmin, xmax
+                        y0 = (10 ** b) * (x0 ** m)
+                        y1 = (10 ** b) * (x1 ** m)
+                        if y0 > 0 and y1 > 0:
+                            ax.plot(
+                                [x0, x1],
+                                [y0, y1],
+                                color="red",
+                                ls=":",
+                                lw=2,
+                                label=f"fit: y={C:.3g} * x^{m:.3f}",
+                            )
+                            ax.legend(loc="upper left")
                 else:
-                    info = "no overlapping successful rows"
+                    info = "no overlapping successful rows (positive, finite)"
+
                 ax.set_title(f"{p1} (x) vs {p2} (y)\n{info}")
                 ax.set_xlabel(f"{p1} elapsed_sec (s)")
                 ax.set_ylabel(f"{p2} elapsed_sec (s)")
-                ax.grid(True, alpha=0.3)
+                ax.grid(True, which="both", alpha=0.3)
                 fig.tight_layout()
                 pdf.savefig(fig)
                 plt.close(fig)
@@ -306,6 +415,7 @@ def main(argv: List[str]) -> int:
             return 2
         try:
             recs = load_csv(path)
+            print(f"parser-name: {name} -> # pdf-pages: {len(recs)}")
         except Exception as e:
             print(f"Failed to load CSV '{path}' for parser '{name}': {e}", file=sys.stderr)
             return 2
@@ -325,4 +435,3 @@ def main(argv: List[str]) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main(sys.argv[1:]))
-
