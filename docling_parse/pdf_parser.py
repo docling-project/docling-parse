@@ -233,7 +233,7 @@ class PdfDocument:
             t=dimension["rectangles"]["bleed-bbox"][3],
             coord_origin=CoordOrigin.BOTTOMLEFT,
         )
-
+        
         trim_bbox = BoundingBox(
             l=dimension["rectangles"]["trim-bbox"][0],
             b=dimension["rectangles"]["trim-bbox"][1],
@@ -249,7 +249,7 @@ class PdfDocument:
             t=dimension["rectangles"]["crop-bbox"][3],
             coord_origin=CoordOrigin.BOTTOMLEFT,
         )
-
+        
         # Fixme: The boundary type to which this rect refers should accept a user argument
         # TODO: Why is this a BoundingRectangle not a BoundingBox?
         rect = BoundingRectangle(

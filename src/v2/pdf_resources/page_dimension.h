@@ -112,8 +112,11 @@ namespace pdflib
   std::pair<double, double> pdf_resource<PAGE_DIMENSION>::rotate(int my_angle)
   {
     angle -= my_angle;
+
+    LOG_S(INFO) << "my_angle: " << my_angle;
     
     utils::values::rotate_inplace(my_angle, media_bbox);
+
     LOG_S(INFO) << "media: "
 		<< media_bbox[0] << ", "
 		<< media_bbox[1] << ", "
@@ -150,7 +153,7 @@ namespace pdflib
 		<< crop_bbox[2] << ", "
 		<< crop_bbox[3];
 
-    LOG_S(INFO) << "crop: "
+    LOG_S(INFO) << "bbox: "
 		<< bbox[0] << ", "
 		<< bbox[1] << ", "
 		<< bbox[2] << ", "
@@ -403,11 +406,71 @@ namespace pdflib
 	throw std::logic_error(ss.str());
       }
 
+    LOG_S(INFO) << "crop-box: ("
+		<< crop_bbox[0] << ", "
+		<< crop_bbox[1] << ", "
+		<< crop_bbox[2] << ", "
+		<< crop_bbox[3] << ")";
+
+    LOG_S(INFO) << "media-box: ("
+		<< media_bbox[0] << ", "
+		<< media_bbox[1] << ", "
+		<< media_bbox[2] << ", "
+		<< media_bbox[3] << ")";      
+
+    LOG_S(INFO) << "art-box: ("
+		<< art_bbox[0] << ", "
+		<< art_bbox[1] << ", "
+		<< art_bbox[2] << ", "
+		<< art_bbox[3] << ")";
+
+    LOG_S(INFO) << "bleed-box: ("
+		<< bleed_bbox[0] << ", "
+		<< bleed_bbox[1] << ", "
+		<< bleed_bbox[2] << ", "
+		<< bleed_bbox[3] << ")";
+
+    LOG_S(INFO) << "trim-box: ("
+		<< trim_bbox[0] << ", "
+		<< trim_bbox[1] << ", "
+		<< trim_bbox[2] << ", "
+		<< trim_bbox[3] << ")";
+    
     crop_bbox = normalize_page_boundaries(crop_bbox, "crop_bbox");
     media_bbox = normalize_page_boundaries(media_bbox, "media_bbox");
     art_bbox = normalize_page_boundaries(art_bbox, "art_bbox");
     bleed_bbox = normalize_page_boundaries(bleed_bbox, "bleed_bbox");
     trim_bbox = normalize_page_boundaries(trim_bbox, "trim_bbox");
+
+    LOG_S(INFO) << "crop-box: ("
+		<< crop_bbox[0] << ", "
+		<< crop_bbox[1] << ", "
+		<< crop_bbox[2] << ", "
+		<< crop_bbox[3] << ")";
+
+    LOG_S(INFO) << "media-box: ("
+		<< media_bbox[0] << ", "
+		<< media_bbox[1] << ", "
+		<< media_bbox[2] << ", "
+		<< media_bbox[3] << ")";      
+
+    LOG_S(INFO) << "art-box: ("
+		<< art_bbox[0] << ", "
+		<< art_bbox[1] << ", "
+		<< art_bbox[2] << ", "
+		<< art_bbox[3] << ")";
+
+    LOG_S(INFO) << "bleed-box: ("
+		<< bleed_bbox[0] << ", "
+		<< bleed_bbox[1] << ", "
+		<< bleed_bbox[2] << ", "
+		<< bleed_bbox[3] << ")";
+
+    LOG_S(INFO) << "trim-box: ("
+		<< trim_bbox[0] << ", "
+		<< trim_bbox[1] << ", "
+		<< trim_bbox[2] << ", "
+		<< trim_bbox[3] << ")";    
   }
 
 }

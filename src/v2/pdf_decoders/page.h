@@ -561,14 +561,13 @@ namespace pdflib
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    if(page_dimension.get_angle()==0)
+    int angle = page_dimension.get_angle();
+    
+    if((angle%360)==0)
       {
         return;
       }
-
-    int angle = page_dimension.get_angle();
-
-    if((angle%90)!=0)
+    else if((angle%90)!=0)
       {
         LOG_S(ERROR) << "the /Rotate angle should be a multiple of 90 ...";
       }
@@ -577,6 +576,8 @@ namespace pdflib
     LOG_S(WARNING) << "rotating contents clock-wise with angle: " << angle;
 
     std::pair<double, double> delta = page_dimension.rotate(angle);
+    LOG_S(INFO) << "translation delta: " << delta.first << ", " << delta.second;
+    
     page_cells.rotate(angle, delta);
     page_lines.rotate(angle, delta);
     page_images.rotate(angle, delta);
