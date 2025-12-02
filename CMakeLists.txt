@@ -171,7 +171,7 @@ target_link_libraries(parse_v2_fonts.exe ${DEPENDENCIES} ${LIB_LINK})
 # **********************
 
 add_library(parse_v1 STATIC "${TOPLEVEL_PREFIX_PATH}/app/parse_v1.cpp")
-add_library(parse_v2 STATIC "${TOPLEVEL_PREFIX_PATH}/app/parse_v1.cpp")
+add_library(parse_v2 STATIC "${TOPLEVEL_PREFIX_PATH}/app/parse_v2.cpp")
 
 add_dependencies(parse_v1 ${DEPENDENCIES})
 add_dependencies(parse_v2 ${DEPENDENCIES})
