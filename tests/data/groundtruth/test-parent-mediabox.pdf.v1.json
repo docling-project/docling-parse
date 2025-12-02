@@ -1,0 +1,210 @@
+{
+  "info": {
+    "histograms": {
+      "mean-char-height": {
+        "/AAAAAC+AptosDisplay": 70.44225568536396,
+        "/AAAAAE+Aptos": 27.76164092239103
+      },
+      "mean-char-width": {
+        "/AAAAAC+AptosDisplay": 19.71323201579967,
+        "/AAAAAE+Aptos": 9.899118263345573
+      },
+      "number-of-chars": {
+        "/AAAAAC+AptosDisplay": 26,
+        "/AAAAAE+Aptos": 38
+      }
+    },
+    "styles": [
+      "/AAAAAC+AptosDisplay",
+      "/AAAAAE+Aptos"
+    ]
+  },
+  "pages": [
+    {
+      "cells": [
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              173.1875,
+              283.44,
+              221.95551,
+              356.70001
+            ],
+            "device": [
+              173.1875,
+              266.52002,
+              793.61151,
+              339.77997
+            ]
+          },
+          "content": {
+            "rnormalized": "Test Japanese Translation "
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAC+AptosDisplay",
+            "size": 1
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              293.38751,
+              233.76001,
+              325.17313,
+              263.06403
+            ],
+            "device": [
+              293.38751,
+              226.992,
+              666.55396,
+              256.29596
+            ]
+          },
+          "content": {
+            "rnormalized": "Maintain format in the translated file"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/AAAAAE+Aptos",
+            "size": 1
+          }
+        }
+      ],
+      "dimensions": {
+        "bbox": [
+          0,
+          0,
+          960,
+          540
+        ],
+        "height": 540,
+        "width": 960
+      },
+      "height": 540,
+      "horizontal-lines": [
+        {
+          "x0": 0,
+          "x1": 959.76001,
+          "y": 540
+        },
+        {
+          "x0": 0,
+          "x1": 959.76001,
+          "y": 1.206994e-05
+        },
+        {
+          "x0": 0,
+          "x1": 960,
+          "y": 540
+        },
+        {
+          "x0": 0,
+          "x1": 960,
+          "y": 1.40816e-05
+        }
+      ],
+      "ignored-cells": [],
+      "images": [],
+      "paths": [
+        {
+          "bbox": [
+            0,
+            1.206994e-05,
+            959.76001,
+            540
+          ],
+          "sub-paths": [
+            0,
+            5
+          ],
+          "type": "unknown",
+          "x-values": [
+            0,
+            959.76001,
+            959.76001,
+            0,
+            0
+          ],
+          "y-values": [
+            540,
+            540,
+            1.206994e-05,
+            1.206994e-05,
+            540
+          ]
+        },
+        {
+          "bbox": [
+            0,
+            1.40816e-05,
+            960,
+            540
+          ],
+          "sub-paths": [
+            0,
+            5
+          ],
+          "type": "unknown",
+          "x-values": [
+            0,
+            960,
+            960,
+            0,
+            0
+          ],
+          "y-values": [
+            540,
+            540,
+            1.40816e-05,
+            1.40816e-05,
+            540
+          ]
+        }
+      ],
+      "vertical-lines": [
+        {
+          "x": 959.76001,
+          "y0": 1.206994e-05,
+          "y1": 540
+        },
+        {
+          "x": 0,
+          "y0": 1.206994e-05,
+          "y1": 540
+        },
+        {
+          "x": 960,
+          "y0": 1.40816e-05,
+          "y1": 540
+        },
+        {
+          "x": 0,
+          "y0": 1.40816e-05,
+          "y1": 540
+        }
+      ],
+      "width": 960
+    }
+  ]
+}

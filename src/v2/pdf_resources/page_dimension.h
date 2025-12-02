@@ -339,6 +339,7 @@ namespace pdflib
         art_bbox = crop_bbox;
       }
     
+    // FIXME: cleanup and review the box priorities
     if((not initialised) and json_resources.count("/CropBox"))
       {
 	std::stringstream ss;

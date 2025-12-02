@@ -1,0 +1,2 @@
+(173.19, 271.60) (798.36, 271.60) (798.36, 322.86) (173.19, 322.86)       /TT2 Test Japanese Translation 	<|special_separator|>
+(293.39, 229.03) (666.51, 229.03) (666.51, 249.53) (293.39, 249.53)       /TT4 Maintain format in the translated file
