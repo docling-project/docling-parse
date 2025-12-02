@@ -8,11 +8,6 @@ from docling_core.types.doc.page import SegmentedPdfPage, TextCellUnit
 
 from docling_parse.pdf_parser import DoclingPdfParser, PdfDocument
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
-
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Process a PDF file.")
@@ -254,6 +249,10 @@ def visualise_py(
 
 
 def main():
+    # Configure logging
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+    )
 
     (
         log_level,

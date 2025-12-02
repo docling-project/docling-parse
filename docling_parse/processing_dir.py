@@ -11,11 +11,6 @@ from tabulate import tabulate
 
 from docling_parse import pdf_parser_v2  # type: ignore[attr-defined]
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
-
 
 @dataclass
 class FileTask:
@@ -153,6 +148,10 @@ def process_files_from_queue(file_queue: Queue, page_level: bool, loglevel: str)
 
 
 def main():
+    # Configure logging
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+    )
 
     directory, recursive, loglevel, page_level_parsing = parse_arguments()
 

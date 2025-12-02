@@ -27,9 +27,7 @@ from docling_parse.pdf_parsers import pdf_parser_v2  # type: ignore[import]
 from docling_parse.pdf_parsers import pdf_sanitizer  # type: ignore[import]
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+_log = logging.getLogger(__name__)
 
 
 class PdfDocument:
@@ -442,25 +440,25 @@ class PdfDocument:
             segmented_page.word_cells = self._to_cells(page["word_cells"])
             segmented_page.has_words = len(segmented_page.word_cells) > 0
         elif keep_chars:
-            logging.warning(
+            _log.warning(
                 "`words` will be created for segmented_page in an inefficient way!"
             )
             self._create_word_cells(segmented_page, enforce_same_font=enforce_same_font)
         # else:
-        #    logging.warning("No `words` will be created for segmented_page")
+        #    _log.warning("No `words` will be created for segmented_page")
 
         if create_textlines and ("line_cells" in page):
             segmented_page.textline_cells = self._to_cells(page["line_cells"])
             segmented_page.has_lines = len(segmented_page.textline_cells) > 0
         elif keep_chars:
-            logging.warning(
+            _log.warning(
                 "`text_lines` will be created for segmented_page in an inefficient way!"
             )
             self._create_textline_cells(
                 segmented_page, enforce_same_font=enforce_same_font
             )
         # else:
-        #    logging.warning("No `text_lines` will be created for segmented_page")
+        #    _log.warning("No `text_lines` will be created for segmented_page")
 
         return segmented_page
 

@@ -27,11 +27,6 @@ except ImportError as e:
 
 from docling_parse import pdf_parser_v2  # type: ignore[attr-defined]
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
-
 queue_lock = threading.Lock()
 
 
@@ -342,6 +337,10 @@ def process_files_from_queue(
 
 
 def main():
+    # Configure logging
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+    )
 
     s3_config, threads, loglevel = parse_arguments()
 
