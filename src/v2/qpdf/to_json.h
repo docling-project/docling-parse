@@ -162,7 +162,9 @@ namespace pdflib
         else if(obj.isBool())
           {
             bool val = obj.getBoolValue();
-            result = val;
+            // Work around C++20 template resolution issue with bool
+            // Use boolean_t wrapper type for proper JSON conversion
+            result = nlohmann::json::boolean_t(val);
           }
         else
           {
