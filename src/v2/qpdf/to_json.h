@@ -163,8 +163,8 @@ namespace pdflib
           {
             bool val = obj.getBoolValue();
             // Work around nlohmann_json 3.12 explicit bool constructor
-            // Must use ternary to select pre-constructed boolean values
-            result = val ? nlohmann::json(true) : nlohmann::json(false);
+            // Parse string representation of boolean
+            result = nlohmann::json::parse(val ? "true" : "false");
           }
         else
           {

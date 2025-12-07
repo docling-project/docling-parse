@@ -186,9 +186,9 @@ namespace pdflib
       cell.push_back(font_name); // 18
 
       // Work around nlohmann_json 3.12 explicit bool constructor
-      // Must use ternary to select pre-constructed boolean values
-      cell.push_back(widget ? nlohmann::json(true) : nlohmann::json(false)); // 19
-      cell.push_back(left_to_right ? nlohmann::json(true) : nlohmann::json(false)); // 20
+      // Parse string representation of boolean
+      cell.push_back(nlohmann::json::parse(widget ? "true" : "false")); // 19
+      cell.push_back(nlohmann::json::parse(left_to_right ? "true" : "false")); // 20
     }
     assert(cell.size()==header.size());
 
