@@ -124,8 +124,8 @@ namespace pdflib
 	  item["rendering_mode"] = cell.rendering_mode;
 
 	  // Work around nlohmann_json 3.12 explicit bool constructor
-	  item["widget"] = nlohmann::json{cell.widget};
-	  item["left_to_right"] = nlohmann::json{cell.left_to_right};
+	  item["widget"] = cell.widget ? nlohmann::json(true) : nlohmann::json(false);
+	  item["left_to_right"] = cell.left_to_right ? nlohmann::json(true) : nlohmann::json(false);
 	}
 
 	result.push_back(item);

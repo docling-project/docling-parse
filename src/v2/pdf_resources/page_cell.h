@@ -186,9 +186,9 @@ namespace pdflib
       cell.push_back(font_name); // 18
 
       // Work around nlohmann_json 3.12 explicit bool constructor
-      // Use brace initialization to explicitly construct from bool
-      cell.push_back(nlohmann::json{widget}); // 19
-      cell.push_back(nlohmann::json{left_to_right}); // 20
+      // Must use ternary to select pre-constructed boolean values
+      cell.push_back(widget ? nlohmann::json(true) : nlohmann::json(false)); // 19
+      cell.push_back(left_to_right ? nlohmann::json(true) : nlohmann::json(false)); // 20
     }
     assert(cell.size()==header.size());
 
