@@ -163,8 +163,8 @@ namespace pdflib
           {
             bool val = obj.getBoolValue();
             // Work around C++20 template resolution issue with bool
-            // Use boolean_t wrapper type for proper JSON conversion
-            result = nlohmann::json::boolean_t(val);
+            // Explicitly construct json value from boolean
+            result = nlohmann::json(val);
           }
         else
           {

@@ -123,8 +123,8 @@ namespace pdflib
 
 	  item["rendering_mode"] = cell.rendering_mode;
 
-	  item["widget"] = nlohmann::json::boolean_t(cell.widget);
-	  item["left_to_right"] = nlohmann::json::boolean_t(cell.left_to_right);
+	  item["widget"] = nlohmann::json(cell.widget);
+	  item["left_to_right"] = nlohmann::json(cell.left_to_right);
 	}
 
 	result.push_back(item);

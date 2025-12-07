@@ -185,8 +185,8 @@ namespace pdflib
       cell.push_back(font_key); // 17
       cell.push_back(font_name); // 18
 
-      cell.push_back(nlohmann::json::boolean_t(widget)); // 19
-      cell.push_back(nlohmann::json::boolean_t(left_to_right)); // 20
+      cell.push_back(nlohmann::json(widget)); // 19
+      cell.push_back(nlohmann::json(left_to_right)); // 20
     }
     assert(cell.size()==header.size());
 
