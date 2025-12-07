@@ -185,8 +185,16 @@ namespace pdflib
       cell.push_back(font_key); // 17
       cell.push_back(font_name); // 18
 
-      cell.push_back(nlohmann::json(widget)); // 19
-      cell.push_back(nlohmann::json(left_to_right)); // 20
+      // Work around nlohmann_json 3.12 explicit bool constructor
+      {
+        nlohmann::json widget_json;
+        widget_json = widget;
+        cell.push_back(widget_json); // 19
+
+        nlohmann::json ltr_json;
+        ltr_json = left_to_right;
+        cell.push_back(ltr_json); // 20
+      }
     }
     assert(cell.size()==header.size());
 

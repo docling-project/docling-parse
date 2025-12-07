@@ -162,9 +162,10 @@ namespace pdflib
         else if(obj.isBool())
           {
             bool val = obj.getBoolValue();
-            // Work around C++20 template resolution issue with bool
-            // Explicitly construct json value from boolean
-            result = nlohmann::json(val);
+            // Work around nlohmann_json 3.12 explicit bool constructor
+            // Create json and assign bool value
+            result = nlohmann::json();
+            result = val;
           }
         else
           {
