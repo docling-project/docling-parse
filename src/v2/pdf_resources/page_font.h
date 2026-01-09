@@ -487,7 +487,13 @@ namespace pdflib
 
         auto& fm = bfonts.get(fontname);
 
-        if(fm.has(c))
+        // If font declares a specific encoding (MacRoman, WinAnsi, etc.),
+        // use that encoding instead of base font's built-in mapping
+        if(encoding == MACROMAN || encoding == MACEXPERT || encoding == WINANSI || encoding == STANDARD)
+          {
+            return get_character_from_encoding(c);
+          }
+        else if(fm.has(c))
           {
             return fm.to_utf8(c);
           }
@@ -702,6 +708,13 @@ namespace pdflib
 	      }
 
             LOG_S(INFO) << "font-encoding [" << name << "]: " << to_string(encoding);
+          }
+        else if(result.is_object() && result.count("/BaseEncoding") == 1 && result["/BaseEncoding"].is_string())
+          {
+            // Extract /BaseEncoding from encoding dictionary
+            std::string base_enc = result["/BaseEncoding"].get<std::string>();
+            encoding = to_encoding_name(base_enc);
+            LOG_S(INFO) << "font-encoding from object /BaseEncoding [" << base_enc << "]: " << to_string(encoding);
           }
         else
           {
