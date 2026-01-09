@@ -7,31 +7,31 @@
 (078.25, 694.58) (091.03, 694.58) (091.03, 703.89) (078.25, 703.89)       /TT2  si 	<|special_separator|>
 (091.03, 694.57) (121.03, 694.57) (121.03, 703.92) (091.03, 703.92)       /TT1 toutes	<|special_separator|>
 (121.03, 694.58) (297.21, 694.58) (297.21, 703.89) (121.03, 703.89)       /TT2  les conditions suivantes sont remplies :	<|special_separator|>
-(027.00, 676.61) (184.20, 677.11) (184.20, 686.42) (027.00, 685.92)       /TT2 ¥ Vous êtes un résident du Canada.	<|special_separator|>
-(027.00, 661.61) (253.67, 662.11) (253.67, 671.42) (027.00, 670.92)       /TT2 ¥ Vous avez acheté les produits dans une province 	<|special_separator|>
+(027.00, 676.61) (184.20, 677.11) (184.20, 686.42) (027.00, 685.92)       /TT2 • Vous êtes un résident du Canada.	<|special_separator|>
+(027.00, 661.61) (253.67, 662.11) (253.67, 671.42) (027.00, 670.92)       /TT2 • Vous avez acheté les produits dans une province 	<|special_separator|>
 (033.00, 651.11) (277.55, 651.11) (277.55, 660.42) (033.00, 660.42)       /TT2 participante et vous avez payé la TVH sur ces produits.	<|special_separator|>
-(027.00, 634.61) (280.88, 635.11) (280.88, 644.42) (027.00, 643.92)       /TT2 ¥ Vous avez acheté les produits pour les consommer, les 	<|special_separator|>
+(027.00, 634.61) (280.88, 635.11) (280.88, 644.42) (027.00, 643.92)       /TT2 • Vous avez acheté les produits pour les consommer, les 	<|special_separator|>
 (033.00, 624.11) (292.54, 624.11) (292.54, 633.42) (033.00, 633.42)       /TT2 utiliser ou les fournir exclusivement (généralement à 90 % 	<|special_separator|>
 (033.00, 613.11) (245.00, 613.11) (245.00, 622.42) (033.00, 622.42)       /TT2 ou plus) à l'extérieur de la province participante.	<|special_separator|>
-(027.00, 598.61) (246.12, 599.11) (246.12, 608.42) (027.00, 607.92)       /TT2 ¥ Vous avez transféré les produits d'une province 	<|special_separator|>
+(027.00, 598.61) (246.12, 599.11) (246.12, 608.42) (027.00, 607.92)       /TT2 • Vous avez transféré les produits d'une province 	<|special_separator|>
 (033.00, 588.11) (280.92, 588.11) (280.92, 597.42) (033.00, 597.42)       /TT2 participante dans une autre province ou dans une autre 	<|special_separator|>
 (033.00, 577.11) (287.02, 577.11) (287.02, 586.42) (033.00, 586.42)       /TT2 région du Canada dans les 30 jours suivant la date où ils 	<|special_separator|>
 (033.00, 566.11) (299.25, 566.11) (299.25, 575.42) (033.00, 575.42)       /TT2 vous ont été livrés (toute période pendant laquelle les biens 	<|special_separator|>
 (033.00, 555.11) (294.81, 555.11) (294.81, 564.42) (033.00, 564.42)       /TT2 étaient entreposés dans la province participante avant que 	<|special_separator|>
 (033.00, 544.11) (284.46, 544.11) (284.46, 553.42) (033.00, 553.42)       /TT2 vous ne les retiriez n'est pas comptée dans les 30 jours).	<|special_separator|>
-(027.00, 529.61) (282.00, 530.11) (282.00, 539.42) (027.00, 538.92)       /TT2 ¥ Vous avez payé les taxes provinciales applicables de la 	<|special_separator|>
+(027.00, 529.61) (282.00, 530.11) (282.00, 539.42) (027.00, 538.92)       /TT2 • Vous avez payé les taxes provinciales applicables de la 	<|special_separator|>
 (033.00, 519.11) (287.27, 519.11) (287.27, 528.42) (033.00, 528.42)       /TT2 province non participante ou de l'autre région du Canada 	<|special_separator|>
 (033.00, 508.11) (181.41, 508.11) (181.41, 517.42) (033.00, 517.42)       /TT2 où les produits ont été transférés.	<|special_separator|>
-(027.00, 493.61) (249.21, 494.58) (249.21, 503.89) (027.00, 502.92)       /TT2 ¥ Si vous êtes un consommateur du bien (sauf les 	<|special_separator|>
+(027.00, 493.61) (249.21, 494.58) (249.21, 503.89) (027.00, 502.92)       /TT2 • Si vous êtes un consommateur du bien (sauf les 	<|special_separator|>
 (249.21, 494.57) (297.57, 494.57) (297.57, 503.92) (249.21, 503.92)       /TT1 véhicules 	<|special_separator|>
 (033.00, 483.57) (131.36, 483.57) (131.36, 492.92) (033.00, 492.92)       /TT1 à moteur déterminés	<|special_separator|>
 (131.36, 483.58) (288.65, 483.58) (288.65, 492.89) (131.36, 492.89)       /TT2 ), vous résidez dans la province ou 	<|special_separator|>
 (033.00, 472.58) (281.47, 472.58) (281.47, 481.89) (033.00, 481.89)       /TT2 autre région du Canada où vous avez apporté les biens.	<|special_separator|>
-(027.00, 457.61) (030.50, 457.61) (030.50, 466.92) (027.00, 466.92)       /TT2 ¥	<|special_separator|>
+(027.00, 457.61) (030.50, 457.61) (030.50, 466.92) (027.00, 466.92)       /TT2 •	<|special_separator|>
 (033.00, 458.57) (093.57, 458.57) (093.57, 467.92) (033.00, 467.92)       /TT1 Chaque reçu	<|special_separator|>
 (093.57, 458.58) (273.65, 458.58) (273.65, 467.89) (093.57, 467.89)       /TT2  indique un montant minimum de la taxe 	<|special_separator|>
 (033.00, 447.58) (113.59, 447.58) (113.59, 456.89) (033.00, 456.89)       /TT2 admissible de 5 $.	<|special_separator|>
-(027.00, 430.61) (030.50, 430.61) (030.50, 439.92) (027.00, 439.92)       /TT2 ¥	<|special_separator|>
+(027.00, 430.61) (030.50, 430.61) (030.50, 439.92) (027.00, 439.92)       /TT2 •	<|special_separator|>
 (033.00, 431.57) (206.91, 431.57) (206.91, 440.92) (033.00, 440.92)       /TT1 Le montant total du remboursement 	<|special_separator|>
 (206.91, 431.58) (253.05, 431.58) (253.05, 440.89) (206.91, 440.89)       /TT2 de la taxe 	<|special_separator|>
 (033.00, 420.58) (170.29, 420.58) (170.29, 429.89) (033.00, 429.89)       /TT2 admissible est de 25 $ ou plus.	<|special_separator|>
@@ -59,11 +59,11 @@
 (021.00, 262.14) (220.28, 262.14) (220.28, 272.43) (021.00, 272.43)       /TT1 Documents à joindre à votre demande	<|special_separator|>
 (021.00, 248.11) (283.34, 248.11) (283.34, 257.42) (021.00, 257.42)       /TT2 Joignez les renseignements et documents suivants à votre 	<|special_separator|>
 (021.00, 237.11) (068.25, 237.11) (068.25, 246.42) (021.00, 246.42)       /TT2 demande :	<|special_separator|>
-(027.00, 217.61) (211.98, 218.11) (211.98, 227.42) (027.00, 226.92)       /TT2 ¥ les copies des reçus pour chaque achat;	<|special_separator|>
-(027.00, 202.61) (288.67, 203.11) (288.67, 212.42) (027.00, 211.92)       /TT2 ¥ la preuve de paiement des taxes provinciales applicables;	<|special_separator|>
-(027.00, 187.61) (274.77, 188.11) (274.77, 197.42) (027.00, 196.92)       /TT2 ¥ si le produit admissible était entreposé, les copies des 	<|special_separator|>
+(027.00, 217.61) (211.98, 218.11) (211.98, 227.42) (027.00, 226.92)       /TT2 • les copies des reçus pour chaque achat;	<|special_separator|>
+(027.00, 202.61) (288.67, 203.11) (288.67, 212.42) (027.00, 211.92)       /TT2 • la preuve de paiement des taxes provinciales applicables;	<|special_separator|>
+(027.00, 187.61) (274.77, 188.11) (274.77, 197.42) (027.00, 196.92)       /TT2 • si le produit admissible était entreposé, les copies des 	<|special_separator|>
 (033.00, 177.11) (236.68, 177.11) (236.68, 186.42) (033.00, 186.42)       /TT2 reçus afin de justifier la date de l'entreposage.	<|special_separator|>
-(027.00, 160.61) (268.91, 161.11) (268.91, 170.42) (027.00, 169.92)       /TT2 ¥ dans le cas d'un véhicule à moteur déterminé qui est 	<|special_separator|>
+(027.00, 160.61) (268.91, 161.11) (268.91, 170.42) (027.00, 169.92)       /TT2 • dans le cas d'un véhicule à moteur déterminé qui est 	<|special_separator|>
 (033.00, 150.11) (234.20, 150.11) (234.20, 159.42) (033.00, 159.42)       /TT2 immatriculé dans une province, une copie de 	<|special_separator|>
 (033.00, 139.11) (287.23, 139.11) (287.23, 148.42) (033.00, 148.42)       /TT2 l'immatriculation du véhicule de la province dans laquelle 	<|special_separator|>
 (033.00, 128.11) (143.61, 128.11) (143.61, 137.42) (033.00, 137.42)       /TT2 le véhicule a été introduit	<|special_separator|>
@@ -97,7 +97,7 @@
 (315.00, 532.14) (472.72, 532.14) (472.72, 542.43) (315.00, 542.43)       /TT1 Remplir ce formulaire en ligne	<|special_separator|>
 (315.00, 518.58) (580.11, 518.58) (580.11, 527.89) (315.00, 527.89)       /TT2 Si vous êtes un inscrit à la TPS/TVH, vous pouvez produire 	<|special_separator|>
 (315.00, 507.58) (570.12, 507.58) (570.12, 516.89) (315.00, 516.89)       /TT2 votre demande de remboursement en ligne en utilisant le 	<|special_separator|>
-(315.00, 496.58) (575.10, 496.58) (575.10, 505.89) (315.00, 505.89)       /TT2 service ˙ Produire un remboursement ¨ dans Mon dossier 	<|special_separator|>
+(315.00, 496.58) (575.10, 496.58) (575.10, 505.89) (315.00, 505.89)       /TT2 service « Produire un remboursement » dans Mon dossier 	<|special_separator|>
 (315.00, 485.58) (378.05, 485.58) (378.05, 494.89) (315.00, 494.89)       /TT2 d'entreprise à 	<|special_separator|>
 (378.05, 485.57) (559.22, 485.57) (559.22, 494.92) (378.05, 494.92)       /TT1 canada.ca/mon-dossier-entreprise-arc	<|special_separator|>
 (559.22, 485.58) (575.90, 485.58) (575.90, 494.89) (559.22, 494.89)       /TT2  ou 	<|special_separator|>

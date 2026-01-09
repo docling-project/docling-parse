@@ -8171,7 +8171,7 @@
               661.42,
               28.459,
               661.42,
-              "\u00ba",
+              "\u00ce",
               -1,
               2.78,
               "/MacRomanEncoding",
@@ -33862,7 +33862,7 @@
               251.389,
               42.218,
               251.389,
-              "\u00a1",
+              "\u00b0",
               -1,
               2.78,
               "/MacRomanEncoding",
@@ -34161,7 +34161,7 @@
               251.389,
               94.828,
               251.389,
-              "\u00a1",
+              "\u00b0",
               -1,
               2.78,
               "/MacRomanEncoding",
@@ -36024,7 +36024,7 @@
               103.42,
               22.999,
               103.42,
-              "\u00b8",
+              "\u00c0",
               -1,
               2.78,
               "/MacRomanEncoding",
@@ -39214,6 +39214,7 @@
           }
         ]
       },
+      "page_number": 0,
       "sanitized": {
         "cells": {
           "data": [
@@ -39391,7 +39392,7 @@
               661.42,
               20.999,
               661.42,
-              "(l'\u00bale-du-Prince-\u00c9douard, le Nouveau-Brunswick, la Nouvelle-\u00c9cosse, l'Ontario ou  ",
+              "(l'\u00cele-du-Prince-\u00c9douard, le Nouveau-Brunswick, la Nouvelle-\u00c9cosse, l'Ontario ou  ",
               -1,
               2.78,
               "/MacRomanEncoding",
@@ -40012,7 +40013,7 @@
               251.389,
               34.998,
               251.389,
-              "N\u00a1 d'unit\u00e9 - n\u00a1 et rue, CP, RR :",
+              "N\u00b0 d'unit\u00e9 - n\u00b0 et rue, CP, RR :",
               -1,
               2.78,
               "/MacRomanEncoding",
@@ -40127,7 +40128,7 @@
               103.42,
               22.999,
               103.42,
-              "\u00b8 USAGE INTERNE",
+              "\u00c0 USAGE INTERNE",
               -1,
               2.78,
               "/MacRomanEncoding",
@@ -41593,12 +41594,12 @@
         ]
       },
       "timings": {
-        "decode_annots": 3.6e-05,
-        "decode_contents": 0.005252,
-        "decode_dimensions": 1e-06,
-        "decode_page": 0.013941,
-        "decode_resources": 0.000402,
-        "sanitise_contents": 0.001037
+        "decode_annots": 3.9e-05,
+        "decode_contents": 0.004977,
+        "decode_dimensions": 3e-06,
+        "decode_page": 0.00762,
+        "decode_resources": 0.000376,
+        "sanitise_contents": 0.000863
       }
     },
     {
@@ -45008,7 +45009,7 @@
               698.39,
               42.218,
               698.39,
-              "\u00a1",
+              "\u00b0",
               -1,
               2.78,
               "/MacRomanEncoding",
@@ -45307,7 +45308,7 @@
               698.39,
               94.828,
               698.39,
-              "\u00a1",
+              "\u00b0",
               -1,
               2.78,
               "/MacRomanEncoding",
@@ -67053,6 +67054,7 @@
           }
         ]
       },
+      "page_number": 1,
       "sanitized": {
         "cells": {
           "data": [
@@ -67207,7 +67209,7 @@
               698.39,
               34.998,
               698.39,
-              "N\u00a1 d'unit\u00e9 - n\u00a1 et rue, RR :",
+              "N\u00b0 d'unit\u00e9 - n\u00b0 et rue, RR :",
               -1,
               2.78,
               "/MacRomanEncoding",
@@ -68416,11 +68418,11 @@
       },
       "timings": {
         "decode_annots": 1.9e-05,
-        "decode_contents": 0.003415,
-        "decode_dimensions": 0.0,
-        "decode_page": 0.008054,
-        "decode_resources": 0.000385,
-        "sanitise_contents": 0.000701
+        "decode_contents": 0.00309,
+        "decode_dimensions": 5e-06,
+        "decode_page": 0.004985,
+        "decode_resources": 0.00032,
+        "sanitise_contents": 0.000611
       }
     },
     {
@@ -96063,6 +96065,7 @@
           }
         ]
       },
+      "page_number": 2,
       "sanitized": {
         "cells": {
           "data": [
@@ -102180,12 +102183,12 @@
         ]
       },
       "timings": {
-        "decode_annots": 0.000148,
-        "decode_contents": 0.00503,
-        "decode_dimensions": 0.0,
-        "decode_page": 0.011826,
-        "decode_resources": 0.000381,
-        "sanitise_contents": 0.000631
+        "decode_annots": 0.000138,
+        "decode_contents": 0.004531,
+        "decode_dimensions": 3e-06,
+        "decode_page": 0.009021,
+        "decode_resources": 0.000343,
+        "sanitise_contents": 0.000558
       }
     },
     {
@@ -164025,6 +164028,7 @@
           }
         ]
       },
+      "page_number": 3,
       "sanitized": {
         "cells": {
           "data": [
@@ -166018,12 +166022,12 @@
         ]
       },
       "timings": {
-        "decode_annots": 1.9e-05,
-        "decode_contents": 0.008117,
-        "decode_dimensions": 0.0,
-        "decode_page": 0.029579,
-        "decode_resources": 0.000462,
-        "sanitise_contents": 0.002572
+        "decode_annots": 2.9e-05,
+        "decode_contents": 0.007173,
+        "decode_dimensions": 1e-06,
+        "decode_page": 0.01175,
+        "decode_resources": 0.000383,
+        "sanitise_contents": 0.002289
       }
     },
     {
@@ -171441,7 +171445,7 @@
               685.918,
               26.999,
               685.918,
-              "\u00a5",
+              "\u2022",
               -1,
               2.78,
               "/MacRomanEncoding",
@@ -172200,7 +172204,7 @@
               670.918,
               26.999,
               670.918,
-              "\u00a5",
+              "\u2022",
               -1,
               2.78,
               "/MacRomanEncoding",
@@ -174592,7 +174596,7 @@
               643.918,
               26.999,
               643.918,
-              "\u00a5",
+              "\u2022",
               -1,
               2.78,
               "/MacRomanEncoding",
@@ -178387,7 +178391,7 @@
               607.918,
               26.999,
               607.918,
-              "\u00a5",
+              "\u2022",
               -1,
               2.78,
               "/MacRomanEncoding",
@@ -186230,7 +186234,7 @@
               538.918,
               26.999,
               538.918,
-              "\u00a5",
+              "\u2022",
               -1,
               2.78,
               "/MacRomanEncoding",
@@ -189657,7 +189661,7 @@
               502.918,
               26.999,
               502.918,
-              "\u00a5",
+              "\u2022",
               -1,
               2.78,
               "/MacRomanEncoding",
@@ -193498,7 +193502,7 @@
               466.918,
               26.999,
               466.918,
-              "\u00a5",
+              "\u2022",
               -1,
               2.78,
               "/MacRomanEncoding",
@@ -195085,7 +195089,7 @@
               439.918,
               26.999,
               439.918,
-              "\u00a5",
+              "\u2022",
               -1,
               2.78,
               "/MacRomanEncoding",
@@ -213669,7 +213673,7 @@
               226.918,
               26.999,
               226.918,
-              "\u00a5",
+              "\u2022",
               -1,
               2.78,
               "/MacRomanEncoding",
@@ -214589,7 +214593,7 @@
               211.918,
               26.999,
               211.918,
-              "\u00a5",
+              "\u2022",
               -1,
               2.78,
               "/MacRomanEncoding",
@@ -215923,7 +215927,7 @@
               196.918,
               26.999,
               196.918,
-              "\u00a5",
+              "\u2022",
               -1,
               2.78,
               "/MacRomanEncoding",
@@ -218384,7 +218388,7 @@
               169.918,
               26.999,
               169.918,
-              "\u00a5",
+              "\u2022",
               -1,
               2.78,
               "/MacRomanEncoding",
@@ -248123,7 +248127,7 @@
               505.888,
               349.45,
               505.888,
-              "\u02d9",
+              "\u00ab",
               -1,
               2.78,
               "/MacRomanEncoding",
@@ -248767,7 +248771,7 @@
               505.888,
               485.06,
               505.888,
-              "\u00a8",
+              "\u00bb",
               -1,
               2.78,
               "/MacRomanEncoding",
@@ -274527,6 +274531,7 @@
           }
         ]
       },
+      "page_number": 4,
       "sanitized": {
         "cells": {
           "data": [
@@ -274750,7 +274755,7 @@
               686.418,
               26.999,
               685.918,
-              "\u00a5 Vous \u00eates un r\u00e9sident du Canada.",
+              "\u2022 Vous \u00eates un r\u00e9sident du Canada.",
               -1,
               2.78,
               "/MacRomanEncoding",
@@ -274773,7 +274778,7 @@
               671.418,
               26.999,
               670.918,
-              "\u00a5 Vous avez achet\u00e9 les produits dans une province ",
+              "\u2022 Vous avez achet\u00e9 les produits dans une province ",
               -1,
               2.78,
               "/MacRomanEncoding",
@@ -274819,7 +274824,7 @@
               644.418,
               26.999,
               643.918,
-              "\u00a5 Vous avez achet\u00e9 les produits pour les consommer, les ",
+              "\u2022 Vous avez achet\u00e9 les produits pour les consommer, les ",
               -1,
               2.78,
               "/MacRomanEncoding",
@@ -274888,7 +274893,7 @@
               608.418,
               26.999,
               607.918,
-              "\u00a5 Vous avez transf\u00e9r\u00e9 les produits d'une province ",
+              "\u2022 Vous avez transf\u00e9r\u00e9 les produits d'une province ",
               -1,
               2.78,
               "/MacRomanEncoding",
@@ -275026,7 +275031,7 @@
               539.418,
               26.999,
               538.918,
-              "\u00a5 Vous avez pay\u00e9 les taxes provinciales applicables de la ",
+              "\u2022 Vous avez pay\u00e9 les taxes provinciales applicables de la ",
               -1,
               2.78,
               "/MacRomanEncoding",
@@ -275095,7 +275100,7 @@
               503.888,
               26.999,
               502.918,
-              "\u00a5 Si vous \u00eates un consommateur du bien (sauf les ",
+              "\u2022 Si vous \u00eates un consommateur du bien (sauf les ",
               -1,
               2.78,
               "/MacRomanEncoding",
@@ -275210,7 +275215,7 @@
               466.918,
               26.999,
               466.918,
-              "\u00a5",
+              "\u2022",
               -1,
               2.78,
               "/MacRomanEncoding",
@@ -275302,7 +275307,7 @@
               439.918,
               26.999,
               439.918,
-              "\u00a5",
+              "\u2022",
               -1,
               2.78,
               "/MacRomanEncoding",
@@ -275946,7 +275951,7 @@
               227.418,
               26.999,
               226.918,
-              "\u00a5 les copies des re\u00e7us pour chaque achat;",
+              "\u2022 les copies des re\u00e7us pour chaque achat;",
               -1,
               2.78,
               "/MacRomanEncoding",
@@ -275969,7 +275974,7 @@
               212.418,
               26.999,
               211.918,
-              "\u00a5 la preuve de paiement des taxes provinciales applicables;",
+              "\u2022 la preuve de paiement des taxes provinciales applicables;",
               -1,
               2.78,
               "/MacRomanEncoding",
@@ -275992,7 +275997,7 @@
               197.418,
               26.999,
               196.918,
-              "\u00a5 si le produit admissible \u00e9tait entrepos\u00e9, les copies des ",
+              "\u2022 si le produit admissible \u00e9tait entrepos\u00e9, les copies des ",
               -1,
               2.78,
               "/MacRomanEncoding",
@@ -276038,7 +276043,7 @@
               170.418,
               26.999,
               169.918,
-              "\u00a5 dans le cas d'un v\u00e9hicule \u00e0 moteur d\u00e9termin\u00e9 qui est ",
+              "\u2022 dans le cas d'un v\u00e9hicule \u00e0 moteur d\u00e9termin\u00e9 qui est ",
               -1,
               2.78,
               "/MacRomanEncoding",
@@ -276820,7 +276825,7 @@
               505.888,
               315.0,
               505.888,
-              "service \u02d9 Produire un remboursement \u00a8 dans Mon dossier ",
+              "service \u00ab Produire un remboursement \u00bb dans Mon dossier ",
               -1,
               2.78,
               "/MacRomanEncoding",
@@ -277971,28 +277976,28 @@
         ]
       },
       "timings": {
-        "decode_annots": 8e-06,
-        "decode_contents": 0.014581,
-        "decode_dimensions": 0.0,
-        "decode_page": 0.070208,
-        "decode_resources": 0.000478,
-        "sanitise_contents": 0.002797
+        "decode_annots": 1.9e-05,
+        "decode_contents": 0.012882,
+        "decode_dimensions": 2e-06,
+        "decode_page": 0.017587,
+        "decode_resources": 0.000438,
+        "sanitise_contents": 0.002366
       }
     }
   ],
   "timings": {
-    "decode_annots": 0.00023,
-    "decode_contents": 0.036395,
-    "decode_dimensions": 1e-06,
-    "decode_document": 0.138763,
-    "decode_page": 0.133608,
-    "decode_resources": 0.002108,
-    "decoding page 0": 0.014627,
-    "decoding page 1": 0.008518,
-    "decoding page 2": 0.012364,
-    "decoding page 3": 0.030636,
-    "decoding page 4": 0.072146,
-    "process_document_from_bytesio": 0.001617,
-    "sanitise_contents": 0.007738
+    "decode_annots": 0.000244,
+    "decode_contents": 0.032653,
+    "decode_dimensions": 1.4000000000000001e-05,
+    "decode_document": 0.055737,
+    "decode_page": 0.050963,
+    "decode_resources": 0.00186,
+    "decoding page 0": 0.008265,
+    "decoding page 1": 0.005382,
+    "decoding page 2": 0.009514,
+    "decoding page 3": 0.012762,
+    "decoding page 4": 0.019357,
+    "process_document_from_bytesio": 0.001291,
+    "sanitise_contents": 0.006687
   }
 }
