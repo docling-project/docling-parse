@@ -214,8 +214,9 @@ namespace docling
 
   bool docling_parser_v2::load_document_from_bytesio(std::string key, pybind11::object bytes_io)
   {
-    logging_lib::info("pdf-parser") << __FILE__ << ":" << __LINE__ << "\t" << __FUNCTION__;
-
+    // logging_lib::info("pdf-parser") << __FILE__ << ":" << __LINE__ << "\t" << __FUNCTION__;
+    LOG_S(INFO) << __FILE__ << ":" << __LINE__ << "\t" << __FUNCTION__;
+      
     // Check if the object is a BytesIO object
     if (!pybind11::hasattr(bytes_io, "read")) {
 

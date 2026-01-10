@@ -3,6 +3,9 @@
 #ifndef RESOURCE_UTILS_H_
 #define RESOURCE_UTILS_H_
 
+#define LOGURU_WITH_STREAMS 1
+#include <loguru.hpp>
+
 class resource_utils
 {
 public:
@@ -80,8 +83,9 @@ std::filesystem::path resource_utils::get_resources_dir(bool verify)
 {
   if(verify and (not std::filesystem::exists(RESOURCES_DIR)))
     {
-      std::cout << __FILE__ << ":" << __LINE__ << "\t"
-		<< "resources-dir does not exist ..." << "\n";
+      //std::cout << __FILE__ << ":" << __LINE__ << "\t"
+      LOG_S(ERROR) << __FILE__ << ":" << __LINE__ << "\t"
+		   << "resources-dir does not exist ..." << "\n";
     }
 
   return RESOURCES_DIR;
@@ -91,8 +95,9 @@ std::filesystem::path resource_utils::get_resources_v2_dir(bool verify)
 {
   if(verify and (not std::filesystem::exists(RESOURCES_V2_DIR)))
     {
-      std::cout << __FILE__ << ":" << __LINE__ << "\t"
-		<< "resources-v2-dir does not exist ..." << "\n";
+      // std::cout << __FILE__ << ":" << __LINE__ << "\t"
+      LOG_S(ERROR) << __FILE__ << ":" << __LINE__ << "\t"
+		   << "resources-v2-dir does not exist ..." << "\n";
     }
 
   return RESOURCES_V2_DIR;

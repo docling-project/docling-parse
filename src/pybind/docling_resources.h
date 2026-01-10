@@ -5,6 +5,8 @@
 
 #include <Python.h>
 
+#include <resources.h>
+
 namespace docling
 {
   
