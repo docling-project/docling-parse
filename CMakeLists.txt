@@ -107,7 +107,8 @@ include(cmake/extlib_loguru.cmake)
 include(cmake/extlib_json.cmake)
 include(cmake/extlib_utf8.git.cmake)
 include(cmake/extlib_jpeg.cmake)
-include(cmake/extlib_qpdf_v11.cmake)
+# include(cmake/extlib_qpdf_v11.cmake)
+include(cmake/extlib_qpdf_v12.cmake)
 
 # aggregate the targets created by the dependencies
 set(DEPENDENCIES qpdf jpeg utf8 json loguru cxxopts)
