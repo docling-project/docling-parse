@@ -14671,6 +14671,7 @@
           }
         ]
       },
+      "page_number": 0,
       "sanitized": {
         "cells": {
           "data": [
@@ -23228,11 +23229,11 @@
       },
       "timings": {
         "decode_annots": 0.0,
-        "decode_contents": 0.005094,
-        "decode_dimensions": 1e-06,
-        "decode_page": 0.008746,
-        "decode_resources": 0.000641,
-        "sanitise_contents": 9.8e-05
+        "decode_contents": 0.005218,
+        "decode_dimensions": 2e-06,
+        "decode_page": 0.008872,
+        "decode_resources": 0.000695,
+        "sanitise_contents": 0.0001
       }
     },
     {
@@ -31802,6 +31803,7 @@
           }
         ]
       },
+      "page_number": 1,
       "sanitized": {
         "cells": {
           "data": [
@@ -34481,11 +34483,11 @@
       },
       "timings": {
         "decode_annots": 0.0,
-        "decode_contents": 0.012053,
-        "decode_dimensions": 0.0,
-        "decode_page": 0.030385,
-        "decode_resources": 0.001067,
-        "sanitise_contents": 0.000125
+        "decode_contents": 0.012207,
+        "decode_dimensions": 1e-06,
+        "decode_page": 0.030296,
+        "decode_resources": 0.001064,
+        "sanitise_contents": 0.000128
       }
     },
     {
@@ -94733,6 +94735,7 @@
           }
         ]
       },
+      "page_number": 2,
       "sanitized": {
         "cells": {
           "data": [
@@ -112152,25 +112155,25 @@
       },
       "timings": {
         "decode_annots": 0.0,
-        "decode_contents": 0.008458,
-        "decode_dimensions": 0.0,
-        "decode_page": 0.025639,
-        "decode_resources": 0.000796,
-        "sanitise_contents": 0.000801
+        "decode_contents": 0.008514,
+        "decode_dimensions": 1e-06,
+        "decode_page": 0.012962,
+        "decode_resources": 0.000768,
+        "sanitise_contents": 0.000822
       }
     }
   ],
   "timings": {
     "decode_annots": 0.0,
-    "decode_contents": 0.025605,
-    "decode_dimensions": 1e-06,
-    "decode_document": 0.066621,
-    "decode_page": 0.06477,
-    "decode_resources": 0.002504,
-    "decoding page 0": 0.008899,
-    "decoding page 1": 0.030535,
-    "decoding page 2": 0.0269,
-    "process_document_from_bytesio": 0.002309,
-    "sanitise_contents": 0.001024
+    "decode_contents": 0.025939000000000004,
+    "decode_dimensions": 4e-06,
+    "decode_document": 0.055559,
+    "decode_page": 0.05213,
+    "decode_resources": 0.002527,
+    "decoding page 0": 0.009017,
+    "decoding page 1": 0.030442,
+    "decoding page 2": 0.014136,
+    "process_document_from_bytesio": 0.002263,
+    "sanitise_contents": 0.0010500000000000002
   }
 }

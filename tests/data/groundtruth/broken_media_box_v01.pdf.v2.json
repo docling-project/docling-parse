@@ -7,7 +7,7 @@
   },
   "info": {
     "#-pages": 1,
-    "filename": "tests/data/regression/broken_media_box_v01.pdf"
+    "filename": ""
   },
   "pages": [
     {
@@ -12935,23 +12935,23 @@
       },
       "timings": {
         "decode_annots": 0.0,
-        "decode_contents": 0.001505,
-        "decode_dimensions": 0.0,
-        "decode_page": 0.003311,
-        "decode_resources": 0.000751,
-        "sanitise_contents": 0.00015
+        "decode_contents": 0.001349,
+        "decode_dimensions": 1e-06,
+        "decode_page": 0.002767,
+        "decode_resources": 0.000729,
+        "sanitise_contents": 0.000151
       }
     }
   ],
   "timings": {
     "decode_annots": 0.0,
-    "decode_contents": 0.001505,
-    "decode_dimensions": 0.0,
-    "decode_document": 0.003574,
-    "decode_page": 0.003311,
-    "decode_resources": 0.000751,
-    "decoding page 0": 0.003497,
-    "process_document_from_file": 0.000606,
-    "sanitise_contents": 0.00015
+    "decode_contents": 0.001349,
+    "decode_dimensions": 1e-06,
+    "decode_document": 0.003415,
+    "decode_page": 0.002767,
+    "decode_resources": 0.000729,
+    "decoding page 0": 0.002953,
+    "process_document_from_bytesio": 0.000387,
+    "sanitise_contents": 0.000151
   }
 }
