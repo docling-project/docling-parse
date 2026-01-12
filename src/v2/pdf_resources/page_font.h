@@ -12,14 +12,14 @@ namespace pdflib
   public:
 
     const static inline std::string RESOURCE_DIR_KEY = "pdf_resource_directory";
-
+    
   public:
 
     pdf_resource();
     ~pdf_resource();
 
     static void initialise(nlohmann::json                 data,
-                           std::map<std::string, double>& timings);
+			   std::map<std::string, double>& timings);
 
     nlohmann::json get();
 
@@ -40,12 +40,12 @@ namespace pdflib
 
     double get_capheight();
     double get_xheight();
-
+    
     std::string get_utf8_string(std::string line, bool is_hex_str);
 
     // only needed for the cmap-resource files
-    bool numb_is_in_cmap(uint32_t c);
-
+    bool numb_is_in_cmap(uint32_t c); 
+    
     void set(std::string      font_key_,
              nlohmann::json&  json_font_,
              QPDFObjectHandle qpdf_font_);
@@ -64,7 +64,7 @@ namespace pdflib
     void init_font_matrix();
 
     //void init_fontfile3();
-
+    
     void init_ascent_and_descent();
 
     void init_default_width();
@@ -122,7 +122,7 @@ namespace pdflib
     double xheight;
 
     double stemv, stemh;
-
+    
     int fchar, lchar;
 
     bool   has_default_width=false;
@@ -151,7 +151,7 @@ namespace pdflib
 
   pdf_resource<PAGE_FONT>::pdf_resource()
   {}
-
+  
   pdf_resource<PAGE_FONT>::~pdf_resource()
   {
     if(unknown_numbs.size()>0)
@@ -165,42 +165,42 @@ namespace pdflib
   }
 
   void pdf_resource<PAGE_FONT>::initialise(nlohmann::json                 data,
-                                           std::map<std::string, double>& timings)
+					   std::map<std::string, double>& timings)
   {
     LOG_S(INFO) << __FUNCTION__ << ": " << data.dump(2);
-
+    
     std::string PDFS_RESOURCES_DIR = "../docling_parse/pdf_resources_v2/";
     LOG_S(INFO) << "default pdf-resource-dir: " << PDFS_RESOURCES_DIR;
-
+    
     //if(data.count(RESOURCE_DIR_KEY)==0)
     //{
     //LOG_S(WARNING) << "resource-dir-key is missing '" << RESOURCE_DIR_KEY << "' in data: \n" << data.dump(2);
     //}
-
+    
     //std::string pdf_resources_dir = data.value("pdf-resource-directory", PDFS_RESOURCES_DIR);
     std::string pdf_resources_dir = data.value(RESOURCE_DIR_KEY, PDFS_RESOURCES_DIR);
     pdf_resources_dir += (pdf_resources_dir.back()=='/'? "" : "/");
-
+    
     std::string glyphs_dir, cids_dir, encodings_dir, bfonts_dir;
-
+    
     if(utils::filesystem::is_dir(pdf_resources_dir))
       {
-        LOG_S(INFO) << "pdf_resources_dir: " << pdf_resources_dir;
+	LOG_S(INFO) << "pdf_resources_dir: " << pdf_resources_dir;
 
-        glyphs_dir    = pdf_resources_dir+"glyphs/";
-        cids_dir      = pdf_resources_dir+"cmap-resources/";
-        encodings_dir = pdf_resources_dir+"encodings/";
-        bfonts_dir    = pdf_resources_dir+"fonts/";
+	glyphs_dir    = pdf_resources_dir+"glyphs/";
+	cids_dir      = pdf_resources_dir+"cmap-resources/";
+	encodings_dir = pdf_resources_dir+"encodings/";
+	bfonts_dir    = pdf_resources_dir+"fonts/";	
       }
     else
       {
-        std::string message = "no existing pdf_resources_dir: " +  pdf_resources_dir;
-        LOG_S(ERROR) << message;
-        throw std::logic_error(message);
+	std::string message = "no existing pdf_resources_dir: " +  pdf_resources_dir; 
+	LOG_S(ERROR) << message;
+	throw std::logic_error(message);
       }
-
+    
     utils::timer timer;
-
+    
     {
       timer.reset();
 
@@ -211,9 +211,9 @@ namespace pdflib
 
     {
       timer.reset();
-
+      
       cids.initialise(cids_dir);
-
+      
       timings["init-cids"] = timer.get_time();
     }
 
@@ -273,58 +273,58 @@ namespace pdflib
       }
     else if(has_default_width)
       {
-        return default_width;
+	return default_width;
       }
     else if(bfonts.has_corresponding_font(font_name))
       {
-        std::string fontname = bfonts.get_corresponding_font(font_name);
-
+	std::string fontname = bfonts.get_corresponding_font(font_name);
+	
         auto& bfont = bfonts.get(fontname);
 
         if(bfont.has(c))
           {
             return bfont.get_width(c);
           }
-        else if(bfont.has(get_string(c)))
-          {
-            return bfont.get_width(get_string(c));
-          }
-        else if(has_default_width)
-          {
-            return default_width;
-          }
+	else if(bfont.has(get_string(c)))
+	  {
+	    return bfont.get_width(get_string(c));
+	  }
+	else if(has_default_width)
+	  {
+	    return default_width;
+	  }
         else if(verbose)
-          {
+          {	    
             LOG_S(WARNING) << "fontname " << fontname
-                           << " does not have numb_to_width for " << c
-                           << " (space-index=" << space_index << ")";
+			   << " does not have numb_to_width for " << c 
+			   << " (space-index=" << space_index << ")";
           }
-        else
-          {}
+	else
+	  {}
       }
     else if(c==space_index)
       {
-        return 500;
+	return 500;
       }
     else if(verbose)
       {
         LOG_S(WARNING) << "font does not have numb_to_width for " << c
-                       << " nor a known font [base-font=" << base_font
-                       << ", font-key=" << font_key << "]";
+		       << " nor a known font [base-font=" << base_font 
+		       << ", font-key=" << font_key << "]";
       }
 
     if(verbose)
       {
-        LOG_S(WARNING) << "falling back on default width " << __FUNCTION__;
+	LOG_S(WARNING) << "falling back on default width " << __FUNCTION__;
       }
-
+    
     return 500.0;
   }
 
   double pdf_resource<PAGE_FONT>::get_space_width()
   {
-    //LOG_S(INFO) << __FUNCTION__
-    //<< "\tspace-index: " << space_index
+    //LOG_S(INFO) << __FUNCTION__ 
+    //<< "\tspace-index: " << space_index 
     //<< "\t font-name: " << font_name
     //<< "\t font-key: " << font_key;
 
@@ -361,7 +361,7 @@ namespace pdflib
   {
     return xheight;
   }
-
+  
   std::string pdf_resource<PAGE_FONT>::get_string(uint32_t c)
   {
     //LOG_S(INFO) << __FUNCTION__ << "\t" << c;
@@ -377,7 +377,7 @@ namespace pdflib
             {
               result += cmap_numb_to_char.at(c);
             }
-          else if(32<=c)
+	  else if(32<=c)
             {
               std::string tmp(64, ' '); // have a good safety margin here!
               auto itr = utf8::append(c, tmp.begin());
@@ -388,11 +388,11 @@ namespace pdflib
           else
             {
               LOG_S(ERROR) << "could not decode character with value=" << c
-                           << " for encoding=" << to_string(encoding)
-                           << ", fontname=" << font_name
-                           << " and subtype=" << subtype;
-
-              result = "GLYPH<c="+std::to_string(c)+",font="+font_name+">";
+			     << " for encoding=" << to_string(encoding)
+			     << ", fontname=" << font_name
+			     << " and subtype=" << subtype;
+	      
+	      result = "GLYPH<c="+std::to_string(c)+",font="+font_name+">";
             }
 
           return result;
@@ -413,30 +413,30 @@ namespace pdflib
         break;
 
       case CMAP_RESOURCES:
-        {
+	{
           if(cmap_numb_to_char.count(c))
-            {
-              return cmap_numb_to_char[c];
-            }
-          else if(32<=c)
+	    {
+	      return cmap_numb_to_char[c];
+	    }
+	  else if(32<=c)
             {
               std::string tmp(64, ' '); // have a good safety margin here!
 
               auto itr = utf8::append(c, tmp.begin());
               tmp.erase(itr, tmp.end());
 
-              return tmp;
+	      return tmp;
             }
-          else
-            {
-              LOG_S(ERROR) << "could not decode character with value=" << c
-                           << " for encoding=" << to_string(encoding)
-                           << ", fontname=" << font_name
-                           << " and subtype=" << subtype;
-              return "GLYPH<c="+std::to_string(c)+",font="+font_name+">";
-            }
-        }
-        break;
+	  else
+	    {
+	      LOG_S(ERROR) << "could not decode character with value=" << c
+			     << " for encoding=" << to_string(encoding)
+			     << ", fontname=" << font_name
+			     << " and subtype=" << subtype;
+	      return "GLYPH<c="+std::to_string(c)+",font="+font_name+">";
+	    }
+	}
+	break;
 
       default:
         {
@@ -461,14 +461,14 @@ namespace pdflib
     // messy and unclear her.
 
     /*
-      if(diff_numb_to_char.count(c)>0 and cmap_numb_to_char.count(c)>0)
+    if(diff_numb_to_char.count(c)>0 and cmap_numb_to_char.count(c)>0)
       {
-      LOG_S(WARNING) << "there might be some confusion here: "
-      << "diff["<<c<<"]: " << diff_numb_to_char.at(c) << " "
-      << "cmap["<<c<<"]: " << cmap_numb_to_char.at(c);
+	LOG_S(WARNING) << "there might be some confusion here: "
+		       << "diff["<<c<<"]: " << diff_numb_to_char.at(c) << " "
+		       << "cmap["<<c<<"]: " << cmap_numb_to_char.at(c);
       }
     */
-
+    
     if(diff_initialized and diff_numb_to_char.count(c)>0)
       {
         return diff_numb_to_char.at(c);
@@ -476,64 +476,63 @@ namespace pdflib
     else if(cmap_initialized and cmap_numb_to_char.count(c)>0)
       {
         return cmap_numb_to_char.at(c);
-      }
+      }         
     else if(bfonts.has_corresponding_font(font_name))
       {
         // check if the font-name is registered as a 'special' font, eg
         // the TeX mathematical fonts
 
         std::string fontname = bfonts.get_corresponding_font(font_name);
-        //LOG_S(WARNING) << "detected a known font: " << font_name << " -> " << fontname;
+	//LOG_S(WARNING) << "detected a known font: " << font_name << " -> " << fontname;
 
         auto& fm = bfonts.get(fontname);
 
-        if(fm.has(c))
+        // If font declares a specific encoding (MacRoman, WinAnsi, etc.),
+        // use that encoding instead of base font's built-in mapping
+        if(encoding == MACROMAN || encoding == MACEXPERT || encoding == WINANSI || encoding == STANDARD)
+          {
+            return get_character_from_encoding(c);
+          }
+        else if(fm.has(c))
           {
             return fm.to_utf8(c);
           }
         else if(bfonts.is_core_14_font(fontname))
-          {
-            /*
-              logging_lib::warn("pdf-parser") << __FILE__ << ":" << __LINE__ << "\t"
-              << "font " << font_name << " found in the Core 14 metrics: " << c
-              << "; Encoding: " << to_string(_encoding)
-              << "; font-name: " << font_name;
-            */
-            return get_character_from_encoding(c);
-          }
-        // If font declares a specific encoding (MacRoman, WinAnsi, etc.),
-        // and the font doesn't have a built-in mapping for this character,
-        // use the encoding table instead of base font's default mapping
-        else if(encoding == MACROMAN || encoding == MACEXPERT || encoding == WINANSI || encoding == STANDARD)
-          {
-            return get_character_from_encoding(c);
-          }
-        else
-          {
-            /*
-              std::string notdef="GLYPH<"+std::to_string(c)+">";
+	  {
+	    /*
+	      logging_lib::warn("pdf-parser") << __FILE__ << ":" << __LINE__ << "\t"
+	      << "font " << font_name << " found in the Core 14 metrics: " << c
+	      << "; Encoding: " << to_string(_encoding)
+	      << "; font-name: " << font_name;
+	    */
+	    return get_character_from_encoding(c);
+	  }
+	else
+	  {
+	    /*
+	    std::string notdef="GLYPH<"+std::to_string(c)+">";
+	    
+	    unknown_numbs[c] += 1;
+	    
+	    LOG_S(ERROR) << " Symbol not found in special font: " << c
+			 << "; Encoding: "  << to_string(encoding)
+			 << "; font-name: " << font_name
+			 << " (corresponding font: " << fontname << ")";
+	    
+	    return notdef;
+	    */
 
-              unknown_numbs[c] += 1;
+	    LOG_S(WARNING) << " Symbol not found in special font: " << c
+			   << "; Encoding: "  << to_string(encoding)
+			   << "; font-name: " << font_name
+			   << " (corresponding font: " << fontname << ")";
 
-              LOG_S(ERROR) << " Symbol not found in special font: " << c
-              << "; Encoding: "  << to_string(encoding)
-              << "; font-name: " << font_name
-              << " (corresponding font: " << fontname << ")";
-
-              return notdef;
-            */
-
-            LOG_S(WARNING) << " Symbol not found in special font: " << c
-                           << "; Encoding: "  << to_string(encoding)
-                           << "; font-name: " << font_name
-                           << " (corresponding font: " << fontname << ")";
-
-            return get_character_from_encoding(c);
-          }
+	    return get_character_from_encoding(c);	    
+	  }
       }
     else
       {
-        //LOG_S(WARNING) << "no known font: " << font_name;
+	//LOG_S(WARNING) << "no known font: " << font_name;
         return get_character_from_encoding(c);
       }
   }
@@ -575,7 +574,7 @@ namespace pdflib
             LOG_S(ERROR) << "Symbol not found: " << int(c)
                          << "; Encoding: "  << to_string(encoding)
                          << "; font-name: " << font_name;
-
+	    
             return notdef;
           }
       }
@@ -591,19 +590,19 @@ namespace pdflib
       if(true)
       {
       print_obj(qpdf_font_);
-
+      
       try
       {
       LOG_S(INFO) << "font [key='" << font_key_ << "']:\n" << json_font_.dump(2);
       }
       catch(std::exception e)
       {
-      LOG_S(ERROR) << "could not dump the json-representation of the font [key="
+      LOG_S(ERROR) << "could not dump the json-representation of the font [key=" 
       << font_key_ << "] with error: " << e.what();
       }
       }
     */
-
+    
     font_key  = font_key_;
 
     json_font = json_font_;
@@ -619,7 +618,7 @@ namespace pdflib
     init_font_matrix();
 
     //init_fontfile3();
-
+      
     init_ascent_and_descent();
 
     init_default_width();
@@ -671,42 +670,42 @@ namespace pdflib
           {
             encoding_name = result.get<std::string>();
 
-            if(cids.has(encoding_name))
-              {
-                encoding = CMAP_RESOURCES;
-              }
-            else if(encoding_name.find("stream") != std::string::npos)
-              {
-                LOG_S(WARNING) << "font-encoding [" << name << "] contains stream, "
-                               << "falling back to STANDARD encoding";
+	    if(cids.has(encoding_name))
+	      {
+		encoding = CMAP_RESOURCES;
+	      }
+	    else if(encoding_name.find("stream") != std::string::npos)
+	      {
+		LOG_S(WARNING) << "font-encoding [" << name << "] contains stream, "
+			       << "falling back to STANDARD encoding";
+		
+		/*
+		encoding = to_encoding_name(encoding_name);
+		auto qpdf_obj = qpdf_font.getKey("/Encoding");
 
-                /*
-                  encoding = to_encoding_name(encoding_name);
-                  auto qpdf_obj = qpdf_font.getKey("/Encoding");
-
-                  if(qpdf_obj.isStream())
-                  {
-                  std::vector<qpdf_instruction> stream;
-
-                  // decode the stream
-                  {
-                  qpdf_stream_decoder decoder(stream);
-                  decoder.decode(qpdf_obj);
-
-                  decoder.print();
-                  }
-                  }
-                  else
-                  {
-                  LOG_S(WARNING) << "could not init stream ...";
-                  }
-                */
-                encoding = STANDARD;
-              }
-            else
-              {
-                encoding = to_encoding_name(encoding_name);
-              }
+		if(qpdf_obj.isStream())
+		  {
+		    std::vector<qpdf_instruction> stream;
+		    
+		    // decode the stream
+		    {
+		      qpdf_stream_decoder decoder(stream);
+		      decoder.decode(qpdf_obj);
+		      
+		      decoder.print();
+		    }
+		  }
+		else
+		  {
+		    LOG_S(WARNING) << "could not init stream ...";
+		  }
+		*/
+		encoding = STANDARD;
+	      }
+	    else
+	      {
+		encoding = to_encoding_name(encoding_name);
+	      }
 
             LOG_S(INFO) << "font-encoding [" << name << "]: " << to_string(encoding);
           }
@@ -750,20 +749,20 @@ namespace pdflib
           {
             auto desc_fonts = utils::json::get(keys_0, json_font);
 
-            if(desc_fonts.size()==1)
-              {
-                LOG_S(INFO) << "found the descendant font";// << desc_font.dump(2);
-                desc_font = desc_fonts[0];
+	    if(desc_fonts.size()==1)
+	      {
+		LOG_S(INFO) << "found the descendant font";// << desc_font.dump(2);
+		desc_font = desc_fonts[0];
 
-                //qpdf_desc_font = qpdf_font.getKey(keys_0.at(0)).getArrayItem(0);
-              }
-            else
-              {
-                std::string message = "no descendant font!";
-                LOG_S(ERROR) << message;
-
-                throw std::logic_error(message);
-              }
+		//qpdf_desc_font = qpdf_font.getKey(keys_0.at(0)).getArrayItem(0);		
+	      }
+	    else
+	      {
+		std::string message = "no descendant font!";
+		LOG_S(ERROR) << message;
+		
+		throw std::logic_error(message);
+	      }
           }
         else if(subtype==TYPE_0)
           {
@@ -830,7 +829,7 @@ namespace pdflib
     else if(base_font!="null")
       {
         font_name = base_font;
-        LOG_S(INFO) << "font-name [from base-font]: " << font_name;
+        LOG_S(INFO) << "font-name [from base-font]: " << font_name;        
       }
     else
       {
@@ -845,7 +844,7 @@ namespace pdflib
     std::vector<std::string> keys_0 = {"/FontDescriptor", "/FontBBox"};
     std::vector<std::string> keys_1 = {"/FontBBox"};
     nlohmann::json json_bbox;
-
+    
     if(utils::json::has(keys_0, json_font))
       {
         json_bbox = utils::json::get(keys_0, json_font);
@@ -891,7 +890,7 @@ namespace pdflib
           }
       }
 
-    LOG_S(INFO) << " -> font-bbox: ["
+    LOG_S(INFO) << " -> font-bbox: [" 
                 << font_bbox[0] << ", "
                 << font_bbox[1] << ", "
                 << font_bbox[2] << ", "
@@ -940,117 +939,117 @@ namespace pdflib
 
 
   /*
-    void pdf_resource<PAGE_FONT>::init_fontfile3()
-    {
+  void pdf_resource<PAGE_FONT>::init_fontfile3()
+  {
     LOG_S(INFO) << __FUNCTION__;// << "\t" << json_font.dump(2);
 
     std::vector<std::string> keys_0 = {"/FontDescriptor", "/FontFile3"};
     std::vector<std::string> keys_1 = {"/FontFile3"};
 
     if(utils::json::has(keys_0, json_font))
-    {
-    auto qpdf_obj = qpdf_font.getKey("/FontDescriptor").getKey("/FontFile3");
+      {
+	auto qpdf_obj = qpdf_font.getKey("/FontDescriptor").getKey("/FontFile3");
 
-    if(qpdf_obj.isStream())
-    {
-    std::vector<qpdf_instruction> stream;
+	if(qpdf_obj.isStream())
+	  {
+	    std::vector<qpdf_instruction> stream;
+	    
+	    // decode the stream
+	    {
+	      qpdf_stream_decoder decoder(stream);
+	      decoder.decode(qpdf_obj);
+	      
+	      decoder.print();
+	    }
+	  }
+	else
+	  {
+	    LOG_S(WARNING) << "fontfile3 is not a stream ...";
+	  }
 
-    // decode the stream
-    {
-    qpdf_stream_decoder decoder(stream);
-    decoder.decode(qpdf_obj);
+	{
+	  auto buffer = qpdf_obj.getRawStreamData();
+	  
+	  LOG_S(INFO) << "buffer-size: " << buffer->getSize();
+	  //LOG_S(INFO) << "buffer: " << buffer->getBuffer();
 
-    decoder.print();
-    }
-    }
-    else
-    {
-    LOG_S(WARNING) << "fontfile3 is not a stream ...";
-    }
+	  std::string filename = "fontfile.zip";
+	  std::ofstream outFile(filename, std::ios::binary);
+	  if (!outFile) {
+	    LOG_S(ERROR) << "opening file for writing: " << filename << std::endl;
+	    return;
+	  }
 
-    {
-    auto buffer = qpdf_obj.getRawStreamData();
+	  outFile.write(reinterpret_cast<const char*>(buffer->getBuffer()), buffer->getSize());
+	  outFile.close();
+	  
+	  if (!outFile) {
+	    LOG_S(ERROR) << "Error occurred while writing to the file: " << filename << std::endl;
+	  } else {
+	    LOG_S(INFO) << "Buffer successfully written to " << filename << std::endl;
+	  }
+	}
 
-    LOG_S(INFO) << "buffer-size: " << buffer->getSize();
-    //LOG_S(INFO) << "buffer: " << buffer->getBuffer();
-
-    std::string filename = "fontfile.zip";
-    std::ofstream outFile(filename, std::ios::binary);
-    if (!outFile) {
-    LOG_S(ERROR) << "opening file for writing: " << filename << std::endl;
-    return;
-    }
-
-    outFile.write(reinterpret_cast<const char*>(buffer->getBuffer()), buffer->getSize());
-    outFile.close();
-
-    if (!outFile) {
-    LOG_S(ERROR) << "Error occurred while writing to the file: " << filename << std::endl;
-    } else {
-    LOG_S(INFO) << "Buffer successfully written to " << filename << std::endl;
-    }
-    }
-
-    {
-    auto buffer = qpdf_obj.getStreamData(qpdf_dl_generalized);
-
-    LOG_S(INFO) << "buffer-size: " << buffer->getSize();
-    //LOG_S(INFO) << "buffer: " << buffer->getBuffer();
-    }
-
-    //assert(false);
-    }
+	{
+	auto buffer = qpdf_obj.getStreamData(qpdf_dl_generalized);
+	  
+	LOG_S(INFO) << "buffer-size: " << buffer->getSize();
+	//LOG_S(INFO) << "buffer: " << buffer->getBuffer();
+	}
+	
+	//assert(false);
+      }
 
     else if(utils::json::has(keys_0, desc_font))
-    {
-    auto qpdf_obj = qpdf_desc_font.getKey("/FontDescriptor").getKey("/FontFile3");
+      {
+	auto qpdf_obj = qpdf_desc_font.getKey("/FontDescriptor").getKey("/FontFile3");
 
-    if(qpdf_obj.isStream())
-    {
-    std::vector<qpdf_instruction> stream;
-
-    // decode the stream
-    {
-    qpdf_stream_decoder decoder(stream);
-    decoder.decode(qpdf_obj);
-
-    decoder.print();
-    }
-    }
-    else
-    {
-    LOG_S(WARNING) << "fontfile3 is not a stream ...";
-    }
-    }
+	if(qpdf_obj.isStream())
+	  {
+	    std::vector<qpdf_instruction> stream;
+	    
+	    // decode the stream
+	    {
+	      qpdf_stream_decoder decoder(stream);
+	      decoder.decode(qpdf_obj);
+	      
+	      decoder.print();
+	    }
+	  }
+	else
+	  {
+	    LOG_S(WARNING) << "fontfile3 is not a stream ...";
+	  }
+      }    
     else if(utils::json::has(keys_1, json_font))
-    {
-    auto qpdf_obj = qpdf_font.getKey("/FontFile3");
+      {
+	auto qpdf_obj = qpdf_font.getKey("/FontFile3");
 
-    if(qpdf_obj.isStream())
-    {
-    std::vector<qpdf_instruction> stream;
+	if(qpdf_obj.isStream())
+	  {
+	    std::vector<qpdf_instruction> stream;
+	    
+	    // decode the stream
+	    {
+	      qpdf_stream_decoder decoder(stream);
+	      decoder.decode(qpdf_obj);
+	      
+	      decoder.print();
+	    }
+	  }
+	else
+	  {
+	    LOG_S(WARNING) << "fontfile3 is not a stream ...";
+	  }	  
+      }
 
-    // decode the stream
-    {
-    qpdf_stream_decoder decoder(stream);
-    decoder.decode(qpdf_obj);
-
-    decoder.print();
-    }
-    }
     else
-    {
-    LOG_S(WARNING) << "fontfile3 is not a stream ...";
-    }
-    }
-
-    else
-    {
-    LOG_S(WARNING) << "no fontfile3 detected ...";
-    }
-    }
+      {
+	LOG_S(WARNING) << "no fontfile3 detected ...";
+      }
+  }
   */
-
+  
   void pdf_resource<PAGE_FONT>::init_ascent_and_descent()
   {
     LOG_S(INFO) << __FUNCTION__;
@@ -1091,7 +1090,7 @@ namespace pdflib
               ascent = font_bbox[3];
               LOG_S(WARNING) << " -> falling back on font-bbox for ascent (=" << ascent << ")";
             }
-          else
+          else 
             {
               // from times-Roman
               ascent = 683.0;
@@ -1145,29 +1144,29 @@ namespace pdflib
         }
     }
 
-    if(std::abs( ascent)<1.e-3 and
+    if(std::abs( ascent)<1.e-3 and 
        std::abs(descent)<1.e-3   )
       {
         LOG_S(ERROR) << "ascent (=" << ascent << ") and descent (=" << descent << ") are "
                      << "equal to zero. This might lead to weird representation!";
 
-        if(std::abs(font_bbox[1])>1.e-3)
-          {
-            descent = font_bbox[1];
-            LOG_S(WARNING) << " -> falling back on font-bbox for descent (=" << descent << ")";
-          }
+	if(std::abs(font_bbox[1])>1.e-3)
+	  {
+	    descent = font_bbox[1];
+	    LOG_S(WARNING) << " -> falling back on font-bbox for descent (=" << descent << ")";
+	  }
 
-        if(std::abs(font_bbox[3])>1.e-3)
-          {
-            ascent = font_bbox[3];
-            LOG_S(WARNING) << " -> falling back on font-bbox for ascent (=" << ascent << ")";
-          }
+	if(std::abs(font_bbox[3])>1.e-3)
+	  {
+	    ascent = font_bbox[3];
+	    LOG_S(WARNING) << " -> falling back on font-bbox for ascent (=" << ascent << ")";
+	  }
       }
 
     capheight=0;
     {
       std::vector<std::string> keys = {"/FontDescriptor", "/CapHeight"};
-
+      
       //bool capheight_defined=false;
       if(utils::json::has(keys, json_font))
         {
@@ -1186,14 +1185,14 @@ namespace pdflib
       else
         {
           LOG_S(WARNING) << "'capheight' was not explicitely defined -> defaulting to ascent";
-          capheight = ascent;
+	  capheight = ascent;
         }
     }
 
     xheight=0;
     {
       std::vector<std::string> keys = {"/FontDescriptor", "/XHeight"};
-
+      
       //bool xheight_defined=false;
       if(utils::json::has(keys, json_font))
         {
@@ -1231,23 +1230,23 @@ namespace pdflib
 
     if(utils::json::has(f_keys, json_font))
       {
-        has_default_width = true;
+	has_default_width = true;
         default_width     = utils::json::get(f_keys, json_font).get<double>();
 
         LOG_S(INFO) << "default-width: " << default_width;
       }
     else if(utils::json::has(f_keys, desc_font))
       {
-        has_default_width = true;
+	has_default_width = true;
         default_width     = utils::json::get(f_keys, desc_font).get<double>();
 
         LOG_S(INFO) << "default-width: " << default_width;
       }
     else
       {
-        default_width = 500;
+	default_width = 500;
         LOG_S(WARNING) << "could not find default-width: defaulting to " << default_width;
-      }
+      }    
   }
 
   void pdf_resource<PAGE_FONT>::init_char_widths()
@@ -1337,7 +1336,7 @@ namespace pdflib
 
     if(fchar==-1 and lchar==-1 and values.size()==0)
       {
-        LOG_S(WARNING) << "did not detect any /Widths";
+	LOG_S(WARNING) << "did not detect any /Widths";
         return;
       }
 
@@ -1350,12 +1349,12 @@ namespace pdflib
     int cnt=0;
     for(int ind=fchar; ind<=lchar; ind++)
       {
-        if(cnt>=values.size())
-          {
-            LOG_S(ERROR) << "going out of bounds with " << cnt << " >= " << values.size();
-            continue;
-          }
-
+	if(cnt>=values.size())
+	  {
+	    LOG_S(ERROR) << "going out of bounds with " << cnt << " >= " << values.size();
+	    continue;
+	  }
+	
         numb_to_widths[ind] = values[cnt++] * type3_xscale;
         //LOG_S(INFO) << "index: " << ind << " -> width: " << numb_to_widths.at(ind);
       }
@@ -1395,7 +1394,7 @@ namespace pdflib
         LOG_S(INFO) << l << "\t" << ws[l].is_number() << "\t beg: " << ws[l].dump();
 
         //assert(l<ws.size());
-
+	
         beg = ws[l].get<int>();
         l += 1;
 
@@ -1410,30 +1409,30 @@ namespace pdflib
 
             //assert(l<ws.size());
 
-            if(l>=ws.size())
-              {
-                LOG_S(WARNING) << "index " << l << " is out of bounds " << ws.size();
-                continue;
-              }
-
+	    if(l>=ws.size())
+	      {
+		LOG_S(WARNING) << "index " << l << " is out of bounds " << ws.size();
+		continue;
+	      }
+	    
             end = ws[l].get<int>();
             l += 1;
 
             //LOG_S(INFO) << l << "\t" << ws[l].is_number() << "\t w: " << ws[l].dump();
 
             //assert(l<ws.size());
-            if(l>=ws.size())
-              {
-                LOG_S(WARNING) << "index " << l << " is out of bounds " << ws.size();
-                continue;
-              }
-
+	    if(l>=ws.size())
+	      {
+		LOG_S(WARNING) << "index " << l << " is out of bounds " << ws.size();
+		continue;
+	      }
+	    
             double w = ws[l].get<double>();
             l += 1;
 
             for(int id=beg; id<=end; id++)
               {
-                //LOG_S(WARNING) << "\t" << id << " -> " << w;
+		//LOG_S(WARNING) << "\t" << id << " -> " << w;
                 numb_to_widths[id] = w * type3_xscale;
               }
           }
@@ -1442,34 +1441,34 @@ namespace pdflib
             //LOG_S(INFO) << l << "\t" << ws[l].is_number() << "\t widths: " << ws[l].dump();
 
             //assert(l<ws.size());
-            if(l>=ws.size())
-              {
-                LOG_S(WARNING) << "index " << l << " is out of bounds " << ws.size();
-                continue;
-              }
-
+	    if(l>=ws.size())
+	      {
+		LOG_S(WARNING) << "index " << l << " is out of bounds " << ws.size();
+		continue;
+	      }
+	    
             std::vector<double> w = ws[l].get<std::vector<double> >();
             l += 1;
 
             for(int k=0; k<w.size(); k++)
               {
-                //LOG_S(WARNING) << "\t" << beg+k  << " -> " << w[k];
+		//LOG_S(WARNING) << "\t" << beg+k  << " -> " << w[k];
 
                 numb_to_widths[beg+k] = w[k] * type3_xscale;
               }
           }
         else if(ws[l].is_null())
           {
-            LOG_S(WARNING) << "\t ws[" << l << "] is null ... skipping now";
-            l += 1;
-          }
+	    LOG_S(WARNING) << "\t ws[" << l << "] is null ... skipping now";
+	    l += 1;
+	  }
         else
           {
-            std::stringstream message;
-            message <<  "unknown type in " << __FUNCTION__ << " for " << ws.dump(2);
+	    std::stringstream message;
+	    message <<  "unknown type in " << __FUNCTION__ << " for " << ws.dump(2);	    
 
-            LOG_S(ERROR) << message.str();
-            throw std::logic_error(message.str());
+	    LOG_S(ERROR) << message.str();
+	    throw std::logic_error(message.str());
           }
       }
   }
@@ -1488,77 +1487,77 @@ namespace pdflib
           {
             auto tmp = to_json(qpdf_font);
 
-            std::stringstream ss;
-            ss << "qpdf-font: " << tmp.dump();
-
+	    std::stringstream ss;
+	    ss << "qpdf-font: " << tmp.dump();
+	    
             LOG_S(ERROR) << ss.str();
-            throw std::logic_error(ss.str());
+	    throw std::logic_error(ss.str());
           }
 
         auto qpdf_obj = qpdf_font.getKey("/ToUnicode");
         //assert(qpdf_obj.isStream());
 
-        if(qpdf_obj.isStream())
-          {
-            std::vector<qpdf_instruction> stream;
+	if(qpdf_obj.isStream())
+	  {
+	    std::vector<qpdf_instruction> stream;
+	    
+	    // decode the stream
+	    {
+	      qpdf_stream_decoder decoder(stream);
+	      decoder.decode(qpdf_obj);
+	      
+	      //decoder.print();
+	    }
+	    
+	    // interprete the stream
+	    {
+	      cmap_parser parser;
+	      parser.parse(stream);
+	      
+	      //parser.print();
+	      
+	      cmap_numb_to_char = parser.get();
+	    }
+	  }
+	else if(qpdf_obj.isString())
+	  {
+	    auto _ = to_json(qpdf_obj);	    
+	    std::string message = "qpdf_obj.isString(): " + _.dump(2);
 
-            // decode the stream
-            {
-              qpdf_stream_decoder decoder(stream);
-              decoder.decode(qpdf_obj);
+	    LOG_S(ERROR) << message;
+	    throw std::logic_error(message);
+	  }
+	else if(qpdf_obj.isName())
+	  {
+	    auto _ = to_json(qpdf_obj);	    
+	    std::string message = "qpdf_obj.isName(): " + _.dump(2);
 
-              //decoder.print();
-            }
+	    LOG_S(ERROR) << message;
+	    //throw std::logic_error(message);	    
+	  }    
+	else
+	  {
+	    auto _ = to_json(qpdf_obj);	    
+	    std::string message = "qpdf_obj is unknown: " + _.dump(2);
 
-            // interprete the stream
-            {
-              cmap_parser parser;
-              parser.parse(stream);
-
-              //parser.print();
-
-              cmap_numb_to_char = parser.get();
-            }
-          }
-        else if(qpdf_obj.isString())
-          {
-            auto _ = to_json(qpdf_obj);
-            std::string message = "qpdf_obj.isString(): " + _.dump(2);
-
-            LOG_S(ERROR) << message;
-            throw std::logic_error(message);
-          }
-        else if(qpdf_obj.isName())
-          {
-            auto _ = to_json(qpdf_obj);
-            std::string message = "qpdf_obj.isName(): " + _.dump(2);
-
-            LOG_S(ERROR) << message;
-            //throw std::logic_error(message);
-          }
-        else
-          {
-            auto _ = to_json(qpdf_obj);
-            std::string message = "qpdf_obj is unknown: " + _.dump(2);
-
-            LOG_S(ERROR) << message;
-            throw std::logic_error(message);
-          }
+	    LOG_S(ERROR) << message;
+	    throw std::logic_error(message);
+	  }
 
         /*
-          {
+        {
           for(auto itr=cmap_numb_to_char.begin(); itr!=cmap_numb_to_char.end(); itr++)
-          {
-          LOG_S(INFO) << "\t" << itr->first << " -> " << itr->second;
-          }
-          }
+            {
+              LOG_S(INFO) << "\t" << itr->first << " -> " << itr->second;
+            }
+        }
         */
 
         cmap_initialized = true;
       }
     else
       {
-        cmap_initialized = false;
+	cmap_initialized = false;
       }
   }
 
@@ -1566,121 +1565,121 @@ namespace pdflib
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    if(cmap_initialized) // we found a `ToUnicode` before. No need to go deeper!
+    if(cmap_initialized) // we found a `ToUnicode` before. No need to go deeper! 
       {
-        LOG_S(WARNING) << "We found a `ToUnicode` before. No need to go deeper!";
-        return;
+	LOG_S(WARNING) << "We found a `ToUnicode` before. No need to go deeper!";
+	return;
       }
     //else
 
-    if(subtype==TYPE_0 and desc_font!=NULL and
+    if(subtype==TYPE_0 and desc_font!=NULL and 
        cids.has(encoding_name) )
       {
-        try
-          {
-            LOG_S(INFO) << "descendant-font: " << desc_font.dump(2);
-          }
-        catch(const std::exception& exc)
-          {
-            LOG_S(ERROR) << "could not dump the descendant font with error: "
-                         << exc.what();
-          }
+	try
+	  {
+	    LOG_S(INFO) << "descendant-font: " << desc_font.dump(2);
+	  }
+	catch(const std::exception& exc)
+	  {
+	    LOG_S(ERROR) << "could not dump the descendant font with error: " 
+			 << exc.what();
+	  }
 
-        LOG_S(INFO) << "encoding-name: " << encoding_name;
+	LOG_S(INFO) << "encoding-name: " << encoding_name;
 
-        if(cids.decode_cmap_resource(encoding_name))
-          {
-            font_cid& cid = cids.get(encoding_name);
+	if(cids.decode_cmap_resource(encoding_name))
+	  {
+	    font_cid& cid = cids.get(encoding_name);
+	
+	    cmap_numb_to_char = cid.get();	
 
-            cmap_numb_to_char = cid.get();
+	    cid.decode_widths(numb_to_widths);	
 
-            cid.decode_widths(numb_to_widths);
-
-            cmap_initialized = true;
-          }
-        else
-          {
-            cmap_initialized = false;
-          }
+	    cmap_initialized = true;	    
+	  }
+	else
+	  {
+	    cmap_initialized = false;	    
+	  }
       }
     else if(subtype==TYPE_0 and desc_font!=NULL)
       {
-        try
-          {
-            LOG_S(INFO) << "descendant-font: " << desc_font.dump(2);
-          }
-        catch(const std::exception& exc)
-          {
-            LOG_S(ERROR) << "could not dump the descendant font with error: "
-                         << exc.what();
-          }
+	try
+	  {
+	    LOG_S(INFO) << "descendant-font: " << desc_font.dump(2);
+	  }
+	catch(const std::exception& exc)
+	  {
+	    LOG_S(ERROR) << "could not dump the descendant font with error: " 
+			 << exc.what();
+	  }
 
-        LOG_S(INFO) << "encoding-type: " << to_string(encoding);
-        LOG_S(INFO) << "encoding-name: " << encoding_name;
+	LOG_S(INFO) << "encoding-type: " << to_string(encoding);
+	LOG_S(INFO) << "encoding-name: " << encoding_name;
 
-        std::vector<std::string> key_registry = {"/CIDSystemInfo", "/Registry"};
-        std::vector<std::string> key_ordering = {"/CIDSystemInfo", "/Ordering"};
-        std::vector<std::string> key_supplement = {"/CIDSystemInfo", "/Supplement"};
+	std::vector<std::string> key_registry = {"/CIDSystemInfo", "/Registry"};
+	std::vector<std::string> key_ordering = {"/CIDSystemInfo", "/Ordering"};
+	std::vector<std::string> key_supplement = {"/CIDSystemInfo", "/Supplement"};
 
-        std::string registry_   = utils::json::get(key_registry, desc_font).get<std::string>();
-        std::string ordering_   = utils::json::get(key_ordering, desc_font).get<std::string>();
-        int         supplement_ = utils::json::get(key_supplement, desc_font).get<int>();
+	std::string registry_   = utils::json::get(key_registry, desc_font).get<std::string>();
+	std::string ordering_   = utils::json::get(key_ordering, desc_font).get<std::string>();
+	int         supplement_ = utils::json::get(key_supplement, desc_font).get<int>();
+	
+	LOG_S(INFO) << "found descendant-font without /ToUnicode";
+	LOG_S(INFO) << " --> registry: " << registry_;
+	LOG_S(INFO) << " --> ordering: " << ordering_;
+	LOG_S(INFO) << " --> supplement: " << supplement_;
+	
+	int supplement = cids.get_supplement(registry_, ordering_);
 
-        LOG_S(INFO) << "found descendant-font without /ToUnicode";
-        LOG_S(INFO) << " --> registry: " << registry_;
-        LOG_S(INFO) << " --> ordering: " << ordering_;
-        LOG_S(INFO) << " --> supplement: " << supplement_;
+	if(supplement_>supplement)
+	  {
+	    LOG_S(ERROR) << "Unknown CIDSystemInfo with "
+			   << "registry: " << registry_ << " "
+			   << "ordering: " << ordering_ << " "
+			   << "supplement: " << supplement_ << " "
+			   << "max-supplement: " << supplement;
 
-        int supplement = cids.get_supplement(registry_, ordering_);
+	    cmap_initialized = false;
+	    return;
+	  }
 
-        if(supplement_>supplement)
-          {
-            LOG_S(ERROR) << "Unknown CIDSystemInfo with "
-                         << "registry: " << registry_ << " "
-                         << "ordering: " << ordering_ << " "
-                         << "supplement: " << supplement_ << " "
-                         << "max-supplement: " << supplement;
+	std::string encoding_name = registry_+"-"+ordering_+"-"+std::to_string(supplement_);
 
-            cmap_initialized = false;
-            return;
-          }
+	/*
+	if(cids.has_cmap_resource(name))
+	  {
+	    LOG_S(INFO) << "found cid with name: " << name;
 
-        std::string encoding_name = registry_+"-"+ordering_+"-"+std::to_string(supplement_);
+	    font_cid cid;
 
-        /*
-          if(cids.has_cmap_resource(name))
-          {
-          LOG_S(INFO) << "found cid with name: " << name;
+	    cids.decode_cmap_resource(name, cid);	
+	    
+	    cmap_numb_to_char = cid.get();
+	    
+	    cmap_initialized = true;	    
+	  }
+	*/
+	if(cids.decode_cmap_resource(encoding_name))
+	  {
+	    font_cid& cid = cids.get(encoding_name);
+	
+	    cmap_numb_to_char = cid.get();	
 
-          font_cid cid;
+	    cid.decode_widths(numb_to_widths);	
 
-          cids.decode_cmap_resource(name, cid);
+	    cmap_initialized = true;	    
+	  }
+	else
+	  {
+	    LOG_S(ERROR) << "Unknown CIDSystemInfo with "
+			   << "registry: " << registry_ << " "
+			   << "ordering: " << ordering_ << " "
+			   << "supplement: " << supplement_ << " "
+			   << "max-supplement: " << supplement;
 
-          cmap_numb_to_char = cid.get();
-
-          cmap_initialized = true;
-          }
-        */
-        if(cids.decode_cmap_resource(encoding_name))
-          {
-            font_cid& cid = cids.get(encoding_name);
-
-            cmap_numb_to_char = cid.get();
-
-            cid.decode_widths(numb_to_widths);
-
-            cmap_initialized = true;
-          }
-        else
-          {
-            LOG_S(ERROR) << "Unknown CIDSystemInfo with "
-                         << "registry: " << registry_ << " "
-                         << "ordering: " << ordering_ << " "
-                         << "supplement: " << supplement_ << " "
-                         << "max-supplement: " << supplement;
-
-            cmap_initialized = false;
-          }
+	    cmap_initialized = false;
+	  }
       }
     else
       {
@@ -1691,9 +1690,9 @@ namespace pdflib
     /*
     // FIXME
     if(cmap_numb_to_char.size()==0)
-    {
-    throw std::logic_error(__FUNCTION__);
-    }
+      {
+	throw std::logic_error(__FUNCTION__);
+      }
     */
   }
 
@@ -1708,7 +1707,7 @@ namespace pdflib
     std::regex re_01(R"(\/(.+)\.(.+))");
     std::regex re_02(R"((\/)?(uni|UNI)([0-9A-Ea-e]{4}))");
     std::regex re_03(R"((\/)(g|G)\d+)");
-
+    
     if(utils::json::has(keys, json_font))
       {
         auto diffs = utils::json::get(keys, json_font);
@@ -1729,118 +1728,118 @@ namespace pdflib
                   {
                     name = diffs[l].get<std::string>();
 
-                    // Object to hold the match results
-                    std::smatch match;
-
+		    // Object to hold the match results
+		    std::smatch match;
+		    
                     std::string name_ = "", font_subname = "";
-                    if(std::regex_search(name, match, re_01))
-                      {
-                        name_ = match[1].str();
-                        font_subname = utils::string::to_lower(match[2].str());
+		    if(std::regex_search(name, match, re_01))
+		      {
+			name_ = match[1].str();
+			font_subname = utils::string::to_lower(match[2].str());
 
-                        LOG_S(WARNING) << name << " => (" << name_ << ", " << font_subname << ")";
-                      }
-                    else if(name.size()>0 and name[0]=='/')
+			LOG_S(WARNING) << name << " => (" << name_ << ", " << font_subname << ")"; 
+		      }                    
+		    else if(name.size()>0 and name[0]=='/')
                       {
                         name_ = name.substr(1, name.size()-1);
                       }
-                    else
-                      {}
+		    else
+		      {}
 
-                    LOG_S(INFO) << name << ", in cmap: " << cmap_numb_to_char.count(numb) << ", #-names: " << name_to_descr.size() << ", type: " << subtype;
-
+		    LOG_S(INFO) << name << ", in cmap: " << cmap_numb_to_char.count(numb) << ", #-names: " << name_to_descr.size() << ", type: " << subtype;
+		    
                     if(subtype==TYPE_3 and //name_to_descr.count(name)==1 and // only for TYPE_3 fonts
                        cmap_numb_to_char.count(numb)==1)
                       {
-                        LOG_S(WARNING) << "overloading difference from cmap";
+			LOG_S(WARNING) << "overloading difference from cmap";
                         diff_numb_to_char[numb] = cmap_numb_to_char[numb];
                       }
 
-                    // FIXME: might need to be commented out or fixed
-                    /*
-                      else if(name_to_descr.count(name)==1 and
-                      cmap_numb_to_char.count(numb)==0)
+		    // FIXME: might need to be commented out or fixed
+		    /*
+                    else if(name_to_descr.count(name)==1 and 
+                            cmap_numb_to_char.count(numb)==0)
                       {
-                      //assert(subtype==TYPE_3);
+		        //assert(subtype==TYPE_3);
 
-                      LOG_S(WARNING) << "could not resolve the character (name="<<name
-                      <<", numb="<<numb<<") for TYPE_3 font:" << font_name;
+                        LOG_S(WARNING) << "could not resolve the character (name="<<name
+                                       <<", numb="<<numb<<") for TYPE_3 font:" << font_name;
 
-                      diff_numb_to_char[numb] = "glyph["+font_name+"|"+name+"]";
-                      //diff_numb_to_char[numb] = "glyph["+font_name+"|"+name+"]";
-                      }
-                    */
-                    else if(glyphs.has(name) and font_subname=="sups")
+                        diff_numb_to_char[numb] = "glyph["+font_name+"|"+name+"]";
+			//diff_numb_to_char[numb] = "glyph["+font_name+"|"+name+"]";
+		      }
+		    */
+		    else if(glyphs.has(name) and font_subname=="sups")
                       {
                         diff_numb_to_char[numb] = "$^{" + glyphs[name] + "}";
                         LOG_S(INFO) << "differences[" << numb << "] -> " << name
-                                    << " -> " << diff_numb_to_char[numb];
+				    << " -> " << diff_numb_to_char[numb];
                       }
-                    else if(glyphs.has(name) and font_subname=="subs")
+		    else if(glyphs.has(name) and font_subname=="subs")
                       {
                         diff_numb_to_char[numb] = "$_{" + glyphs[name] + "}";
                         LOG_S(INFO) << "differences[" << numb << "] -> " << name
-                                    << " -> " << diff_numb_to_char[numb];
-                      }
+				    << " -> " << diff_numb_to_char[numb];
+                      }		    
                     else if(glyphs.has(name))
                       {
                         diff_numb_to_char[numb] = glyphs[name];
                         LOG_S(INFO) << "differences[" << numb << "] -> " << name
-                                    << " -> " << diff_numb_to_char[numb];
+				    << " -> " << diff_numb_to_char[numb];
                       }
 
-                    else if(glyphs.has(name_) and font_subname=="sups")
+		    else if(glyphs.has(name_) and font_subname=="sups")
                       {
                         diff_numb_to_char[numb] = "$^{" + glyphs[name_] + "}";
                         LOG_S(INFO) << "differences[" << numb << "] -> " << name_
-                                    << " -> " << diff_numb_to_char[numb];
+				    << " -> " << diff_numb_to_char[numb];
                       }
-                    else if(glyphs.has(name_) and font_subname=="subs")
+		    else if(glyphs.has(name_) and font_subname=="subs")
                       {
                         diff_numb_to_char[numb] = "$_{" + glyphs[name_] + "}";
                         LOG_S(INFO) << "differences[" << numb << "] -> " << name_
-                                    << " -> " << diff_numb_to_char[numb];
-                      }
-                    else if(glyphs.has(name_))
+				    << " -> " << diff_numb_to_char[numb];
+                      }		    
+		    else if(glyphs.has(name_))
                       {
                         diff_numb_to_char[numb] = glyphs[name_];
                         LOG_S(INFO) << "differences[" << numb << "] -> " << name_
-                                    << " -> " << diff_numb_to_char[numb];
+				    << " -> " << diff_numb_to_char[numb];
                       }
-                    /*
-                      else if(name_.size()>0)
+		    /*
+                    else if(name_.size()>0)
                       {
-                      diff_numb_to_char[numb] = name_;
-                      LOG_S(WARNING) << "differences["<<numb<<"] -> " << name_;
+                        diff_numb_to_char[numb] = name_;
+                        LOG_S(WARNING) << "differences["<<numb<<"] -> " << name_;
                       }
-                    */
-                    else if(std::regex_search(name, match, re_02))
-                      {
-                        std::string unicode_hex = match[3].str();
-                        // LOG_S(WARNING) << "name: " << name << ", unicode_hex: " << unicode_hex << ", len: " << unicode_hex.size();
-
-                        diff_numb_to_char[numb] = utils::string::hex_to_utf8(unicode_hex, 4);
-                        LOG_S(WARNING) << "differences["<<numb<<"] -> "
-                                       << diff_numb_to_char[numb]
-                                       << " (from " << name << ")";
-                      }
-                    else if(std::regex_search(name_, match, re_02))
-                      {
-                        std::string unicode_hex = match[3].str();
-                        // LOG_S(WARNING) << "name: " << name_ << ", unicode_hex: " << unicode_hex << ", len: " << unicode_hex.size();
-
-                        diff_numb_to_char[numb] = utils::string::hex_to_utf8(unicode_hex, 4);
-                        LOG_S(WARNING) << "differences["<<numb<<"] -> "
-                                       << diff_numb_to_char[numb]
-                                       << " (from " << name << ")";
-                      }
-                    else if(std::regex_match(name, match, re_03) and cmap_numb_to_char.count(numb)==1) // if the name is of type /g23 of /G23 and we have a match in the cmap
-                      {
-                        LOG_S(WARNING) << "overloading difference from cmap";
+		    */
+		    else if(std::regex_search(name, match, re_02))
+		      {
+			std::string unicode_hex = match[3].str();
+			// LOG_S(WARNING) << "name: " << name << ", unicode_hex: " << unicode_hex << ", len: " << unicode_hex.size();
+			
+			diff_numb_to_char[numb] = utils::string::hex_to_utf8(unicode_hex, 4);
+			LOG_S(WARNING) << "differences["<<numb<<"] -> "
+				       << diff_numb_to_char[numb]
+				       << " (from " << name << ")";
+		      }
+		    else if(std::regex_search(name_, match, re_02))
+		      {
+			std::string unicode_hex = match[3].str();
+			// LOG_S(WARNING) << "name: " << name_ << ", unicode_hex: " << unicode_hex << ", len: " << unicode_hex.size();
+			
+			diff_numb_to_char[numb] = utils::string::hex_to_utf8(unicode_hex, 4);
+			LOG_S(WARNING) << "differences["<<numb<<"] -> "
+				       << diff_numb_to_char[numb]
+				       << " (from " << name << ")";
+		      }
+		    else if(std::regex_match(name, match, re_03) and cmap_numb_to_char.count(numb)==1) // if the name is of type /g23 of /G23 and we have a match in the cmap
+		      {
+			LOG_S(WARNING) << "overloading difference from cmap";
                         diff_numb_to_char[numb] = cmap_numb_to_char[numb];
-                        //diff_numb_to_char[numb] = name;
-                        //LOG_S(ERROR) << "weird differences["<<numb<<"] -> " << name;
-                      }
+			//diff_numb_to_char[numb] = name;
+			//LOG_S(ERROR) << "weird differences["<<numb<<"] -> " << name;
+		      }
                     else
                       {
                         diff_numb_to_char[numb] = name;
@@ -1883,11 +1882,11 @@ namespace pdflib
         //assert(subtype==TYPE_3);
 
         QPDFObjectHandle qpdf_char_procs = qpdf_font.getKey(keys.front());
-        LOG_S(WARNING) << "found CharProcs: " << qpdf_char_procs.getTypeName();
-
+        LOG_S(WARNING) << "found CharProcs: " << qpdf_char_procs.getTypeName();        
+        
         auto json_char_procs = utils::json::get(keys, json_font);
-
-        for(auto& pair : json_char_procs.items())
+       
+        for(auto& pair : json_char_procs.items()) 
           {
             std::string key = pair.key();
 
@@ -1897,46 +1896,46 @@ namespace pdflib
                 //LOG_S(INFO) << "decoding: " << key << " -> " << qpdf_char_proc.getTypeName();
 
                 //assert(qpdf_char_proc.isStream());
-                if(not qpdf_char_proc.isStream())
-                  {
-                    std::string message = "not qpdf_obj.isStream()";
-                    LOG_S(ERROR) << message;
-                    throw std::logic_error(message);
-                  }
-
+		if(not qpdf_char_proc.isStream())
+		  {
+		    std::string message = "not qpdf_obj.isStream()";
+		    LOG_S(ERROR) << message;
+		    throw std::logic_error(message);
+		  }
+		
                 std::vector<qpdf_instruction> stream={};
 
                 // decode the stream
                 {
                   qpdf_stream_decoder decoder(stream);
-                  decoder.decode(qpdf_char_proc);
+                  decoder.decode(qpdf_char_proc);                  
                   decoder.print();
                 }
 
-                LOG_S(INFO) << "key: " << key << " => #-streams: " << stream.size();
-
+		LOG_S(INFO) << "key: " << key << " => #-streams: " << stream.size();
+		
                 // interprete the stream
                 {
                   char_processor parser;
                   parser.parse(stream);
 
                   name_to_descr[key] = parser.parse(stream);
-                  //LOG_S(INFO) << key << ": " << name_to_descr.at(key);
+		  //LOG_S(INFO) << key << ": " << name_to_descr.at(key);
 
-                  //parser.print();
+                  //parser.print();          
                   //cmap_numb_to_char = parser.get();
 
                   // FIXME: place-holder for now
                   //char_description desc;
-                  //name_to_descr[key] = desc;
+                  //name_to_descr[key] = desc; 
                 }
               }
             else
               {
                 LOG_S(WARNING) << "could not find key: " << key;
-              }
+              }            
           }
-      }
+      }    
   }
 
   void pdf_resource<PAGE_FONT>::init_space_index()
@@ -1948,45 +1947,45 @@ namespace pdflib
     std::vector<std::string> space_in_str = {};
     for(auto hex:space_in_hex)
       {
-        std::string str = utils::string::hex_to_utf8(hex, 4);
-        LOG_S(INFO) << "\t" << hex << "\t'" << str << "'";
+	std::string str = utils::string::hex_to_utf8(hex, 4);
+	LOG_S(INFO) << "\t" << hex << "\t'" << str << "'";
 
-        space_in_str.push_back(str);
+	space_in_str.push_back(str);
       }
 
     space_index = -1;
 
     for(auto str:space_in_str)
       {
-        for(auto itr=cmap_numb_to_char.begin(); itr!=cmap_numb_to_char.end(); itr++)
-          {
-            if(space_index==-1 and (itr->second)==str and
-               numb_to_widths.count(itr->first)==1  )
-              {
-                space_index = itr->first;
-              }
-            else if(space_index!=-1)
-              {
-                break;
-              }
-            else
-              {}
-          }
-
-        for(auto itr=diff_numb_to_char.begin(); itr!=diff_numb_to_char.end(); itr++)
-          {
-            if(space_index==-1 and (itr->second)==str and
-               numb_to_widths.count(itr->first)==1 )
-              {
-                space_index = itr->first;
-              }
-            else if(space_index!=-1)
-              {
-                break;
-              }
-            else
-              {}
-          }
+	for(auto itr=cmap_numb_to_char.begin(); itr!=cmap_numb_to_char.end(); itr++)
+	  {
+	    if(space_index==-1 and (itr->second)==str and 
+	       numb_to_widths.count(itr->first)==1  ) 
+	      {
+		space_index = itr->first;
+	      }
+	    else if(space_index!=-1)
+	      {
+		break;
+	      }
+	    else
+	      {}
+	  }
+	
+	for(auto itr=diff_numb_to_char.begin(); itr!=diff_numb_to_char.end(); itr++)
+	  {
+	    if(space_index==-1 and (itr->second)==str and 
+	       numb_to_widths.count(itr->first)==1 ) 
+	      {
+		space_index = itr->first;
+	      }
+	    else if(space_index!=-1)
+	      {
+		break;
+	      }
+	    else
+	      {}
+	  }
       }
 
     for(auto itr=cmap_numb_to_char.begin(); itr!=cmap_numb_to_char.end(); itr++)
@@ -2002,7 +2001,7 @@ namespace pdflib
         else
           {}
       }
-
+    
     for(auto itr=diff_numb_to_char.begin(); itr!=diff_numb_to_char.end(); itr++)
       {
         if(space_index==-1 and itr->second=="\t" and numb_to_widths.count(itr->first)==1)
@@ -2043,30 +2042,30 @@ namespace pdflib
     LOG_S(INFO) << __FUNCTION__;
 
     std::set<uint32_t> numbs;
-
+    
     for(auto itr=numb_to_widths.begin(); itr!=numb_to_widths.end(); itr++)
       {
         numbs.insert(itr->first);
       }
-
+    
     for(auto itr=cmap_numb_to_char.begin(); itr!=cmap_numb_to_char.end(); itr++)
       {
         numbs.insert(itr->first);
       }
-
+    
     for(auto itr=diff_numb_to_char.begin(); itr!=diff_numb_to_char.end(); itr++)
       {
         numbs.insert(itr->first);
       }
-
+    
     LOG_S(INFO) << "tables of " << font_name;
     LOG_S(INFO) << "space-index: " << space_index;
-    LOG_S(INFO) << std::setw(16) << "counter"
-                << std::setw(16) << "number"
-                << std::setw(16) << "numb_to_widths"
-                << std::setw(16) << "get_width"
-                << std::setw(16) << "cmap"
-                << std::setw(16) << "diff";
+    LOG_S(INFO) << std::setw(16) << "counter" 
+		<< std::setw(16) << "number" 
+		<< std::setw(16) << "numb_to_widths" 
+		<< std::setw(16) << "get_width" 
+		<< std::setw(16) << "cmap" 
+		<< std::setw(16) << "diff";
 
     int num=32;
 
@@ -2078,42 +2077,42 @@ namespace pdflib
           width = std::to_string(numb_to_widths[numb]);
 
         std::string width_ = " --- ";
-        width_ = std::to_string(get_width(numb, false));
-
+	width_ = std::to_string(get_width(numb, false));
+        
         std::string cmap = " --- ";
         if(cmap_numb_to_char.count(numb)==1)
           cmap = "'"+cmap_numb_to_char[numb]+"'";
-
+        
         std::string diff = " --- ";
         if(diff_numb_to_char.count(numb)==1)
           diff = "'"+diff_numb_to_char[numb]+"'";
 
-        if(l<num/2)
-          {
-            LOG_S(INFO) << std::setw(16) << l
-                        << std::setw(16) << numb
-                        << std::setw(16) << width
-                        << std::setw(16) << width_
-                        << std::setw(16) << cmap
-                        << std::setw(16) << diff;
-          }
-        else if(l==num/2 and numbs.size()>num/2)
-          {
-            LOG_S(WARNING) << "... ignoring lines ...";
-          }
-        else if(numbs.size()-num/4<l)
-          {
-            LOG_S(INFO) << std::setw(16) << l
-                        << std::setw(16) << numb
-                        << std::setw(16) << width
-                        << std::setw(16) << width_
-                        << std::setw(16) << cmap
-                        << std::setw(16) << diff;
-          }
-        else
-          {}
+	if(l<num/2)
+	  {
+	    LOG_S(INFO) << std::setw(16) << l
+			<< std::setw(16) << numb 
+			<< std::setw(16) << width 
+			<< std::setw(16) << width_ 
+			<< std::setw(16) << cmap 
+			<< std::setw(16) << diff;
+	  }
+	else if(l==num/2 and numbs.size()>num/2)
+	  {
+	    LOG_S(WARNING) << "... ignoring lines ..."; 
+	  }
+	else if(numbs.size()-num/4<l)
+	  {
+	    LOG_S(INFO) << std::setw(16) << l 
+			<< std::setw(16) << numb 
+			<< std::setw(16) << width 
+			<< std::setw(16) << width_ 
+			<< std::setw(16) << cmap 
+			<< std::setw(16) << diff;
+	  }	
+	else 
+	  {}
 
-        l += 1;
+	l += 1;
       }
   }
 
