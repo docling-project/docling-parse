@@ -4,7 +4,7 @@
 (246.50, 737.11) (274.28, 737.11) (274.28, 746.42) (246.50, 746.42)       /TT2 (suite)	<|special_separator|>
 (035.00, 711.63) (132.81, 711.63) (132.81, 721.91) (035.00, 721.91)       /TT1 Adresse physique 	<|special_separator|>
 (132.81, 711.64) (297.54, 711.64) (297.54, 721.88) (132.81, 721.88)       /TT2 (si différente de l'adresse postale)	<|special_separator|>
-(035.00, 689.08) (152.74, 689.08) (152.74, 698.39) (035.00, 698.39)       /TT2 N¡ d'unité - n¡ et rue, RR :	<|special_separator|>
+(035.00, 689.08) (152.74, 689.08) (152.74, 698.39) (035.00, 698.39)       /TT2 N° d'unité - n° et rue, RR :	<|special_separator|>
 (035.00, 662.08) (059.45, 662.08) (059.45, 671.39) (035.00, 671.39)       /TT2 Ville :	<|special_separator|>
 (035.00, 634.08) (155.05, 634.08) (155.05, 643.39) (035.00, 643.39)       /TT2 Province, territoire ou état :	<|special_separator|>
 (035.00, 608.08) (126.16, 608.08) (126.16, 617.39) (035.00, 617.39)       /TT2 Code postal ou ZIP :	<|special_separator|>
