@@ -394803,12 +394803,12 @@
         ]
       },
       "timings": {
-        "decode_annots": 7e-06,
-        "decode_contents": 0.06006,
-        "decode_dimensions": 3e-06,
-        "decode_page": 0.076938,
-        "decode_resources": 0.003754,
-        "sanitise_contents": 0.007909
+        "decode_annots": 5e-06,
+        "decode_contents": 0.056641,
+        "decode_dimensions": 1e-06,
+        "decode_page": 0.073173,
+        "decode_resources": 0.003475,
+        "sanitise_contents": 0.008056
       }
     },
     {
@@ -527790,12 +527790,12 @@
         ]
       },
       "timings": {
-        "decode_annots": 2.1e-05,
-        "decode_contents": 0.002298,
+        "decode_annots": 2e-05,
+        "decode_contents": 0.002195,
         "decode_dimensions": 2e-06,
-        "decode_page": 0.010319,
-        "decode_resources": 0.002143,
-        "sanitise_contents": 0.003225
+        "decode_page": 0.010119,
+        "decode_resources": 0.002041,
+        "sanitise_contents": 0.003259
       }
     },
     {
@@ -648794,12 +648794,12 @@
         ]
       },
       "timings": {
-        "decode_annots": 9e-06,
-        "decode_contents": 0.00447,
+        "decode_annots": 8e-06,
+        "decode_contents": 0.004293,
         "decode_dimensions": 1e-06,
-        "decode_page": 0.013091,
-        "decode_resources": 0.003094,
-        "sanitise_contents": 0.003099
+        "decode_page": 0.012671,
+        "decode_resources": 0.00289,
+        "sanitise_contents": 0.003115
       }
     },
     {
@@ -743195,26 +743195,26 @@
       },
       "timings": {
         "decode_annots": 5e-06,
-        "decode_contents": 0.00273,
+        "decode_contents": 0.002523,
         "decode_dimensions": 1e-06,
-        "decode_page": 0.008948,
-        "decode_resources": 0.002111,
-        "sanitise_contents": 0.002069
+        "decode_page": 0.008775,
+        "decode_resources": 0.002196,
+        "sanitise_contents": 0.002124
       }
     }
   ],
   "timings": {
-    "decode_annots": 4.2e-05,
-    "decode_contents": 0.069558,
-    "decode_dimensions": 6.999999999999999e-06,
-    "decode_document": 0.123843,
-    "decode_page": 0.109296,
-    "decode_resources": 0.011101999999999999,
-    "decoding page 0": 0.082524,
-    "decoding page 1": 0.012626,
-    "decoding page 2": 0.015202,
-    "decoding page 3": 0.010617,
-    "process_document_from_bytesio": 7.8e-05,
-    "sanitise_contents": 0.016302
+    "decode_annots": 3.8e-05,
+    "decode_contents": 0.065652,
+    "decode_dimensions": 4.9999999999999996e-06,
+    "decode_document": 0.119715,
+    "decode_page": 0.10473800000000001,
+    "decode_resources": 0.010602,
+    "decoding page 0": 0.078317,
+    "decoding page 1": 0.01239,
+    "decoding page 2": 0.014721,
+    "decoding page 3": 0.010354,
+    "process_document_from_bytesio": 8.4e-05,
+    "sanitise_contents": 0.016554
   }
 }

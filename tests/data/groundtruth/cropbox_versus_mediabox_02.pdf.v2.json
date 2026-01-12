@@ -23229,11 +23229,11 @@
       },
       "timings": {
         "decode_annots": 0.0,
-        "decode_contents": 0.005218,
+        "decode_contents": 0.004832,
         "decode_dimensions": 2e-06,
-        "decode_page": 0.008872,
-        "decode_resources": 0.000695,
-        "sanitise_contents": 0.0001
+        "decode_page": 0.008295,
+        "decode_resources": 0.00061,
+        "sanitise_contents": 9.2e-05
       }
     },
     {
@@ -34483,11 +34483,11 @@
       },
       "timings": {
         "decode_annots": 0.0,
-        "decode_contents": 0.012207,
+        "decode_contents": 0.011199,
         "decode_dimensions": 1e-06,
-        "decode_page": 0.030296,
-        "decode_resources": 0.001064,
-        "sanitise_contents": 0.000128
+        "decode_page": 0.029015,
+        "decode_resources": 0.001031,
+        "sanitise_contents": 0.00013
       }
     },
     {
@@ -112155,25 +112155,25 @@
       },
       "timings": {
         "decode_annots": 0.0,
-        "decode_contents": 0.008514,
-        "decode_dimensions": 1e-06,
-        "decode_page": 0.012962,
-        "decode_resources": 0.000768,
-        "sanitise_contents": 0.000822
+        "decode_contents": 0.008065,
+        "decode_dimensions": 3e-06,
+        "decode_page": 0.012279,
+        "decode_resources": 0.000755,
+        "sanitise_contents": 0.00081
       }
     }
   ],
   "timings": {
     "decode_annots": 0.0,
-    "decode_contents": 0.025939000000000004,
-    "decode_dimensions": 4e-06,
-    "decode_document": 0.055559,
-    "decode_page": 0.05213,
-    "decode_resources": 0.002527,
-    "decoding page 0": 0.009017,
-    "decoding page 1": 0.030442,
-    "decoding page 2": 0.014136,
-    "process_document_from_bytesio": 0.002263,
-    "sanitise_contents": 0.0010500000000000002
+    "decode_contents": 0.024096,
+    "decode_dimensions": 6e-06,
+    "decode_document": 0.053781,
+    "decode_page": 0.049588999999999994,
+    "decode_resources": 0.002396,
+    "decoding page 0": 0.008419,
+    "decoding page 1": 0.029153,
+    "decoding page 2": 0.013476,
+    "process_document_from_bytesio": 0.002368,
+    "sanitise_contents": 0.001032
   }
 }

@@ -3743,7 +3743,7 @@
               698.39,
               42.218,
               698.39,
-              "\u00a1",
+              "\u00b0",
               -1,
               2.78,
               "/MacRomanEncoding",
@@ -4042,7 +4042,7 @@
               698.39,
               94.828,
               698.39,
-              "\u00a1",
+              "\u00b0",
               -1,
               2.78,
               "/MacRomanEncoding",
@@ -25420,7 +25420,7 @@
               698.39,
               34.998,
               698.39,
-              "N\u00a1 d'unit\u00e9 - n\u00a1 et rue, RR :",
+              "N\u00b0 d'unit\u00e9 - n\u00b0 et rue, RR :",
               -1,
               2.78,
               "/MacRomanEncoding",
@@ -27025,7 +27025,7 @@
               698.39,
               34.998,
               698.39,
-              "N\u00a1",
+              "N\u00b0",
               -1,
               2.78,
               "/MacRomanEncoding",
@@ -27094,7 +27094,7 @@
               698.39,
               89.268,
               698.39,
-              "n\u00a1",
+              "n\u00b0",
               -1,
               2.78,
               "/MacRomanEncoding",
@@ -30712,7 +30712,7 @@
               698.39,
               34.998,
               698.39,
-              "N\u00a1 d'unit\u00e9 - n\u00a1 et rue, RR :",
+              "N\u00b0 d'unit\u00e9 - n\u00b0 et rue, RR :",
               -1,
               2.78,
               "/MacRomanEncoding",
@@ -31920,25 +31920,25 @@
         ]
       },
       "timings": {
-        "decode_annots": 2.1e-05,
-        "decode_contents": 0.00367,
+        "decode_annots": 2e-05,
+        "decode_contents": 0.003555,
         "decode_dimensions": 2e-06,
-        "decode_page": 0.005777,
-        "decode_resources": 0.000362,
-        "sanitise_contents": 0.000672
+        "decode_page": 0.005665,
+        "decode_resources": 0.000375,
+        "sanitise_contents": 0.000668
       }
     }
   ],
   "timings": {
-    "decode_annots": 2.1e-05,
-    "decode_contents": 0.00367,
+    "decode_annots": 2e-05,
+    "decode_contents": 0.003555,
     "decode_dimensions": 2e-06,
-    "decode_document": 0.009916,
-    "decode_page": 0.005777,
-    "decode_resources": 0.000362,
-    "decoding page 0": 0.012806,
-    "decoding page 1": 0.008106,
-    "process_document_from_bytesio": 0.001482,
-    "sanitise_contents": 0.000672
+    "decode_document": 0.010201,
+    "decode_page": 0.005665,
+    "decode_resources": 0.000375,
+    "decoding page 0": 0.012359,
+    "decoding page 1": 0.008234,
+    "process_document_from_bytesio": 0.001419,
+    "sanitise_contents": 0.000668
   }
 }

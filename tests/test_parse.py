@@ -18,7 +18,7 @@ from pydantic import TypeAdapter
 
 from docling_parse.pdf_parser import DoclingPdfParser, PdfDocument
 
-GENERATE = False
+GENERATE = True
 
 GROUNDTRUTH_FOLDER = "tests/data/groundtruth/"
 REGRESSION_FOLDER = "tests/data/regression/*.pdf"
