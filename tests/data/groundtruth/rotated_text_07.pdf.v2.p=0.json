@@ -100420,26 +100420,7 @@
             ]
           }
         ]
-      },
-      "timings": {
-        "decode_annots": 0.0,
-        "decode_contents": 0.008487,
-        "decode_dimensions": 1e-06,
-        "decode_page": 0.011395,
-        "decode_resources": 0.000731,
-        "sanitise_contents": 0.000557
       }
     }
-  ],
-  "timings": {
-    "decode_annots": 0.0,
-    "decode_contents": 0.008487,
-    "decode_dimensions": 1e-06,
-    "decode_document": 0.01785,
-    "decode_page": 0.011395,
-    "decode_resources": 0.000731,
-    "decoding page 0": 0.015431,
-    "process_document_from_bytesio": 2e-05,
-    "sanitise_contents": 0.000557
-  }
+  ]
 }

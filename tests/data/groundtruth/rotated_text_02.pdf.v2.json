@@ -28384,26 +28384,7 @@
             ]
           }
         ]
-      },
-      "timings": {
-        "decode_annots": 0.0,
-        "decode_contents": 0.004327,
-        "decode_dimensions": 1e-06,
-        "decode_page": 0.005822,
-        "decode_resources": 0.00028,
-        "sanitise_contents": 0.00071
       }
     }
-  ],
-  "timings": {
-    "decode_annots": 0.0,
-    "decode_contents": 0.004327,
-    "decode_dimensions": 1e-06,
-    "decode_document": 0.006797,
-    "decode_page": 0.005822,
-    "decode_resources": 0.00028,
-    "decoding page 0": 0.006273,
-    "process_document_from_bytesio": 0.000635,
-    "sanitise_contents": 0.00071
-  }
+  ]
 }
