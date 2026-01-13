@@ -1,3 +1,11 @@
+## [v4.7.3](https://github.com/docling-project/docling-parse/releases/tag/v4.7.3) - 2026-01-13
+
+### Fix
+
+* Updated the font-parsing ([#193](https://github.com/docling-project/docling-parse/issues/193)) ([`ec6149e`](https://github.com/docling-project/docling-parse/commit/ec6149ecd724fb8ae14de18f8dd92ba1ca970928))
+* Mixed v1 and v2 in the compiled library ([#183](https://github.com/docling-project/docling-parse/issues/183)) ([`dd3daee`](https://github.com/docling-project/docling-parse/commit/dd3daee33450fd430a1c88bbdd5f4464c3b1847c))
+* Avoid setting global root logger ([#182](https://github.com/docling-project/docling-parse/issues/182)) ([`96e5f21`](https://github.com/docling-project/docling-parse/commit/96e5f2163926af75e6eee4150c65f9f6e285c100))
+
 ## [v4.7.2](https://github.com/docling-project/docling-parse/releases/tag/v4.7.2) - 2025-12-02
 
 ### Fix

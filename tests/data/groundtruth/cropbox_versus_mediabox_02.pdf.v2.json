@@ -14671,6 +14671,7 @@
           }
         ]
       },
+      "page_number": 0,
       "sanitized": {
         "cells": {
           "data": [
@@ -23225,14 +23226,6 @@
             ]
           }
         ]
-      },
-      "timings": {
-        "decode_annots": 0.0,
-        "decode_contents": 0.005094,
-        "decode_dimensions": 1e-06,
-        "decode_page": 0.008746,
-        "decode_resources": 0.000641,
-        "sanitise_contents": 9.8e-05
       }
     },
     {
@@ -31802,6 +31795,7 @@
           }
         ]
       },
+      "page_number": 1,
       "sanitized": {
         "cells": {
           "data": [
@@ -34478,14 +34472,6 @@
             ]
           }
         ]
-      },
-      "timings": {
-        "decode_annots": 0.0,
-        "decode_contents": 0.012053,
-        "decode_dimensions": 0.0,
-        "decode_page": 0.030385,
-        "decode_resources": 0.001067,
-        "sanitise_contents": 0.000125
       }
     },
     {
@@ -94733,6 +94719,7 @@
           }
         ]
       },
+      "page_number": 2,
       "sanitized": {
         "cells": {
           "data": [
@@ -112149,28 +112136,7 @@
             ]
           }
         ]
-      },
-      "timings": {
-        "decode_annots": 0.0,
-        "decode_contents": 0.008458,
-        "decode_dimensions": 0.0,
-        "decode_page": 0.025639,
-        "decode_resources": 0.000796,
-        "sanitise_contents": 0.000801
       }
     }
-  ],
-  "timings": {
-    "decode_annots": 0.0,
-    "decode_contents": 0.025605,
-    "decode_dimensions": 1e-06,
-    "decode_document": 0.066621,
-    "decode_page": 0.06477,
-    "decode_resources": 0.002504,
-    "decoding page 0": 0.008899,
-    "decoding page 1": 0.030535,
-    "decoding page 2": 0.0269,
-    "process_document_from_bytesio": 0.002309,
-    "sanitise_contents": 0.001024
-  }
+  ]
 }

@@ -215,7 +215,7 @@ def test_reference_documents_from_filenames():
     assert len(pdf_docs) > 0, "len(pdf_docs)==0 -> nothing to test"
 
     for pdf_doc_path in pdf_docs:
-        print(f"parsing {pdf_doc_path}")
+        # print(f"parsing {pdf_doc_path}")
 
         pdf_doc: PdfDocument = parser.load(
             path_or_stream=pdf_doc_path,
@@ -288,7 +288,7 @@ def test_reference_documents_from_filenames():
             img = pred_page.render_as_image(cell_unit=TextCellUnit.LINE)
             # img.show()
 
-            print(f"unloading page: {page_no}")
+            # print(f"unloading page: {page_no}")
             pdf_doc.unload_pages(page_range=(page_no, page_no + 1))
 
         toc: PdfTableOfContents = pdf_doc.get_table_of_contents()

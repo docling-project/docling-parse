@@ -215,6 +215,9 @@ def test_reference_documents_from_filenames_with_keys():
 
         if GENERATE or (not os.path.exists(fname)):
             with open(fname, "w") as fw:
+                del pred_doc["timings"]  # remove timings for regression
+                for i in range(0, len(pred_doc["pages"])):
+                    del pred_doc["pages"][i]["timings"]  # remove timings for regression
                 fw.write(json.dumps(pred_doc, indent=2))
 
             assert True
@@ -257,6 +260,11 @@ def test_reference_documents_from_filenames_with_keys_page_by_page():
 
             if GENERATE or (not os.path.exists(fname)):
                 with open(fname, "w") as fw:
+                    del pred_doc["timings"]  # remove timings for regression
+                    for i in range(0, len(pred_doc["pages"])):
+                        del pred_doc["pages"][i][
+                            "timings"
+                        ]  # remove timings for regression
                     fw.write(json.dumps(pred_doc, indent=2))
 
                 assert True
@@ -317,6 +325,9 @@ def test_reference_documents_from_bytesio_with_keys():
 
         if GENERATE or (not os.path.exists(fname)):
             with open(fname, "w") as fw:
+                del pred_doc["timings"]  # remove timings for regression
+                for i in range(0, len(pred_doc["pages"])):
+                    del pred_doc["pages"][i]["timings"]  # remove timings for regression
                 fw.write(json.dumps(pred_doc, indent=2))
 
             assert True
@@ -363,6 +374,11 @@ def test_reference_documents_from_bytesio_with_keys_page_by_page():
 
             if GENERATE or (not os.path.exists(fname)):
                 with open(fname, "w") as fw:
+                    del pred_doc["timings"]  # remove timings for regression
+                    for i in range(0, len(pred_doc["pages"])):
+                        del pred_doc["pages"][i][
+                            "timings"
+                        ]  # remove timings for regression
                     fw.write(json.dumps(pred_doc, indent=2))
 
                 assert True

@@ -103,6 +103,7 @@ namespace pdflib
 
     std::string        encoding_name;
     font_encoding_name encoding;
+    bool               has_explicit_encoding; // true if encoding was found in PDF, false if defaulted
 
     font_subtype_name  subtype;
 
@@ -487,7 +488,14 @@ namespace pdflib
 
         auto& fm = bfonts.get(fontname);
 
-        if(fm.has(c))
+        // If font declares a specific encoding (MacRoman, WinAnsi, etc.) AND it was
+        // explicitly specified in the PDF, use that encoding instead of base font's built-in mapping
+        if(has_explicit_encoding &&
+           (encoding == MACROMAN || encoding == MACEXPERT || encoding == WINANSI || encoding == STANDARD))
+          {
+            return get_character_from_encoding(c);
+          }
+        else if(fm.has(c))
           {
             return fm.to_utf8(c);
           }
@@ -505,14 +513,14 @@ namespace pdflib
 	  {
 	    /*
 	    std::string notdef="GLYPH<"+std::to_string(c)+">";
-	    
+
 	    unknown_numbs[c] += 1;
-	    
+
 	    LOG_S(ERROR) << " Symbol not found in special font: " << c
 			 << "; Encoding: "  << to_string(encoding)
 			 << "; font-name: " << font_name
 			 << " (corresponding font: " << fontname << ")";
-	    
+
 	    return notdef;
 	    */
 
@@ -521,7 +529,7 @@ namespace pdflib
 			   << "; font-name: " << font_name
 			   << " (corresponding font: " << fontname << ")";
 
-	    return get_character_from_encoding(c);	    
+	    return get_character_from_encoding(c);
 	  }
       }
     else
@@ -653,6 +661,7 @@ namespace pdflib
       {
         name = utils::json::get(keys_0, json_font);
         encoding = to_encoding_name(name);
+        has_explicit_encoding = true;
 
         LOG_S(INFO) << "font-encoding [" << name << "]: " << to_string(encoding);
       }
@@ -667,12 +676,13 @@ namespace pdflib
 	    if(cids.has(encoding_name))
 	      {
 		encoding = CMAP_RESOURCES;
+		has_explicit_encoding = true;
 	      }
 	    else if(encoding_name.find("stream") != std::string::npos)
 	      {
 		LOG_S(WARNING) << "font-encoding [" << name << "] contains stream, "
 			       << "falling back to STANDARD encoding";
-		
+
 		/*
 		encoding = to_encoding_name(encoding_name);
 		auto qpdf_obj = qpdf_font.getKey("/Encoding");
@@ -680,12 +690,12 @@ namespace pdflib
 		if(qpdf_obj.isStream())
 		  {
 		    std::vector<qpdf_instruction> stream;
-		    
+
 		    // decode the stream
 		    {
 		      qpdf_stream_decoder decoder(stream);
 		      decoder.decode(qpdf_obj);
-		      
+
 		      decoder.print();
 		    }
 		  }
@@ -695,13 +705,23 @@ namespace pdflib
 		  }
 		*/
 		encoding = STANDARD;
+		has_explicit_encoding = false;
 	      }
 	    else
 	      {
 		encoding = to_encoding_name(encoding_name);
+		has_explicit_encoding = true;
 	      }
 
             LOG_S(INFO) << "font-encoding [" << name << "]: " << to_string(encoding);
+          }
+        else if(result.is_object() && result.count("/BaseEncoding") == 1 && result["/BaseEncoding"].is_string())
+          {
+            // Extract /BaseEncoding from encoding dictionary
+            std::string base_enc = result["/BaseEncoding"].get<std::string>();
+            encoding = to_encoding_name(base_enc);
+            has_explicit_encoding = true;
+            LOG_S(INFO) << "font-encoding from object /BaseEncoding [" << base_enc << "]: " << to_string(encoding);
           }
         else
           {
@@ -709,12 +729,14 @@ namespace pdflib
             LOG_S(WARNING) << " --> font-encoding falling back to STANDARD";
 
             encoding = STANDARD;
+            has_explicit_encoding = false;
           }
       }
     else
       {
         LOG_S(WARNING) << "font-encoding not defined, falling back to STANDARD";
         encoding = STANDARD;
+        has_explicit_encoding = false;
       }
   }
 

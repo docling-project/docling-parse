@@ -1,0 +1,107 @@
+{
+  "info": {
+    "histograms": {
+      "mean-char-height": {
+        "/SUBSET+ArialMT": 0.6950222284786728
+      },
+      "mean-char-width": {
+        "/SUBSET+ArialMT": 6.214133230506241
+      },
+      "number-of-chars": {
+        "/SUBSET+ArialMT": 45
+      }
+    },
+    "styles": [
+      "/SUBSET+ArialMT"
+    ]
+  },
+  "pages": [
+    {
+      "cells": [
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              50,
+              700,
+              175.42599,
+              715.638
+            ],
+            "device": [
+              50,
+              697.03198,
+              175.42599,
+              712.66998
+            ]
+          },
+          "content": {
+            "rnormalized": "Temperature: 100\u00b0F"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/SUBSET+ArialMT",
+            "size": 14
+          }
+        },
+        {
+          "angle": 0,
+          "box": {
+            "baseline": [
+              50,
+              680,
+              204.21001,
+              695.638
+            ],
+            "device": [
+              50,
+              677.03198,
+              204.21001,
+              692.66998
+            ]
+          },
+          "content": {
+            "rnormalized": "Specific Gravity: 60/60\u00b0F"
+          },
+          "enumeration": {
+            "match": -1,
+            "type": -1
+          },
+          "font": {
+            "color": [
+              0,
+              0,
+              0,
+              255
+            ],
+            "name": "/SUBSET+ArialMT",
+            "size": 14
+          }
+        }
+      ],
+      "dimensions": {
+        "bbox": [
+          0,
+          0,
+          612,
+          792
+        ],
+        "height": 792,
+        "width": 612
+      },
+      "height": 792,
+      "ignored-cells": [],
+      "images": [],
+      "paths": [],
+      "width": 612
+    }
+  ]
+}

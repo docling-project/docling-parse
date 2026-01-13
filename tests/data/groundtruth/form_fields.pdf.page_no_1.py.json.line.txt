@@ -5,7 +5,7 @@
 (502.01, 679.96) (570.21, 679.96) (570.21, 687.41) (502.01, 687.41)       /TT2 N'inscrivez rien ici. 	<|special_separator|>
 (021.00, 674.11) (444.48, 674.11) (444.48, 683.42) (021.00, 683.42)       /TT2 Remplissez ce formulaire pour demander un remboursement si vous avez payé la TVH sur des 	<|special_separator|>
 (021.00, 663.11) (372.26, 663.11) (372.26, 672.42) (021.00, 672.42)       /TT2 produits (les biens meubles corporels) achetés dans une province participante  	<|special_separator|>
-(021.00, 652.11) (384.38, 652.11) (384.38, 661.42) (021.00, 661.42)       /TT2 (l'ºle-du-Prince-Édouard, le Nouveau-Brunswick, la Nouvelle-Écosse, l'Ontario ou  	<|special_separator|>
+(021.00, 652.11) (384.38, 652.11) (384.38, 661.42) (021.00, 661.42)       /TT2 (l'Île-du-Prince-Édouard, le Nouveau-Brunswick, la Nouvelle-Écosse, l'Ontario ou  	<|special_separator|>
 (021.00, 641.11) (427.85, 641.11) (427.85, 650.42) (021.00, 650.42)       /TT2 Terre-Neuve-et-Labrador), et transférés dans une province non participante ou autre région 	<|special_separator|>
 (021.00, 630.11) (414.54, 630.11) (414.54, 639.42) (021.00, 639.42)       /TT2 du Canada ou dans une autre province participante dont le taux de TVH est moins élevé.	<|special_separator|>
 (027.00, 611.57) (078.68, 611.57) (078.68, 620.92) (027.00, 620.92)       /TT1 Remarque 	<|special_separator|>
@@ -32,12 +32,12 @@
 (279.00, 295.08) (317.34, 295.08) (317.34, 304.39) (279.00, 304.39)       /TT2 Français	<|special_separator|>
 (348.00, 295.08) (380.79, 295.08) (380.79, 304.39) (348.00, 304.39)       /TT2 Anglais	<|special_separator|>
 (035.00, 264.14) (119.97, 264.14) (119.97, 274.43) (035.00, 274.43)       /TT1 Adresse postale	<|special_separator|>
-(035.00, 242.08) (172.19, 242.08) (172.19, 251.39) (035.00, 251.39)       /TT2 N¡ d'unité - n¡ et rue, CP, RR :	<|special_separator|>
+(035.00, 242.08) (172.19, 242.08) (172.19, 251.39) (035.00, 251.39)       /TT2 N° d'unité - n° et rue, CP, RR :	<|special_separator|>
 (035.00, 215.08) (059.45, 215.08) (059.45, 224.39) (035.00, 224.39)       /TT2 Ville :	<|special_separator|>
 (035.00, 187.08) (155.05, 187.08) (155.05, 196.39) (035.00, 196.39)       /TT2 Province, territoire ou état :	<|special_separator|>
 (035.00, 161.08) (126.16, 161.08) (126.16, 170.39) (035.00, 170.39)       /TT2 Code postal ou ZIP :	<|special_separator|>
 (035.00, 134.08) (062.79, 134.08) (062.79, 143.39) (035.00, 143.39)       /TT2 Pays :	<|special_separator|>
-(023.00, 094.07) (115.23, 094.07) (115.23, 103.42) (023.00, 103.42)       /TT1 ¸ USAGE INTERNE	<|special_separator|>
+(023.00, 094.07) (115.23, 094.07) (115.23, 103.42) (023.00, 103.42)       /TT1 À USAGE INTERNE	<|special_separator|>
 (023.00, 077.11) (033.00, 077.11) (033.00, 086.42) (023.00, 086.42)       /TT2 IC	<|special_separator|>
 (199.78, 077.11) (214.22, 077.11) (214.22, 086.42) (199.78, 086.42)       /TT2 NC	<|special_separator|>
 (021.00, 019.09) (074.35, 019.09) (074.35, 026.54) (021.00, 026.54)       /TT2 GST495 F (24)	<|special_separator|>
