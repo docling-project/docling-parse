@@ -162,7 +162,9 @@ namespace pdflib
         else if(obj.isBool())
           {
             bool val = obj.getBoolValue();
-            result = val;
+            // Work around nlohmann_json 3.12 explicit bool constructor
+            // Parse string representation of boolean
+            result = nlohmann::json::parse(val ? "true" : "false");
           }
         else
           {
