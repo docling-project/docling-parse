@@ -51,10 +51,10 @@ jobs:
             platform: "linux"
             platform_id: "manylinux_aarch64"
 
-          - name: "macos-13"
-            platform: "macos"
-            min_macos_version: "13"
-            platform_id: "macosx_x86_64"
+          # - name: "macos-13"
+          #   platform: "macos"
+          #   min_macos_version: "13"
+          #   platform_id: "macosx_x86_64"
 
           - name: "macos-14"
             platform: "macos"
