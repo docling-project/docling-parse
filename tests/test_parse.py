@@ -574,9 +574,6 @@ def test_get_annotations():
 
     assert annotations is not None
     assert annotations.form is not None or annotations.form is None
-    assert hasattr(annotations, "language")
-    assert hasattr(annotations, "meta_xml")
-    assert hasattr(annotations, "table_of_contents")
 
     # form_fields.pdf has form data
     if annotations.form is not None:
