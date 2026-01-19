@@ -618,6 +618,107 @@ def verify_annotations_recursive(true_annots, pred_annots):
         assert True  # Other types pass
 
 
+def test_table_of_contents():
+    """Test table of contents extraction from PDF documents."""
+    parser = DoclingPdfParser(loglevel="fatal")
+
+    # Test with a PDF that has a TOC
+    pdf_doc = parser.load(
+        path_or_stream="tests/data/regression/table_of_contents_01.pdf", lazy=True
+    )
+
+    # Test get_table_of_contents() method
+    toc = pdf_doc.get_table_of_contents()
+    assert toc is not None, "TOC should not be None for table_of_contents_01.pdf"
+    assert toc.text == "<root>", "Root TOC entry should have text '<root>'"
+    assert toc.children is not None, "Root TOC should have children"
+    assert len(toc.children) > 0, "Root TOC should have at least one child"
+
+    # Verify expected top-level entries exist
+    top_level_titles = [child.text for child in toc.children]
+    assert "Introduction" in top_level_titles, "TOC should contain 'Introduction'"
+    assert (
+        "Model Architecture" in top_level_titles
+    ), "TOC should contain 'Model Architecture'"
+    assert "Conclusion" in top_level_titles, "TOC should contain 'Conclusion'"
+
+    # Verify nested structure exists
+    model_arch_entry = next(
+        (child for child in toc.children if child.text == "Model Architecture"), None
+    )
+    assert model_arch_entry is not None, "Should find 'Model Architecture' entry"
+    assert (
+        model_arch_entry.children is not None
+    ), "'Model Architecture' should have children"
+    assert (
+        len(model_arch_entry.children) >= 2
+    ), "'Model Architecture' should have at least 2 children"
+
+    nested_titles = [child.text for child in model_arch_entry.children]
+    assert "Dense Models" in nested_titles, "Should contain 'Dense Models' nested entry"
+    assert (
+        "Mixture-of-Expert models" in nested_titles
+    ), "Should contain 'Mixture-of-Expert models' nested entry"
+
+    # Test caching - calling again should return same instance
+    toc2 = pdf_doc.get_table_of_contents()
+    assert toc is toc2, "get_table_of_contents should return cached instance"
+
+    # Test get_annotations().table_of_contents
+    annotations = pdf_doc.get_annotations()
+    assert annotations is not None, "Annotations should not be None"
+    assert (
+        annotations.table_of_contents is not None
+    ), "annotations.table_of_contents should not be None"
+    assert (
+        len(annotations.table_of_contents) > 0
+    ), "annotations.table_of_contents should have entries"
+
+    # Verify PdfTocEntry structure
+    first_entry = annotations.table_of_contents[0]
+    assert first_entry.title == "Introduction", "First entry should be 'Introduction'"
+    assert first_entry.level == 0, "Top-level entries should have level 0"
+
+    # Find entry with children and verify nested structure
+    model_arch_annot = next(
+        (e for e in annotations.table_of_contents if e.title == "Model Architecture"),
+        None,
+    )
+    assert (
+        model_arch_annot is not None
+    ), "Should find 'Model Architecture' in annotations TOC"
+    assert (
+        model_arch_annot.children is not None
+    ), "'Model Architecture' annotation should have children"
+    assert (
+        len(model_arch_annot.children) >= 2
+    ), "'Model Architecture' annotation should have at least 2 children"
+
+    for child in model_arch_annot.children:
+        assert child.level == 1, "Children of top-level entry should have level 1"
+
+    pdf_doc.unload()
+
+
+def test_table_of_contents_none_for_pdf_without_toc():
+    """Test that TOC is None for PDFs without table of contents."""
+    parser = DoclingPdfParser(loglevel="fatal")
+
+    # font_01.pdf is a simple PDF without TOC
+    pdf_doc = parser.load(path_or_stream="tests/data/regression/font_01.pdf", lazy=True)
+
+    toc = pdf_doc.get_table_of_contents()
+    assert toc is None, "TOC should be None for PDF without table of contents"
+
+    annotations = pdf_doc.get_annotations()
+    assert annotations is not None, "Annotations should not be None even without TOC"
+    assert (
+        annotations.table_of_contents is None or len(annotations.table_of_contents) == 0
+    ), "table_of_contents should be None or empty for PDF without TOC"
+
+    pdf_doc.unload()
+
+
 def test_annotations_match_v2_groundtruth():
     """Test that annotations match v2 parser groundtruth."""
     parser = DoclingPdfParser(loglevel="fatal")
