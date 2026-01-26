@@ -11,4 +11,3 @@ recursive-include tests *
 
 recursive-include docling_parse *.so *.pyd *.dll
 recursive-include docling_parse/pdf_resources *
-recursive-include docling_parse/pdf_resources_v2 *

@@ -170,7 +170,7 @@ namespace pdflib
   {
     LOG_S(INFO) << __FUNCTION__ << ": " << data.dump(2);
     
-    std::string PDFS_RESOURCES_DIR = "../docling_parse/pdf_resources_v2/";
+    std::string PDFS_RESOURCES_DIR = "../docling_parse/pdf_resources/";
     LOG_S(INFO) << "default pdf-resource-dir: " << PDFS_RESOURCES_DIR;
     
     //if(data.count(RESOURCE_DIR_KEY)==0)

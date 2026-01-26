@@ -16,24 +16,24 @@ namespace docling
 
     docling_resources();
 
-    std::string get_resources_v2_path();
+    std::string get_resources_path();
 
   private:
 
-    bool set_resources_v2_path();
+    bool set_resources_path();
   };
 
   docling_resources::docling_resources()
   {
-    set_resources_v2_path();
+    set_resources_path();
   }
 
-  std::string docling_resources::get_resources_v2_path()
+  std::string docling_resources::get_resources_path()
   {
-    return resource_utils::get_resources_v2_dir(true).string();
+    return resource_utils::get_resources_dir(true).string();
   }
 
-  bool docling_resources::set_resources_v2_path()
+  bool docling_resources::set_resources_path()
   {
     // Get the module object of your package
     PyObject* myPackageModule = PyImport_ImportModule("docling_parse");
@@ -47,9 +47,9 @@ namespace docling
     std::filesystem::path __init__path(filename);
 
     std::filesystem::path package_path = __init__path.parent_path();
-    std::filesystem::path resources_path = package_path / resource_utils::resources_v2_relative_path;
+    std::filesystem::path resources_path = package_path / resource_utils::resources_relative_path;
 
-    return resource_utils::set_resources_v2_dir(resources_path);
+    return resource_utils::set_resources_dir(resources_path);
   }  
   
 }

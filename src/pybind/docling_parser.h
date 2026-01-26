@@ -1,7 +1,7 @@
 //-*-C++-*-
 
-#ifndef PYBIND_PDF_PARSER_V2_H
-#define PYBIND_PDF_PARSER_V2_H
+#ifndef PYBIND_PDF_PARSER_H
+#define PYBIND_PDF_PARSER_H
 
 #include <optional>
 #ifdef _WIN32
@@ -11,20 +11,20 @@
 
 #include <pybind/docling_resources.h>
 
-#include <v2.h>
+#include <parse.h>
 
 namespace docling
 {
-  class docling_parser_v2: public docling_resources
+  class docling_parser: public docling_resources
   {
     typedef pdflib::pdf_decoder<pdflib::DOCUMENT> decoder_type;
     typedef std::shared_ptr<decoder_type> decoder_ptr_type;
     
   public:
 
-    docling_parser_v2();
+    docling_parser();
 
-    docling_parser_v2(std::string level);
+    docling_parser(std::string level);
 
     void set_loglevel(int level=0);
     void set_loglevel_with_label(std::string level="error");
@@ -89,9 +89,9 @@ namespace docling
     std::map<std::string, decoder_ptr_type> key2doc;
   };
 
-  docling_parser_v2::docling_parser_v2():
+  docling_parser::docling_parser():
     docling_resources(),
-    pdf_resources_dir(resource_utils::get_resources_v2_dir(true).string()),
+    pdf_resources_dir(resource_utils::get_resources_dir(true).string()),
     key2doc({})
   {
     LOG_S(WARNING) << "pdf_resources_dir: " << pdf_resources_dir;
@@ -105,9 +105,9 @@ namespace docling
     pdflib::pdf_resource<pdflib::PAGE_FONT>::initialise(data, timings);
   }
 
-  docling_parser_v2::docling_parser_v2(std::string level):
+  docling_parser::docling_parser(std::string level):
     docling_resources(),
-    pdf_resources_dir(resource_utils::get_resources_v2_dir(true).string()),
+    pdf_resources_dir(resource_utils::get_resources_dir(true).string()),
     key2doc({})
   {
     set_loglevel_with_label(level);    
@@ -123,7 +123,7 @@ namespace docling
     pdflib::pdf_resource<pdflib::PAGE_FONT>::initialise(data, timings);
   }
   
-  void docling_parser_v2::set_loglevel(int level)
+  void docling_parser::set_loglevel(int level)
   {
     if(level>=3)
       {
@@ -147,7 +147,7 @@ namespace docling
       }
   }
 
-  void docling_parser_v2::set_loglevel_with_label(std::string level)
+  void docling_parser::set_loglevel_with_label(std::string level)
   {
     if(level=="info")
       {
@@ -171,7 +171,7 @@ namespace docling
       }
   }
 
-  std::vector<std::string> docling_parser_v2::list_loaded_keys()
+  std::vector<std::string> docling_parser::list_loaded_keys()
   {
     std::vector<std::string> keys={};
 
@@ -184,12 +184,12 @@ namespace docling
     return keys;
   }
 
-  bool docling_parser_v2::is_loaded(std::string key)
+  bool docling_parser::is_loaded(std::string key)
   {
     return (key2doc.count(key)==1);
   }
 
-  bool docling_parser_v2::load_document(std::string key, std::string filename, std::optional<std::string> password)
+  bool docling_parser::load_document(std::string key, std::string filename, std::optional<std::string> password)
   {
 #ifdef _WIN32
     // Convert UTF-8 string to UTF-16 wstring
@@ -212,7 +212,7 @@ namespace docling
     return false;
   }
 
-  bool docling_parser_v2::load_document_from_bytesio(std::string key, pybind11::object bytes_io)
+  bool docling_parser::load_document_from_bytesio(std::string key, pybind11::object bytes_io)
   {
     // logging_lib::info("pdf-parser") << __FILE__ << ":" << __LINE__ << "\t" << __FUNCTION__;
     LOG_S(INFO) << __FILE__ << ":" << __LINE__ << "\t" << __FUNCTION__;
@@ -248,7 +248,7 @@ namespace docling
     return false;
   }
 
-  bool docling_parser_v2::unload_document(std::string key)
+  bool docling_parser::unload_document(std::string key)
   {
     if(key2doc.count(key)==1)
       {
@@ -263,7 +263,7 @@ namespace docling
     return false;    
   }
 
-  bool docling_parser_v2::unload_document_page(std::string key, int page_num)
+  bool docling_parser::unload_document_page(std::string key, int page_num)
   {
     auto itr = key2doc.find(key);
 
@@ -280,7 +280,7 @@ namespace docling
     return false;    
   }
 
-  bool docling_parser_v2::unload_document_pages(std::string key)
+  bool docling_parser::unload_document_pages(std::string key)
   {
     auto itr = key2doc.find(key);
 
@@ -297,12 +297,12 @@ namespace docling
     return false;    
   }
   
-  void docling_parser_v2::unload_documents()
+  void docling_parser::unload_documents()
   {
     key2doc.clear();
   }
 
-  int docling_parser_v2::number_of_pages(std::string key)
+  int docling_parser::number_of_pages(std::string key)
   {
     auto itr = key2doc.find(key);
 
@@ -318,7 +318,7 @@ namespace docling
     return -1;
   }
 
-  nlohmann::json docling_parser_v2::get_annotations(std::string key)
+  nlohmann::json docling_parser::get_annotations(std::string key)
   {
     LOG_S(INFO) << __FUNCTION__;
 
@@ -333,7 +333,7 @@ namespace docling
     return (itr->second)->get_annotations();
   }
 
-  nlohmann::json docling_parser_v2::get_meta_xml(std::string key)
+  nlohmann::json docling_parser::get_meta_xml(std::string key)
   {
     LOG_S(INFO) << __FUNCTION__;
 
@@ -348,7 +348,7 @@ namespace docling
     return (itr->second)->get_meta_xml();
   }
   
-  nlohmann::json docling_parser_v2::get_table_of_contents(std::string key)
+  nlohmann::json docling_parser::get_table_of_contents(std::string key)
   {
     LOG_S(INFO) << __FUNCTION__;
 
@@ -363,7 +363,7 @@ namespace docling
     return (itr->second)->get_table_of_contents();
   }
 
-  nlohmann::json docling_parser_v2::parse_pdf_from_key(std::string key,
+  nlohmann::json docling_parser::parse_pdf_from_key(std::string key,
 						       std::string page_boundary,
 						       bool do_sanitization)
   {
@@ -389,7 +389,7 @@ namespace docling
     return decoder->get();
   }
 
-  nlohmann::json docling_parser_v2::parse_pdf_from_key_on_page(std::string key,
+  nlohmann::json docling_parser::parse_pdf_from_key_on_page(std::string key,
 							       int page,
 							       std::string page_boundary,
 							       bool do_sanitization,
@@ -430,7 +430,7 @@ namespace docling
     return decoder->get();
   }
 
-  nlohmann::json docling_parser_v2::sanitize_cells(nlohmann::json& json_cells,
+  nlohmann::json docling_parser::sanitize_cells(nlohmann::json& json_cells,
 						   nlohmann::json& json_dim,
 						   nlohmann::json& json_lines,
 						   double horizontal_cell_tolerance,
@@ -457,7 +457,7 @@ namespace docling
     return cells.get();
   }
 
-  nlohmann::json docling_parser_v2::sanitize_cells_in_bbox(nlohmann::json& page,
+  nlohmann::json docling_parser::sanitize_cells_in_bbox(nlohmann::json& page,
 							   std::array<double, 4> bbox,
 							   double cell_overlap,
 							   double horizontal_cell_tolerance,

@@ -9,7 +9,7 @@ from queue import Queue
 
 from tabulate import tabulate
 
-from docling_parse import pdf_parser_v2  # type: ignore[attr-defined]
+from docling_parse import pdf_parser  # type: ignore[attr-defined]
 
 
 @dataclass
@@ -95,7 +95,7 @@ def process_files_from_queue(file_queue: Queue, page_level: bool, loglevel: str)
         )
 
         try:
-            parser = pdf_parser_v2(loglevel)
+            parser = pdf_parser(loglevel)
 
             parser.load_document(task.file_hash, str(task.file_name))
 

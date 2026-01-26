@@ -6,15 +6,15 @@ example input:
 {
     "data":
     {
-        "glyphs": "../docling_parse/pdf_resources_v2/glyphs",
-        "cids": "../docling_parse/pdf_resources_v2/cmap-resources",
-        "encodings": "../docling_parse/pdf_resources_v2/encodings",
-        "fonts": "../docling_parse/pdf_resources_v2/fonts"
+        "glyphs": "../docling_parse/pdf_resources/glyphs",
+        "cids": "../docling_parse/pdf_resources/cmap-resources",
+        "encodings": "../docling_parse/pdf_resources/encodings",
+        "fonts": "../docling_parse/pdf_resources/fonts"
     }
 }
 */
 
-#include <v2.h>
+#include <parse.h>
 
 nlohmann::json read_input(std::string filename)
 {

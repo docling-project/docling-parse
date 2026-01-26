@@ -25,7 +25,7 @@ except ImportError as e:
 # import boto3
 # import botocore
 
-from docling_parse import pdf_parser_v2  # type: ignore[attr-defined]
+from docling_parse import pdf_parser  # type: ignore[attr-defined]
 
 queue_lock = threading.Lock()
 
@@ -301,7 +301,7 @@ def process_files_from_queue(
 
             ##save_file(scratch_dir, task)
 
-            parser = pdf_parser_v2(loglevel)
+            parser = pdf_parser(loglevel)
 
             success = parser.load_document_from_bytesio(task.file_hash, task.data)
 

@@ -3,7 +3,7 @@
 #ifndef PYBIND_PDF_SANITIZER_H
 #define PYBIND_PDF_SANITIZER_H
 
-#include <v2.h>
+#include <parse.h>
 
 namespace docling
 {

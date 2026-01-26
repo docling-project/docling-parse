@@ -7,7 +7,7 @@ from docling_core.types.doc.page import PdfPageBoundaryType
 from pydantic import BaseModel
 
 from docling_parse.pdf_parser import DoclingPdfParser, PdfDocument
-from docling_parse.pdf_parsers import pdf_parser_v2  # type: ignore[import]
+from docling_parse.pdf_parsers import pdf_parser  # type: ignore[import]
 
 
 class DocumentTiming(BaseModel):
@@ -20,7 +20,7 @@ class DocumentTiming(BaseModel):
     page_times: list[float] = []
 
 
-def test_performance_pdf_parse_v2(
+def test_performance_pdf_parse(
     ifolder: Path, lazy: bool = True, loglevel: str = "fatal"
 ) -> list[DocumentTiming]:
 
@@ -42,7 +42,7 @@ def test_performance_pdf_parse_v2(
 
         start_0_time = datetime.now()
 
-        parser = pdf_parser_v2(level="fatal")
+        parser = pdf_parser(level="fatal")
         parser.load_document(doc_key, str(pdf_doc_path))
 
         parser.parse_pdf_from_key(doc_key)
@@ -129,7 +129,7 @@ def main():
 
     ifolder = Path("./timings/*.pdf")
 
-    timings = test_performance_pdf_parse_v2(ifolder=ifolder)
+    timings = test_performance_pdf_parse(ifolder=ifolder)
 
     for _ in timings:
         print(_)

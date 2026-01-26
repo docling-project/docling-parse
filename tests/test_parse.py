@@ -719,11 +719,11 @@ def test_table_of_contents_none_for_pdf_without_toc():
     pdf_doc.unload()
 
 
-def test_annotations_match_v2_groundtruth():
-    """Test that annotations match v2 parser groundtruth."""
+def test_annotations_match_groundtruth():
+    """Test that annotations match parser groundtruth."""
     parser = DoclingPdfParser(loglevel="fatal")
 
-    # Test a few PDFs that have v2 groundtruth with annotations
+    # Test a few PDFs that have groundtruth with annotations
     test_files = [
         "form_fields.pdf",
         "table_of_contents_01.pdf",
@@ -731,7 +731,7 @@ def test_annotations_match_v2_groundtruth():
 
     for pdf_file in test_files:
         pdf_path = f"tests/data/regression/{pdf_file}"
-        groundtruth_path = f"tests/data/groundtruth/{pdf_file}.v2.json"
+        groundtruth_path = f"tests/data/groundtruth/{pdf_file}.json"
 
         if not os.path.exists(pdf_path) or not os.path.exists(groundtruth_path):
             continue

@@ -1,6 +1,6 @@
 //-*-C++-*-
 
-#include "v2.h"
+#include "parse.h"
 
 void set_loglevel(std::string level)
 {
@@ -33,7 +33,7 @@ void set_loglevel(std::string level)
 nlohmann::json create_config(std::filesystem::path ifile,
                              std::filesystem::path ofile,
                              int page=-1,
-                             std::filesystem::path pdf_resource_dir="../docling_parse/pdf_resources_v2/")
+                             std::filesystem::path pdf_resource_dir="../docling_parse/pdf_resources/")
 {
   nlohmann::json config = nlohmann::json::object({});
 

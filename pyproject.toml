@@ -100,8 +100,7 @@ include = ["docling_parse*"]
 [tool.setuptools.package-data]
 "docling_parse" = [
     "*.so", "*.pyd", "*.dll",
-    "pdf_resources/*",
-    "pdf_resources_v2/*"
+    "pdf_resources/*"
 ]
 
 [tool.setuptools.exclude-package-data]

@@ -7,26 +7,26 @@
 
 #include <pybind/utils/pybind11_json.h>
 
-#include <pybind/docling_parser_v2.h>
+#include <pybind/docling_parser.h>
 #include <pybind/docling_sanitizer.h>
 
 PYBIND11_MODULE(pdf_parsers, m) {
 
   // next generation parser, 10x faster with more finegrained output
-  pybind11::class_<docling::docling_parser_v2>(m, "pdf_parser_v2")
+  pybind11::class_<docling::docling_parser>(m, "pdf_parser")
     .def(pybind11::init())
 
     .def(pybind11::init<const std::string&>(),
 	 pybind11::arg("level"),
 	 R"(
-    Construct pdf_parser_v2 with logging level.
+    Construct pdf_parser with logging level.
 
     Parameters:
         level (str): Logging level as a string.
                      One of ['fatal', 'error', 'warning', 'info'])")
     
     .def("set_loglevel",
-	 [](docling::docling_parser_v2 &self, int level) -> void {
+	 [](docling::docling_parser &self, int level) -> void {
 	   self.set_loglevel(level);
 	 },
 	 pybind11::arg("level"),
@@ -38,7 +38,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
                      One of [`fatal`=0, `error`=1, `warning`=2, `info`=3])")
     
     .def("set_loglevel_with_label",
-	 [](docling::docling_parser_v2 &self, const std::string &level) -> void {
+	 [](docling::docling_parser &self, const std::string &level) -> void {
             self.set_loglevel_with_label(level);
 	 },
 	 pybind11::arg("level"),
@@ -51,7 +51,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
            )")
 
     .def("is_loaded",
-	 [](docling::docling_parser_v2 &self, const std::string &key) -> bool {
+	 [](docling::docling_parser &self, const std::string &key) -> bool {
 	   return self.is_loaded(key);
 	 },
 	 pybind11::arg("key"),
@@ -65,7 +65,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
         bool: True if the document is loaded, False otherwise.)")
     
     .def("list_loaded_keys",
-	 [](docling::docling_parser_v2 &self) -> std::vector<std::string> {
+	 [](docling::docling_parser &self) -> std::vector<std::string> {
 	   return self.list_loaded_keys();
 	 },
 	 R"(
@@ -76,7 +76,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
     
     .def("load_document",
 	 [](
-        docling::docling_parser_v2 &self,
+        docling::docling_parser &self,
         const std::string &key,
         const std::string &filename,
         std::optional<std::string>& password
@@ -98,7 +98,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
         bool: True if the document was successfully loaded, False otherwise.)")
     
     .def("load_document_from_bytesio",
-	 [](docling::docling_parser_v2 &self, const std::string &key, pybind11::object bytes_io) -> bool {
+	 [](docling::docling_parser &self, const std::string &key, pybind11::object bytes_io) -> bool {
 	   return self.load_document_from_bytesio(key, bytes_io);
 	 },
 	 pybind11::arg("key"),
@@ -114,7 +114,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
         bool: True if the document was successfully loaded, False otherwise.)")
     
     .def("unload_document",
-	 [](docling::docling_parser_v2 &self, const std::string &key) -> bool {
+	 [](docling::docling_parser &self, const std::string &key) -> bool {
 	   return self.unload_document(key);
 	 },
 	 R"(
@@ -127,7 +127,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
         bool: True if the document was successfully unloaded, False otherwise.)")
 
     .def("unload_document_pages",
-	 [](docling::docling_parser_v2 &self, const std::string &key) -> bool {
+	 [](docling::docling_parser &self, const std::string &key) -> bool {
 	   return self.unload_document_pages(key);
 	 },
 	 pybind11::arg("key"),
@@ -141,7 +141,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
         bool: True if the document was successfully unloaded, False otherwise.)")
 
     .def("unload_document_page",
-	 [](docling::docling_parser_v2 &self, const std::string &key, int page) -> bool {
+	 [](docling::docling_parser &self, const std::string &key, int page) -> bool {
 	   return self.unload_document_page(key, page);
 	 },
 	 pybind11::arg("key"),
@@ -157,7 +157,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
         bool: True if the document was successfully unloaded, False otherwise.)")
     
     .def("number_of_pages",
-	 [](docling::docling_parser_v2 &self, const std::string &key) -> int {
+	 [](docling::docling_parser &self, const std::string &key) -> int {
 	   return self.number_of_pages(key);
 	 },
 	 pybind11::arg("key"),
@@ -171,7 +171,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
         int: The number of pages in the document.)")
 
     .def("get_annotations",
-	 [](docling::docling_parser_v2 &self, const std::string &key) -> nlohmann::json {
+	 [](docling::docling_parser &self, const std::string &key) -> nlohmann::json {
 	   return self.get_annotations(key);
 	 },
 	 pybind11::arg("key"),
@@ -185,7 +185,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
         dict: A JSON object containing the annotations for the document.)")
     
     .def("get_table_of_contents",
-	 [](docling::docling_parser_v2 &self, const std::string &key) -> nlohmann::json {
+	 [](docling::docling_parser &self, const std::string &key) -> nlohmann::json {
 	   return self.get_table_of_contents(key);
 	 },
 	 pybind11::arg("key"),
@@ -199,7 +199,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
         dict: A JSON object representing the table of contents of the document.)")
 
     .def("get_meta_xml",
-	 [](docling::docling_parser_v2 &self, const std::string &key) -> nlohmann::json {
+	 [](docling::docling_parser &self, const std::string &key) -> nlohmann::json {
 	   return self.get_meta_xml(key);
 	 },
 	 pybind11::arg("key"),
@@ -213,7 +213,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
         dict: A None or string of the metadata in xml of the document.)")
     
     .def("parse_pdf_from_key",
-	 [](docling::docling_parser_v2 &self,
+	 [](docling::docling_parser &self,
 	    const std::string &key,
 	    const std::string &page_boundary,
 	    bool do_sanitization
@@ -235,7 +235,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
         dict: A JSON representation of the parsed PDF document.)")
 
     .def("parse_pdf_from_key_on_page",
-	 [](docling::docling_parser_v2 &self,
+	 [](docling::docling_parser &self,
 	    const std::string &key,
 	    int page,
 	    const std::string &page_boundary,
@@ -282,7 +282,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
         dict: A JSON representation of the parsed page.)")
 
     .def("sanitize_cells",
-	 [](docling::docling_parser_v2 &self,
+	 [](docling::docling_parser &self,
 	    nlohmann::json &original_cells,
 	    nlohmann::json &page_dim,
 	    nlohmann::json &page_lines,
@@ -322,7 +322,7 @@ Sanitize table cells with specified parameters and return the processed JSON.
         dict: A JSON object representing the sanitized table cells.)")
 
     .def("sanitize_cells_in_bbox",
-	 [](docling::docling_parser_v2 &self,
+	 [](docling::docling_parser &self,
 	    nlohmann::json &page,
 	    const std::array<double, 4> &bbox,
 	    double cell_overlap,

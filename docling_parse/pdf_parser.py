@@ -24,7 +24,7 @@ from docling_core.types.doc.page import (
 )
 from pydantic import BaseModel, ConfigDict
 
-from docling_parse.pdf_parsers import pdf_parser_v2  # type: ignore[import]
+from docling_parse.pdf_parsers import pdf_parser  # type: ignore[import]
 from docling_parse.pdf_parsers import pdf_sanitizer  # type: ignore[import]
 
 # Configure logging
@@ -92,11 +92,11 @@ class PdfDocument:
 
     def __init__(
         self,
-        parser: "pdf_parser_v2",
+        parser: "pdf_parser",
         key: str,
         boundary_type: PdfPageBoundaryType = PdfPageBoundaryType.CROP_BOX,
     ):
-        self._parser: pdf_parser_v2 = parser
+        self._parser: pdf_parser = parser
         self._key = key
         self._boundary_type = boundary_type
         self._pages: Dict[int, SegmentedPdfPage] = {}
@@ -658,7 +658,7 @@ class DoclingPdfParser:
             level (str): Logging level as a string.
                      One of ['fatal', 'error', 'warning', 'info']
         """
-        self.parser = pdf_parser_v2(level=loglevel)
+        self.parser = pdf_parser(level=loglevel)
 
     def set_loglevel(self, loglevel: str):
         """Set the log level using a string label.

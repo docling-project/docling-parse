@@ -21,7 +21,7 @@ setup(
     package_data={
         "docling_parse": [
             "*.so", "*.pyd", "*.dll",
-            "pdf_resources_v2/*",
+            "pdf_resources/*",
         ],
     },
 )
