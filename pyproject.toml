@@ -13,7 +13,6 @@ classifiers = [
     "Intended Audience :: Science/Research",
     "Programming Language :: C++",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -28,7 +27,7 @@ authors = [
     {name = "Panos Vagenas", email = "pva@zurich.ibm.com"},
     {name = "Maxim Lysak", email = "mly@zurich.ibm.com"},
 ]
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = [
     "tabulate>=0.9.0,<1.0.0",
     "pillow>=10.0.0,<13.0.0",
@@ -108,7 +107,7 @@ include = ["docling_parse*"]
 
 [tool.black]
 line-length = 88
-target-version = ["py39", "py310", "py311", "py312", "py313", "py314"]
+target-version = ["py310", "py311", "py312", "py313", "py314"]
 include = '\.pyi?$'
 preview = true
 
@@ -132,7 +131,7 @@ pretty = true
 no_implicit_optional = true
 namespace_packages = true
 show_error_codes = true
-python_version = "3.9"
+python_version = "3.10"
 
 [[tool.mypy.overrides]]
 module = [
