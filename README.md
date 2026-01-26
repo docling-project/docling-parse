@@ -168,7 +168,7 @@ If you use Docling in your projects, please consider citing the following:
 
 ```bib
 @techreport{Docling,
-  author = {Deep Search Team},
+  author = {Docling Team},
   month = {8},
   title = {Docling Technical Report},
   url = {https://arxiv.org/abs/2408.09869},
@@ -183,3 +183,11 @@ If you use Docling in your projects, please consider citing the following:
 
 The Docling Parse codebase is under MIT license.
 For individual model usage, please refer to the model licenses found in the original packages.
+
+## LF AI & Data
+
+Docling (and also docling-parse) is hosted as a project in the [LF AI & Data Foundation](https://lfaidata.foundation/projects/).
+
+### IBM ❤️ Open Source AI
+
+The project was started by the AI for knowledge team at IBM Research Zurich.
