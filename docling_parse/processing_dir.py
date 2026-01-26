@@ -9,7 +9,7 @@ from queue import Queue
 
 from tabulate import tabulate
 
-from docling_parse import pdf_parser  # type: ignore[attr-defined]
+from docling_parse.pdf_parsers import pdf_parser  # type: ignore[import]
 
 
 @dataclass

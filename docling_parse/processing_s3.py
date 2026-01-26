@@ -25,7 +25,7 @@ except ImportError as e:
 # import boto3
 # import botocore
 
-from docling_parse import pdf_parser  # type: ignore[attr-defined]
+from docling_parse.pdf_parsers import pdf_parser  # type: ignore[import]
 
 queue_lock = threading.Lock()
 
