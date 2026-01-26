@@ -101,68 +101,24 @@ options:
 
 ## Performance Benchmarks
 
-### Characteristics of different parser versions
+*Coming soon - benchmarks will be updated for the current parser version.*
 
-<table>
-  <tr>
-    <th>Version</th>
-    <th>Original</th>
-    <th>Word-level</th>
-    <th>Snippet-level</th>
-    <th>Performance</th>
-  </tr>
-  <tr>
-    <th>V1</th>
-    <td rowspan="2"><img src="./docs/example_visualisations/2305.14962v1.pdf_page=0.png" alt="screenshot" width="100"/></td>
-    <td>Not Supported</td>
-    <td><img src="./docs/example_visualisations/2305.14962v1.pdf_page=0.v1.png" alt="v1 snippet" width="100"/></td>
-    <td>~0.250 sec/page </td>
-  </tr>
-  <tr>
-    <th>V2</th>
-    <!-- The "Original" column image spans from the previous row -->
-    <td><img src="./docs/example_visualisations/2305.14962v1.pdf_page=0.v2.original.png" alt="v1 word" width="100"/></td>
-    <td><img src="./docs/example_visualisations/2305.14962v1.pdf_page=0.v2.sanitized.png" alt="v2 snippet" width="100"/></td>
-    <td>~0.050 sec/page <br><br>[~5-10X faster than v1]</td>
-  </tr>
-</table>
-
-### Timings of different parser versions
-
-We ran the v1 and v2 parser on [DocLayNet](https://huggingface.co/datasets/docling-project/DocLayNet-v1.1). We found the following overall behavior
-
-![parser-performance](./docs/dln-v1.png)
+For historical V1 vs V2 benchmarks, see [legacy_performance_benchmarks.md](./docs/legacy_performance_benchmarks.md).
 
 ## Development
 
 ### CXX
 
-To build the parse, simply run the following command in the root folder,
+To build the parser, simply run the following command in the root folder,
 
 ```sh
 rm -rf build; cmake -B ./build; cd build; make
 ```
 
-You can run the parser from your build folder. Example from parse_v1,
+You can run the parser from your build folder:
 
 ```sh
-% ./parse_v1.exe -h
-A program to process PDF files or configuration files
-Usage:
-  PDFProcessor [OPTION...]
-
-  -i, --input arg          Input PDF file
-  -c, --config arg         Config file
-      --create-config arg  Create config file
-  -o, --output arg         Output file
-  -l, --loglevel arg       loglevel [error;warning;success;info]
-  -h, --help               Print usage
-```
-
-Example from parse_v2,
-
-```sh
-% ./parse_v2.exe -h
+% ./parse.exe -h
 program to process PDF files or configuration files
 Usage:
   PDFProcessor [OPTION...]
@@ -172,12 +128,13 @@ Usage:
       --create-config arg  Create config file
   -p, --page arg           Pages to process (default: -1 for all) (default:
                            -1)
+      --password arg       Password for accessing encrypted, password-protected files
   -o, --output arg         Output file
   -l, --loglevel arg       loglevel [error;warning;success;info]
   -h, --help               Print usage
 ```
 
-If you dont have an input file, then a template input file will be printed on the terminal.
+If you don't have an input file, a template input file will be printed on the terminal.
 
 
 ### Python
