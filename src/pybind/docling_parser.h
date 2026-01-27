@@ -62,6 +62,15 @@ namespace docling
 					      bool create_word_cells,
 					      bool create_line_cells);
 
+    // New: Direct typed access to page decoder (avoids JSON serialization)
+    std::shared_ptr<pdflib::pdf_decoder<pdflib::PAGE>> get_page_decoder(
+        std::string key,
+        int page,
+        std::string page_boundary,
+        bool do_sanitization,
+        bool create_word_cells,
+        bool create_line_cells);
+
     nlohmann::json sanitize_cells(nlohmann::json& original_cells,
 				  nlohmann::json& page_dim,
 				  nlohmann::json& page_lines,
@@ -86,7 +95,23 @@ namespace docling
 
     std::string pdf_resources_dir;
 
+    // in the serial case
     std::map<std::string, decoder_ptr_type> key2doc;
+
+    // in the threaded case
+    /*
+      typedef std::shared_ptr<std::string> buffer_type;
+      typedef std::optional<std::string> password_type;
+
+      std::mutex task_mutex;
+      
+      // (key, page_number) to pdf_decoder: every thread has its own pdf_decoder obj, such
+      // that the QPDF object is operated on by 1 thread only
+      std::map<std::pair<std::string, int>, decoder_ptr_type> tasks;
+
+      std::map<std::string, std::pair<buffer_type, password_type> > key_to_buffer;
+      std::map<std::string, std::pair<std::string, password_type> > key_to_filename;
+     */
   };
 
   docling_parser::docling_parser():
@@ -426,8 +451,35 @@ namespace docling
     //auto result = decoder->get();
     //LOG_S(ERROR) << "`" << result.dump(2) << "`";
     //}
-    
+
     return decoder->get();
+  }
+
+  std::shared_ptr<pdflib::pdf_decoder<pdflib::PAGE>> docling_parser::get_page_decoder(
+      std::string key,
+      int page,
+      std::string page_boundary,
+      bool do_sanitization,
+      bool create_word_cells,
+      bool create_line_cells)
+  {
+    LOG_S(INFO) << __FUNCTION__ << " for key: " << key << " and page: " << page;
+
+    auto itr = key2doc.find(key);
+    if(itr == key2doc.end())
+      {
+	LOG_S(ERROR) << "key not found: " << key;
+	return nullptr;
+      }
+
+    auto& decoder = itr->second;
+
+    // Use the new decode_page method which returns typed page decoder
+    return decoder->decode_page(page,
+				page_boundary,
+				do_sanitization,
+				create_word_cells,
+				create_line_cells);
   }
 
   nlohmann::json docling_parser::sanitize_cells(nlohmann::json& json_cells,

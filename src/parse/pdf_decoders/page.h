@@ -21,8 +21,31 @@ namespace pdflib
 
     int get_page_number();
 
+    // Typed accessors for direct pybind11 binding
     pdf_resource<PAGE_CELLS>& get_page_cells() { return page_cells; }
+    pdf_resource<PAGE_LINES>& get_page_lines() { return page_lines; }
+    pdf_resource<PAGE_IMAGES>& get_page_images() { return page_images; }
+    pdf_resource<PAGE_DIMENSION>& get_page_dimension() { return page_dimension; }
 
+    // Char, word and line cells (char_cells is alias for page_cells, word/line are computed)
+    pdf_resource<PAGE_CELLS>& get_char_cells() { return page_cells; }
+    pdf_resource<PAGE_CELLS>& get_word_cells() { return word_cells; }
+    pdf_resource<PAGE_CELLS>& get_line_cells() { return line_cells; }
+
+    bool has_word_cells() const { return word_cells_created; }
+    bool has_line_cells() const { return line_cells_created; }
+
+    // Create word/line cells from page_cells
+    void create_word_cells(double horizontal_cell_tolerance = 1.0,
+			   bool enforce_same_font = true,
+			   double space_width_factor_for_merge = 0.33);
+
+    void create_line_cells(double horizontal_cell_tolerance = 1.0,
+			   bool enforce_same_font = true,
+			   double space_width_factor_for_merge = 1.0,
+			   double space_width_factor_for_merge_with_space = 0.33);
+
+    // JSON serialization (kept for backward compatibility)
     nlohmann::json get(bool keep_char_cells=true,
                        bool keep_lines=true,
                        bool keep_bitmaps=true,
@@ -83,6 +106,12 @@ namespace pdflib
     pdf_resource<PAGE_CELLS>  cells;
     pdf_resource<PAGE_LINES>  lines;
     pdf_resource<PAGE_IMAGES> images;
+
+    // Computed cell aggregations
+    pdf_resource<PAGE_CELLS>  word_cells;
+    pdf_resource<PAGE_CELLS>  line_cells;
+    bool word_cells_created = false;
+    bool line_cells_created = false;
 
     pdf_resource<PAGE_GRPHS>     page_grphs;
     pdf_resource<PAGE_FONTS>     page_fonts;
@@ -623,6 +652,54 @@ namespace pdflib
       LOG_S(INFO) << "#-sani-cells: " << cells.size();
     }
 
+    timings[__FUNCTION__] = timer.get_time();
+  }
+
+  void pdf_decoder<PAGE>::create_word_cells(double horizontal_cell_tolerance,
+					    bool enforce_same_font,
+					    double space_width_factor_for_merge)
+  {
+    LOG_S(INFO) << __FUNCTION__;
+    utils::timer timer;
+
+    pdf_sanitator<PAGE_CELLS> sanitizer;
+
+    word_cells = sanitizer.create_word_cells(page_cells,
+					     horizontal_cell_tolerance,
+					     enforce_same_font,
+					     space_width_factor_for_merge);
+
+    // Remove duplicates (quadratic but necessary)
+    sanitizer.remove_duplicate_cells(word_cells, 0.5, true);
+
+    word_cells_created = true;
+
+    LOG_S(INFO) << "#-page-cells: " << page_cells.size() << " -> #-word-cells: " << word_cells.size();
+    timings[__FUNCTION__] = timer.get_time();
+  }
+
+  void pdf_decoder<PAGE>::create_line_cells(double horizontal_cell_tolerance,
+					    bool enforce_same_font,
+					    double space_width_factor_for_merge,
+					    double space_width_factor_for_merge_with_space)
+  {
+    LOG_S(INFO) << __FUNCTION__;
+    utils::timer timer;
+
+    pdf_sanitator<PAGE_CELLS> sanitizer;
+
+    line_cells = sanitizer.create_line_cells(page_cells,
+					     horizontal_cell_tolerance,
+					     enforce_same_font,
+					     space_width_factor_for_merge,
+					     space_width_factor_for_merge_with_space);
+
+    // Remove duplicates (quadratic but necessary)
+    sanitizer.remove_duplicate_cells(line_cells, 0.5, true);
+
+    line_cells_created = true;
+
+    LOG_S(INFO) << "#-page-cells: " << page_cells.size() << " -> #-line-cells: " << line_cells.size();
     timings[__FUNCTION__] = timer.get_time();
   }
 

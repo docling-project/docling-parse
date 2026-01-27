@@ -13,6 +13,8 @@ namespace pdflib
   template<>
   class pdf_decoder<DOCUMENT>
   {
+    typedef std::shared_ptr<pdf_decoder<PAGE>> page_decoder_ptr;
+
   public:
 
     pdf_decoder();
@@ -27,11 +29,16 @@ namespace pdflib
 
     nlohmann::json get_meta_xml() { return json_annots["meta_xml"]; }
     nlohmann::json get_table_of_contents() { return json_annots["table_of_contents"]; }
-    
-    bool process_document_from_file(std::string& _filename, std::optional<std::string>& password);
-    bool process_document_from_bytesio(std::string& _buffer);
-    
-    void decode_document(std::string page_boundary, bool do_sanitization);
+
+    bool process_document_from_file(std::string& _filename,
+				    std::optional<std::string>& password);
+
+    bool process_document_from_bytesio(std::string& _buffer,
+				       std::optional<std::string>& password,
+				       std::string description = "processing buffer");
+
+    void decode_document(std::string page_boundary,
+			 bool do_sanitization);
 
     void decode_document(std::vector<int>& page_numbers,
 			 std::string page_boundary,
@@ -42,21 +49,32 @@ namespace pdflib
 			 bool create_word_cells,
 			 bool create_line_cells);
 
+    // New: Direct access to page decoders (typed API)
+    bool has_page_decoder(int page_number);
+    page_decoder_ptr get_page_decoder(int page_number);
+
+    // New: Decode a single page and return the page decoder directly
+    page_decoder_ptr decode_page(int page_number,
+				 std::string page_boundary,
+				 bool do_sanitization,
+				 bool create_word_cells,
+				 bool create_line_cells);
+
     bool unload_pages();
 
     bool unload_page(int page_number);
-    
+
   private:
 
     void update_qpdf_logger();
-    
+
     void update_timings(std::map<std::string, double>& timings_, bool set_timer);
 
   private:
 
     std::string filename;
     std::string buffer; // keep a local copy, in order to not let it expire
-    
+
     std::map<std::string, double> timings;
 
     QPDF qpdf_document;
@@ -64,47 +82,51 @@ namespace pdflib
     QPDFObjectHandle qpdf_root;
     QPDFObjectHandle qpdf_pages;
 
-    int number_of_pages;    
+    int number_of_pages;
 
-    //nlohmann::json json_toc; // table-of-contents
     nlohmann::json json_annots;
-    nlohmann::json json_document;
+    nlohmann::json json_document;  // Keep for backward compatibility
+
+    // New: Persistent page decoders for typed API
+    std::map<int, page_decoder_ptr> page_decoders;
   };
 
   pdf_decoder<DOCUMENT>::pdf_decoder():
     filename(""),
     buffer(""),
-    
+
     timings({}),
     qpdf_document(),
-    
+
     // have compatibulity between QPDF v10 and v11
     qpdf_root(),
     qpdf_pages(),
-    
+
     number_of_pages(-1),
 
     json_annots(nlohmann::json::value_t::null),
-    json_document(nlohmann::json::value_t::null)
+    json_document(nlohmann::json::value_t::null),
+    page_decoders({})
   {
     update_qpdf_logger();
   }
-  
+
   pdf_decoder<DOCUMENT>::pdf_decoder(std::map<std::string, double>& timings_):
     filename(""),
     buffer(""),
-    
+
     timings(timings_),
     qpdf_document(),
 
     // have compatibulity between QPDF v10 and v11
     qpdf_root(),
     qpdf_pages(),
-    
+
     number_of_pages(-1),
 
     json_annots(nlohmann::json::value_t::null),
-    json_document(nlohmann::json::value_t::null)
+    json_document(nlohmann::json::value_t::null),
+    page_decoders({})
   {
     update_qpdf_logger();
   }
@@ -192,7 +214,9 @@ namespace pdflib
     return true;
   }
   
-  bool pdf_decoder<DOCUMENT>::process_document_from_bytesio(std::string& _buffer)
+  bool pdf_decoder<DOCUMENT>::process_document_from_bytesio(std::string& _buffer,
+							    std::optional<std::string>& password,
+							    std::string description = "processing buffer")
   {
     buffer = _buffer;    
     LOG_S(INFO) << "start processing buffer of size " << buffer.size() << " by qpdf ...";
@@ -201,10 +225,20 @@ namespace pdflib
     
     try
       {
-	std::string description = "processing buffer";	
-        qpdf_document.processMemoryFile(description.c_str(),
-					buffer.c_str(), buffer.size());
-
+	//std::string description = "processing buffer";
+        if (password.has_value())
+	  {	
+	    qpdf_document.processMemoryFile(description.c_str(),
+					    buffer.c_str(),
+					    buffer.size(),
+					    password.value().c_str());
+	  }
+	else
+	  {
+	    qpdf_document.processMemoryFile(description.c_str(),
+					    buffer.c_str(),
+					    buffer.size());
+	  }	
         LOG_S(INFO) << "buffer processed by qpdf!";        
 
         qpdf_root  = qpdf_document.getRoot();
@@ -391,29 +425,107 @@ namespace pdflib
 	  {
 	    timings[itr->first] += itr->second;
 	  }
-      }    
+      }
+  }
+
+  bool pdf_decoder<DOCUMENT>::has_page_decoder(int page_number)
+  {
+    return page_decoders.count(page_number) > 0;
+  }
+
+  pdf_decoder<DOCUMENT>::page_decoder_ptr pdf_decoder<DOCUMENT>::get_page_decoder(int page_number)
+  {
+    auto itr = page_decoders.find(page_number);
+    if(itr != page_decoders.end())
+      {
+	return itr->second;
+      }
+    return nullptr;
+  }
+
+  pdf_decoder<DOCUMENT>::page_decoder_ptr pdf_decoder<DOCUMENT>::decode_page(
+      int page_number,
+      std::string page_boundary,
+      bool do_sanitization,
+      bool create_word_cells,
+      bool create_line_cells)
+  {
+    LOG_S(INFO) << __FUNCTION__ << " for page: " << page_number;
+    utils::timer timer;
+
+    // Check bounds
+    if(page_number < 0 || page_number >= number_of_pages)
+      {
+	LOG_S(ERROR) << "page " << page_number << " is out of bounds (0-" << number_of_pages-1 << ")";
+	return nullptr;
+      }
+
+    // Return cached decoder if already decoded
+    if(has_page_decoder(page_number))
+      {
+	LOG_S(INFO) << "returning cached page decoder for page: " << page_number;
+	return page_decoders[page_number];
+      }
+
+    // Get the QPDF page
+    std::vector<QPDFObjectHandle> pages = qpdf_document.getAllPages();
+    QPDFObjectHandle qpdf_page = pages.at(page_number);
+
+    // Create and decode the page
+    auto page_decoder = std::make_shared<pdf_decoder<PAGE>>(qpdf_page, page_number);
+
+    bool set_timer = (timings.empty());
+    auto timings_ = page_decoder->decode_page(page_boundary, do_sanitization);
+    update_timings(timings_, set_timer);
+
+    // Create word and line cells if requested
+    if(create_word_cells)
+      {
+	LOG_S(INFO) << "creating word-cells for page: " << page_number;
+	page_decoder->create_word_cells();
+      }
+
+    if(create_line_cells)
+      {
+	LOG_S(INFO) << "creating line-cells for page: " << page_number;
+	page_decoder->create_line_cells();
+      }
+
+    // Store in cache
+    page_decoders[page_number] = page_decoder;
+
+    std::stringstream ss;
+    ss << "decode_page " << page_number;
+    timings[ss.str()] = timer.get_time();
+
+    return page_decoder;
   }
 
   bool pdf_decoder<DOCUMENT>::unload_page(int page_number)
   {
-    if(not json_document.contains("pages"))
+    // Clear from page_decoders cache
+    if(page_decoders.count(page_number) > 0)
       {
-	LOG_S(WARNING) << "json_document does not have `pages`";        
-	return false;
+	page_decoders.erase(page_number);
+	LOG_S(INFO) << "unloaded page decoder for page: " << page_number;
       }
 
-    nlohmann::json& json_pages = json_document["pages"];
-    
-    for(int l=0; l<json_pages.size(); l++)
+    // Also clear from json_document for backward compatibility
+    if(json_document.contains("pages"))
       {
-	if((json_pages[l].is_object()) and
-	   (json_pages[l].contains("page_number")) and 
-	   (json_pages[l]["page_number"]==page_number))
-	  {
-	    json_pages[l].clear();
+	nlohmann::json& json_pages = json_document["pages"];
 
-	    nlohmann::json none;
-	    json_pages[l] = none;
+	for(int l=0; l<json_pages.size(); l++)
+	  {
+	    if((json_pages[l].is_object()) and
+	       (json_pages[l].contains("page_number")) and
+	       (json_pages[l]["page_number"]==page_number))
+	      {
+		json_pages[l].clear();
+
+		nlohmann::json none;
+		json_pages[l] = none;
+	      }
 	  }
       }
 
@@ -422,13 +534,15 @@ namespace pdflib
 
   bool pdf_decoder<DOCUMENT>::unload_pages()
   {
-    if(not json_document.contains("pages"))
-      {
-	LOG_S(WARNING) << "json_document does not have `pages`";        
-	return false;
-      }
+    // Clear all page decoders
+    page_decoders.clear();
+    LOG_S(INFO) << "unloaded all page decoders";
 
-    json_document["pages"] = nlohmann::json::array({});
+    // Also clear json_document for backward compatibility
+    if(json_document.contains("pages"))
+      {
+	json_document["pages"] = nlohmann::json::array({});
+      }
 
     return true;
   }

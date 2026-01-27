@@ -546,6 +546,235 @@ class PdfDocument:
 
         return segmented_page
 
+    # ============= Typed API Methods (zero-copy from C++) =============
+
+    def _to_page_geometry_from_decoder(self, page_dim) -> PdfPageGeometry:
+        """Convert typed PdfPageDimension to PdfPageGeometry."""
+        crop_bbox = page_dim.get_crop_bbox()
+        media_bbox = page_dim.get_media_bbox()
+        angle = page_dim.get_angle()
+
+        # Use crop_box as default boundary
+        bbox = crop_bbox
+        width = bbox[2] - bbox[0]
+        height = bbox[3] - bbox[1]
+
+        rect = BoundingBox(l=bbox[0], b=bbox[1], r=bbox[2], t=bbox[3])
+        art_bbox_obj = BoundingBox(l=crop_bbox[0], b=crop_bbox[1], r=crop_bbox[2], t=crop_bbox[3])
+        media_bbox_obj = BoundingBox(l=media_bbox[0], b=media_bbox[1], r=media_bbox[2], t=media_bbox[3])
+        crop_bbox_obj = BoundingBox(l=crop_bbox[0], b=crop_bbox[1], r=crop_bbox[2], t=crop_bbox[3])
+
+        return PdfPageGeometry(
+            width=width,
+            height=height,
+            angle=angle,
+            boundary_type=PdfPageBoundaryType(self._boundary_type),
+            rect=rect,
+            art_bbox=art_bbox_obj,
+            media_bbox=media_bbox_obj,
+            trim_bbox=crop_bbox_obj,
+            crop_bbox=crop_bbox_obj,
+            bleed_bbox=crop_bbox_obj,
+        )
+
+    def _to_cells_from_decoder(self, cells_container) -> List[Union[PdfTextCell, TextCell]]:
+        """Convert typed PdfCells container to list of PdfTextCell objects."""
+        result: List[Union[PdfTextCell, TextCell]] = []
+
+        for ind, cell in enumerate(cells_container):
+            rect = BoundingRectangle(
+                r_x0=cell.r_x0,
+                r_y0=cell.r_y0,
+                r_x1=cell.r_x1,
+                r_y1=cell.r_y1,
+                r_x2=cell.r_x2,
+                r_y2=cell.r_y2,
+                r_x3=cell.r_x3,
+                r_y3=cell.r_y3,
+            )
+
+            result.append(PdfTextCell(
+                rect=rect,
+                text=cell.text,
+                orig=cell.text,
+                font_key=cell.font_key,
+                font_name=cell.font_name,
+                widget=cell.widget,
+                text_direction=(
+                    TextDirection.LEFT_TO_RIGHT
+                    if cell.left_to_right
+                    else TextDirection.RIGHT_TO_LEFT
+                ),
+                index=ind,
+                rendering_mode=cell.rendering_mode,
+            ))
+
+        return result
+
+    def _to_lines_from_decoder(self, lines_container) -> List[PdfLine]:
+        """Convert typed PdfLines container to list of PdfLine objects."""
+        result: List[PdfLine] = []
+
+        for ind, line in enumerate(lines_container):
+            x_coords = line.get_x()
+            y_coords = line.get_y()
+            indices = line.get_i()
+
+            for l in range(0, len(indices), 2):
+                i0: int = indices[l + 0]
+                i1: int = indices[l + 1]
+
+                points: List[Coord2D] = []
+                for k in range(i0, i1):
+                    points.append(Coord2D(x_coords[k], y_coords[k]))
+
+                pdf_line = PdfLine(
+                    index=ind,
+                    parent_id=l,
+                    points=points,
+                )
+                result.append(pdf_line)
+
+        return result
+
+    def _to_bitmap_resources_from_decoder(self, images_container) -> List[BitmapResource]:
+        """Convert typed PdfImages container to list of BitmapResource objects."""
+        result: List[BitmapResource] = []
+
+        for ind, image in enumerate(images_container):
+            rect = BoundingRectangle(
+                r_x0=image.x0,
+                r_y0=image.y0,
+                r_x1=image.x1,
+                r_y1=image.y0,
+                r_x2=image.x1,
+                r_y2=image.y1,
+                r_x3=image.x0,
+                r_y3=image.y1,
+            )
+            bitmap = BitmapResource(index=ind, rect=rect, uri=None)
+            result.append(bitmap)
+
+        return result
+
+    def _to_segmented_page_from_decoder(
+        self,
+        page_decoder,
+        *,
+        keep_chars: bool = True,
+        keep_lines: bool = True,
+        keep_bitmaps: bool = True,
+        create_words: bool = True,
+        create_textlines: bool = True,
+        enforce_same_font: bool = True,
+    ) -> SegmentedPdfPage:
+        """Convert typed PdfPageDecoder to SegmentedPdfPage (zero-copy path)."""
+
+        char_cells = []
+        if keep_chars:
+            char_cells = self._to_cells_from_decoder(page_decoder.get_char_cells())
+
+        lines = []
+        if keep_lines:
+            lines = self._to_lines_from_decoder(page_decoder.get_page_lines())
+
+        bitmap_resources = []
+        if keep_bitmaps:
+            bitmap_resources = self._to_bitmap_resources_from_decoder(page_decoder.get_page_images())
+
+        segmented_page = SegmentedPdfPage(
+            dimension=self._to_page_geometry_from_decoder(page_decoder.get_page_dimension()),
+            char_cells=char_cells,
+            word_cells=[],
+            textline_cells=[],
+            has_chars=len(char_cells) > 0,
+            bitmap_resources=bitmap_resources,
+            lines=lines,
+        )
+
+        if create_words and page_decoder.has_word_cells():
+            segmented_page.word_cells = self._to_cells_from_decoder(page_decoder.get_word_cells())
+            segmented_page.has_words = len(segmented_page.word_cells) > 0
+        elif keep_chars:
+            _log.warning(
+                "`words` will be created for segmented_page in an inefficient way!"
+            )
+            self._create_word_cells(segmented_page, enforce_same_font=enforce_same_font)
+
+        if create_textlines and page_decoder.has_line_cells():
+            segmented_page.textline_cells = self._to_cells_from_decoder(page_decoder.get_line_cells())
+            segmented_page.has_lines = len(segmented_page.textline_cells) > 0
+        elif keep_chars:
+            _log.warning(
+                "`text_lines` will be created for segmented_page in an inefficient way!"
+            )
+            self._create_textline_cells(
+                segmented_page, enforce_same_font=enforce_same_font
+            )
+
+        return segmented_page
+
+    def get_page_typed(
+        self,
+        page_no: int,
+        *,
+        keep_chars: bool = True,
+        keep_lines: bool = True,
+        keep_bitmaps: bool = True,
+        create_words: bool = True,
+        create_textlines: bool = True,
+        enforce_same_font: bool = True,
+        do_sanitization: bool = False,
+    ) -> SegmentedPdfPage:
+        """Get page using typed API (zero-copy from C++, faster than get_page).
+
+        This method uses direct typed bindings to C++ objects, avoiding JSON
+        serialization/deserialization overhead. Use this for better performance.
+
+        Args:
+            page_no: Page number (1-indexed).
+            keep_chars: Keep individual character cells.
+            keep_lines: Keep graphic lines.
+            keep_bitmaps: Keep bitmap resources.
+            create_words: Create word cells from char cells.
+            create_textlines: Create textline cells from char cells.
+            enforce_same_font: Enforce same font when creating words/lines.
+            do_sanitization: Apply sanitization.
+
+        Returns:
+            SegmentedPdfPage with the parsed page data.
+        """
+        if page_no in self._pages.keys():
+            return self._pages[page_no]
+
+        if 1 <= page_no <= self.number_of_pages():
+            page_decoder = self._parser.get_page_decoder(
+                key=self._key,
+                page=page_no - 1,
+                page_boundary=self._boundary_type,
+                do_sanitization=do_sanitization,
+                create_word_cells=create_words,
+                create_line_cells=create_textlines,
+            )
+
+            if page_decoder is None:
+                raise ValueError(f"Failed to decode page {page_no}")
+
+            self._pages[page_no] = self._to_segmented_page_from_decoder(
+                page_decoder=page_decoder,
+                keep_chars=keep_chars,
+                keep_lines=keep_lines,
+                keep_bitmaps=keep_bitmaps,
+                create_words=create_words,
+                create_textlines=create_textlines,
+                enforce_same_font=enforce_same_font,
+            )
+            return self._pages[page_no]
+
+        raise ValueError(
+            f"incorrect page_no: {page_no} for key={self._key} (min:1, max:{self.number_of_pages()})"
+        )
+
     def _create_word_cells(
         self,
         segmented_page: SegmentedPdfPage,
