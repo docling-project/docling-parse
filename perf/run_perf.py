@@ -80,48 +80,62 @@ class Row:
 # -------- Parser adapters --------
 
 
-def parse_with_docling(pdf_path: Path) -> Iterable[Row]:
-    from docling_parse.pdf_parser import DoclingPdfParser
-    from docling_core.types.doc.page import PdfPageBoundaryType
+def make_parse_with_docling(mode: str) -> Callable[[Path], Iterable[Row]]:
+    def _runner(pdf_path: Path) -> Iterable[Row]:
+        from docling_parse.pdf_parser import DoclingPdfParser, CONVERSION_MODE
+        from docling_core.types.doc.page import PdfPageBoundaryType
 
-    rows: List[Row] = []
-    try:
-        parser = DoclingPdfParser(loglevel="fatal")
-        doc = parser.load(str(pdf_path), lazy=True, boundary_type=PdfPageBoundaryType.CROP_BOX)
+        rows: List[Row] = []
         try:
-            n = doc.number_of_pages()
-        except Exception as e:  # pragma: no cover
-            rows.append(Row(str(pdf_path), -1, 0.0, False, f"num_pages: {e}"))
-            return rows
-
-        for page_idx in range(1, n + 1):
-            t0 = time.perf_counter()
-            err = ""
-            ok = True
+            parser = DoclingPdfParser(loglevel="fatal")
+            doc = parser.load(
+                str(pdf_path),
+                lazy=True,
+                boundary_type=PdfPageBoundaryType.CROP_BOX,
+            )
             try:
-                _ = doc.get_page(page_idx,
-                                 keep_chars=False,
-                                 keep_lines=False,
-                                 keep_bitmaps=False,
-                                 create_words=False,
-                                 create_textlines=True)
+                n = doc.number_of_pages()
             except Exception as e:  # pragma: no cover
-                ok = False
-                err = str(e)
-                print(f"error: {err}")
-            t1 = time.perf_counter()
-            rows.append(Row(str(pdf_path), page_idx, t1 - t0, ok, err))
+                rows.append(Row(str(pdf_path), -1, 0.0, False, f"num_pages: {e}"))
+                return rows
 
-        # best-effort cleanup
-        try:
-            doc.unload()
-        except Exception:
-            pass
+            conv_mode = (
+                CONVERSION_MODE.JSON if mode.lower() == "json" else CONVERSION_MODE.TYPED
+            )
 
-    except Exception as e:  # pragma: no cover
-        rows.append(Row(str(pdf_path), -1, 0.0, False, f"load: {e}"))
+            for page_idx in range(1, n + 1):
+                t0 = time.perf_counter()
+                err = ""
+                ok = True
+                try:
+                    _ = doc.get_page(
+                        page_idx,
+                        mode=conv_mode,
+                        keep_chars=False,
+                        keep_lines=False,
+                        keep_bitmaps=False,
+                        create_words=False,
+                        create_textlines=True,
+                    )
+                except Exception as e:  # pragma: no cover
+                    ok = False
+                    err = str(e)
+                    print(f"error: {err}")
+                t1 = time.perf_counter()
+                rows.append(Row(str(pdf_path), page_idx, t1 - t0, ok, err))
 
-    return rows
+            # best-effort cleanup
+            try:
+                doc.unload()
+            except Exception:
+                pass
+
+        except Exception as e:  # pragma: no cover
+            rows.append(Row(str(pdf_path), -1, 0.0, False, f"load: {e}"))
+
+        return rows
+
+    return _runner
 
 
 def parse_with_pdfplumber(pdf_path: Path) -> Iterable[Row]:
@@ -233,7 +247,8 @@ def parse_with_pymupdf(pdf_path: Path) -> Iterable[Row]:
 
 
 PARSERS: dict[str, Callable[[Path], Iterable[Row]]] = {
-    "docling": parse_with_docling,
+    "docling-mode=json": make_parse_with_docling("json"),
+    "docling-mode=typed": make_parse_with_docling("typed"),
     "pdfplumber": parse_with_pdfplumber,
     "pypdfium2": parse_with_pypdfium2,
     "pypdfium": parse_with_pypdfium2,  # alias
@@ -351,9 +366,9 @@ def main(argv: List[str]) -> int:
     ap.add_argument(
         "--parser",
         "-p",
-        default="docling",
-        choices=sorted({"docling", "pdfplumber", "pypdfium2", "pypdfium", "pymupdf"}),
-        help="Parser backend to benchmark",
+        default="docling-mode=typed",
+        choices=sorted(PARSERS.keys()),
+        help="Parser backend to benchmark (docling-mode=json|typed, pdfplumber, pypdfium2, pypdfium, pymupdf)",
     )
     ap.add_argument(
         "--recursive",
