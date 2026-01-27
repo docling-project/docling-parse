@@ -216,7 +216,7 @@ namespace pdflib
   
   bool pdf_decoder<DOCUMENT>::process_document_from_bytesio(std::string& _buffer,
 							    std::optional<std::string>& password,
-							    std::string description = "processing buffer")
+							    std::string description)
   {
     buffer = _buffer;    
     LOG_S(INFO) << "start processing buffer of size " << buffer.size() << " by qpdf ...";

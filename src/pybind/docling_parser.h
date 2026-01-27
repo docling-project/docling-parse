@@ -260,7 +260,9 @@ namespace docling
     try
       {
 	key2doc[key] = std::make_shared<decoder_type>();
-	key2doc.at(key)->process_document_from_bytesio(data_str);
+	std::optional<std::string> password = std::nullopt;
+	std::string description = "parsing of " + key + " from bytesio";
+	key2doc.at(key)->process_document_from_bytesio(data_str, password, description);
 
 	return true;
       }
