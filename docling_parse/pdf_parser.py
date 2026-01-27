@@ -556,17 +556,29 @@ class PdfDocument:
 
         # Use crop_box as default boundary
         bbox = crop_bbox
-        width = bbox[2] - bbox[0]
-        height = bbox[3] - bbox[1]
-
-        rect = BoundingBox(l=bbox[0], b=bbox[1], r=bbox[2], t=bbox[3])
-        art_bbox_obj = BoundingBox(l=crop_bbox[0], b=crop_bbox[1], r=crop_bbox[2], t=crop_bbox[3])
-        media_bbox_obj = BoundingBox(l=media_bbox[0], b=media_bbox[1], r=media_bbox[2], t=media_bbox[3])
-        crop_bbox_obj = BoundingBox(l=crop_bbox[0], b=crop_bbox[1], r=crop_bbox[2], t=crop_bbox[3])
+        # Build page rectangle as a BoundingRectangle (typed API expects this)
+        rect = BoundingRectangle(
+            r_x0=bbox[0],
+            r_y0=bbox[1],
+            r_x1=bbox[2],
+            r_y1=bbox[1],
+            r_x2=bbox[2],
+            r_y2=bbox[3],
+            r_x3=bbox[0],
+            r_y3=bbox[3],
+            coord_origin=CoordOrigin.BOTTOMLEFT,
+        )
+        art_bbox_obj = BoundingBox(
+            l=crop_bbox[0], b=crop_bbox[1], r=crop_bbox[2], t=crop_bbox[3]
+        )
+        media_bbox_obj = BoundingBox(
+            l=media_bbox[0], b=media_bbox[1], r=media_bbox[2], t=media_bbox[3]
+        )
+        crop_bbox_obj = BoundingBox(
+            l=crop_bbox[0], b=crop_bbox[1], r=crop_bbox[2], t=crop_bbox[3]
+        )
 
         return PdfPageGeometry(
-            width=width,
-            height=height,
             angle=angle,
             boundary_type=PdfPageBoundaryType(self._boundary_type),
             rect=rect,
@@ -577,7 +589,9 @@ class PdfDocument:
             bleed_bbox=crop_bbox_obj,
         )
 
-    def _to_cells_from_decoder(self, cells_container) -> List[Union[PdfTextCell, TextCell]]:
+    def _to_cells_from_decoder(
+        self, cells_container
+    ) -> List[Union[PdfTextCell, TextCell]]:
         """Convert typed PdfCells container to list of PdfTextCell objects."""
         result: List[Union[PdfTextCell, TextCell]] = []
 
@@ -593,21 +607,23 @@ class PdfDocument:
                 r_y3=cell.r_y3,
             )
 
-            result.append(PdfTextCell(
-                rect=rect,
-                text=cell.text,
-                orig=cell.text,
-                font_key=cell.font_key,
-                font_name=cell.font_name,
-                widget=cell.widget,
-                text_direction=(
-                    TextDirection.LEFT_TO_RIGHT
-                    if cell.left_to_right
-                    else TextDirection.RIGHT_TO_LEFT
-                ),
-                index=ind,
-                rendering_mode=cell.rendering_mode,
-            ))
+            result.append(
+                PdfTextCell(
+                    rect=rect,
+                    text=cell.text,
+                    orig=cell.text,
+                    font_key=cell.font_key,
+                    font_name=cell.font_name,
+                    widget=cell.widget,
+                    text_direction=(
+                        TextDirection.LEFT_TO_RIGHT
+                        if cell.left_to_right
+                        else TextDirection.RIGHT_TO_LEFT
+                    ),
+                    index=ind,
+                    rendering_mode=cell.rendering_mode,
+                )
+            )
 
         return result
 
@@ -637,7 +653,9 @@ class PdfDocument:
 
         return result
 
-    def _to_bitmap_resources_from_decoder(self, images_container) -> List[BitmapResource]:
+    def _to_bitmap_resources_from_decoder(
+        self, images_container
+    ) -> List[BitmapResource]:
         """Convert typed PdfImages container to list of BitmapResource objects."""
         result: List[BitmapResource] = []
 
@@ -680,10 +698,14 @@ class PdfDocument:
 
         bitmap_resources = []
         if keep_bitmaps:
-            bitmap_resources = self._to_bitmap_resources_from_decoder(page_decoder.get_page_images())
+            bitmap_resources = self._to_bitmap_resources_from_decoder(
+                page_decoder.get_page_images()
+            )
 
         segmented_page = SegmentedPdfPage(
-            dimension=self._to_page_geometry_from_decoder(page_decoder.get_page_dimension()),
+            dimension=self._to_page_geometry_from_decoder(
+                page_decoder.get_page_dimension()
+            ),
             char_cells=char_cells,
             word_cells=[],
             textline_cells=[],
@@ -693,7 +715,9 @@ class PdfDocument:
         )
 
         if create_words and page_decoder.has_word_cells():
-            segmented_page.word_cells = self._to_cells_from_decoder(page_decoder.get_word_cells())
+            segmented_page.word_cells = self._to_cells_from_decoder(
+                page_decoder.get_word_cells()
+            )
             segmented_page.has_words = len(segmented_page.word_cells) > 0
         elif keep_chars:
             _log.warning(
@@ -702,7 +726,9 @@ class PdfDocument:
             self._create_word_cells(segmented_page, enforce_same_font=enforce_same_font)
 
         if create_textlines and page_decoder.has_line_cells():
-            segmented_page.textline_cells = self._to_cells_from_decoder(page_decoder.get_line_cells())
+            segmented_page.textline_cells = self._to_cells_from_decoder(
+                page_decoder.get_line_cells()
+            )
             segmented_page.has_lines = len(segmented_page.textline_cells) > 0
         elif keep_chars:
             _log.warning(
