@@ -2,6 +2,7 @@
 
 import hashlib
 import logging
+from enum import Enum
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
@@ -29,6 +30,11 @@ from docling_parse.pdf_parsers import pdf_sanitizer  # type: ignore[import]
 
 # Configure logging
 _log = logging.getLogger(__name__)
+
+
+class CONVERSION_MODE(Enum):
+    JSON = "JSON"
+    TYPED = "TYPED"
 
 
 class PdfTocEntry(BaseModel):
@@ -72,6 +78,7 @@ class PdfDocument:
     def iterate_pages(
         self,
         *,
+        mode: CONVERSION_MODE = CONVERSION_MODE.TYPED,
         keep_chars: bool = True,
         keep_lines: bool = True,
         keep_bitmaps: bool = True,
@@ -82,6 +89,7 @@ class PdfDocument:
         for page_no in range(self.number_of_pages()):
             yield page_no + 1, self.get_page(
                 page_no + 1,
+                mode=mode,
                 keep_chars=keep_chars,
                 keep_lines=keep_lines,
                 keep_bitmaps=keep_bitmaps,
@@ -224,7 +232,7 @@ class PdfDocument:
         else:
             raise RuntimeError("This document is not loaded.")
 
-    def get_page(
+    def _get_page_json(
         self,
         page_no: int,
         *,
@@ -271,6 +279,43 @@ class PdfDocument:
         )
 
         return SegmentedPdfPage()
+
+    def get_page(
+        self,
+        page_no: int,
+        *,
+        mode: CONVERSION_MODE = CONVERSION_MODE.TYPED,
+        keep_chars: bool = True,
+        keep_lines: bool = True,
+        keep_bitmaps: bool = True,
+        create_words: bool = True,
+        create_textlines: bool = True,
+        enforce_same_font: bool = True,
+        do_sanitization: bool = False,
+    ) -> SegmentedPdfPage:
+        """Unified page getter. Dispatches to JSON or TYPED pipeline based on mode."""
+        if mode == CONVERSION_MODE.JSON:
+            return self._get_page_json(
+                page_no,
+                keep_chars=keep_chars,
+                keep_lines=keep_lines,
+                keep_bitmaps=keep_bitmaps,
+                create_words=create_words,
+                create_textlines=create_textlines,
+                enforce_same_font=enforce_same_font,
+                do_sanitization=do_sanitization,
+            )
+        else:
+            return self._get_page_typed(
+                page_no,
+                keep_chars=keep_chars,
+                keep_lines=keep_lines,
+                keep_bitmaps=keep_bitmaps,
+                create_words=create_words,
+                create_textlines=create_textlines,
+                enforce_same_font=enforce_same_font,
+                do_sanitization=do_sanitization,
+            )
 
     def load_all_pages(self, create_words: bool = True, create_lines: bool = True):
         doc_dict = self._parser.parse_pdf_from_key(
@@ -740,7 +785,7 @@ class PdfDocument:
 
         return segmented_page
 
-    def get_page_typed(
+    def _get_page_typed(
         self,
         page_no: int,
         *,

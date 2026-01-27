@@ -6,6 +6,7 @@ import re
 from io import BytesIO
 from typing import Dict, List, Union
 
+import pytest
 from docling_core.types.doc.page import (
     BitmapResource,
     PdfLine,
@@ -18,7 +19,7 @@ from docling_core.types.doc.page import (
 )
 from pydantic import TypeAdapter
 
-from docling_parse.pdf_parser import DoclingPdfParser, PdfDocument
+from docling_parse.pdf_parser import CONVERSION_MODE, DoclingPdfParser, PdfDocument
 
 GENERATE = False
 
@@ -208,7 +209,8 @@ def verify_SegmentedPdfPage(
     verify_lines(true_page.lines, pred_page.lines, eps=eps)
 
 
-def test_reference_documents_from_filenames():
+@pytest.mark.parametrize("mode", [CONVERSION_MODE.JSON, CONVERSION_MODE.TYPED])
+def test_reference_documents_from_filenames(mode):
 
     parser = DoclingPdfParser(loglevel="fatal")
 
@@ -228,7 +230,7 @@ def test_reference_documents_from_filenames():
 
         # PdfDocument.iterate_pages() will automatically populate pages as they are yielded.
         # No need to call PdfDocument.load_all_pages() before.
-        for page_no, pred_page in pdf_doc.iterate_pages():
+        for page_no, pred_page in pdf_doc.iterate_pages(mode=mode):
             # print(f" -> Page {page_no} has {len(pred_page.sanitized.cells)} cells.")
 
             rname = os.path.basename(pdf_doc_path)
