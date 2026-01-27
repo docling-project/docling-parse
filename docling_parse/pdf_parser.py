@@ -73,6 +73,48 @@ class PdfAnnotations(BaseModel):
     table_of_contents: Optional[List[PdfTocEntry]] = None
 
 
+class Timings(BaseModel):
+    """Timing information from PDF page parsing.
+
+    Provides detailed timing breakdown of the parsing process, useful for
+    performance analysis and optimization.
+
+    Attributes:
+        data: Dictionary mapping operation names to elapsed time in seconds.
+            Common keys include:
+            - 'decode_page': Total page decoding time
+            - 'decode_dimensions': Time to parse page dimensions
+            - 'decode_resources': Time to decode page resources (fonts, etc.)
+            - 'decode_contents': Time to decode page content streams
+            - 'decode_annots': Time to decode annotations
+            - 'create_word_cells': Time to create word cells (if requested)
+            - 'create_line_cells': Time to create line cells (if requested)
+    """
+
+    model_config = ConfigDict(validate_assignment=True)
+
+    data: Dict[str, float] = {}
+
+    def total(self) -> float:
+        """Get total time across all operations."""
+        return sum(self.data.values())
+
+    def get(self, key: str, default: float = 0.0) -> float:
+        """Get timing for a specific operation."""
+        return self.data.get(key, default)
+
+    def __getitem__(self, key: str) -> float:
+        return self.data[key]
+
+    def keys(self):
+        """Get all timing operation names."""
+        return self.data.keys()
+
+    def items(self):
+        """Get all timing items as (name, seconds) pairs."""
+        return self.data.items()
+
+
 class PdfDocument:
 
     def iterate_pages(
@@ -232,54 +274,6 @@ class PdfDocument:
         else:
             raise RuntimeError("This document is not loaded.")
 
-    def _get_page_json(
-        self,
-        page_no: int,
-        *,
-        keep_chars: bool = True,
-        keep_lines: bool = True,
-        keep_bitmaps: bool = True,
-        create_words: bool = True,
-        create_textlines: bool = True,
-        enforce_same_font: bool = True,
-        do_sanitization: bool = False,
-    ) -> SegmentedPdfPage:
-        if page_no in self._pages.keys():
-            return self._pages[page_no]
-        else:
-            if 1 <= page_no <= self.number_of_pages():
-
-                doc_dict = self._parser.parse_pdf_from_key_on_page(
-                    key=self._key,
-                    page=page_no - 1,
-                    page_boundary=self._boundary_type,
-                    do_sanitization=do_sanitization,
-                    keep_char_cells=keep_chars,
-                    keep_lines=keep_lines,
-                    keep_bitmaps=keep_bitmaps,
-                    create_word_cells=create_words,
-                    create_line_cells=create_textlines,
-                )
-                for pi, page in enumerate(
-                    doc_dict["pages"]
-                ):  # only one page is expected
-                    self._pages[page_no] = self._to_segmented_page(
-                        page=page["original"],
-                        keep_chars=keep_chars,
-                        keep_lines=keep_lines,
-                        keep_bitmaps=keep_bitmaps,
-                        create_words=create_words,
-                        create_textlines=create_textlines,
-                        enforce_same_font=enforce_same_font,
-                    )  # put on cache
-                    return self._pages[page_no]
-
-        raise ValueError(
-            f"incorrect page_no: {page_no} for key={self._key} (min:1, max:{self.number_of_pages()})"
-        )
-
-        return SegmentedPdfPage()
-
     def get_page(
         self,
         page_no: int,
@@ -316,6 +310,211 @@ class PdfDocument:
                 enforce_same_font=enforce_same_font,
                 do_sanitization=do_sanitization,
             )
+
+    def get_page_with_timings(
+        self,
+        page_no: int,
+        *,
+        mode: CONVERSION_MODE = CONVERSION_MODE.TYPED,
+        keep_chars: bool = True,
+        keep_lines: bool = True,
+        keep_bitmaps: bool = True,
+        create_words: bool = True,
+        create_textlines: bool = True,
+        enforce_same_font: bool = True,
+        do_sanitization: bool = False,
+    ) -> Tuple[SegmentedPdfPage, Timings]:
+        """Get page along with timing information.
+
+        Similar to get_page() but also returns timing data from the parsing process.
+        Useful for performance analysis and benchmarking.
+
+        Note: This method does NOT use the page cache to ensure fresh timing data.
+
+        Args:
+            page_no: Page number (1-indexed).
+            mode: Conversion mode (JSON or TYPED).
+            keep_chars: Keep individual character cells.
+            keep_lines: Keep graphic lines.
+            keep_bitmaps: Keep bitmap resources.
+            create_words: Create word cells from char cells.
+            create_textlines: Create textline cells from char cells.
+            enforce_same_font: Enforce same font when creating words/lines.
+            do_sanitization: Apply sanitization.
+
+        Returns:
+            Tuple of (SegmentedPdfPage, Timings) with the parsed page data and timing info.
+        """
+        if not (1 <= page_no <= self.number_of_pages()):
+            raise ValueError(
+                f"incorrect page_no: {page_no} for key={self._key} "
+                f"(min:1, max:{self.number_of_pages()})"
+            )
+
+        if mode == CONVERSION_MODE.TYPED:
+            return self._get_page_with_timings_typed(
+                page_no,
+                keep_chars=keep_chars,
+                keep_lines=keep_lines,
+                keep_bitmaps=keep_bitmaps,
+                create_words=create_words,
+                create_textlines=create_textlines,
+                enforce_same_font=enforce_same_font,
+                do_sanitization=do_sanitization,
+            )
+        else:
+            return self._get_page_with_timings_json(
+                page_no,
+                keep_chars=keep_chars,
+                keep_lines=keep_lines,
+                keep_bitmaps=keep_bitmaps,
+                create_words=create_words,
+                create_textlines=create_textlines,
+                enforce_same_font=enforce_same_font,
+                do_sanitization=do_sanitization,
+            )
+
+    def _get_page_with_timings_typed(
+        self,
+        page_no: int,
+        *,
+        keep_chars: bool = True,
+        keep_lines: bool = True,
+        keep_bitmaps: bool = True,
+        create_words: bool = True,
+        create_textlines: bool = True,
+        enforce_same_font: bool = True,
+        do_sanitization: bool = False,
+    ) -> Tuple[SegmentedPdfPage, Timings]:
+        """Get page with timings using typed API."""
+        page_decoder = self._parser.get_page_decoder(
+            key=self._key,
+            page=page_no - 1,
+            page_boundary=self._boundary_type,
+            do_sanitization=do_sanitization,
+            create_word_cells=create_words,
+            create_line_cells=create_textlines,
+        )
+
+        if page_decoder is None:
+            raise ValueError(f"Failed to decode page {page_no}")
+
+        segmented_page = self._to_segmented_page_from_decoder(
+            page_decoder=page_decoder,
+            keep_chars=keep_chars,
+            keep_lines=keep_lines,
+            keep_bitmaps=keep_bitmaps,
+            create_words=create_words,
+            create_textlines=create_textlines,
+            enforce_same_font=enforce_same_font,
+        )
+
+        # Get timings from the page decoder
+        timings_dict = page_decoder.get_timings()
+        timings = Timings(data=dict(timings_dict))
+
+        return segmented_page, timings
+
+    def _get_page_with_timings_json(
+        self,
+        page_no: int,
+        *,
+        keep_chars: bool = True,
+        keep_lines: bool = True,
+        keep_bitmaps: bool = True,
+        create_words: bool = True,
+        create_textlines: bool = True,
+        enforce_same_font: bool = True,
+        do_sanitization: bool = False,
+    ) -> Tuple[SegmentedPdfPage, Timings]:
+        """Get page with timings using JSON API."""
+        doc_dict = self._parser.parse_pdf_from_key_on_page(
+            key=self._key,
+            page=page_no - 1,
+            page_boundary=self._boundary_type,
+            do_sanitization=do_sanitization,
+            keep_char_cells=keep_chars,
+            keep_lines=keep_lines,
+            keep_bitmaps=keep_bitmaps,
+            create_word_cells=create_words,
+            create_line_cells=create_textlines,
+        )
+
+        # Extract page and timings from doc_dict
+        timings_data: Dict[str, float] = {}
+
+        # Get document-level timings
+        if "timings" in doc_dict:
+            timings_data.update(doc_dict["timings"])
+
+        for page in doc_dict["pages"]:
+            # Get page-level timings
+            if "timings" in page:
+                timings_data.update(page["timings"])
+
+            segmented_page = self._to_segmented_page(
+                page=page["original"],
+                keep_chars=keep_chars,
+                keep_lines=keep_lines,
+                keep_bitmaps=keep_bitmaps,
+                create_words=create_words,
+                create_textlines=create_textlines,
+                enforce_same_font=enforce_same_font,
+            )
+
+            return segmented_page, Timings(data=timings_data)
+
+        raise ValueError(f"No pages found in document for page {page_no}")
+
+    def _get_page_json(
+        self,
+        page_no: int,
+        *,
+        keep_chars: bool = True,
+        keep_lines: bool = True,
+        keep_bitmaps: bool = True,
+        create_words: bool = True,
+        create_textlines: bool = True,
+        enforce_same_font: bool = True,
+        do_sanitization: bool = False,
+    ) -> SegmentedPdfPage:
+        if page_no in self._pages.keys():
+            return self._pages[page_no]
+        else:
+            if 1 <= page_no <= self.number_of_pages():
+
+                doc_dict = self._parser.parse_pdf_from_key_on_page(
+                    key=self._key,
+                    page=page_no - 1,
+                    page_boundary=self._boundary_type,
+                    do_sanitization=do_sanitization,
+                    keep_char_cells=keep_chars,
+                    keep_lines=keep_lines,
+                    keep_bitmaps=keep_bitmaps,
+                    create_word_cells=create_words,
+                    create_line_cells=create_textlines,
+                )
+                for pi, page in enumerate(
+                    doc_dict["pages"]
+                ):  # only one page is expected
+                    print(page.keys())
+
+                    self._pages[page_no] = self._to_segmented_page(
+                        page=page["original"],
+                        keep_chars=keep_chars,
+                        keep_lines=keep_lines,
+                        keep_bitmaps=keep_bitmaps,
+                        create_words=create_words,
+                        create_textlines=create_textlines,
+                        enforce_same_font=enforce_same_font,
+                    )  # put on cache
+                    return self._pages[page_no]
+
+        raise ValueError(
+            f"incorrect page_no: {page_no} for key={self._key} (min:1, max:{self.number_of_pages()})"
+        )
+
+        return SegmentedPdfPage()
 
     def load_all_pages(self, create_words: bool = True, create_lines: bool = True):
         doc_dict = self._parser.parse_pdf_from_key(

@@ -53,6 +53,9 @@ namespace pdflib
 
     std::map<std::string, double> decode_page(std::string page_boundary, bool do_sanitization);
 
+    // Get timing information for this page
+    const std::map<std::string, double>& get_timings() const { return timings; }
+
   private:
 
     void decode_dimensions();
@@ -415,10 +418,14 @@ namespace pdflib
 
     if(json_resources.count("/ExtGState"))
       {
+        utils::timer timer;
+
         qpdf_grphs = qpdf_resources.getKey("/ExtGState");
         json_grphs = json_resources["/ExtGState"];
 
         decode_grphs();
+
+        timings["decode_grphs"] += timer.get_time();
       }
     else
       {
@@ -427,10 +434,14 @@ namespace pdflib
 
     if(json_resources.count("/Font"))
       {
+        utils::timer timer;
+
         qpdf_fonts = qpdf_resources.getKey("/Font");
         json_fonts = json_resources["/Font"];
 
         decode_fonts();
+
+        timings["decode_fonts"] += timer.get_time();
       }
     else
       {
@@ -439,10 +450,14 @@ namespace pdflib
 
     if(json_resources.count("/XObject"))
       {
+        utils::timer timer;
+
         qpdf_xobjects = qpdf_resources.getKey("/XObject");
         json_xobjects = json_resources["/XObject"];
 
         decode_xobjects();
+
+        timings["decode_xobjects"] += timer.get_time();
       }
     else
       {
@@ -461,7 +476,7 @@ namespace pdflib
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    page_fonts.set(json_fonts, qpdf_fonts);
+    page_fonts.set(json_fonts, qpdf_fonts, timings);
   }
 
   void pdf_decoder<PAGE>::decode_xobjects()

@@ -142,7 +142,9 @@ PYBIND11_MODULE(pdf_parsers, m) {
     .def("has_word_cells", &pdflib::pdf_decoder<pdflib::PAGE>::has_word_cells,
 	 "Check if word cells have been created")
     .def("has_line_cells", &pdflib::pdf_decoder<pdflib::PAGE>::has_line_cells,
-	 "Check if line cells have been created");
+	 "Check if line cells have been created")
+    .def("get_timings", &pdflib::pdf_decoder<pdflib::PAGE>::get_timings,
+	 "Get timing information for page decoding as Dict[str, float]");
 
   // ============= PDF Parser =============
 

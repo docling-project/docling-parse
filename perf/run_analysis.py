@@ -18,8 +18,8 @@ Notes:
     both 'typed' and 'json' analyses to understand low-level bottlenecks.
 
 Usage examples:
-  python perf/run_analysis.py perf/results/perf_docling_*.csv --top 25 --mode typed
-  python perf/run_analysis.py perf/results/perf_docling_20250915-151237.csv --mode json
+  python perf/run_analysis.py perf/results/perf_docling_*.csv --top 25 --mode typed --loglevel fatal
+  python perf/run_analysis.py perf/results/perf_docling_20250915-151237.csv --mode json --nth 7
 """
 
 from __future__ import annotations
@@ -27,6 +27,7 @@ from __future__ import annotations
 import argparse
 import csv
 import math
+import re
 import time
 from collections import defaultdict
 from dataclasses import dataclass
@@ -95,6 +96,12 @@ def timestamped_out_path(prefix: str = "analysis") -> Path:
 
 # -------------- Timing extraction --------------
 
+# Keys to skip from timing aggregation (e.g., per-page wrapper times)
+SKIP_KEY_RE = re.compile(r"^\s*(?:decoding page|decode[_\s]?page)\s+\d+\s*$", re.IGNORECASE)
+
+def should_skip_timing_key(key: str) -> bool:
+    return bool(SKIP_KEY_RE.match(key.strip()))
+
 
 def extract_timings_for_page(
     doc, page_number: int,
@@ -108,85 +115,76 @@ def extract_timings_for_page(
 ) -> Dict[str, float]:
     """Run docling-parse on the given page and return a mapping of stage timings.
 
-    This triggers the chosen pipeline (typed/json) for parity, then uses the
-    underlying JSON entry point to fetch detailed stage timings.
+    Uses the public get_page_with_timings(...) API for either typed/json mode
+    and returns the reported stage timings.
     """
 
-    # Trigger the chosen pipeline to mirror performance path (optional but informative)
     try:
-        if mode.lower() == "json":
-            _ = doc.get_page(
-                page_number,
-                mode=CONVERSION_MODE.JSON,
-                keep_chars=keep_chars,
-                keep_lines=keep_lines,
-                keep_bitmaps=keep_bitmaps,
-                create_words=create_words,
-                create_textlines=create_textlines,
-            )
-        else:  # typed
-            _ = doc.get_page(
-                page_number,
-                mode=CONVERSION_MODE.TYPED,
-                keep_chars=keep_chars,
-                keep_lines=keep_lines,
-                keep_bitmaps=keep_bitmaps,
-                create_words=create_words,
-                create_textlines=create_textlines,
-            )
-    except Exception:
-        # proceed to attempt timings anyway
-        pass
-
-    # Use internal JSON call to fetch detailed timings structure
-    timings: Dict[str, float] = {}
-    try:
-        doc_dict = doc._parser.parse_pdf_from_key_on_page(
-            key=doc._key,
-            page=page_number - 1,
-            page_boundary=doc._boundary_type,
-            do_sanitization=False,
-            keep_char_cells=keep_chars,
+        conv_mode = CONVERSION_MODE.JSON if mode.lower() == "json" else CONVERSION_MODE.TYPED
+        _, timings = doc.get_page_with_timings(
+            page_number,
+            mode=conv_mode,
+            keep_chars=keep_chars,
             keep_lines=keep_lines,
             keep_bitmaps=keep_bitmaps,
-            create_word_cells=create_words,
-            create_line_cells=create_textlines,
+            create_words=create_words,
+            create_textlines=create_textlines,
         )
-        # Timings may appear at the document-level and/or within the page object
-        if isinstance(doc_dict, dict):
-            if "timings" in doc_dict and isinstance(doc_dict["timings"], dict):
-                for k, v in doc_dict["timings"].items():
-                    try:
-                        timings[str(k)] = float(v)
-                    except Exception:
-                        continue
-            if "pages" in doc_dict and isinstance(doc_dict["pages"], list):
-                for page in doc_dict["pages"]:
-                    if isinstance(page, dict) and "timings" in page and isinstance(page["timings"], dict):
-                        for k, v in page["timings"].items():
-                            try:
-                                timings[str(k)] = float(v)
-                            except Exception:
-                                continue
     except Exception:
-        # If timings are not available, return empty mapping
         return {}
 
-    return timings
+    # Convert to plain dict and filter unwanted keys
+    result: Dict[str, float] = {}
+    try:
+        for k, v in timings.items():
+            key = str(k).strip()
+            if should_skip_timing_key(key):
+                continue
+            try:
+                result[key] = float(v)
+            except Exception:
+                continue
+    except Exception:
+        return {}
+
+    return result
 
 
-def analyze_pages(csv_path: Path, top_n: int, mode: str, min_sec: float | None = None) -> List[PageTimings]:
+def analyze_pages(
+    csv_path: Path,
+    top_n: int,
+    mode: str,
+    min_sec: float | None = None,
+    *,
+    nth: int | None = None,
+    loglevel: str = "fatal",
+) -> List[PageTimings]:
     rows = read_perf_csv(csv_path)
-    slow = top_slowest_pages(rows, top_n=top_n, min_sec=min_sec)
-    if not slow:
+    cands = [r for r in rows if r.success and r.page_number > 0 and math.isfinite(r.elapsed_sec)]
+    if min_sec is not None:
+        cands = [r for r in cands if r.elapsed_sec >= min_sec]
+    cands.sort(key=lambda r: r.elapsed_sec, reverse=True)
+
+    selected: List[PerfRow] = []
+    # If nth is specified, analyze only that single page and ignore --top
+    if nth is not None:
+        if nth <= 0:
+            raise ValueError(f"--nth must be >= 1 (got {nth})")
+        if nth > len(cands):
+            raise ValueError(f"--nth {nth} exceeds number of candidate pages {len(cands)}")
+        selected = [cands[nth - 1]]
+    elif top_n and top_n > 0:
+        selected = cands[:top_n]
+
+    if not selected:
         return []
 
     # Group target pages by filename for efficient load
     pages_by_file: Dict[str, List[PerfRow]] = defaultdict(list)
-    for r in slow:
+    for r in selected:
         pages_by_file[r.filename].append(r)
 
-    parser = DoclingPdfParser(loglevel="fatal")
+    parser = DoclingPdfParser(loglevel=loglevel)
     results: List[PageTimings] = []
     for filename, pages in pages_by_file.items():
         # Sort pages descending by original elapsed (for determinism)
@@ -228,6 +226,8 @@ def write_results_csv(out_path: Path, pages: List[PageTimings]) -> None:
     seen = set()
     for p in pages:
         for k in p.stages.keys():
+            if should_skip_timing_key(k):
+                continue
             if k not in seen:
                 seen.add(k)
                 all_keys.append(k)
@@ -252,6 +252,8 @@ def print_summary(pages: List[PageTimings], top_k: int = 10) -> None:
     agg: Dict[str, List[float]] = defaultdict(list)
     for p in pages:
         for k, v in p.stages.items():
+            if should_skip_timing_key(k):
+                continue
             if isinstance(v, (int, float)) and math.isfinite(v):
                 agg[k].append(float(v))
 
@@ -270,8 +272,15 @@ def main(argv: List[str]) -> int:
     ap = argparse.ArgumentParser(description="Analyze slowest pages and extract detailed parser timings")
     ap.add_argument("csv", help="Perf CSV file path (from perf/run_perf.py)")
     ap.add_argument("--top", type=int, default=20, help="Number of slowest pages to analyze")
+    ap.add_argument("--nth", type=int, default=None, help="Additionally include the Nth slowest page (1-based)")
     ap.add_argument("--min-sec", type=float, default=None, help="Optional minimum elapsed_sec threshold")
     ap.add_argument("--mode", choices=["typed", "json"], default="typed", help="Pipeline to trigger before fetching timings")
+    ap.add_argument(
+        "--loglevel",
+        choices=["fatal", "error", "warning", "info"],
+        default="fatal",
+        help="Docling parser log level",
+    )
     ap.add_argument("--out", type=str, default=None, help="Output CSV path for stage timings (defaults under perf/results)")
 
     args = ap.parse_args(argv)
@@ -281,7 +290,18 @@ def main(argv: List[str]) -> int:
         print(f"CSV not found: {csv_path}")
         return 2
 
-    pages = analyze_pages(csv_path, top_n=args.top, mode=args.mode, min_sec=args.min_sec)
+    try:
+        pages = analyze_pages(
+            csv_path,
+            top_n=args.top,
+            mode=args.mode,
+            min_sec=args.min_sec,
+            nth=args.nth,
+            loglevel=args.loglevel,
+        )
+    except ValueError as e:
+        print(f"Error: {e}")
+        return 2
     if not pages:
         print("No pages met the criteria or failed to parse timings.")
         return 1
@@ -297,4 +317,3 @@ if __name__ == "__main__":
     import sys
 
     raise SystemExit(main(sys.argv[1:]))
-

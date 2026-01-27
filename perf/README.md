@@ -20,3 +20,14 @@ CSV columns
 Statistics
 - Prints totals, avg sec/page, min/max, and percentiles (p50/p90/p95/p99) after the run.
 
+Visualization
+- `python perf/run_eval.py perf/results` creates plots under `perf/viz`:
+  - Per-parser page-time histograms (log-log)
+  - Superposed histogram across parsers
+  - Stacked histograms with common x-axis
+  - Per-document scatter (pages vs total time) with linear fit
+  - Pairwise hexbin plots of per-page times across parsers
+
+Analysis
+- `python perf/run_analysis.py <perf_csv> --top 20 --mode typed` extracts detailed stage timings
+  for the slowest pages to help identify bottlenecks. Writes `perf/results/analysis_<ts>.csv` by default.
