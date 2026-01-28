@@ -121,19 +121,20 @@ namespace pdflib
 	  {
 	    utils::timer font_timer;
 
-	    pdf_resource<PAGE_FONT> page_font;
+	    pdf_resource<PAGE_FONT> page_font(timings);
 	    page_font.set(key, val, qpdf_fonts.getKey(key));
 
 	    if(page_fonts.count(key)==1)
 	      {
 		LOG_S(WARNING) << "We are overwriting a font!";
+		page_fonts.erase(key);
 	      }
 
-	    page_fonts[key] = page_font;
+	    page_fonts.emplace(key, std::move(page_font));
 
 	    double font_time = font_timer.get_time();
 	    total_font_time += font_time;
-	    timings.add_timing("decode_font: " + key, font_time);
+	    timings.add_timing(pdf_timings::PREFIX_DECODE_FONT + key, font_time);
 	  }
 	else
 	  {
@@ -141,8 +142,7 @@ namespace pdflib
 	  }
       }
 
-    timings.add_timing("decode_fonts_total", total_font_time);
-    timings.add_timing("decode_fonts_count", static_cast<double>(json_fonts.size()));
+    timings.add_timing(pdf_timings::KEY_DECODE_FONTS_TOTAL, total_font_time);
   }
 
 }

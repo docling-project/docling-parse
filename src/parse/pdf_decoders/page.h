@@ -321,7 +321,7 @@ namespace pdflib
         LOG_S(WARNING) << "skipping sanitization!";
       }
 
-    timings.add_timing(__FUNCTION__, timer.get_time());
+    timings.add_timing(pdf_timings::KEY_DECODE_PAGE, timer.get_time());
   }
 
   void pdf_decoder<PAGE>::decode_dimensions()
@@ -331,7 +331,7 @@ namespace pdflib
 
     page_dimension.execute(json_page, qpdf_page);
 
-    timings.add_timing(__FUNCTION__, timer.get_time());
+    timings.add_timing(pdf_timings::KEY_DECODE_DIMENSIONS, timer.get_time());
   }
 
   void pdf_decoder<PAGE>::decode_resources()
@@ -410,7 +410,7 @@ namespace pdflib
         }
     }
 
-    timings.add_timing(__FUNCTION__, timer.get_time());
+    timings.add_timing(pdf_timings::KEY_DECODE_RESOURCES, timer.get_time());
   }
 
   void pdf_decoder<PAGE>::decode_resources_low_level()
@@ -426,7 +426,7 @@ namespace pdflib
 
         decode_grphs();
 
-        timings.add_timing("decode_grphs", timer.get_time());
+        timings.add_timing(pdf_timings::KEY_DECODE_GRPHS, timer.get_time());
       }
     else
       {
@@ -442,7 +442,7 @@ namespace pdflib
 
         decode_fonts();
 
-        timings.add_timing("decode_fonts", timer.get_time());
+        timings.add_timing(pdf_timings::KEY_DECODE_FONTS, timer.get_time());
       }
     else
       {
@@ -458,7 +458,7 @@ namespace pdflib
 
         decode_xobjects();
 
-        timings.add_timing("decode_xobjects", timer.get_time());
+        timings.add_timing(pdf_timings::KEY_DECODE_XOBJECTS, timer.get_time());
       }
     else
       {
@@ -475,14 +475,14 @@ namespace pdflib
 
   void pdf_decoder<PAGE>::decode_fonts()
   {
-    LOG_S(ERROR) << __FUNCTION__;
+    LOG_S(INFO) << __FUNCTION__;
 
     page_fonts.set(json_fonts, qpdf_fonts, timings);
 
-    for(auto itr=timings.begin(); itr!=timings.end(); itr++)
-      {
-	LOG_S(ERROR) << itr->first << ": " << timings.get_sum(itr->first);
-      }
+    //for(auto itr=timings.begin(); itr!=timings.end(); itr++)
+    //{
+    //LOG_S(INFO) << itr->first << ": " << timings.get_sum(itr->first);
+    //}
   }
 
   void pdf_decoder<PAGE>::decode_xobjects()
@@ -523,7 +523,7 @@ namespace pdflib
           }
       }
 
-    timings.add_timing(__FUNCTION__, timer.get_time());
+    timings.add_timing(pdf_timings::KEY_DECODE_CONTENTS, timer.get_time());
   }
 
   void pdf_decoder<PAGE>::decode_annots()
@@ -604,7 +604,7 @@ namespace pdflib
           }
       }
 
-    timings.add_timing(__FUNCTION__, timer.get_time());
+    timings.add_timing(pdf_timings::KEY_DECODE_ANNOTS, timer.get_time());
   }
 
   void pdf_decoder<PAGE>::rotate_contents()
@@ -673,7 +673,7 @@ namespace pdflib
       LOG_S(INFO) << "#-sani-cells: " << cells.size();
     }
 
-    timings.add_timing(__FUNCTION__, timer.get_time());
+    timings.add_timing(pdf_timings::KEY_SANITISE_CONTENTS, timer.get_time());
   }
 
   void pdf_decoder<PAGE>::create_word_cells(double horizontal_cell_tolerance,
@@ -696,7 +696,7 @@ namespace pdflib
     word_cells_created = true;
 
     LOG_S(INFO) << "#-page-cells: " << page_cells.size() << " -> #-word-cells: " << word_cells.size();
-    timings.add_timing(__FUNCTION__, timer.get_time());
+    timings.add_timing(pdf_timings::KEY_CREATE_WORD_CELLS, timer.get_time());
   }
 
   void pdf_decoder<PAGE>::create_line_cells(double horizontal_cell_tolerance,
@@ -721,7 +721,7 @@ namespace pdflib
     line_cells_created = true;
 
     LOG_S(INFO) << "#-page-cells: " << page_cells.size() << " -> #-line-cells: " << line_cells.size();
-    timings.add_timing(__FUNCTION__, timer.get_time());
+    timings.add_timing(pdf_timings::KEY_CREATE_LINE_CELLS, timer.get_time());
   }
 
 }

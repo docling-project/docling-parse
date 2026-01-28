@@ -38,7 +38,6 @@ namespace pdflib
 
     // Font timing keys
     static const std::string KEY_DECODE_FONTS_TOTAL;
-    static const std::string KEY_DECODE_FONTS_COUNT;
 
     // Document-level timing keys
     static const std::string KEY_PROCESS_DOCUMENT_FROM_FILE;
@@ -49,6 +48,12 @@ namespace pdflib
     static const std::string PREFIX_DECODE_FONT;
     static const std::string PREFIX_DECODING_PAGE;
     static const std::string PREFIX_DECODE_PAGE;
+
+    // CMap parsing timing keys
+    static const std::string KEY_CMAP_PARSE_TOTAL;
+    static const std::string KEY_CMAP_PARSE_ENDBFCHAR;
+    static const std::string KEY_CMAP_PARSE_ENDBFRANGE;
+    static const std::string KEY_CMAP_PARSE_ENDCODESPACERANGE;
 
     /**
      * @brief Get all static timing keys.
@@ -291,7 +296,6 @@ namespace pdflib
   const std::string pdf_timings::KEY_CREATE_LINE_CELLS = "create_line_cells";
 
   const std::string pdf_timings::KEY_DECODE_FONTS_TOTAL = "decode_fonts_total";
-  const std::string pdf_timings::KEY_DECODE_FONTS_COUNT = "decode_fonts_count";
 
   const std::string pdf_timings::KEY_PROCESS_DOCUMENT_FROM_FILE = "process_document_from_file";
   const std::string pdf_timings::KEY_PROCESS_DOCUMENT_FROM_BYTESIO = "process_document_from_bytesio";
@@ -300,6 +304,12 @@ namespace pdflib
   const std::string pdf_timings::PREFIX_DECODE_FONT = "decode_font: ";
   const std::string pdf_timings::PREFIX_DECODING_PAGE = "decoding page ";
   const std::string pdf_timings::PREFIX_DECODE_PAGE = "decode_page ";
+
+  // CMap parsing timing keys
+  const std::string pdf_timings::KEY_CMAP_PARSE_TOTAL = " cmap-parse-total";
+  const std::string pdf_timings::KEY_CMAP_PARSE_ENDBFCHAR = " cmap-parse-endbfchar";
+  const std::string pdf_timings::KEY_CMAP_PARSE_ENDBFRANGE = " cmap-parse-endbfrange";
+  const std::string pdf_timings::KEY_CMAP_PARSE_ENDCODESPACERANGE = " cmap-parse-endcodespacerange";
 
   const std::set<std::string>& pdf_timings::get_static_keys()
   {
@@ -315,8 +325,7 @@ namespace pdflib
       KEY_SANITISE_CONTENTS,
       KEY_CREATE_WORD_CELLS,
       KEY_CREATE_LINE_CELLS,
-      KEY_DECODE_FONTS_TOTAL,
-      KEY_DECODE_FONTS_COUNT,
+      KEY_DECODE_FONTS_TOTAL,      
       KEY_PROCESS_DOCUMENT_FROM_FILE,
       KEY_PROCESS_DOCUMENT_FROM_BYTESIO,
       KEY_DECODE_DOCUMENT

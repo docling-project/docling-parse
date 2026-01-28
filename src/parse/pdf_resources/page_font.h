@@ -15,7 +15,7 @@ namespace pdflib
     
   public:
 
-    pdf_resource();
+    pdf_resource(pdf_timings& timings);
     ~pdf_resource();
 
     static void initialise(nlohmann::json                 data,
@@ -76,7 +76,7 @@ namespace pdflib
     void init_widths();
     void init_ws();
 
-    void init_cmap();
+    void init_cmap(pdf_timings& timings);
     void init_cmap_resource();
 
     void init_differences();
@@ -95,6 +95,8 @@ namespace pdflib
 
   private:
 
+    pdf_timings& timings;
+    
     nlohmann::json   json_font;
     nlohmann::json   desc_font; // derived from json_font, only for '/Type-0'
 
@@ -137,7 +139,7 @@ namespace pdflib
     bool cmap_initialized;
     bool diff_initialized;
 
-    std::map<uint32_t, std::string> cmap_numb_to_char;
+    std::unordered_map<uint32_t, std::string> cmap_numb_to_char;
     std::map<uint32_t, std::string> diff_numb_to_char;
 
     std::map<uint32_t, int> unknown_numbs;
@@ -150,7 +152,8 @@ namespace pdflib
   font_encodings pdf_resource<PAGE_FONT>::encodings = font_encodings();
   base_fonts     pdf_resource<PAGE_FONT>::bfonts = base_fonts();
 
-  pdf_resource<PAGE_FONT>::pdf_resource()
+  pdf_resource<PAGE_FONT>::pdf_resource(pdf_timings& timings):
+    timings(timings)
   {}
   
   pdf_resource<PAGE_FONT>::~pdf_resource()
@@ -604,41 +607,76 @@ namespace pdflib
       }
       }
     */
+
+    {
+      utils::timer font_timer;
+
+      font_key  = font_key_;
+      json_font = json_font_;
+      qpdf_font = qpdf_font_;
+
+      double font_time = font_timer.get_time();
+      timings.add_timing(pdf_timings::PREFIX_DECODE_FONT + font_key + " init font-copy", font_time);            
+    }
     
-    font_key  = font_key_;
-
-    json_font = json_font_;
-    qpdf_font = qpdf_font_;
-
-    init_encoding();
-    init_subtype();
-
-    init_base_font();
-
-    init_font_name();
-    init_font_bbox();
-    init_font_matrix();
-
-    //init_fontfile3();
+    {
+      utils::timer font_timer;
       
-    init_ascent_and_descent();
+      init_encoding();
+      init_subtype();
+      
+      init_base_font();
+      
+      init_font_name();
+      init_font_bbox();
+      init_font_matrix();
+      
+      //init_fontfile3();
+      
+      init_ascent_and_descent();
+      
+      init_default_width();
+      
+      init_char_widths();
 
-    init_default_width();
+      double font_time = font_timer.get_time();
+      timings.add_timing(pdf_timings::PREFIX_DECODE_FONT + font_key + " init font-metrics", font_time);      
+    }
+    
+    {
+      utils::timer font_timer;
+      
+      init_cmap(timings);
 
-    init_char_widths();
+      double font_time = font_timer.get_time();
+      timings.add_timing(pdf_timings::PREFIX_DECODE_FONT + font_key + " font-cmap", font_time);
+    }
 
-    init_cmap();
-    init_cmap_resource();
+    {
+      utils::timer font_timer;
+      
+      init_cmap_resource();
 
+      double font_time = font_timer.get_time();
+      timings.add_timing(pdf_timings::PREFIX_DECODE_FONT + font_key + " font-cmap-resources", font_time);
+    }    
+    
     LOG_S(INFO) << __FUNCTION__ << "\t cmap-init: " << cmap_initialized;
     LOG_S(INFO) << __FUNCTION__ << "\t cmap-size: " << cmap_numb_to_char.size();
 
-    init_charprocs();
+    {
+      utils::timer font_timer;
+      
+      init_charprocs();
+      
+      init_differences();
+      
+      init_space_index();
 
-    init_differences();
-
-    init_space_index();
-
+      double font_time = font_timer.get_time();
+      timings.add_timing(pdf_timings::PREFIX_DECODE_FONT + font_key + " font-chars", font_time);      
+    }
+    
     unknown_numbs.clear();
 
     /*
@@ -1482,7 +1520,7 @@ namespace pdflib
       }
   }
 
-  void pdf_resource<PAGE_FONT>::init_cmap()
+  void pdf_resource<PAGE_FONT>::init_cmap(pdf_timings& timings)
   {
     LOG_S(INFO) << __FUNCTION__;
 
@@ -1504,7 +1542,6 @@ namespace pdflib
           }
 
         auto qpdf_obj = qpdf_font.getKey("/ToUnicode");
-        //assert(qpdf_obj.isStream());
 
 	if(qpdf_obj.isStream())
 	  {
@@ -1512,19 +1549,26 @@ namespace pdflib
 	    
 	    // decode the stream
 	    {
+	      utils::timer font_timer;
+	      
 	      qpdf_stream_decoder decoder(stream);
 	      decoder.decode(qpdf_obj);
 	      
 	      //decoder.print();
+
+	      double font_time = font_timer.get_time();
+	      timings.add_timing(pdf_timings::PREFIX_DECODE_FONT + font_key + " font-cmap-stream-decode", font_time);	      
 	    }
 	    
 	    // interprete the stream
 	    {
+	      std::string key_root = pdf_timings::PREFIX_DECODE_FONT + font_key;
+
 	      cmap_parser parser;
-	      parser.parse(stream);
-	      
+	      parser.parse(stream, timings, key_root);
+
 	      //parser.print();
-	      
+
 	      cmap_numb_to_char = parser.get();
 	    }
 	  }

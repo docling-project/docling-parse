@@ -7,6 +7,7 @@
 
 #include <set>
 #include <map>
+#include <unordered_map>
 
 namespace pdflib
 {
@@ -19,7 +20,7 @@ namespace pdflib
     font_cid();
     ~font_cid();
 
-    std::map<uint32_t, std::string>& get();
+    std::unordered_map<uint32_t, std::string>& get();
 
     void decode_cmap_resource(std::string filename,
                               std::string cid2code,
@@ -41,7 +42,7 @@ namespace pdflib
     std::map<uint32_t, uint32_t>    cmap2cid;
     std::map<uint32_t, std::string> cid2utf8;
 
-    std::map<uint32_t, std::string> cmap2str;
+    std::unordered_map<uint32_t, std::string> cmap2str;
   };
 
   font_cid::font_cid()
@@ -50,7 +51,7 @@ namespace pdflib
   font_cid::~font_cid()
   {}
 
-  std::map<uint32_t, std::string>& font_cid::get()
+  std::unordered_map<uint32_t, std::string>& font_cid::get()
   {
     return cmap2str;
   }

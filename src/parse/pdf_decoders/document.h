@@ -211,11 +211,11 @@ namespace pdflib
         return false;
       }
 
-    timings.add_timing(__FUNCTION__, timer.get_time());
+    timings.add_timing(pdf_timings::KEY_PROCESS_DOCUMENT_FROM_FILE, timer.get_time());
 
     return true;
   }
-  
+
   bool pdf_decoder<DOCUMENT>::process_document_from_bytesio(std::string& _buffer,
 							    std::optional<std::string>& password,
 							    std::string description)
@@ -263,11 +263,11 @@ namespace pdflib
         return false;
       }
 
-    timings.add_timing(__FUNCTION__, timer.get_time());
+    timings.add_timing(pdf_timings::KEY_PROCESS_DOCUMENT_FROM_BYTESIO, timer.get_time());
 
     return true;
   }
-  
+
   void pdf_decoder<DOCUMENT>::decode_document(std::string page_boundary,
 					      bool do_sanitization)
   {
@@ -297,12 +297,12 @@ namespace pdflib
         json_pages.push_back(page_decoder.get(keep_char_cells, keep_lines, keep_bitmaps, do_sanitization));
 
 	std::stringstream ss;
-	ss << "decoding page " << page_number++;
+	ss << pdf_timings::PREFIX_DECODING_PAGE << page_number++;
 
 	timings.add_timing(ss.str(), page_timer.get_time());
       }
 
-    timings.add_timing(__FUNCTION__, timer.get_time());
+    timings.add_timing(pdf_timings::KEY_DECODE_DOCUMENT, timer.get_time());
   }
 
   void pdf_decoder<DOCUMENT>::decode_document(std::vector<int>& page_numbers,
@@ -398,7 +398,7 @@ namespace pdflib
 	    json_pages.push_back(page);
 
 	    std::stringstream ss;
-	    ss << "decoding page " << page_number;
+	    ss << pdf_timings::PREFIX_DECODING_PAGE << page_number;
 
 	    timings.add_timing(ss.str(), page_timer.get_time());
 	  }
@@ -411,7 +411,7 @@ namespace pdflib
 	  }
       }
 
-    timings.add_timing(__FUNCTION__, timer.get_time());
+    timings.add_timing(pdf_timings::KEY_DECODE_DOCUMENT, timer.get_time());
   }
 
   void pdf_decoder<DOCUMENT>::update_timings(pdf_timings& timings_,
@@ -493,7 +493,7 @@ namespace pdflib
     page_decoders[page_number] = page_decoder;
 
     std::stringstream ss;
-    ss << "decode_page " << page_number;
+    ss << pdf_timings::PREFIX_DECODE_PAGE << page_number;
     timings.add_timing(ss.str(), timer.get_time());
 
     return page_decoder;

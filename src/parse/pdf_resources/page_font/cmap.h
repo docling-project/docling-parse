@@ -14,11 +14,13 @@ namespace pdflib
     cmap_parser();
     ~cmap_parser();
 
-    std::map<uint32_t, std::string> get() { return _map; }
+    std::unordered_map<uint32_t, std::string> get() { return _map; }
 
     void print();
 
-    void parse(std::vector<qpdf_instruction>& instructions);
+    void parse(std::vector<qpdf_instruction>& instructions,
+               pdf_timings& timings,
+               const std::string& key_root);
 
   private:
 
@@ -63,7 +65,7 @@ namespace pdflib
     uint32_t                      bf_cnt;
     std::pair<uint32_t, uint32_t> bf_range;
 
-    std::map<uint32_t, std::string> _map;
+    std::unordered_map<uint32_t, std::string> _map;
   };
 
   cmap_parser::cmap_parser():
@@ -81,22 +83,26 @@ namespace pdflib
       }
   }
 
-  void cmap_parser::parse(std::vector<qpdf_instruction>& instructions)
+  void cmap_parser::parse(std::vector<qpdf_instruction>& instructions,
+                          pdf_timings& timings,
+                          const std::string& key_root)
   {
+    utils::timer total_timer;
+
     std::vector<qpdf_instruction> parameters;
 
     for(auto& item:instructions)
       {
-	//LOG_S(INFO) << item.key << ": " << item.val; 
-	
+	//LOG_S(INFO) << item.key << ": " << item.val;
+
         if(item.key!="operator")
           {
             parameters.push_back(item);
           }
         else
           {
-	    LOG_S(INFO) << item.key << ": " << item.val; 
-	    
+	    LOG_S(INFO) << item.key << ": " << item.val;
+
             if(item.val=="CMapName")
               {
                 parse_cmap_name(parameters);
@@ -111,7 +117,9 @@ namespace pdflib
               }
             else if(item.val=="endcodespacerange")
               {
+                utils::timer op_timer;
                 parse_endcodespacerange(parameters);
+                timings.add_timing(key_root + pdf_timings::KEY_CMAP_PARSE_ENDCODESPACERANGE, op_timer.get_time());
               }
             else if(item.val=="beginbfrange")
               {
@@ -119,7 +127,9 @@ namespace pdflib
               }
             else if(item.val=="endbfrange")
               {
+                utils::timer op_timer;
                 parse_endbfrange(parameters);
+                timings.add_timing(key_root + pdf_timings::KEY_CMAP_PARSE_ENDBFRANGE, op_timer.get_time());
               }
             else if(item.val=="beginbfchar")
               {
@@ -127,7 +137,9 @@ namespace pdflib
               }
             else if(item.val=="endbfchar")
               {
+                utils::timer op_timer;
                 parse_endbfchar(parameters);
+                timings.add_timing(key_root + pdf_timings::KEY_CMAP_PARSE_ENDBFCHAR, op_timer.get_time());
               }
             else
               {
@@ -137,6 +149,8 @@ namespace pdflib
             parameters.clear();
           }
       }
+
+    timings.add_timing(key_root + pdf_timings::KEY_CMAP_PARSE_TOTAL, total_timer.get_time());
   }
 
   uint32_t cmap_parser::to_uint32(QPDFObjectHandle handle)
@@ -171,7 +185,6 @@ namespace pdflib
   std::string cmap_parser::to_utf8(QPDFObjectHandle handle,
                                    size_t number_of_chars)
   {
-    //logging_lib::info("pdf-parser") << __FUNCTION__ << "\n";
     if(not handle.isString())
       {
         std::string message = "not handle.isString()";
@@ -387,6 +400,8 @@ namespace pdflib
 
     QPDFObjectHandle target;
 
+    // LOG_S(ERROR) << __FUNCTION__ << "\t total cnt: " << bf_cnt;
+    
     for(size_t i=0; i<bf_cnt; i+=1)
       {
         source_start = get_source(parameters[3*i+0].obj);
@@ -395,16 +410,36 @@ namespace pdflib
 
         if(target.isString())
           {
-	    //LOG_S(INFO) << "source_beg: " << source_start << ", source_end: " << source_end << ": " << target;
+	    //LOG_S(ERROR) << "source_beg: " << source_start << ", source_end: " << source_end << ": " << target;
 	    
             // FIXME we probably need to fix the 2 in the to_utf8(..)
             //std::string tmp = target.getUTF8Value();
             std::string tmp = get_target(target);//to_utf8(target, 2);
-	    LOG_S(INFO) << "source_beg: " << source_start << ", source_end: " << source_end << ": " << tmp;
+	    LOG_S(INFO) << "source_beg: " << source_start.size() << ", source_end: " << source_end.size()
+			 << " tmp: " << tmp.size()
+			 << " source_start==tmp: " << (source_start==tmp);
 
-            tmp.erase(std::remove_if(tmp.begin(), tmp.end(), [] (char x) { return x==0;} ), tmp.end());
-	    LOG_S(INFO) << "source_beg: " << source_start << ", source_end: " << source_end << ": " << tmp;
-	    
+	    /* Legacy */
+            // tmp.erase(std::remove_if(tmp.begin(), tmp.end(), [] (char x) { return x==0;} ), tmp.end()); 
+
+            // Remove only trailing null bytes (not all nulls)
+            while(!tmp.empty() && tmp.back() == '\0')
+              {
+                tmp.pop_back();
+              }
+            // If string became empty, it was all nulls - preserve as single null
+            if(tmp.empty())
+              {
+                tmp = std::string(1, '\0');
+              }
+
+	    //LOG_S(ERROR) << "tmp: `" << tmp.size() << "`";
+	    //LOG_S(ERROR) << "source_beg: " << source_start << ", source_end: " << source_end << ": " << tmp;
+
+	    LOG_S(INFO) << "source_beg: " << source_start.size() << ", source_end: " << source_end.size()
+			<< " tmp: " << tmp.size()
+			<< " source_start==tmp: " << (source_start==tmp);
+
             set_range(source_start, source_end, tmp);
           }
         else if(target.isArray())
@@ -419,22 +454,34 @@ namespace pdflib
                 //std::string tgt = tmp.getUTF8Value();
                 std::string tgt = get_target(tmp);
 
-                tgt.erase(std::remove_if(tgt.begin(), tgt.end(), [] (char x) { return x==0; }), tgt.end());
+		/* Legacy */
+                //tgt.erase(std::remove_if(tgt.begin(), tgt.end(), [] (char x) { return x==0; }), tgt.end());
+
+                // Remove only trailing null bytes (not all nulls)
+                while(!tgt.empty() && tgt.back() == '\0')
+                  {
+                    tgt.pop_back();
+                  }
+                // If string became empty, it was all nulls - preserve as single null
+                if(tgt.empty())
+                  {
+                    tgt = std::string(1, '\0');
+                  }
 
                 target_strs.push_back(tgt);
               }
 
-	    LOG_S(INFO) << "source_beg: " << source_start << ", source_end: " << source_end << ": ";
-	    for(auto _:target_strs)
-	      {
-		LOG_S(INFO) << " => " << _;
-	      }
+	    //LOG_S(INFO) << " -> source_beg: " << source_start << ", source_end: " << source_end << ": ";
+	    //for(auto _:target_strs)
+	    //{
+	    //LOG_S(INFO) << " => " << _;
+	    //}
 	    
             set_range(source_start, source_end, target_strs);
           }
         else
           {
-            LOG_S(WARNING) << "could not interprete the target";
+            LOG_S(ERROR) << "could not interprete the target";
           }
       }
   }
@@ -488,9 +535,9 @@ namespace pdflib
                        << "'" << src_end << "' -> " << end;;
       }
 
-    LOG_S(INFO) << __FUNCTION__ << "\t"
-		<< "beg: " << begin << ", "
-		<< "end: " << end;
+    //LOG_S(INFO) << __FUNCTION__ << "\t"
+    //<< "beg: " << begin << ", "
+    //<< "end: " << end << "\t tgt: `" << tgt << "` with size: " << tgt.size();
     
     std::string mapping(tgt);
     std::vector<uint32_t> tgts;
@@ -501,6 +548,12 @@ namespace pdflib
         uint32_t tmp = utf8::next(itr_tgt, tgt.end());
         tgts.push_back(tmp);
       }
+
+    //LOG_S(INFO) << __FUNCTION__ << "\t"
+    //<< "len(tgts): " << tgts.size() << "\t end - begin + 1: " << (end - begin + 1);
+
+    // Pre-reserve capacity to avoid rehashing during bulk insertions
+    _map.reserve(_map.size() + (end - begin + 1));
 
     if(mapping=="")
       {
@@ -527,7 +580,7 @@ namespace pdflib
 
 		    if(utf8::is_valid(tmp.begin(), tmp.end()))
 		      {
-			LOG_S(INFO) << "cmap-ind:" << (begin+i) << " -> target: " << tmp;
+			//LOG_S(INFO) << "cmap-ind:" << (begin+i) << " -> target: " << tmp;
 			_map[begin + i] = tmp;
 		      }
 		    else
@@ -578,7 +631,7 @@ namespace pdflib
                     //_map[begin + i] = tmp;
 		    if(utf8::is_valid(tmp.begin(), tmp.end()))
 		      {
-			LOG_S(INFO) << "cmap-ind:" << (begin+i) << " -> target: " << tmp;
+			// LOG_S(INFO) << "cmap-ind:" << (begin+i) << " -> target: " << tmp;
 			_map[begin + i] = tmp;
 		      }
 		    else
@@ -603,7 +656,6 @@ namespace pdflib
             tgts.back() += 1;
           }
       }
-
   }
 
   void cmap_parser::set_range(const std::string src_begin,
@@ -618,6 +670,9 @@ namespace pdflib
     auto itr_end = src_end.begin();
     uint32_t end = utf8::next(itr_end, src_end.end());
 
+    // Pre-reserve capacity to avoid rehashing during bulk insertions
+    _map.reserve(_map.size() + (end - begin + 1));
+
     for(uint32_t i = 0; i < end - begin + 1; i++)
       {
         //assert(csr_range.first<=begin+i and begin+i<=csr_range.second);
@@ -629,7 +684,7 @@ namespace pdflib
 
 	if(i<tgt.size())
 	  {
-	    LOG_S(INFO) << "cmap-ind:" << (begin+i) << " -> target: " << tgt.at(i);
+	    // LOG_S(INFO) << "cmap-ind:" << (begin+i) << " -> target: " << tgt.at(i);
 	    _map[begin + i] = tgt.at(i);
 	  }
 	else

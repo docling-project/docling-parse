@@ -9,13 +9,10 @@ Input CSV format (as produced by perf/run_perf.py):
 What this script does:
   1) Reads a CSV and finds the top N slowest successful pages.
   2) Loads those documents with docling-parse (typed or json pipeline selection).
-  3) Retrieves detailed stage timings from the underlying parser (via JSON call).
-  4) Writes a consolidated CSV of per-page stage timings and prints a short summary.
-
-Notes:
-  - Detailed timings are extracted from the JSON decoder entry point, which reports
-    C++ stage timings common across the core decoding pipeline. This is useful for
-    both 'typed' and 'json' analyses to understand low-level bottlenecks.
+  3) Retrieves detailed stage timings from the underlying parser.
+  4) Outputs results based on mode:
+     --top: CSV with static timings per pdf-page
+     --nth: Table with all timings (static + dynamic) showing sum, avg, std, count
 
 Usage examples:
   python perf/run_analysis.py perf/results/perf_docling_*.csv --top 25 --mode typed --loglevel fatal
@@ -27,15 +24,23 @@ from __future__ import annotations
 import argparse
 import csv
 import math
-import re
+import statistics
 import time
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Iterable, List, Tuple
+from typing import Dict, List
 
 from docling_core.types.doc.page import PdfPageBoundaryType
-from docling_parse.pdf_parser import CONVERSION_MODE, DoclingPdfParser
+from tabulate import tabulate
+
+from docling_parse.pdf_parser import (
+    CONVERSION_MODE,
+    DoclingPdfParser,
+    Timings,
+    get_static_timing_keys,
+    is_static_timing_key,
+)
 
 
 # -------------- Data types --------------
@@ -54,7 +59,7 @@ class PageTimings:
     filename: str
     page_number: int
     elapsed_original: float
-    stages: Dict[str, float]
+    timings: Timings = field(default_factory=lambda: Timings())
 
 
 # -------------- IO helpers --------------
@@ -77,12 +82,19 @@ def read_perf_csv(path: Path) -> List[PerfRow]:
     return rows
 
 
-def top_slowest_pages(rows: List[PerfRow], top_n: int, min_sec: float | None = None) -> List[PerfRow]:
-    cands = [r for r in rows if r.success and r.page_number > 0 and math.isfinite(r.elapsed_sec)]
+def get_sorted_candidates(
+    rows: List[PerfRow], min_sec: float | None = None
+) -> List[PerfRow]:
+    """Get successful pages sorted by elapsed time descending."""
+    cands = [
+        r
+        for r in rows
+        if r.success and r.page_number > 0 and math.isfinite(r.elapsed_sec)
+    ]
     if min_sec is not None:
         cands = [r for r in cands if r.elapsed_sec >= min_sec]
     cands.sort(key=lambda r: r.elapsed_sec, reverse=True)
-    return cands[:top_n]
+    return cands
 
 
 def ensure_parent(path: Path) -> None:
@@ -96,15 +108,10 @@ def timestamped_out_path(prefix: str = "analysis") -> Path:
 
 # -------------- Timing extraction --------------
 
-# Keys to skip from timing aggregation (e.g., per-page wrapper times)
-SKIP_KEY_RE = re.compile(r"^\s*(?:decoding page|decode[_\s]?page)\s+\d+\s*$", re.IGNORECASE)
-
-def should_skip_timing_key(key: str) -> bool:
-    return bool(SKIP_KEY_RE.match(key.strip()))
-
 
 def extract_timings_for_page(
-    doc, page_number: int,
+    doc,
+    page_number: int,
     *,
     mode: str = "typed",
     keep_chars: bool = True,
@@ -112,15 +119,12 @@ def extract_timings_for_page(
     keep_bitmaps: bool = True,
     create_words: bool = True,
     create_textlines: bool = True,
-) -> Dict[str, float]:
-    """Run docling-parse on the given page and return a mapping of stage timings.
-
-    Uses the public get_page_with_timings(...) API for either typed/json mode
-    and returns the reported stage timings.
-    """
-
+) -> Timings:
+    """Run docling-parse on the given page and return Timings object."""
     try:
-        conv_mode = CONVERSION_MODE.JSON if mode.lower() == "json" else CONVERSION_MODE.TYPED
+        conv_mode = (
+            CONVERSION_MODE.JSON if mode.lower() == "json" else CONVERSION_MODE.TYPED
+        )
         _, timings = doc.get_page_with_timings(
             page_number,
             mode=conv_mode,
@@ -130,32 +134,14 @@ def extract_timings_for_page(
             create_words=create_words,
             create_textlines=create_textlines,
         )
+        return timings
     except Exception:
-        return {}
-
-    print(timings)
-    exit(-1)
-    
-    # Convert to plain dict and filter unwanted keys
-    result: Dict[str, float] = {}
-    try:
-        for k, v in timings.items():
-            key = str(k).strip()
-            if should_skip_timing_key(key):
-                continue
-            try:
-                result[key] = float(v)
-            except Exception:
-                continue
-    except Exception:
-        return {}
-
-    return result
+        return Timings()
 
 
 def analyze_pages(
     csv_path: Path,
-    top_n: int,
+    top_n: int | None,
     mode: str,
     min_sec: float | None = None,
     *,
@@ -163,13 +149,10 @@ def analyze_pages(
     loglevel: str = "fatal",
 ) -> List[PageTimings]:
     rows = read_perf_csv(csv_path)
-    cands = [r for r in rows if r.success and r.page_number > 0 and math.isfinite(r.elapsed_sec)]
-    if min_sec is not None:
-        cands = [r for r in cands if r.elapsed_sec >= min_sec]
-    cands.sort(key=lambda r: r.elapsed_sec, reverse=True)
+    cands = get_sorted_candidates(rows, min_sec)
 
     selected: List[PerfRow] = []
-    # If nth is specified, analyze only that single page and ignore --top
+    # If nth is specified, analyze only that single page
     if nth is not None:
         if nth <= 0:
             raise ValueError(f"--nth must be >= 1 (got {nth})")
@@ -189,19 +172,28 @@ def analyze_pages(
 
     parser = DoclingPdfParser(loglevel=loglevel)
     results: List[PageTimings] = []
+
     for filename, pages in pages_by_file.items():
         # Sort pages descending by original elapsed (for determinism)
         pages.sort(key=lambda r: r.elapsed_sec, reverse=True)
         try:
-            doc = parser.load(filename, lazy=True, boundary_type=PdfPageBoundaryType.CROP_BOX)
-        except Exception as e:
+            doc = parser.load(
+                filename, lazy=True, boundary_type=PdfPageBoundaryType.CROP_BOX
+            )
+        except Exception:
             # Unable to load document; record empty timings for its pages
             for r in pages:
-                results.append(PageTimings(filename=r.filename, page_number=r.page_number, elapsed_original=r.elapsed_sec, stages={}))
+                results.append(
+                    PageTimings(
+                        filename=r.filename,
+                        page_number=r.page_number,
+                        elapsed_original=r.elapsed_sec,
+                    )
+                )
             continue
 
         for r in pages:
-            stage_times = extract_timings_for_page(
+            timings = extract_timings_for_page(
                 doc,
                 r.page_number,
                 mode=mode,
@@ -211,7 +203,14 @@ def analyze_pages(
                 create_words=True,
                 create_textlines=True,
             )
-            results.append(PageTimings(filename=r.filename, page_number=r.page_number, elapsed_original=r.elapsed_sec, stages=stage_times))
+            results.append(
+                PageTimings(
+                    filename=r.filename,
+                    page_number=r.page_number,
+                    elapsed_original=r.elapsed_sec,
+                    timings=timings,
+                )
+            )
 
         # Best-effort unload
         try:
@@ -222,71 +221,159 @@ def analyze_pages(
     return results
 
 
-def write_results_csv(out_path: Path, pages: List[PageTimings]) -> None:
+# -------------- Output: --top mode (CSV with static timings) --------------
+
+
+def write_static_timings_csv(out_path: Path, pages: List[PageTimings]) -> None:
+    """Write CSV with static timing keys only, one row per page."""
     ensure_parent(out_path)
-    # Union of all stage keys
-    all_keys: List[str] = []
-    seen = set()
-    for p in pages:
-        for k in p.stages.keys():
-            if should_skip_timing_key(k):
-                continue
-            if k not in seen:
-                seen.add(k)
-                all_keys.append(k)
-    header = ["filename", "page_number", "elapsed_original_sec"] + all_keys
+
+    # Get ordered static keys
+    static_keys = sorted(get_static_timing_keys())
+
+    header = ["filename", "page_number", "elapsed_original_sec"] + static_keys
+
     with out_path.open("w", newline="") as f:
         w = csv.writer(f)
         w.writerow(header)
         for p in pages:
             row = [p.filename, p.page_number, f"{p.elapsed_original:.9f}"]
-            for k in all_keys:
-                v = p.stages.get(k, "")
-                row.append(f"{v:.9f}" if isinstance(v, (int, float)) else "")
+            for k in static_keys:
+                v = p.timings.get(k, 0.0)
+                row.append(f"{v:.9f}" if v else "")
             w.writerow(row)
 
 
-def print_summary(pages: List[PageTimings], top_k: int = 10) -> None:
+def print_top_summary(pages: List[PageTimings]) -> None:
+    """Print summary for --top mode."""
     if not pages:
         print("No pages analyzed.")
         return
 
-    # Aggregate average contribution per stage across analyzed pages
-    agg: Dict[str, List[float]] = defaultdict(list)
-    for p in pages:
-        for k, v in p.stages.items():
-            if should_skip_timing_key(k):
-                continue
-            if isinstance(v, (int, float)) and math.isfinite(v):
-                agg[k].append(float(v))
+    print(f"\nAnalyzed {len(pages)} pages.")
+    print(f"Static timing keys: {sorted(get_static_timing_keys())}")
 
-    means: List[Tuple[str, float]] = []
-    for k, vals in agg.items():
-        if vals:
-            means.append((k, sum(vals) / len(vals)))
-    means.sort(key=lambda x: x[1], reverse=True)
 
-    print("\nTop stage averages across analyzed pages:")
-    for name, val in means[:top_k]:
-        print(f" - {name}: {val:.6f} sec (avg over {len(agg[name])} pages)")
+# -------------- Output: --nth mode (table with all timings) --------------
+
+
+def print_nth_table(page: PageTimings) -> None:
+    """Print detailed table for a single page with all timings."""
+    print(f"\n{'=' * 80}")
+    print(f"File: {page.filename}")
+    print(f"Page: {page.page_number}")
+    print(f"Original elapsed: {page.elapsed_original:.6f} sec")
+    print(f"{'=' * 80}\n")
+
+    timings = page.timings
+
+    if not timings.data:
+        print("No timing data available.")
+        return
+
+    # Collect all timing data with statistics
+    table_data = []
+
+    # Get all keys, separating static and dynamic
+    all_keys = list(timings.data.keys())
+    static_keys = [k for k in all_keys if is_static_timing_key(k)]
+    dynamic_keys = [k for k in all_keys if not is_static_timing_key(k)]
+
+    # Sort each group
+    static_keys.sort()
+    dynamic_keys.sort()
+
+    def add_timing_row(key: str, is_static: bool):
+        """Add a row for the given timing key."""
+        values = timings.get_all(key)
+        if not values:
+            values = [timings.get(key, 0.0)]
+
+        total = sum(values)
+        count = len(values)
+        avg = total / count if count > 0 else 0.0
+        std = statistics.stdev(values) if count > 1 else 0.0
+
+        key_type = "static" if is_static else "dynamic"
+        table_data.append([key, key_type, f"{total:.6f}", f"{avg:.6f}", f"{std:.6f}", count])
+
+    # Add static timings first
+    for key in static_keys:
+        add_timing_row(key, is_static=True)
+
+    # Add separator row if we have both static and dynamic
+    if static_keys and dynamic_keys:
+        table_data.append(["---", "---", "---", "---", "---", "---"])
+
+    # Add dynamic timings
+    for key in dynamic_keys:
+        add_timing_row(key, is_static=False)
+
+    # Print table
+    headers = ["Timing Key", "Type", "Total (sec)", "Average (sec)", "Std Dev", "Count"]
+    print(tabulate(table_data, headers=headers, tablefmt="grid"))
+
+    # Print totals
+    print(f"\nTotal static time: {sum(timings.get_static_timings().values()):.6f} sec")
+    print(f"Total dynamic time: {sum(timings.get_dynamic_timings().values()):.6f} sec")
+    print(f"Total all timings: {timings.total():.6f} sec")
+
+
+# -------------- Main --------------
 
 
 def main(argv: List[str]) -> int:
-    ap = argparse.ArgumentParser(description="Analyze slowest pages and extract detailed parser timings")
+    ap = argparse.ArgumentParser(
+        description="Analyze slowest pages and extract detailed parser timings"
+    )
     ap.add_argument("csv", help="Perf CSV file path (from perf/run_perf.py)")
-    ap.add_argument("--top", type=int, default=20, help="Number of slowest pages to analyze")
-    ap.add_argument("--nth", type=int, default=None, help="Additionally include the Nth slowest page (1-based)")
-    ap.add_argument("--min-sec", type=float, default=None, help="Optional minimum elapsed_sec threshold")
-    ap.add_argument("--mode", choices=["typed", "json"], default="typed", help="Pipeline to trigger before fetching timings")
+    ap.add_argument(
+        "--top",
+        type=int,
+        default=None,
+        help="Analyze top N slowest pages, output CSV with static timings",
+    )
+    ap.add_argument(
+        "--nth",
+        type=int,
+        default=None,
+        help="Analyze the Nth slowest page (1-based), show detailed table",
+    )
+    ap.add_argument(
+        "--min-sec",
+        type=float,
+        default=None,
+        help="Optional minimum elapsed_sec threshold",
+    )
+    ap.add_argument(
+        "--mode",
+        choices=["typed", "json"],
+        default="typed",
+        help="Pipeline to trigger before fetching timings",
+    )
     ap.add_argument(
         "--loglevel",
         choices=["fatal", "error", "warning", "info"],
         default="fatal",
         help="Docling parser log level",
     )
-    ap.add_argument("--out", type=str, default=None, help="Output CSV path for stage timings (defaults under perf/results)")
+    ap.add_argument(
+        "--out",
+        type=str,
+        default=None,
+        help="Output CSV path for --top mode (defaults under perf/results)",
+    )
 
     args = ap.parse_args(argv)
+
+    # Validate arguments
+    if args.top is None and args.nth is None:
+        print("Error: Must specify either --top or --nth")
+        return 2
+
+    if args.top is not None and args.nth is not None:
+        print("Error: Cannot specify both --top and --nth")
+        return 2
 
     csv_path = Path(args.csv)
     if not csv_path.exists():
@@ -305,14 +392,22 @@ def main(argv: List[str]) -> int:
     except ValueError as e:
         print(f"Error: {e}")
         return 2
+
     if not pages:
         print("No pages met the criteria or failed to parse timings.")
         return 1
 
-    out_path = Path(args.out) if args.out else timestamped_out_path(prefix="analysis")
-    write_results_csv(out_path, pages)
-    print_summary(pages)
-    print(f"\nWrote detailed timings: {out_path}")
+    # Output based on mode
+    if args.nth is not None:
+        # --nth mode: print detailed table
+        print_nth_table(pages[0])
+    else:
+        # --top mode: write CSV with static timings
+        out_path = Path(args.out) if args.out else timestamped_out_path(prefix="analysis")
+        write_static_timings_csv(out_path, pages)
+        print_top_summary(pages)
+        print(f"\nWrote static timings CSV: {out_path}")
+
     return 0
 
 
