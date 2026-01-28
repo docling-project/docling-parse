@@ -3,6 +3,8 @@
 #ifndef PDF_PAGE_FONT_BASE_FONT_H
 #define PDF_PAGE_FONT_BASE_FONT_H
 
+#include <unordered_map>
+
 namespace pdflib
 {
 
@@ -48,11 +50,11 @@ namespace pdflib
 
     nlohmann::json properties;
     
-    std::map<uint32_t, std::string> numb_to_name;
-    std::map<uint32_t, std::string> numb_to_utf8;
+    std::unordered_map<uint32_t, std::string> numb_to_name;
+    std::unordered_map<uint32_t, std::string> numb_to_utf8;
 
-    std::map<uint32_t   , double> numb_to_width;
-    std::map<std::string, double> name_to_width;
+    std::unordered_map<uint32_t   , double> numb_to_width;
+    std::unordered_map<std::string, double> name_to_width;
   };
 
   base_font::base_font(std::string filename_,

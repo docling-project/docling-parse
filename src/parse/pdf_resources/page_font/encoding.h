@@ -4,6 +4,7 @@
 #define PDF_PAGE_FONT_ENCODING_H
 
 #include <fstream>
+#include <unordered_map>
 
 namespace pdflib
 {
@@ -16,7 +17,7 @@ namespace pdflib
     font_encoding();
     ~font_encoding();
 
-    std::map<uint32_t, std::string>& get_numb_to_utf8();
+    std::unordered_map<uint32_t, std::string>& get_numb_to_utf8();
 
     template<typename glyphs_type>
     void initialise(font_encoding_name name_, 
@@ -27,9 +28,9 @@ namespace pdflib
   private:
 
     font_encoding_name name;
-    
-    std::map<uint32_t, std::string> numb_to_name;
-    std::map<uint32_t, std::string> numb_to_utf8;
+
+    std::unordered_map<uint32_t, std::string> numb_to_name;
+    std::unordered_map<uint32_t, std::string> numb_to_utf8;
   };
 
   font_encoding::font_encoding()
@@ -38,7 +39,7 @@ namespace pdflib
   font_encoding::~font_encoding()
   {}
 
-  std::map<uint32_t, std::string>& font_encoding::get_numb_to_utf8()
+  std::unordered_map<uint32_t, std::string>& font_encoding::get_numb_to_utf8()
   {
     return numb_to_utf8;
   }

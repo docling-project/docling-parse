@@ -26,7 +26,7 @@ namespace pdflib
                               std::string cid2code,
                               std::vector<std::string> columns);
 
-    void decode_widths(std::map<uint32_t, double>& numb_to_widths);
+    void decode_widths(std::unordered_map<uint32_t, double>& numb_to_widths);
 
   private:
 
@@ -39,8 +39,8 @@ namespace pdflib
 
   private:
 
-    std::map<uint32_t, uint32_t>    cmap2cid;
-    std::map<uint32_t, std::string> cid2utf8;
+    std::unordered_map<uint32_t, uint32_t>    cmap2cid;
+    std::unordered_map<uint32_t, std::string> cid2utf8;
 
     std::unordered_map<uint32_t, std::string> cmap2str;
   };
@@ -307,11 +307,11 @@ namespace pdflib
       }
   }
 
-  void font_cid::decode_widths(std::map<uint32_t, double>& numb_to_widths)
+  void font_cid::decode_widths(std::unordered_map<uint32_t, double>& numb_to_widths)
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    std::map<uint32_t, double> numb_to_widths_ = numb_to_widths;
+    std::unordered_map<uint32_t, double> numb_to_widths_ = numb_to_widths;
     numb_to_widths.clear();
 
     for(auto itr=cmap2cid.begin(); itr!=cmap2cid.end(); itr++)

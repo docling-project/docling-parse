@@ -131,18 +131,18 @@ namespace pdflib
     bool   has_default_width=false;
     double default_width;
 
-    std::map<uint32_t   , double> numb_to_widths;
-    std::map<std::string, double> name_to_widths;
+    std::unordered_map<uint32_t   , double> numb_to_widths;
+    std::unordered_map<std::string, double> name_to_widths;
 
-    std::map<std::string, char_description> name_to_descr;
+    std::unordered_map<std::string, char_description> name_to_descr;
 
     bool cmap_initialized;
     bool diff_initialized;
 
     std::unordered_map<uint32_t, std::string> cmap_numb_to_char;
-    std::map<uint32_t, std::string> diff_numb_to_char;
+    std::unordered_map<uint32_t, std::string> diff_numb_to_char;
 
-    std::map<uint32_t, int> unknown_numbs;
+    std::unordered_map<uint32_t, int> unknown_numbs;
 
     uint32_t space_index;
   };

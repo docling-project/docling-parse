@@ -7,6 +7,7 @@
 
 #include <set>
 #include <map>
+#include <unordered_map>
 
 namespace pdflib
 {
@@ -43,8 +44,8 @@ namespace pdflib
     
     std::set<std::string> unknown_glyphs;
 
-    std::map<std::string, std::string> name_to_code;
-    std::map<std::string, std::string> name_to_utf8;
+    std::unordered_map<std::string, std::string> name_to_code;
+    std::unordered_map<std::string, std::string> name_to_utf8;
   };
 
   font_glyphs::font_glyphs():
