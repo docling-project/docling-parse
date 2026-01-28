@@ -18,7 +18,7 @@ namespace pdflib
   public:
 
     pdf_decoder();
-    pdf_decoder(std::map<std::string, double>& timings_);
+    pdf_decoder(pdf_timings& timings_);
     ~pdf_decoder();
 
     nlohmann::json get();
@@ -68,14 +68,14 @@ namespace pdflib
 
     void update_qpdf_logger();
 
-    void update_timings(std::map<std::string, double>& timings_, bool set_timer);
+    void update_timings(pdf_timings& timings_, bool set_timer);
 
   private:
 
     std::string filename;
     std::string buffer; // keep a local copy, in order to not let it expire
 
-    std::map<std::string, double> timings;
+    pdf_timings timings;
 
     QPDF qpdf_document;
 
@@ -111,7 +111,7 @@ namespace pdflib
     update_qpdf_logger();
   }
 
-  pdf_decoder<DOCUMENT>::pdf_decoder(std::map<std::string, double>& timings_):
+  pdf_decoder<DOCUMENT>::pdf_decoder(pdf_timings& timings_):
     filename(""),
     buffer(""),
 
@@ -164,7 +164,9 @@ namespace pdflib
     {
       nlohmann::json& timings_ = json_document["timings"];
 
-      for(auto itr=timings.begin(); itr!=timings.end(); itr++)
+      // Serialize timings as sums for backward compatibility
+      auto sum_map = timings.to_sum_map();
+      for(auto itr=sum_map.begin(); itr!=sum_map.end(); itr++)
 	{
 	  timings_[itr->first] = itr->second;
 	}
@@ -209,7 +211,7 @@ namespace pdflib
         return false;
       }
 
-    timings[__FUNCTION__] = timer.get_time();
+    timings.add_timing(__FUNCTION__, timer.get_time());
 
     return true;
   }
@@ -261,7 +263,7 @@ namespace pdflib
         return false;
       }
 
-    timings[__FUNCTION__] = timer.get_time();
+    timings.add_timing(__FUNCTION__, timer.get_time());
 
     return true;
   }
@@ -288,8 +290,8 @@ namespace pdflib
 	
         pdf_decoder<PAGE> page_decoder(page, page_number);
 
-        auto timings_ = page_decoder.decode_page(page_boundary, do_sanitization);
-	update_timings(timings_, set_timer);
+        page_decoder.decode_page(page_boundary, do_sanitization);
+	update_timings(page_decoder.get_timings(), set_timer);
 	set_timer = false;
 
         json_pages.push_back(page_decoder.get(keep_char_cells, keep_lines, keep_bitmaps, do_sanitization));
@@ -297,10 +299,10 @@ namespace pdflib
 	std::stringstream ss;
 	ss << "decoding page " << page_number++;
 
-	timings[ss.str()] = page_timer.get_time();
+	timings.add_timing(ss.str(), page_timer.get_time());
       }
 
-    timings[__FUNCTION__] = timer.get_time();
+    timings.add_timing(__FUNCTION__, timer.get_time());
   }
 
   void pdf_decoder<DOCUMENT>::decode_document(std::vector<int>& page_numbers,
@@ -339,12 +341,12 @@ namespace pdflib
 	    pdf_decoder<PAGE> page_decoder(pages.at(page_number), page_number);
 
 	    {
-	      //utils::timer decode_timer;	      
-	      auto timings_ = page_decoder.decode_page(page_boundary, do_sanitization);
+	      //utils::timer decode_timer;
+	      page_decoder.decode_page(page_boundary, do_sanitization);
 
 	      //std::cout << "decode_timer: " << decode_timer.get_time() << "\n";
-	      
-	      update_timings(timings_, set_timer);
+
+	      update_timings(page_decoder.get_timings(), set_timer);
 	      set_timer=false;
 	    }
 
@@ -397,35 +399,31 @@ namespace pdflib
 
 	    std::stringstream ss;
 	    ss << "decoding page " << page_number;
-	    
-	    timings[ss.str()] = page_timer.get_time();	    
+
+	    timings.add_timing(ss.str(), page_timer.get_time());
 	  }
 	else
 	  {
-	    LOG_S(WARNING) << "page " << page_number << " is out of bounds ...";        
-	    
+	    LOG_S(WARNING) << "page " << page_number << " is out of bounds ...";
+
 	    nlohmann::json none;
 	    json_pages.push_back(none);
 	  }
       }
 
-    timings[__FUNCTION__] = timer.get_time();
+    timings.add_timing(__FUNCTION__, timer.get_time());
   }
 
-  void pdf_decoder<DOCUMENT>::update_timings(std::map<std::string, double>& timings_,
+  void pdf_decoder<DOCUMENT>::update_timings(pdf_timings& timings_,
 					     bool set_timer)
   {
-    for(auto itr=timings_.begin(); itr!=timings_.end(); itr++)
+    if(set_timer)
       {
-	if(timings.count(itr->first)==0 or set_timer)
-	  {
-	    timings[itr->first] = itr->second;
-	  }
-	else
-	  {
-	    timings[itr->first] += itr->second;
-	  }
+	// Clear existing timings when starting a new batch
+	timings.clear();
       }
+    // Merge all timings from the page decoder
+    timings.merge(timings_);
   }
 
   bool pdf_decoder<DOCUMENT>::has_page_decoder(int page_number)
@@ -475,8 +473,8 @@ namespace pdflib
     auto page_decoder = std::make_shared<pdf_decoder<PAGE>>(qpdf_page, page_number);
 
     bool set_timer = (timings.empty());
-    auto timings_ = page_decoder->decode_page(page_boundary, do_sanitization);
-    update_timings(timings_, set_timer);
+    page_decoder->decode_page(page_boundary, do_sanitization);
+    update_timings(page_decoder->get_timings(), set_timer);
 
     // Create word and line cells if requested
     if(create_word_cells)
@@ -496,7 +494,7 @@ namespace pdflib
 
     std::stringstream ss;
     ss << "decode_page " << page_number;
-    timings[ss.str()] = timer.get_time();
+    timings.add_timing(ss.str(), timer.get_time());
 
     return page_decoder;
   }

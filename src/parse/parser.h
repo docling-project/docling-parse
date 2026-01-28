@@ -188,9 +188,10 @@ namespace plib
 			  bool do_sanitization,
 			  bool pretty_print)			  
   {
+    pdflib::pdf_timings timings;
     pdflib::pdf_decoder<pdflib::DOCUMENT> document_decoder(timings);
 
-    if(timings.count("fonts-initialisation")==0)
+    if(timings.has_key("fonts-initialisation"))
       {
         LOG_S(ERROR) << "fonts are not initialised";
         return false;

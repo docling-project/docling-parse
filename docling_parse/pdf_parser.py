@@ -27,6 +27,29 @@ from pydantic import BaseModel, ConfigDict
 
 from docling_parse.pdf_parsers import pdf_parser  # type: ignore[import]
 from docling_parse.pdf_parsers import pdf_sanitizer  # type: ignore[import]
+from docling_parse.pdf_parsers import (  # type: ignore[import]
+    get_static_timing_keys,
+    is_static_timing_key,
+    TIMING_KEY_DECODE_PAGE,
+    TIMING_KEY_DECODE_DIMENSIONS,
+    TIMING_KEY_DECODE_RESOURCES,
+    TIMING_KEY_DECODE_GRPHS,
+    TIMING_KEY_DECODE_FONTS,
+    TIMING_KEY_DECODE_XOBJECTS,
+    TIMING_KEY_DECODE_CONTENTS,
+    TIMING_KEY_DECODE_ANNOTS,
+    TIMING_KEY_SANITISE_CONTENTS,
+    TIMING_KEY_CREATE_WORD_CELLS,
+    TIMING_KEY_CREATE_LINE_CELLS,
+    TIMING_KEY_DECODE_FONTS_TOTAL,
+    TIMING_KEY_DECODE_FONTS_COUNT,
+    TIMING_KEY_PROCESS_DOCUMENT_FROM_FILE,
+    TIMING_KEY_PROCESS_DOCUMENT_FROM_BYTESIO,
+    TIMING_KEY_DECODE_DOCUMENT,
+    TIMING_PREFIX_DECODE_FONT,
+    TIMING_PREFIX_DECODING_PAGE,
+    TIMING_PREFIX_DECODE_PAGE,
+)
 
 # Configure logging
 _log = logging.getLogger(__name__)
@@ -80,7 +103,7 @@ class Timings(BaseModel):
     performance analysis and optimization.
 
     Attributes:
-        data: Dictionary mapping operation names to elapsed time in seconds.
+        data: Dictionary mapping operation names to elapsed time in seconds (summed).
             Common keys include:
             - 'decode_page': Total page decoding time
             - 'decode_dimensions': Time to parse page dimensions
@@ -89,19 +112,31 @@ class Timings(BaseModel):
             - 'decode_annots': Time to decode annotations
             - 'create_word_cells': Time to create word cells (if requested)
             - 'create_line_cells': Time to create line cells (if requested)
+        raw_data: Dictionary mapping operation names to list of elapsed times.
+            This is useful when an operation is repeated multiple times
+            (e.g., decoding multiple fonts) and you want to see individual timings.
     """
 
     model_config = ConfigDict(validate_assignment=True)
 
     data: Dict[str, float] = {}
+    raw_data: Dict[str, List[float]] = {}
 
     def total(self) -> float:
         """Get total time across all operations."""
         return sum(self.data.values())
 
     def get(self, key: str, default: float = 0.0) -> float:
-        """Get timing for a specific operation."""
+        """Get timing for a specific operation (summed if repeated)."""
         return self.data.get(key, default)
+
+    def get_all(self, key: str) -> List[float]:
+        """Get all timing values for a specific operation."""
+        return self.raw_data.get(key, [])
+
+    def get_count(self, key: str) -> int:
+        """Get the number of times an operation was timed."""
+        return len(self.raw_data.get(key, []))
 
     def __getitem__(self, key: str) -> float:
         return self.data[key]
@@ -113,6 +148,19 @@ class Timings(BaseModel):
     def items(self):
         """Get all timing items as (name, seconds) pairs."""
         return self.data.items()
+
+    def get_static_timings(self) -> Dict[str, float]:
+        """Get only static (constant) timing keys."""
+        return {k: v for k, v in self.data.items() if is_static_timing_key(k)}
+
+    def get_dynamic_timings(self) -> Dict[str, float]:
+        """Get only dynamic timing keys."""
+        return {k: v for k, v in self.data.items() if not is_static_timing_key(k)}
+
+    @staticmethod
+    def static_keys() -> set:
+        """Get all static timing key names."""
+        return get_static_timing_keys()
 
 
 class PdfDocument:
@@ -411,7 +459,8 @@ class PdfDocument:
 
         # Get timings from the page decoder
         timings_dict = page_decoder.get_timings()
-        timings = Timings(data=dict(timings_dict))
+        raw_timings_dict = page_decoder.get_timings_raw()
+        timings = Timings(data=dict(timings_dict), raw_data=dict(raw_timings_dict))
 
         return segmented_page, timings
 
@@ -462,6 +511,7 @@ class PdfDocument:
                 enforce_same_font=enforce_same_font,
             )
 
+            # Note: JSON mode only provides summed timings, not raw timing vectors
             return segmented_page, Timings(data=timings_data)
 
         raise ValueError(f"No pages found in document for page {page_no}")

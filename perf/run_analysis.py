@@ -133,6 +133,9 @@ def extract_timings_for_page(
     except Exception:
         return {}
 
+    print(timings)
+    exit(-1)
+    
     # Convert to plain dict and filter unwanted keys
     result: Dict[str, float] = {}
     try:

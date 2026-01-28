@@ -26,7 +26,7 @@ namespace pdflib
 
     void set(nlohmann::json&   json_fonts,
              QPDFObjectHandle& qpdf_fonts_,
-             std::map<std::string, double>& timings);
+             pdf_timings& timings);
 
   private:
 
@@ -104,7 +104,7 @@ namespace pdflib
   
   void pdf_resource<PAGE_FONTS>::set(nlohmann::json&   json_fonts,
                                      QPDFObjectHandle& qpdf_fonts,
-                                     std::map<std::string, double>& timings)
+                                     pdf_timings& timings)
   {
     LOG_S(INFO) << __FUNCTION__;
 
@@ -133,7 +133,7 @@ namespace pdflib
 
 	    double font_time = font_timer.get_time();
 	    total_font_time += font_time;
-	    timings["decode_font:" + key] = font_time;
+	    timings.add_timing("decode_font: " + key, font_time);
 	  }
 	else
 	  {
@@ -141,8 +141,8 @@ namespace pdflib
 	  }
       }
 
-    timings["decode_fonts_total"] = total_font_time;
-    timings["decode_fonts_count"] = static_cast<double>(json_fonts.size());
+    timings.add_timing("decode_fonts_total", total_font_time);
+    timings.add_timing("decode_fonts_count", static_cast<double>(json_fonts.size()));
   }
 
 }

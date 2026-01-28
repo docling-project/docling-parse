@@ -51,10 +51,11 @@ namespace pdflib
                        bool keep_bitmaps=true,
 		       bool do_sanitization=false);
 
-    std::map<std::string, double> decode_page(std::string page_boundary, bool do_sanitization);
+    void decode_page(std::string page_boundary, bool do_sanitization);
 
     // Get timing information for this page
-    const std::map<std::string, double>& get_timings() const { return timings; }
+    pdf_timings& get_timings() { return timings; }
+    const pdf_timings& get_timings() const { return timings; }
 
   private:
 
@@ -120,7 +121,7 @@ namespace pdflib
     pdf_resource<PAGE_FONTS>     page_fonts;
     pdf_resource<PAGE_XOBJECTS>  page_xobjects;
 
-    std::map<std::string, double> timings;
+    pdf_timings timings;
   };
 
   pdf_decoder<PAGE>::pdf_decoder(QPDFObjectHandle page, int page_num):
@@ -157,7 +158,9 @@ namespace pdflib
 
       nlohmann::json& timings_ = result["timings"];
       {
-        for(auto itr=timings.begin(); itr!=timings.end(); itr++)
+        // Serialize timings as sums for backward compatibility
+        auto sum_map = timings.to_sum_map();
+        for(auto itr=sum_map.begin(); itr!=sum_map.end(); itr++)
           {
             timings_[itr->first] = itr->second;
           }
@@ -226,7 +229,7 @@ namespace pdflib
     return result;
   }
 
-  std::map<std::string, double> pdf_decoder<PAGE>::decode_page(std::string page_boundary, bool do_sanitization)
+  void pdf_decoder<PAGE>::decode_page(std::string page_boundary, bool do_sanitization)
   {
     utils::timer timer;
 
@@ -253,7 +256,7 @@ namespace pdflib
                      << e.what();
       }
     */
-    
+
     decode_dimensions();
 
     {
@@ -263,7 +266,7 @@ namespace pdflib
     }
 
     {
-      //utils::timer _;      
+      //utils::timer _;
       decode_contents();
       //std::cout << "decode_contents: " << _.get_time() << "\n";
     }
@@ -279,7 +282,7 @@ namespace pdflib
     // fix the orientiation
     {
       //utils::timer _;
-      
+
       pdf_sanitator<PAGE_DIMENSION> sanitator(page_dimension);
 
       sanitator.sanitize(page_boundary); // update the top-level bbox
@@ -301,10 +304,10 @@ namespace pdflib
 
 	//std::cout << "pdf_sanitator<PAGE_CELLS>::remove_duplicate_chars " << _.get_time() << "\n";
       }
-      
+
       {
 	//utils::timer _;
-	sanitator.sanitize_text(page_cells);	
+	sanitator.sanitize_text(page_cells);
 	//std::cout << "pdf_sanitator<PAGE_CELLS>::sanitize_text " << _.get_time() << "\n";
       }
     }
@@ -318,9 +321,7 @@ namespace pdflib
         LOG_S(WARNING) << "skipping sanitization!";
       }
 
-    timings[__FUNCTION__] = timer.get_time();
-
-    return timings;
+    timings.add_timing(__FUNCTION__, timer.get_time());
   }
 
   void pdf_decoder<PAGE>::decode_dimensions()
@@ -330,7 +331,7 @@ namespace pdflib
 
     page_dimension.execute(json_page, qpdf_page);
 
-    timings[__FUNCTION__] = timer.get_time();
+    timings.add_timing(__FUNCTION__, timer.get_time());
   }
 
   void pdf_decoder<PAGE>::decode_resources()
@@ -409,7 +410,7 @@ namespace pdflib
         }
     }
 
-    timings[__FUNCTION__] = timer.get_time();
+    timings.add_timing(__FUNCTION__, timer.get_time());
   }
 
   void pdf_decoder<PAGE>::decode_resources_low_level()
@@ -425,7 +426,7 @@ namespace pdflib
 
         decode_grphs();
 
-        timings["decode_grphs"] += timer.get_time();
+        timings.add_timing("decode_grphs", timer.get_time());
       }
     else
       {
@@ -441,7 +442,7 @@ namespace pdflib
 
         decode_fonts();
 
-        timings["decode_fonts"] += timer.get_time();
+        timings.add_timing("decode_fonts", timer.get_time());
       }
     else
       {
@@ -457,7 +458,7 @@ namespace pdflib
 
         decode_xobjects();
 
-        timings["decode_xobjects"] += timer.get_time();
+        timings.add_timing("decode_xobjects", timer.get_time());
       }
     else
       {
@@ -474,9 +475,14 @@ namespace pdflib
 
   void pdf_decoder<PAGE>::decode_fonts()
   {
-    LOG_S(INFO) << __FUNCTION__;
+    LOG_S(ERROR) << __FUNCTION__;
 
     page_fonts.set(json_fonts, qpdf_fonts, timings);
+
+    for(auto itr=timings.begin(); itr!=timings.end(); itr++)
+      {
+	LOG_S(ERROR) << itr->first << ": " << timings.get_sum(itr->first);
+      }
   }
 
   void pdf_decoder<PAGE>::decode_xobjects()
@@ -497,7 +503,7 @@ namespace pdflib
     pdf_decoder<STREAM> stream_decoder(page_dimension, page_cells,
                                        page_lines, page_images,
                                        page_fonts, page_grphs,
-                                       page_xobjects);
+                                       page_xobjects, timings);
 
     int cnt = 0;
 
@@ -517,7 +523,7 @@ namespace pdflib
           }
       }
 
-    timings[__FUNCTION__] = timer.get_time();
+    timings.add_timing(__FUNCTION__, timer.get_time());
   }
 
   void pdf_decoder<PAGE>::decode_annots()
@@ -598,7 +604,7 @@ namespace pdflib
           }
       }
 
-    timings[__FUNCTION__] = timer.get_time();
+    timings.add_timing(__FUNCTION__, timer.get_time());
   }
 
   void pdf_decoder<PAGE>::rotate_contents()
@@ -667,7 +673,7 @@ namespace pdflib
       LOG_S(INFO) << "#-sani-cells: " << cells.size();
     }
 
-    timings[__FUNCTION__] = timer.get_time();
+    timings.add_timing(__FUNCTION__, timer.get_time());
   }
 
   void pdf_decoder<PAGE>::create_word_cells(double horizontal_cell_tolerance,
@@ -690,7 +696,7 @@ namespace pdflib
     word_cells_created = true;
 
     LOG_S(INFO) << "#-page-cells: " << page_cells.size() << " -> #-word-cells: " << word_cells.size();
-    timings[__FUNCTION__] = timer.get_time();
+    timings.add_timing(__FUNCTION__, timer.get_time());
   }
 
   void pdf_decoder<PAGE>::create_line_cells(double horizontal_cell_tolerance,
@@ -715,7 +721,7 @@ namespace pdflib
     line_cells_created = true;
 
     LOG_S(INFO) << "#-page-cells: " << page_cells.size() << " -> #-line-cells: " << line_cells.size();
-    timings[__FUNCTION__] = timer.get_time();
+    timings.add_timing(__FUNCTION__, timer.get_time());
   }
 
 }

@@ -19,7 +19,9 @@ namespace pdflib
 
                 pdf_resource<PAGE_FONTS>&     page_fonts_,                                   
                 pdf_resource<PAGE_GRPHS>&     page_grphs_,                                   
-                pdf_resource<PAGE_XOBJECTS>&  page_xobjects_);
+                pdf_resource<PAGE_XOBJECTS>&  page_xobjects_,
+
+		pdf_timings& timings);
 
     ~pdf_decoder();
 
@@ -41,6 +43,7 @@ namespace pdflib
     void interprete(std::vector<qpdf_instruction>& stream_,
                     std::vector<qpdf_instruction>& parameters_);
 
+
     void interprete_stream(std::vector<qpdf_instruction>& parameters);
 
     pdf_state<GLOBAL>& cgs(); // get current global state
@@ -51,7 +54,8 @@ namespace pdflib
     void q();
     void Q();
 
-    void execute_operator(qpdf_instruction op, std::vector<qpdf_instruction> parameters);
+    void execute_operator(qpdf_instruction op,
+			  std::vector<qpdf_instruction> parameters);
     
   private:
 
@@ -64,6 +68,8 @@ namespace pdflib
     pdf_resource<PAGE_GRPHS>&     page_grphs;
     pdf_resource<PAGE_XOBJECTS>&  page_xobjects;
 
+    pdf_timings& timings;
+    
     std::set<std::string> unknown_operators;
 
     std::vector<qpdf_instruction> stream;
@@ -80,7 +86,8 @@ namespace pdflib
                                    pdf_resource<PAGE_FONTS>&     page_fonts_,
                                    pdf_resource<PAGE_GRPHS>&     page_grphs_,
 
-                                   pdf_resource<PAGE_XOBJECTS>&  page_xobjects_):
+                                   pdf_resource<PAGE_XOBJECTS>&  page_xobjects_,
+				   pdf_timings& timings):
     page_dimension(page_dimension_),
     page_cells(page_cells_),    
     page_lines(page_lines_),
@@ -91,6 +98,8 @@ namespace pdflib
 
     page_xobjects(page_xobjects_),
 
+    timings(timings),
+    
     unknown_operators({}),
     stream({}),
     stack({}),
@@ -459,13 +468,13 @@ namespace pdflib
                 // parse the resources of the xobject
                 {
                   std::pair<nlohmann::json, QPDFObjectHandle> xobj_fonts = xobj.get_fonts();
-                  page_fonts_.set(xobj_fonts.first, xobj_fonts.second);
+                  page_fonts_.set(xobj_fonts.first, xobj_fonts.second, timings);
 
                   std::pair<nlohmann::json, QPDFObjectHandle> xobj_grphs = xobj.get_grphs();
-                  page_grphs_.set(xobj_grphs.first, xobj_grphs.second);
+                  page_grphs_.set(xobj_grphs.first, xobj_grphs.second/*, timings*/);
 
                   std::pair<nlohmann::json, QPDFObjectHandle> xobj_xobjects = xobj.get_xobjects();
-                  page_xobjects_.set(xobj_xobjects.first, xobj_xobjects.second);
+                  page_xobjects_.set(xobj_xobjects.first, xobj_xobjects.second/*, timings*/);
                 }
                 
                 {
@@ -481,7 +490,7 @@ namespace pdflib
                     pdf_decoder<STREAM> new_stream(page_dimension, page_cells, 
                                                    page_lines, page_images, 
                                                    page_fonts_, page_grphs_, 
-						   page_xobjects_);
+						   page_xobjects_, timings);
 
                     bool updated_stack = new_stream.update_stack(stack, stack_count);
 

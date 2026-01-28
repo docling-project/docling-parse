@@ -143,8 +143,53 @@ PYBIND11_MODULE(pdf_parsers, m) {
 	 "Check if word cells have been created")
     .def("has_line_cells", &pdflib::pdf_decoder<pdflib::PAGE>::has_line_cells,
 	 "Check if line cells have been created")
-    .def("get_timings", &pdflib::pdf_decoder<pdflib::PAGE>::get_timings,
-	 "Get timing information for page decoding as Dict[str, float]");
+    .def("get_timings", [](pdflib::pdf_decoder<pdflib::PAGE>& self) {
+	   // Return as Dict[str, float] (sums) for backward compatibility
+	   return self.get_timings().to_sum_map();
+	 },
+	 "Get timing information for page decoding as Dict[str, float]")
+    .def("get_timings_raw", [](pdflib::pdf_decoder<pdflib::PAGE>& self) {
+	   // Return as Dict[str, List[float]] for detailed timing data
+	   return self.get_timings().get_raw_data();
+	 },
+	 "Get detailed timing information as Dict[str, List[float]]")
+    .def("get_static_timings", [](pdflib::pdf_decoder<pdflib::PAGE>& self) {
+	   return self.get_timings().get_static_timings();
+	 },
+	 "Get only static (constant) timing keys as Dict[str, float]")
+    .def("get_dynamic_timings", [](pdflib::pdf_decoder<pdflib::PAGE>& self) {
+	   return self.get_timings().get_dynamic_timings();
+	 },
+	 "Get only dynamic timing keys as Dict[str, float]");
+
+  // ============= Timing Keys Constants =============
+
+  m.attr("TIMING_KEY_DECODE_PAGE") = pdflib::pdf_timings::KEY_DECODE_PAGE;
+  m.attr("TIMING_KEY_DECODE_DIMENSIONS") = pdflib::pdf_timings::KEY_DECODE_DIMENSIONS;
+  m.attr("TIMING_KEY_DECODE_RESOURCES") = pdflib::pdf_timings::KEY_DECODE_RESOURCES;
+  m.attr("TIMING_KEY_DECODE_GRPHS") = pdflib::pdf_timings::KEY_DECODE_GRPHS;
+  m.attr("TIMING_KEY_DECODE_FONTS") = pdflib::pdf_timings::KEY_DECODE_FONTS;
+  m.attr("TIMING_KEY_DECODE_XOBJECTS") = pdflib::pdf_timings::KEY_DECODE_XOBJECTS;
+  m.attr("TIMING_KEY_DECODE_CONTENTS") = pdflib::pdf_timings::KEY_DECODE_CONTENTS;
+  m.attr("TIMING_KEY_DECODE_ANNOTS") = pdflib::pdf_timings::KEY_DECODE_ANNOTS;
+  m.attr("TIMING_KEY_SANITISE_CONTENTS") = pdflib::pdf_timings::KEY_SANITISE_CONTENTS;
+  m.attr("TIMING_KEY_CREATE_WORD_CELLS") = pdflib::pdf_timings::KEY_CREATE_WORD_CELLS;
+  m.attr("TIMING_KEY_CREATE_LINE_CELLS") = pdflib::pdf_timings::KEY_CREATE_LINE_CELLS;
+  m.attr("TIMING_KEY_DECODE_FONTS_TOTAL") = pdflib::pdf_timings::KEY_DECODE_FONTS_TOTAL;
+  m.attr("TIMING_KEY_DECODE_FONTS_COUNT") = pdflib::pdf_timings::KEY_DECODE_FONTS_COUNT;
+  m.attr("TIMING_KEY_PROCESS_DOCUMENT_FROM_FILE") = pdflib::pdf_timings::KEY_PROCESS_DOCUMENT_FROM_FILE;
+  m.attr("TIMING_KEY_PROCESS_DOCUMENT_FROM_BYTESIO") = pdflib::pdf_timings::KEY_PROCESS_DOCUMENT_FROM_BYTESIO;
+  m.attr("TIMING_KEY_DECODE_DOCUMENT") = pdflib::pdf_timings::KEY_DECODE_DOCUMENT;
+
+  m.attr("TIMING_PREFIX_DECODE_FONT") = pdflib::pdf_timings::PREFIX_DECODE_FONT;
+  m.attr("TIMING_PREFIX_DECODING_PAGE") = pdflib::pdf_timings::PREFIX_DECODING_PAGE;
+  m.attr("TIMING_PREFIX_DECODE_PAGE") = pdflib::pdf_timings::PREFIX_DECODE_PAGE;
+
+  m.def("get_static_timing_keys", &pdflib::pdf_timings::get_static_keys,
+	"Get all static timing keys as Set[str]");
+  m.def("is_static_timing_key", &pdflib::pdf_timings::is_static_key,
+	pybind11::arg("key"),
+	"Check if a timing key is static (constant)");
 
   // ============= PDF Parser =============
 
