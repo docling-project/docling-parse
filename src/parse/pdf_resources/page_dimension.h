@@ -245,27 +245,46 @@ namespace pdflib
       }
 
     if(json_resources.count("/MediaBox"))
-      {        
+      {
         for(int d=0; d<4; d++)
           {
             media_bbox[d] = json_resources["/MediaBox"][d].get<double>();
           }
       }
-    // it might inherit the media-bbox from the parent document (sec 7.7.3.4, p 80)
-    else if(qpdf_resources.hasKey("/Parent") and qpdf_resources.getKey("/Parent").hasKey("/MediaBox"))
-      {
-	QPDFObjectHandle qpdf_bbox = qpdf_resources.getKey("/Parent").getKey("/MediaBox"); 
-	nlohmann::json   json_bbox = to_json(qpdf_bbox);
-
-	//LOG_S(WARNING) << "inherited bbox: " << json_bbox.dump(2);	
-	for(int d=0; d<4; d++)
-          {
-            media_bbox[d] = json_bbox[d].get<double>();
-          }
-      }
+    // it might inherit the media-bbox from an ancestor in the page tree (sec 7.7.3.4, p 80)
+    // PDF allows MediaBox to be inherited from any parent, not just the immediate parent
     else
       {
-        LOG_S(ERROR) << "The page is missing the required '/MediaBox'";
+        bool found_mediabox = false;
+        QPDFObjectHandle current = qpdf_resources;
+
+        // Traverse the parent chain to find inherited MediaBox
+        // Limit depth to prevent infinite loops in malformed PDFs
+        for(int depth = 0; depth < 10 && current.hasKey("/Parent"); depth++)
+          {
+            QPDFObjectHandle parent = current.getKey("/Parent");
+            if(parent.hasKey("/MediaBox"))
+              {
+                QPDFObjectHandle qpdf_bbox = parent.getKey("/MediaBox");
+                nlohmann::json json_bbox = to_json(qpdf_bbox);
+
+                LOG_S(INFO) << "inherited MediaBox from ancestor at depth " << (depth + 1)
+                            << ": " << json_bbox.dump();
+
+                for(int d=0; d<4; d++)
+                  {
+                    media_bbox[d] = json_bbox[d].get<double>();
+                  }
+                found_mediabox = true;
+                break;
+              }
+            current = parent;
+          }
+
+        if(!found_mediabox)
+          {
+            LOG_S(ERROR) << "The page is missing the required '/MediaBox'";
+          }
       }
 
     if(json_resources.count("/CropBox"))
@@ -349,15 +368,16 @@ namespace pdflib
         bbox = crop_bbox;
         initialised = true;
       }    
-    //else if(not initialised)
-    else if((not initialised) and (json_resources.count("/MediaBox") or (qpdf_resources.hasKey("/Parent") and qpdf_resources.getKey("/Parent").hasKey("/MediaBox"))))
+    // Check if media_bbox was set (either directly or via inheritance)
+    // media_bbox is initialized to {0,0,0,0}, so non-zero values indicate it was found
+    else if((not initialised) and (media_bbox[2] > 0 || media_bbox[3] > 0))
       {
 	std::stringstream ss;
-	ss << "defaulting to media-box";	
+	ss << "defaulting to media-box";
         LOG_S(INFO) << ss.str();
 
 	crop_bbox = media_bbox;
-	
+
         bbox = media_bbox;
         initialised = true;
       }
