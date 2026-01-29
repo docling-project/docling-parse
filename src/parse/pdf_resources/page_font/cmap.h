@@ -61,11 +61,18 @@ namespace pdflib
     // Helper to populate the map for a range of source codepoints.
     // Detects identity mapping when tgts.size()==1 && tgts[0]==begin (maps i -> i).
     // For non-identity, uses tgts and increments tgts.back() for each iteration.
-    void populate_range_mapping(uint32_t begin, uint32_t end, std::vector<uint32_t>& tgts);
-
+    static void populate_range_mapping(uint32_t begin, uint32_t end,
+                                       std::vector<uint32_t>& tgts,
+                                       const std::pair<uint32_t, uint32_t>& csr_range,
+                                       std::unordered_map<uint32_t, std::string>& map,
+				       bool cache=true);
+    
     // Legacy implementation - kept for comparison, uses mapping=="" check instead of identity detection
-    void populate_range_mapping_legacy(uint32_t begin, uint32_t end,
-                                       const std::string& mapping, std::vector<uint32_t>& tgts);
+    static void populate_range_mapping_legacy(uint32_t begin, uint32_t end,
+                                              const std::string& mapping,
+                                              std::vector<uint32_t>& tgts,
+                                              const std::pair<uint32_t, uint32_t>& csr_range,
+                                              std::unordered_map<uint32_t, std::string>& map);
 
   private:
 
@@ -290,8 +297,36 @@ namespace pdflib
       }
   }
 
-  void cmap_parser::populate_range_mapping(uint32_t begin, uint32_t end, std::vector<uint32_t>& tgts)
+  void cmap_parser::populate_range_mapping(uint32_t begin, uint32_t end,
+                                           std::vector<uint32_t>& tgts,
+                                           const std::pair<uint32_t, uint32_t>& csr_range,
+                                           std::unordered_map<uint32_t, std::string>& map,
+					   bool cache)
   {
+    if(begin==0 and
+       end==65535 and
+       csr_range.first==0 and
+       csr_range.second==65535 and
+       tgts.size()==1 and tgts.at(0)==0 and
+       cache)
+      {
+	static std::unordered_map<uint32_t, std::string> _map;
+	static std::once_flag _map_init_flag;
+
+	// Thread-safe one-time initialization:
+	// 1. std::call_once ensures the lambda runs exactly once across all threads
+	// 2. All other threads block until initialization completes
+	// 3. After initialization, _map is read-only, making the copy safe
+	std::call_once(_map_init_flag, [&]() {
+	    _map.reserve(end - begin + 1);
+	    populate_range_mapping(begin, end, tgts, csr_range, _map, false);
+	});
+
+	map = _map; // deep copy
+
+	return;
+      }
+    
     // Identity mapping: single target codepoint equals begin, so each source i maps to target i
     // This happens when tgts={begin} and we increment tgts.back() each iteration
     // Example: begin=0, end=65535, tgts={0} -> maps 0->0, 1->1, ..., 65535->65535
@@ -348,7 +383,7 @@ namespace pdflib
               tmp.erase(itr, tmp.end());
             }
 
-            if(_map.count(src_codepoint) == 1)
+            if(map.count(src_codepoint) == 1)
               {
                 LOG_S(WARNING) << "overwriting number c=" << src_codepoint;
               }
@@ -356,18 +391,18 @@ namespace pdflib
             if(utf8::is_valid(tmp.begin(), tmp.end()))
               {
                 //LOG_S(INFO) << "cmap-ind:" << src_codepoint << " -> target: " << tmp;
-                _map[src_codepoint] = tmp;
+                map[src_codepoint] = tmp;
               }
             else
               {
                 LOG_S(WARNING) << "invalid utf8 string -> iteration: " << src_codepoint;
-                _map[src_codepoint] = "UNICODE<" + std::to_string(src_codepoint) + ">";
+                map[src_codepoint] = "UNICODE<" + std::to_string(src_codepoint) + ">";
               }
           }
         catch(const std::exception& exc)
           {
             LOG_S(WARNING) << "invalid utf8 string: " << exc.what() << " -> iteration: " << src_codepoint;
-            _map[src_codepoint] = "UNICODE<" + std::to_string(src_codepoint) + ">";
+            map[src_codepoint] = "UNICODE<" + std::to_string(src_codepoint) + ">";
           }
 
         // Increment last target codepoint for non-identity mappings
@@ -379,7 +414,10 @@ namespace pdflib
   }
 
   void cmap_parser::populate_range_mapping_legacy(uint32_t begin, uint32_t end,
-                                                  const std::string& mapping, std::vector<uint32_t>& tgts)
+                                                  const std::string& mapping,
+                                                  std::vector<uint32_t>& tgts,
+                                                  const std::pair<uint32_t, uint32_t>& csr_range,
+                                                  std::unordered_map<uint32_t, std::string>& map)
   {
     // Legacy implementation using mapping=="" check (likely dead code path)
     // Kept for comparison with populate_range_mapping which uses identity detection
@@ -400,7 +438,7 @@ namespace pdflib
                       tmp.erase(itr, tmp.end());
                     }
 
-                    if(_map.count(begin + i) == 1)
+                    if(map.count(begin + i) == 1)
                       {
                         LOG_S(WARNING) << "overwriting number c=" << begin + i;
                       }
@@ -408,19 +446,19 @@ namespace pdflib
                     if(utf8::is_valid(tmp.begin(), tmp.end()))
                       {
                         //LOG_S(INFO) << "cmap-ind:" << (begin+i) << " -> target: " << tmp;
-                        _map[begin + i] = tmp;
+                        map[begin + i] = tmp;
                       }
                     else
                       {
                         LOG_S(WARNING) << "invalid utf8 string -> iteration: " << (begin + i);
-                        _map[begin + i] = "UNICODE<" + std::to_string(begin + i) + ">";
+                        map[begin + i] = "UNICODE<" + std::to_string(begin + i) + ">";
                       }
                   }
                 catch(const std::exception& exc)
                   {
                     LOG_S(WARNING) << "invalid utf8 string: " << exc.what() << " -> iteration: " << (begin + i);
 
-                    _map[begin + i] = "UNICODE<" + std::to_string(begin + i) + ">";
+                    map[begin + i] = "UNICODE<" + std::to_string(begin + i) + ">";
                   }
               }
             else
@@ -454,28 +492,28 @@ namespace pdflib
                       tmp.erase(itr, tmp.end());
                     }
 
-                    if(_map.count(begin + i) == 1)
+                    if(map.count(begin + i) == 1)
                       {
                         LOG_S(WARNING) << "overwriting number c=" << begin + i;
                       }
 
-                    //_map[begin + i] = tmp;
+                    //map[begin + i] = tmp;
                     if(utf8::is_valid(tmp.begin(), tmp.end()))
                       {
                         // LOG_S(INFO) << "cmap-ind:" << (begin+i) << " -> target: " << tmp;
-                        _map[begin + i] = tmp;
+                        map[begin + i] = tmp;
                       }
                     else
                       {
                         LOG_S(WARNING) << "invalid utf8 string -> iteration: " << (begin + i);
-                        _map[begin + i] = "UNICODE<" + std::to_string(begin + i) + ">";
+                        map[begin + i] = "UNICODE<" + std::to_string(begin + i) + ">";
                       }
                   }
                 catch(const std::exception& exc)
                   {
                     LOG_S(WARNING) << "invalid utf8 string: " << exc.what();
 
-                    _map[begin + i] = "UNICODE<" + std::to_string(begin + i) + ">";
+                    map[begin + i] = "UNICODE<" + std::to_string(begin + i) + ">";
                   }
               }
             else
@@ -767,10 +805,10 @@ namespace pdflib
     _map.reserve(_map.size() + (end - begin + 1));
 
     // New implementation with proper identity detection
-    populate_range_mapping(begin, end, tgts);
+    populate_range_mapping(begin, end, tgts, csr_range, _map);
 
     // Legacy implementation - uncomment to switch back for comparison
-    //populate_range_mapping_legacy(begin, end, mapping, tgts);
+    //populate_range_mapping_legacy(begin, end, mapping, tgts, csr_range, _map);
   }
 
   void cmap_parser::set_range(const std::string src_begin,

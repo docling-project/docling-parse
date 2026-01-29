@@ -1,8 +1,9 @@
 //-*-C++-*-
 
-// std libraries 
+// std libraries
 #include <set>
 #include <map>
+#include <mutex>
 #include <vector>
 #include <assert.h>
 #include <filesystem>
