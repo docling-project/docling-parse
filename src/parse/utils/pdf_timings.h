@@ -36,6 +36,13 @@ namespace pdflib
     static const std::string KEY_CREATE_WORD_CELLS;
     static const std::string KEY_CREATE_LINE_CELLS;
 
+    // Additional decode_page step keys
+    static const std::string KEY_TO_JSON_PAGE;
+    static const std::string KEY_EXTRACT_ANNOTS_JSON;
+    static const std::string KEY_ROTATE_CONTENTS;
+    static const std::string KEY_SANITIZE_ORIENTATION;
+    static const std::string KEY_SANITIZE_CELLS;
+
     // Font timing keys
     static const std::string KEY_DECODE_FONTS_TOTAL;
 
@@ -64,6 +71,12 @@ namespace pdflib
      * @brief Check if a key is a static (constant) timing key.
      */
     static bool is_static_key(const std::string& key);
+
+    /**
+     * @brief Get static timing keys used in decode_page method (excluding the global timer).
+     * @return Keys in the same order as they appear in decode_page.
+     */
+    static const std::vector<std::string>& get_decode_page_keys();
 
     pdf_timings();
     ~pdf_timings();
@@ -297,6 +310,13 @@ namespace pdflib
 
   const std::string pdf_timings::KEY_DECODE_FONTS_TOTAL = "decode_fonts_total";
 
+  // Additional decode_page step keys
+  const std::string pdf_timings::KEY_TO_JSON_PAGE = "to_json_page";
+  const std::string pdf_timings::KEY_EXTRACT_ANNOTS_JSON = "extract_annots_json";
+  const std::string pdf_timings::KEY_ROTATE_CONTENTS = "rotate_contents";
+  const std::string pdf_timings::KEY_SANITIZE_ORIENTATION = "sanitize_orientation";
+  const std::string pdf_timings::KEY_SANITIZE_CELLS = "sanitize_cells";
+
   const std::string pdf_timings::KEY_PROCESS_DOCUMENT_FROM_FILE = "process_document_from_file";
   const std::string pdf_timings::KEY_PROCESS_DOCUMENT_FROM_BYTESIO = "process_document_from_bytesio";
   const std::string pdf_timings::KEY_DECODE_DOCUMENT = "decode_document";
@@ -325,7 +345,12 @@ namespace pdflib
       KEY_SANITISE_CONTENTS,
       KEY_CREATE_WORD_CELLS,
       KEY_CREATE_LINE_CELLS,
-      KEY_DECODE_FONTS_TOTAL,      
+      KEY_DECODE_FONTS_TOTAL,
+      KEY_TO_JSON_PAGE,
+      KEY_EXTRACT_ANNOTS_JSON,
+      KEY_ROTATE_CONTENTS,
+      KEY_SANITIZE_ORIENTATION,
+      KEY_SANITIZE_CELLS,
       KEY_PROCESS_DOCUMENT_FROM_FILE,
       KEY_PROCESS_DOCUMENT_FROM_BYTESIO,
       KEY_DECODE_DOCUMENT
@@ -337,6 +362,24 @@ namespace pdflib
   {
     const auto& static_keys = get_static_keys();
     return static_keys.find(key) != static_keys.end();
+  }
+
+  const std::vector<std::string>& pdf_timings::get_decode_page_keys()
+  {
+    // Keys in the same order as they appear in decode_page method
+    static std::vector<std::string> decode_page_keys = {
+      KEY_TO_JSON_PAGE,
+      KEY_EXTRACT_ANNOTS_JSON,
+      KEY_DECODE_DIMENSIONS,
+      KEY_DECODE_RESOURCES,
+      KEY_DECODE_CONTENTS,
+      KEY_DECODE_ANNOTS,
+      KEY_ROTATE_CONTENTS,
+      KEY_SANITIZE_ORIENTATION,
+      KEY_SANITIZE_CELLS,
+      KEY_SANITISE_CONTENTS
+    };
+    return decode_page_keys;
   }
 
 }

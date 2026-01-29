@@ -272,11 +272,49 @@ def plot_hex_pairs(per_parser_rows: Dict[str, List[PageRow]], viz_dir: Path) -> 
             plt.figure(figsize=(6.5, 6))
             plt.hexbin(xa, yb, gridsize=50, norm=LogNorm(), cmap="viridis")
             plt.colorbar(label="count (log)")
+            # Add x=y diagonal line
+            lim_min = min(xa.min(), yb.min())
+            lim_max = max(xa.max(), yb.max())
+            plt.plot([lim_min, lim_max], [lim_min, lim_max], 'r-', linewidth=1.5, label="x=y")
+            plt.legend(loc="upper left")
             plt.xlabel(f"Seconds/page — {pa}")
             plt.ylabel(f"Seconds/page — {pb}")
             plt.title(f"Per-page time hexbin — {pa} vs {pb} (n={xa.size})")
             plt.grid(True, alpha=0.2)
             out = viz_dir / f"hex_{safe_name(pa)}_vs_{safe_name(pb)}.png"
+            plt.tight_layout()
+            plt.savefig(out, dpi=150)
+            plt.close()
+
+
+def plot_hex_pairs_loglog(per_parser_rows: Dict[str, List[PageRow]], viz_dir: Path) -> None:
+    parsers = list(per_parser_rows.keys())
+    if len(parsers) < 2:
+        return
+    for a_idx in range(len(parsers)):
+        for b_idx in range(a_idx + 1, len(parsers)):
+            pa, pb = parsers[a_idx], parsers[b_idx]
+            xa, yb = pairwise_common_page_times(per_parser_rows[pa], per_parser_rows[pb])
+            if xa.size == 0:
+                continue
+            # Filter to positive values for log scale
+            mask = (xa > 0) & (yb > 0)
+            xa_pos, yb_pos = xa[mask], yb[mask]
+            if xa_pos.size == 0:
+                continue
+            plt.figure(figsize=(6.5, 6))
+            plt.hexbin(xa_pos, yb_pos, gridsize=50, norm=LogNorm(), cmap="viridis", xscale="log", yscale="log")
+            plt.colorbar(label="count (log)")
+            # Add x=y diagonal line
+            lim_min = min(xa_pos.min(), yb_pos.min())
+            lim_max = max(xa_pos.max(), yb_pos.max())
+            plt.plot([lim_min, lim_max], [lim_min, lim_max], 'r-', linewidth=1.5, label="x=y")
+            plt.legend(loc="upper left")
+            plt.xlabel(f"Seconds/page (log) — {pa}")
+            plt.ylabel(f"Seconds/page (log) — {pb}")
+            plt.title(f"Per-page time hexbin (log-log) — {pa} vs {pb} (n={xa_pos.size})")
+            plt.grid(True, alpha=0.2, which="both")
+            out = viz_dir / f"hex_loglog_{safe_name(pa)}_vs_{safe_name(pb)}.png"
             plt.tight_layout()
             plt.savefig(out, dpi=150)
             plt.close()
@@ -379,6 +417,7 @@ def main(argv: List[str]) -> int:
     # Step 3: hexbin for every pair of parsers (only if 2+ parsers)
     if len(per_parser_rows) >= 2:
         plot_hex_pairs(per_parser_rows, viz_dir)
+        plot_hex_pairs_loglog(per_parser_rows, viz_dir)
 
     print(f"Wrote visualizations to: {viz_dir}")
     return 0

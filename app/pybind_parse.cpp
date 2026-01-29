@@ -176,6 +176,14 @@ PYBIND11_MODULE(pdf_parsers, m) {
   m.attr("TIMING_KEY_CREATE_WORD_CELLS") = pdflib::pdf_timings::KEY_CREATE_WORD_CELLS;
   m.attr("TIMING_KEY_CREATE_LINE_CELLS") = pdflib::pdf_timings::KEY_CREATE_LINE_CELLS;
   m.attr("TIMING_KEY_DECODE_FONTS_TOTAL") = pdflib::pdf_timings::KEY_DECODE_FONTS_TOTAL;
+
+  // Additional decode_page step keys
+  m.attr("TIMING_KEY_TO_JSON_PAGE") = pdflib::pdf_timings::KEY_TO_JSON_PAGE;
+  m.attr("TIMING_KEY_EXTRACT_ANNOTS_JSON") = pdflib::pdf_timings::KEY_EXTRACT_ANNOTS_JSON;
+  m.attr("TIMING_KEY_ROTATE_CONTENTS") = pdflib::pdf_timings::KEY_ROTATE_CONTENTS;
+  m.attr("TIMING_KEY_SANITIZE_ORIENTATION") = pdflib::pdf_timings::KEY_SANITIZE_ORIENTATION;
+  m.attr("TIMING_KEY_SANITIZE_CELLS") = pdflib::pdf_timings::KEY_SANITIZE_CELLS;
+
   m.attr("TIMING_KEY_PROCESS_DOCUMENT_FROM_FILE") = pdflib::pdf_timings::KEY_PROCESS_DOCUMENT_FROM_FILE;
   m.attr("TIMING_KEY_PROCESS_DOCUMENT_FROM_BYTESIO") = pdflib::pdf_timings::KEY_PROCESS_DOCUMENT_FROM_BYTESIO;
   m.attr("TIMING_KEY_DECODE_DOCUMENT") = pdflib::pdf_timings::KEY_DECODE_DOCUMENT;
@@ -189,6 +197,8 @@ PYBIND11_MODULE(pdf_parsers, m) {
   m.def("is_static_timing_key", &pdflib::pdf_timings::is_static_key,
 	pybind11::arg("key"),
 	"Check if a timing key is static (constant)");
+  m.def("get_decode_page_timing_keys", &pdflib::pdf_timings::get_decode_page_keys,
+	"Get timing keys used in decode_page method (in order, excluding global timer) as List[str]");
 
   // ============= PDF Parser =============
 

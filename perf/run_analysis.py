@@ -38,6 +38,7 @@ from docling_parse.pdf_parser import (
     CONVERSION_MODE,
     DoclingPdfParser,
     Timings,
+    get_decode_page_timing_keys,
     get_static_timing_keys,
     is_static_timing_key,
 )
@@ -225,20 +226,20 @@ def analyze_pages(
 
 
 def write_static_timings_csv(out_path: Path, pages: List[PageTimings]) -> None:
-    """Write CSV with static timing keys only, one row per page."""
+    """Write CSV with decode_page timing keys only, one row per page."""
     ensure_parent(out_path)
 
-    # Get ordered static keys
-    static_keys = sorted(get_static_timing_keys())
+    # Get decode_page keys in order (excludes the global decode_page timer)
+    decode_page_keys = get_decode_page_timing_keys()
 
-    header = ["filename", "page_number", "elapsed_original_sec"] + static_keys
+    header = ["filename", "page_number", "elapsed_original_sec"] + decode_page_keys
 
     with out_path.open("w", newline="") as f:
         w = csv.writer(f)
         w.writerow(header)
         for p in pages:
             row = [p.filename, p.page_number, f"{p.elapsed_original:.9f}"]
-            for k in static_keys:
+            for k in decode_page_keys:
                 v = p.timings.get(k, 0.0)
                 row.append(f"{v:.9f}" if v else "")
             w.writerow(row)
@@ -251,7 +252,7 @@ def print_top_summary(pages: List[PageTimings]) -> None:
         return
 
     print(f"\nAnalyzed {len(pages)} pages.")
-    print(f"Static timing keys: {sorted(get_static_timing_keys())}")
+    print(f"decode_page timing keys: {get_decode_page_timing_keys()}")
 
 
 # -------------- Output: --nth mode (table with all timings) --------------
