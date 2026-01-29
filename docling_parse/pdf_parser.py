@@ -167,6 +167,11 @@ class Timings(BaseModel):
         """Get all static timing key names."""
         return get_static_timing_keys()
 
+    @staticmethod
+    def decode_page_keys() -> List[str]:
+        """Get timing keys used in decode_page method (in order, excluding global timer)."""
+        return get_decode_page_timing_keys()
+
 
 class PdfDocument:
 
