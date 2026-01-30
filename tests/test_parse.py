@@ -218,6 +218,12 @@ def test_reference_documents_from_filenames(mode):
 
     assert len(pdf_docs) > 0, "len(pdf_docs)==0 -> nothing to test"
 
+    # this map restricts for pdf's with multiple pages
+    # which pages will be tested
+    page_restrictions = {
+        "deep-mediabox-inheritance.pdf": [2]
+    }
+    
     for pdf_doc_path in pdf_docs:
         # print(f"parsing {pdf_doc_path}")
 
@@ -238,6 +244,10 @@ def test_reference_documents_from_filenames(mode):
                 GROUNDTRUTH_FOLDER, rname + f".page_no_{page_no}.py.json"
             )
 
+            # don't do all pages of big pdf's
+            if rname in page_restrictions and page_no not in page_restrictions[rname]:
+                continue
+            
             SPECIAL_SEPERATOR = "\t<|special_separator|>\n"
 
             if GENERATE or (not os.path.exists(fname)):
