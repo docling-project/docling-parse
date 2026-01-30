@@ -139,7 +139,8 @@ namespace pdflib
     bool cmap_initialized;
     bool diff_initialized;
 
-    std::unordered_map<uint32_t, std::string> cmap_numb_to_char;
+    //std::unordered_map<uint32_t, std::string> cmap_numb_to_char;
+    cmap_value cmap_numb_to_char;
     std::unordered_map<uint32_t, std::string> diff_numb_to_char;
 
     std::unordered_map<uint32_t, int> unknown_numbs;
@@ -420,7 +421,7 @@ namespace pdflib
 	{
           if(cmap_numb_to_char.count(c))
 	    {
-	      return cmap_numb_to_char[c];
+	      return cmap_numb_to_char.at(c);
 	    }
 	  else if(32<=c)
             {
@@ -1805,12 +1806,12 @@ namespace pdflib
                        cmap_numb_to_char.count(numb)==1)
                       {
 			LOG_S(WARNING) << "overloading difference from cmap";
-                        diff_numb_to_char[numb] = cmap_numb_to_char[numb];
+                        diff_numb_to_char[numb] = cmap_numb_to_char.at(numb);
                       }
 
 		    // FIXME: might need to be commented out or fixed
 		    /*
-                    else if(name_to_descr.count(name)==1 and 
+                    else if(name_to_descr.count(name)==1 and
                             cmap_numb_to_char.count(numb)==0)
                       {
 		        //assert(subtype==TYPE_3);
@@ -1889,7 +1890,7 @@ namespace pdflib
 		    else if(std::regex_match(name, match, re_03) and cmap_numb_to_char.count(numb)==1) // if the name is of type /g23 of /G23 and we have a match in the cmap
 		      {
 			LOG_S(WARNING) << "overloading difference from cmap";
-                        diff_numb_to_char[numb] = cmap_numb_to_char[numb];
+                        diff_numb_to_char[numb] = cmap_numb_to_char.at(numb);
 			//diff_numb_to_char[numb] = name;
 			//LOG_S(ERROR) << "weird differences["<<numb<<"] -> " << name;
 		      }
@@ -2134,7 +2135,7 @@ namespace pdflib
         
         std::string cmap = " --- ";
         if(cmap_numb_to_char.count(numb)==1)
-          cmap = "'"+cmap_numb_to_char[numb]+"'";
+          cmap = "'"+cmap_numb_to_char.at(numb)+"'";
         
         std::string diff = " --- ";
         if(diff_numb_to_char.count(numb)==1)

@@ -4,6 +4,7 @@
 #include <set>
 #include <map>
 #include <mutex>
+#include <iomanip>
 #include <vector>
 #include <assert.h>
 #include <filesystem>
@@ -55,6 +56,7 @@
 #include <parse/pdf_resources/page_font/encodings.h>
 #include <parse/pdf_resources/page_font/base_font.h>
 #include <parse/pdf_resources/page_font/base_fonts.h>
+#include <parse/pdf_resources/page_font/cmap_value.h>
 #include <parse/pdf_resources/page_font/cmap.h>
 #include <parse/pdf_resources/page_font/char_description.h>
 #include <parse/pdf_resources/page_font/char_processor.h>

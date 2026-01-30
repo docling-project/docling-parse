@@ -14,7 +14,7 @@ namespace pdflib
     cmap_parser();
     ~cmap_parser();
 
-    std::unordered_map<uint32_t, std::string> get() { return _map; }
+    cmap_value get();
 
     void print();
 
@@ -61,11 +61,13 @@ namespace pdflib
     // Helper to populate the map for a range of source codepoints.
     // Detects identity mapping when tgts.size()==1 && tgts[0]==begin (maps i -> i).
     // For non-identity, uses tgts and increments tgts.back() for each iteration.
-    static void populate_range_mapping(uint32_t begin, uint32_t end,
-                                       std::vector<uint32_t>& tgts,
-                                       const std::pair<uint32_t, uint32_t>& csr_range,
-                                       std::unordered_map<uint32_t, std::string>& map,
-				       bool cache=true);
+    //static void populate_range_mapping(uint32_t begin, uint32_t end,
+    //                                   std::vector<uint32_t>& tgts,
+    //                                   const std::pair<uint32_t, uint32_t>& csr_range,
+    //                                   std::unordered_map<uint32_t, std::string>& map,
+    //				         bool cache=true);
+    void populate_range_mapping(uint32_t begin, uint32_t end,
+                                std::vector<uint32_t>& tgts);
     
     // Legacy implementation - kept for comparison, uses mapping=="" check instead of identity detection
     static void populate_range_mapping_legacy(uint32_t begin, uint32_t end,
@@ -85,6 +87,8 @@ namespace pdflib
     std::pair<uint32_t, uint32_t> bf_range;
 
     std::unordered_map<uint32_t, std::string> _map;
+
+    cmap_value _cmap;
   };
 
   cmap_parser::cmap_parser():
@@ -93,6 +97,11 @@ namespace pdflib
 
   cmap_parser::~cmap_parser()
   {}
+
+  cmap_value cmap_parser::get()
+  {
+    return _cmap;
+  }
 
   void cmap_parser::print()
   {
@@ -167,6 +176,12 @@ namespace pdflib
 
             parameters.clear();
           }
+      }
+
+    // If identity was not set during populate_range_mapping, construct from _map
+    if(not _cmap.is_identity())
+      {
+        _cmap = cmap_value(std::move(_map));
       }
 
     timings.add_timing(key_root + pdf_timings::KEY_CMAP_PARSE_TOTAL, total_timer.get_time());
@@ -297,39 +312,29 @@ namespace pdflib
       }
   }
 
+  // Legacy: static version with caching
+  //void cmap_parser::populate_range_mapping(uint32_t begin, uint32_t end,
+  //                                         std::vector<uint32_t>& tgts,
+  //                                         const std::pair<uint32_t, uint32_t>& csr_range,
+  //                                         std::unordered_map<uint32_t, std::string>& map,
+  //                                         bool cache)
+
   void cmap_parser::populate_range_mapping(uint32_t begin, uint32_t end,
-                                           std::vector<uint32_t>& tgts,
-                                           const std::pair<uint32_t, uint32_t>& csr_range,
-                                           std::unordered_map<uint32_t, std::string>& map,
-					   bool cache)
+                                           std::vector<uint32_t>& tgts)
   {
     if(begin==0 and
        end==65535 and
        csr_range.first==0 and
        csr_range.second==65535 and
-       tgts.size()==1 and tgts.at(0)==0 and
-       cache)
+       tgts.size()==1 and tgts.at(0)==0)
       {
-	static std::unordered_map<uint32_t, std::string> _map;
-	static std::once_flag _map_init_flag;
-
-	// Thread-safe one-time initialization:
-	// 1. std::call_once ensures the lambda runs exactly once across all threads
-	// 2. All other threads block until initialization completes
-	// 3. After initialization, _map is read-only, making the copy safe
-	std::call_once(_map_init_flag, [&]() {
-	    _map.reserve(end - begin + 1);
-	    populate_range_mapping(begin, end, tgts, csr_range, _map, false);
-	});
-
-	map = _map; // deep copy
-
-	return;
+        // Identity mapping detected: cmap_value will compute UTF-8 on the fly
+        LOG_S(INFO) << "identity mapping detected, using cmap_value identity mode";
+        _cmap = cmap_value(true, csr_range, {});
+        return;
       }
-    
-    // Identity mapping: single target codepoint equals begin, so each source i maps to target i
-    // This happens when tgts={begin} and we increment tgts.back() each iteration
-    // Example: begin=0, end=65535, tgts={0} -> maps 0->0, 1->1, ..., 65535->65535
+
+    // Non-identity: populate _map entry by entry
     bool is_identity = (tgts.size() == 1 && tgts[0] == begin);
 
     LOG_S(INFO) << "populate_range_mapping: begin=" << begin << ", end=" << end
@@ -342,7 +347,6 @@ namespace pdflib
 
         if(not (csr_range.first <= src_codepoint and src_codepoint <= csr_range.second))
           {
-            // Out of bounds - use different log level based on mapping type
             if(is_identity)
               {
                 LOG_S(WARNING) << "index " << src_codepoint << " is out of bounds ["
@@ -354,7 +358,6 @@ namespace pdflib
                              << csr_range.first << ", " << csr_range.second << "]";
               }
 
-            // Still need to increment for non-identity mappings
             if(not is_identity)
               {
                 tgts.back() += 1;
@@ -369,12 +372,10 @@ namespace pdflib
               auto itr = tmp.begin();
               if(is_identity)
                 {
-                  // Identity: target codepoint = source codepoint
                   itr = utf8::append(src_codepoint, itr);
                 }
               else
                 {
-                  // Non-identity: append all target codepoints
                   for(auto tgt_uint : tgts)
                     {
                       itr = utf8::append(tgt_uint, itr);
@@ -383,29 +384,27 @@ namespace pdflib
               tmp.erase(itr, tmp.end());
             }
 
-            if(map.count(src_codepoint) == 1)
+            if(_map.count(src_codepoint) == 1)
               {
                 LOG_S(WARNING) << "overwriting number c=" << src_codepoint;
               }
 
             if(utf8::is_valid(tmp.begin(), tmp.end()))
               {
-                //LOG_S(INFO) << "cmap-ind:" << src_codepoint << " -> target: " << tmp;
-                map[src_codepoint] = tmp;
+                _map[src_codepoint] = tmp;
               }
             else
               {
                 LOG_S(WARNING) << "invalid utf8 string -> iteration: " << src_codepoint;
-                map[src_codepoint] = "UNICODE<" + std::to_string(src_codepoint) + ">";
+                _map[src_codepoint] = "UNICODE<" + std::to_string(src_codepoint) + ">";
               }
           }
         catch(const std::exception& exc)
           {
             LOG_S(WARNING) << "invalid utf8 string: " << exc.what() << " -> iteration: " << src_codepoint;
-            map[src_codepoint] = "UNICODE<" + std::to_string(src_codepoint) + ">";
+            _map[src_codepoint] = "UNICODE<" + std::to_string(src_codepoint) + ">";
           }
 
-        // Increment last target codepoint for non-identity mappings
         if(not is_identity)
           {
             tgts.back() += 1;
@@ -413,6 +412,7 @@ namespace pdflib
       }
   }
 
+  // FIXME: not used code, just reference still ...
   void cmap_parser::populate_range_mapping_legacy(uint32_t begin, uint32_t end,
                                                   const std::string& mapping,
                                                   std::vector<uint32_t>& tgts,
@@ -568,7 +568,6 @@ namespace pdflib
   void cmap_parser::parse_endcodespacerange(std::vector<qpdf_instruction>& parameters)
   {
     LOG_S(INFO) << __FUNCTION__;
-    //assert(parameters.size()==2*csr_cnt);
 
     const int num_params = 2;
     if(parameters.size()<num_params)
@@ -687,18 +686,16 @@ namespace pdflib
             // FIXME we probably need to fix the 2 in the to_utf8(..)
             //std::string tgt = target.getUTF8Value();
             std::string tgt = get_target(target);//to_utf8(target, 2);
-	    LOG_S(INFO) << "source_beg: " << source_start.size() << ", source_end: " << source_end.size()
-			 << " tgt: " << tgt.size()
-			 << " source_start==tgt: " << (source_start==tgt);
+
+	    //LOG_S(INFO) << "source_beg: " << source_start.size() << ", source_end: " << source_end.size()
+	    //<< " tgt: " << tgt.size()
+	    //<< " source_start==tgt: " << (source_start==tgt);
 
             remove_trailing_nulls(tgt);
 
-	    //LOG_S(ERROR) << "tgt: `" << tgt.size() << "`";
-	    //LOG_S(ERROR) << "source_beg: " << source_start << ", source_end: " << source_end << ": " << tgt;
-
-	    LOG_S(INFO) << "source_beg: " << source_start.size() << ", source_end: " << source_end.size()
-			<< " tgt: " << tgt.size()
-			<< " source_start==tgt: " << (source_start==tgt);
+	    //LOG_S(INFO) << "source_beg: " << source_start.size() << ", source_end: " << source_end.size()
+	    //<< " tgt: " << tgt.size()
+	    //<< " source_start==tgt: " << (source_start==tgt);
 
             set_range(source_start, source_end, tgt);
           }
@@ -804,10 +801,11 @@ namespace pdflib
     // Pre-reserve capacity to avoid rehashing during bulk insertions
     _map.reserve(_map.size() + (end - begin + 1));
 
-    // New implementation with proper identity detection
-    populate_range_mapping(begin, end, tgts, csr_range, _map);
+    // New implementation with cmap_value identity detection
+    populate_range_mapping(begin, end, tgts);
 
-    // Legacy implementation - uncomment to switch back for comparison
+    // Legacy implementations:
+    //populate_range_mapping(begin, end, tgts, csr_range, _map);
     //populate_range_mapping_legacy(begin, end, mapping, tgts, csr_range, _map);
   }
 
