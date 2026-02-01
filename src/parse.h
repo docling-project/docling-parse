@@ -79,6 +79,8 @@
 #include <parse/pdf_resources/page_image.h>
 #include <parse/pdf_resources/page_images.h>
 
+#include <parse/pdf_resources/render_instructions.h>
+
 #include <parse/pdf_sanitator.h>
 #include <parse/pdf_sanitators/constants.h>
 #include <parse/pdf_sanitators/lines.h>

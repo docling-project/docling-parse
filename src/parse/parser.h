@@ -17,11 +17,13 @@ namespace plib
     ~parser();
 
     void set_loglevel_with_label(std::string level);
-    
+
     void parse(std::string filename, bool do_sanitization);
     void parse(nlohmann::json config, bool do_sanitization);
 
     bool initialise(nlohmann::json& data);
+
+    pdflib::pdf_render_instructions& get_instructions() { return instructions; }
 
   private:
     
@@ -41,6 +43,8 @@ namespace plib
     nlohmann::json input_file;
 
     std::map<std::string, double> timings;
+
+    pdflib::pdf_render_instructions instructions;
   };
 
   parser::parser()

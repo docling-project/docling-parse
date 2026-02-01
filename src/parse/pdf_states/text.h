@@ -13,7 +13,8 @@ namespace pdflib
 
     pdf_state(std::array<double, 9>&    trafo_matrix_,
               pdf_resource<PAGE_CELLS>& page_cells_,
-              pdf_resource<PAGE_FONTS>& page_fonts_);
+              pdf_resource<PAGE_FONTS>& page_fonts_,
+              pdf_render_instructions&  instructions_);
 
     ~pdf_state();
 
@@ -89,6 +90,8 @@ namespace pdflib
     pdf_resource<PAGE_CELLS>& page_cells;
     pdf_resource<PAGE_FONTS>& page_fonts;
 
+    pdf_render_instructions& instructions;
+
     std::array<double, 9> text_matrix;
     std::array<double, 9> line_matrix;
 
@@ -111,11 +114,14 @@ namespace pdflib
 
   pdf_state<TEXT>::pdf_state(std::array<double, 9>&    trafo_matrix_,
                              pdf_resource<PAGE_CELLS>& page_cells_,
-                             pdf_resource<PAGE_FONTS>& page_fonts_):
+                             pdf_resource<PAGE_FONTS>& page_fonts_,
+                             pdf_render_instructions&  instructions_):
     trafo_matrix(trafo_matrix_),
 
     page_cells(page_cells_),
-    page_fonts(page_fonts_)
+    page_fonts(page_fonts_),
+
+    instructions(instructions_)
   {
     text_matrix = {1.0, 0.0, 0.0,
                    0.0, 1.0, 0.0,
@@ -130,7 +136,9 @@ namespace pdflib
     trafo_matrix(other.trafo_matrix),
 
     page_cells(other.page_cells),
-    page_fonts(other.page_fonts)
+    page_fonts(other.page_fonts),
+
+    instructions(other.instructions)
   {
     *this = other;
 
@@ -567,6 +575,18 @@ namespace pdflib
       cell.instr_count = instr_count;
 
       cells.push_back(cell);
+
+      {
+        text_instruction tinstr(cell.text,
+                                cell.font_enc,
+                                cell.font_key,
+                                cell.r_x0, cell.r_y0,
+                                cell.r_x1, cell.r_y1,
+                                cell.r_x2, cell.r_y2,
+                                cell.r_x3, cell.r_y3);
+
+        instructions.add_text_instruction(std::move(tinstr));
+      }
     }
 
     if(rendering_mode==3)

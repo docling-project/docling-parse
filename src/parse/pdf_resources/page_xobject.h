@@ -20,7 +20,9 @@ namespace pdflib
 
     std::array<double, 6> get_matrix();
     std::array<double, 4> get_bbox();
-    
+
+    std::string get_key();
+
     std::pair<nlohmann::json, QPDFObjectHandle> get_fonts();
     std::pair<nlohmann::json, QPDFObjectHandle> get_grphs();
 
@@ -92,6 +94,11 @@ namespace pdflib
   std::array<double, 4> pdf_resource<PAGE_XOBJECT>::get_bbox()
   {
     return bbox;
+  }
+
+  std::string pdf_resource<PAGE_XOBJECT>::get_key()
+  {
+    return xobject_key;
   }
 
   std::pair<nlohmann::json, QPDFObjectHandle> pdf_resource<PAGE_XOBJECT>::get_fonts()
@@ -172,7 +179,7 @@ namespace pdflib
       qpdf_xobject_dict = qpdf_xobject.getDict();
       json_xobject_dict = to_json(qpdf_xobject_dict);
 
-      // LOG_S(INFO) << "xobject-dict: " << json_xobject_dict.dump(2);
+      LOG_S(INFO) << "xobject-dict: " << json_xobject_dict.dump(2);
     }
 
     {

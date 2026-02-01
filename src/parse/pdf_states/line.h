@@ -17,7 +17,8 @@ namespace pdflib
   public:
 
     pdf_state(std::array<double, 9>&    trafo_matrix_,
-              pdf_resource<PAGE_LINES>& page_lines_);
+              pdf_resource<PAGE_LINES>& page_lines_,
+              pdf_render_instructions&  instructions_);
 
     pdf_state(const pdf_state<LINE>& other);
               
@@ -86,6 +87,7 @@ namespace pdflib
     std::array<double, 9>&    trafo_matrix;
 
     pdf_resource<PAGE_LINES>& page_lines;
+    pdf_render_instructions&  instructions;
     pdf_resource<PAGE_LINES>  curr_lines;
 
     pdf_resource<PAGE_LINES>  clippings;
@@ -94,10 +96,12 @@ namespace pdflib
   };
 
   pdf_state<LINE>::pdf_state(std::array<double, 9>&    trafo_matrix_,
-                             pdf_resource<PAGE_LINES>& page_lines_):
+                             pdf_resource<PAGE_LINES>& page_lines_,
+                             pdf_render_instructions&  instructions_):
     trafo_matrix(trafo_matrix_),
 
     page_lines(page_lines_),
+    instructions(instructions_),
 
     curr_lines(),
     clippings(),
@@ -110,7 +114,8 @@ namespace pdflib
   pdf_state<LINE>::pdf_state(const pdf_state<LINE>& other):
     trafo_matrix(other.trafo_matrix),
 
-    page_lines(other.page_lines)
+    page_lines(other.page_lines),
+    instructions(other.instructions)
   {
     *this = other;
   }
@@ -490,6 +495,12 @@ namespace pdflib
 	  {
 	    //LOG_S(INFO) << " --> keeping line";
 	    page_lines.push_back(curr_lines[i]);
+
+	    {
+	      shape_instruction shpinstr(curr_lines[i].get_x(),
+					 curr_lines[i].get_y());
+	      instructions.add_shape_instruction(std::move(shpinstr));
+	    }
 	  }
 	else
 	  {

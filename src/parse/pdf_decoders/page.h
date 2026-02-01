@@ -57,6 +57,9 @@ namespace pdflib
     pdf_timings& get_timings() { return timings; }
     const pdf_timings& get_timings() const { return timings; }
 
+    // Get render instructions collected during decode
+    pdf_render_instructions& get_instructions() { return instructions; }
+
   private:
 
     void decode_dimensions();
@@ -121,6 +124,8 @@ namespace pdflib
     pdf_resource<PAGE_FONTS>     page_fonts;
     pdf_resource<PAGE_XOBJECTS>  page_xobjects;
 
+    pdf_render_instructions instructions;
+    
     pdf_timings timings;
   };
 
@@ -321,6 +326,9 @@ namespace pdflib
     //utils::timer timer;
 
     page_dimension.execute(json_page, qpdf_page);
+
+    instructions.set_size_instruction(page_dimension.get_media_bbox(),
+				      page_dimension.get_crop_bbox());
   }
 
   void pdf_decoder<PAGE>::decode_resources()
@@ -473,10 +481,15 @@ namespace pdflib
     QPDFPageObjectHelper          qpdf_page_object(qpdf_page);
     std::vector<QPDFObjectHandle> contents = qpdf_page_object.getPageContents();
 
-    pdf_decoder<STREAM> stream_decoder(page_dimension, page_cells,
-                                       page_lines, page_images,
-                                       page_fonts, page_grphs,
-                                       page_xobjects, timings);
+    pdf_decoder<STREAM> stream_decoder(page_dimension,
+				       page_cells,
+                                       page_lines,
+				       page_images,
+                                       page_fonts,
+				       page_grphs,
+                                       page_xobjects,
+				       instructions,
+				       timings);
 
     int cnt = 0;
 

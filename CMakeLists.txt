@@ -149,18 +149,23 @@ message(STATUS "cmake lib-link: ${LIBLINK_SEMICOLON}")
 
 add_executable(parse.exe "${TOPLEVEL_PREFIX_PATH}/app/parse.cpp")
 add_executable(parse_fonts.exe "${TOPLEVEL_PREFIX_PATH}/app/parse_fonts.cpp")
+add_executable(render.exe "${TOPLEVEL_PREFIX_PATH}/app/render.cpp")
 
 set_property(TARGET parse.exe PROPERTY CXX_STANDARD 20)
 set_property(TARGET parse_fonts.exe PROPERTY CXX_STANDARD 20)
+set_property(TARGET render.exe PROPERTY CXX_STANDARD 20)
 
 add_dependencies(parse.exe ${DEPENDENCIES})
 add_dependencies(parse_fonts.exe ${DEPENDENCIES})
+add_dependencies(render.exe ${DEPENDENCIES})
 
 target_include_directories(parse.exe INTERFACE ${DEPENDENCIES})
 target_include_directories(parse_fonts.exe INTERFACE ${DEPENDENCIES})
+target_include_directories(render.exe INTERFACE ${DEPENDENCIES})
 
 target_link_libraries(parse.exe ${DEPENDENCIES} ${LIB_LINK})
 target_link_libraries(parse_fonts.exe ${DEPENDENCIES} ${LIB_LINK})
+target_link_libraries(render.exe ${DEPENDENCIES} ${LIB_LINK})
 
 # **********************
 # ***  Libraries     ***

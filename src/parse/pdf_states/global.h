@@ -16,7 +16,9 @@ namespace pdflib
               pdf_resource<PAGE_IMAGES>& page_images_,
 
               pdf_resource<PAGE_FONTS>& page_fonts_,
-	      pdf_resource<PAGE_GRPHS>& page_grphs_);
+	      pdf_resource<PAGE_GRPHS>& page_grphs_,
+
+              pdf_render_instructions& instructions_);
 
     pdf_state(const pdf_state<GLOBAL>& other);
 
@@ -45,6 +47,8 @@ namespace pdflib
     pdf_resource<PAGE_FONTS>& page_fonts;
     pdf_resource<PAGE_GRPHS>& page_grphs;
 
+    pdf_render_instructions& instructions;
+
     std::array<double, 9> trafo_matrix;
 
     pdf_state<TEXT> text_state;    
@@ -57,7 +61,9 @@ namespace pdflib
                                pdf_resource<PAGE_IMAGES>& page_images_,
 
                                pdf_resource<PAGE_FONTS>& page_fonts_,
-			       pdf_resource<PAGE_GRPHS>& page_grphs_):
+			       pdf_resource<PAGE_GRPHS>& page_grphs_,
+
+                               pdf_render_instructions& instructions_):
     page_cells(page_cells_),
     page_lines(page_lines_),
     page_images(page_images_),
@@ -65,12 +71,14 @@ namespace pdflib
     page_fonts(page_fonts_),
     page_grphs(page_grphs_),
 
+    instructions(instructions_),
+
     trafo_matrix({1.0, 0.0, 0.0,
           0.0, 1.0, 0.0,
           0.0, 0.0, 1.0}),
 
-    text_state(trafo_matrix, page_cells, page_fonts),
-    line_state(trafo_matrix, page_lines),
+    text_state(trafo_matrix, page_cells, page_fonts, instructions),
+    line_state(trafo_matrix, page_lines, instructions),
     grph_state(trafo_matrix, page_grphs)
   {
     //LOG_S(INFO) << "pdf_state<GLOBAL>";
@@ -84,10 +92,12 @@ namespace pdflib
     page_fonts(other.page_fonts),
     page_grphs(other.page_grphs),
 
+    instructions(other.instructions),
+
     trafo_matrix(other.trafo_matrix),
 
-    text_state(trafo_matrix, page_cells, page_fonts),
-    line_state(trafo_matrix, page_lines),
+    text_state(trafo_matrix, page_cells, page_fonts, instructions),
+    line_state(trafo_matrix, page_lines, instructions),
     grph_state(trafo_matrix, page_grphs)
   {
     //LOG_S(INFO) << "pdf_state<GLOBAL>(const pdf_state<GLOBAL>& other)";
@@ -220,10 +230,22 @@ namespace pdflib
       image.x0 = img_bbox[0];
       image.y0 = img_bbox[1];
       image.x1 = img_bbox[2];
-      image.y1 = img_bbox[3];      
-    }
+      image.y1 = img_bbox[3];
 
-    page_images.push_back(image);
+      page_images.push_back(image);
+
+      {
+        bitmap_instruction binstr(xobj.get_key(),
+				  nullptr,
+                                  {{0, 0, 0}},
+                                  d_0[0], d_0[1],
+                                  d_1[0], d_1[1],
+                                  d_2[0], d_2[1],
+                                  d_3[0], d_3[1]);
+
+        instructions.add_bitmap_instruction(std::move(binstr));
+      }
+    }
   }
 
 }
