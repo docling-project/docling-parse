@@ -20,7 +20,7 @@ namespace pdflib
 
     std::array<double, 6> get_matrix();
     std::array<double, 4> get_bbox();
-    
+
     std::pair<nlohmann::json, QPDFObjectHandle> get_fonts();
     std::pair<nlohmann::json, QPDFObjectHandle> get_grphs();
 
@@ -32,6 +32,30 @@ namespace pdflib
 
     std::vector<qpdf_instruction> parse_stream();
 
+    // Image property getters (valid when subtype is XOBJECT_IMAGE)
+    std::string              get_key() const;
+    int                      get_image_width() const;
+    int                      get_image_height() const;
+    int                      get_bits_per_component() const;
+    std::string              get_color_space() const;
+    std::string              get_intent() const;
+    std::vector<std::string> get_filters() const;
+
+    bool                     has_raw_stream_data() const;
+    std::shared_ptr<Buffer>  get_raw_stream_data() const;
+
+    bool                     has_decoded_stream_data() const;
+    std::shared_ptr<Buffer>  get_decoded_stream_data() const;
+
+    // Determine file extension from filters (e.g. ".jpg", ".jp2", ".jb2", ".bin")
+    std::string pick_extension() const;
+
+    // Save raw stream data to a file
+    void save_to_file(std::filesystem::path const& path) const;
+
+    // Load a buffer from a file on disk
+    static std::shared_ptr<Buffer> load_from_file(std::filesystem::path const& path);
+
   private:
 
     void parse();
@@ -39,6 +63,12 @@ namespace pdflib
     void init_matrix();
 
     void init_bbox();
+
+    void init_image_properties();
+
+    void init_filters();
+
+    void init_stream_data();
 
   private:
 
@@ -52,9 +82,29 @@ namespace pdflib
 
     std::array<double, 6> matrix;
     std::array<double, 4> bbox;
+
+    // Image-specific properties (populated only for XOBJECT_IMAGE)
+    int              image_width;
+    int              image_height;
+    int              bits_per_component;
+    std::string      color_space;
+    std::string      intent;
+    std::vector<std::string> image_filters;
+
+    // Stream data
+    std::shared_ptr<Buffer> raw_stream_data;
+    std::shared_ptr<Buffer> decoded_stream_data;
   };
 
-  pdf_resource<PAGE_XOBJECT>::pdf_resource()
+  pdf_resource<PAGE_XOBJECT>::pdf_resource():
+    image_width(0),
+    image_height(0),
+    bits_per_component(0),
+    color_space(),
+    intent(),
+    image_filters(),
+    raw_stream_data(nullptr),
+    decoded_stream_data(nullptr)
   {}
 
   pdf_resource<PAGE_XOBJECT>::~pdf_resource()
@@ -178,7 +228,14 @@ namespace pdflib
     {
       init_matrix();
 
-      init_bbox();      
+      init_bbox();
+    }
+
+    if(get_subtype() == XOBJECT_IMAGE)
+    {
+      init_image_properties();
+      init_filters();
+      init_stream_data();
     }
   }
 
@@ -240,7 +297,7 @@ namespace pdflib
 
     std::vector<std::string> keys = {"/BBox"};
     if(utils::json::has(keys, json_xobject_dict))
-      {        
+      {
         nlohmann::json json_bbox = utils::json::get(keys, json_xobject_dict);
 
         //assert(bbox.size()==json_bbox.size());
@@ -250,7 +307,7 @@ namespace pdflib
 	    LOG_S(ERROR) << message;
 	    throw std::logic_error(message);
 	  }
-	
+
         for(int l=0; l<bbox.size(); l++)
           {
             bbox[l] = json_bbox[l].get<double>();
@@ -260,6 +317,231 @@ namespace pdflib
       {
         LOG_S(WARNING) << "no '/BBox' key detected";
       }
+  }
+
+  void pdf_resource<PAGE_XOBJECT>::init_image_properties()
+  {
+    LOG_S(INFO) << __FUNCTION__;
+
+    // /Width
+    if(json_xobject_dict.count("/Width") && json_xobject_dict["/Width"].is_number())
+      {
+        image_width = json_xobject_dict["/Width"].get<int>();
+      }
+
+    // /Height
+    if(json_xobject_dict.count("/Height") && json_xobject_dict["/Height"].is_number())
+      {
+        image_height = json_xobject_dict["/Height"].get<int>();
+      }
+
+    // /BitsPerComponent
+    if(json_xobject_dict.count("/BitsPerComponent") && json_xobject_dict["/BitsPerComponent"].is_number())
+      {
+        bits_per_component = json_xobject_dict["/BitsPerComponent"].get<int>();
+      }
+
+    // /ColorSpace – may be a name ("/DeviceRGB") or an array; store as string
+    if(json_xobject_dict.count("/ColorSpace"))
+      {
+        auto& cs = json_xobject_dict["/ColorSpace"];
+        if(cs.is_string())
+          {
+            color_space = cs.get<std::string>();
+          }
+        else
+          {
+            color_space = cs.dump();
+          }
+      }
+
+    // /Intent
+    if(json_xobject_dict.count("/Intent") && json_xobject_dict["/Intent"].is_string())
+      {
+        intent = json_xobject_dict["/Intent"].get<std::string>();
+      }
+
+    LOG_S(INFO) << "image properties: "
+                << image_width << "x" << image_height
+                << " bpc=" << bits_per_component
+                << " cs=" << color_space
+                << " intent=" << intent;
+  }
+
+  void pdf_resource<PAGE_XOBJECT>::init_filters()
+  {
+    LOG_S(INFO) << __FUNCTION__;
+
+    image_filters.clear();
+
+    if(not json_xobject_dict.count("/Filter"))
+      return;
+
+    auto& f = json_xobject_dict["/Filter"];
+    if(f.is_string())
+      {
+        image_filters.push_back(f.get<std::string>());
+      }
+    else if(f.is_array())
+      {
+        for(auto const& item : f)
+          {
+            if(item.is_string())
+              image_filters.push_back(item.get<std::string>());
+          }
+      }
+
+    for(auto const& flt : image_filters)
+      {
+        LOG_S(INFO) << "filter: " << flt;
+      }
+  }
+
+  void pdf_resource<PAGE_XOBJECT>::init_stream_data()
+  {
+    LOG_S(INFO) << __FUNCTION__;
+
+    if(not qpdf_xobject.isStream())
+      {
+        LOG_S(WARNING) << "xobject is not a stream, cannot extract raw data";
+        return;
+      }
+
+    try
+      {
+        raw_stream_data = qpdf_xobject.getRawStreamData();
+        LOG_S(INFO) << "raw stream size: " << raw_stream_data->getSize() << " bytes";
+      }
+    catch(std::exception const& e)
+      {
+        LOG_S(ERROR) << "failed to get raw stream data: " << e.what();
+        raw_stream_data = nullptr;
+      }
+
+    try
+      {
+        decoded_stream_data = qpdf_xobject.getStreamData();
+        LOG_S(INFO) << "decoded stream size: " << decoded_stream_data->getSize() << " bytes";
+      }
+    catch(std::exception const& e)
+      {
+        LOG_S(WARNING) << "failed to get decoded stream data: " << e.what();
+        decoded_stream_data = nullptr;
+      }
+  }
+
+  // --- Getters ---
+
+  std::string pdf_resource<PAGE_XOBJECT>::get_key() const
+  {
+    return xobject_key;
+  }
+
+  int pdf_resource<PAGE_XOBJECT>::get_image_width() const
+  {
+    return image_width;
+  }
+
+  int pdf_resource<PAGE_XOBJECT>::get_image_height() const
+  {
+    return image_height;
+  }
+
+  int pdf_resource<PAGE_XOBJECT>::get_bits_per_component() const
+  {
+    return bits_per_component;
+  }
+
+  std::string pdf_resource<PAGE_XOBJECT>::get_color_space() const
+  {
+    return color_space;
+  }
+
+  std::string pdf_resource<PAGE_XOBJECT>::get_intent() const
+  {
+    return intent;
+  }
+
+  std::vector<std::string> pdf_resource<PAGE_XOBJECT>::get_filters() const
+  {
+    return image_filters;
+  }
+
+  bool pdf_resource<PAGE_XOBJECT>::has_raw_stream_data() const
+  {
+    return (raw_stream_data != nullptr && raw_stream_data->getSize() > 0);
+  }
+
+  std::shared_ptr<Buffer> pdf_resource<PAGE_XOBJECT>::get_raw_stream_data() const
+  {
+    return raw_stream_data;
+  }
+
+  bool pdf_resource<PAGE_XOBJECT>::has_decoded_stream_data() const
+  {
+    return (decoded_stream_data != nullptr && decoded_stream_data->getSize() > 0);
+  }
+
+  std::shared_ptr<Buffer> pdf_resource<PAGE_XOBJECT>::get_decoded_stream_data() const
+  {
+    return decoded_stream_data;
+  }
+
+  // --- File I/O ---
+
+  std::string pdf_resource<PAGE_XOBJECT>::pick_extension() const
+  {
+    for(auto const& f : image_filters)
+      {
+        if(f == "/DCTDecode")  return ".jpg";
+        if(f == "/JPXDecode")  return ".jp2";
+        if(f == "/JBIG2Decode") return ".jb2";
+      }
+    return ".bin";
+  }
+
+  void pdf_resource<PAGE_XOBJECT>::save_to_file(std::filesystem::path const& path) const
+  {
+    if(not has_raw_stream_data())
+      {
+        LOG_S(WARNING) << "no raw stream data to save";
+        return;
+      }
+
+    std::ofstream out(path, std::ios::binary);
+    if(not out)
+      {
+        LOG_S(ERROR) << "unable to open output file: " << path.string();
+        throw std::runtime_error("unable to open output file: " + path.string());
+      }
+
+    out.write(reinterpret_cast<char const*>(raw_stream_data->getBuffer()),
+              static_cast<std::streamsize>(raw_stream_data->getSize()));
+
+    LOG_S(INFO) << "saved " << raw_stream_data->getSize()
+                << " bytes to " << path.string();
+  }
+
+  std::shared_ptr<Buffer> pdf_resource<PAGE_XOBJECT>::load_from_file(
+      std::filesystem::path const& path)
+  {
+    std::ifstream in(path, std::ios::binary | std::ios::ate);
+    if(not in)
+      {
+        LOG_S(ERROR) << "unable to open input file: " << path.string();
+        throw std::runtime_error("unable to open input file: " + path.string());
+      }
+
+    auto size = static_cast<std::size_t>(in.tellg());
+    in.seekg(0, std::ios::beg);
+
+    auto buffer = std::make_shared<Buffer>(size);
+    in.read(reinterpret_cast<char*>(buffer->getBuffer()),
+            static_cast<std::streamsize>(size));
+
+    LOG_S(INFO) << "loaded " << size << " bytes from " << path.string();
+
+    return buffer;
   }
 
 }

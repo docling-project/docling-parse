@@ -84,6 +84,7 @@ int main(int argc, char* argv[]) {
       ("p,page", "Pages to process (default: -1 for all)", cxxopts::value<int>()->default_value("-1"))
       ("password", "Password for accessing encrypted, password-protected files", cxxopts::value<std::string>())
       ("o,output", "Output file", cxxopts::value<std::string>())
+      ("export-images", "Export images to directory", cxxopts::value<std::string>())
       ("l,loglevel", "loglevel [error;warning;success;info]", cxxopts::value<std::string>())
       ("h,help", "Print usage");
 
@@ -169,6 +170,12 @@ int main(int argc, char* argv[]) {
       parser.parse(config, do_sanitization);
 
       LOG_S(INFO) << "total-time [sec]: " << timer.get_time();
+
+      if (result.count("export-images")) {
+        std::string images_dir = result["export-images"].as<std::string>();
+        parser.export_images(images_dir, page);
+      }
+
       return 0;
     }
 

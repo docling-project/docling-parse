@@ -32,6 +32,7 @@
 #define POINTERHOLDER_TRANSITION 0 // eliminate warnings from QPDF
 #include <qpdf/QPDF.hh>
 #include <qpdf/QPDFPageObjectHelper.hh>
+#include <qpdf/Buffer.hh>
 
 // code to locate pdf-resources (eg fonts)
 #include <resources.h>
