@@ -7,8 +7,6 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
 
-from PIL import Image as PILImage
-
 from docling_core.types.doc.base import BoundingBox, CoordOrigin, ImageRefMode
 from docling_core.types.doc.document import ImageRef
 from docling_core.types.doc.page import (
@@ -26,6 +24,7 @@ from docling_core.types.doc.page import (
     TextCell,
     TextDirection,
 )
+from PIL import Image as PILImage
 from pydantic import BaseModel, ConfigDict
 
 from docling_parse.pdf_parsers import pdf_parser  # type: ignore[import]
@@ -986,7 +985,7 @@ class PdfDocument:
 
                 if image_bytes and len(image_bytes) > 0:
                     fmt = image.get_image_format()
-                    pil_image = None
+                    pil_image: PILImage.Image | None = None
 
                     if fmt in ("jpeg", "jp2"):
                         pil_image = PILImage.open(BytesIO(image_bytes))
@@ -1007,9 +1006,7 @@ class PdfDocument:
                         # Compute DPI from pixel dimensions and PDF bbox
                         bbox_width = abs(image.x1 - image.x0)
                         if bbox_width > 0 and image.image_width > 0:
-                            dpi = int(
-                                round(image.image_width * 72.0 / bbox_width)
-                            )
+                            dpi = int(round(image.image_width * 72.0 / bbox_width))
                         else:
                             dpi = 72
 
