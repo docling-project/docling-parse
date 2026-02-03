@@ -9,6 +9,7 @@
 #include <cstdio>
 #include <cmath>
 #include <algorithm>
+#include <csetjmp>
 
 #include <jpeglib.h>
 
@@ -51,6 +52,31 @@ public:
   bool has_decode = false;
   bool image_mask = false;
 };
+
+// ---------------------------------------------------------------------------
+// Custom libjpeg error handler that longjmp's instead of calling exit()
+// ---------------------------------------------------------------------------
+struct jpeg_error_longjmp : public jpeg_error_mgr
+{
+  std::jmp_buf jmp;
+};
+
+inline void jpeg_error_exit_longjmp(j_common_ptr cinfo)
+{
+  auto* myerr = reinterpret_cast<jpeg_error_longjmp*>(cinfo->err);
+  char buf[JMSG_LENGTH_MAX];
+  (*cinfo->err->format_message)(cinfo, buf);
+  LOG_S(WARNING) << "libjpeg error: " << buf;
+  std::longjmp(myerr->jmp, 1);
+}
+
+// ---------------------------------------------------------------------------
+// Validate that data begins with the JPEG SOI marker (0xFF 0xD8)
+// ---------------------------------------------------------------------------
+inline bool is_jpeg_data(unsigned char const* data, std::size_t size)
+{
+  return size >= 2 && data[0] == 0xFF && data[1] == 0xD8;
+}
 
 // ---------------------------------------------------------------------------
 // apply_decode_component
@@ -116,13 +142,38 @@ inline bool write_corrected_jpeg_from_memory(
     LOG_S(INFO) << __FUNCTION__ << ": /Decode values = [" << dec_str << "]";
   }
 
-  if(!data || size == 0) return false;
+  if((not data) or (size == 0))
+    {
+      LOG_S(INFO) << __FUNCTION__ << ": data is null or size is zero";
+      return false;
+    }
+
+  if(!is_jpeg_data(data, size))
+    {
+      LOG_S(WARNING) << __FUNCTION__
+                     << ": data does not start with JPEG SOI marker"
+                     << " (starts with 0x" << std::hex
+                     << static_cast<int>(data[0]) << " 0x"
+                     << static_cast<int>(size > 1 ? data[1] : 0)
+                     << std::dec << "), skipping";
+      return false;
+    }
 
   // --- Decompress --------------------------------------------------------
+  LOG_S(INFO) << "starting the jpeg decompression ...";
+
   jpeg_decompress_struct dinfo{};
-  jpeg_error_mgr jerr{};
+  jpeg_error_longjmp jerr{};
+
   dinfo.err = jpeg_std_error(&jerr);
+  jerr.error_exit = jpeg_error_exit_longjmp;
   jpeg_create_decompress(&dinfo);
+
+  if(setjmp(jerr.jmp))
+  {
+    jpeg_destroy_decompress(&dinfo);
+    return false;
+  }
 
   jpeg_mem_src(&dinfo, const_cast<unsigned char*>(data),
                static_cast<unsigned long>(size));
@@ -251,8 +302,9 @@ inline bool write_corrected_jpeg_from_memory(
 
   // --- Re-encode (preserving original colour space) ----------------------
   jpeg_compress_struct cinfo{};
-  jpeg_error_mgr cjerr{};
+  jpeg_error_longjmp cjerr{};
   cinfo.err = jpeg_std_error(&cjerr);
+  cjerr.error_exit = jpeg_error_exit_longjmp;
   jpeg_create_compress(&cinfo);
 
   std::FILE* outfile = std::fopen(path.string().c_str(), "wb");
@@ -262,6 +314,14 @@ inline bool write_corrected_jpeg_from_memory(
     jpeg_destroy_compress(&cinfo);
     return false;
   }
+
+  if(setjmp(cjerr.jmp))
+  {
+    std::fclose(outfile);
+    jpeg_destroy_compress(&cinfo);
+    return false;
+  }
+
   jpeg_stdio_dest(&cinfo, outfile);
 
   cinfo.image_width      = static_cast<JDIMENSION>(w);
@@ -311,11 +371,25 @@ inline std::vector<unsigned char> write_corrected_jpeg_to_memory(
 {
   if(not data or size == 0) { return {}; }
 
+  if(!is_jpeg_data(data, size))
+  {
+    LOG_S(WARNING) << "write_corrected_jpeg_to_memory"
+                   << ": data does not start with JPEG SOI marker, skipping";
+    return {};
+  }
+
   // --- Decompress --------------------------------------------------------
   jpeg_decompress_struct dinfo{};
-  jpeg_error_mgr jerr{};
+  jpeg_error_longjmp jerr{};
   dinfo.err = jpeg_std_error(&jerr);
+  jerr.error_exit = jpeg_error_exit_longjmp;
   jpeg_create_decompress(&dinfo);
+
+  if(setjmp(jerr.jmp))
+  {
+    jpeg_destroy_decompress(&dinfo);
+    return {};
+  }
 
   jpeg_mem_src(&dinfo, const_cast<unsigned char*>(data),
                static_cast<unsigned long>(size));
@@ -379,9 +453,17 @@ inline std::vector<unsigned char> write_corrected_jpeg_to_memory(
   unsigned long  outsize = 0;
 
   jpeg_compress_struct cinfo{};
-  jpeg_error_mgr cjerr{};
+  jpeg_error_longjmp cjerr{};
   cinfo.err = jpeg_std_error(&cjerr);
+  cjerr.error_exit = jpeg_error_exit_longjmp;
   jpeg_create_compress(&cinfo);
+
+  if(setjmp(cjerr.jmp))
+  {
+    jpeg_destroy_compress(&cinfo);
+    if(outbuf) free(outbuf);
+    return {};
+  }
 
   jpeg_mem_dest(&cinfo, &outbuf, &outsize);
 

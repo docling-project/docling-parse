@@ -130,7 +130,7 @@ namespace pdflib
   xobject_subtype_name pdf_resource<PAGE_XOBJECT>::get_subtype()
   {
     std::string subtype = json_xobject_dict["/Subtype"].get<std::string>();
-    
+
     if(subtype=="/Image")
       {
         return XOBJECT_IMAGE;
@@ -141,7 +141,7 @@ namespace pdflib
       }
     else
       {
-        LOG_S(ERROR) << "unknown XObject subtype: " << subtype; 
+        LOG_S(ERROR) << "unknown XObject subtype: " << subtype;
         return XOBJECT_UNKNOWN;
       }
   }
@@ -153,25 +153,25 @@ namespace pdflib
   }
 
   /*
-  std::array<double, 4> pdf_resource<PAGE_XOBJECT>::get_bbox()
-  {
+    std::array<double, 4> pdf_resource<PAGE_XOBJECT>::get_bbox()
+    {
     return bbox;
-  }
+    }
   */
-  
+
   std::pair<nlohmann::json, QPDFObjectHandle> pdf_resource<PAGE_XOBJECT>::get_fonts()
   {
     std::pair<nlohmann::json, QPDFObjectHandle> fonts;
 
     std::vector<std::string> keys = {"/Resources", "/Font"};
     if(utils::json::has(keys, json_xobject_dict))
-      {        
+      {
         fonts.first  = utils::json::get(keys, json_xobject_dict);
         fonts.second = qpdf_xobject_dict.getKey(keys[0]).getKey(keys[1]);
-      }    
+      }
     else
       {
-        LOG_S(WARNING) << "no '/Font' key detected: " << json_xobject_dict.dump(2);        
+        LOG_S(WARNING) << "no '/Font' key detected: " << json_xobject_dict.dump(2);
       }
 
     return fonts;
@@ -183,28 +183,28 @@ namespace pdflib
 
     std::vector<std::string> keys = {"/Resources", "/ExtGState"};
     if(utils::json::has(keys, json_xobject_dict))
-      {        
+      {
         grphs.first  = utils::json::get(keys, json_xobject_dict);
         grphs.second = qpdf_xobject_dict.getKey(keys[0]).getKey(keys[1]);
-      }    
+      }
     else
       {
-        LOG_S(WARNING) << "no '/ExtGState' key detected: " << json_xobject_dict.dump(2);        
+        LOG_S(WARNING) << "no '/ExtGState' key detected: " << json_xobject_dict.dump(2);
       }
 
     return grphs;
   }
-  
+
   std::pair<nlohmann::json, QPDFObjectHandle> pdf_resource<PAGE_XOBJECT>::get_xobjects()
   {
     std::pair<nlohmann::json, QPDFObjectHandle> xobjects;
 
     std::vector<std::string> keys = {"/Resources", "/XObject"};
     if(utils::json::has(keys, json_xobject_dict))
-      {        
+      {
         xobjects.first  = utils::json::get(keys, json_xobject_dict);
         xobjects.second = qpdf_xobject_dict.getKey(keys[0]).getKey(keys[1]);
-      }    
+      }
     else
       {
         LOG_S(WARNING) << "no '/XObject' key detected";
@@ -246,66 +246,60 @@ namespace pdflib
     }
 
     if(get_subtype() == XOBJECT_IMAGE)
-    {
-      init_image_properties();
-      init_filters();
-      init_stream_data();
-
-      static int count=0;
-      count+=1;
-      
-      std::string fname = "image_" + std::to_string(count) + pick_extension();
-      this->save_to_file(fname.c_str());
-    }
+      {
+        init_image_properties();
+        init_filters();
+        init_stream_data();
+      }
   }
 
   std::vector<qpdf_instruction> pdf_resource<PAGE_XOBJECT>::parse_stream()
   {
     std::vector<qpdf_instruction> stream;
 
-    // decode the stream 
+    // decode the stream
     try
       {
         qpdf_stream_decoder decoder(stream);
         decoder.decode(qpdf_xobject);
-        
+
         decoder.print();
       }
     catch(const std::exception& exc)
       {
-	std::stringstream ss;
-	ss << "encountered an error: " << exc.what();
+        std::stringstream ss;
+        ss << "encountered an error: " << exc.what();
 
-	LOG_S(ERROR) << ss.str();
-	throw std::logic_error(ss.str());
+        LOG_S(ERROR) << ss.str();
+        throw std::logic_error(ss.str());
       }
 
     return stream;
   }
 
-  
+
   void pdf_resource<PAGE_XOBJECT>::init_matrix()
   {
     matrix = {1., 0., 0., 1., 0., 0.};
 
     std::vector<std::string> keys = {"/Matrix"};
     if(utils::json::has(keys, json_xobject_dict))
-      {        
+      {
         nlohmann::json json_matrix = utils::json::get(keys, json_xobject_dict);
 
         //assert(matrix.size()==json_matrix.size());
-	if(matrix.size()!=json_matrix.size())
-	  {
-	    std::string message = "matrix.size()!=json_matrix.size()";
-	    LOG_S(ERROR) << message;
-	    throw std::logic_error(message);
-	  }
-	
+        if(matrix.size()!=json_matrix.size())
+          {
+            std::string message = "matrix.size()!=json_matrix.size()";
+            LOG_S(ERROR) << message;
+            throw std::logic_error(message);
+          }
+
         for(int l=0; l<matrix.size(); l++)
           {
             matrix[l] = json_matrix[l].get<double>();
           }
-      }    
+      }
     else
       {
         LOG_S(WARNING) << "no '/Matrix' key detected";
@@ -313,35 +307,35 @@ namespace pdflib
   }
 
   /*
-  void pdf_resource<PAGE_XOBJECT>::init_bbox()
-  {
+    void pdf_resource<PAGE_XOBJECT>::init_bbox()
+    {
     bbox = {0., 0., 0., 0.};
 
     std::vector<std::string> keys = {"/BBox"};
     if(utils::json::has(keys, json_xobject_dict))
-      {
-        nlohmann::json json_bbox = utils::json::get(keys, json_xobject_dict);
+    {
+    nlohmann::json json_bbox = utils::json::get(keys, json_xobject_dict);
 
-        //assert(bbox.size()==json_bbox.size());
-	if(bbox.size()!=json_bbox.size())
-	  {
-	    std::string message = "matrix.size()!=json_matrix.size()";
-	    LOG_S(ERROR) << message;
-	    throw std::logic_error(message);
-	  }
+    //assert(bbox.size()==json_bbox.size());
+    if(bbox.size()!=json_bbox.size())
+    {
+    std::string message = "matrix.size()!=json_matrix.size()";
+    LOG_S(ERROR) << message;
+    throw std::logic_error(message);
+    }
 
-        for(int l=0; l<bbox.size(); l++)
-          {
-            bbox[l] = json_bbox[l].get<double>();
-          }
-      }
+    for(int l=0; l<bbox.size(); l++)
+    {
+    bbox[l] = json_bbox[l].get<double>();
+    }
+    }
     else
-      {
-        LOG_S(WARNING) << "no '/BBox' key detected";
-      }
-  }
+    {
+    LOG_S(WARNING) << "no '/BBox' key detected";
+    }
+    }
   */
-  
+
   void pdf_resource<PAGE_XOBJECT>::init_image_properties()
   {
     LOG_S(INFO) << __FUNCTION__ << ": " << json_xobject_dict.dump(2);
@@ -353,9 +347,9 @@ namespace pdflib
       }
     else
       {
-	LOG_S(WARNING) << "no `/Width` found";
+        LOG_S(WARNING) << "no `/Width` found";
       }
-    
+
     // /Height
     if(json_xobject_dict.count("/Height") && json_xobject_dict["/Height"].is_number())
       {
@@ -363,9 +357,9 @@ namespace pdflib
       }
     else
       {
-	LOG_S(WARNING) << "no `/Height` found";
+        LOG_S(WARNING) << "no `/Height` found";
       }
-    
+
     // /BitsPerComponent
     if(json_xobject_dict.count("/BitsPerComponent") && json_xobject_dict["/BitsPerComponent"].is_number())
       {
@@ -373,9 +367,9 @@ namespace pdflib
       }
     else
       {
-	LOG_S(WARNING) << "no `/BitsPerComponent` found";
+        LOG_S(WARNING) << "no `/BitsPerComponent` found";
       }
-    
+
     // /ColorSpace – may be a name ("/DeviceRGB") or an array; store as string
     if(json_xobject_dict.count("/ColorSpace"))
       {
@@ -391,9 +385,9 @@ namespace pdflib
       }
     else
       {
-	LOG_S(WARNING) << "no `/ColorSpace` found";
+        LOG_S(WARNING) << "no `/ColorSpace` found";
       }
-    
+
     // /Intent
     if(json_xobject_dict.count("/Intent") && json_xobject_dict["/Intent"].is_string())
       {
@@ -401,9 +395,9 @@ namespace pdflib
       }
     else
       {
-	LOG_S(WARNING) << "no `/Intent` found";
+        LOG_S(WARNING) << "no `/Intent` found";
       }
-    
+
     // /ImageMask
     if(json_xobject_dict.count("/ImageMask") && json_xobject_dict["/ImageMask"].is_boolean())
       {
@@ -411,9 +405,9 @@ namespace pdflib
       }
     else
       {
-	LOG_S(WARNING) << "no `/ImageMask` found";
+        LOG_S(WARNING) << "no `/ImageMask` found";
       }
-    
+
     // /Decode (array of pairs per component)
     decode_array.clear();
     decode_present = false;
@@ -432,14 +426,14 @@ namespace pdflib
       }
     else
       {
-	LOG_S(WARNING) << "no `/Decode` found: falling back on default";
-	decode_array = {
-	  1, 0, 1, 0,
-	  1, 0, 1, 0
-	};
-	decode_present = !decode_array.empty();
+        LOG_S(WARNING) << "no `/Decode` found: falling back on default";
+        decode_array = {
+          1, 0, 1, 0,
+          1, 0, 1, 0
+        };
+        decode_present = !decode_array.empty();
       }
-    
+
     LOG_S(INFO) << "image properties: "
                 << image_width << "x" << image_height
                 << " bpc=" << bits_per_component
@@ -457,9 +451,9 @@ namespace pdflib
 
     if(not json_xobject_dict.count("/Filter"))
       {
-	return;
+        return;
       }
-    
+
     auto& f = json_xobject_dict["/Filter"];
     if(f.is_string())
       {
@@ -620,18 +614,18 @@ namespace pdflib
       if(!(color_space == "/DeviceRGB" || color_space == "/DeviceGray" || color_space == "/DeviceCMYK")) return false;
       if(image_mask) return false;
       if(decode_present && !decode_array.empty())
-      {
-        int ncomp = (color_space == "/DeviceGray") ? 1
-                  : (color_space == "/DeviceCMYK") ? 4 : 3;
-        if(static_cast<int>(decode_array.size()) < 2*ncomp) return false;
-        for(int c=0;c<ncomp;++c)
         {
-          double dmin = decode_array[2*c+0];
-          double dmax = decode_array[2*c+1];
-          if(!(std::abs(dmin - 0.0) < 1e-12 && std::abs(dmax - 1.0) < 1e-12))
-            return false;
+          int ncomp = (color_space == "/DeviceGray") ? 1
+            : (color_space == "/DeviceCMYK") ? 4 : 3;
+          if(static_cast<int>(decode_array.size()) < 2*ncomp) return false;
+          for(int c=0;c<ncomp;++c)
+            {
+              double dmin = decode_array[2*c+0];
+              double dmax = decode_array[2*c+1];
+              if(!(std::abs(dmin - 0.0) < 1e-12 && std::abs(dmax - 1.0) < 1e-12))
+                return false;
+            }
         }
-      }
       return true;
     }();
 
@@ -647,9 +641,9 @@ namespace pdflib
         params.image_mask = image_mask;
 
         bool ok = jpeg::write_corrected_jpeg_from_memory(
-            reinterpret_cast<unsigned char const*>(raw_stream_data->getBuffer()),
-            static_cast<std::size_t>(raw_stream_data->getSize()),
-            params, path);
+                                                         reinterpret_cast<unsigned char const*>(raw_stream_data->getBuffer()),
+                                                         static_cast<std::size_t>(raw_stream_data->getSize()),
+                                                         params, path);
         if(ok)
           {
             LOG_S(INFO) << "wrote corrected JPEG to " << path.string();
@@ -673,7 +667,7 @@ namespace pdflib
   }
 
   std::shared_ptr<Buffer> pdf_resource<PAGE_XOBJECT>::load_from_file(
-      std::filesystem::path const& path)
+                                                                     std::filesystem::path const& path)
   {
     std::ifstream in(path, std::ios::binary | std::ios::ate);
     if(not in)

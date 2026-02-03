@@ -213,6 +213,7 @@ def verify_SegmentedPdfPage(
 def test_reference_documents_from_filenames(mode):
 
     parser = DoclingPdfParser(loglevel="fatal")
+    # parser = DoclingPdfParser(loglevel="info")
 
     pdf_docs = sorted(glob.glob(REGRESSION_FOLDER))
 
