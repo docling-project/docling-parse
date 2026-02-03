@@ -7,7 +7,10 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
 
-from docling_core.types.doc.base import BoundingBox, CoordOrigin
+from PIL import Image as PILImage
+
+from docling_core.types.doc.base import BoundingBox, CoordOrigin, ImageRefMode
+from docling_core.types.doc.document import ImageRef
 from docling_core.types.doc.page import (
     BitmapResource,
     BoundingRectangle,
@@ -974,7 +977,56 @@ class PdfDocument:
                 r_x3=image.x0,
                 r_y3=image.y1,
             )
-            bitmap = BitmapResource(index=ind, rect=rect, uri=None)
+
+            image_ref = None
+            mode = ImageRefMode.PLACEHOLDER
+
+            try:
+                image_bytes = image.get_image_as_bytes()
+
+                if image_bytes and len(image_bytes) > 0:
+                    fmt = image.get_image_format()
+                    pil_image = None
+
+                    if fmt in ("jpeg", "jp2"):
+                        pil_image = PILImage.open(BytesIO(image_bytes))
+                    elif fmt in ("raw", "jbig2"):
+                        pil_mode = image.get_pil_mode()
+                        w = image.image_width
+                        h = image.image_height
+                        if w > 0 and h > 0:
+                            pil_image = PILImage.frombytes(
+                                pil_mode, (w, h), image_bytes
+                            )
+
+                    if pil_image is not None:
+                        # Normalize to RGBA for consistent downstream handling
+                        if pil_image.mode != "RGBA":
+                            pil_image = pil_image.convert("RGBA")
+
+                        # Compute DPI from pixel dimensions and PDF bbox
+                        bbox_width = abs(image.x1 - image.x0)
+                        if bbox_width > 0 and image.image_width > 0:
+                            dpi = int(
+                                round(image.image_width * 72.0 / bbox_width)
+                            )
+                        else:
+                            dpi = 72
+
+                        image_ref = ImageRef.from_pil(pil_image, dpi=dpi)
+                        mode = ImageRefMode.EMBEDDED
+
+            except Exception:
+                _log.debug(
+                    "Failed to extract image data for bitmap %d, "
+                    "falling back to placeholder",
+                    ind,
+                    exc_info=True,
+                )
+
+            bitmap = BitmapResource(
+                index=ind, rect=rect, uri=None, image=image_ref, mode=mode
+            )
             result.append(bitmap)
 
         return result

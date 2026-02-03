@@ -54,12 +54,25 @@ PYBIND11_MODULE(pdf_parsers, m) {
 	 "Get segment indices")
     .def("__len__", &pdflib::pdf_resource<pdflib::PAGE_LINE>::size);
 
-  // PdfImage - bitmap resource with bounding box
+  // PdfImage - bitmap resource with bounding box and image data
   pybind11::class_<pdflib::pdf_resource<pdflib::PAGE_IMAGE>>(m, "PdfImage")
     .def_readonly("x0", &pdflib::pdf_resource<pdflib::PAGE_IMAGE>::x0)
     .def_readonly("y0", &pdflib::pdf_resource<pdflib::PAGE_IMAGE>::y0)
     .def_readonly("x1", &pdflib::pdf_resource<pdflib::PAGE_IMAGE>::x1)
-    .def_readonly("y1", &pdflib::pdf_resource<pdflib::PAGE_IMAGE>::y1);
+    .def_readonly("y1", &pdflib::pdf_resource<pdflib::PAGE_IMAGE>::y1)
+    .def_readonly("image_width", &pdflib::pdf_resource<pdflib::PAGE_IMAGE>::image_width)
+    .def_readonly("image_height", &pdflib::pdf_resource<pdflib::PAGE_IMAGE>::image_height)
+    .def("get_image_format", &pdflib::pdf_resource<pdflib::PAGE_IMAGE>::get_image_format,
+	 "Get image format hint: 'jpeg', 'jp2', 'jbig2', or 'raw'")
+    .def("get_pil_mode", &pdflib::pdf_resource<pdflib::PAGE_IMAGE>::get_pil_mode,
+	 "Get PIL-compatible mode string: 'L', 'RGB', 'CMYK', or '1'")
+    .def("get_image_as_bytes",
+	 [](pdflib::pdf_resource<pdflib::PAGE_IMAGE> const& self) {
+	   auto data = self.get_image_as_bytes();
+	   return pybind11::bytes(reinterpret_cast<char const*>(data.data()),
+				  data.size());
+	 },
+	 "Get image data as bytes (corrected JPEG, raw JP2, or decoded pixels)");
 
   // PdfPageDimension - page geometry and bounding boxes
   pybind11::class_<pdflib::pdf_resource<pdflib::PAGE_DIMENSION>>(m, "PdfPageDimension")

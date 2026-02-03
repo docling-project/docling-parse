@@ -298,5 +298,124 @@ inline bool write_corrected_jpeg_from_memory(
   return true;
 }
 
+// ---------------------------------------------------------------------------
+// write_corrected_jpeg_to_memory
+// ---------------------------------------------------------------------------
+// Same as write_corrected_jpeg_from_memory but writes to a memory buffer
+// instead of a file.  Returns the corrected JPEG as a byte vector, or an
+// empty vector on failure.
+// ---------------------------------------------------------------------------
+inline std::vector<unsigned char> write_corrected_jpeg_to_memory(
+    unsigned char const* data, std::size_t size,
+    jpeg_parameters const& params)
+{
+  if(not data or size == 0) { return {}; }
+
+  // --- Decompress --------------------------------------------------------
+  jpeg_decompress_struct dinfo{};
+  jpeg_error_mgr jerr{};
+  dinfo.err = jpeg_std_error(&jerr);
+  jpeg_create_decompress(&dinfo);
+
+  jpeg_mem_src(&dinfo, const_cast<unsigned char*>(data),
+               static_cast<unsigned long>(size));
+
+  if(JPEG_HEADER_OK != jpeg_read_header(&dinfo, TRUE))
+  {
+    jpeg_destroy_decompress(&dinfo);
+    return {};
+  }
+
+  switch(params.color_space)
+  {
+    case ColorSpace::Gray: { dinfo.out_color_space = JCS_GRAYSCALE; break; }
+    case ColorSpace::RGB:  { dinfo.out_color_space = JCS_RGB;       break; }
+    case ColorSpace::CMYK: { dinfo.out_color_space = JCS_CMYK;      break; }
+    default: { break; }
+  }
+
+  jpeg_start_decompress(&dinfo);
+
+  const int         ncomp  = dinfo.output_components;
+  const std::size_t w      = dinfo.output_width;
+  const std::size_t h      = dinfo.output_height;
+  const std::size_t stride = w * static_cast<std::size_t>(ncomp);
+  const bool        is_cmyk = (dinfo.out_color_space == JCS_CMYK);
+
+  std::vector<unsigned char> image(h * stride);
+
+  while(dinfo.output_scanline < dinfo.output_height)
+  {
+    unsigned char* row = &image[dinfo.output_scanline * stride];
+    JSAMPROW rows[1] = { row };
+    jpeg_read_scanlines(&dinfo, rows, 1);
+  }
+
+  jpeg_finish_decompress(&dinfo);
+  jpeg_destroy_decompress(&dinfo);
+
+  // --- Apply /Decode mapping ---------------------------------------------
+  if(params.has_decode and not params.decode.empty() and
+     static_cast<int>(params.decode.size()) >= 2 * ncomp)
+  {
+    for(std::size_t y = 0; y < h; ++y)
+    {
+      unsigned char* row = &image[y * stride];
+      for(std::size_t x = 0; x < w; ++x)
+      {
+        for(int c = 0; c < ncomp; ++c)
+        {
+          double dmin = params.decode[2 * c + 0];
+          double dmax = params.decode[2 * c + 1];
+          row[x * ncomp + c] = apply_decode_component(
+              row[x * ncomp + c], dmin, dmax);
+        }
+      }
+    }
+  }
+
+  // --- Re-encode to memory -----------------------------------------------
+  unsigned char* outbuf  = nullptr;
+  unsigned long  outsize = 0;
+
+  jpeg_compress_struct cinfo{};
+  jpeg_error_mgr cjerr{};
+  cinfo.err = jpeg_std_error(&cjerr);
+  jpeg_create_compress(&cinfo);
+
+  jpeg_mem_dest(&cinfo, &outbuf, &outsize);
+
+  cinfo.image_width      = static_cast<JDIMENSION>(w);
+  cinfo.image_height     = static_cast<JDIMENSION>(h);
+  cinfo.input_components = ncomp;
+
+  if(is_cmyk)
+  {
+    cinfo.in_color_space = JCS_CMYK;
+  }
+  else
+  {
+    cinfo.in_color_space = (ncomp == 1) ? JCS_GRAYSCALE : JCS_RGB;
+  }
+
+  jpeg_set_defaults(&cinfo);
+  jpeg_set_quality(&cinfo, 90, TRUE);
+  jpeg_start_compress(&cinfo, TRUE);
+
+  for(std::size_t y = 0; y < h; ++y)
+  {
+    JSAMPROW row[1] = { const_cast<unsigned char*>(&image[y * stride]) };
+    jpeg_write_scanlines(&cinfo, row, 1);
+  }
+
+  jpeg_finish_compress(&cinfo);
+  jpeg_destroy_compress(&cinfo);
+
+  std::vector<unsigned char> result(outbuf, outbuf + outsize);
+  free(outbuf);  // jpeg_mem_dest allocates with malloc
+
+  return result;
+}
+
 } // namespace jpeg
 } // namespace pdflib
