@@ -3,6 +3,9 @@
 #ifndef PDF_PAGE_IMAGE_RESOURCE_H
 #define PDF_PAGE_IMAGE_RESOURCE_H
 
+// JPEG correction helpers
+#include <parse/utils/jpeg/jpeg_utils.h>
+
 namespace pdflib
 {
 
@@ -47,6 +50,11 @@ namespace pdflib
     std::vector<std::string> filters;
     std::shared_ptr<Buffer>  raw_stream_data;
     std::shared_ptr<Buffer>  decoded_stream_data;
+
+    // PDF image semantics copied from XObject
+    bool decode_present = false;
+    std::vector<double> decode_array; // 2*ncomp when present
+    bool image_mask = false;
   };
 
   pdf_resource<PAGE_IMAGE>::pdf_resource():
@@ -131,6 +139,63 @@ namespace pdflib
       {
         LOG_S(WARNING) << "no raw stream data to save";
         return;
+      }
+
+    auto ext = path.extension().string();
+    for(auto& c : ext) c = static_cast<char>(::tolower(c));
+
+    auto is_jpeg_ext = (ext == ".jpg" || ext == ".jpeg");
+
+    auto filters_have_dct = false;
+    for(auto const& f : filters) { if(f == "/DCTDecode") filters_have_dct = true; }
+
+    auto color_space_to_enum = [](std::string const& cs){
+      return jpeg::to_color_space(cs);
+    };
+
+    auto is_safe_passthrough = [&]() -> bool {
+      if(!is_jpeg_ext) return false;
+      if(!filters_have_dct) return false;
+      if(bits_per_component != 8) return false;
+      if(!(color_space == "/DeviceRGB" || color_space == "/DeviceGray" || color_space == "/DeviceCMYK")) return false;
+      if(image_mask) return false;
+      if(decode_present && !decode_array.empty())
+      {
+        int ncomp = (color_space == "/DeviceGray") ? 1
+                  : (color_space == "/DeviceCMYK") ? 4 : 3;
+        if(static_cast<int>(decode_array.size()) < 2*ncomp) return false;
+        for(int c=0;c<ncomp;++c)
+        {
+          double dmin = decode_array[2*c+0];
+          double dmax = decode_array[2*c+1];
+          if(!(std::abs(dmin - 0.0) < 1e-12 && std::abs(dmax - 1.0) < 1e-12))
+            return false;
+        }
+      }
+      return true;
+    }();
+
+    if(is_jpeg_ext && (!is_safe_passthrough))
+      {
+        jpeg::jpeg_parameters params;
+        params.width = image_width;
+        params.height = image_height;
+        params.bits_per_component = bits_per_component;
+        params.color_space = color_space_to_enum(color_space);
+        params.decode = decode_array;
+        params.has_decode = decode_present && !decode_array.empty();
+        params.image_mask = image_mask;
+
+        bool ok = jpeg::write_corrected_jpeg_from_memory(
+            reinterpret_cast<unsigned char const*>(raw_stream_data->getBuffer()),
+            static_cast<std::size_t>(raw_stream_data->getSize()),
+            params, path);
+        if(ok)
+          {
+            LOG_S(INFO) << "wrote corrected JPEG to " << path.string();
+            return;
+          }
+        LOG_S(WARNING) << "JPEG correction failed, falling back to raw copy: " << path.string();
       }
 
     std::ofstream out(path, std::ios::binary);

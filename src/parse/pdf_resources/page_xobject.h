@@ -3,6 +3,8 @@
 #ifndef PDF_PAGE_XOBJECT_RESOURCE_H
 #define PDF_PAGE_XOBJECT_RESOURCE_H
 
+#include <parse/utils/jpeg/jpeg_utils.h>
+
 namespace pdflib
 {
 
@@ -19,7 +21,7 @@ namespace pdflib
     xobject_subtype_name get_subtype();
 
     std::array<double, 6> get_matrix();
-    std::array<double, 4> get_bbox();
+    //std::array<double, 4> get_bbox();
 
     std::pair<nlohmann::json, QPDFObjectHandle> get_fonts();
     std::pair<nlohmann::json, QPDFObjectHandle> get_grphs();
@@ -40,6 +42,11 @@ namespace pdflib
     std::string              get_color_space() const;
     std::string              get_intent() const;
     std::vector<std::string> get_filters() const;
+
+    // Optional PDF semantics for images
+    bool                     has_decode_array() const;
+    std::vector<double>      get_decode_array() const;
+    bool                     is_image_mask() const;
 
     bool                     has_raw_stream_data() const;
     std::shared_ptr<Buffer>  get_raw_stream_data() const;
@@ -81,7 +88,7 @@ namespace pdflib
     std::string xobject_key;
 
     std::array<double, 6> matrix;
-    std::array<double, 4> bbox;
+    // std::array<double, 4> bbox;
 
     // Image-specific properties (populated only for XOBJECT_IMAGE)
     int              image_width;
@@ -94,6 +101,11 @@ namespace pdflib
     // Stream data
     std::shared_ptr<Buffer> raw_stream_data;
     std::shared_ptr<Buffer> decoded_stream_data;
+
+    // PDF image semantics
+    std::vector<double> decode_array; // length 2*ncomp when present
+    bool decode_present = false;
+    bool image_mask = false;
   };
 
   pdf_resource<PAGE_XOBJECT>::pdf_resource():
@@ -134,16 +146,19 @@ namespace pdflib
       }
   }
 
+
   std::array<double, 6> pdf_resource<PAGE_XOBJECT>::get_matrix()
   {
     return matrix;
   }
-  
+
+  /*
   std::array<double, 4> pdf_resource<PAGE_XOBJECT>::get_bbox()
   {
     return bbox;
   }
-
+  */
+  
   std::pair<nlohmann::json, QPDFObjectHandle> pdf_resource<PAGE_XOBJECT>::get_fonts()
   {
     std::pair<nlohmann::json, QPDFObjectHandle> fonts;
@@ -227,8 +242,7 @@ namespace pdflib
 
     {
       init_matrix();
-
-      init_bbox();
+      // init_bbox();
     }
 
     if(get_subtype() == XOBJECT_IMAGE)
@@ -236,6 +250,12 @@ namespace pdflib
       init_image_properties();
       init_filters();
       init_stream_data();
+
+      static int count=0;
+      count+=1;
+      
+      std::string fname = "image_" + std::to_string(count) + pick_extension();
+      this->save_to_file(fname.c_str());
     }
   }
 
@@ -263,6 +283,7 @@ namespace pdflib
     return stream;
   }
 
+  
   void pdf_resource<PAGE_XOBJECT>::init_matrix()
   {
     matrix = {1., 0., 0., 1., 0., 0.};
@@ -291,6 +312,7 @@ namespace pdflib
       }
   }
 
+  /*
   void pdf_resource<PAGE_XOBJECT>::init_bbox()
   {
     bbox = {0., 0., 0., 0.};
@@ -318,29 +340,42 @@ namespace pdflib
         LOG_S(WARNING) << "no '/BBox' key detected";
       }
   }
-
+  */
+  
   void pdf_resource<PAGE_XOBJECT>::init_image_properties()
   {
-    LOG_S(INFO) << __FUNCTION__;
+    LOG_S(INFO) << __FUNCTION__ << ": " << json_xobject_dict.dump(2);
 
     // /Width
     if(json_xobject_dict.count("/Width") && json_xobject_dict["/Width"].is_number())
       {
         image_width = json_xobject_dict["/Width"].get<int>();
       }
-
+    else
+      {
+	LOG_S(WARNING) << "no `/Width` found";
+      }
+    
     // /Height
     if(json_xobject_dict.count("/Height") && json_xobject_dict["/Height"].is_number())
       {
         image_height = json_xobject_dict["/Height"].get<int>();
       }
-
+    else
+      {
+	LOG_S(WARNING) << "no `/Height` found";
+      }
+    
     // /BitsPerComponent
     if(json_xobject_dict.count("/BitsPerComponent") && json_xobject_dict["/BitsPerComponent"].is_number())
       {
         bits_per_component = json_xobject_dict["/BitsPerComponent"].get<int>();
       }
-
+    else
+      {
+	LOG_S(WARNING) << "no `/BitsPerComponent` found";
+      }
+    
     // /ColorSpace – may be a name ("/DeviceRGB") or an array; store as string
     if(json_xobject_dict.count("/ColorSpace"))
       {
@@ -354,18 +389,64 @@ namespace pdflib
             color_space = cs.dump();
           }
       }
-
+    else
+      {
+	LOG_S(WARNING) << "no `/ColorSpace` found";
+      }
+    
     // /Intent
     if(json_xobject_dict.count("/Intent") && json_xobject_dict["/Intent"].is_string())
       {
         intent = json_xobject_dict["/Intent"].get<std::string>();
       }
-
+    else
+      {
+	LOG_S(WARNING) << "no `/Intent` found";
+      }
+    
+    // /ImageMask
+    if(json_xobject_dict.count("/ImageMask") && json_xobject_dict["/ImageMask"].is_boolean())
+      {
+        image_mask = json_xobject_dict["/ImageMask"].get<bool>();
+      }
+    else
+      {
+	LOG_S(WARNING) << "no `/ImageMask` found";
+      }
+    
+    // /Decode (array of pairs per component)
+    decode_array.clear();
+    decode_present = false;
+    if(json_xobject_dict.count("/Decode"))
+      {
+        auto& dec = json_xobject_dict["/Decode"];
+        if(dec.is_array())
+          {
+            for(auto const& v : dec)
+              {
+                if(v.is_number())
+                  decode_array.push_back(v.get<double>());
+              }
+            decode_present = !decode_array.empty();
+          }
+      }
+    else
+      {
+	LOG_S(WARNING) << "no `/Decode` found: falling back on default";
+	decode_array = {
+	  1, 0, 1, 0,
+	  1, 0, 1, 0
+	};
+	decode_present = !decode_array.empty();
+      }
+    
     LOG_S(INFO) << "image properties: "
                 << image_width << "x" << image_height
                 << " bpc=" << bits_per_component
                 << " cs=" << color_space
-                << " intent=" << intent;
+                << " intent=" << intent
+                << " mask=" << (image_mask?"true":"false")
+                << " decode_len=" << decode_array.size();
   }
 
   void pdf_resource<PAGE_XOBJECT>::init_filters()
@@ -375,8 +456,10 @@ namespace pdflib
     image_filters.clear();
 
     if(not json_xobject_dict.count("/Filter"))
-      return;
-
+      {
+	return;
+      }
+    
     auto& f = json_xobject_dict["/Filter"];
     if(f.is_string())
       {
@@ -467,6 +550,21 @@ namespace pdflib
     return image_filters;
   }
 
+  bool pdf_resource<PAGE_XOBJECT>::has_decode_array() const
+  {
+    return decode_present && !decode_array.empty();
+  }
+
+  std::vector<double> pdf_resource<PAGE_XOBJECT>::get_decode_array() const
+  {
+    return decode_array;
+  }
+
+  bool pdf_resource<PAGE_XOBJECT>::is_image_mask() const
+  {
+    return image_mask;
+  }
+
   bool pdf_resource<PAGE_XOBJECT>::has_raw_stream_data() const
   {
     return (raw_stream_data != nullptr && raw_stream_data->getSize() > 0);
@@ -506,6 +604,58 @@ namespace pdflib
       {
         LOG_S(WARNING) << "no raw stream data to save";
         return;
+      }
+
+    auto ext = path.extension().string();
+    for(auto& c : ext) c = static_cast<char>(::tolower(c));
+    bool is_jpeg_ext = (ext == ".jpg" || ext == ".jpeg");
+
+    bool filters_have_dct = false;
+    for(auto const& f : image_filters) { if(f == "/DCTDecode") filters_have_dct = true; }
+
+    auto is_safe_passthrough = [&]() -> bool {
+      if(!is_jpeg_ext) return false;
+      if(!filters_have_dct) return false;
+      if(bits_per_component != 8) return false;
+      if(!(color_space == "/DeviceRGB" || color_space == "/DeviceGray" || color_space == "/DeviceCMYK")) return false;
+      if(image_mask) return false;
+      if(decode_present && !decode_array.empty())
+      {
+        int ncomp = (color_space == "/DeviceGray") ? 1
+                  : (color_space == "/DeviceCMYK") ? 4 : 3;
+        if(static_cast<int>(decode_array.size()) < 2*ncomp) return false;
+        for(int c=0;c<ncomp;++c)
+        {
+          double dmin = decode_array[2*c+0];
+          double dmax = decode_array[2*c+1];
+          if(!(std::abs(dmin - 0.0) < 1e-12 && std::abs(dmax - 1.0) < 1e-12))
+            return false;
+        }
+      }
+      return true;
+    }();
+
+    if(is_jpeg_ext && (!is_safe_passthrough))
+      {
+        jpeg::jpeg_parameters params;
+        params.width = image_width;
+        params.height = image_height;
+        params.bits_per_component = bits_per_component;
+        params.color_space = jpeg::to_color_space(color_space);
+        params.decode = decode_array;
+        params.has_decode = decode_present && !decode_array.empty();
+        params.image_mask = image_mask;
+
+        bool ok = jpeg::write_corrected_jpeg_from_memory(
+            reinterpret_cast<unsigned char const*>(raw_stream_data->getBuffer()),
+            static_cast<std::size_t>(raw_stream_data->getSize()),
+            params, path);
+        if(ok)
+          {
+            LOG_S(INFO) << "wrote corrected JPEG to " << path.string();
+            return;
+          }
+        LOG_S(WARNING) << "JPEG correction failed, falling back to raw copy: " << path.string();
       }
 
     std::ofstream out(path, std::ios::binary);

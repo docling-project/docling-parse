@@ -75,7 +75,6 @@ namespace pdflib
                                         QPDFObjectHandle& qpdf_xobjects)
   {
     LOG_S(INFO) << __FUNCTION__;
-    //LOG_S(INFO) << json_xobjects.dump(2);
 
     int cnt = 0;
     int len = json_xobjects.size();

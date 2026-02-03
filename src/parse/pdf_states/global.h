@@ -234,6 +234,11 @@ namespace pdflib
       image.filters              = xobj.get_filters();
       image.raw_stream_data      = xobj.get_raw_stream_data();
       image.decoded_stream_data  = xobj.get_decoded_stream_data();
+
+      // propagate PDF semantics for JPEG correction
+      image.decode_present = xobj.has_decode_array();
+      image.decode_array   = xobj.get_decode_array();
+      image.image_mask     = xobj.is_image_mask();
     }
 
     page_images.push_back(image);

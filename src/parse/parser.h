@@ -292,12 +292,15 @@ namespace plib
           }
 
         auto& page_images = page_dec->get_page_images();
+	LOG_S(INFO) << "page " << p << " has " << page_images.size() << " images.";
+	
         for(size_t i = 0; i < page_images.size(); ++i)
           {
             auto& img = page_images[i];
 
             if(not img.raw_stream_data or img.raw_stream_data->getSize() == 0)
               {
+		LOG_S(WARNING) << " -> found no buffer for image " << i; 
                 continue;
               }
 
