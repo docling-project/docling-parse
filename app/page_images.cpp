@@ -26,7 +26,7 @@ static void write_file(fs::path const& p, std::shared_ptr<Buffer> const& buf)
               static_cast<std::streamsize>(buf->getSize()));
 }
 
-static std::vector<std::string> get_filters(QPDFObjectHandle const& stream)
+static std::vector<std::string> get_filters(QPDFObjectHandle& stream)
 {
     std::vector<std::string> filters;
     if (!stream.isStream())
