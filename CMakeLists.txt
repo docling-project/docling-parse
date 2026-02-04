@@ -149,23 +149,23 @@ message(STATUS "cmake lib-link: ${LIBLINK_SEMICOLON}")
 
 add_executable(parse.exe "${TOPLEVEL_PREFIX_PATH}/app/parse.cpp")
 add_executable(parse_fonts.exe "${TOPLEVEL_PREFIX_PATH}/app/parse_fonts.cpp")
-add_executable(page_images.exe "${TOPLEVEL_PREFIX_PATH}/app/page_images.cpp")
+# add_executable(page_images.exe "${TOPLEVEL_PREFIX_PATH}/app/page_images.cpp")
 
 set_property(TARGET parse.exe PROPERTY CXX_STANDARD 20)
 set_property(TARGET parse_fonts.exe PROPERTY CXX_STANDARD 20)
-set_property(TARGET page_images.exe PROPERTY CXX_STANDARD 20)
+# set_property(TARGET page_images.exe PROPERTY CXX_STANDARD 20)
 
 add_dependencies(parse.exe ${DEPENDENCIES})
 add_dependencies(parse_fonts.exe ${DEPENDENCIES})
-add_dependencies(page_images.exe ${DEPENDENCIES})
+# add_dependencies(page_images.exe ${DEPENDENCIES})
 
 target_include_directories(parse.exe INTERFACE ${DEPENDENCIES})
 target_include_directories(parse_fonts.exe INTERFACE ${DEPENDENCIES})
-target_include_directories(page_images.exe INTERFACE ${DEPENDENCIES})
+# target_include_directories(page_images.exe INTERFACE ${DEPENDENCIES})
 
 target_link_libraries(parse.exe ${DEPENDENCIES} ${LIB_LINK})
 target_link_libraries(parse_fonts.exe ${DEPENDENCIES} ${LIB_LINK})
-target_link_libraries(page_images.exe ${DEPENDENCIES} ${LIB_LINK})
+# target_link_libraries(page_images.exe ${DEPENDENCIES} ${LIB_LINK})
 
 # **********************
 # ***  Libraries     ***

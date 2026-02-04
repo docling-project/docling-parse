@@ -120,6 +120,7 @@ int main(int argc, char* argv[])
                     auto filters = get_filters(img);
 
                     std::shared_ptr<Buffer> data;
+		    //PointerHolder<Buffer> data;
                     bool wrote_decoded = false;
 
                     if (want_decoded)
