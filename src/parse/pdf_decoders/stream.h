@@ -21,6 +21,10 @@ namespace pdflib
                 pdf_resource<PAGE_GRPHS>&     page_grphs_,                                   
                 pdf_resource<PAGE_XOBJECTS>&  page_xobjects_,
 
+		bool keep_char_cells,
+		bool keep_lines,
+		bool keep_bitmaps,
+		
 		pdf_timings& timings);
 
     ~pdf_decoder();
@@ -67,7 +71,11 @@ namespace pdflib
     pdf_resource<PAGE_FONTS>&     page_fonts;
     pdf_resource<PAGE_GRPHS>&     page_grphs;
     pdf_resource<PAGE_XOBJECTS>&  page_xobjects;
-
+    
+    bool keep_char_cells;
+    bool keep_lines;
+    bool keep_bitmaps;
+    
     pdf_timings& timings;
     
     std::set<std::string> unknown_operators;
@@ -87,17 +95,26 @@ namespace pdflib
                                    pdf_resource<PAGE_GRPHS>&     page_grphs_,
 
                                    pdf_resource<PAGE_XOBJECTS>&  page_xobjects_,
+
+				   bool keep_char_cells,
+				   bool keep_lines,
+				   bool keep_bitmaps,
+
 				   pdf_timings& timings):
     page_dimension(page_dimension_),
     page_cells(page_cells_),    
     page_lines(page_lines_),
     page_images(page_images_),
-
+    
     page_fonts(page_fonts_),
     page_grphs(page_grphs_),
-
+    
     page_xobjects(page_xobjects_),
-
+    
+    keep_char_cells(keep_char_cells),
+    keep_lines(keep_lines),
+    keep_bitmaps(keep_bitmaps),
+    
     timings(timings),
     
     unknown_operators({}),
@@ -154,8 +171,15 @@ namespace pdflib
       {
         //stack.clear();
         
-        pdf_state<GLOBAL> state(page_cells, page_lines, page_images, 
-				page_fonts, page_grphs);
+        pdf_state<GLOBAL> state(page_cells,
+				page_lines,
+				page_images, 
+				page_fonts,
+				page_grphs,
+				keep_char_cells,
+				keep_lines,
+				keep_bitmaps);
+	
         stack.push_back(state);
       }
 
@@ -170,8 +194,14 @@ namespace pdflib
 
     if(stack.size()>0 and page_fonts.keys()!=cgs().page_fonts.keys())
       {
-        pdf_state<GLOBAL> state(page_cells, page_lines, page_images, 
-				page_fonts, page_grphs);
+        pdf_state<GLOBAL> state(page_cells,
+				page_lines,
+				page_images, 
+				page_fonts,
+				page_grphs,
+				keep_char_cells,
+				keep_lines,
+				keep_bitmaps);
         state = stack.back();
 
         stack.push_back(state);              
@@ -291,28 +321,18 @@ namespace pdflib
     return cgs().grph_state;
   } 
 
-  /*  
-  void pdf_decoder<STREAM>::q()
-  {
-    pdf_state<GLOBAL> state(page_cells, page_lines, page_images, page_fonts);
-    
-    if(stack.size()>0)
-      {
-        state = stack.back();
-      }
-    
-    stack.push_back(state);    
-
-    stack_count += 1;
-  } 
-  */
-
   void pdf_decoder<STREAM>::q()
   {
     if(stack.size()==0)
       {
-        pdf_state<GLOBAL> state(page_cells, page_lines, page_images, 
-				page_fonts, page_grphs);
+        pdf_state<GLOBAL> state(page_cells,
+				page_lines,
+				page_images, 
+				page_fonts,
+				page_grphs,
+				keep_char_cells,
+				keep_lines,
+				keep_bitmaps);
         stack.push_back(state);      
       }
     else
@@ -487,10 +507,20 @@ namespace pdflib
                   {
                     std::vector<qpdf_instruction> insts = xobj.parse_stream();
 
-                    pdf_decoder<STREAM> new_stream(page_dimension, page_cells, 
-                                                   page_lines, page_images, 
-                                                   page_fonts_, page_grphs_, 
-						   page_xobjects_, timings);
+                    pdf_decoder<STREAM> new_stream(page_dimension,
+						   page_cells, 
+                                                   page_lines,
+						   page_images, 
+
+						   page_fonts_,
+						   page_grphs_, 
+						   page_xobjects_,
+
+						   keep_char_cells,
+						   keep_lines,
+						   keep_bitmaps,
+
+						   timings);
 
                     bool updated_stack = new_stream.update_stack(stack, stack_count);
 

@@ -16,7 +16,11 @@ namespace pdflib
               pdf_resource<PAGE_IMAGES>& page_images_,
 
               pdf_resource<PAGE_FONTS>& page_fonts_,
-	      pdf_resource<PAGE_GRPHS>& page_grphs_);
+	      pdf_resource<PAGE_GRPHS>& page_grphs_,
+
+	      bool keep_char_cells,
+	      bool keep_lines,
+	      bool keep_bitmaps);
 
     pdf_state(const pdf_state<GLOBAL>& other);
 
@@ -29,7 +33,7 @@ namespace pdflib
 
     void Do_image(pdf_resource<PAGE_XOBJECT>& xobj);
 
-    void Do_form(pdf_resource<PAGE_XOBJECT>& xobj);
+    // void Do_form(pdf_resource<PAGE_XOBJECT>& xobj);
 
   private:
 
@@ -45,6 +49,10 @@ namespace pdflib
     pdf_resource<PAGE_FONTS>& page_fonts;
     pdf_resource<PAGE_GRPHS>& page_grphs;
 
+    bool keep_char_cells;
+    bool keep_lines;
+    bool keep_bitmaps;
+    
     std::array<double, 9> trafo_matrix;
 
     pdf_state<TEXT> text_state;    
@@ -57,7 +65,11 @@ namespace pdflib
                                pdf_resource<PAGE_IMAGES>& page_images_,
 
                                pdf_resource<PAGE_FONTS>& page_fonts_,
-			       pdf_resource<PAGE_GRPHS>& page_grphs_):
+			       pdf_resource<PAGE_GRPHS>& page_grphs_,
+
+			       bool keep_char_cells,
+			       bool keep_lines,
+			       bool keep_bitmaps):
     page_cells(page_cells_),
     page_lines(page_lines_),
     page_images(page_images_),
@@ -65,12 +77,16 @@ namespace pdflib
     page_fonts(page_fonts_),
     page_grphs(page_grphs_),
 
+    keep_char_cells(keep_char_cells),
+    keep_lines(keep_lines),
+    keep_bitmaps(keep_bitmaps),
+    
     trafo_matrix({1.0, 0.0, 0.0,
           0.0, 1.0, 0.0,
           0.0, 0.0, 1.0}),
 
-    text_state(trafo_matrix, page_cells, page_fonts),
-    line_state(trafo_matrix, page_lines),
+    text_state(trafo_matrix, page_cells, page_fonts, keep_char_cells),
+    line_state(trafo_matrix, page_lines, keep_lines),
     grph_state(trafo_matrix, page_grphs)
   {
     //LOG_S(INFO) << "pdf_state<GLOBAL>";
@@ -84,10 +100,14 @@ namespace pdflib
     page_fonts(other.page_fonts),
     page_grphs(other.page_grphs),
 
+    keep_char_cells(other.keep_char_cells),
+    keep_lines(other.keep_lines),
+    keep_bitmaps(other.keep_bitmaps),
+    
     trafo_matrix(other.trafo_matrix),
 
-    text_state(trafo_matrix, page_cells, page_fonts),
-    line_state(trafo_matrix, page_lines),
+    text_state(trafo_matrix, page_cells, page_fonts, keep_char_cells),
+    line_state(trafo_matrix, page_lines, keep_lines),
     grph_state(trafo_matrix, page_grphs)
   {
     //LOG_S(INFO) << "pdf_state<GLOBAL>(const pdf_state<GLOBAL>& other)";
@@ -110,6 +130,10 @@ namespace pdflib
     this->line_state = other.line_state;
     this->grph_state = other.grph_state;
 
+    this->keep_char_cells = other.keep_char_cells;
+    this->keep_lines = other.keep_lines;
+    this->keep_bitmaps = other.keep_bitmaps;
+    
     return *this;
   }
 
@@ -178,7 +202,7 @@ namespace pdflib
   
   void pdf_state<GLOBAL>::Do_image(pdf_resource<PAGE_XOBJECT>& xobj)
   {
-    //LOG_S(INFO) << __FUNCTION__;
+    if(not keep_bitmaps) { return; }
 
     pdf_resource<PAGE_IMAGE> image;
     {
@@ -222,7 +246,7 @@ namespace pdflib
       image.x1 = img_bbox[2];
       image.y1 = img_bbox[3];
     }
-
+    
     // Populate image properties from the XObject
     {
       image.xobject_key       = xobj.get_key();
@@ -240,7 +264,7 @@ namespace pdflib
       image.decode_array   = xobj.get_decode_array();
       image.image_mask     = xobj.is_image_mask();
     }
-
+    
     page_images.push_back(image);
   }
 

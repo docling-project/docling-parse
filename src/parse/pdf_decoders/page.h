@@ -51,7 +51,11 @@ namespace pdflib
                        bool keep_bitmaps=true,
 		       bool do_sanitization=false);
 
-    void decode_page(std::string page_boundary, bool do_sanitization);
+    void decode_page(std::string page_boundary,
+		     bool do_sanitization,
+		     bool keep_char_cells = true,
+		     bool keep_lines = true,
+		     bool keep_bitmaps = true);
 
     // Get timing information for this page
     pdf_timings& get_timings() { return timings; }
@@ -72,7 +76,9 @@ namespace pdflib
     void decode_xobjects();
 
     // Contents
-    void decode_contents();
+    void decode_contents(bool keep_char_cells,
+			 bool keep_lines,
+			 bool keep_bitmaps);
 
     void decode_annots();
 
@@ -229,7 +235,11 @@ namespace pdflib
     return result;
   }
 
-  void pdf_decoder<PAGE>::decode_page(std::string page_boundary, bool do_sanitization)
+  void pdf_decoder<PAGE>::decode_page(std::string page_boundary,
+				      bool do_sanitization,
+				      bool keep_char_cells,
+				      bool keep_lines,
+				      bool keep_bitmaps)
   {
     utils::timer global, local;
 
@@ -259,7 +269,7 @@ namespace pdflib
 
     {
       local.reset();
-      decode_contents();
+      decode_contents(keep_char_cells, keep_lines, keep_bitmaps);
       timings.add_timing(pdf_timings::KEY_DECODE_CONTENTS, local.get_time());
     }
 
@@ -466,17 +476,26 @@ namespace pdflib
     page_xobjects.set(json_xobjects, qpdf_xobjects);
   }
 
-  void pdf_decoder<PAGE>::decode_contents()
+  void pdf_decoder<PAGE>::decode_contents(bool keep_char_cells,
+					  bool keep_lines,
+					  bool keep_bitmaps)
   {
     LOG_S(INFO) << __FUNCTION__;
 
     QPDFPageObjectHelper          qpdf_page_object(qpdf_page);
     std::vector<QPDFObjectHandle> contents = qpdf_page_object.getPageContents();
 
-    pdf_decoder<STREAM> stream_decoder(page_dimension, page_cells,
-                                       page_lines, page_images,
-                                       page_fonts, page_grphs,
-                                       page_xobjects, timings);
+    pdf_decoder<STREAM> stream_decoder(page_dimension,
+				       page_cells,
+                                       page_lines,
+				       page_images,
+                                       page_fonts,
+				       page_grphs,
+                                       page_xobjects,
+				       keep_char_cells,
+				       keep_lines,
+				       keep_bitmaps,
+				       timings);
 
     int cnt = 0;
 
