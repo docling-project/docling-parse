@@ -51,11 +51,7 @@ namespace pdflib
                        bool keep_bitmaps=true,
 		       bool do_sanitization=false);
 
-    void decode_page(std::string page_boundary,
-		     bool do_sanitization,
-		     bool keep_char_cells = true,
-		     bool keep_lines = true,
-		     bool keep_bitmaps = true);
+    void decode_page(const decode_page_config& config);
 
     // Get timing information for this page
     pdf_timings& get_timings() { return timings; }
@@ -76,9 +72,7 @@ namespace pdflib
     void decode_xobjects();
 
     // Contents
-    void decode_contents(bool keep_char_cells,
-			 bool keep_lines,
-			 bool keep_bitmaps);
+    void decode_contents(const decode_page_config& config);
 
     void decode_annots();
 
@@ -235,11 +229,7 @@ namespace pdflib
     return result;
   }
 
-  void pdf_decoder<PAGE>::decode_page(std::string page_boundary,
-				      bool do_sanitization,
-				      bool keep_char_cells,
-				      bool keep_lines,
-				      bool keep_bitmaps)
+  void pdf_decoder<PAGE>::decode_page(const decode_page_config& config)
   {
     utils::timer global, local;
 
@@ -269,7 +259,7 @@ namespace pdflib
 
     {
       local.reset();
-      decode_contents(keep_char_cells, keep_lines, keep_bitmaps);
+      decode_contents(config);
       timings.add_timing(pdf_timings::KEY_DECODE_CONTENTS, local.get_time());
     }
 
@@ -290,10 +280,10 @@ namespace pdflib
       local.reset();
       pdf_sanitator<PAGE_DIMENSION> sanitator(page_dimension);
 
-      sanitator.sanitize(page_boundary); // update the top-level bbox
-      sanitator.sanitize(page_cells, page_boundary);
-      sanitator.sanitize(page_lines, page_boundary);
-      sanitator.sanitize(page_images, page_boundary);
+      sanitator.sanitize(config.page_boundary); // update the top-level bbox
+      sanitator.sanitize(page_cells, config.page_boundary);
+      sanitator.sanitize(page_lines, config.page_boundary);
+      sanitator.sanitize(page_images, config.page_boundary);
       timings.add_timing(pdf_timings::KEY_SANITIZE_ORIENTATION, local.get_time());
     }
 
@@ -311,10 +301,10 @@ namespace pdflib
       timings.add_timing(pdf_timings::KEY_SANITIZE_CELLS, local.get_time());
     }
 
-    if(do_sanitization)
+    if(config.do_sanitization)
       {
         local.reset();
-        sanitise_contents(page_boundary);
+        sanitise_contents(config.page_boundary);
         timings.add_timing(pdf_timings::KEY_SANITISE_CONTENTS, local.get_time());
       }
     else
@@ -476,25 +466,23 @@ namespace pdflib
     page_xobjects.set(json_xobjects, qpdf_xobjects);
   }
 
-  void pdf_decoder<PAGE>::decode_contents(bool keep_char_cells,
-					  bool keep_lines,
-					  bool keep_bitmaps)
+  void pdf_decoder<PAGE>::decode_contents(const decode_page_config& config)
   {
     LOG_S(INFO) << __FUNCTION__;
 
     QPDFPageObjectHelper          qpdf_page_object(qpdf_page);
     std::vector<QPDFObjectHandle> contents = qpdf_page_object.getPageContents();
 
-    pdf_decoder<STREAM> stream_decoder(page_dimension,
+    pdf_decoder<STREAM> stream_decoder(config,
+
+				       page_dimension,
 				       page_cells,
                                        page_lines,
 				       page_images,
                                        page_fonts,
 				       page_grphs,
                                        page_xobjects,
-				       keep_char_cells,
-				       keep_lines,
-				       keep_bitmaps,
+
 				       timings);
 
     int cnt = 0;

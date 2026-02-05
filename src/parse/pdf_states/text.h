@@ -11,10 +11,10 @@ namespace pdflib
   {
   public:
 
-    pdf_state(std::array<double, 9>& trafo_matrix_,
+    pdf_state(const decode_page_config& config,
+              std::array<double, 9>& trafo_matrix_,
               pdf_resource<PAGE_CELLS>& page_cells_,
-              pdf_resource<PAGE_FONTS>& page_fonts_,
-	      bool keep_char_cells);
+              pdf_resource<PAGE_FONTS>& page_fonts_);
 
     ~pdf_state();
 
@@ -85,12 +85,12 @@ namespace pdflib
     static int block_count;
     static int instr_count;
 
+    const decode_page_config& config;
+
     std::array<double, 9>& trafo_matrix;
 
     pdf_resource<PAGE_CELLS>& page_cells;
     pdf_resource<PAGE_FONTS>& page_fonts;
-
-    bool keep_char_cells;
     
     std::array<double, 9> text_matrix;
     std::array<double, 9> line_matrix;
@@ -112,16 +112,16 @@ namespace pdflib
   int pdf_state<TEXT>::block_count = 0;
   int pdf_state<TEXT>::instr_count = 0;
 
-  pdf_state<TEXT>::pdf_state(std::array<double, 9>&    trafo_matrix_,
+  pdf_state<TEXT>::pdf_state(const decode_page_config& config_,
+                             std::array<double, 9>&    trafo_matrix_,
                              pdf_resource<PAGE_CELLS>& page_cells_,
-                             pdf_resource<PAGE_FONTS>& page_fonts_,
-			     bool keep_char_cells):
+                             pdf_resource<PAGE_FONTS>& page_fonts_):
+    config(config_),
+
     trafo_matrix(trafo_matrix_),
 
     page_cells(page_cells_),
-    page_fonts(page_fonts_),
-
-    keep_char_cells(keep_char_cells)
+    page_fonts(page_fonts_)
   {
     text_matrix = {1.0, 0.0, 0.0,
                    0.0, 1.0, 0.0,
@@ -133,6 +133,8 @@ namespace pdflib
   }
 
   pdf_state<TEXT>::pdf_state(const pdf_state<TEXT>& other):
+    config(other.config),
+
     trafo_matrix(other.trafo_matrix),
 
     page_cells(other.page_cells),
@@ -440,7 +442,7 @@ namespace pdflib
                                  int stack_size,
                                  std::vector<pdf_resource<PAGE_CELL> >& cells)
   {
-    if(not keep_char_cells)
+    if(not config.keep_char_cells)
       {
 	return;
       }

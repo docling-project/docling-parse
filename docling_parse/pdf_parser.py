@@ -27,6 +27,7 @@ from docling_core.types.doc.page import (
 from PIL import Image as PILImage
 from pydantic import BaseModel, ConfigDict
 
+from docling_parse.pdf_parsers import DecodePageConfig  # type: ignore[import]
 from docling_parse.pdf_parsers import pdf_parser  # type: ignore[import]
 from docling_parse.pdf_parsers import pdf_sanitizer  # type: ignore[import]
 from docling_parse.pdf_parsers import (  # type: ignore[import]
@@ -177,29 +178,6 @@ class Timings(BaseModel):
 
 class PdfDocument:
 
-    def iterate_pages(
-        self,
-        *,
-        mode: CONVERSION_MODE = CONVERSION_MODE.TYPED,
-        keep_chars: bool = True,
-        keep_lines: bool = True,
-        keep_bitmaps: bool = True,
-        create_words: bool = True,
-        create_textlines: bool = True,
-        enforce_same_font: bool = True,
-    ) -> Iterator[Tuple[int, SegmentedPdfPage]]:
-        for page_no in range(self.number_of_pages()):
-            yield page_no + 1, self.get_page(
-                page_no + 1,
-                mode=mode,
-                keep_chars=keep_chars,
-                keep_lines=keep_lines,
-                keep_bitmaps=keep_bitmaps,
-                create_words=create_words,
-                create_textlines=create_textlines,
-                enforce_same_font=enforce_same_font,
-            )
-
     def __init__(
         self,
         parser: "pdf_parser",
@@ -276,6 +254,29 @@ class PdfDocument:
         else:
             raise RuntimeError("This document is not loaded.")
 
+    def iterate_pages(
+        self,
+        *,
+        mode: CONVERSION_MODE = CONVERSION_MODE.TYPED,
+        keep_chars: bool = True,
+        keep_lines: bool = True,
+        keep_bitmaps: bool = True,
+        create_words: bool = True,
+        create_textlines: bool = True,
+        enforce_same_font: bool = True,
+    ) -> Iterator[Tuple[int, SegmentedPdfPage]]:
+        for page_no in range(self.number_of_pages()):
+            yield page_no + 1, self.get_page(
+                page_no + 1,
+                mode=mode,
+                keep_chars=keep_chars,
+                keep_lines=keep_lines,
+                keep_bitmaps=keep_bitmaps,
+                create_words=create_words,
+                create_textlines=create_textlines,
+                enforce_same_font=enforce_same_font,
+            )
+        
     def _to_table_of_contents(self, toc: dict) -> List[PdfTableOfContents]:
 
         result = []

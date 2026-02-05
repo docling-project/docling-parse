@@ -271,18 +271,18 @@ namespace pdflib
   void pdf_decoder<DOCUMENT>::decode_document(std::string page_boundary,
 					      bool do_sanitization)
   {
-    LOG_S(INFO) << "start decoding all pages ...";        
+    LOG_S(INFO) << "start decoding all pages ...";
     utils::timer timer;
 
-    bool keep_char_cells = true;
-    bool keep_lines = true; 
-    bool keep_bitmaps = true;
-    
+    decode_page_config config;
+    config.page_boundary = page_boundary;
+    config.do_sanitization = do_sanitization;
+
     nlohmann::json& json_pages = json_document["pages"];
     json_pages = nlohmann::json::array({});
-    
+
     bool set_timer=true;
-    
+
     int page_number=0;
     for(QPDFObjectHandle page : qpdf_document.getAllPages())
       {
@@ -290,11 +290,14 @@ namespace pdflib
 
 	auto page_decoder = std::make_shared<pdf_decoder<PAGE>>(page, page_number);
 
-        page_decoder->decode_page(page_boundary, do_sanitization);
+        page_decoder->decode_page(config);
 	update_timings(page_decoder->get_timings(), set_timer);
 	set_timer = false;
 
-        json_pages.push_back(page_decoder->get(keep_char_cells, keep_lines, keep_bitmaps, do_sanitization));
+        json_pages.push_back(page_decoder->get(config.keep_char_cells,
+					       config.keep_lines,
+					       config.keep_bitmaps,
+					       config.do_sanitization));
 
 	page_decoders[page_number] = page_decoder;
 
@@ -321,14 +324,21 @@ namespace pdflib
 		<< "keep_lines: " << keep_lines << ", "
 		<< "keep_bitmaps: " << keep_bitmaps << ", "
 		<< "create_word_cells: " << create_word_cells << ", "
-      		<< "create_line_cells: " << create_line_cells << ")";  
-						   
+      		<< "create_line_cells: " << create_line_cells << ")";
+
+    decode_page_config config;
+    config.page_boundary = page_boundary;
+    config.do_sanitization = do_sanitization;
+    config.keep_char_cells = keep_char_cells;
+    config.keep_lines = keep_lines;
+    config.keep_bitmaps = keep_bitmaps;
+
     utils::timer timer;
 
     // make sure that we only return the page from the page-numbers
     nlohmann::json& json_pages = json_document["pages"];
     json_pages = nlohmann::json::array({});
-      
+
     std::vector<QPDFObjectHandle> pages = qpdf_document.getAllPages();
 
     bool set_timer=true; // make sure we override all timings for this page-set
@@ -343,10 +353,7 @@ namespace pdflib
 	    auto page_decoder = std::make_shared<pdf_decoder<PAGE>>(pages.at(page_number), page_number);
 
 	    {
-	      //utils::timer decode_timer;
-	      page_decoder->decode_page(page_boundary, do_sanitization);
-
-	      //std::cout << "decode_timer: " << decode_timer.get_time() << "\n";
+	      page_decoder->decode_page(config);
 
 	      update_timings(page_decoder->get_timings(), set_timer);
 	      set_timer=false;
@@ -476,8 +483,12 @@ namespace pdflib
     // Create and decode the page
     auto page_decoder = std::make_shared<pdf_decoder<PAGE>>(qpdf_page, page_number);
 
+    decode_page_config config;
+    config.page_boundary = page_boundary;
+    config.do_sanitization = do_sanitization;
+
     bool set_timer = (timings.empty());
-    page_decoder->decode_page(page_boundary, do_sanitization);
+    page_decoder->decode_page(config);
     update_timings(page_decoder->get_timings(), set_timer);
 
     // Create word and line cells if requested

@@ -15,6 +15,30 @@
 
 PYBIND11_MODULE(pdf_parsers, m) {
 
+  // ============= Decode Page Config =============
+
+  pybind11::class_<pdflib::decode_page_config>(m, "DecodePageConfig",
+    R"(
+    Configuration parameters for page decoding.
+
+    Attributes:
+        page_boundary (str): The page boundary specification [choices: crop_box, media_box].
+        do_sanitization (bool): Sanitize the chars into lines [default=true].
+        keep_char_cells (bool): Keep all the individual char cells [default=true].
+        keep_lines (bool): Keep all the graphic lines [default=true].
+        keep_bitmaps (bool): Keep all the bitmap resources [default=true].
+        max_num_lines (int): Maximum number of lines to keep (-1 means no cap) [default=-1].
+        max_num_bitmaps (int): Maximum number of bitmaps to keep (-1 means no cap) [default=-1].
+    )")
+    .def(pybind11::init<>())
+    .def_readwrite("page_boundary", &pdflib::decode_page_config::page_boundary)
+    .def_readwrite("do_sanitization", &pdflib::decode_page_config::do_sanitization)
+    .def_readwrite("keep_char_cells", &pdflib::decode_page_config::keep_char_cells)
+    .def_readwrite("keep_lines", &pdflib::decode_page_config::keep_lines)
+    .def_readwrite("keep_bitmaps", &pdflib::decode_page_config::keep_bitmaps)
+    .def_readwrite("max_num_lines", &pdflib::decode_page_config::max_num_lines)
+    .def_readwrite("max_num_bitmaps", &pdflib::decode_page_config::max_num_bitmaps);
+
   // ============= Typed Resource Bindings (for zero-copy access) =============
 
   // PdfCell - individual text cell with bounding box and text content

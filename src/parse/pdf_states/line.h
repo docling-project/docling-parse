@@ -16,9 +16,9 @@ namespace pdflib
   {
   public:
 
-    pdf_state(std::array<double, 9>&    trafo_matrix_,
-              pdf_resource<PAGE_LINES>& page_lines_,
-	      bool keep_lines);
+    pdf_state(const decode_page_config& config,
+              std::array<double, 9>&    trafo_matrix_,
+              pdf_resource<PAGE_LINES>& page_lines_);
 
     pdf_state(const pdf_state<LINE>& other);
               
@@ -84,11 +84,11 @@ namespace pdflib
 
   private:
 
+    const decode_page_config& config;
+
     std::array<double, 9>&    trafo_matrix;
 
     pdf_resource<PAGE_LINES>& page_lines;
-
-    bool keep_lines;
     
     pdf_resource<PAGE_LINES>  curr_lines;
     pdf_resource<PAGE_LINES>  clippings;
@@ -96,14 +96,14 @@ namespace pdflib
     clipping_path_mode_type clipping_path_mode;
   };
 
-  pdf_state<LINE>::pdf_state(std::array<double, 9>&    trafo_matrix_,
-                             pdf_resource<PAGE_LINES>& page_lines_,
-			     bool keep_lines):
+  pdf_state<LINE>::pdf_state(const decode_page_config& config_,
+                             std::array<double, 9>&    trafo_matrix_,
+                             pdf_resource<PAGE_LINES>& page_lines_):
+    config(config_),
+
     trafo_matrix(trafo_matrix_),
 
     page_lines(page_lines_),
-
-    keep_lines(keep_lines),
     
     curr_lines(),
     clippings(),
@@ -114,6 +114,8 @@ namespace pdflib
   }
 
   pdf_state<LINE>::pdf_state(const pdf_state<LINE>& other):
+    config(other.config),
+
     trafo_matrix(other.trafo_matrix),
 
     page_lines(other.page_lines)
@@ -144,7 +146,7 @@ namespace pdflib
       }
   }
 
-  pdf_state<LINE>& pdf_state<LINE>::operator=(const pdf_state<LINE>& other)    
+  pdf_state<LINE>& pdf_state<LINE>::operator=(const pdf_state<LINE>& other)
   {
     this->curr_lines = other.curr_lines;
     this->clippings  = other.clippings;
@@ -154,7 +156,7 @@ namespace pdflib
 
   void pdf_state<LINE>::m(std::vector<qpdf_instruction>& instructions)
   {
-    if(not keep_lines) { return; }
+    if(not config.keep_lines) { return; }
 
     if(not verify(instructions, 2, __FUNCTION__) ) { return; }
     
@@ -166,7 +168,7 @@ namespace pdflib
 
   void pdf_state<LINE>::l(std::vector<qpdf_instruction>& instructions)
   {
-    if(not keep_lines) { return; }
+    if(not config.keep_lines) { return; }
     
     if(not verify(instructions, 2, __FUNCTION__) ) { return; }
     
@@ -178,7 +180,7 @@ namespace pdflib
 
   void pdf_state<LINE>::c(std::vector<qpdf_instruction>& instructions)
   {
-    if(not keep_lines) { return; }
+    if(not config.keep_lines) { return; }
     
     if(not verify(instructions, 6, __FUNCTION__) ) { return; }
     
@@ -219,7 +221,7 @@ namespace pdflib
 
   void pdf_state<LINE>::v(std::vector<qpdf_instruction>& instructions)
   {
-    if(not keep_lines) { return; }
+    if(not config.keep_lines) { return; }
     
     //assert(instructions.size()==4);
     if(not verify(instructions, 4, __FUNCTION__) ) { return; }
@@ -244,7 +246,7 @@ namespace pdflib
 
   void pdf_state<LINE>::y(std::vector<qpdf_instruction>& instructions)
   {
-    if(not keep_lines) { return; }
+    if(not config.keep_lines) { return; }
     
     //assert(instructions.size()==4);
     if(not verify(instructions, 4, __FUNCTION__) ) { return; }
@@ -269,7 +271,7 @@ namespace pdflib
 
   void pdf_state<LINE>::h(std::vector<qpdf_instruction>& instructions)
   {
-    if(not keep_lines) { return; }
+    if(not config.keep_lines) { return; }
 
     if(not verify(instructions, 0, __FUNCTION__) ) { return; }
     
@@ -278,7 +280,7 @@ namespace pdflib
   
   void pdf_state<LINE>::re(std::vector<qpdf_instruction>& instructions)
   {
-    if(not keep_lines) { return; }
+    if(not config.keep_lines) { return; }
 
     if(not verify(instructions, 4, __FUNCTION__) ) { return; }
     
@@ -293,7 +295,7 @@ namespace pdflib
 
   void pdf_state<LINE>::s(std::vector<qpdf_instruction>& instructions)
   {
-    if(not keep_lines) { return; }
+    if(not config.keep_lines) { return; }
     
     close_last_path();
 
@@ -302,14 +304,14 @@ namespace pdflib
  
   void pdf_state<LINE>::S(std::vector<qpdf_instruction>& instructions)
   {
-    if(not keep_lines) { return; }
+    if(not config.keep_lines) { return; }
     
     register_paths();
   }
 
   void pdf_state<LINE>::f(std::vector<qpdf_instruction>& instructions)
   {
-    if(not keep_lines) { return; }
+    if(not config.keep_lines) { return; }
     
     close_last_path();
 
@@ -318,14 +320,14 @@ namespace pdflib
 
   void pdf_state<LINE>::F(std::vector<qpdf_instruction>& instructions)
   {
-    if(not keep_lines) { return; }
+    if(not config.keep_lines) { return; }
     
     this->f(instructions);
   }
 
   void pdf_state<LINE>::fStar(std::vector<qpdf_instruction>& instructions)
   {
-    if(not keep_lines) { return; }
+    if(not config.keep_lines) { return; }
     
     close_last_path();
 
@@ -334,7 +336,7 @@ namespace pdflib
 
   void pdf_state<LINE>::B(std::vector<qpdf_instruction>& instructions)
   {
-    if(not keep_lines) { return; }
+    if(not config.keep_lines) { return; }
     
     close_last_path();
 
@@ -343,7 +345,7 @@ namespace pdflib
 
   void pdf_state<LINE>::BStar(std::vector<qpdf_instruction>& instructions)
   {
-    if(not keep_lines) { return; }
+    if(not config.keep_lines) { return; }
     
     close_last_path();
 
@@ -352,7 +354,7 @@ namespace pdflib
    
   void pdf_state<LINE>::b(std::vector<qpdf_instruction>& instructions)
   {
-    if(not keep_lines) { return; }
+    if(not config.keep_lines) { return; }
     
     close_last_path();
 
@@ -361,7 +363,7 @@ namespace pdflib
 
   void pdf_state<LINE>::bStar(std::vector<qpdf_instruction>& instructions)
   {
-    if(not keep_lines) { return; }
+    if(not config.keep_lines) { return; }
     
     close_last_path();
 
@@ -370,21 +372,21 @@ namespace pdflib
 
   void pdf_state<LINE>::W(std::vector<qpdf_instruction>& instructions)
   {
-    if(not keep_lines) { return; }
+    if(not config.keep_lines) { return; }
 	
     clipping_path_mode = NONZERO_WINDING_NUMBER_RULE;    
   }
   
   void pdf_state<LINE>::WStar(std::vector<qpdf_instruction>& instructions)
   {
-    if(not keep_lines) { return; }
+    if(not config.keep_lines) { return; }
     
     clipping_path_mode = EVEN_ODD_RULE;
   }
 
   void pdf_state<LINE>::n(std::vector<qpdf_instruction>& instructions)
   {
-    if(not keep_lines) { return; }
+    if(not config.keep_lines) { return; }
     
     clippings.clear();
 
@@ -546,7 +548,7 @@ namespace pdflib
 
   void pdf_state<LINE>::m(double x, double y)
   {
-    if(not keep_lines) { return; }
+    if(not config.keep_lines) { return; }
     
     pdf_resource<PAGE_LINE> line;
     curr_lines.push_back(line);
@@ -556,7 +558,7 @@ namespace pdflib
 
   void pdf_state<LINE>::l(double x, double y)
   {
-    if(not keep_lines) { return; }
+    if(not config.keep_lines) { return; }
     
     if(curr_lines.size()==0)
       {
@@ -571,7 +573,7 @@ namespace pdflib
 
   void pdf_state<LINE>::h()
   {
-    if(not keep_lines) { return; }
+    if(not config.keep_lines) { return; }
     
     if(curr_lines.size()==0)
       {
@@ -602,7 +604,7 @@ namespace pdflib
   void pdf_state<LINE>::re(double x, double y, 
                            double w, double h)
   {
-    if(not keep_lines) { return; }
+    if(not config.keep_lines) { return; }
     
     this->m(x, y);
 

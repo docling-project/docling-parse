@@ -86,6 +86,8 @@
 #include <parse/pdf_sanitators/cells.h>
 #include <parse/pdf_sanitators/page_dimension.h>
 
+#include <parse/decode_page_config.h>
+
 #include <parse/pdf_state.h>
 #include <parse/pdf_states/text.h>
 #include <parse/pdf_states/line.h>
