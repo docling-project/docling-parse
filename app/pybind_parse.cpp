@@ -37,7 +37,10 @@ PYBIND11_MODULE(pdf_parsers, m) {
     .def_readwrite("keep_lines", &pdflib::decode_page_config::keep_lines)
     .def_readwrite("keep_bitmaps", &pdflib::decode_page_config::keep_bitmaps)
     .def_readwrite("max_num_lines", &pdflib::decode_page_config::max_num_lines)
-    .def_readwrite("max_num_bitmaps", &pdflib::decode_page_config::max_num_bitmaps);
+    .def_readwrite("max_num_bitmaps", &pdflib::decode_page_config::max_num_bitmaps)
+    .def_readwrite("create_word_cells", &pdflib::decode_page_config::create_word_cells)
+    .def_readwrite("create_line_cells", &pdflib::decode_page_config::create_line_cells)
+    .def_readwrite("enforce_same_font", &pdflib::decode_page_config::enforce_same_font);
 
   // ============= Typed Resource Bindings (for zero-copy access) =============
 
@@ -551,6 +554,27 @@ PYBIND11_MODULE(pdf_parsers, m) {
             - get_page_lines(): Graphic lines
             - get_page_images(): Bitmap resources
             - get_page_dimension(): Page geometry)")
+
+    .def("get_page_decoder",
+	 [](docling::docling_parser &self,
+	    const std::string &key,
+	    int page,
+	    const pdflib::decode_page_config &config) -> std::shared_ptr<pdflib::pdf_decoder<pdflib::PAGE>> {
+	   return self.get_page_decoder(key, page, config);
+	 },
+	 pybind11::arg("key"),
+	 pybind11::arg("page"),
+	 pybind11::arg("config"),
+	 R"(
+    Get a typed page decoder using a DecodePageConfig object.
+
+    Parameters:
+        key (str): The unique key of the document.
+        page (int): The page number to parse (0-indexed).
+        config (DecodePageConfig): Configuration object for page decoding.
+
+    Returns:
+        PdfPageDecoder: A typed page decoder object.)")
 
     .def("sanitize_cells",
 	 [](docling::docling_parser &self,

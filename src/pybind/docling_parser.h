@@ -62,7 +62,7 @@ namespace docling
 					      bool create_word_cells,
 					      bool create_line_cells);
 
-    // New: Direct typed access to page decoder (avoids JSON serialization)
+    // Direct typed access to page decoder (avoids JSON serialization)
     std::shared_ptr<pdflib::pdf_decoder<pdflib::PAGE>> get_page_decoder(
         std::string key,
         int page,
@@ -70,6 +70,12 @@ namespace docling
         bool do_sanitization,
         bool create_word_cells,
         bool create_line_cells);
+
+    // Config-based overload
+    std::shared_ptr<pdflib::pdf_decoder<pdflib::PAGE>> get_page_decoder(
+        std::string key,
+        int page,
+        const pdflib::decode_page_config& config);
 
     nlohmann::json sanitize_cells(nlohmann::json& original_cells,
 				  nlohmann::json& page_dim,
@@ -465,6 +471,20 @@ namespace docling
       bool create_word_cells,
       bool create_line_cells)
   {
+    pdflib::decode_page_config config;
+    config.page_boundary = page_boundary;
+    config.do_sanitization = do_sanitization;
+    config.create_word_cells = create_word_cells;
+    config.create_line_cells = create_line_cells;
+
+    return get_page_decoder(key, page, config);
+  }
+
+  std::shared_ptr<pdflib::pdf_decoder<pdflib::PAGE>> docling_parser::get_page_decoder(
+      std::string key,
+      int page,
+      const pdflib::decode_page_config& config)
+  {
     LOG_S(INFO) << __FUNCTION__ << " for key: " << key << " and page: " << page;
 
     auto itr = key2doc.find(key);
@@ -475,13 +495,7 @@ namespace docling
       }
 
     auto& decoder = itr->second;
-
-    // Use the new decode_page method which returns typed page decoder
-    return decoder->decode_page(page,
-				page_boundary,
-				do_sanitization,
-				create_word_cells,
-				create_line_cells);
+    return decoder->decode_page(page, config);
   }
 
   nlohmann::json docling_parser::sanitize_cells(nlohmann::json& json_cells,

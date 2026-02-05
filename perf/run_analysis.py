@@ -42,6 +42,7 @@ from docling_parse.pdf_parser import (
     get_static_timing_keys,
     is_static_timing_key,
 )
+from docling_parse.pdf_parsers import DecodePageConfig  # type: ignore[import]
 
 
 # -------------- Data types --------------
@@ -115,11 +116,7 @@ def extract_timings_for_page(
     page_number: int,
     *,
     mode: str = "typed",
-    keep_chars: bool = True,
-    keep_lines: bool = True,
-    keep_bitmaps: bool = True,
-    create_words: bool = True,
-    create_textlines: bool = True,
+    config: DecodePageConfig | None = None,
 ) -> Timings:
     """Run docling-parse on the given page and return Timings object."""
     try:
@@ -129,11 +126,7 @@ def extract_timings_for_page(
         _, timings = doc.get_page_with_timings(
             page_number,
             mode=conv_mode,
-            keep_chars=keep_chars,
-            keep_lines=keep_lines,
-            keep_bitmaps=keep_bitmaps,
-            create_words=create_words,
-            create_textlines=create_textlines,
+            config=config,
         )
         return timings
     except Exception:
@@ -198,11 +191,6 @@ def analyze_pages(
                 doc,
                 r.page_number,
                 mode=mode,
-                keep_chars=True,
-                keep_lines=True,
-                keep_bitmaps=True,
-                create_words=True,
-                create_textlines=True,
             )
             results.append(
                 PageTimings(

@@ -53,12 +53,9 @@ namespace pdflib
     bool has_page_decoder(int page_number);
     page_decoder_ptr get_page_decoder(int page_number);
 
-    // New: Decode a single page and return the page decoder directly
+    // Decode a single page and return the page decoder directly
     page_decoder_ptr decode_page(int page_number,
-				 std::string page_boundary,
-				 bool do_sanitization,
-				 bool create_word_cells,
-				 bool create_line_cells);
+				 const decode_page_config& config);
 
     bool unload_pages();
 
@@ -332,6 +329,8 @@ namespace pdflib
     config.keep_char_cells = keep_char_cells;
     config.keep_lines = keep_lines;
     config.keep_bitmaps = keep_bitmaps;
+    config.create_word_cells = create_word_cells;
+    config.create_line_cells = create_line_cells;
 
     utils::timer timer;
 
@@ -362,17 +361,16 @@ namespace pdflib
 	    nlohmann::json page = page_decoder->get(keep_char_cells, keep_lines, keep_bitmaps, do_sanitization);
 
 	    pdf_sanitator<PAGE_CELLS> sanitizer;
-	    if(create_word_cells)
+	    if(config.create_word_cells)
 	      {
 		LOG_S(INFO) << "creating word-cells in `original` (2)";
 
 		double horizontal_cell_tolerance=1.00;
-		bool enforce_same_font=true;
 		double space_width_factor_for_merge=0.33;
 
 		pdf_resource<PAGE_CELLS> word_cells = sanitizer.create_word_cells(page_decoder->get_page_cells(),
 										  horizontal_cell_tolerance,
-										  enforce_same_font,
+										  config.enforce_same_font,
 										  space_width_factor_for_merge);
 
 		// quadratic: might be slower ...
@@ -381,27 +379,23 @@ namespace pdflib
 		page["original"]["word_cells"] = word_cells.get();
 	      }
 
-	    if(create_line_cells)
+	    if(config.create_line_cells)
 	      {
-		//utils::timer line_cells_timer;
-
 		LOG_S(INFO) << "creating line-cells in `original` (2)";
 
 		double horizontal_cell_tolerance=1.00;
-		bool enforce_same_font=true;
 		double space_width_factor_for_merge=1.00;
 		double space_width_factor_for_merge_with_space=0.33;
 
 		pdf_resource<PAGE_CELLS> line_cells = sanitizer.create_line_cells(page_decoder->get_page_cells(),
 										  horizontal_cell_tolerance,
-										  enforce_same_font,
+										  config.enforce_same_font,
 										  space_width_factor_for_merge,
 										  space_width_factor_for_merge_with_space);
 		// quadratic: might be slower ...
 		sanitizer.remove_duplicate_cells(line_cells, 0.5, true);
 
 		page["original"]["line_cells"] = line_cells.get();
-		//std::cout << "line_cells: " << line_cells_timer.get_time() << "\n";
 	      }
 
 	    json_pages.push_back(page);
@@ -454,10 +448,7 @@ namespace pdflib
 
   pdf_decoder<DOCUMENT>::page_decoder_ptr pdf_decoder<DOCUMENT>::decode_page(
       int page_number,
-      std::string page_boundary,
-      bool do_sanitization,
-      bool create_word_cells,
-      bool create_line_cells)
+      const decode_page_config& config)
   {
     LOG_S(INFO) << __FUNCTION__ << " for page: " << page_number;
     utils::timer timer;
@@ -483,25 +474,21 @@ namespace pdflib
     // Create and decode the page
     auto page_decoder = std::make_shared<pdf_decoder<PAGE>>(qpdf_page, page_number);
 
-    decode_page_config config;
-    config.page_boundary = page_boundary;
-    config.do_sanitization = do_sanitization;
-
     bool set_timer = (timings.empty());
     page_decoder->decode_page(config);
     update_timings(page_decoder->get_timings(), set_timer);
 
     // Create word and line cells if requested
-    if(create_word_cells)
+    if(config.create_word_cells)
       {
 	LOG_S(INFO) << "creating word-cells for page: " << page_number;
-	page_decoder->create_word_cells();
+	page_decoder->create_word_cells(1.0, config.enforce_same_font, 0.33);
       }
 
-    if(create_line_cells)
+    if(config.create_line_cells)
       {
 	LOG_S(INFO) << "creating line-cells for page: " << page_number;
-	page_decoder->create_line_cells();
+	page_decoder->create_line_cells(1.0, config.enforce_same_font, 1.0, 0.33);
       }
 
     // Store in cache

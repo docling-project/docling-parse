@@ -83,6 +83,7 @@ class Row:
 def make_parse_with_docling(mode: str) -> Callable[[Path], Iterable[Row]]:
     def _runner(pdf_path: Path) -> Iterable[Row]:
         from docling_parse.pdf_parser import DoclingPdfParser, CONVERSION_MODE
+        from docling_parse.pdf_parsers import DecodePageConfig  # type: ignore[import]
         from docling_core.types.doc.page import PdfPageBoundaryType
 
         rows: List[Row] = []
@@ -108,14 +109,16 @@ def make_parse_with_docling(mode: str) -> Callable[[Path], Iterable[Row]]:
                 err = ""
                 ok = True
                 try:
+                    perf_config = DecodePageConfig()
+                    perf_config.keep_char_cells = False
+                    perf_config.keep_lines = False
+                    perf_config.keep_bitmaps = False
+                    perf_config.create_word_cells = False
+                    perf_config.create_line_cells = True
                     _ = doc.get_page(
                         page_idx,
                         mode=conv_mode,
-                        keep_chars=False,
-                        keep_lines=False,
-                        keep_bitmaps=False,
-                        create_words=False,
-                        create_textlines=True,
+                        config=perf_config,
                     )
                 except Exception as e:  # pragma: no cover
                     ok = False
