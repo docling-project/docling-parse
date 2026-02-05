@@ -40,7 +40,11 @@ PYBIND11_MODULE(pdf_parsers, m) {
     .def_readwrite("max_num_bitmaps", &pdflib::decode_page_config::max_num_bitmaps)
     .def_readwrite("create_word_cells", &pdflib::decode_page_config::create_word_cells)
     .def_readwrite("create_line_cells", &pdflib::decode_page_config::create_line_cells)
-    .def_readwrite("enforce_same_font", &pdflib::decode_page_config::enforce_same_font);
+    .def_readwrite("enforce_same_font", &pdflib::decode_page_config::enforce_same_font)
+    .def_readwrite("horizontal_cell_tolerance", &pdflib::decode_page_config::horizontal_cell_tolerance)
+    .def_readwrite("word_space_width_factor_for_merge", &pdflib::decode_page_config::word_space_width_factor_for_merge)
+    .def_readwrite("line_space_width_factor_for_merge", &pdflib::decode_page_config::line_space_width_factor_for_merge)
+    .def_readwrite("line_space_width_factor_for_merge_with_space", &pdflib::decode_page_config::line_space_width_factor_for_merge_with_space);
 
   // ============= Typed Resource Bindings (for zero-copy access) =============
 
@@ -712,50 +716,30 @@ Sanitize table cells with specified parameters and return the processed JSON.
     
     .def("create_word_cells",
 	 [](docling::docling_sanitizer &self,
-	    double horizontal_cell_tolerance,
-	    bool enforce_same_font,
-	    double space_width_factor_for_merge/* = 1.0*/) -> nlohmann::json {
-	   return self.create_word_cells(horizontal_cell_tolerance,
-					 enforce_same_font,
-					 space_width_factor_for_merge);
+	    const pdflib::decode_page_config &config) -> nlohmann::json {
+	   return self.create_word_cells(config);
 	 },
-	 pybind11::arg("horizontal_cell_tolerance"), // =1.0,
-	 pybind11::arg("enforce_same_font"), //=true,
-	 pybind11::arg("space_width_factor_for_merge"), //=0.33,
+	 pybind11::arg("config"),
 	 R"(
     Create word cells
 
     Parameters:
-        horizontal_cell_tolerance (float): Vertical adjustment parameter to judge if two cells need to be merged (yes if abs(cell_i.r_y1-cell_i.r_y0)<horizontal_cell_tolerance), default = 1.0.
-        enforce_same_font (bool): Whether to enforce the same font across cells. Default is True
-        space_width_factor_for_merge (float): Factor for merging cells based on space width. Default is 0.33.
+        config (DecodePageConfig): Configuration for word cell creation.
 
     Returns:
         dict: A JSON object representing the sanitized word cells in the bounding box.)")
-    
+
     .def("create_line_cells",
 	 [](docling::docling_sanitizer &self,
-	    double horizontal_cell_tolerance,
-	    bool enforce_same_font,
-	    double space_width_factor_for_merge /*= 1.0*/,
-	    double space_width_factor_for_merge_with_space /*= 0.33*/) -> nlohmann::json {
-	   return self.create_line_cells(horizontal_cell_tolerance,
-					 enforce_same_font,
-					 space_width_factor_for_merge,
-					 space_width_factor_for_merge_with_space);
+	    const pdflib::decode_page_config &config) -> nlohmann::json {
+	   return self.create_line_cells(config);
 	 },
-	 pybind11::arg("horizontal_cell_tolerance"), //=1.0,
-	 pybind11::arg("enforce_same_font"), //=true,
-	 pybind11::arg("space_width_factor_for_merge"), //=1.0,
-	 pybind11::arg("space_width_factor_for_merge_with_space"), //=0.33,
+	 pybind11::arg("config"),
 	 R"(
     Create line cells
 
     Parameters:
-        horizontal_cell_tolerance (float): Vertical adjustment parameter to judge if two cells need to be merged (yes if abs(cell_i.r_y1-cell_i.r_y0)<horizontal_cell_tolerance), default = 1.0.
-        enforce_same_font (bool): Whether to enforce the same font across cells. Default is True
-        space_width_factor_for_merge (float): Factor for merging cells based on space width. Default is 1.0.
-        space_width_factor_for_merge_with_space (float): Factor for merging cells with space width. Default is 0.33.
+        config (DecodePageConfig): Configuration for line cell creation.
 
     Returns:
         dict: A JSON object representing the sanitized line cells in the bounding box.)");  

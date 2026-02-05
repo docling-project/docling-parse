@@ -291,10 +291,7 @@ namespace pdflib
 	update_timings(page_decoder->get_timings(), set_timer);
 	set_timer = false;
 
-        json_pages.push_back(page_decoder->get(config.keep_char_cells,
-					       config.keep_lines,
-					       config.keep_bitmaps,
-					       config.do_sanitization));
+        json_pages.push_back(page_decoder->get(config));
 
 	page_decoders[page_number] = page_decoder;
 
@@ -358,20 +355,15 @@ namespace pdflib
 	      set_timer=false;
 	    }
 
-	    nlohmann::json page = page_decoder->get(keep_char_cells, keep_lines, keep_bitmaps, do_sanitization);
+	    nlohmann::json page = page_decoder->get(config);
 
 	    pdf_sanitator<PAGE_CELLS> sanitizer;
 	    if(config.create_word_cells)
 	      {
 		LOG_S(INFO) << "creating word-cells in `original` (2)";
 
-		double horizontal_cell_tolerance=1.00;
-		double space_width_factor_for_merge=0.33;
-
 		pdf_resource<PAGE_CELLS> word_cells = sanitizer.create_word_cells(page_decoder->get_page_cells(),
-										  horizontal_cell_tolerance,
-										  config.enforce_same_font,
-										  space_width_factor_for_merge);
+										  config);
 
 		// quadratic: might be slower ...
 		sanitizer.remove_duplicate_cells(word_cells, 0.5, true);
@@ -383,15 +375,8 @@ namespace pdflib
 	      {
 		LOG_S(INFO) << "creating line-cells in `original` (2)";
 
-		double horizontal_cell_tolerance=1.00;
-		double space_width_factor_for_merge=1.00;
-		double space_width_factor_for_merge_with_space=0.33;
-
 		pdf_resource<PAGE_CELLS> line_cells = sanitizer.create_line_cells(page_decoder->get_page_cells(),
-										  horizontal_cell_tolerance,
-										  config.enforce_same_font,
-										  space_width_factor_for_merge,
-										  space_width_factor_for_merge_with_space);
+										  config);
 		// quadratic: might be slower ...
 		sanitizer.remove_duplicate_cells(line_cells, 0.5, true);
 
@@ -482,13 +467,13 @@ namespace pdflib
     if(config.create_word_cells)
       {
 	LOG_S(INFO) << "creating word-cells for page: " << page_number;
-	page_decoder->create_word_cells(1.0, config.enforce_same_font, 0.33);
+	page_decoder->create_word_cells(config);
       }
 
     if(config.create_line_cells)
       {
 	LOG_S(INFO) << "creating line-cells for page: " << page_number;
-	page_decoder->create_line_cells(1.0, config.enforce_same_font, 1.0, 0.33);
+	page_decoder->create_line_cells(config);
       }
 
     // Store in cache

@@ -20,14 +20,8 @@ namespace docling
 
     bool set_char_cells(nlohmann::json& data);
 
-    nlohmann::json create_word_cells(double horizontal_cell_tolerance, //=1.00,
-				     bool enforce_same_font, //=true,
-				     double space_width_factor_for_merge); //=0.05);
-
-    nlohmann::json create_line_cells(double horizontal_cell_tolerance, //=1.00,
-				     bool enforce_same_font, //=true,
-				     double space_width_factor_for_merge, //=1.00,
-				     double space_width_factor_for_merge_with_space); //=0.33);
+    nlohmann::json create_word_cells(const pdflib::decode_page_config& config);
+    nlohmann::json create_line_cells(const pdflib::decode_page_config& config);
     
   private:
 
@@ -240,85 +234,20 @@ namespace docling
   }
   */
   
-  nlohmann::json docling_sanitizer::create_word_cells(double horizontal_cell_tolerance,
-						      bool enforce_same_font,
-						      double space_width_factor_for_merge)
+  nlohmann::json docling_sanitizer::create_word_cells(const pdflib::decode_page_config& config)
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    /*
-    // do a deep copy
-    word_cells = char_cells;
-
-    LOG_S(INFO) << "#-word cells: " << word_cells.size();
-    
-    // remove all spaces 
-    auto itr = word_cells.begin();
-    while(itr!=word_cells.end())
-      {
-	if(utils::string::is_space(itr->text))
-	  {
-	    itr = word_cells.erase(itr);	    
-	  }
-	else
-	  {
-	    itr++;
-	  }
-      }
-
-    LOG_S(INFO) << "#-word cells: " << word_cells.size();
-    
-    // > space_width_factor_for_merge, so nothing gets merged with a space
-    double space_width_factor_for_merge_with_space = 2.0*space_width_factor_for_merge; 
-    
-    cell_sanitizer.sanitize_bbox(word_cells,
-    horizontal_cell_tolerance,
-				 enforce_same_font,
-				 space_width_factor_for_merge,
-				 space_width_factor_for_merge_with_space);
-
-    LOG_S(INFO) << "#-wordcells: " << word_cells.size();
-
-    return to_records("word");
-    */
-
-    word_cells = cell_sanitizer.create_word_cells(char_cells,
-						  horizontal_cell_tolerance,
-						  enforce_same_font,
-						  space_width_factor_for_merge);
+    word_cells = cell_sanitizer.create_word_cells(char_cells, config);
 
     return cell_sanitizer.to_records(word_cells);
   }
 
-  nlohmann::json docling_sanitizer::create_line_cells(double horizontal_cell_tolerance,
-						      bool enforce_same_font,
-						      double space_width_factor_for_merge,
-						      double space_width_factor_for_merge_with_space)
+  nlohmann::json docling_sanitizer::create_line_cells(const pdflib::decode_page_config& config)
   {
     LOG_S(INFO) << __FUNCTION__ << " -> char_cells: " << char_cells.size();
 
-    /*
-    // do a deep copy
-    line_cells = char_cells;
-
-    LOG_S(INFO) << "initial line-cells: " << line_cells.size();
-    
-    cell_sanitizer.sanitize_bbox(line_cells,
-				 horizontal_cell_tolerance,
-				 enforce_same_font,
-				 space_width_factor_for_merge,
-				 space_width_factor_for_merge_with_space);
-    
-    LOG_S(INFO) << "initial line-cells: " << line_cells.size();
-
-    return to_records("line");
-    */
-
-    line_cells = cell_sanitizer.create_line_cells(char_cells,
-						  horizontal_cell_tolerance,
-						  enforce_same_font,
-						  space_width_factor_for_merge,
-						  space_width_factor_for_merge_with_space);
+    line_cells = cell_sanitizer.create_line_cells(char_cells, config);
 
     return cell_sanitizer.to_records(line_cells);
   }  

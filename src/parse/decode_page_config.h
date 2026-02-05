@@ -21,7 +21,17 @@ namespace pdflib
 
     bool create_word_cells = true;
     bool create_line_cells = true;
-    bool enforce_same_font = true;
+    bool enforce_same_font = true;      // word & line cell creation
+
+    // word & line cell creation parameters
+    double horizontal_cell_tolerance = 1.0;
+
+    // word cell creation
+    double word_space_width_factor_for_merge = 0.33;
+
+    // line cell creation
+    double line_space_width_factor_for_merge = 1.0;
+    double line_space_width_factor_for_merge_with_space = 0.33;
   };
 
 }
