@@ -7,6 +7,7 @@ from docling_core.types.doc.page import PdfPageBoundaryType
 from pydantic import BaseModel
 
 from docling_parse.pdf_parser import DoclingPdfParser, PdfDocument
+from docling_parse.pdf_parsers import DecodePageConfig  # type: ignore[import]
 from docling_parse.pdf_parsers import pdf_parser  # type: ignore[import]
 
 
@@ -59,12 +60,7 @@ def test_performance_pdf_parse(
 
 def test_performance_pdf_parse_py(
     ifolder: Path,
-    keep_chars: bool = True,
-    keep_lines: bool = True,
-    keep_bitmaps: bool = True,
-    create_words: bool = True,
-    create_textlines: bool = True,
-    enforce_same_font: bool = True,
+    config: DecodePageConfig | None = None,
     lazy: bool = True,
     loglevel: str = "error",
 ) -> list[DocumentTiming]:
@@ -100,12 +96,7 @@ def test_performance_pdf_parse_py(
         start_1_time = datetime.now()
         timing.num_pages = 0
         for page_no, pred_page in pdf_doc.iterate_pages(
-            keep_chars=keep_chars,
-            keep_lines=keep_lines,
-            keep_bitmaps=keep_bitmaps,
-            create_words=create_words,
-            create_textlines=create_textlines,
-            enforce_same_font=enforce_same_font,
+            config=config,
         ):
             timing.num_pages += 1
 
@@ -135,42 +126,39 @@ def main():
         print(_)
 
     # Optimized
+    optimized_config = DecodePageConfig()
+    optimized_config.keep_char_cells = False
+    optimized_config.keep_lines = False
+    optimized_config.keep_bitmaps = False
+    optimized_config.create_word_cells = True
+    optimized_config.create_line_cells = True
+    optimized_config.enforce_same_font = False
     timings = test_performance_pdf_parse_py(
         ifolder=ifolder,
-        keep_chars=False,
-        keep_lines=False,
-        keep_bitmaps=False,
-        create_words=True,
-        create_textlines=True,
-        enforce_same_font=False,
+        config=optimized_config,
     )
 
     for _ in timings:
         print(_)
 
-    # Optoimized for time, not memory
+    # Optimized for time, not memory
+    full_config = DecodePageConfig()
+    full_config.enforce_same_font = True
     timings = test_performance_pdf_parse_py(
         ifolder=ifolder,
-        keep_chars=True,
-        keep_lines=True,
-        keep_bitmaps=True,
-        create_words=True,
-        create_textlines=True,
-        enforce_same_font=True,
+        config=full_config,
     )
 
     for _ in timings:
         print(_)
 
     # Original ...
+    no_cells_config = DecodePageConfig()
+    no_cells_config.create_word_cells = False
+    no_cells_config.create_line_cells = False
     timings = test_performance_pdf_parse_py(
         ifolder=ifolder,
-        keep_chars=True,
-        keep_lines=True,
-        keep_bitmaps=True,
-        create_words=False,
-        create_textlines=False,
-        enforce_same_font=True,
+        config=no_cells_config,
     )
 
     for _ in timings:

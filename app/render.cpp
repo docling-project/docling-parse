@@ -128,7 +128,12 @@ int main(int argc, char* argv[])
 	  // Decode all pages
 	  int num_pages = doc.get_number_of_pages();
 	  for (int p = 0; p < num_pages; p++) {
-	    auto page_decoder = doc.decode_page(p, "crop_box", do_sanitization, false, false);
+	    pdflib::decode_page_config page_config;
+	    page_config.page_boundary = "crop_box";
+	    page_config.do_sanitization = do_sanitization;
+	    page_config.keep_lines = false;
+	    page_config.keep_bitmaps = false;
+	    auto page_decoder = doc.decode_page(p, page_config);
 	    if (page_decoder) {
 	      auto& instructions = page_decoder->get_instructions();
 	      instructions.iterate_over_instructions(renderer);
@@ -137,7 +142,12 @@ int main(int argc, char* argv[])
 	}
 	else {
 	  // Decode specific page
-	  auto page_decoder = doc.decode_page(page, "crop_box", do_sanitization, false, false);
+	  pdflib::decode_page_config page_config;
+	  page_config.page_boundary = "crop_box";
+	  page_config.do_sanitization = do_sanitization;
+	  page_config.keep_lines = false;
+	  page_config.keep_bitmaps = false;
+	  auto page_decoder = doc.decode_page(page, page_config);
 	  if (page_decoder) {
 	    auto& instructions = page_decoder->get_instructions();
 	    instructions.iterate_over_instructions(renderer);

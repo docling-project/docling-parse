@@ -17,15 +17,10 @@ namespace pdflib
     nlohmann::json to_records(pdf_resource<PAGE_CELLS>& cells);
 
     pdf_resource<PAGE_CELLS> create_word_cells(pdf_resource<PAGE_CELLS>& cells,
-					       double horizontal_cell_tolerance, //=1.00,
-					       bool enforce_same_font, //=true,
-					       double space_width_factor_for_merge); //=0.05);
+					       const decode_page_config& config);
 
     pdf_resource<PAGE_CELLS> create_line_cells(pdf_resource<PAGE_CELLS>& cells,
-					       double horizontal_cell_tolerance, //=1.00,
-					       bool enforce_same_font, //=true,
-					       double space_width_factor_for_merge, //=1.00,
-					       double space_width_factor_for_merge_with_space); //=0.33);
+					       const decode_page_config& config);
 
     
     //void remove_duplicate_chars(pdf_resource<PAGE_CELLS>& cells, double eps=1.0e-1);
@@ -134,26 +129,24 @@ namespace pdflib
   }
   
   pdf_resource<PAGE_CELLS> pdf_sanitator<PAGE_CELLS>::create_word_cells(pdf_resource<PAGE_CELLS>& char_cells,
-									double horizontal_cell_tolerance,
-									bool enforce_same_font,
-									double space_width_factor_for_merge)
+									const decode_page_config& config)
   {
     LOG_S(INFO) << __FUNCTION__;
-    LOG_S(INFO) << "space_width_factor_for_merge (create_word_cells): " << space_width_factor_for_merge;
-    
+    LOG_S(INFO) << "word_space_width_factor_for_merge: " << config.word_space_width_factor_for_merge;
+
     // do a deep copy
     pdf_resource<PAGE_CELLS> word_cells;
     word_cells = char_cells;
 
     LOG_S(INFO) << "#-char cells: " << word_cells.size();
-    
-    // remove all spaces 
+
+    // remove all spaces
     auto itr = word_cells.begin();
     while(itr!=word_cells.end())
       {
 	if(utils::string::is_space(itr->text))
 	  {
-	    itr = word_cells.erase(itr);	    
+	    itr = word_cells.erase(itr);
 	  }
 	else
 	  {
@@ -162,14 +155,14 @@ namespace pdflib
       }
 
     LOG_S(INFO) << "#-char cells (without spaces): " << word_cells.size();
-    
+
     // > space_width_factor_for_merge, so nothing gets merged with a space
-    double space_width_factor_for_merge_with_space = 2.0*space_width_factor_for_merge; 
-    
+    double space_width_factor_for_merge_with_space = 2.0*config.word_space_width_factor_for_merge;
+
     sanitize_bbox(word_cells,
-		  horizontal_cell_tolerance,
-		  enforce_same_font,
-		  space_width_factor_for_merge,
+		  config.horizontal_cell_tolerance,
+		  config.enforce_same_font,
+		  config.word_space_width_factor_for_merge,
 		  space_width_factor_for_merge_with_space);
 
     LOG_S(INFO) << "#-word cells: " << word_cells.size();
@@ -179,26 +172,23 @@ namespace pdflib
   }
 
   pdf_resource<PAGE_CELLS> pdf_sanitator<PAGE_CELLS>::create_line_cells(pdf_resource<PAGE_CELLS>& char_cells,
-									double horizontal_cell_tolerance,
-									bool enforce_same_font,
-									double space_width_factor_for_merge,
-									double space_width_factor_for_merge_with_space)
+									const decode_page_config& config)
   {
     LOG_S(INFO) << __FUNCTION__ << " -> char_cells: " << char_cells.size();
-    LOG_S(INFO) << "space_width_factor_for_merge (create_line_cells): " << space_width_factor_for_merge;
-    LOG_S(INFO) << "space_width_factor_for_merge_with_space (create_line_cells): " << space_width_factor_for_merge_with_space;
-    
+    LOG_S(INFO) << "line_space_width_factor_for_merge: " << config.line_space_width_factor_for_merge;
+    LOG_S(INFO) << "line_space_width_factor_for_merge_with_space: " << config.line_space_width_factor_for_merge_with_space;
+
     // do a deep copy
     pdf_resource<PAGE_CELLS> line_cells;
     line_cells = char_cells;
 
     LOG_S(INFO) << "# char-cells: " << line_cells.size();
-    
+
     sanitize_bbox(line_cells,
-		  horizontal_cell_tolerance,
-		  enforce_same_font,
-		  space_width_factor_for_merge,
-		  space_width_factor_for_merge_with_space);
+		  config.horizontal_cell_tolerance,
+		  config.enforce_same_font,
+		  config.line_space_width_factor_for_merge,
+		  config.line_space_width_factor_for_merge_with_space);
     
     LOG_S(INFO) << "# line-cells: " << line_cells.size();
     

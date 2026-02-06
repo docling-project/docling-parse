@@ -62,7 +62,7 @@ namespace pdflib
     std::array<double, 9>& trafo_matrix;
 
     pdf_resource<PAGE_GRPHS>& page_grphs;
-
+    
     std::string null_grph_key;
     std::string curr_grph_key;
 
@@ -107,7 +107,6 @@ namespace pdflib
 
   pdf_state<GRPH>::pdf_state(const pdf_state<GRPH>& other):
     trafo_matrix(other.trafo_matrix),
-
     page_grphs(other.page_grphs)
   {
     *this = other;
@@ -264,7 +263,6 @@ namespace pdflib
 
   void pdf_state<GRPH>::i(std::vector<qpdf_instruction>& instructions)
   {
-    //assert(instructions.size()==1);
     if(not verify(instructions, 1, __FUNCTION__) ) { return; }
     
     if(instructions[0].is_number())
@@ -281,7 +279,6 @@ namespace pdflib
 
   void pdf_state<GRPH>::gs(std::vector<qpdf_instruction>& instructions)
   {
-    //assert(instructions.size()==1);
     if(not verify(instructions, 1, __FUNCTION__) ) { return; }
     
     std::string key = instructions[0].to_utf8_string();
@@ -329,7 +326,6 @@ namespace pdflib
   
   void pdf_state<GRPH>::G(std::vector<qpdf_instruction>& instructions)
   {
-    //assert(instructions.size()==1);
     if(not verify(instructions, 1, __FUNCTION__) ) { return; }
     
     int r = std::round(255.0*instructions[0].to_double());
@@ -343,7 +339,6 @@ namespace pdflib
 
   void pdf_state<GRPH>::g(std::vector<qpdf_instruction>& instructions)
   {
-    //assert(instructions.size()==1);
     if(not verify(instructions, 1, __FUNCTION__) ) { return; }
     
     int r = std::round(255.0*instructions[0].to_double());
@@ -357,7 +352,6 @@ namespace pdflib
   
   void pdf_state<GRPH>::RG(std::vector<qpdf_instruction>& instructions)
   {
-    //assert(instructions.size()==3);
     if(not verify(instructions, 3, __FUNCTION__) ) { return; }
     
     int r = std::round(255.0*instructions[0].to_double());
@@ -385,7 +379,6 @@ namespace pdflib
   
   void pdf_state<GRPH>::K(std::vector<qpdf_instruction>& instructions)
   {
-    //assert(instructions.size()==4);
     if(not verify(instructions, 4, __FUNCTION__) ) { return; }
     
     double c = instructions[0].to_double();
@@ -404,7 +397,6 @@ namespace pdflib
 
   void pdf_state<GRPH>::k(std::vector<qpdf_instruction>& instructions)
   {
-    //assert(instructions.size()==4);
     if(not verify(instructions, 4, __FUNCTION__) ) { return; }
     
     double c = instructions[0].to_double();

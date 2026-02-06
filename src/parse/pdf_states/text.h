@@ -11,7 +11,8 @@ namespace pdflib
   {
   public:
 
-    pdf_state(std::array<double, 9>&    trafo_matrix_,
+    pdf_state(const decode_page_config& config,
+              std::array<double, 9>& trafo_matrix_,
               pdf_resource<PAGE_CELLS>& page_cells_,
               pdf_resource<PAGE_FONTS>& page_fonts_,
               pdf_render_instructions&  instructions_);
@@ -85,12 +86,15 @@ namespace pdflib
     static int block_count;
     static int instr_count;
 
+    const decode_page_config& config;
+
     std::array<double, 9>& trafo_matrix;
 
     pdf_resource<PAGE_CELLS>& page_cells;
     pdf_resource<PAGE_FONTS>& page_fonts;
 
     pdf_render_instructions& instructions;
+
 
     std::array<double, 9> text_matrix;
     std::array<double, 9> line_matrix;
@@ -112,10 +116,13 @@ namespace pdflib
   int pdf_state<TEXT>::block_count = 0;
   int pdf_state<TEXT>::instr_count = 0;
 
-  pdf_state<TEXT>::pdf_state(std::array<double, 9>&    trafo_matrix_,
+  pdf_state<TEXT>::pdf_state(const decode_page_config& config_,
+                             std::array<double, 9>&    trafo_matrix_,
                              pdf_resource<PAGE_CELLS>& page_cells_,
                              pdf_resource<PAGE_FONTS>& page_fonts_,
                              pdf_render_instructions&  instructions_):
+    config(config_),
+
     trafo_matrix(trafo_matrix_),
 
     page_cells(page_cells_),
@@ -133,6 +140,8 @@ namespace pdflib
   }
 
   pdf_state<TEXT>::pdf_state(const pdf_state<TEXT>& other):
+    config(other.config),
+
     trafo_matrix(other.trafo_matrix),
 
     page_cells(other.page_cells),
@@ -411,44 +420,11 @@ namespace pdflib
 
 	//LOG_S(INFO) << "delta_width: " << delta_width;
 
-	// this is the old way of adding cells
-	/*
-        if(delta_width >= space_width)
-          {
-            //LOG_S(WARNING) << "delta_width (="<<delta_width<<") >= space_width ("<<space_width<<")";
-
-            text  += chars_;
-            width += char_width;
-
-            //add_cell(font, text, char_width, stack_size, cells);
-            add_cell(font, text, width, stack_size, cells);
-
-            move_cursor(delta_width, 0);
-
-            chars  = {};
-            widths = {};
-
-            text  = "";
-            width = 0;
-          }
-        else
-          {
-            double width_new = char_width + delta_width;
-
-            chars.push_back(chars_);
-            widths.push_back(width_new);
-
-            text  += chars_;
-            width += width_new;
-          }
-	*/
-
 	if(true) // adding char by char ...
 	  {
             text  += chars_;
             width += char_width;
 
-            //add_cell(font, text, char_width, stack_size, cells);
             add_cell(font, text, width, stack_size, cells);
 
             move_cursor(delta_width, 0);
@@ -475,6 +451,11 @@ namespace pdflib
                                  int stack_size,
                                  std::vector<pdf_resource<PAGE_CELL> >& cells)
   {
+    if(not config.keep_char_cells)
+      {
+	return;
+      }
+    
     // LOG_S(INFO) << __FUNCTION__ << " with text='" << text << "', width=" << width;
 
     bool left_to_right = (not utils::string::is_right_to_left(text));

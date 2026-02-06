@@ -15,6 +15,37 @@
 
 PYBIND11_MODULE(pdf_parsers, m) {
 
+  // ============= Decode Page Config =============
+
+  pybind11::class_<pdflib::decode_page_config>(m, "DecodePageConfig",
+    R"(
+    Configuration parameters for page decoding.
+
+    Attributes:
+        page_boundary (str): The page boundary specification [choices: crop_box, media_box].
+        do_sanitization (bool): Sanitize the chars into lines [default=true].
+        keep_char_cells (bool): Keep all the individual char cells [default=true].
+        keep_lines (bool): Keep all the graphic lines [default=true].
+        keep_bitmaps (bool): Keep all the bitmap resources [default=true].
+        max_num_lines (int): Maximum number of lines to keep (-1 means no cap) [default=-1].
+        max_num_bitmaps (int): Maximum number of bitmaps to keep (-1 means no cap) [default=-1].
+    )")
+    .def(pybind11::init<>())
+    .def_readwrite("page_boundary", &pdflib::decode_page_config::page_boundary)
+    .def_readwrite("do_sanitization", &pdflib::decode_page_config::do_sanitization)
+    .def_readwrite("keep_char_cells", &pdflib::decode_page_config::keep_char_cells)
+    .def_readwrite("keep_lines", &pdflib::decode_page_config::keep_lines)
+    .def_readwrite("keep_bitmaps", &pdflib::decode_page_config::keep_bitmaps)
+    .def_readwrite("max_num_lines", &pdflib::decode_page_config::max_num_lines)
+    .def_readwrite("max_num_bitmaps", &pdflib::decode_page_config::max_num_bitmaps)
+    .def_readwrite("create_word_cells", &pdflib::decode_page_config::create_word_cells)
+    .def_readwrite("create_line_cells", &pdflib::decode_page_config::create_line_cells)
+    .def_readwrite("enforce_same_font", &pdflib::decode_page_config::enforce_same_font)
+    .def_readwrite("horizontal_cell_tolerance", &pdflib::decode_page_config::horizontal_cell_tolerance)
+    .def_readwrite("word_space_width_factor_for_merge", &pdflib::decode_page_config::word_space_width_factor_for_merge)
+    .def_readwrite("line_space_width_factor_for_merge", &pdflib::decode_page_config::line_space_width_factor_for_merge)
+    .def_readwrite("line_space_width_factor_for_merge_with_space", &pdflib::decode_page_config::line_space_width_factor_for_merge_with_space);
+
   // ============= Typed Resource Bindings (for zero-copy access) =============
 
   // PdfCell - individual text cell with bounding box and text content
@@ -54,12 +85,25 @@ PYBIND11_MODULE(pdf_parsers, m) {
 	 "Get segment indices")
     .def("__len__", &pdflib::pdf_resource<pdflib::PAGE_LINE>::size);
 
-  // PdfImage - bitmap resource with bounding box
+  // PdfImage - bitmap resource with bounding box and image data
   pybind11::class_<pdflib::pdf_resource<pdflib::PAGE_IMAGE>>(m, "PdfImage")
     .def_readonly("x0", &pdflib::pdf_resource<pdflib::PAGE_IMAGE>::x0)
     .def_readonly("y0", &pdflib::pdf_resource<pdflib::PAGE_IMAGE>::y0)
     .def_readonly("x1", &pdflib::pdf_resource<pdflib::PAGE_IMAGE>::x1)
-    .def_readonly("y1", &pdflib::pdf_resource<pdflib::PAGE_IMAGE>::y1);
+    .def_readonly("y1", &pdflib::pdf_resource<pdflib::PAGE_IMAGE>::y1)
+    .def_readonly("image_width", &pdflib::pdf_resource<pdflib::PAGE_IMAGE>::image_width)
+    .def_readonly("image_height", &pdflib::pdf_resource<pdflib::PAGE_IMAGE>::image_height)
+    .def("get_image_format", &pdflib::pdf_resource<pdflib::PAGE_IMAGE>::get_image_format,
+	 "Get image format hint: 'jpeg', 'jp2', 'jbig2', or 'raw'")
+    .def("get_pil_mode", &pdflib::pdf_resource<pdflib::PAGE_IMAGE>::get_pil_mode,
+	 "Get PIL-compatible mode string: 'L', 'RGB', 'CMYK', or '1'")
+    .def("get_image_as_bytes",
+	 [](pdflib::pdf_resource<pdflib::PAGE_IMAGE> const& self) {
+	   auto data = self.get_image_as_bytes();
+	   return pybind11::bytes(reinterpret_cast<char const*>(data.data()),
+				  data.size());
+	 },
+	 "Get image data as bytes (corrected JPEG, raw JP2, or decoded pixels)");
 
   // PdfPageDimension - page geometry and bounding boxes
   pybind11::class_<pdflib::pdf_resource<pdflib::PAGE_DIMENSION>>(m, "PdfPageDimension")
@@ -515,6 +559,27 @@ PYBIND11_MODULE(pdf_parsers, m) {
             - get_page_images(): Bitmap resources
             - get_page_dimension(): Page geometry)")
 
+    .def("get_page_decoder",
+	 [](docling::docling_parser &self,
+	    const std::string &key,
+	    int page,
+	    const pdflib::decode_page_config &config) -> std::shared_ptr<pdflib::pdf_decoder<pdflib::PAGE>> {
+	   return self.get_page_decoder(key, page, config);
+	 },
+	 pybind11::arg("key"),
+	 pybind11::arg("page"),
+	 pybind11::arg("config"),
+	 R"(
+    Get a typed page decoder using a DecodePageConfig object.
+
+    Parameters:
+        key (str): The unique key of the document.
+        page (int): The page number to parse (0-indexed).
+        config (DecodePageConfig): Configuration object for page decoding.
+
+    Returns:
+        PdfPageDecoder: A typed page decoder object.)")
+
     .def("sanitize_cells",
 	 [](docling::docling_parser &self,
 	    nlohmann::json &original_cells,
@@ -651,50 +716,30 @@ Sanitize table cells with specified parameters and return the processed JSON.
     
     .def("create_word_cells",
 	 [](docling::docling_sanitizer &self,
-	    double horizontal_cell_tolerance,
-	    bool enforce_same_font,
-	    double space_width_factor_for_merge/* = 1.0*/) -> nlohmann::json {
-	   return self.create_word_cells(horizontal_cell_tolerance,
-					 enforce_same_font,
-					 space_width_factor_for_merge);
+	    const pdflib::decode_page_config &config) -> nlohmann::json {
+	   return self.create_word_cells(config);
 	 },
-	 pybind11::arg("horizontal_cell_tolerance"), // =1.0,
-	 pybind11::arg("enforce_same_font"), //=true,
-	 pybind11::arg("space_width_factor_for_merge"), //=0.33,
+	 pybind11::arg("config"),
 	 R"(
     Create word cells
 
     Parameters:
-        horizontal_cell_tolerance (float): Vertical adjustment parameter to judge if two cells need to be merged (yes if abs(cell_i.r_y1-cell_i.r_y0)<horizontal_cell_tolerance), default = 1.0.
-        enforce_same_font (bool): Whether to enforce the same font across cells. Default is True
-        space_width_factor_for_merge (float): Factor for merging cells based on space width. Default is 0.33.
+        config (DecodePageConfig): Configuration for word cell creation.
 
     Returns:
         dict: A JSON object representing the sanitized word cells in the bounding box.)")
-    
+
     .def("create_line_cells",
 	 [](docling::docling_sanitizer &self,
-	    double horizontal_cell_tolerance,
-	    bool enforce_same_font,
-	    double space_width_factor_for_merge /*= 1.0*/,
-	    double space_width_factor_for_merge_with_space /*= 0.33*/) -> nlohmann::json {
-	   return self.create_line_cells(horizontal_cell_tolerance,
-					 enforce_same_font,
-					 space_width_factor_for_merge,
-					 space_width_factor_for_merge_with_space);
+	    const pdflib::decode_page_config &config) -> nlohmann::json {
+	   return self.create_line_cells(config);
 	 },
-	 pybind11::arg("horizontal_cell_tolerance"), //=1.0,
-	 pybind11::arg("enforce_same_font"), //=true,
-	 pybind11::arg("space_width_factor_for_merge"), //=1.0,
-	 pybind11::arg("space_width_factor_for_merge_with_space"), //=0.33,
+	 pybind11::arg("config"),
 	 R"(
     Create line cells
 
     Parameters:
-        horizontal_cell_tolerance (float): Vertical adjustment parameter to judge if two cells need to be merged (yes if abs(cell_i.r_y1-cell_i.r_y0)<horizontal_cell_tolerance), default = 1.0.
-        enforce_same_font (bool): Whether to enforce the same font across cells. Default is True
-        space_width_factor_for_merge (float): Factor for merging cells based on space width. Default is 1.0.
-        space_width_factor_for_merge_with_space (float): Factor for merging cells with space width. Default is 0.33.
+        config (DecodePageConfig): Configuration for line cell creation.
 
     Returns:
         dict: A JSON object representing the sanitized line cells in the bounding box.)");  

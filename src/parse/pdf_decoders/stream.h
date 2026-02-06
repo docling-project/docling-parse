@@ -12,7 +12,9 @@ namespace pdflib
 
   public:
 
-    pdf_decoder(pdf_resource<PAGE_DIMENSION>& page_dimension_,
+    pdf_decoder(const decode_page_config& config,
+
+                pdf_resource<PAGE_DIMENSION>& page_dimension_,
                 pdf_resource<PAGE_CELLS>&     page_cells_,
                 pdf_resource<PAGE_LINES>&     page_lines_,
                 pdf_resource<PAGE_IMAGES>&    page_images_,
@@ -61,6 +63,8 @@ namespace pdflib
 
   private:
 
+    const decode_page_config& config;
+
     pdf_resource<PAGE_DIMENSION>& page_dimension;
     pdf_resource<PAGE_CELLS>&     page_cells;
     pdf_resource<PAGE_LINES>&     page_lines;
@@ -82,7 +86,9 @@ namespace pdflib
     int stack_count;
   };
 
-  pdf_decoder<STREAM>::pdf_decoder(pdf_resource<PAGE_DIMENSION>& page_dimension_,
+  pdf_decoder<STREAM>::pdf_decoder(const decode_page_config& config_,
+
+                                   pdf_resource<PAGE_DIMENSION>& page_dimension_,
                                    pdf_resource<PAGE_CELLS>&     page_cells_,
                                    pdf_resource<PAGE_LINES>&     page_lines_,
                                    pdf_resource<PAGE_IMAGES>&    page_images_,
@@ -92,9 +98,11 @@ namespace pdflib
 
                                    pdf_resource<PAGE_XOBJECTS>&  page_xobjects_,
 
-                                   pdf_render_instructions& instructions,
+                                   pdf_render_instructions& instructions_,
 
-                                   pdf_timings& timings):
+				   pdf_timings& timings):
+    config(config_),
+
     page_dimension(page_dimension_),
     page_cells(page_cells_),
     page_lines(page_lines_),
@@ -105,7 +113,7 @@ namespace pdflib
 
     page_xobjects(page_xobjects_),
 
-    instructions(instructions),
+    instructions(instructions_),
 
     timings(timings),
 
@@ -163,8 +171,14 @@ namespace pdflib
       {
         //stack.clear();
 
-        pdf_state<GLOBAL> state(page_cells, page_lines, page_images,
-                                page_fonts, page_grphs, instructions);
+        pdf_state<GLOBAL> state(config,
+				page_cells,
+				page_lines,
+				page_images,
+				page_fonts,
+				page_grphs,
+				instructions);
+
         stack.push_back(state);
       }
 
@@ -179,8 +193,13 @@ namespace pdflib
 
     if(stack.size()>0 and page_fonts.keys()!=cgs().page_fonts.keys())
       {
-        pdf_state<GLOBAL> state(page_cells, page_lines, page_images,
-                                page_fonts, page_grphs, instructions);
+        pdf_state<GLOBAL> state(config,
+				page_cells,
+				page_lines,
+				page_images,
+				page_fonts,
+				page_grphs,
+				instructions);
         state = stack.back();
 
         stack.push_back(state);
@@ -286,32 +305,17 @@ namespace pdflib
     return cgs().grph_state;
   }
 
-  /*
-    void pdf_decoder<STREAM>::q()
-    {
-    pdf_state<GLOBAL> state(page_cells, page_lines, page_images, page_fonts);
-
-    if(stack.size()>0)
-    {
-    state = stack.back();
-    }
-
-    stack.push_back(state);
-
-    stack_count += 1;
-    }
-  */
-
   void pdf_decoder<STREAM>::q()
   {
     if(stack.size()==0)
       {
-        pdf_state<GLOBAL> state(page_cells,
-                                page_lines,
-                                page_images,
-                                page_fonts,
-                                page_grphs,
-                                instructions);
+        pdf_state<GLOBAL> state(config,
+				page_cells,
+				page_lines,
+				page_images,
+				page_fonts,
+				page_grphs,
+				instructions);
         stack.push_back(state);
       }
     else
@@ -486,11 +490,18 @@ namespace pdflib
                   {
                     std::vector<qpdf_instruction> insts = xobj.parse_stream();
 
-                    pdf_decoder<STREAM> new_stream(page_dimension, page_cells,
-                                                   page_lines, page_images,
-                                                   page_fonts_, page_grphs_,
-                                                   page_xobjects_, instructions,
-                                                   timings);
+                    pdf_decoder<STREAM> new_stream(config,
+
+						   page_dimension,
+						   page_cells,
+                                                   page_lines,
+						   page_images,
+
+						   page_fonts_,
+						   page_grphs_,
+						   page_xobjects_,
+						   instructions,
+						   timings);
 
                     bool updated_stack = new_stream.update_stack(stack, stack_count);
 

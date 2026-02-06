@@ -36,22 +36,13 @@ namespace pdflib
     bool has_line_cells() const { return line_cells_created; }
 
     // Create word/line cells from page_cells
-    void create_word_cells(double horizontal_cell_tolerance = 1.0,
-			   bool enforce_same_font = true,
-			   double space_width_factor_for_merge = 0.33);
+    void create_word_cells(const decode_page_config& config);
+    void create_line_cells(const decode_page_config& config);
 
-    void create_line_cells(double horizontal_cell_tolerance = 1.0,
-			   bool enforce_same_font = true,
-			   double space_width_factor_for_merge = 1.0,
-			   double space_width_factor_for_merge_with_space = 0.33);
+    // JSON serialization
+    nlohmann::json get(const decode_page_config& config);
 
-    // JSON serialization (kept for backward compatibility)
-    nlohmann::json get(bool keep_char_cells=true,
-                       bool keep_lines=true,
-                       bool keep_bitmaps=true,
-		       bool do_sanitization=false);
-
-    void decode_page(std::string page_boundary, bool do_sanitization);
+    void decode_page(const decode_page_config& config);
 
     // Get timing information for this page
     pdf_timings& get_timings() { return timings; }
@@ -75,7 +66,7 @@ namespace pdflib
     void decode_xobjects();
 
     // Contents
-    void decode_contents();
+    void decode_contents(const decode_page_config& config);
 
     void decode_annots();
 
@@ -144,11 +135,13 @@ namespace pdflib
     return page_number;
   }
 
-  nlohmann::json pdf_decoder<PAGE>::get(bool keep_char_cells,
-                                        bool keep_lines,
-                                        bool keep_bitmaps,
-                                        bool do_sanitization)
+  nlohmann::json pdf_decoder<PAGE>::get(const decode_page_config& config)
   {
+    bool keep_char_cells = config.keep_char_cells;
+    bool keep_lines = config.keep_lines;
+    bool keep_bitmaps = config.keep_bitmaps;
+    bool do_sanitization = config.do_sanitization;
+
     LOG_S(INFO) << "pdf_decoder<PAGE>::get "
 		<< "keep_char_cells: " << keep_char_cells << ", "
 		<< "keep_lines: " << keep_lines << ", "
@@ -234,7 +227,7 @@ namespace pdflib
     return result;
   }
 
-  void pdf_decoder<PAGE>::decode_page(std::string page_boundary, bool do_sanitization)
+  void pdf_decoder<PAGE>::decode_page(const decode_page_config& config)
   {
     utils::timer global, local;
 
@@ -264,7 +257,7 @@ namespace pdflib
 
     {
       local.reset();
-      decode_contents();
+      decode_contents(config);
       timings.add_timing(pdf_timings::KEY_DECODE_CONTENTS, local.get_time());
     }
 
@@ -285,10 +278,10 @@ namespace pdflib
       local.reset();
       pdf_sanitator<PAGE_DIMENSION> sanitator(page_dimension);
 
-      sanitator.sanitize(page_boundary); // update the top-level bbox
-      sanitator.sanitize(page_cells, page_boundary);
-      sanitator.sanitize(page_lines, page_boundary);
-      sanitator.sanitize(page_images, page_boundary);
+      sanitator.sanitize(config.page_boundary); // update the top-level bbox
+      sanitator.sanitize(page_cells, config.page_boundary);
+      sanitator.sanitize(page_lines, config.page_boundary);
+      sanitator.sanitize(page_images, config.page_boundary);
       timings.add_timing(pdf_timings::KEY_SANITIZE_ORIENTATION, local.get_time());
     }
 
@@ -306,10 +299,10 @@ namespace pdflib
       timings.add_timing(pdf_timings::KEY_SANITIZE_CELLS, local.get_time());
     }
 
-    if(do_sanitization)
+    if(config.do_sanitization)
       {
         local.reset();
-        sanitise_contents(page_boundary);
+        sanitise_contents(config.page_boundary);
         timings.add_timing(pdf_timings::KEY_SANITISE_CONTENTS, local.get_time());
       }
     else
@@ -474,14 +467,16 @@ namespace pdflib
     page_xobjects.set(json_xobjects, qpdf_xobjects);
   }
 
-  void pdf_decoder<PAGE>::decode_contents()
+  void pdf_decoder<PAGE>::decode_contents(const decode_page_config& config)
   {
     LOG_S(INFO) << __FUNCTION__;
 
     QPDFPageObjectHelper          qpdf_page_object(qpdf_page);
     std::vector<QPDFObjectHandle> contents = qpdf_page_object.getPageContents();
 
-    pdf_decoder<STREAM> stream_decoder(page_dimension,
+    pdf_decoder<STREAM> stream_decoder(config,
+
+				       page_dimension,
 				       page_cells,
                                        page_lines,
 				       page_images,
@@ -654,19 +649,14 @@ namespace pdflib
     }
   }
 
-  void pdf_decoder<PAGE>::create_word_cells(double horizontal_cell_tolerance,
-					    bool enforce_same_font,
-					    double space_width_factor_for_merge)
+  void pdf_decoder<PAGE>::create_word_cells(const decode_page_config& config)
   {
     LOG_S(INFO) << __FUNCTION__;
     utils::timer timer;
 
     pdf_sanitator<PAGE_CELLS> sanitizer;
 
-    word_cells = sanitizer.create_word_cells(page_cells,
-					     horizontal_cell_tolerance,
-					     enforce_same_font,
-					     space_width_factor_for_merge);
+    word_cells = sanitizer.create_word_cells(page_cells, config);
 
     // Remove duplicates (quadratic but necessary)
     sanitizer.remove_duplicate_cells(word_cells, 0.5, true);
@@ -677,21 +667,14 @@ namespace pdflib
     timings.add_timing(pdf_timings::KEY_CREATE_WORD_CELLS, timer.get_time());
   }
 
-  void pdf_decoder<PAGE>::create_line_cells(double horizontal_cell_tolerance,
-					    bool enforce_same_font,
-					    double space_width_factor_for_merge,
-					    double space_width_factor_for_merge_with_space)
+  void pdf_decoder<PAGE>::create_line_cells(const decode_page_config& config)
   {
     LOG_S(INFO) << __FUNCTION__;
     utils::timer timer;
 
     pdf_sanitator<PAGE_CELLS> sanitizer;
 
-    line_cells = sanitizer.create_line_cells(page_cells,
-					     horizontal_cell_tolerance,
-					     enforce_same_font,
-					     space_width_factor_for_merge,
-					     space_width_factor_for_merge_with_space);
+    line_cells = sanitizer.create_line_cells(page_cells, config);
 
     // Remove duplicates (quadratic but necessary)
     sanitizer.remove_duplicate_cells(line_cells, 0.5, true);

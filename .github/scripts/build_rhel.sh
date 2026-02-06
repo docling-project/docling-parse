@@ -21,16 +21,25 @@ sudo -E XDG_RUNTIME_DIR= podman build --progress=plain \
         && dnf clean all
 
     RUN dnf install -y --nodocs \
-            autoconf automake binutils cmake gcc gcc-c++ git glibc-devel glibc-headers glibc-static kernel-devel libtool libstdc++-devel make ninja-build pkgconfig zlib-devel \
+            autoconf automake binutils cmake git glibc-devel glibc-headers glibc-static kernel-devel libtool libstdc++-devel make ninja-build pkgconfig zlib-devel \
             python3.11 python3.11-pip python3.11-devel \
             libjpeg-turbo-devel libpng-devel qpdf-devel json-devel utf8cpp-devel loguru-devel cxxopts-devel \
+            gcc gcc-c++ \
+            gcc-toolset-13 gcc-toolset-13-gcc-c++ \
         && dnf clean all
+
+    # Make GCC 13 the default compiler in subsequent RUN steps
+    ENV PATH=/opt/rh/gcc-toolset-13/root/usr/bin:$PATH
+    ENV LD_LIBRARY_PATH=/opt/rh/gcc-toolset-13/root/usr/lib64:$LD_LIBRARY_PATH
 
     WORKDIR /src
 
     COPY ./dist/*.tar.gz .
 
     ENV USE_SYSTEM_DEPS=on
+
+    # (optional but nice) sanity check which compiler is active
+    RUN gcc --version && g++ --version
 
     # pre-install build requirements + wheel for "--no-build-isolation"
     # build docling-parse wheel in an isolated network namespace (unshare -rn)
