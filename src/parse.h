@@ -39,6 +39,8 @@
 
 // specifics of parser
 #include <parse/enums.h>
+#include <parse/config.h>
+
 #include <parse/utils.h>
 #include <parse/utils/pdf_timings.h>
 
@@ -79,8 +81,6 @@
 
 #include <parse/pdf_resources/page_image.h>
 #include <parse/pdf_resources/page_images.h>
-
-#include <parse/decode_page_config.h>
 
 #include <parse/pdf_sanitator.h>
 #include <parse/pdf_sanitators/constants.h>

@@ -37,17 +37,10 @@ namespace pdflib
 				       std::optional<std::string>& password,
 				       std::string description = "processing buffer");
 
-    void decode_document(std::string page_boundary,
-			 bool do_sanitization);
+    void decode_document(const decode_page_config& config);
 
     void decode_document(std::vector<int>& page_numbers,
-			 std::string page_boundary,
-			 bool do_sanitization,
-			 bool keep_char_cells,
-			 bool keep_lines,
-			 bool keep_bitmaps,
-			 bool create_word_cells,
-			 bool create_line_cells);
+			 const decode_page_config& config);
 
     // New: Direct access to page decoders (typed API)
     bool has_page_decoder(int page_number);
@@ -265,15 +258,10 @@ namespace pdflib
     return true;
   }
 
-  void pdf_decoder<DOCUMENT>::decode_document(std::string page_boundary,
-					      bool do_sanitization)
+  void pdf_decoder<DOCUMENT>::decode_document(const decode_page_config& config)
   {
     LOG_S(INFO) << "start decoding all pages ...";
     utils::timer timer;
-
-    decode_page_config config;
-    config.page_boundary = page_boundary;
-    config.do_sanitization = do_sanitization;
 
     nlohmann::json& json_pages = json_document["pages"];
     json_pages = nlohmann::json::array({});
@@ -305,29 +293,9 @@ namespace pdflib
   }
 
   void pdf_decoder<DOCUMENT>::decode_document(std::vector<int>& page_numbers,
-					      std::string page_boundary,
-					      bool do_sanitization,
-					      bool keep_char_cells,
-					      bool keep_lines,
-					      bool keep_bitmaps,
-					      bool create_word_cells,
-					      bool create_line_cells)
+					      const decode_page_config& config)
   {
-    LOG_S(INFO) << "start decoding selected pages ("
-		<< "keep_char_cells: " << keep_char_cells << ", "
-		<< "keep_lines: " << keep_lines << ", "
-		<< "keep_bitmaps: " << keep_bitmaps << ", "
-		<< "create_word_cells: " << create_word_cells << ", "
-      		<< "create_line_cells: " << create_line_cells << ")";
-
-    decode_page_config config;
-    config.page_boundary = page_boundary;
-    config.do_sanitization = do_sanitization;
-    config.keep_char_cells = keep_char_cells;
-    config.keep_lines = keep_lines;
-    config.keep_bitmaps = keep_bitmaps;
-    config.create_word_cells = create_word_cells;
-    config.create_line_cells = create_line_cells;
+    LOG_S(INFO) << "start decoding selected pages:\n" << config.to_string();
 
     utils::timer timer;
 

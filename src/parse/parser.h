@@ -18,8 +18,8 @@ namespace plib
 
     void set_loglevel_with_label(std::string level);
 
-    void parse(std::string filename, bool do_sanitization);
-    void parse(nlohmann::json config, bool do_sanitization);
+    void parse(std::string filename, pdflib::decode_page_config page_config);
+    void parse(nlohmann::json config, pdflib::decode_page_config page_config);
 
     bool initialise(nlohmann::json& data);
 
@@ -28,15 +28,14 @@ namespace plib
 
   private:
 
-    void execute_parse(bool do_sanitization);
+    void execute_parse(pdflib::decode_page_config page_config);
 
     bool parse_input(std::string filename);
 
     bool parse_file(std::string inp_filename,
                     std::string out_filename,
                     nlohmann::json& task,
-		    std::string page_boundary,
-		    bool do_sanitization,
+		    pdflib::decode_page_config page_config,
                     bool pretty_print=true);
 
   private:
@@ -87,24 +86,24 @@ namespace plib
       }
   }
   
-  void parser::parse(std::string filename, bool do_sanitization)
+  void parser::parse(std::string filename, pdflib::decode_page_config page_config)
   {
     if(not parse_input(filename))
       {
         return;
       }
 
-    execute_parse(do_sanitization);
+    execute_parse(page_config);
   }
 
-  void parser::parse(nlohmann::json config, bool do_sanitization)
+  void parser::parse(nlohmann::json config, pdflib::decode_page_config page_config)
   {
     input_file = config;
 
-    execute_parse(do_sanitization);
+    execute_parse(page_config);
   }
   
-  void parser::execute_parse(bool do_sanitization)
+  void parser::execute_parse(pdflib::decode_page_config page_config)
   {
     // initialise the fonts
     /*
@@ -144,7 +143,7 @@ namespace plib
         std::ifstream ifs(inp_filename);
         if(ifs)
           {
-            parse_file(inp_filename, out_filename, val, "crop_box", do_sanitization);
+            parse_file(inp_filename, out_filename, val, page_config);
           }
         else
           {
@@ -190,8 +189,7 @@ namespace plib
   bool parser::parse_file(std::string inp_filename,
                           std::string out_filename,
                           nlohmann::json& task,
-			  std::string page_boundary,
-			  bool do_sanitization,
+			  pdflib::decode_page_config page_config,
 			  bool pretty_print)
   {
     pdflib::pdf_timings pdf_timings;
@@ -220,25 +218,12 @@ namespace plib
 
     if(task.count("page-numbers")==0)
       {
-        document_decoder->decode_document(page_boundary, do_sanitization);
+        document_decoder->decode_document(page_config);
       }
     else
       {
-	bool keep_char_cells = true;
-	bool keep_lines = true;
-	bool keep_bitmaps = true;
-	bool create_word_cells = true;
-	bool create_line_cells = true;
-
         std::vector<int> page_numbers = task["page-numbers"];
-        document_decoder->decode_document(page_numbers,
-					  page_boundary,
-					  do_sanitization,
-					  keep_char_cells,
-					  keep_lines,
-					  keep_bitmaps,
-					  create_word_cells,
-					  create_line_cells);
+        document_decoder->decode_document(page_numbers, page_config);
       }
 
     nlohmann::json json_document = document_decoder->get();

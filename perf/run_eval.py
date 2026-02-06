@@ -279,7 +279,7 @@ def plot_hex_pairs(per_parser_rows: Dict[str, List[PageRow]], viz_dir: Path) -> 
             plt.legend(loc="upper left")
             plt.xlabel(f"Seconds/page — {pa}")
             plt.ylabel(f"Seconds/page — {pb}")
-            plt.title(f"Per-page time hexbin — {pa} vs {pb} (n={xa.size})")
+            plt.title(f"'{pa}' vs '{pb}' (n={xa.size})")
             plt.grid(True, alpha=0.2)
             out = viz_dir / f"hex_{safe_name(pa)}_vs_{safe_name(pb)}.png"
             plt.tight_layout()
@@ -312,7 +312,7 @@ def plot_hex_pairs_loglog(per_parser_rows: Dict[str, List[PageRow]], viz_dir: Pa
             plt.legend(loc="upper left")
             plt.xlabel(f"Seconds/page (log) — {pa}")
             plt.ylabel(f"Seconds/page (log) — {pb}")
-            plt.title(f"Per-page time hexbin (log-log) — {pa} vs {pb} (n={xa_pos.size})")
+            plt.title(f"{pa} vs {pb} (n={xa_pos.size})")
             plt.grid(True, alpha=0.2, which="both")
             out = viz_dir / f"hex_loglog_{safe_name(pa)}_vs_{safe_name(pb)}.png"
             plt.tight_layout()

@@ -410,7 +410,10 @@ namespace docling
       }
     
     auto& decoder = itr->second;
-    decoder->decode_document(page_boundary, do_sanitization);
+    pdflib::decode_page_config config;
+    config.page_boundary = page_boundary;
+    config.do_sanitization = do_sanitization;
+    decoder->decode_document(config);
 
     LOG_S(INFO) << "decoding done for key: " << key;
 
@@ -443,15 +446,17 @@ namespace docling
 
     auto& decoder = itr->second;
     
+    pdflib::decode_page_config config;
+    config.page_boundary = page_boundary;
+    config.do_sanitization = do_sanitization;
+    config.keep_char_cells = keep_char_cells;
+    config.keep_lines = keep_lines;
+    config.keep_bitmaps = keep_bitmaps;
+    config.create_word_cells = create_word_cells;
+    config.create_line_cells = create_line_cells;
+
     std::vector<int> pages = {page};
-    decoder->decode_document(pages,
-			     page_boundary,
-			     do_sanitization,
-			     keep_char_cells,
-			     keep_lines,
-			     keep_bitmaps,
-			     create_word_cells,
-			     create_line_cells);
+    decoder->decode_document(pages, config);
 
     LOG_S(INFO) << "decoding done for for key: " << key << " and page: " << page;
 

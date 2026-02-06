@@ -72,7 +72,9 @@ int main(int argc, char* argv[]) {
   loguru::init(argc, argv);
 
   bool do_sanitization = true;
-  
+  bool keep_lines = true;
+  bool keep_bitmaps = true;
+
   try {
     cxxopts::Options options("PDFProcessor", "A program to process PDF files or configuration files");
 
@@ -85,6 +87,10 @@ int main(int argc, char* argv[]) {
       ("password", "Password for accessing encrypted, password-protected files", cxxopts::value<std::string>())
       ("o,output", "Output file", cxxopts::value<std::string>())
       ("export-images", "Export images to directory", cxxopts::value<std::string>())
+      ("keep-text", "Keep text cells in output (default: true)", cxxopts::value<bool>()->default_value("true"))
+      ("keep-lines", "Keep lines in output (default: true)", cxxopts::value<bool>()->default_value("true"))
+      ("keep-bitmaps", "Keep bitmaps in output (default: true)", cxxopts::value<bool>()->default_value("true"))
+      ("do-sanitation", "Do text sanitation (default: true)", cxxopts::value<bool>()->default_value("true"))
       ("l,loglevel", "loglevel [error;warning;success;info]", cxxopts::value<std::string>())
       ("h,help", "Print usage");
 
@@ -110,15 +116,30 @@ int main(int argc, char* argv[]) {
       
       set_loglevel(level);
     }
-    
+
+    do_sanitization = result["do-sanitation"].as<bool>();
+    bool keep_text = result["keep-text"].as<bool>();
+    keep_lines = result["keep-lines"].as<bool>();
+    keep_bitmaps = result["keep-bitmaps"].as<bool>();
+
     if (result.count("config")) {
       std::string config_file = result["config"].as<std::string>();
       LOG_F(INFO, "Config file: %s", config_file.c_str());
 
+      pdflib::decode_page_config page_config;
+
+      page_config.do_sanitization = do_sanitization;
+      page_config.keep_char_cells = keep_text;
+      page_config.keep_lines = keep_lines;
+      page_config.keep_bitmaps = keep_bitmaps;
+
+      LOG_S(INFO) << "decode_page_config:\n" << page_config.to_string();
+
       utils::timer timer;
 
       plib::parser parser;
-      parser.parse(config_file, do_sanitization);
+
+      parser.parse(config_file, page_config);
 
       LOG_S(INFO) << "total-time [sec]: " << timer.get_time();
       return 0;
@@ -164,10 +185,18 @@ int main(int argc, char* argv[]) {
         config["password"] = result["password"].as<std::string>();
       }
 
+      pdflib::decode_page_config page_config;
+      page_config.do_sanitization = do_sanitization;
+      page_config.keep_char_cells = keep_text;
+      page_config.keep_lines = keep_lines;
+      page_config.keep_bitmaps = keep_bitmaps;
+
+      LOG_S(INFO) << "decode_page_config:\n" << page_config.to_string();
+
       utils::timer timer;
 
       plib::parser parser(level);
-      parser.parse(config, do_sanitization);
+      parser.parse(config, page_config);
 
       LOG_S(INFO) << "total-time [sec]: " << timer.get_time();
 
