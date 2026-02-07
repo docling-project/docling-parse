@@ -111,7 +111,7 @@ def make_parse_with_docling(mode: str) -> Callable[[Path], Iterable[Row]]:
                 try:
                     perf_config = DecodePageConfig()
                     perf_config.keep_char_cells = False
-                    perf_config.keep_lines = False
+                    perf_config.keep_shapes = False
                     perf_config.keep_bitmaps = False
                     perf_config.create_word_cells = False
                     perf_config.create_line_cells = True

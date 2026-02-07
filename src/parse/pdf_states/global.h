@@ -13,7 +13,7 @@ namespace pdflib
 
     pdf_state(const decode_page_config& config,
               pdf_resource<PAGE_CELLS>& page_cells_,
-              pdf_resource<PAGE_LINES>& page_lines_,
+              pdf_resource<PAGE_SHAPES>& page_shapes_,
               pdf_resource<PAGE_IMAGES>& page_images_,
 
               pdf_resource<PAGE_FONTS>& page_fonts_,
@@ -42,7 +42,7 @@ namespace pdflib
     const decode_page_config& config;
 
     pdf_resource<PAGE_CELLS>& page_cells;
-    pdf_resource<PAGE_LINES>& page_lines;
+    pdf_resource<PAGE_SHAPES>& page_shapes;
     pdf_resource<PAGE_IMAGES>& page_images;
 
     pdf_resource<PAGE_FONTS>& page_fonts;
@@ -50,14 +50,15 @@ namespace pdflib
 
     std::array<double, 9> trafo_matrix;
 
+    pdf_state<GRPH> grph_state; // this needs to be first     
+    
     pdf_state<TEXT> text_state;    
-    pdf_state<LINE> line_state;    
-    pdf_state<GRPH> grph_state;    
+    pdf_state<SHAPE> shape_state;    
   };
 
   pdf_state<GLOBAL>::pdf_state(const decode_page_config& config_,
                                pdf_resource<PAGE_CELLS>& page_cells_,
-                               pdf_resource<PAGE_LINES>& page_lines_,
+                               pdf_resource<PAGE_SHAPES>& page_shapes_,
                                pdf_resource<PAGE_IMAGES>& page_images_,
 
                                pdf_resource<PAGE_FONTS>& page_fonts_,
@@ -65,7 +66,7 @@ namespace pdflib
     config(config_),
 
     page_cells(page_cells_),
-    page_lines(page_lines_),
+    page_shapes(page_shapes_),
     page_images(page_images_),
 
     page_fonts(page_fonts_),
@@ -75,9 +76,9 @@ namespace pdflib
           0.0, 1.0, 0.0,
           0.0, 0.0, 1.0}),
 
+    grph_state(trafo_matrix, page_grphs),
     text_state(config, trafo_matrix, page_cells, page_fonts),
-    line_state(config, trafo_matrix, page_lines),
-    grph_state(trafo_matrix, page_grphs)
+    shape_state(config, trafo_matrix, page_shapes)
   {
     //LOG_S(INFO) << "pdf_state<GLOBAL>";
   }
@@ -86,7 +87,7 @@ namespace pdflib
     config(other.config),
 
     page_cells(other.page_cells),
-    page_lines(other.page_lines),
+    page_shapes(other.page_shapes),
     page_images(other.page_images),
 
     page_fonts(other.page_fonts),
@@ -94,15 +95,14 @@ namespace pdflib
 
     trafo_matrix(other.trafo_matrix),
 
+    grph_state(trafo_matrix, page_grphs),
     text_state(config, trafo_matrix, page_cells, page_fonts),
-    line_state(config, trafo_matrix, page_lines),
-    grph_state(trafo_matrix, page_grphs)
+    shape_state(config, trafo_matrix, page_shapes)
   {
     //LOG_S(INFO) << "pdf_state<GLOBAL>(const pdf_state<GLOBAL>& other)";
-
-    text_state = other.text_state;
-    line_state = other.line_state;
+    shape_state = other.shape_state;
     grph_state = other.grph_state;
+    text_state = other.text_state;
   }
 
   pdf_state<GLOBAL>::~pdf_state()
@@ -114,9 +114,9 @@ namespace pdflib
   {
     this->trafo_matrix = other.trafo_matrix;
 
-    this->text_state = other.text_state;
-    this->line_state = other.line_state;
     this->grph_state = other.grph_state;
+    this->text_state = other.text_state;
+    this->shape_state = other.shape_state;
 
     return *this;
   }
@@ -145,11 +145,9 @@ namespace pdflib
 
     return false;
   }
-
   
   void pdf_state<GLOBAL>::cm(std::vector<qpdf_instruction>& instructions)
   {
-    //assert(instructions.size()==6);
     if(not verify(instructions, 6, __FUNCTION__) ) { return; }
     
     std::array<double, 6> matrix;

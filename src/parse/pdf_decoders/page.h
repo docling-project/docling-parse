@@ -23,7 +23,7 @@ namespace pdflib
 
     // Typed accessors for direct pybind11 binding
     pdf_resource<PAGE_CELLS>& get_page_cells() { return page_cells; }
-    pdf_resource<PAGE_LINES>& get_page_lines() { return page_lines; }
+    pdf_resource<PAGE_SHAPES>& get_page_shapes() { return page_shapes; }
     pdf_resource<PAGE_IMAGES>& get_page_images() { return page_images; }
     pdf_resource<PAGE_DIMENSION>& get_page_dimension() { return page_dimension; }
 
@@ -95,11 +95,11 @@ namespace pdflib
     pdf_resource<PAGE_DIMENSION> page_dimension;
 
     pdf_resource<PAGE_CELLS>  page_cells;
-    pdf_resource<PAGE_LINES>  page_lines;
+    pdf_resource<PAGE_SHAPES>  page_shapes;
     pdf_resource<PAGE_IMAGES> page_images;
 
     pdf_resource<PAGE_CELLS>  cells;
-    pdf_resource<PAGE_LINES>  lines;
+    pdf_resource<PAGE_SHAPES>  shapes;
     pdf_resource<PAGE_IMAGES> images;
 
     // Computed cell aggregations
@@ -133,13 +133,13 @@ namespace pdflib
   nlohmann::json pdf_decoder<PAGE>::get(const decode_page_config& config)
   {
     bool keep_char_cells = config.keep_char_cells;
-    bool keep_lines = config.keep_lines;
+    bool keep_shapes = config.keep_shapes;
     bool keep_bitmaps = config.keep_bitmaps;
     bool do_sanitization = config.do_sanitization;
 
     LOG_S(INFO) << "pdf_decoder<PAGE>::get "
 		<< "keep_char_cells: " << keep_char_cells << ", "
-		<< "keep_lines: " << keep_lines << ", "
+		<< "keep_shapes: " << keep_shapes << ", "
 		<< "keep_bitmaps: " << keep_bitmaps << ", "
 		<< "do_sanitization: " << do_sanitization << ", ";
     
@@ -182,13 +182,13 @@ namespace pdflib
 	    LOG_S(WARNING) << "skipping the serialization of `cells` to json!";
 	  }	
 
-        if(keep_lines)
+        if(keep_shapes)
           {
-            original["lines"] = page_lines.get();
+            original["shapes"] = page_shapes.get();
           }
 	else
 	  {
-	    LOG_S(WARNING) << "skipping the serialization of `lines` to json!";
+	    LOG_S(WARNING) << "skipping the serialization of `shapes` to json!";
 	  }	
       }
 
@@ -208,9 +208,9 @@ namespace pdflib
               sanitized["cells"] = cells.get();
             }
 
-          if(keep_lines)
+          if(keep_shapes)
             {
-              sanitized["lines"] = lines.get();
+              sanitized["shapes"] = shapes.get();
             }
         }
       	else
@@ -275,7 +275,7 @@ namespace pdflib
 
       sanitator.sanitize(config.page_boundary); // update the top-level bbox
       sanitator.sanitize(page_cells, config.page_boundary);
-      sanitator.sanitize(page_lines, config.page_boundary);
+      sanitator.sanitize(page_shapes, config.page_boundary);
       sanitator.sanitize(page_images, config.page_boundary);
       timings.add_timing(pdf_timings::KEY_SANITIZE_ORIENTATION, local.get_time());
     }
@@ -470,7 +470,7 @@ namespace pdflib
 
 				       page_dimension,
 				       page_cells,
-                                       page_lines,
+                                       page_shapes,
 				       page_images,
                                        page_fonts,
 				       page_grphs,
@@ -597,7 +597,7 @@ namespace pdflib
     LOG_S(INFO) << "translation delta: " << delta.first << ", " << delta.second;
     
     page_cells.rotate(angle, delta);
-    page_lines.rotate(angle, delta);
+    page_shapes.rotate(angle, delta);
     page_images.rotate(angle, delta);
   }
 
@@ -606,7 +606,7 @@ namespace pdflib
     LOG_S(INFO) << __FUNCTION__;
 
     {
-      lines = page_lines;
+      shapes = page_shapes;
     }
 
     {

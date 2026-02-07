@@ -17,8 +17,8 @@ namespace pdflib
     PAGE_CELL,
     PAGE_CELLS,
 
-    PAGE_LINE,
-    PAGE_LINES,
+    PAGE_SHAPE, // formerly PAGE_LINE,
+    PAGE_SHAPES, // formerly PAGE_LINES,
 
     PAGE_IMAGE,
     PAGE_IMAGES,

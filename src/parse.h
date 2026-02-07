@@ -76,8 +76,8 @@
 #include <parse/pdf_resources/page_cell.h>
 #include <parse/pdf_resources/page_cells.h>
 
-#include <parse/pdf_resources/page_line.h>
-#include <parse/pdf_resources/page_lines.h>
+#include <parse/pdf_resources/page_shape.h>
+#include <parse/pdf_resources/page_shapes.h>
 
 #include <parse/pdf_resources/page_image.h>
 #include <parse/pdf_resources/page_images.h>

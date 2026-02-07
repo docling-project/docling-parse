@@ -128,7 +128,7 @@ def main():
     # Optimized
     optimized_config = DecodePageConfig()
     optimized_config.keep_char_cells = False
-    optimized_config.keep_lines = False
+    optimized_config.keep_shapes = False
     optimized_config.keep_bitmaps = False
     optimized_config.create_word_cells = True
     optimized_config.create_line_cells = True

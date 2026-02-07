@@ -16,7 +16,7 @@ namespace pdflib
 
                 pdf_resource<PAGE_DIMENSION>& page_dimension_,
                 pdf_resource<PAGE_CELLS>&     page_cells_,
-                pdf_resource<PAGE_LINES>&     page_lines_,
+                pdf_resource<PAGE_SHAPES>&     page_shapes_,
                 pdf_resource<PAGE_IMAGES>&    page_images_,
 
                 pdf_resource<PAGE_FONTS>&     page_fonts_,
@@ -50,7 +50,7 @@ namespace pdflib
 
     pdf_state<GLOBAL>& cgs(); // get current global state
     pdf_state<TEXT>&   cts(); // get current text state
-    pdf_state<LINE>&   cls(); // get current line state
+    pdf_state<SHAPE>&   cls(); // get current shape state
     pdf_state<GRPH>&   cgrs(); // get current graphics state
 
     void q();
@@ -65,7 +65,7 @@ namespace pdflib
 
     pdf_resource<PAGE_DIMENSION>& page_dimension;
     pdf_resource<PAGE_CELLS>&     page_cells;
-    pdf_resource<PAGE_LINES>&     page_lines;
+    pdf_resource<PAGE_SHAPES>&     page_shapes;
     pdf_resource<PAGE_IMAGES>&    page_images;
 
     pdf_resource<PAGE_FONTS>&     page_fonts;
@@ -86,7 +86,7 @@ namespace pdflib
 
                                    pdf_resource<PAGE_DIMENSION>& page_dimension_,
                                    pdf_resource<PAGE_CELLS>&     page_cells_,
-                                   pdf_resource<PAGE_LINES>&     page_lines_,
+                                   pdf_resource<PAGE_SHAPES>&     page_shapes_,
                                    pdf_resource<PAGE_IMAGES>&    page_images_,
 
                                    pdf_resource<PAGE_FONTS>&     page_fonts_,
@@ -99,7 +99,7 @@ namespace pdflib
 
     page_dimension(page_dimension_),
     page_cells(page_cells_),
-    page_lines(page_lines_),
+    page_shapes(page_shapes_),
     page_images(page_images_),
 
     page_fonts(page_fonts_),
@@ -165,7 +165,7 @@ namespace pdflib
 
         pdf_state<GLOBAL> state(config,
 				page_cells,
-				page_lines,
+				page_shapes,
 				page_images,
 				page_fonts,
 				page_grphs);
@@ -186,7 +186,7 @@ namespace pdflib
       {
         pdf_state<GLOBAL> state(config,
 				page_cells,
-				page_lines,
+				page_shapes,
 				page_images,
 				page_fonts,
 				page_grphs);
@@ -297,10 +297,10 @@ namespace pdflib
     return cgs().text_state;
   } 
 
-  // get current text state
-  pdf_state<LINE>& pdf_decoder<STREAM>::cls()
+  // get current shape state
+  pdf_state<SHAPE>& pdf_decoder<STREAM>::cls()
   {
-    return cgs().line_state;
+    return cgs().shape_state;
   } 
 
   // get current graphics state
@@ -315,7 +315,7 @@ namespace pdflib
       {
         pdf_state<GLOBAL> state(config,
 				page_cells,
-				page_lines,
+				page_shapes,
 				page_images,
 				page_fonts,
 				page_grphs);
@@ -497,7 +497,7 @@ namespace pdflib
 
 						   page_dimension,
 						   page_cells,
-                                                   page_lines,
+                                                   page_shapes,
 						   page_images,
 
 						   page_fonts_,

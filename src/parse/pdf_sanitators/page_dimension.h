@@ -18,7 +18,7 @@ namespace pdflib
     
     void sanitize(pdf_resource<PAGE_CELLS>& cells, std::string page_boundary);
 
-    void sanitize(pdf_resource<PAGE_LINES>& lines, std::string page_boundary);
+    void sanitize(pdf_resource<PAGE_SHAPES>& shapes, std::string page_boundary);
 
     void sanitize(pdf_resource<PAGE_IMAGES>& images, std::string page_boundary);
 
@@ -216,19 +216,19 @@ namespace pdflib
     */    
   }
 
-  void pdf_sanitator<PAGE_DIMENSION>::sanitize(pdf_resource<PAGE_LINES>& lines, std::string page_boundary)
+  void pdf_sanitator<PAGE_DIMENSION>::sanitize(pdf_resource<PAGE_SHAPES>& shapes, std::string page_boundary)
   {
     LOG_S(INFO) << __FUNCTION__;
 
     std::array<double, 4> page_bbox = get_page_boundary(page_boundary);
     
     // filter everything out
-    for(auto itr=lines.begin(); itr!=lines.end(); )
+    for(auto itr=shapes.begin(); itr!=shapes.end(); )
       {
-	pdf_resource<PAGE_LINE>& line = *itr;
+	pdf_resource<PAGE_SHAPE>& shape = *itr;
 
-	std::vector<double>& x = line.get_x();
-	std::vector<double>& y = line.get_y();
+	std::vector<double>& x = shape.get_x();
+	std::vector<double>& y = shape.get_y();
 
 	bool is_contained_in_boundary=true;
 	for(std::size_t l=0; l<x.size(); l++)
@@ -257,7 +257,7 @@ namespace pdflib
 	  }
 	else
 	  {
-	    itr = lines.erase(itr);	    
+	    itr = shapes.erase(itr);	    
 	  }
       }
 
@@ -266,12 +266,12 @@ namespace pdflib
     /*
     std::array<double, 2> v, r;
 
-    for(size_t l=0; l<lines.size(); l++)
+    for(size_t l=0; l<shapes.size(); l++)
       {
-	pdf_resource<PAGE_LINE>& line = lines[l];
+	pdf_resource<PAGE_SHAPE>& shape = shapes[l];
 
-	std::vector<double>& x = line.get_x();
-	std::vector<double>& y = line.get_y();
+	std::vector<double>& x = shape.get_x();
+	std::vector<double>& y = shape.get_y();
 
 	for(size_t k=0; k<x.size(); k++)
 	  {

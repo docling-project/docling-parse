@@ -1,13 +1,13 @@
 //-*-C++-*-
 
-#ifndef PDF_PAGE_LINE_RESOURCE_H
-#define PDF_PAGE_LINE_RESOURCE_H
+#ifndef PDF_PAGE_SHAPE_RESOURCE_H
+#define PDF_PAGE_SHAPE_RESOURCE_H
 
 namespace pdflib
 {
 
   template<>
-  class pdf_resource<PAGE_LINE>
+  class pdf_resource<PAGE_SHAPE>
   {
   public:
 
@@ -42,17 +42,17 @@ namespace pdflib
     std::vector<double> y;
   };
 
-  pdf_resource<PAGE_LINE>::pdf_resource()
+  pdf_resource<PAGE_SHAPE>::pdf_resource()
   {
     i = {0, 0};
     x = {};
     y = {};
   }
 
-  pdf_resource<PAGE_LINE>::~pdf_resource()
+  pdf_resource<PAGE_SHAPE>::~pdf_resource()
   {}
 
-  nlohmann::json pdf_resource<PAGE_LINE>::get()
+  nlohmann::json pdf_resource<PAGE_SHAPE>::get()
   {
     for(size_t l=0; l<this->size(); l++)
       {
@@ -69,7 +69,7 @@ namespace pdflib
     return result;
   }
 
-  bool pdf_resource<PAGE_LINE>::init_from(nlohmann::json& data)
+  bool pdf_resource<PAGE_SHAPE>::init_from(nlohmann::json& data)
   {
     if(data.count("x")==1 and
        data.count("y")==1 and
@@ -90,7 +90,7 @@ namespace pdflib
     return false;
   }
 
-  void pdf_resource<PAGE_LINE>::rotate(int angle, std::pair<double, double> delta)
+  void pdf_resource<PAGE_SHAPE>::rotate(int angle, std::pair<double, double> delta)
   {
     for(int l=0; l<x.size(); l++)
       {
@@ -99,7 +99,7 @@ namespace pdflib
       }
   }
   
-  void pdf_resource<PAGE_LINE>::append(double x_, double y_)
+  void pdf_resource<PAGE_SHAPE>::append(double x_, double y_)
   {
     x.push_back(x_);
     y.push_back(y_);
@@ -107,17 +107,17 @@ namespace pdflib
     i.back() += 1;
   }
 
-  size_t pdf_resource<PAGE_LINE>::size()
+  size_t pdf_resource<PAGE_SHAPE>::size()
   {
     return x.size();
   }
 
-  std::pair<double, double> pdf_resource<PAGE_LINE>::front()
+  std::pair<double, double> pdf_resource<PAGE_SHAPE>::front()
   {
     //assert(x.size()>0);
     if(x.size()==0)
       {
-	LOG_S(ERROR) << "applying front on empty page_line ...";
+	LOG_S(ERROR) << "applying front on empty page_shape ...";
 	return std::make_pair(0, 0);
       }
     
@@ -125,12 +125,12 @@ namespace pdflib
     return std::make_pair(x.front(), y.front());
   }
 
-  std::pair<double, double> pdf_resource<PAGE_LINE>::back()
+  std::pair<double, double> pdf_resource<PAGE_SHAPE>::back()
   {
     //assert(x.size()>0);
     if(x.size()==0)
       {
-	LOG_S(ERROR) << "applying front on empty page_line ...";
+	LOG_S(ERROR) << "applying front on empty page_shape ...";
 	return std::make_pair(0, 0);
       }
     
@@ -138,12 +138,12 @@ namespace pdflib
     return std::make_pair(x.back(), y.back());
   }
 
-  std::pair<double, double> pdf_resource<PAGE_LINE>::operator[](int i)
+  std::pair<double, double> pdf_resource<PAGE_SHAPE>::operator[](int i)
   {
     //assert(x.size()>0 and i<x.size());
     if(0<=i and i>=x.size())
       {
-	LOG_S(ERROR) << "out of bounds index " << i << " for page-line of size " << x.size();
+	LOG_S(ERROR) << "out of bounds index " << i << " for page-shape of size " << x.size();
 	return std::make_pair(0, 0);	
       }
     
@@ -151,7 +151,7 @@ namespace pdflib
     return std::make_pair(x[i], y[i]);
   }
 
-  void pdf_resource<PAGE_LINE>::transform(std::array<double, 9> trafo_matrix)
+  void pdf_resource<PAGE_SHAPE>::transform(std::array<double, 9> trafo_matrix)
   {
     //assert(x.size()==y.size());
     if(x.size()!=y.size())

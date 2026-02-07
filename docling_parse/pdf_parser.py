@@ -14,7 +14,7 @@ from docling_core.types.doc.page import (
     BoundingRectangle,
     Coord2D,
     ParsedPdfDocument,
-    PdfLine,
+    PdfShape,
     PdfMetaData,
     PdfPageBoundaryType,
     PdfPageGeometry,
@@ -425,7 +425,7 @@ class PdfDocument:
             page_boundary=config.page_boundary,
             do_sanitization=config.do_sanitization,
             keep_char_cells=config.keep_char_cells,
-            keep_lines=config.keep_lines,
+            keep_shapes=config.keep_shapes,
             keep_bitmaps=config.keep_bitmaps,
             create_word_cells=config.create_word_cells,
             create_line_cells=config.create_line_cells,
@@ -470,7 +470,7 @@ class PdfDocument:
                     page_boundary=config.page_boundary,
                     do_sanitization=config.do_sanitization,
                     keep_char_cells=config.keep_char_cells,
-                    keep_lines=config.keep_lines,
+                    keep_shapes=config.keep_shapes,
                     keep_bitmaps=config.keep_bitmaps,
                     create_word_cells=config.create_word_cells,
                     create_line_cells=config.create_line_cells,
@@ -662,9 +662,9 @@ class PdfDocument:
 
         return result
 
-    def _to_lines(self, data: dict) -> List[PdfLine]:
+    def _to_shapes(self, data: dict) -> List[PdfShape]:
 
-        result: List[PdfLine] = []
+        result: List[PdfShape] = []
         for ind, item in enumerate(data):
 
             for l in range(0, len(item["i"]), 2):
@@ -675,12 +675,12 @@ class PdfDocument:
                 for k in range(i0, i1):
                     points.append(Coord2D(item["x"][k], item["y"][k]))
 
-                line = PdfLine(
+                shape = PdfShape(
                     index=ind,
                     parent_id=l,
                     points=points,
                 )
-                result.append(line)
+                result.append(shape)
 
         return result
 
@@ -692,7 +692,7 @@ class PdfDocument:
     ) -> SegmentedPdfPage:
 
         char_cells = self._to_cells(page["cells"]) if "cells" in page else []
-        lines = self._to_lines(page["lines"]) if "lines" in page else []
+        shapes = self._to_shapes(page["shapes"]) if "shapes" in page else []
         bitmap_resources = (
             self._to_bitmap_resources(page["images"]) if "images" in page else []
         )
@@ -704,7 +704,7 @@ class PdfDocument:
             textline_cells=[],
             has_chars=len(char_cells) > 0,
             bitmap_resources=bitmap_resources,
-            lines=lines,
+            shapes=shapes,
         )
 
         if config.create_word_cells and ("word_cells" in page):
@@ -808,14 +808,14 @@ class PdfDocument:
 
         return result
 
-    def _to_lines_from_decoder(self, lines_container) -> List[PdfLine]:
-        """Convert typed PdfLines container to list of PdfLine objects."""
-        result: List[PdfLine] = []
+    def _to_shapes_from_decoder(self, shapes_container) -> List[PdfShape]:
+        """Convert typed PdfShapes container to list of PdfShape objects."""
+        result: List[PdfShape] = []
 
-        for ind, line in enumerate(lines_container):
-            x_coords = line.get_x()
-            y_coords = line.get_y()
-            indices = line.get_i()
+        for ind, shape in enumerate(shapes_container):
+            x_coords = shape.get_x()
+            y_coords = shape.get_y()
+            indices = shape.get_i()
 
             for l in range(0, len(indices), 2):
                 i0: int = indices[l + 0]
@@ -825,12 +825,12 @@ class PdfDocument:
                 for k in range(i0, i1):
                     points.append(Coord2D(x_coords[k], y_coords[k]))
 
-                pdf_line = PdfLine(
+                pdf_shape = PdfShape(
                     index=ind,
                     parent_id=l,
                     points=points,
                 )
-                result.append(pdf_line)
+                result.append(pdf_shape)
 
         return result
 
@@ -912,7 +912,7 @@ class PdfDocument:
         """Convert typed PdfPageDecoder to SegmentedPdfPage (zero-copy path)."""
 
         char_cells = self._to_cells_from_decoder(page_decoder.get_char_cells())
-        lines = self._to_lines_from_decoder(page_decoder.get_page_lines())
+        shapes = self._to_shapes_from_decoder(page_decoder.get_page_shapes())
         bitmap_resources = self._to_bitmap_resources_from_decoder(
             page_decoder.get_page_images()
         )
@@ -926,7 +926,7 @@ class PdfDocument:
             textline_cells=[],
             has_chars=len(char_cells) > 0,
             bitmap_resources=bitmap_resources,
-            lines=lines,
+            shapes=shapes,
         )
 
         if page_decoder.has_word_cells():
