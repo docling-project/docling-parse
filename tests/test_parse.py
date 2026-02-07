@@ -9,8 +9,8 @@ from typing import Dict, List, Union
 import pytest
 from docling_core.types.doc.page import (
     BitmapResource,
-    PdfShape,
     PdfPageBoundaryType,
+    PdfShape,
     PdfTableOfContents,
     PdfTextCell,
     SegmentedPdfPage,
@@ -153,7 +153,9 @@ def verify_shapes(
 
         pred_shape = pred_shapes[i]
 
-        assert true_shape.index == pred_shape.index, "true_shape.index == pred_shape.index"
+        assert (
+            true_shape.index == pred_shape.index
+        ), "true_shape.index == pred_shape.index"
 
         true_points = true_shape.points
         pred_points = pred_shape.points
