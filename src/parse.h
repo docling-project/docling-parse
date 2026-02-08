@@ -84,13 +84,13 @@
 
 #include <parse/pdf_sanitator.h>
 #include <parse/pdf_sanitators/constants.h>
-#include <parse/pdf_sanitators/lines.h>
+#include <parse/pdf_sanitators/shapes.h>
 #include <parse/pdf_sanitators/cells.h>
 #include <parse/pdf_sanitators/page_dimension.h>
 
 #include <parse/pdf_state.h>
 #include <parse/pdf_states/text.h>
-#include <parse/pdf_states/line.h>
+#include <parse/pdf_states/shape.h>
 #include <parse/pdf_states/grph.h>
 #include <parse/pdf_states/bitmap.h>
 #include <parse/pdf_states/global.h>

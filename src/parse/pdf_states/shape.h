@@ -1,7 +1,7 @@
 //-*-C++-*-
 
-#ifndef PDF_LINE_STATE_H
-#define PDF_LINE_STATE_H
+#ifndef PDF_SHAPE_STATE_H
+#define PDF_SHAPE_STATE_H
 
 namespace pdflib
 {
