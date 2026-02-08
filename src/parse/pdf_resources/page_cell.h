@@ -81,6 +81,12 @@ namespace pdflib
     int instr_count;
 
     bool widget;
+
+    // graphics state properties
+    bool                has_graphics_state = false;
+    double              line_width = -1;
+    std::array<int, 3>  rgb_stroking_ops = {0, 0, 0};
+    std::array<int, 3>  rgb_filling_ops  = {0, 0, 0};
   };
 
   pdf_resource<PAGE_CELL>::pdf_resource():
@@ -133,7 +139,12 @@ namespace pdflib
     //"instr-count",
 
     "widget",
-    "left_to_right"
+    "left_to_right",
+
+    "has-graphics-state",
+    "line-width",
+    "rgb-stroking",
+    "rgb-filling"
   };
 
   void pdf_resource<PAGE_CELL>::rotate(int angle, std::pair<double, double> delta)
@@ -187,6 +198,11 @@ namespace pdflib
 
       cell.push_back(widget); // 19
       cell.push_back(left_to_right); // 20
+
+      cell.push_back(has_graphics_state); // 21
+      cell.push_back(utils::values::round(line_width)); // 22
+      cell.push_back(rgb_stroking_ops); // 23
+      cell.push_back(rgb_filling_ops);  // 24
     }
     assert(cell.size()==header.size());
 
@@ -226,6 +242,11 @@ namespace pdflib
 
 	widget = data.at(19).get<bool>();
 	left_to_right = data.at(20).get<bool>();
+
+	if(data.size()>21) { has_graphics_state = data.at(21).get<bool>(); }
+	if(data.size()>22) { line_width         = data.at(22).get<double>(); }
+	if(data.size()>23) { rgb_stroking_ops   = data.at(23).get<std::array<int, 3> >(); }
+	if(data.size()>24) { rgb_filling_ops    = data.at(24).get<std::array<int, 3> >(); }
 
         return true;
       }

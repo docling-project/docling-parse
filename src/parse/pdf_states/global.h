@@ -78,9 +78,9 @@ namespace pdflib
         0.0, 0.0, 1.0}),
 
     grph_state(trafo_matrix, page_grphs),
-    text_state(config, trafo_matrix, page_cells, page_fonts),
-    shape_state(config, trafo_matrix, page_shapes),
-    bitmap_state(config, trafo_matrix, page_images)
+    text_state(config, grph_state, trafo_matrix, page_cells, page_fonts),
+    shape_state(config, grph_state, trafo_matrix, page_shapes),
+    bitmap_state(config, grph_state, trafo_matrix, page_images)
   {
     //LOG_S(INFO) << "pdf_state<GLOBAL>";
   }
@@ -98,9 +98,9 @@ namespace pdflib
     trafo_matrix(other.trafo_matrix),
 
     grph_state(trafo_matrix, page_grphs),
-    text_state(config, trafo_matrix, page_cells, page_fonts),
-    shape_state(config, trafo_matrix, page_shapes),
-    bitmap_state(config, trafo_matrix, page_images)
+    text_state(config, grph_state, trafo_matrix, page_cells, page_fonts),
+    shape_state(config, grph_state, trafo_matrix, page_shapes),
+    bitmap_state(config, grph_state, trafo_matrix, page_images)
   {
     //LOG_S(INFO) << "pdf_state<GLOBAL>(const pdf_state<GLOBAL>& other)";
     shape_state = other.shape_state;

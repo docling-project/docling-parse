@@ -89,9 +89,9 @@
 #include <parse/pdf_sanitators/page_dimension.h>
 
 #include <parse/pdf_state.h>
+#include <parse/pdf_states/grph.h>
 #include <parse/pdf_states/text.h>
 #include <parse/pdf_states/shape.h>
-#include <parse/pdf_states/grph.h>
 #include <parse/pdf_states/bitmap.h>
 #include <parse/pdf_states/global.h>
 

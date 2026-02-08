@@ -12,6 +12,7 @@ namespace pdflib
   public:
 
     pdf_state(const decode_page_config& config,
+              const pdf_state<GRPH>& grph_state_,
               std::array<double, 9>& trafo_matrix_,
               pdf_resource<PAGE_CELLS>& page_cells_,
               pdf_resource<PAGE_FONTS>& page_fonts_);
@@ -86,6 +87,7 @@ namespace pdflib
     static int instr_count;
 
     const decode_page_config& config;
+    const pdf_state<GRPH>& grph_state;
 
     std::array<double, 9>& trafo_matrix;
 
@@ -113,10 +115,12 @@ namespace pdflib
   int pdf_state<TEXT>::instr_count = 0;
 
   pdf_state<TEXT>::pdf_state(const decode_page_config& config_,
+                             const pdf_state<GRPH>& grph_state_,
                              std::array<double, 9>&    trafo_matrix_,
                              pdf_resource<PAGE_CELLS>& page_cells_,
                              pdf_resource<PAGE_FONTS>& page_fonts_):
     config(config_),
+    grph_state(grph_state_),
 
     trafo_matrix(trafo_matrix_),
 
@@ -134,6 +138,7 @@ namespace pdflib
 
   pdf_state<TEXT>::pdf_state(const pdf_state<TEXT>& other):
     config(other.config),
+    grph_state(other.grph_state),
 
     trafo_matrix(other.trafo_matrix),
 
@@ -545,6 +550,11 @@ namespace pdflib
       cell.stack_size  = stack_size;
       cell.block_count = block_count;
       cell.instr_count = instr_count;
+
+      cell.has_graphics_state = true;
+      cell.line_width         = grph_state.get_line_width();
+      cell.rgb_stroking_ops   = grph_state.get_rgb_stroking_ops();
+      cell.rgb_filling_ops    = grph_state.get_rgb_filling_ops();
 
       cells.push_back(cell);
     }

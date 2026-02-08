@@ -9,14 +9,44 @@ namespace pdflib
   enum clipping_path_mode_type {
     NO_CLIPPING_PATH_RULE,
     NONZERO_WINDING_NUMBER_RULE,
-    EVEN_ODD_RULE};
+    EVEN_ODD_RULE
+  };
 
   template<>
   class pdf_state<SHAPE>
   {
+    /*
+      PDF doesn’t have a “shape object” in the stream. It has a current path
+      that you keep appending segments to. Then a painting operator paints it.
+
+      Common path-building operators (not exhaustive):
+
+      - `m`: move-to (starts a new subpath)
+      - `l`: line-to
+      - `c`: cubic Bézier curve-to
+      - `v`: curve variants
+      - `y`: curve variants
+      - `re`: rectangle convenience (adds a closed subpath rectangle)
+      - `h`: closepath
+
+      Common painting operators:
+
+      - `f`: fill (nonzero winding rule)
+      - `F`: is a legacy alias for f
+      - `f*`: fill (even-odd rule)
+      - `S`: stroke
+      - `s`: closepath + stroke
+      - `B`: fill + stroke (nonzero)
+      - `B*`: fill + stroke (even-odd)
+      - `b`, `b*`:  closepath + fill+stroke
+      - `n`: end path without painting (also clears the current path)
+      - `W`, `W*`: set clipping path (then usually n)
+     */
+    
   public:
 
     pdf_state(const decode_page_config& config,
+              const pdf_state<GRPH>& grph_state_,
               std::array<double, 9>&    trafo_matrix_,
               pdf_resource<PAGE_SHAPES>& page_shapes_);
 
@@ -25,8 +55,6 @@ namespace pdflib
     ~pdf_state();
 
     pdf_state<SHAPE>& operator=(const pdf_state<SHAPE>& other);
-
-    // void update(pdf_resource<PAGE_SHAPES>& shapes);
 
     void m(std::vector<qpdf_instruction>& instructions);
     void l(std::vector<qpdf_instruction>& instructions);
@@ -85,6 +113,7 @@ namespace pdflib
   private:
 
     const decode_page_config& config;
+    const pdf_state<GRPH>& grph_state;
 
     std::array<double, 9>&    trafo_matrix;
 
@@ -97,9 +126,11 @@ namespace pdflib
   };
 
   pdf_state<SHAPE>::pdf_state(const decode_page_config& config_,
+                              const pdf_state<GRPH>& grph_state_,
                               std::array<double, 9>&    trafo_matrix_,
                               pdf_resource<PAGE_SHAPES>& page_shapes_):
     config(config_),
+    grph_state(grph_state_),
 
     trafo_matrix(trafo_matrix_),
 
@@ -115,6 +146,7 @@ namespace pdflib
 
   pdf_state<SHAPE>::pdf_state(const pdf_state<SHAPE>& other):
     config(other.config),
+    grph_state(other.grph_state),
 
     trafo_matrix(other.trafo_matrix),
 
@@ -534,6 +566,17 @@ namespace pdflib
         if(keep_shape(curr_shapes[i]))
           {
             //LOG_S(INFO) << " --> keeping shape";
+            curr_shapes[i].set_graphics_state(
+              grph_state.get_line_width(),
+              grph_state.get_miter_limit(),
+              grph_state.get_line_cap(),
+              grph_state.get_line_join(),
+              grph_state.get_dash_phase(),
+              grph_state.get_dash_array(),
+              grph_state.get_flatness(),
+              grph_state.get_rgb_stroking_ops(),
+              grph_state.get_rgb_filling_ops());
+
             page_shapes.push_back(curr_shapes[i]);
           }
         else

@@ -12,6 +12,7 @@ namespace pdflib
   public:
 
     pdf_state(const decode_page_config& config_,
+              const pdf_state<GRPH>& grph_state_,
               std::array<double, 9>&    trafo_matrix_,
               pdf_resource<PAGE_IMAGES>& page_images_);
 
@@ -26,6 +27,7 @@ namespace pdflib
   private:
 
     const decode_page_config& config;
+    const pdf_state<GRPH>& grph_state;
 
     std::array<double, 9>& trafo_matrix;
 
@@ -33,15 +35,18 @@ namespace pdflib
   };
 
   pdf_state<BITMAP>::pdf_state(const decode_page_config& config_,
+                               const pdf_state<GRPH>& grph_state_,
                                std::array<double, 9>&    trafo_matrix_,
                                pdf_resource<PAGE_IMAGES>& page_images_):
     config(config_),
+    grph_state(grph_state_),
     trafo_matrix(trafo_matrix_),
     page_images(page_images_)
   {}
 
   pdf_state<BITMAP>::pdf_state(const pdf_state<BITMAP>& other):
     config(other.config),
+    grph_state(other.grph_state),
     trafo_matrix(other.trafo_matrix),
     page_images(other.page_images)
   {}
@@ -117,6 +122,11 @@ namespace pdflib
       image.decode_present = xobj.has_decode_array();
       image.decode_array   = xobj.get_decode_array();
       image.image_mask     = xobj.is_image_mask();
+
+      // propagate graphics state
+      image.has_graphics_state = true;
+      image.rgb_stroking_ops   = grph_state.get_rgb_stroking_ops();
+      image.rgb_filling_ops    = grph_state.get_rgb_filling_ops();
     }
 
     page_images.push_back(image);

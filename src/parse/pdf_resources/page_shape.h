@@ -24,6 +24,13 @@ namespace pdflib
     std::vector<double>& get_x() { return x; }
     std::vector<double>& get_y() { return y; }
 
+    void set_graphics_state(double line_width_, double miter_limit_,
+                            int line_cap_, int line_join_,
+                            double dash_phase_, const std::vector<double>& dash_array_,
+                            double flatness_,
+                            const std::array<int, 3>& rgb_stroking_ops_,
+                            const std::array<int, 3>& rgb_filling_ops_);
+
     void append(double x_, double y_);
 
     size_t size();
@@ -40,6 +47,23 @@ namespace pdflib
     std::vector<int>    i;    
     std::vector<double> x;
     std::vector<double> y;
+
+    // graphics state properties
+    bool has_graphics_state = false;
+
+    double line_width = -1;
+    double miter_limit = -1;
+
+    int line_cap = -1;
+    int line_join = -1;
+
+    double              dash_phase = 0;
+    std::vector<double> dash_array = {};
+
+    double flatness = -1;
+
+    std::array<int, 3> rgb_stroking_ops = {0, 0, 0};
+    std::array<int, 3> rgb_filling_ops  = {0, 0, 0};
   };
 
   pdf_resource<PAGE_SHAPE>::pdf_resource()
@@ -51,6 +75,30 @@ namespace pdflib
 
   pdf_resource<PAGE_SHAPE>::~pdf_resource()
   {}
+
+  void pdf_resource<PAGE_SHAPE>::set_graphics_state(double line_width_, double miter_limit_,
+                                                    int line_cap_, int line_join_,
+                                                    double dash_phase_, const std::vector<double>& dash_array_,
+                                                    double flatness_,
+                                                    const std::array<int, 3>& rgb_stroking_ops_,
+                                                    const std::array<int, 3>& rgb_filling_ops_)
+  {
+    has_graphics_state = true;
+
+    line_width  = line_width_;
+    miter_limit = miter_limit_;
+
+    line_cap  = line_cap_;
+    line_join = line_join_;
+
+    dash_phase = dash_phase_;
+    dash_array = dash_array_;
+
+    flatness = flatness_;
+
+    rgb_stroking_ops = rgb_stroking_ops_;
+    rgb_filling_ops  = rgb_filling_ops_;
+  }
 
   nlohmann::json pdf_resource<PAGE_SHAPE>::get()
   {
@@ -65,6 +113,22 @@ namespace pdflib
       result["x"] = x;
       result["y"] = y;
       result["i"] = i;
+
+      result["has-graphics-state"] = has_graphics_state;
+
+      result["line-width"]  = utils::values::round(line_width);
+      result["miter-limit"] = utils::values::round(miter_limit);
+
+      result["line-cap"]  = line_cap;
+      result["line-join"] = line_join;
+
+      result["dash-phase"] = utils::values::round(dash_phase);
+      result["dash-array"] = dash_array;
+
+      result["flatness"] = utils::values::round(flatness);
+
+      result["rgb-stroking"] = rgb_stroking_ops;
+      result["rgb-filling"]  = rgb_filling_ops;
     }
     return result;
   }
@@ -78,7 +142,23 @@ namespace pdflib
 	x = data["x"].get<std::vector<double> >();
 	y = data["y"].get<std::vector<double> >();
 	i = data["i"].get<std::vector<int> >();
-	
+
+	if(data.count("has-graphics-state")) { has_graphics_state = data["has-graphics-state"].get<bool>(); }
+
+	if(data.count("line-width"))  { line_width  = data["line-width"].get<double>(); }
+	if(data.count("miter-limit")) { miter_limit = data["miter-limit"].get<double>(); }
+
+	if(data.count("line-cap"))  { line_cap  = data["line-cap"].get<int>(); }
+	if(data.count("line-join")) { line_join = data["line-join"].get<int>(); }
+
+	if(data.count("dash-phase")) { dash_phase = data["dash-phase"].get<double>(); }
+	if(data.count("dash-array")) { dash_array = data["dash-array"].get<std::vector<double> >(); }
+
+	if(data.count("flatness")) { flatness = data["flatness"].get<double>(); }
+
+	if(data.count("rgb-stroking")) { rgb_stroking_ops = data["rgb-stroking"].get<std::array<int, 3> >(); }
+	if(data.count("rgb-filling"))  { rgb_filling_ops  = data["rgb-filling"].get<std::array<int, 3> >(); }
+
 	return true;
       }
     else

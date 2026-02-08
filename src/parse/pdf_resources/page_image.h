@@ -67,6 +67,11 @@ namespace pdflib
     bool decode_present = false;
     std::vector<double> decode_array; // 2*ncomp when present
     bool image_mask = false;
+
+    // graphics state properties
+    bool               has_graphics_state = false;
+    std::array<int, 3> rgb_stroking_ops = {0, 0, 0};
+    std::array<int, 3> rgb_filling_ops  = {0, 0, 0};
   };
 
   pdf_resource<PAGE_IMAGE>::pdf_resource():
@@ -95,7 +100,10 @@ namespace pdflib
     "image_height",
     "bits_per_component",
     "color_space",
-    "intent"
+    "intent",
+    "has-graphics-state",
+    "rgb-stroking",
+    "rgb-filling"
   };
 
   nlohmann::json pdf_resource<PAGE_IMAGE>::get()
@@ -113,6 +121,9 @@ namespace pdflib
       image.push_back(bits_per_component);
       image.push_back(color_space);
       image.push_back(intent);
+      image.push_back(has_graphics_state);
+      image.push_back(rgb_stroking_ops);
+      image.push_back(rgb_filling_ops);
     }
     assert(image.size()==header.size());
 

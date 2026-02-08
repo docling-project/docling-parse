@@ -9,6 +9,117 @@ namespace pdflib
   template<>
   class pdf_state<GRPH>
   {
+    /*
+      ### General graphics state (Table 57)
+
+      - `w` — Set line width  
+      Sets the thickness of stroked paths in user space units.  
+      Operands: `lineWidth`  
+      Notes: `0` means a device-dependent “hairline” width (often 1 device pixel).
+      
+      - `J` — Set line cap style  
+      Sets the shape used at the ends of open subpaths when stroking.  
+      Operands: `lineCap`  
+      Values: `0` butt, `1` round, `2` projecting square.
+
+      - `j` — Set line join style  
+      Sets how corners are rendered where path segments meet when stroking.  
+      Operands: `lineJoin`  
+      Values: `0` miter, `1` round, `2` bevel.
+      
+      - `M` — Set miter limit  
+      Limits how far a miter join can extend at sharp angles. If exceeded, bevel join is used.  
+      Operands: `miterLimit`
+      
+      - `d` — Set line dash pattern  
+      Sets the dash pattern for stroking.  
+      Operands: `dashArray dashPhase`  
+      `dashArray` alternates on/off lengths (e.g. `[3 2]`), `dashPhase` is the start offset.  
+      Notes: `[] 0 d` disables dashing (solid line).
+
+      - `ri` — Set rendering intent  
+      Sets the color rendering intent for color conversions (mainly ICC-based workflows).  
+      Operands: `intentName`  
+      Typical values: `/Perceptual`, `/RelativeColorimetric`, `/Saturation`, `/AbsoluteColorimetric`  
+      Notes: some renderers ignore this.
+      
+      - `i` — Set flatness tolerance  
+      Controls curve flattening accuracy when approximating Bézier curves with line segments.  
+      Operands: `flatness`  
+      Notes: smaller = higher quality, larger = faster.
+      
+      - `gs` — Set parameters from graphics state dictionary (ExtGState)  
+      Applies an ExtGState resource entry (named graphics state).  
+      Operands: `gsName`  
+      Common parameters: stroke/fill alpha (`CA`/`ca`), blend mode (`BM`), soft mask (`SMask`), overprint, etc.
+
+
+      ### Color operators (Table 74)
+      
+      - `CS` — Set stroking color space  
+      Sets the color space used for stroking operations.  
+      Operands: `colorSpaceName`  
+      Examples: `/DeviceRGB`, `/DeviceCMYK`, `/DeviceGray`, `/Pattern`, `/Cs1` (ICCBased, etc.)
+      
+      - `cs` — Set nonstroking (fill) color space  
+      Sets the color space used for nonstroking (fill) operations.  
+      Operands: `colorSpaceName`
+      
+      - `SC` — Set stroking color (in current stroking color space)  
+      Sets stroking color components for the current stroking color space.  
+      Operands: `c1 ... cn`  
+      Example: DeviceRGB uses `R G B SC`, DeviceCMYK uses `C M Y K SC`.  
+      Notes: for patterns and certain special spaces, use `SCN`.
+      
+      - `SCN` — Set stroking color (special: patterns / Separation / DeviceN, etc.)  
+      Like `SC`, but supports Pattern color spaces and other cases needing extra parameters.  
+      Operands: `c1 ... cn [name]` (varies by current color space)  
+      Notes: for `/Pattern`, typically includes a pattern name (and optional component
+      values for uncolored patterns).
+      
+      - `sc` — Set nonstroking (fill) color (in current nonstroking color space)  
+      Sets fill color components for the current nonstroking color space.  
+      Operands: `c1 ... cn`
+      
+      - `scn` — Set nonstroking (fill) color (special: patterns / Separation / DeviceN, etc.)  
+      Like `sc`, but supports Pattern color spaces and other cases needing extra parameters.  
+      Operands: `c1 ... cn [name]` (varies by current color space)
+      
+      - `G` — Set stroking gray (DeviceGray)  
+      Sets stroking color space to DeviceGray and sets gray level.  
+      Operands: `gray`  
+      Range: typically `0` (black) to `1` (white).
+      
+      - `g` — Set nonstroking gray (DeviceGray)  
+      Sets nonstroking color space to DeviceGray and sets gray level.  
+      Operands: `gray`
+
+      - `RG` — Set stroking RGB (DeviceRGB)  
+      Sets stroking color space to DeviceRGB and sets color.  
+      Operands: `r g b`  
+      Range: typically `0..1` per component.
+      
+      - `rg` — Set nonstroking RGB (DeviceRGB)  
+      Sets nonstroking color space to DeviceRGB and sets color.  
+      Operands: `r g b`
+      
+      - `K` — Set stroking CMYK (DeviceCMYK)  
+      Sets stroking color space to DeviceCMYK and sets color.  
+      Operands: `c m y k`  
+      Range: typically `0..1` per component.
+      
+      - `k` — Set nonstroking CMYK (DeviceCMYK)  
+      Sets nonstroking color space to DeviceCMYK and sets color.  
+      Operands: `c m y k`
+      
+      ### Shading
+      
+      - `sh` — Paint shading pattern  
+      Paints a shading (e.g., gradient/mesh) defined in the Shading resource dictionary.  
+      Operands: `shadingName`  
+      Notes: the shading defines its own color space and how colors are computed.      
+     */
+    
   public:
 
     pdf_state(std::array<double, 9>&    trafo_matrix_,
@@ -52,6 +163,22 @@ namespace pdflib
     void K(std::vector<qpdf_instruction>& instructions);
     void k(std::vector<qpdf_instruction>& instructions);
 
+    // shading
+
+    void sh(std::vector<qpdf_instruction>& instructions);
+
+    // Public getters for graphics state properties
+    double get_line_width() const { return line_width; }
+    double get_miter_limit() const { return miter_limit; }
+    int get_line_cap() const { return line_cap; }
+    int get_line_join() const { return line_join; }
+    double get_dash_phase() const { return dash_phase; }
+    const std::vector<double>& get_dash_array() const { return dash_array; }
+    double get_flatness() const { return flatness; }
+    const std::array<int, 3>& get_rgb_stroking_ops() const { return rgb_stroking_ops; }
+    const std::array<int, 3>& get_rgb_filling_ops() const { return rgb_filling_ops; }
+    const std::string& get_curr_grph_key() const { return curr_grph_key; }
+
   private:
 
     bool verify(std::vector<qpdf_instruction>& instructions,
@@ -78,7 +205,7 @@ namespace pdflib
     double flatness;
 
     std::array<int, 3> rgb_stroking_ops;
-    std::array<int, 3> rgb_nonstroking_ops;
+    std::array<int, 3> rgb_filling_ops;
   };
 
   pdf_state<GRPH>::pdf_state(std::array<double, 9>&    trafo_matrix_,
@@ -102,7 +229,7 @@ namespace pdflib
     flatness(-1),
     
     rgb_stroking_ops({0,0,0}),
-    rgb_nonstroking_ops({0,0,0})
+    rgb_filling_ops({0,0,0})
   {}
 
   pdf_state<GRPH>::pdf_state(const pdf_state<GRPH>& other):
@@ -131,7 +258,7 @@ namespace pdflib
     this->flatness = other.flatness;
 
     this->rgb_stroking_ops = other.rgb_stroking_ops;
-    this->rgb_nonstroking_ops = other.rgb_nonstroking_ops;
+    this->rgb_filling_ops = other.rgb_filling_ops;
 
     return *this;
   }
@@ -171,7 +298,6 @@ namespace pdflib
   
   void pdf_state<GRPH>::w(std::vector<qpdf_instruction>& instructions)
   {
-    //assert(instructions.size()==1);
     if(not verify(instructions, 1, __FUNCTION__) ) { return; }
     
     line_width = instructions[0].to_double();
@@ -179,7 +305,6 @@ namespace pdflib
 
   void pdf_state<GRPH>::J(std::vector<qpdf_instruction>& instructions)
   {
-    //assert(instructions.size()==1);
     if(not verify(instructions, 1, __FUNCTION__) ) { return; }
     
     line_cap = instructions[0].to_int();
@@ -187,7 +312,6 @@ namespace pdflib
 
   void pdf_state<GRPH>::j(std::vector<qpdf_instruction>& instructions)
   {
-    //assert(instructions.size()==1);
     if(not verify(instructions, 1, __FUNCTION__) ) { return; }
     
     line_join = instructions[0].to_int();
@@ -195,7 +319,6 @@ namespace pdflib
 
   void pdf_state<GRPH>::M(std::vector<qpdf_instruction>& instructions)
   {
-    //assert(instructions.size()==1);
     if(not verify(instructions, 1, __FUNCTION__) ) { return; }
     
     miter_limit = instructions[0].to_double();
@@ -204,13 +327,12 @@ namespace pdflib
   // Table 56 – Examples of Line Dash Patterns [p 127/135]
   void pdf_state<GRPH>::d(std::vector<qpdf_instruction>& instructions)
   {
-    //assert(instructions.size()==2);
     if(not verify(instructions, 2, __FUNCTION__) ) { return; }
  
     QPDFObjectHandle arr = instructions[0].obj;
 
-    //assert(arr.isArray());
     //if(not arr.isArray()) { LOG_S(ERROR) << "instructions[0].obj is not an array"; return; }
+    
     if(arr.isArray())
       {
 	for(int l=0; l<arr.getArrayNItems(); l++)
@@ -374,7 +496,7 @@ namespace pdflib
 
     LOG_S(INFO) << "rgb: {" << r << ", " << g << ", " << b << "}";
 
-    rgb_nonstroking_ops = {r, g, b};
+    rgb_filling_ops = {r, g, b};
   }
   
   void pdf_state<GRPH>::K(std::vector<qpdf_instruction>& instructions)
@@ -410,7 +532,7 @@ namespace pdflib
 
     LOG_S(INFO) << "rgb: {" << r << ", " << g << ", " << b << "}";
 
-    rgb_nonstroking_ops = {r, g, b};
+    rgb_filling_ops = {r, g, b};
   }
   
 }
