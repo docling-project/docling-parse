@@ -10,8 +10,8 @@ namespace pdflib
     GLOBAL,
     TEXT,
     SHAPE, // formerly LINE
-    GRPH //,
-    //BTMP
+    GRPH,
+    BITMAP
   };
 
   template<state_type name>

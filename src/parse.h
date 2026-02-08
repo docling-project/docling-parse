@@ -92,6 +92,7 @@
 #include <parse/pdf_states/text.h>
 #include <parse/pdf_states/line.h>
 #include <parse/pdf_states/grph.h>
+#include <parse/pdf_states/bitmap.h>
 #include <parse/pdf_states/global.h>
 
 #include <parse/pdf_decoder.h>

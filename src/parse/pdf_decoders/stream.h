@@ -48,10 +48,11 @@ namespace pdflib
 
     void interprete_stream(std::vector<qpdf_instruction>& parameters);
 
-    pdf_state<GLOBAL>& cgs(); // get current global state
-    pdf_state<TEXT>&   cts(); // get current text state
-    pdf_state<SHAPE>&   cls(); // get current shape state
-    pdf_state<GRPH>&   cgrs(); // get current graphics state
+    pdf_state<GLOBAL>&  current_global_state(); // get current global state
+    pdf_state<TEXT>&    current_text_state(); // get current text state
+    pdf_state<SHAPE>&   current_shape_state(); // get current shape state
+    pdf_state<GRPH>&    current_graphic_state(); // get current graphics state
+    pdf_state<BITMAP>&  current_bitmap_state(); // get current bitmap state
 
     void q();
     void Q();
@@ -182,7 +183,7 @@ namespace pdflib
     stack       = stack_;
     stack_count = stack_count_;
 
-    if(stack.size()>0 and page_fonts.keys()!=cgs().page_fonts.keys())
+    if(stack.size()>0 and page_fonts.keys()!=current_global_state().page_fonts.keys())
       {
         pdf_state<GLOBAL> state(config,
 				page_cells,
@@ -219,7 +220,7 @@ namespace pdflib
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    //assert(page_fonts.keys()==cgs().page_fonts.keys());
+    //assert(page_fonts.keys()==current_global_state().page_fonts.keys());
 
     for(int l=0; l<stream.size(); l++)
       {
@@ -276,7 +277,7 @@ namespace pdflib
   }
 
   // get current global state
-  pdf_state<GLOBAL>& pdf_decoder<STREAM>::cgs()
+  pdf_state<GLOBAL>& pdf_decoder<STREAM>::current_global_state()
   {
     if(stack.size()==0)
       {
@@ -292,22 +293,28 @@ namespace pdflib
   }
  
   // get current text state
-  pdf_state<TEXT>& pdf_decoder<STREAM>::cts()
+  pdf_state<TEXT>& pdf_decoder<STREAM>::current_text_state()
   {
-    return cgs().text_state;
+    return current_global_state().text_state;
   } 
 
   // get current shape state
-  pdf_state<SHAPE>& pdf_decoder<STREAM>::cls()
+  pdf_state<SHAPE>& pdf_decoder<STREAM>::current_shape_state()
   {
-    return cgs().shape_state;
+    return current_global_state().shape_state;
   } 
 
   // get current graphics state
-  pdf_state<GRPH>& pdf_decoder<STREAM>::cgrs()
+  pdf_state<GRPH>& pdf_decoder<STREAM>::current_graphic_state()
   {
-    return cgs().grph_state;
-  } 
+    return current_global_state().grph_state;
+  }
+
+  // get current bitmap state
+  pdf_state<BITMAP>& pdf_decoder<STREAM>::current_bitmap_state()
+  {
+    return current_global_state().bitmap_state;
+  }
 
   void pdf_decoder<STREAM>::q()
   {
@@ -358,56 +365,56 @@ namespace pdflib
       case pdf_operator::w:
         {
           LOG_S(INFO) << "executing " << to_string(name);
-          cgrs().w(parameters);
+          current_graphic_state().w(parameters);
         }
         break;
 
       case pdf_operator::J:
         {
           LOG_S(INFO) << "executing " << to_string(name);
-          cgrs().J(parameters);
+          current_graphic_state().J(parameters);
         }
         break;
 
       case pdf_operator::j:
         {
           LOG_S(INFO) << "executing " << to_string(name);
-          cgrs().j(parameters);
+          current_graphic_state().j(parameters);
         }
         break;
 
       case pdf_operator::M:
         {
           LOG_S(INFO) << "executing " << to_string(name);
-          cgrs().M(parameters);
+          current_graphic_state().M(parameters);
         }
         break;
 
       case pdf_operator::d:
         {
           LOG_S(INFO) << "executing " << to_string(name);
-          cgrs().d(parameters);
+          current_graphic_state().d(parameters);
         }
         break;
 
       case pdf_operator::ri:
         {
           LOG_S(INFO) << "executing " << to_string(name);
-          cgrs().ri(parameters);
+          current_graphic_state().ri(parameters);
         }
         break;
 
       case pdf_operator::i:
         {
           LOG_S(INFO) << "executing " << to_string(name);
-          cgrs().i(parameters);
+          current_graphic_state().i(parameters);
         }
         break;
 
       case pdf_operator::gs:
         {
           LOG_S(INFO) << "executing " << to_string(name);
-          cgrs().gs(parameters);
+          current_graphic_state().gs(parameters);
         }
         break;
 
@@ -432,7 +439,7 @@ namespace pdflib
       case pdf_operator::cm: 
         {
           LOG_S(INFO) << "executing " << to_string(name);          
-          cgs().cm(parameters);
+          current_global_state().cm(parameters);
         }
         break;
 
@@ -459,7 +466,7 @@ namespace pdflib
             case XOBJECT_IMAGE:
               {
                 LOG_S(INFO) << "Do_Image: image with `" << xobj_name << "`";
-                cgs().Do_image(xobj);
+                current_bitmap_state().Do_image(xobj);
               }
               break;
 
@@ -488,7 +495,7 @@ namespace pdflib
                   this->q();
 
                   // transform coordinate system
-                  cgs().cm(xobj.get_matrix());
+                  current_global_state().cm(xobj.get_matrix());
 
                   {
                     std::vector<qpdf_instruction> insts = xobj.parse_stream();
@@ -547,84 +554,84 @@ namespace pdflib
       case pdf_operator::CS: 
         {
           LOG_S(INFO) << "executing " << to_string(name);          
-	  cgrs().CS(parameters);
+	  current_graphic_state().CS(parameters);
         }
         break;
 
       case pdf_operator::cs: 
         {
           LOG_S(INFO) << "executing " << to_string(name);          
-	  cgrs().cs(parameters);
+	  current_graphic_state().cs(parameters);
         }
         break;
 
       case pdf_operator::SC: 
         {
           LOG_S(INFO) << "executing " << to_string(name);          
-	  cgrs().SC(parameters);
+	  current_graphic_state().SC(parameters);
         }
         break;
 
       case pdf_operator::SCN: 
         {
           LOG_S(INFO) << "executing " << to_string(name);          
-	  cgrs().SCN(parameters);
+	  current_graphic_state().SCN(parameters);
         }
         break;
 
       case pdf_operator::sc: 
         {
           LOG_S(INFO) << "executing " << to_string(name);          
-	  cgrs().sc(parameters);
+	  current_graphic_state().sc(parameters);
         }
         break;
 
       case pdf_operator::scn: 
         {
           LOG_S(INFO) << "executing " << to_string(name);          
-	  cgrs().scn(parameters);
+	  current_graphic_state().scn(parameters);
         }
         break;
 
       case pdf_operator::G: 
         {
           LOG_S(INFO) << "executing " << to_string(name);          
-	  cgrs().G(parameters);
+	  current_graphic_state().G(parameters);
         }
         break;
 
       case pdf_operator::g:
         {
           LOG_S(INFO) << "executing " << to_string(name);          
-	  cgrs().g(parameters);
+	  current_graphic_state().g(parameters);
         }
         break;
 
       case pdf_operator::RG: 
         {
           LOG_S(INFO) << "executing " << to_string(name);          
-	  cgrs().RG(parameters);
+	  current_graphic_state().RG(parameters);
         }
         break;
 
       case pdf_operator::rg:
         {
           LOG_S(INFO) << "executing " << to_string(name);          
-	  cgrs().rg(parameters);
+	  current_graphic_state().rg(parameters);
         }
         break;
 	
       case pdf_operator::K: 
         {
           LOG_S(INFO) << "executing " << to_string(name);          
-	  cgrs().K(parameters);
+	  current_graphic_state().K(parameters);
         }
         break;
 
       case pdf_operator::k:
         {
           LOG_S(INFO) << "executing " << to_string(name);          
-	  cgrs().k(parameters);
+	  current_graphic_state().k(parameters);
         }
         break;
 	
@@ -635,16 +642,16 @@ namespace pdflib
       case pdf_operator::BT:
         {
           LOG_S(INFO) << "executing " << to_string(name);
-          assert(page_fonts.keys()==cgs().page_fonts.keys());
+          assert(page_fonts.keys()==current_global_state().page_fonts.keys());
 
-          cts().BT();
+          current_text_state().BT();
         }
         break;
 
       case pdf_operator::ET:
         {
           LOG_S(INFO) << "executing " << to_string(name);
-          cts().ET();
+          current_text_state().ET();
         }
         break;
 
@@ -655,49 +662,49 @@ namespace pdflib
       case pdf_operator::Tc:
         {
           LOG_S(INFO) << "executing " << to_string(name);          
-          cts().Tc(parameters);
+          current_text_state().Tc(parameters);
         }
         break;
 
       case pdf_operator::Tw:
         {
           LOG_S(INFO) << "executing " << to_string(name);          
-          cts().Tw(parameters);
+          current_text_state().Tw(parameters);
         }
         break;
 
       case pdf_operator::Tz:
         {
           LOG_S(INFO) << "executing " << to_string(name);          
-          cts().Tz(parameters);
+          current_text_state().Tz(parameters);
         }
         break;
 
       case pdf_operator::TL:
         {
           LOG_S(INFO) << "executing " << to_string(name);          
-          cts().TL(parameters);
+          current_text_state().TL(parameters);
         }
         break;
 
       case pdf_operator::Tf:
         {
           LOG_S(INFO) << "executing " << to_string(name);          
-          cts().Tf(parameters);
+          current_text_state().Tf(parameters);
         }
         break;
 
       case pdf_operator::Tr:
         {
           LOG_S(INFO) << "executing " << to_string(name);          
-          cts().Tr(parameters);
+          current_text_state().Tr(parameters);
         }
         break;
 
       case pdf_operator::Ts:
         {
           LOG_S(INFO) << "executing " << to_string(name);          
-          cts().Ts(parameters);
+          current_text_state().Ts(parameters);
         }
         break;
 
@@ -708,28 +715,28 @@ namespace pdflib
       case pdf_operator::Td:
         {
           LOG_S(INFO) << "executing " << to_string(name);          
-          cts().Td(parameters);
+          current_text_state().Td(parameters);
         }
         break;
 
       case pdf_operator::TD:
         {
           LOG_S(INFO) << "executing " << to_string(name);          
-          cts().TD(parameters);
+          current_text_state().TD(parameters);
         }
         break;
 
       case pdf_operator::Tm:
         {
           LOG_S(INFO) << "executing " << to_string(name);          
-          cts().Tm(parameters);
+          current_text_state().Tm(parameters);
         }
         break;
 
       case pdf_operator::TStar:
         {
           LOG_S(INFO) << "executing " << to_string(name);          
-          cts().TStar(parameters);
+          current_text_state().TStar(parameters);
         }
         break;
 
@@ -740,14 +747,14 @@ namespace pdflib
       case pdf_operator::Tj:
         {
           LOG_S(INFO) << "executing " << to_string(name);          
-          cts().Tj(parameters, stack_count);
+          current_text_state().Tj(parameters, stack_count);
         }
         break;
 
       case pdf_operator::TJ:
         {
           LOG_S(INFO) << "executing " << to_string(name);          
-          cts().TJ(parameters, stack_count);
+          current_text_state().TJ(parameters, stack_count);
         }
         break;
 
@@ -757,10 +764,10 @@ namespace pdflib
           assert(parameters.size()==1);
 
           std::vector<qpdf_instruction> TStar_params = {};
-          cts().TStar(TStar_params);
+          current_text_state().TStar(TStar_params);
           
           std::vector<qpdf_instruction> Tj_params = {parameters[0]};          
-          cts().Tj(Tj_params, stack_count);          
+          current_text_state().Tj(Tj_params, stack_count);          
         }
         break;
 
@@ -770,16 +777,16 @@ namespace pdflib
           assert(parameters.size()==3);
 
           std::vector<qpdf_instruction> Tw_params = {parameters[0]};
-          cts().Tw(Tw_params);
+          current_text_state().Tw(Tw_params);
           
           std::vector<qpdf_instruction> Tc_params = {parameters[1]};
-          cts().Tc(Tc_params);
+          current_text_state().Tc(Tc_params);
 
           std::vector<qpdf_instruction> TStar_params = {};
-          cts().TStar(TStar_params);
+          current_text_state().TStar(TStar_params);
 
           std::vector<qpdf_instruction> Tj_params = {parameters[2]};          
-          cts().Tj(Tj_params, stack_count);          
+          current_text_state().Tj(Tj_params, stack_count);          
         }
         break;
 
@@ -790,49 +797,49 @@ namespace pdflib
       case pdf_operator::m:
         {
           LOG_S(INFO) << "executing " << to_string(name);          
-          cls().m(parameters);
+          current_shape_state().m(parameters);
         }
         break;
 
       case pdf_operator::l:
         {
           LOG_S(INFO) << "executing " << to_string(name);          
-          cls().l(parameters);
+          current_shape_state().l(parameters);
         }
         break;
 
       case pdf_operator::c:
         {
           LOG_S(INFO) << "executing " << to_string(name);          
-          cls().c(parameters);
+          current_shape_state().c(parameters);
         }
         break;
 
       case pdf_operator::v:
         {
           LOG_S(INFO) << "executing " << to_string(name);          
-          cls().v(parameters);
+          current_shape_state().v(parameters);
         }
         break;
 
       case pdf_operator::y:
         {
           LOG_S(INFO) << "executing " << to_string(name);          
-          cls().y(parameters);
+          current_shape_state().y(parameters);
         }
         break;
 
       case pdf_operator::h:
         {
           LOG_S(INFO) << "executing " << to_string(name);          
-          cls().h(parameters);
+          current_shape_state().h(parameters);
         }
         break;
 
       case pdf_operator::re:
         {
           LOG_S(INFO) << "executing " << to_string(name);          
-          cls().re(parameters);          
+          current_shape_state().re(parameters);          
         }
         break;
 
@@ -843,70 +850,70 @@ namespace pdflib
       case pdf_operator::s:
         {
           LOG_S(INFO) << "executing " << to_string(name);          
-          cls().s(parameters);          
+          current_shape_state().s(parameters);          
         }
         break;
 
       case pdf_operator::S:
         {
           LOG_S(INFO) << "executing " << to_string(name);          
-          cls().S(parameters);          
+          current_shape_state().S(parameters);          
         }
         break;
 
       case pdf_operator::f:
         {
           LOG_S(INFO) << "executing " << to_string(name);          
-          cls().f(parameters);          
+          current_shape_state().f(parameters);          
         }
         break;
 
       case pdf_operator::F:
         {
           LOG_S(INFO) << "executing " << to_string(name);          
-          cls().F(parameters);          
+          current_shape_state().F(parameters);          
         }
         break;
 
       case pdf_operator::fStar:
         {
           LOG_S(INFO) << "executing " << to_string(name);          
-          cls().fStar(parameters);          
+          current_shape_state().fStar(parameters);          
         }
         break;
 
       case pdf_operator::B:
         {
           LOG_S(INFO) << "executing " << to_string(name);          
-          cls().B(parameters);          
+          current_shape_state().B(parameters);          
         }
         break;
 
       case pdf_operator::BStar:
         {
           LOG_S(INFO) << "executing " << to_string(name);          
-          cls().BStar(parameters);          
+          current_shape_state().BStar(parameters);          
         }
         break;
 
       case pdf_operator::b:
         {
           LOG_S(INFO) << "executing " << to_string(name);          
-          cls().b(parameters);          
+          current_shape_state().b(parameters);          
         }
         break;
 
       case pdf_operator::bStar:
         {
           LOG_S(INFO) << "executing " << to_string(name);          
-          cls().bStar(parameters);          
+          current_shape_state().bStar(parameters);          
         }
         break;
 
       case pdf_operator::n:
         {
           LOG_S(INFO) << "executing " << to_string(name);          
-          cls().n(parameters);          
+          current_shape_state().n(parameters);          
         }
         break;
 
@@ -917,14 +924,14 @@ namespace pdflib
       case pdf_operator::W:
         {
           LOG_S(INFO) << "executing " << to_string(name);          
-          cls().W(parameters);          
+          current_shape_state().W(parameters);          
         }
         break;
 
       case pdf_operator::WStar:
         {
           LOG_S(INFO) << "executing " << to_string(name);          
-          cls().WStar(parameters);          
+          current_shape_state().WStar(parameters);          
         }
         break;
 
