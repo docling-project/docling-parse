@@ -751,8 +751,8 @@ wheels = [
 
 [[package]]
 name = "docling-core"
-version = "2.63.0"
-source = { git = "https://github.com/docling-project/docling-core.git?rev=1400f0cc6bd0c83a6580b4b9b1f5b766b8456cfd#1400f0cc6bd0c83a6580b4b9b1f5b766b8456cfd" }
+version = "2.64.0"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "jsonref" },
     { name = "jsonschema" },
@@ -764,6 +764,10 @@ dependencies = [
     { name = "tabulate" },
     { name = "typer" },
     { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/23/f2/692de80893b0e0b22e4a5faa03f970b65de6d274a84d375c0ef92b54700b/docling_core-2.64.0.tar.gz", hash = "sha256:5ceb993d1ad743a882fe9bbae63a6b91ae5475e9d90cdf7451e9a1a7c2c2589f", size = 251646, upload-time = "2026-02-09T12:04:51.565Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/65/9b/9f75957f7ac2e048c0cfad56631267e9d5a23b0d5708b7639598072f5253/docling_core-2.64.0-py3-none-any.whl", hash = "sha256:38dd5d8c60eba8b76a0f37c6f3510c0e53d3d53e0e2585329755b1886887b714", size = 239264, upload-time = "2026-02-09T12:04:50.256Z" },
 ]
 
 [[package]]
@@ -816,7 +820,7 @@ perf-test = [
 
 [package.metadata]
 requires-dist = [
-    { name = "docling-core", git = "https://github.com/docling-project/docling-core.git?rev=1400f0cc6bd0c83a6580b4b9b1f5b766b8456cfd" },
+    { name = "docling-core", specifier = ">=2.64.0" },
     { name = "pdfplumber", marker = "extra == 'perf-tools'", specifier = ">=0.11.7" },
     { name = "pillow", specifier = ">=10.0.0,<13.0.0" },
     { name = "pydantic", specifier = ">=2.0.0" },
