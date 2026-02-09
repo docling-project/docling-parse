@@ -12,6 +12,7 @@ from docling_core.types.doc.document import ImageRef
 from docling_core.types.doc.page import (
     BitmapResource,
     BoundingRectangle,
+    ColorRGBA,
     Coord2D,
     ParsedPdfDocument,
     PdfMetaData,
@@ -675,10 +676,24 @@ class PdfDocument:
                 for k in range(i0, i1):
                     points.append(Coord2D(item["x"][k], item["y"][k]))
 
+                has_gs = item.get("has-graphics-state", False)
+                rgb_s = item.get("rgb-stroking", [0, 0, 0])
+                rgb_f = item.get("rgb-filling", [0, 0, 0])
+
                 shape = PdfShape(
                     index=ind,
                     parent_id=l,
                     points=points,
+                    has_graphics_state=has_gs,
+                    line_width=item.get("line-width", -1.0),
+                    miter_limit=item.get("miter-limit", -1.0),
+                    line_cap=item.get("line-cap", -1),
+                    line_join=item.get("line-join", -1),
+                    dash_phase=item.get("dash-phase", 0.0),
+                    dash_array=item.get("dash-array", []),
+                    flatness=item.get("flatness", -1.0),
+                    rgb_stroking=ColorRGBA(r=rgb_s[0], g=rgb_s[1], b=rgb_s[2]),
+                    rgb_filling=ColorRGBA(r=rgb_f[0], g=rgb_f[1], b=rgb_f[2]),
                 )
                 result.append(shape)
 
@@ -825,10 +840,23 @@ class PdfDocument:
                 for k in range(i0, i1):
                     points.append(Coord2D(x_coords[k], y_coords[k]))
 
+                rgb_s = shape.get_rgb_stroking_ops()
+                rgb_f = shape.get_rgb_filling_ops()
+
                 pdf_shape = PdfShape(
                     index=ind,
                     parent_id=l,
                     points=points,
+                    has_graphics_state=shape.get_has_graphics_state(),
+                    line_width=shape.get_line_width(),
+                    miter_limit=shape.get_miter_limit(),
+                    line_cap=shape.get_line_cap(),
+                    line_join=shape.get_line_join(),
+                    dash_phase=shape.get_dash_phase(),
+                    dash_array=list(shape.get_dash_array()),
+                    flatness=shape.get_flatness(),
+                    rgb_stroking=ColorRGBA(r=rgb_s[0], g=rgb_s[1], b=rgb_s[2]),
+                    rgb_filling=ColorRGBA(r=rgb_f[0], g=rgb_f[1], b=rgb_f[2]),
                 )
                 result.append(pdf_shape)
 

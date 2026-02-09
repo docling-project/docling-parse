@@ -41,7 +41,19 @@ namespace pdflib
     std::pair<double, double> operator[](int i);
 
     void transform(std::array<double, 9> trafo_matrix);
-    
+
+    bool get_has_graphics_state() const { return has_graphics_state; }
+
+    double get_line_width() const { return line_width; }
+    double get_miter_limit() const { return miter_limit; }
+    int get_line_cap() const { return line_cap; }
+    int get_line_join() const { return line_join; }
+    double get_dash_phase() const { return dash_phase; }
+    const std::vector<double>& get_dash_array() const { return dash_array; }
+    double get_flatness() const { return flatness; }
+    const std::array<int, 3>& get_rgb_stroking_ops() const { return rgb_stroking_ops; }
+    const std::array<int, 3>& get_rgb_filling_ops() const { return rgb_filling_ops; }
+
   private:
 
     std::vector<int>    i;    

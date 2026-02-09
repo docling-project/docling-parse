@@ -83,7 +83,30 @@ PYBIND11_MODULE(pdf_parsers, m) {
     .def("get_i", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::get_i,
 	 pybind11::return_value_policy::reference_internal,
 	 "Get segment indices")
-    .def("__len__", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::size);
+    .def("__len__", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::size)
+    .def("get_has_graphics_state", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::get_has_graphics_state,
+	 "Check if graphics state has been set")
+    .def("get_line_width", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::get_line_width,
+	 "Get line width")
+    .def("get_miter_limit", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::get_miter_limit,
+	 "Get miter limit")
+    .def("get_line_cap", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::get_line_cap,
+	 "Get line cap style")
+    .def("get_line_join", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::get_line_join,
+	 "Get line join style")
+    .def("get_dash_phase", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::get_dash_phase,
+	 "Get dash phase")
+    .def("get_dash_array", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::get_dash_array,
+	 pybind11::return_value_policy::reference_internal,
+	 "Get dash array")
+    .def("get_flatness", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::get_flatness,
+	 "Get flatness tolerance")
+    .def("get_rgb_stroking_ops", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::get_rgb_stroking_ops,
+	 pybind11::return_value_policy::reference_internal,
+	 "Get RGB stroking color")
+    .def("get_rgb_filling_ops", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::get_rgb_filling_ops,
+	 pybind11::return_value_policy::reference_internal,
+	 "Get RGB filling color");
 
   // PdfImage - bitmap resource with bounding box and image data
   pybind11::class_<pdflib::pdf_resource<pdflib::PAGE_IMAGE>>(m, "PdfImage")
