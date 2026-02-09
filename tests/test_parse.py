@@ -191,7 +191,7 @@ def verify_shapes(
             true_shape.rgba.a == pred_shape.rgba.a
         ), "true_shape.rgba.a == pred_shape.rgba.a"
         """
-        
+
     return True
 
 
