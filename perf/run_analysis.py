@@ -35,7 +35,6 @@ from docling_core.types.doc.page import PdfPageBoundaryType
 from tabulate import tabulate
 
 from docling_parse.pdf_parser import (
-    CONVERSION_MODE,
     DoclingPdfParser,
     Timings,
     get_decode_page_timing_keys,
@@ -115,17 +114,12 @@ def extract_timings_for_page(
     doc,
     page_number: int,
     *,
-    mode: str = "typed",
     config: DecodePageConfig | None = None,
 ) -> Timings:
     """Run docling-parse on the given page and return Timings object."""
     try:
-        conv_mode = (
-            CONVERSION_MODE.JSON if mode.lower() == "json" else CONVERSION_MODE.TYPED
-        )
         _, timings = doc.get_page_with_timings(
             page_number,
-            mode=conv_mode,
             config=config,
         )
         return timings
@@ -190,7 +184,6 @@ def analyze_pages(
             timings = extract_timings_for_page(
                 doc,
                 r.page_number,
-                mode=mode,
             )
             results.append(
                 PageTimings(

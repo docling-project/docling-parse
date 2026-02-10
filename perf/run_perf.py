@@ -82,7 +82,7 @@ class Row:
 
 def make_parse_with_docling(mode: str) -> Callable[[Path], Iterable[Row]]:
     def _runner(pdf_path: Path) -> Iterable[Row]:
-        from docling_parse.pdf_parser import DoclingPdfParser, CONVERSION_MODE
+        from docling_parse.pdf_parser import DoclingPdfParser
         from docling_parse.pdf_parsers import DecodePageConfig  # type: ignore[import]
         from docling_core.types.doc.page import PdfPageBoundaryType
 
@@ -100,10 +100,6 @@ def make_parse_with_docling(mode: str) -> Callable[[Path], Iterable[Row]]:
                 rows.append(Row(str(pdf_path), -1, 0.0, False, f"num_pages: {e}"))
                 return rows
 
-            conv_mode = (
-                CONVERSION_MODE.JSON if mode.lower() == "json" else CONVERSION_MODE.TYPED
-            )
-
             for page_idx in range(1, n + 1):
                 t0 = time.perf_counter()
                 err = ""
@@ -117,7 +113,6 @@ def make_parse_with_docling(mode: str) -> Callable[[Path], Iterable[Row]]:
                     perf_config.create_line_cells = True
                     _ = doc.get_page(
                         page_idx,
-                        mode=conv_mode,
                         config=perf_config,
                     )
                 except Exception as e:  # pragma: no cover
