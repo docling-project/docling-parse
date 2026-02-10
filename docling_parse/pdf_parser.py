@@ -734,7 +734,6 @@ class PdfDocument:
         segmented_page.has_lines = len(segmented_page.textline_cells) > 0
 
 
-
 class DoclingPdfParser:
 
     def __init__(self, loglevel: str = "fatal"):
