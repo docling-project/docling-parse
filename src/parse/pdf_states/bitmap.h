@@ -14,7 +14,8 @@ namespace pdflib
     pdf_state(const decode_page_config& config_,
               const pdf_state<GRPH>& grph_state_,
               std::array<double, 9>&    trafo_matrix_,
-              pdf_resource<PAGE_IMAGES>& page_images_);
+              pdf_resource<PAGE_IMAGES>& page_images_,
+              pdf_render_instructions&  instructions_);
 
     pdf_state(const pdf_state<BITMAP>& other);
 
@@ -32,23 +33,28 @@ namespace pdflib
     std::array<double, 9>& trafo_matrix;
 
     pdf_resource<PAGE_IMAGES>& page_images;
+
+    pdf_render_instructions&  instructions;
   };
 
   pdf_state<BITMAP>::pdf_state(const decode_page_config& config_,
                                const pdf_state<GRPH>& grph_state_,
                                std::array<double, 9>&    trafo_matrix_,
-                               pdf_resource<PAGE_IMAGES>& page_images_):
+                               pdf_resource<PAGE_IMAGES>& page_images_,
+                               pdf_render_instructions&  instructions_):
     config(config_),
     grph_state(grph_state_),
     trafo_matrix(trafo_matrix_),
-    page_images(page_images_)
+    page_images(page_images_),
+    instructions(instructions_)
   {}
 
   pdf_state<BITMAP>::pdf_state(const pdf_state<BITMAP>& other):
     config(other.config),
     grph_state(other.grph_state),
     trafo_matrix(other.trafo_matrix),
-    page_images(other.page_images)
+    page_images(other.page_images),
+    instructions(other.instructions)
   {}
 
   pdf_state<BITMAP>::~pdf_state()

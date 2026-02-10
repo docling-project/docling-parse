@@ -124,49 +124,53 @@ int main(int argc, char* argv[])
 	// Decode and render
 	pdflib::renderer<pdflib::NAIVE> renderer;
 
-	if (page == -1) {
-	  // Decode all pages
-	  int num_pages = doc.get_number_of_pages();
-	  for (int p = 0; p < num_pages; p++) {
+	if (page == -1)
+	  {
+	    // Decode all pages
+	    int num_pages = doc.get_number_of_pages();
+	    for (int p = 0; p < num_pages; p++) {
+	      pdflib::decode_page_config page_config;
+	      page_config.page_boundary = "crop_box";
+	      page_config.do_sanitization = do_sanitization;
+	      page_config.keep_shapes = false;
+	      page_config.keep_bitmaps = false;
+	      auto page_decoder = doc.decode_page(p, page_config);
+	      if (page_decoder) {
+		auto& instructions = page_decoder->get_instructions();
+		instructions.iterate_over_instructions(renderer);
+	      }
+	    }
+	  }
+	else
+	  {
+	    // Decode specific page
 	    pdflib::decode_page_config page_config;
 	    page_config.page_boundary = "crop_box";
 	    page_config.do_sanitization = do_sanitization;
-	    page_config.keep_lines = false;
+	    page_config.keep_shapes = false;
 	    page_config.keep_bitmaps = false;
-	    auto page_decoder = doc.decode_page(p, page_config);
-	    if (page_decoder) {
-	      auto& instructions = page_decoder->get_instructions();
-	      instructions.iterate_over_instructions(renderer);
-	    }
+	    auto page_decoder = doc.decode_page(page, page_config);
+	    if (page_decoder)
+	      {
+		auto& instructions = page_decoder->get_instructions();
+		instructions.iterate_over_instructions(renderer);
+	      }
+	    else
+	      {
+		LOG_S(ERROR) << "Failed to decode page: " << page;
+		return 1;
+	      }
 	  }
-	}
-	else {
-	  // Decode specific page
-	  pdflib::decode_page_config page_config;
-	  page_config.page_boundary = "crop_box";
-	  page_config.do_sanitization = do_sanitization;
-	  page_config.keep_lines = false;
-	  page_config.keep_bitmaps = false;
-	  auto page_decoder = doc.decode_page(page, page_config);
-	  if (page_decoder) {
-	    auto& instructions = page_decoder->get_instructions();
-	    instructions.iterate_over_instructions(renderer);
-	  }
-	  else {
-	    LOG_S(ERROR) << "Failed to decode page: " << page;
-	    return 1;
-	  }
-	}
-
+	
 	LOG_S(INFO) << "total-time [sec]: " << timer.get_time();
 	return 0;
       }
-
-    //} catch (const cxxopts::OptionException& e) {
-    } catch (const cxxopts::exceptions::exception& e) {
-    LOG_F(ERROR, "Error parsing options: %s", e.what());
-    return 1;
-  }
+    }
+  catch (const cxxopts::exceptions::exception& e)
+    {
+      LOG_F(ERROR, "Error parsing options: %s", e.what());
+      return 1;
+    }
 
   return 0;
 }
