@@ -25,7 +25,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
         page_boundary (str): The page boundary specification [choices: crop_box, media_box].
         do_sanitization (bool): Sanitize the chars into lines [default=true].
         keep_char_cells (bool): Keep all the individual char cells [default=true].
-        keep_lines (bool): Keep all the graphic lines [default=true].
+        keep_shapes (bool): Keep all the graphic shapes [default=true].
         keep_bitmaps (bool): Keep all the bitmap resources [default=true].
         max_num_lines (int): Maximum number of lines to keep (-1 means no cap) [default=-1].
         max_num_bitmaps (int): Maximum number of bitmaps to keep (-1 means no cap) [default=-1].
@@ -34,7 +34,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
     .def_readwrite("page_boundary", &pdflib::decode_page_config::page_boundary)
     .def_readwrite("do_sanitization", &pdflib::decode_page_config::do_sanitization)
     .def_readwrite("keep_char_cells", &pdflib::decode_page_config::keep_char_cells)
-    .def_readwrite("keep_lines", &pdflib::decode_page_config::keep_lines)
+    .def_readwrite("keep_shapes", &pdflib::decode_page_config::keep_shapes)
     .def_readwrite("keep_bitmaps", &pdflib::decode_page_config::keep_bitmaps)
     .def_readwrite("max_num_lines", &pdflib::decode_page_config::max_num_lines)
     .def_readwrite("max_num_bitmaps", &pdflib::decode_page_config::max_num_bitmaps)
@@ -72,18 +72,41 @@ PYBIND11_MODULE(pdf_parsers, m) {
     .def_readonly("widget", &pdflib::pdf_resource<pdflib::PAGE_CELL>::widget)
     .def_readonly("left_to_right", &pdflib::pdf_resource<pdflib::PAGE_CELL>::left_to_right);
 
-  // PdfLine - graphic line with coordinates
-  pybind11::class_<pdflib::pdf_resource<pdflib::PAGE_LINE>>(m, "PdfLine")
-    .def("get_x", &pdflib::pdf_resource<pdflib::PAGE_LINE>::get_x,
+  // PdfShape - graphic shape with coordinates
+  pybind11::class_<pdflib::pdf_resource<pdflib::PAGE_SHAPE>>(m, "PdfShape")
+    .def("get_x", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::get_x,
 	 pybind11::return_value_policy::reference_internal,
-	 "Get x coordinates of line points")
-    .def("get_y", &pdflib::pdf_resource<pdflib::PAGE_LINE>::get_y,
+	 "Get x coordinates of shape points")
+    .def("get_y", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::get_y,
 	 pybind11::return_value_policy::reference_internal,
-	 "Get y coordinates of line points")
-    .def("get_i", &pdflib::pdf_resource<pdflib::PAGE_LINE>::get_i,
+	 "Get y coordinates of shape points")
+    .def("get_i", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::get_i,
 	 pybind11::return_value_policy::reference_internal,
 	 "Get segment indices")
-    .def("__len__", &pdflib::pdf_resource<pdflib::PAGE_LINE>::size);
+    .def("__len__", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::size)
+    .def("get_has_graphics_state", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::get_has_graphics_state,
+	 "Check if graphics state has been set")
+    .def("get_line_width", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::get_line_width,
+	 "Get line width")
+    .def("get_miter_limit", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::get_miter_limit,
+	 "Get miter limit")
+    .def("get_line_cap", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::get_line_cap,
+	 "Get line cap style")
+    .def("get_line_join", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::get_line_join,
+	 "Get line join style")
+    .def("get_dash_phase", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::get_dash_phase,
+	 "Get dash phase")
+    .def("get_dash_array", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::get_dash_array,
+	 pybind11::return_value_policy::reference_internal,
+	 "Get dash array")
+    .def("get_flatness", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::get_flatness,
+	 "Get flatness tolerance")
+    .def("get_rgb_stroking_ops", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::get_rgb_stroking_ops,
+	 pybind11::return_value_policy::reference_internal,
+	 "Get RGB stroking color")
+    .def("get_rgb_filling_ops", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::get_rgb_filling_ops,
+	 pybind11::return_value_policy::reference_internal,
+	 "Get RGB filling color");
 
   // PdfImage - bitmap resource with bounding box and image data
   pybind11::class_<pdflib::pdf_resource<pdflib::PAGE_IMAGE>>(m, "PdfImage")
@@ -130,17 +153,17 @@ PYBIND11_MODULE(pdf_parsers, m) {
 	   return pybind11::make_iterator(self.begin(), self.end());
 	 }, pybind11::keep_alive<0, 1>());
 
-  // PdfLines - iterable container of PdfLine objects
-  pybind11::class_<pdflib::pdf_resource<pdflib::PAGE_LINES>>(m, "PdfLines")
-    .def("__len__", &pdflib::pdf_resource<pdflib::PAGE_LINES>::size)
-    .def("__getitem__", [](pdflib::pdf_resource<pdflib::PAGE_LINES>& self, size_t i)
-	 -> pdflib::pdf_resource<pdflib::PAGE_LINE>& {
+  // PdfShapes - iterable container of PdfShape objects
+  pybind11::class_<pdflib::pdf_resource<pdflib::PAGE_SHAPES>>(m, "PdfShapes")
+    .def("__len__", &pdflib::pdf_resource<pdflib::PAGE_SHAPES>::size)
+    .def("__getitem__", [](pdflib::pdf_resource<pdflib::PAGE_SHAPES>& self, size_t i)
+	 -> pdflib::pdf_resource<pdflib::PAGE_SHAPE>& {
 	   if (i >= self.size()) {
 	     throw pybind11::index_error("index out of range");
 	   }
 	   return self[i];
 	 }, pybind11::return_value_policy::reference_internal)
-    .def("__iter__", [](pdflib::pdf_resource<pdflib::PAGE_LINES>& self) {
+    .def("__iter__", [](pdflib::pdf_resource<pdflib::PAGE_SHAPES>& self) {
 	   return pybind11::make_iterator(self.begin(), self.end());
 	 }, pybind11::keep_alive<0, 1>());
 
@@ -177,9 +200,9 @@ PYBIND11_MODULE(pdf_parsers, m) {
     .def("get_line_cells", &pdflib::pdf_decoder<pdflib::PAGE>::get_line_cells,
 	 pybind11::return_value_policy::reference_internal,
 	 "Get line cells (aggregated from char cells)")
-    .def("get_page_lines", &pdflib::pdf_decoder<pdflib::PAGE>::get_page_lines,
+    .def("get_page_shapes", &pdflib::pdf_decoder<pdflib::PAGE>::get_page_shapes,
 	 pybind11::return_value_policy::reference_internal,
-	 "Get graphic lines on the page")
+	 "Get graphic shapes on the page")
     .def("get_page_images", &pdflib::pdf_decoder<pdflib::PAGE>::get_page_images,
 	 pybind11::return_value_policy::reference_internal,
 	 "Get bitmap/image resources on the page")
@@ -475,7 +498,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
 	    const std::string &page_boundary,
 	    bool do_sanitization,
 	    bool keep_char_cells,
-	    bool keep_lines,
+	    bool keep_shapes,
 	    bool keep_bitmaps,
 	    bool create_word_cells,
 	    bool create_line_cells) -> nlohmann::json {
@@ -484,7 +507,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
 					   page_boundary,
 					   do_sanitization,
 					   keep_char_cells,
-					   keep_lines,
+					   keep_shapes,
 					   keep_bitmaps,
 					   create_word_cells,
 					   create_line_cells);
@@ -494,7 +517,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
     pybind11::arg("page_boundary") = "crop_box", // media_box
     pybind11::arg("do_sanitization") = true,
     pybind11::arg("keep_char_cells") = true,
-    pybind11::arg("keep_lines") = true,
+    pybind11::arg("keep_shapes") = true,
     pybind11::arg("keep_bitmaps") = true,
     pybind11::arg("create_word_cells") = true,
     pybind11::arg("create_line_cells") = true,
@@ -507,7 +530,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
         page_boundary (str): The page boundary specification for parsing [choices: crop_box, media_box].
         do_sanitization: Sanitize the chars into lines [default=true].
         keep_char_cells: keep all the individual char's
-        keep_lines: keep all the lines
+        keep_shapes: keep all the shapes
         keep_bitmaps: keep all the bitmap resources
         create_word_cells: create words from the char-cells
         create_line_cells: create lines from the char-cells
@@ -555,7 +578,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
             - get_char_cells(): Individual character cells
             - get_word_cells(): Word cells (aggregated)
             - get_line_cells(): Line cells (aggregated)
-            - get_page_lines(): Graphic lines
+            - get_page_shapes(): Graphic shapes
             - get_page_images(): Bitmap resources
             - get_page_dimension(): Page geometry)")
 
@@ -584,14 +607,14 @@ PYBIND11_MODULE(pdf_parsers, m) {
 	 [](docling::docling_parser &self,
 	    nlohmann::json &original_cells,
 	    nlohmann::json &page_dim,
-	    nlohmann::json &page_lines,
+	    nlohmann::json &page_shapes,
 	    double horizontal_cell_tolerance,
 	    bool enforce_same_font,
 	    double space_width_factor_for_merge,
 	    double space_width_factor_for_merge_with_space) -> nlohmann::json {
 	   return self.sanitize_cells(original_cells,
 				      page_dim,
-				      page_lines,
+				      page_shapes,
 				      horizontal_cell_tolerance,
 				      enforce_same_font,
 				      space_width_factor_for_merge,
@@ -600,7 +623,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
 	 },	 
 	 pybind11::arg("original_cells"),
 	 pybind11::arg("page_dimension"),
-	 pybind11::arg("page_lines"),
+	 pybind11::arg("page_shapes"),
 	 pybind11::arg("horizontal_cell_tolerance")=1.0,
 	 pybind11::arg("enforce_same_font")=true,
 	 pybind11::arg("space_width_factor_for_merge")=1.5,
@@ -611,7 +634,7 @@ Sanitize table cells with specified parameters and return the processed JSON.
     Parameters:
         original_cells (dict): The original table cells as a JSON object.
         page_dim (dict): Page dimensions as a JSON object.
-        page_lines (dict): Page lines as a JSON object.
+        page_shapes (dict): Page shapes as a JSON object.
         horizontal_cell_tolerance (float): Vertical adjustment parameter to judge if two cells need to be merged (yes if abs(cell_i.r_y1-cell_i.r_y0)<horizontal_cell_tolerance), default = 1.0.
         enforce_same_font (bool): Whether to enforce the same font across cells. Default = True.
         space_width_factor_for_merge (float): Factor for merging cells based on space width. Default = 1.5.

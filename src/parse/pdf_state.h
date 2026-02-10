@@ -9,8 +9,9 @@ namespace pdflib
   enum state_type { 
     GLOBAL,
     TEXT,
-    LINE,
-    GRPH
+    SHAPE, // formerly LINE
+    GRPH,
+    BITMAP
   };
 
   template<state_type name>

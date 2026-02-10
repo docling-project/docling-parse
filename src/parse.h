@@ -76,8 +76,8 @@
 #include <parse/pdf_resources/page_cell.h>
 #include <parse/pdf_resources/page_cells.h>
 
-#include <parse/pdf_resources/page_line.h>
-#include <parse/pdf_resources/page_lines.h>
+#include <parse/pdf_resources/page_shape.h>
+#include <parse/pdf_resources/page_shapes.h>
 
 #include <parse/pdf_resources/page_image.h>
 #include <parse/pdf_resources/page_images.h>
@@ -86,14 +86,15 @@
 
 #include <parse/pdf_sanitator.h>
 #include <parse/pdf_sanitators/constants.h>
-#include <parse/pdf_sanitators/lines.h>
+#include <parse/pdf_sanitators/shapes.h>
 #include <parse/pdf_sanitators/cells.h>
 #include <parse/pdf_sanitators/page_dimension.h>
 
 #include <parse/pdf_state.h>
-#include <parse/pdf_states/text.h>
-#include <parse/pdf_states/line.h>
 #include <parse/pdf_states/grph.h>
+#include <parse/pdf_states/text.h>
+#include <parse/pdf_states/shape.h>
+#include <parse/pdf_states/bitmap.h>
 #include <parse/pdf_states/global.h>
 
 #include <parse/pdf_decoder.h>

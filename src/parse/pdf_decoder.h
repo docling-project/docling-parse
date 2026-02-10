@@ -8,10 +8,7 @@ namespace pdflib
   enum decode_type { 
     DOCUMENT,
     PAGE, 
-    
-    //FONT,
     STREAM,
-
     CMAP
   };
 

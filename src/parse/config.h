@@ -13,7 +13,7 @@ namespace pdflib
     bool do_sanitization = true;
 
     bool keep_char_cells = true;
-    bool keep_lines = true;
+    bool keep_shapes = true;
     bool keep_bitmaps = true;
 
     int max_num_lines = -1;   // -1 means no cap
@@ -51,7 +51,7 @@ namespace pdflib
     j["do_sanitization"] = do_sanitization;
 
     j["keep_char_cells"] = keep_char_cells;
-    j["keep_lines"] = keep_lines;
+    j["keep_shapes"] = keep_shapes;
     j["keep_bitmaps"] = keep_bitmaps;
 
     j["max_num_lines"] = max_num_lines;
@@ -78,7 +78,7 @@ namespace pdflib
     if(j.count("do_sanitization")) { do_sanitization = j["do_sanitization"]; }
 
     if(j.count("keep_char_cells")) { keep_char_cells = j["keep_char_cells"]; }
-    if(j.count("keep_lines")) { keep_lines = j["keep_lines"]; }
+    if(j.count("keep_shapes")) { keep_shapes = j["keep_shapes"]; }
     if(j.count("keep_bitmaps")) { keep_bitmaps = j["keep_bitmaps"]; }
 
     if(j.count("max_num_lines")) { max_num_lines = j["max_num_lines"]; }
@@ -133,7 +133,7 @@ namespace pdflib
        << std::setw(48) << "page_boundary" << page_boundary << "\n"
        << std::setw(48) << "do_sanitization" << (do_sanitization ? "true" : "false") << "\n"
        << std::setw(48) << "keep_char_cells" << (keep_char_cells ? "true" : "false") << "\n"
-       << std::setw(48) << "keep_lines" << (keep_lines ? "true" : "false") << "\n"
+       << std::setw(48) << "keep_shapes" << (keep_shapes ? "true" : "false") << "\n"
        << std::setw(48) << "keep_bitmaps" << (keep_bitmaps ? "true" : "false") << "\n"
        << std::setw(48) << "max_num_lines" << max_num_lines << "\n"
        << std::setw(48) << "max_num_bitmaps" << max_num_bitmaps << "\n"

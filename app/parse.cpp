@@ -72,7 +72,7 @@ int main(int argc, char* argv[]) {
   loguru::init(argc, argv);
 
   bool do_sanitization = true;
-  bool keep_lines = true;
+  bool keep_shapes = true;
   bool keep_bitmaps = true;
 
   try {
@@ -88,7 +88,7 @@ int main(int argc, char* argv[]) {
       ("o,output", "Output file", cxxopts::value<std::string>())
       ("export-images", "Export images to directory", cxxopts::value<std::string>())
       ("keep-text", "Keep text cells in output (default: true)", cxxopts::value<bool>()->default_value("true"))
-      ("keep-lines", "Keep lines in output (default: true)", cxxopts::value<bool>()->default_value("true"))
+      ("keep-shapes", "Keep shapes in output (default: true)", cxxopts::value<bool>()->default_value("true"))
       ("keep-bitmaps", "Keep bitmaps in output (default: true)", cxxopts::value<bool>()->default_value("true"))
       ("do-sanitation", "Do text sanitation (default: true)", cxxopts::value<bool>()->default_value("true"))
       ("l,loglevel", "loglevel [error;warning;success;info]", cxxopts::value<std::string>())
@@ -119,7 +119,7 @@ int main(int argc, char* argv[]) {
 
     do_sanitization = result["do-sanitation"].as<bool>();
     bool keep_text = result["keep-text"].as<bool>();
-    keep_lines = result["keep-lines"].as<bool>();
+    keep_shapes = result["keep-shapes"].as<bool>();
     keep_bitmaps = result["keep-bitmaps"].as<bool>();
 
     if (result.count("config")) {
@@ -130,7 +130,7 @@ int main(int argc, char* argv[]) {
 
       page_config.do_sanitization = do_sanitization;
       page_config.keep_char_cells = keep_text;
-      page_config.keep_lines = keep_lines;
+      page_config.keep_shapes = keep_shapes;
       page_config.keep_bitmaps = keep_bitmaps;
 
       LOG_S(INFO) << "decode_page_config:\n" << page_config.to_string();
@@ -188,7 +188,7 @@ int main(int argc, char* argv[]) {
       pdflib::decode_page_config page_config;
       page_config.do_sanitization = do_sanitization;
       page_config.keep_char_cells = keep_text;
-      page_config.keep_lines = keep_lines;
+      page_config.keep_shapes = keep_shapes;
       page_config.keep_bitmaps = keep_bitmaps;
 
       LOG_S(INFO) << "decode_page_config:\n" << page_config.to_string();
