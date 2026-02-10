@@ -48,20 +48,6 @@ namespace docling
     nlohmann::json get_meta_xml(std::string key);
     nlohmann::json get_table_of_contents(std::string key);
 
-    nlohmann::json parse_pdf_from_key(std::string key,
-                                      std::string page_boundary,
-                                      bool do_sanitization);
-
-    nlohmann::json parse_pdf_from_key_on_page(std::string key,
-                                              int page,
-                                              std::string page_boundary,
-                                              bool do_sanitization,
-                                              bool keep_char_cells,
-                                              bool keep_shapes,
-                                              bool keep_bitmaps,
-                                              bool create_word_cells,
-                                              bool create_line_cells);
-
     // Direct typed access to page decoder (avoids JSON serialization)
     std::shared_ptr<pdflib::pdf_decoder<pdflib::PAGE>> get_page_decoder(
                                                                         std::string key,
@@ -394,78 +380,6 @@ namespace docling
       }
 
     return (itr->second)->get_table_of_contents();
-  }
-
-  nlohmann::json docling_parser::parse_pdf_from_key(std::string key,
-                                                    std::string page_boundary,
-                                                    bool do_sanitization)
-  {
-    LOG_S(INFO) << __FUNCTION__;
-
-    auto itr = key2doc.find(key);
-    if(itr==key2doc.end())
-      {
-        LOG_S(ERROR) << "key not found: " << key;
-        return nlohmann::json::value_t::null;
-      }
-
-    auto& decoder = itr->second;
-    pdflib::decode_page_config config;
-    config.page_boundary = page_boundary;
-    config.do_sanitization = do_sanitization;
-    decoder->decode_document(config);
-
-    LOG_S(INFO) << "decoding done for key: " << key;
-
-    //{
-    //auto result = decoder->get();
-    //LOG_S(ERROR) << result.dump(2);
-    //}
-
-    return decoder->get();
-  }
-
-  nlohmann::json docling_parser::parse_pdf_from_key_on_page(std::string key,
-                                                            int page,
-                                                            std::string page_boundary,
-                                                            bool do_sanitization,
-                                                            bool keep_char_cells,
-                                                            bool keep_shapes,
-                                                            bool keep_bitmaps,
-                                                            bool create_word_cells,
-                                                            bool create_line_cells)
-  {
-    LOG_S(INFO) << __FUNCTION__;
-
-    auto itr = key2doc.find(key);
-    if(itr==key2doc.end())
-      {
-        LOG_S(ERROR) << "key not found: " << key << " " << key2doc.count(key);
-        return nlohmann::json::value_t::null;
-      }
-
-    auto& decoder = itr->second;
-
-    pdflib::decode_page_config config;
-    config.page_boundary = page_boundary;
-    config.do_sanitization = do_sanitization;
-    config.keep_char_cells = keep_char_cells;
-    config.keep_shapes = keep_shapes;
-    config.keep_bitmaps = keep_bitmaps;
-    config.create_word_cells = create_word_cells;
-    config.create_line_cells = create_line_cells;
-
-    std::vector<int> pages = {page};
-    decoder->decode_document(pages, config);
-
-    LOG_S(INFO) << "decoding done for for key: " << key << " and page: " << page;
-
-    //{
-    //auto result = decoder->get();
-    //LOG_S(ERROR) << "`" << result.dump(2) << "`";
-    //}
-
-    return decoder->get();
   }
 
   std::shared_ptr<pdflib::pdf_decoder<pdflib::PAGE>> docling_parser::get_page_decoder(
