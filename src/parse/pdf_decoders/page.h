@@ -108,16 +108,19 @@ namespace pdflib
     bool word_cells_created = false;
     bool line_cells_created = false;
 
-    pdf_resource<PAGE_GRPHS>     page_grphs;
-    pdf_resource<PAGE_FONTS>     page_fonts;
-    pdf_resource<PAGE_XOBJECTS>  page_xobjects;
+    std::shared_ptr<pdf_resource<PAGE_GRPHS>>     page_grphs;
+    std::shared_ptr<pdf_resource<PAGE_FONTS>>     page_fonts;
+    std::shared_ptr<pdf_resource<PAGE_XOBJECTS>>  page_xobjects;
 
     pdf_timings timings;
   };
 
   pdf_decoder<PAGE>::pdf_decoder(QPDFObjectHandle page, int page_num):
     qpdf_page(page),
-    page_number(page_num)
+    page_number(page_num),
+    page_grphs(std::make_shared<pdf_resource<PAGE_GRPHS>>()),
+    page_fonts(std::make_shared<pdf_resource<PAGE_FONTS>>()),
+    page_xobjects(std::make_shared<pdf_resource<PAGE_XOBJECTS>>())
   {
   }
 
@@ -383,7 +386,7 @@ namespace pdflib
       }
 
     {
-      auto font_keys = page_fonts.keys();
+      auto font_keys = page_fonts->keys();
 
       LOG_S(INFO) << "fonts: " << font_keys.size();
       for(auto key:font_keys)
@@ -438,14 +441,14 @@ namespace pdflib
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    page_grphs.set(json_grphs, qpdf_grphs);
+    page_grphs->set(json_grphs, qpdf_grphs);
   }
 
   void pdf_decoder<PAGE>::decode_fonts()
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    page_fonts.set(json_fonts, qpdf_fonts, timings);
+    page_fonts->set(json_fonts, qpdf_fonts, timings);
 
     //for(auto itr=timings.begin(); itr!=timings.end(); itr++)
     //{
@@ -457,7 +460,7 @@ namespace pdflib
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    page_xobjects.set(json_xobjects, qpdf_xobjects);
+    page_xobjects->set(json_xobjects, qpdf_xobjects);
   }
 
   void pdf_decoder<PAGE>::decode_contents(const decode_page_config& config)

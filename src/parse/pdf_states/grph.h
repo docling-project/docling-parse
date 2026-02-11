@@ -123,7 +123,7 @@ namespace pdflib
   public:
 
     pdf_state(std::array<double, 9>&    trafo_matrix_,
-              pdf_resource<PAGE_GRPHS>& page_grphs_);
+              std::shared_ptr<pdf_resource<PAGE_GRPHS>> page_grphs_);
 
     pdf_state(const pdf_state<GRPH>& other);
     
@@ -188,7 +188,7 @@ namespace pdflib
     
     std::array<double, 9>& trafo_matrix;
 
-    pdf_resource<PAGE_GRPHS>& page_grphs;
+    std::shared_ptr<pdf_resource<PAGE_GRPHS>> page_grphs;
     
     std::string null_grph_key;
     std::string curr_grph_key;
@@ -209,7 +209,7 @@ namespace pdflib
   };
 
   pdf_state<GRPH>::pdf_state(std::array<double, 9>&    trafo_matrix_,
-                             pdf_resource<PAGE_GRPHS>& page_grphs_):
+                             std::shared_ptr<pdf_resource<PAGE_GRPHS>> page_grphs_):
     trafo_matrix(trafo_matrix_),
 
     page_grphs(page_grphs_),
@@ -405,14 +405,14 @@ namespace pdflib
     
     std::string key = instructions[0].to_utf8_string();
 
-    if(page_grphs.count(key)>0)
+    if(page_grphs->count(key)>0)
       {
 	curr_grph_key = key;
       }
     else
       {
-	LOG_S(WARNING) << "key (=" << key << ") not found in page_grphs: " << page_grphs.get().dump(2);
-	curr_grph_key = null_grph_key;	
+	LOG_S(WARNING) << "key (=" << key << ") not found in page_grphs: " << page_grphs->get().dump(2);
+	curr_grph_key = null_grph_key;
       }
   }
 

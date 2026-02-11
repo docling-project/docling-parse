@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <iostream>
 #include <string>
+#include <memory>
 #include <regex>
 #include <fstream>
 #include <iostream>

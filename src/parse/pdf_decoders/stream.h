@@ -19,9 +19,9 @@ namespace pdflib
                 pdf_resource<PAGE_SHAPES>&     page_shapes_,
                 pdf_resource<PAGE_IMAGES>&    page_images_,
 
-                pdf_resource<PAGE_FONTS>&     page_fonts_,
-                pdf_resource<PAGE_GRPHS>&     page_grphs_,
-                pdf_resource<PAGE_XOBJECTS>&  page_xobjects_,
+                std::shared_ptr<pdf_resource<PAGE_FONTS>>     page_fonts_,
+                std::shared_ptr<pdf_resource<PAGE_GRPHS>>     page_grphs_,
+                std::shared_ptr<pdf_resource<PAGE_XOBJECTS>>  page_xobjects_,
 
                 pdf_timings& timings);
 
@@ -78,9 +78,9 @@ namespace pdflib
     pdf_resource<PAGE_SHAPES>&     page_shapes;
     pdf_resource<PAGE_IMAGES>&    page_images;
 
-    pdf_resource<PAGE_FONTS>&     page_fonts;
-    pdf_resource<PAGE_GRPHS>&     page_grphs;
-    pdf_resource<PAGE_XOBJECTS>&  page_xobjects;
+    std::shared_ptr<pdf_resource<PAGE_FONTS>>     page_fonts;
+    std::shared_ptr<pdf_resource<PAGE_GRPHS>>     page_grphs;
+    std::shared_ptr<pdf_resource<PAGE_XOBJECTS>>  page_xobjects;
 
     pdf_timings& timings;
 
@@ -99,10 +99,10 @@ namespace pdflib
                                    pdf_resource<PAGE_SHAPES>&     page_shapes_,
                                    pdf_resource<PAGE_IMAGES>&    page_images_,
 
-                                   pdf_resource<PAGE_FONTS>&     page_fonts_,
-                                   pdf_resource<PAGE_GRPHS>&     page_grphs_,
+                                   std::shared_ptr<pdf_resource<PAGE_FONTS>>     page_fonts_,
+                                   std::shared_ptr<pdf_resource<PAGE_GRPHS>>     page_grphs_,
 
-                                   pdf_resource<PAGE_XOBJECTS>&  page_xobjects_,
+                                   std::shared_ptr<pdf_resource<PAGE_XOBJECTS>>  page_xobjects_,
 
                                    pdf_timings& timings):
     config(config_),
@@ -192,7 +192,7 @@ namespace pdflib
     stack       = stack_;
     stack_count = stack_count_;
 
-    if(stack.size()>0 and page_fonts.keys()!=current_global_state().page_fonts.keys())
+    if(stack.size()>0 and page_fonts->keys()!=current_global_state().page_fonts->keys())
       {
         pdf_state<GLOBAL> state(config,
                                 page_cells,
@@ -364,7 +364,7 @@ namespace pdflib
   {
     LOG_S(INFO) << "Do_Image: image with `" << xobj_name << "`";
 
-    pdf_resource<PAGE_XOBJECT_IMAGE>& xobj = page_xobjects.get_image(xobj_name);
+    pdf_resource<PAGE_XOBJECT_IMAGE>& xobj = page_xobjects->get_image(xobj_name);
     current_bitmap_state().Do_image(xobj);
   }
 
@@ -373,31 +373,31 @@ namespace pdflib
   {
     LOG_S(INFO) << "Do_Form: XObject with name `" << xobj_name << "`";
 
-    pdf_resource<PAGE_XOBJECT_FORM>& xobj = page_xobjects.get_form(xobj_name);
+    pdf_resource<PAGE_XOBJECT_FORM>& xobj = page_xobjects->get_form(xobj_name);
 
-    // this copy is very expensive!
-    pdf_resource<PAGE_FONTS>     page_fonts_ = page_fonts;
-    pdf_resource<PAGE_GRPHS>     page_grphs_ = page_grphs;
-    pdf_resource<PAGE_XOBJECTS>  page_xobjects_ = page_xobjects;
+    // create child resources with parent link (no deep copy)
+    auto page_fonts_    = std::make_shared<pdf_resource<PAGE_FONTS>>(page_fonts);
+    auto page_grphs_    = std::make_shared<pdf_resource<PAGE_GRPHS>>(page_grphs);
+    auto page_xobjects_ = std::make_shared<pdf_resource<PAGE_XOBJECTS>>(page_xobjects);
 
-    // parse the resources of the xobject
+    // parse the resources of the xobject into the child resources
     {
       if(xobj.has_fonts())
         {
           std::pair<nlohmann::json, QPDFObjectHandle> xobj_fonts = xobj.get_fonts();
-          page_fonts_.set(xobj_fonts.first, xobj_fonts.second, timings);
+          page_fonts_->set(xobj_fonts.first, xobj_fonts.second, timings);
         }
 
       if(xobj.has_grphs())
         {
           std::pair<nlohmann::json, QPDFObjectHandle> xobj_grphs = xobj.get_grphs();
-          page_grphs_.set(xobj_grphs.first, xobj_grphs.second/*, timings*/);
+          page_grphs_->set(xobj_grphs.first, xobj_grphs.second/*, timings*/);
         }
 
       if(xobj.has_xobjects())
         {
           std::pair<nlohmann::json, QPDFObjectHandle> xobj_xobjects = xobj.get_xobjects();
-          page_xobjects_.set(xobj_xobjects.first, xobj_xobjects.second/*, timings*/);
+          page_xobjects_->set(xobj_xobjects.first, xobj_xobjects.second/*, timings*/);
         }
     }
 
@@ -559,13 +559,13 @@ namespace pdflib
 
           std::string xobj_name = parameters[0].to_utf8_string();
 
-          if(not page_xobjects.has(xobj_name))
+          if(not page_xobjects->has(xobj_name))
             {
               LOG_S(ERROR) << "unknown xobject with name `" << xobj_name << "`";
               return;
             }
 
-          xobject_subtype_name xobj_subtype = page_xobjects.get_subtype(xobj_name);
+          xobject_subtype_name xobj_subtype = page_xobjects->get_subtype(xobj_name);
 
           switch(xobj_subtype)
             {
@@ -678,7 +678,10 @@ namespace pdflib
       case pdf_operator::BT:
         {
           LOG_S(INFO) << "executing " << to_string(name);
-          assert(page_fonts.keys()==current_global_state().page_fonts.keys());
+          if(page_fonts->keys()!=current_global_state().page_fonts->keys())
+            {
+              LOG_S(ERROR) << "page_fonts keys mismatch with current global state";
+            }
 
           current_text_state().BT();
         }

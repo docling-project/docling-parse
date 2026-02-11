@@ -12,6 +12,7 @@ namespace pdflib
   public:
 
     pdf_resource();
+    pdf_resource(std::shared_ptr<pdf_resource<PAGE_XOBJECTS>> parent);
     ~pdf_resource();
 
     nlohmann::json get();
@@ -31,12 +32,18 @@ namespace pdflib
 
     static xobject_subtype_name detect_subtype(QPDFObjectHandle& qpdf_obj);
 
+    std::shared_ptr<pdf_resource<PAGE_XOBJECTS>> parent_;
     std::map<std::string, pdf_resource<PAGE_XOBJECT_IMAGE> >      image_xobjects;
     std::map<std::string, pdf_resource<PAGE_XOBJECT_FORM> >       form_xobjects;
     std::map<std::string, pdf_resource<PAGE_XOBJECT_POSTSCRIPT> > postscript_xobjects;
   };
 
-  pdf_resource<PAGE_XOBJECTS>::pdf_resource()
+  pdf_resource<PAGE_XOBJECTS>::pdf_resource():
+    parent_(nullptr)
+  {}
+
+  pdf_resource<PAGE_XOBJECTS>::pdf_resource(std::shared_ptr<pdf_resource<PAGE_XOBJECTS>> parent):
+    parent_(parent)
   {}
 
   pdf_resource<PAGE_XOBJECTS>::~pdf_resource()
@@ -66,9 +73,17 @@ namespace pdflib
 
   bool pdf_resource<PAGE_XOBJECTS>::has(std::string name)
   {
-    return (image_xobjects.count(name)==1 or
-            form_xobjects.count(name)==1 or
-            postscript_xobjects.count(name)==1);
+    if(image_xobjects.count(name)==1 or
+       form_xobjects.count(name)==1 or
+       postscript_xobjects.count(name)==1)
+      {
+        return true;
+      }
+    if(parent_)
+      {
+        return parent_->has(name);
+      }
+    return false;
   }
 
   xobject_subtype_name pdf_resource<PAGE_XOBJECTS>::get_subtype(std::string name)
@@ -86,41 +101,58 @@ namespace pdflib
         return XOBJECT_POSTSCRIPT;
       }
 
+    if(parent_)
+      {
+        return parent_->get_subtype(name);
+      }
+
     LOG_S(ERROR) << "unknown xobject: " << name;
     return XOBJECT_UNKNOWN;
   }
 
   pdf_resource<PAGE_XOBJECT_IMAGE>& pdf_resource<PAGE_XOBJECTS>::get_image(std::string name)
   {
-    if(image_xobjects.count(name)!=1)
+    if(image_xobjects.count(name)==1)
       {
-	std::string message = "image_xobjects does not contain: " + name;
-	LOG_S(ERROR) << message;
-	throw std::logic_error(message);
+        return image_xobjects.at(name);
       }
-    return image_xobjects.at(name);
+    if(parent_)
+      {
+        return parent_->get_image(name);
+      }
+    std::string message = "image_xobjects does not contain: " + name;
+    LOG_S(ERROR) << message;
+    throw std::logic_error(message);
   }
 
   pdf_resource<PAGE_XOBJECT_FORM>& pdf_resource<PAGE_XOBJECTS>::get_form(std::string name)
   {
-    if(form_xobjects.count(name)!=1)
+    if(form_xobjects.count(name)==1)
       {
-	std::string message = "form_xobjects does not contain: " + name;
-	LOG_S(ERROR) << message;
-	throw std::logic_error(message);
+        return form_xobjects.at(name);
       }
-    return form_xobjects.at(name);
+    if(parent_)
+      {
+        return parent_->get_form(name);
+      }
+    std::string message = "form_xobjects does not contain: " + name;
+    LOG_S(ERROR) << message;
+    throw std::logic_error(message);
   }
 
   pdf_resource<PAGE_XOBJECT_POSTSCRIPT>& pdf_resource<PAGE_XOBJECTS>::get_postscript(std::string name)
   {
-    if(postscript_xobjects.count(name)!=1)
+    if(postscript_xobjects.count(name)==1)
       {
-	std::string message = "postscript_xobjects does not contain: " + name;
-	LOG_S(ERROR) << message;
-	throw std::logic_error(message);
+        return postscript_xobjects.at(name);
       }
-    return postscript_xobjects.at(name);
+    if(parent_)
+      {
+        return parent_->get_postscript(name);
+      }
+    std::string message = "postscript_xobjects does not contain: " + name;
+    LOG_S(ERROR) << message;
+    throw std::logic_error(message);
   }
 
   xobject_subtype_name pdf_resource<PAGE_XOBJECTS>::detect_subtype(QPDFObjectHandle& qpdf_obj)

@@ -16,8 +16,8 @@ namespace pdflib
               pdf_resource<PAGE_SHAPES>& page_shapes_,
               pdf_resource<PAGE_IMAGES>& page_images_,
 
-              pdf_resource<PAGE_FONTS>& page_fonts_,
-              pdf_resource<PAGE_GRPHS>& page_grphs_);
+              std::shared_ptr<pdf_resource<PAGE_FONTS>> page_fonts_,
+              std::shared_ptr<pdf_resource<PAGE_GRPHS>> page_grphs_);
 
     pdf_state(const pdf_state<GLOBAL>& other);
 
@@ -41,8 +41,8 @@ namespace pdflib
     pdf_resource<PAGE_SHAPES>& page_shapes;
     pdf_resource<PAGE_IMAGES>& page_images;
 
-    pdf_resource<PAGE_FONTS>& page_fonts;
-    pdf_resource<PAGE_GRPHS>& page_grphs;
+    std::shared_ptr<pdf_resource<PAGE_FONTS>> page_fonts;
+    std::shared_ptr<pdf_resource<PAGE_GRPHS>> page_grphs;
 
     std::array<double, 9> trafo_matrix;
 
@@ -58,8 +58,8 @@ namespace pdflib
                                pdf_resource<PAGE_SHAPES>& page_shapes_,
                                pdf_resource<PAGE_IMAGES>& page_images_,
 
-                               pdf_resource<PAGE_FONTS>& page_fonts_,
-                               pdf_resource<PAGE_GRPHS>& page_grphs_):
+                               std::shared_ptr<pdf_resource<PAGE_FONTS>> page_fonts_,
+                               std::shared_ptr<pdf_resource<PAGE_GRPHS>> page_grphs_):
     config(config_),
 
     page_cells(page_cells_),

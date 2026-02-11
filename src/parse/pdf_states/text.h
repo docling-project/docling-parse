@@ -15,7 +15,7 @@ namespace pdflib
               const pdf_state<GRPH>& grph_state_,
               std::array<double, 9>& trafo_matrix_,
               pdf_resource<PAGE_CELLS>& page_cells_,
-              pdf_resource<PAGE_FONTS>& page_fonts_);
+              std::shared_ptr<pdf_resource<PAGE_FONTS>> page_fonts_);
 
     ~pdf_state();
 
@@ -92,7 +92,7 @@ namespace pdflib
     std::array<double, 9>& trafo_matrix;
 
     pdf_resource<PAGE_CELLS>& page_cells;
-    pdf_resource<PAGE_FONTS>& page_fonts;
+    std::shared_ptr<pdf_resource<PAGE_FONTS>> page_fonts;
     
     std::array<double, 9> text_matrix;
     std::array<double, 9> line_matrix;
@@ -118,7 +118,7 @@ namespace pdflib
                              const pdf_state<GRPH>& grph_state_,
                              std::array<double, 9>&    trafo_matrix_,
                              pdf_resource<PAGE_CELLS>& page_cells_,
-                             pdf_resource<PAGE_FONTS>& page_fonts_):
+                             std::shared_ptr<pdf_resource<PAGE_FONTS>> page_fonts_):
     config(config_),
     grph_state(grph_state_),
 
@@ -275,11 +275,11 @@ namespace pdflib
     font_name = instructions[0].to_utf8_string();
     font_size = instructions[1].to_double();
     
-    if(page_fonts.count(font_name) == 0)
+    if(page_fonts->count(font_name) == 0)
       {
         LOG_S(ERROR) << "unknown page-font: '" << font_name << "'";
 
-	auto font_keys = page_fonts.keys();
+	auto font_keys = page_fonts->keys();
 	LOG_S(WARNING) << "known fonts: " << font_keys.size();
 	for(auto key:font_keys)
 	  {
@@ -355,7 +355,7 @@ namespace pdflib
   {
     //LOG_S(INFO) << __FUNCTION__;
 
-    auto& font = page_fonts[font_name];
+    auto& font = (*page_fonts)[font_name];
 
     std::vector<std::pair<uint32_t, std::string> > items = analyse_string(instruction);
 
@@ -572,7 +572,7 @@ namespace pdflib
   {
     //LOG_S(INFO) << __FUNCTION__ << " fontname: " << font_name << ", key: " << instruction.key << " => val: " << instruction.val;
 
-    auto& font = page_fonts[font_name];
+    auto& font = (*page_fonts)[font_name];
 
     font_encoding_name encoding = font.get_encoding();
 

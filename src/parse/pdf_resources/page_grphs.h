@@ -12,6 +12,7 @@ namespace pdflib
   public:
 
     pdf_resource();
+    pdf_resource(std::shared_ptr<pdf_resource<PAGE_GRPHS>> parent);
     ~pdf_resource();
 
     nlohmann::json get();
@@ -19,7 +20,7 @@ namespace pdflib
     size_t size();
 
     int count(std::string key);
-    
+
     std::set<std::string> keys();
 
     pdf_resource<PAGE_GRPH>& operator[](std::string fort_name);
@@ -29,10 +30,16 @@ namespace pdflib
 
   private:
 
+    std::shared_ptr<pdf_resource<PAGE_GRPHS>> parent_;
     std::map<std::string, pdf_resource<PAGE_GRPH> > page_grphs;
   };
 
-  pdf_resource<PAGE_GRPHS>::pdf_resource()
+  pdf_resource<PAGE_GRPHS>::pdf_resource():
+    parent_(nullptr)
+  {}
+
+  pdf_resource<PAGE_GRPHS>::pdf_resource(std::shared_ptr<pdf_resource<PAGE_GRPHS>> parent):
+    parent_(parent)
   {}
 
   pdf_resource<PAGE_GRPHS>::~pdf_resource()
@@ -58,12 +65,25 @@ namespace pdflib
 
   int pdf_resource<PAGE_GRPHS>::count(std::string key)
   {
-    return page_grphs.count(key);
+    if(page_grphs.count(key)==1)
+      {
+        return 1;
+      }
+    if(parent_)
+      {
+        return parent_->count(key);
+      }
+    return 0;
   }
 
   std::set<std::string> pdf_resource<PAGE_GRPHS>::keys()
   {
     std::set<std::string> keys_;
+
+    if(parent_)
+      {
+        keys_ = parent_->keys();
+      }
 
     for(auto itr=page_grphs.begin(); itr!=page_grphs.end(); itr++)
       {
@@ -79,22 +99,23 @@ namespace pdflib
       {
         return page_grphs[grph_name];
       }
-    else
-      {
-        std::stringstream ss;
-        for(auto itr=page_grphs.begin(); itr!=page_grphs.end(); itr++)
-	  {
-	    ss << itr->first << ", ";
-	  }
 
-	{
-	  std::stringstream ss;
-	  ss << "graphics state with name '" << grph_name << "' is not known: " << ss.str();
-	  
-	  LOG_S(ERROR) << ss.str();
-	  throw std::logic_error(ss.str());
-	}
+    if(parent_)
+      {
+        return (*parent_)[grph_name];
       }
+
+    {
+      std::stringstream ss;
+      ss << "graphics state with name '" << grph_name << "' is not known: ";
+      for(auto itr=page_grphs.begin(); itr!=page_grphs.end(); itr++)
+        {
+          ss << itr->first << ", ";
+        }
+
+      LOG_S(ERROR) << ss.str();
+      throw std::logic_error(ss.str());
+    }
 
     return (page_grphs.begin()->second);
   }
