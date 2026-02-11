@@ -28,10 +28,6 @@ namespace pdflib
     void cm(std::vector<qpdf_instruction>& instructions);
     void cm(std::array<double, 6> matrix);
 
-    // void Do_image(pdf_resource<PAGE_XOBJECT_IMAGE>& xobj);
-
-    // void Do_form(pdf_resource<PAGE_XOBJECT_FORM>& xobj);
-
   private:
 
     bool verify(std::vector<qpdf_instruction>& instructions,
@@ -186,76 +182,6 @@ namespace pdflib
     trafo_matrix[6] = matrix[4] * tmp[0] + matrix[5] * tmp[3] + tmp[6];
     trafo_matrix[7] = matrix[4] * tmp[1] + matrix[5] * tmp[4] + tmp[7];
   }
-
-  /*
-  void pdf_state<GLOBAL>::Do_image(pdf_resource<PAGE_XOBJECT_IMAGE>& xobj)
-  {
-    if(not config.keep_bitmaps) { return; }
-
-    pdf_resource<PAGE_IMAGE> image;
-    {
-      // FIXME clean up this crap
-      std::array<double, 9> ctm = trafo_matrix;
-
-      std::array<double, 3> u_0 = {{0, 0, 1}};
-      std::array<double, 3> u_1 = {{0, 1, 1}};
-      std::array<double, 3> u_2 = {{1, 1, 1}};
-      std::array<double, 3> u_3 = {{1, 0, 1}};
-
-      std::array<double, 3> d_0 = {{0, 0, 0}};
-      std::array<double, 3> d_1 = {{0, 0, 0}};
-      std::array<double, 3> d_2 = {{0, 0, 0}};
-      std::array<double, 3> d_3 = {{0, 0, 0}};
-
-      // p 120
-      for(int j=0; j<3; j++){
-        for(int i=0; i<3; i++){
-          d_0[j] += u_0[i]*ctm[i*3+j] ;
-          d_1[j] += u_1[i]*ctm[i*3+j] ;
-          d_2[j] += u_2[i]*ctm[i*3+j] ;
-          d_3[j] += u_3[i]*ctm[i*3+j] ;
-        }
-      }
-
-      std::array<double, 4> img_bbox;
-
-      img_bbox[0] = std::min(std::min(d_0[0], d_1[0]),
-                             std::min(d_2[0], d_3[0]));
-      img_bbox[2] = std::max(std::max(d_0[0], d_1[0]),
-                             std::max(d_2[0], d_3[0]));
-
-      img_bbox[1] = std::min(std::min(d_0[1], d_1[1]),
-                             std::min(d_2[1], d_3[1]));
-      img_bbox[3] = std::max(std::max(d_0[1], d_1[1]),
-                             std::max(d_2[1], d_3[1]));
-
-      image.x0 = img_bbox[0];
-      image.y0 = img_bbox[1];
-      image.x1 = img_bbox[2];
-      image.y1 = img_bbox[3];
-    }
-
-    // Populate image properties from the XObject
-    {
-      image.xobject_key       = xobj.get_key();
-      image.image_width       = xobj.get_image_width();
-      image.image_height      = xobj.get_image_height();
-      image.bits_per_component = xobj.get_bits_per_component();
-      image.color_space       = xobj.get_color_space();
-      image.intent            = xobj.get_intent();
-      image.filters              = xobj.get_filters();
-      image.raw_stream_data      = xobj.get_raw_stream_data();
-      image.decoded_stream_data  = xobj.get_decoded_stream_data();
-
-      // propagate PDF semantics for JPEG correction
-      image.decode_present = xobj.has_decode_array();
-      image.decode_array   = xobj.get_decode_array();
-      image.image_mask     = xobj.is_image_mask();
-    }
-
-    page_images.push_back(image);
-  }
-  */
 
 }
 

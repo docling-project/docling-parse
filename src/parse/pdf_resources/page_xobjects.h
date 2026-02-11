@@ -66,8 +66,8 @@ namespace pdflib
 
   bool pdf_resource<PAGE_XOBJECTS>::has(std::string name)
   {
-    return (image_xobjects.count(name)==1 ||
-            form_xobjects.count(name)==1 ||
+    return (image_xobjects.count(name)==1 or
+            form_xobjects.count(name)==1 or
             postscript_xobjects.count(name)==1);
   }
 

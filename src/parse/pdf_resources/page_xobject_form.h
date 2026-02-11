@@ -9,6 +9,10 @@ namespace pdflib
   template<>
   class pdf_resource<PAGE_XOBJECT_FORM>
   {
+    inline static const std::vector<std::string> FONTS_KEY = {"/Resources", "/Font"};
+    inline static const std::vector<std::string> GRPHS_KEY = {"/Resources", "/ExtGState"};
+    inline static const std::vector<std::string> XOBJS_KEY = {"/Resources", "/XObject"};
+    
   public:
 
     pdf_resource();
@@ -27,6 +31,10 @@ namespace pdflib
     std::array<double, 6> get_matrix();
     std::array<double, 4> get_bbox();
 
+    bool has_fonts();
+    bool has_grphs();
+    bool has_xobjects();
+    
     std::pair<nlohmann::json, QPDFObjectHandle> get_fonts();
     std::pair<nlohmann::json, QPDFObjectHandle> get_grphs();
     std::pair<nlohmann::json, QPDFObjectHandle> get_xobjects();
@@ -37,9 +45,9 @@ namespace pdflib
 
     void parse();
 
-    void init_matrix();
+    void parse_matrix();
 
-    void init_bbox();
+    void parse_bbox();
 
   private:
 
@@ -99,8 +107,8 @@ namespace pdflib
       json_xobject_dict = to_json(qpdf_xobject_dict);
     }
 
-    init_matrix();
-    init_bbox();
+    parse_matrix();
+    parse_bbox();
   }
 
   std::array<double, 6> pdf_resource<PAGE_XOBJECT_FORM>::get_matrix()
@@ -113,15 +121,29 @@ namespace pdflib
     return bbox;
   }
 
+  bool pdf_resource<PAGE_XOBJECT_FORM>::has_fonts()
+  {
+    return utils::json::has(FONTS_KEY, json_xobject_dict);
+  }
+
+  bool pdf_resource<PAGE_XOBJECT_FORM>::has_grphs()
+  {
+    return utils::json::has(GRPHS_KEY, json_xobject_dict);
+  }
+
+  bool pdf_resource<PAGE_XOBJECT_FORM>::has_xobjects()
+  {
+    return utils::json::has(XOBJS_KEY, json_xobject_dict);
+  }
+
   std::pair<nlohmann::json, QPDFObjectHandle> pdf_resource<PAGE_XOBJECT_FORM>::get_fonts()
   {
     std::pair<nlohmann::json, QPDFObjectHandle> fonts;
 
-    std::vector<std::string> keys = {"/Resources", "/Font"};
-    if(utils::json::has(keys, json_xobject_dict))
+    if(utils::json::has(FONTS_KEY, json_xobject_dict))
       {
-        fonts.first  = utils::json::get(keys, json_xobject_dict);
-        fonts.second = qpdf_xobject_dict.getKey(keys[0]).getKey(keys[1]);
+        fonts.first  = utils::json::get(FONTS_KEY, json_xobject_dict);
+        fonts.second = qpdf_xobject_dict.getKey(FONTS_KEY[0]).getKey(FONTS_KEY[1]);
       }
     else
       {
@@ -135,11 +157,10 @@ namespace pdflib
   {
     std::pair<nlohmann::json, QPDFObjectHandle> grphs;
 
-    std::vector<std::string> keys = {"/Resources", "/ExtGState"};
-    if(utils::json::has(keys, json_xobject_dict))
+    if(utils::json::has(GRPHS_KEY, json_xobject_dict))
       {
-        grphs.first  = utils::json::get(keys, json_xobject_dict);
-        grphs.second = qpdf_xobject_dict.getKey(keys[0]).getKey(keys[1]);
+        grphs.first  = utils::json::get(GRPHS_KEY, json_xobject_dict);
+        grphs.second = qpdf_xobject_dict.getKey(GRPHS_KEY[0]).getKey(GRPHS_KEY[1]);
       }
     else
       {
@@ -153,11 +174,10 @@ namespace pdflib
   {
     std::pair<nlohmann::json, QPDFObjectHandle> xobjects;
 
-    std::vector<std::string> keys = {"/Resources", "/XObject"};
-    if(utils::json::has(keys, json_xobject_dict))
+    if(utils::json::has(XOBJS_KEY, json_xobject_dict))
       {
-        xobjects.first  = utils::json::get(keys, json_xobject_dict);
-        xobjects.second = qpdf_xobject_dict.getKey(keys[0]).getKey(keys[1]);
+        xobjects.first  = utils::json::get(XOBJS_KEY, json_xobject_dict);
+        xobjects.second = qpdf_xobject_dict.getKey(XOBJS_KEY[0]).getKey(XOBJS_KEY[1]);
       }
     else
       {
@@ -191,8 +211,10 @@ namespace pdflib
     return stream;
   }
 
-  void pdf_resource<PAGE_XOBJECT_FORM>::init_matrix()
+  void pdf_resource<PAGE_XOBJECT_FORM>::parse_matrix()
   {
+    LOG_S(INFO) << __FUNCTION__;
+    
     matrix = {1., 0., 0., 1., 0., 0.};
 
     std::vector<std::string> keys = {"/Matrix"};
@@ -211,6 +233,14 @@ namespace pdflib
           {
             matrix[l] = json_matrix[l].get<double>();
           }
+
+	LOG_S(INFO) << "matrix: ["
+		    << matrix.at(0) << ", "
+		    << matrix.at(1) << ", "
+		    << matrix.at(2) << ", "
+		    << matrix.at(3) << ", "
+		    << matrix.at(4) << ", "
+		    << matrix.at(5) << "]";	
       }
     else
       {
@@ -218,8 +248,10 @@ namespace pdflib
       }
   }
 
-  void pdf_resource<PAGE_XOBJECT_FORM>::init_bbox()
+  void pdf_resource<PAGE_XOBJECT_FORM>::parse_bbox()
   {
+    LOG_S(INFO) << __FUNCTION__;
+    
     bbox = {0., 0., 0., 0.};
 
     std::vector<std::string> keys = {"/BBox"};
@@ -238,10 +270,16 @@ namespace pdflib
           {
             bbox[l] = json_bbox[l].get<double>();
           }
+
+	LOG_S(INFO) << "bbox: ["
+		    << bbox.at(0) << ", "
+		    << bbox.at(1) << ", "
+		    << bbox.at(2) << ", "
+		    << bbox.at(3) << "]";		
       }
     else
       {
-        LOG_S(WARNING) << "no '/BBox' key detected";
+        LOG_S(ERROR) << "no '/BBox' key detected and it is required!";
       }
   }
 
