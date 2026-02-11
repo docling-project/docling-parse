@@ -21,7 +21,7 @@ namespace pdflib
 
     int count(std::string key);
 
-    std::set<std::string> keys();
+    std::unordered_set<std::string> keys();
 
     pdf_resource<PAGE_GRPH>& operator[](std::string fort_name);
 
@@ -31,7 +31,7 @@ namespace pdflib
   private:
 
     std::shared_ptr<pdf_resource<PAGE_GRPHS>> parent_;
-    std::map<std::string, pdf_resource<PAGE_GRPH> > page_grphs;
+    std::unordered_map<std::string, pdf_resource<PAGE_GRPH> > page_grphs;
   };
 
   pdf_resource<PAGE_GRPHS>::pdf_resource():
@@ -76,9 +76,9 @@ namespace pdflib
     return 0;
   }
 
-  std::set<std::string> pdf_resource<PAGE_GRPHS>::keys()
+  std::unordered_set<std::string> pdf_resource<PAGE_GRPHS>::keys()
   {
-    std::set<std::string> keys_;
+    std::unordered_set<std::string> keys_;
 
     if(parent_)
       {

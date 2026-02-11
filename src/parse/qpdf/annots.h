@@ -6,6 +6,7 @@
 #include <sstream>
 #include <iostream>
 #include <iomanip>
+#include <unordered_set>
 
 #include <nlohmann/json.hpp>
 #include <qpdf/QPDF.hh>
@@ -14,7 +15,7 @@ namespace pdflib
 {
   // FIXME: add a begin time to cap the max time spent in this routine
   nlohmann::json extract_annots_in_json(QPDFObjectHandle obj,
-                                        std::set<std::string> prev_objs={},
+                                        std::unordered_set<std::string> prev_objs={},
                                         int level=0, int max_level=16)
   {
     LOG_S(INFO) << __FUNCTION__;

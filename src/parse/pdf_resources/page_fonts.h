@@ -21,7 +21,7 @@ namespace pdflib
 
     int count(std::string key);
 
-    std::set<std::string> keys();
+    std::unordered_set<std::string> keys();
 
     pdf_resource<PAGE_FONT>& operator[](std::string fort_name);
 
@@ -32,7 +32,7 @@ namespace pdflib
   private:
 
     std::shared_ptr<pdf_resource<PAGE_FONTS>> parent_;
-    std::map<std::string, pdf_resource<PAGE_FONT> > page_fonts;
+    std::unordered_map<std::string, pdf_resource<PAGE_FONT> > page_fonts;
   };
 
   pdf_resource<PAGE_FONTS>::pdf_resource():
@@ -77,9 +77,9 @@ namespace pdflib
     return 0;
   }
 
-  std::set<std::string> pdf_resource<PAGE_FONTS>::keys()
+  std::unordered_set<std::string> pdf_resource<PAGE_FONTS>::keys()
   {
-    std::set<std::string> keys_;
+    std::unordered_set<std::string> keys_;
 
     if(parent_)
       {

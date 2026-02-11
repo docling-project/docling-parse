@@ -29,7 +29,7 @@ namespace pdflib
 
     void print();
 
-    std::set<std::string> get_unknown_operators();
+    std::unordered_set<std::string> get_unknown_operators();
 
     // decode the qpdf-stream
     void decode(QPDFObjectHandle& content);
@@ -84,7 +84,7 @@ namespace pdflib
 
     pdf_timings& timings;
 
-    std::set<std::string> unknown_operators;
+    std::unordered_set<std::string> unknown_operators;
 
     std::vector<qpdf_instruction> stream;
     std::vector<pdf_state<GLOBAL> > stack;
@@ -141,7 +141,7 @@ namespace pdflib
       }
   }
 
-  std::set<std::string> pdf_decoder<STREAM>::get_unknown_operators()
+  std::unordered_set<std::string> pdf_decoder<STREAM>::get_unknown_operators()
   {
     LOG_S(INFO) << __FUNCTION__;
     return unknown_operators;

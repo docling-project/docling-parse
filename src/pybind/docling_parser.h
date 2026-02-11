@@ -88,7 +88,7 @@ namespace docling
     std::string pdf_resources_dir;
 
     // in the serial case
-    std::map<std::string, decoder_ptr_type> key2doc;
+    std::unordered_map<std::string, decoder_ptr_type> key2doc;
 
     // in the threaded case
     /*
@@ -118,7 +118,7 @@ namespace docling
     nlohmann::json data = nlohmann::json::object({});
     data[RESOURCE_DIR_KEY] = pdf_resources_dir;
 
-    std::map<std::string, double> timings = {};
+    std::unordered_map<std::string, double> timings = {};
     pdflib::pdf_resource<pdflib::PAGE_FONT>::initialise(data, timings);
   }
 
@@ -136,7 +136,7 @@ namespace docling
     nlohmann::json data = nlohmann::json::object({});
     data[RESOURCE_DIR_KEY] = pdf_resources_dir;
 
-    std::map<std::string, double> timings = {};
+    std::unordered_map<std::string, double> timings = {};
     pdflib::pdf_resource<pdflib::PAGE_FONT>::initialise(data, timings);
   }
 

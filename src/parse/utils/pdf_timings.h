@@ -3,11 +3,11 @@
 #ifndef PDF_TIMINGS_H
 #define PDF_TIMINGS_H
 
-#include <map>
-#include <set>
 #include <string>
 #include <vector>
 #include <numeric>
+#include <unordered_map>
+#include <unordered_set>
 
 namespace pdflib
 {
@@ -15,7 +15,7 @@ namespace pdflib
   /**
    * @brief A class for tracking timing measurements during PDF parsing.
    *
-   * Unlike a simple std::map<std::string, double>, this class stores all timing
+   * Unlike a simple std::unordered_map<std::string, double>, this class stores all timing
    * measurements as vectors, allowing the same key to be recorded multiple times
    * (e.g., when a task is repeated). This provides more accurate profiling data.
    */
@@ -65,7 +65,7 @@ namespace pdflib
     /**
      * @brief Get all static timing keys.
      */
-    static const std::set<std::string>& get_static_keys();
+    static const std::unordered_set<std::string>& get_static_keys();
 
     /**
      * @brief Check if a key is a static (constant) timing key.
@@ -150,25 +150,25 @@ namespace pdflib
     /**
      * @brief Convert to a map of sums for backward compatibility.
      */
-    std::map<std::string, double> to_sum_map() const;
+    std::unordered_map<std::string, double> to_sum_map() const;
 
     /**
      * @brief Get the raw internal map for direct access.
      */
-    const std::map<std::string, std::vector<double>>& get_raw_data() const;
+    const std::unordered_map<std::string, std::vector<double>>& get_raw_data() const;
 
     /**
      * @brief Get only the static timing keys that are present.
      */
-    std::map<std::string, double> get_static_timings() const;
+    std::unordered_map<std::string, double> get_static_timings() const;
 
     /**
      * @brief Get only the dynamic timing keys that are present.
      */
-    std::map<std::string, double> get_dynamic_timings() const;
+    std::unordered_map<std::string, double> get_dynamic_timings() const;
 
   private:
-    std::map<std::string, std::vector<double>> timings_;
+    std::unordered_map<std::string, std::vector<double>> timings_;
   };
 
   // Implementation
@@ -254,9 +254,9 @@ namespace pdflib
       }
   }
 
-  std::map<std::string, double> pdf_timings::to_sum_map() const
+  std::unordered_map<std::string, double> pdf_timings::to_sum_map() const
   {
-    std::map<std::string, double> result;
+    std::unordered_map<std::string, double> result;
     for (const auto& pair : timings_)
       {
         result[pair.first] = std::accumulate(pair.second.begin(), pair.second.end(), 0.0);
@@ -264,14 +264,14 @@ namespace pdflib
     return result;
   }
 
-  const std::map<std::string, std::vector<double>>& pdf_timings::get_raw_data() const
+  const std::unordered_map<std::string, std::vector<double>>& pdf_timings::get_raw_data() const
   {
     return timings_;
   }
 
-  std::map<std::string, double> pdf_timings::get_static_timings() const
+  std::unordered_map<std::string, double> pdf_timings::get_static_timings() const
   {
-    std::map<std::string, double> result;
+    std::unordered_map<std::string, double> result;
     for (const auto& pair : timings_)
       {
         if (is_static_key(pair.first))
@@ -282,9 +282,9 @@ namespace pdflib
     return result;
   }
 
-  std::map<std::string, double> pdf_timings::get_dynamic_timings() const
+  std::unordered_map<std::string, double> pdf_timings::get_dynamic_timings() const
   {
-    std::map<std::string, double> result;
+    std::unordered_map<std::string, double> result;
     for (const auto& pair : timings_)
       {
         if (!is_static_key(pair.first))
@@ -331,9 +331,9 @@ namespace pdflib
   const std::string pdf_timings::KEY_CMAP_PARSE_ENDBFRANGE = " cmap-parse-endbfrange";
   const std::string pdf_timings::KEY_CMAP_PARSE_ENDCODESPACERANGE = " cmap-parse-endcodespacerange";
 
-  const std::set<std::string>& pdf_timings::get_static_keys()
+  const std::unordered_set<std::string>& pdf_timings::get_static_keys()
   {
-    static std::set<std::string> static_keys = {
+    static std::unordered_set<std::string> static_keys = {
       KEY_DECODE_PAGE,
       KEY_DECODE_DIMENSIONS,
       KEY_DECODE_RESOURCES,

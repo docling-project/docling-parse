@@ -33,9 +33,10 @@ namespace pdflib
     static xobject_subtype_name detect_subtype(QPDFObjectHandle& qpdf_obj);
 
     std::shared_ptr<pdf_resource<PAGE_XOBJECTS>> parent_;
-    std::map<std::string, pdf_resource<PAGE_XOBJECT_IMAGE> >      image_xobjects;
-    std::map<std::string, pdf_resource<PAGE_XOBJECT_FORM> >       form_xobjects;
-    std::map<std::string, pdf_resource<PAGE_XOBJECT_POSTSCRIPT> > postscript_xobjects;
+    
+    std::unordered_map<std::string, pdf_resource<PAGE_XOBJECT_IMAGE> >      image_xobjects;
+    std::unordered_map<std::string, pdf_resource<PAGE_XOBJECT_FORM> >       form_xobjects;
+    std::unordered_map<std::string, pdf_resource<PAGE_XOBJECT_POSTSCRIPT> > postscript_xobjects;
   };
 
   pdf_resource<PAGE_XOBJECTS>::pdf_resource():

@@ -5,8 +5,7 @@
 
 #include <fstream>
 
-#include <set>
-#include <map>
+#include <unordered_set>
 #include <unordered_map>
 
 namespace pdflib
@@ -42,7 +41,7 @@ namespace pdflib
 
     bool initialized;
     
-    std::set<std::string> unknown_glyphs;
+    std::unordered_set<std::string> unknown_glyphs;
 
     std::unordered_map<std::string, std::string> name_to_code;
     std::unordered_map<std::string, std::string> name_to_utf8;

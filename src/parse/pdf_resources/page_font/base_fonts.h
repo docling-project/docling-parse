@@ -3,8 +3,8 @@
 #ifndef PDF_PAGE_FONT_BASE_FONTS_H
 #define PDF_PAGE_FONT_BASE_FONTS_H
 
-#include <set>
-#include <map>
+#include <unordered_set>
+#include <unordered_map>
 
 //#include <filesystem>
 
@@ -45,9 +45,9 @@ namespace pdflib
 
     bool initialized;
     
-    std::set<std::string> core_14_fonts;
+    std::unordered_set<std::string> core_14_fonts;
 
-    std::map<std::string, base_font_type> name_to_basefont;
+    std::unordered_map<std::string, base_font_type> name_to_basefont;
   };
 
   base_fonts::base_fonts():

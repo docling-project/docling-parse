@@ -42,7 +42,7 @@ namespace plib
 
     nlohmann::json input_file;
 
-    std::map<std::string, double> timings;
+    std::unordered_map<std::string, double> timings;
 
     // Persisted document decoder (from last parse_file call)
     std::shared_ptr<pdflib::pdf_decoder<pdflib::DOCUMENT>> document_decoder;
