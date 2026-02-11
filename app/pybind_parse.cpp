@@ -248,6 +248,8 @@ PYBIND11_MODULE(pdf_parsers, m) {
   m.attr("TIMING_KEY_CREATE_WORD_CELLS") = pdflib::pdf_timings::KEY_CREATE_WORD_CELLS;
   m.attr("TIMING_KEY_CREATE_LINE_CELLS") = pdflib::pdf_timings::KEY_CREATE_LINE_CELLS;
   m.attr("TIMING_KEY_DECODE_FONTS_TOTAL") = pdflib::pdf_timings::KEY_DECODE_FONTS_TOTAL;
+  m.attr("TIMING_KEY_DECODE_XOBJECTS_TOTAL") = pdflib::pdf_timings::KEY_DECODE_XOBJECTS_TOTAL;
+  m.attr("TIMING_KEY_DECODE_GRPHS_TOTAL") = pdflib::pdf_timings::KEY_DECODE_GRPHS_TOTAL;
 
   // Additional decode_page step keys
   m.attr("TIMING_KEY_TO_JSON_PAGE") = pdflib::pdf_timings::KEY_TO_JSON_PAGE;
@@ -261,6 +263,8 @@ PYBIND11_MODULE(pdf_parsers, m) {
   m.attr("TIMING_KEY_DECODE_DOCUMENT") = pdflib::pdf_timings::KEY_DECODE_DOCUMENT;
 
   m.attr("TIMING_PREFIX_DECODE_FONT") = pdflib::pdf_timings::PREFIX_DECODE_FONT;
+  m.attr("TIMING_PREFIX_DECODE_XOBJECT") = pdflib::pdf_timings::PREFIX_DECODE_XOBJECT;
+  m.attr("TIMING_PREFIX_DECODE_GRPH") = pdflib::pdf_timings::PREFIX_DECODE_GRPH;
   m.attr("TIMING_PREFIX_DECODING_PAGE") = pdflib::pdf_timings::PREFIX_DECODING_PAGE;
   m.attr("TIMING_PREFIX_DECODE_PAGE") = pdflib::pdf_timings::PREFIX_DECODE_PAGE;
 

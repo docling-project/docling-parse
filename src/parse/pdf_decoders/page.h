@@ -441,7 +441,7 @@ namespace pdflib
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    page_grphs->set(json_grphs, qpdf_grphs);
+    page_grphs->set(json_grphs, qpdf_grphs, timings);
   }
 
   void pdf_decoder<PAGE>::decode_fonts()
@@ -460,7 +460,7 @@ namespace pdflib
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    page_xobjects->set(json_xobjects, qpdf_xobjects);
+    page_xobjects->set(json_xobjects, qpdf_xobjects, timings);
   }
 
   void pdf_decoder<PAGE>::decode_contents(const decode_page_config& config)

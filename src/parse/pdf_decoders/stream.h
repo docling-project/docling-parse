@@ -375,6 +375,17 @@ namespace pdflib
 
     pdf_resource<PAGE_XOBJECT_FORM>& xobj = page_xobjects->get_form(xobj_name);
 
+    std::array<double, 4> bbox = xobj.get_bbox();
+    LOG_S(INFO) << "form bbox: ["
+		<< bbox.at(0) << ", "
+      		<< bbox.at(1) << ", "
+      		<< bbox.at(2) << ", "
+      		<< bbox.at(3) << "]";
+    
+    // check if (1) we keep data outside the page_boundary and
+    // (2) if bbox is outside of page_boundary
+    // please implement
+    
     // create child resources with parent link (no deep copy)
     auto page_fonts_    = std::make_shared<pdf_resource<PAGE_FONTS>>(page_fonts);
     auto page_grphs_    = std::make_shared<pdf_resource<PAGE_GRPHS>>(page_grphs);
@@ -391,13 +402,13 @@ namespace pdflib
       if(xobj.has_grphs())
         {
           std::pair<nlohmann::json, QPDFObjectHandle> xobj_grphs = xobj.get_grphs();
-          page_grphs_->set(xobj_grphs.first, xobj_grphs.second/*, timings*/);
+          page_grphs_->set(xobj_grphs.first, xobj_grphs.second, timings);
         }
 
       if(xobj.has_xobjects())
         {
           std::pair<nlohmann::json, QPDFObjectHandle> xobj_xobjects = xobj.get_xobjects();
-          page_xobjects_->set(xobj_xobjects.first, xobj_xobjects.second/*, timings*/);
+          page_xobjects_->set(xobj_xobjects.first, xobj_xobjects.second, timings);
         }
     }
 

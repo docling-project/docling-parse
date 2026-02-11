@@ -26,7 +26,8 @@ namespace pdflib
     pdf_resource<PAGE_XOBJECT_POSTSCRIPT>& get_postscript(std::string name);
 
     void set(nlohmann::json&   json_xobjects,
-             QPDFObjectHandle& qpdf_xobjects_);
+             QPDFObjectHandle& qpdf_xobjects_,
+             pdf_timings& timings);
 
   private:
 
@@ -184,9 +185,12 @@ namespace pdflib
   }
 
   void pdf_resource<PAGE_XOBJECTS>::set(nlohmann::json&   json_xobjects,
-                                        QPDFObjectHandle& qpdf_xobjects)
+                                        QPDFObjectHandle& qpdf_xobjects,
+                                        pdf_timings& timings)
   {
     LOG_S(INFO) << __FUNCTION__;
+
+    double total_xobject_time = 0.0;
 
     int cnt = 0;
     int len = json_xobjects.size();
@@ -200,6 +204,8 @@ namespace pdflib
 
 	QPDFObjectHandle qpdf_obj = qpdf_xobjects.getKey(key);
 	xobject_subtype_name subtype = detect_subtype(qpdf_obj);
+
+	utils::timer xobject_timer;
 
 	switch(subtype)
 	  {
@@ -242,7 +248,13 @@ namespace pdflib
 	    }
 	    break;
 	  }
+
+	double xobject_time = xobject_timer.get_time();
+	total_xobject_time += xobject_time;
+	timings.add_timing(pdf_timings::PREFIX_DECODE_XOBJECT + key, xobject_time);
       }
+
+    timings.add_timing(pdf_timings::KEY_DECODE_XOBJECTS_TOTAL, total_xobject_time);
   }
 
 }

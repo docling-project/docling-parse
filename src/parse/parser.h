@@ -26,6 +26,9 @@ namespace plib
     // Export images from the last parsed document
     void export_images(std::string out_dir, int target_page=-1);
 
+    // Get timings from the last parsed document
+    std::unordered_map<std::string, double> get_timings() const;
+
   private:
 
     void execute_parse(pdflib::decode_page_config page_config);
@@ -86,6 +89,15 @@ namespace plib
       }
   }
   
+  std::unordered_map<std::string, double> parser::get_timings() const
+  {
+    if(document_decoder)
+      {
+        return document_decoder->get_timings().to_sum_map();
+      }
+    return {};
+  }
+
   void parser::parse(std::string filename, pdflib::decode_page_config page_config)
   {
     if(not parse_input(filename))

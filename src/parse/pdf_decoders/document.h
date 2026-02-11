@@ -54,6 +54,8 @@ namespace pdflib
 
     bool unload_page(int page_number);
 
+    pdf_timings& get_timings() { return timings; }
+
   private:
 
     void update_qpdf_logger();

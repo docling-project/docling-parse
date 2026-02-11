@@ -46,6 +46,12 @@ namespace pdflib
     // Font timing keys
     static const std::string KEY_DECODE_FONTS_TOTAL;
 
+    // XObject timing keys
+    static const std::string KEY_DECODE_XOBJECTS_TOTAL;
+
+    // Grphs timing keys
+    static const std::string KEY_DECODE_GRPHS_TOTAL;
+
     // Document-level timing keys
     static const std::string KEY_PROCESS_DOCUMENT_FROM_FILE;
     static const std::string KEY_PROCESS_DOCUMENT_FROM_BYTESIO;
@@ -53,6 +59,8 @@ namespace pdflib
 
     // Dynamic key prefixes (for pattern matching)
     static const std::string PREFIX_DECODE_FONT;
+    static const std::string PREFIX_DECODE_XOBJECT;
+    static const std::string PREFIX_DECODE_GRPH;
     static const std::string PREFIX_DECODING_PAGE;
     static const std::string PREFIX_DECODE_PAGE;
 
@@ -309,6 +317,8 @@ namespace pdflib
   const std::string pdf_timings::KEY_CREATE_LINE_CELLS = "create_line_cells";
 
   const std::string pdf_timings::KEY_DECODE_FONTS_TOTAL = "decode_fonts_total";
+  const std::string pdf_timings::KEY_DECODE_XOBJECTS_TOTAL = "decode_xobjects_total";
+  const std::string pdf_timings::KEY_DECODE_GRPHS_TOTAL = "decode_grphs_total";
 
   // Additional decode_page step keys
   const std::string pdf_timings::KEY_TO_JSON_PAGE = "to_json_page";
@@ -322,6 +332,8 @@ namespace pdflib
   const std::string pdf_timings::KEY_DECODE_DOCUMENT = "decode_document";
 
   const std::string pdf_timings::PREFIX_DECODE_FONT = "decode_font: ";
+  const std::string pdf_timings::PREFIX_DECODE_XOBJECT = "decode_xobject: ";
+  const std::string pdf_timings::PREFIX_DECODE_GRPH = "decode_grph: ";
   const std::string pdf_timings::PREFIX_DECODING_PAGE = "decoding page ";
   const std::string pdf_timings::PREFIX_DECODE_PAGE = "decode_page ";
 
@@ -346,6 +358,8 @@ namespace pdflib
       KEY_CREATE_WORD_CELLS,
       KEY_CREATE_LINE_CELLS,
       KEY_DECODE_FONTS_TOTAL,
+      KEY_DECODE_XOBJECTS_TOTAL,
+      KEY_DECODE_GRPHS_TOTAL,
       KEY_TO_JSON_PAGE,
       KEY_EXTRACT_ANNOTS_JSON,
       KEY_ROTATE_CONTENTS,

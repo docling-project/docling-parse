@@ -26,7 +26,8 @@ namespace pdflib
     pdf_resource<PAGE_GRPH>& operator[](std::string fort_name);
 
     void set(nlohmann::json&   json_grphs,
-             QPDFObjectHandle& qpdf_grphs_);
+             QPDFObjectHandle& qpdf_grphs_,
+             pdf_timings& timings);
 
   private:
 
@@ -121,11 +122,14 @@ namespace pdflib
   }
   
   void pdf_resource<PAGE_GRPHS>::set(nlohmann::json&   json_grphs,
-                                     QPDFObjectHandle& qpdf_grphs)
+                                     QPDFObjectHandle& qpdf_grphs,
+                                     pdf_timings& timings)
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    for(auto& pair : json_grphs.items()) 
+    double total_grph_time = 0.0;
+
+    for(auto& pair : json_grphs.items())
       {
         std::string     key = pair.key();
         nlohmann::json& val = pair.value();
@@ -141,7 +145,9 @@ namespace pdflib
 	    //throw std::logic_error(message);
 	    continue;
 	  }
-	
+
+	utils::timer grph_timer;
+
         pdf_resource<PAGE_GRPH> page_grph;
         page_grph.set(key, val, qpdf_grphs.getKey(key));
 
@@ -152,7 +158,13 @@ namespace pdflib
           }
 
         page_grphs[key] = page_grph;
+
+	double grph_time = grph_timer.get_time();
+	total_grph_time += grph_time;
+	timings.add_timing(pdf_timings::PREFIX_DECODE_GRPH + key, grph_time);
       }
+
+    timings.add_timing(pdf_timings::KEY_DECODE_GRPHS_TOTAL, total_grph_time);
   }
 
 }

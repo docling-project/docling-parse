@@ -133,7 +133,7 @@ int main(int argc, char* argv[]) {
       page_config.keep_shapes = keep_shapes;
       page_config.keep_bitmaps = keep_bitmaps;
 
-      LOG_S(INFO) << "decode_page_config:\n" << page_config.to_string();
+      std::cout << "decode_page_config:\n" << page_config.to_string() << std::endl;
 
       utils::timer timer;
 
@@ -141,7 +141,17 @@ int main(int argc, char* argv[]) {
 
       parser.parse(config_file, page_config);
 
-      LOG_S(INFO) << "total-time [sec]: " << timer.get_time();
+      double total_time = timer.get_time();
+      std::cout << "\ntimings:\n";
+      for(const auto& [key, val] : parser.get_timings())
+        {
+          if(pdflib::pdf_timings::is_static_key(key))
+            {
+              std::cout << "  " << std::setw(48) << std::left << key << val << " [sec]\n";
+            }
+        }
+      std::cout << std::setw(48) << std::left << "  total-time" << total_time << " [sec]" << std::endl;
+
       return 0;
     }
 
@@ -191,14 +201,23 @@ int main(int argc, char* argv[]) {
       page_config.keep_shapes = keep_shapes;
       page_config.keep_bitmaps = keep_bitmaps;
 
-      LOG_S(INFO) << "decode_page_config:\n" << page_config.to_string();
+      std::cout << "decode_page_config:\n" << page_config.to_string() << std::endl;
 
       utils::timer timer;
 
       plib::parser parser(level);
       parser.parse(config, page_config);
 
-      LOG_S(INFO) << "total-time [sec]: " << timer.get_time();
+      double total_time = timer.get_time();
+      std::cout << "\ntimings:\n";
+      for(const auto& [key, val] : parser.get_timings())
+        {
+          if(pdflib::pdf_timings::is_static_key(key))
+            {
+              std::cout << "  " << std::setw(48) << std::left << key << val << " [sec]\n";
+            }
+        }
+      std::cout << std::setw(48) << std::left << "  total-time" << total_time << " [sec]" << std::endl;
 
       if (result.count("export-images")) {
         std::string images_dir = result["export-images"].as<std::string>();
