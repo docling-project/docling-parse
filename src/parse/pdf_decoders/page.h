@@ -123,6 +123,7 @@ namespace pdflib
 
   pdf_decoder<PAGE>::~pdf_decoder()
   {
+    LOG_S(INFO) << "releasing memory for pdf page decoder";    
   }
 
   int pdf_decoder<PAGE>::get_page_number()

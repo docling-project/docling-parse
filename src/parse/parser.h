@@ -226,7 +226,23 @@ namespace plib
         document_decoder->decode_document(page_numbers, page_config);
       }
 
-    nlohmann::json json_document = document_decoder->get();
+    // Build the output JSON from the typed API
+    nlohmann::json json_document;
+
+    json_document["info"]["filename"] = inp_filename;
+    json_document["info"]["#-pages"] = document_decoder->get_number_of_pages();
+    json_document["annotations"] = document_decoder->get_annotations();
+
+    nlohmann::json json_pages = nlohmann::json::array({});
+    for(int p = 0; p < document_decoder->get_number_of_pages(); ++p)
+      {
+	if(document_decoder->has_page_decoder(p))
+	  {
+	    auto page_dec = document_decoder->get_page_decoder(p);
+	    json_pages.push_back(page_dec->get(page_config));
+	  }
+      }
+    json_document["pages"] = json_pages;
 
     LOG_S(WARNING) << "writing to: " << out_filename;
 
