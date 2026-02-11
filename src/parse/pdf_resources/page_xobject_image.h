@@ -1,7 +1,7 @@
 //-*-C++-*-
 
-#ifndef PDF_PAGE_XOBJECT_RESOURCE_H
-#define PDF_PAGE_XOBJECT_RESOURCE_H
+#ifndef PDF_PAGE_XOBJECT_IMAGE_RESOURCE_H
+#define PDF_PAGE_XOBJECT_IMAGE_RESOURCE_H
 
 #include <parse/utils/jpeg/jpeg_utils.h>
 
@@ -9,7 +9,7 @@ namespace pdflib
 {
 
   template<>
-  class pdf_resource<PAGE_XOBJECT>
+  class pdf_resource<PAGE_XOBJECT_IMAGE>
   {
   public:
 
@@ -18,24 +18,14 @@ namespace pdflib
 
     nlohmann::json get();
 
-    xobject_subtype_name get_subtype();
-
-    std::array<double, 6> get_matrix();
-    //std::array<double, 4> get_bbox();
-
-    std::pair<nlohmann::json, QPDFObjectHandle> get_fonts();
-    std::pair<nlohmann::json, QPDFObjectHandle> get_grphs();
-
-    std::pair<nlohmann::json, QPDFObjectHandle> get_xobjects();
+    std::string              get_key() const;
+    xobject_subtype_name     get_subtype() const;
 
     void set(std::string      xobject_key_,
              nlohmann::json&  json_xobject_,
              QPDFObjectHandle qpdf_xobject_);
 
-    std::vector<qpdf_instruction> parse_stream();
-
-    // Image property getters (valid when subtype is XOBJECT_IMAGE)
-    std::string              get_key() const;
+    // Image property getters
     int                      get_image_width() const;
     int                      get_image_height() const;
     int                      get_bits_per_component() const;
@@ -67,10 +57,6 @@ namespace pdflib
 
     void parse();
 
-    void init_matrix();
-
-    void init_bbox();
-
     void init_image_properties();
 
     void init_filters();
@@ -87,10 +73,7 @@ namespace pdflib
 
     std::string xobject_key;
 
-    std::array<double, 6> matrix;
-    // std::array<double, 4> bbox;
-
-    // Image-specific properties (populated only for XOBJECT_IMAGE)
+    // Image-specific properties
     int              image_width;
     int              image_height;
     int              bits_per_component;
@@ -108,7 +91,7 @@ namespace pdflib
     bool image_mask = false;
   };
 
-  pdf_resource<PAGE_XOBJECT>::pdf_resource():
+  pdf_resource<PAGE_XOBJECT_IMAGE>::pdf_resource():
     image_width(0),
     image_height(0),
     bits_per_component(0),
@@ -119,103 +102,27 @@ namespace pdflib
     decoded_stream_data(nullptr)
   {}
 
-  pdf_resource<PAGE_XOBJECT>::~pdf_resource()
+  pdf_resource<PAGE_XOBJECT_IMAGE>::~pdf_resource()
   {}
 
-  nlohmann::json pdf_resource<PAGE_XOBJECT>::get()
+  nlohmann::json pdf_resource<PAGE_XOBJECT_IMAGE>::get()
   {
     return json_xobject;
   }
 
-  xobject_subtype_name pdf_resource<PAGE_XOBJECT>::get_subtype()
+  std::string pdf_resource<PAGE_XOBJECT_IMAGE>::get_key() const
   {
-    std::string subtype = json_xobject_dict["/Subtype"].get<std::string>();
-
-    if(subtype=="/Image")
-      {
-        return XOBJECT_IMAGE;
-      }
-    else if(subtype=="/Form")
-      {
-        return XOBJECT_FORM;
-      }
-    else
-      {
-        LOG_S(ERROR) << "unknown XObject subtype: " << subtype;
-        return XOBJECT_UNKNOWN;
-      }
+    return xobject_key;
   }
 
-
-  std::array<double, 6> pdf_resource<PAGE_XOBJECT>::get_matrix()
+  xobject_subtype_name pdf_resource<PAGE_XOBJECT_IMAGE>::get_subtype() const
   {
-    return matrix;
+    return XOBJECT_IMAGE;
   }
 
-  /*
-    std::array<double, 4> pdf_resource<PAGE_XOBJECT>::get_bbox()
-    {
-    return bbox;
-    }
-  */
-
-  std::pair<nlohmann::json, QPDFObjectHandle> pdf_resource<PAGE_XOBJECT>::get_fonts()
-  {
-    std::pair<nlohmann::json, QPDFObjectHandle> fonts;
-
-    std::vector<std::string> keys = {"/Resources", "/Font"};
-    if(utils::json::has(keys, json_xobject_dict))
-      {
-        fonts.first  = utils::json::get(keys, json_xobject_dict);
-        fonts.second = qpdf_xobject_dict.getKey(keys[0]).getKey(keys[1]);
-      }
-    else
-      {
-        LOG_S(WARNING) << "no '/Font' key detected: " << json_xobject_dict.dump(2);
-      }
-
-    return fonts;
-  }
-
-  std::pair<nlohmann::json, QPDFObjectHandle> pdf_resource<PAGE_XOBJECT>::get_grphs()
-  {
-    std::pair<nlohmann::json, QPDFObjectHandle> grphs;
-
-    std::vector<std::string> keys = {"/Resources", "/ExtGState"};
-    if(utils::json::has(keys, json_xobject_dict))
-      {
-        grphs.first  = utils::json::get(keys, json_xobject_dict);
-        grphs.second = qpdf_xobject_dict.getKey(keys[0]).getKey(keys[1]);
-      }
-    else
-      {
-        LOG_S(WARNING) << "no '/ExtGState' key detected: " << json_xobject_dict.dump(2);
-      }
-
-    return grphs;
-  }
-
-  std::pair<nlohmann::json, QPDFObjectHandle> pdf_resource<PAGE_XOBJECT>::get_xobjects()
-  {
-    std::pair<nlohmann::json, QPDFObjectHandle> xobjects;
-
-    std::vector<std::string> keys = {"/Resources", "/XObject"};
-    if(utils::json::has(keys, json_xobject_dict))
-      {
-        xobjects.first  = utils::json::get(keys, json_xobject_dict);
-        xobjects.second = qpdf_xobject_dict.getKey(keys[0]).getKey(keys[1]);
-      }
-    else
-      {
-        LOG_S(WARNING) << "no '/XObject' key detected";
-      }
-
-    return xobjects;
-  }
-
-  void pdf_resource<PAGE_XOBJECT>::set(std::string      xobject_key_,
-                                       nlohmann::json&  json_xobject_,
-                                       QPDFObjectHandle qpdf_xobject_)
+  void pdf_resource<PAGE_XOBJECT_IMAGE>::set(std::string      xobject_key_,
+                                              nlohmann::json&  json_xobject_,
+                                              QPDFObjectHandle qpdf_xobject_)
   {
     LOG_S(INFO) << __FUNCTION__ << ": " << xobject_key_;
 
@@ -225,118 +132,23 @@ namespace pdflib
     qpdf_xobject = qpdf_xobject_;
 
     parse();
-
-    // LOG_S(INFO) << json_xobject.dump(2);
   }
 
-  void pdf_resource<PAGE_XOBJECT>::parse()
+  void pdf_resource<PAGE_XOBJECT_IMAGE>::parse()
   {
     LOG_S(INFO) << __FUNCTION__;
 
     {
       qpdf_xobject_dict = qpdf_xobject.getDict();
       json_xobject_dict = to_json(qpdf_xobject_dict);
-
-      // LOG_S(INFO) << "xobject-dict: " << json_xobject_dict.dump(2);
     }
 
-    {
-      init_matrix();
-      // init_bbox();
-    }
-
-    if(get_subtype() == XOBJECT_IMAGE)
-      {
-        init_image_properties();
-        init_filters();
-        init_stream_data();
-      }
+    init_image_properties();
+    init_filters();
+    init_stream_data();
   }
 
-  std::vector<qpdf_instruction> pdf_resource<PAGE_XOBJECT>::parse_stream()
-  {
-    std::vector<qpdf_instruction> stream;
-
-    // decode the stream
-    try
-      {
-        qpdf_stream_decoder decoder(stream);
-        decoder.decode(qpdf_xobject);
-
-        decoder.print();
-      }
-    catch(const std::exception& exc)
-      {
-        std::stringstream ss;
-        ss << "encountered an error: " << exc.what();
-
-        LOG_S(ERROR) << ss.str();
-        throw std::logic_error(ss.str());
-      }
-
-    return stream;
-  }
-
-
-  void pdf_resource<PAGE_XOBJECT>::init_matrix()
-  {
-    matrix = {1., 0., 0., 1., 0., 0.};
-
-    std::vector<std::string> keys = {"/Matrix"};
-    if(utils::json::has(keys, json_xobject_dict))
-      {
-        nlohmann::json json_matrix = utils::json::get(keys, json_xobject_dict);
-
-        //assert(matrix.size()==json_matrix.size());
-        if(matrix.size()!=json_matrix.size())
-          {
-            std::string message = "matrix.size()!=json_matrix.size()";
-            LOG_S(ERROR) << message;
-            throw std::logic_error(message);
-          }
-
-        for(int l=0; l<matrix.size(); l++)
-          {
-            matrix[l] = json_matrix[l].get<double>();
-          }
-      }
-    else
-      {
-        LOG_S(WARNING) << "no '/Matrix' key detected";
-      }
-  }
-
-  /*
-    void pdf_resource<PAGE_XOBJECT>::init_bbox()
-    {
-    bbox = {0., 0., 0., 0.};
-
-    std::vector<std::string> keys = {"/BBox"};
-    if(utils::json::has(keys, json_xobject_dict))
-    {
-    nlohmann::json json_bbox = utils::json::get(keys, json_xobject_dict);
-
-    //assert(bbox.size()==json_bbox.size());
-    if(bbox.size()!=json_bbox.size())
-    {
-    std::string message = "matrix.size()!=json_matrix.size()";
-    LOG_S(ERROR) << message;
-    throw std::logic_error(message);
-    }
-
-    for(int l=0; l<bbox.size(); l++)
-    {
-    bbox[l] = json_bbox[l].get<double>();
-    }
-    }
-    else
-    {
-    LOG_S(WARNING) << "no '/BBox' key detected";
-    }
-    }
-  */
-
-  void pdf_resource<PAGE_XOBJECT>::init_image_properties()
+  void pdf_resource<PAGE_XOBJECT_IMAGE>::init_image_properties()
   {
     LOG_S(INFO) << __FUNCTION__ << ": " << json_xobject_dict.dump(2);
 
@@ -370,7 +182,7 @@ namespace pdflib
         LOG_S(WARNING) << "no `/BitsPerComponent` found";
       }
 
-    // /ColorSpace – may be a name ("/DeviceRGB") or an array; store as string
+    // /ColorSpace -- may be a name ("/DeviceRGB") or an array; store as string
     if(json_xobject_dict.count("/ColorSpace"))
       {
         auto& cs = json_xobject_dict["/ColorSpace"];
@@ -443,7 +255,7 @@ namespace pdflib
                 << " decode_len=" << decode_array.size();
   }
 
-  void pdf_resource<PAGE_XOBJECT>::init_filters()
+  void pdf_resource<PAGE_XOBJECT_IMAGE>::init_filters()
   {
     LOG_S(INFO) << __FUNCTION__;
 
@@ -474,7 +286,7 @@ namespace pdflib
       }
   }
 
-  void pdf_resource<PAGE_XOBJECT>::init_stream_data()
+  void pdf_resource<PAGE_XOBJECT_IMAGE>::init_stream_data()
   {
     LOG_S(INFO) << __FUNCTION__;
 
@@ -509,79 +321,74 @@ namespace pdflib
 
   // --- Getters ---
 
-  std::string pdf_resource<PAGE_XOBJECT>::get_key() const
-  {
-    return xobject_key;
-  }
-
-  int pdf_resource<PAGE_XOBJECT>::get_image_width() const
+  int pdf_resource<PAGE_XOBJECT_IMAGE>::get_image_width() const
   {
     return image_width;
   }
 
-  int pdf_resource<PAGE_XOBJECT>::get_image_height() const
+  int pdf_resource<PAGE_XOBJECT_IMAGE>::get_image_height() const
   {
     return image_height;
   }
 
-  int pdf_resource<PAGE_XOBJECT>::get_bits_per_component() const
+  int pdf_resource<PAGE_XOBJECT_IMAGE>::get_bits_per_component() const
   {
     return bits_per_component;
   }
 
-  std::string pdf_resource<PAGE_XOBJECT>::get_color_space() const
+  std::string pdf_resource<PAGE_XOBJECT_IMAGE>::get_color_space() const
   {
     return color_space;
   }
 
-  std::string pdf_resource<PAGE_XOBJECT>::get_intent() const
+  std::string pdf_resource<PAGE_XOBJECT_IMAGE>::get_intent() const
   {
     return intent;
   }
 
-  std::vector<std::string> pdf_resource<PAGE_XOBJECT>::get_filters() const
+  std::vector<std::string> pdf_resource<PAGE_XOBJECT_IMAGE>::get_filters() const
   {
     return image_filters;
   }
 
-  bool pdf_resource<PAGE_XOBJECT>::has_decode_array() const
+  bool pdf_resource<PAGE_XOBJECT_IMAGE>::has_decode_array() const
   {
     return decode_present && !decode_array.empty();
   }
 
-  std::vector<double> pdf_resource<PAGE_XOBJECT>::get_decode_array() const
+  std::vector<double> pdf_resource<PAGE_XOBJECT_IMAGE>::get_decode_array() const
   {
     return decode_array;
   }
 
-  bool pdf_resource<PAGE_XOBJECT>::is_image_mask() const
+  bool pdf_resource<PAGE_XOBJECT_IMAGE>::is_image_mask() const
   {
     return image_mask;
   }
 
-  bool pdf_resource<PAGE_XOBJECT>::has_raw_stream_data() const
+  bool pdf_resource<PAGE_XOBJECT_IMAGE>::has_raw_stream_data() const
   {
     return (raw_stream_data != nullptr && raw_stream_data->getSize() > 0);
   }
 
-  std::shared_ptr<Buffer> pdf_resource<PAGE_XOBJECT>::get_raw_stream_data() const
+  std::shared_ptr<Buffer> pdf_resource<PAGE_XOBJECT_IMAGE>::get_raw_stream_data() const
   {
     return raw_stream_data;
   }
 
-  bool pdf_resource<PAGE_XOBJECT>::has_decoded_stream_data() const
+  bool pdf_resource<PAGE_XOBJECT_IMAGE>::has_decoded_stream_data() const
   {
     return (decoded_stream_data != nullptr && decoded_stream_data->getSize() > 0);
   }
 
-  std::shared_ptr<Buffer> pdf_resource<PAGE_XOBJECT>::get_decoded_stream_data() const
+  std::shared_ptr<Buffer> pdf_resource<PAGE_XOBJECT_IMAGE>::get_decoded_stream_data() const
   {
     return decoded_stream_data;
   }
 
   // --- File I/O ---
 
-  std::string pdf_resource<PAGE_XOBJECT>::pick_extension() const
+  std::string pdf_resource<PAGE_XOBJECT_IMAGE>::pick_extension() const
   {
     for(auto const& f : image_filters)
       {
@@ -592,7 +399,7 @@ namespace pdflib
     return ".bin";
   }
 
-  void pdf_resource<PAGE_XOBJECT>::save_to_file(std::filesystem::path const& path) const
+  void pdf_resource<PAGE_XOBJECT_IMAGE>::save_to_file(std::filesystem::path const& path) const
   {
     if(not has_raw_stream_data())
       {
@@ -666,7 +473,7 @@ namespace pdflib
                 << " bytes to " << path.string();
   }
 
-  std::shared_ptr<Buffer> pdf_resource<PAGE_XOBJECT>::load_from_file(
+  std::shared_ptr<Buffer> pdf_resource<PAGE_XOBJECT_IMAGE>::load_from_file(
                                                                      std::filesystem::path const& path)
   {
     std::ifstream in(path, std::ios::binary | std::ios::ate);

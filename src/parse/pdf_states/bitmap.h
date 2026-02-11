@@ -22,7 +22,7 @@ namespace pdflib
 
     pdf_state<BITMAP>& operator=(const pdf_state<BITMAP>& other);
 
-    void Do_image(pdf_resource<PAGE_XOBJECT>& xobj);
+    void Do_image(pdf_resource<PAGE_XOBJECT_IMAGE>& xobj);
 
   private:
 
@@ -59,7 +59,7 @@ namespace pdflib
     return *this;
   }
 
-  void pdf_state<BITMAP>::Do_image(pdf_resource<PAGE_XOBJECT>& xobj)
+  void pdf_state<BITMAP>::Do_image(pdf_resource<PAGE_XOBJECT_IMAGE>& xobj)
   {
     if(not config.keep_bitmaps) { return; }
 

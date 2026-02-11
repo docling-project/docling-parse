@@ -459,13 +459,14 @@ namespace pdflib
               return;
             }
 
-          pdf_resource<PAGE_XOBJECT>& xobj = page_xobjects.get(xobj_name);
+          xobject_subtype_name xobj_subtype = page_xobjects.get_subtype(xobj_name);
 
-          switch(xobj.get_subtype())
+          switch(xobj_subtype)
             {
             case XOBJECT_IMAGE:
               {
                 LOG_S(INFO) << "Do_Image: image with `" << xobj_name << "`";
+                pdf_resource<PAGE_XOBJECT_IMAGE>& xobj = page_xobjects.get_image(xobj_name);
                 current_bitmap_state().Do_image(xobj);
               }
               break;
@@ -473,6 +474,8 @@ namespace pdflib
             case XOBJECT_FORM:
               {
                 LOG_S(INFO) << "Do_Form: XObject with name `" << xobj_name << "`";
+
+                pdf_resource<PAGE_XOBJECT_FORM>& xobj = page_xobjects.get_form(xobj_name);
 
                 pdf_resource<PAGE_FONTS>     page_fonts_ = page_fonts;
                 pdf_resource<PAGE_GRPHS>     page_grphs_ = page_grphs;
@@ -489,9 +492,9 @@ namespace pdflib
                   std::pair<nlohmann::json, QPDFObjectHandle> xobj_xobjects = xobj.get_xobjects();
                   page_xobjects_.set(xobj_xobjects.first, xobj_xobjects.second/*, timings*/);
                 }
-                
+
                 {
-                  // push-back the stack 
+                  // push-back the stack
                   this->q();
 
                   // transform coordinate system
@@ -531,8 +534,8 @@ namespace pdflib
                       }
                   }
 
-                  // pop-back the stack 
-                  this->Q();                
+                  // pop-back the stack
+                  this->Q();
                 }
 
                 LOG_S(INFO) << "ending the execution of FORM XObject with name `" << xobj_name << "`";
@@ -541,7 +544,7 @@ namespace pdflib
 
             default:
               {
-                LOG_S(ERROR) << " unknown subtype of xobject with name " << xobj_name;
+                LOG_S(WARNING) << "unsupported xobject subtype (PostScript) with name " << xobj_name;
               }
             }
         }

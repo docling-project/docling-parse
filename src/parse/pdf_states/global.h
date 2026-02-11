@@ -28,9 +28,9 @@ namespace pdflib
     void cm(std::vector<qpdf_instruction>& instructions);
     void cm(std::array<double, 6> matrix);
 
-    // void Do_image(pdf_resource<PAGE_XOBJECT>& xobj);
+    // void Do_image(pdf_resource<PAGE_XOBJECT_IMAGE>& xobj);
 
-    // void Do_form(pdf_resource<PAGE_XOBJECT>& xobj);
+    // void Do_form(pdf_resource<PAGE_XOBJECT_FORM>& xobj);
 
   private:
 
@@ -188,7 +188,7 @@ namespace pdflib
   }
 
   /*
-  void pdf_state<GLOBAL>::Do_image(pdf_resource<PAGE_XOBJECT>& xobj)
+  void pdf_state<GLOBAL>::Do_image(pdf_resource<PAGE_XOBJECT_IMAGE>& xobj)
   {
     if(not config.keep_bitmaps) { return; }
 
