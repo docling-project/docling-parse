@@ -61,8 +61,10 @@ namespace pdflib
 
   void pdf_state<BITMAP>::Do_image(pdf_resource<PAGE_XOBJECT>& xobj)
   {
-    if(not config.keep_bitmaps) { return; }
+    if(not config.keep_bitmaps) { LOG_S(WARNING) << "skipping " << __FUNCTION__; return; }
 
+    LOG_S(INFO) << "starting to do " << __FUNCTION__;
+    
     pdf_resource<PAGE_IMAGE> image;
     {
       // FIXME clean up this crap
@@ -118,6 +120,11 @@ namespace pdflib
       image.raw_stream_data      = xobj.get_raw_stream_data();
       image.decoded_stream_data  = xobj.get_decoded_stream_data();
 
+      LOG_S(INFO) << "image with ("
+		  << image.x0 << ", " << image.y0 << ") x ("
+		  << image.x1 << ", " << image.y1 << "): "
+		  << image.raw_stream_data;
+      
       // propagate PDF semantics for JPEG correction
       image.decode_present = xobj.has_decode_array();
       image.decode_array   = xobj.get_decode_array();

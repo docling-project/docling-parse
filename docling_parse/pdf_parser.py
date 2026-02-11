@@ -28,7 +28,6 @@ from pydantic import BaseModel, ConfigDict
 
 from docling_parse.pdf_parsers import DecodePageConfig  # type: ignore[import]
 from docling_parse.pdf_parsers import pdf_parser  # type: ignore[import]
-from docling_parse.pdf_parsers import pdf_sanitizer  # type: ignore[import]
 from docling_parse.pdf_parsers import (  # type: ignore[import]
     TIMING_KEY_CREATE_LINE_CELLS,
     TIMING_KEY_CREATE_WORD_CELLS,
@@ -668,70 +667,6 @@ class PdfDocument:
         raise ValueError(
             f"incorrect page_no: {page_no} for key={self._key} (min:1, max:{self.number_of_pages()})"
         )
-
-    def _create_word_cells(
-        self,
-        segmented_page: SegmentedPdfPage,
-        config: DecodePageConfig,
-        _loglevel: str = "fatal",
-    ):
-        if len(segmented_page.word_cells) > 0:
-            return
-
-        sanitizer = pdf_sanitizer(level=_loglevel)
-
-        char_data = []
-        for item in segmented_page.char_cells:
-            item_dict = item.model_dump(mode="json", by_alias=True, exclude_none=True)
-            item_dict["left_to_right"] = (
-                item.text_direction == TextDirection.LEFT_TO_RIGHT
-            )
-            char_data.append(item_dict)
-
-        sanitizer.set_char_cells(data=char_data)
-
-        data = sanitizer.create_word_cells(config=config)
-
-        segmented_page.word_cells = []
-        for item in data:
-            cell = PdfTextCell.model_validate(item)
-            segmented_page.word_cells.append(cell)
-
-        segmented_page.has_words = len(segmented_page.word_cells) > 0
-
-    def _create_textline_cells(
-        self,
-        segmented_page: SegmentedPdfPage,
-        config: DecodePageConfig,
-        _loglevel: str = "fatal",
-    ):
-        if len(segmented_page.textline_cells) > 0:
-            return
-
-        sanitizer = pdf_sanitizer(level=_loglevel)
-
-        char_data = []
-        for item in segmented_page.char_cells:
-            item_dict = item.model_dump(mode="json", by_alias=True, exclude_none=True)
-
-            # TODO changing representation for the C++ parser, need to update on C++ code.
-            item_dict["left_to_right"] = (
-                item.text_direction == TextDirection.LEFT_TO_RIGHT
-            )
-            item_dict["id"] = item.index
-
-            char_data.append(item_dict)
-
-        sanitizer.set_char_cells(data=char_data)
-
-        data = sanitizer.create_line_cells(config=config)
-
-        segmented_page.textline_cells = []
-        for item in data:
-            cell = PdfTextCell.model_validate(item)
-            segmented_page.textline_cells.append(cell)
-
-        segmented_page.has_lines = len(segmented_page.textline_cells) > 0
 
 
 class DoclingPdfParser:

@@ -8,7 +8,6 @@
 #include <pybind/utils/pybind11_json.h>
 
 #include <pybind/docling_parser.h>
-#include <pybind/docling_sanitizer.h>
 
 // Include parse headers for typed bindings
 #include <parse.h>
@@ -227,7 +226,13 @@ PYBIND11_MODULE(pdf_parsers, m) {
     .def("get_dynamic_timings", [](pdflib::pdf_decoder<pdflib::PAGE>& self) {
 	   return self.get_timings().get_dynamic_timings();
 	 },
-	 "Get only dynamic timing keys as Dict[str, float]");
+	 "Get only dynamic timing keys as Dict[str, float]")
+    .def("create_word_cells", &pdflib::pdf_decoder<pdflib::PAGE>::create_word_cells,
+	 pybind11::arg("config"),
+	 "Recompute word cells from char cells with the given config")
+    .def("create_line_cells", &pdflib::pdf_decoder<pdflib::PAGE>::create_line_cells,
+	 pybind11::arg("config"),
+	 "Recompute line cells from char cells with the given config");
 
   // ============= Timing Keys Constants =============
 
@@ -463,77 +468,4 @@ PYBIND11_MODULE(pdf_parsers, m) {
 
     Returns:
         PdfPageDecoder: A typed page decoder object.)");
-
-  // purely for backward compatibility
-  pybind11::class_<docling::docling_sanitizer>(m, "pdf_sanitizer")
-    .def(pybind11::init())
-
-    .def(pybind11::init<const std::string&>(),
-	 pybind11::arg("level"),
-	 R"(
-    Construct docling_sanitizer with logging level.
-
-    Parameters:
-        level (str): Logging level as a string.
-                     One of ['fatal', 'error', 'warning', 'info'])")
-
-    .def("set_loglevel_with_label",
-	 [](docling::docling_sanitizer &self, const std::string &level) -> void {
-            self.set_loglevel_with_label(level);
-	 },
-	 pybind11::arg("level"),
-	 R"(
-    Set the log level using a string label.
-
-    Parameters:
-        level (str): Logging level as a string.
-                     One of ['fatal', 'error', 'warning', 'info']
-           )")
-
-    .def("set_char_cells",
-	 [](docling::docling_sanitizer &self,
-	    nlohmann::json& data) -> nlohmann::json {
-	   return self.set_char_cells(data);
-	 },
-	 pybind11::arg("data"),
-	 R"(
-    Set char cells
-
-    Parameters:
-        data: A JSON object (for with data and header) or a list or records
-
-    Returns:
-        dict: A JSON object representing the sanitized word cells in the bounding box.)")
-    
-    .def("create_word_cells",
-	 [](docling::docling_sanitizer &self,
-	    const pdflib::decode_page_config &config) -> nlohmann::json {
-	   return self.create_word_cells(config);
-	 },
-	 pybind11::arg("config"),
-	 R"(
-    Create word cells
-
-    Parameters:
-        config (DecodePageConfig): Configuration for word cell creation.
-
-    Returns:
-        dict: A JSON object representing the sanitized word cells in the bounding box.)")
-
-    .def("create_line_cells",
-	 [](docling::docling_sanitizer &self,
-	    const pdflib::decode_page_config &config) -> nlohmann::json {
-	   return self.create_line_cells(config);
-	 },
-	 pybind11::arg("config"),
-	 R"(
-    Create line cells
-
-    Parameters:
-        config (DecodePageConfig): Configuration for line cell creation.
-
-    Returns:
-        dict: A JSON object representing the sanitized line cells in the bounding box.)");  
-    
-    
 }

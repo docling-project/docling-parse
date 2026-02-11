@@ -58,14 +58,11 @@ class PageRow:
 
 KNOWN_PARSERS = [
     # Known keys from perf/run_perf.py
-    "docling-mode=json",
-    "docling-mode=typed",
+    "docling",
     "pdfplumber",
     "pypdfium2",
     "pypdfium",
     "pymupdf",
-    # Legacy/short names sometimes used in filenames
-    "docling",
 ]
 
 

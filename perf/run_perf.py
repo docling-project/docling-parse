@@ -80,7 +80,7 @@ class Row:
 # -------- Parser adapters --------
 
 
-def make_parse_with_docling(mode: str) -> Callable[[Path], Iterable[Row]]:
+def parse_with_docling() -> Callable[[Path], Iterable[Row]]:
     def _runner(pdf_path: Path) -> Iterable[Row]:
         from docling_parse.pdf_parser import DoclingPdfParser
         from docling_parse.pdf_parsers import DecodePageConfig  # type: ignore[import]
@@ -245,8 +245,7 @@ def parse_with_pymupdf(pdf_path: Path) -> Iterable[Row]:
 
 
 PARSERS: dict[str, Callable[[Path], Iterable[Row]]] = {
-    "docling-mode=json": make_parse_with_docling("json"),
-    "docling-mode=typed": make_parse_with_docling("typed"),
+    "docling": parse_with_docling(),
     "pdfplumber": parse_with_pdfplumber,
     "pypdfium2": parse_with_pypdfium2,
     "pypdfium": parse_with_pypdfium2,  # alias
@@ -364,9 +363,9 @@ def main(argv: List[str]) -> int:
     ap.add_argument(
         "--parser",
         "-p",
-        default="docling-mode=typed",
+        default="docling",
         choices=sorted(PARSERS.keys()),
-        help="Parser backend to benchmark (docling-mode=json|typed, pdfplumber, pypdfium2, pypdfium, pymupdf)",
+        help="Parser backend to benchmark (docling, pdfplumber, pypdfium2, pypdfium, pymupdf)",
     )
     ap.add_argument(
         "--recursive",
@@ -399,7 +398,9 @@ def main(argv: List[str]) -> int:
     rows: List[Row] = []
     started = time.perf_counter()
     for pdf in tqdm(pdfs, desc=f"Parsing PDFs with {parser_key}"):
+        print(pdf)
         rows.extend(list(parser_fn(pdf)))
+        
     ended = time.perf_counter()
 
     # Write CSV
