@@ -12,6 +12,7 @@ namespace pdflib
   public:
 
     pdf_resource();
+    pdf_resource(std::shared_ptr<pdf_resource<PAGE_FONTS>> parent);
     ~pdf_resource();
 
     nlohmann::json get();
@@ -19,8 +20,8 @@ namespace pdflib
     size_t size();
 
     int count(std::string key);
-    
-    std::set<std::string> keys();
+
+    std::unordered_set<std::string> keys();
 
     pdf_resource<PAGE_FONT>& operator[](std::string fort_name);
 
@@ -30,10 +31,16 @@ namespace pdflib
 
   private:
 
-    std::map<std::string, pdf_resource<PAGE_FONT> > page_fonts;
+    std::shared_ptr<pdf_resource<PAGE_FONTS>> parent_;
+    std::unordered_map<std::string, pdf_resource<PAGE_FONT> > page_fonts;
   };
 
-  pdf_resource<PAGE_FONTS>::pdf_resource()
+  pdf_resource<PAGE_FONTS>::pdf_resource():
+    parent_(nullptr)
+  {}
+
+  pdf_resource<PAGE_FONTS>::pdf_resource(std::shared_ptr<pdf_resource<PAGE_FONTS>> parent):
+    parent_(parent)
   {}
 
   pdf_resource<PAGE_FONTS>::~pdf_resource()
@@ -59,12 +66,25 @@ namespace pdflib
 
   int pdf_resource<PAGE_FONTS>::count(std::string key)
   {
-    return page_fonts.count(key);
+    if(page_fonts.count(key)==1)
+      {
+        return 1;
+      }
+    if(parent_)
+      {
+        return parent_->count(key);
+      }
+    return 0;
   }
 
-  std::set<std::string> pdf_resource<PAGE_FONTS>::keys()
+  std::unordered_set<std::string> pdf_resource<PAGE_FONTS>::keys()
   {
-    std::set<std::string> keys_;
+    std::unordered_set<std::string> keys_;
+
+    if(parent_)
+      {
+        keys_ = parent_->keys();
+      }
 
     for(auto itr=page_fonts.begin(); itr!=page_fonts.end(); itr++)
       {
@@ -80,24 +100,29 @@ namespace pdflib
       {
         return page_fonts.at(font_name);
       }
-    else
-      {
-        std::stringstream ss;
-	ss << "font_name [" << font_name << "] is not known: ";
-        for(auto itr=page_fonts.begin(); itr!=page_fonts.end(); itr++)
-	  {
-	    if(itr==page_fonts.begin())
-	      {
-		ss << itr->first;
-	      }
-	    else
-	      {
-		ss << ", " << itr->first; 
-	      }
-	  }
 
-	throw std::logic_error(ss.str());
+    if(parent_)
+      {
+        return (*parent_)[font_name];
       }
+
+    {
+      std::stringstream ss;
+      ss << "font_name [" << font_name << "] is not known: ";
+      for(auto itr=page_fonts.begin(); itr!=page_fonts.end(); itr++)
+        {
+          if(itr==page_fonts.begin())
+            {
+              ss << itr->first;
+            }
+          else
+            {
+              ss << ", " << itr->first;
+            }
+        }
+
+      throw std::logic_error(ss.str());
+    }
 
     return (page_fonts.begin()->second);
   }

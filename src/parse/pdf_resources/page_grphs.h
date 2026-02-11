@@ -12,6 +12,7 @@ namespace pdflib
   public:
 
     pdf_resource();
+    pdf_resource(std::shared_ptr<pdf_resource<PAGE_GRPHS>> parent);
     ~pdf_resource();
 
     nlohmann::json get();
@@ -19,20 +20,27 @@ namespace pdflib
     size_t size();
 
     int count(std::string key);
-    
-    std::set<std::string> keys();
+
+    std::unordered_set<std::string> keys();
 
     pdf_resource<PAGE_GRPH>& operator[](std::string fort_name);
 
     void set(nlohmann::json&   json_grphs,
-             QPDFObjectHandle& qpdf_grphs_);
+             QPDFObjectHandle& qpdf_grphs_,
+             pdf_timings& timings);
 
   private:
 
-    std::map<std::string, pdf_resource<PAGE_GRPH> > page_grphs;
+    std::shared_ptr<pdf_resource<PAGE_GRPHS>> parent_;
+    std::unordered_map<std::string, pdf_resource<PAGE_GRPH> > page_grphs;
   };
 
-  pdf_resource<PAGE_GRPHS>::pdf_resource()
+  pdf_resource<PAGE_GRPHS>::pdf_resource():
+    parent_(nullptr)
+  {}
+
+  pdf_resource<PAGE_GRPHS>::pdf_resource(std::shared_ptr<pdf_resource<PAGE_GRPHS>> parent):
+    parent_(parent)
   {}
 
   pdf_resource<PAGE_GRPHS>::~pdf_resource()
@@ -58,12 +66,25 @@ namespace pdflib
 
   int pdf_resource<PAGE_GRPHS>::count(std::string key)
   {
-    return page_grphs.count(key);
+    if(page_grphs.count(key)==1)
+      {
+        return 1;
+      }
+    if(parent_)
+      {
+        return parent_->count(key);
+      }
+    return 0;
   }
 
-  std::set<std::string> pdf_resource<PAGE_GRPHS>::keys()
+  std::unordered_set<std::string> pdf_resource<PAGE_GRPHS>::keys()
   {
-    std::set<std::string> keys_;
+    std::unordered_set<std::string> keys_;
+
+    if(parent_)
+      {
+        keys_ = parent_->keys();
+      }
 
     for(auto itr=page_grphs.begin(); itr!=page_grphs.end(); itr++)
       {
@@ -79,32 +100,36 @@ namespace pdflib
       {
         return page_grphs[grph_name];
       }
-    else
-      {
-        std::stringstream ss;
-        for(auto itr=page_grphs.begin(); itr!=page_grphs.end(); itr++)
-	  {
-	    ss << itr->first << ", ";
-	  }
 
-	{
-	  std::stringstream ss;
-	  ss << "graphics state with name '" << grph_name << "' is not known: " << ss.str();
-	  
-	  LOG_S(ERROR) << ss.str();
-	  throw std::logic_error(ss.str());
-	}
+    if(parent_)
+      {
+        return (*parent_)[grph_name];
       }
+
+    {
+      std::stringstream ss;
+      ss << "graphics state with name '" << grph_name << "' is not known: ";
+      for(auto itr=page_grphs.begin(); itr!=page_grphs.end(); itr++)
+        {
+          ss << itr->first << ", ";
+        }
+
+      LOG_S(ERROR) << ss.str();
+      throw std::logic_error(ss.str());
+    }
 
     return (page_grphs.begin()->second);
   }
   
   void pdf_resource<PAGE_GRPHS>::set(nlohmann::json&   json_grphs,
-                                     QPDFObjectHandle& qpdf_grphs)
+                                     QPDFObjectHandle& qpdf_grphs,
+                                     pdf_timings& timings)
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    for(auto& pair : json_grphs.items()) 
+    double total_grph_time = 0.0;
+
+    for(auto& pair : json_grphs.items())
       {
         std::string     key = pair.key();
         nlohmann::json& val = pair.value();
@@ -120,7 +145,9 @@ namespace pdflib
 	    //throw std::logic_error(message);
 	    continue;
 	  }
-	
+
+	utils::timer grph_timer;
+
         pdf_resource<PAGE_GRPH> page_grph;
         page_grph.set(key, val, qpdf_grphs.getKey(key));
 
@@ -131,7 +158,13 @@ namespace pdflib
           }
 
         page_grphs[key] = page_grph;
+
+	double grph_time = grph_timer.get_time();
+	total_grph_time += grph_time;
+	timings.add_timing(pdf_timings::PREFIX_DECODE_GRPH + key, grph_time);
       }
+
+    timings.add_timing(pdf_timings::KEY_DECODE_GRPHS_TOTAL, total_grph_time);
   }
 
 }

@@ -101,7 +101,7 @@ int main(int argc, char* argv[])
 	  std::string resource_dir = resource_utils::get_resources_dir(false).string();
 	  data[pdflib::pdf_resource<pdflib::PAGE_FONT>::RESOURCE_DIR_KEY] = resource_dir;
 
-	  std::map<std::string, double> font_timings;
+	  std::unordered_map<std::string, double> font_timings;
 	  pdflib::pdf_resource<pdflib::PAGE_FONT>::initialise(data, font_timings);
 	}
 

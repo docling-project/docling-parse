@@ -5,8 +5,7 @@
 
 #include <fstream>
 
-#include <set>
-#include <map>
+#include <unordered_map>
 
 namespace pdflib
 {
@@ -36,14 +35,14 @@ namespace pdflib
     bool initialized;
     std::string directory;
 
-    std::map<std::string, int>                       ro_2_sup;
-    std::map<std::string, std::vector<std::string> > ros_2_cols;
+    std::unordered_map<std::string, int>                       ro_2_sup;
+    std::unordered_map<std::string, std::vector<std::string> > ros_2_cols;
 
-    std::map<std::string, std::string> cmap_2_filename;
-    std::map<std::string, std::string> cmap_2_cid2code;
-    std::map<std::string, std::vector<std::string> > cmap_2_columns;
+    std::unordered_map<std::string, std::string> cmap_2_filename;
+    std::unordered_map<std::string, std::string> cmap_2_cid2code;
+    std::unordered_map<std::string, std::vector<std::string> > cmap_2_columns;
 
-    std::map<std::string, font_cid> cids;
+    std::unordered_map<std::string, font_cid> cids;
   };
 
   font_cids::font_cids():

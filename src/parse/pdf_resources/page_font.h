@@ -18,8 +18,8 @@ namespace pdflib
     pdf_resource(pdf_timings& timings);
     ~pdf_resource();
 
-    static void initialise(nlohmann::json                 data,
-			   std::map<std::string, double>& timings);
+    static void initialise(nlohmann::json                            data,
+			   std::unordered_map<std::string, double>& timings);
 
     nlohmann::json get();
 
@@ -169,8 +169,8 @@ namespace pdflib
       }
   }
 
-  void pdf_resource<PAGE_FONT>::initialise(nlohmann::json                 data,
-					   std::map<std::string, double>& timings)
+  void pdf_resource<PAGE_FONT>::initialise(nlohmann::json                            data,
+					   std::unordered_map<std::string, double>& timings)
   {
     LOG_S(INFO) << __FUNCTION__ << ": " << data.dump(2);
     

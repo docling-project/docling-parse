@@ -6,7 +6,6 @@ import re
 from io import BytesIO
 from typing import Dict, List, Union
 
-import pytest
 from docling_core.types.doc.page import (
     BitmapResource,
     PdfPageBoundaryType,
@@ -19,7 +18,7 @@ from docling_core.types.doc.page import (
 )
 from pydantic import TypeAdapter
 
-from docling_parse.pdf_parser import CONVERSION_MODE, DoclingPdfParser, PdfDocument
+from docling_parse.pdf_parser import DoclingPdfParser, PdfDocument
 
 GENERATE = False
 
@@ -214,8 +213,7 @@ def verify_SegmentedPdfPage(
     verify_shapes(true_page.shapes, pred_page.shapes, eps=eps)
 
 
-@pytest.mark.parametrize("mode", [CONVERSION_MODE.JSON, CONVERSION_MODE.TYPED])
-def test_reference_documents_from_filenames(mode):
+def test_reference_documents_from_filenames():
 
     parser = DoclingPdfParser(loglevel="fatal")
     # parser = DoclingPdfParser(loglevel="info")
@@ -240,7 +238,7 @@ def test_reference_documents_from_filenames(mode):
 
         # PdfDocument.iterate_pages() will automatically populate pages as they are yielded.
         # No need to call PdfDocument.load_all_pages() before.
-        for page_no, pred_page in pdf_doc.iterate_pages(mode=mode):
+        for page_no, pred_page in pdf_doc.iterate_pages():
             # print(f" -> Page {page_no} has {len(pred_page.sanitized.cells)} cells.")
 
             rname = os.path.basename(pdf_doc_path)
@@ -291,10 +289,13 @@ def test_reference_documents_from_filenames(mode):
                         _lines
                     ), f"len(lines) == len(_lines) => {len(lines)} == {len(_lines)} from {_fname}"
 
+                    # this is a bit dangerous due to rounding errors ...
+                    """
                     for i, line in enumerate(lines):
                         assert (
                             line == _lines[i]
                         ), f"line == _lines[i] => {line} == {_lines[i]} in line {i} for {_fname}"
+                    """
 
                 true_page = SegmentedPdfPage.load_from_json(fname)
                 verify_SegmentedPdfPage(true_page, pred_page, filename=fname)

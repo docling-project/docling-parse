@@ -23,7 +23,7 @@ namespace pdflib
 
     pdf_state<BITMAP>& operator=(const pdf_state<BITMAP>& other);
 
-    void Do_image(pdf_resource<PAGE_XOBJECT>& xobj);
+    void Do_image(pdf_resource<PAGE_XOBJECT_IMAGE>& xobj);
 
   private:
 
@@ -65,10 +65,12 @@ namespace pdflib
     return *this;
   }
 
-  void pdf_state<BITMAP>::Do_image(pdf_resource<PAGE_XOBJECT>& xobj)
+  void pdf_state<BITMAP>::Do_image(pdf_resource<PAGE_XOBJECT_IMAGE>& xobj)
   {
-    if(not config.keep_bitmaps) { return; }
+    if(not config.keep_bitmaps) { LOG_S(WARNING) << "skipping " << __FUNCTION__; return; }
 
+    LOG_S(INFO) << "starting to do " << __FUNCTION__;
+    
     pdf_resource<PAGE_IMAGE> image;
     {
       // FIXME clean up this crap
@@ -110,6 +112,18 @@ namespace pdflib
       image.y0 = img_bbox[1];
       image.x1 = img_bbox[2];
       image.y1 = img_bbox[3];
+
+      {
+        bitmap_instruction binstr(xobj.get_key(),
+				  nullptr,
+                                  {{0, 0, 0}},
+                                  d_0[0], d_0[1],
+                                  d_1[0], d_1[1],
+                                  d_2[0], d_2[1],
+                                  d_3[0], d_3[1]);
+
+        instructions.add_bitmap_instruction(std::move(binstr));
+      }
     }
 
     // Populate image properties from the XObject
@@ -124,6 +138,11 @@ namespace pdflib
       image.raw_stream_data      = xobj.get_raw_stream_data();
       image.decoded_stream_data  = xobj.get_decoded_stream_data();
 
+      LOG_S(INFO) << "image with ("
+		  << image.x0 << ", " << image.y0 << ") x ("
+		  << image.x1 << ", " << image.y1 << "): "
+		  << image.raw_stream_data;
+      
       // propagate PDF semantics for JPEG correction
       image.decode_present = xobj.has_decode_array();
       image.decode_array   = xobj.get_decode_array();

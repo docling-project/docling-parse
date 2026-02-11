@@ -100,7 +100,7 @@ namespace pdflib
       }
     else
       {
-	std::set<std::string> page_boundaries = {"media_box", "crop_box"};
+	std::unordered_set<std::string> page_boundaries = {"media_box", "crop_box"};
 	
 	std::stringstream ss;
 

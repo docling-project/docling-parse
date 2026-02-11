@@ -42,8 +42,8 @@ def parse_args():
         type=str,
         # choices=["both", "original", "sanitized"],
         choices=["all", "char", "word", "line"],
-        required=True,
-        default="both",
+        required=False,
+        default="char",
         help="category [`all`, `char`, `word`, `line`]",
     )
 

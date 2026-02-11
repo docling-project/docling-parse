@@ -119,7 +119,8 @@ namespace pdflib
     XOBJECT_UNKNOWN,
 
     XOBJECT_FORM,
-    XOBJECT_IMAGE
+    XOBJECT_IMAGE,
+    XOBJECT_POSTSCRIPT
   };
 
 

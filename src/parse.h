@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <iostream>
 #include <string>
+#include <memory>
 #include <regex>
 #include <fstream>
 #include <iostream>
@@ -70,7 +71,9 @@
 #include <parse/pdf_resources/page_grph.h>
 #include <parse/pdf_resources/page_grphs.h>
 
-#include <parse/pdf_resources/page_xobject.h>
+#include <parse/pdf_resources/page_xobject_image.h>
+#include <parse/pdf_resources/page_xobject_form.h>
+#include <parse/pdf_resources/page_xobject_postscript.h>
 #include <parse/pdf_resources/page_xobjects.h>
 
 #include <parse/pdf_resources/page_cell.h>
