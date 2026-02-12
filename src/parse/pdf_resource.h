@@ -16,6 +16,41 @@ namespace pdflib
 
     PAGE_IMAGE,
     PAGE_IMAGES,
+  };
+  
+  template<item_name name>
+  class page_item
+  {
+  public:
+
+    page_item();
+    ~page_item();
+
+  private:
+
+  };
+  
+  enum resource_name {
+
+    // former resources and need to be renamed to page_item
+    /* 
+    PAGE_DIMENSION,
+
+    PAGE_CELL,
+    PAGE_CELLS,
+
+    PAGE_SHAPE,
+    PAGE_SHAPES,
+
+    PAGE_IMAGE,
+    PAGE_IMAGES,
+    */
+    
+    PAGE_FONT,
+    PAGE_FONTS,
+    
+    PAGE_GRPH,
+    PAGE_GRPHS,
 
     PAGE_WIDGET,
     PAGE_WIDGETS,

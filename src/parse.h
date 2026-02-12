@@ -78,16 +78,12 @@
 
 #include <parse/page_items/page_cell.h>
 #include <parse/page_items/page_cells.h>
-
 #include <parse/page_items/page_shape.h>
 #include <parse/page_items/page_shapes.h>
-
 #include <parse/page_items/page_image.h>
 #include <parse/page_items/page_images.h>
-
 #include <parse/page_items/page_widget.h>
 #include <parse/page_items/page_widgets.h>
-
 #include <parse/page_items/page_hyperlink.h>
 #include <parse/page_items/page_hyperlinks.h>
 

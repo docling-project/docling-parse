@@ -26,6 +26,7 @@ namespace pdflib
     page_item<PAGE_SHAPES>& get_page_shapes() { return page_shapes; }
     page_item<PAGE_IMAGES>& get_page_images() { return page_images; }
     page_item<PAGE_DIMENSION>& get_page_dimension() { return page_dimension; }
+
     page_item<PAGE_WIDGETS>& get_page_widgets() { return page_widgets; }
     page_item<PAGE_HYPERLINKS>& get_page_hyperlinks() { return page_hyperlinks; }
 
