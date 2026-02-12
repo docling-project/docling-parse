@@ -13,9 +13,30 @@
 
 namespace pdflib
 {
+  std::pair<bool, std::string> to_string(QPDFObjectHandle obj,
+					 const std::string& key)
+  {
+    std::pair<bool, std::string> result(false, "");
+
+    if(obj.hasKey(key) and obj.getKey(key).isString())
+      {
+	result.first = true;
+	result.second = obj.getKey(key).getUTF8Value();
+      }
+    else if(obj.hasKey(key) and obj.getKey(key).isName())
+      {
+	result.first = true;
+	result.second = obj.getKey(key).getName();
+      }
+
+    return result;
+  }
+  
   // FIXME: add a begin time to cap the max time spent in this routine
-  nlohmann::json to_json(QPDFObjectHandle obj, std::unordered_set<std::string> prev_objs={},
-                         int level=0, int max_level=32)
+  nlohmann::json to_json(QPDFObjectHandle obj,
+			 std::unordered_set<std::string> prev_objs={},
+                         int level=0,
+			 int max_level=32)
   {
     nlohmann::json result;
 

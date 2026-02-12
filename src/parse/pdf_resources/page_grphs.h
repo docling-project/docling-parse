@@ -25,8 +25,7 @@ namespace pdflib
 
     pdf_resource<PAGE_GRPH>& operator[](std::string fort_name);
 
-    void set(nlohmann::json&   json_grphs,
-             QPDFObjectHandle& qpdf_grphs_,
+    void set(QPDFObjectHandle& qpdf_grphs_,
              pdf_timings& timings);
 
   private:
@@ -121,40 +120,25 @@ namespace pdflib
     return (page_grphs.begin()->second);
   }
   
-  void pdf_resource<PAGE_GRPHS>::set(nlohmann::json&   json_grphs,
-                                     QPDFObjectHandle& qpdf_grphs,
+  void pdf_resource<PAGE_GRPHS>::set(QPDFObjectHandle& qpdf_grphs,
                                      pdf_timings& timings)
   {
     LOG_S(INFO) << __FUNCTION__;
 
     double total_grph_time = 0.0;
 
-    for(auto& pair : json_grphs.items())
+    for(auto& key : qpdf_grphs.getKeys())
       {
-        std::string     key = pair.key();
-        nlohmann::json& val = pair.value();
-
         LOG_S(INFO) << "decoding graphics state: " << key;
-        //assert(qpdf_grphs.hasKey(key));
-
-	if(not qpdf_grphs.hasKey(key))
-	  {
-	    std::string message = "not qpdf_grphs.hasKey(key)";
-	    LOG_S(ERROR) << message;
-
-	    //throw std::logic_error(message);
-	    continue;
-	  }
 
 	utils::timer grph_timer;
 
         pdf_resource<PAGE_GRPH> page_grph;
-        page_grph.set(key, val, qpdf_grphs.getKey(key));
+        page_grph.set(key, qpdf_grphs.getKey(key));
 
         if(page_grphs.count(key)==1)
           {
-	    std::string ss= "we are overwriting a grph!";
-	    LOG_S(WARNING) << ss;
+	    LOG_S(WARNING) << "we are overwriting a grph!";
           }
 
         page_grphs[key] = page_grph;

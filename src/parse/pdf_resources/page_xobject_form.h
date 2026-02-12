@@ -9,9 +9,10 @@ namespace pdflib
   template<>
   class pdf_resource<PAGE_XOBJECT_FORM>
   {
-    inline static const std::vector<std::string> FONTS_KEY = {"/Resources", "/Font"};
-    inline static const std::vector<std::string> GRPHS_KEY = {"/Resources", "/ExtGState"};
-    inline static const std::vector<std::string> XOBJS_KEY = {"/Resources", "/XObject"};
+    const static inline std::string RESOURCES_KEY = "/Resources";
+    const static inline std::string FONTS_KEY = "/Font";
+    const static inline std::string GRPHS_KEY = "/ExtGState";
+    const static inline std::string XOBJS_KEY = "/XObject";
     
   public:
 
@@ -24,7 +25,6 @@ namespace pdflib
     xobject_subtype_name get_subtype() const;
 
     void set(std::string      xobject_key_,
-             nlohmann::json&  json_xobject_,
              QPDFObjectHandle qpdf_xobject_);
 
     // Form-specific API
@@ -34,10 +34,10 @@ namespace pdflib
     bool has_fonts();
     bool has_grphs();
     bool has_xobjects();
-    
-    std::pair<nlohmann::json, QPDFObjectHandle> get_fonts();
-    std::pair<nlohmann::json, QPDFObjectHandle> get_grphs();
-    std::pair<nlohmann::json, QPDFObjectHandle> get_xobjects();
+
+    QPDFObjectHandle get_fonts();
+    QPDFObjectHandle get_grphs();
+    QPDFObjectHandle get_xobjects();
 
     std::vector<qpdf_instruction> parse_stream();
 
@@ -51,7 +51,6 @@ namespace pdflib
 
   private:
 
-    nlohmann::json   json_xobject;
     QPDFObjectHandle qpdf_xobject;
 
     QPDFObjectHandle qpdf_xobject_dict;
@@ -71,7 +70,7 @@ namespace pdflib
 
   nlohmann::json pdf_resource<PAGE_XOBJECT_FORM>::get()
   {
-    return json_xobject;
+    return to_json(qpdf_xobject);
   }
 
   std::string pdf_resource<PAGE_XOBJECT_FORM>::get_key() const
@@ -85,14 +84,11 @@ namespace pdflib
   }
 
   void pdf_resource<PAGE_XOBJECT_FORM>::set(std::string      xobject_key_,
-                                             nlohmann::json&  json_xobject_,
                                              QPDFObjectHandle qpdf_xobject_)
   {
     LOG_S(INFO) << __FUNCTION__ << ": " << xobject_key_;
 
     xobject_key  = xobject_key_;
-
-    json_xobject = json_xobject_;
     qpdf_xobject = qpdf_xobject_;
 
     parse();
@@ -123,68 +119,53 @@ namespace pdflib
 
   bool pdf_resource<PAGE_XOBJECT_FORM>::has_fonts()
   {
-    return utils::json::has(FONTS_KEY, json_xobject_dict);
+    return qpdf_xobject_dict.hasKey(RESOURCES_KEY) and
+           qpdf_xobject_dict.getKey(RESOURCES_KEY).hasKey(FONTS_KEY);
   }
 
   bool pdf_resource<PAGE_XOBJECT_FORM>::has_grphs()
   {
-    return utils::json::has(GRPHS_KEY, json_xobject_dict);
+    return qpdf_xobject_dict.hasKey(RESOURCES_KEY) and
+           qpdf_xobject_dict.getKey(RESOURCES_KEY).hasKey(GRPHS_KEY);
   }
 
   bool pdf_resource<PAGE_XOBJECT_FORM>::has_xobjects()
   {
-    return utils::json::has(XOBJS_KEY, json_xobject_dict);
+    return qpdf_xobject_dict.hasKey(RESOURCES_KEY) and
+           qpdf_xobject_dict.getKey(RESOURCES_KEY).hasKey(XOBJS_KEY);
   }
 
-  std::pair<nlohmann::json, QPDFObjectHandle> pdf_resource<PAGE_XOBJECT_FORM>::get_fonts()
+  QPDFObjectHandle pdf_resource<PAGE_XOBJECT_FORM>::get_fonts()
   {
-    std::pair<nlohmann::json, QPDFObjectHandle> fonts;
-
-    if(utils::json::has(FONTS_KEY, json_xobject_dict))
+    if(has_fonts())
       {
-        fonts.first  = utils::json::get(FONTS_KEY, json_xobject_dict);
-        fonts.second = qpdf_xobject_dict.getKey(FONTS_KEY[0]).getKey(FONTS_KEY[1]);
-      }
-    else
-      {
-        LOG_S(WARNING) << "no '/Font' key detected: " << json_xobject_dict.dump(2);
+	return qpdf_xobject_dict.getKey(RESOURCES_KEY).getKey(FONTS_KEY);
       }
 
-    return fonts;
+    LOG_S(WARNING) << "no '/Font' key detected in xobject dict";
+    return QPDFObjectHandle::newNull();
   }
 
-  std::pair<nlohmann::json, QPDFObjectHandle> pdf_resource<PAGE_XOBJECT_FORM>::get_grphs()
+  QPDFObjectHandle pdf_resource<PAGE_XOBJECT_FORM>::get_grphs()
   {
-    std::pair<nlohmann::json, QPDFObjectHandle> grphs;
-
-    if(utils::json::has(GRPHS_KEY, json_xobject_dict))
+    if(has_grphs())
       {
-        grphs.first  = utils::json::get(GRPHS_KEY, json_xobject_dict);
-        grphs.second = qpdf_xobject_dict.getKey(GRPHS_KEY[0]).getKey(GRPHS_KEY[1]);
-      }
-    else
-      {
-        LOG_S(WARNING) << "no '/ExtGState' key detected: " << json_xobject_dict.dump(2);
+	return qpdf_xobject_dict.getKey(RESOURCES_KEY).getKey(GRPHS_KEY);
       }
 
-    return grphs;
+    LOG_S(WARNING) << "no '/ExtGState' key detected in xobject dict";
+    return QPDFObjectHandle::newNull();
   }
 
-  std::pair<nlohmann::json, QPDFObjectHandle> pdf_resource<PAGE_XOBJECT_FORM>::get_xobjects()
+  QPDFObjectHandle pdf_resource<PAGE_XOBJECT_FORM>::get_xobjects()
   {
-    std::pair<nlohmann::json, QPDFObjectHandle> xobjects;
-
-    if(utils::json::has(XOBJS_KEY, json_xobject_dict))
+    if(has_xobjects())
       {
-        xobjects.first  = utils::json::get(XOBJS_KEY, json_xobject_dict);
-        xobjects.second = qpdf_xobject_dict.getKey(XOBJS_KEY[0]).getKey(XOBJS_KEY[1]);
-      }
-    else
-      {
-        LOG_S(WARNING) << "no '/XObject' key detected";
+	return qpdf_xobject_dict.getKey(RESOURCES_KEY).getKey(XOBJS_KEY);
       }
 
-    return xobjects;
+    LOG_S(WARNING) << "no '/XObject' key detected in xobject dict";
+    return QPDFObjectHandle::newNull();
   }
 
   std::vector<qpdf_instruction> pdf_resource<PAGE_XOBJECT_FORM>::parse_stream()

@@ -25,8 +25,7 @@ namespace pdflib
     pdf_resource<PAGE_XOBJECT_FORM>&       get_form(std::string name);
     pdf_resource<PAGE_XOBJECT_POSTSCRIPT>& get_postscript(std::string name);
 
-    void set(nlohmann::json&   json_xobjects,
-             QPDFObjectHandle& qpdf_xobjects_,
+    void set(QPDFObjectHandle& qpdf_xobjects_,
              pdf_timings& timings);
 
   private:
@@ -184,23 +183,20 @@ namespace pdflib
     return XOBJECT_UNKNOWN;
   }
 
-  void pdf_resource<PAGE_XOBJECTS>::set(nlohmann::json&   json_xobjects,
-                                        QPDFObjectHandle& qpdf_xobjects,
+  void pdf_resource<PAGE_XOBJECTS>::set(QPDFObjectHandle& qpdf_xobjects,
                                         pdf_timings& timings)
   {
     LOG_S(INFO) << __FUNCTION__;
 
     double total_xobject_time = 0.0;
 
+    auto keys = qpdf_xobjects.getKeys();
     int cnt = 0;
-    int len = json_xobjects.size();
+    int len = keys.size();
 
-    for(auto& pair : json_xobjects.items())
+    for(auto& key : keys)
       {
-        LOG_S(INFO) << "decoding xobject: " << pair.key() << "\t" << (++cnt) << "/" << len;
-
-        std::string key = pair.key();
-	nlohmann::json& val = pair.value();
+        LOG_S(INFO) << "decoding xobject: " << key << "\t" << (++cnt) << "/" << len;
 
 	QPDFObjectHandle qpdf_obj = qpdf_xobjects.getKey(key);
 	xobject_subtype_name subtype = detect_subtype(qpdf_obj);
@@ -217,7 +213,7 @@ namespace pdflib
 		}
 
 	      pdf_resource<PAGE_XOBJECT_IMAGE> xobj;
-	      xobj.set(key, val, qpdf_obj);
+	      xobj.set(key, qpdf_obj);
 	      image_xobjects[key] = xobj;
 	    }
 	    break;
@@ -230,7 +226,7 @@ namespace pdflib
 		}
 
 	      pdf_resource<PAGE_XOBJECT_FORM> xobj;
-	      xobj.set(key, val, qpdf_obj);
+	      xobj.set(key, qpdf_obj);
 	      form_xobjects[key] = xobj;
 	    }
 	    break;
@@ -243,7 +239,7 @@ namespace pdflib
 		}
 
 	      pdf_resource<PAGE_XOBJECT_POSTSCRIPT> xobj;
-	      xobj.set(key, val, qpdf_obj);
+	      xobj.set(key, qpdf_obj);
 	      postscript_xobjects[key] = xobj;
 	    }
 	    break;
