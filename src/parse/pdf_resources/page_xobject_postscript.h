@@ -20,7 +20,6 @@ namespace pdflib
     xobject_subtype_name get_subtype() const;
 
     void set(std::string      xobject_key_,
-             nlohmann::json&  json_xobject_,
              QPDFObjectHandle qpdf_xobject_);
 
   private:
@@ -29,7 +28,6 @@ namespace pdflib
 
   private:
 
-    nlohmann::json   json_xobject;
     QPDFObjectHandle qpdf_xobject;
 
     QPDFObjectHandle qpdf_xobject_dict;
@@ -46,7 +44,7 @@ namespace pdflib
 
   nlohmann::json pdf_resource<PAGE_XOBJECT_POSTSCRIPT>::get()
   {
-    return json_xobject;
+    return to_json(qpdf_xobject);
   }
 
   std::string pdf_resource<PAGE_XOBJECT_POSTSCRIPT>::get_key() const
@@ -60,15 +58,12 @@ namespace pdflib
   }
 
   void pdf_resource<PAGE_XOBJECT_POSTSCRIPT>::set(std::string      xobject_key_,
-                                                   nlohmann::json&  json_xobject_,
                                                    QPDFObjectHandle qpdf_xobject_)
   {
     LOG_S(INFO) << __FUNCTION__ << ": " << xobject_key_;
     LOG_S(WARNING) << "PostScript XObjects are not fully supported";
 
     xobject_key  = xobject_key_;
-
-    json_xobject = json_xobject_;
     qpdf_xobject = qpdf_xobject_;
 
     parse();

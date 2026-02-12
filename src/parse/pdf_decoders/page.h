@@ -53,8 +53,8 @@ namespace pdflib
     void decode_dimensions();
 
     // Resources
-    void decode_resources();
-    void decode_resources_low_level();
+    void decode_resources(const decode_page_config& config);
+    void decode_resources_low_level(const decode_page_config& config);
 
     void decode_grphs();
 
@@ -77,7 +77,6 @@ namespace pdflib
 
     int page_number;
 
-    QPDFObjectHandle qpdf_parent_resources;
     QPDFObjectHandle qpdf_resources;
     QPDFObjectHandle qpdf_grphs;
     QPDFObjectHandle qpdf_fonts;
@@ -85,12 +84,8 @@ namespace pdflib
 
     nlohmann::json json_annots;
 
+    // Debug-only: populated when config.populate_json_objects is true
     nlohmann::json json_page;
-    nlohmann::json json_parent_resources;
-    nlohmann::json json_resources;
-    nlohmann::json json_grphs;
-    nlohmann::json json_fonts;
-    nlohmann::json json_xobjects;
 
     pdf_resource<PAGE_DIMENSION> page_dimension;
 
@@ -108,9 +103,9 @@ namespace pdflib
     bool word_cells_created = false;
     bool line_cells_created = false;
 
-    std::shared_ptr<pdf_resource<PAGE_GRPHS>>     page_grphs;
-    std::shared_ptr<pdf_resource<PAGE_FONTS>>     page_fonts;
-    std::shared_ptr<pdf_resource<PAGE_XOBJECTS>>  page_xobjects;
+    std::shared_ptr<pdf_resource<PAGE_GRPHS> > page_grphs;
+    std::shared_ptr<pdf_resource<PAGE_FONTS> > page_fonts;
+    std::shared_ptr<pdf_resource<PAGE_XOBJECTS> > page_xobjects;
 
     pdf_timings timings;
   };
@@ -230,11 +225,12 @@ namespace pdflib
   {
     utils::timer global, local;
 
-    {
-      local.reset();
-      json_page = to_json(qpdf_page);
-      timings.add_timing(pdf_timings::KEY_TO_JSON_PAGE, local.get_time());
-    }
+    if(config.populate_json_objects)
+      {
+	local.reset();
+	json_page = to_json(qpdf_page);
+	timings.add_timing(pdf_timings::KEY_TO_JSON_PAGE, local.get_time());
+      }
 
     {
       local.reset();
@@ -250,7 +246,7 @@ namespace pdflib
 
     {
       local.reset();
-      decode_resources();
+      decode_resources(config);
       timings.add_timing(pdf_timings::KEY_DECODE_RESOURCES, local.get_time());
     }
 
@@ -315,31 +311,24 @@ namespace pdflib
   void pdf_decoder<PAGE>::decode_dimensions()
   {
     LOG_S(INFO) << __FUNCTION__;
-    //utils::timer timer;
 
-    page_dimension.execute(json_page, qpdf_page);
+    page_dimension.execute(qpdf_page);
   }
 
-  void pdf_decoder<PAGE>::decode_resources()
+  void pdf_decoder<PAGE>::decode_resources(const decode_page_config& config)
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    if(json_page.count("/Resources") and
-       json_page.count("/Parent"))
+    bool has_resources = qpdf_page.hasKey("/Resources");
+    bool has_parent = qpdf_page.hasKey("/Parent");
+
+    if(has_resources and has_parent)
       {
         auto parent = qpdf_page.getKey("/Parent");
         if(parent.hasKey("/Resources"))
           {
-            //LOG_S(INFO) << "parent of page has resources!: " << json_parent_resources.dump(2);
-
-            qpdf_parent_resources = parent.getKey("/Resources");
-            json_parent_resources = to_json(qpdf_parent_resources); //json_page["/Resources"];
-
-            // both are used in the decode_resources
-            qpdf_resources = qpdf_parent_resources;
-            json_resources = json_parent_resources;
-
-            decode_resources_low_level();
+            qpdf_resources = parent.getKey("/Resources");
+            decode_resources_low_level(config);
           }
         else
           {
@@ -348,32 +337,23 @@ namespace pdflib
 
         // This might overwrite resources from the parent ...
         qpdf_resources = qpdf_page.getKey("/Resources");
-        json_resources = json_page["/Resources"];
-
-        decode_resources_low_level();
+        decode_resources_low_level(config);
       }
-    else if(json_page.count("/Resources"))
+    else if(has_resources)
       {
         qpdf_resources = qpdf_page.getKey("/Resources");
-        json_resources = json_page["/Resources"];
-
-        decode_resources_low_level();
+        decode_resources_low_level(config);
       }
-    else if(json_page.count("/Parent"))
+    else if(has_parent)
       {
         auto parent = qpdf_page.getKey("/Parent");
         if(parent.hasKey("/Resources"))
           {
-            qpdf_parent_resources = parent.getKey("/Resources");
-            json_parent_resources = to_json(qpdf_parent_resources); //json_page["/Resources"];
+            qpdf_resources = parent.getKey("/Resources");
 
-            LOG_S(INFO) << "parent of page has resources!: " << json_parent_resources.dump(2);
+            LOG_S(INFO) << "parent of page has resources!";
 
-            // both are used in the decode_resources
-            qpdf_resources = qpdf_parent_resources;
-            json_resources = json_parent_resources;
-
-            decode_resources_low_level();
+            decode_resources_low_level(config);
           }
         else
           {
@@ -382,7 +362,7 @@ namespace pdflib
       }
     else
       {
-        LOG_S(WARNING) << "page does not have any resources!: " << json_page.dump(2);
+        LOG_S(WARNING) << "page does not have any resources!";
       }
 
     {
@@ -396,44 +376,38 @@ namespace pdflib
     }
   }
 
-  void pdf_decoder<PAGE>::decode_resources_low_level()
+  void pdf_decoder<PAGE>::decode_resources_low_level(const decode_page_config& config)
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    if(json_resources.count("/ExtGState"))
+    if(qpdf_resources.hasKey("/ExtGState"))
       {
         qpdf_grphs = qpdf_resources.getKey("/ExtGState");
-        json_grphs = json_resources["/ExtGState"];
-
         decode_grphs();
       }
     else
       {
-        LOG_S(WARNING) << "page does not have any graphics state! ";// << json_resources.dump(2);
+        LOG_S(WARNING) << "page does not have any graphics state!";
       }
 
-    if(json_resources.count("/Font"))
+    if(qpdf_resources.hasKey("/Font"))
       {
         qpdf_fonts = qpdf_resources.getKey("/Font");
-        json_fonts = json_resources["/Font"];
-
         decode_fonts();
       }
     else
       {
-        LOG_S(WARNING) << "page does not have any fonts! ";// << json_resources.dump(2);
+        LOG_S(WARNING) << "page does not have any fonts!";
       }
 
-    if(json_resources.count("/XObject"))
+    if(qpdf_resources.hasKey("/XObject"))
       {
         qpdf_xobjects = qpdf_resources.getKey("/XObject");
-        json_xobjects = json_resources["/XObject"];
-
         decode_xobjects();
       }
     else
       {
-        LOG_S(WARNING) << "page does not have any xobjects! ";// << json_resources.dump(2);
+        LOG_S(WARNING) << "page does not have any xobjects!";
       }
   }
 
@@ -441,26 +415,21 @@ namespace pdflib
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    page_grphs->set(json_grphs, qpdf_grphs, timings);
+    page_grphs->set(qpdf_grphs, timings);
   }
 
   void pdf_decoder<PAGE>::decode_fonts()
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    page_fonts->set(json_fonts, qpdf_fonts, timings);
-
-    //for(auto itr=timings.begin(); itr!=timings.end(); itr++)
-    //{
-    //LOG_S(INFO) << itr->first << ": " << timings.get_sum(itr->first);
-    //}
+    page_fonts->set(qpdf_fonts, timings);
   }
 
   void pdf_decoder<PAGE>::decode_xobjects()
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    page_xobjects->set(json_xobjects, qpdf_xobjects, timings);
+    page_xobjects->set(qpdf_xobjects, timings);
   }
 
   void pdf_decoder<PAGE>::decode_contents(const decode_page_config& config)

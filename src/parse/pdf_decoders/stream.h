@@ -395,20 +395,20 @@ namespace pdflib
     {
       if(xobj.has_fonts())
         {
-          std::pair<nlohmann::json, QPDFObjectHandle> xobj_fonts = xobj.get_fonts();
-          page_fonts_->set(xobj_fonts.first, xobj_fonts.second, timings);
+          QPDFObjectHandle xobj_fonts = xobj.get_fonts();
+          page_fonts_->set(xobj_fonts, timings);
         }
 
       if(xobj.has_grphs())
         {
-          std::pair<nlohmann::json, QPDFObjectHandle> xobj_grphs = xobj.get_grphs();
-          page_grphs_->set(xobj_grphs.first, xobj_grphs.second, timings);
+          QPDFObjectHandle xobj_grphs = xobj.get_grphs();
+          page_grphs_->set(xobj_grphs, timings);
         }
 
       if(xobj.has_xobjects())
         {
-          std::pair<nlohmann::json, QPDFObjectHandle> xobj_xobjects = xobj.get_xobjects();
-          page_xobjects_->set(xobj_xobjects.first, xobj_xobjects.second, timings);
+          QPDFObjectHandle xobj_xobjects = xobj.get_xobjects();
+          page_xobjects_->set(xobj_xobjects, timings);
         }
     }
 

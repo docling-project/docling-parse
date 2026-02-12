@@ -33,6 +33,8 @@ namespace pdflib
     double line_space_width_factor_for_merge = 1.0;
     double line_space_width_factor_for_merge_with_space = 0.33;
 
+    bool populate_json_objects = false;
+
     nlohmann::json to_json() const;
     void from_json(const nlohmann::json& j);
 
@@ -68,6 +70,8 @@ namespace pdflib
     j["line_space_width_factor_for_merge"] = line_space_width_factor_for_merge;
     j["line_space_width_factor_for_merge_with_space"] = line_space_width_factor_for_merge_with_space;
 
+    j["populate_json_objects"] = populate_json_objects;
+
     return j;
   }
 
@@ -94,6 +98,8 @@ namespace pdflib
 
     if(j.count("line_space_width_factor_for_merge")) { line_space_width_factor_for_merge = j["line_space_width_factor_for_merge"]; }
     if(j.count("line_space_width_factor_for_merge_with_space")) { line_space_width_factor_for_merge_with_space = j["line_space_width_factor_for_merge_with_space"]; }
+
+    if(j.count("populate_json_objects")) { populate_json_objects = j["populate_json_objects"]; }
   }
 
   bool decode_page_config::load(const std::string& filename)
@@ -143,7 +149,8 @@ namespace pdflib
        << std::setw(48) << "horizontal_cell_tolerance" << horizontal_cell_tolerance << "\n"
        << std::setw(48) << "word_space_width_factor_for_merge" << word_space_width_factor_for_merge << "\n"
        << std::setw(48) << "line_space_width_factor_for_merge" << line_space_width_factor_for_merge << "\n"
-       << std::setw(48) << "line_space_width_factor_for_merge_with_space" << line_space_width_factor_for_merge_with_space << "\n";
+       << std::setw(48) << "line_space_width_factor_for_merge_with_space" << line_space_width_factor_for_merge_with_space << "\n"
+       << std::setw(48) << "populate_json_objects" << (populate_json_objects ? "true" : "false") << "\n";
 
     return ss.str();
   }

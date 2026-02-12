@@ -24,15 +24,15 @@ namespace pdflib
     std::array<double, 4> get_crop_bbox() { return crop_bbox; }
     std::array<double, 4> get_media_bbox() { return media_bbox; }
 
-    void execute(nlohmann::json& json_resources,
-		 QPDFObjectHandle qpdf_resources);
+    void execute(QPDFObjectHandle qpdf_page);
 
     std::pair<double, double> rotate(int angle);
     
   private:
 
     std::array<double, 4> normalize_page_boundaries(std::array<double, 4> bbox, std::string name);
-    
+    std::array<double, 4> qpdf_bbox_to_array(QPDFObjectHandle qpdf_arr, std::string name);
+
   private:
 
     bool                  initialised;
@@ -228,35 +228,74 @@ namespace pdflib
     return false;
   }
   
-  // Table 30, p 85
-  void pdf_resource<PAGE_DIMENSION>::execute(nlohmann::json& json_resources,
-					     QPDFObjectHandle qpdf_resources)
+  std::array<double, 4> pdf_resource<PAGE_DIMENSION>::qpdf_bbox_to_array(QPDFObjectHandle qpdf_arr,
+								       std::string name)
   {
-    LOG_S(INFO) << __FUNCTION__ << ": " << json_resources.dump(2);
+    std::array<double, 4> result = {0, 0, 0, 0};
 
-    if(json_resources.count("/Rotate"))
+    if(not qpdf_arr.isArray())
       {
-        angle = json_resources["/Rotate"].get<int>();
-	LOG_S(INFO) << "found a rotated poge with angle: " << angle;
+	LOG_S(WARNING) << name << " is not an array, skipping";
+	return result;
+      }
+
+    int n = qpdf_arr.getArrayNItems();
+    if(n != 4)
+      {
+	LOG_S(WARNING) << name << " has " << n << " items instead of 4";
+      }
+
+    for(int d = 0; d < 4 && d < n; d++)
+      {
+	QPDFObjectHandle item = qpdf_arr.getArrayItem(d);
+	if(item.isNumber())
+	  {
+	    result[d] = item.getNumericValue();
+	  }
+	else
+	  {
+	    LOG_S(WARNING) << name << "[" << d << "] is not a number: " << item.unparse();
+	    result[d] = 0;
+	  }
+      }
+
+    return result;
+  }
+
+  // Table 30, p 85
+  void pdf_resource<PAGE_DIMENSION>::execute(QPDFObjectHandle qpdf_page)
+  {
+    LOG_S(INFO) << __FUNCTION__;
+
+    if(qpdf_page.hasKey("/Rotate"))
+      {
+        QPDFObjectHandle rotate_obj = qpdf_page.getKey("/Rotate");
+	if(rotate_obj.isInteger())
+	  {
+	    angle = static_cast<int>(rotate_obj.getIntValue());
+	    LOG_S(INFO) << "found a rotated page with angle: " << angle;
+	  }
+	else
+	  {
+	    LOG_S(WARNING) << "/Rotate is not an integer: " << rotate_obj.unparse();
+	    angle = 0;
+	  }
       }
     else
       {
         angle = 0;
       }
 
-    if(json_resources.count("/MediaBox"))
+    if(qpdf_page.hasKey("/MediaBox"))
       {
-        for(int d=0; d<4; d++)
-          {
-            media_bbox[d] = json_resources["/MediaBox"][d].get<double>();
-          }
+        media_bbox = qpdf_bbox_to_array(qpdf_page.getKey("/MediaBox"), "/MediaBox");
       }
     // it might inherit the media-bbox from an ancestor in the page tree (sec 7.7.3.4, p 80)
     // PDF allows MediaBox to be inherited from any parent, not just the immediate parent
     else
       {
         bool found_mediabox = false;
-        QPDFObjectHandle current = qpdf_resources;
+        QPDFObjectHandle current = qpdf_page;
 
         // Traverse the parent chain to find inherited MediaBox
         // Limit depth to prevent infinite loops in malformed PDFs
@@ -265,16 +304,12 @@ namespace pdflib
             QPDFObjectHandle parent = current.getKey("/Parent");
             if(parent.hasKey("/MediaBox"))
               {
-                QPDFObjectHandle qpdf_bbox = parent.getKey("/MediaBox");
-                nlohmann::json json_bbox = to_json(qpdf_bbox);
+                media_bbox = qpdf_bbox_to_array(parent.getKey("/MediaBox"), "/MediaBox (inherited)");
 
                 LOG_S(INFO) << "inherited MediaBox from ancestor at depth " << (depth + 1)
-                            << ": " << json_bbox.dump();
+                            << ": [" << media_bbox[0] << ", " << media_bbox[1]
+                            << ", " << media_bbox[2] << ", " << media_bbox[3] << "]";
 
-                for(int d=0; d<4; d++)
-                  {
-                    media_bbox[d] = json_bbox[d].get<double>();
-                  }
                 found_mediabox = true;
                 break;
               }
@@ -287,12 +322,14 @@ namespace pdflib
           }
       }
 
-    if(json_resources.count("/CropBox"))
-      {        
-        for(int d=0; d<4; d++)
-          {
-            crop_bbox[d] = json_resources["/CropBox"][d].get<double>();
-          }
+    bool has_cropbox = qpdf_page.hasKey("/CropBox");
+    bool has_bleedbox = qpdf_page.hasKey("/BleedBox");
+    bool has_trimbox = qpdf_page.hasKey("/TrimBox");
+    bool has_artbox = qpdf_page.hasKey("/ArtBox");
+
+    if(has_cropbox)
+      {
+        crop_bbox = qpdf_bbox_to_array(qpdf_page.getKey("/CropBox"), "/CropBox");
       }
     else
       {
@@ -319,55 +356,46 @@ namespace pdflib
 	crop_bbox[0] = std::max(crop_bbox[0], media_bbox[0]);
 	crop_bbox[1] = std::max(crop_bbox[1], media_bbox[1]);
 	crop_bbox[2] = std::min(crop_bbox[2], media_bbox[2]);
-	crop_bbox[3] = std::min(crop_bbox[3], media_bbox[3]);	
+	crop_bbox[3] = std::min(crop_bbox[3], media_bbox[3]);
       }
-    
-    if(json_resources.count("/BleedBox"))
-      {        
-        for(int d=0; d<4; d++)
-          {
-            bleed_bbox[d] = json_resources["/BleedBox"][d].get<double>();
-          }
+
+    if(has_bleedbox)
+      {
+        bleed_bbox = qpdf_bbox_to_array(qpdf_page.getKey("/BleedBox"), "/BleedBox");
       }
     else
       {
         bleed_bbox = crop_bbox;
       }
 
-    if(json_resources.count("/TrimBox"))
-      {        
-        for(int d=0; d<4; d++)
-          {
-            trim_bbox[d] = json_resources["/TrimBox"][d].get<double>();
-          }
+    if(has_trimbox)
+      {
+        trim_bbox = qpdf_bbox_to_array(qpdf_page.getKey("/TrimBox"), "/TrimBox");
       }
     else
       {
         trim_bbox = crop_bbox;
       }
 
-    if(json_resources.count("/ArtBox"))
-      {        
-        for(int d=0; d<4; d++)
-          {
-            art_bbox[d] = json_resources["/ArtBox"][d].get<double>();
-          }
+    if(has_artbox)
+      {
+        art_bbox = qpdf_bbox_to_array(qpdf_page.getKey("/ArtBox"), "/ArtBox");
       }
     else
       {
         art_bbox = crop_bbox;
       }
-    
+
     // FIXME: cleanup and review the box priorities
-    if((not initialised) and json_resources.count("/CropBox"))
+    if((not initialised) and has_cropbox)
       {
 	std::stringstream ss;
-	ss << "defaulting to crop-box";	
+	ss << "defaulting to crop-box";
         LOG_S(INFO) << ss.str();
-	
+
         bbox = crop_bbox;
         initialised = true;
-      }    
+      }
     // Check if media_bbox was set (either directly or via inheritance)
     // media_bbox is initialized to {0,0,0,0}, so non-zero values indicate it was found
     else if((not initialised) and (media_bbox[2] > 0 || media_bbox[3] > 0))
@@ -381,48 +409,47 @@ namespace pdflib
         bbox = media_bbox;
         initialised = true;
       }
-    else if((not initialised) and json_resources.count("/ArtBox"))
+    else if((not initialised) and has_artbox)
       {
 	std::stringstream ss;
-	ss << "defaulting to art-box";	
+	ss << "defaulting to art-box";
         LOG_S(INFO) << ss.str();
 
 	crop_bbox = art_bbox;
 	media_bbox = art_bbox;
-	
+
         bbox = art_bbox;
         initialised = true;
-      }    
-    else if((not initialised) and json_resources.count("/BleedBox"))
+      }
+    else if((not initialised) and has_bleedbox)
       {
 	std::stringstream ss;
-	ss << "defaulting to bleed-box";	
+	ss << "defaulting to bleed-box";
         LOG_S(INFO) << ss.str();
-	
+
 	crop_bbox = bleed_bbox;
 	media_bbox = bleed_bbox;
-	
+
         bbox = bleed_bbox;
         initialised = true;
       }
-    else if((not initialised) and json_resources.count("/TrimBox"))
+    else if((not initialised) and has_trimbox)
       {
 	std::stringstream ss;
-	ss << "defaulting to trim-box";	
+	ss << "defaulting to trim-box";
         LOG_S(INFO) << ss.str();
 
 	crop_bbox = trim_bbox;
 	media_bbox = trim_bbox;
-	
+
         bbox = trim_bbox;
         initialised = true;
-      }    
+      }
     else
       {
 	std::stringstream ss;
-	ss << "could not find the page-dimensions: " 
-	   << json_resources.dump(4);
-	
+	ss << "could not find the page-dimensions";
+
         LOG_S(ERROR) << ss.str();
 	throw std::logic_error(ss.str());
       }

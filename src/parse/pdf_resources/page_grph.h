@@ -16,8 +16,7 @@ namespace pdflib
     
     nlohmann::json get();
 
-    void set(std::string&     key_, 
-	     nlohmann::json&  json_graph, 
+    void set(const std::string& key_,
 	     QPDFObjectHandle qpdf_grph);
     
   private:
@@ -37,12 +36,11 @@ namespace pdflib
     return val;
   }
   
-  void pdf_resource<PAGE_GRPH>::set(std::string& key_, 
-				    nlohmann::json& json_graph, 
+  void pdf_resource<PAGE_GRPH>::set(const std::string& key_,
 				    QPDFObjectHandle qpdf_grph)
   {
     key = key_;
-    val = json_graph;
+    val = to_json(qpdf_grph);
 
     LOG_S(INFO) << key << ": " << val.dump(2);
   }

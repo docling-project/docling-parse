@@ -75,9 +75,20 @@ class Row:
     elapsed_sec: float
     success: bool
     error: str
+    timings_detail: dict = None  # optional per-key timing breakdown (docling only)
+
+    def __post_init__(self):
+        if self.timings_detail is None:
+            self.timings_detail = {}
 
 
 # -------- Parser adapters --------
+
+
+def _get_docling_static_timing_keys() -> List[str]:
+    """Return all static timing keys from the C++ pybind module."""
+    from docling_parse.pdf_parsers import get_static_timing_keys  # type: ignore[import]
+    return sorted(get_static_timing_keys())
 
 
 def parse_with_docling() -> Callable[[Path], Iterable[Row]]:
@@ -85,6 +96,8 @@ def parse_with_docling() -> Callable[[Path], Iterable[Row]]:
         from docling_parse.pdf_parser import DoclingPdfParser
         from docling_parse.pdf_parsers import DecodePageConfig  # type: ignore[import]
         from docling_core.types.doc.page import PdfPageBoundaryType
+
+        timing_keys = _get_docling_static_timing_keys()
 
         rows: List[Row] = []
         try:
@@ -104,6 +117,7 @@ def parse_with_docling() -> Callable[[Path], Iterable[Row]]:
                 t0 = time.perf_counter()
                 err = ""
                 ok = True
+                detail: dict = {}
                 try:
                     perf_config = DecodePageConfig()
                     perf_config.keep_char_cells = False
@@ -111,16 +125,19 @@ def parse_with_docling() -> Callable[[Path], Iterable[Row]]:
                     perf_config.keep_bitmaps = False
                     perf_config.create_word_cells = False
                     perf_config.create_line_cells = True
-                    _ = doc.get_page(
+                    _, timings_obj = doc.get_page_with_timings(
                         page_idx,
                         config=perf_config,
                     )
+                    static_t = timings_obj.get_static_timings()
+                    for key in timing_keys:
+                        detail[key] = static_t.get(key, 0.0)
                 except Exception as e:  # pragma: no cover
                     ok = False
                     err = str(e)
                     print(f"error: {err}")
                 t1 = time.perf_counter()
-                rows.append(Row(str(pdf_path), page_idx, t1 - t0, ok, err))
+                rows.append(Row(str(pdf_path), page_idx, t1 - t0, ok, err, detail))
 
             # best-effort cleanup
             try:
@@ -352,6 +369,35 @@ def print_per_document_table(rows: List[Row]) -> None:
     print(tabulate(table_rows, headers=headers))
 
 
+def _get_timing_keys_from_rows(rows: List[Row]) -> List[str]:
+    """Extract the sorted set of timing detail keys present across all rows."""
+    keys: set = set()
+    for r in rows:
+        keys.update(r.timings_detail.keys())
+    return sorted(keys)
+
+
+def print_timing_breakdown(rows: List[Row], timing_keys: List[str]) -> None:
+    """Print a table showing average absolute time and % for each static timing key."""
+    ok_rows = [r for r in rows if r.page_number > 0 and r.success and r.timings_detail]
+    if not ok_rows:
+        return
+
+    n = len(ok_rows)
+    total_elapsed = sum(r.elapsed_sec for r in ok_rows)
+
+    headers = ["timing_key", "total_sec", "avg_sec", "avg_%"]
+    table_rows = []
+    for key in timing_keys:
+        key_total = sum(r.timings_detail.get(key, 0.0) for r in ok_rows)
+        key_avg = key_total / n
+        key_pct = (key_total / total_elapsed * 100.0) if total_elapsed > 0 else 0.0
+        table_rows.append([key, fmt_seconds(key_total), fmt_seconds(key_avg), f"{key_pct:.2f}%"])
+
+    print("\nTiming breakdown (static keys, across all successful pages):")
+    print(tabulate(table_rows, headers=headers))
+
+
 def default_output_path(parser_name: str) -> Path:
     ts = time.strftime("%Y%m%d-%H%M%S")
     return Path("perf") / "results" / f"perf_{parser_name}_{ts}.csv"
@@ -403,16 +449,31 @@ def main(argv: List[str]) -> int:
         
     ended = time.perf_counter()
 
+    # Collect timing detail keys from the rows (docling only)
+    timing_keys = _get_timing_keys_from_rows(rows)
+
     # Write CSV
     with out_path.open("w", newline="") as f:
         w = csv.writer(f)
-        w.writerow(["filename", "page_number", "elapsed_sec", "success", "error"])
+        header = ["filename", "page_number", "elapsed_sec", "success", "error"]
+        for key in timing_keys:
+            header.append(key)
+            header.append(f"{key}_%")
+        w.writerow(header)
         for r in rows:
-            w.writerow([r.filename, r.page_number, f"{r.elapsed_sec:.9f}", int(r.success), r.error])
+            row_data = [r.filename, r.page_number, f"{r.elapsed_sec:.9f}", int(r.success), r.error]
+            for key in timing_keys:
+                val = r.timings_detail.get(key, 0.0)
+                pct = (val / r.elapsed_sec * 100.0) if r.elapsed_sec > 0 else 0.0
+                row_data.append(f"{val:.9f}")
+                row_data.append(f"{pct:.2f}")
+            w.writerow(row_data)
 
     # Print summary
     stats = compute_stats(rows)
     print_stats(stats, parser_key)
+    if timing_keys:
+        print_timing_breakdown(rows, timing_keys)
     print_per_document_table(rows)
     print(f"\nWrote: {out_path}")
     print(f"Total wall time: {fmt_seconds(ended - started)} sec")
