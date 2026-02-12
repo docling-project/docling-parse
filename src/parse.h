@@ -85,6 +85,12 @@
 #include <parse/page_items/page_image.h>
 #include <parse/page_items/page_images.h>
 
+#include <parse/page_items/page_widget.h>
+#include <parse/page_items/page_widgets.h>
+
+#include <parse/page_items/page_hyperlink.h>
+#include <parse/page_items/page_hyperlinks.h>
+
 #include <parse/pdf_sanitator.h>
 #include <parse/page_item_sanitator.h>
 #include <parse/pdf_sanitators/constants.h>

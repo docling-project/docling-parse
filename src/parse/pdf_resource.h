@@ -16,6 +16,12 @@ namespace pdflib
 
     PAGE_IMAGE,
     PAGE_IMAGES,
+
+    PAGE_WIDGET,
+    PAGE_WIDGETS,
+
+    PAGE_HYPERLINK,
+    PAGE_HYPERLINKS,
   };
   
   template<item_name name>
