@@ -48,7 +48,7 @@ namespace pdflib
     pdf_state(const decode_page_config& config,
               const pdf_state<GRPH>& grph_state_,
               std::array<double, 9>&    trafo_matrix_,
-              pdf_resource<PAGE_SHAPES>& page_shapes_);
+              page_item<PAGE_SHAPES>& page_shapes_);
 
     pdf_state(const pdf_state<SHAPE>& other);
 
@@ -90,7 +90,7 @@ namespace pdflib
     bool verify(std::vector<qpdf_instruction>& instructions,
                 std::size_t num_instr, std::string name);
 
-    bool keep_shape(pdf_resource<PAGE_SHAPE>& shape);
+    bool keep_shape(page_item<PAGE_SHAPE>& shape);
 
     void close_last_path();
 
@@ -103,7 +103,7 @@ namespace pdflib
     void re(double x, double y,
             double w, double h);
 
-    void interpolate(pdf_resource<PAGE_SHAPE>& shape,
+    void interpolate(page_item<PAGE_SHAPE>& shape,
                      double x0, double y0,
                      double x1, double y1,
                      double x2, double y2,
@@ -117,10 +117,10 @@ namespace pdflib
 
     std::array<double, 9>&    trafo_matrix;
 
-    pdf_resource<PAGE_SHAPES>& page_shapes;
+    page_item<PAGE_SHAPES>& page_shapes;
 
-    pdf_resource<PAGE_SHAPES>  curr_shapes;
-    pdf_resource<PAGE_SHAPES>  clippings;
+    page_item<PAGE_SHAPES>  curr_shapes;
+    page_item<PAGE_SHAPES>  clippings;
 
     clipping_path_mode_type clipping_path_mode;
   };
@@ -128,7 +128,7 @@ namespace pdflib
   pdf_state<SHAPE>::pdf_state(const decode_page_config& config_,
                               const pdf_state<GRPH>& grph_state_,
                               std::array<double, 9>&    trafo_matrix_,
-                              pdf_resource<PAGE_SHAPES>& page_shapes_):
+                              page_item<PAGE_SHAPES>& page_shapes_):
     config(config_),
     grph_state(grph_state_),
 
@@ -438,7 +438,7 @@ namespace pdflib
 
     curr_shapes.clear();
 
-    pdf_resource<PAGE_SHAPE> shape;
+    page_item<PAGE_SHAPE> shape;
     curr_shapes.push_back(shape);
   }
 
@@ -481,7 +481,7 @@ namespace pdflib
     return false;
   }
 
-  bool pdf_state<SHAPE>::keep_shape(pdf_resource<PAGE_SHAPE>& shape)
+  bool pdf_state<SHAPE>::keep_shape(page_item<PAGE_SHAPE>& shape)
   {
     if(shape.size()<2)
       {
@@ -593,7 +593,7 @@ namespace pdflib
   {
     if(not config.keep_shapes) { return; }
 
-    pdf_resource<PAGE_SHAPE> shape;
+    page_item<PAGE_SHAPE> shape;
     curr_shapes.push_back(shape);
 
     this->l(x,y);
@@ -638,7 +638,7 @@ namespace pdflib
     shape.append(coor.first, coor.second);
 
     // add new shape segment
-    pdf_resource<PAGE_SHAPE> shape_;
+    page_item<PAGE_SHAPE> shape_;
     shape_.append(coor.first, coor.second);
 
     curr_shapes.push_back(shape_);
@@ -660,7 +660,7 @@ namespace pdflib
     this->h();
   }
 
-  void pdf_state<SHAPE>::interpolate(pdf_resource<PAGE_SHAPE>& shape,
+  void pdf_state<SHAPE>::interpolate(page_item<PAGE_SHAPE>& shape,
                                      double x0, double y0,
                                      double x1, double y1,
                                      double x2, double y2,

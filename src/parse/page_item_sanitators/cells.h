@@ -1,55 +1,55 @@
 //-*-C++-*-
 
-#ifndef PDF_CELLS_SANITATOR_H
-#define PDF_CELLS_SANITATOR_H
+#ifndef PAGE_ITEM_CELLS_SANITATOR_H
+#define PAGE_ITEM_CELLS_SANITATOR_H
 
 namespace pdflib
 {
 
   template<>
-  class pdf_sanitator<PAGE_CELLS>
+  class page_item_sanitator<PAGE_CELLS>
   {
   public:
     
-    pdf_sanitator();
-    ~pdf_sanitator();
+    page_item_sanitator();
+    ~page_item_sanitator();
 
-    nlohmann::json to_records(pdf_resource<PAGE_CELLS>& cells);
+    nlohmann::json to_records(page_item<PAGE_CELLS>& cells);
 
-    pdf_resource<PAGE_CELLS> create_word_cells(pdf_resource<PAGE_CELLS>& cells,
+    page_item<PAGE_CELLS> create_word_cells(page_item<PAGE_CELLS>& cells,
 					       const decode_page_config& config);
 
-    pdf_resource<PAGE_CELLS> create_line_cells(pdf_resource<PAGE_CELLS>& cells,
+    page_item<PAGE_CELLS> create_line_cells(page_item<PAGE_CELLS>& cells,
 					       const decode_page_config& config);
 
     
-    //void remove_duplicate_chars(pdf_resource<PAGE_CELLS>& cells, double eps=1.0e-1);
-    void remove_adjacent_cells(pdf_resource<PAGE_CELLS>& cells, double eps); //=1.0e-1);
-    void remove_duplicate_cells(pdf_resource<PAGE_CELLS>& cells, double eps, bool same_line);
+    //void remove_duplicate_chars(page_item<PAGE_CELLS>& cells, double eps=1.0e-1);
+    void remove_adjacent_cells(page_item<PAGE_CELLS>& cells, double eps); //=1.0e-1);
+    void remove_duplicate_cells(page_item<PAGE_CELLS>& cells, double eps, bool same_line);
     
-    void sanitize_bbox(pdf_resource<PAGE_CELLS>& cells,
+    void sanitize_bbox(page_item<PAGE_CELLS>& cells,
 		       double horizontal_cell_tolerance, //=1.0,
 		       bool enforce_same_font, //=true,
 		       double space_width_factor_for_merge, //=1.5,
 		       double space_width_factor_for_merge_with_space); //=0.33);
 
-    void sanitize_text(pdf_resource<PAGE_CELLS>& cells);
+    void sanitize_text(page_item<PAGE_CELLS>& cells);
 
 
     
   private:
 
-    bool applicable_for_merge(pdf_resource<PAGE_CELL>& cell_i,
-			      pdf_resource<PAGE_CELL>& cell_j,
+    bool applicable_for_merge(page_item<PAGE_CELL>& cell_i,
+			      page_item<PAGE_CELL>& cell_j,
 			      bool enforce_same_font);
 
-    void contract_cells_into_lines_right_to_left(pdf_resource<PAGE_CELLS>& cells,
+    void contract_cells_into_lines_right_to_left(page_item<PAGE_CELLS>& cells,
 						 double horizontal_cell_tolerance,
 						 bool enforce_same_font,
 						 double space_width_factor_for_merge,
 						 double space_width_factor_for_merge_with_space);
 
-    void contract_cells_into_lines_left_to_right(pdf_resource<PAGE_CELLS>& cells,
+    void contract_cells_into_lines_left_to_right(page_item<PAGE_CELLS>& cells,
 						 double horizontal_cell_tolerance,
 						 bool enforce_same_font,
 						 double space_width_factor_for_merge,
@@ -57,14 +57,14 @@ namespace pdflib
 						 bool allow_reverse);
     
     // linear
-    void contract_cells_into_lines_v1(pdf_resource<PAGE_CELLS>& cells,
+    void contract_cells_into_lines_v1(page_item<PAGE_CELLS>& cells,
 				      double horizontal_cell_tolerance=1.0,
 				      bool enforce_same_font=true,
 				      double space_width_factor_for_merge=1.5,
 				      double space_width_factor_for_merge_with_space=0.33);
 
     // quadratic
-    void contract_cells_into_lines_v2(pdf_resource<PAGE_CELLS>& cells,
+    void contract_cells_into_lines_v2(page_item<PAGE_CELLS>& cells,
 				      double horizontal_cell_tolerance=1.0,
 				      bool enforce_same_font=true,
 				      double space_width_factor_for_merge=1.5,
@@ -74,13 +74,13 @@ namespace pdflib
 
   };
 
-  pdf_sanitator<PAGE_CELLS>::pdf_sanitator()
+  page_item_sanitator<PAGE_CELLS>::page_item_sanitator()
   {}
   
-  pdf_sanitator<PAGE_CELLS>::~pdf_sanitator()
+  page_item_sanitator<PAGE_CELLS>::~page_item_sanitator()
   {}
 
-  nlohmann::json pdf_sanitator<PAGE_CELLS>::to_records(pdf_resource<PAGE_CELLS>& cells)
+  nlohmann::json page_item_sanitator<PAGE_CELLS>::to_records(page_item<PAGE_CELLS>& cells)
   {
     LOG_S(INFO) << __FUNCTION__;
 
@@ -89,7 +89,7 @@ namespace pdflib
     int order = 0;
     for(auto itr=cells.begin(); itr!=cells.end(); itr++)
       {
-	pdflib::pdf_resource<pdflib::PAGE_CELL>& cell = *itr;
+	pdflib::page_item<pdflib::PAGE_CELL>& cell = *itr;
 
 	if(not cell.active)
 	  {
@@ -128,14 +128,14 @@ namespace pdflib
     return result;
   }
   
-  pdf_resource<PAGE_CELLS> pdf_sanitator<PAGE_CELLS>::create_word_cells(pdf_resource<PAGE_CELLS>& char_cells,
+  page_item<PAGE_CELLS> page_item_sanitator<PAGE_CELLS>::create_word_cells(page_item<PAGE_CELLS>& char_cells,
 									const decode_page_config& config)
   {
     LOG_S(INFO) << __FUNCTION__;
     LOG_S(INFO) << "word_space_width_factor_for_merge: " << config.word_space_width_factor_for_merge;
 
     // do a deep copy
-    pdf_resource<PAGE_CELLS> word_cells;
+    page_item<PAGE_CELLS> word_cells;
     word_cells = char_cells;
 
     LOG_S(INFO) << "#-char cells: " << word_cells.size();
@@ -171,7 +171,7 @@ namespace pdflib
     return word_cells;
   }
 
-  pdf_resource<PAGE_CELLS> pdf_sanitator<PAGE_CELLS>::create_line_cells(pdf_resource<PAGE_CELLS>& char_cells,
+  page_item<PAGE_CELLS> page_item_sanitator<PAGE_CELLS>::create_line_cells(page_item<PAGE_CELLS>& char_cells,
 									const decode_page_config& config)
   {
     LOG_S(INFO) << __FUNCTION__ << " -> char_cells: " << char_cells.size();
@@ -179,7 +179,7 @@ namespace pdflib
     LOG_S(INFO) << "line_space_width_factor_for_merge_with_space: " << config.line_space_width_factor_for_merge_with_space;
 
     // do a deep copy
-    pdf_resource<PAGE_CELLS> line_cells;
+    page_item<PAGE_CELLS> line_cells;
     line_cells = char_cells;
 
     LOG_S(INFO) << "# char-cells: " << line_cells.size();
@@ -197,7 +197,7 @@ namespace pdflib
   }  
 
   /*
-  void pdf_sanitator<PAGE_CELLS>::remove_duplicate_chars(pdf_resource<PAGE_CELLS>& cells, double eps)
+  void page_item_sanitator<PAGE_CELLS>::remove_duplicate_chars(page_item<PAGE_CELLS>& cells, double eps)
   {
     while(true)
       {
@@ -242,7 +242,7 @@ namespace pdflib
 	  }
       }
 
-    pdf_resource<PAGE_CELLS> cells_;
+    page_item<PAGE_CELLS> cells_;
     for(int i=0; i<cells.size(); i++)
       {
 	if(cells[i].active)
@@ -255,8 +255,8 @@ namespace pdflib
   }
   */
 
-  //void pdf_sanitator<PAGE_CELLS>::remove_duplicate_chars(pdf_resource<PAGE_CELLS>& cells, double eps)
-  void pdf_sanitator<PAGE_CELLS>::remove_adjacent_cells(pdf_resource<PAGE_CELLS>& cells, double eps)
+  //void page_item_sanitator<PAGE_CELLS>::remove_duplicate_chars(page_item<PAGE_CELLS>& cells, double eps)
+  void page_item_sanitator<PAGE_CELLS>::remove_adjacent_cells(page_item<PAGE_CELLS>& cells, double eps)
   {
     for(int i=0; i<cells.size(); i++)
       {
@@ -292,7 +292,7 @@ namespace pdflib
     cells.remove_inactive_cells();
   }
 
-  void pdf_sanitator<PAGE_CELLS>::remove_duplicate_cells(pdf_resource<PAGE_CELLS>& cells, double eps, bool same_line)
+  void page_item_sanitator<PAGE_CELLS>::remove_duplicate_cells(page_item<PAGE_CELLS>& cells, double eps, bool same_line)
   {
     for(int i=0; i<cells.size(); i++)
       {
@@ -334,7 +334,7 @@ namespace pdflib
     cells.remove_inactive_cells();
   }
   
-  void pdf_sanitator<PAGE_CELLS>::sanitize_text(pdf_resource<PAGE_CELLS>& cells)
+  void page_item_sanitator<PAGE_CELLS>::sanitize_text(page_item<PAGE_CELLS>& cells)
   {
     for(int i=0; i<cells.size(); i++)
       {
@@ -369,7 +369,7 @@ namespace pdflib
     }
   }
   
-  void pdf_sanitator<PAGE_CELLS>::sanitize_bbox(pdf_resource<PAGE_CELLS>& cells,
+  void page_item_sanitator<PAGE_CELLS>::sanitize_bbox(page_item<PAGE_CELLS>& cells,
 						double horizontal_cell_tolerance,
 						bool enforce_same_font,
 						double space_width_factor_for_merge,
@@ -390,8 +390,8 @@ namespace pdflib
     */
   }
 
-  bool pdf_sanitator<PAGE_CELLS>::applicable_for_merge(pdf_resource<PAGE_CELL>& cell_i,
-						       pdf_resource<PAGE_CELL>& cell_j,
+  bool page_item_sanitator<PAGE_CELLS>::applicable_for_merge(page_item<PAGE_CELL>& cell_i,
+						       page_item<PAGE_CELL>& cell_j,
 						       bool enforce_same_font)
   {
     if(not cell_i.active)
@@ -417,7 +417,7 @@ namespace pdflib
     return true;
   }
   
-  void pdf_sanitator<PAGE_CELLS>::contract_cells_into_lines_v1(pdf_resource<PAGE_CELLS>& cells,
+  void page_item_sanitator<PAGE_CELLS>::contract_cells_into_lines_v1(page_item<PAGE_CELLS>& cells,
 							       double horizontal_cell_tolerance,
 							       bool enforce_same_font,
 							       double space_width_factor_for_merge,
@@ -430,7 +430,7 @@ namespace pdflib
     contract_cells_into_lines_left_to_right(cells, horizontal_cell_tolerance, enforce_same_font, space_width_factor_for_merge, space_width_factor_for_merge_with_space, true);
   }
   
-  void pdf_sanitator<PAGE_CELLS>::contract_cells_into_lines_left_to_right(pdf_resource<PAGE_CELLS>& cells,
+  void page_item_sanitator<PAGE_CELLS>::contract_cells_into_lines_left_to_right(page_item<PAGE_CELLS>& cells,
 									  double horizontal_cell_tolerance,
 									  bool enforce_same_font,
 									  double space_width_factor_for_merge,
@@ -479,14 +479,14 @@ namespace pdflib
 
     {
       auto it = std::remove_if(cells.begin(), cells.end(), 
-                        [](const pdf_resource<PAGE_CELL>& cell) {
+                        [](const page_item<PAGE_CELL>& cell) {
                             return !cell.active;
                         });
       cells.erase(it, cells.end());
     }    
   }
   
-  void pdf_sanitator<PAGE_CELLS>::contract_cells_into_lines_right_to_left(pdf_resource<PAGE_CELLS>& cells,
+  void page_item_sanitator<PAGE_CELLS>::contract_cells_into_lines_right_to_left(page_item<PAGE_CELLS>& cells,
 									  double horizontal_cell_tolerance,
 									  bool enforce_same_font,
 									  double space_width_factor_for_merge,
@@ -527,14 +527,14 @@ namespace pdflib
 
     {
       auto it = std::remove_if(cells.begin(), cells.end(), 
-                        [](const pdf_resource<PAGE_CELL>& cell) {
+                        [](const page_item<PAGE_CELL>& cell) {
                             return !cell.active;
                         });
       cells.erase(it, cells.end());
     }    
   }
 
-  void pdf_sanitator<PAGE_CELLS>::contract_cells_into_lines_v2(pdf_resource<PAGE_CELLS>& cells,
+  void page_item_sanitator<PAGE_CELLS>::contract_cells_into_lines_v2(page_item<PAGE_CELLS>& cells,
 							       double horizontal_cell_tolerance,
 							       bool enforce_same_font,
 							       double space_width_factor_for_merge,
@@ -590,7 +590,7 @@ namespace pdflib
 	  }
       }
 
-    pdf_resource<PAGE_CELLS> cells_;
+    page_item<PAGE_CELLS> cells_;
     for(int i=0; i<cells.size(); i++)
       {
 	if(cells[i].active)

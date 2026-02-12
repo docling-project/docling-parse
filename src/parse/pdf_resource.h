@@ -5,23 +5,52 @@
 
 namespace pdflib
 {
-  enum resource_name {
+  enum item_name {
     PAGE_DIMENSION,
-
-    PAGE_FONT,
-    PAGE_FONTS,
-
-    PAGE_GRPH,
-    PAGE_GRPHS,
 
     PAGE_CELL,
     PAGE_CELLS,
 
-    PAGE_SHAPE, // formerly PAGE_LINE,
-    PAGE_SHAPES, // formerly PAGE_LINES,
+    PAGE_SHAPE,
+    PAGE_SHAPES,
 
     PAGE_IMAGE,
     PAGE_IMAGES,
+  };
+  
+  template<item_name name>
+  class page_item
+  {
+  public:
+
+    page_item();
+    ~page_item();
+
+  private:
+
+  };
+  
+  enum resource_name {
+
+    // former resources and need to be renamed to page_item
+    /* 
+    PAGE_DIMENSION,
+
+    PAGE_CELL,
+    PAGE_CELLS,
+
+    PAGE_SHAPE,
+    PAGE_SHAPES,
+
+    PAGE_IMAGE,
+    PAGE_IMAGES,
+    */
+    
+    PAGE_FONT,
+    PAGE_FONTS,
+    
+    PAGE_GRPH,
+    PAGE_GRPHS,
 
     PAGE_XOBJECT_IMAGE,
     PAGE_XOBJECT_FORM,

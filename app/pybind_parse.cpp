@@ -48,79 +48,79 @@ PYBIND11_MODULE(pdf_parsers, m) {
   // ============= Typed Resource Bindings (for zero-copy access) =============
 
   // PdfCell - individual text cell with bounding box and text content
-  pybind11::class_<pdflib::pdf_resource<pdflib::PAGE_CELL>>(m, "PdfCell")
-    .def_readonly("x0", &pdflib::pdf_resource<pdflib::PAGE_CELL>::x0)
-    .def_readonly("y0", &pdflib::pdf_resource<pdflib::PAGE_CELL>::y0)
-    .def_readonly("x1", &pdflib::pdf_resource<pdflib::PAGE_CELL>::x1)
-    .def_readonly("y1", &pdflib::pdf_resource<pdflib::PAGE_CELL>::y1)
-    .def_readonly("r_x0", &pdflib::pdf_resource<pdflib::PAGE_CELL>::r_x0)
-    .def_readonly("r_y0", &pdflib::pdf_resource<pdflib::PAGE_CELL>::r_y0)
-    .def_readonly("r_x1", &pdflib::pdf_resource<pdflib::PAGE_CELL>::r_x1)
-    .def_readonly("r_y1", &pdflib::pdf_resource<pdflib::PAGE_CELL>::r_y1)
-    .def_readonly("r_x2", &pdflib::pdf_resource<pdflib::PAGE_CELL>::r_x2)
-    .def_readonly("r_y2", &pdflib::pdf_resource<pdflib::PAGE_CELL>::r_y2)
-    .def_readonly("r_x3", &pdflib::pdf_resource<pdflib::PAGE_CELL>::r_x3)
-    .def_readonly("r_y3", &pdflib::pdf_resource<pdflib::PAGE_CELL>::r_y3)
-    .def_readonly("text", &pdflib::pdf_resource<pdflib::PAGE_CELL>::text)
-    .def_readonly("rendering_mode", &pdflib::pdf_resource<pdflib::PAGE_CELL>::rendering_mode)
-    .def_readonly("space_width", &pdflib::pdf_resource<pdflib::PAGE_CELL>::space_width)
-    .def_readonly("enc_name", &pdflib::pdf_resource<pdflib::PAGE_CELL>::enc_name)
-    .def_readonly("font_enc", &pdflib::pdf_resource<pdflib::PAGE_CELL>::font_enc)
-    .def_readonly("font_key", &pdflib::pdf_resource<pdflib::PAGE_CELL>::font_key)
-    .def_readonly("font_name", &pdflib::pdf_resource<pdflib::PAGE_CELL>::font_name)
-    .def_readonly("widget", &pdflib::pdf_resource<pdflib::PAGE_CELL>::widget)
-    .def_readonly("left_to_right", &pdflib::pdf_resource<pdflib::PAGE_CELL>::left_to_right);
+  pybind11::class_<pdflib::page_item<pdflib::PAGE_CELL>>(m, "PdfCell")
+    .def_readonly("x0", &pdflib::page_item<pdflib::PAGE_CELL>::x0)
+    .def_readonly("y0", &pdflib::page_item<pdflib::PAGE_CELL>::y0)
+    .def_readonly("x1", &pdflib::page_item<pdflib::PAGE_CELL>::x1)
+    .def_readonly("y1", &pdflib::page_item<pdflib::PAGE_CELL>::y1)
+    .def_readonly("r_x0", &pdflib::page_item<pdflib::PAGE_CELL>::r_x0)
+    .def_readonly("r_y0", &pdflib::page_item<pdflib::PAGE_CELL>::r_y0)
+    .def_readonly("r_x1", &pdflib::page_item<pdflib::PAGE_CELL>::r_x1)
+    .def_readonly("r_y1", &pdflib::page_item<pdflib::PAGE_CELL>::r_y1)
+    .def_readonly("r_x2", &pdflib::page_item<pdflib::PAGE_CELL>::r_x2)
+    .def_readonly("r_y2", &pdflib::page_item<pdflib::PAGE_CELL>::r_y2)
+    .def_readonly("r_x3", &pdflib::page_item<pdflib::PAGE_CELL>::r_x3)
+    .def_readonly("r_y3", &pdflib::page_item<pdflib::PAGE_CELL>::r_y3)
+    .def_readonly("text", &pdflib::page_item<pdflib::PAGE_CELL>::text)
+    .def_readonly("rendering_mode", &pdflib::page_item<pdflib::PAGE_CELL>::rendering_mode)
+    .def_readonly("space_width", &pdflib::page_item<pdflib::PAGE_CELL>::space_width)
+    .def_readonly("enc_name", &pdflib::page_item<pdflib::PAGE_CELL>::enc_name)
+    .def_readonly("font_enc", &pdflib::page_item<pdflib::PAGE_CELL>::font_enc)
+    .def_readonly("font_key", &pdflib::page_item<pdflib::PAGE_CELL>::font_key)
+    .def_readonly("font_name", &pdflib::page_item<pdflib::PAGE_CELL>::font_name)
+    .def_readonly("widget", &pdflib::page_item<pdflib::PAGE_CELL>::widget)
+    .def_readonly("left_to_right", &pdflib::page_item<pdflib::PAGE_CELL>::left_to_right);
 
   // PdfShape - graphic shape with coordinates
-  pybind11::class_<pdflib::pdf_resource<pdflib::PAGE_SHAPE>>(m, "PdfShape")
-    .def("get_x", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::get_x,
+  pybind11::class_<pdflib::page_item<pdflib::PAGE_SHAPE>>(m, "PdfShape")
+    .def("get_x", &pdflib::page_item<pdflib::PAGE_SHAPE>::get_x,
 	 pybind11::return_value_policy::reference_internal,
 	 "Get x coordinates of shape points")
-    .def("get_y", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::get_y,
+    .def("get_y", &pdflib::page_item<pdflib::PAGE_SHAPE>::get_y,
 	 pybind11::return_value_policy::reference_internal,
 	 "Get y coordinates of shape points")
-    .def("get_i", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::get_i,
+    .def("get_i", &pdflib::page_item<pdflib::PAGE_SHAPE>::get_i,
 	 pybind11::return_value_policy::reference_internal,
 	 "Get segment indices")
-    .def("__len__", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::size)
-    .def("get_has_graphics_state", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::get_has_graphics_state,
+    .def("__len__", &pdflib::page_item<pdflib::PAGE_SHAPE>::size)
+    .def("get_has_graphics_state", &pdflib::page_item<pdflib::PAGE_SHAPE>::get_has_graphics_state,
 	 "Check if graphics state has been set")
-    .def("get_line_width", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::get_line_width,
+    .def("get_line_width", &pdflib::page_item<pdflib::PAGE_SHAPE>::get_line_width,
 	 "Get line width")
-    .def("get_miter_limit", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::get_miter_limit,
+    .def("get_miter_limit", &pdflib::page_item<pdflib::PAGE_SHAPE>::get_miter_limit,
 	 "Get miter limit")
-    .def("get_line_cap", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::get_line_cap,
+    .def("get_line_cap", &pdflib::page_item<pdflib::PAGE_SHAPE>::get_line_cap,
 	 "Get line cap style")
-    .def("get_line_join", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::get_line_join,
+    .def("get_line_join", &pdflib::page_item<pdflib::PAGE_SHAPE>::get_line_join,
 	 "Get line join style")
-    .def("get_dash_phase", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::get_dash_phase,
+    .def("get_dash_phase", &pdflib::page_item<pdflib::PAGE_SHAPE>::get_dash_phase,
 	 "Get dash phase")
-    .def("get_dash_array", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::get_dash_array,
+    .def("get_dash_array", &pdflib::page_item<pdflib::PAGE_SHAPE>::get_dash_array,
 	 pybind11::return_value_policy::reference_internal,
 	 "Get dash array")
-    .def("get_flatness", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::get_flatness,
+    .def("get_flatness", &pdflib::page_item<pdflib::PAGE_SHAPE>::get_flatness,
 	 "Get flatness tolerance")
-    .def("get_rgb_stroking_ops", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::get_rgb_stroking_ops,
+    .def("get_rgb_stroking_ops", &pdflib::page_item<pdflib::PAGE_SHAPE>::get_rgb_stroking_ops,
 	 pybind11::return_value_policy::reference_internal,
 	 "Get RGB stroking color")
-    .def("get_rgb_filling_ops", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::get_rgb_filling_ops,
+    .def("get_rgb_filling_ops", &pdflib::page_item<pdflib::PAGE_SHAPE>::get_rgb_filling_ops,
 	 pybind11::return_value_policy::reference_internal,
 	 "Get RGB filling color");
 
   // PdfImage - bitmap resource with bounding box and image data
-  pybind11::class_<pdflib::pdf_resource<pdflib::PAGE_IMAGE>>(m, "PdfImage")
-    .def_readonly("x0", &pdflib::pdf_resource<pdflib::PAGE_IMAGE>::x0)
-    .def_readonly("y0", &pdflib::pdf_resource<pdflib::PAGE_IMAGE>::y0)
-    .def_readonly("x1", &pdflib::pdf_resource<pdflib::PAGE_IMAGE>::x1)
-    .def_readonly("y1", &pdflib::pdf_resource<pdflib::PAGE_IMAGE>::y1)
-    .def_readonly("image_width", &pdflib::pdf_resource<pdflib::PAGE_IMAGE>::image_width)
-    .def_readonly("image_height", &pdflib::pdf_resource<pdflib::PAGE_IMAGE>::image_height)
-    .def("get_image_format", &pdflib::pdf_resource<pdflib::PAGE_IMAGE>::get_image_format,
+  pybind11::class_<pdflib::page_item<pdflib::PAGE_IMAGE>>(m, "PdfImage")
+    .def_readonly("x0", &pdflib::page_item<pdflib::PAGE_IMAGE>::x0)
+    .def_readonly("y0", &pdflib::page_item<pdflib::PAGE_IMAGE>::y0)
+    .def_readonly("x1", &pdflib::page_item<pdflib::PAGE_IMAGE>::x1)
+    .def_readonly("y1", &pdflib::page_item<pdflib::PAGE_IMAGE>::y1)
+    .def_readonly("image_width", &pdflib::page_item<pdflib::PAGE_IMAGE>::image_width)
+    .def_readonly("image_height", &pdflib::page_item<pdflib::PAGE_IMAGE>::image_height)
+    .def("get_image_format", &pdflib::page_item<pdflib::PAGE_IMAGE>::get_image_format,
 	 "Get image format hint: 'jpeg', 'jp2', 'jbig2', or 'raw'")
-    .def("get_pil_mode", &pdflib::pdf_resource<pdflib::PAGE_IMAGE>::get_pil_mode,
+    .def("get_pil_mode", &pdflib::page_item<pdflib::PAGE_IMAGE>::get_pil_mode,
 	 "Get PIL-compatible mode string: 'L', 'RGB', 'CMYK', or '1'")
     .def("get_image_as_bytes",
-	 [](pdflib::pdf_resource<pdflib::PAGE_IMAGE> const& self) {
+	 [](pdflib::page_item<pdflib::PAGE_IMAGE> const& self) {
 	   auto data = self.get_image_as_bytes();
 	   return pybind11::bytes(reinterpret_cast<char const*>(data.data()),
 				  data.size());
@@ -128,55 +128,55 @@ PYBIND11_MODULE(pdf_parsers, m) {
 	 "Get image data as bytes (corrected JPEG, raw JP2, or decoded pixels)");
 
   // PdfPageDimension - page geometry and bounding boxes
-  pybind11::class_<pdflib::pdf_resource<pdflib::PAGE_DIMENSION>>(m, "PdfPageDimension")
-    .def("get_angle", &pdflib::pdf_resource<pdflib::PAGE_DIMENSION>::get_angle,
+  pybind11::class_<pdflib::page_item<pdflib::PAGE_DIMENSION>>(m, "PdfPageDimension")
+    .def("get_angle", &pdflib::page_item<pdflib::PAGE_DIMENSION>::get_angle,
 	 "Get page rotation angle in degrees")
-    .def("get_crop_bbox", &pdflib::pdf_resource<pdflib::PAGE_DIMENSION>::get_crop_bbox,
+    .def("get_crop_bbox", &pdflib::page_item<pdflib::PAGE_DIMENSION>::get_crop_bbox,
 	 "Get crop box as [x0, y0, x1, y1]")
-    .def("get_media_bbox", &pdflib::pdf_resource<pdflib::PAGE_DIMENSION>::get_media_bbox,
+    .def("get_media_bbox", &pdflib::page_item<pdflib::PAGE_DIMENSION>::get_media_bbox,
 	 "Get media box as [x0, y0, x1, y1]");
 
   // ============= Container Type Bindings =============
 
   // PdfCells - iterable container of PdfCell objects
-  pybind11::class_<pdflib::pdf_resource<pdflib::PAGE_CELLS>>(m, "PdfCells")
-    .def("__len__", &pdflib::pdf_resource<pdflib::PAGE_CELLS>::size)
-    .def("__getitem__", [](pdflib::pdf_resource<pdflib::PAGE_CELLS>& self, size_t i)
-	 -> pdflib::pdf_resource<pdflib::PAGE_CELL>& {
+  pybind11::class_<pdflib::page_item<pdflib::PAGE_CELLS>>(m, "PdfCells")
+    .def("__len__", &pdflib::page_item<pdflib::PAGE_CELLS>::size)
+    .def("__getitem__", [](pdflib::page_item<pdflib::PAGE_CELLS>& self, size_t i)
+	 -> pdflib::page_item<pdflib::PAGE_CELL>& {
 	   if (i >= self.size()) {
 	     throw pybind11::index_error("index out of range");
 	   }
 	   return self[i];
 	 }, pybind11::return_value_policy::reference_internal)
-    .def("__iter__", [](pdflib::pdf_resource<pdflib::PAGE_CELLS>& self) {
+    .def("__iter__", [](pdflib::page_item<pdflib::PAGE_CELLS>& self) {
 	   return pybind11::make_iterator(self.begin(), self.end());
 	 }, pybind11::keep_alive<0, 1>());
 
   // PdfShapes - iterable container of PdfShape objects
-  pybind11::class_<pdflib::pdf_resource<pdflib::PAGE_SHAPES>>(m, "PdfShapes")
-    .def("__len__", &pdflib::pdf_resource<pdflib::PAGE_SHAPES>::size)
-    .def("__getitem__", [](pdflib::pdf_resource<pdflib::PAGE_SHAPES>& self, size_t i)
-	 -> pdflib::pdf_resource<pdflib::PAGE_SHAPE>& {
+  pybind11::class_<pdflib::page_item<pdflib::PAGE_SHAPES>>(m, "PdfShapes")
+    .def("__len__", &pdflib::page_item<pdflib::PAGE_SHAPES>::size)
+    .def("__getitem__", [](pdflib::page_item<pdflib::PAGE_SHAPES>& self, size_t i)
+	 -> pdflib::page_item<pdflib::PAGE_SHAPE>& {
 	   if (i >= self.size()) {
 	     throw pybind11::index_error("index out of range");
 	   }
 	   return self[i];
 	 }, pybind11::return_value_policy::reference_internal)
-    .def("__iter__", [](pdflib::pdf_resource<pdflib::PAGE_SHAPES>& self) {
+    .def("__iter__", [](pdflib::page_item<pdflib::PAGE_SHAPES>& self) {
 	   return pybind11::make_iterator(self.begin(), self.end());
 	 }, pybind11::keep_alive<0, 1>());
 
   // PdfImages - iterable container of PdfImage objects
-  pybind11::class_<pdflib::pdf_resource<pdflib::PAGE_IMAGES>>(m, "PdfImages")
-    .def("__len__", &pdflib::pdf_resource<pdflib::PAGE_IMAGES>::size)
-    .def("__getitem__", [](pdflib::pdf_resource<pdflib::PAGE_IMAGES>& self, size_t i)
-	 -> pdflib::pdf_resource<pdflib::PAGE_IMAGE>& {
+  pybind11::class_<pdflib::page_item<pdflib::PAGE_IMAGES>>(m, "PdfImages")
+    .def("__len__", &pdflib::page_item<pdflib::PAGE_IMAGES>::size)
+    .def("__getitem__", [](pdflib::page_item<pdflib::PAGE_IMAGES>& self, size_t i)
+	 -> pdflib::page_item<pdflib::PAGE_IMAGE>& {
 	   if (i >= self.size()) {
 	     throw pybind11::index_error("index out of range");
 	   }
 	   return self[i];
 	 }, pybind11::return_value_policy::reference_internal)
-    .def("__iter__", [](pdflib::pdf_resource<pdflib::PAGE_IMAGES>& self) {
+    .def("__iter__", [](pdflib::page_item<pdflib::PAGE_IMAGES>& self) {
 	   return pybind11::make_iterator(self.begin(), self.end());
 	 }, pybind11::keep_alive<0, 1>());
 

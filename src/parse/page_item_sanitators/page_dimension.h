@@ -1,26 +1,26 @@
 //-*-C++-*-
 
-#ifndef PDF_PAGE_DIMENSION_SANITATOR_H
-#define PDF_PAGE_DIMENSION_SANITATOR_H
+#ifndef PAGE_ITEM_DIMENSION_SANITATOR_H
+#define PAGE_ITEM_DIMENSION_SANITATOR_H
 
 namespace pdflib
 {
 
   template<>
-  class pdf_sanitator<PAGE_DIMENSION>
+  class page_item_sanitator<PAGE_DIMENSION>
   {
   public:
 
-    pdf_sanitator(pdf_resource<PAGE_DIMENSION>& page_dims);
-    ~pdf_sanitator();
+    page_item_sanitator(page_item<PAGE_DIMENSION>& page_dims);
+    ~page_item_sanitator();
 
     void sanitize(std::string page_boundary);
     
-    void sanitize(pdf_resource<PAGE_CELLS>& cells, std::string page_boundary);
+    void sanitize(page_item<PAGE_CELLS>& cells, std::string page_boundary);
 
-    void sanitize(pdf_resource<PAGE_SHAPES>& shapes, std::string page_boundary);
+    void sanitize(page_item<PAGE_SHAPES>& shapes, std::string page_boundary);
 
-    void sanitize(pdf_resource<PAGE_IMAGES>& images, std::string page_boundary);
+    void sanitize(page_item<PAGE_IMAGES>& images, std::string page_boundary);
 
   private:
 
@@ -33,7 +33,7 @@ namespace pdflib
 
   private:
 
-    pdf_resource<PAGE_DIMENSION>& page_dims;
+    page_item<PAGE_DIMENSION>& page_dims;
 
     std::array<double, 4> crop_bbox;
     std::array<double, 4> media_bbox;
@@ -41,19 +41,19 @@ namespace pdflib
     std::array<std::array<double, 2>, 2> R;
   };
   
-  pdf_sanitator<PAGE_DIMENSION>::pdf_sanitator(pdf_resource<PAGE_DIMENSION>& page_dims_):
+  page_item_sanitator<PAGE_DIMENSION>::page_item_sanitator(page_item<PAGE_DIMENSION>& page_dims_):
     page_dims(page_dims_)
   {
     LOG_S(INFO) << __FUNCTION__;
     initialise();
   }
   
-  pdf_sanitator<PAGE_DIMENSION>::~pdf_sanitator()
+  page_item_sanitator<PAGE_DIMENSION>::~page_item_sanitator()
   {
     LOG_S(INFO) << __FUNCTION__;
   }
 
-  void pdf_sanitator<PAGE_DIMENSION>::initialise()
+  void page_item_sanitator<PAGE_DIMENSION>::initialise()
   {
     LOG_S(INFO) << __FUNCTION__;
 
@@ -86,7 +86,7 @@ namespace pdflib
     */
   }
 
-  std::array<double, 4> pdf_sanitator<PAGE_DIMENSION>::get_page_boundary(std::string page_boundary)
+  std::array<double, 4> page_item_sanitator<PAGE_DIMENSION>::get_page_boundary(std::string page_boundary)
   {
     LOG_S(INFO) << __FUNCTION__;
 
@@ -117,12 +117,12 @@ namespace pdflib
     return crop_bbox;
   }
 
-  void pdf_sanitator<PAGE_DIMENSION>::sanitize(std::string page_boundary)
+  void page_item_sanitator<PAGE_DIMENSION>::sanitize(std::string page_boundary)
   {
     page_dims.set_page_boundaries(page_boundary);
   }
   
-  void pdf_sanitator<PAGE_DIMENSION>::sanitize(pdf_resource<PAGE_CELLS>& cells, std::string page_boundary)
+  void page_item_sanitator<PAGE_DIMENSION>::sanitize(page_item<PAGE_CELLS>& cells, std::string page_boundary)
   {
     LOG_S(INFO) << __FUNCTION__;
 
@@ -173,7 +173,7 @@ namespace pdflib
     std::array<double, 2> r;
     for(size_t l=0; l<cells.size(); l++)
       {
-	pdf_resource<PAGE_CELL>& cell = cells[l];
+	page_item<PAGE_CELL>& cell = cells[l];
 	
 	std::array<std::array<double, 2>, 6> vecs = {
 	  std::array<double, 2>({cell.x0, cell.y0}),
@@ -216,7 +216,7 @@ namespace pdflib
     */    
   }
 
-  void pdf_sanitator<PAGE_DIMENSION>::sanitize(pdf_resource<PAGE_SHAPES>& shapes, std::string page_boundary)
+  void page_item_sanitator<PAGE_DIMENSION>::sanitize(page_item<PAGE_SHAPES>& shapes, std::string page_boundary)
   {
     LOG_S(INFO) << __FUNCTION__;
 
@@ -225,7 +225,7 @@ namespace pdflib
     // filter everything out
     for(auto itr=shapes.begin(); itr!=shapes.end(); )
       {
-	pdf_resource<PAGE_SHAPE>& shape = *itr;
+	page_item<PAGE_SHAPE>& shape = *itr;
 
 	std::vector<double>& x = shape.get_x();
 	std::vector<double>& y = shape.get_y();
@@ -268,7 +268,7 @@ namespace pdflib
 
     for(size_t l=0; l<shapes.size(); l++)
       {
-	pdf_resource<PAGE_SHAPE>& shape = shapes[l];
+	page_item<PAGE_SHAPE>& shape = shapes[l];
 
 	std::vector<double>& x = shape.get_x();
 	std::vector<double>& y = shape.get_y();
@@ -286,7 +286,7 @@ namespace pdflib
     */
   }
   
-  void pdf_sanitator<PAGE_DIMENSION>::sanitize(pdf_resource<PAGE_IMAGES>& images, std::string page_boundary)
+  void page_item_sanitator<PAGE_DIMENSION>::sanitize(page_item<PAGE_IMAGES>& images, std::string page_boundary)
   {
     LOG_S(INFO) << __FUNCTION__;
 
@@ -352,7 +352,7 @@ namespace pdflib
 
     for(size_t l=0; l<images.size(); l++)
       {
-	pdf_resource<PAGE_IMAGE>& image = images[l];
+	page_item<PAGE_IMAGE>& image = images[l];
 
 	std::array<std::array<double, 2>, 6> vecs = {
 	  std::array<double, 2>({image.x0, image.y0}),
@@ -378,7 +378,7 @@ namespace pdflib
     */
   }
 
-  void pdf_sanitator<PAGE_DIMENSION>::transform(std::array<double, 2>& v,
+  void page_item_sanitator<PAGE_DIMENSION>::transform(std::array<double, 2>& v,
 						std::array<double, 2>& r)
   {
     /*

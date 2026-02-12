@@ -14,7 +14,7 @@ namespace pdflib
     pdf_state(const decode_page_config& config,
               const pdf_state<GRPH>& grph_state_,
               std::array<double, 9>& trafo_matrix_,
-              pdf_resource<PAGE_CELLS>& page_cells_,
+              page_item<PAGE_CELLS>& page_cells_,
               std::shared_ptr<pdf_resource<PAGE_FONTS>> page_fonts_);
 
     ~pdf_state();
@@ -59,7 +59,7 @@ namespace pdflib
     
     void move_cursor(double tx, double ty);
 
-    std::vector<pdf_resource<PAGE_CELL> > generate_cells(qpdf_instruction instruction,
+    std::vector<page_item<PAGE_CELL> > generate_cells(qpdf_instruction instruction,
                                                          int              stack_size);
 
     std::vector<std::pair<uint32_t, std::string> > analyse_string(qpdf_instruction instruction);
@@ -67,7 +67,7 @@ namespace pdflib
     void add_cell(pdf_resource<PAGE_FONT>& font,
                   std::string text,  double width,
                   int stack_size,
-                  std::vector<pdf_resource<PAGE_CELL> >& cells);
+                  std::vector<page_item<PAGE_CELL> >& cells);
 
     /*
       std::array<double, 4> compute_bbox(double font_descent,
@@ -91,7 +91,7 @@ namespace pdflib
 
     std::array<double, 9>& trafo_matrix;
 
-    pdf_resource<PAGE_CELLS>& page_cells;
+    page_item<PAGE_CELLS>& page_cells;
     std::shared_ptr<pdf_resource<PAGE_FONTS>> page_fonts;
     
     std::array<double, 9> text_matrix;
@@ -117,7 +117,7 @@ namespace pdflib
   pdf_state<TEXT>::pdf_state(const decode_page_config& config_,
                              const pdf_state<GRPH>& grph_state_,
                              std::array<double, 9>&    trafo_matrix_,
-                             pdf_resource<PAGE_CELLS>& page_cells_,
+                             page_item<PAGE_CELLS>& page_cells_,
                              std::shared_ptr<pdf_resource<PAGE_FONTS>> page_fonts_):
     config(config_),
     grph_state(grph_state_),
@@ -295,7 +295,7 @@ namespace pdflib
     
     instr_count += 1;
 
-    std::vector<pdf_resource<PAGE_CELL> > cells = generate_cells(instructions[0],
+    std::vector<page_item<PAGE_CELL> > cells = generate_cells(instructions[0],
                                                                  stack_size);
 
     for(auto& cell:cells)
@@ -318,7 +318,7 @@ namespace pdflib
           {
             qpdf_instruction inst(item);
 
-            std::vector<pdf_resource<PAGE_CELL> > cells = generate_cells(item,
+            std::vector<page_item<PAGE_CELL> > cells = generate_cells(item,
                                                                          stack_size);
 
             for(auto& cell:cells)
@@ -350,7 +350,7 @@ namespace pdflib
     text_matrix[7] += tx * text_matrix[1] + ty * text_matrix[4];
   }
 
-  std::vector<pdf_resource<PAGE_CELL> > pdf_state<TEXT>::generate_cells(qpdf_instruction instruction,
+  std::vector<page_item<PAGE_CELL> > pdf_state<TEXT>::generate_cells(qpdf_instruction instruction,
                                                                         int              stack_size)
   {
     //LOG_S(INFO) << __FUNCTION__;
@@ -374,7 +374,7 @@ namespace pdflib
     std::vector<double> widths={};
     std::vector<std::string> chars={};
 
-    std::vector<pdf_resource<PAGE_CELL> > cells={};
+    std::vector<page_item<PAGE_CELL> > cells={};
 
     /*
     double space_width=0;
@@ -445,7 +445,7 @@ namespace pdflib
   void pdf_state<TEXT>::add_cell(pdf_resource<PAGE_FONT>& font,
                                  std::string text, double width,
                                  int stack_size,
-                                 std::vector<pdf_resource<PAGE_CELL> >& cells)
+                                 std::vector<page_item<PAGE_CELL> >& cells)
   {
     if(not config.keep_char_cells)
       {
@@ -495,7 +495,7 @@ namespace pdflib
     }
 
     {
-      pdf_resource<PAGE_CELL> cell;
+      page_item<PAGE_CELL> cell;
 
       cell.active = true;
       cell.left_to_right = left_to_right;

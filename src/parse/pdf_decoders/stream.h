@@ -14,10 +14,10 @@ namespace pdflib
 
     pdf_decoder(const decode_page_config& config,
 
-                pdf_resource<PAGE_DIMENSION>& page_dimension_,
-                pdf_resource<PAGE_CELLS>&     page_cells_,
-                pdf_resource<PAGE_SHAPES>&     page_shapes_,
-                pdf_resource<PAGE_IMAGES>&    page_images_,
+                page_item<PAGE_DIMENSION>& page_dimension_,
+                page_item<PAGE_CELLS>&     page_cells_,
+                page_item<PAGE_SHAPES>&     page_shapes_,
+                page_item<PAGE_IMAGES>&    page_images_,
 
                 std::shared_ptr<pdf_resource<PAGE_FONTS>>     page_fonts_,
                 std::shared_ptr<pdf_resource<PAGE_GRPHS>>     page_grphs_,
@@ -73,10 +73,10 @@ namespace pdflib
 
     const decode_page_config& config;
 
-    pdf_resource<PAGE_DIMENSION>& page_dimension;
-    pdf_resource<PAGE_CELLS>&     page_cells;
-    pdf_resource<PAGE_SHAPES>&     page_shapes;
-    pdf_resource<PAGE_IMAGES>&    page_images;
+    page_item<PAGE_DIMENSION>& page_dimension;
+    page_item<PAGE_CELLS>&     page_cells;
+    page_item<PAGE_SHAPES>&     page_shapes;
+    page_item<PAGE_IMAGES>&    page_images;
 
     std::shared_ptr<pdf_resource<PAGE_FONTS>>     page_fonts;
     std::shared_ptr<pdf_resource<PAGE_GRPHS>>     page_grphs;
@@ -94,10 +94,10 @@ namespace pdflib
 
   pdf_decoder<STREAM>::pdf_decoder(const decode_page_config& config_,
 
-                                   pdf_resource<PAGE_DIMENSION>& page_dimension_,
-                                   pdf_resource<PAGE_CELLS>&     page_cells_,
-                                   pdf_resource<PAGE_SHAPES>&     page_shapes_,
-                                   pdf_resource<PAGE_IMAGES>&    page_images_,
+                                   page_item<PAGE_DIMENSION>& page_dimension_,
+                                   page_item<PAGE_CELLS>&     page_cells_,
+                                   page_item<PAGE_SHAPES>&     page_shapes_,
+                                   page_item<PAGE_IMAGES>&    page_images_,
 
                                    std::shared_ptr<pdf_resource<PAGE_FONTS>>     page_fonts_,
                                    std::shared_ptr<pdf_resource<PAGE_GRPHS>>     page_grphs_,

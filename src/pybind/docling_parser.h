@@ -425,16 +425,16 @@ namespace docling
                                                 double space_width_factor_for_merge, //=1.5,
                                                 double space_width_factor_for_merge_with_space) //=0.33);
   {
-    pdflib::pdf_resource<pdflib::PAGE_DIMENSION> dim;
+    pdflib::page_item<pdflib::PAGE_DIMENSION> dim;
     dim.init_from(json_dim);
 
-    pdflib::pdf_resource<pdflib::PAGE_SHAPES> shapes;
+    pdflib::page_item<pdflib::PAGE_SHAPES> shapes;
     shapes.init_from(json_shapes);
 
-    pdflib::pdf_resource<pdflib::PAGE_CELLS> cells;
+    pdflib::page_item<pdflib::PAGE_CELLS> cells;
     cells.init_from(json_cells);
 
-    pdflib::pdf_sanitator<pdflib::PAGE_CELLS> sanitizer;//(dim, shapes);
+    pdflib::page_item_sanitator<pdflib::PAGE_CELLS> sanitizer;//(dim, shapes);
     sanitizer.sanitize_bbox(cells, horizontal_cell_tolerance, enforce_same_font,
                             space_width_factor_for_merge,
                             space_width_factor_for_merge_with_space);
@@ -466,21 +466,21 @@ namespace docling
     double x1 = bbox[2];
     double y1 = bbox[3];
 
-    pdflib::pdf_resource<pdflib::PAGE_DIMENSION> dim;
+    pdflib::page_item<pdflib::PAGE_DIMENSION> dim;
     if(not dim.init_from(page["original"]["dimension"]))
       {
         LOG_S(WARNING) << "could not init dim";
         return sanitized_cells;
       }
 
-    pdflib::pdf_resource<pdflib::PAGE_SHAPES> shapes;
+    pdflib::page_item<pdflib::PAGE_SHAPES> shapes;
     if(not shapes.init_from(page["original"]["shapes"]))
       {
         LOG_S(WARNING) << "could not init shapes";
         return sanitized_cells;
       }
 
-    pdflib::pdf_resource<pdflib::PAGE_CELLS> cells;
+    pdflib::page_item<pdflib::PAGE_CELLS> cells;
     if(not cells.init_from(page["original"]["cells"]["data"]))
       {
         LOG_S(WARNING) << "could not init cells";
@@ -490,7 +490,7 @@ namespace docling
     LOG_S(INFO) << "init done ... --> #-cells: " << cells.size();
 
     // get all cells with an overlap over cell_overlap
-    pdflib::pdf_resource<pdflib::PAGE_CELLS> selected_cells;
+    pdflib::page_item<pdflib::PAGE_CELLS> selected_cells;
     for(int i=0; i<cells.size(); i++)
       {
         double overlap = utils::values::compute_overlap(cells[i].x0, cells[i].y0, cells[i].x1, cells[i].y1,
@@ -507,7 +507,7 @@ namespace docling
         return sanitized_cells;
       }
 
-    pdflib::pdf_sanitator<pdflib::PAGE_CELLS> sanitizer;
+    pdflib::page_item_sanitator<pdflib::PAGE_CELLS> sanitizer;
     sanitizer.sanitize_bbox(selected_cells,
                             horizontal_cell_tolerance,
                             enforce_same_font,

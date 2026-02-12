@@ -1,7 +1,7 @@
 //-*-C++-*-
 
-#ifndef PDF_PAGE_IMAGE_RESOURCE_H
-#define PDF_PAGE_IMAGE_RESOURCE_H
+#ifndef PAGE_ITEM_IMAGE_H
+#define PAGE_ITEM_IMAGE_H
 
 // JPEG correction helpers
 #include <parse/utils/jpeg/jpeg_utils.h>
@@ -10,12 +10,12 @@ namespace pdflib
 {
 
   template<>
-  class pdf_resource<PAGE_IMAGE>
+  class page_item<PAGE_IMAGE>
   {
   public:
 
-    pdf_resource();
-    ~pdf_resource();
+    page_item();
+    ~page_item();
 
     nlohmann::json get();
 
@@ -74,7 +74,7 @@ namespace pdflib
     std::array<int, 3> rgb_filling_ops  = {0, 0, 0};
   };
 
-  pdf_resource<PAGE_IMAGE>::pdf_resource():
+  page_item<PAGE_IMAGE>::page_item():
     x0(0), y0(0), x1(0), y1(0),
     xobject_key(),
     image_width(0),
@@ -87,10 +87,10 @@ namespace pdflib
     decoded_stream_data(nullptr)
   {}
 
-  pdf_resource<PAGE_IMAGE>::~pdf_resource()
+  page_item<PAGE_IMAGE>::~page_item()
   {}
 
-  std::vector<std::string> pdf_resource<PAGE_IMAGE>::header = {
+  std::vector<std::string> page_item<PAGE_IMAGE>::header = {
     "x0",
     "y0",
     "x1",
@@ -106,7 +106,7 @@ namespace pdflib
     "rgb-filling"
   };
 
-  nlohmann::json pdf_resource<PAGE_IMAGE>::get()
+  nlohmann::json page_item<PAGE_IMAGE>::get()
   {
     nlohmann::json image;
 
@@ -130,7 +130,7 @@ namespace pdflib
     return image;
   }
 
-  void pdf_resource<PAGE_IMAGE>::rotate(int angle, std::pair<double, double> delta)
+  void page_item<PAGE_IMAGE>::rotate(int angle, std::pair<double, double> delta)
   {
     utils::values::rotate_inplace(angle, x0, y0);
     utils::values::rotate_inplace(angle, x1, y1);
@@ -145,7 +145,7 @@ namespace pdflib
     y1 = y_max;
   }
 
-  std::string pdf_resource<PAGE_IMAGE>::get_image_extension() const
+  std::string page_item<PAGE_IMAGE>::get_image_extension() const
   {
     for(auto const& f : filters)
       {
@@ -156,7 +156,7 @@ namespace pdflib
     return ".bin";
   }
 
-  void pdf_resource<PAGE_IMAGE>::save_to_file(std::filesystem::path const& path) const
+  void page_item<PAGE_IMAGE>::save_to_file(std::filesystem::path const& path) const
   {
     if(not raw_stream_data or raw_stream_data->getSize() == 0)
       {
@@ -235,7 +235,7 @@ namespace pdflib
                 << " bytes to " << path.string();
   }
 
-  void pdf_resource<PAGE_IMAGE>::save_decoded_to_file(std::filesystem::path const& path) const
+  void page_item<PAGE_IMAGE>::save_decoded_to_file(std::filesystem::path const& path) const
   {
     if(not decoded_stream_data or decoded_stream_data->getSize() == 0)
       {
@@ -257,7 +257,7 @@ namespace pdflib
                 << " bytes to " << path.string();
   }
 
-  std::string pdf_resource<PAGE_IMAGE>::get_image_format() const
+  std::string page_item<PAGE_IMAGE>::get_image_format() const
   {
     for(auto const& f : filters)
       {
@@ -268,7 +268,7 @@ namespace pdflib
     return "raw";
   }
 
-  std::string pdf_resource<PAGE_IMAGE>::get_pil_mode() const
+  std::string page_item<PAGE_IMAGE>::get_pil_mode() const
   {
     if(image_mask) { return "1"; }
     if(color_space == "/DeviceGray") { return "L"; }
@@ -281,7 +281,7 @@ namespace pdflib
     return "RGB";
   }
 
-  std::vector<unsigned char> pdf_resource<PAGE_IMAGE>::get_image_as_bytes() const
+  std::vector<unsigned char> page_item<PAGE_IMAGE>::get_image_as_bytes() const
   {
     std::string fmt = get_image_format();
 

@@ -1,18 +1,18 @@
 //-*-C++-*-
 
-#ifndef PDF_PAGE_DIMENSION_RESOURCE_H
-#define PDF_PAGE_DIMENSION_RESOURCE_H
+#ifndef PAGE_ITEM_DIMENSION_H
+#define PAGE_ITEM_DIMENSION_H
 
 namespace pdflib
 {
 
   template<>
-  class pdf_resource<PAGE_DIMENSION>
+  class page_item<PAGE_DIMENSION>
   {
   public:
 
-    pdf_resource();
-    ~pdf_resource();
+    page_item();
+    ~page_item();
     
     void set_page_boundaries(std::string page_boundary);
     
@@ -49,7 +49,7 @@ namespace pdflib
     std::array<double, 4> art_bbox;
   };
 
-  pdf_resource<PAGE_DIMENSION>::pdf_resource():
+  page_item<PAGE_DIMENSION>::page_item():
     initialised(false),
     page_boundary(""),
     
@@ -63,10 +63,10 @@ namespace pdflib
     art_bbox({0,0,0,0})
   {}
 
-  pdf_resource<PAGE_DIMENSION>::~pdf_resource()
+  page_item<PAGE_DIMENSION>::~page_item()
   {}
 
-  void pdf_resource<PAGE_DIMENSION>::set_page_boundaries(std::string page_boundary_)
+  void page_item<PAGE_DIMENSION>::set_page_boundaries(std::string page_boundary_)
   {
     page_boundary = page_boundary_;
     
@@ -87,7 +87,7 @@ namespace pdflib
       }
   }
   
-  nlohmann::json pdf_resource<PAGE_DIMENSION>::get()
+  nlohmann::json page_item<PAGE_DIMENSION>::get()
   {
     nlohmann::json result;
     {
@@ -109,7 +109,7 @@ namespace pdflib
     return result;
   }
 
-  std::pair<double, double> pdf_resource<PAGE_DIMENSION>::rotate(int my_angle)
+  std::pair<double, double> page_item<PAGE_DIMENSION>::rotate(int my_angle)
   {
     angle -= my_angle;
 
@@ -162,7 +162,7 @@ namespace pdflib
     return delta;
   }
 
-  std::array<double, 4> pdf_resource<PAGE_DIMENSION>::normalize_page_boundaries(std::array<double, 4> bbox, std::string name)
+  std::array<double, 4> page_item<PAGE_DIMENSION>::normalize_page_boundaries(std::array<double, 4> bbox, std::string name)
   {
     LOG_S(INFO) << __FUNCTION__;
     
@@ -189,7 +189,7 @@ namespace pdflib
     return bbox;
   }
   
-  bool pdf_resource<PAGE_DIMENSION>::init_from(nlohmann::json& data)
+  bool page_item<PAGE_DIMENSION>::init_from(nlohmann::json& data)
   {
     //LOG_S(INFO) << "reading: " << data.dump(2);
     LOG_S(INFO) << __FUNCTION__;
@@ -228,7 +228,7 @@ namespace pdflib
     return false;
   }
   
-  std::array<double, 4> pdf_resource<PAGE_DIMENSION>::qpdf_bbox_to_array(QPDFObjectHandle qpdf_arr,
+  std::array<double, 4> page_item<PAGE_DIMENSION>::qpdf_bbox_to_array(QPDFObjectHandle qpdf_arr,
 								       std::string name)
   {
     std::array<double, 4> result = {0, 0, 0, 0};
@@ -263,7 +263,7 @@ namespace pdflib
   }
 
   // Table 30, p 85
-  void pdf_resource<PAGE_DIMENSION>::execute(QPDFObjectHandle qpdf_page)
+  void page_item<PAGE_DIMENSION>::execute(QPDFObjectHandle qpdf_page)
   {
     LOG_S(INFO) << __FUNCTION__;
 

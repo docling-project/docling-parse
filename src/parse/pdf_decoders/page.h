@@ -22,15 +22,15 @@ namespace pdflib
     int get_page_number();
 
     // Typed accessors for direct pybind11 binding
-    pdf_resource<PAGE_CELLS>& get_page_cells() { return page_cells; }
-    pdf_resource<PAGE_SHAPES>& get_page_shapes() { return page_shapes; }
-    pdf_resource<PAGE_IMAGES>& get_page_images() { return page_images; }
-    pdf_resource<PAGE_DIMENSION>& get_page_dimension() { return page_dimension; }
+    page_item<PAGE_CELLS>& get_page_cells() { return page_cells; }
+    page_item<PAGE_SHAPES>& get_page_shapes() { return page_shapes; }
+    page_item<PAGE_IMAGES>& get_page_images() { return page_images; }
+    page_item<PAGE_DIMENSION>& get_page_dimension() { return page_dimension; }
 
     // Char, word and line cells (char_cells is alias for page_cells, word/line are computed)
-    pdf_resource<PAGE_CELLS>& get_char_cells() { return page_cells; }
-    pdf_resource<PAGE_CELLS>& get_word_cells() { return word_cells; }
-    pdf_resource<PAGE_CELLS>& get_line_cells() { return line_cells; }
+    page_item<PAGE_CELLS>& get_char_cells() { return page_cells; }
+    page_item<PAGE_CELLS>& get_word_cells() { return word_cells; }
+    page_item<PAGE_CELLS>& get_line_cells() { return line_cells; }
 
     bool has_word_cells() const { return word_cells_created; }
     bool has_line_cells() const { return line_cells_created; }
@@ -87,19 +87,19 @@ namespace pdflib
     nlohmann::json json_page;
     nlohmann::json json_annots;
     
-    pdf_resource<PAGE_DIMENSION> page_dimension;
+    page_item<PAGE_DIMENSION> page_dimension;
 
-    pdf_resource<PAGE_CELLS>  page_cells;
-    pdf_resource<PAGE_SHAPES>  page_shapes;
-    pdf_resource<PAGE_IMAGES> page_images;
+    page_item<PAGE_CELLS>  page_cells;
+    page_item<PAGE_SHAPES>  page_shapes;
+    page_item<PAGE_IMAGES> page_images;
 
-    pdf_resource<PAGE_CELLS>  cells;
-    pdf_resource<PAGE_SHAPES>  shapes;
-    pdf_resource<PAGE_IMAGES> images;
+    page_item<PAGE_CELLS>  cells;
+    page_item<PAGE_SHAPES>  shapes;
+    page_item<PAGE_IMAGES> images;
 
     // Computed cell aggregations
-    pdf_resource<PAGE_CELLS>  word_cells;
-    pdf_resource<PAGE_CELLS>  line_cells;
+    page_item<PAGE_CELLS>  word_cells;
+    page_item<PAGE_CELLS>  line_cells;
     bool word_cells_created = false;
     bool line_cells_created = false;
 
@@ -272,7 +272,7 @@ namespace pdflib
     // fix the orientation
     {
       local.reset();
-      pdf_sanitator<PAGE_DIMENSION> sanitator(page_dimension);
+      page_item_sanitator<PAGE_DIMENSION> sanitator(page_dimension);
 
       sanitator.sanitize(config.page_boundary); // update the top-level bbox
       sanitator.sanitize(page_cells, config.page_boundary);
@@ -283,7 +283,7 @@ namespace pdflib
 
     {
       local.reset();
-      pdf_sanitator<PAGE_CELLS> sanitator;
+      page_item_sanitator<PAGE_CELLS> sanitator;
 
       {
 	sanitator.remove_duplicate_cells(page_cells, 0.5, true);
@@ -500,7 +500,7 @@ namespace pdflib
                   }
                 //LOG_S(INFO) << "text: " << text;
 
-                pdf_resource<PAGE_CELL> cell;
+                page_item<PAGE_CELL> cell;
                 {
                   cell.widget = true;
 
@@ -627,7 +627,7 @@ namespace pdflib
 		text = "<unknown>";
 	      }
 	    
-	    pdf_resource<PAGE_CELL> cell;
+	    page_item<PAGE_CELL> cell;
 	    {
 	      cell.widget = true;
 	      
@@ -719,7 +719,7 @@ namespace pdflib
 
     // sanitise the cells
     {
-      pdf_sanitator<PAGE_CELLS> sanitator;
+      page_item_sanitator<PAGE_CELLS> sanitator;
 
       //sanitator.remove_duplicate_chars(page_cells, 0.5);
       //sanitator.sanitize_text(page_cells);
@@ -750,7 +750,7 @@ namespace pdflib
     LOG_S(INFO) << __FUNCTION__;
     utils::timer timer;
 
-    pdf_sanitator<PAGE_CELLS> sanitizer;
+    page_item_sanitator<PAGE_CELLS> sanitizer;
 
     word_cells = sanitizer.create_word_cells(page_cells, config);
 
@@ -768,7 +768,7 @@ namespace pdflib
     LOG_S(INFO) << __FUNCTION__;
     utils::timer timer;
 
-    pdf_sanitator<PAGE_CELLS> sanitizer;
+    page_item_sanitator<PAGE_CELLS> sanitizer;
 
     line_cells = sanitizer.create_line_cells(page_cells, config);
 

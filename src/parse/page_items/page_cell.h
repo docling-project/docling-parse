@@ -1,18 +1,18 @@
 //-*-C++-*-
 
-#ifndef PDF_PAGE_CELL_RESOURCE_H
-#define PDF_PAGE_CELL_RESOURCE_H
+#ifndef PAGE_ITEM_CELL_H
+#define PAGE_ITEM_CELL_H
 
 namespace pdflib
 {
 
   template<>
-  class pdf_resource<PAGE_CELL>
+  class page_item<PAGE_CELL>
   {
   public:
 
-    pdf_resource();
-    ~pdf_resource();
+    page_item();
+    ~page_item();
 
     nlohmann::json get();
     bool init_from(nlohmann::json& data);
@@ -25,11 +25,11 @@ namespace pdflib
 
     double average_char_width();
     
-    bool is_adjacent_to(pdf_resource<PAGE_CELL>& other, double delta);
+    bool is_adjacent_to(page_item<PAGE_CELL>& other, double delta);
 
-    bool has_same_reading_orientation(pdf_resource<PAGE_CELL>& other);
+    bool has_same_reading_orientation(page_item<PAGE_CELL>& other);
     
-    bool merge_with(pdf_resource<PAGE_CELL>& other, double delta);
+    bool merge_with(page_item<PAGE_CELL>& other, double delta);
     
   public:
 
@@ -89,15 +89,15 @@ namespace pdflib
     std::array<int, 3>  rgb_filling_ops  = {0, 0, 0};
   };
 
-  pdf_resource<PAGE_CELL>::pdf_resource():
+  page_item<PAGE_CELL>::page_item():
     active(true),
     left_to_right(true)
     {}
 
-  pdf_resource<PAGE_CELL>::~pdf_resource()
+  page_item<PAGE_CELL>::~page_item()
   {}
 
-  std::vector<std::string> pdf_resource<PAGE_CELL>::header = {
+  std::vector<std::string> page_item<PAGE_CELL>::header = {
     "x0",
     "y0",
     "x1",
@@ -147,7 +147,7 @@ namespace pdflib
     "rgb-filling"
   };
 
-  void pdf_resource<PAGE_CELL>::rotate(int angle, std::pair<double, double> delta)
+  void page_item<PAGE_CELL>::rotate(int angle, std::pair<double, double> delta)
   {
     utils::values::rotate_inplace(angle, x0, y0);
     utils::values::rotate_inplace(angle, x1, y1);
@@ -166,7 +166,7 @@ namespace pdflib
     utils::values::translate_inplace(delta, r_x3, r_y3);    
   }
   
-  nlohmann::json pdf_resource<PAGE_CELL>::get()
+  nlohmann::json page_item<PAGE_CELL>::get()
   {
     nlohmann::json cell;
 
@@ -209,7 +209,7 @@ namespace pdflib
     return cell;
   }
 
-  bool pdf_resource<PAGE_CELL>::init_from(nlohmann::json& data)
+  bool page_item<PAGE_CELL>::init_from(nlohmann::json& data)
   {
     //LOG_S(INFO) << __FUNCTION__ << "data: " << data.size();
 
@@ -253,7 +253,7 @@ namespace pdflib
     else
       {
 	std::stringstream ss;
-	ss << "can not initialise pdf_resource<PAGE_CELL> from "
+	ss << "can not initialise page_item<PAGE_CELL> from "
 	   << data.dump(2);
 	
         LOG_S(ERROR) << ss.str();
@@ -263,17 +263,17 @@ namespace pdflib
     return false;
   }
 
-  double pdf_resource<PAGE_CELL>::length()
+  double page_item<PAGE_CELL>::length()
   {
     return std::sqrt(std::pow(r_x1-r_x0, 2) + std::pow(r_y1-r_y0, 2));
   }
 
-  int pdf_resource<PAGE_CELL>::number_of_chars()
+  int page_item<PAGE_CELL>::number_of_chars()
   {
     return utils::string::count_unicode_characters(text);
   }
 
-  double pdf_resource<PAGE_CELL>::average_char_width()
+  double page_item<PAGE_CELL>::average_char_width()
   {
     double len = length();
     int num_chars = number_of_chars();
@@ -281,7 +281,7 @@ namespace pdflib
     return (num_chars>0? len/num_chars : 0.0);
   }
   
-  bool pdf_resource<PAGE_CELL>::is_adjacent_to(pdf_resource<PAGE_CELL>& other, double eps)
+  bool page_item<PAGE_CELL>::is_adjacent_to(page_item<PAGE_CELL>& other, double eps)
   {
     double d0 = std::sqrt((r_x1-other.r_x0)*(r_x1-other.r_x0) + (r_y1-other.r_y0)*(r_y1-other.r_y0));
     double d1 = std::sqrt((r_x2-other.r_x3)*(r_x2-other.r_x3) + (r_y2-other.r_y3)*(r_y2-other.r_y3));
@@ -289,7 +289,7 @@ namespace pdflib
     return ((d0<eps) and (d1<eps));
   }
 
-  bool pdf_resource<PAGE_CELL>::has_same_reading_orientation(pdf_resource<PAGE_CELL>& other)
+  bool page_item<PAGE_CELL>::has_same_reading_orientation(page_item<PAGE_CELL>& other)
   {
     // it might need is_punctuation function instead of just the space
     bool is_punc = utils::string::is_punctuation_or_space(text);
@@ -299,7 +299,7 @@ namespace pdflib
     return ((left_to_right==other.left_to_right) or (is_punc or other_is_punc)); 
   }
   
-  bool pdf_resource<PAGE_CELL>::merge_with(pdf_resource<PAGE_CELL>& other, double delta)
+  bool page_item<PAGE_CELL>::merge_with(page_item<PAGE_CELL>& other, double delta)
   {
     if(not has_same_reading_orientation(other))
       {
