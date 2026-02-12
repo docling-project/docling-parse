@@ -65,8 +65,9 @@ namespace pdflib
     // Contents
     void decode_contents(const decode_page_config& config);
 
-    void decode_annots();
-
+    void decode_annots_from_qpdf();
+    void extract_page_cells_from_annot(QPDFObjectHandle annots);
+    
     void rotate_contents();
 
     void sanitise_contents(std::string page_boundary);
@@ -82,11 +83,10 @@ namespace pdflib
     QPDFObjectHandle qpdf_fonts;
     QPDFObjectHandle qpdf_xobjects;
 
-    nlohmann::json json_annots;
-
     // Debug-only: populated when config.populate_json_objects is true
     nlohmann::json json_page;
-
+    nlohmann::json json_annots;
+    
     pdf_resource<PAGE_DIMENSION> page_dimension;
 
     pdf_resource<PAGE_CELLS>  page_cells;
@@ -232,11 +232,12 @@ namespace pdflib
 	timings.add_timing(pdf_timings::KEY_TO_JSON_PAGE, local.get_time());
       }
 
-    {
-      local.reset();
-      json_annots = extract_annots_in_json(qpdf_page);
-      timings.add_timing(pdf_timings::KEY_EXTRACT_ANNOTS_JSON, local.get_time());
-    }
+    if(config.populate_json_objects)
+      {
+	local.reset();
+	json_annots = extract_annots_in_json(qpdf_page);
+	timings.add_timing(pdf_timings::KEY_EXTRACT_ANNOTS_JSON, local.get_time());
+      }
 
     {
       local.reset();
@@ -258,7 +259,7 @@ namespace pdflib
 
     {
       local.reset();
-      decode_annots();
+      decode_annots_from_qpdf();
       timings.add_timing(pdf_timings::KEY_DECODE_ANNOTS, local.get_time());
     }
 
@@ -470,6 +471,7 @@ namespace pdflib
       }
   }
 
+  /* // legacy decode_annots - commented out, declaration removed
   void pdf_decoder<PAGE>::decode_annots()
   {
     LOG_S(INFO) << __FUNCTION__;
@@ -547,7 +549,136 @@ namespace pdflib
           }
       }
   }
+  */ // end legacy decode_annots
 
+  void pdf_decoder<PAGE>::decode_annots_from_qpdf()
+  {
+    if(qpdf_page.isDictionary())
+      {
+	if(qpdf_page.hasKey("/Annot"))
+	  {
+	    LOG_S(INFO) << "found `/Annot`";
+	    QPDFObjectHandle annot = qpdf_page.getKey("/Annot");
+	    extract_page_cells_from_annot(annot);
+	  }
+
+	if(qpdf_page.hasKey("/Annots"))
+	  {
+	    LOG_S(INFO) << "found `/Annots`";
+	    QPDFObjectHandle annots = qpdf_page.getKey("/Annots");
+	    extract_page_cells_from_annot(annots);
+	  }    
+      }
+  }
+
+  // FIXME: we need to expand the capabilities of the annotation extraction!
+  void pdf_decoder<PAGE>::extract_page_cells_from_annot(QPDFObjectHandle annots)
+  {
+    if(not annots.isArray())
+      {
+	LOG_S(WARNING) << "annotation is not an array";
+	return;
+      }
+
+    for(int l=0; l<annots.getArrayNItems(); l++)
+      {
+	QPDFObjectHandle annot = annots.getArrayItem(l);
+
+	// auto annot_json = to_json(annot);
+	// LOG_S(INFO) << "annot " << l << ": " << annot_json.dump(2);
+	
+	auto [has_type, type] = to_string(annot, "/Type");
+	if(not has_type)
+	  {
+	    continue;
+	  }
+
+	auto [has_subtype, subtype] = to_string(annot, "/Subtype");
+	if(not has_subtype)
+	  {
+	    continue;
+	  }
+	
+	LOG_S(INFO) << "type: " << type << ", subtype: " << subtype;
+	
+	if(type=="/Annot" and
+	   subtype=="/Widget" and
+	   annot.hasKey("/Rect") and
+	   annot.getKey("/Rect").isArray() and
+	   annot.hasKey("/V") and
+	   annot.hasKey("/T")
+	   )
+	  {
+	    auto rect = annot.getKey("/Rect");
+
+	    std::array<double, 4> bbox = {0., 0., 0., 0.};
+	    for(int l=0; l<rect.getArrayNItems() and l<bbox.size(); l++)
+	      {
+		QPDFObjectHandle num = rect.getArrayItem(l);
+		if(num.isNumber())
+		  {
+		    bbox[l] = num.getNumericValue();
+		  }
+	      }
+	    
+	    auto [has_value, text] = to_string(annot, "/V");
+	    if(not has_value)
+	      {
+		text = "<unknown>";
+	      }
+	    
+	    pdf_resource<PAGE_CELL> cell;
+	    {
+	      cell.widget = true;
+	      
+	      cell.x0 = bbox[0];
+	      cell.y0 = bbox[1];
+	      cell.x1 = bbox[2];
+	      cell.y1 = bbox[3];
+	      
+	      cell.r_x0 = bbox[0];
+	      cell.r_y0 = bbox[1];
+	      cell.r_x1 = bbox[2];
+	      cell.r_y1 = bbox[1];
+	      cell.r_x2 = bbox[2];
+	      cell.r_y2 = bbox[3];
+	      cell.r_x3 = bbox[0];
+	      cell.r_y3 = bbox[3];
+	      
+	      cell.text = text;
+	      cell.rendering_mode = 0;
+	      
+	      cell.space_width = 0;
+	      //cell.chars  = {};//chars;
+	      //cell.widths = {};//widths;
+	      
+	      cell.enc_name = "Form-font"; //font.get_encoding_name();
+	      
+	      cell.font_enc = "Form-font"; //to_string(font.get_encoding());
+	      cell.font_key = "Form-font"; //font.get_key();
+	      
+	      cell.font_name = "Form-font"; //font.get_name();
+	      cell.font_size = 0; //font_size/1000.0;
+	      
+	      cell.italic = false;
+	      cell.bold   = false;
+	      
+	      cell.ocr        = false;
+	      cell.confidence = -1.0;
+	      
+	      cell.stack_size  = -1;
+	      cell.block_count = -1;
+	      cell.instr_count = -1;
+	    }	    
+	    page_cells.push_back(cell);
+	  }
+	else
+	  {
+	    LOG_S(WARNING) << "annot is being skipped!";
+	  }
+      }
+  }
+  
   void pdf_decoder<PAGE>::rotate_contents()
   {
     LOG_S(INFO) << __FUNCTION__;

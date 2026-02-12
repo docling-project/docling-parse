@@ -287,7 +287,7 @@ def test_reference_documents_from_filenames():
 
                     assert len(lines) == len(
                         _lines
-                    ), f"len(lines) == len(_lines) => {len(lines)} == {len(_lines)} from {_fname}"
+                    ), f"len(lines) == len(_lines) => {len(lines)} == {len(_lines)} from {_fname} for {pdf_doc_path}"
 
                     # this is a bit dangerous due to rounding errors ...
                     """
