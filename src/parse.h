@@ -50,9 +50,22 @@
 #include <parse/qpdf/instruction.h>
 #include <parse/qpdf/stream_decoder.h>
 
-#include <parse/pdf_resource.h>
+// page-item
+#include <parse/page_item.h>
 #include <parse/page_items/page_dimension.h>
+#include <parse/page_items/page_cell.h>
+#include <parse/page_items/page_cells.h>
+#include <parse/page_items/page_shape.h>
+#include <parse/page_items/page_shapes.h>
+#include <parse/page_items/page_image.h>
+#include <parse/page_items/page_images.h>
+#include <parse/page_items/page_widget.h>
+#include <parse/page_items/page_widgets.h>
+#include <parse/page_items/page_hyperlink.h>
+#include <parse/page_items/page_hyperlinks.h>
 
+// pdf-resource
+#include <parse/pdf_resource.h>
 #include <parse/pdf_resources/page_font/glyphs.h>
 #include <parse/pdf_resources/page_font/font_cid.h>
 #include <parse/pdf_resources/page_font/font_cids.h>
@@ -76,17 +89,7 @@
 #include <parse/pdf_resources/page_xobject_postscript.h>
 #include <parse/pdf_resources/page_xobjects.h>
 
-#include <parse/page_items/page_cell.h>
-#include <parse/page_items/page_cells.h>
-#include <parse/page_items/page_shape.h>
-#include <parse/page_items/page_shapes.h>
-#include <parse/page_items/page_image.h>
-#include <parse/page_items/page_images.h>
-#include <parse/page_items/page_widget.h>
-#include <parse/page_items/page_widgets.h>
-#include <parse/page_items/page_hyperlink.h>
-#include <parse/page_items/page_hyperlinks.h>
-
+//  
 #include <parse/pdf_sanitator.h>
 #include <parse/page_item_sanitator.h>
 #include <parse/pdf_sanitators/constants.h>
