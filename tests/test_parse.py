@@ -46,6 +46,7 @@ def save_as_json_rounded(page: SegmentedPdfPage, filename, indent=2, ndigits=3):
     with open(filename, "w", encoding="utf-8") as fw:
         json.dump(out, fw, indent=indent)
 
+
 GROUNDTRUTH_FOLDER = "tests/data/groundtruth/"
 REGRESSION_FOLDER = "tests/data/regression/*.pdf"
 
@@ -322,8 +323,8 @@ def verify_hyperlinks(
                 abs(true_rect[l][1] - pred_rect[l][1]) < eps
             ), "abs(true_rect[l][1]-pred_rect[l][1])<eps"
 
-        assert (
-            str(true_hyperlink.uri) == str(pred_hyperlink.uri)
+        assert str(true_hyperlink.uri) == str(
+            pred_hyperlink.uri
         ), "true_hyperlink.uri == pred_hyperlink.uri"
 
     return True

@@ -427,15 +427,24 @@ class PdfDocument:
             coord_origin=CoordOrigin.BOTTOMLEFT,
         )
         art_bbox_obj = BoundingBox(
-            l=crop_bbox[0], b=crop_bbox[1], r=crop_bbox[2], t=crop_bbox[3],
+            l=crop_bbox[0],
+            b=crop_bbox[1],
+            r=crop_bbox[2],
+            t=crop_bbox[3],
             coord_origin=CoordOrigin.BOTTOMLEFT,
         )
         media_bbox_obj = BoundingBox(
-            l=media_bbox[0], b=media_bbox[1], r=media_bbox[2], t=media_bbox[3],
+            l=media_bbox[0],
+            b=media_bbox[1],
+            r=media_bbox[2],
+            t=media_bbox[3],
             coord_origin=CoordOrigin.BOTTOMLEFT,
         )
         crop_bbox_obj = BoundingBox(
-            l=crop_bbox[0], b=crop_bbox[1], r=crop_bbox[2], t=crop_bbox[3],
+            l=crop_bbox[0],
+            b=crop_bbox[1],
+            r=crop_bbox[2],
+            t=crop_bbox[3],
             coord_origin=CoordOrigin.BOTTOMLEFT,
         )
 
@@ -564,9 +573,7 @@ class PdfDocument:
 
         return result
 
-    def _to_hyperlinks_from_decoder(
-        self, hyperlinks_container
-    ) -> List[PdfHyperlink]:
+    def _to_hyperlinks_from_decoder(self, hyperlinks_container) -> List[PdfHyperlink]:
         """Convert typed PdfHyperlinks container to list of PdfHyperlink objects."""
         result: List[PdfHyperlink] = []
 
