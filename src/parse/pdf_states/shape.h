@@ -216,23 +216,7 @@ namespace pdflib
 
     if(not verify(instructions, 6, __FUNCTION__) ) { return; }
 
-    /*
-      if(curr_shapes.size()==0)
-      {
-      LOG_S(ERROR) << "applying 'c' on empty shapes";
-      return;
-      }
-    */
-
     auto& shape = curr_shapes.back();
-
-    /*
-      if(shape.size()==0)
-      {
-      LOG_S(ERROR) << "applying 'c' on empty shape";
-      return;
-      }
-    */
 
     std::pair<double, double> coor = shape.back();
 
@@ -255,7 +239,6 @@ namespace pdflib
   {
     if(not config.keep_shapes) { return; }
 
-    //assert(instructions.size()==4);
     if(not verify(instructions, 4, __FUNCTION__) ) { return; }
 
     auto& shape = curr_shapes.back();
@@ -280,7 +263,6 @@ namespace pdflib
   {
     if(not config.keep_shapes) { return; }
 
-    //assert(instructions.size()==4);
     if(not verify(instructions, 4, __FUNCTION__) ) { return; }
 
     auto& shape = curr_shapes.back();
@@ -549,6 +531,7 @@ namespace pdflib
         */
       }
 
+    LOG_S(INFO) << "#-current shapes: " << curr_shapes.size()
     for(int i=0; i<curr_shapes.size(); i++)
       {
         curr_shapes[i].transform(trafo_matrix);
@@ -577,11 +560,24 @@ namespace pdflib
               grph_state.get_rgb_stroking_ops(),
               grph_state.get_rgb_filling_ops());
 
+	    LOG_S(INFO) << "creating new shape " << page_shapes.size()
+			<< " with len(i): " << curr_shapes[i].get_i().size()
+			<< " with len(x): " << curr_shapes[i].get_x().size()
+			<< " with fill color: ("
+			<< curr_shapes[i].get_rgb_filling_ops()[0] << ", "
+			<< curr_shapes[i].get_rgb_filling_ops()[1] << ", "
+			<< curr_shapes[i].get_rgb_filling_ops()[1] << ")"
+			<< " with stroke color: ("
+			<< curr_shapes[i].get_rgb_stroking_ops()[0] << ", "
+			<< curr_shapes[i].get_rgb_stroking_ops()[1] << ", "
+			<< curr_shapes[i].get_rgb_stroking_ops()[1] << ")";
+	    
             page_shapes.push_back(curr_shapes[i]);
+	    
           }
         else
           {
-            //LOG_S(WARNING) << " --> ignoring shape";
+            LOG_S(WARNING) << " --> ignoring shape";
           }
       }
     //LOG_S(INFO) << "--------------------------------------------------";

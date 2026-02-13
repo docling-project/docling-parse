@@ -492,6 +492,15 @@ class PdfDocument:
             y_coords = shape.get_y()
             indices = shape.get_i()
 
+            """
+            print(f"{ind}\tlen(indices): {len(indices)} -> {len(x_coords)} -> {shape.get_rgb_filling_ops()}")
+            if len(indices)>2:
+                print(indices)
+
+            if ind>8:
+                break
+            """
+
             for l in range(0, len(indices), 2):
                 i0: int = indices[l + 0]
                 i1: int = indices[l + 1]
@@ -519,6 +528,56 @@ class PdfDocument:
                     rgb_filling=ColorRGBA(r=rgb_f[0], g=rgb_f[1], b=rgb_f[2]),
                 )
                 result.append(pdf_shape)
+
+        return result
+
+    def _to_shapes_from_widgets(self, widgets_container) -> List[PdfShape]:
+        """Convert typed PdfWidgets container to list of PdfShape (rectangle per widget)."""
+        result: List[PdfShape] = []
+
+        for ind, widget in enumerate(widgets_container):
+            points = [
+                Coord2D(widget.x0, widget.y0),
+                Coord2D(widget.x1, widget.y0),
+                Coord2D(widget.x1, widget.y1),
+                Coord2D(widget.x0, widget.y1),
+                Coord2D(widget.x0, widget.y0),  # close the rectangle
+            ]
+            pdf_shape = PdfShape(
+                index=ind,
+                parent_id=0,
+                points=points,
+                has_graphics_state=True,
+                line_width=1.0,
+                rgb_stroking=ColorRGBA(r=255, g=165, b=0, a=255),  # orange
+                rgb_filling=ColorRGBA(r=255, g=165, b=0, a=64),  # orange, translucent
+            )
+            result.append(pdf_shape)
+
+        return result
+
+    def _to_shapes_from_hyperlinks(self, hyperlinks_container) -> List[PdfShape]:
+        """Convert typed PdfHyperlinks container to list of PdfShape (rectangle per hyperlink)."""
+        result: List[PdfShape] = []
+
+        for ind, hyperlink in enumerate(hyperlinks_container):
+            points = [
+                Coord2D(hyperlink.x0, hyperlink.y0),
+                Coord2D(hyperlink.x1, hyperlink.y0),
+                Coord2D(hyperlink.x1, hyperlink.y1),
+                Coord2D(hyperlink.x0, hyperlink.y1),
+                Coord2D(hyperlink.x0, hyperlink.y0),  # close the rectangle
+            ]
+            pdf_shape = PdfShape(
+                index=ind,
+                parent_id=0,
+                points=points,
+                has_graphics_state=True,
+                line_width=1.0,
+                rgb_stroking=ColorRGBA(r=0, g=0, b=255, a=255),  # blue
+                rgb_filling=ColorRGBA(r=0, g=0, b=255, a=64),  # blue, translucent
+            )
+            result.append(pdf_shape)
 
         return result
 
@@ -601,6 +660,8 @@ class PdfDocument:
 
         char_cells = self._to_cells_from_decoder(page_decoder.get_char_cells())
         shapes = self._to_shapes_from_decoder(page_decoder.get_page_shapes())
+        shapes += self._to_shapes_from_widgets(page_decoder.get_page_widgets())
+        shapes += self._to_shapes_from_hyperlinks(page_decoder.get_page_hyperlinks())
         bitmap_resources = self._to_bitmap_resources_from_decoder(
             page_decoder.get_page_images()
         )

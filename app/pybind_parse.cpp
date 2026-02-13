@@ -136,6 +136,24 @@ PYBIND11_MODULE(pdf_parsers, m) {
     .def("get_media_bbox", &pdflib::page_item<pdflib::PAGE_DIMENSION>::get_media_bbox,
 	 "Get media box as [x0, y0, x1, y1]");
 
+  // PdfWidget - form field widget with bounding box and field info
+  pybind11::class_<pdflib::page_item<pdflib::PAGE_WIDGET>>(m, "PdfWidget")
+    .def_readonly("x0", &pdflib::page_item<pdflib::PAGE_WIDGET>::x0)
+    .def_readonly("y0", &pdflib::page_item<pdflib::PAGE_WIDGET>::y0)
+    .def_readonly("x1", &pdflib::page_item<pdflib::PAGE_WIDGET>::x1)
+    .def_readonly("y1", &pdflib::page_item<pdflib::PAGE_WIDGET>::y1)
+    .def_readonly("text", &pdflib::page_item<pdflib::PAGE_WIDGET>::text)
+    .def_readonly("field_name", &pdflib::page_item<pdflib::PAGE_WIDGET>::field_name)
+    .def_readonly("field_type", &pdflib::page_item<pdflib::PAGE_WIDGET>::field_type);
+
+  // PdfHyperlink - hyperlink annotation with bounding box and URI
+  pybind11::class_<pdflib::page_item<pdflib::PAGE_HYPERLINK>>(m, "PdfHyperlink")
+    .def_readonly("x0", &pdflib::page_item<pdflib::PAGE_HYPERLINK>::x0)
+    .def_readonly("y0", &pdflib::page_item<pdflib::PAGE_HYPERLINK>::y0)
+    .def_readonly("x1", &pdflib::page_item<pdflib::PAGE_HYPERLINK>::x1)
+    .def_readonly("y1", &pdflib::page_item<pdflib::PAGE_HYPERLINK>::y1)
+    .def_readonly("uri", &pdflib::page_item<pdflib::PAGE_HYPERLINK>::uri);
+
   // ============= Container Type Bindings =============
 
   // PdfCells - iterable container of PdfCell objects
@@ -180,6 +198,34 @@ PYBIND11_MODULE(pdf_parsers, m) {
 	   return pybind11::make_iterator(self.begin(), self.end());
 	 }, pybind11::keep_alive<0, 1>());
 
+  // PdfWidgets - iterable container of PdfWidget objects
+  pybind11::class_<pdflib::page_item<pdflib::PAGE_WIDGETS>>(m, "PdfWidgets")
+    .def("__len__", &pdflib::page_item<pdflib::PAGE_WIDGETS>::size)
+    .def("__getitem__", [](pdflib::page_item<pdflib::PAGE_WIDGETS>& self, size_t i)
+	 -> pdflib::page_item<pdflib::PAGE_WIDGET>& {
+	   if (i >= self.size()) {
+	     throw pybind11::index_error("index out of range");
+	   }
+	   return self[i];
+	 }, pybind11::return_value_policy::reference_internal)
+    .def("__iter__", [](pdflib::page_item<pdflib::PAGE_WIDGETS>& self) {
+	   return pybind11::make_iterator(self.begin(), self.end());
+	 }, pybind11::keep_alive<0, 1>());
+
+  // PdfHyperlinks - iterable container of PdfHyperlink objects
+  pybind11::class_<pdflib::page_item<pdflib::PAGE_HYPERLINKS>>(m, "PdfHyperlinks")
+    .def("__len__", &pdflib::page_item<pdflib::PAGE_HYPERLINKS>::size)
+    .def("__getitem__", [](pdflib::page_item<pdflib::PAGE_HYPERLINKS>& self, size_t i)
+	 -> pdflib::page_item<pdflib::PAGE_HYPERLINK>& {
+	   if (i >= self.size()) {
+	     throw pybind11::index_error("index out of range");
+	   }
+	   return self[i];
+	 }, pybind11::return_value_policy::reference_internal)
+    .def("__iter__", [](pdflib::page_item<pdflib::PAGE_HYPERLINKS>& self) {
+	   return pybind11::make_iterator(self.begin(), self.end());
+	 }, pybind11::keep_alive<0, 1>());
+
   // ============= Page Decoder Binding =============
 
   // PdfPageDecoder - provides typed access to decoded page data
@@ -205,6 +251,12 @@ PYBIND11_MODULE(pdf_parsers, m) {
     .def("get_page_images", &pdflib::pdf_decoder<pdflib::PAGE>::get_page_images,
 	 pybind11::return_value_policy::reference_internal,
 	 "Get bitmap/image resources on the page")
+    .def("get_page_widgets", &pdflib::pdf_decoder<pdflib::PAGE>::get_page_widgets,
+	 pybind11::return_value_policy::reference_internal,
+	 "Get form field widgets on the page")
+    .def("get_page_hyperlinks", &pdflib::pdf_decoder<pdflib::PAGE>::get_page_hyperlinks,
+	 pybind11::return_value_policy::reference_internal,
+	 "Get hyperlink annotations on the page")
     .def("has_word_cells", &pdflib::pdf_decoder<pdflib::PAGE>::has_word_cells,
 	 "Check if word cells have been created")
     .def("has_line_cells", &pdflib::pdf_decoder<pdflib::PAGE>::has_line_cells,
