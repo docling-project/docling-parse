@@ -531,7 +531,7 @@ namespace pdflib
         */
       }
 
-    LOG_S(INFO) << "#-current shapes: " << curr_shapes.size()
+    LOG_S(INFO) << "#-current shapes: " << curr_shapes.size();
     for(int i=0; i<curr_shapes.size(); i++)
       {
         curr_shapes[i].transform(trafo_matrix);

@@ -5,6 +5,8 @@ dist
 extlib_*/
 scratch_*
 perf/results/**
+perf/results_*
+perf/viz*
 tests/data/regression/*.json
 tests/data/cases/*.json
 
