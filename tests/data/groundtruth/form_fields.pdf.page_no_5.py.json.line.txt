@@ -1,4 +1,4 @@
-(229.64, 752.15) (382.36, 752.15) (382.36, 763.38) (229.64, 763.38)       /TT1 Renseignements généraux	<|special_separator|>
+(229.64, 752.16) (382.36, 752.16) (382.36, 763.38) (229.64, 763.38)       /TT1 Renseignements généraux	<|special_separator|>
 (021.00, 730.14) (191.54, 730.14) (191.54, 740.43) (021.00, 740.43)       /TT1 Admissibilité au remboursement	<|special_separator|>
 (021.00, 716.58) (257.77, 716.58) (257.77, 725.89) (021.00, 725.89)       /TT2 Vous pourriez obtenir un remboursement de la partie 	<|special_separator|>
 (021.00, 705.58) (251.66, 705.58) (251.66, 714.89) (021.00, 714.89)       /TT2 provinciale de la TVH que vous avez payée sur des 	<|special_separator|>
@@ -77,7 +77,7 @@
 (027.00, 038.58) (074.80, 038.58) (074.80, 047.89) (027.00, 047.89)       /TT2 retournés. 	<|special_separator|>
 (074.80, 038.57) (143.87, 038.57) (143.87, 047.92) (074.80, 047.92)       /TT1 N'envoyez pas	<|special_separator|>
 (143.87, 038.58) (232.79, 038.58) (232.79, 047.89) (143.87, 047.89)       /TT2  les reçus originaux.	<|special_separator|>
-(315.00, 730.14) (417.69, 730.14) (417.69, 740.43) (315.00, 740.43)       /TT1 Délai de production	<|special_separator|>
+(315.00, 730.14) (417.68, 730.14) (417.68, 740.43) (315.00, 740.43)       /TT1 Délai de production	<|special_separator|>
 (315.00, 716.11) (586.80, 716.11) (586.80, 725.42) (315.00, 725.42)       /TT2 Vous devez demander ce remboursement au plus tard un an 	<|special_separator|>
 (315.00, 705.11) (592.33, 705.11) (592.33, 714.42) (315.00, 714.42)       /TT2 suivant le jour où vous avez transféré les produits admissibles 	<|special_separator|>
 (315.00, 694.11) (434.50, 694.11) (434.50, 703.42) (315.00, 703.42)       /TT2 de la province participante.	<|special_separator|>
@@ -114,7 +114,7 @@
 (370.27, 405.57) (387.50, 405.57) (387.50, 414.92) (370.27, 414.92)       /TT1 pas	<|special_separator|>
 (387.50, 405.58) (570.38, 405.58) (570.38, 414.89) (387.50, 414.89)       /TT2  besoin de produire une demande papier.	<|special_separator|>
 (315.00, 382.14) (546.69, 382.14) (546.69, 392.43) (315.00, 392.43)       /TT1 Où envoyer ce formulaire si vous produisez 	<|special_separator|>
-(315.00, 370.14) (421.98, 370.14) (421.98, 380.43) (315.00, 380.43)       /TT1 une demande papier	<|special_separator|>
+(315.00, 370.14) (421.97, 370.14) (421.97, 380.43) (315.00, 380.43)       /TT1 une demande papier	<|special_separator|>
 (315.00, 356.11) (490.09, 356.11) (490.09, 365.42) (315.00, 365.42)       /TT2 Envoyer votre demande par la poste à :	<|special_separator|>
 (345.00, 338.57) (573.40, 338.57) (573.40, 347.92) (345.00, 347.92)       /TT1 Traitement des remboursements de la TPS/TVH 	<|special_separator|>
 (345.00, 327.57) (479.08, 327.57) (479.08, 336.92) (345.00, 336.92)       /TT1 Centre fiscal de l'Atlantique 	<|special_separator|>

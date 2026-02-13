@@ -714,6 +714,15 @@ wheels = [
 ]
 
 [[package]]
+name = "defusedxml"
+version = "0.7.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/0f/d5/c66da9b79e5bdb124974bfe172b4daf3c984ebd9c2a06e2b8a4dc7331c72/defusedxml-0.7.1.tar.gz", hash = "sha256:1bb3032db185915b62d7c6209c5a8792be6a32ab2fedacc84e01b52c51aa3e69", size = 75520, upload-time = "2021-03-08T10:59:26.269Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/07/6c/aa3f2f849e01cb6a001cd8554a88d4c77c5c1a31c95bdf1cf9301e6d9ef4/defusedxml-0.7.1-py2.py3-none-any.whl", hash = "sha256:a352e7e428770286cc899e2542b6cdaedb2b4953ff269a210103ec58f6198a61", size = 25604, upload-time = "2021-03-08T10:59:24.45Z" },
+]
+
+[[package]]
 name = "delocate"
 version = "0.13.0"
 source = { registry = "https://pypi.org/simple" }
@@ -751,9 +760,10 @@ wheels = [
 
 [[package]]
 name = "docling-core"
-version = "2.64.0"
+version = "2.65.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
+    { name = "defusedxml" },
     { name = "jsonref" },
     { name = "jsonschema" },
     { name = "latex2mathml" },
@@ -765,9 +775,9 @@ dependencies = [
     { name = "typer" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/23/f2/692de80893b0e0b22e4a5faa03f970b65de6d274a84d375c0ef92b54700b/docling_core-2.64.0.tar.gz", hash = "sha256:5ceb993d1ad743a882fe9bbae63a6b91ae5475e9d90cdf7451e9a1a7c2c2589f", size = 251646, upload-time = "2026-02-09T12:04:51.565Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ca/f0/54e61a05728f6e44f45092ab115b11b24464b64274f8a5fe8fcfe90ac70d/docling_core-2.65.1.tar.gz", hash = "sha256:3a143adb9cc613c503380eff92f5895078fc5a00fc7264f327d0d85ff60176cd", size = 253164, upload-time = "2026-02-13T12:23:06.472Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/65/9b/9f75957f7ac2e048c0cfad56631267e9d5a23b0d5708b7639598072f5253/docling_core-2.64.0-py3-none-any.whl", hash = "sha256:38dd5d8c60eba8b76a0f37c6f3510c0e53d3d53e0e2585329755b1886887b714", size = 239264, upload-time = "2026-02-09T12:04:50.256Z" },
+    { url = "https://files.pythonhosted.org/packages/54/ee/2a450f8cf9a153dd080551b1ff09d45f200d629c30917b2047ecb8e1f6b6/docling_core-2.65.1-py3-none-any.whl", hash = "sha256:fcdb30254bc5046b52b8bec5919de3b6cdbeed915399cede5351ff328cdd020d", size = 240086, upload-time = "2026-02-13T12:23:04.289Z" },
 ]
 
 [[package]]
@@ -820,7 +830,7 @@ perf-test = [
 
 [package.metadata]
 requires-dist = [
-    { name = "docling-core", specifier = ">=2.64.0" },
+    { name = "docling-core", specifier = ">=2.65.1" },
     { name = "pdfplumber", marker = "extra == 'perf-tools'", specifier = ">=0.11.7" },
     { name = "pillow", specifier = ">=10.0.0,<13.0.0" },
     { name = "pydantic", specifier = ">=2.0.0" },

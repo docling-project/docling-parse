@@ -13,8 +13,8 @@
 (035.00, 657.11) (281.78, 657.11) (281.78, 666.42) (035.00, 666.42)       /TT2 Pour les produits au taux de 15 %, inscrivez le montant 	<|special_separator|>
 (035.00, 646.11) (074.46, 646.11) (074.46, 655.42) (035.00, 655.42)       /TT2 de TVH :	<|special_separator|>
 (403.72, 648.61) (409.28, 648.61) (409.28, 657.92) (403.72, 657.92)       /TT2 $	<|special_separator|>
-(415.00, 647.63) (422.00, 647.63) (422.00, 658.80) (415.00, 658.80)       /TT3 ×	<|special_separator|>
-(423.99, 647.86) (458.00, 647.63) (458.00, 658.80) (423.99, 657.17)       /TT2 10/15 =	<|special_separator|>
+(415.00, 647.63) (422.00, 647.63) (422.00, 658.81) (415.00, 658.81)       /TT3 ×	<|special_separator|>
+(423.99, 647.86) (458.00, 647.63) (458.00, 658.81) (423.99, 657.17)       /TT2 10/15 =	<|special_separator|>
 (559.72, 648.61) (565.28, 648.61) (565.28, 657.92) (559.72, 657.92)       /TT2 $	<|special_separator|>
 (035.00, 618.14) (570.51, 618.14) (570.51, 628.43) (035.00, 628.43)       /TT1 Produits admissibles transférés dans une province participante dont le taux de la TVH est moins élevé	<|special_separator|>
 (573.89, 576.63) (581.11, 576.63) (581.11, 585.98) (573.89, 585.98)       /TT1 C	<|special_separator|>
@@ -47,8 +47,8 @@
 (037.42, 320.61) (133.58, 320.61) (133.58, 329.92) (037.42, 329.92)       /TT2 Numéro de téléphone	<|special_separator|>
 (155.72, 321.58) (181.29, 321.58) (181.29, 330.89) (155.72, 330.89)       /TT2 Poste	<|special_separator|>
 (204.48, 321.11) (458.51, 321.11) (458.51, 330.42) (204.48, 330.42)       /TT2 Signature du demandeur ou de son représentant autorisé	<|special_separator|>
-(466.99, 321.57) (580.94, 321.57) (580.94, 330.89) (466.99, 330.89)       /TT2      Année       Mois   Jour 	<|special_separator|>
-(021.00, 294.96) (581.82, 294.96) (581.82, 302.41) (021.00, 302.41)       /TT2 Les renseignements personnels (y compris le NAS) sont recueillis et utilisés aux fins d'appliquer ou d'exécuter la partie IX de la Loi sur la taxe d'accise, et des 	<|special_separator|>
+(466.99, 321.58) (580.94, 321.58) (580.94, 330.89) (466.99, 330.89)       /TT2      Année       Mois   Jour 	<|special_separator|>
+(021.00, 294.96) (581.81, 294.96) (581.81, 302.41) (021.00, 302.41)       /TT2 Les renseignements personnels (y compris le NAS) sont recueillis et utilisés aux fins d'appliquer ou d'exécuter la partie IX de la Loi sur la taxe d'accise, et des 	<|special_separator|>
 (021.00, 285.96) (553.60, 285.96) (553.60, 293.41) (021.00, 293.41)       /TT2 programmes et activités connexes incluant l'administration de la taxe, les remboursements, les choix, la vérification, l'observation et la perception. Les 	<|special_separator|>
 (021.00, 276.96) (579.93, 276.96) (579.93, 284.41) (021.00, 284.41)       /TT2 renseignements recueillis peuvent être communiqués à une autre institution gouvernementale fédérale, provinciale, territoriale, autochtone ou étrangère dans 	<|special_separator|>
 (021.00, 267.96) (579.63, 267.96) (579.63, 275.41) (021.00, 275.41)       /TT2 la mesure où le droit l'autorise. Le défaut de fournir ces renseignements pourrait entraîner un paiement d'intérêts ou de pénalités, ou d'autres mesures. Selon 	<|special_separator|>

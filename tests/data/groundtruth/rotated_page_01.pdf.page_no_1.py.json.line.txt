@@ -2,7 +2,7 @@
 (357.54, 206.28) (440.65, 206.28) (440.65, 218.66) (357.54, 218.66)       /TT2 August 2016	<|special_separator|>
 (119.58, 533.98) (641.59, 533.98) (641.59, 543.28) (119.58, 543.28)       /TT4 This document has been prepared by Exo U Inc. and is intended to provide preliminary information to interested 	<|special_separator|>
 (119.58, 521.38) (622.29, 521.38) (622.29, 530.68) (119.58, 530.68)       /TT4 parties to formulate the basis of their transaction intent. The information contained herein is confidential and 	<|special_separator|>
-(119.58, 508.78) (651.45, 508.78) (651.45, 518.08) (119.58, 518.08)       /TT4 proprietary to Exo U Inc. Accordingly, the reader agrees to treat all information as strictly confidential and shall not 	<|special_separator|>
+(119.58, 508.78) (651.44, 508.78) (651.44, 518.08) (119.58, 518.08)       /TT4 proprietary to Exo U Inc. Accordingly, the reader agrees to treat all information as strictly confidential and shall not 	<|special_separator|>
 (119.58, 496.18) (645.58, 496.18) (645.58, 505.48) (119.58, 505.48)       /TT4 disclose, either in part or in whole, to any party not directly involved in the investment and/or transaction decision.	<|special_separator|>
 (119.58, 470.98) (666.55, 470.98) (666.55, 480.28) (119.58, 480.28)       /TT4 This document is not intended for general circulation or publication and cannot be reproduced in any form without the 	<|special_separator|>
 (119.58, 458.38) (270.28, 458.38) (270.28, 467.68) (119.58, 467.68)       /TT4 written permission of Exo U Inc. 	<|special_separator|>

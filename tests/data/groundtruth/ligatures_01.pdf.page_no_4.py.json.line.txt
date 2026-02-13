@@ -1,7 +1,7 @@
 (053.80, 723.51) (246.24, 723.51) (246.24, 731.44) (053.80, 731.44)      /F219 KDD '22, August 14-18, 2022, Washington, DC, USA	<|special_separator|>
 (253.14, 723.51) (558.20, 723.51) (558.20, 731.44) (253.14, 731.44)      /F219 Birgit Pfitzmann, Christoph Auer, Michele Dolfi, Ahmed S. Nassar, and Peter Staar	<|special_separator|>
 (053.50, 698.82) (558.49, 698.82) (558.49, 706.27) (053.50, 706.27)      /F138 Table 1: DocLayNet dataset overview. Along with the frequency of each class label, we present the relative occurrence (as %	<|special_separator|>
-(053.80, 687.86) (558.20, 687.86) (558.20, 695.32) (053.80, 695.32)      /F138 of row 'Total') in the train, test and validation sets. The inter-annotator agreement is computed as the mAP@0.5-0.95 metric	<|special_separator|>
+(053.80, 687.86) (558.20, 687.86) (558.20, 695.31) (053.80, 695.31)      /F138 of row 'Total') in the train, test and validation sets. The inter-annotator agreement is computed as the mAP@0.5-0.95 metric	<|special_separator|>
 (053.80, 676.90) (469.85, 676.90) (469.85, 684.36) (053.80, 684.36)      /F138 between pairwise annotations from the triple-annotated pages, from which we obtain accuracy ranges.	<|special_separator|>
 (233.94, 643.54) (270.04, 643.54) (270.04, 651.35) (233.94, 651.35)      /F134 % of Total	<|special_separator|>
 (329.05, 643.54) (407.37, 643.54) (407.37, 651.35) (329.05, 651.35)      /F134 triple inter-annotator	<|special_separator|>
@@ -54,7 +54,7 @@
 (428.12, 599.31) (447.83, 599.31) (447.83, 607.11) (428.12, 607.11)      /F134 86-96	<|special_separator|>
 (465.65, 599.31) (477.51, 599.31) (477.51, 607.11) (465.65, 607.11)      /F134 n/a	<|special_separator|>
 (495.32, 599.31) (507.18, 599.31) (507.18, 607.11) (495.32, 607.11)      /F134 n/a	<|special_separator|>
-(104.83, 588.35) (137.71, 588.35) (137.71, 596.15) (104.83, 596.15)      /F134 List-item	<|special_separator|>
+(104.83, 588.35) (137.70, 588.35) (137.70, 596.15) (104.83, 596.15)      /F134 List-item	<|special_separator|>
 (173.70, 588.35) (198.71, 588.35) (198.71, 596.15) (173.70, 596.15)      /F134 185660	<|special_separator|>
 (215.04, 588.35) (233.69, 588.35) (233.69, 596.15) (215.04, 596.15)      /F134 17.19	<|special_separator|>
 (245.85, 588.35) (264.50, 588.35) (264.50, 596.15) (245.85, 596.15)      /F134 13.34	<|special_separator|>
@@ -78,7 +78,7 @@
 (428.12, 577.39) (447.83, 577.39) (447.83, 585.19) (428.12, 585.19)      /F134 92-97	<|special_separator|>
 (465.00, 577.39) (477.51, 577.39) (477.51, 585.19) (465.00, 585.19)      /F134 100	<|special_separator|>
 (487.47, 577.39) (507.18, 577.39) (507.18, 585.19) (487.47, 585.19)      /F134 96-98	<|special_separator|>
-(104.83, 566.43) (150.10, 566.43) (150.10, 574.24) (104.83, 574.24)      /F134 Page-header	<|special_separator|>
+(104.83, 566.43) (150.11, 566.43) (150.11, 574.24) (104.83, 574.24)      /F134 Page-header	<|special_separator|>
 (177.87, 566.43) (198.71, 566.43) (198.71, 574.24) (177.87, 574.24)      /F134 58022	<|special_separator|>
 (219.21, 566.43) (233.69, 566.43) (233.69, 574.24) (219.21, 574.24)      /F134 5.10	<|special_separator|>
 (250.02, 566.43) (264.50, 566.43) (264.50, 574.24) (250.02, 574.24)      /F134 6.70	<|special_separator|>
@@ -90,18 +90,18 @@
 (428.12, 566.43) (447.83, 566.43) (447.83, 574.24) (428.12, 574.24)      /F134 91-92	<|special_separator|>
 (457.80, 566.43) (477.51, 566.43) (477.51, 574.24) (457.80, 574.24)      /F134 97-99	<|special_separator|>
 (487.47, 566.43) (507.18, 566.43) (507.18, 574.24) (487.47, 574.24)      /F134 81-86	<|special_separator|>
-(104.83, 555.48) (130.81, 555.48) (130.81, 563.28) (104.83, 563.28)      /F134 Picture	<|special_separator|>
-(177.87, 555.48) (198.71, 555.48) (198.71, 563.28) (177.87, 563.28)      /F134 45976	<|special_separator|>
-(219.21, 555.48) (233.69, 555.48) (233.69, 563.28) (219.21, 563.28)      /F134 4.21	<|special_separator|>
-(250.02, 555.48) (264.50, 555.48) (264.50, 563.28) (250.02, 563.28)      /F134 2.78	<|special_separator|>
-(280.83, 555.48) (295.31, 555.48) (295.31, 563.28) (280.83, 563.28)      /F134 5.31	<|special_separator|>
-(305.27, 555.48) (324.98, 555.48) (324.98, 563.28) (305.27, 563.28)      /F134 69-71	<|special_separator|>
-(334.94, 555.48) (354.65, 555.48) (354.65, 563.28) (334.94, 563.28)      /F134 56-59	<|special_separator|>
-(364.61, 555.48) (384.32, 555.48) (384.32, 563.28) (364.61, 563.28)      /F134 82-86	<|special_separator|>
-(398.45, 555.48) (418.16, 555.48) (418.16, 563.28) (398.45, 563.28)      /F134 69-82	<|special_separator|>
-(428.12, 555.48) (447.83, 555.48) (447.83, 563.28) (428.12, 563.28)      /F134 80-95	<|special_separator|>
-(457.80, 555.48) (477.51, 555.48) (477.51, 563.28) (457.80, 563.28)      /F134 66-71	<|special_separator|>
-(487.47, 555.48) (507.18, 555.48) (507.18, 563.28) (487.47, 563.28)      /F134 59-76	<|special_separator|>
+(104.83, 555.47) (130.81, 555.47) (130.81, 563.28) (104.83, 563.28)      /F134 Picture	<|special_separator|>
+(177.87, 555.47) (198.71, 555.47) (198.71, 563.28) (177.87, 563.28)      /F134 45976	<|special_separator|>
+(219.21, 555.47) (233.69, 555.47) (233.69, 563.28) (219.21, 563.28)      /F134 4.21	<|special_separator|>
+(250.02, 555.47) (264.50, 555.47) (264.50, 563.28) (250.02, 563.28)      /F134 2.78	<|special_separator|>
+(280.83, 555.47) (295.31, 555.47) (295.31, 563.28) (280.83, 563.28)      /F134 5.31	<|special_separator|>
+(305.27, 555.47) (324.98, 555.47) (324.98, 563.28) (305.27, 563.28)      /F134 69-71	<|special_separator|>
+(334.94, 555.47) (354.65, 555.47) (354.65, 563.28) (334.94, 563.28)      /F134 56-59	<|special_separator|>
+(364.61, 555.47) (384.32, 555.47) (384.32, 563.28) (364.61, 563.28)      /F134 82-86	<|special_separator|>
+(398.45, 555.47) (418.16, 555.47) (418.16, 563.28) (398.45, 563.28)      /F134 69-82	<|special_separator|>
+(428.12, 555.47) (447.83, 555.47) (447.83, 563.28) (428.12, 563.28)      /F134 80-95	<|special_separator|>
+(457.80, 555.47) (477.51, 555.47) (477.51, 563.28) (457.80, 563.28)      /F134 66-71	<|special_separator|>
+(487.47, 555.47) (507.18, 555.47) (507.18, 563.28) (487.47, 563.28)      /F134 59-76	<|special_separator|>
 (104.83, 544.52) (159.56, 544.52) (159.56, 552.32) (104.83, 552.32)      /F134 Section-header	<|special_separator|>
 (173.70, 544.52) (198.71, 544.52) (198.71, 552.32) (173.70, 552.32)      /F134 142884	<|special_separator|>
 (215.04, 544.52) (233.69, 544.52) (233.69, 552.32) (215.04, 552.32)      /F134 12.60	<|special_separator|>
@@ -126,7 +126,7 @@
 (428.12, 533.56) (447.83, 533.56) (447.83, 541.36) (428.12, 541.36)      /F134 58-80	<|special_separator|>
 (457.80, 533.56) (477.51, 533.56) (477.51, 541.36) (457.80, 541.36)      /F134 79-84	<|special_separator|>
 (487.47, 533.56) (507.18, 533.56) (507.18, 541.36) (487.47, 541.36)      /F134 70-85	<|special_separator|>
-(104.83, 522.60) (120.78, 522.60) (120.78, 530.40) (104.83, 530.40)      /F134 Text	<|special_separator|>
+(104.83, 522.60) (120.79, 522.60) (120.79, 530.40) (104.83, 530.40)      /F134 Text	<|special_separator|>
 (173.70, 522.60) (198.71, 522.60) (198.71, 530.40) (173.70, 530.40)      /F134 510377	<|special_separator|>
 (215.04, 522.60) (233.69, 522.60) (233.69, 530.40) (215.04, 530.40)      /F134 45.82	<|special_separator|>
 (245.85, 522.60) (264.50, 522.60) (264.50, 530.40) (245.85, 530.40)      /F134 49.28	<|special_separator|>
@@ -171,17 +171,17 @@
 (053.80, 138.52) (294.05, 138.52) (294.05, 146.32) (053.80, 146.32)      /F134 quality controls. Phase one and two required a small team of experts	<|special_separator|>
 (053.80, 127.56) (294.04, 127.56) (294.04, 135.36) (053.80, 135.36)      /F134 only. For phases three and four, a group of 40 dedicated annotators	<|special_separator|>
 (053.47, 116.60) (170.59, 116.60) (170.59, 124.40) (053.47, 124.40)      /F134 were assembled and supervised.	<|special_separator|>
-(063.76, 105.77) (226.72, 105.77) (226.72, 113.22) (063.76, 113.22)      /F138 Phase 1: Data selection and preparation.	<|special_separator|>
+(063.76, 105.77) (226.73, 105.77) (226.73, 113.22) (063.76, 113.22)      /F138 Phase 1: Data selection and preparation.	<|special_separator|>
 (229.07, 105.64) (295.56, 105.64) (295.56, 113.44) (229.07, 113.44)      /F134 Our inclusion cri-	<|special_separator|>
 (053.80, 094.68) (294.05, 094.68) (294.05, 102.48) (053.80, 102.48)      /F134 teria for documents were described in Section 3. A large effort went	<|special_separator|>
 (053.80, 083.72) (294.05, 083.72) (294.05, 091.52) (053.80, 091.52)      /F134 into ensuring that all documents are free to use. The data sources	<|special_separator|>
 (317.95, 471.69) (481.03, 471.69) (481.03, 479.49) (317.95, 479.49)      /F134 include publication repositories such as arXiv	<|special_separator|>
 (481.04, 475.31) (484.42, 475.31) (484.42, 481.64) (481.04, 481.64)      /F134 3	<|special_separator|>
-(484.92, 471.69) (559.18, 471.69) (559.18, 479.49) (484.92, 479.49)      /F134 , government offices,	<|special_separator|>
+(484.92, 471.69) (559.19, 471.69) (559.19, 479.49) (484.92, 479.49)      /F134 , government offices,	<|special_separator|>
 (317.95, 460.73) (558.20, 460.73) (558.20, 468.53) (317.95, 468.53)      /F134 company websites as well as data directory services for financial	<|special_separator|>
 (317.95, 449.77) (558.37, 449.77) (558.37, 457.57) (317.95, 457.57)      /F134 reports and patents. Scanned documents were excluded wherever	<|special_separator|>
 (317.95, 438.81) (558.20, 438.81) (558.20, 446.61) (317.95, 446.61)      /F134 possible because they can be rotated or skewed. This would not	<|special_separator|>
-(317.95, 427.85) (558.20, 427.85) (558.20, 435.65) (317.95, 435.65)      /F134 allow us to perform annotation with rectangular bounding-boxes	<|special_separator|>
+(317.95, 427.85) (558.20, 427.85) (558.20, 435.66) (317.95, 435.66)      /F134 allow us to perform annotation with rectangular bounding-boxes	<|special_separator|>
 (317.95, 416.89) (496.72, 416.89) (496.72, 424.70) (317.95, 424.70)      /F134 and therefore complicate the annotation process.	<|special_separator|>
 (327.92, 405.94) (558.21, 405.94) (558.21, 413.74) (327.92, 413.74)      /F134 Preparation work included uploading and parsing the sourced	<|special_separator|>
 (317.95, 394.98) (558.20, 394.98) (558.20, 402.78) (317.95, 402.78)      /F134 PDF documents in the Corpus Conversion Service (CCS) [22], a	<|special_separator|>
@@ -190,7 +190,7 @@
 (317.95, 362.10) (558.20, 362.10) (558.20, 369.90) (317.95, 369.90)      /F134 terface of CCS is shown in Figure 3. The desired balance of pages	<|special_separator|>
 (317.95, 351.14) (559.71, 351.14) (559.71, 358.94) (317.95, 358.94)      /F134 between the different document categories was achieved by se-	<|special_separator|>
 (317.95, 340.18) (558.37, 340.18) (558.37, 347.98) (317.95, 347.98)      /F134 lective subsampling of pages with certain desired properties. For	<|special_separator|>
-(317.95, 329.22) (558.20, 329.22) (558.20, 337.02) (317.95, 337.02)      /F134 example, we made sure to include the title page of each document	<|special_separator|>
+(317.95, 329.22) (558.20, 329.22) (558.20, 337.03) (317.95, 337.03)      /F134 example, we made sure to include the title page of each document	<|special_separator|>
 (317.95, 318.26) (558.37, 318.26) (558.37, 326.07) (317.95, 326.07)      /F134 and bias the remaining page selection to those with figures or	<|special_separator|>
 (317.95, 307.31) (558.20, 307.31) (558.20, 315.11) (317.95, 315.11)      /F134 tables. The latter was achieved by leveraging pre-trained object	<|special_separator|>
 (317.95, 296.35) (558.53, 296.35) (558.53, 304.15) (317.95, 304.15)      /F134 detection models from PubLayNet, which helped us estimate how	<|special_separator|>

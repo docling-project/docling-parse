@@ -28,6 +28,7 @@ namespace pdflib
 
     // Widget-specific fields
     std::string text;
+    std::string description;
     std::string field_name;
     std::string field_type;
   };
@@ -35,6 +36,7 @@ namespace pdflib
   page_item<PAGE_WIDGET>::page_item():
     x0(0), y0(0), x1(0), y1(0),
     text(),
+    description(),
     field_name(),
     field_type()
   {}
@@ -52,6 +54,7 @@ namespace pdflib
       result["y1"] = utils::values::round(y1);
 
       result["text"] = text;
+      result["description"] = description;
       result["field_name"] = field_name;
       result["field_type"] = field_type;
     }

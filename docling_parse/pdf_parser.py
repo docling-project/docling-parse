@@ -13,12 +13,14 @@ from docling_core.types.doc.page import (
     BoundingRectangle,
     ColorRGBA,
     Coord2D,
+    PdfHyperlink,
     PdfMetaData,
     PdfPageBoundaryType,
     PdfPageGeometry,
     PdfShape,
     PdfTableOfContents,
     PdfTextCell,
+    PdfWidget,
     SegmentedPdfPage,
     TextCell,
     TextDirection,
@@ -425,13 +427,16 @@ class PdfDocument:
             coord_origin=CoordOrigin.BOTTOMLEFT,
         )
         art_bbox_obj = BoundingBox(
-            l=crop_bbox[0], b=crop_bbox[1], r=crop_bbox[2], t=crop_bbox[3]
+            l=crop_bbox[0], b=crop_bbox[1], r=crop_bbox[2], t=crop_bbox[3],
+            coord_origin=CoordOrigin.BOTTOMLEFT,
         )
         media_bbox_obj = BoundingBox(
-            l=media_bbox[0], b=media_bbox[1], r=media_bbox[2], t=media_bbox[3]
+            l=media_bbox[0], b=media_bbox[1], r=media_bbox[2], t=media_bbox[3],
+            coord_origin=CoordOrigin.BOTTOMLEFT,
         )
         crop_bbox_obj = BoundingBox(
-            l=crop_bbox[0], b=crop_bbox[1], r=crop_bbox[2], t=crop_bbox[3]
+            l=crop_bbox[0], b=crop_bbox[1], r=crop_bbox[2], t=crop_bbox[3],
+            coord_origin=CoordOrigin.BOTTOMLEFT,
         )
 
         return PdfPageGeometry(
@@ -531,53 +536,58 @@ class PdfDocument:
 
         return result
 
-    def _to_shapes_from_widgets(self, widgets_container) -> List[PdfShape]:
-        """Convert typed PdfWidgets container to list of PdfShape (rectangle per widget)."""
-        result: List[PdfShape] = []
+    def _to_widgets_from_decoder(self, widgets_container) -> List[PdfWidget]:
+        """Convert typed PdfWidgets container to list of PdfWidget objects."""
+        result: List[PdfWidget] = []
 
         for ind, widget in enumerate(widgets_container):
-            points = [
-                Coord2D(widget.x0, widget.y0),
-                Coord2D(widget.x1, widget.y0),
-                Coord2D(widget.x1, widget.y1),
-                Coord2D(widget.x0, widget.y1),
-                Coord2D(widget.x0, widget.y0),  # close the rectangle
-            ]
-            pdf_shape = PdfShape(
-                index=ind,
-                parent_id=0,
-                points=points,
-                has_graphics_state=True,
-                line_width=1.0,
-                rgb_stroking=ColorRGBA(r=255, g=165, b=0, a=255),  # orange
-                rgb_filling=ColorRGBA(r=255, g=165, b=0, a=64),  # orange, translucent
+            rect = BoundingRectangle(
+                r_x0=widget.x0,
+                r_y0=widget.y0,
+                r_x1=widget.x1,
+                r_y1=widget.y0,
+                r_x2=widget.x1,
+                r_y2=widget.y1,
+                r_x3=widget.x0,
+                r_y3=widget.y1,
             )
-            result.append(pdf_shape)
+            result.append(
+                PdfWidget(
+                    index=ind,
+                    rect=rect,
+                    widget_text=widget.text or None,
+                    widget_description=widget.description or None,
+                    widget_field_name=widget.field_name or None,
+                    widget_field_type=widget.field_type or None,
+                )
+            )
 
         return result
 
-    def _to_shapes_from_hyperlinks(self, hyperlinks_container) -> List[PdfShape]:
-        """Convert typed PdfHyperlinks container to list of PdfShape (rectangle per hyperlink)."""
-        result: List[PdfShape] = []
+    def _to_hyperlinks_from_decoder(
+        self, hyperlinks_container
+    ) -> List[PdfHyperlink]:
+        """Convert typed PdfHyperlinks container to list of PdfHyperlink objects."""
+        result: List[PdfHyperlink] = []
 
         for ind, hyperlink in enumerate(hyperlinks_container):
-            points = [
-                Coord2D(hyperlink.x0, hyperlink.y0),
-                Coord2D(hyperlink.x1, hyperlink.y0),
-                Coord2D(hyperlink.x1, hyperlink.y1),
-                Coord2D(hyperlink.x0, hyperlink.y1),
-                Coord2D(hyperlink.x0, hyperlink.y0),  # close the rectangle
-            ]
-            pdf_shape = PdfShape(
-                index=ind,
-                parent_id=0,
-                points=points,
-                has_graphics_state=True,
-                line_width=1.0,
-                rgb_stroking=ColorRGBA(r=0, g=0, b=255, a=255),  # blue
-                rgb_filling=ColorRGBA(r=0, g=0, b=255, a=64),  # blue, translucent
+            rect = BoundingRectangle(
+                r_x0=hyperlink.x0,
+                r_y0=hyperlink.y0,
+                r_x1=hyperlink.x1,
+                r_y1=hyperlink.y0,
+                r_x2=hyperlink.x1,
+                r_y2=hyperlink.y1,
+                r_x3=hyperlink.x0,
+                r_y3=hyperlink.y1,
             )
-            result.append(pdf_shape)
+            result.append(
+                PdfHyperlink(
+                    index=ind,
+                    rect=rect,
+                    uri=hyperlink.uri or None,
+                )
+            )
 
         return result
 
@@ -660,8 +670,10 @@ class PdfDocument:
 
         char_cells = self._to_cells_from_decoder(page_decoder.get_char_cells())
         shapes = self._to_shapes_from_decoder(page_decoder.get_page_shapes())
-        shapes += self._to_shapes_from_widgets(page_decoder.get_page_widgets())
-        shapes += self._to_shapes_from_hyperlinks(page_decoder.get_page_hyperlinks())
+        widgets = self._to_widgets_from_decoder(page_decoder.get_page_widgets())
+        hyperlinks = self._to_hyperlinks_from_decoder(
+            page_decoder.get_page_hyperlinks()
+        )
         bitmap_resources = self._to_bitmap_resources_from_decoder(
             page_decoder.get_page_images()
         )
@@ -676,6 +688,8 @@ class PdfDocument:
             has_chars=len(char_cells) > 0,
             bitmap_resources=bitmap_resources,
             shapes=shapes,
+            widgets=widgets,
+            hyperlinks=hyperlinks,
         )
 
         if page_decoder.has_word_cells():

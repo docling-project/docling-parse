@@ -1,16 +1,16 @@
 (053.80, 723.51) (347.02, 723.51) (347.02, 731.44) (053.80, 731.44)      /F219 DocLayNet: A Large Human-Annotated Dataset for Document-Layout Analysis	<|special_separator|>
 (365.76, 723.51) (558.20, 723.51) (558.20, 731.44) (365.76, 731.44)      /F219 KDD '22, August 14-18, 2022, Washington, DC, USA	<|special_separator|>
-(237.11, 650.73) (262.98, 650.73) (262.98, 657.46) (237.11, 657.46)        /F1 Patents	<|special_separator|>
+(237.11, 650.72) (262.98, 650.72) (262.98, 657.46) (237.11, 657.46)        /F1 Patents	<|special_separator|>
 (202.88, 643.35) (213.90, 643.35) (213.90, 650.09) (202.88, 650.09)        /F1 8%	<|special_separator|>
 (207.13, 690.65) (237.65, 690.65) (237.65, 697.39) (207.13, 697.39)        /F1 Scientific	<|special_separator|>
-(184.40, 665.13) (199.66, 665.13) (199.66, 671.87) (184.40, 671.87)        /F1 17%	<|special_separator|>
+(184.40, 665.13) (199.67, 665.13) (199.67, 671.87) (184.40, 671.87)        /F1 17%	<|special_separator|>
 (088.29, 669.46) (118.80, 669.46) (118.80, 676.20) (088.29, 676.20)        /F1 Financial	<|special_separator|>
 (136.24, 653.57) (151.51, 653.57) (151.51, 660.31) (136.24, 660.31)        /F1 32%	<|special_separator|>
-(093.97, 596.15) (121.11, 596.15) (121.11, 602.89) (093.97, 602.89)        /F1 Tenders	<|special_separator|>
-(139.62, 613.59) (150.65, 613.59) (150.65, 620.32) (139.62, 620.32)        /F1 6%	<|special_separator|>
-(139.88, 571.31) (157.69, 571.31) (157.69, 578.05) (139.88, 578.05)        /F1 Laws	<|special_separator|>
+(093.97, 596.15) (121.12, 596.15) (121.12, 602.89) (093.97, 602.89)        /F1 Tenders	<|special_separator|>
+(139.62, 613.58) (150.64, 613.58) (150.64, 620.32) (139.62, 620.32)        /F1 6%	<|special_separator|>
+(139.88, 571.31) (157.68, 571.31) (157.68, 578.05) (139.88, 578.05)        /F1 Laws	<|special_separator|>
 (157.44, 600.03) (172.70, 600.03) (172.70, 606.77) (157.44, 606.77)        /F1 16%	<|special_separator|>
-(225.47, 594.51) (254.29, 594.51) (254.29, 601.25) (225.47, 601.25)        /F1 Manuals	<|special_separator|>
+(225.47, 594.52) (254.30, 594.52) (254.30, 601.25) (225.47, 601.25)        /F1 Manuals	<|special_separator|>
 (194.41, 612.69) (209.67, 612.69) (209.67, 619.43) (194.41, 619.43)        /F1 21%	<|special_separator|>
 (053.80, 547.66) (294.04, 547.66) (294.04, 555.11) (053.80, 555.11)      /F138 Figure 2: Distribution of DocLayNet pages across document	<|special_separator|>
 (053.80, 536.70) (096.76, 536.70) (096.76, 544.15) (053.80, 544.15)      /F138 categories.	<|special_separator|>
@@ -40,7 +40,7 @@
 (142.85, 392.33) (215.15, 392.33) (215.15, 400.24) (142.85, 400.24)      /F148 Government Tenders	<|special_separator|>
 (215.16, 392.38) (295.56, 392.38) (295.56, 400.18) (215.16, 400.18)      /F134 . Each document cate-	<|special_separator|>
 (053.80, 381.42) (294.05, 381.42) (294.05, 389.22) (053.80, 389.22)      /F134 gory was sourced from various repositories. For example, Financial	<|special_separator|>
-(053.80, 370.46) (132.19, 370.46) (132.19, 378.26) (053.80, 378.26)      /F134 Reports contain both	<|special_separator|>
+(053.80, 370.46) (132.20, 370.46) (132.20, 378.26) (053.80, 378.26)      /F134 Reports contain both	<|special_separator|>
 (134.53, 370.41) (167.77, 370.41) (167.77, 378.32) (134.53, 378.32)      /F148 free-style	<|special_separator|>
 (170.31, 370.46) (255.74, 374.08) (255.74, 380.41) (170.31, 378.26)      /F134 format annual reports 2	<|special_separator|>
 (258.57, 370.46) (295.56, 370.46) (295.56, 378.26) (258.57, 378.26)      /F134 which ex-	<|special_separator|>
@@ -52,10 +52,10 @@
 (053.80, 337.54) (068.09, 337.54) (068.09, 345.45) (053.80, 345.45)      /F148 uals	<|special_separator|>
 (068.30, 337.58) (294.05, 337.58) (294.05, 345.38) (068.30, 345.38)      /F134 ) contain a large amount of free-style layouts in order to obtain	<|special_separator|>
 (053.80, 326.62) (294.04, 326.62) (294.04, 334.42) (053.80, 334.42)      /F134 maximum variability. In the other four categories, we boosted the	<|special_separator|>
-(053.57, 315.66) (294.05, 315.66) (294.05, 323.46) (053.57, 323.46)      /F134 variability by mixing documents from independent providers, such	<|special_separator|>
+(053.57, 315.66) (294.05, 315.66) (294.05, 323.47) (053.57, 323.47)      /F134 variability by mixing documents from independent providers, such	<|special_separator|>
 (053.80, 304.70) (294.05, 304.70) (294.05, 312.51) (053.80, 312.51)      /F134 as different government websites or publishers. In Figure 2, we	<|special_separator|>
 (053.80, 293.75) (294.22, 293.75) (294.22, 301.55) (053.80, 301.55)      /F134 show the document categories contained in DocLayNet with their	<|special_separator|>
-(053.80, 282.79) (112.30, 282.79) (112.30, 290.59) (053.80, 290.59)      /F134 respective sizes.	<|special_separator|>
+(053.80, 282.79) (112.29, 282.79) (112.29, 290.59) (053.80, 290.59)      /F134 respective sizes.	<|special_separator|>
 (063.76, 271.83) (295.56, 271.83) (295.56, 279.63) (063.76, 279.63)      /F134 We did not control the document selection with regard to lan-	<|special_separator|>
 (053.80, 260.87) (294.05, 260.87) (294.05, 268.67) (053.80, 268.67)      /F134 guage. The vast majority of documents contained in DocLayNet	<|special_separator|>
 (053.53, 249.91) (295.56, 249.91) (295.56, 257.71) (053.53, 257.71)      /F134 (close to 95%) are published in English language. However, Do-	<|special_separator|>
@@ -70,7 +70,7 @@
 (053.80, 151.28) (294.05, 151.28) (294.05, 159.08) (053.80, 159.08)      /F134 into pre-defined train-, test- and validation-sets. In this way, we can	<|special_separator|>
 (053.80, 140.32) (294.04, 140.32) (294.04, 148.12) (053.80, 148.12)      /F134 avoid spurious variations in the evaluation scores due to random	<|special_separator|>
 (053.80, 129.36) (294.05, 129.36) (294.05, 137.16) (053.80, 137.16)      /F134 splitting in train-, test- and validation-sets. We also ensured that	<|special_separator|>
-(053.80, 118.40) (294.04, 118.40) (294.04, 126.20) (053.80, 126.20)      /F134 less frequent labels are represented in train and test sets in equal	<|special_separator|>
+(053.80, 118.40) (294.04, 118.40) (294.04, 126.21) (053.80, 126.21)      /F134 less frequent labels are represented in train and test sets in equal	<|special_separator|>
 (053.80, 107.44) (098.92, 107.44) (098.92, 115.25) (053.80, 115.25)      /F134 proportions.	<|special_separator|>
 (053.80, 086.91) (195.79, 083.94) (195.79, 090.01) (053.80, 091.67)      /F134 2 e.g. AAPL from https://www.annualreports.com/	<|special_separator|>
 (327.92, 696.40) (558.20, 696.40) (558.20, 704.21) (327.92, 704.21)      /F134 Table 1 shows the overall frequency and distribution of the labels	<|special_separator|>
@@ -81,7 +81,7 @@
 (317.95, 641.61) (558.53, 641.61) (558.53, 649.41) (317.95, 649.41)      /F134 lead to overestimation of their prediction accuracy. We will show	<|special_separator|>
 (317.95, 630.65) (461.64, 630.65) (461.64, 638.45) (317.95, 638.45)      /F134 the impact of this decision in Section 5.	<|special_separator|>
 (327.92, 619.69) (558.44, 619.69) (558.44, 627.49) (327.92, 627.49)      /F134 In order to accommodate the different types of models currently	<|special_separator|>
-(317.95, 608.73) (516.82, 608.73) (516.82, 616.53) (317.95, 616.53)      /F134 in use by the community, we provide DocLayNet in an	<|special_separator|>
+(317.95, 608.73) (516.82, 608.73) (516.82, 616.54) (317.95, 616.54)      /F134 in use by the community, we provide DocLayNet in an	<|special_separator|>
 (519.08, 608.69) (558.20, 608.69) (558.20, 616.60) (519.08, 616.60)      /F148 augmented	<|special_separator|>
 (317.95, 597.77) (558.20, 597.77) (558.20, 605.58) (317.95, 605.58)      /F134 COCO format [16]. This entails the standard COCO ground-truth	<|special_separator|>
 (317.95, 586.82) (558.20, 586.82) (558.20, 594.62) (317.95, 594.62)      /F134 file (in JSON format) with the associated page images (in PNG	<|special_separator|>
@@ -93,7 +93,7 @@
 (317.95, 542.98) (558.20, 542.98) (558.20, 550.78) (317.95, 550.78)      /F134 the original PDF pages, as well as sidecar files containing parsed	<|special_separator|>
 (317.95, 532.02) (558.20, 532.02) (558.20, 539.82) (317.95, 539.82)      /F134 PDF text and text-cell coordinates (in JSON). All additional files are	<|special_separator|>
 (317.95, 521.06) (550.36, 521.06) (550.36, 528.86) (317.95, 528.86)      /F134 linked to the primary page images by their matching filenames.	<|special_separator|>
-(327.92, 510.10) (559.18, 510.10) (559.18, 517.90) (327.92, 517.90)      /F134 Despite being cost-intense and far less scalable than automation,	<|special_separator|>
+(327.92, 510.10) (559.18, 510.10) (559.18, 517.91) (327.92, 517.91)      /F134 Despite being cost-intense and far less scalable than automation,	<|special_separator|>
 (317.95, 499.14) (559.71, 499.14) (559.71, 506.95) (317.95, 506.95)      /F134 human annotation has several benefits over automated ground-	<|special_separator|>
 (317.95, 488.19) (558.20, 488.19) (558.20, 495.99) (317.95, 495.99)      /F134 truth generation. The first and most obvious reason to leverage	<|special_separator|>
 (317.95, 477.23) (559.71, 477.23) (559.71, 485.03) (317.95, 485.03)      /F134 human annotations is the freedom to annotate any type of doc-	<|special_separator|>
@@ -102,18 +102,18 @@
 (317.95, 444.35) (558.37, 444.35) (558.37, 452.15) (317.95, 452.15)      /F134 ter is not a hard constraint with human annotation, but it is for	<|special_separator|>
 (317.95, 433.39) (558.20, 433.39) (558.20, 441.19) (317.95, 441.19)      /F134 automated methods. A second reason to use human annotations is	<|special_separator|>
 (317.95, 422.43) (558.20, 422.43) (558.20, 430.23) (317.95, 430.23)      /F134 that the latter usually provide a more natural interpretation of the	<|special_separator|>
-(317.95, 411.47) (559.71, 411.47) (559.71, 419.27) (317.95, 419.27)      /F134 page layout. The human-interpreted layout can significantly devi-	<|special_separator|>
+(317.95, 411.47) (559.71, 411.47) (559.71, 419.28) (317.95, 419.28)      /F134 page layout. The human-interpreted layout can significantly devi-	<|special_separator|>
 (317.95, 400.51) (559.19, 400.51) (559.19, 408.32) (317.95, 408.32)      /F134 ate from the programmatic layout used in typesetting. For example,	<|special_separator|>
 (316.94, 389.56) (558.20, 389.56) (558.20, 397.36) (316.94, 397.36)      /F134 'invisible' tables might be used solely for aligning text paragraphs	<|special_separator|>
 (317.95, 378.60) (559.71, 378.60) (559.71, 386.40) (317.95, 386.40)      /F134 on columns. Such typesetting tricks might be interpreted by au-	<|special_separator|>
 (317.95, 367.64) (558.20, 367.64) (558.20, 375.44) (317.95, 375.44)      /F134 tomated methods incorrectly as an actual table, while the human	<|special_separator|>
 (317.95, 356.68) (464.51, 356.68) (464.51, 364.48) (317.95, 364.48)      /F134 annotation will interpret it correctly as	<|special_separator|>
-(466.98, 356.63) (482.15, 356.63) (482.15, 364.54) (466.98, 364.54)      /F148 Text	<|special_separator|>
+(466.98, 356.64) (482.15, 356.64) (482.15, 364.54) (466.98, 364.54)      /F148 Text	<|special_separator|>
 (485.13, 356.68) (558.20, 356.68) (558.20, 364.48) (485.13, 364.48)      /F134 or other styles. The	<|special_separator|>
 (317.95, 345.72) (558.20, 345.72) (558.20, 353.52) (317.95, 353.52)      /F134 same applies to multi-line text elements, when authors decided to	<|special_separator|>
-(317.95, 334.76) (558.51, 334.76) (558.51, 342.56) (317.95, 342.56)      /F134 space them as 'invisible' list elements without bullet symbols. A	<|special_separator|>
+(317.95, 334.76) (558.52, 334.76) (558.52, 342.56) (317.95, 342.56)      /F134 space them as 'invisible' list elements without bullet symbols. A	<|special_separator|>
 (317.95, 323.80) (558.20, 323.80) (558.20, 331.60) (317.95, 331.60)      /F134 third reason to gather ground-truth through human annotation is	<|special_separator|>
-(317.95, 312.84) (559.58, 312.84) (559.58, 320.64) (317.95, 320.64)      /F134 to estimate a 'natural' upper bound on the segmentation accuracy.	<|special_separator|>
+(317.95, 312.84) (559.58, 312.84) (559.58, 320.65) (317.95, 320.65)      /F134 to estimate a 'natural' upper bound on the segmentation accuracy.	<|special_separator|>
 (317.64, 301.88) (558.42, 301.88) (558.42, 309.69) (317.64, 309.69)      /F134 As we will show in Section 4, certain documents featuring complex	<|special_separator|>
 (317.95, 290.93) (559.72, 290.93) (559.72, 298.73) (317.95, 298.73)      /F134 layouts can have different but equally acceptable layout interpre-	<|special_separator|>
 (317.95, 279.97) (558.20, 279.97) (558.20, 287.77) (317.95, 287.77)      /F134 tations. This natural upper bound for segmentation accuracy can	<|special_separator|>
@@ -124,8 +124,8 @@
 (317.95, 225.17) (558.20, 225.17) (558.20, 232.97) (317.95, 232.97)      /F134 and avoid overfitting (see Table 1). On the flip side, achieving high	<|special_separator|>
 (317.95, 214.21) (558.20, 214.21) (558.20, 222.01) (317.95, 222.01)      /F134 annotation consistency proved to be a key challenge in human	<|special_separator|>
 (317.95, 203.25) (457.62, 203.25) (457.62, 211.06) (317.95, 211.06)      /F134 annotation, as we outline in Section 4.	<|special_separator|>
-(317.95, 175.15) (323.56, 175.15) (323.56, 184.21) (317.95, 184.21)      /F138 4	<|special_separator|>
-(334.47, 175.15) (470.21, 175.15) (470.21, 184.21) (334.47, 184.21)      /F138 ANNOTATION CAMPAIGN	<|special_separator|>
+(317.95, 175.14) (323.56, 175.14) (323.56, 184.21) (317.95, 184.21)      /F138 4	<|special_separator|>
+(334.47, 175.14) (470.21, 175.14) (470.21, 184.21) (334.47, 184.21)      /F138 ANNOTATION CAMPAIGN	<|special_separator|>
 (317.69, 151.79) (558.20, 151.79) (558.20, 159.60) (317.69, 159.60)      /F134 The annotation campaign was carried out in four phases. In phase	<|special_separator|>
 (317.95, 140.84) (559.59, 140.84) (559.59, 148.64) (317.95, 148.64)      /F134 one, we identified and prepared the data sources for annotation.	<|special_separator|>
 (317.95, 129.88) (558.20, 129.88) (558.20, 137.68) (317.95, 137.68)      /F134 In phase two, we determined the class labels and how annotations	<|special_separator|>

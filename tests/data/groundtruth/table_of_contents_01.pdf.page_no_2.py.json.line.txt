@@ -1,7 +1,7 @@
-(108.00, 754.57) (126.82, 754.57) (126.82, 763.12) (108.00, 763.12)       /F81 IBM	<|special_separator|>
-(399.97, 754.57) (504.00, 754.57) (504.00, 763.12) (399.97, 763.12)       /F81 Granite Language Models	<|special_separator|>
-(186.85, 627.76) (197.88, 627.76) (197.88, 636.74) (186.85, 636.74)       /Tc1 0.2	<|special_separator|>
-(186.85, 648.60) (197.88, 648.60) (197.88, 657.57) (186.85, 657.57)       /Tc1 0.6	<|special_separator|>
+(108.00, 754.56) (126.82, 754.56) (126.82, 763.12) (108.00, 763.12)       /F81 IBM	<|special_separator|>
+(399.97, 754.56) (504.00, 754.56) (504.00, 763.12) (399.97, 763.12)       /F81 Granite Language Models	<|special_separator|>
+(186.86, 627.77) (197.88, 627.77) (197.88, 636.74) (186.86, 636.74)       /Tc1 0.2	<|special_separator|>
+(186.86, 648.60) (197.88, 648.60) (197.88, 657.57) (186.86, 657.57)       /Tc1 0.6	<|special_separator|>
 (194.22, 669.35) (197.88, 669.35) (197.88, 678.32) (194.22, 678.32)       /Tc1 1	<|special_separator|>
 (185.01, 675.96) (225.49, 675.96) (225.49, 684.93) (185.01, 684.93)       /Tc1 Human Exams	<|special_separator|>
 (242.68, 649.94) (283.16, 649.94) (283.16, 658.91) (242.68, 658.91)       /Tc1 Commonsense	<|special_separator|>
@@ -13,19 +13,19 @@
 (180.91, 692.17) (229.51, 692.17) (229.51, 703.21) (180.91, 703.21)       /Tc2 Base Models	<|special_separator|>
 (130.95, 564.85) (182.47, 564.85) (182.47, 573.82) (130.95, 573.82)       /Tc1 Granite-3.0-8B	<|special_separator|>
 (195.23, 564.85) (239.39, 564.85) (239.39, 573.82) (195.23, 573.82)       /Tc1 Llama-3.1-8B	<|special_separator|>
-(252.15, 564.85) (288.94, 564.85) (288.94, 573.82) (252.15, 573.82)       /Tc1 Mistral-7B	<|special_separator|>
+(252.15, 564.85) (288.95, 564.85) (288.95, 573.82) (252.15, 573.82)       /Tc1 Mistral-7B	<|special_separator|>
 (198.40, 548.15) (208.35, 548.15) (208.35, 555.85) (198.40, 555.85)       /F81 (a)	<|special_separator|>
-(388.61, 624.70) (399.63, 624.70) (399.63, 633.68) (388.61, 633.68)       /Tc1 0.2	<|special_separator|>
-(388.61, 643.70) (399.63, 643.70) (399.63, 652.67) (388.61, 652.67)       /Tc1 0.6	<|special_separator|>
+(388.60, 624.70) (399.63, 624.70) (399.63, 633.68) (388.60, 633.68)       /Tc1 0.2	<|special_separator|>
+(388.60, 643.70) (399.63, 643.70) (399.63, 652.67) (388.60, 652.67)       /Tc1 0.6	<|special_separator|>
 (395.97, 662.69) (399.63, 662.69) (399.63, 671.66) (395.97, 671.66)       /Tc1 1	<|special_separator|>
 (386.76, 677.16) (427.24, 677.16) (427.24, 686.14) (386.76, 686.14)       /Tc1 Instruction	<|special_separator|>
 (390.45, 669.22) (423.56, 669.22) (423.56, 678.19) (390.45, 678.19)       /Tc1 Following	<|special_separator|>
-(434.90, 653.15) (468.02, 653.15) (468.02, 662.12) (434.90, 662.12)       /Tc1 Reasoning	<|special_separator|>
+(434.91, 653.15) (468.02, 653.15) (468.02, 662.12) (434.91, 662.12)       /Tc1 Reasoning	<|special_separator|>
 (446.46, 625.21) (490.62, 625.21) (490.62, 634.18) (446.46, 634.18)       /Tc1 Multilingual	<|special_separator|>
-(434.90, 597.35) (445.93, 597.35) (445.93, 606.32) (434.90, 606.32)       /Tc1 RAG	<|special_separator|>
+(434.91, 597.34) (445.93, 597.34) (445.93, 606.32) (434.91, 606.32)       /Tc1 RAG	<|special_separator|>
 (399.65, 581.28) (414.36, 581.28) (414.36, 590.25) (399.65, 590.25)       /Tc1 Code	<|special_separator|>
-(331.26, 597.35) (379.10, 597.35) (379.10, 606.32) (331.26, 606.32)       /Tc1 Cybersecurity	<|special_separator|>
-(338.11, 629.22) (367.55, 629.22) (367.55, 638.20) (338.11, 638.20)       /Tc1 Function	<|special_separator|>
+(331.26, 597.34) (379.10, 597.34) (379.10, 606.32) (331.26, 606.32)       /Tc1 Cybersecurity	<|special_separator|>
+(338.11, 629.22) (367.55, 629.22) (367.55, 638.19) (338.11, 638.19)       /Tc1 Function	<|special_separator|>
 (339.95, 621.27) (365.71, 621.27) (365.71, 630.25) (339.95, 630.25)       /Tc1 Calling	<|special_separator|>
 (357.03, 653.15) (379.10, 653.15) (379.10, 662.12) (357.03, 662.12)       /Tc1 Safety	<|special_separator|>
 (374.04, 692.20) (440.30, 692.20) (440.30, 703.25) (374.04, 703.25)       /Tc2 Instruct Models	<|special_separator|>
@@ -44,7 +44,7 @@
 (108.00, 426.90) (456.53, 426.90) (456.53, 435.45) (108.00, 435.45)       /F81 pretrained LLM for on-premise use requires models with lower hardware requirements.	<|special_separator|>
 (107.69, 409.96) (504.67, 409.96) (504.67, 418.51) (107.69, 418.51)       /F81 There are many lightweight models like Gemma (Team et al., 2024) and Llama (Dubey et al., 2024)	<|special_separator|>
 (108.00, 399.00) (504.00, 399.00) (504.00, 407.55) (108.00, 407.55)       /F81 that perform well and fit the bill. However, in an enterprise setting, the adoption of LLMs can have	<|special_separator|>
-(108.00, 388.04) (504.00, 388.04) (504.00, 396.60) (108.00, 396.60)       /F81 further constraints. The provenance and transparency around data usage and processing can have	<|special_separator|>
+(108.00, 388.04) (504.00, 388.04) (504.00, 396.59) (108.00, 396.59)       /F81 further constraints. The provenance and transparency around data usage and processing can have	<|special_separator|>
 (108.00, 377.08) (504.00, 377.08) (504.00, 385.64) (108.00, 385.64)       /F81 legal and compliance implications. In particular, the license that an LLM is released under can also	<|special_separator|>
 (108.00, 366.12) (368.92, 366.12) (368.92, 374.68) (108.00, 374.68)       /F81 restrict companies from using a model on their specific use cases.	<|special_separator|>
 (108.00, 349.19) (224.14, 349.19) (224.14, 357.74) (108.00, 357.74)       /F81 In this report, we present the	<|special_separator|>
@@ -55,13 +55,13 @@
 (108.00, 316.31) (504.00, 316.31) (504.00, 324.86) (108.00, 324.86)       /F81 commercial use. The models' data curation and training procedures were designed for enterprise	<|special_separator|>
 (108.00, 305.35) (504.00, 305.35) (504.00, 313.90) (108.00, 313.90)       /F81 usage and customization in mind, with a process that evaluates datasets for governance, risk and	<|special_separator|>
 (108.00, 294.39) (504.00, 294.39) (504.00, 302.95) (108.00, 302.95)       /F81 compliance (GRC) criteria, in addition to IBM's standard data clearance process and document	<|special_separator|>
-(108.00, 283.44) (446.13, 283.44) (446.13, 291.99) (108.00, 291.99)       /F81 quality checks. Specifically, Granite 3.0 includes 4 different models of varying sizes:	<|special_separator|>
+(108.00, 283.43) (446.13, 283.43) (446.13, 291.99) (108.00, 291.99)       /F81 quality checks. Specifically, Granite 3.0 includes 4 different models of varying sizes:	<|special_separator|>
 (135.40, 261.96) (138.88, 261.96) (138.88, 270.52) (135.40, 270.52)       /F81 •	<|special_separator|>
-(143.87, 261.95) (206.12, 261.95) (206.12, 270.90) (143.87, 270.90)       /F90 Dense Models:	<|special_separator|>
+(143.86, 261.95) (206.12, 261.95) (206.12, 270.91) (143.86, 270.91)       /F90 Dense Models:	<|special_separator|>
 (209.21, 261.96) (473.94, 261.96) (473.94, 270.52) (209.21, 270.52)       /F81 2B and 8B parameter models, trained on 12 trillion tokens in total.	<|special_separator|>
-(135.40, 245.93) (138.88, 245.93) (138.88, 254.48) (135.40, 254.48)       /F81 •	<|special_separator|>
+(135.40, 245.92) (138.88, 245.92) (138.88, 254.48) (135.40, 254.48)       /F81 •	<|special_separator|>
 (143.87, 245.91) (287.09, 245.91) (287.09, 254.87) (143.87, 254.87)       /F90 Mixture-of-Expert (MoE) Models:	<|special_separator|>
-(290.18, 245.93) (504.00, 245.93) (504.00, 254.48) (290.18, 254.48)       /F81 Sparse 1B and 3B MoE models, with 400M and 800M	<|special_separator|>
+(290.18, 245.92) (504.00, 245.92) (504.00, 254.48) (290.18, 254.48)       /F81 Sparse 1B and 3B MoE models, with 400M and 800M	<|special_separator|>
 (143.87, 234.97) (423.62, 234.97) (423.62, 243.52) (143.87, 243.52)       /F81 activated parameters respectively, trained on 10 trillion tokens in total.	<|special_separator|>
 (107.64, 213.50) (504.00, 213.50) (504.00, 222.05) (107.64, 222.05)       /F81 Accordingly, these models provide a range of options with different compute requirements to choose	<|special_separator|>
 (108.00, 202.54) (504.00, 202.54) (504.00, 211.09) (108.00, 211.09)       /F81 from, with appropriate trade-offs with their performance on downstream tasks. At each scale, we	<|special_separator|>

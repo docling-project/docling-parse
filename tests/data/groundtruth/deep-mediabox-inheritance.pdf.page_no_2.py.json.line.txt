@@ -39,7 +39,7 @@
 (225.70, 537.83) (234.89, 537.83) (234.89, 549.29) (225.70, 549.29)        /F3 by	<|special_separator|>
 (240.22, 537.83) (251.99, 537.83) (251.99, 549.29) (240.22, 549.29)        /F3 the	<|special_separator|>
 (257.28, 537.83) (319.47, 537.83) (319.47, 549.29) (257.28, 549.29)        /F3 undermentioned	<|special_separator|>
-(324.87, 537.83) (366.10, 537.83) (366.10, 549.29) (324.87, 549.29)        /F3 documents	<|special_separator|>
+(324.86, 537.83) (366.10, 537.83) (366.10, 549.29) (324.86, 549.29)        /F3 documents	<|special_separator|>
 (371.47, 537.83) (378.86, 537.83) (378.86, 549.29) (371.47, 549.29)        /F3 in	<|special_separator|>
 (384.17, 537.83) (417.21, 537.83) (417.21, 549.29) (384.17, 549.29)        /F3 triplicate	<|special_separator|>
 (422.55, 537.83) (436.33, 537.83) (436.33, 549.29) (422.55, 549.29)        /F3 and	<|special_separator|>
@@ -49,11 +49,11 @@
 (085.03, 496.79) (106.59, 496.79) (106.59, 508.24) (085.03, 508.24)        /F3 3.2.1.	<|special_separator|>
 (123.42, 496.79) (160.53, 496.79) (160.53, 508.24) (123.42, 508.24)        /F3 a detailed	<|special_separator|>
 (164.64, 496.79) (206.47, 496.79) (206.47, 508.24) (164.64, 508.24)        /F3 description	<|special_separator|>
-(210.62, 496.79) (218.22, 496.79) (218.22, 508.24) (210.62, 508.24)        /F3 of	<|special_separator|>
+(210.62, 496.79) (218.21, 496.79) (218.21, 508.24) (210.62, 508.24)        /F3 of	<|special_separator|>
 (222.30, 496.79) (234.08, 496.79) (234.08, 508.24) (222.30, 508.24)        /F3 the	<|special_separator|>
-(238.18, 496.79) (264.23, 496.79) (264.23, 508.24) (238.18, 508.24)        /F3 vehicle	<|special_separator|>
+(238.17, 496.79) (264.23, 496.79) (264.23, 508.24) (238.17, 508.24)        /F3 vehicle	<|special_separator|>
 (268.33, 496.79) (284.50, 496.79) (284.50, 508.24) (268.33, 508.24)        /F3 type	<|special_separator|>
-(288.63, 496.79) (333.40, 496.79) (333.40, 508.24) (288.63, 508.24)        /F3 with regard	<|special_separator|>
+(288.63, 496.79) (333.41, 496.79) (333.41, 508.24) (288.63, 508.24)        /F3 with regard	<|special_separator|>
 (337.56, 496.79) (345.25, 496.79) (345.25, 508.24) (337.56, 508.24)        /F3 to	<|special_separator|>
 (349.30, 496.79) (361.07, 496.79) (361.07, 508.24) (349.30, 508.24)        /F3 the	<|special_separator|>
 (365.17, 496.79) (385.34, 496.79) (385.34, 508.24) (365.17, 508.24)        /F3 items	<|special_separator|>
@@ -62,16 +62,16 @@
 (123.42, 486.13) (411.84, 486.13) (411.84, 497.58) (123.42, 497.58)        /F3 The numbers and/or symbols identifying the vehicle type shall be specified;	<|special_separator|>
 (085.03, 455.68) (106.59, 455.68) (106.59, 467.14) (085.03, 467.14)        /F3 3.2.2.	<|special_separator|>
 (123.42, 455.68) (171.23, 455.68) (171.23, 467.14) (123.42, 467.14)        /F3 photographs	<|special_separator|>
-(175.69, 455.68) (200.45, 455.68) (200.45, 467.14) (175.69, 467.14)        /F3 and/or	<|special_separator|>
+(175.70, 455.68) (200.45, 455.68) (200.45, 467.14) (175.70, 467.14)        /F3 and/or	<|special_separator|>
 (204.84, 455.68) (238.89, 455.68) (238.89, 467.14) (204.84, 467.14)        /F3 diagrams	<|special_separator|>
 (243.28, 455.68) (295.47, 455.68) (295.47, 467.14) (243.28, 467.14)        /F3 and drawings	<|special_separator|>
-(299.93, 455.68) (307.51, 455.68) (307.51, 467.14) (299.93, 467.14)        /F3 of	<|special_separator|>
+(299.92, 455.68) (307.52, 455.68) (307.52, 467.14) (299.92, 467.14)        /F3 of	<|special_separator|>
 (311.89, 455.68) (323.67, 455.68) (323.67, 467.14) (311.89, 467.14)        /F3 the	<|special_separator|>
 (328.05, 455.68) (354.10, 455.68) (354.10, 467.14) (328.05, 467.14)        /F3 vehicle	<|special_separator|>
 (358.50, 455.68) (406.51, 455.68) (406.51, 467.14) (358.50, 467.14)        /F3 showing the	<|special_separator|>
 (410.89, 455.68) (436.95, 455.68) (436.95, 467.14) (410.89, 467.14)        /F3 vehicle	<|special_separator|>
 (441.40, 455.68) (457.57, 455.68) (457.57, 467.14) (441.40, 467.14)        /F3 type	<|special_separator|>
-(461.93, 455.68) (469.31, 455.68) (469.31, 467.14) (461.93, 467.14)        /F3 in	<|special_separator|>
+(461.92, 455.68) (469.31, 455.68) (469.31, 467.14) (461.92, 467.14)        /F3 in	<|special_separator|>
 (473.72, 455.68) (494.47, 455.68) (494.47, 467.14) (473.72, 467.14)        /F3 front,	<|special_separator|>
 (123.42, 445.02) (213.67, 445.02) (213.67, 456.48) (123.42, 456.48)        /F3 side, and rear elevation;	<|special_separator|>
 (085.03, 414.63) (106.59, 414.63) (106.59, 426.09) (085.03, 426.09)        /F3 3.2.3.	<|special_separator|>
@@ -83,11 +83,11 @@
 (123.42, 327.34) (163.28, 327.34) (163.28, 337.52) (123.42, 337.52)        /F3 APPROVAL	<|special_separator|>
 (085.04, 296.61) (099.41, 296.61) (099.41, 308.06) (085.04, 308.06)        /F3 4.1.	<|special_separator|>
 (123.42, 296.61) (494.45, 296.61) (494.45, 308.06) (123.42, 308.06)        /F3 If the vehicle type submitted for approval pursuant to this Regulation meets the requirements of	<|special_separator|>
-(123.42, 285.95) (350.65, 285.95) (350.65, 297.40) (123.42, 297.40)        /F3 paragraph 5, approval of that vehicle type shall be granted.	<|special_separator|>
+(123.42, 285.95) (350.66, 285.95) (350.66, 297.41) (123.42, 297.41)        /F3 paragraph 5, approval of that vehicle type shall be granted.	<|special_separator|>
 (085.04, 255.56) (099.41, 255.56) (099.41, 267.02) (085.04, 267.02)        /F3 4.2.	<|special_separator|>
 (123.42, 255.56) (494.44, 255.56) (494.44, 267.02) (123.42, 267.02)        /F3 An approval number shall be assigned to each type approved. Its first two digits (currently 00	<|special_separator|>
 (123.42, 244.90) (494.44, 244.90) (494.44, 256.36) (123.42, 256.36)        /F3 for the Regulation in its original form) shall indicate the series of amendments incorporating the	<|special_separator|>
-(123.42, 234.24) (169.44, 234.24) (169.44, 245.70) (123.42, 245.70)        /F3 most recent	<|special_separator|>
+(123.42, 234.24) (169.43, 234.24) (169.43, 245.70) (123.42, 245.70)        /F3 most recent	<|special_separator|>
 (173.77, 234.24) (233.79, 234.24) (233.79, 245.70) (173.77, 245.70)        /F3 major technical	<|special_separator|>
 (238.12, 234.24) (411.15, 234.24) (411.15, 245.70) (238.12, 245.70)        /F3 amendments made to the Regulation at the	<|special_separator|>
 (415.48, 234.24) (432.25, 234.24) (432.25, 245.70) (415.48, 245.70)        /F3 time	<|special_separator|>
@@ -134,16 +134,16 @@
 (337.18, 098.80) (344.87, 098.80) (344.87, 110.25) (337.18, 110.25)        /F3 to	<|special_separator|>
 (350.28, 098.80) (354.38, 098.80) (354.38, 110.25) (350.28, 110.25)        /F3 a	<|special_separator|>
 (359.75, 098.80) (385.81, 098.80) (385.81, 110.25) (359.75, 110.25)        /F3 vehicle	<|special_separator|>
-(391.28, 098.80) (407.44, 098.80) (407.44, 110.25) (391.28, 110.25)        /F3 type	<|special_separator|>
+(391.28, 098.80) (407.45, 098.80) (407.45, 110.25) (391.28, 110.25)        /F3 type	<|special_separator|>
 (412.82, 098.80) (448.16, 098.80) (448.16, 110.25) (412.82, 110.25)        /F3 approved	<|special_separator|>
 (453.58, 098.80) (475.44, 098.80) (475.44, 110.25) (453.58, 110.25)        /F3 under	<|special_separator|>
 (480.91, 098.80) (494.49, 098.80) (494.49, 110.25) (480.91, 110.25)        /F3 this	<|special_separator|>
-(123.42, 088.14) (166.05, 088.14) (166.05, 099.59) (123.42, 099.59)        /F3 Regulation,	<|special_separator|>
-(170.09, 088.14) (330.21, 088.14) (330.21, 099.59) (170.09, 099.59)        /F3 conspicuously and in a readily accessible	<|special_separator|>
-(334.23, 088.14) (494.47, 088.14) (494.47, 099.59) (334.23, 099.59)        /F3 place specified on the approval form, an	<|special_separator|>
+(123.42, 088.14) (166.05, 088.14) (166.05, 099.60) (123.42, 099.60)        /F3 Regulation,	<|special_separator|>
+(170.09, 088.14) (330.21, 088.14) (330.21, 099.60) (170.09, 099.60)        /F3 conspicuously and in a readily accessible	<|special_separator|>
+(334.23, 088.14) (494.47, 088.14) (494.47, 099.60) (334.23, 099.60)        /F3 place specified on the approval form, an	<|special_separator|>
 (123.42, 077.48) (283.98, 077.48) (283.98, 088.94) (123.42, 088.94)        /F3 international approval mark consisting of:	<|special_separator|>
 (085.04, 049.43) (087.26, 049.43) (087.26, 059.61) (085.04, 059.61)        /F3 (	<|special_separator|>
-(087.25, 053.12) (090.42, 053.12) (090.42, 060.24) (087.25, 060.24)        /F3 5	<|special_separator|>
+(087.25, 053.11) (090.42, 053.11) (090.42, 060.24) (087.25, 060.24)        /F3 5	<|special_separator|>
 (090.42, 049.43) (092.64, 049.43) (092.64, 059.61) (090.42, 059.61)        /F3 )	<|special_separator|>
 (097.17, 049.43) (351.80, 049.43) (351.80, 059.61) (097.17, 059.61)        /F3 Manufacturer of the base vehicle or the final assembler of the tank vehicle.	<|special_separator|>
 (034.02, 785.41) (066.49, 785.41) (066.49, 796.12) (034.02, 796.12)        /F3 1.2.2002	<|special_separator|>

@@ -143,6 +143,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
     .def_readonly("x1", &pdflib::page_item<pdflib::PAGE_WIDGET>::x1)
     .def_readonly("y1", &pdflib::page_item<pdflib::PAGE_WIDGET>::y1)
     .def_readonly("text", &pdflib::page_item<pdflib::PAGE_WIDGET>::text)
+    .def_readonly("description", &pdflib::page_item<pdflib::PAGE_WIDGET>::description)
     .def_readonly("field_name", &pdflib::page_item<pdflib::PAGE_WIDGET>::field_name)
     .def_readonly("field_type", &pdflib::page_item<pdflib::PAGE_WIDGET>::field_type);
 

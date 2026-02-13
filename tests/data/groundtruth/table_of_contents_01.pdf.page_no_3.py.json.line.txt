@@ -1,21 +1,21 @@
-(108.00, 754.57) (126.82, 754.57) (126.82, 763.12) (108.00, 763.12)       /F81 IBM	<|special_separator|>
-(399.97, 754.57) (504.00, 754.57) (504.00, 763.12) (399.97, 763.12)       /F81 Granite Language Models	<|special_separator|>
+(108.00, 754.56) (126.82, 754.56) (126.82, 763.12) (108.00, 763.12)       /F81 IBM	<|special_separator|>
+(399.97, 754.56) (504.00, 754.56) (504.00, 763.12) (399.97, 763.12)       /F81 Granite Language Models	<|special_separator|>
 (107.64, 698.11) (504.00, 698.11) (504.00, 706.66) (107.64, 706.66)       /F81 Additionally, the models were trained with techniques that leverage different methods found in the	<|special_separator|>
 (108.00, 687.15) (182.76, 687.15) (182.76, 695.70) (108.00, 695.70)       /F81 existing literature:	<|special_separator|>
-(187.29, 687.32) (193.29, 687.32) (193.29, 696.02) (187.29, 696.02)       /F31 µ	<|special_separator|>
-(193.29, 687.32) (200.07, 687.32) (200.07, 696.02) (193.29, 696.02)       /F28 P	<|special_separator|>
+(187.29, 687.31) (193.29, 687.31) (193.29, 696.02) (187.29, 696.02)       /F31 µ	<|special_separator|>
+(193.29, 687.31) (200.07, 687.31) (200.07, 696.02) (193.29, 696.02)       /F28 P	<|special_separator|>
 (203.29, 687.15) (504.17, 687.15) (504.17, 695.70) (203.29, 695.70)       /F81 (Yang & Hu, 2020; Yang et al., 2022; 2023) allowed for hyperparameter	<|special_separator|>
 (108.00, 676.19) (504.67, 676.19) (504.67, 684.74) (108.00, 684.74)       /F81 transfer after a hyperparameter search on smaller models, and Power scheduler (Shen et al., 2024c)	<|special_separator|>
 (108.00, 665.23) (504.00, 665.23) (504.00, 673.78) (108.00, 673.78)       /F81 allowed for learning rate transfer across batch size and total number of training tokens. For our MoE	<|special_separator|>
 (108.00, 654.27) (504.00, 654.27) (504.00, 662.83) (108.00, 662.83)       /F81 models, we used a dropless MoE (Gale et al., 2023) approach for better model performance using the	<|special_separator|>
-(108.00, 643.32) (293.70, 643.32) (293.70, 651.87) (108.00, 651.87)       /F81 ScatterMoE (Tan et al., 2024) implementation.	<|special_separator|>
+(108.00, 643.31) (293.70, 643.31) (293.70, 651.87) (108.00, 651.87)       /F81 ScatterMoE (Tan et al., 2024) implementation.	<|special_separator|>
 (108.00, 626.38) (504.00, 626.38) (504.00, 634.93) (108.00, 634.93)       /F81 Experiment results show that our Granite 3.0 models outperform models of similar parameter sizes	<|special_separator|>
 (108.00, 615.42) (505.25, 615.42) (505.25, 623.97) (108.00, 623.97)       /F81 on many benchmarks, demonstrating strong performance in knowledge, reasoning, function calling,	<|special_separator|>
 (108.00, 604.46) (504.00, 604.46) (504.00, 613.01) (108.00, 613.01)       /F81 multilingual, code support, as well as enterprise tasks like cybersecurity and retrieval augmented	<|special_separator|>
 (108.00, 593.50) (505.65, 593.50) (505.65, 602.05) (108.00, 602.05)       /F81 generation (RAG). Figure 3 shows that our Granite-3.0-8B models consistently outperform Llama-	<|special_separator|>
-(108.00, 582.54) (469.77, 582.54) (469.77, 591.10) (108.00, 591.10)       /F81 3.1-8B and Mistral-7B on various domains. The key advantages of Granite 3.0 models are:	<|special_separator|>
+(108.00, 582.54) (469.77, 582.54) (469.77, 591.09) (108.00, 591.09)       /F81 3.1-8B and Mistral-7B on various domains. The key advantages of Granite 3.0 models are:	<|special_separator|>
 (135.40, 561.58) (138.88, 561.58) (138.88, 570.13) (135.40, 570.13)       /F81 •	<|special_separator|>
-(143.87, 561.56) (199.75, 561.56) (199.75, 570.52) (143.87, 570.52)       /F90 Lightweight:	<|special_separator|>
+(143.87, 561.56) (199.76, 561.56) (199.76, 570.52) (143.87, 570.52)       /F90 Lightweight:	<|special_separator|>
 (204.11, 561.58) (504.00, 561.58) (504.00, 570.13) (204.11, 570.13)       /F81 Our largest dense model has 8 billion parameters, and our smallest MoE	<|special_separator|>
 (143.87, 550.62) (505.25, 550.62) (505.25, 559.17) (143.87, 559.17)       /F81 model has an activated parameter count of 400 million, enabling hosting, or even fine-tuning,	<|special_separator|>
 (143.87, 539.66) (286.92, 539.66) (286.92, 548.21) (143.87, 548.21)       /F81 on more limited compute resources.	<|special_separator|>
@@ -38,14 +38,14 @@
 (107.53, 411.93) (504.00, 411.93) (504.00, 420.48) (107.53, 420.48)       /F81 We describe the model architecture and background on MoE models in Section 2. Then, we describe	<|special_separator|>
 (108.00, 400.97) (504.17, 400.97) (504.17, 409.52) (108.00, 409.52)       /F81 our data collection, filtering, and preprocessing pipeline in Section 3. We then go into detail about our	<|special_separator|>
 (108.00, 390.01) (504.00, 390.01) (504.00, 398.57) (108.00, 398.57)       /F81 data mixture and hyperparameter search for pretraining in Section 4, followed by our post-training	<|special_separator|>
-(108.00, 379.06) (403.54, 379.06) (403.54, 387.61) (108.00, 387.61)       /F81 methodology in Section 5, and our compute infrastructure in Section 6.	<|special_separator|>
-(408.68, 379.06) (504.00, 379.06) (504.00, 387.61) (408.68, 387.61)       /F81 Section 7 describes the	<|special_separator|>
+(108.00, 379.05) (403.54, 379.05) (403.54, 387.61) (108.00, 387.61)       /F81 methodology in Section 5, and our compute infrastructure in Section 6.	<|special_separator|>
+(408.68, 379.05) (504.00, 379.05) (504.00, 387.61) (408.68, 387.61)       /F81 Section 7 describes the	<|special_separator|>
 (108.00, 368.10) (504.17, 368.10) (504.17, 376.65) (108.00, 376.65)       /F81 results of our comprehensive evaluation of the trained models, including a comparison with other	<|special_separator|>
 (108.00, 357.14) (464.91, 357.14) (464.91, 365.69) (108.00, 365.69)       /F81 open-source LLMs. Finally, Section 8 discusses the social harms and risks of this project.	<|special_separator|>
 (108.30, 327.74) (114.28, 327.74) (114.28, 338.00) (108.30, 338.00)       /F81 2	<|special_separator|>
 (126.83, 327.74) (249.92, 328.23) (249.92, 336.44) (126.83, 338.00)       /F81 MODEL ARCHITECTURE	<|special_separator|>
 (107.69, 304.43) (504.17, 304.43) (504.17, 312.99) (107.69, 312.99)       /F81 The Granite 3.0 language models are based on two architectures: a decoder-only dense transformer	<|special_separator|>
-(108.00, 293.48) (367.59, 293.48) (367.59, 302.03) (108.00, 302.03)       /F81 and a decoder-only sparse Mixture-of-Expert (MoE) transformer.	<|special_separator|>
+(108.00, 293.47) (367.59, 293.47) (367.59, 302.03) (108.00, 302.03)       /F81 and a decoder-only sparse Mixture-of-Expert (MoE) transformer.	<|special_separator|>
 (214.53, 271.61) (397.16, 271.81) (397.16, 279.51) (214.53, 280.16)       /F81 Table 1: Hyperparameters for Granite 3.0 models.	<|special_separator|>
 (231.13, 248.30) (254.54, 248.30) (254.54, 256.00) (231.13, 256.00)       /F81 Model	<|special_separator|>
 (277.85, 248.30) (288.31, 248.30) (288.31, 256.00) (277.85, 256.00)       /F81 2B	<|special_separator|>
@@ -53,10 +53,10 @@
 (355.95, 248.30) (397.30, 248.30) (397.30, 256.00) (355.95, 256.00)       /F81 1B-A400M	<|special_separator|>
 (409.25, 248.30) (450.59, 248.30) (450.59, 256.00) (409.25, 256.00)       /F81 3B-A800M	<|special_separator|>
 (197.01, 233.34) (254.54, 233.34) (254.54, 241.04) (197.01, 241.04)       /F81 Embedding size	<|special_separator|>
-(274.11, 233.34) (292.05, 233.34) (292.05, 241.04) (274.11, 241.04)       /F81 2048	<|special_separator|>
-(318.44, 233.34) (336.38, 233.34) (336.38, 241.04) (318.44, 241.04)       /F81 4096	<|special_separator|>
+(274.11, 233.34) (292.04, 233.34) (292.04, 241.04) (274.11, 241.04)       /F81 2048	<|special_separator|>
+(318.44, 233.34) (336.37, 233.34) (336.37, 241.04) (318.44, 241.04)       /F81 4096	<|special_separator|>
 (367.66, 233.34) (385.59, 233.34) (385.59, 241.04) (367.66, 241.04)       /F81 1024	<|special_separator|>
-(420.95, 233.34) (438.89, 233.34) (438.89, 241.04) (420.95, 241.04)       /F81 1536	<|special_separator|>
+(420.96, 233.34) (438.89, 233.34) (438.89, 241.04) (420.96, 241.04)       /F81 1536	<|special_separator|>
 (191.79, 223.38) (254.54, 223.38) (254.54, 231.07) (191.79, 231.07)       /F81 Number of layers	<|special_separator|>
 (278.60, 223.38) (287.56, 223.38) (287.56, 231.07) (278.60, 231.07)       /F81 40	<|special_separator|>
 (322.93, 223.38) (331.89, 223.38) (331.89, 231.07) (322.93, 231.07)       /F81 40	<|special_separator|>
@@ -78,7 +78,7 @@
 (374.38, 193.49) (378.87, 193.49) (378.87, 201.19) (374.38, 201.19)       /F81 8	<|special_separator|>
 (427.68, 193.49) (432.16, 193.49) (432.16, 201.19) (427.68, 201.19)       /F81 8	<|special_separator|>
 (193.27, 183.53) (254.54, 183.53) (254.54, 191.22) (193.27, 191.22)       /F81 MLP hidden size	<|special_separator|>
-(274.11, 183.53) (292.05, 183.53) (292.05, 191.22) (274.11, 191.22)       /F81 8192	<|special_separator|>
+(274.11, 183.53) (292.04, 183.53) (292.04, 191.22) (274.11, 191.22)       /F81 8192	<|special_separator|>
 (316.20, 183.53) (338.62, 183.53) (338.62, 191.22) (316.20, 191.22)       /F81 12800	<|special_separator|>
 (369.90, 183.53) (383.35, 183.53) (383.35, 191.22) (369.90, 191.22)       /F81 512	<|special_separator|>
 (423.20, 183.53) (436.65, 183.53) (436.65, 191.22) (423.20, 191.22)       /F81 512	<|special_separator|>
@@ -97,26 +97,26 @@
 (325.17, 153.64) (329.65, 153.64) (329.65, 161.34) (325.17, 161.34)       /F81 -	<|special_separator|>
 (374.38, 153.64) (378.87, 153.64) (378.87, 161.34) (374.38, 161.34)       /F81 8	<|special_separator|>
 (427.68, 153.64) (432.16, 153.64) (432.16, 161.34) (427.68, 161.34)       /F81 8	<|special_separator|>
-(196.00, 143.68) (254.54, 143.68) (254.54, 151.37) (196.00, 151.37)       /F81 Initialization std	<|special_separator|>
+(196.01, 143.68) (254.54, 143.68) (254.54, 151.37) (196.01, 151.37)       /F81 Initialization std	<|special_separator|>
 (277.48, 143.68) (288.68, 143.68) (288.68, 151.37) (277.48, 151.37)       /F81 0.1	<|special_separator|>
-(321.81, 143.68) (333.01, 143.68) (333.01, 151.37) (321.81, 151.37)       /F81 0.1	<|special_separator|>
+(321.80, 143.68) (333.01, 143.68) (333.01, 151.37) (321.80, 151.37)       /F81 0.1	<|special_separator|>
 (371.02, 143.68) (382.23, 143.68) (382.23, 151.37) (371.02, 151.37)       /F81 0.1	<|special_separator|>
 (424.32, 143.68) (435.53, 143.68) (435.53, 151.37) (424.32, 151.37)       /F81 0.1	<|special_separator|>
 (192.53, 133.71) (254.54, 133.71) (254.54, 141.41) (192.53, 141.41)       /F81 Sequence Length	<|special_separator|>
-(274.11, 133.71) (292.05, 133.71) (292.05, 141.41) (274.11, 141.41)       /F81 4096	<|special_separator|>
-(318.44, 133.71) (336.38, 133.71) (336.38, 141.41) (318.44, 141.41)       /F81 4096	<|special_separator|>
+(274.11, 133.71) (292.04, 133.71) (292.04, 141.41) (274.11, 141.41)       /F81 4096	<|special_separator|>
+(318.44, 133.71) (336.37, 133.71) (336.37, 141.41) (318.44, 141.41)       /F81 4096	<|special_separator|>
 (367.66, 133.71) (385.59, 133.71) (385.59, 141.41) (367.66, 141.41)       /F81 4096	<|special_separator|>
-(420.95, 133.71) (438.89, 133.71) (438.89, 141.41) (420.95, 141.41)       /F81 4096	<|special_separator|>
+(420.96, 133.71) (438.89, 133.71) (438.89, 141.41) (420.96, 141.41)       /F81 4096	<|special_separator|>
 (181.55, 123.75) (254.54, 123.75) (254.54, 131.45) (181.55, 131.45)       /F81 Position Embedding	<|special_separator|>
 (272.62, 123.75) (293.54, 123.75) (293.54, 131.45) (272.62, 131.45)       /F81 RoPE	<|special_separator|>
 (316.94, 123.75) (337.87, 123.75) (337.87, 131.45) (316.94, 131.45)       /F81 RoPE	<|special_separator|>
 (366.16, 123.75) (387.09, 123.75) (387.09, 131.45) (366.16, 131.45)       /F81 RoPE	<|special_separator|>
 (419.46, 123.75) (440.39, 123.75) (440.39, 131.45) (419.46, 131.45)       /F81 RoPE	<|special_separator|>
-(210.35, 108.78) (254.54, 108.78) (254.54, 116.48) (210.35, 116.48)       /F81 #Parameters	<|special_separator|>
-(274.49, 108.78) (291.67, 108.78) (291.67, 116.48) (274.49, 116.48)       /F81 2.5B	<|special_separator|>
-(318.81, 108.78) (336.00, 108.78) (336.00, 116.48) (318.81, 116.48)       /F81 8.1B	<|special_separator|>
-(368.03, 108.78) (385.22, 108.78) (385.22, 116.48) (368.03, 116.48)       /F81 1.3B	<|special_separator|>
-(421.33, 108.78) (438.52, 108.78) (438.52, 116.48) (421.33, 116.48)       /F81 3.3B	<|special_separator|>
+(210.35, 108.79) (254.54, 108.79) (254.54, 116.48) (210.35, 116.48)       /F81 #Parameters	<|special_separator|>
+(274.49, 108.79) (291.67, 108.79) (291.67, 116.48) (274.49, 116.48)       /F81 2.5B	<|special_separator|>
+(318.81, 108.79) (336.00, 108.79) (336.00, 116.48) (318.81, 116.48)       /F81 8.1B	<|special_separator|>
+(368.03, 108.79) (385.22, 108.79) (385.22, 116.48) (368.03, 116.48)       /F81 1.3B	<|special_separator|>
+(421.33, 108.79) (438.52, 108.79) (438.52, 116.48) (421.33, 116.48)       /F81 3.3B	<|special_separator|>
 (184.56, 098.82) (254.54, 098.82) (254.54, 106.52) (184.56, 106.52)       /F81 #Active Parameters	<|special_separator|>
 (274.49, 098.82) (291.67, 098.82) (291.67, 106.52) (274.49, 106.52)       /F81 2.5B	<|special_separator|>
 (318.81, 098.82) (336.00, 098.82) (336.00, 106.52) (318.81, 106.52)       /F81 8.1B	<|special_separator|>
