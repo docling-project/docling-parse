@@ -382,17 +382,16 @@ PYBIND11_MODULE(pdf_parsers, m) {
         List[str]: A list of keys for the currently loaded documents.)")
     
     .def("load_document",
-	 [](
-        docling::docling_parser &self,
-        const std::string &key,
-        const std::string &filename,
-        std::optional<std::string>& password
-     ) -> bool {
+	 [](docling::docling_parser &self,
+	    const std::string &key,
+	    const std::string &filename,
+	    std::optional<std::string>& password
+	    ) -> bool {
 	   return self.load_document(key, filename, password);
 	 },
 	 pybind11::arg("key"),
 	 pybind11::arg("filename"),
-     pybind11::arg("password") = pybind11::none(),
+	 pybind11::arg("password") = pybind11::none(),
 	 R"(
     Load a document by key and filename.
 
@@ -405,17 +404,23 @@ PYBIND11_MODULE(pdf_parsers, m) {
         bool: True if the document was successfully loaded, False otherwise.)")
     
     .def("load_document_from_bytesio",
-	 [](docling::docling_parser &self, const std::string &key, pybind11::object bytes_io) -> bool {
-	   return self.load_document_from_bytesio(key, bytes_io);
+	 [](docling::docling_parser &self,
+	    const std::string &key,
+	    pybind11::object bytes_io,
+	    std::optional<std::string>& password
+	    ) -> bool {
+	   return self.load_document_from_bytesio(key, bytes_io, password);
 	 },
 	 pybind11::arg("key"),
 	 pybind11::arg("bytes_io"),
+	 pybind11::arg("password") = pybind11::none(),	 
 	 R"(
     Load a document by key from a BytesIO-like object.
 
     Parameters:
         key (str): The unique key to identify the document.
         bytes_io (Any): A BytesIO-like object containing the document data.
+        password (str, optional): Optional password for password-protected files
 
     Returns:
         bool: True if the document was successfully loaded, False otherwise.)")

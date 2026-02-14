@@ -26,14 +26,18 @@ namespace docling
 
     docling_parser(std::string level);
 
-    void set_loglevel(int level=0);
     void set_loglevel_with_label(std::string level="error");
 
     bool is_loaded(std::string key);
     std::vector<std::string> list_loaded_keys();
 
-    bool load_document(std::string key, std::string filename, std::optional<std::string> password);
-    bool load_document_from_bytesio(std::string key, pybind11::object bytes_io);
+    bool load_document(std::string key,
+		       std::string filename,
+		       std::optional<std::string> password);
+    
+    bool load_document_from_bytesio(std::string key,
+				    pybind11::object bytes_io,
+				    std::optional<std::string> password);
 
     bool unload_document(std::string key);
     bool unload_document_pages(std::string key);
@@ -48,36 +52,9 @@ namespace docling
     nlohmann::json get_meta_xml(std::string key);
     nlohmann::json get_table_of_contents(std::string key);
 
-    // Direct typed access to page decoder (avoids JSON serialization)
-    std::shared_ptr<pdflib::pdf_decoder<pdflib::PAGE>> get_page_decoder(
-                                                                        std::string key,
-                                                                        int page,
-                                                                        std::string page_boundary,
-                                                                        bool do_sanitization,
-                                                                        bool create_word_cells,
-                                                                        bool create_line_cells);
-
-    // Config-based overload
-    std::shared_ptr<pdflib::pdf_decoder<pdflib::PAGE>> get_page_decoder(
-                                                                        std::string key,
+    std::shared_ptr<pdflib::pdf_decoder<pdflib::PAGE>> get_page_decoder(std::string key,
                                                                         int page,
                                                                         const pdflib::decode_page_config& config);
-
-    nlohmann::json sanitize_cells(nlohmann::json& original_cells,
-                                  nlohmann::json& page_dim,
-                                  nlohmann::json& page_shapes,
-                                  double horizontal_cell_tolerance,
-                                  bool enforce_same_font,
-                                  double space_width_factor_for_merge, //=1.5,
-                                  double space_width_factor_for_merge_with_space); //=0.33);
-
-    nlohmann::json sanitize_cells_in_bbox(nlohmann::json& page,
-                                          std::array<double, 4> bbox,
-                                          double cell_overlap,
-                                          double horizontal_cell_tolerance,
-                                          bool enforce_same_font,
-                                          double space_width_factor_for_merge, //=1.5,
-                                          double space_width_factor_for_merge_with_space); //=0.33);
 
   private:
 
@@ -140,30 +117,6 @@ namespace docling
     pdflib::pdf_resource<pdflib::PAGE_FONT>::initialise(data, timings);
   }
 
-  void docling_parser::set_loglevel(int level)
-  {
-    if(level>=3)
-      {
-        loguru::g_stderr_verbosity = loguru::Verbosity_INFO;
-      }
-    else if(level==2)
-      {
-        loguru::g_stderr_verbosity = loguru::Verbosity_WARNING;
-      }
-    else if(level==1)
-      {
-        loguru::g_stderr_verbosity = loguru::Verbosity_ERROR;
-      }
-    else if(level==0)
-      {
-        loguru::g_stderr_verbosity = loguru::Verbosity_FATAL;
-      }
-    else
-      {
-        loguru::g_stderr_verbosity = loguru::Verbosity_ERROR;
-      }
-  }
-
   void docling_parser::set_loglevel_with_label(std::string level)
   {
     if(level=="info")
@@ -206,11 +159,13 @@ namespace docling
     return (key2doc.count(key)==1);
   }
 
-  bool docling_parser::load_document(std::string key, std::string filename, std::optional<std::string> password)
+  bool docling_parser::load_document(std::string key,
+				     std::string filename,
+				     std::optional<std::string> password)
   {
 #ifdef _WIN32
     // Convert UTF-8 string to UTF-16 wstring
-    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t> > converter;
     std::wstring wide_filename = converter.from_bytes(filename);
     std::filesystem::path path_filename(wide_filename);
 #else
@@ -229,7 +184,9 @@ namespace docling
     return false;
   }
 
-  bool docling_parser::load_document_from_bytesio(std::string key, pybind11::object bytes_io)
+  bool docling_parser::load_document_from_bytesio(std::string key,
+						  pybind11::object bytes_io,
+						  std::optional<std::string> password)
   {
     // logging_lib::info("pdf-parser") << __FILE__ << ":" << __LINE__ << "\t" << __FUNCTION__;
     LOG_S(INFO) << __FILE__ << ":" << __LINE__ << "\t" << __FUNCTION__;
@@ -252,7 +209,7 @@ namespace docling
     try
       {
         key2doc[key] = std::make_shared<decoder_type>();
-        std::optional<std::string> password = std::nullopt;
+        //std::optional<std::string> password = std::nullopt;
         std::string description = "parsing of " + key + " from bytesio";
         key2doc.at(key)->process_document_from_bytesio(data_str, password, description);
 
@@ -382,25 +339,7 @@ namespace docling
     return (itr->second)->get_table_of_contents();
   }
 
-  std::shared_ptr<pdflib::pdf_decoder<pdflib::PAGE>> docling_parser::get_page_decoder(
-                                                                                      std::string key,
-                                                                                      int page,
-                                                                                      std::string page_boundary,
-                                                                                      bool do_sanitization,
-                                                                                      bool create_word_cells,
-                                                                                      bool create_line_cells)
-  {
-    pdflib::decode_page_config config;
-    config.page_boundary = page_boundary;
-    config.do_sanitization = do_sanitization;
-    config.create_word_cells = create_word_cells;
-    config.create_line_cells = create_line_cells;
-
-    return get_page_decoder(key, page, config);
-  }
-
-  std::shared_ptr<pdflib::pdf_decoder<pdflib::PAGE>> docling_parser::get_page_decoder(
-                                                                                      std::string key,
+  std::shared_ptr<pdflib::pdf_decoder<pdflib::PAGE>> docling_parser::get_page_decoder(std::string key,
                                                                                       int page,
                                                                                       const pdflib::decode_page_config& config)
   {
@@ -416,110 +355,6 @@ namespace docling
     auto& decoder = itr->second;
     return decoder->decode_page(page, config);
   }
-
-  nlohmann::json docling_parser::sanitize_cells(nlohmann::json& json_cells,
-                                                nlohmann::json& json_dim,
-                                                nlohmann::json& json_shapes,
-                                                double horizontal_cell_tolerance,
-                                                bool enforce_same_font,
-                                                double space_width_factor_for_merge, //=1.5,
-                                                double space_width_factor_for_merge_with_space) //=0.33);
-  {
-    pdflib::page_item<pdflib::PAGE_DIMENSION> dim;
-    dim.init_from(json_dim);
-
-    pdflib::page_item<pdflib::PAGE_SHAPES> shapes;
-    shapes.init_from(json_shapes);
-
-    pdflib::page_item<pdflib::PAGE_CELLS> cells;
-    cells.init_from(json_cells);
-
-    pdflib::page_item_sanitator<pdflib::PAGE_CELLS> sanitizer;//(dim, shapes);
-    sanitizer.sanitize_bbox(cells, horizontal_cell_tolerance, enforce_same_font,
-                            space_width_factor_for_merge,
-                            space_width_factor_for_merge_with_space);
-
-    sanitizer.sanitize_text(cells);
-
-    return cells.get();
-  }
-
-  nlohmann::json docling_parser::sanitize_cells_in_bbox(nlohmann::json& page,
-                                                        std::array<double, 4> bbox,
-                                                        double cell_overlap,
-                                                        double horizontal_cell_tolerance,
-                                                        bool enforce_same_font,
-                                                        double space_width_factor_for_merge, //=1.5,
-                                                        double space_width_factor_for_merge_with_space) //=0.33);
-  {
-    LOG_S(INFO) << __FUNCTION__
-                << ", cell_overlap: " << cell_overlap
-                << ", horizontal_cell_tolerance: " << horizontal_cell_tolerance
-                << ", enforce_same_font: " << enforce_same_font;
-
-    // empty array
-    nlohmann::json sanitized_cells = nlohmann::json::array({});
-
-    double x0 = bbox[0];
-    double y0 = bbox[1];
-
-    double x1 = bbox[2];
-    double y1 = bbox[3];
-
-    pdflib::page_item<pdflib::PAGE_DIMENSION> dim;
-    if(not dim.init_from(page["original"]["dimension"]))
-      {
-        LOG_S(WARNING) << "could not init dim";
-        return sanitized_cells;
-      }
-
-    pdflib::page_item<pdflib::PAGE_SHAPES> shapes;
-    if(not shapes.init_from(page["original"]["shapes"]))
-      {
-        LOG_S(WARNING) << "could not init shapes";
-        return sanitized_cells;
-      }
-
-    pdflib::page_item<pdflib::PAGE_CELLS> cells;
-    if(not cells.init_from(page["original"]["cells"]["data"]))
-      {
-        LOG_S(WARNING) << "could not init cells";
-        return sanitized_cells;
-      }
-
-    LOG_S(INFO) << "init done ... --> #-cells: " << cells.size();
-
-    // get all cells with an overlap over cell_overlap
-    pdflib::page_item<pdflib::PAGE_CELLS> selected_cells;
-    for(int i=0; i<cells.size(); i++)
-      {
-        double overlap = utils::values::compute_overlap(cells[i].x0, cells[i].y0, cells[i].x1, cells[i].y1,
-                                                        x0, y0, x1, y1);
-
-        if(overlap>cell_overlap-1.e-3)
-          {
-            selected_cells.push_back(cells[i]);
-          }
-      }
-
-    if(selected_cells.size()==0)
-      {
-        return sanitized_cells;
-      }
-
-    pdflib::page_item_sanitator<pdflib::PAGE_CELLS> sanitizer;
-    sanitizer.sanitize_bbox(selected_cells,
-                            horizontal_cell_tolerance,
-                            enforce_same_font,
-                            space_width_factor_for_merge,
-                            space_width_factor_for_merge_with_space);
-
-    sanitizer.sanitize_text(selected_cells);
-
-    return selected_cells.get();
-  }
-
-
 
 }
 
