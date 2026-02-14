@@ -3,6 +3,7 @@
 #ifndef PDF_DOCUMENT_DECODER_H
 #define PDF_DOCUMENT_DECODER_H
 
+#include <fstream>
 #include <optional>
 #include <qpdf/QPDF.hh>
 //#include <qpdf/QPDFPageObjectHelper.hh>
@@ -33,7 +34,7 @@ namespace pdflib
     bool process_document_from_file(std::string& _filename,
 				    std::optional<std::string>& password);
 
-    bool process_document_from_bytesio(std::string& _buffer,
+    bool process_document_from_bytesio(std::shared_ptr<std::string> _buffer,
 				       std::optional<std::string>& password,
 				       std::string description = "processing buffer");
 
@@ -67,7 +68,7 @@ namespace pdflib
   private:
 
     std::string filename;
-    std::string buffer; // keep a local copy, in order to not let it expire
+    std::shared_ptr<std::string> buffer; // keep a shared copy, in order to not let it expire
 
     pdf_timings timings;
 
@@ -87,7 +88,7 @@ namespace pdflib
 
   pdf_decoder<DOCUMENT>::pdf_decoder():
     filename(""),
-    buffer(""),
+    buffer(nullptr),
 
     timings({}),
     qpdf_document(),
@@ -107,7 +108,7 @@ namespace pdflib
 
   pdf_decoder<DOCUMENT>::pdf_decoder(pdf_timings& timings_):
     filename(""),
-    buffer(""),
+    buffer(nullptr),
 
     timings(timings_),
     qpdf_document(),
@@ -183,58 +184,46 @@ namespace pdflib
 
   bool pdf_decoder<DOCUMENT>::process_document_from_file(std::string& _filename, std::optional<std::string>& password)
   {
-    filename = _filename; // save it    
-    LOG_S(INFO) << "start processing '" << filename << "' by qpdf ...";        
+    filename = _filename; // save it
+    LOG_S(INFO) << "start processing '" << filename << "' by reading into memory ...";
 
     utils::timer timer;
-    
-    try
+
+    // Read the file into a buffer
+    std::ifstream ifs(filename, std::ios::binary | std::ios::ate);
+    if(!ifs.is_open())
       {
-	{
-	  utils::timer qpdf_timer;
-
-	  if (password.has_value())
-	    {
-	      qpdf_document.processFile(filename.c_str(), password.value().c_str());
-	    }
-	  else
-	    {
-	      qpdf_document.processFile(filename.c_str());
-	    }
-
-	  double qpdf_elapsed = qpdf_timer.get_time();
-	  std::cout << "  " << pdf_timings::KEY_QPDF_PROCESS << ": " << qpdf_elapsed << "\n";
-	  timings.add_timing(pdf_timings::KEY_QPDF_PROCESS, qpdf_elapsed);
-
-	  LOG_S(INFO) << "filename: " << filename << " processed by qpdf!";
-	}
-
-        qpdf_root  = qpdf_document.getRoot();
-        qpdf_pages = qpdf_root.getKey("/Pages");
-
-        number_of_pages = qpdf_pages.getKey("/Count").getIntValue();
-        LOG_S(INFO) << "#-pages: " << number_of_pages;
+	LOG_S(ERROR) << "could not open file: " << filename;
+	return false;
       }
-    catch(const std::exception& exc)
+
+    auto file_size = ifs.tellg();
+    ifs.seekg(0, std::ios::beg);
+
+    auto file_buffer = std::make_shared<std::string>(file_size, '\0');
+    if(!ifs.read(file_buffer->data(), file_size))
       {
-        LOG_S(ERROR) << "filename: " << filename << " can not be processed by qpdf: " << exc.what();
-        return false;
+	LOG_S(ERROR) << "could not read file: " << filename;
+	return false;
       }
+    ifs.close();
+
+    std::string description = "processing file " + filename;
+    bool result = process_document_from_bytesio(file_buffer, password, description);
 
     double total_elapsed = timer.get_time();
     std::cout << pdf_timings::KEY_PROCESS_DOCUMENT_FROM_FILE << ": " << total_elapsed << "\n";
-
     timings.add_timing(pdf_timings::KEY_PROCESS_DOCUMENT_FROM_FILE, total_elapsed);
 
-    return true;
+    return result;
   }
 
-  bool pdf_decoder<DOCUMENT>::process_document_from_bytesio(std::string& _buffer,
+  bool pdf_decoder<DOCUMENT>::process_document_from_bytesio(std::shared_ptr<std::string> _buffer,
 							    std::optional<std::string>& password,
 							    std::string description)
   {
     buffer = _buffer;
-    LOG_S(INFO) << "start processing buffer of size " << buffer.size() << " by qpdf ...";
+    LOG_S(INFO) << "start processing buffer of size " << buffer->size() << " by qpdf ...";
 
     utils::timer timer;
 
@@ -246,15 +235,15 @@ namespace pdflib
 	  if(password.has_value())
 	    {
 	      qpdf_document.processMemoryFile(description.c_str(),
-					      buffer.c_str(),
-					      buffer.size(),
+					      buffer->c_str(),
+					      buffer->size(),
 					      password.value().c_str());
 	    }
 	  else
 	    {
 	      qpdf_document.processMemoryFile(description.c_str(),
-					      buffer.c_str(),
-					      buffer.size());
+					      buffer->c_str(),
+					      buffer->size());
 	    }
 
 	  double qpdf_elapsed = qpdf_timer.get_time();
@@ -272,7 +261,7 @@ namespace pdflib
       }
     catch(const std::exception & exc)
       {
-        LOG_S(ERROR) << "filename: " << filename << " can not be processed by qpdf: " << exc.what();
+        LOG_S(ERROR) << "could not process buffer by qpdf: " << exc.what();
         return false;
       }
 

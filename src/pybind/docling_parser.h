@@ -203,15 +203,14 @@ namespace docling
     // Read the entire content of the BytesIO stream
     pybind11::bytes data = bytes_io.attr("read")();
 
-    // Get a pointer to the data
-    std::string data_str = data.cast<std::string>();
+    // Get the data into a shared buffer
+    auto data_buffer = std::make_shared<std::string>(data.cast<std::string>());
 
     try
       {
         key2doc[key] = std::make_shared<decoder_type>();
-        //std::optional<std::string> password = std::nullopt;
         std::string description = "parsing of " + key + " from bytesio";
-        key2doc.at(key)->process_document_from_bytesio(data_str, password, description);
+        key2doc.at(key)->process_document_from_bytesio(data_buffer, password, description);
 
         return true;
       }
