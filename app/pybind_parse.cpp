@@ -313,6 +313,8 @@ PYBIND11_MODULE(pdf_parsers, m) {
 
   m.attr("TIMING_KEY_PROCESS_DOCUMENT_FROM_FILE") = pdflib::pdf_timings::KEY_PROCESS_DOCUMENT_FROM_FILE;
   m.attr("TIMING_KEY_PROCESS_DOCUMENT_FROM_BYTESIO") = pdflib::pdf_timings::KEY_PROCESS_DOCUMENT_FROM_BYTESIO;
+  m.attr("TIMING_KEY_QPDF_PROCESS") = pdflib::pdf_timings::KEY_QPDF_PROCESS;
+  m.attr("TIMING_KEY_EXTRACT_DOC_ANNOTATIONS") = pdflib::pdf_timings::KEY_EXTRACT_DOC_ANNOTATIONS;
   m.attr("TIMING_KEY_DECODE_DOCUMENT") = pdflib::pdf_timings::KEY_DECODE_DOCUMENT;
 
   m.attr("TIMING_PREFIX_DECODE_FONT") = pdflib::pdf_timings::PREFIX_DECODE_FONT;

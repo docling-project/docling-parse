@@ -91,8 +91,9 @@ def _get_docling_static_timing_keys() -> List[str]:
     return sorted(get_static_timing_keys())
 
 
-def parse_with_docling() -> Callable[[Path], Iterable[Row]]:
+def parse_with_docling(use_bytesio: bool = False) -> Callable[[Path], Iterable[Row]]:
     def _runner(pdf_path: Path) -> Iterable[Row]:
+        from io import BytesIO
         from docling_parse.pdf_parser import DoclingPdfParser
         from docling_parse.pdf_parsers import DecodePageConfig  # type: ignore[import]
         from docling_core.types.doc.page import PdfPageBoundaryType
@@ -102,8 +103,12 @@ def parse_with_docling() -> Callable[[Path], Iterable[Row]]:
         rows: List[Row] = []
         try:
             parser = DoclingPdfParser(loglevel="fatal")
+            if use_bytesio:
+                source = BytesIO(pdf_path.read_bytes())
+            else:
+                source = str(pdf_path)
             doc = parser.load(
-                str(pdf_path),
+                source,
                 lazy=True,
                 boundary_type=PdfPageBoundaryType.CROP_BOX,
             )
@@ -261,13 +266,14 @@ def parse_with_pymupdf(pdf_path: Path) -> Iterable[Row]:
     return rows
 
 
-PARSERS: dict[str, Callable[[Path], Iterable[Row]]] = {
-    "docling": parse_with_docling(),
+NON_DOCLING_PARSERS: dict[str, Callable[[Path], Iterable[Row]]] = {
     "pdfplumber": parse_with_pdfplumber,
     "pypdfium2": parse_with_pypdfium2,
     "pypdfium": parse_with_pypdfium2,  # alias
     "pymupdf": parse_with_pymupdf,
 }
+
+ALL_PARSER_NAMES = sorted({"docling"} | set(NON_DOCLING_PARSERS.keys()))
 
 
 # -------- Main program --------
@@ -410,7 +416,7 @@ def main(argv: List[str]) -> int:
         "--parser",
         "-p",
         default="docling",
-        choices=sorted(PARSERS.keys()),
+        choices=ALL_PARSER_NAMES,
         help="Parser backend to benchmark (docling, pdfplumber, pypdfium2, pypdfium, pymupdf)",
     )
     ap.add_argument(
@@ -426,13 +432,33 @@ def main(argv: List[str]) -> int:
         default=None,
         help="Output CSV path. Defaults to perf/results/perf_<parser>_<timestamp>.csv",
     )
+    ap.add_argument(
+        "--limit",
+        "-l",
+        type=int,
+        default=None,
+        help="Maximum number of documents to process",
+    )
+    ap.add_argument(
+        "--bytesio",
+        action="store_true",
+        help="(docling only) Read PDFs into memory and pass as BytesIO instead of file path",
+    )
 
     args = ap.parse_args(argv)
 
     parser_key = args.parser
-    parser_fn = PARSERS[parser_key]
+    if parser_key == "docling":
+        parser_fn = parse_with_docling(use_bytesio=args.bytesio)
+    else:
+        if args.bytesio:
+            ap.error("--bytesio is only supported with --parser docling")
+        parser_fn = NON_DOCLING_PARSERS[parser_key]
     input_path = Path(args.input)
     pdfs = find_pdfs(input_path, recursive=args.recursive)
+
+    if args.limit is not None:
+        pdfs = pdfs[:args.limit]
 
     if not pdfs:
         print(f"No PDFs found at {input_path}", file=sys.stderr)
@@ -444,7 +470,7 @@ def main(argv: List[str]) -> int:
     rows: List[Row] = []
     started = time.perf_counter()
     for pdf in tqdm(pdfs, desc=f"Parsing PDFs with {parser_key}"):
-        print(pdf)
+        # print(pdf)
         rows.extend(list(parser_fn(pdf)))
         
     ended = time.perf_counter()

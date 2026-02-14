@@ -25,10 +25,10 @@ namespace pdflib
 
     std::string get_filename() { return filename; }
 
-    nlohmann::json get_annotations() { return json_annots; }
+    nlohmann::json get_annotations();
 
-    nlohmann::json get_meta_xml() { return json_annots["meta_xml"]; }
-    nlohmann::json get_table_of_contents() { return json_annots["table_of_contents"]; }
+    nlohmann::json get_meta_xml();
+    nlohmann::json get_table_of_contents();
 
     bool process_document_from_file(std::string& _filename,
 				    std::optional<std::string>& password);
@@ -60,6 +60,8 @@ namespace pdflib
 
     void update_qpdf_logger();
 
+    void ensure_annots_loaded();
+
     void update_timings(pdf_timings& timings_, bool set_timer);
 
   private:
@@ -77,6 +79,7 @@ namespace pdflib
     int number_of_pages;
 
     nlohmann::json json_annots;
+    bool annots_loaded;
 
     // New: Persistent page decoders for typed API
     std::map<int, page_decoder_ptr> page_decoders;
@@ -96,6 +99,7 @@ namespace pdflib
     number_of_pages(-1),
 
     json_annots(nlohmann::json::value_t::null),
+    annots_loaded(false),
     page_decoders({})
   {
     update_qpdf_logger();
@@ -115,6 +119,7 @@ namespace pdflib
     number_of_pages(-1),
 
     json_annots(nlohmann::json::value_t::null),
+    annots_loaded(false),
     page_decoders({})
   {
     update_qpdf_logger();
@@ -142,6 +147,40 @@ namespace pdflib
       }
   }
   
+  void pdf_decoder<DOCUMENT>::ensure_annots_loaded()
+  {
+    if(annots_loaded)
+      {
+	return;
+      }
+
+    utils::timer annots_timer;
+    json_annots = extract_document_annotations_in_json(qpdf_document, qpdf_root);
+    annots_loaded = true;
+
+    double annots_elapsed = annots_timer.get_time();
+    std::cout << "  " << pdf_timings::KEY_EXTRACT_DOC_ANNOTATIONS << ": " << annots_elapsed << "\n";
+    timings.add_timing(pdf_timings::KEY_EXTRACT_DOC_ANNOTATIONS, annots_elapsed);
+  }
+
+  nlohmann::json pdf_decoder<DOCUMENT>::get_annotations()
+  {
+    ensure_annots_loaded();
+    return json_annots;
+  }
+
+  nlohmann::json pdf_decoder<DOCUMENT>::get_meta_xml()
+  {
+    ensure_annots_loaded();
+    return json_annots["meta_xml"];
+  }
+
+  nlohmann::json pdf_decoder<DOCUMENT>::get_table_of_contents()
+  {
+    ensure_annots_loaded();
+    return json_annots["table_of_contents"];
+  }
+
   bool pdf_decoder<DOCUMENT>::process_document_from_file(std::string& _filename, std::optional<std::string>& password)
   {
     filename = _filename; // save it    
@@ -151,18 +190,28 @@ namespace pdflib
     
     try
       {
-        if (password.has_value()) {
-          qpdf_document.processFile(filename.c_str(), password.value().c_str());
-        } else {
-          qpdf_document.processFile(filename.c_str());
-        }
-        LOG_S(INFO) << "filename: " << filename << " processed by qpdf!";        
+	{
+	  utils::timer qpdf_timer;
+
+	  if (password.has_value())
+	    {
+	      qpdf_document.processFile(filename.c_str(), password.value().c_str());
+	    }
+	  else
+	    {
+	      qpdf_document.processFile(filename.c_str());
+	    }
+
+	  double qpdf_elapsed = qpdf_timer.get_time();
+	  std::cout << "  " << pdf_timings::KEY_QPDF_PROCESS << ": " << qpdf_elapsed << "\n";
+	  timings.add_timing(pdf_timings::KEY_QPDF_PROCESS, qpdf_elapsed);
+
+	  LOG_S(INFO) << "filename: " << filename << " processed by qpdf!";
+	}
 
         qpdf_root  = qpdf_document.getRoot();
         qpdf_pages = qpdf_root.getKey("/Pages");
 
-	json_annots = extract_document_annotations_in_json(qpdf_document, qpdf_root);
-	
         number_of_pages = qpdf_pages.getKey("/Count").getIntValue();
         LOG_S(INFO) << "#-pages: " << number_of_pages;
       }
@@ -172,7 +221,10 @@ namespace pdflib
         return false;
       }
 
-    timings.add_timing(pdf_timings::KEY_PROCESS_DOCUMENT_FROM_FILE, timer.get_time());
+    double total_elapsed = timer.get_time();
+    std::cout << pdf_timings::KEY_PROCESS_DOCUMENT_FROM_FILE << ": " << total_elapsed << "\n";
+
+    timings.add_timing(pdf_timings::KEY_PROCESS_DOCUMENT_FROM_FILE, total_elapsed);
 
     return true;
   }
@@ -181,34 +233,40 @@ namespace pdflib
 							    std::optional<std::string>& password,
 							    std::string description)
   {
-    buffer = _buffer;    
+    buffer = _buffer;
     LOG_S(INFO) << "start processing buffer of size " << buffer.size() << " by qpdf ...";
 
     utils::timer timer;
-    
+
     try
       {
-	//std::string description = "processing buffer";
-        if (password.has_value())
-	  {	
-	    qpdf_document.processMemoryFile(description.c_str(),
-					    buffer.c_str(),
-					    buffer.size(),
-					    password.value().c_str());
-	  }
-	else
-	  {
-	    qpdf_document.processMemoryFile(description.c_str(),
-					    buffer.c_str(),
-					    buffer.size());
-	  }	
-        LOG_S(INFO) << "buffer processed by qpdf!";        
+	{
+	  utils::timer qpdf_timer;
+
+	  if(password.has_value())
+	    {
+	      qpdf_document.processMemoryFile(description.c_str(),
+					      buffer.c_str(),
+					      buffer.size(),
+					      password.value().c_str());
+	    }
+	  else
+	    {
+	      qpdf_document.processMemoryFile(description.c_str(),
+					      buffer.c_str(),
+					      buffer.size());
+	    }
+
+	  double qpdf_elapsed = qpdf_timer.get_time();
+	  std::cout << "  " << pdf_timings::KEY_QPDF_PROCESS << ": " << qpdf_elapsed << "\n";
+	  timings.add_timing(pdf_timings::KEY_QPDF_PROCESS, qpdf_elapsed);
+
+	  LOG_S(INFO) << "buffer processed by qpdf!";
+	}
 
         qpdf_root  = qpdf_document.getRoot();
         qpdf_pages = qpdf_root.getKey("/Pages");
 
-	json_annots = extract_document_annotations_in_json(qpdf_document, qpdf_root);
-	
         number_of_pages = qpdf_pages.getKey("/Count").getIntValue();
         LOG_S(INFO) << "#-pages: " << number_of_pages;
       }
@@ -218,7 +276,10 @@ namespace pdflib
         return false;
       }
 
-    timings.add_timing(pdf_timings::KEY_PROCESS_DOCUMENT_FROM_BYTESIO, timer.get_time());
+    double total_elapsed = timer.get_time();
+    std::cout << pdf_timings::KEY_PROCESS_DOCUMENT_FROM_BYTESIO << ": " << total_elapsed << "\n";
+
+    timings.add_timing(pdf_timings::KEY_PROCESS_DOCUMENT_FROM_BYTESIO, total_elapsed);
 
     return true;
   }
