@@ -266,6 +266,88 @@ def parse_with_pymupdf(pdf_path: Path) -> Iterable[Row]:
     return rows
 
 
+def parse_with_docling_threaded(
+    num_threads: int = 4,
+    max_concurrent_results: int = 64,
+) -> Callable[[List[Path]], Tuple[List[Row], float]]:
+    """Return a runner that loads *all* PDFs, then decodes pages in parallel.
+
+    Unlike the other adapters this one consumes the full list of files at once
+    so that the thread pool can work across documents.  It returns
+    (rows, wall_time) so the caller can report the true parallel wall time.
+    """
+
+    def _runner(pdf_paths: List[Path]) -> Tuple[List[Row], float]:
+        from docling_parse.pdf_parser import (
+            DoclingThreadedPdfParser,
+            ThreadedPdfParserConfig,
+        )
+        from docling_parse.pdf_parsers import DecodePageConfig  # type: ignore[import]
+
+        decode_config = DecodePageConfig()
+        decode_config.keep_char_cells = False
+        decode_config.keep_shapes = False
+        decode_config.keep_bitmaps = False
+        decode_config.create_word_cells = False
+        decode_config.create_line_cells = True
+
+        parser_config = ThreadedPdfParserConfig(
+            loglevel="fatal",
+            threads=num_threads,
+            max_concurrent_results=max_concurrent_results,
+        )
+
+        parser = DoclingThreadedPdfParser(
+            parser_config=parser_config,
+            decode_config=decode_config,
+        )
+
+        for pdf_path in pdf_paths:
+            try:
+                parser.load(str(pdf_path))
+            except Exception as e:
+                pass  # will surface as missing results below
+
+        rows: List[Row] = []
+        wall_start = time.perf_counter()
+
+        while parser.has_tasks():
+            t0 = time.perf_counter()
+            task = parser.get_task()
+            t1 = time.perf_counter()
+
+            if task.success:
+                page_decoder, timings_dict = task.get()
+                detail: dict = {}
+                for key, val in timings_dict.items():
+                    detail[key] = val
+                rows.append(
+                    Row(
+                        filename=task.doc_key,
+                        page_number=task.page_number + 1,
+                        elapsed_sec=t1 - t0,
+                        success=True,
+                        error="",
+                        timings_detail=detail,
+                    )
+                )
+            else:
+                rows.append(
+                    Row(
+                        filename=task.doc_key,
+                        page_number=task.page_number + 1,
+                        elapsed_sec=t1 - t0,
+                        success=False,
+                        error=task.error(),
+                    )
+                )
+
+        wall_end = time.perf_counter()
+        return rows, wall_end - wall_start
+
+    return _runner
+
+
 NON_DOCLING_PARSERS: dict[str, Callable[[Path], Iterable[Row]]] = {
     "pdfplumber": parse_with_pdfplumber,
     "pypdfium2": parse_with_pypdfium2,
@@ -273,7 +355,7 @@ NON_DOCLING_PARSERS: dict[str, Callable[[Path], Iterable[Row]]] = {
     "pymupdf": parse_with_pymupdf,
 }
 
-ALL_PARSER_NAMES = sorted({"docling"} | set(NON_DOCLING_PARSERS.keys()))
+ALL_PARSER_NAMES = sorted({"docling", "docling-threaded"} | set(NON_DOCLING_PARSERS.keys()))
 
 
 # -------- Main program --------
@@ -444,12 +526,30 @@ def main(argv: List[str]) -> int:
         action="store_true",
         help="(docling only) Read PDFs into memory and pass as BytesIO instead of file path",
     )
+    ap.add_argument(
+        "--threads",
+        "-t",
+        type=int,
+        default=4,
+        help="(docling-threaded only) Number of worker threads (default: 4)",
+    )
+    ap.add_argument(
+        "--max-concurrent-results",
+        type=int,
+        default=64,
+        help="(docling-threaded only) Max buffered results before workers pause (default: 64)",
+    )
 
     args = ap.parse_args(argv)
 
     parser_key = args.parser
     if parser_key == "docling":
         parser_fn = parse_with_docling(use_bytesio=args.bytesio)
+    elif parser_key == "docling-threaded":
+        if args.bytesio:
+            ap.error("--bytesio is not supported with --parser docling-threaded")
+        # handled separately below
+        parser_fn = None
     else:
         if args.bytesio:
             ap.error("--bytesio is only supported with --parser docling")
@@ -469,11 +569,20 @@ def main(argv: List[str]) -> int:
 
     rows: List[Row] = []
     started = time.perf_counter()
-    for pdf in tqdm(pdfs, desc=f"Parsing PDFs with {parser_key}"):
-        # print(pdf)
-        rows.extend(list(parser_fn(pdf)))
-        
-    ended = time.perf_counter()
+
+    if parser_key == "docling-threaded":
+        threaded_fn = parse_with_docling_threaded(
+            num_threads=args.threads,
+            max_concurrent_results=args.max_concurrent_results,
+        )
+        print(f"Loading {len(pdfs)} PDFs and parsing with {args.threads} threads ...")
+        rows, wall_time = threaded_fn(pdfs)
+        ended = started + wall_time
+    else:
+        for pdf in tqdm(pdfs, desc=f"Parsing PDFs with {parser_key}"):
+            # print(pdf)
+            rows.extend(list(parser_fn(pdf)))
+        ended = time.perf_counter()
 
     # Collect timing detail keys from the rows (docling only)
     timing_keys = _get_timing_keys_from_rows(rows)

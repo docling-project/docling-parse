@@ -8,6 +8,7 @@
 #include <pybind/utils/pybind11_json.h>
 
 #include <pybind/docling_parser.h>
+#include <pybind/docling_threaded_parser.h>
 
 // Include parse headers for typed bindings
 #include <parse.h>
@@ -533,4 +534,135 @@ PYBIND11_MODULE(pdf_parsers, m) {
 
     Returns:
         PdfPageDecoder: A typed page decoder object.)");
+
+  // ============= Threaded PDF Parser =============
+
+  // PageDecodeResult - result of a threaded page decode task
+  pybind11::class_<docling::page_decode_result>(m, "PageDecodeResult",
+    R"(
+    Result of a threaded page decoding task.
+
+    Attributes:
+        doc_key (str): The document key this page belongs to.
+        page_number (int): The page number (0-indexed).
+        success (bool): Whether the decoding succeeded.
+    )")
+    .def_readonly("doc_key", &docling::page_decode_result::doc_key)
+    .def_readonly("page_number", &docling::page_decode_result::page_number)
+    .def_readonly("success", &docling::page_decode_result::success)
+    .def("get", [](docling::page_decode_result& self)
+         -> std::pair<std::shared_ptr<pdflib::pdf_decoder<pdflib::PAGE>>,
+                      std::unordered_map<std::string, double>> {
+           if(!self.success)
+             {
+               throw std::runtime_error("Cannot get result from failed task: " + self.error_message);
+             }
+           auto timings_map = self.page_decoder->get_timings().to_sum_map();
+           return std::make_pair(self.page_decoder, timings_map);
+         },
+         R"(
+    Get the page decoder and timing information.
+
+    Returns:
+        Tuple[PdfPageDecoder, Dict[str, float]]: The page decoder and timing data.
+
+    Raises:
+        RuntimeError: If the task was not successful.)")
+    .def("error", [](docling::page_decode_result& self) -> std::string {
+           return self.error_message;
+         },
+         R"(
+    Get the error message if the task failed.
+
+    Returns:
+        str: The error message.)");
+
+  // threaded_pdf_parser - parallel PDF parser with bounded result queue
+  pybind11::class_<docling::docling_threaded_parser>(m, "threaded_pdf_parser",
+    R"(
+    Threaded PDF parser that processes pages in parallel.
+
+    Loads multiple documents and decodes their pages using a thread pool.
+    Results are available via a bounded queue to control memory usage.
+    )")
+    .def(pybind11::init<const std::string&, int, int, pdflib::decode_page_config>(),
+         pybind11::arg("loglevel") = "fatal",
+         pybind11::arg("num_threads") = 4,
+         pybind11::arg("max_concurrent_results") = 32,
+         pybind11::arg("config") = pdflib::decode_page_config(),
+         R"(
+    Construct a threaded PDF parser.
+
+    Parameters:
+        loglevel (str): Logging level ('fatal', 'error', 'warning', 'info').
+        num_threads (int): Number of worker threads.
+        max_concurrent_results (int): Maximum results buffered before workers pause.
+        config (DecodePageConfig): Configuration for page decoding.)")
+
+    .def("load_document",
+         [](docling::docling_threaded_parser& self,
+            const std::string& key,
+            const std::string& filename,
+            std::optional<std::string>& password) -> bool {
+           return self.load_document(key, filename, password);
+         },
+         pybind11::arg("key"),
+         pybind11::arg("filename"),
+         pybind11::arg("password") = pybind11::none(),
+         R"(
+    Load a document by key and filename.
+
+    Parameters:
+        key (str): The unique key to identify the document.
+        filename (str): The path to the document file to load.
+        password (str, optional): Optional password for password-protected files.
+
+    Returns:
+        bool: True if the document was successfully loaded.)")
+
+    .def("load_document_from_bytesio",
+         [](docling::docling_threaded_parser& self,
+            const std::string& key,
+            pybind11::object bytes_io,
+            std::optional<std::string>& password) -> bool {
+           return self.load_document_from_bytesio(key, bytes_io, password);
+         },
+         pybind11::arg("key"),
+         pybind11::arg("bytes_io"),
+         pybind11::arg("password") = pybind11::none(),
+         R"(
+    Load a document from a BytesIO-like object.
+
+    Parameters:
+        key (str): The unique key to identify the document.
+        bytes_io (Any): A BytesIO-like object containing the document data.
+        password (str, optional): Optional password for password-protected files.
+
+    Returns:
+        bool: True if the document was successfully loaded.)")
+
+    .def("has_tasks",
+         [](docling::docling_threaded_parser& self) -> bool {
+           return self.has_tasks();
+         },
+         R"(
+    Check if there are remaining tasks to consume.
+
+    On first call, builds the task queue from all loaded documents and starts worker threads.
+
+    Returns:
+        bool: True if there are remaining results to consume.)")
+
+    .def("get_task",
+         [](docling::docling_threaded_parser& self) -> docling::page_decode_result {
+           pybind11::gil_scoped_release release;
+           return self.get_task();
+         },
+         R"(
+    Get the next completed page decode result.
+
+    Blocks until a result is available. Releases the GIL while waiting.
+
+    Returns:
+        PageDecodeResult: The result of a page decoding task.)");
 }

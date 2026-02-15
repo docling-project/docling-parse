@@ -86,6 +86,45 @@ for page_no, pred_page in pdf_doc.iterate_pages():
     img.show()
 ```
 
+### Parallel parsing (multi-threaded)
+
+Parse pages from one or more PDFs in parallel using a thread pool with backpressure:
+
+```python
+from docling_parse.pdf_parser import (
+    DoclingThreadedPdfParser,
+    ThreadedPdfParserConfig,
+)
+from docling_parse.pdf_parsers import DecodePageConfig  # type: ignore[import]
+
+parser_config = ThreadedPdfParserConfig(
+    loglevel="fatal",
+    threads=4,                # worker threads
+    max_concurrent_results=32 # cap buffered results to limit memory
+)
+decode_config = DecodePageConfig()
+
+parser = DoclingThreadedPdfParser(
+    parser_config=parser_config,
+    decode_config=decode_config,
+)
+
+# load one or more documents
+for source in ["doc_a.pdf", "doc_b.pdf"]:
+    parser.load(source)
+
+# consume decoded pages as they become available
+while parser.has_tasks():
+    task = parser.get_task()
+
+    if task.success:
+        page_decoder, timings = task.get()
+        print(f"{task.doc_key} p{task.page_number}: "
+              f"{len(list(page_decoder.get_word_cells()))} words")
+    else:
+        print(f"error on {task.doc_key} p{task.page_number}: {task.error()}")
+```
+
 Use the CLI
 
 ```sh

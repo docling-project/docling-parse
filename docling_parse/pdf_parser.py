@@ -29,7 +29,9 @@ from PIL import Image as PILImage
 from pydantic import BaseModel, ConfigDict
 
 from docling_parse.pdf_parsers import DecodePageConfig  # type: ignore[import]
+from docling_parse.pdf_parsers import PageDecodeResult  # type: ignore[import]
 from docling_parse.pdf_parsers import pdf_parser  # type: ignore[import]
+from docling_parse.pdf_parsers import threaded_pdf_parser  # type: ignore[import]
 from docling_parse.pdf_parsers import (  # type: ignore[import]
     TIMING_KEY_CREATE_LINE_CELLS,
     TIMING_KEY_CREATE_WORD_CELLS,
@@ -854,3 +856,123 @@ class DoclingPdfParser:
              bool: True if the document was successfully loaded, False otherwise.)")
         """
         return self.parser.load_document_from_bytesio(key=key, bytes_io=data)
+
+
+class ThreadedPdfParserConfig(BaseModel):
+    """Configuration for the threaded PDF parser.
+
+    Attributes:
+        loglevel: Logging level ('fatal', 'error', 'warning', 'info').
+        threads: Number of worker threads for parallel page decoding.
+        max_concurrent_results: Maximum results buffered before workers pause.
+    """
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    loglevel: str = "fatal"
+    threads: int = 4
+    max_concurrent_results: int = 32
+
+
+class DoclingThreadedPdfParser:
+    """Threaded PDF parser that decodes pages from multiple documents in parallel.
+
+    Usage::
+
+        parser_config = ThreadedPdfParserConfig(loglevel="fatal", threads=4, max_concurrent_results=32)
+        decode_config = DecodePageConfig()
+
+        parser = DoclingThreadedPdfParser(parser_config=parser_config, decode_config=decode_config)
+
+        for source in sources:
+            parser.load(source)
+
+        while parser.has_tasks():
+            task = parser.get_task()
+
+            if task.success:
+                page_decoder, timings = task.get()
+            else:
+                error_msg = task.error()
+    """
+
+    def __init__(
+        self,
+        parser_config: Optional[ThreadedPdfParserConfig] = None,
+        decode_config: Optional[DecodePageConfig] = None,
+    ):
+        if parser_config is None:
+            parser_config = ThreadedPdfParserConfig()
+        if decode_config is None:
+            decode_config = DecodePageConfig()
+
+        self._parser = threaded_pdf_parser(
+            loglevel=parser_config.loglevel,
+            num_threads=parser_config.threads,
+            max_concurrent_results=parser_config.max_concurrent_results,
+            config=decode_config,
+        )
+
+    def load(
+        self,
+        path_or_stream: Union[str, Path, BytesIO],
+        password: Optional[str] = None,
+    ) -> str:
+        """Load a document for parallel processing.
+
+        Parameters:
+            path_or_stream: File path or BytesIO object.
+            password: Optional password for protected files.
+
+        Returns:
+            str: The document key.
+        """
+        if isinstance(path_or_stream, str):
+            path_or_stream = Path(path_or_stream)
+
+        if isinstance(path_or_stream, Path):
+            key = f"key={str(path_or_stream)}"
+            success = self._parser.load_document(
+                key=key, filename=str(path_or_stream).encode("utf8"), password=password
+            )
+        elif isinstance(path_or_stream, BytesIO):
+            hasher = hashlib.sha256(usedforsecurity=False)
+            while chunk := path_or_stream.read(8192):
+                hasher.update(chunk)
+            path_or_stream.seek(0)
+            hash_val = hasher.hexdigest()
+
+            key = f"key={hash_val}"
+            success = self._parser.load_document_from_bytesio(
+                key=key, bytes_io=path_or_stream, password=password
+            )
+        else:
+            raise TypeError(
+                f"Expected str, Path, or BytesIO, got {type(path_or_stream)}"
+            )
+
+        if not success:
+            raise RuntimeError(f"Failed to load document with key {key}")
+
+        return key
+
+    def has_tasks(self) -> bool:
+        """Check if there are remaining tasks to consume.
+
+        On first call, builds the task queue and starts worker threads.
+
+        Returns:
+            bool: True if there are remaining results to consume.
+        """
+        return self._parser.has_tasks()
+
+    def get_task(self) -> "PageDecodeResult":
+        """Get the next completed page decode result.
+
+        Blocks until a result is available.
+
+        Returns:
+            PageDecodeResult: The result with doc_key, page_number, success flag.
+                Use task.get() to get (PdfPageDecoder, timings) or task.error() for error message.
+        """
+        return self._parser.get_task()

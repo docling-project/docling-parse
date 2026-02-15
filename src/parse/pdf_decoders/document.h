@@ -57,6 +57,9 @@ namespace pdflib
 
     pdf_timings& get_timings() { return timings; }
 
+    std::shared_ptr<std::string> get_buffer() { return buffer; }
+    std::optional<std::string> get_password() { return password; }
+
   private:
 
     void update_qpdf_logger();
