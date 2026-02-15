@@ -35,6 +35,9 @@ namespace pdflib
 
     bool populate_json_objects = false;
 
+    // threading
+    bool do_thread_safe = true; // slight compute/memory overhead in single threaded case
+    
     nlohmann::json to_json() const;
     void from_json(const nlohmann::json& j);
 

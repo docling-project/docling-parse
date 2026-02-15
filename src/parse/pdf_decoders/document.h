@@ -32,10 +32,10 @@ namespace pdflib
     nlohmann::json get_table_of_contents();
 
     bool process_document_from_file(std::string& _filename,
-				    std::optional<std::string>& password);
+				    std::optional<std::string>& _password);
 
     bool process_document_from_bytesio(std::shared_ptr<std::string> _buffer,
-				       std::optional<std::string>& password,
+				       std::optional<std::string>& _password,
 				       std::string description = "processing buffer");
 
     void decode_document(const decode_page_config& config);
@@ -69,6 +69,7 @@ namespace pdflib
 
     std::string filename;
     std::shared_ptr<std::string> buffer; // keep a shared copy, in order to not let it expire
+    std::optional<std::string> password; // stored for thread-safe page decoding
 
     pdf_timings timings;
 
@@ -89,6 +90,7 @@ namespace pdflib
   pdf_decoder<DOCUMENT>::pdf_decoder():
     filename(""),
     buffer(nullptr),
+    password(std::nullopt),
 
     timings({}),
     qpdf_document(),
@@ -109,6 +111,7 @@ namespace pdflib
   pdf_decoder<DOCUMENT>::pdf_decoder(pdf_timings& timings_):
     filename(""),
     buffer(nullptr),
+    password(std::nullopt),
 
     timings(timings_),
     qpdf_document(),
@@ -182,7 +185,7 @@ namespace pdflib
     return json_annots["table_of_contents"];
   }
 
-  bool pdf_decoder<DOCUMENT>::process_document_from_file(std::string& _filename, std::optional<std::string>& password)
+  bool pdf_decoder<DOCUMENT>::process_document_from_file(std::string& _filename, std::optional<std::string>& _password)
   {
     filename = _filename; // save it
     LOG_S(INFO) << "start processing '" << filename << "' by reading into memory ...";
@@ -209,7 +212,7 @@ namespace pdflib
     ifs.close();
 
     std::string description = "processing file " + filename;
-    bool result = process_document_from_bytesio(file_buffer, password, description);
+    bool result = process_document_from_bytesio(file_buffer, _password, description);
 
     double total_elapsed = timer.get_time();
     std::cout << pdf_timings::KEY_PROCESS_DOCUMENT_FROM_FILE << ": " << total_elapsed << "\n";
@@ -219,10 +222,11 @@ namespace pdflib
   }
 
   bool pdf_decoder<DOCUMENT>::process_document_from_bytesio(std::shared_ptr<std::string> _buffer,
-							    std::optional<std::string>& password,
+							    std::optional<std::string>& _password,
 							    std::string description)
   {
     buffer = _buffer;
+    password = _password;
     LOG_S(INFO) << "start processing buffer of size " << buffer->size() << " by qpdf ...";
 
     utils::timer timer;
@@ -405,17 +409,29 @@ namespace pdflib
 	return page_decoders[page_number];
       }
 
-    // Get the QPDF page
-    std::vector<QPDFObjectHandle> pages = qpdf_document.getAllPages();
-    QPDFObjectHandle qpdf_page = pages.at(page_number);
+    // Get the QPDF page and decode it
+    std::shared_ptr<pdf_decoder<PAGE> > page_decoder = nullptr;
+    {
+      bool set_timer = (timings.empty());
 
-    // Create and decode the page
-    auto page_decoder = std::make_shared<pdf_decoder<PAGE>>(qpdf_page, page_number);
+      if(not config.do_thread_safe)
+	{
+	  std::vector<QPDFObjectHandle> pages = qpdf_document.getAllPages();
+	  QPDFObjectHandle qpdf_page = pages.at(page_number);
 
-    bool set_timer = (timings.empty());
-    page_decoder->decode_page(config);
-    update_timings(page_decoder->get_timings(), set_timer);
-
+	  page_decoder = std::make_shared<pdf_decoder<PAGE>>(qpdf_page, page_number);
+	}
+      else
+	{
+	  // creates its own QPDF document
+	  page_decoder = std::make_shared<pdf_decoder<PAGE>>(buffer, password, page_number);
+	}
+      
+      page_decoder->decode_page(config);
+      
+      update_timings(page_decoder->get_timings(), set_timer);
+    }
+    
     // Create word and line cells if requested
     if(config.create_word_cells)
       {

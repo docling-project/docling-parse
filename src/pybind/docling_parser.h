@@ -17,9 +17,12 @@ namespace docling
 {
   class docling_parser: public docling_resources
   {
-    typedef pdflib::pdf_decoder<pdflib::DOCUMENT> decoder_type;
-    typedef std::shared_ptr<decoder_type> decoder_ptr_type;
+    typedef pdflib::pdf_decoder<pdflib::PAGE> page_decoder_type;
+    typedef pdflib::pdf_decoder<pdflib::DOCUMENT> doc_decoder_type;
 
+    typedef std::shared_ptr<page_decoder_type> page_decoder_ptr_type;
+    typedef std::shared_ptr<doc_decoder_type> doc_decoder_ptr_type;
+    
   public:
 
     docling_parser();
@@ -56,6 +59,8 @@ namespace docling
                                                                         int page,
                                                                         const pdflib::decode_page_config& config);
 
+    //std::shared_ptr<pdflib::pdf_decoder<pdflib::PAGE>> get_page_decoders_in_parallel(const pdflib::decode_page_config& config);
+    
   private:
 
     bool verify_page_boundary(std::string page_boundary);
@@ -64,23 +69,7 @@ namespace docling
 
     std::string pdf_resources_dir;
 
-    // in the serial case
-    std::unordered_map<std::string, decoder_ptr_type> key2doc;
-
-    // in the threaded case
-    /*
-      typedef std::shared_ptr<std::string> buffer_type;
-      typedef std::optional<std::string> password_type;
-
-      std::mutex task_mutex;
-
-      // (key, page_number) to pdf_decoder: every thread has its own pdf_decoder obj, such
-      // that the QPDF object is operated on by 1 thread only
-      std::map<std::pair<std::string, int>, decoder_ptr_type> tasks;
-
-      std::map<std::string, std::pair<buffer_type, password_type> > key_to_buffer;
-      std::map<std::string, std::pair<std::string, password_type> > key_to_filename;
-    */
+    std::unordered_map<std::string, doc_decoder_ptr_type> key2doc;
   };
 
   docling_parser::docling_parser():
@@ -174,9 +163,9 @@ namespace docling
 
     if (std::filesystem::exists(path_filename))
       {
-        //key2doc[key] = std::filesystem::path(filename);
-        key2doc[key] = std::make_shared<decoder_type>();
+        key2doc[key] = std::make_shared<doc_decoder_type>();
         key2doc.at(key)->process_document_from_file(filename, password);
+
         return true;
       }
 
@@ -208,7 +197,7 @@ namespace docling
 
     try
       {
-        key2doc[key] = std::make_shared<decoder_type>();
+        key2doc[key] = std::make_shared<doc_decoder_type>();
         std::string description = "parsing of " + key + " from bytesio";
         key2doc.at(key)->process_document_from_bytesio(data_buffer, password, description);
 
@@ -244,7 +233,7 @@ namespace docling
 
     if(itr!=key2doc.end())
       {
-        decoder_ptr_type decoder_ptr = itr->second;
+        doc_decoder_ptr_type decoder_ptr = itr->second;
         decoder_ptr->unload_page(page_num);
       }
     else
@@ -261,7 +250,7 @@ namespace docling
 
     if(itr!=key2doc.end())
       {
-        decoder_ptr_type decoder_ptr = itr->second;
+        doc_decoder_ptr_type decoder_ptr = itr->second;
         decoder_ptr->unload_pages();
       }
     else
@@ -351,8 +340,8 @@ namespace docling
         return nullptr;
       }
 
-    auto& decoder = itr->second;
-    return decoder->decode_page(page, config);
+    auto& doc_decoder = itr->second;
+    return doc_decoder->decode_page(page, config);
   }
 
 }

@@ -43,7 +43,8 @@ PYBIND11_MODULE(pdf_parsers, m) {
     .def_readwrite("horizontal_cell_tolerance", &pdflib::decode_page_config::horizontal_cell_tolerance)
     .def_readwrite("word_space_width_factor_for_merge", &pdflib::decode_page_config::word_space_width_factor_for_merge)
     .def_readwrite("line_space_width_factor_for_merge", &pdflib::decode_page_config::line_space_width_factor_for_merge)
-    .def_readwrite("line_space_width_factor_for_merge_with_space", &pdflib::decode_page_config::line_space_width_factor_for_merge_with_space);
+    .def_readwrite("line_space_width_factor_for_merge_with_space", &pdflib::decode_page_config::line_space_width_factor_for_merge_with_space)
+    .def_readwrite("do_thread_safe", &pdflib::decode_page_config::do_thread_safe);
 
   // ============= Typed Resource Bindings (for zero-copy access) =============
 
