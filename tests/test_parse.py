@@ -418,10 +418,9 @@ def test_reference_documents_from_filenames():
 
                     _fname = fname + f".{unit}.txt"
 
-                    lines = []
                     with open(_fname, "r") as fr:
                         content = fr.read()
-                        lines = content.split(SPECIAL_SEPERATOR)
+                        lines = content.split(SPECIAL_SEPERATOR) if content else []
 
                     assert len(lines) == len(
                         _lines
