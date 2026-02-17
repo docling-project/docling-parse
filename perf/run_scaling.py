@@ -199,7 +199,7 @@ def main(argv: List[str]) -> int:
 
     # Summary table
     print()
-    seq_vs_t1 = seq_time / baseline_threaded_time if baseline_threaded_time > 0 else float("inf")
+    seq_vs_t1 = baseline_threaded_time / seq_time if baseline_threaded_time > 0 else float("inf")
     headers = ["mode", "threads", "wall_time (s)", "vs sequential", "vs threaded(1)"]
     table = [["sequential", "-", f"{seq_time:.3f}", "1.00x", f"{seq_vs_t1:.2f}x"]]
     for n, t, s_seq, s_t1 in threaded_results:
