@@ -267,6 +267,7 @@ jobs:
           CIBW_PLATFORM: windows
           CIBW_BUILD_VERBOSITY: 3
           CIBW_ARCHS: AMD64
+          CIBW_SKIP: "pp*"
           CIBW_PROJECT_REQUIRES_PYTHON: "~=${{ matrix.python-version }}.0"
           PKG_CONFIG_PATH: "C:/msys64/usr/lib/pkgconfig"
           PKG_CONFIG_EXECUTABLE: "C:/mingw64/bin/pkg-config.exe"

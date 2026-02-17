@@ -1,3 +1,9 @@
+## [v5.3.1](https://github.com/docling-project/docling-parse/releases/tag/v5.3.1) - 2026-02-17
+
+### Fix
+
+* Deal with image containing rotated pages ([#217](https://github.com/docling-project/docling-parse/issues/217)) ([`0b592f6`](https://github.com/docling-project/docling-parse/commit/0b592f6d09fc20b0347d452b6a82d064d1a6e7dc))
+
 ## [v5.3.0](https://github.com/docling-project/docling-parse/releases/tag/v5.3.0) - 2026-02-16
 
 ### Feature
