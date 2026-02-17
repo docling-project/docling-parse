@@ -233,14 +233,38 @@ namespace pdflib
       }
     else
       {
-        LOG_S(WARNING) << "no `/Decode` found: falling back on default";
-        decode_array = {
-          1, 0, 1, 0,
-          1, 0, 1, 0
-        };
-        decode_present = !decode_array.empty();
+	// p 210, table 90: Default decode arrays
+	if(color_space=="/DeviceGray")
+	  {
+	    LOG_S(WARNING) << "no `/Decode` found: falling back on default for " << color_space;
+	    decode_array = {
+	      1, 0
+	    };
+	    decode_present = !decode_array.empty();
+	  }
+	else if(color_space=="/DeviceRGB")
+	  {
+	    LOG_S(WARNING) << "no `/Decode` found: falling back on default for " << color_space;
+	    decode_array = {
+	      1, 0, 1, 0,
+	      1, 0
+	    };
+	    decode_present = !decode_array.empty();
+	  }
+	else if(color_space=="/DeviceCMYK")
+	  {
+	    LOG_S(WARNING) << "no `/Decode` found: falling back on default for " << color_space;
+	    decode_array = {
+	      1, 0, 1, 0,
+	      1, 0, 1, 0
+	    };
+	    decode_present = !decode_array.empty();
+	  }
+	else
+	  {
+	    LOG_S(ERROR) << color_space << " is not part of [/DeviceGray, /DeviceRGB, /DeviceCMYK]";
+	  }
       }
-
     LOG_S(INFO) << "image properties: "
                 << image_width << "x" << image_height
                 << " bpc=" << bits_per_component
@@ -468,8 +492,7 @@ namespace pdflib
                 << " bytes to " << path.string();
   }
 
-  std::shared_ptr<Buffer> pdf_resource<PAGE_XOBJECT_IMAGE>::load_from_file(
-                                                                     std::filesystem::path const& path)
+  std::shared_ptr<Buffer> pdf_resource<PAGE_XOBJECT_IMAGE>::load_from_file(std::filesystem::path const& path)
   {
     std::ifstream in(path, std::ios::binary | std::ios::ate);
     if(not in)

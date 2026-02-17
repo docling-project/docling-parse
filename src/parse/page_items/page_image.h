@@ -351,6 +351,7 @@ namespace pdflib
 
             if(not result.empty())
               {
+		LOG_S(INFO) << "corrected JPEG in image-buffer!";
                 return result;
               }
 
@@ -358,7 +359,11 @@ namespace pdflib
                            << xobject_key
                            << ", falling back to raw passthrough";
           }
-
+	else
+	  {
+	    LOG_S(INFO) << "JPEG does not need correction in image-buffer!";
+	  }
+	
         // Safe passthrough: return raw JPEG bytes
         auto* buf = reinterpret_cast<unsigned char const*>(
             raw_stream_data->getBuffer());
