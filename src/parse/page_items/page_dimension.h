@@ -137,15 +137,60 @@ namespace pdflib
 
     utils::values::rotate_inplace(my_angle, bbox);
     
-    std::pair<double, double> delta = {0.0, std::abs(media_bbox[3])};
+    // std::pair<double, double> delta = {0.0, std::abs(media_bbox[3])};
+
+    std::pair<double, double> delta = {0.0, 0.0}; //std::abs(media_bbox[3])};
+
+    switch(my_angle)
+      {
+      case 0:
+	{}
+	break;
+	
+      case 90:
+	{
+	  delta = {0.0, std::abs(media_bbox[3])};
+
+	  media_bbox[3] += 2*delta.second;
+	  crop_bbox[3] += 2*delta.second;
+	  bleed_bbox[3] += 2*delta.second;
+	  trim_bbox[3] += 2*delta.second;
+	  art_bbox[3] += 2*delta.second;
+	  
+	  bbox[3] += 2*delta.second;	  
+	}
+	break;
+
+      case 180:
+	{
+	  delta = {std::abs(media_bbox[2]), std::abs(media_bbox[3])};
+
+	  media_bbox[2] += 2*delta.first;
+	  media_bbox[3] += 2*delta.second;
+
+	  crop_bbox[2] += 2*delta.first;
+	  crop_bbox[3] += 2*delta.second;
+
+	  bleed_bbox[2] += 2*delta.first;
+	  bleed_bbox[3] += 2*delta.second;
+
+	  trim_bbox[2] += 2*delta.first;
+	  trim_bbox[3] += 2*delta.second;
+
+	  art_bbox[2] += 2*delta.first;
+	  art_bbox[3] += 2*delta.second;
+
+	  bbox[2] += 2*delta.first;	  	  
+	  bbox[3] += 2*delta.second;	  	  
+	}
+	break;
+
+      default:
+	{
+	  LOG_S(WARNING) << "might be unsupported rotation angle: " << my_angle;
+	}
+      }
     
-    media_bbox[3] += 2*delta.second;
-    crop_bbox[3] += 2*delta.second;
-    bleed_bbox[3] += 2*delta.second;
-    trim_bbox[3] += 2*delta.second;
-    art_bbox[3] += 2*delta.second;
-    
-    bbox[3] += 2*delta.second;
 
     LOG_S(INFO) << "crop: "
 		<< crop_bbox[0] << ", "
