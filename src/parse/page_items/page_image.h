@@ -147,12 +147,23 @@ namespace pdflib
 
   std::string page_item<PAGE_IMAGE>::get_image_extension() const
   {
+    bool has_flate = false;
+
     for(auto const& f : filters)
       {
-        if(f == "/DCTDecode")  return ".jpg";
-        if(f == "/JPXDecode")  return ".jp2";
+        if(f == "/DCTDecode")   return ".jpg";
+        if(f == "/JPXDecode")   return ".jp2";
         if(f == "/JBIG2Decode") return ".jb2";
+        if(f == "/FlateDecode") has_flate = true;
       }
+
+    if(has_flate)
+      {
+        // Future: return ".png" for lossless export (requires libpng or lodepng).
+        return ".jpg";
+      }
+
+    LOG_S(WARNING) << "get_image_extension: no recognized filter, defaulting to .bin";
     return ".bin";
   }
 
@@ -259,12 +270,26 @@ namespace pdflib
 
   std::string page_item<PAGE_IMAGE>::get_image_format() const
   {
+    // Image-format filters take priority — /FlateDecode is just transport
+    // compression and can appear alongside any of these.
+    bool has_flate = false;
+
     for(auto const& f : filters)
       {
-        if(f == "/DCTDecode")  { return "jpeg"; }
-        if(f == "/JPXDecode")  { return "jp2"; }
+        if(f == "/DCTDecode")   { return "jpeg"; }
+        if(f == "/JPXDecode")   { return "jp2"; }
         if(f == "/JBIG2Decode") { return "jbig2"; }
+        if(f == "/FlateDecode") { has_flate = true; }
       }
+
+    if(has_flate)
+      {
+        // /FlateDecode only (no image-format filter) → raw pixels after
+        // decompression.  We encode them as JPEG for a viewable output.
+        // Future: return "png" here for lossless export (requires libpng or lodepng).
+        return "jpeg";
+      }
+
     return "raw";
   }
 
@@ -287,6 +312,41 @@ namespace pdflib
 
     if(fmt == "jpeg")
       {
+        // Check whether the raw stream is actually JPEG-encoded (/DCTDecode)
+        // or raw pixels that we need to encode (e.g. /FlateDecode).
+        bool filters_have_dct = false;
+        for(auto const& f : filters) { if(f == "/DCTDecode") filters_have_dct = true; }
+
+        if(not filters_have_dct and decoded_stream_data and decoded_stream_data->getSize() > 0)
+          {
+            // Raw pixels (e.g. /FlateDecode) — encode to JPEG from the decoded stream,
+            // applying /Decode mapping (e.g. inversion for /DeviceGray with [1, 0]).
+            // Future: for lossless export, encode to PNG here instead
+            // (requires libpng or lodepng and a write_png_from_raw_pixels_to_memory() helper).
+            jpeg::jpeg_parameters params;
+            params.width              = image_width;
+            params.height             = image_height;
+            params.bits_per_component = bits_per_component;
+            params.color_space        = jpeg::to_color_space(color_space);
+            params.decode             = decode_array;
+            params.has_decode         = decode_present and not decode_array.empty();
+            params.image_mask         = image_mask;
+
+            auto result = jpeg::write_jpeg_from_raw_pixels_to_memory(
+                reinterpret_cast<unsigned char const*>(decoded_stream_data->getBuffer()),
+                static_cast<std::size_t>(decoded_stream_data->getSize()),
+                params);
+
+            if(not result.empty())
+              {
+                LOG_S(INFO) << "encoded raw pixels as JPEG in memory for xobject_key=" << xobject_key;
+                return result;
+              }
+
+            LOG_S(WARNING) << "JPEG encoding from raw pixels failed for xobject_key=" << xobject_key;
+            return {};
+          }
+
         if(not raw_stream_data or raw_stream_data->getSize() == 0)
           {
             LOG_S(WARNING) << "no raw stream data for JPEG image"
