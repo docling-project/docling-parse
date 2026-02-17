@@ -149,16 +149,19 @@ namespace pdflib
 
   void page_item<PAGE_CELL>::rotate(int angle, std::pair<double, double> delta)
   {
+    LOG_S(INFO) << "rotate & translate cell: (x0: " << x0 << ", y0: " << y0 << ", x1: " << x1 << ", y1: " << y1 << ")"; 
     utils::values::rotate_inplace(angle, x0, y0);
     utils::values::rotate_inplace(angle, x1, y1);
+
+    utils::values::translate_inplace(delta, x0, y0);
+    utils::values::translate_inplace(delta, x1, y1);
+    
+    LOG_S(INFO) << "into (x0: " << x0 << ", y0: " << y0 << ", x1: " << x1 << ", y1: " << y1 << ")"; 
     
     utils::values::rotate_inplace(angle, r_x0, r_y0);
     utils::values::rotate_inplace(angle, r_x1, r_y1);
     utils::values::rotate_inplace(angle, r_x2, r_y2);
     utils::values::rotate_inplace(angle, r_x3, r_y3);
-
-    utils::values::translate_inplace(delta, x0, y0);
-    utils::values::translate_inplace(delta, x1, y1);
     
     utils::values::translate_inplace(delta, r_x0, r_y0);
     utils::values::translate_inplace(delta, r_x1, r_y1);

@@ -1,3 +1,35 @@
+## [v5.3.2](https://github.com/docling-project/docling-parse/releases/tag/v5.3.2) - 2026-02-17
+
+### Fix
+
+* Rotated pages (missing commits) ([#219](https://github.com/docling-project/docling-parse/issues/219)) ([`6d98479`](https://github.com/docling-project/docling-parse/commit/6d984796a9e4c168019404581dbb963a0ce4c2b0))
+
+## [v5.3.1](https://github.com/docling-project/docling-parse/releases/tag/v5.3.1) - 2026-02-17
+
+### Fix
+
+* Deal with image containing rotated pages ([#217](https://github.com/docling-project/docling-parse/issues/217)) ([`0b592f6`](https://github.com/docling-project/docling-parse/commit/0b592f6d09fc20b0347d452b6a82d064d1a6e7dc))
+
+## [v5.3.0](https://github.com/docling-project/docling-parse/releases/tag/v5.3.0) - 2026-02-16
+
+### Feature
+
+* Refactor pdf resources to pdf page item ([#215](https://github.com/docling-project/docling-parse/issues/215)) ([`e7812a1`](https://github.com/docling-project/docling-parse/commit/e7812a122ae07a08318c74daac78214e36407954))
+* Refactored the code and removed a lot of extra json parameters ([#213](https://github.com/docling-project/docling-parse/issues/213)) ([`67d2922`](https://github.com/docling-project/docling-parse/commit/67d2922913b4579506c6525642170c5196e2791a))
+* Removing the json from the pdf-parser ([#210](https://github.com/docling-project/docling-parse/issues/210)) ([`3272dd8`](https://github.com/docling-project/docling-parse/commit/3272dd8d0b5f94f509555cf37a7517af570699a4))
+* Renaming lines to shapes and enriching with graphics (color, filling and stroking) ([#209](https://github.com/docling-project/docling-parse/issues/209)) ([`ea5f1d8`](https://github.com/docling-project/docling-parse/commit/ea5f1d8d7ba6d6b845fd5394c9dcf8eaba015657))
+* Add decoding config to decode_page ([#208](https://github.com/docling-project/docling-parse/issues/208)) ([`f01ce84`](https://github.com/docling-project/docling-parse/commit/f01ce848aa102a2a9440d3f2ddf34c228a002183))
+* Add-image-extraction ([#207](https://github.com/docling-project/docling-parse/issues/207)) ([`25672da`](https://github.com/docling-project/docling-parse/commit/25672da1e8a5bfb3994bf8fa5fc3a888ea3ec1ae))
+
+### Fix
+
+* Recursively traverse parent chain for inherited MediaBox ([#204](https://github.com/docling-project/docling-parse/issues/204)) ([`bb0b4ef`](https://github.com/docling-project/docling-parse/commit/bb0b4ef0b147bdaf1eabce1213bef4389308c4a9))
+
+### Performance
+
+* Improve recursive form xobject ([#212](https://github.com/docling-project/docling-parse/issues/212)) ([`2fd79a0`](https://github.com/docling-project/docling-parse/commit/2fd79a05c583cd20c43442078991c023b519e80d))
+* Default cmap speedup ([#203](https://github.com/docling-project/docling-parse/issues/203)) ([`82a0aaa`](https://github.com/docling-project/docling-parse/commit/82a0aaa791c6512a4a06ec2169dbf4c970c87993))
+
 ## [v5.2.0](https://github.com/docling-project/docling-parse/releases/tag/v5.2.0) - 2026-01-30
 
 ### Feature

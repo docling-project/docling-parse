@@ -70,4 +70,5 @@ def build_local(num_threads: int):
 
 if "__main__" == __name__:
     num_threads = int(os.getenv("BUILD_THREADS", "4"))
+    print(f"Building with {num_threads} threads (BUILD_THREADS={os.getenv('BUILD_THREADS', 'not set, defaulting to 4')})")
     build_local(num_threads=num_threads)
