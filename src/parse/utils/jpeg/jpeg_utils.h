@@ -499,5 +499,236 @@ inline std::vector<unsigned char> write_corrected_jpeg_to_memory(
   return result;
 }
 
+// ---------------------------------------------------------------------------
+// write_jpeg_from_raw_pixels
+// ---------------------------------------------------------------------------
+// Encodes an already-decompressed pixel buffer (e.g. from /FlateDecode) as
+// JPEG on disk.  The caller supplies the raw pixel data, image dimensions,
+// and colour-space metadata via jpeg_parameters.
+//
+// The /Decode mapping is applied identically to the corrected-JPEG path.
+//
+// Future: for lossless export, add a write_png_from_raw_pixels() counterpart
+// here (requires libpng or lodepng) and call it from save_to_file() when
+// the chosen extension is ".png".
+// ---------------------------------------------------------------------------
+inline bool write_jpeg_from_raw_pixels(
+    unsigned char const* pixels, std::size_t pixel_count,
+    jpeg_parameters const& params,
+    std::filesystem::path const& path)
+{
+  LOG_S(INFO) << __FUNCTION__
+              << ": pixel_count=" << pixel_count
+              << " w=" << params.width << " h=" << params.height
+              << " bpc=" << params.bits_per_component
+              << " cs=" << color_space_name(params.color_space)
+              << " has_decode=" << params.has_decode
+              << " path=" << path.string();
+
+  if(!pixels || pixel_count == 0)
+  {
+    LOG_S(WARNING) << __FUNCTION__ << ": no pixel data";
+    return false;
+  }
+
+  int ncomp = 0;
+  switch(params.color_space)
+  {
+    case ColorSpace::Gray: ncomp = 1; break;
+    case ColorSpace::RGB:  ncomp = 3; break;
+    case ColorSpace::CMYK: ncomp = 4; break;
+    default:
+      LOG_S(WARNING) << __FUNCTION__ << ": unknown colour space";
+      return false;
+  }
+
+  const std::size_t w      = static_cast<std::size_t>(params.width);
+  const std::size_t h      = static_cast<std::size_t>(params.height);
+  const std::size_t stride = w * static_cast<std::size_t>(ncomp);
+  const std::size_t expected = h * stride;
+
+  if(pixel_count < expected)
+  {
+    LOG_S(WARNING) << __FUNCTION__
+                   << ": pixel buffer too small: got " << pixel_count
+                   << " expected " << expected;
+    return false;
+  }
+
+  // Make a mutable copy so we can apply /Decode in-place
+  std::vector<unsigned char> image(pixels, pixels + expected);
+
+  // --- Apply /Decode mapping -----------------------------------------------
+  if(params.has_decode && !params.decode.empty() &&
+     static_cast<int>(params.decode.size()) >= 2 * ncomp)
+  {
+    LOG_S(INFO) << __FUNCTION__ << ": applying /Decode mapping to " << ncomp << " components";
+
+    for(std::size_t y = 0; y < h; ++y)
+    {
+      unsigned char* row = &image[y * stride];
+      for(std::size_t x = 0; x < w; ++x)
+      {
+        for(int c = 0; c < ncomp; ++c)
+        {
+          double dmin = params.decode[2 * c + 0];
+          double dmax = params.decode[2 * c + 1];
+          row[x * ncomp + c] = apply_decode_component(
+              row[x * ncomp + c], dmin, dmax);
+        }
+      }
+    }
+  }
+
+  // --- Encode as JPEG ------------------------------------------------------
+  jpeg_compress_struct cinfo{};
+  jpeg_error_longjmp cjerr{};
+  cinfo.err = jpeg_std_error(&cjerr);
+  cjerr.error_exit = jpeg_error_exit_longjmp;
+  jpeg_create_compress(&cinfo);
+
+  std::FILE* outfile = std::fopen(path.string().c_str(), "wb");
+  if(!outfile)
+  {
+    LOG_S(ERROR) << __FUNCTION__ << ": failed to open output file: " << path.string();
+    jpeg_destroy_compress(&cinfo);
+    return false;
+  }
+
+  if(setjmp(cjerr.jmp))
+  {
+    std::fclose(outfile);
+    jpeg_destroy_compress(&cinfo);
+    return false;
+  }
+
+  jpeg_stdio_dest(&cinfo, outfile);
+
+  cinfo.image_width      = static_cast<JDIMENSION>(w);
+  cinfo.image_height     = static_cast<JDIMENSION>(h);
+  cinfo.input_components = ncomp;
+
+  if(params.color_space == ColorSpace::CMYK)
+    cinfo.in_color_space = JCS_CMYK;
+  else
+    cinfo.in_color_space = (ncomp == 1) ? JCS_GRAYSCALE : JCS_RGB;
+
+  jpeg_set_defaults(&cinfo);
+  jpeg_set_quality(&cinfo, 90, TRUE);
+  jpeg_start_compress(&cinfo, TRUE);
+
+  for(std::size_t y = 0; y < h; ++y)
+  {
+    JSAMPROW row[1] = { &image[y * stride] };
+    jpeg_write_scanlines(&cinfo, row, 1);
+  }
+
+  jpeg_finish_compress(&cinfo);
+  std::fclose(outfile);
+  jpeg_destroy_compress(&cinfo);
+
+  LOG_S(INFO) << __FUNCTION__ << ": wrote JPEG to " << path.string();
+  return true;
+}
+
+// ---------------------------------------------------------------------------
+// write_jpeg_from_raw_pixels_to_memory
+// ---------------------------------------------------------------------------
+// Same as write_jpeg_from_raw_pixels but returns the JPEG as a byte vector.
+//
+// Future: add write_png_from_raw_pixels_to_memory() for lossless in-memory
+// encoding (requires libpng or lodepng).
+// ---------------------------------------------------------------------------
+inline std::vector<unsigned char> write_jpeg_from_raw_pixels_to_memory(
+    unsigned char const* pixels, std::size_t pixel_count,
+    jpeg_parameters const& params)
+{
+  if(!pixels || pixel_count == 0) { return {}; }
+
+  int ncomp = 0;
+  switch(params.color_space)
+  {
+    case ColorSpace::Gray: ncomp = 1; break;
+    case ColorSpace::RGB:  ncomp = 3; break;
+    case ColorSpace::CMYK: ncomp = 4; break;
+    default: return {};
+  }
+
+  const std::size_t w      = static_cast<std::size_t>(params.width);
+  const std::size_t h      = static_cast<std::size_t>(params.height);
+  const std::size_t stride = w * static_cast<std::size_t>(ncomp);
+  const std::size_t expected = h * stride;
+
+  if(pixel_count < expected) { return {}; }
+
+  std::vector<unsigned char> image(pixels, pixels + expected);
+
+  // --- Apply /Decode mapping -----------------------------------------------
+  if(params.has_decode && !params.decode.empty() &&
+     static_cast<int>(params.decode.size()) >= 2 * ncomp)
+  {
+    for(std::size_t y = 0; y < h; ++y)
+    {
+      unsigned char* row = &image[y * stride];
+      for(std::size_t x = 0; x < w; ++x)
+      {
+        for(int c = 0; c < ncomp; ++c)
+        {
+          double dmin = params.decode[2 * c + 0];
+          double dmax = params.decode[2 * c + 1];
+          row[x * ncomp + c] = apply_decode_component(
+              row[x * ncomp + c], dmin, dmax);
+        }
+      }
+    }
+  }
+
+  // --- Encode as JPEG to memory --------------------------------------------
+  unsigned char* outbuf  = nullptr;
+  unsigned long  outsize = 0;
+
+  jpeg_compress_struct cinfo{};
+  jpeg_error_longjmp cjerr{};
+  cinfo.err = jpeg_std_error(&cjerr);
+  cjerr.error_exit = jpeg_error_exit_longjmp;
+  jpeg_create_compress(&cinfo);
+
+  if(setjmp(cjerr.jmp))
+  {
+    jpeg_destroy_compress(&cinfo);
+    if(outbuf) free(outbuf);
+    return {};
+  }
+
+  jpeg_mem_dest(&cinfo, &outbuf, &outsize);
+
+  cinfo.image_width      = static_cast<JDIMENSION>(w);
+  cinfo.image_height     = static_cast<JDIMENSION>(h);
+  cinfo.input_components = ncomp;
+
+  if(params.color_space == ColorSpace::CMYK)
+    cinfo.in_color_space = JCS_CMYK;
+  else
+    cinfo.in_color_space = (ncomp == 1) ? JCS_GRAYSCALE : JCS_RGB;
+
+  jpeg_set_defaults(&cinfo);
+  jpeg_set_quality(&cinfo, 90, TRUE);
+  jpeg_start_compress(&cinfo, TRUE);
+
+  for(std::size_t y = 0; y < h; ++y)
+  {
+    JSAMPROW row[1] = { &image[y * stride] };
+    jpeg_write_scanlines(&cinfo, row, 1);
+  }
+
+  jpeg_finish_compress(&cinfo);
+  jpeg_destroy_compress(&cinfo);
+
+  std::vector<unsigned char> result(outbuf, outbuf + outsize);
+  free(outbuf);
+
+  return result;
+}
+
 } // namespace jpeg
 } // namespace pdflib

@@ -238,7 +238,8 @@ namespace pdflib
 	  {
 	    LOG_S(WARNING) << "no `/Decode` found: falling back on default for " << color_space;
 	    decode_array = {
-	      1, 0
+	      //1, 0
+	      0, 1
 	    };
 	    decode_present = !decode_array.empty();
 	  }
@@ -246,8 +247,8 @@ namespace pdflib
 	  {
 	    LOG_S(WARNING) << "no `/Decode` found: falling back on default for " << color_space;
 	    decode_array = {
-	      1, 0, 1, 0,
-	      1, 0
+	      //1, 0, 1, 0, 1, 0
+	      0, 1, 0, 1, 0, 1
 	    };
 	    decode_present = !decode_array.empty();
 	  }
@@ -409,12 +410,43 @@ namespace pdflib
 
   std::string pdf_resource<PAGE_XOBJECT_IMAGE>::pick_extension() const
   {
+    // Image-format filters take priority — /FlateDecode is just transport
+    // compression and can appear alongside any of these.
+    bool has_flate = false;
+
     for(auto const& f : image_filters)
       {
-        if(f == "/DCTDecode")  return ".jpg";
-        if(f == "/JPXDecode")  return ".jp2";
-        if(f == "/JBIG2Decode") return ".jb2";
+        if(f == "/DCTDecode")
+          {
+            return ".jpg";
+          }
+        else if(f == "/JPXDecode")
+          {
+            return ".jp2";
+          }
+        else if(f == "/JBIG2Decode")
+          {
+            return ".jb2";
+          }
+        else if(f == "/FlateDecode")
+          {
+            has_flate = true;
+          }
+        else
+          {
+            LOG_S(WARNING) << "pick_extension: unrecognized filter `" << f << "`";
+          }
       }
+
+    if(has_flate)
+      {
+        // /FlateDecode only (no image-format filter) → raw pixels after
+        // decompression.  We encode them as JPEG for a viewable output.
+        // Future: return ".png" here for lossless export (requires libpng or lodepng).
+        return ".jpg";
+      }
+
+    LOG_S(WARNING) << "pick_extension: no recognized filter, defaulting to .bin";
     return ".bin";
   }
 
@@ -455,15 +487,17 @@ namespace pdflib
       return true;
     }();
 
-    if(is_jpeg_ext && (!is_safe_passthrough))
+    if(is_jpeg_ext and filters_have_dct and (not is_safe_passthrough))
       {
+        // The raw stream is already JPEG-encoded (/DCTDecode) but needs
+        // /Decode correction — decompress, apply mapping, re-encode.
         jpeg::jpeg_parameters params;
         params.width = image_width;
         params.height = image_height;
         params.bits_per_component = bits_per_component;
         params.color_space = jpeg::to_color_space(color_space);
         params.decode = decode_array;
-        params.has_decode = decode_present && !decode_array.empty();
+        params.has_decode = decode_present and not decode_array.empty();
         params.image_mask = image_mask;
 
         bool ok = jpeg::write_corrected_jpeg_from_memory(
@@ -476,6 +510,32 @@ namespace pdflib
             return;
           }
         LOG_S(WARNING) << "JPEG correction failed, falling back to raw copy: " << path.string();
+      }
+
+    if(is_jpeg_ext and (not filters_have_dct) and has_decoded_stream_data())
+      {
+        // Raw pixels (e.g. /FlateDecode) — encode to JPEG from the decoded stream.
+        // Future: for lossless export, encode to PNG here instead
+        // (requires libpng or lodepng and a write_png_from_raw_pixels() helper).
+        jpeg::jpeg_parameters params;
+        params.width = image_width;
+        params.height = image_height;
+        params.bits_per_component = bits_per_component;
+        params.color_space = jpeg::to_color_space(color_space);
+        params.decode = decode_array;
+        params.has_decode = decode_present and not decode_array.empty();
+        params.image_mask = image_mask;
+
+        bool ok = jpeg::write_jpeg_from_raw_pixels(
+                                                    reinterpret_cast<unsigned char const*>(decoded_stream_data->getBuffer()),
+                                                    static_cast<std::size_t>(decoded_stream_data->getSize()),
+                                                    params, path);
+        if(ok)
+          {
+            LOG_S(INFO) << "wrote JPEG from raw pixels to " << path.string();
+            return;
+          }
+        LOG_S(WARNING) << "JPEG encoding from raw pixels failed, falling back to raw copy: " << path.string();
       }
 
     std::ofstream out(path, std::ios::binary);
