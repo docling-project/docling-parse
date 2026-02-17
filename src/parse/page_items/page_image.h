@@ -132,7 +132,7 @@ namespace pdflib
 
   void page_item<PAGE_IMAGE>::rotate(int angle, std::pair<double, double> delta)
   {
-    LOG_S(INFO) << "rotate & translate image: (x0: " << x0 << ", y0: " << y0 << ", x1: " << x1 << ", y1: " << y1 << ")"; 
+    // LOG_S(INFO) << "rotate & translate image: (x0: " << x0 << ", y0: " << y0 << ", x1: " << x1 << ", y1: " << y1 << ")"; 
     
     utils::values::rotate_inplace(angle, x0, y0);
     utils::values::rotate_inplace(angle, x1, y1);
@@ -140,7 +140,7 @@ namespace pdflib
     utils::values::translate_inplace(delta, x0, y0);
     utils::values::translate_inplace(delta, x1, y1);
 
-    LOG_S(INFO) << "into (x0: " << x0 << ", y0: " << y0 << ", x1: " << x1 << ", y1: " << y1 << ")"; 
+    // LOG_S(INFO) << "into (x0: " << x0 << ", y0: " << y0 << ", x1: " << x1 << ", y1: " << y1 << ")"; 
 
     // The bounding box always needs to have x0<x1 and y0<y1. If you want
     // to keep the orientation of the image, we will need to add the rectangle
