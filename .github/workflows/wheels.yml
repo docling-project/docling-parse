@@ -111,8 +111,9 @@ jobs:
           echo "Building cp: ${{ env.python_cp_version }}"
           echo "Building cache_tag: ${PY_CACHE_TAG}"
           echo "Building platform_id: ${{ matrix.os.platform_id }}"
+          echo "Building with BUILD_THREADS: ${BUILD_THREADS:-not set}"
           uv run python --version
-          uv run python --version | grep ${{ matrix.python-version }} 
+          uv run python --version | grep ${{ matrix.python-version }}
           cat ./pyproject.toml
           uv pip install --group build
           rm -rf ./build || true
@@ -163,8 +164,9 @@ jobs:
           echo "Building cp: ${{ env.python_cp_version }}"
           echo "Building cache_tag: ${PY_CACHE_TAG}"
           echo "Building platform_id: ${{ matrix.os.platform_id }}"
+          echo "Building with BUILD_THREADS: ${BUILD_THREADS:-not set}"
           uv run python --version
-          uv run python --version | grep ${{ matrix.python-version }} 
+          uv run python --version | grep ${{ matrix.python-version }}
           cat ./pyproject.toml
           uv pip install --group build
           rm -rf ./build || true
@@ -204,14 +206,18 @@ jobs:
           CIBW_SKIP: "pp* *musllinux_* *_i686* *_s390* *pypy*"
           CIBW_PROJECT_REQUIRES_PYTHON: "~=${{ matrix.python-version }}.0"
           CIBW_BUILD_VERBOSITY: 3
-          BUILD_THREADS: "8"
+          # Multi-threading: pass BUILD_THREADS into the cibuildwheel Docker container.
+          # Comment out the next line to disable parallel builds.
+          CIBW_ENVIRONMENT_PASS_LINUX: "BUILD_THREADS"
+          BUILD_THREADS: "4"
         run: |
           PY_CACHE_TAG=$(uv run python -c 'import sys;print(sys.implementation.cache_tag)')
           echo "Building cp: ${{ env.python_cp_version }}"
           echo "Building cache_tag: ${PY_CACHE_TAG}"
           echo "Building platform_id: ${{ matrix.os.platform_id }}"
+          echo "Building with BUILD_THREADS: ${BUILD_THREADS:-not set}"
           uv run python --version
-          uv run python --version | grep ${{ matrix.python-version }} 
+          uv run python --version | grep ${{ matrix.python-version }}
           cat ./pyproject.toml
           uv pip install --group build
           rm -rf ./build || true
@@ -275,7 +281,7 @@ jobs:
           CMAKE_LIBRARY_PATH: "C:/msys64/mingw64/lib;C:/mingw64/lib;C:/windows-libs/external-libs/lib-mingw64"
           CMAKE_INCLUDE_PATH: "C:/msys64/mingw64/include;C:/mingw64/include;C:/windows-libs/external-libs/include"
           CMAKE_GENERATOR: "MSYS Makefiles"
-          BUILD_THREADS: 1
+          BUILD_THREADS: 4
           ASM_NASM: "C:/nasm/nasm.exe"
         shell: pwsh
         run: |
