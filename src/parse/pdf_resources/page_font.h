@@ -3,6 +3,8 @@
 #ifndef PDF_PAGE_FONT_RESOURCE_H
 #define PDF_PAGE_FONT_RESOURCE_H
 
+#include <parse/qpdf/qpdf_compat.h>
+
 namespace pdflib
 {
 
@@ -1016,8 +1018,8 @@ namespace pdflib
 	  }
 
 	{
-	  auto buffer = qpdf_obj.getRawStreamData();
-	  
+	  auto buffer = to_shared_ptr(qpdf_obj.getRawStreamData());
+
 	  LOG_S(INFO) << "buffer-size: " << buffer->getSize();
 	  //LOG_S(INFO) << "buffer: " << buffer->getBuffer();
 
@@ -1039,7 +1041,7 @@ namespace pdflib
 	}
 
 	{
-	auto buffer = qpdf_obj.getStreamData(qpdf_dl_generalized);
+	auto buffer = to_shared_ptr(qpdf_obj.getStreamData(qpdf_dl_generalized));
 	  
 	LOG_S(INFO) << "buffer-size: " << buffer->getSize();
 	//LOG_S(INFO) << "buffer: " << buffer->getBuffer();

@@ -11,6 +11,8 @@
 #include <nlohmann/json.hpp>
 #include <qpdf/QPDF.hh>
 
+#include <parse/qpdf/qpdf_compat.h>
+
 namespace pdflib
 {
   // FIXME: add a begin time to cap the max time spent in this routine
@@ -89,7 +91,7 @@ namespace pdflib
 
 	    if(metadata.isStream())
 	      {
-		auto ptr = metadata.getStreamData(qpdf_dl_all);
+		auto ptr = to_shared_ptr(metadata.getStreamData(qpdf_dl_all));
 		
 		// Convert raw data to std::string
 		std::string content(reinterpret_cast<const char*>(ptr->getBuffer()), ptr->getSize());
