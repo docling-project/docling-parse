@@ -230,7 +230,7 @@ namespace pdflib
     LOG_S(INFO) << " unparsed: '" << unparsed << "'";
 
     // FIXME this might be too short
-    std::string result(64, ' ');
+    std::string result(1024, ' ');
 
     // we have a hex-string ...
     if(unparsed.size()>0     and
@@ -367,6 +367,7 @@ namespace pdflib
 
         try
           {
+	    /*
             std::string tmp(128, 0);
             {
               auto itr = tmp.begin();
@@ -383,7 +384,25 @@ namespace pdflib
                 }
               tmp.erase(itr, tmp.end());
             }
-
+	    */
+	    std::string tmp;
+	    {
+	      tmp.reserve(16); // optional, just a hint
+	      
+	      if (is_identity)
+		{
+		  utf8::append(src_codepoint, std::back_inserter(tmp));
+		}
+	      else
+		{
+		  for (auto tgt_uint : tgts)
+		    {
+		      utf8::append(tgt_uint, std::back_inserter(tmp));
+		    }
+		}
+	    }
+	    LOG_S(INFO) << "size(tmp-buffer): " << tmp.size();
+	    
             if(_map.count(src_codepoint) == 1)
               {
                 LOG_S(WARNING) << "overwriting number c=" << src_codepoint;
@@ -777,7 +796,7 @@ namespace pdflib
     if(itr_end != src_end.end())
       {
         LOG_S(WARNING) << "itr_end!=src_end.end() --> errors might occur in the cmap: "
-                       << "'" << src_end << "' -> " << end;;
+                       << "'" << src_end << "' -> " << end;
       }
 
     //LOG_S(INFO) << __FUNCTION__ << "\t"
@@ -788,11 +807,26 @@ namespace pdflib
     std::string mapping(tgt);
     std::vector<uint32_t> tgts;
 
+    if(!utf8::is_valid(tgt.begin(), tgt.end()))
+      {
+	LOG_S(WARNING) << "tgt is not valid UTF-8 (size=" << tgt.size() << ")";
+      }
+    
     auto itr_tgt = tgt.begin();
     while(itr_tgt != tgt.end())
       {
-        uint32_t tmp = utf8::next(itr_tgt, tgt.end());
-        tgts.push_back(tmp);
+	try
+	  {
+	    uint32_t tmp = utf8::next(itr_tgt, tgt.end());
+	    tgts.push_back(tmp);
+	  }
+	catch (const std::exception& e)
+	  {
+	    LOG_S(ERROR) << "Invalid UTF-8 in tgt near offset "
+			 << std::distance(tgt.begin(), itr_tgt)
+			 << ": " << e.what();
+	    break; // or replace with U+FFFD and advance carefully
+	  }	    
       }
 
     //LOG_S(INFO) << __FUNCTION__ << "\t"
