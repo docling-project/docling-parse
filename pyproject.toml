@@ -81,12 +81,7 @@ perf-test = [
     "pypdfium2>=4.30.0",
 ]
 
-[project.optional-dependencies]
-perf-tools = [
-    "pdfplumber>=0.11.7",
-    "pymupdf>=1.26.4",
-    "pypdfium2>=4.30.0",
-]
+
 [tool.uv]
 package = true
 default-groups = "all"
