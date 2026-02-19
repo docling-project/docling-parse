@@ -229,8 +229,9 @@ namespace pdflib
     std::string unparsed = handle.unparse();
     LOG_S(INFO) << " unparsed: '" << unparsed << "'";
 
-    // FIXME this might be too short
-    std::string result(1024, ' ');
+    // Legacy: fixed-size buffer + iterator may cause segfaults if content exceeds allocated size
+    //std::string result(1024, ' ');
+    std::string result;
 
     // we have a hex-string ...
     if(unparsed.size()>0     and
@@ -250,8 +251,10 @@ namespace pdflib
 
         try
           {
-            auto itr = utf8::utf16to8(utf16_vec.begin(), utf16_vec.end(), result.begin());
-            result.erase(itr, result.end());
+            // Legacy: fixed-size buffer + iterator may cause segfaults if utf16 decodes to more bytes than allocated
+            //auto itr = utf8::utf16to8(utf16_vec.begin(), utf16_vec.end(), result.begin());
+            //result.erase(itr, result.end());
+            utf8::utf16to8(utf16_vec.begin(), utf16_vec.end(), std::back_inserter(result));
 
             //logging_lib::success("pdf-parser") << "SUCCES: able to parse the unicode hex-string \""
             //<< unparsed << "\" --> " << result;
@@ -268,7 +271,8 @@ namespace pdflib
       {
         std::string tmp = handle.getStringValue();
 
-        auto itr = result.begin();
+        // Legacy: fixed-size buffer + iterator may cause segfaults if encoded content exceeds allocated size
+        //auto itr = result.begin();
         for(size_t i=0; i<tmp.size(); i+=number_of_chars)
           {
             uint32_t i32=0;
@@ -277,10 +281,11 @@ namespace pdflib
 	      {
 		i32 = (i32 << 8) + static_cast<unsigned char>(tmp.at(i+j));
 	      }
-	    
+
             try
               {
-                itr = utf8::append(i32, itr);
+                //itr = utf8::append(i32, itr);
+                utf8::append(i32, std::back_inserter(result));
               }
             catch(...)
               {
@@ -289,7 +294,7 @@ namespace pdflib
               }
           }
 
-        result.erase(itr, result.end());
+        //result.erase(itr, result.end());
       }
 
     return result;
@@ -449,13 +454,15 @@ namespace pdflib
               {
                 try
                   {
-                    std::string tmp(128, 0);
-                    {
-                      auto itr = tmp.begin();
-                      itr = utf8::append(begin + i, itr);
-
-                      tmp.erase(itr, tmp.end());
-                    }
+                    // Legacy: fixed-size buffer + iterator may cause segfaults if codepoint encodes to more bytes than allocated
+                    //std::string tmp(128, 0);
+                    //{
+                    //  auto itr = tmp.begin();
+                    //  itr = utf8::append(begin + i, itr);
+                    //  tmp.erase(itr, tmp.end());
+                    //}
+                    std::string tmp;
+                    utf8::append(begin + i, std::back_inserter(tmp));
 
                     if(map.count(begin + i) == 1)
                       {
@@ -501,15 +508,21 @@ namespace pdflib
               {
                 try
                   {
-                    std::string tmp(128, 0);
-                    {
-                      auto itr = tmp.begin();
-                      for(auto tgt_uint : tgts)
-                        {
-                          itr = utf8::append(tgt_uint, itr);
-                        }
-                      tmp.erase(itr, tmp.end());
-                    }
+                    // Legacy: fixed-size buffer + iterator may cause segfaults if tgts encodes to more bytes than allocated
+                    //std::string tmp(128, 0);
+                    //{
+                    //  auto itr = tmp.begin();
+                    //  for(auto tgt_uint : tgts)
+                    //    {
+                    //      itr = utf8::append(tgt_uint, itr);
+                    //    }
+                    //  tmp.erase(itr, tmp.end());
+                    //}
+                    std::string tmp;
+                    for(auto tgt_uint : tgts)
+                      {
+                        utf8::append(tgt_uint, std::back_inserter(tmp));
+                      }
 
                     if(map.count(begin + i) == 1)
                       {
