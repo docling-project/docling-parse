@@ -229,8 +229,6 @@ namespace pdflib
     std::string unparsed = handle.unparse();
     LOG_S(INFO) << " unparsed: '" << unparsed << "'";
 
-    // Legacy: fixed-size buffer + iterator may cause segfaults if content exceeds allocated size
-    //std::string result(1024, ' ');
     std::string result;
 
     // we have a hex-string ...
@@ -251,19 +249,21 @@ namespace pdflib
 
         try
           {
-            // Legacy: fixed-size buffer + iterator may cause segfaults if utf16 decodes to more bytes than allocated
-            //auto itr = utf8::utf16to8(utf16_vec.begin(), utf16_vec.end(), result.begin());
-            //result.erase(itr, result.end());
             utf8::utf16to8(utf16_vec.begin(), utf16_vec.end(), std::back_inserter(result));
 
             //logging_lib::success("pdf-parser") << "SUCCES: able to parse the unicode hex-string \""
             //<< unparsed << "\" --> " << result;
           }
-        catch(...)
+        catch(const utf8::invalid_utf16& e)
           {
-            LOG_S(ERROR) << "Not able to parse the unicode hex-string \""
-                         << unparsed << "\"";
-
+            LOG_S(ERROR) << "Invalid UTF-16 sequence in hex-string \""
+                         << unparsed << "\": " << e.what();
+            result = "GLYPH(cmap:" + unparsed + ")";
+          }
+        catch(const utf8::exception& e)
+          {
+            LOG_S(ERROR) << "UTF-8 error parsing hex-string \""
+                         << unparsed << "\": " << e.what();
             result = "GLYPH(cmap:" + unparsed + ")";
           }
       }
@@ -271,8 +271,6 @@ namespace pdflib
       {
         std::string tmp = handle.getStringValue();
 
-        // Legacy: fixed-size buffer + iterator may cause segfaults if encoded content exceeds allocated size
-        //auto itr = result.begin();
         for(size_t i=0; i<tmp.size(); i+=number_of_chars)
           {
             uint32_t i32=0;
@@ -284,17 +282,20 @@ namespace pdflib
 
             try
               {
-                //itr = utf8::append(i32, itr);
                 utf8::append(i32, std::back_inserter(result));
               }
-            catch(...)
+            catch(const utf8::invalid_code_point& e)
               {
-                LOG_S(ERROR) << "Not able to parse the unicode string \""
-                             << tmp << "\" --> " << i32;
+                LOG_S(ERROR) << "Invalid code point 0x" << std::hex << static_cast<uint32_t>(e.code_point())
+                             << " in unicode string \"" << tmp << "\"";
+              }
+            catch(const utf8::exception& e)
+              {
+                LOG_S(ERROR) << "UTF-8 error for value 0x" << std::hex << i32
+                             << " in unicode string \"" << tmp << "\": " << e.what();
               }
           }
 
-        //result.erase(itr, result.end());
       }
 
     return result;
@@ -302,9 +303,6 @@ namespace pdflib
 
   void cmap_parser::remove_trailing_nulls(std::string& str)
   {
-    /* Legacy */
-    // str.erase(std::remove_if(str.begin(), str.end(), [] (char x) { return x==0; }), str.end());
-
     // Remove only trailing null bytes (not all nulls)
     while(not str.empty() && str.back() == '\0')
       {
@@ -316,13 +314,6 @@ namespace pdflib
         str = std::string(1, '\0');
       }
   }
-
-  // Legacy: static version with caching
-  //void cmap_parser::populate_range_mapping(uint32_t begin, uint32_t end,
-  //                                         std::vector<uint32_t>& tgts,
-  //                                         const std::pair<uint32_t, uint32_t>& csr_range,
-  //                                         std::unordered_map<uint32_t, std::string>& map,
-  //                                         bool cache)
 
   void cmap_parser::populate_range_mapping(uint32_t begin, uint32_t end,
                                            std::vector<uint32_t>& tgts)
@@ -372,24 +363,6 @@ namespace pdflib
 
         try
           {
-	    /*
-            std::string tmp(128, 0);
-            {
-              auto itr = tmp.begin();
-              if(is_identity)
-                {
-                  itr = utf8::append(src_codepoint, itr);
-                }
-              else
-                {
-                  for(auto tgt_uint : tgts)
-                    {
-                      itr = utf8::append(tgt_uint, itr);
-                    }
-                }
-              tmp.erase(itr, tmp.end());
-            }
-	    */
 	    std::string tmp;
 	    {
 	      tmp.reserve(16); // optional, just a hint
@@ -437,6 +410,7 @@ namespace pdflib
   }
 
   // FIXME: not used code, just reference still ...
+  /*
   void cmap_parser::populate_range_mapping_legacy(uint32_t begin, uint32_t end,
                                                   const std::string& mapping,
                                                   std::vector<uint32_t>& tgts,
@@ -454,13 +428,6 @@ namespace pdflib
               {
                 try
                   {
-                    // Legacy: fixed-size buffer + iterator may cause segfaults if codepoint encodes to more bytes than allocated
-                    //std::string tmp(128, 0);
-                    //{
-                    //  auto itr = tmp.begin();
-                    //  itr = utf8::append(begin + i, itr);
-                    //  tmp.erase(itr, tmp.end());
-                    //}
                     std::string tmp;
                     utf8::append(begin + i, std::back_inserter(tmp));
 
@@ -508,16 +475,6 @@ namespace pdflib
               {
                 try
                   {
-                    // Legacy: fixed-size buffer + iterator may cause segfaults if tgts encodes to more bytes than allocated
-                    //std::string tmp(128, 0);
-                    //{
-                    //  auto itr = tmp.begin();
-                    //  for(auto tgt_uint : tgts)
-                    //    {
-                    //      itr = utf8::append(tgt_uint, itr);
-                    //    }
-                    //  tmp.erase(itr, tmp.end());
-                    //}
                     std::string tmp;
                     for(auto tgt_uint : tgts)
                       {
@@ -564,7 +521,8 @@ namespace pdflib
                      << tgts.at(0) << ", " << tgts.size() << "\t => Done!";
       }
   }
-
+  */
+  
   void cmap_parser::parse_cmap_name(std::vector<qpdf_instruction>& parameters)
   {
     LOG_S(WARNING) << __FUNCTION__ << ": skipping ...";
