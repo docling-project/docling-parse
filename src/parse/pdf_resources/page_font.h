@@ -384,11 +384,6 @@ namespace pdflib
             }
 	  else if(32<=c)
             {
-              // Legacy: fixed-size buffer + iterator may cause segfaults if c encodes to more bytes than allocated
-              //std::string tmp(64, ' '); // have a good safety margin here!
-              //auto itr = utf8::append(c, tmp.begin());
-              //tmp.erase(itr, tmp.end());
-              //result = tmp;
               utf8::append(c, std::back_inserter(result));
             }
           else
@@ -426,10 +421,6 @@ namespace pdflib
 	    }
 	  else if(32<=c)
             {
-              // Legacy: fixed-size buffer + iterator may cause segfaults if c encodes to more bytes than allocated
-              //std::string tmp(64, ' '); // have a good safety margin here!
-              //auto itr = utf8::append(c, tmp.begin());
-              //tmp.erase(itr, tmp.end());
               std::string tmp;
               utf8::append(c, std::back_inserter(tmp));
 
