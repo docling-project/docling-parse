@@ -313,7 +313,7 @@ namespace pdflib
       {
 	return 500;
       }
-    else if(verbose)
+    // else if(verbose)
       {
         LOG_S(WARNING) << "font does not have numb_to_width for " << c
 		       << " nor a known font [base-font=" << base_font 

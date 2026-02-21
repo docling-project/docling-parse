@@ -369,6 +369,29 @@ def print_per_document_table(rows: List[Row]) -> None:
     print(tabulate(table_rows, headers=headers))
 
 
+def write_per_document_csv(rows: List[Row], out_path: Path) -> Path:
+    per_doc = compute_per_document_stats(rows)
+    per_doc_path = out_path.with_name(out_path.stem + "_per_doc" + out_path.suffix)
+    with per_doc_path.open("w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["basename", "document", "pages", "total", "mean", "median", "min", "max", "p90", "p95", "p99"])
+        for s in per_doc:
+            w.writerow([
+                Path(s["document"]).name,
+                s["document"],
+                s["pages"],
+                fmt_seconds(s["total"]),
+                fmt_seconds(s["mean"]),
+                fmt_seconds(s["median"]),
+                fmt_seconds(s["min"]),
+                fmt_seconds(s["max"]),
+                fmt_seconds(s["p90"]),
+                fmt_seconds(s["p95"]),
+                fmt_seconds(s["p99"]),
+            ])
+    return per_doc_path
+
+
 def _get_timing_keys_from_rows(rows: List[Row]) -> List[str]:
     """Extract the sorted set of timing detail keys present across all rows."""
     keys: set = set()
@@ -475,7 +498,9 @@ def main(argv: List[str]) -> int:
     if timing_keys:
         print_timing_breakdown(rows, timing_keys)
     print_per_document_table(rows)
+    per_doc_path = write_per_document_csv(rows, out_path)
     print(f"\nWrote: {out_path}")
+    print(f"Wrote: {per_doc_path}")
     print(f"Total wall time: {fmt_seconds(ended - started)} sec")
 
     return 0
