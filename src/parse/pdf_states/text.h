@@ -272,6 +272,8 @@ namespace pdflib
     //assert(instructions.size()==2);
     if(not verify(instructions, 2, __FUNCTION__) ) { return; }
 
+    std::string prev_fontname = font_name;
+    
     font_name = instructions[0].to_utf8_string();
     font_size = instructions[1].to_double();
 
@@ -285,6 +287,12 @@ namespace pdflib
           {
             LOG_S(WARNING) << " -> font-key: '" << key << "'";
           }
+      
+	if(page_fonts->count(prev_fontname))
+	  {
+	    LOG_S(WARNING) << "falling back on previous fontname: " << prev_fontname;
+	    font_name = prev_fontname;
+	  }
       }
   }
 
@@ -403,8 +411,8 @@ namespace pdflib
 	  }
 	
 	//LOG_S(INFO) << item.first << " --> "
-		    << item.second << "\twidth_: "
-		    << width_ << "\tchars_: '" << chars_ << "'";
+	//<< item.second << "\twidth_: "
+	//<< width_ << "\tchars_: '" << chars_ << "'";
 
         double char_width = (width_ / 1000.0 * font_size * h_scaling);
 

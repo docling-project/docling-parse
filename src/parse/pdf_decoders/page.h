@@ -200,7 +200,7 @@ namespace pdflib
             LOG_S(WARNING) << "skipping the serialization of `shapes` to json!";
           }
 
-        original["widgets"] = page_widgets.get();
+            original["widgets"] = page_widgets.get();
         original["hyperlinks"] = page_hyperlinks.get();
       }
 
@@ -243,6 +243,8 @@ namespace pdflib
         local.reset();
         json_page = to_json(qpdf_page);
         timings.add_timing(pdf_timings::KEY_TO_JSON_PAGE, local.get_time());
+
+        //LOG_S(INFO) << json_page.dump(2);
       }
 
     if(config.populate_json_objects)
@@ -250,6 +252,8 @@ namespace pdflib
         local.reset();
         json_annots = extract_annots_in_json(qpdf_page);
         timings.add_timing(pdf_timings::KEY_EXTRACT_ANNOTS_JSON, local.get_time());
+
+        //LOG_S(INFO) << json_annots.dump(2);
       }
 
     {
@@ -486,6 +490,8 @@ namespace pdflib
 
   void pdf_decoder<PAGE>::decode_annots_from_qpdf()
   {
+    LOG_S(INFO) << __FUNCTION__;
+
     if(not qpdf_page.isDictionary())
       {
         return;
@@ -509,6 +515,8 @@ namespace pdflib
   // FIXME: we need to expand the capabilities of the annotation extraction!
   void pdf_decoder<PAGE>::extract_page_items_from_annots(QPDFObjectHandle annots)
   {
+    LOG_S(INFO) << __FUNCTION__;
+
     if(not annots.isArray())
       {
         LOG_S(WARNING) << "annotation is not an array";
@@ -519,8 +527,8 @@ namespace pdflib
       {
         QPDFObjectHandle annot = annots.getArrayItem(l);
 
-        // auto annot_json = to_json(annot);
-        // LOG_S(INFO) << "annot " << l << ": " << annot_json.dump(2);
+        //auto annot_json = to_json(annot);
+        //LOG_S(INFO) << "annot " << l << ": " << annot_json.dump(2);
 
         auto [has_type, type] = to_string(annot, "/Type");
         if((not has_type) or (type!="/Annot"))
@@ -543,23 +551,23 @@ namespace pdflib
            annot.hasKey("/T")
            )
           {
-	    add_page_cell_from_annot(annot);
+            add_page_cell_from_annot(annot);
           }
         else if(subtype=="/Link" and
-		annot.hasKey("/Rect") and
-		annot.getKey("/Rect").isArray() and
-		annot.hasKey("/A")
-		)
+                annot.hasKey("/Rect") and
+                annot.getKey("/Rect").isArray() and
+                annot.hasKey("/A")
+                )
           {
-	    add_page_hyperlink_from_annot(annot);
+            add_page_hyperlink_from_annot(annot);
           }
         else if(subtype=="/Widget" and
-		annot.hasKey("/Rect") and
-		annot.getKey("/Rect").isArray()
-		)
+                annot.hasKey("/Rect") and
+                annot.getKey("/Rect").isArray()
+                )
           {
-	    add_page_widget_from_annot(annot);
-          }	
+            add_page_widget_from_annot(annot);
+          }
         else
           {
             LOG_S(WARNING) << "annot is being skipped!";
