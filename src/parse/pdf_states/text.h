@@ -363,6 +363,19 @@ namespace pdflib
   {
     //LOG_S(INFO) << __FUNCTION__;
 
+    std::vector<page_item<PAGE_CELL> > cells={};
+    
+    if(page_fonts->count(font_name)==0)
+      {
+	LOG_S(ERROR) << "do not know font with name: " << font_name << " -> known keys: ";
+	for(auto& key : page_fonts->keys())
+	  {
+	    LOG_S(ERROR) << key;
+	  }
+	LOG_S(ERROR) << "skipping potential cells ...";
+	return cells;
+      }
+    
     auto& font = (*page_fonts)[font_name];
 
     std::vector<std::pair<uint32_t, std::string> > items = analyse_string(instruction);
@@ -381,8 +394,6 @@ namespace pdflib
 
     std::vector<double> widths={};
     std::vector<std::string> chars={};
-
-    std::vector<page_item<PAGE_CELL> > cells={};
 
     /*
       double space_width=0;
@@ -712,7 +723,7 @@ namespace pdflib
           }
       }
 
-    LOG_S(INFO) << "size of result: " << result.size();
+    //LOG_S(INFO) << "size of result: " << result.size();
     
     return result;
   }

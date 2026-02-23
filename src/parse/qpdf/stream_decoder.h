@@ -34,7 +34,8 @@ namespace pdflib
     std::vector<qpdf_instruction>& stream;
 
     std::regex value_pattern_0;
-    std::regex value_pattern_1;    
+    std::regex value_pattern_1;
+    std::regex value_pattern_2;
   };
 
   qpdf_stream_decoder::qpdf_stream_decoder(std::vector<qpdf_instruction>& stream_):
@@ -42,7 +43,8 @@ namespace pdflib
     stream(stream_),
 
     value_pattern_0(R"(^(\d\.\d+)(\-\d+)$)"),
-    value_pattern_1(R"(^((\-)?\d+\.\d*)(\-)(\d*)$)")
+    value_pattern_1(R"(^((\-)?\d+\.\d*)(\-)(\d*)$)"), // need to deal with numbers that have random `-` in the middle 
+    value_pattern_2(R"(^(\-)+((\-)\d+(\.)?(\d*))(\-)?(\d*)$)") // need to deal with numbers that have multiple `-` as start 
   {}
 
   qpdf_stream_decoder::~qpdf_stream_decoder()
@@ -125,7 +127,7 @@ namespace pdflib
     else if (std::regex_match(row.val, match, value_pattern_0))
       {
 	std::string mvalue = match[1].str();	
-	LOG_S(WARNING) << std::setw(12) << row.key << " | " << row.val << " => new matched value: " << mvalue;
+	LOG_S(WARNING) << "match-1: " << std::setw(12) << row.key << " | " << row.val << " => new matched value: " << mvalue;
 
 	double value = std::stod(mvalue);	
 	
@@ -139,7 +141,21 @@ namespace pdflib
     else if (std::regex_match(row.val, match, value_pattern_1))
       {
 	std::string mvalue = match[1].str() + match[4].str();	
-	LOG_S(WARNING) << std::setw(12) << row.key << " | " << row.val << " => new matched value: " << mvalue;
+	LOG_S(WARNING) << "match-2: " << std::setw(12) << row.key << " | " << row.val << " => new matched value: " << mvalue;
+	
+	double value = std::stod(mvalue);
+	
+	// Creating a real (floating-point) QPDFObjectHandle
+	QPDFObjectHandle new_obj = QPDFObjectHandle::newReal(value);
+
+	row.key = new_obj.getTypeName();
+	row.val = new_obj.unparse();
+	row.obj = new_obj;
+      }
+    else if (std::regex_match(row.val, match, value_pattern_2))
+      {
+	std::string mvalue = match[3].str() + match[7].str();	
+	LOG_S(WARNING) << "match-3: " << std::setw(12) << row.key << " | " << row.val << " => new matched value: " << mvalue;
 	
 	double value = std::stod(mvalue);
 	

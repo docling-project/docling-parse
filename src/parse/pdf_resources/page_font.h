@@ -760,8 +760,7 @@ namespace pdflib
           }
         else
           {
-            LOG_S(WARNING) << "font-encoding [object]: " << result.dump();
-            LOG_S(WARNING) << " --> font-encoding falling back to STANDARD";
+            LOG_S(WARNING) << " --> font-encoding falling back to STANDARD with font-encoding [object]: " << result.dump();
 
             encoding = STANDARD;
             has_explicit_encoding = false;
@@ -1358,21 +1357,30 @@ namespace pdflib
     {
       std::vector<std::string> keys = {"/Widths"};
 
-      if(utils::json::has(keys, json_font))
+      bool found_widths = false;
+      if(utils::json::has(keys, json_font) and (not found_widths))
         {
           auto result = utils::json::get(keys, json_font);
           LOG_S(INFO) << "widths: " << result.dump();
 
-          values = result.get<std::vector<double> >();
+	  if(result.is_array())
+	    {
+	      values = result.get<std::vector<double> >();
+	      found_widths = true;
+	    }
         }
-      else if(utils::json::has(keys, desc_font))
+      else if(utils::json::has(keys, desc_font) and (not found_widths))
         {
           auto result = utils::json::get(keys, desc_font);
           LOG_S(INFO) << "widths: " << result.dump();
 
-          values = result.get<std::vector<double> >();
+	  if(result.is_array())
+	    {
+	      values = result.get<std::vector<double> >();
+	      found_widths = true;
+	    }
         }
-      else
+      else if(not found_widths)
         {
           LOG_S(WARNING) << "could not find widths";
         }

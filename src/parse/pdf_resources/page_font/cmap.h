@@ -258,13 +258,13 @@ namespace pdflib
           {
             LOG_S(ERROR) << "Invalid UTF-16 sequence in hex-string \""
                          << unparsed << "\": " << e.what();
-            result = "GLYPH(cmap:" + unparsed + ")";
+            result = "GLYPH<cmap:" + unparsed + ">";
           }
         catch(const utf8::exception& e)
           {
             LOG_S(ERROR) << "UTF-8 error parsing hex-string \""
                          << unparsed << "\": " << e.what();
-            result = "GLYPH(cmap:" + unparsed + ")";
+            result = "GLYPH<cmap:" + unparsed + ">";
           }
       }
     else
@@ -273,26 +273,30 @@ namespace pdflib
 
         for(size_t i=0; i<tmp.size(); i+=number_of_chars)
           {
-            uint32_t i32=0;
-
-            for(size_t j=0; j<number_of_chars; j+=1)
-	      {
-		i32 = (i32 << 8) + static_cast<unsigned char>(tmp.at(i+j));
-	      }
+	    uint32_t i32=0;		
 
             try
               {
+		for(size_t j=0; j<number_of_chars and (i+j)<tmp.size(); j+=1)
+		  {
+		    i32 = (i32 << 8) + static_cast<unsigned char>(tmp.at(i+j));
+		  }
+		
                 utf8::append(i32, std::back_inserter(result));
               }
             catch(const utf8::invalid_code_point& e)
               {
                 LOG_S(ERROR) << "Invalid code point 0x" << std::hex << static_cast<uint32_t>(e.code_point())
-                             << " in unicode string \"" << tmp << "\"";
+                             << " in unicode string '" << tmp << "' with unparsed '" << unparsed << "'";
+
+		result = "GLYPH<cmap:" + unparsed + ">";
               }
             catch(const utf8::exception& e)
               {
                 LOG_S(ERROR) << "UTF-8 error for value 0x" << std::hex << i32
                              << " in unicode string \"" << tmp << "\": " << e.what();
+
+		result = "GLYPH<cmap:" + unparsed + ">";
               }
           }
 
@@ -393,13 +397,13 @@ namespace pdflib
             else
               {
                 LOG_S(WARNING) << "invalid utf8 string -> iteration: " << src_codepoint;
-                _map[src_codepoint] = "UNICODE<" + std::to_string(src_codepoint) + ">";
+                _map[src_codepoint] = "GLYPH<unicode:" + std::to_string(src_codepoint) + ">";
               }
           }
         catch(const std::exception& exc)
           {
             LOG_S(WARNING) << "invalid utf8 string: " << exc.what() << " -> iteration: " << src_codepoint;
-            _map[src_codepoint] = "UNICODE<" + std::to_string(src_codepoint) + ">";
+            _map[src_codepoint] = "GLYPH<unicode:" + std::to_string(src_codepoint) + ">";
           }
 
         if(not is_identity)

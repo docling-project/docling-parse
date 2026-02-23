@@ -120,7 +120,7 @@ namespace pdflib
   }
 
   void pdf_resource<PAGE_XOBJECT_IMAGE>::set(std::string      xobject_key_,
-                                              QPDFObjectHandle qpdf_xobject_)
+					     QPDFObjectHandle qpdf_xobject_)
   {
     LOG_S(INFO) << __FUNCTION__ << ": " << xobject_key_;
 
