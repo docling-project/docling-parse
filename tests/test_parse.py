@@ -918,3 +918,28 @@ def test_annotations_match_groundtruth():
         verify_annotations_recursive(true_annotations, pred_dict)
 
         pdf_doc.unload()
+
+
+def test_mixed_font_arrows_are_merged_into_line_cells():
+    """Regression: mixed-font arrow glyphs must stay in the surrounding line text."""
+    parser = DoclingPdfParser(loglevel="fatal")
+    pdf_doc = parser.load(
+        path_or_stream="tests/data/targeted/mixed_font_arrows_01.pdf",
+        lazy=False,
+    )
+
+    expected_line_texts = [
+        "Arrow Ordering Parser Fixture",
+        "Alpha → Beta → Gamma",
+        "One → Two → Three",
+        "North → South",
+    ]
+
+    page = pdf_doc.get_page(1)
+    line_texts = [normalize_text(cell.text) for cell in page.textline_cells]
+
+    assert (
+        line_texts == expected_line_texts
+    ), f"unexpected line cells: {line_texts}"
+
+    pdf_doc.unload()

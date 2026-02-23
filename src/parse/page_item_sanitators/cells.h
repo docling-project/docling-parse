@@ -184,11 +184,14 @@ namespace pdflib
 
     LOG_S(INFO) << "# char-cells: " << line_cells.size();
 
-    sanitize_bbox(line_cells,
-		  config.horizontal_cell_tolerance,
-		  config.enforce_same_font,
-		  config.line_space_width_factor_for_merge,
-		  config.line_space_width_factor_for_merge_with_space);
+    // Line cells can legitimately mix fonts (e.g., fallback symbol glyphs such as arrows).
+    // Also, PDF content-stream order is not guaranteed to match visual reading order.
+    // Use the order-independent merge path for line construction and do not require font equality.
+    contract_cells_into_lines_v2(line_cells,
+				 config.horizontal_cell_tolerance,
+				 false,
+				 config.line_space_width_factor_for_merge,
+				 config.line_space_width_factor_for_merge_with_space);
     
     LOG_S(INFO) << "# line-cells: " << line_cells.size();
     
@@ -580,6 +583,16 @@ namespace pdflib
 		    erased_cell = true;
 
 		    LOG_S(INFO) << " -> merging cell-" << i << " with " << j << " '" << cells[j].text << "'"<< ": " << cells[i].text;
+		  }
+		else if(cells[j].is_adjacent_to(cells[i], delta_0))
+		  {
+		    cells[j].merge_with(cells[i], delta_1);
+
+		    cells[i].active = false;
+		    erased_cell = true;
+
+		    LOG_S(INFO) << " -> merging reverse cell-" << j << " with " << i << " '" << cells[i].text << "'"<< ": " << cells[j].text;
+		    break;
 		  }		
 	      }
 	  }
