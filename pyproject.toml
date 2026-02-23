@@ -32,7 +32,7 @@ dependencies = [
     "tabulate>=0.9.0,<1.0.0",
     "pillow>=10.0.0,<13.0.0",
     "pydantic>=2.0.0",
-    "docling-core>=2.65.1",
+    "docling-core>=2.65.2",
     # "docling-core @ git+https://github.com/docling-project/docling-core.git@720a14846ac6fe9f53031305af04d50b6d8479e4",
     "pywin32>=305; sys_platform == 'win32'",
 ]

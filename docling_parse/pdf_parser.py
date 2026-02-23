@@ -654,10 +654,7 @@ class PdfDocument:
 
             except Exception:
                 _log.debug(
-                    "Failed to extract image data for bitmap %d, "
-                    "falling back to placeholder",
-                    ind,
-                    exc_info=True,
+                    "Failed to extract image data for bitmap, falling back to placeholder"
                 )
 
             bitmap = BitmapResource(
