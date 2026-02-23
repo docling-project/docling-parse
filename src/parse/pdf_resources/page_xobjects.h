@@ -212,7 +212,6 @@ namespace pdflib
         LOG_S(INFO) << "decoding xobject: " << key << "\t" << (++cnt) << "/" << len;
 
 	QPDFObjectHandle qpdf_obj = qpdf_xobjects.getKey(key);
-
 	xobject_subtype_name subtype = detect_subtype(qpdf_obj);
 	
 	utils::timer xobject_timer;

@@ -415,9 +415,10 @@ namespace pdflib
 	  {
 	    chars_ = font.get_string(item.first);
 	  }
-	catch(...)
+	catch(const std::exception& e)
 	  {
-	    LOG_S(WARNING) << "falling back to " << item.second;
+	    LOG_S(WARNING) << "could not decode character (value=" << item.first
+			   << "): " << e.what() << "; falling back to '" << item.second << "'";
 	    chars_ = item.second;
 	  }
 	
