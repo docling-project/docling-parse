@@ -28,6 +28,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
         keep_bitmaps (bool): Keep all the bitmap resources [default=true].
         max_num_lines (int): Maximum number of lines to keep (-1 means no cap) [default=-1].
         max_num_bitmaps (int): Maximum number of bitmaps to keep (-1 means no cap) [default=-1].
+        keep_glyphs (bool): If true, keep GLYPH<...> fallback strings in output; if false, replace them with a space [default=false].
     )")
     .def(pybind11::init<>())
     .def_readwrite("page_boundary", &pdflib::decode_page_config::page_boundary)
@@ -43,7 +44,8 @@ PYBIND11_MODULE(pdf_parsers, m) {
     .def_readwrite("horizontal_cell_tolerance", &pdflib::decode_page_config::horizontal_cell_tolerance)
     .def_readwrite("word_space_width_factor_for_merge", &pdflib::decode_page_config::word_space_width_factor_for_merge)
     .def_readwrite("line_space_width_factor_for_merge", &pdflib::decode_page_config::line_space_width_factor_for_merge)
-    .def_readwrite("line_space_width_factor_for_merge_with_space", &pdflib::decode_page_config::line_space_width_factor_for_merge_with_space);
+    .def_readwrite("line_space_width_factor_for_merge_with_space", &pdflib::decode_page_config::line_space_width_factor_for_merge_with_space)
+    .def_readwrite("keep_glyphs", &pdflib::decode_page_config::keep_glyphs);
 
   // ============= Typed Resource Bindings (for zero-copy access) =============
 

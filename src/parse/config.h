@@ -35,6 +35,8 @@ namespace pdflib
 
     bool populate_json_objects = false;
 
+    bool keep_glyphs = false;
+
     nlohmann::json to_json() const;
     void from_json(const nlohmann::json& j);
 
@@ -72,6 +74,8 @@ namespace pdflib
 
     j["populate_json_objects"] = populate_json_objects;
 
+    j["keep_glyphs"] = keep_glyphs;
+
     return j;
   }
 
@@ -100,6 +104,8 @@ namespace pdflib
     if(j.count("line_space_width_factor_for_merge_with_space")) { line_space_width_factor_for_merge_with_space = j["line_space_width_factor_for_merge_with_space"]; }
 
     if(j.count("populate_json_objects")) { populate_json_objects = j["populate_json_objects"]; }
+
+    if(j.count("keep_glyphs")) { keep_glyphs = j["keep_glyphs"]; }
   }
 
   bool decode_page_config::load(const std::string& filename)
@@ -150,7 +156,8 @@ namespace pdflib
        << std::setw(48) << "word_space_width_factor_for_merge" << word_space_width_factor_for_merge << "\n"
        << std::setw(48) << "line_space_width_factor_for_merge" << line_space_width_factor_for_merge << "\n"
        << std::setw(48) << "line_space_width_factor_for_merge_with_space" << line_space_width_factor_for_merge_with_space << "\n"
-       << std::setw(48) << "populate_json_objects" << (populate_json_objects ? "true" : "false") << "\n";
+       << std::setw(48) << "populate_json_objects" << (populate_json_objects ? "true" : "false") << "\n"
+       << std::setw(48) << "keep_glyphs" << (keep_glyphs ? "true" : "false") << "\n";
 
     return ss.str();
   }

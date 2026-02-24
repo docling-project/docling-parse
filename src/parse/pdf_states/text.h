@@ -414,6 +414,10 @@ namespace pdflib
 	try
 	  {
 	    chars_ = font.get_string(item.first);
+	    if((not config.keep_glyphs) and chars_.rfind("GLYPH<", 0) == 0)
+	      {
+	        chars_ = " ";
+	      }
 	  }
 	catch(const std::exception& e)
 	  {
