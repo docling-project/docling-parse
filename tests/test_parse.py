@@ -20,7 +20,7 @@ from docling_core.types.doc.page import (
 )
 from pydantic import TypeAdapter
 
-from docling_parse.pdf_parser import DoclingPdfParser, PdfDocument
+from docling_parse.pdf_parser import DecodePageConfig, DoclingPdfParser, PdfDocument
 
 GENERATE = False
 
@@ -364,19 +364,22 @@ def test_reference_documents_from_filenames():
     # which pages will be tested
     page_restrictions = {"deep-mediabox-inheritance.pdf": [2]}
 
+    config = DecodePageConfig()
+    config.keep_glyphs = True
+
     for pdf_doc_path in pdf_docs:
         # print(f"parsing {pdf_doc_path}")
 
         pdf_doc: PdfDocument = parser.load(
             path_or_stream=pdf_doc_path,
             boundary_type=PdfPageBoundaryType.CROP_BOX,  # default: CROP_BOX
-            lazy=False,
-        )  # default: True
+            lazy=True,
+        )
         assert pdf_doc is not None
 
         # PdfDocument.iterate_pages() will automatically populate pages as they are yielded.
         # No need to call PdfDocument.load_all_pages() before.
-        for page_no, pred_page in pdf_doc.iterate_pages():
+        for page_no, pred_page in pdf_doc.iterate_pages(config=config):
             # print(f" -> Page {page_no} has {len(pred_page.sanitized.cells)} cells.")
 
             rname = os.path.basename(pdf_doc_path)
