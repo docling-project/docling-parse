@@ -55,12 +55,12 @@ namespace pdflib
   private:
 
     bool verify(std::vector<qpdf_instruction>& instructions,
-		std::size_t num_instr, std::string name);
-    
+                std::size_t num_instr, std::string name);
+
     void move_cursor(double tx, double ty);
 
     std::vector<page_item<PAGE_CELL> > generate_cells(qpdf_instruction instruction,
-                                                         int              stack_size);
+                                                      int              stack_size);
 
     std::vector<std::pair<uint32_t, std::string> > analyse_string(qpdf_instruction instruction);
 
@@ -93,7 +93,7 @@ namespace pdflib
 
     page_item<PAGE_CELLS>& page_cells;
     std::shared_ptr<pdf_resource<PAGE_FONTS>> page_fonts;
-    
+
     std::array<double, 9> text_matrix;
     std::array<double, 9> line_matrix;
 
@@ -176,38 +176,38 @@ namespace pdflib
   }
 
   bool pdf_state<TEXT>::verify(std::vector<qpdf_instruction>& instructions,
-			       std::size_t num_instr, std::string name)
+                               std::size_t num_instr, std::string name)
   {
     if(instructions.size()==num_instr)
       {
-	return true;
+        return true;
       }
 
     if(instructions.size()>num_instr)
       {
-	LOG_S(ERROR) << "#-instructions " << instructions.size()
-		     << " exceeds expected value " << num_instr << " for "
-		     << name;
-	LOG_S(ERROR) << " => we can continue but might have incorrect results!";
-	
-	return true;
+        LOG_S(ERROR) << "#-instructions " << instructions.size()
+                     << " exceeds expected value " << num_instr << " for "
+                     << name;
+        LOG_S(ERROR) << " => we can continue but might have incorrect results!";
+
+        return true;
       }
-    
+
     if(instructions.size()<num_instr) // fatal ...
       {
-	std::stringstream ss;
-	ss << "#-instructions " << instructions.size()
-	   << " does not match expected value " << num_instr
-	   << " for PDF operation: "
-	   << name;
-	
-	LOG_S(ERROR) << ss.str();
-	throw std::logic_error(ss.str());	
+        std::stringstream ss;
+        ss << "#-instructions " << instructions.size()
+           << " does not match expected value " << num_instr
+           << " for PDF operation: "
+           << name;
+
+        LOG_S(ERROR) << ss.str();
+        throw std::logic_error(ss.str());
       }
 
     return false;
   }
-  
+
   void pdf_state<TEXT>::BT()
   {
     //for(int l=0; l<9; l++)
@@ -216,12 +216,12 @@ namespace pdflib
     block_count += 1;
 
     text_matrix = {{1.0, 0.0, 0.0,
-                    0.0, 1.0, 0.0,
-                    0.0, 0.0, 1.0}};
+                      0.0, 1.0, 0.0,
+                      0.0, 0.0, 1.0}};
 
     line_matrix = {{1.0, 0.0, 0.0,
-                    0.0, 1.0, 0.0,
-                    0.0, 0.0, 1.0}};
+                      0.0, 1.0, 0.0,
+                      0.0, 0.0, 1.0}};
   }
 
   void pdf_state<TEXT>::ET()
@@ -232,7 +232,7 @@ namespace pdflib
   {
     //assert(instructions.size()==1);
     if(not verify(instructions, 1, __FUNCTION__) ) { return; }
-    
+
     char_spacing = instructions[0].to_double();
   }
 
@@ -240,7 +240,7 @@ namespace pdflib
   {
     //assert(instructions.size()==2);
     if(not verify(instructions, 2, __FUNCTION__) ) { return; }
-    
+
     double tx = instructions[0].to_double();
     double ty = instructions[1].to_double();
 
@@ -259,7 +259,7 @@ namespace pdflib
   {
     //assert(instructions.size()==2);
     if(not verify(instructions, 2, __FUNCTION__) ) { return; }
-    
+
     double tx = instructions[0].to_double();
     double ty = instructions[1].to_double();
 
@@ -271,19 +271,27 @@ namespace pdflib
   {
     //assert(instructions.size()==2);
     if(not verify(instructions, 2, __FUNCTION__) ) { return; }
+
+    std::string prev_fontname = font_name;
     
     font_name = instructions[0].to_utf8_string();
     font_size = instructions[1].to_double();
-    
+
     if(page_fonts->count(font_name) == 0)
       {
         LOG_S(ERROR) << "unknown page-font: '" << font_name << "'";
 
-	auto font_keys = page_fonts->keys();
-	LOG_S(WARNING) << "known fonts: " << font_keys.size();
-	for(auto key:font_keys)
+        auto font_keys = page_fonts->keys();
+        LOG_S(WARNING) << "known fonts: " << font_keys.size();
+        for(auto key:font_keys)
+          {
+            LOG_S(WARNING) << " -> font-key: '" << key << "'";
+          }
+      
+	if(page_fonts->count(prev_fontname))
 	  {
-	    LOG_S(WARNING) << " -> font-key: '" << key << "'";
+	    LOG_S(WARNING) << "falling back on previous fontname: " << prev_fontname;
+	    font_name = prev_fontname;
 	  }
       }
   }
@@ -292,11 +300,11 @@ namespace pdflib
   {
     //assert(instructions.size()==1);
     if(not verify(instructions, 1, __FUNCTION__) ) { return; }
-    
+
     instr_count += 1;
 
     std::vector<page_item<PAGE_CELL> > cells = generate_cells(instructions[0],
-                                                                 stack_size);
+                                                              stack_size);
 
     for(auto& cell:cells)
       {
@@ -309,7 +317,7 @@ namespace pdflib
   {
     //assert(instructions.size()==1);
     if(not verify(instructions, 1, __FUNCTION__) ) { return; }
-    
+
     instr_count += 1;
 
     for(auto item : instructions[0].obj.getArrayAsVector())
@@ -319,7 +327,7 @@ namespace pdflib
             qpdf_instruction inst(item);
 
             std::vector<page_item<PAGE_CELL> > cells = generate_cells(item,
-                                                                         stack_size);
+                                                                      stack_size);
 
             for(auto& cell:cells)
               {
@@ -339,7 +347,7 @@ namespace pdflib
           {
             LOG_S(ERROR) << "item is not a string nor a value: "
                          << item.unparse() << " [" << item.getTypeName() << "]"
-			 << " -> skipping for now ...";
+                         << " -> skipping for now ...";
           }
       }
   }
@@ -351,10 +359,23 @@ namespace pdflib
   }
 
   std::vector<page_item<PAGE_CELL> > pdf_state<TEXT>::generate_cells(qpdf_instruction instruction,
-                                                                        int              stack_size)
+                                                                     int              stack_size)
   {
     //LOG_S(INFO) << __FUNCTION__;
 
+    std::vector<page_item<PAGE_CELL> > cells={};
+    
+    if(page_fonts->count(font_name)==0)
+      {
+	LOG_S(ERROR) << "do not know font with name: " << font_name << " -> known keys: ";
+	for(auto& key : page_fonts->keys())
+	  {
+	    LOG_S(ERROR) << key;
+	  }
+	LOG_S(ERROR) << "skipping potential cells ...";
+	return cells;
+      }
+    
     auto& font = (*page_fonts)[font_name];
 
     std::vector<std::pair<uint32_t, std::string> > items = analyse_string(instruction);
@@ -374,36 +395,50 @@ namespace pdflib
     std::vector<double> widths={};
     std::vector<std::string> chars={};
 
-    std::vector<page_item<PAGE_CELL> > cells={};
-
     /*
-    double space_width=0;
-    {
+      double space_width=0;
+      {
       double w0 = font.get_space_width();
       space_width = (w0 / 1000.0 * font_size * h_scaling);// + (char_spacing+word_spacing)*h_scaling;
-    }
+      }
     */
-    
+
     for(auto item:items)
       {
+	//LOG_S(INFO) << item.first << "\t" << item.second;
+	
         double      width_ = font.get_width(item.first);
-        std::string chars_ = font.get_string(item.first);
+        //std::string chars_ = font.get_string(item.first);
 
-        /*
-	  LOG_S(INFO) << item.first << " --> "
-	  << item.second << "\twidth_: "
-	  << width_ << "\tchars_: '" << chars_ << "'";
-	 */
+	std::string chars_ = item.second;
+	try
+	  {
+	    chars_ = font.get_string(item.first);
+	    if((not config.keep_glyphs) and chars_.rfind("GLYPH<", 0) == 0)
+	      {
+	        chars_ = " ";
+	      }
+	  }
+	catch(const std::exception& e)
+	  {
+	    LOG_S(WARNING) << "could not decode character (value=" << item.first
+			   << "): " << e.what() << "; falling back to '" << item.second << "'";
+	    chars_ = item.second;
+	  }
+	
+	//LOG_S(INFO) << item.first << " --> "
+	//<< item.second << "\twidth_: "
+	//<< width_ << "\tchars_: '" << chars_ << "'";
 
         double char_width = (width_ / 1000.0 * font_size * h_scaling);
 
-	/*
-	  LOG_S(INFO) << "char_width: "
-	  << char_width << ", width_: " << width_
-	  << ", font_size: " << font_size
-	  << ", h_scaling: " << h_scaling;	
-	 */
-	
+        /*
+          LOG_S(INFO) << "char_width: "
+          << char_width << ", width_: " << width_
+          << ", font_size: " << font_size
+          << ", h_scaling: " << h_scaling;
+        */
+
         double delta_width=0;
         if(chars_==" ")
           {
@@ -414,10 +449,10 @@ namespace pdflib
             delta_width += char_spacing*h_scaling;
           }
 
-	//LOG_S(INFO) << "delta_width: " << delta_width;
+        //LOG_S(INFO) << "delta_width: " << delta_width;
 
-	if(true) // adding char by char ...
-	  {
+        if(true) // adding char by char ...
+          {
             text  += chars_;
             width += char_width;
 
@@ -449,13 +484,13 @@ namespace pdflib
   {
     if(not config.keep_char_cells)
       {
-	return;
+        return;
       }
-    
-    // LOG_S(INFO) << __FUNCTION__ << " with text='" << text << "', width=" << width;
+
+    //LOG_S(INFO) << __FUNCTION__ << " with text='" << text << "', width=" << width;
 
     bool left_to_right = (not utils::string::is_right_to_left(text));
-    
+
     double font_descent = font.get_descent();
     double font_ascent  = font.get_ascent();
     double font_capheight  = font.get_capheight();
@@ -478,17 +513,17 @@ namespace pdflib
 		       << "left_to_right: " << left_to_right << ", text: " << text;
       }
     */
-    
+
     double space_width=0;
     {
       double w0 = font.get_space_width();
       double w1 = (w0 / 1000.0 * font_size * h_scaling);// + (char_spacing+word_spacing)*h_scaling;
 
       /*
-      LOG_S(INFO) << __FUNCTION__ << " -> w0: " << w0 << ", w1: " << w1 << ", "
-		  << "font_size: " << font_size << ", h_scaling: " << h_scaling;
+        LOG_S(INFO) << __FUNCTION__ << " -> w0: " << w0 << ", w1: " << w1 << ", "
+        << "font_size: " << font_size << ", h_scaling: " << h_scaling;
       */
-      
+
       std::array<double, 8> rect = compute_rect(font_descent, font_ascent, w1);
       space_width = std::sqrt((rect[2]-rect[0])*(rect[2]-rect[0])+
                               (rect[3]-rect[1])*(rect[3]-rect[1]));
@@ -499,15 +534,15 @@ namespace pdflib
 
       cell.active = true;
       cell.left_to_right = left_to_right;
-      
+
       cell.widget = false;
 
       double ratio = 1.0;
       if(0.05<=font_capheight/font_ascent and font_capheight/font_ascent<=1.0)
-	{
-	  ratio = font_capheight/font_ascent;
-	}
-      
+        {
+          ratio = font_capheight/font_ascent;
+        }
+
       std::array<double, 8> rect = compute_rect(font_descent*ratio, font_ascent*ratio, width);
       {
         cell.r_x0 = rect[0];
@@ -561,8 +596,8 @@ namespace pdflib
 
     if(rendering_mode==3)
       {
-	LOG_S(WARNING) << "Found cell with text-rendering mode 3 (=invisible) "
-		       << "with text=" << text;
+        LOG_S(WARNING) << "Found cell with text-rendering mode 3 (=invisible) "
+                       << "with text=" << text;
       }
 
     move_cursor(width, 0);
@@ -570,37 +605,36 @@ namespace pdflib
 
   std::vector<std::pair<uint32_t, std::string> > pdf_state<TEXT>::analyse_string(qpdf_instruction instruction)
   {
-    //LOG_S(INFO) << __FUNCTION__ << " fontname: " << font_name << ", key: " << instruction.key << " => val: " << instruction.val;
+    // LOG_S(INFO) << __FUNCTION__ << " fontname: " << font_name << ", key: " << instruction.key << " => val: " << instruction.val;
 
     auto& font = (*page_fonts)[font_name];
 
     font_encoding_name encoding = font.get_encoding();
-
+    // LOG_S(INFO) << "encoding: " << encoding;
+    
     std::string values = instruction.to_char_string();
-    //LOG_S(INFO) << "values: " << values.size() << "\t" << values;
+    // LOG_S(INFO) << "values: " << values.size() << "\t" << values;
 
     std::vector<std::pair<uint32_t, std::string> > result;
 
     if(encoding == IDENTITY_H or
        encoding == IDENTITY_V  ) // 2-byte string
-      {
-	//LOG_S(INFO) << "detected encoding: " << to_string(encoding);
+      { 
+        // LOG_S(INFO) << "detected encoding: " << to_string(encoding);
 
-        //assert(values.size()%2==0);
+        if((values.size()%2)!=0)
+          {
+            LOG_S(WARNING) << "detected non-even values: potential for incorrect paths!";
+          }
 
-	if((values.size()%2)!=0)
-	  {
-	    LOG_S(WARNING) << "detected non-even values: potential for incorrect paths!";
-	  }
-	
         for(int l=0; l<values.size(); l+=2)
           {
-	    if(l+1>=values.size())
-	      {
-		LOG_S(ERROR) <<  "skipping last part of the path";
-		continue;
-	      }
-	    
+            if(l+1>=values.size())
+              {
+                LOG_S(ERROR) <<  "skipping last part of the path";
+                continue;
+              }
+
             //LOG_S(INFO) << "1. value-stream: " << int(static_cast<unsigned char>(values[l+0])) << "\t"
             //<< static_cast<int>(values[l+0]);
 
@@ -626,60 +660,60 @@ namespace pdflib
       }
     else if(encoding == CMAP_RESOURCES)
       {
-	//LOG_S(INFO) << "detected encoding: " << to_string(encoding);
+        // LOG_S(INFO) << "detected encoding: " << to_string(encoding);
 
-	int l=0; 
+        int l=0;
 
-	while(l<values.size())
-	  {
-	    if(l+2<=values.size())
-	      {
-		uint32_t c0 = static_cast<unsigned char>(values[l+0]);		
-		uint32_t c1 = static_cast<unsigned char>(values[l+1]);		
+        while(l<values.size())
+          {
+            if(l+2<=values.size())
+              {
+                uint32_t c0 = static_cast<unsigned char>(values[l+0]);
+                uint32_t c1 = static_cast<unsigned char>(values[l+1]);
 
-		uint32_t c = 256*c0+c1;
-		
-		//LOG_S(INFO) << "c: " << c << "\tc0: " << c0 << "\tc1: " << c1;
-		if(font.numb_is_in_cmap(c))
-		  {
-		    std::string v = values.substr(l, 2);
+                uint32_t c = 256*c0+c1;
 
-		    std::pair<uint32_t, std::string> item(c,v);		    
-		    result.push_back(item);            
+                //LOG_S(INFO) << "c: " << c << "\tc0: " << c0 << "\tc1: " << c1;
+                if(font.numb_is_in_cmap(c))
+                  {
+                    std::string v = values.substr(l, 2);
 
-		    l += 2;
-		  }
-		else
-		  {
-		    std::string v = values.substr(l, 1);
+                    std::pair<uint32_t, std::string> item(c,v);
+                    result.push_back(item);
 
-		    std::pair<uint32_t, std::string> item(c0,v);		    
-		    result.push_back(item);            
+                    l += 2;
+                  }
+                else
+                  {
+                    std::string v = values.substr(l, 1);
 
-		    l += 1;
-		  }
-	      }
-	    else if(l+1<=values.size())
-	      {
-		uint32_t    c = static_cast<unsigned char>(values[l+0]);		
-		std::string v = values.substr(l, 1);
+                    std::pair<uint32_t, std::string> item(c0,v);
+                    result.push_back(item);
 
-		std::pair<uint32_t, std::string> item(c,v);		    
-		result.push_back(item);            
-		
-		l += 1;
-	      }
-	    else
-	      {
-		LOG_S(ERROR) << "we should never arrive here: " 
-			     << l << "\t" << values.size();
-		break;
-	      }
-	  }
+                    l += 1;
+                  }
+              }
+            else if(l+1<=values.size())
+              {
+                uint32_t    c = static_cast<unsigned char>(values[l+0]);
+                std::string v = values.substr(l, 1);
+
+                std::pair<uint32_t, std::string> item(c,v);
+                result.push_back(item);
+
+                l += 1;
+              }
+            else
+              {
+                LOG_S(ERROR) << "we should never arrive here: "
+                             << l << "\t" << values.size();
+                break;
+              }
+          }
       }
     else
       {
-	//LOG_S(INFO) << "detected encoding: " << to_string(encoding);
+        // LOG_S(INFO) << "detected encoding: " << to_string(encoding);
 
         for(int l=0; l<values.size(); l+=1)
           {
@@ -688,12 +722,14 @@ namespace pdflib
             v += values[l];
 
             std::pair<uint32_t, std::string> item(c,v);
-	    //LOG_S(INFO) << item.first << ": " << item.second;
-	    
+            // LOG_S(INFO) << item.first << ": " << item.second;
+
             result.push_back(item);
           }
       }
 
+    //LOG_S(INFO) << "size of result: " << result.size();
+    
     return result;
   }
 
@@ -810,9 +846,8 @@ namespace pdflib
 
   void pdf_state<TEXT>::TL(std::vector<qpdf_instruction>& instructions)
   {
-    //assert(instructions.size()==1);
     if(not verify(instructions, 1, __FUNCTION__) ) { return; }
-    
+
     double tl = instructions[0].to_double();
 
     TL(tl);
@@ -825,9 +860,8 @@ namespace pdflib
 
   void pdf_state<TEXT>::Tm(std::vector<qpdf_instruction>& instructions)
   {
-    //assert(instructions.size()==6);
     if(not verify(instructions, 6, __FUNCTION__) ) { return; }
-    
+
     double a = instructions[0].to_double();
     double b = instructions[1].to_double();
 
@@ -864,9 +898,8 @@ namespace pdflib
   */
   void pdf_state<TEXT>::Tr(std::vector<qpdf_instruction>& instructions)
   {
-    //assert(instructions.size()==1);
     if(not verify(instructions, 1, __FUNCTION__) ) { return; }
-    
+
     int mode = instructions[0].to_int();
 
     rendering_mode = mode;
@@ -874,25 +907,22 @@ namespace pdflib
 
   void pdf_state<TEXT>::Ts(std::vector<qpdf_instruction>& instructions)
   {
-    //assert(instructions.size()==1);
     if(not verify(instructions, 1, __FUNCTION__) ) { return; }
-    
+
     rise = instructions[0].to_double();
   }
 
   void pdf_state<TEXT>::TStar(std::vector<qpdf_instruction>& instructions)
   {
-    //assert(instructions.size()==0);
     if(not verify(instructions, 0, __FUNCTION__) ) { return; }
-    
+
     this->Td(0, -leading);
   }
 
   void pdf_state<TEXT>::Tw(std::vector<qpdf_instruction>& instructions)
   {
-    //assert(instructions.size()==1);
     if(not verify(instructions, 1, __FUNCTION__) ) { return; }
-    
+
     double tw = instructions[0].to_double();
 
     word_spacing = tw;
@@ -901,9 +931,8 @@ namespace pdflib
   // section 9.3.4 [p 258]
   void pdf_state<TEXT>::Tz(std::vector<qpdf_instruction>& instructions)
   {
-    //assert(instructions.size()==1);
     if(not verify(instructions, 1, __FUNCTION__) ) { return; }
-    
+
     double th = instructions[0].to_double();
 
     h_scaling = th / 100.0;

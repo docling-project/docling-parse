@@ -4,6 +4,7 @@
 #define PDF_PAGE_XOBJECT_IMAGE_RESOURCE_H
 
 #include <parse/utils/jpeg/jpeg_utils.h>
+#include <parse/qpdf/qpdf_compat.h>
 
 namespace pdflib
 {
@@ -119,7 +120,7 @@ namespace pdflib
   }
 
   void pdf_resource<PAGE_XOBJECT_IMAGE>::set(std::string      xobject_key_,
-                                              QPDFObjectHandle qpdf_xobject_)
+					     QPDFObjectHandle qpdf_xobject_)
   {
     LOG_S(INFO) << __FUNCTION__ << ": " << xobject_key_;
 
@@ -318,7 +319,7 @@ namespace pdflib
 
     try
       {
-        raw_stream_data = qpdf_xobject.getRawStreamData();
+        raw_stream_data = to_shared_ptr(qpdf_xobject.getRawStreamData());
         LOG_S(INFO) << "raw stream size: " << raw_stream_data->getSize() << " bytes";
       }
     catch(std::exception const& e)
@@ -329,7 +330,7 @@ namespace pdflib
 
     try
       {
-        decoded_stream_data = qpdf_xobject.getStreamData();
+        decoded_stream_data = to_shared_ptr(qpdf_xobject.getStreamData());
         LOG_S(INFO) << "decoded stream size: " << decoded_stream_data->getSize() << " bytes";
       }
     catch(std::exception const& e)

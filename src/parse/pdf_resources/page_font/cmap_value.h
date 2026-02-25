@@ -132,9 +132,12 @@ namespace pdflib
 
   std::string cmap_value::codepoint_to_utf8(uint32_t codepoint)
   {
-    std::string result(4, 0);
-    auto itr = utf8::append(codepoint, result.begin());
-    result.erase(itr, result.end());
+    // Legacy: fixed-size buffer + iterator may cause segfaults if codepoint encodes to more bytes than allocated
+    //std::string result(4, 0);
+    //auto itr = utf8::append(codepoint, result.begin());
+    //result.erase(itr, result.end());
+    std::string result;
+    utf8::append(codepoint, std::back_inserter(result));
     return result;
   }
 

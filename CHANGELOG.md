@@ -1,3 +1,27 @@
+## [v5.4.0](https://github.com/docling-project/docling-parse/releases/tag/v5.4.0) - 2026-02-24
+
+### Feature
+
+* Add config option to remove glyph output ([#231](https://github.com/docling-project/docling-parse/issues/231)) ([`9657023`](https://github.com/docling-project/docling-parse/commit/96570232f653b3588d88878b45d167f70d9ed654))
+
+### Fix
+
+* Updated the debug log ([#229](https://github.com/docling-project/docling-parse/issues/229)) ([`36eb392`](https://github.com/docling-project/docling-parse/commit/36eb3928fd57be02819a36fcadd8ce4d705511a5))
+
+## [v5.3.4](https://github.com/docling-project/docling-parse/releases/tag/v5.3.4) - 2026-02-23
+
+### Fix
+
+* Robustify parse of broken pdfs ([#228](https://github.com/docling-project/docling-parse/issues/228)) ([`e0264dd`](https://github.com/docling-project/docling-parse/commit/e0264dd22ddc204096290628ddbe85975aa79cc4))
+* Use only development groups and not extras ([#225](https://github.com/docling-project/docling-parse/issues/225)) ([`3eb7241`](https://github.com/docling-project/docling-parse/commit/3eb724169686c3fc0c7dcb24936ff06913a7966a))
+
+## [v5.3.3](https://github.com/docling-project/docling-parse/releases/tag/v5.3.3) - 2026-02-20
+
+### Fix
+
+* Replace fixed-size utf8::append buffers with std::back_inserter to prevent segfaults ([#224](https://github.com/docling-project/docling-parse/issues/224)) ([`237cef6`](https://github.com/docling-project/docling-parse/commit/237cef698a748049ea1c8eb534692085814880be))
+* Bridge PointerHolder<T> to std::shared_ptr<T> for qpdf 10.x + ([#221](https://github.com/docling-project/docling-parse/issues/221)) ([`b0817db`](https://github.com/docling-project/docling-parse/commit/b0817dbac14dee836ba274823c66337c2047b413))
+
 ## [v5.3.2](https://github.com/docling-project/docling-parse/releases/tag/v5.3.2) - 2026-02-17
 
 ### Fix

@@ -1,6 +1,6 @@
 [project]
 name = "docling-parse"
-version = "5.3.2"
+version = "5.4.0"
 description = "Simple package to extract text with coordinates from programmatic PDFs"
 license = "MIT"
 keywords = ["docling", "pdf", "parser"]
@@ -32,7 +32,7 @@ dependencies = [
     "tabulate>=0.9.0,<1.0.0",
     "pillow>=10.0.0,<13.0.0",
     "pydantic>=2.0.0",
-    "docling-core>=2.65.1",
+    "docling-core>=2.65.2",
     # "docling-core @ git+https://github.com/docling-project/docling-core.git@720a14846ac6fe9f53031305af04d50b6d8479e4",
     "pywin32>=305; sys_platform == 'win32'",
 ]
@@ -81,12 +81,7 @@ perf-test = [
     "pypdfium2>=4.30.0",
 ]
 
-[project.optional-dependencies]
-perf-tools = [
-    "pdfplumber>=0.11.7",
-    "pymupdf>=1.26.4",
-    "pypdfium2>=4.30.0",
-]
+
 [tool.uv]
 package = true
 default-groups = "all"
