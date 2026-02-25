@@ -228,14 +228,14 @@ namespace pdflib
 	      pdf_resource<PAGE_XOBJECT_IMAGE> xobj;
 	      xobj.set(key, qpdf_obj);
 
-	      {
-		//to be commented out!!
-		std::string fname = "./pic_" + std::to_string(image_xobjects.size()) + xobj.pick_extension();
-		LOG_S(ERROR) << "storing pic at: " << fname;
+	      //to be commented out!!	      
+	      //{
+	      //std::string fname = "./pic_" + std::to_string(image_xobjects.size()) + xobj.pick_extension();
+	      //LOG_S(ERROR) << "storing pic at: " << fname;
 		
-		std::filesystem::path path(fname.c_str());
-		xobj.save_to_file(path);
-	      }
+	      //std::filesystem::path path(fname.c_str());
+	      //xobj.save_to_file(path);
+	      //}
 	      
 	      image_xobjects[key] = xobj;		      
 	    }

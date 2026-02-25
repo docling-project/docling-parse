@@ -40,7 +40,8 @@ namespace pdflib
 
     // debug: in production, we dont want to have ugly GLYPH<...> 
     bool keep_glyphs = false;
-
+    bool keep_qpdf_warnings = false;
+    
     nlohmann::json to_json() const;
     void from_json(const nlohmann::json& j);
 
@@ -79,6 +80,7 @@ namespace pdflib
     j["populate_json_objects"] = populate_json_objects;
 
     j["keep_glyphs"] = keep_glyphs;
+    j["keep_qpdf_warnings"] = keep_qpdf_warnings;
 
     return j;
   }
@@ -110,6 +112,7 @@ namespace pdflib
     if(j.count("populate_json_objects")) { populate_json_objects = j["populate_json_objects"]; }
 
     if(j.count("keep_glyphs")) { keep_glyphs = j["keep_glyphs"]; }
+    if(j.count("keep_qpdf_warnings")) { keep_qpdf_warnings = j["keep_qpdf_warnings"]; }
   }
 
   bool decode_page_config::load(const std::string& filename)
@@ -161,7 +164,8 @@ namespace pdflib
        << std::setw(48) << "line_space_width_factor_for_merge" << line_space_width_factor_for_merge << "\n"
        << std::setw(48) << "line_space_width_factor_for_merge_with_space" << line_space_width_factor_for_merge_with_space << "\n"
        << std::setw(48) << "populate_json_objects" << (populate_json_objects ? "true" : "false") << "\n"
-       << std::setw(48) << "keep_glyphs" << (keep_glyphs ? "true" : "false") << "\n";
+       << std::setw(48) << "keep_glyphs" << (keep_glyphs ? "true" : "false") << "\n"
+       << std::setw(48) << "keep_qpdf_warnings" << (keep_qpdf_warnings ? "true" : "false") << "\n";
 
     return ss.str();
   }

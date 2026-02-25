@@ -62,6 +62,8 @@ namespace pdflib
 
   private:
 
+    void update_qpdf_logger();
+    
     void decode_dimensions();
 
     // Resources
@@ -144,8 +146,7 @@ namespace pdflib
     page_grphs(std::make_shared<pdf_resource<PAGE_GRPHS>>()),
     page_fonts(std::make_shared<pdf_resource<PAGE_FONTS>>()),
     page_xobjects(std::make_shared<pdf_resource<PAGE_XOBJECTS>>())
-  {
-  }
+  {}
 
   pdf_decoder<PAGE>::pdf_decoder(std::shared_ptr<std::string> buffer,
 				 std::optional<std::string> password,
@@ -175,6 +176,8 @@ namespace pdflib
 					       owned_buffer->size());
       }
 
+    update_qpdf_logger();
+    
     std::vector<QPDFObjectHandle> pages = owned_qpdf_document->getAllPages();
 
     if(page_num < 0 || page_num >= static_cast<int>(pages.size()))
@@ -191,6 +194,26 @@ namespace pdflib
     LOG_S(INFO) << "releasing memory for pdf page decoder";
   }
 
+  void pdf_decoder<PAGE>::update_qpdf_logger()
+  {
+    if(loguru::g_stderr_verbosity==loguru::Verbosity_INFO or
+       loguru::g_stderr_verbosity==loguru::Verbosity_WARNING)
+      {
+	// ignore ...	
+      }
+    else if(loguru::g_stderr_verbosity==loguru::Verbosity_ERROR or
+	    loguru::g_stderr_verbosity==loguru::Verbosity_FATAL)
+      {
+	owned_qpdf_document->setSuppressWarnings(true);
+	//qpdf_document.setMaxWarnings(0); only for later versions ...
+      }
+    else
+      {
+
+      }
+  }
+
+  
   int pdf_decoder<PAGE>::get_page_number()
   {
     return page_number;
@@ -293,6 +316,11 @@ namespace pdflib
 
   void pdf_decoder<PAGE>::decode_page(const decode_page_config& config)
   {
+    if(owned_qpdf_document != nullptr)
+      {
+	owned_qpdf_document->setSuppressWarnings(!config.keep_qpdf_warnings);
+      }
+    
     utils::timer global, local;
 
     if(config.populate_json_objects)

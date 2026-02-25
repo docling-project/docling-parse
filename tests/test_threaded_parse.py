@@ -45,6 +45,7 @@ def test_threaded_reference_documents_from_filenames():
     decode_config = DecodePageConfig()
     decode_config.page_boundary = "crop_box"
     decode_config.do_sanitization = False
+    decode_config.keep_glyphs = True
 
     parser_config = ThreadedPdfParserConfig(
         loglevel="fatal",
@@ -119,6 +120,7 @@ def test_threaded_single_document():
     decode_config = DecodePageConfig()
     decode_config.page_boundary = "crop_box"
     decode_config.do_sanitization = False
+    decode_config.keep_glyphs = True
 
     parser = DoclingThreadedPdfParser(
         parser_config=ThreadedPdfParserConfig(
@@ -155,6 +157,7 @@ def test_threaded_results_match_sequential():
     decode_config = DecodePageConfig()
     decode_config.page_boundary = "crop_box"
     decode_config.do_sanitization = False
+    decode_config.keep_glyphs = True
 
     # Sequential parsing
     seq_parser = DoclingPdfParser(loglevel="fatal")
@@ -227,6 +230,7 @@ def test_threaded_backpressure():
     decode_config = DecodePageConfig()
     decode_config.page_boundary = "crop_box"
     decode_config.do_sanitization = False
+    decode_config.keep_glyphs = True
 
     parser = DoclingThreadedPdfParser(
         parser_config=ThreadedPdfParserConfig(
@@ -255,6 +259,7 @@ def test_threaded_single_thread():
     decode_config = DecodePageConfig()
     decode_config.page_boundary = "crop_box"
     decode_config.do_sanitization = False
+    decode_config.keep_glyphs = True
 
     parser = DoclingThreadedPdfParser(
         parser_config=ThreadedPdfParserConfig(
