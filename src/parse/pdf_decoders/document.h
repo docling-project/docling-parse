@@ -166,7 +166,6 @@ namespace pdflib
     annots_loaded = true;
 
     double annots_elapsed = annots_timer.get_time();
-    std::cout << "  " << pdf_timings::KEY_EXTRACT_DOC_ANNOTATIONS << ": " << annots_elapsed << "\n";
     timings.add_timing(pdf_timings::KEY_EXTRACT_DOC_ANNOTATIONS, annots_elapsed);
   }
 
@@ -218,7 +217,6 @@ namespace pdflib
     bool result = process_document_from_bytesio(file_buffer, _password, description);
 
     double total_elapsed = timer.get_time();
-    std::cout << pdf_timings::KEY_PROCESS_DOCUMENT_FROM_FILE << ": " << total_elapsed << "\n";
     timings.add_timing(pdf_timings::KEY_PROCESS_DOCUMENT_FROM_FILE, total_elapsed);
 
     return result;
@@ -254,7 +252,6 @@ namespace pdflib
 	    }
 
 	  double qpdf_elapsed = qpdf_timer.get_time();
-	  std::cout << "  " << pdf_timings::KEY_QPDF_PROCESS << ": " << qpdf_elapsed << "\n";
 	  timings.add_timing(pdf_timings::KEY_QPDF_PROCESS, qpdf_elapsed);
 
 	  LOG_S(INFO) << "buffer processed by qpdf!";
@@ -273,7 +270,7 @@ namespace pdflib
       }
 
     double total_elapsed = timer.get_time();
-    std::cout << pdf_timings::KEY_PROCESS_DOCUMENT_FROM_BYTESIO << ": " << total_elapsed << "\n";
+    // std::cout << pdf_timings::KEY_PROCESS_DOCUMENT_FROM_BYTESIO << ": " << total_elapsed << "\n";
 
     timings.add_timing(pdf_timings::KEY_PROCESS_DOCUMENT_FROM_BYTESIO, total_elapsed);
 
