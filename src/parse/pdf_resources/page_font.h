@@ -1761,6 +1761,7 @@ namespace pdflib
     std::regex re_01(R"(\/(.+)\.(.+))");
     std::regex re_02(R"((\/)?(uni|UNI)([0-9A-Ea-e]{4}))");
     std::regex re_03(R"((\/)(g|G)\d+)");
+    std::regex re_04(R"((\/)(C)(\d+))");
     
     if(utils::json::has(keys, json_font))
       {
@@ -1893,6 +1894,15 @@ namespace pdflib
                         diff_numb_to_char[numb] = cmap_numb_to_char.at(numb);
 			//diff_numb_to_char[numb] = name;
 			//LOG_S(ERROR) << "weird differences["<<numb<<"] -> " << name;
+		      }
+		    else if(std::regex_match(name, match, re_04)) // if the name is of type /C<decimal> treat the number as a Unicode code point
+		      {
+			uint32_t codepoint = static_cast<uint32_t>(std::stoul(match[3].str()));
+			std::vector<uint32_t> vec = {codepoint};
+			diff_numb_to_char[numb] = utils::string::vec_to_utf8(vec);
+			LOG_S(INFO) << "differences[" << numb << "] -> " << name
+				    << " -> " << diff_numb_to_char[numb]
+				    << " (codepoint=" << codepoint << ")";
 		      }
                     else
                       {
