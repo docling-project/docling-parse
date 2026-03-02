@@ -62,6 +62,8 @@ namespace pdflib
 
     void update_timings(pdf_timings& timings_, bool set_timer);
 
+    bool process_document_components();
+    
   private:
 
     std::string filename;
@@ -141,7 +143,52 @@ namespace pdflib
 
       }
   }
-  
+
+  bool pdf_decoder<DOCUMENT>::process_document_components()    
+  {
+    utils::timer timer;
+    
+    if(qpdf_root.hasKey("/Pages"))
+      {
+        qpdf_pages = qpdf_root.getKey("/Pages");
+
+	if(qpdf_pages.hasKey("/Count"))
+	  {
+	    number_of_pages = qpdf_pages.getKey("/Count").getIntValue();	    
+	  }
+	else
+	  {
+	    LOG_S(WARNING) << "filename: " << filename << " has no `/Count`";
+	    number_of_pages = 0;
+	    for(QPDFObjectHandle page : qpdf_document.getAllPages())
+	      {
+		number_of_pages += 1;
+	      }
+	  }
+	
+	LOG_S(INFO) << "#-pages: " << number_of_pages;
+      }
+    else
+      {
+        LOG_S(ERROR) << "filename: " << filename << " has no pages";;
+        return false;
+      }
+
+    timings.add_timing(pdf_timings::KEY_PROCESS_DOCUMENT_COMPONENTS, timer.get_time());
+    
+    try
+      {
+	json_annots = extract_document_annotations_in_json(qpdf_document, qpdf_root);
+      }
+    catch(const std::exception& exc)
+      {
+        LOG_S(WARNING) << "filename: " << filename << " can not find any `annotations` " << exc.what();
+        return false;
+      }
+
+    return true;
+  }
+    
   bool pdf_decoder<DOCUMENT>::process_document_from_file(std::string& _filename, std::optional<std::string>& password)
   {
     filename = _filename; // save it    
@@ -159,12 +206,6 @@ namespace pdflib
         LOG_S(INFO) << "filename: " << filename << " processed by qpdf!";        
 
         qpdf_root  = qpdf_document.getRoot();
-        qpdf_pages = qpdf_root.getKey("/Pages");
-
-	json_annots = extract_document_annotations_in_json(qpdf_document, qpdf_root);
-	
-        number_of_pages = qpdf_pages.getKey("/Count").getIntValue();
-        LOG_S(INFO) << "#-pages: " << number_of_pages;
       }
     catch(const std::exception& exc)
       {
@@ -173,7 +214,12 @@ namespace pdflib
       }
 
     timings.add_timing(pdf_timings::KEY_PROCESS_DOCUMENT_FROM_FILE, timer.get_time());
-
+    
+    if(not process_document_components())
+      {
+	return false;
+      }
+    
     return true;
   }
 
@@ -203,14 +249,6 @@ namespace pdflib
 					    buffer.size());
 	  }	
         LOG_S(INFO) << "buffer processed by qpdf!";        
-
-        qpdf_root  = qpdf_document.getRoot();
-        qpdf_pages = qpdf_root.getKey("/Pages");
-
-	json_annots = extract_document_annotations_in_json(qpdf_document, qpdf_root);
-	
-        number_of_pages = qpdf_pages.getKey("/Count").getIntValue();
-        LOG_S(INFO) << "#-pages: " << number_of_pages;
       }
     catch(const std::exception & exc)
       {
@@ -219,10 +257,15 @@ namespace pdflib
       }
 
     timings.add_timing(pdf_timings::KEY_PROCESS_DOCUMENT_FROM_BYTESIO, timer.get_time());
-
+    
+    if(not process_document_components())
+      {
+	return false;
+      }
+    
     return true;
   }
-
+  
   void pdf_decoder<DOCUMENT>::decode_document(const decode_page_config& config)
   {
     LOG_S(INFO) << "start decoding all pages ...";
