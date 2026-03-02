@@ -170,7 +170,7 @@ namespace pdflib
       }
     else
       {
-        LOG_S(ERROR) << "filename: " << filename << " has no pages";;
+        LOG_S(ERROR) << "filename: " << filename << " has no pages";
         return false;
       }
 
@@ -183,7 +183,7 @@ namespace pdflib
     catch(const std::exception& exc)
       {
         LOG_S(WARNING) << "filename: " << filename << " can not find any `annotations` " << exc.what();
-        return false;
+        //return false;
       }
 
     return true;
@@ -210,7 +210,7 @@ namespace pdflib
     catch(const std::exception& exc)
       {
         LOG_S(ERROR) << "filename: " << filename << " can not be processed by qpdf: " << exc.what();
-        return false;
+	return false;
       }
 
     timings.add_timing(pdf_timings::KEY_PROCESS_DOCUMENT_FROM_FILE, timer.get_time());
@@ -248,7 +248,9 @@ namespace pdflib
 					    buffer.c_str(),
 					    buffer.size());
 	  }	
-        LOG_S(INFO) << "buffer processed by qpdf!";        
+        LOG_S(INFO) << "buffer processed by qpdf!";
+
+        qpdf_root = qpdf_document.getRoot();
       }
     catch(const std::exception & exc)
       {
