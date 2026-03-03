@@ -87,6 +87,7 @@ int main(int argc, char* argv[]) {
       ("password", "Password for accessing encrypted, password-protected files", cxxopts::value<std::string>())
       ("o,output", "Output file", cxxopts::value<std::string>())
       ("export-images", "Export images to directory", cxxopts::value<std::string>())
+      ("print-cells", "Print cells to stdout [char, word, line, all] (default: none)", cxxopts::value<std::string>())
       ("keep-text", "Keep text cells in output (default: true)", cxxopts::value<bool>()->default_value("true"))
       ("keep-shapes", "Keep shapes in output (default: true)", cxxopts::value<bool>()->default_value("true"))
       ("keep-bitmaps", "Keep bitmaps in output (default: true)", cxxopts::value<bool>()->default_value("true"))
@@ -218,6 +219,11 @@ int main(int argc, char* argv[]) {
             }
         }
       std::cout << std::setw(48) << std::left << "  total-time" << total_time << " [sec]" << std::endl;
+
+      if (result.count("print-cells")) {
+        std::string mode = result["print-cells"].as<std::string>();
+        parser.print_cells(mode);
+      }
 
       if (result.count("export-images")) {
         std::string images_dir = result["export-images"].as<std::string>();

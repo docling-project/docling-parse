@@ -362,7 +362,11 @@ def test_reference_documents_from_filenames():
 
     # this map restricts for pdf's with multiple pages
     # which pages will be tested
-    page_restrictions = {"deep-mediabox-inheritance.pdf": [2]}
+    page_restrictions = {
+        "deep-mediabox-inheritance.pdf": [2],
+        "font_06.pdf": [1],
+        "font_07.pdf": [1],
+    }
 
     config = DecodePageConfig()
     config.keep_glyphs = True

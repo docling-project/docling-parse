@@ -406,7 +406,13 @@ namespace pdflib
     
     if(enforce_same_font and cell_i.font_name!=cell_j.font_name)
       {
-	return false;
+	// Exception: ligature glyphs are often encoded in a different font than
+	// the surrounding text, so allow merging when either cell is a ligature.
+	if(not utils::string::is_ligature(cell_i.text) and
+	   not utils::string::is_ligature(cell_j.text))
+	  {
+	    return false;
+	  }
       }
 	    
     if(not cell_i.has_same_reading_orientation(cell_j))
@@ -453,20 +459,51 @@ namespace pdflib
 		break;
 	      }
 	    
+	    bool i_is_ligature = utils::string::is_ligature(cells[i].text) or cells[i].last_merged_cell_was_ligature;
+	    bool j_is_ligature = utils::string::is_ligature(cells[j].text) or cells[j].last_merged_cell_was_ligature;
+
 	    double delta_0 = cells[i].average_char_width()*space_width_factor_for_merge;
 	    double delta_1 = cells[i].average_char_width()*space_width_factor_for_merge_with_space;
-	    
-	    if(cells[i].is_adjacent_to(cells[j], delta_0))
+
+	    // Ligature glyphs often have taller bounding boxes than surrounding text,
+	    // inflating d1 (top-corner distance) in is_adjacent_to even when cells
+	    // are horizontally touching.  We therefore relax only eps_d1 (top-edge
+	    // tolerance) when a ligature is involved, leaving eps_d0 (bottom-edge /
+	    // horizontal-gap tolerance) unchanged.  This prevents the extra slack
+	    // from incorrectly bridging word-boundary gaps.
+	    double adj_eps_d1 = delta_0;
+	    if(i_is_ligature or j_is_ligature)
+	      {
+		adj_eps_d1 += horizontal_cell_tolerance;
+	      }
+
+	    if(cells[i].is_adjacent_to(cells[j], delta_0, adj_eps_d1))
 	      {
 		cells[i].merge_with(cells[j], delta_1);
-		
+		// If cell_i was the ligature side, adopt cell_j's font so subsequent
+		// merges are not blocked by the ligature font.
+		if(i_is_ligature and not j_is_ligature)
+		  {
+		    cells[i].font_name = cells[j].font_name;
+		    cells[i].font_key  = cells[j].font_key;
+		  }
+		// Flag resets based only on whether the just-absorbed cell (j) is a
+		// raw ligature. This ensures extra tolerance lasts exactly one merge
+		// after a ligature and returns to normal once the inflated bbox is absorbed.
+		cells[i].last_merged_cell_was_ligature = utils::string::is_ligature(cells[j].text);
 		cells[j].active = false;
 		LOG_S(INFO) << " -> merging cell-" << i << " with " << j << " '" << cells[j].text << "'"<< ": " << cells[i].text;
 	      }
-	    else if(allow_reverse and cells[j].is_adjacent_to(cells[i], delta_0))
+	    else if(allow_reverse and cells[j].is_adjacent_to(cells[i], delta_0, adj_eps_d1))
 	      {
 		cells[j].merge_with(cells[i], delta_1);
-		
+		// If cell_j was the ligature side, adopt cell_i's font.
+		if(j_is_ligature and not i_is_ligature)
+		  {
+		    cells[j].font_name = cells[i].font_name;
+		    cells[j].font_key  = cells[i].font_key;
+		  }
+		cells[j].last_merged_cell_was_ligature = utils::string::is_ligature(cells[i].text);
 		cells[i].active = false;
 		LOG_S(INFO) << " -> merging reverse cell-" << j << " with " << i << " '" << cells[i].text << "'"<< ": " << cells[j].text;
 	      }	    
@@ -508,13 +545,31 @@ namespace pdflib
 		break;
 	      }
 	    
+	    bool i_is_ligature = utils::string::is_ligature(cells[i].text) or cells[i].last_merged_cell_was_ligature;
+	    bool j_is_ligature = utils::string::is_ligature(cells[j].text) or cells[j].last_merged_cell_was_ligature;
+
 	    double delta_0 = cells[i].average_char_width()*space_width_factor_for_merge;
 	    double delta_1 = cells[i].average_char_width()*space_width_factor_for_merge_with_space;
-	    
-	    if(cells[j].is_adjacent_to(cells[i], delta_0))
+
+	    double adj_eps_d1 = delta_0;
+	    if(i_is_ligature or j_is_ligature)
+	      {
+		adj_eps_d1 += horizontal_cell_tolerance;
+	      }
+
+	    if(cells[j].is_adjacent_to(cells[i], delta_0, adj_eps_d1))
 	      {
 		cells[j].merge_with(cells[i], delta_1);
-		
+		// If cell_j was the ligature side, adopt cell_i's font.
+		if(j_is_ligature and not i_is_ligature)
+		  {
+		    cells[j].font_name = cells[i].font_name;
+		    cells[j].font_key  = cells[i].font_key;
+		  }
+			// Flag resets based only on whether the just-absorbed cell (i) is a
+		// raw ligature — same one-step propagation semantics as L2R pass.
+		cells[j].last_merged_cell_was_ligature = utils::string::is_ligature(cells[i].text);
+
 		cells[i].active = false;
 		LOG_S(INFO) << " -> merging cell-" << i << " with " << j << " '" << cells[j].text << "'"<< ": " << cells[i].text;
 	      }

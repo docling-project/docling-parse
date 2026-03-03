@@ -26,6 +26,10 @@ namespace plib
     // Export images from the last parsed document
     void export_images(std::string out_dir, int target_page=-1);
 
+    // Print char/word/line cells to stdout for debugging
+    // mode: "char", "word", "line", or "all"
+    void print_cells(std::string mode="word") const;
+
     // Get timings from the last parsed document
     std::unordered_map<std::string, double> get_timings() const;
 
@@ -269,6 +273,63 @@ namespace plib
       }
 
     return true;
+  }
+
+  void parser::print_cells(std::string mode) const
+  {
+    if(not document_decoder)
+      {
+	LOG_S(ERROR) << "no document has been parsed yet";
+	return;
+      }
+
+    auto print_cell_list = [](const std::string& label, pdflib::page_item<pdflib::PAGE_CELLS>& cells)
+      {
+	std::cout << "\n--- " << label << " (" << cells.size() << ") ---\n";
+	for(auto& cell : cells)
+	  {
+	    if(not cell.active) { continue; }
+	    std::cout << std::fixed << std::setprecision(2)
+		      << "(" << cell.r_x0 << ", " << cell.r_y0 << ") "
+		      << "(" << cell.r_x1 << ", " << cell.r_y1 << ") "
+		      << "(" << cell.r_x2 << ", " << cell.r_y2 << ") "
+		      << "(" << cell.r_x3 << ", " << cell.r_y3 << ")"
+		      << "\t" << cell.font_key << " " << cell.text << "\n";
+	  }
+      };
+
+    int num_pages = document_decoder->get_number_of_pages();
+    for(int p = 0; p < num_pages; ++p)
+      {
+	if(not document_decoder->has_page_decoder(p)) { continue; }
+
+	auto page_dec = document_decoder->get_page_decoder(p);
+	if(not page_dec) { continue; }
+
+	std::cout << "\n=== page " << (p + 1) << " / " << num_pages << " ===";
+
+	if(mode == "char" or mode == "all")
+	  {
+	    print_cell_list("chars", page_dec->get_char_cells());
+	  }
+
+	if(mode == "word" or mode == "all")
+	  {
+	    if(page_dec->has_word_cells())
+	      {
+		print_cell_list("words", page_dec->get_word_cells());
+	      }
+	  }
+
+	if(mode == "line" or mode == "all")
+	  {
+	    if(page_dec->has_line_cells())
+	      {
+		print_cell_list("lines", page_dec->get_line_cells());
+	      }
+	  }
+      }
+    std::cout << "\n";
   }
 
   void parser::export_images(std::string out_dir, int target_page)

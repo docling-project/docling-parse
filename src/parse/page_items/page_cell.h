@@ -27,6 +27,15 @@ namespace pdflib
     
     bool is_adjacent_to(page_item<PAGE_CELL>& other, double delta);
 
+    // Two-epsilon variant for ligature-aware adjacency:
+    //   d0 = distance between this cell's bottom-right (r_x1, r_y1) and other's bottom-left (r_x0, r_y0)
+    //   d1 = distance between this cell's top-right   (r_x2, r_y2) and other's top-left    (r_x3, r_y3)
+    // eps_d0 controls the bottom-edge gap; eps_d1 controls the top-edge gap.
+    // For same-height cells d0 ≈ d1 ≈ horizontal gap.  When a ligature glyph is
+    // involved its taller bbox inflates d1 only, so eps_d1 can be relaxed
+    // independently without widening the horizontal-gap tolerance.
+    bool is_adjacent_to(page_item<PAGE_CELL>& other, double eps_d0, double eps_d1);
+
     bool has_same_reading_orientation(page_item<PAGE_CELL>& other);
     
     bool merge_with(page_item<PAGE_CELL>& other, double delta);
@@ -81,6 +90,7 @@ namespace pdflib
     int instr_count;
 
     bool widget;
+    bool last_merged_cell_was_ligature = false;
 
     // graphics state properties
     bool                has_graphics_state = false;
@@ -290,6 +300,14 @@ namespace pdflib
     double d1 = std::sqrt((r_x2-other.r_x3)*(r_x2-other.r_x3) + (r_y2-other.r_y3)*(r_y2-other.r_y3));
 
     return ((d0<eps) and (d1<eps));
+  }
+
+  bool page_item<PAGE_CELL>::is_adjacent_to(page_item<PAGE_CELL>& other, double eps_d0, double eps_d1)
+  {
+    double d0 = std::sqrt((r_x1-other.r_x0)*(r_x1-other.r_x0) + (r_y1-other.r_y0)*(r_y1-other.r_y0));
+    double d1 = std::sqrt((r_x2-other.r_x3)*(r_x2-other.r_x3) + (r_y2-other.r_y3)*(r_y2-other.r_y3));
+
+    return ((d0<eps_d0) and (d1<eps_d1));
   }
 
   bool page_item<PAGE_CELL>::has_same_reading_orientation(page_item<PAGE_CELL>& other)

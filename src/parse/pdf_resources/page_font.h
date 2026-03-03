@@ -1759,7 +1759,7 @@ namespace pdflib
 
     // Create a regex object
     std::regex re_01(R"(\/(.+)\.(.+))");
-    std::regex re_02(R"((\/)?(uni|UNI)([0-9A-Ea-e]{4}))");
+    std::regex re_02(R"((\/)?(uni|UNI)([0-9A-Fa-f]{4}))");
     std::regex re_03(R"((\/)(g|G)\d+)");
     std::regex re_04(R"((\/)(C)(\d+))");
     

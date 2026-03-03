@@ -336,6 +336,56 @@ namespace utils
       
       return false;
     }
+
+    bool is_ligature(const std::string& val)
+    {
+      // Unicode Alphabetic Presentation Forms ligatures (U+FB00-U+FB06)
+      static const std::unordered_set<uint32_t> unicode_ligatures = {
+	0xFB00, // ﬀ Latin small ligature ff
+	0xFB01, // ﬁ Latin small ligature fi
+	0xFB02, // ﬂ Latin small ligature fl
+	0xFB03, // ﬃ Latin small ligature ffi
+	0xFB04, // ﬄ Latin small ligature ffl
+	0xFB05, // ﬅ Latin small ligature long s t
+	0xFB06, // ﬆ Latin small ligature st
+      };
+
+      // Common ligature strings in decomposed (ASCII) form, as PDFs often
+      // map ligature glyphs to their component characters.
+      // Note: "st" is commented out — it is far too common in normal text
+      // to use as a reliable ligature indicator at the string level.
+      // The Unicode codepoints U+FB05/U+FB06 still cover it when present.
+      static const std::unordered_set<std::string> string_ligatures = {
+	"ff", "fi", "fl", "ffi", "ffl",
+	//"st",
+      };
+
+      if(val.size() == 0)
+	{
+	  return false;
+	}
+
+      if(string_ligatures.count(val))
+	{
+	  return true;
+	}
+
+      if(utf8::is_valid(val.begin(), val.end()))
+	{
+	  std::vector<uint32_t> utf32_chars = {};
+	  utf8::utf8to32(val.begin(), val.end(), std::back_inserter(utf32_chars));
+
+	  for(auto ch : utf32_chars)
+	    {
+	      if(unicode_ligatures.count(ch))
+		{
+		  return true;
+		}
+	    }
+	}
+
+      return false;
+    }
     
   }
 
