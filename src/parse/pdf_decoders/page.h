@@ -162,6 +162,8 @@ namespace pdflib
   {
     std::string description = "thread-safe page " + std::to_string(page_num);
 
+    update_qpdf_logger();
+
     if(password.has_value())
       {
 	owned_qpdf_document->processMemoryFile(description.c_str(),
@@ -175,8 +177,6 @@ namespace pdflib
 					       owned_buffer->c_str(),
 					       owned_buffer->size());
       }
-
-    update_qpdf_logger();
     
     std::vector<QPDFObjectHandle> pages = owned_qpdf_document->getAllPages();
 

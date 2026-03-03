@@ -366,6 +366,7 @@ def test_reference_documents_from_filenames():
 
     config = DecodePageConfig()
     config.keep_glyphs = True
+    config.keep_qpdf_warnings = False
 
     for pdf_doc_path in pdf_docs:
         # print(f"parsing {pdf_doc_path}")
