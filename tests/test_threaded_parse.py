@@ -152,10 +152,14 @@ def test_threaded_single_document():
 
 def test_threaded_results_match_sequential():
     """Verify threaded results match sequential results for the same documents."""
+
+    """
     filenames = [
         "tests/data/regression/font_01.pdf",
         "tests/data/regression/ligatures_01.pdf",
     ]
+    """
+    filenames = glob.glob("tests/data/regression/*.pdf")
 
     decode_config = DecodePageConfig()
     decode_config.page_boundary = "crop_box"
@@ -170,12 +174,13 @@ def test_threaded_results_match_sequential():
         pdf_doc = seq_parser.load(
             path_or_stream=filename,
             boundary_type=PdfPageBoundaryType.CROP_BOX,
-            lazy=False,
+            lazy=True,
         )
         key = f"key={filename}"
         sequential_pages[key] = {}
-        for page_no, page in pdf_doc.iterate_pages():
+        for page_no, page in pdf_doc.iterate_pages(config=decode_config):
             sequential_pages[key][page_no] = page
+            # print(f"seq: {key}, {page_no}")
 
     # Threaded parsing
     threaded_parser = DoclingThreadedPdfParser(
@@ -198,6 +203,7 @@ def test_threaded_results_match_sequential():
         if task.doc_key not in threaded_pages:
             threaded_pages[task.doc_key] = {}
         threaded_pages[task.doc_key][task.page_number + 1] = pred_page  # 1-indexed
+        # print(f"threaded: {task.doc_key}, {task.page_number + 1}")
 
     # Compare
     for key in sequential_pages:
@@ -212,10 +218,28 @@ def test_threaded_results_match_sequential():
                 seq_page.dimension.width / 100.0, seq_page.dimension.height / 100.0
             )
 
+            """
+            print(f"** Page {page_no} for {key} **")
+            print(f" -> char-cells count for {key} page {page_no}: {len(seq_page.char_cells)} versus {len(thr_page.char_cells)}")
+            print(f" -> word-cells count for {key} page {page_no}: {len(seq_page.word_cells)} versus {len(thr_page.word_cells)}")
+            print(f" -> line-cells count for {key} page {page_no}: {len(seq_page.textline_cells)} versus {len(thr_page.textline_cells)}")
+            print(f" -> shapes count for {key} page {page_no}: {len(seq_page.shapes)} versus {len(thr_page.shapes)}")
+            """
+
             # Verify key fields match
             assert len(seq_page.char_cells) == len(
                 thr_page.char_cells
             ), f"char_cells count mismatch for {key} page {page_no}"
+
+            """
+            if len(seq_page.word_cells)!=len(thr_page.word_cells):
+                for i, cell in enumerate(seq_page.word_cells):
+                    print(f" === [{i}] === ")
+                    print(cell.text)
+                    print(thr_page.word_cells[i].text)
+                    assert cell.text==thr_page.word_cells[i].text
+            """
+
             assert len(seq_page.word_cells) == len(
                 thr_page.word_cells
             ), f"word_cells count mismatch for {key} page {page_no}"
