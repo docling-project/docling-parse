@@ -32,16 +32,16 @@ namespace pdflib
     nlohmann::json get_table_of_contents();
 
     bool process_document_from_file(std::string& _filename,
-				    std::optional<std::string>& _password);
+                                    std::optional<std::string>& _password);
 
     bool process_document_from_bytesio(std::shared_ptr<std::string> _buffer,
-				       std::optional<std::string>& _password,
-				       std::string description = "processing buffer");
+                                       std::optional<std::string>& _password,
+                                       std::string description = "processing buffer");
 
     void decode_document(const decode_page_config& config);
 
     void decode_document(std::vector<int>& page_numbers,
-			 const decode_page_config& config);
+                         const decode_page_config& config);
 
     // New: Direct access to page decoders (typed API)
     bool has_page_decoder(int page_number);
@@ -49,7 +49,7 @@ namespace pdflib
 
     // Decode a single page and return the page decoder directly
     page_decoder_ptr decode_page(int page_number,
-				 const decode_page_config& config);
+                                 const decode_page_config& config);
 
     bool unload_pages();
 
@@ -67,6 +67,8 @@ namespace pdflib
     void ensure_annots_loaded();
 
     void update_timings(pdf_timings& timings_, bool set_timer);
+
+    bool process_document_components();
 
   private:
 
@@ -140,33 +142,76 @@ namespace pdflib
     if(loguru::g_stderr_verbosity==loguru::Verbosity_INFO or
        loguru::g_stderr_verbosity==loguru::Verbosity_WARNING)
       {
-	// ignore ...	
+        // ignore ...
       }
     else if(loguru::g_stderr_verbosity==loguru::Verbosity_ERROR or
-	    loguru::g_stderr_verbosity==loguru::Verbosity_FATAL)
+            loguru::g_stderr_verbosity==loguru::Verbosity_FATAL)
       {
-	qpdf_document.setSuppressWarnings(true);
-	//qpdf_document.setMaxWarnings(0); only for later versions ...
+        qpdf_document.setSuppressWarnings(true);
+        //qpdf_document.setMaxWarnings(0); only for later versions ...
       }
     else
       {
 
       }
   }
-  
+
   void pdf_decoder<DOCUMENT>::ensure_annots_loaded()
   {
     if(annots_loaded)
       {
-	return;
+        return;
       }
 
-    utils::timer annots_timer;
-    json_annots = extract_document_annotations_in_json(qpdf_document, qpdf_root);
-    annots_loaded = true;
+    try
+      {
+        utils::timer annots_timer;
+        json_annots = extract_document_annotations_in_json(qpdf_document, qpdf_root);
 
-    double annots_elapsed = annots_timer.get_time();
-    timings.add_timing(pdf_timings::KEY_EXTRACT_DOC_ANNOTATIONS, annots_elapsed);
+        double annots_elapsed = annots_timer.get_time();
+        timings.add_timing(pdf_timings::KEY_EXTRACT_DOC_ANNOTATIONS, annots_elapsed);
+      }
+    catch(const std::exception& exc)
+      {
+        LOG_S(WARNING) << "filename: " << filename << " can not find any `annotations` " << exc.what();
+      }
+
+    annots_loaded = true;
+  }
+
+  bool pdf_decoder<DOCUMENT>::process_document_components()
+  {
+    utils::timer timer;
+
+    if(qpdf_root.hasKey("/Pages"))
+      {
+        qpdf_pages = qpdf_root.getKey("/Pages");
+
+        if(qpdf_pages.hasKey("/Count"))
+          {
+            number_of_pages = qpdf_pages.getKey("/Count").getIntValue();
+          }
+        else
+          {
+            LOG_S(WARNING) << "filename: " << filename << " has no `/Count`";
+            number_of_pages = 0;
+            for(QPDFObjectHandle page : qpdf_document.getAllPages())
+              {
+                number_of_pages += 1;
+              }
+          }
+
+        LOG_S(INFO) << "#-pages: " << number_of_pages;
+      }
+    else
+      {
+        LOG_S(ERROR) << "filename: " << filename << " has no pages";
+        return false;
+      }
+
+    timings.add_timing(pdf_timings::KEY_PROCESS_DOCUMENT_COMPONENTS, timer.get_time());
+
+    return true;
   }
 
   nlohmann::json pdf_decoder<DOCUMENT>::get_annotations()
@@ -187,7 +232,45 @@ namespace pdflib
     return json_annots["table_of_contents"];
   }
 
-  bool pdf_decoder<DOCUMENT>::process_document_from_file(std::string& _filename, std::optional<std::string>& _password)
+  /*
+    bool pdf_decoder<DOCUMENT>::process_document_from_file(std::string& _filename,
+    std::optional<std::string>& password)
+    {
+    try
+    {
+    if (password.has_value())
+    {
+    qpdf_document.processFile(filename.c_str(), password.value().c_str());
+    }
+    else
+    {
+    qpdf_document.processFile(filename.c_str());
+    }
+    LOG_S(INFO) << "filename: " << filename << " processed by qpdf!";
+
+    qpdf_root  = qpdf_document.getRoot();
+    }
+    catch(const std::exception& exc)
+    {
+    LOG_S(ERROR) << "filename: " << filename << " can not be processed by qpdf: " << exc.what();
+    return false;
+    }
+
+    timings.add_timing(pdf_timings::KEY_PROCESS_DOCUMENT_FROM_FILE, timer.get_time());
+
+    if(not process_document_components())
+    {
+    return false;
+    }
+
+    ensure_annots_loaded();
+
+    return true;
+    }
+  */
+
+  bool pdf_decoder<DOCUMENT>::process_document_from_file(std::string& _filename,
+                                                         std::optional<std::string>& _password)
   {
     filename = _filename; // save it
     LOG_S(INFO) << "start processing '" << filename << "' by reading into memory ...";
@@ -198,8 +281,8 @@ namespace pdflib
     std::ifstream ifs(filename, std::ios::binary | std::ios::ate);
     if(!ifs.is_open())
       {
-	LOG_S(ERROR) << "could not open file: " << filename;
-	return false;
+        LOG_S(ERROR) << "could not open file: " << filename;
+        return false;
       }
 
     auto file_size = ifs.tellg();
@@ -208,8 +291,8 @@ namespace pdflib
     auto file_buffer = std::make_shared<std::string>(file_size, '\0');
     if(!ifs.read(file_buffer->data(), file_size))
       {
-	LOG_S(ERROR) << "could not read file: " << filename;
-	return false;
+        LOG_S(ERROR) << "could not read file: " << filename;
+        return false;
       }
     ifs.close();
 
@@ -223,8 +306,8 @@ namespace pdflib
   }
 
   bool pdf_decoder<DOCUMENT>::process_document_from_bytesio(std::shared_ptr<std::string> _buffer,
-							    std::optional<std::string>& _password,
-							    std::string description)
+                                                            std::optional<std::string>& _password,
+                                                            std::string description)
   {
     buffer = _buffer;
     password = _password;
@@ -234,34 +317,22 @@ namespace pdflib
 
     try
       {
-	{
-	  utils::timer qpdf_timer;
+        if (password.has_value())
+          {
+            qpdf_document.processMemoryFile(description.c_str(),
+                                            buffer->c_str(),
+                                            buffer->size(),
+                                            password.value().c_str());
+          }
+        else
+          {
+            qpdf_document.processMemoryFile(description.c_str(),
+                                            buffer->c_str(),
+                                            buffer->size());
+          }
+        LOG_S(INFO) << "buffer processed by qpdf!";
 
-	  if(password.has_value())
-	    {
-	      qpdf_document.processMemoryFile(description.c_str(),
-					      buffer->c_str(),
-					      buffer->size(),
-					      password.value().c_str());
-	    }
-	  else
-	    {
-	      qpdf_document.processMemoryFile(description.c_str(),
-					      buffer->c_str(),
-					      buffer->size());
-	    }
-
-	  double qpdf_elapsed = qpdf_timer.get_time();
-	  timings.add_timing(pdf_timings::KEY_QPDF_PROCESS, qpdf_elapsed);
-
-	  LOG_S(INFO) << "buffer processed by qpdf!";
-	}
-
-        qpdf_root  = qpdf_document.getRoot();
-        qpdf_pages = qpdf_root.getKey("/Pages");
-
-        number_of_pages = qpdf_pages.getKey("/Count").getIntValue();
-        LOG_S(INFO) << "#-pages: " << number_of_pages;
+        qpdf_root = qpdf_document.getRoot();
       }
     catch(const std::exception & exc)
       {
@@ -269,10 +340,14 @@ namespace pdflib
         return false;
       }
 
-    double total_elapsed = timer.get_time();
-    // std::cout << pdf_timings::KEY_PROCESS_DOCUMENT_FROM_BYTESIO << ": " << total_elapsed << "\n";
+    timings.add_timing(pdf_timings::KEY_PROCESS_DOCUMENT_FROM_BYTESIO, timer.get_time());
 
-    timings.add_timing(pdf_timings::KEY_PROCESS_DOCUMENT_FROM_BYTESIO, total_elapsed);
+    if(not process_document_components())
+      {
+        return false;
+      }
+
+    ensure_annots_loaded();
 
     return true;
   }
@@ -287,27 +362,27 @@ namespace pdflib
     int page_number=0;
     for(QPDFObjectHandle page : qpdf_document.getAllPages())
       {
-	utils::timer page_timer;
+        utils::timer page_timer;
 
-	auto page_decoder = std::make_shared<pdf_decoder<PAGE>>(page, page_number);
+        auto page_decoder = std::make_shared<pdf_decoder<PAGE>>(page, page_number);
 
         page_decoder->decode_page(config);
-	update_timings(page_decoder->get_timings(), set_timer);
-	set_timer = false;
+        update_timings(page_decoder->get_timings(), set_timer);
+        set_timer = false;
 
-	page_decoders[page_number] = page_decoder;
+        page_decoders[page_number] = page_decoder;
 
-	std::stringstream ss;
-	ss << pdf_timings::PREFIX_DECODING_PAGE << page_number++;
+        std::stringstream ss;
+        ss << pdf_timings::PREFIX_DECODING_PAGE << page_number++;
 
-	timings.add_timing(ss.str(), page_timer.get_time());
+        timings.add_timing(ss.str(), page_timer.get_time());
       }
 
     timings.add_timing(pdf_timings::KEY_DECODE_DOCUMENT, timer.get_time());
   }
 
   void pdf_decoder<DOCUMENT>::decode_document(std::vector<int>& page_numbers,
-					      const decode_page_config& config)
+                                              const decode_page_config& config)
   {
     LOG_S(INFO) << "start decoding selected pages:\n" << config.to_string();
 
@@ -318,56 +393,56 @@ namespace pdflib
     bool set_timer=true; // make sure we override all timings for this page-set
     for(auto page_number:page_numbers)
       {
-	utils::timer timer;
+        utils::timer timer;
 
-	if(0<=page_number and page_number<pages.size())
-	  {
-	    utils::timer page_timer;
+        if(0<=page_number and page_number<pages.size())
+          {
+            utils::timer page_timer;
 
-	    auto page_decoder = std::make_shared<pdf_decoder<PAGE>>(pages.at(page_number), page_number);
+            auto page_decoder = std::make_shared<pdf_decoder<PAGE>>(pages.at(page_number), page_number);
 
-	    {
-	      page_decoder->decode_page(config);
+            {
+              page_decoder->decode_page(config);
 
-	      update_timings(page_decoder->get_timings(), set_timer);
-	      set_timer=false;
-	    }
+              update_timings(page_decoder->get_timings(), set_timer);
+              set_timer=false;
+            }
 
-	    if(config.create_word_cells)
-	      {
-		LOG_S(INFO) << "creating word-cells for page: " << page_number;
-		page_decoder->create_word_cells(config);
-	      }
+            if(config.create_word_cells)
+              {
+                LOG_S(INFO) << "creating word-cells for page: " << page_number;
+                page_decoder->create_word_cells(config);
+              }
 
-	    if(config.create_line_cells)
-	      {
-		LOG_S(INFO) << "creating line-cells for page: " << page_number;
-		page_decoder->create_line_cells(config);
-	      }
+            if(config.create_line_cells)
+              {
+                LOG_S(INFO) << "creating line-cells for page: " << page_number;
+                page_decoder->create_line_cells(config);
+              }
 
-	    page_decoders[page_number] = page_decoder;
+            page_decoders[page_number] = page_decoder;
 
-	    std::stringstream ss;
-	    ss << pdf_timings::PREFIX_DECODING_PAGE << page_number;
+            std::stringstream ss;
+            ss << pdf_timings::PREFIX_DECODING_PAGE << page_number;
 
-	    timings.add_timing(ss.str(), page_timer.get_time());
-	  }
-	else
-	  {
-	    LOG_S(WARNING) << "page " << page_number << " is out of bounds ...";
-	  }
+            timings.add_timing(ss.str(), page_timer.get_time());
+          }
+        else
+          {
+            LOG_S(WARNING) << "page " << page_number << " is out of bounds ...";
+          }
       }
 
     timings.add_timing(pdf_timings::KEY_DECODE_DOCUMENT, timer.get_time());
   }
 
   void pdf_decoder<DOCUMENT>::update_timings(pdf_timings& timings_,
-					     bool set_timer)
+                                             bool set_timer)
   {
     if(set_timer)
       {
-	// Clear existing timings when starting a new batch
-	timings.clear();
+        // Clear existing timings when starting a new batch
+        timings.clear();
       }
     // Merge all timings from the page decoder
     timings.merge(timings_);
@@ -383,14 +458,14 @@ namespace pdflib
     auto itr = page_decoders.find(page_number);
     if(itr != page_decoders.end())
       {
-	return itr->second;
+        return itr->second;
       }
     return nullptr;
   }
 
   pdf_decoder<DOCUMENT>::page_decoder_ptr pdf_decoder<DOCUMENT>::decode_page(
-      int page_number,
-      const decode_page_config& config)
+                                                                             int page_number,
+                                                                             const decode_page_config& config)
   {
     LOG_S(INFO) << __FUNCTION__ << " for page: " << page_number;
     utils::timer timer;
@@ -398,15 +473,15 @@ namespace pdflib
     // Check bounds
     if(page_number < 0 || page_number >= number_of_pages)
       {
-	LOG_S(ERROR) << "page " << page_number << " is out of bounds (0-" << number_of_pages-1 << ")";
-	return nullptr;
+        LOG_S(ERROR) << "page " << page_number << " is out of bounds (0-" << number_of_pages-1 << ")";
+        return nullptr;
       }
 
     // Return cached decoder if already decoded
     if(has_page_decoder(page_number))
       {
-	LOG_S(INFO) << "returning cached page decoder for page: " << page_number;
-	return page_decoders[page_number];
+        LOG_S(INFO) << "returning cached page decoder for page: " << page_number;
+        return page_decoders[page_number];
       }
 
     // Get the QPDF page and decode it
@@ -415,34 +490,34 @@ namespace pdflib
       bool set_timer = (timings.empty());
 
       if(not config.do_thread_safe)
-	{
-	  std::vector<QPDFObjectHandle> pages = qpdf_document.getAllPages();
-	  QPDFObjectHandle qpdf_page = pages.at(page_number);
+        {
+          std::vector<QPDFObjectHandle> pages = qpdf_document.getAllPages();
+          QPDFObjectHandle qpdf_page = pages.at(page_number);
 
-	  page_decoder = std::make_shared<pdf_decoder<PAGE>>(qpdf_page, page_number);
-	}
+          page_decoder = std::make_shared<pdf_decoder<PAGE>>(qpdf_page, page_number);
+        }
       else
-	{
-	  // creates its own QPDF document
-	  page_decoder = std::make_shared<pdf_decoder<PAGE>>(buffer, password, page_number);
-	}
-      
+        {
+          // creates its own QPDF document
+          page_decoder = std::make_shared<pdf_decoder<PAGE>>(buffer, password, page_number);
+        }
+
       page_decoder->decode_page(config);
-      
+
       update_timings(page_decoder->get_timings(), set_timer);
     }
-    
+
     // Create word and line cells if requested
     if(config.create_word_cells)
       {
-	LOG_S(INFO) << "creating word-cells for page: " << page_number;
-	page_decoder->create_word_cells(config);
+        LOG_S(INFO) << "creating word-cells for page: " << page_number;
+        page_decoder->create_word_cells(config);
       }
 
     if(config.create_line_cells)
       {
-	LOG_S(INFO) << "creating line-cells for page: " << page_number;
-	page_decoder->create_line_cells(config);
+        LOG_S(INFO) << "creating line-cells for page: " << page_number;
+        page_decoder->create_line_cells(config);
       }
 
     // Store in cache
@@ -459,8 +534,8 @@ namespace pdflib
   {
     if(page_decoders.count(page_number) > 0)
       {
-	page_decoders.erase(page_number);
-	LOG_S(INFO) << "unloaded page decoder for page: " << page_number;
+        page_decoders.erase(page_number);
+        LOG_S(INFO) << "unloaded page decoder for page: " << page_number;
       }
 
     return true;
@@ -473,7 +548,7 @@ namespace pdflib
 
     return true;
   }
-    
+
 }
 
 #endif

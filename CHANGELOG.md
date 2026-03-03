@@ -1,3 +1,10 @@
+## [v5.4.1](https://github.com/docling-project/docling-parse/releases/tag/v5.4.1) - 2026-03-03
+
+### Fix
+
+* Map  characters into the proper chars ([#233](https://github.com/docling-project/docling-parse/issues/233)) ([`0316060`](https://github.com/docling-project/docling-parse/commit/0316060f2c9ec9f38e3f0e1e37ac37c001c9828d))
+* Robustify the page number count ([#232](https://github.com/docling-project/docling-parse/issues/232)) ([`a4fecd1`](https://github.com/docling-project/docling-parse/commit/a4fecd1e0643bb51ee785c6ea5f104f3d4034a96))
+
 ## [v5.4.0](https://github.com/docling-project/docling-parse/releases/tag/v5.4.0) - 2026-02-24
 
 ### Feature
