@@ -43,13 +43,13 @@ namespace pdflib
     void decode_document(std::vector<int>& page_numbers,
                          const decode_page_config& config);
 
-    // New: Direct access to page decoders (typed API)
-    bool has_page_decoder(int page_number);
-    page_decoder_ptr get_page_decoder(int page_number);
-
     // Decode a single page and return the page decoder directly
     page_decoder_ptr decode_page(int page_number,
                                  const decode_page_config& config);
+    
+    // New: Direct access to page decoders (typed API)
+    bool has_page_decoder(int page_number);
+    page_decoder_ptr get_page_decoder(int page_number);
 
     bool unload_pages();
 
@@ -357,25 +357,9 @@ namespace pdflib
     LOG_S(INFO) << "start decoding all pages ...";
     utils::timer timer;
 
-    bool set_timer=true;
-
-    int page_number=0;
-    for(QPDFObjectHandle page : qpdf_document.getAllPages())
+    for(int page_number = 0; page_number < number_of_pages; page_number++)
       {
-        utils::timer page_timer;
-
-        auto page_decoder = std::make_shared<pdf_decoder<PAGE>>(page, page_number);
-
-        page_decoder->decode_page(config);
-        update_timings(page_decoder->get_timings(), set_timer);
-        set_timer = false;
-
-        page_decoders[page_number] = page_decoder;
-
-        std::stringstream ss;
-        ss << pdf_timings::PREFIX_DECODING_PAGE << page_number++;
-
-        timings.add_timing(ss.str(), page_timer.get_time());
+        decode_page(page_number, config);
       }
 
     timings.add_timing(pdf_timings::KEY_DECODE_DOCUMENT, timer.get_time());
@@ -385,86 +369,17 @@ namespace pdflib
                                               const decode_page_config& config)
   {
     LOG_S(INFO) << "start decoding selected pages:\n" << config.to_string();
-
     utils::timer timer;
 
-    std::vector<QPDFObjectHandle> pages = qpdf_document.getAllPages();
-
-    bool set_timer=true; // make sure we override all timings for this page-set
-    for(auto page_number:page_numbers)
+    for(auto page_number : page_numbers)
       {
-        utils::timer timer;
-
-        if(0<=page_number and page_number<pages.size())
-          {
-            utils::timer page_timer;
-
-            auto page_decoder = std::make_shared<pdf_decoder<PAGE>>(pages.at(page_number), page_number);
-
-            {
-              page_decoder->decode_page(config);
-
-              update_timings(page_decoder->get_timings(), set_timer);
-              set_timer=false;
-            }
-
-            if(config.create_word_cells)
-              {
-                LOG_S(INFO) << "creating word-cells for page: " << page_number;
-                page_decoder->create_word_cells(config);
-              }
-
-            if(config.create_line_cells)
-              {
-                LOG_S(INFO) << "creating line-cells for page: " << page_number;
-                page_decoder->create_line_cells(config);
-              }
-
-            page_decoders[page_number] = page_decoder;
-
-            std::stringstream ss;
-            ss << pdf_timings::PREFIX_DECODING_PAGE << page_number;
-
-            timings.add_timing(ss.str(), page_timer.get_time());
-          }
-        else
-          {
-            LOG_S(WARNING) << "page " << page_number << " is out of bounds ...";
-          }
+        decode_page(page_number, config);
       }
 
     timings.add_timing(pdf_timings::KEY_DECODE_DOCUMENT, timer.get_time());
   }
 
-  void pdf_decoder<DOCUMENT>::update_timings(pdf_timings& timings_,
-                                             bool set_timer)
-  {
-    if(set_timer)
-      {
-        // Clear existing timings when starting a new batch
-        timings.clear();
-      }
-    // Merge all timings from the page decoder
-    timings.merge(timings_);
-  }
-
-  bool pdf_decoder<DOCUMENT>::has_page_decoder(int page_number)
-  {
-    return page_decoders.count(page_number) > 0;
-  }
-
-  pdf_decoder<DOCUMENT>::page_decoder_ptr pdf_decoder<DOCUMENT>::get_page_decoder(int page_number)
-  {
-    auto itr = page_decoders.find(page_number);
-    if(itr != page_decoders.end())
-      {
-        return itr->second;
-      }
-    return nullptr;
-  }
-
-  pdf_decoder<DOCUMENT>::page_decoder_ptr pdf_decoder<DOCUMENT>::decode_page(
-                                                                             int page_number,
+  pdf_decoder<DOCUMENT>::page_decoder_ptr pdf_decoder<DOCUMENT>::decode_page(int page_number,
                                                                              const decode_page_config& config)
   {
     LOG_S(INFO) << __FUNCTION__ << " for page: " << page_number;
@@ -489,17 +404,17 @@ namespace pdflib
     {
       bool set_timer = (timings.empty());
 
-      if(not config.do_thread_safe)
+      if(config.do_thread_safe)
+        {
+          // creates its own QPDF document
+          page_decoder = std::make_shared<pdf_decoder<PAGE>>(buffer, password, page_number);	  
+        }
+      else
         {
           std::vector<QPDFObjectHandle> pages = qpdf_document.getAllPages();
           QPDFObjectHandle qpdf_page = pages.at(page_number);
 
           page_decoder = std::make_shared<pdf_decoder<PAGE>>(qpdf_page, page_number);
-        }
-      else
-        {
-          // creates its own QPDF document
-          page_decoder = std::make_shared<pdf_decoder<PAGE>>(buffer, password, page_number);
         }
 
       page_decoder->decode_page(config);
@@ -549,6 +464,33 @@ namespace pdflib
     return true;
   }
 
+  void pdf_decoder<DOCUMENT>::update_timings(pdf_timings& timings_,
+                                             bool set_timer)
+  {
+    if(set_timer)
+      {
+        // Clear existing timings when starting a new batch
+        timings.clear();
+      }
+    // Merge all timings from the page decoder
+    timings.merge(timings_);
+  }
+
+  bool pdf_decoder<DOCUMENT>::has_page_decoder(int page_number)
+  {
+    return page_decoders.count(page_number) > 0;
+  }
+
+  pdf_decoder<DOCUMENT>::page_decoder_ptr pdf_decoder<DOCUMENT>::get_page_decoder(int page_number)
+  {
+    auto itr = page_decoders.find(page_number);
+    if(itr != page_decoders.end())
+      {
+        return itr->second;
+      }
+    return nullptr;
+  }
+  
 }
 
 #endif
