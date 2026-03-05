@@ -45,7 +45,7 @@ namespace docling
     docling_threaded_parser(std::string loglevel,
                             int num_threads,
                             int max_concurrent_results,
-                            pdflib::decode_page_config config);
+                            pdflib::decode_config config);
 
     ~docling_threaded_parser();
 
@@ -75,7 +75,7 @@ namespace docling
 
     std::string pdf_resources_dir;
 
-    pdflib::decode_page_config config;
+    pdflib::decode_config config;
     int num_threads;
     int max_concurrent_results;
 
@@ -102,7 +102,7 @@ namespace docling
   docling_threaded_parser::docling_threaded_parser(std::string loglevel,
                                                     int num_threads,
                                                     int max_concurrent_results,
-                                                    pdflib::decode_page_config config):
+                                                    pdflib::decode_config config):
     docling_resources(),
     pdf_resources_dir(resource_utils::get_resources_dir(true).string()),
     config(config),

@@ -11,7 +11,7 @@ namespace pdflib
   {
   public:
 
-    pdf_state(const decode_page_config& config,
+    pdf_state(const decode_config& config,
               page_item<PAGE_CELLS>& page_cells_,
               page_item<PAGE_SHAPES>& page_shapes_,
               page_item<PAGE_IMAGES>& page_images_,
@@ -25,17 +25,17 @@ namespace pdflib
 
     pdf_state<GLOBAL>& operator=(const pdf_state<GLOBAL>& other);
 
-    void cm(std::vector<qpdf_instruction>& instructions);
+    void cm(std::vector<qpdf_stream_instruction>& instructions);
     void cm(std::array<double, 6> matrix);
 
   private:
 
-    bool verify(std::vector<qpdf_instruction>& instructions,
+    bool verify(std::vector<qpdf_stream_instruction>& instructions,
                 std::size_t num_instr, std::string name);
 
   public:
 
-    const decode_page_config& config;
+    const decode_config& config;
 
     page_item<PAGE_CELLS>& page_cells;
     page_item<PAGE_SHAPES>& page_shapes;
@@ -53,7 +53,7 @@ namespace pdflib
     pdf_state<BITMAP> bitmap_state;
   };
 
-  pdf_state<GLOBAL>::pdf_state(const decode_page_config& config_,
+  pdf_state<GLOBAL>::pdf_state(const decode_config& config_,
                                page_item<PAGE_CELLS>& page_cells_,
                                page_item<PAGE_SHAPES>& page_shapes_,
                                page_item<PAGE_IMAGES>& page_images_,
@@ -122,7 +122,7 @@ namespace pdflib
     return *this;
   }
 
-  bool pdf_state<GLOBAL>::verify(std::vector<qpdf_instruction>& instructions,
+  bool pdf_state<GLOBAL>::verify(std::vector<qpdf_stream_instruction>& instructions,
                                  std::size_t num_instr, std::string name)
   {
     if(instructions.size()==num_instr)
@@ -147,7 +147,7 @@ namespace pdflib
     return false;
   }
 
-  void pdf_state<GLOBAL>::cm(std::vector<qpdf_instruction>& instructions)
+  void pdf_state<GLOBAL>::cm(std::vector<qpdf_stream_instruction>& instructions)
   {
     if(not verify(instructions, 6, __FUNCTION__) ) { return; }
 

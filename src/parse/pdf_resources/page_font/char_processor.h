@@ -14,11 +14,11 @@ namespace pdflib
     char_processor();
     ~char_processor();
 
-    char_description parse(std::vector<qpdf_instruction>& instructions_);
+    char_description parse(std::vector<qpdf_stream_instruction>& instructions_);
 
   private:
     
-    //std::vector<qpdf_instruction> instructions
+    //std::vector<qpdf_stream_instruction> instructions
   };
 
   char_processor::char_processor()
@@ -27,7 +27,7 @@ namespace pdflib
   char_processor::~char_processor()
   {}
 
-  char_description char_processor::parse(std::vector<qpdf_instruction>& instructions_)
+  char_description char_processor::parse(std::vector<qpdf_stream_instruction>& instructions_)
   {
     char_description desc;
     desc.instructions = instructions_;
@@ -35,7 +35,7 @@ namespace pdflib
     return desc;
 
     /*
-    std::vector<qpdf_instruction> parameters;
+    std::vector<qpdf_stream_instruction> parameters;
 
     for(auto& item:instructions)
       {

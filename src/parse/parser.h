@@ -18,8 +18,8 @@ namespace plib
 
     void set_loglevel_with_label(std::string level);
 
-    void parse(std::string filename, pdflib::decode_page_config page_config);
-    void parse(nlohmann::json config, pdflib::decode_page_config page_config);
+    void parse(std::string filename, pdflib::decode_config page_config);
+    void parse(nlohmann::json config, pdflib::decode_config page_config);
 
     bool initialise(nlohmann::json& data);
 
@@ -35,14 +35,14 @@ namespace plib
 
   private:
 
-    void execute_parse(pdflib::decode_page_config page_config);
+    void execute_parse(pdflib::decode_config page_config);
 
     bool parse_input(std::string filename);
 
     bool parse_file(std::string inp_filename,
                     std::string out_filename,
                     nlohmann::json& task,
-		    pdflib::decode_page_config page_config,
+		    pdflib::decode_config page_config,
                     bool pretty_print=true);
 
   private:
@@ -102,7 +102,7 @@ namespace plib
     return {};
   }
 
-  void parser::parse(std::string filename, pdflib::decode_page_config page_config)
+  void parser::parse(std::string filename, pdflib::decode_config page_config)
   {
     if(not parse_input(filename))
       {
@@ -112,14 +112,14 @@ namespace plib
     execute_parse(page_config);
   }
 
-  void parser::parse(nlohmann::json config, pdflib::decode_page_config page_config)
+  void parser::parse(nlohmann::json config, pdflib::decode_config page_config)
   {
     input_file = config;
 
     execute_parse(page_config);
   }
   
-  void parser::execute_parse(pdflib::decode_page_config page_config)
+  void parser::execute_parse(pdflib::decode_config page_config)
   {
     // initialise the fonts
     /*
@@ -205,7 +205,7 @@ namespace plib
   bool parser::parse_file(std::string inp_filename,
                           std::string out_filename,
                           nlohmann::json& task,
-			  pdflib::decode_page_config page_config,
+			  pdflib::decode_config page_config,
 			  bool pretty_print)
   {
     pdflib::pdf_timings pdf_timings;

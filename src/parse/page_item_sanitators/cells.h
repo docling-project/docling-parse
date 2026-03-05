@@ -17,10 +17,10 @@ namespace pdflib
     nlohmann::json to_records(page_item<PAGE_CELLS>& cells);
 
     page_item<PAGE_CELLS> create_word_cells(page_item<PAGE_CELLS>& cells,
-					       const decode_page_config& config);
+					       const decode_config& config);
 
     page_item<PAGE_CELLS> create_line_cells(page_item<PAGE_CELLS>& cells,
-					       const decode_page_config& config);
+					       const decode_config& config);
 
     
     //void remove_duplicate_chars(page_item<PAGE_CELLS>& cells, double eps=1.0e-1);
@@ -129,7 +129,7 @@ namespace pdflib
   }
   
   page_item<PAGE_CELLS> page_item_sanitator<PAGE_CELLS>::create_word_cells(page_item<PAGE_CELLS>& char_cells,
-									const decode_page_config& config)
+									const decode_config& config)
   {
     LOG_S(INFO) << __FUNCTION__;
     LOG_S(INFO) << "word_space_width_factor_for_merge: " << config.word_space_width_factor_for_merge;
@@ -172,7 +172,7 @@ namespace pdflib
   }
 
   page_item<PAGE_CELLS> page_item_sanitator<PAGE_CELLS>::create_line_cells(page_item<PAGE_CELLS>& char_cells,
-									const decode_page_config& config)
+									const decode_config& config)
   {
     LOG_S(INFO) << __FUNCTION__ << " -> char_cells: " << char_cells.size();
     LOG_S(INFO) << "line_space_width_factor_for_merge: " << config.line_space_width_factor_for_merge;

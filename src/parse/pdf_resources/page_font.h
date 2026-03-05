@@ -720,7 +720,7 @@ namespace pdflib
 
 		if(qpdf_obj.isStream())
 		  {
-		    std::vector<qpdf_instruction> stream;
+		    std::vector<qpdf_stream_instruction> stream;
 
 		    // decode the stream
 		    {
@@ -991,7 +991,7 @@ namespace pdflib
 
 	if(qpdf_obj.isStream())
 	  {
-	    std::vector<qpdf_instruction> stream;
+	    std::vector<qpdf_stream_instruction> stream;
 	    
 	    // decode the stream
 	    {
@@ -1045,7 +1045,7 @@ namespace pdflib
 
 	if(qpdf_obj.isStream())
 	  {
-	    std::vector<qpdf_instruction> stream;
+	    std::vector<qpdf_stream_instruction> stream;
 	    
 	    // decode the stream
 	    {
@@ -1066,7 +1066,7 @@ namespace pdflib
 
 	if(qpdf_obj.isStream())
 	  {
-	    std::vector<qpdf_instruction> stream;
+	    std::vector<qpdf_stream_instruction> stream;
 	    
 	    // decode the stream
 	    {
@@ -1546,7 +1546,7 @@ namespace pdflib
 
 	if(qpdf_obj.isStream())
 	  {
-	    std::vector<qpdf_instruction> stream;
+	    std::vector<qpdf_stream_instruction> stream;
 	    
 	    // decode the stream
 	    {
@@ -1967,7 +1967,7 @@ namespace pdflib
 		    throw std::logic_error(message);
 		  }
 		
-                std::vector<qpdf_instruction> stream={};
+                std::vector<qpdf_stream_instruction> stream={};
 
                 // decode the stream
                 {

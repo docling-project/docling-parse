@@ -18,7 +18,7 @@ namespace pdflib
 
     void print();
 
-    void parse(std::vector<qpdf_instruction>& instructions,
+    void parse(std::vector<qpdf_stream_instruction>& instructions,
                pdf_timings& timings,
                const std::string& key_root);
 
@@ -32,17 +32,17 @@ namespace pdflib
     std::string get_source(QPDFObjectHandle my_handle);
     std::string get_target(QPDFObjectHandle my_handle);
 
-    void parse_cmap_name(std::vector<qpdf_instruction>& parameters);
-    void parse_cmap_type(std::vector<qpdf_instruction>& parameters);
+    void parse_cmap_name(std::vector<qpdf_stream_instruction>& parameters);
+    void parse_cmap_type(std::vector<qpdf_stream_instruction>& parameters);
 
-    void parse_begincodespacerange(std::vector<qpdf_instruction>& parameters);
-    void parse_endcodespacerange(std::vector<qpdf_instruction>& parameters);
+    void parse_begincodespacerange(std::vector<qpdf_stream_instruction>& parameters);
+    void parse_endcodespacerange(std::vector<qpdf_stream_instruction>& parameters);
 
-    void parse_beginbfrange(std::vector<qpdf_instruction>& parameters);
-    void parse_endbfrange(std::vector<qpdf_instruction>& parameters);
+    void parse_beginbfrange(std::vector<qpdf_stream_instruction>& parameters);
+    void parse_endbfrange(std::vector<qpdf_stream_instruction>& parameters);
 
-    void parse_beginbfchar(std::vector<qpdf_instruction>& parameters);
-    void parse_endbfchar(std::vector<qpdf_instruction>& parameters);
+    void parse_beginbfchar(std::vector<qpdf_stream_instruction>& parameters);
+    void parse_endbfchar(std::vector<qpdf_stream_instruction>& parameters);
 
     void set_mapping(const std::string src,
                      const std::string tgt);
@@ -111,13 +111,13 @@ namespace pdflib
       }
   }
 
-  void cmap_parser::parse(std::vector<qpdf_instruction>& instructions,
+  void cmap_parser::parse(std::vector<qpdf_stream_instruction>& instructions,
                           pdf_timings& timings,
                           const std::string& key_root)
   {
     utils::timer total_timer;
 
-    std::vector<qpdf_instruction> parameters;
+    std::vector<qpdf_stream_instruction> parameters;
 
     for(auto& item:instructions)
       {
@@ -527,17 +527,17 @@ namespace pdflib
   }
   */
   
-  void cmap_parser::parse_cmap_name(std::vector<qpdf_instruction>& parameters)
+  void cmap_parser::parse_cmap_name(std::vector<qpdf_stream_instruction>& parameters)
   {
     LOG_S(WARNING) << __FUNCTION__ << ": skipping ...";
   }
 
-  void cmap_parser::parse_cmap_type(std::vector<qpdf_instruction>& parameters)
+  void cmap_parser::parse_cmap_type(std::vector<qpdf_stream_instruction>& parameters)
   {
     LOG_S(WARNING) << __FUNCTION__ << ": skipping ...";
   }
 
-  void cmap_parser::parse_begincodespacerange(std::vector<qpdf_instruction>& parameters)
+  void cmap_parser::parse_begincodespacerange(std::vector<qpdf_stream_instruction>& parameters)
   {
     LOG_S(INFO) << __FUNCTION__;
 
@@ -559,7 +559,7 @@ namespace pdflib
     LOG_S(INFO) << __FUNCTION__ << " csr_cnt: " << csr_cnt;
   }
 
-  void cmap_parser::parse_endcodespacerange(std::vector<qpdf_instruction>& parameters)
+  void cmap_parser::parse_endcodespacerange(std::vector<qpdf_stream_instruction>& parameters)
   {
     LOG_S(INFO) << __FUNCTION__;
 
@@ -582,7 +582,7 @@ namespace pdflib
     LOG_S(INFO) << parameters[1].obj.unparse() << "\t" << csr_range.second;
   }
 
-  void cmap_parser::parse_beginbfrange(std::vector<qpdf_instruction>& parameters)
+  void cmap_parser::parse_beginbfrange(std::vector<qpdf_stream_instruction>& parameters)
   {
     LOG_S(INFO) << __FUNCTION__;
 
@@ -636,7 +636,7 @@ namespace pdflib
     return target;
   }
 
-  void cmap_parser::parse_endbfrange(std::vector<qpdf_instruction>& parameters)
+  void cmap_parser::parse_endbfrange(std::vector<qpdf_stream_instruction>& parameters)
   {
     LOG_S(INFO) << __FUNCTION__;
     
@@ -860,7 +860,7 @@ namespace pdflib
       }
   }
 
-  void cmap_parser::parse_beginbfchar(std::vector<qpdf_instruction>& parameters)
+  void cmap_parser::parse_beginbfchar(std::vector<qpdf_stream_instruction>& parameters)
   {
     LOG_S(INFO) << __FUNCTION__;
 
@@ -879,7 +879,7 @@ namespace pdflib
       }
   }
 
-  void cmap_parser::parse_endbfchar(std::vector<qpdf_instruction>& parameters)
+  void cmap_parser::parse_endbfchar(std::vector<qpdf_stream_instruction>& parameters)
   {
     LOG_S(INFO) << __FUNCTION__ << ": starting ...";
 

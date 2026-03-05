@@ -57,9 +57,9 @@ namespace docling
 
     std::shared_ptr<pdflib::pdf_decoder<pdflib::PAGE>> get_page_decoder(std::string key,
                                                                         int page,
-                                                                        const pdflib::decode_page_config& config);
+                                                                        const pdflib::decode_config& config);
 
-    //std::shared_ptr<pdflib::pdf_decoder<pdflib::PAGE>> get_page_decoders_in_parallel(const pdflib::decode_page_config& config);
+    //std::shared_ptr<pdflib::pdf_decoder<pdflib::PAGE>> get_page_decoders_in_parallel(const pdflib::decode_config& config);
     
   private:
 
@@ -329,7 +329,7 @@ namespace docling
 
   std::shared_ptr<pdflib::pdf_decoder<pdflib::PAGE>> docling_parser::get_page_decoder(std::string key,
                                                                                       int page,
-                                                                                      const pdflib::decode_page_config& config)
+                                                                                      const pdflib::decode_config& config)
   {
     LOG_S(INFO) << __FUNCTION__ << " for key: " << key << " and page: " << page;
 

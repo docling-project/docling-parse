@@ -48,13 +48,13 @@ namespace pdflib
     bool has_line_cells() const { return line_cells_created; }
 
     // Create word/line cells from page_cells
-    void create_word_cells(const decode_page_config& config);
-    void create_line_cells(const decode_page_config& config);
+    void create_word_cells(const decode_config& config);
+    void create_line_cells(const decode_config& config);
 
     // JSON serialization
-    nlohmann::json get(const decode_page_config& config);
+    nlohmann::json get(const decode_config& config);
 
-    void decode_page(const decode_page_config& config);
+    void decode_page(const decode_config& config);
 
     // Get timing information for this page
     pdf_timings& get_timings() { return timings; }
@@ -67,8 +67,8 @@ namespace pdflib
     void decode_dimensions();
 
     // Resources
-    void decode_resources(const decode_page_config& config);
-    void decode_resources_low_level(const decode_page_config& config);
+    void decode_resources(const decode_config& config);
+    void decode_resources_low_level(const decode_config& config);
 
     void decode_grphs();
 
@@ -77,7 +77,7 @@ namespace pdflib
     void decode_xobjects();
 
     // Contents
-    void decode_contents(const decode_page_config& config);
+    void decode_contents(const decode_config& config);
 
     void decode_annots_from_qpdf();
     void extract_page_items_from_annots(QPDFObjectHandle annots);
@@ -219,7 +219,7 @@ namespace pdflib
     return page_number;
   }
 
-  nlohmann::json pdf_decoder<PAGE>::get(const decode_page_config& config)
+  nlohmann::json pdf_decoder<PAGE>::get(const decode_config& config)
   {
     bool keep_char_cells = config.keep_char_cells;
     bool keep_shapes = config.keep_shapes;
@@ -314,7 +314,7 @@ namespace pdflib
     return result;
   }
 
-  void pdf_decoder<PAGE>::decode_page(const decode_page_config& config)
+  void pdf_decoder<PAGE>::decode_page(const decode_config& config)
   {
     if(owned_qpdf_document != nullptr)
       {
@@ -418,7 +418,7 @@ namespace pdflib
     page_dimension.execute(qpdf_page);
   }
 
-  void pdf_decoder<PAGE>::decode_resources(const decode_page_config& config)
+  void pdf_decoder<PAGE>::decode_resources(const decode_config& config)
   {
     LOG_S(INFO) << __FUNCTION__;
 
@@ -479,7 +479,7 @@ namespace pdflib
     }
   }
 
-  void pdf_decoder<PAGE>::decode_resources_low_level(const decode_page_config& config)
+  void pdf_decoder<PAGE>::decode_resources_low_level(const decode_config& config)
   {
     LOG_S(INFO) << __FUNCTION__;
 
@@ -535,7 +535,7 @@ namespace pdflib
     page_xobjects->set(qpdf_xobjects, timings);
   }
 
-  void pdf_decoder<PAGE>::decode_contents(const decode_page_config& config)
+  void pdf_decoder<PAGE>::decode_contents(const decode_config& config)
   {
     LOG_S(INFO) << __FUNCTION__;
 
@@ -556,7 +556,7 @@ namespace pdflib
 
     int cnt = 0;
 
-    std::vector<qpdf_instruction> parameters;
+    std::vector<qpdf_stream_instruction> parameters;
     for(auto content:contents)
       {
         LOG_S(INFO) << "--------------- start decoding content stream (" << (cnt++) << ")... ---------------";
@@ -882,7 +882,7 @@ namespace pdflib
     }
   }
 
-  void pdf_decoder<PAGE>::create_word_cells(const decode_page_config& config)
+  void pdf_decoder<PAGE>::create_word_cells(const decode_config& config)
   {
     LOG_S(INFO) << __FUNCTION__;
     utils::timer timer;
@@ -900,7 +900,7 @@ namespace pdflib
     timings.add_timing(pdf_timings::KEY_CREATE_WORD_CELLS, timer.get_time());
   }
 
-  void pdf_decoder<PAGE>::create_line_cells(const decode_page_config& config)
+  void pdf_decoder<PAGE>::create_line_cells(const decode_config& config)
   {
     LOG_S(INFO) << __FUNCTION__;
     utils::timer timer;

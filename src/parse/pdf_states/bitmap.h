@@ -11,7 +11,7 @@ namespace pdflib
   {
   public:
 
-    pdf_state(const decode_page_config& config_,
+    pdf_state(const decode_config& config_,
               const pdf_state<GRPH>& grph_state_,
               std::array<double, 9>&    trafo_matrix_,
               page_item<PAGE_IMAGES>& page_images_);
@@ -26,7 +26,7 @@ namespace pdflib
 
   private:
 
-    const decode_page_config& config;
+    const decode_config& config;
     const pdf_state<GRPH>& grph_state;
 
     std::array<double, 9>& trafo_matrix;
@@ -34,7 +34,7 @@ namespace pdflib
     page_item<PAGE_IMAGES>& page_images;
   };
 
-  pdf_state<BITMAP>::pdf_state(const decode_page_config& config_,
+  pdf_state<BITMAP>::pdf_state(const decode_config& config_,
                                const pdf_state<GRPH>& grph_state_,
                                std::array<double, 9>&    trafo_matrix_,
                                page_item<PAGE_IMAGES>& page_images_):

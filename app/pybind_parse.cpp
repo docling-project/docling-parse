@@ -17,7 +17,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
 
   // ============= Decode Page Config =============
 
-  pybind11::class_<pdflib::decode_page_config>(m, "DecodePageConfig",
+  pybind11::class_<pdflib::decode_config>(m, "DecodePageConfig",
     R"(
     Configuration parameters for page decoding.
 
@@ -33,23 +33,23 @@ PYBIND11_MODULE(pdf_parsers, m) {
         keep_qpdf_warnings (bool): If true, QPDF warnings are emitted; if false, they are suppressed [default=false].
     )")
     .def(pybind11::init<>())
-    .def_readwrite("page_boundary", &pdflib::decode_page_config::page_boundary)
-    .def_readwrite("do_sanitization", &pdflib::decode_page_config::do_sanitization)
-    .def_readwrite("keep_char_cells", &pdflib::decode_page_config::keep_char_cells)
-    .def_readwrite("keep_shapes", &pdflib::decode_page_config::keep_shapes)
-    .def_readwrite("keep_bitmaps", &pdflib::decode_page_config::keep_bitmaps)
-    .def_readwrite("max_num_lines", &pdflib::decode_page_config::max_num_lines)
-    .def_readwrite("max_num_bitmaps", &pdflib::decode_page_config::max_num_bitmaps)
-    .def_readwrite("create_word_cells", &pdflib::decode_page_config::create_word_cells)
-    .def_readwrite("create_line_cells", &pdflib::decode_page_config::create_line_cells)
-    .def_readwrite("enforce_same_font", &pdflib::decode_page_config::enforce_same_font)
-    .def_readwrite("horizontal_cell_tolerance", &pdflib::decode_page_config::horizontal_cell_tolerance)
-    .def_readwrite("word_space_width_factor_for_merge", &pdflib::decode_page_config::word_space_width_factor_for_merge)
-    .def_readwrite("line_space_width_factor_for_merge", &pdflib::decode_page_config::line_space_width_factor_for_merge)
-    .def_readwrite("line_space_width_factor_for_merge_with_space", &pdflib::decode_page_config::line_space_width_factor_for_merge_with_space)
-    .def_readwrite("do_thread_safe", &pdflib::decode_page_config::do_thread_safe)
-    .def_readwrite("keep_glyphs", &pdflib::decode_page_config::keep_glyphs)
-    .def_readwrite("keep_qpdf_warnings", &pdflib::decode_page_config::keep_qpdf_warnings);
+    .def_readwrite("page_boundary", &pdflib::decode_config::page_boundary)
+    .def_readwrite("do_sanitization", &pdflib::decode_config::do_sanitization)
+    .def_readwrite("keep_char_cells", &pdflib::decode_config::keep_char_cells)
+    .def_readwrite("keep_shapes", &pdflib::decode_config::keep_shapes)
+    .def_readwrite("keep_bitmaps", &pdflib::decode_config::keep_bitmaps)
+    .def_readwrite("max_num_lines", &pdflib::decode_config::max_num_lines)
+    .def_readwrite("max_num_bitmaps", &pdflib::decode_config::max_num_bitmaps)
+    .def_readwrite("create_word_cells", &pdflib::decode_config::create_word_cells)
+    .def_readwrite("create_line_cells", &pdflib::decode_config::create_line_cells)
+    .def_readwrite("enforce_same_font", &pdflib::decode_config::enforce_same_font)
+    .def_readwrite("horizontal_cell_tolerance", &pdflib::decode_config::horizontal_cell_tolerance)
+    .def_readwrite("word_space_width_factor_for_merge", &pdflib::decode_config::word_space_width_factor_for_merge)
+    .def_readwrite("line_space_width_factor_for_merge", &pdflib::decode_config::line_space_width_factor_for_merge)
+    .def_readwrite("line_space_width_factor_for_merge_with_space", &pdflib::decode_config::line_space_width_factor_for_merge_with_space)
+    .def_readwrite("do_thread_safe", &pdflib::decode_config::do_thread_safe)
+    .def_readwrite("keep_glyphs", &pdflib::decode_config::keep_glyphs)
+    .def_readwrite("keep_qpdf_warnings", &pdflib::decode_config::keep_qpdf_warnings);
 
   // ============= Typed Resource Bindings (for zero-copy access) =============
 
@@ -522,7 +522,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
 	 [](docling::docling_parser &self,
 	    const std::string &key,
 	    int page,
-	    const pdflib::decode_page_config &config) -> std::shared_ptr<pdflib::pdf_decoder<pdflib::PAGE>> {
+	    const pdflib::decode_config &config) -> std::shared_ptr<pdflib::pdf_decoder<pdflib::PAGE>> {
 	   return self.get_page_decoder(key, page, config);
 	 },
 	 pybind11::arg("key"),
@@ -589,11 +589,11 @@ PYBIND11_MODULE(pdf_parsers, m) {
     Loads multiple documents and decodes their pages using a thread pool.
     Results are available via a bounded queue to control memory usage.
     )")
-    .def(pybind11::init<const std::string&, int, int, pdflib::decode_page_config>(),
+    .def(pybind11::init<const std::string&, int, int, pdflib::decode_config>(),
          pybind11::arg("loglevel") = "fatal",
          pybind11::arg("num_threads") = 4,
          pybind11::arg("max_concurrent_results") = 32,
-         pybind11::arg("config") = pdflib::decode_page_config(),
+         pybind11::arg("config") = pdflib::decode_config(),
          R"(
     Construct a threaded PDF parser.
 

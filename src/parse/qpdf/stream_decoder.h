@@ -13,7 +13,7 @@ namespace pdflib
   {
   public:
 
-    qpdf_stream_decoder(std::vector<qpdf_instruction>& stream_);
+    qpdf_stream_decoder(std::vector<qpdf_stream_instruction>& stream_);
     ~qpdf_stream_decoder();
 
     void print();
@@ -31,14 +31,14 @@ namespace pdflib
     
   private:
 
-    std::vector<qpdf_instruction>& stream;
+    std::vector<qpdf_stream_instruction>& stream;
 
     std::regex value_pattern_0;
     std::regex value_pattern_1;
     std::regex value_pattern_2;
   };
 
-  qpdf_stream_decoder::qpdf_stream_decoder(std::vector<qpdf_instruction>& stream_):
+  qpdf_stream_decoder::qpdf_stream_decoder(std::vector<qpdf_stream_instruction>& stream_):
     QPDFObjectHandle::ParserCallbacks(),
     stream(stream_),
 
@@ -81,7 +81,7 @@ namespace pdflib
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    qpdf_instruction row;
+    qpdf_stream_instruction row;
     {
       row.key = obj.getTypeName();
       row.val = obj.unparse();
@@ -98,7 +98,7 @@ namespace pdflib
   {
     //LOG_S(INFO) << __FUNCTION__ << "\t offset: " << offset << ", len: " << len;
 
-    qpdf_instruction row;
+    qpdf_stream_instruction row;
     {
       row.key = obj.getTypeName();
       row.val = obj.unparse();

@@ -6,7 +6,7 @@
 namespace pdflib
 {
 
-  struct decode_page_config
+  struct decode_config
   {
     std::string page_boundary = "crop_box";
 
@@ -51,7 +51,7 @@ namespace pdflib
     std::string to_string() const;
   };
 
-  nlohmann::json decode_page_config::to_json() const
+  nlohmann::json decode_config::to_json() const
   {
     nlohmann::json j;
 
@@ -85,7 +85,7 @@ namespace pdflib
     return j;
   }
 
-  void decode_page_config::from_json(const nlohmann::json& j)
+  void decode_config::from_json(const nlohmann::json& j)
   {
     if(j.count("page_boundary")) { page_boundary = j["page_boundary"]; }
 
@@ -115,7 +115,7 @@ namespace pdflib
     if(j.count("keep_qpdf_warnings")) { keep_qpdf_warnings = j["keep_qpdf_warnings"]; }
   }
 
-  bool decode_page_config::load(const std::string& filename)
+  bool decode_config::load(const std::string& filename)
   {
     std::ifstream ifs(filename);
     if(!ifs)
@@ -130,7 +130,7 @@ namespace pdflib
     return true;
   }
 
-  bool decode_page_config::save(const std::string& filename) const
+  bool decode_config::save(const std::string& filename) const
   {
     std::ofstream ofs(filename);
     if(!ofs)
@@ -142,7 +142,7 @@ namespace pdflib
     return true;
   }
 
-  std::string decode_page_config::to_string() const
+  std::string decode_config::to_string() const
   {
     std::stringstream ss;
 

@@ -38,10 +38,10 @@ namespace pdflib
                                        std::optional<std::string>& _password,
                                        std::string description = "processing buffer");
 
-    void decode_document(const decode_page_config& config);
+    void decode_document(const decode_config& config);
 
     void decode_document(std::vector<int>& page_numbers,
-                         const decode_page_config& config);
+                         const decode_config& config);
 
     // New: Direct access to page decoders (typed API)
     bool has_page_decoder(int page_number);
@@ -49,7 +49,7 @@ namespace pdflib
 
     // Decode a single page and return the page decoder directly
     page_decoder_ptr decode_page(int page_number,
-                                 const decode_page_config& config);
+                                 const decode_config& config);
 
     bool unload_pages();
 
@@ -352,7 +352,7 @@ namespace pdflib
     return true;
   }
 
-  void pdf_decoder<DOCUMENT>::decode_document(const decode_page_config& config)
+  void pdf_decoder<DOCUMENT>::decode_document(const decode_config& config)
   {
     LOG_S(INFO) << "start decoding all pages ...";
     utils::timer timer;
@@ -382,7 +382,7 @@ namespace pdflib
   }
 
   void pdf_decoder<DOCUMENT>::decode_document(std::vector<int>& page_numbers,
-                                              const decode_page_config& config)
+                                              const decode_config& config)
   {
     LOG_S(INFO) << "start decoding selected pages:\n" << config.to_string();
 
@@ -465,7 +465,7 @@ namespace pdflib
 
   pdf_decoder<DOCUMENT>::page_decoder_ptr pdf_decoder<DOCUMENT>::decode_page(
                                                                              int page_number,
-                                                                             const decode_page_config& config)
+                                                                             const decode_config& config)
   {
     LOG_S(INFO) << __FUNCTION__ << " for page: " << page_number;
     utils::timer timer;

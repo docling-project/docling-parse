@@ -1,18 +1,19 @@
 //-*-C++-*-
 
-#ifndef QPDF_INSTRUCTION_H
-#define QPDF_INSTRUCTION_H
+#ifndef QPDF_STREAM_INSTRUCTION_H
+#define QPDF_STREAM_INSTRUCTION_H
 
 namespace pdflib
 {
-  class qpdf_instruction
+
+  class qpdf_stream_instruction
   {
   public:
 
-    qpdf_instruction();
-    qpdf_instruction(QPDFObjectHandle& obj_);
+    qpdf_stream_instruction();
+    qpdf_stream_instruction(QPDFObjectHandle& obj_);
 
-    ~qpdf_instruction();
+    ~qpdf_stream_instruction();
 
     std::string unparse();
 
@@ -23,8 +24,7 @@ namespace pdflib
     bool is_null();
     bool is_array();
     bool is_dict();
-    
-    
+        
     int    to_int();
     double to_double();
 
@@ -40,54 +40,54 @@ namespace pdflib
     std::string val="";
   };
 
-  qpdf_instruction::qpdf_instruction()
+  qpdf_stream_instruction::qpdf_stream_instruction()
   {}
 
-  qpdf_instruction::qpdf_instruction(QPDFObjectHandle& obj_):
+  qpdf_stream_instruction::qpdf_stream_instruction(QPDFObjectHandle& obj_):
     obj(obj_),
     key(obj_.getTypeName()),
     val(obj_.unparse())
   {}
 
-  qpdf_instruction::~qpdf_instruction()
+  qpdf_stream_instruction::~qpdf_stream_instruction()
   {}
 
-  std::string qpdf_instruction::unparse()
+  std::string qpdf_stream_instruction::unparse()
   {
     return obj.unparse();
   }
 
-  bool qpdf_instruction::is_integer()
+  bool qpdf_stream_instruction::is_integer()
   {
     return obj.isInteger();
   }
 
-  bool qpdf_instruction::is_number()
+  bool qpdf_stream_instruction::is_number()
   {
     return obj.isNumber();
   }
 
-  bool qpdf_instruction::is_string()
+  bool qpdf_stream_instruction::is_string()
   {
     return (obj.isName() or obj.isString());
   }
 
-  bool qpdf_instruction::is_null()
+  bool qpdf_stream_instruction::is_null()
   {
     return obj.isNull();
   }
 
-  bool qpdf_instruction::is_array()
+  bool qpdf_stream_instruction::is_array()
   {
     return obj.isArray();
   }
 
-  bool qpdf_instruction::is_dict()
+  bool qpdf_stream_instruction::is_dict()
   {
     return obj.isDictionary();
   }
   
-  int qpdf_instruction::to_int()  
+  int qpdf_stream_instruction::to_int()  
   { 
     if(not obj.isInteger())
       {
@@ -99,7 +99,7 @@ namespace pdflib
     return obj.getIntValue(); 
   } 
 
-  double qpdf_instruction::to_double() 
+  double qpdf_stream_instruction::to_double() 
   {
     if(not obj.isNumber())
       {
@@ -111,7 +111,7 @@ namespace pdflib
     return obj.getNumericValue(); 
   } 
 
-  std::string qpdf_instruction::to_char_string() 
+  std::string qpdf_stream_instruction::to_char_string() 
   {
     if (obj.isName() or obj.isString())
       {
@@ -130,7 +130,7 @@ namespace pdflib
     return "null";    
   }
 
-  std::string qpdf_instruction::to_utf8_string() 
+  std::string qpdf_stream_instruction::to_utf8_string() 
   {
     if (obj.isName())
       {

@@ -127,14 +127,14 @@ int main(int argc, char* argv[]) {
       std::string config_file = result["config"].as<std::string>();
       LOG_F(INFO, "Config file: %s", config_file.c_str());
 
-      pdflib::decode_page_config page_config;
+      pdflib::decode_config page_config;
 
       page_config.do_sanitization = do_sanitization;
       page_config.keep_char_cells = keep_text;
       page_config.keep_shapes = keep_shapes;
       page_config.keep_bitmaps = keep_bitmaps;
 
-      std::cout << "decode_page_config:\n" << page_config.to_string() << std::endl;
+      std::cout << "decode_config:\n" << page_config.to_string() << std::endl;
 
       utils::timer timer;
 
@@ -196,13 +196,13 @@ int main(int argc, char* argv[]) {
         config["password"] = result["password"].as<std::string>();
       }
 
-      pdflib::decode_page_config page_config;
+      pdflib::decode_config page_config;
       page_config.do_sanitization = do_sanitization;
       page_config.keep_char_cells = keep_text;
       page_config.keep_shapes = keep_shapes;
       page_config.keep_bitmaps = keep_bitmaps;
 
-      std::cout << "decode_page_config:\n" << page_config.to_string() << std::endl;
+      std::cout << "decode_config:\n" << page_config.to_string() << std::endl;
 
       utils::timer timer;
 
