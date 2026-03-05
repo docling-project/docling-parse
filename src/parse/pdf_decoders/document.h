@@ -407,7 +407,7 @@ namespace pdflib
   }
 
   pdf_decoder<DOCUMENT>::page_decoder_ptr pdf_decoder<DOCUMENT>::decode_page(int page_number,
-                                                                             const decode_page_config& config)
+                                                                             const decode_config& config)
   {
     LOG_S(INFO) << __FUNCTION__ << " for page: " << page_number;
     utils::timer timer;
@@ -491,33 +491,6 @@ namespace pdflib
     return true;
   }
 
-  void pdf_decoder<DOCUMENT>::update_timings(pdf_timings& timings_,
-                                             bool set_timer)
-  {
-    if(set_timer)
-      {
-        // Clear existing timings when starting a new batch
-        timings.clear();
-      }
-    // Merge all timings from the page decoder
-    timings.merge(timings_);
-  }
-
-  bool pdf_decoder<DOCUMENT>::has_page_decoder(int page_number)
-  {
-    return page_decoders.count(page_number) > 0;
-  }
-
-  pdf_decoder<DOCUMENT>::page_decoder_ptr pdf_decoder<DOCUMENT>::get_page_decoder(int page_number)
-  {
-    auto itr = page_decoders.find(page_number);
-    if(itr != page_decoders.end())
-      {
-        return itr->second;
-      }
-    return nullptr;
-  }
-  
 }
 
 #endif
