@@ -64,6 +64,7 @@ build = [
 ]
 dev = [
     "pytest>=7.4.2,<8.0.0",
+    "pypdf>=5.0.0,<6.0.0",
     "black[jupyter]>=24.4.2,<26.0.0",
     "python-semantic-release>=7.32.2,<8.0.0",
     "pre-commit>=3.7.1,<4.0.0",
