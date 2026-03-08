@@ -46,7 +46,7 @@ namespace pdflib
     // Decode a single page and return the page decoder directly
     page_decoder_ptr decode_page(int page_number,
                                  const decode_config& config);
-    
+
     // New: Direct access to page decoders (typed API)
     bool has_page_decoder(int page_number);
     page_decoder_ptr get_page_decoder(int page_number);
@@ -181,27 +181,64 @@ namespace pdflib
 
   bool pdf_decoder<DOCUMENT>::process_document_components()
   {
+    LOG_S(INFO) << __FUNCTION__;
+
     utils::timer timer;
 
     if(qpdf_root.hasKey("/Pages"))
       {
         qpdf_pages = qpdf_root.getKey("/Pages");
 
+        int _number_of_pages = -1;
         if(qpdf_pages.hasKey("/Count"))
           {
-            number_of_pages = qpdf_pages.getKey("/Count").getIntValue();
-          }
-        else
-          {
-            LOG_S(WARNING) << "filename: " << filename << " has no `/Count`";
-            number_of_pages = 0;
-            for(QPDFObjectHandle page : qpdf_document.getAllPages())
-              {
-                number_of_pages += 1;
-              }
+            _number_of_pages = qpdf_pages.getKey("/Count").getIntValue();
+            //LOG_S(WARNING) << "`/Count` (before): " << _number_of_pages;
           }
 
-        LOG_S(INFO) << "#-pages: " << number_of_pages;
+	// Be aware that this operation does some normalization
+        number_of_pages = 0;
+        for(QPDFObjectHandle page : qpdf_document.getAllPages()) 
+          {
+            number_of_pages += 1;
+          }
+        LOG_S(INFO) << "#-pages (from `qpdf_document.getAllPages()`): " << number_of_pages;
+
+	if(number_of_pages!=_number_of_pages and qpdf_pages.hasKey("/Count"))
+          {
+	    LOG_S(WARNING) << "`/Count` before (=" << _number_of_pages << ") != "
+			   << " len(`/Pages`) (=" << number_of_pages << ")";
+          }
+	
+        /*
+          if(qpdf_pages.hasKey("/Count"))
+          {
+          int __number_of_pages = qpdf_pages.getKey("/Count").getIntValue();
+          LOG_S(WARNING) << "`/Count` (after): " << __number_of_pages;
+
+          if(_number_of_pages!=__number_of_pages)
+          {
+          LOG_S(WARNING) << "`/Count` before (=" << _number_of_pages << ") != "
+          << "`/Count` after (=" << __number_of_pages << ")";
+          }
+
+          if(number_of_pages!=_number_of_pages)
+          {
+          LOG_S(WARNING) << "`/Count` before (=" << _number_of_pages << ") != "
+          << " len(`/Pages`) (=" << number_of_pages << ")";
+          }
+
+          if(number_of_pages!=__number_of_pages)
+          {
+          LOG_S(WARNING) << "`/Count` after (=" << __number_of_pages << ") != "
+          << " len(`/Pages`) (=" << number_of_pages << ")";
+          }
+          }
+          else
+          {
+          LOG_S(WARNING) << "filename: " << filename << " has no `/Count`";
+          }
+        */
       }
     else
       {
@@ -434,7 +471,7 @@ namespace pdflib
       if(config.do_thread_safe)
         {
           // creates its own QPDF document
-          page_decoder = std::make_shared<pdf_decoder<PAGE>>(buffer, password, page_number);	  
+          page_decoder = std::make_shared<pdf_decoder<PAGE>>(buffer, password, page_number);
         }
       else
         {

@@ -77,7 +77,7 @@ namespace docling
     pdf_resources_dir(resource_utils::get_resources_dir(true).string()),
     key2doc({})
   {
-    LOG_S(WARNING) << "pdf_resources_dir: " << pdf_resources_dir;
+    LOG_S(INFO) << "pdf_resources_dir: " << pdf_resources_dir;
 
     auto RESOURCE_DIR_KEY = pdflib::pdf_resource<pdflib::PAGE_FONT>::RESOURCE_DIR_KEY;
 
@@ -95,7 +95,7 @@ namespace docling
   {
     set_loglevel_with_label(level);
 
-    LOG_S(WARNING) << "pdf_resources_dir: " << pdf_resources_dir;
+    LOG_S(INFO) << "pdf_resources_dir: " << pdf_resources_dir;
 
     auto RESOURCE_DIR_KEY = pdflib::pdf_resource<pdflib::PAGE_FONT>::RESOURCE_DIR_KEY;
 

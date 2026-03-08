@@ -162,7 +162,7 @@ namespace pdflib
   {
     if(initialized)
       {
-	LOG_S(WARNING) << "skipping base_fonts::initialise, already initialized ...";
+	LOG_S(INFO) << "skipping base_fonts::initialise, already initialized ...";
 	return;
       }
     

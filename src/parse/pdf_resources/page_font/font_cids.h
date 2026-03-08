@@ -87,7 +87,7 @@ namespace pdflib
   {
     if(initialized)
       {
-	LOG_S(WARNING) << "skipping font_cids::initialise, already initialized ...";
+	LOG_S(INFO) << "skipping font_cids::initialise, already initialized ...";
 	return;
       }
     

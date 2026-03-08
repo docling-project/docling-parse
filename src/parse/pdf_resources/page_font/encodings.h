@@ -43,7 +43,7 @@ namespace pdflib
   {
     if(initialized)
       {
-	LOG_S(WARNING) << "skipping font_encodings::initialise, already initialized ...";
+	LOG_S(INFO) << "skipping font_encodings::initialise, already initialized ...";
 	return;
       }
     

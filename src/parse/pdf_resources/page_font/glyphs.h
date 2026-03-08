@@ -101,14 +101,15 @@ namespace pdflib
     LOG_S(ERROR) << "could not find a glyph with name=" << key;
     unknown_glyphs.insert(key);
 
-    return "glyph["+key+"]";
+    // FIXME: we should not do this, especially if the decode_config does not allow this! 
+    return "GLYPH["+key+"]";
   }
 
   void font_glyphs::initialise(std::string dirname)
   {
     if(initialized)
       {
-	LOG_S(WARNING) << "skipping font_glyphs::initialise, already initialized ...";
+	LOG_S(INFO) << "skipping font_glyphs::initialise, already initialized ...";
 	return;
       }
     
@@ -215,7 +216,7 @@ namespace pdflib
 
   void font_glyphs::read_file_uni(std::string filename)
   {
-    LOG_S(WARNING) << __FUNCTION__ << ": " << filename;
+    LOG_S(INFO) << __FUNCTION__ << ": " << filename;
 
     std::ifstream file(filename.c_str());
 
