@@ -9,7 +9,7 @@
 #include <array>
 #include <memory>
 
-#include <parse/pdf_resources/render_instructions.h>
+#include <parse/page_items/render_instructions.h>
 
 namespace pdflib
 {

@@ -129,7 +129,7 @@ int main(int argc, char* argv[])
 	    // Decode all pages
 	    int num_pages = doc.get_number_of_pages();
 	    for (int p = 0; p < num_pages; p++) {
-	      pdflib::decode_page_config page_config;
+	      pdflib::decode_config page_config;
 	      page_config.page_boundary = "crop_box";
 	      page_config.do_sanitization = do_sanitization;
 	      page_config.keep_shapes = false;
@@ -144,7 +144,7 @@ int main(int argc, char* argv[])
 	else
 	  {
 	    // Decode specific page
-	    pdflib::decode_page_config page_config;
+	    pdflib::decode_config page_config;
 	    page_config.page_boundary = "crop_box";
 	    page_config.do_sanitization = do_sanitization;
 	    page_config.keep_shapes = false;
