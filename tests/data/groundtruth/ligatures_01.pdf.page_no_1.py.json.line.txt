@@ -2,26 +2,26 @@
 (200.12, 672.59) (411.88, 672.59) (411.88, 687.85) (200.12, 687.85)      /F133 Document-Layout Analysis	<|special_separator|>
 (102.06, 647.35) (182.64, 647.35) (182.64, 657.75) (102.06, 657.75)      /F134 Birgit Pfitzmann	<|special_separator|>
 (114.29, 635.83) (170.40, 635.83) (170.40, 644.50) (114.29, 644.50)      /F134 IBM Research	<|special_separator|>
-(090.97, 623.88) (193.73, 623.88) (193.73, 632.54) (090.97, 632.54)      /F134 Rueschlikon, Switzerland	<|special_separator|>
+(090.97, 623.87) (193.73, 623.87) (193.73, 632.54) (090.97, 632.54)      /F134 Rueschlikon, Switzerland	<|special_separator|>
 (100.02, 611.92) (184.68, 611.92) (184.68, 620.59) (100.02, 620.59)      /F134 bpf@zurich.ibm.com	<|special_separator|>
 (268.62, 647.35) (344.60, 647.35) (344.60, 657.75) (268.62, 657.75)      /F134 Christoph Auer	<|special_separator|>
 (278.44, 635.83) (334.55, 635.83) (334.55, 644.50) (278.44, 644.50)      /F134 IBM Research	<|special_separator|>
-(255.12, 623.88) (357.88, 623.88) (357.88, 632.54) (255.12, 632.54)      /F134 Rueschlikon, Switzerland	<|special_separator|>
+(255.12, 623.87) (357.88, 623.87) (357.88, 632.54) (255.12, 632.54)      /F134 Rueschlikon, Switzerland	<|special_separator|>
 (263.70, 611.92) (349.29, 611.92) (349.29, 620.59) (263.70, 620.59)      /F134 cau@zurich.ibm.com	<|special_separator|>
 (437.69, 647.35) (503.60, 647.35) (503.60, 657.75) (437.69, 657.75)      /F134 Michele Dolfi	<|special_separator|>
 (442.59, 635.83) (498.70, 635.83) (498.70, 644.50) (442.59, 644.50)      /F134 IBM Research	<|special_separator|>
-(419.26, 623.88) (522.03, 623.88) (522.03, 632.54) (419.26, 632.54)      /F134 Rueschlikon, Switzerland	<|special_separator|>
+(419.26, 623.87) (522.03, 623.87) (522.03, 632.54) (419.26, 632.54)      /F134 Rueschlikon, Switzerland	<|special_separator|>
 (428.56, 611.92) (512.74, 611.92) (512.74, 620.59) (428.56, 620.59)      /F134 dol@zurich.ibm.com	<|special_separator|>
 (182.27, 588.97) (265.39, 588.97) (265.39, 599.37) (182.27, 599.37)      /F134 Ahmed S. Nassar	<|special_separator|>
-(195.87, 577.45) (251.98, 577.45) (251.98, 586.11) (195.87, 586.11)      /F134 IBM Research	<|special_separator|>
+(195.87, 577.44) (251.98, 577.44) (251.98, 586.11) (195.87, 586.11)      /F134 IBM Research	<|special_separator|>
 (172.54, 565.49) (275.31, 565.49) (275.31, 574.16) (172.54, 574.16)      /F134 Rueschlikon, Switzerland	<|special_separator|>
 (180.53, 553.53) (267.32, 553.53) (267.32, 562.20) (180.53, 562.20)      /F134 ahn@zurich.ibm.com	<|special_separator|>
 (361.53, 588.97) (414.85, 588.97) (414.85, 599.37) (361.53, 599.37)      /F134 Peter Staar	<|special_separator|>
-(360.02, 577.45) (416.13, 577.45) (416.13, 586.11) (360.02, 586.11)      /F134 IBM Research	<|special_separator|>
+(360.02, 577.44) (416.13, 577.44) (416.13, 586.11) (360.02, 586.11)      /F134 IBM Research	<|special_separator|>
 (336.69, 565.49) (439.46, 565.49) (439.46, 574.16) (336.69, 574.16)      /F134 Rueschlikon, Switzerland	<|special_separator|>
 (346.21, 553.53) (429.94, 553.53) (429.94, 562.20) (346.21, 562.20)      /F134 taa@zurich.ibm.com	<|special_separator|>
 (053.80, 534.29) (111.94, 534.29) (111.94, 543.36) (053.80, 543.36)      /F138 ABSTRACT	<|special_separator|>
-(053.48, 520.86) (295.56, 520.86) (295.56, 528.66) (053.48, 528.66)      /F134 Accurate document layout analysis is a key requirement for high-	<|special_separator|>
+(053.48, 520.86) (295.56, 520.86) (295.56, 528.67) (053.48, 528.67)      /F134 Accurate document layout analysis is a key requirement for high-	<|special_separator|>
 (053.80, 509.90) (294.04, 509.90) (294.04, 517.71) (053.80, 517.71)      /F134 quality PDF document conversion. With the recent availability of	<|special_separator|>
 (053.80, 498.95) (295.35, 498.95) (295.35, 506.75) (053.80, 506.75)      /F134 public, large ground-truth datasets such as PubLayNet and DocBank,	<|special_separator|>
 (053.80, 487.99) (294.05, 487.99) (294.05, 495.79) (053.80, 495.79)      /F134 deep-learning models have proven to be very effective at layout	<|special_separator|>
@@ -46,7 +46,7 @@
 (053.80, 290.73) (294.05, 290.73) (294.05, 298.53) (053.80, 298.53)      /F134 Lastly, we compare models trained on PubLayNet, DocBank and	<|special_separator|>
 (053.80, 279.77) (295.56, 279.77) (295.56, 287.57) (053.80, 287.57)      /F134 DocLayNet, showing that layout predictions of the DocLayNet-	<|special_separator|>
 (053.80, 268.81) (294.22, 268.81) (294.22, 276.61) (053.80, 276.61)      /F134 trained models are more robust and thus the preferred choice for	<|special_separator|>
-(053.80, 257.85) (212.06, 257.85) (212.06, 265.65) (053.80, 265.65)      /F134 general-purpose document-layout analysis.	<|special_separator|>
+(053.80, 257.85) (212.05, 257.85) (212.05, 265.65) (053.80, 265.65)      /F134 general-purpose document-layout analysis.	<|special_separator|>
 (053.80, 231.00) (134.82, 231.00) (134.82, 240.06) (053.80, 240.06)      /F138 CCS CONCEPTS	<|special_separator|>
 (053.80, 217.57) (056.95, 217.57) (056.95, 225.37) (053.80, 225.37)      /F157 •	<|special_separator|>
 (058.44, 217.69) (142.45, 217.69) (142.45, 225.15) (058.44, 225.15)      /F138 Informationsystems	<|special_separator|>
@@ -60,19 +60,19 @@
 (173.92, 206.61) (182.13, 206.61) (182.13, 214.41) (173.92, 214.41)      /F134 ; •	<|special_separator|>
 (185.03, 206.73) (294.05, 206.73) (294.05, 214.19) (185.03, 214.19)      /F138 Computing methodologies	<|special_separator|>
 (053.80, 194.71) (063.01, 194.71) (063.01, 206.00) (053.80, 206.00)       /F98 →	<|special_separator|>
-(065.25, 195.78) (136.81, 195.78) (136.81, 203.23) (065.25, 203.23)      /F138 Machine learning	<|special_separator|>
-(136.81, 195.65) (138.92, 195.65) (138.92, 203.45) (136.81, 203.45)      /F134 ;	<|special_separator|>
+(065.25, 195.78) (136.80, 195.78) (136.80, 203.23) (065.25, 203.23)      /F138 Machine learning	<|special_separator|>
+(136.80, 195.65) (138.92, 195.65) (138.92, 203.45) (136.80, 203.45)      /F134 ;	<|special_separator|>
 (141.16, 195.78) (209.60, 195.78) (209.60, 203.23) (141.16, 203.23)      /F138 Computer vision	<|special_separator|>
 (209.60, 195.65) (211.72, 195.65) (211.72, 203.45) (209.60, 203.45)      /F134 ;	<|special_separator|>
 (213.96, 195.61) (270.46, 195.61) (270.46, 203.51) (213.96, 203.51)      /F148 Object detection	<|special_separator|>
 (270.48, 195.65) (272.60, 195.65) (272.60, 203.45) (270.48, 203.45)      /F134 ;	<|special_separator|>
 (053.80, 151.20) (294.18, 151.20) (294.18, 157.27) (053.80, 157.27)      /F134 Permission to make digital or hard copies of part or all of this work for personal or	<|special_separator|>
 (053.80, 143.23) (294.04, 143.23) (294.04, 149.30) (053.80, 149.30)      /F134 classroom use is granted without fee provided that copies are not made or distributed	<|special_separator|>
-(053.80, 135.26) (294.05, 135.26) (294.05, 141.33) (053.80, 141.33)      /F134 for profit or commercial advantage and that copies bear this notice and the full citation	<|special_separator|>
+(053.80, 135.26) (294.04, 135.26) (294.04, 141.33) (053.80, 141.33)      /F134 for profit or commercial advantage and that copies bear this notice and the full citation	<|special_separator|>
 (053.80, 127.29) (295.12, 127.29) (295.12, 133.36) (053.80, 133.36)      /F134 on the first page. Copyrights for third-party components of this work must be honored.	<|special_separator|>
 (053.80, 119.32) (187.72, 119.32) (187.72, 125.39) (053.80, 125.39)      /F134 For all other uses, contact the owner/author(s).	<|special_separator|>
 (053.80, 110.52) (197.86, 110.52) (197.86, 116.67) (053.80, 116.67)      /F148 KDD '22, August 14-18, 2022, Washington, DC, USA	<|special_separator|>
-(053.32, 101.78) (186.75, 101.78) (186.75, 107.85) (053.32, 107.85)      /F157 © 2022 Copyright held by the owner/author(s).	<|special_separator|>
+(053.32, 101.79) (186.75, 101.79) (186.75, 107.85) (053.32, 107.85)      /F157 © 2022 Copyright held by the owner/author(s).	<|special_separator|>
 (053.55, 093.81) (157.03, 093.81) (157.03, 099.88) (053.55, 099.88)      /F134 ACM ISBN 978-1-4503-9385-0/22/08.	<|special_separator|>
 (053.80, 085.84) (166.94, 085.84) (166.94, 091.91) (053.80, 091.91)      /F134 https://doi.org/10.1145/3534678.3539043	<|special_separator|>
 (327.87, 438.15) (330.41, 438.15) (330.41, 439.73) (327.87, 439.73)       /TT2 13	<|special_separator|>
@@ -109,10 +109,10 @@
 (326.88, 517.19) (353.89, 517.19) (353.89, 518.46) (326.88, 518.46)       /TT4     easily use the lower magnification 	<|special_separator|>
 (326.88, 515.58) (356.02, 515.58) (356.02, 516.85) (326.88, 516.85)       /TT4     objective first. Then, by rotating the  	<|special_separator|>
 (326.88, 513.97) (351.89, 513.97) (351.89, 515.24) (326.88, 515.24)       /TT4     case, the magnification can be  	<|special_separator|>
-(352.63, 513.97) (353.13, 513.97) (353.13, 515.24) (352.63, 515.24)       /TT4  	<|special_separator|>
-(326.88, 512.36) (335.47, 512.36) (335.47, 513.62) (326.88, 513.62)       /TT4     changed.	<|special_separator|>
+(352.63, 513.97) (353.14, 513.97) (353.14, 515.24) (352.63, 515.24)       /TT4  	<|special_separator|>
+(326.88, 512.36) (335.47, 512.36) (335.47, 513.63) (326.88, 513.63)       /TT4     changed.	<|special_separator|>
 (326.88, 509.13) (354.58, 509.13) (354.58, 510.40) (326.88, 510.40)       /TT2 CHANGING THE INTERPUPILLARY 	<|special_separator|>
-(326.88, 507.52) (335.18, 507.52) (335.18, 508.80) (326.88, 508.80)       /TT2 DISTANCE	<|special_separator|>
+(326.88, 507.52) (335.18, 507.52) (335.18, 508.79) (326.88, 508.79)       /TT2 DISTANCE	<|special_separator|>
 (326.88, 505.91) (355.75, 505.91) (355.75, 507.18) (326.88, 507.18)       /TT4 1. The distance between the observer's 	<|special_separator|>
 (326.88, 504.30) (355.58, 504.30) (355.58, 505.57) (326.88, 505.57)       /TT4     pupils is the interpupil ary distance.  	<|special_separator|>
 (326.88, 502.69) (355.17, 502.69) (355.17, 503.96) (326.88, 503.96)       /TT4 2. To adjust the interpupil ary distance 	<|special_separator|>
@@ -120,7 +120,7 @@
 (326.88, 499.47) (351.57, 499.47) (351.57, 500.74) (326.88, 500.74)       /TT4     coincide with the image in the  	<|special_separator|>
 (352.63, 499.47) (353.14, 499.47) (353.14, 500.74) (352.63, 500.74)       /TT4  	<|special_separator|>
 (326.88, 497.86) (336.21, 497.86) (336.21, 499.13) (326.88, 499.13)       /TT4     eyepiece. 	<|special_separator|>
-(326.88, 496.25) (327.38, 496.25) (327.38, 497.52) (326.88, 497.52)       /TT4  	<|special_separator|>
+(326.88, 496.25) (327.39, 496.25) (327.39, 497.52) (326.88, 497.52)       /TT4  	<|special_separator|>
 (326.88, 494.64) (335.39, 494.64) (335.39, 495.91) (326.88, 495.91)       /TT2 FOCUSING	<|special_separator|>
 (326.88, 493.03) (353.19, 493.03) (353.19, 494.30) (326.88, 494.30)       /TT4 1. Remove the lens protective cover.	<|special_separator|>
 (326.88, 491.42) (354.43, 491.42) (354.43, 492.69) (326.88, 492.69)       /TT4 2. Place the specimen on the working 	<|special_separator|>
@@ -150,29 +150,29 @@
 (358.42, 518.80) (385.39, 518.80) (385.39, 520.07) (358.42, 520.07)       /TT4     then turn the focusing knob again.	<|special_separator|>
 (358.42, 515.58) (377.35, 515.58) (377.35, 516.85) (358.42, 516.85)       /TT2 ZOOM MAGNIFICATION	<|special_separator|>
 (358.42, 513.97) (387.36, 513.97) (387.36, 515.24) (358.42, 515.24)       /TT4 1. Turn the zoom magnification knob to 	<|special_separator|>
-(358.42, 512.36) (387.75, 512.36) (387.75, 513.62) (358.42, 513.62)       /TT4     the desired magnification and field of 	<|special_separator|>
-(358.42, 510.75) (364.17, 510.75) (364.17, 512.01) (358.42, 512.01)       /TT4     view.	<|special_separator|>
+(358.42, 512.36) (387.75, 512.36) (387.75, 513.63) (358.42, 513.63)       /TT4     the desired magnification and field of 	<|special_separator|>
+(358.42, 510.74) (364.17, 510.74) (364.17, 512.02) (358.42, 512.02)       /TT4     view.	<|special_separator|>
 (358.42, 509.13) (388.27, 509.13) (388.27, 510.40) (358.42, 510.40)       /TT4 2. In most situations, it is recommended 	<|special_separator|>
-(358.42, 507.52) (381.57, 507.52) (381.57, 508.80) (358.42, 508.80)       /TT4     that you focus at the lowest  	<|special_separator|>
-(384.18, 507.52) (384.68, 507.52) (384.68, 508.80) (384.18, 508.80)       /TT4  	<|special_separator|>
+(358.42, 507.52) (381.57, 507.52) (381.57, 508.79) (358.42, 508.79)       /TT4     that you focus at the lowest  	<|special_separator|>
+(384.17, 507.52) (384.68, 507.52) (384.68, 508.79) (384.17, 508.79)       /TT4  	<|special_separator|>
 (358.42, 505.91) (387.67, 505.91) (387.67, 507.18) (358.42, 507.18)       /TT4     magnification, then move to a higher 	<|special_separator|>
-(358.43, 504.30) (382.77, 504.30) (382.77, 505.57) (358.43, 505.57)       /TT4     magnification and re-focus as  	<|special_separator|>
+(358.42, 504.30) (382.77, 504.30) (382.77, 505.57) (358.42, 505.57)       /TT4     magnification and re-focus as  	<|special_separator|>
 (384.18, 504.30) (384.68, 504.30) (384.68, 505.57) (384.18, 505.57)       /TT4  	<|special_separator|>
-(358.43, 502.69) (367.99, 502.69) (367.99, 503.96) (358.43, 503.96)       /TT4     necessary.	<|special_separator|>
-(358.43, 501.08) (387.60, 501.08) (387.60, 502.35) (358.43, 502.35)       /TT4 3. If the image is not clear to both eyes 	<|special_separator|>
-(358.43, 499.47) (389.07, 499.47) (389.07, 500.74) (358.43, 500.74)       /TT4     at the same time, the diopter ring may 	<|special_separator|>
-(358.43, 497.86) (373.14, 497.86) (373.14, 499.13) (358.43, 499.13)       /TT4     need adjustment.	<|special_separator|>
-(358.43, 494.64) (381.75, 494.64) (381.75, 495.91) (358.43, 495.91)       /TT2 DIOPTER RING ADJUSTMENT	<|special_separator|>
-(358.43, 493.03) (389.01, 493.03) (389.01, 494.30) (358.43, 494.30)       /TT4 1. To adjust the eyepiece for viewing with 	<|special_separator|>
-(358.43, 491.42) (382.73, 491.42) (382.73, 492.69) (358.43, 492.69)       /TT4     or without eyeglasses and for  	<|special_separator|>
+(358.42, 502.69) (367.99, 502.69) (367.99, 503.96) (358.42, 503.96)       /TT4     necessary.	<|special_separator|>
+(358.42, 501.08) (387.60, 501.08) (387.60, 502.35) (358.42, 502.35)       /TT4 3. If the image is not clear to both eyes 	<|special_separator|>
+(358.42, 499.47) (389.07, 499.47) (389.07, 500.74) (358.42, 500.74)       /TT4     at the same time, the diopter ring may 	<|special_separator|>
+(358.42, 497.86) (373.14, 497.86) (373.14, 499.13) (358.42, 499.13)       /TT4     need adjustment.	<|special_separator|>
+(358.42, 494.64) (381.75, 494.64) (381.75, 495.91) (358.42, 495.91)       /TT2 DIOPTER RING ADJUSTMENT	<|special_separator|>
+(358.42, 493.03) (389.01, 493.03) (389.01, 494.30) (358.42, 494.30)       /TT4 1. To adjust the eyepiece for viewing with 	<|special_separator|>
+(358.42, 491.42) (382.73, 491.42) (382.73, 492.69) (358.42, 492.69)       /TT4     or without eyeglasses and for  	<|special_separator|>
 (384.18, 491.42) (384.68, 491.42) (384.68, 492.69) (384.18, 492.69)       /TT4  	<|special_separator|>
-(358.43, 489.81) (388.70, 489.81) (388.70, 491.08) (358.43, 491.08)       /TT4     differences in acuity between the right 	<|special_separator|>
-(358.43, 488.20) (385.15, 488.20) (385.15, 489.47) (358.43, 489.47)       /TT4     and left eyes, fol ow the fol owing 	<|special_separator|>
-(358.43, 486.59) (364.89, 486.59) (364.89, 487.86) (358.43, 487.86)       /TT4     steps:	<|special_separator|>
-(358.43, 484.98) (387.71, 484.98) (387.71, 486.25) (358.43, 486.25)       /TT4     a. Observe an image through the left 	<|special_separator|>
-(358.43, 483.37) (387.86, 483.37) (387.86, 484.64) (358.43, 484.64)       /TT4         eyepiece and bring a specific point 	<|special_separator|>
-(358.43, 481.76) (385.41, 481.76) (385.41, 483.03) (358.43, 483.03)       /TT4         into focus using the focus knob.	<|special_separator|>
-(358.43, 480.15) (382.56, 480.15) (382.56, 481.42) (358.43, 481.42)       /TT4     b. By turning the diopter ring  	<|special_separator|>
+(358.42, 489.81) (388.70, 489.81) (388.70, 491.08) (358.42, 491.08)       /TT4     differences in acuity between the right 	<|special_separator|>
+(358.42, 488.20) (385.15, 488.20) (385.15, 489.47) (358.42, 489.47)       /TT4     and left eyes, fol ow the fol owing 	<|special_separator|>
+(358.42, 486.59) (364.89, 486.59) (364.89, 487.86) (358.42, 487.86)       /TT4     steps:	<|special_separator|>
+(358.42, 484.98) (387.71, 484.98) (387.71, 486.25) (358.42, 486.25)       /TT4     a. Observe an image through the left 	<|special_separator|>
+(358.42, 483.37) (387.86, 483.37) (387.86, 484.64) (358.42, 484.64)       /TT4         eyepiece and bring a specific point 	<|special_separator|>
+(358.42, 481.76) (385.41, 481.76) (385.41, 483.03) (358.42, 483.03)       /TT4         into focus using the focus knob.	<|special_separator|>
+(358.42, 480.15) (382.56, 480.15) (382.56, 481.42) (358.42, 481.42)       /TT4     b. By turning the diopter ring  	<|special_separator|>
 (384.18, 480.15) (384.68, 480.15) (384.68, 481.42) (384.18, 481.42)       /TT4  	<|special_separator|>
 (358.43, 478.54) (386.57, 478.54) (386.57, 479.81) (358.43, 479.81)       /TT4         adjustment for the left eyepiece, 	<|special_separator|>
 (358.43, 476.93) (385.70, 476.93) (385.70, 478.20) (358.43, 478.20)       /TT4         bring the same point into sharp 	<|special_separator|>
@@ -197,26 +197,26 @@
 (358.43, 446.34) (386.42, 446.34) (386.42, 447.61) (358.43, 447.61)       /TT4 4. Open the window in the base plate  	<|special_separator|>
 (358.43, 444.73) (384.34, 444.73) (384.34, 446.00) (358.43, 446.00)       /TT4     and replace the halogen lamp or 	<|special_separator|>
 (358.43, 443.12) (384.68, 443.12) (384.68, 444.39) (358.43, 444.39)       /TT4     fluorescent lamp of transmitted   	<|special_separator|>
-(358.43, 441.51) (368.44, 441.51) (368.44, 442.78) (358.43, 442.78)       /TT4     il uminator.	<|special_separator|>
+(358.43, 441.51) (368.43, 441.51) (368.43, 442.78) (358.43, 442.78)       /TT4     il uminator.	<|special_separator|>
 (358.43, 439.90) (358.93, 439.90) (358.93, 441.17) (358.43, 441.17)       /TT4  	<|special_separator|>
 (364.87, 439.90) (365.37, 439.90) (365.37, 441.17) (364.87, 441.17)       /TT4  	<|special_separator|>
-(371.31, 439.90) (371.81, 439.90) (371.81, 441.17) (371.31, 441.17)       /TT4  	<|special_separator|>
-(377.74, 439.90) (378.25, 439.90) (378.25, 441.17) (377.74, 441.17)       /TT4  	<|special_separator|>
+(371.30, 439.90) (371.81, 439.90) (371.81, 441.17) (371.30, 441.17)       /TT4  	<|special_separator|>
+(377.74, 439.90) (378.24, 439.90) (378.24, 441.17) (377.74, 441.17)       /TT4  	<|special_separator|>
 (384.18, 439.90) (384.68, 439.90) (384.68, 441.17) (384.18, 441.17)       /TT4  	<|special_separator|>
 (326.60, 529.20) (339.11, 529.20) (339.11, 530.47) (326.60, 530.47)       /TT2 Model AY11230	<|special_separator|>
 (358.49, 529.20) (371.00, 529.20) (371.00, 530.47) (358.49, 530.47)       /TT2 Model AY11234	<|special_separator|>
-(455.44, 438.16) (457.98, 438.16) (457.98, 439.75) (455.44, 439.75)       /TT2 14	<|special_separator|>
+(455.44, 438.16) (457.98, 438.16) (457.98, 439.74) (455.44, 439.74)       /TT2 14	<|special_separator|>
 (408.25, 515.11) (414.42, 515.11) (414.42, 516.15) (408.25, 516.15)       /TT4 Objectives	<|special_separator|>
 (409.40, 521.65) (419.07, 521.65) (419.07, 522.70) (409.40, 522.70)       /TT4 Revolving Turret	<|special_separator|>
 (441.39, 511.51) (445.87, 511.51) (445.87, 512.55) (441.39, 512.55)       /TT4 Coarse 	<|special_separator|>
 (441.39, 510.33) (448.22, 510.33) (448.22, 511.37) (441.39, 511.37)       /TT4 Adjustment	<|special_separator|>
 (441.39, 509.15) (444.40, 509.15) (444.40, 510.19) (441.39, 510.19)       /TT4 Knob	<|special_separator|>
 (398.79, 533.32) (428.92, 533.32) (428.92, 536.18) (398.79, 536.18)       /TT2 MODEL AY11236	<|special_separator|>
-(398.32, 483.23) (435.94, 483.23) (435.94, 486.08) (398.32, 486.08)       /TT2 MICROSCOPE USAGE	<|special_separator|>
+(398.33, 483.23) (435.94, 483.23) (435.94, 486.08) (398.33, 486.08)       /TT2 MICROSCOPE USAGE	<|special_separator|>
 (398.09, 479.57) (453.72, 479.57) (453.72, 481.16) (398.09, 481.16)       /TT4 BARSKA Model AY11236 is a powerful fixed power compound 	<|special_separator|>
 (398.09, 477.42) (453.10, 477.42) (453.10, 479.01) (398.09, 479.01)       /TT4 microscope designed for biological studies such as specimen 	<|special_separator|>
 (398.09, 475.27) (458.64, 475.27) (458.64, 476.86) (398.09, 476.86)       /TT4 examination. It can also be used for examining bacteria and          	<|special_separator|>
-(398.09, 473.13) (456.74, 473.13) (456.74, 474.71) (398.09, 474.71)       /TT4 for general clinical and medical studies and other scientific uses. 	<|special_separator|>
+(398.09, 473.13) (456.74, 473.13) (456.74, 474.72) (398.09, 474.72)       /TT4 for general clinical and medical studies and other scientific uses. 	<|special_separator|>
 (398.62, 467.84) (427.77, 467.84) (427.77, 470.70) (398.62, 470.70)       /TT2 CONSTRUCTION	<|special_separator|>
 (398.09, 463.47) (458.02, 463.47) (458.02, 465.05) (398.09, 465.05)       /TT4 BARSKA Model AY11236 is a fixed power compound microscope.   	<|special_separator|>
 (398.08, 461.32) (455.42, 461.32) (455.42, 462.91) (398.08, 462.91)       /TT4 It is constructed with two optical paths at the same angle. It is 	<|special_separator|>
@@ -224,7 +224,7 @@
 (398.08, 457.03) (453.98, 457.03) (453.98, 458.61) (398.08, 458.61)       /TT4 the user can observe specimens at magnification from 40x to 	<|special_separator|>
 (398.08, 454.88) (454.71, 454.88) (454.71, 456.47) (398.08, 456.47)       /TT4 1000x by selecting the desired objective lens. Coarse and fine 	<|special_separator|>
 (398.08, 452.73) (458.90, 452.73) (458.90, 454.32) (398.08, 454.32)       /TT4 focus adjustments provide accuracy and image detail. The rotating 	<|special_separator|>
-(398.09, 450.58) (453.07, 450.58) (453.07, 452.17) (398.09, 452.17)       /TT4 head al ows the user to position the eyepieces for maximum 	<|special_separator|>
+(398.09, 450.59) (453.07, 450.59) (453.07, 452.17) (398.09, 452.17)       /TT4 head al ows the user to position the eyepieces for maximum 	<|special_separator|>
 (398.09, 448.44) (451.47, 448.44) (451.47, 450.03) (398.09, 450.03)       /TT4 viewing comfort and easy access to al  adjustment knobs.  	<|special_separator|>
 (422.11, 489.10) (434.62, 489.10) (434.62, 490.37) (422.11, 490.37)       /TT2 Model AY11236	<|special_separator|>
 (442.02, 507.55) (444.88, 507.55) (444.88, 508.59) (442.02, 508.59)       /TT4 Fine 	<|special_separator|>
@@ -235,11 +235,11 @@
 (404.07, 508.54) (409.22, 508.54) (409.22, 509.59) (404.07, 509.59)       /TT4 Focusing	<|special_separator|>
 (404.07, 507.36) (407.09, 507.36) (407.09, 508.41) (404.07, 508.41)       /TT4 Knob	<|special_separator|>
 (441.81, 528.31) (447.04, 528.31) (447.04, 529.36) (441.81, 529.36)       /TT4 Eyepiece	<|special_separator|>
-(437.35, 519.50) (440.81, 519.50) (440.81, 520.55) (437.35, 520.55)       /TT4 Stand	<|special_separator|>
+(437.35, 519.50) (440.80, 519.50) (440.80, 520.55) (437.35, 520.55)       /TT4 Stand	<|special_separator|>
 (409.72, 506.23) (413.38, 506.23) (413.38, 507.28) (409.72, 507.28)       /TT4 Lamp 	<|special_separator|>
 (409.72, 504.80) (413.27, 504.80) (413.27, 505.85) (409.72, 505.85)       /TT4 On/Of	<|special_separator|>
 (409.72, 503.37) (413.63, 503.37) (413.63, 504.42) (409.72, 504.42)       /TT4 Switch	<|special_separator|>
-(434.87, 493.92) (438.53, 493.92) (438.53, 494.96) (434.87, 494.96)       /TT4 Lamp 	<|special_separator|>
+(434.87, 493.92) (438.53, 493.92) (438.53, 494.97) (434.87, 494.97)       /TT4 Lamp 	<|special_separator|>
 (439.52, 498.45) (443.09, 498.45) (443.09, 499.50) (439.52, 499.50)       /TT4 Power	<|special_separator|>
 (439.52, 497.02) (442.30, 497.02) (442.30, 498.07) (439.52, 498.07)       /TT4 Cord	<|special_separator|>
 (413.56, 525.97) (421.95, 525.97) (421.95, 527.02) (413.56, 527.02)       /TT4 Rotating Head	<|special_separator|>
@@ -254,86 +254,86 @@
 (449.10, 396.75) (529.53, 396.75) (529.53, 398.43) (449.10, 398.43)        /G1 7KHGLYPH<c=3,font=/AAAAAH+ArialMT>DSSURDFKHVGLYPH<c=3,font=/AAAAAH+ArialMT>XVLQJGLYPH<c=3,font=/AAAAAH+ArialMT>VWDQGDUGGLYPH<c=3,font=/AAAAAH+ArialMT>FLUFOLQJGLYPH<c=3,font=/AAAAAH+ArialMT>DSSURDFKGLYPH<c=3,font=/AAAAAH+ArialMT>DUHDVGLYPH<c=3,font=/AAAAAH+ArialMT>FDQGLYPH<c=3,font=/AAAAAH+ArialMT>EHGLYPH<c=3,font=/AAAAAH+ArialMT>LGHQWL¿HGGLYPH<c=3,font=/AAAAAH+ArialMT>E\GLYPH<c=3,font=/AAAAAH+ArialMT>WKHGLYPH<c=3,font=/AAAAAH+ArialMT>DEVHQFHGLYPH<c=3,font=/AAAAAH+ArialMT>RIGLYPH<c=3,font=/AAAAAH+ArialMT>WKHGLYPH<c=3,font=/AAAAAH+ArialMT>	<|special_separator|>
 (532.06, 396.75) (550.42, 396.75) (550.42, 398.43) (532.06, 398.43)       /TT8  on the circling line of 	<|special_separator|>
 (449.10, 394.47) (455.75, 394.47) (455.75, 396.15) (449.10, 396.15)       /TT8 minima.	<|special_separator|>
-(449.95, 374.57) (496.28, 374.57) (496.28, 376.08) (449.95, 376.08)        /G2 $SSO\GLYPH<c=3,font=/AAAAAK+Arial-ItalicMT>6WDQGDUGGLYPH<c=3,font=/AAAAAK+Arial-ItalicMT>&LUFOLQJGLYPH<c=3,font=/AAAAAK+Arial-ItalicMT> $SSURDFKGLYPH<c=3,font=/AAAAAK+Arial-ItalicMT>0DQHXYHULQJGLYPH<c=3,font=/AAAAAK+Arial-ItalicMT>5DGLXVGLYPH<c=3,font=/AAAAAK+Arial-ItalicMT>7 DEOH	<|special_separator|>
+(449.96, 374.57) (496.28, 374.57) (496.28, 376.08) (449.96, 376.08)        /G2 $SSO\GLYPH<c=3,font=/AAAAAK+Arial-ItalicMT>6WDQGDUGGLYPH<c=3,font=/AAAAAK+Arial-ItalicMT>&LUFOLQJGLYPH<c=3,font=/AAAAAK+Arial-ItalicMT> $SSURDFKGLYPH<c=3,font=/AAAAAK+Arial-ItalicMT>0DQHXYHULQJGLYPH<c=3,font=/AAAAAK+Arial-ItalicMT>5DGLXVGLYPH<c=3,font=/AAAAAK+Arial-ItalicMT>7 DEOH	<|special_separator|>
 (501.13, 380.91) (551.16, 380.91) (551.16, 382.42) (501.13, 382.42)        /G2 $SSO\GLYPH<c=3,font=/AAAAAK+Arial-ItalicMT>([SDQGHGGLYPH<c=3,font=/AAAAAK+Arial-ItalicMT>&LUFOLQJGLYPH<c=3,font=/AAAAAK+Arial-ItalicMT> $SSURDFKGLYPH<c=3,font=/AAAAAK+Arial-ItalicMT>0DQHXYHULQJGLYPH<c=3,font=/AAAAAK+Arial-ItalicMT> $LUVSDFHGLYPH<c=3,font=/AAAAAK+Arial-ItalicMT>5DGLXVGLYPH<c=3,font=/AAAAAK+Arial-ItalicMT>	<|special_separator|>
 (501.13, 378.86) (505.25, 378.86) (505.25, 380.37) (501.13, 380.37)      /TT10 Table	<|special_separator|>
 (449.10, 369.37) (469.36, 369.37) (469.36, 371.38) (449.10, 371.38)       /TT6 AIRPORT SKETCH	<|special_separator|>
 (449.10, 367.15) (449.63, 367.15) (449.63, 368.83) (449.10, 368.83)       /TT6  	<|special_separator|>
 (455.94, 367.15) (456.46, 367.15) (456.46, 368.83) (455.94, 368.83)       /TT6  	<|special_separator|>
 (462.77, 367.15) (463.30, 367.15) (463.30, 368.83) (462.77, 368.83)       /TT6  	<|special_separator|>
-(463.30, 367.15) (527.76, 367.15) (527.76, 368.83) (463.30, 368.83)       /TT8                                                                                                                            	<|special_separator|>
+(463.30, 367.15) (527.77, 367.15) (527.77, 368.83) (463.30, 368.83)       /TT8                                                                                                                            	<|special_separator|>
 (449.10, 364.87) (525.94, 364.87) (525.94, 366.55) (449.10, 366.55)       /TT8 The airport sketch is a depiction of the airport with emphasis on runway pattern and related 	<|special_separator|>
 (449.10, 362.60) (522.03, 362.60) (522.03, 364.27) (449.10, 364.27)       /TT8 information, positioned in either the lower left or lower right corner of the chart to aid pi-	<|special_separator|>
-(449.10, 360.32) (524.67, 360.32) (524.67, 362.00) (449.10, 362.00)       /TT8 lot recognition of the airport from the air and to provide some information to aid on ground 	<|special_separator|>
+(449.10, 360.32) (524.67, 360.32) (524.67, 361.99) (449.10, 361.99)       /TT8 lot recognition of the airport from the air and to provide some information to aid on ground 	<|special_separator|>
 (449.10, 358.04) (527.17, 358.04) (527.17, 359.72) (449.10, 359.72)       /TT8 navigation of the airport. The runways are drawn to scale and oriented to true north. Runway 	<|special_separator|>
-(449.10, 355.76) (502.39, 355.76) (502.39, 357.44) (449.10, 357.44)       /TT8 dimensions (length and width) are shown for al  active runways.	<|special_separator|>
+(449.10, 355.76) (502.40, 355.76) (502.40, 357.44) (449.10, 357.44)       /TT8 dimensions (length and width) are shown for al  active runways.	<|special_separator|>
 (449.10, 351.20) (512.93, 351.20) (512.93, 352.88) (449.10, 352.88)       /TT8 Runway(s) are depicted based on what type and construction of the runway.	<|special_separator|>
-(449.95, 346.10) (460.02, 346.10) (460.02, 347.61) (449.95, 347.61)       /TT8 Hard Surface	<|special_separator|>
+(449.96, 346.10) (460.02, 346.10) (460.02, 347.61) (449.96, 347.61)       /TT8 Hard Surface	<|special_separator|>
 (464.90, 346.10) (473.99, 346.10) (473.99, 347.61) (464.90, 347.61)       /TT8 Other Than 	<|special_separator|>
 (464.90, 344.05) (474.97, 344.05) (474.97, 345.56) (464.90, 345.56)       /TT8 Hard Surface	<|special_separator|>
 (478.91, 346.10) (489.46, 346.10) (489.46, 347.61) (478.91, 347.61)       /TT8 Metal Surface	<|special_separator|>
 (493.06, 346.10) (505.03, 346.10) (505.03, 347.61) (493.06, 347.61)       /TT8 Closed Runway	<|special_separator|>
 (509.58, 346.10) (524.30, 346.10) (524.30, 347.61) (509.58, 347.61)       /TT8 Under Construction	<|special_separator|>
-(449.95, 335.36) (458.31, 335.36) (458.31, 336.87) (449.95, 336.87)       /TT8 Stopways, 	<|special_separator|>
-(449.95, 333.30) (461.92, 333.30) (461.92, 334.81) (449.95, 334.81)       /TT8 Taxiways, Park-	<|special_separator|>
-(449.95, 331.25) (457.08, 331.25) (457.08, 332.76) (449.95, 332.76)       /TT8 ing Areas	<|special_separator|>
-(464.90, 335.36) (472.88, 335.36) (472.88, 336.87) (464.90, 336.87)       /TT8 Displaced 	<|special_separator|>
+(449.96, 335.35) (458.31, 335.35) (458.31, 336.86) (449.96, 336.86)       /TT8 Stopways, 	<|special_separator|>
+(449.96, 333.30) (461.92, 333.30) (461.92, 334.81) (449.96, 334.81)       /TT8 Taxiways, Park-	<|special_separator|>
+(449.96, 331.25) (457.08, 331.25) (457.08, 332.76) (449.96, 332.76)       /TT8 ing Areas	<|special_separator|>
+(464.90, 335.35) (472.88, 335.35) (472.88, 336.86) (464.90, 336.86)       /TT8 Displaced 	<|special_separator|>
 (464.90, 333.30) (472.50, 333.30) (472.50, 334.81) (464.90, 334.81)       /TT8 Threshold	<|special_separator|>
-(478.91, 335.36) (484.71, 335.36) (484.71, 336.87) (478.91, 336.87)       /TT8 Closed 	<|special_separator|>
+(478.91, 335.35) (484.71, 335.35) (484.71, 336.86) (478.91, 336.86)       /TT8 Closed 	<|special_separator|>
 (478.91, 333.30) (486.61, 333.30) (486.61, 334.81) (478.91, 334.81)       /TT8 Pavement	<|special_separator|>
-(493.06, 335.36) (504.21, 335.36) (504.21, 336.87) (493.06, 336.87)       /TT8 Water Runway	<|special_separator|>
+(493.06, 335.35) (504.21, 335.35) (504.21, 336.86) (493.06, 336.86)       /TT8 Water Runway	<|special_separator|>
 (449.10, 320.63) (548.60, 320.63) (548.60, 322.31) (449.10, 322.31)       /TT8 Taxiways and aprons are shaded grey. Other runway features that may be shown are runway numbers, runway dimen-	<|special_separator|>
-(449.10, 318.36) (500.08, 318.36) (500.08, 320.03) (449.10, 320.03)       /TT8 sions, runway slope, arresting gear, and displaced threshold.	<|special_separator|>
+(449.10, 318.35) (500.08, 318.35) (500.08, 320.03) (449.10, 320.03)       /TT8 sions, runway slope, arresting gear, and displaced threshold.	<|special_separator|>
 (449.10, 313.80) (547.83, 313.80) (547.83, 315.48) (449.10, 315.48)        /G1 2WKHUGLYPH<c=3,font=/AAAAAH+ArialMT>LQIRUPDWLRQGLYPH<c=3,font=/AAAAAH+ArialMT>FRQFHUQLQJGLYPH<c=3,font=/AAAAAH+ArialMT>OLJKWLQJGLYPH<c=15,font=/AAAAAH+ArialMT>GLYPH<c=3,font=/AAAAAH+ArialMT>¿QDOGLYPH<c=3,font=/AAAAAH+ArialMT>DSSURDFKGLYPH<c=3,font=/AAAAAH+ArialMT>EHDULQJVGLYPH<c=15,font=/AAAAAH+ArialMT>GLYPH<c=3,font=/AAAAAH+ArialMT>DLUSRUWGLYPH<c=3,font=/AAAAAH+ArialMT>EHDFRQGLYPH<c=15,font=/AAAAAH+ArialMT>GLYPH<c=3,font=/AAAAAH+ArialMT>REVWDFOHVGLYPH<c=15,font=/AAAAAH+ArialMT>GLYPH<c=3,font=/AAAAAH+ArialMT>FRQWUROGLYPH<c=3,font=/AAAAAH+ArialMT>WRZHU GLYPH<c=15,font=/AAAAAH+ArialMT>GLYPH<c=3,font=/AAAAAH+ArialMT>1$ 9 $,'VGLYPH<c=15,font=/AAAAAH+ArialMT>GLYPH<c=3,font=/AAAAAH+ArialMT>KHOL	<|special_separator|>
 (547.83, 313.80) (548.46, 313.80) (548.46, 315.48) (547.83, 315.48)       /TT8 -	<|special_separator|>
 (449.10, 311.52) (470.53, 311.52) (470.53, 313.20) (449.10, 313.20)       /TT8 pads may also be shown.	<|special_separator|>
 (449.10, 306.96) (493.38, 306.96) (493.38, 308.64) (449.10, 308.64)        /G3 $LUSRUWGLYPH<c=3,font=/AAAAAN+Arial-BoldMT>(OHYDWLRQGLYPH<c=3,font=/AAAAAN+Arial-BoldMT>DQGGLYPH<c=3,font=/AAAAAN+Arial-BoldMT>7 RXFKGRZQGLYPH<c=3,font=/AAAAAN+Arial-BoldMT>=RQHGLYPH<c=3,font=/AAAAAN+Arial-BoldMT>(OHYDWLRQ	<|special_separator|>
 (449.10, 302.40) (549.16, 302.40) (549.16, 304.08) (449.10, 304.08)       /TT8 The airport elevation is shown enclosed within a box in the upper left corner of the sketch box and the touchdown zone 	<|special_separator|>
-(449.10, 300.12) (546.91, 300.12) (546.91, 301.80) (449.10, 301.80)       /TT8 elevation (TDZE) is shown in the upper right corner of the sketch box. The airport elevation is the highest point of an 	<|special_separator|>
+(449.10, 300.13) (546.91, 300.13) (546.91, 301.80) (449.10, 301.80)       /TT8 elevation (TDZE) is shown in the upper right corner of the sketch box. The airport elevation is the highest point of an 	<|special_separator|>
 (449.10, 297.85) (551.80, 297.85) (551.80, 299.52) (449.10, 299.52)        /G1 DLUSRUW¶VGLYPH<c=3,font=/AAAAAH+ArialMT>XVDEOHGLYPH<c=3,font=/AAAAAH+ArialMT>UXQZD\VGLYPH<c=3,font=/AAAAAH+ArialMT>PHDVXUHGGLYPH<c=3,font=/AAAAAH+ArialMT>LQGLYPH<c=3,font=/AAAAAH+ArialMT>IHHWGLYPH<c=3,font=/AAAAAH+ArialMT>IURPGLYPH<c=3,font=/AAAAAH+ArialMT>PHDQGLYPH<c=3,font=/AAAAAH+ArialMT>VHDGLYPH<c=3,font=/AAAAAH+ArialMT>OHYHOGLYPH<c=17,font=/AAAAAH+ArialMT>GLYPH<c=3,font=/AAAAAH+ArialMT>7KHGLYPH<c=3,font=/AAAAAH+ArialMT>7'=(GLYPH<c=3,font=/AAAAAH+ArialMT>LVGLYPH<c=3,font=/AAAAAH+ArialMT>WKHGLYPH<c=3,font=/AAAAAH+ArialMT>KLJKHVWGLYPH<c=3,font=/AAAAAH+ArialMT>HOHYDWLRQGLYPH<c=3,font=/AAAAAH+ArialMT>LQGLYPH<c=3,font=/AAAAAH+ArialMT>WKHGLYPH<c=3,font=/AAAAAH+ArialMT>¿UVWGLYPH<c=3,font=/AAAAAH+ArialMT>GLYPH<c=22,font=/AAAAAH+ArialMT>GLYPH<c=15,font=/AAAAAH+ArialMT>GLYPH<c=19,font=/AAAAAH+ArialMT>GLYPH<c=19,font=/AAAAAH+ArialMT>GLYPH<c=19,font=/AAAAAH+ArialMT>GLYPH<c=3,font=/AAAAAH+ArialMT>IHHWGLYPH<c=3,font=/AAAAAH+ArialMT>RIGLYPH<c=3,font=/AAAAAH+ArialMT>	<|special_separator|>
 (449.10, 295.57) (505.85, 295.57) (505.85, 297.25) (449.10, 297.25)       /TT8 the landing surface. Circling only approaches wil  not show a TDZE.	<|special_separator|>
 (498.81, 273.07) (502.09, 273.07) (502.09, 275.81) (498.81, 275.81)       /Tc1 114	<|special_separator|>
 (446.19, 320.13) (446.19, 369.15) (444.85, 369.15) (444.85, 320.13)       /TT8 FAA Chart Users' Guide - Terminal Procedures Publication (TPP) - Terms	<|special_separator|>
-(329.40, 409.94) (355.13, 409.94) (355.13, 412.39) (329.40, 412.39)       /Tc7 AGL 2013 Financial Calendar	<|special_separator|>
-(329.40, 407.50) (341.13, 407.50) (341.13, 409.50) (329.40, 409.50)       /Tc8 22 August 2012 	<|special_separator|>
+(329.41, 409.94) (355.13, 409.94) (355.13, 412.39) (329.41, 412.39)       /Tc7 AGL 2013 Financial Calendar	<|special_separator|>
+(329.41, 407.50) (341.13, 407.50) (341.13, 409.50) (329.41, 409.50)       /Tc8 22 August 2012 	<|special_separator|>
 (350.47, 407.50) (384.81, 407.50) (384.81, 409.50) (350.47, 409.50)       /Tc8 2012 ful  year result and final dividend announced	<|special_separator|>
-(329.40, 404.96) (341.17, 404.96) (341.17, 406.96) (329.40, 406.96)       /Tc8 30 August 2012 	<|special_separator|>
+(329.41, 404.96) (341.17, 404.96) (341.17, 406.96) (329.41, 406.96)       /Tc8 30 August 2012 	<|special_separator|>
 (350.47, 404.96) (372.91, 404.96) (372.91, 406.96) (350.47, 406.96)       /Tc8 Ex-dividend trading commences	<|special_separator|>
-(329.40, 402.41) (342.97, 402.41) (342.97, 404.42) (329.40, 404.42)       /Tc8 5 September 2012 	<|special_separator|>
+(329.41, 402.41) (342.97, 402.41) (342.97, 404.42) (329.41, 404.42)       /Tc8 5 September 2012 	<|special_separator|>
 (350.47, 402.41) (374.89, 402.41) (374.89, 404.42) (350.47, 404.42)       /Tc8 Record date for 2012 final dividend	<|special_separator|>
-(329.40, 399.87) (343.91, 399.87) (343.91, 401.88) (329.40, 401.88)       /Tc8 27 September 2012 	<|special_separator|>
+(329.41, 399.87) (343.91, 399.87) (343.91, 401.88) (329.41, 401.88)       /Tc8 27 September 2012 	<|special_separator|>
 (350.47, 399.87) (365.66, 399.87) (365.66, 401.88) (350.47, 401.88)       /Tc8 Final dividend payable	<|special_separator|>
-(329.40, 397.33) (342.07, 397.33) (342.07, 399.33) (329.40, 399.33)       /Tc8 23 October 2012 	<|special_separator|>
+(329.41, 397.33) (342.07, 397.33) (342.07, 399.33) (329.41, 399.33)       /Tc8 23 October 2012 	<|special_separator|>
 (350.47, 397.33) (367.22, 397.33) (367.22, 399.33) (350.47, 399.33)       /Tc8 Annual General Meeting	<|special_separator|>
-(329.40, 394.79) (342.66, 395.54) (342.66, 396.70) (329.40, 396.79)       /Tc8 27 February 2013 1	<|special_separator|>
+(329.41, 394.79) (342.66, 395.54) (342.66, 396.70) (329.41, 396.79)       /Tc8 27 February 2013 1	<|special_separator|>
 (342.65, 394.79) (343.04, 394.79) (343.04, 396.79) (342.65, 396.79)       /Tc8  	<|special_separator|>
 (350.47, 394.79) (386.26, 394.79) (386.26, 396.79) (350.47, 396.79)       /Tc8 2013 interim result and interim dividend announced	<|special_separator|>
 (329.40, 392.24) (341.27, 392.99) (341.27, 394.16) (329.40, 394.25)       /Tc8 28 August 2013 1	<|special_separator|>
-(341.26, 392.25) (341.66, 392.25) (341.66, 394.25) (341.26, 394.25)       /Tc8  	<|special_separator|>
-(350.47, 392.25) (385.93, 392.25) (385.93, 394.25) (350.47, 394.25)       /Tc8 2013 ful  year results and final dividend announced 	<|special_separator|>
-(329.40, 390.07) (358.66, 390.07) (358.66, 391.41) (329.40, 391.41)       /Tc8 1 Indicative dates only, subject to change/Board confirmation	<|special_separator|>
-(329.40, 385.46) (391.77, 385.46) (391.77, 387.46) (329.40, 387.46)       /Tc9 AGL's Annual General Meeting wil  be held at the City Recital Hal , Angel Place, Sydney 	<|special_separator|>
-(329.40, 383.42) (369.65, 383.42) (369.65, 385.43) (329.40, 385.43)       /Tc9 commencing at 10.30am on Tuesday 23 October 2012.	<|special_separator|>
-(363.55, 326.58) (379.53, 326.58) (379.53, 331.04) (363.55, 331.04)       /Tc9 Yesterday	<|special_separator|>
-(363.55, 323.09) (391.38, 323.09) (391.38, 325.09) (363.55, 325.09)       /Tc8 Established in Sydney in 1837, and then 	<|special_separator|>
-(363.55, 321.05) (395.02, 321.05) (395.02, 323.06) (363.55, 323.06)       /Tc8 known as The Australian Gas Light Company, 	<|special_separator|>
-(363.55, 319.02) (394.08, 319.02) (394.08, 321.02) (363.55, 321.02)       /Tc8 the AGL business has an established history 	<|special_separator|>
-(363.55, 316.99) (390.61, 316.99) (390.61, 318.99) (363.55, 318.99)       /Tc8 and reputation for serving the gas and 	<|special_separator|>
-(363.55, 314.95) (393.50, 314.95) (393.50, 316.96) (363.55, 316.96)       /Tc8 electricity needs of Australian households. 	<|special_separator|>
-(363.55, 312.92) (394.12, 312.92) (394.12, 314.92) (363.55, 314.92)       /Tc8 In 1841, when AGL supplied the gas to light 	<|special_separator|>
-(363.55, 310.88) (393.76, 310.88) (393.76, 312.89) (363.55, 312.89)       /Tc8 the first public street lamp, it was reported 	<|special_separator|>
-(363.55, 308.85) (390.50, 308.85) (390.50, 310.86) (363.55, 310.86)       /Tc8 in the Sydney Gazette as a 'wonderful 	<|special_separator|>
-(363.55, 306.82) (395.71, 306.82) (395.71, 308.82) (363.55, 308.82)       /Tc8 achievement of scientific knowledge, assisted 	<|special_separator|>
-(363.55, 304.78) (394.27, 304.78) (394.27, 306.79) (363.55, 306.79)       /Tc8 by mechanical ingenuity.' Within two years, 	<|special_separator|>
-(363.55, 302.75) (396.66, 302.75) (396.66, 304.76) (363.55, 304.76)       /Tc8 165 gas lamps were lighting the City of Sydney.	<|special_separator|>
-(329.40, 361.16) (384.20, 361.16) (384.20, 371.08) (329.40, 371.08)      /Tc10 Looking back on 	<|special_separator|>
-(329.40, 350.99) (341.19, 350.99) (341.19, 360.91) (329.40, 360.91)      /Tc10 175	<|special_separator|>
+(341.26, 392.24) (341.66, 392.24) (341.66, 394.25) (341.26, 394.25)       /Tc8  	<|special_separator|>
+(350.47, 392.24) (385.93, 392.24) (385.93, 394.25) (350.47, 394.25)       /Tc8 2013 ful  year results and final dividend announced 	<|special_separator|>
+(329.41, 390.07) (358.66, 390.07) (358.66, 391.41) (329.41, 391.41)       /Tc8 1 Indicative dates only, subject to change/Board confirmation	<|special_separator|>
+(329.41, 385.46) (391.77, 385.46) (391.77, 387.46) (329.41, 387.46)       /Tc9 AGL's Annual General Meeting wil  be held at the City Recital Hal , Angel Place, Sydney 	<|special_separator|>
+(329.41, 383.42) (369.65, 383.42) (369.65, 385.43) (329.41, 385.43)       /Tc9 commencing at 10.30am on Tuesday 23 October 2012.	<|special_separator|>
+(363.54, 326.58) (379.53, 326.58) (379.53, 331.04) (363.54, 331.04)       /Tc9 Yesterday	<|special_separator|>
+(363.54, 323.09) (391.38, 323.09) (391.38, 325.09) (363.54, 325.09)       /Tc8 Established in Sydney in 1837, and then 	<|special_separator|>
+(363.54, 321.05) (395.02, 321.05) (395.02, 323.06) (363.54, 323.06)       /Tc8 known as The Australian Gas Light Company, 	<|special_separator|>
+(363.54, 319.02) (394.08, 319.02) (394.08, 321.02) (363.54, 321.02)       /Tc8 the AGL business has an established history 	<|special_separator|>
+(363.54, 316.99) (390.61, 316.99) (390.61, 318.99) (363.54, 318.99)       /Tc8 and reputation for serving the gas and 	<|special_separator|>
+(363.54, 314.95) (393.50, 314.95) (393.50, 316.96) (363.54, 316.96)       /Tc8 electricity needs of Australian households. 	<|special_separator|>
+(363.54, 312.92) (394.11, 312.92) (394.11, 314.92) (363.54, 314.92)       /Tc8 In 1841, when AGL supplied the gas to light 	<|special_separator|>
+(363.54, 310.88) (393.76, 310.88) (393.76, 312.89) (363.54, 312.89)       /Tc8 the first public street lamp, it was reported 	<|special_separator|>
+(363.54, 308.85) (390.50, 308.85) (390.50, 310.86) (363.54, 310.86)       /Tc8 in the Sydney Gazette as a 'wonderful 	<|special_separator|>
+(363.54, 306.82) (395.71, 306.82) (395.71, 308.82) (363.54, 308.82)       /Tc8 achievement of scientific knowledge, assisted 	<|special_separator|>
+(363.54, 304.78) (394.27, 304.78) (394.27, 306.79) (363.54, 306.79)       /Tc8 by mechanical ingenuity.' Within two years, 	<|special_separator|>
+(363.54, 302.75) (396.66, 302.75) (396.66, 304.76) (363.54, 304.76)       /Tc8 165 gas lamps were lighting the City of Sydney.	<|special_separator|>
+(329.41, 361.16) (384.20, 361.16) (384.20, 371.08) (329.41, 371.08)      /Tc10 Looking back on 	<|special_separator|>
+(329.41, 350.99) (341.19, 350.99) (341.19, 360.91) (329.41, 360.91)      /Tc10 175	<|special_separator|>
 (340.99, 350.99) (342.69, 350.99) (342.69, 360.91) (340.99, 360.91)      /Tc11  	<|special_separator|>
 (342.17, 350.99) (372.17, 350.99) (372.17, 360.91) (342.17, 360.91)      /Tc10 years of 	<|special_separator|>
-(329.40, 340.82) (353.52, 340.82) (353.52, 350.73) (329.40, 350.73)      /Tc10 looking	<|special_separator|>
+(329.41, 340.82) (353.52, 340.82) (353.52, 350.73) (329.41, 350.73)      /Tc10 looking	<|special_separator|>
 (353.33, 340.82) (355.03, 340.82) (355.03, 350.73) (353.33, 350.73)      /Tc11  	<|special_separator|>
 (354.50, 340.82) (385.75, 340.82) (385.75, 350.73) (354.50, 350.73)      /Tc10 forward.	<|special_separator|>
-(329.40, 418.13) (353.34, 418.13) (353.34, 419.69) (329.40, 419.69)       /Tc9 AGL Energy Limited  ABN 74 115 061 375	<|special_separator|>
+(329.41, 418.13) (353.34, 418.13) (353.34, 419.69) (329.41, 419.69)       /Tc9 AGL Energy Limited  ABN 74 115 061 375	<|special_separator|>
 (546.21, 429.22) (548.23, 429.22) (548.23, 430.92) (546.21, 430.92)       /Tc2 29	<|special_separator|>
 (497.78, 537.13) (542.88, 537.13) (542.88, 540.25) (497.78, 540.25)       /Tc3 signs, signals and road markings	<|special_separator|>
 (490.31, 537.09) (492.10, 537.09) (492.10, 540.21) (490.31, 540.21)       /Tc3 3	<|special_separator|>
@@ -348,7 +348,7 @@
 (498.15, 508.19) (543.93, 508.19) (543.93, 510.00) (498.15, 510.00)       /Tc4 There are three ways to read signs: by their shape, colour and 	<|special_separator|>
 (498.15, 506.15) (545.68, 506.15) (545.68, 507.96) (498.15, 507.96)       /Tc4 the messages printed on them. Understanding these three ways 	<|special_separator|>
 (498.15, 504.11) (545.28, 504.11) (545.28, 505.92) (498.15, 505.92)       /Tc4 of classifying signs wil  help you figure out the meaning of signs 	<|special_separator|>
-(498.15, 502.06) (513.33, 502.06) (513.33, 503.88) (498.15, 503.88)       /Tc4 that are new to you. 	<|special_separator|>
+(498.15, 502.07) (513.33, 502.07) (513.33, 503.88) (498.15, 503.88)       /Tc4 that are new to you. 	<|special_separator|>
 (505.43, 487.15) (508.56, 487.15) (508.56, 488.77) (505.43, 488.77)       /Tc6 Stop	<|special_separator|>
 (527.46, 486.97) (541.53, 486.97) (541.53, 488.59) (527.46, 488.59)       /Tc6 Yield the right-of-way	<|special_separator|>
 (501.79, 469.04) (511.38, 469.04) (511.38, 470.65) (501.79, 470.65)       /Tc6 Shows driving 	<|special_separator|>
@@ -361,16 +361,16 @@
 (499.22, 450.41) (504.43, 450.41) (504.43, 452.03) (499.22, 452.03)       /Tc6 services	<|special_separator|>
 (516.98, 452.17) (529.77, 452.17) (529.77, 453.78) (516.98, 453.78)       /Tc6 Shows a permitted 	<|special_separator|>
 (516.98, 450.48) (520.99, 450.48) (520.99, 452.10) (516.98, 452.10)       /Tc6 action	<|special_separator|>
-(534.56, 452.34) (548.59, 452.34) (548.59, 453.96) (534.56, 453.96)       /Tc6 Shows an action that 	<|special_separator|>
+(534.56, 452.34) (548.58, 452.34) (548.58, 453.96) (534.56, 453.96)       /Tc6 Shows an action that 	<|special_separator|>
 (534.56, 450.66) (545.12, 450.66) (545.12, 452.27) (534.56, 452.27)       /Tc6 is not permitted	<|special_separator|>
 (483.06, 434.05) (494.73, 434.05) (494.73, 435.67) (483.06, 435.67)       /Tc6 Warns of hazards 	<|special_separator|>
 (483.06, 432.37) (487.11, 432.37) (487.11, 433.98) (483.06, 433.98)       /Tc6 ahead	<|special_separator|>
 (499.40, 433.96) (505.66, 433.96) (505.66, 435.58) (499.40, 435.58)       /Tc6 Warns of 	<|special_separator|>
 (499.40, 432.28) (511.72, 432.28) (511.72, 433.89) (499.40, 433.89)       /Tc6 construction zones	<|special_separator|>
 (516.76, 433.96) (527.46, 433.96) (527.46, 435.58) (516.76, 435.58)       /Tc6 Railway crossing	<|special_separator|>
-(534.51, 437.30) (547.90, 437.30) (547.90, 438.92) (534.51, 438.92)       /Tc6 Shows distance and 	<|special_separator|>
+(534.51, 437.30) (547.90, 437.30) (547.90, 438.91) (534.51, 438.91)       /Tc6 Shows distance and 	<|special_separator|>
 (534.51, 435.61) (540.31, 435.61) (540.31, 437.23) (534.51, 437.23)       /Tc6 direction	<|special_separator|>
-(478.38, 519.88) (483.80, 519.88) (483.80, 521.68) (478.38, 521.68)       /Tc4 •  Signs	<|special_separator|>
+(478.37, 519.88) (483.80, 519.88) (483.80, 521.69) (478.37, 521.69)       /Tc4 •  Signs	<|special_separator|>
 (479.97, 517.69) (480.90, 517.69) (480.90, 519.02) (479.97, 519.02)       /Tc4 - 	<|special_separator|>
 (481.22, 517.58) (492.39, 517.58) (492.39, 519.39) (481.22, 519.39)       /Tc4 regulatory signs	<|special_separator|>
 (479.97, 515.39) (480.90, 515.39) (480.90, 516.73) (479.97, 516.73)       /Tc4 - 	<|special_separator|>
@@ -381,7 +381,7 @@
 (481.22, 508.90) (491.06, 508.90) (491.06, 510.71) (481.22, 510.71)       /Tc4 lane use signs	<|special_separator|>
 (479.97, 506.71) (480.90, 506.71) (480.90, 508.05) (479.97, 508.05)       /Tc4 - 	<|special_separator|>
 (481.22, 506.60) (493.38, 506.60) (493.38, 508.41) (481.22, 508.41)       /Tc4   turn control signs	<|special_separator|>
-(479.97, 504.42) (480.90, 504.42) (480.90, 505.75) (479.97, 505.75)       /Tc4 - 	<|special_separator|>
+(479.97, 504.41) (480.90, 504.41) (480.90, 505.75) (479.97, 505.75)       /Tc4 - 	<|special_separator|>
 (481.22, 504.30) (490.54, 504.30) (490.54, 506.11) (481.22, 506.11)       /Tc4   parking signs	<|special_separator|>
 (479.97, 502.12) (480.90, 502.12) (480.90, 503.45) (479.97, 503.45)       /Tc4 - 	<|special_separator|>
 (481.22, 502.00) (491.17, 502.00) (491.17, 503.81) (481.22, 503.81)       /Tc4   reserved lane 	<|special_separator|>
@@ -402,12 +402,12 @@
 (479.97, 479.58) (480.90, 479.58) (480.90, 480.92) (479.97, 480.92)       /Tc4 - 	<|special_separator|>
 (481.22, 479.47) (490.00, 479.47) (490.00, 481.28) (481.22, 481.28)       /Tc4 lane control 	<|special_separator|>
 (481.22, 477.43) (486.00, 477.43) (486.00, 479.24) (481.22, 479.24)       /Tc4 signals	<|special_separator|>
-(479.97, 475.25) (480.90, 475.25) (480.90, 476.58) (479.97, 476.58)       /Tc4 - 	<|special_separator|>
+(479.97, 475.24) (480.90, 475.24) (480.90, 476.58) (479.97, 476.58)       /Tc4 - 	<|special_separator|>
 (481.22, 475.13) (489.35, 475.13) (489.35, 476.94) (481.22, 476.94)       /Tc4 traffic lights	<|special_separator|>
 (478.38, 472.51) (490.52, 472.51) (490.52, 474.32) (478.38, 474.32)       /Tc4 •  Road markings	<|special_separator|>
 (479.97, 470.33) (480.90, 470.33) (480.90, 471.66) (479.97, 471.66)       /Tc4 - 	<|special_separator|>
-(481.22, 470.21) (489.31, 470.21) (489.31, 472.02) (481.22, 472.02)       /Tc4 yel ow lines	<|special_separator|>
-(479.97, 468.03) (480.90, 468.03) (480.90, 469.37) (479.97, 469.37)       /Tc4 - 	<|special_separator|>
+(481.22, 470.22) (489.31, 470.22) (489.31, 472.03) (481.22, 472.03)       /Tc4 yel ow lines	<|special_separator|>
+(479.97, 468.03) (480.90, 468.03) (480.90, 469.36) (479.97, 469.36)       /Tc4 - 	<|special_separator|>
 (481.22, 467.92) (488.64, 467.92) (488.64, 469.73) (481.22, 469.73)       /Tc4 white lines	<|special_separator|>
 (479.97, 465.73) (480.90, 465.73) (480.90, 467.07) (479.97, 467.07)       /Tc4 - 	<|special_separator|>
 (481.22, 465.62) (491.17, 465.62) (491.17, 467.43) (481.22, 467.43)       /Tc4 reserved lane 	<|special_separator|>
@@ -426,7 +426,7 @@
 (317.95, 114.64) (383.31, 114.64) (383.31, 121.57) (317.95, 121.57)      /F134 Layout Analysis. In	<|special_separator|>
 (385.80, 114.60) (558.20, 114.60) (558.20, 121.63) (385.80, 121.63)      /F148 Proceedings of the 28th ACM SIGKDD Conference on	<|special_separator|>
 (317.95, 104.64) (559.00, 104.64) (559.00, 111.67) (317.95, 111.67)      /F148 Knowledge Discovery and Data Mining (KDD '22), August 14-18, 2022, Wash-	<|special_separator|>
-(317.95, 094.67) (370.12, 094.67) (370.12, 101.70) (317.95, 101.70)      /F148 ington, DC, USA.	<|special_separator|>
+(317.95, 094.67) (370.11, 094.67) (370.11, 101.70) (317.95, 101.70)      /F148 ington, DC, USA.	<|special_separator|>
 (371.83, 094.71) (558.72, 094.71) (558.72, 101.65) (371.83, 101.65)      /F134 ACM, New York, NY, USA, 9 pages. https://doi.org/10.1145/	<|special_separator|>
 (317.95, 084.75) (371.59, 084.75) (371.59, 091.68) (317.95, 091.68)      /F134 3534678.3539043	<|special_separator|>
 (036.34, 237.00) (036.34, 627.00) (018.34, 627.00) (018.34, 237.00) /arXivStAmP arXiv:2206.01062v1  [cs.CV]  2 Jun 2022

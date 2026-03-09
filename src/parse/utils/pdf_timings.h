@@ -55,8 +55,11 @@ namespace pdflib
     // Document-level timing keys
     static const std::string KEY_PROCESS_DOCUMENT_FROM_FILE;
     static const std::string KEY_PROCESS_DOCUMENT_FROM_BYTESIO;
+    static const std::string KEY_QPDF_PROCESS;
+    static const std::string KEY_EXTRACT_DOC_ANNOTATIONS;
     static const std::string KEY_DECODE_DOCUMENT;
-
+    static const std::string KEY_PROCESS_DOCUMENT_COMPONENTS;
+    
     // Dynamic key prefixes (for pattern matching)
     static const std::string PREFIX_DECODE_FONT;
     static const std::string PREFIX_DECODE_XOBJECT;
@@ -329,8 +332,11 @@ namespace pdflib
 
   const std::string pdf_timings::KEY_PROCESS_DOCUMENT_FROM_FILE = "process_document_from_file";
   const std::string pdf_timings::KEY_PROCESS_DOCUMENT_FROM_BYTESIO = "process_document_from_bytesio";
+  const std::string pdf_timings::KEY_QPDF_PROCESS = "qpdf_process";
+  const std::string pdf_timings::KEY_EXTRACT_DOC_ANNOTATIONS = "extract_doc_annotations";
   const std::string pdf_timings::KEY_DECODE_DOCUMENT = "decode_document";
-
+  const std::string pdf_timings::KEY_PROCESS_DOCUMENT_COMPONENTS = "decode_document_components";
+  
   const std::string pdf_timings::PREFIX_DECODE_FONT = "decode_font: ";
   const std::string pdf_timings::PREFIX_DECODE_XOBJECT = "decode_xobject: ";
   const std::string pdf_timings::PREFIX_DECODE_GRPH = "decode_grph: ";
@@ -367,6 +373,8 @@ namespace pdflib
       KEY_SANITIZE_CELLS,
       KEY_PROCESS_DOCUMENT_FROM_FILE,
       KEY_PROCESS_DOCUMENT_FROM_BYTESIO,
+      KEY_QPDF_PROCESS,
+      KEY_EXTRACT_DOC_ANNOTATIONS,
       KEY_DECODE_DOCUMENT
     };
     return static_keys;

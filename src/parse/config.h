@@ -6,7 +6,7 @@
 namespace pdflib
 {
 
-  struct decode_page_config
+  struct decode_config
   {
     std::string page_boundary = "crop_box";
 
@@ -35,6 +35,13 @@ namespace pdflib
 
     bool populate_json_objects = false;
 
+    // threading
+    bool do_thread_safe = true; // slight compute/memory overhead in single threaded case
+
+    // debug: in production, we dont want to have ugly GLYPH<...> 
+    bool keep_glyphs = false;
+    bool keep_qpdf_warnings = false;
+    
     nlohmann::json to_json() const;
     void from_json(const nlohmann::json& j);
 
@@ -44,7 +51,7 @@ namespace pdflib
     std::string to_string() const;
   };
 
-  nlohmann::json decode_page_config::to_json() const
+  nlohmann::json decode_config::to_json() const
   {
     nlohmann::json j;
 
@@ -72,10 +79,13 @@ namespace pdflib
 
     j["populate_json_objects"] = populate_json_objects;
 
+    j["keep_glyphs"] = keep_glyphs;
+    j["keep_qpdf_warnings"] = keep_qpdf_warnings;
+
     return j;
   }
 
-  void decode_page_config::from_json(const nlohmann::json& j)
+  void decode_config::from_json(const nlohmann::json& j)
   {
     if(j.count("page_boundary")) { page_boundary = j["page_boundary"]; }
 
@@ -100,9 +110,12 @@ namespace pdflib
     if(j.count("line_space_width_factor_for_merge_with_space")) { line_space_width_factor_for_merge_with_space = j["line_space_width_factor_for_merge_with_space"]; }
 
     if(j.count("populate_json_objects")) { populate_json_objects = j["populate_json_objects"]; }
+
+    if(j.count("keep_glyphs")) { keep_glyphs = j["keep_glyphs"]; }
+    if(j.count("keep_qpdf_warnings")) { keep_qpdf_warnings = j["keep_qpdf_warnings"]; }
   }
 
-  bool decode_page_config::load(const std::string& filename)
+  bool decode_config::load(const std::string& filename)
   {
     std::ifstream ifs(filename);
     if(!ifs)
@@ -117,7 +130,7 @@ namespace pdflib
     return true;
   }
 
-  bool decode_page_config::save(const std::string& filename) const
+  bool decode_config::save(const std::string& filename) const
   {
     std::ofstream ofs(filename);
     if(!ofs)
@@ -129,7 +142,7 @@ namespace pdflib
     return true;
   }
 
-  std::string decode_page_config::to_string() const
+  std::string decode_config::to_string() const
   {
     std::stringstream ss;
 
@@ -150,7 +163,9 @@ namespace pdflib
        << std::setw(48) << "word_space_width_factor_for_merge" << word_space_width_factor_for_merge << "\n"
        << std::setw(48) << "line_space_width_factor_for_merge" << line_space_width_factor_for_merge << "\n"
        << std::setw(48) << "line_space_width_factor_for_merge_with_space" << line_space_width_factor_for_merge_with_space << "\n"
-       << std::setw(48) << "populate_json_objects" << (populate_json_objects ? "true" : "false") << "\n";
+       << std::setw(48) << "populate_json_objects" << (populate_json_objects ? "true" : "false") << "\n"
+       << std::setw(48) << "keep_glyphs" << (keep_glyphs ? "true" : "false") << "\n"
+       << std::setw(48) << "keep_qpdf_warnings" << (keep_qpdf_warnings ? "true" : "false") << "\n";
 
     return ss.str();
   }

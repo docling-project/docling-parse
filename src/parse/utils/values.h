@@ -76,7 +76,8 @@ namespace utils
     
     void rotate_inplace(int angle, double& x0, double& y0)
     {
-      double phi = -3.141592*angle/180.0;
+      //double phi = -3.141592*angle/180.0;
+      double phi = -M_PI*angle/180.0;
       
       double x1 = x0, y1 = y0;
 
@@ -101,6 +102,47 @@ namespace utils
 
       bbox[2] = std::cos(phi)*tmp[2] - std::sin(phi)*tmp[3];
       bbox[3] = std::sin(phi)*tmp[2] + std::cos(phi)*tmp[3];
+    }
+
+    void transform_bottomleft_bbox_inplace(const int& angle,
+					   const std::pair<double, double>& delta,
+					   std::array<double, 4>& bbox)
+    {
+      // LOG_S(INFO) << "delta-x1: " << delta.first << ", delta-y1: " << delta.second;
+      
+      double& x0 = bbox.at(0);
+      double& y0 = bbox.at(1);
+
+      double& x1 = bbox.at(2);
+      double& y1 = bbox.at(3);
+
+      // LOG_S(INFO) << "before x1: " << x1 << ", y1: " << y1;
+      
+      utils::values::rotate_inplace(angle, x0, y0);
+      utils::values::rotate_inplace(angle, x1, y1);
+
+      // LOG_S(INFO) << "rotate  x1: " << x1 << ", y1: " << y1;
+      
+      utils::values::translate_inplace(delta, x0, y0);
+      utils::values::translate_inplace(delta, x1, y1);
+
+      // LOG_S(INFO) << "translate x1: " << x1 << ", y1: " << y1;
+      
+      // The bounding box always needs to have x0<x1 and y0<y1. If you want
+      // to keep the orientation of the image, we will need to add the rectangle
+      // as demonstrated in the page_cell.
+    
+      double x_min = std::min(x0, x1);
+      double x_max = std::max(x0, x1);
+      
+      double y_min = std::min(y0, y1);
+      double y_max = std::max(y0, y1);
+
+      x0 = x_min;
+      x1 = x_max;
+      
+      y0 = y_min;
+      y1 = y_max;      
     }
     
   }

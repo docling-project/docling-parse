@@ -93874,49 +93874,90 @@
   "has_chars": true,
   "has_words": true,
   "has_lines": true,
-  "shapes": [
+  "widgets": [],
+  "hyperlinks": [
     {
       "index": 0,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
+      "rect": {
+        "r_x0": 431.778,
+        "r_y0": 418.708,
+        "r_x1": 475.94,
+        "r_y1": 418.708,
+        "r_x2": 475.94,
+        "r_y2": 430.047,
+        "r_x3": 431.778,
+        "r_y3": 430.047,
+        "coord_origin": "BOTTOMLEFT"
       },
-      "parent_id": 0,
-      "points": [
-        [
-          46.847,
-          741.572
-        ],
-        [
-          47.444,
-          741.572
-        ],
-        [
-          47.444,
-          622.214
-        ],
-        [
-          46.847,
-          622.214
-        ],
-        [
-          46.847,
-          741.572
-        ]
-      ],
-      "width": 1.0,
-      "coord_origin": "BOTTOMLEFT"
+      "uri": "https://library.municode.com/"
     },
     {
       "index": 1,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
+      "rect": {
+        "r_x0": 46.847,
+        "r_y0": 102.408,
+        "r_x1": 90.413,
+        "r_y1": 102.408,
+        "r_x2": 90.413,
+        "r_y2": 113.747,
+        "r_x3": 46.847,
+        "r_y3": 113.747,
+        "coord_origin": "BOTTOMLEFT"
+      },
+      "uri": "https://library.municode.com/"
+    }
+  ],
+  "lines": [],
+  "shapes": [
+    {
+      "index": 0,
+      "parent_id": 0,
+      "points": [
+        [
+          46.847,
+          741.572
+        ],
+        [
+          47.444,
+          741.572
+        ],
+        [
+          47.444,
+          622.214
+        ],
+        [
+          46.847,
+          622.214
+        ],
+        [
+          46.847,
+          741.572
+        ]
+      ],
+      "coord_origin": "BOTTOMLEFT",
+      "has_graphics_state": true,
+      "line_width": -1.0,
+      "miter_limit": -1.0,
+      "line_cap": -1,
+      "line_join": -1,
+      "dash_phase": 0.0,
+      "dash_array": [],
+      "flatness": -1.0,
+      "rgb_stroking": {
+        "r": 204,
+        "g": 204,
+        "b": 204,
         "a": 255
       },
+      "rgb_filling": {
+        "r": 204,
+        "g": 204,
+        "b": 204,
+        "a": 255
+      }
+    },
+    {
+      "index": 1,
       "parent_id": 0,
       "points": [
         [
@@ -93940,17 +93981,30 @@
           420.498
         ]
       ],
-      "width": 1.0,
-      "coord_origin": "BOTTOMLEFT"
+      "coord_origin": "BOTTOMLEFT",
+      "has_graphics_state": true,
+      "line_width": -1.0,
+      "miter_limit": -1.0,
+      "line_cap": -1,
+      "line_join": -1,
+      "dash_phase": 0.0,
+      "dash_array": [],
+      "flatness": -1.0,
+      "rgb_stroking": {
+        "r": 0,
+        "g": 0,
+        "b": 0,
+        "a": 255
+      },
+      "rgb_filling": {
+        "r": 0,
+        "g": 0,
+        "b": 0,
+        "a": 255
+      }
     },
     {
       "index": 2,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
       "parent_id": 0,
       "points": [
         [
@@ -93974,8 +94028,27 @@
           104.199
         ]
       ],
-      "width": 1.0,
-      "coord_origin": "BOTTOMLEFT"
+      "coord_origin": "BOTTOMLEFT",
+      "has_graphics_state": true,
+      "line_width": -1.0,
+      "miter_limit": -1.0,
+      "line_cap": -1,
+      "line_join": -1,
+      "dash_phase": 0.0,
+      "dash_array": [],
+      "flatness": -1.0,
+      "rgb_stroking": {
+        "r": 0,
+        "g": 0,
+        "b": 0,
+        "a": 255
+      },
+      "rgb_filling": {
+        "r": 0,
+        "g": 0,
+        "b": 0,
+        "a": 255
+      }
     }
   ]
 }

@@ -158,7 +158,15 @@ namespace pdflib
 
   xobject_subtype_name pdf_resource<PAGE_XOBJECTS>::detect_subtype(QPDFObjectHandle& qpdf_obj)
   {
-    QPDFObjectHandle dict = qpdf_obj.getDict();
+    LOG_S(INFO) << __FUNCTION__ << ": " << qpdf_obj.getTypeName();
+    
+    if(not qpdf_obj.isStream())
+      {
+	LOG_S(ERROR) << "qpdf-obj is of type " << qpdf_obj.getTypeName() << " and not a stream";
+	return XOBJECT_UNKNOWN;
+      }
+    
+    QPDFObjectHandle dict = qpdf_obj.getDict(); // only works on a stream! 
     nlohmann::json json_dict = to_json(dict);
 
     if(json_dict.count("/Subtype"))
@@ -188,6 +196,11 @@ namespace pdflib
   {
     LOG_S(INFO) << __FUNCTION__;
 
+    //{
+    //auto tmp = to_json(qpdf_xobjects); 
+    //LOG_S(INFO) << tmp.dump(2);
+    //}
+    
     double total_xobject_time = 0.0;
 
     auto keys = qpdf_xobjects.getKeys();
@@ -200,7 +213,7 @@ namespace pdflib
 
 	QPDFObjectHandle qpdf_obj = qpdf_xobjects.getKey(key);
 	xobject_subtype_name subtype = detect_subtype(qpdf_obj);
-
+	
 	utils::timer xobject_timer;
 
 	switch(subtype)
@@ -214,7 +227,17 @@ namespace pdflib
 
 	      pdf_resource<PAGE_XOBJECT_IMAGE> xobj;
 	      xobj.set(key, qpdf_obj);
-	      image_xobjects[key] = xobj;
+
+	      //to be commented out!!	      
+	      //{
+	      //std::string fname = "./pic_" + std::to_string(image_xobjects.size()) + xobj.pick_extension();
+	      //LOG_S(ERROR) << "storing pic at: " << fname;
+		
+	      //std::filesystem::path path(fname.c_str());
+	      //xobj.save_to_file(path);
+	      //}
+	      
+	      image_xobjects[key] = xobj;		      
 	    }
 	    break;
 
@@ -231,7 +254,7 @@ namespace pdflib
 	    }
 	    break;
 
-	  default:
+	  case XOBJECT_POSTSCRIPT:
 	    {
 	      if(postscript_xobjects.count(key)>0)
 		{
@@ -243,6 +266,12 @@ namespace pdflib
 	      postscript_xobjects[key] = xobj;
 	    }
 	    break;
+
+	  default:
+	    {
+	      auto tmp = to_json(qpdf_obj); 
+	      LOG_S(ERROR) << "could not decode xobject: \n" << tmp.dump(2);
+	    }
 	  }
 
 	double xobject_time = xobject_timer.get_time();

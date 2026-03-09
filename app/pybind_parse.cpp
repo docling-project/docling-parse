@@ -8,6 +8,7 @@
 #include <pybind/utils/pybind11_json.h>
 
 #include <pybind/docling_parser.h>
+#include <pybind/docling_threaded_parser.h>
 
 // Include parse headers for typed bindings
 #include <parse.h>
@@ -16,7 +17,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
 
   // ============= Decode Page Config =============
 
-  pybind11::class_<pdflib::decode_page_config>(m, "DecodePageConfig",
+  pybind11::class_<pdflib::decode_config>(m, "DecodePageConfig",
     R"(
     Configuration parameters for page decoding.
 
@@ -28,99 +29,104 @@ PYBIND11_MODULE(pdf_parsers, m) {
         keep_bitmaps (bool): Keep all the bitmap resources [default=true].
         max_num_lines (int): Maximum number of lines to keep (-1 means no cap) [default=-1].
         max_num_bitmaps (int): Maximum number of bitmaps to keep (-1 means no cap) [default=-1].
+        keep_glyphs (bool): If true, keep GLYPH<...> fallback strings in output; if false, replace them with a space [default=false].
+        keep_qpdf_warnings (bool): If true, QPDF warnings are emitted; if false, they are suppressed [default=false].
     )")
     .def(pybind11::init<>())
-    .def_readwrite("page_boundary", &pdflib::decode_page_config::page_boundary)
-    .def_readwrite("do_sanitization", &pdflib::decode_page_config::do_sanitization)
-    .def_readwrite("keep_char_cells", &pdflib::decode_page_config::keep_char_cells)
-    .def_readwrite("keep_shapes", &pdflib::decode_page_config::keep_shapes)
-    .def_readwrite("keep_bitmaps", &pdflib::decode_page_config::keep_bitmaps)
-    .def_readwrite("max_num_lines", &pdflib::decode_page_config::max_num_lines)
-    .def_readwrite("max_num_bitmaps", &pdflib::decode_page_config::max_num_bitmaps)
-    .def_readwrite("create_word_cells", &pdflib::decode_page_config::create_word_cells)
-    .def_readwrite("create_line_cells", &pdflib::decode_page_config::create_line_cells)
-    .def_readwrite("enforce_same_font", &pdflib::decode_page_config::enforce_same_font)
-    .def_readwrite("horizontal_cell_tolerance", &pdflib::decode_page_config::horizontal_cell_tolerance)
-    .def_readwrite("word_space_width_factor_for_merge", &pdflib::decode_page_config::word_space_width_factor_for_merge)
-    .def_readwrite("line_space_width_factor_for_merge", &pdflib::decode_page_config::line_space_width_factor_for_merge)
-    .def_readwrite("line_space_width_factor_for_merge_with_space", &pdflib::decode_page_config::line_space_width_factor_for_merge_with_space);
+    .def_readwrite("page_boundary", &pdflib::decode_config::page_boundary)
+    .def_readwrite("do_sanitization", &pdflib::decode_config::do_sanitization)
+    .def_readwrite("keep_char_cells", &pdflib::decode_config::keep_char_cells)
+    .def_readwrite("keep_shapes", &pdflib::decode_config::keep_shapes)
+    .def_readwrite("keep_bitmaps", &pdflib::decode_config::keep_bitmaps)
+    .def_readwrite("max_num_lines", &pdflib::decode_config::max_num_lines)
+    .def_readwrite("max_num_bitmaps", &pdflib::decode_config::max_num_bitmaps)
+    .def_readwrite("create_word_cells", &pdflib::decode_config::create_word_cells)
+    .def_readwrite("create_line_cells", &pdflib::decode_config::create_line_cells)
+    .def_readwrite("enforce_same_font", &pdflib::decode_config::enforce_same_font)
+    .def_readwrite("horizontal_cell_tolerance", &pdflib::decode_config::horizontal_cell_tolerance)
+    .def_readwrite("word_space_width_factor_for_merge", &pdflib::decode_config::word_space_width_factor_for_merge)
+    .def_readwrite("line_space_width_factor_for_merge", &pdflib::decode_config::line_space_width_factor_for_merge)
+    .def_readwrite("line_space_width_factor_for_merge_with_space", &pdflib::decode_config::line_space_width_factor_for_merge_with_space)
+    .def_readwrite("do_thread_safe", &pdflib::decode_config::do_thread_safe)
+    .def_readwrite("keep_glyphs", &pdflib::decode_config::keep_glyphs)
+    .def_readwrite("keep_qpdf_warnings", &pdflib::decode_config::keep_qpdf_warnings);
 
   // ============= Typed Resource Bindings (for zero-copy access) =============
 
   // PdfCell - individual text cell with bounding box and text content
-  pybind11::class_<pdflib::pdf_resource<pdflib::PAGE_CELL>>(m, "PdfCell")
-    .def_readonly("x0", &pdflib::pdf_resource<pdflib::PAGE_CELL>::x0)
-    .def_readonly("y0", &pdflib::pdf_resource<pdflib::PAGE_CELL>::y0)
-    .def_readonly("x1", &pdflib::pdf_resource<pdflib::PAGE_CELL>::x1)
-    .def_readonly("y1", &pdflib::pdf_resource<pdflib::PAGE_CELL>::y1)
-    .def_readonly("r_x0", &pdflib::pdf_resource<pdflib::PAGE_CELL>::r_x0)
-    .def_readonly("r_y0", &pdflib::pdf_resource<pdflib::PAGE_CELL>::r_y0)
-    .def_readonly("r_x1", &pdflib::pdf_resource<pdflib::PAGE_CELL>::r_x1)
-    .def_readonly("r_y1", &pdflib::pdf_resource<pdflib::PAGE_CELL>::r_y1)
-    .def_readonly("r_x2", &pdflib::pdf_resource<pdflib::PAGE_CELL>::r_x2)
-    .def_readonly("r_y2", &pdflib::pdf_resource<pdflib::PAGE_CELL>::r_y2)
-    .def_readonly("r_x3", &pdflib::pdf_resource<pdflib::PAGE_CELL>::r_x3)
-    .def_readonly("r_y3", &pdflib::pdf_resource<pdflib::PAGE_CELL>::r_y3)
-    .def_readonly("text", &pdflib::pdf_resource<pdflib::PAGE_CELL>::text)
-    .def_readonly("rendering_mode", &pdflib::pdf_resource<pdflib::PAGE_CELL>::rendering_mode)
-    .def_readonly("space_width", &pdflib::pdf_resource<pdflib::PAGE_CELL>::space_width)
-    .def_readonly("enc_name", &pdflib::pdf_resource<pdflib::PAGE_CELL>::enc_name)
-    .def_readonly("font_enc", &pdflib::pdf_resource<pdflib::PAGE_CELL>::font_enc)
-    .def_readonly("font_key", &pdflib::pdf_resource<pdflib::PAGE_CELL>::font_key)
-    .def_readonly("font_name", &pdflib::pdf_resource<pdflib::PAGE_CELL>::font_name)
-    .def_readonly("widget", &pdflib::pdf_resource<pdflib::PAGE_CELL>::widget)
-    .def_readonly("left_to_right", &pdflib::pdf_resource<pdflib::PAGE_CELL>::left_to_right);
+  pybind11::class_<pdflib::page_item<pdflib::PAGE_CELL>>(m, "PdfCell")
+    .def_readonly("x0", &pdflib::page_item<pdflib::PAGE_CELL>::x0)
+    .def_readonly("y0", &pdflib::page_item<pdflib::PAGE_CELL>::y0)
+    .def_readonly("x1", &pdflib::page_item<pdflib::PAGE_CELL>::x1)
+    .def_readonly("y1", &pdflib::page_item<pdflib::PAGE_CELL>::y1)
+    .def_readonly("r_x0", &pdflib::page_item<pdflib::PAGE_CELL>::r_x0)
+    .def_readonly("r_y0", &pdflib::page_item<pdflib::PAGE_CELL>::r_y0)
+    .def_readonly("r_x1", &pdflib::page_item<pdflib::PAGE_CELL>::r_x1)
+    .def_readonly("r_y1", &pdflib::page_item<pdflib::PAGE_CELL>::r_y1)
+    .def_readonly("r_x2", &pdflib::page_item<pdflib::PAGE_CELL>::r_x2)
+    .def_readonly("r_y2", &pdflib::page_item<pdflib::PAGE_CELL>::r_y2)
+    .def_readonly("r_x3", &pdflib::page_item<pdflib::PAGE_CELL>::r_x3)
+    .def_readonly("r_y3", &pdflib::page_item<pdflib::PAGE_CELL>::r_y3)
+    .def_readonly("text", &pdflib::page_item<pdflib::PAGE_CELL>::text)
+    .def_readonly("rendering_mode", &pdflib::page_item<pdflib::PAGE_CELL>::rendering_mode)
+    .def_readonly("space_width", &pdflib::page_item<pdflib::PAGE_CELL>::space_width)
+    .def_readonly("enc_name", &pdflib::page_item<pdflib::PAGE_CELL>::enc_name)
+    .def_readonly("font_enc", &pdflib::page_item<pdflib::PAGE_CELL>::font_enc)
+    .def_readonly("font_key", &pdflib::page_item<pdflib::PAGE_CELL>::font_key)
+    .def_readonly("font_name", &pdflib::page_item<pdflib::PAGE_CELL>::font_name)
+    .def_readonly("widget", &pdflib::page_item<pdflib::PAGE_CELL>::widget)
+    .def_readonly("left_to_right", &pdflib::page_item<pdflib::PAGE_CELL>::left_to_right);
 
   // PdfShape - graphic shape with coordinates
-  pybind11::class_<pdflib::pdf_resource<pdflib::PAGE_SHAPE>>(m, "PdfShape")
-    .def("get_x", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::get_x,
+  pybind11::class_<pdflib::page_item<pdflib::PAGE_SHAPE>>(m, "PdfShape")
+    .def("get_x", &pdflib::page_item<pdflib::PAGE_SHAPE>::get_x,
 	 pybind11::return_value_policy::reference_internal,
 	 "Get x coordinates of shape points")
-    .def("get_y", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::get_y,
+    .def("get_y", &pdflib::page_item<pdflib::PAGE_SHAPE>::get_y,
 	 pybind11::return_value_policy::reference_internal,
 	 "Get y coordinates of shape points")
-    .def("get_i", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::get_i,
+    .def("get_i", &pdflib::page_item<pdflib::PAGE_SHAPE>::get_i,
 	 pybind11::return_value_policy::reference_internal,
 	 "Get segment indices")
-    .def("__len__", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::size)
-    .def("get_has_graphics_state", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::get_has_graphics_state,
+    .def("__len__", &pdflib::page_item<pdflib::PAGE_SHAPE>::size)
+    .def("get_has_graphics_state", &pdflib::page_item<pdflib::PAGE_SHAPE>::get_has_graphics_state,
 	 "Check if graphics state has been set")
-    .def("get_line_width", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::get_line_width,
+    .def("get_line_width", &pdflib::page_item<pdflib::PAGE_SHAPE>::get_line_width,
 	 "Get line width")
-    .def("get_miter_limit", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::get_miter_limit,
+    .def("get_miter_limit", &pdflib::page_item<pdflib::PAGE_SHAPE>::get_miter_limit,
 	 "Get miter limit")
-    .def("get_line_cap", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::get_line_cap,
+    .def("get_line_cap", &pdflib::page_item<pdflib::PAGE_SHAPE>::get_line_cap,
 	 "Get line cap style")
-    .def("get_line_join", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::get_line_join,
+    .def("get_line_join", &pdflib::page_item<pdflib::PAGE_SHAPE>::get_line_join,
 	 "Get line join style")
-    .def("get_dash_phase", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::get_dash_phase,
+    .def("get_dash_phase", &pdflib::page_item<pdflib::PAGE_SHAPE>::get_dash_phase,
 	 "Get dash phase")
-    .def("get_dash_array", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::get_dash_array,
+    .def("get_dash_array", &pdflib::page_item<pdflib::PAGE_SHAPE>::get_dash_array,
 	 pybind11::return_value_policy::reference_internal,
 	 "Get dash array")
-    .def("get_flatness", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::get_flatness,
+    .def("get_flatness", &pdflib::page_item<pdflib::PAGE_SHAPE>::get_flatness,
 	 "Get flatness tolerance")
-    .def("get_rgb_stroking_ops", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::get_rgb_stroking_ops,
+    .def("get_rgb_stroking_ops", &pdflib::page_item<pdflib::PAGE_SHAPE>::get_rgb_stroking_ops,
 	 pybind11::return_value_policy::reference_internal,
 	 "Get RGB stroking color")
-    .def("get_rgb_filling_ops", &pdflib::pdf_resource<pdflib::PAGE_SHAPE>::get_rgb_filling_ops,
+    .def("get_rgb_filling_ops", &pdflib::page_item<pdflib::PAGE_SHAPE>::get_rgb_filling_ops,
 	 pybind11::return_value_policy::reference_internal,
 	 "Get RGB filling color");
 
   // PdfImage - bitmap resource with bounding box and image data
-  pybind11::class_<pdflib::pdf_resource<pdflib::PAGE_IMAGE>>(m, "PdfImage")
-    .def_readonly("x0", &pdflib::pdf_resource<pdflib::PAGE_IMAGE>::x0)
-    .def_readonly("y0", &pdflib::pdf_resource<pdflib::PAGE_IMAGE>::y0)
-    .def_readonly("x1", &pdflib::pdf_resource<pdflib::PAGE_IMAGE>::x1)
-    .def_readonly("y1", &pdflib::pdf_resource<pdflib::PAGE_IMAGE>::y1)
-    .def_readonly("image_width", &pdflib::pdf_resource<pdflib::PAGE_IMAGE>::image_width)
-    .def_readonly("image_height", &pdflib::pdf_resource<pdflib::PAGE_IMAGE>::image_height)
-    .def("get_image_format", &pdflib::pdf_resource<pdflib::PAGE_IMAGE>::get_image_format,
+  pybind11::class_<pdflib::page_item<pdflib::PAGE_IMAGE>>(m, "PdfImage")
+    .def_readonly("x0", &pdflib::page_item<pdflib::PAGE_IMAGE>::x0)
+    .def_readonly("y0", &pdflib::page_item<pdflib::PAGE_IMAGE>::y0)
+    .def_readonly("x1", &pdflib::page_item<pdflib::PAGE_IMAGE>::x1)
+    .def_readonly("y1", &pdflib::page_item<pdflib::PAGE_IMAGE>::y1)
+    .def_readonly("image_width", &pdflib::page_item<pdflib::PAGE_IMAGE>::image_width)
+    .def_readonly("image_height", &pdflib::page_item<pdflib::PAGE_IMAGE>::image_height)
+    .def("get_image_format", &pdflib::page_item<pdflib::PAGE_IMAGE>::get_image_format,
 	 "Get image format hint: 'jpeg', 'jp2', 'jbig2', or 'raw'")
-    .def("get_pil_mode", &pdflib::pdf_resource<pdflib::PAGE_IMAGE>::get_pil_mode,
+    .def("get_pil_mode", &pdflib::page_item<pdflib::PAGE_IMAGE>::get_pil_mode,
 	 "Get PIL-compatible mode string: 'L', 'RGB', 'CMYK', or '1'")
     .def("get_image_as_bytes",
-	 [](pdflib::pdf_resource<pdflib::PAGE_IMAGE> const& self) {
+	 [](pdflib::page_item<pdflib::PAGE_IMAGE> const& self) {
 	   auto data = self.get_image_as_bytes();
 	   return pybind11::bytes(reinterpret_cast<char const*>(data.data()),
 				  data.size());
@@ -128,55 +134,102 @@ PYBIND11_MODULE(pdf_parsers, m) {
 	 "Get image data as bytes (corrected JPEG, raw JP2, or decoded pixels)");
 
   // PdfPageDimension - page geometry and bounding boxes
-  pybind11::class_<pdflib::pdf_resource<pdflib::PAGE_DIMENSION>>(m, "PdfPageDimension")
-    .def("get_angle", &pdflib::pdf_resource<pdflib::PAGE_DIMENSION>::get_angle,
+  pybind11::class_<pdflib::page_item<pdflib::PAGE_DIMENSION>>(m, "PdfPageDimension")
+    .def("get_angle", &pdflib::page_item<pdflib::PAGE_DIMENSION>::get_angle,
 	 "Get page rotation angle in degrees")
-    .def("get_crop_bbox", &pdflib::pdf_resource<pdflib::PAGE_DIMENSION>::get_crop_bbox,
+    .def("get_crop_bbox", &pdflib::page_item<pdflib::PAGE_DIMENSION>::get_crop_bbox,
 	 "Get crop box as [x0, y0, x1, y1]")
-    .def("get_media_bbox", &pdflib::pdf_resource<pdflib::PAGE_DIMENSION>::get_media_bbox,
+    .def("get_media_bbox", &pdflib::page_item<pdflib::PAGE_DIMENSION>::get_media_bbox,
 	 "Get media box as [x0, y0, x1, y1]");
+
+  // PdfWidget - form field widget with bounding box and field info
+  pybind11::class_<pdflib::page_item<pdflib::PAGE_WIDGET>>(m, "PdfWidget")
+    .def_readonly("x0", &pdflib::page_item<pdflib::PAGE_WIDGET>::x0)
+    .def_readonly("y0", &pdflib::page_item<pdflib::PAGE_WIDGET>::y0)
+    .def_readonly("x1", &pdflib::page_item<pdflib::PAGE_WIDGET>::x1)
+    .def_readonly("y1", &pdflib::page_item<pdflib::PAGE_WIDGET>::y1)
+    .def_readonly("text", &pdflib::page_item<pdflib::PAGE_WIDGET>::text)
+    .def_readonly("description", &pdflib::page_item<pdflib::PAGE_WIDGET>::description)
+    .def_readonly("field_name", &pdflib::page_item<pdflib::PAGE_WIDGET>::field_name)
+    .def_readonly("field_type", &pdflib::page_item<pdflib::PAGE_WIDGET>::field_type);
+
+  // PdfHyperlink - hyperlink annotation with bounding box and URI
+  pybind11::class_<pdflib::page_item<pdflib::PAGE_HYPERLINK>>(m, "PdfHyperlink")
+    .def_readonly("x0", &pdflib::page_item<pdflib::PAGE_HYPERLINK>::x0)
+    .def_readonly("y0", &pdflib::page_item<pdflib::PAGE_HYPERLINK>::y0)
+    .def_readonly("x1", &pdflib::page_item<pdflib::PAGE_HYPERLINK>::x1)
+    .def_readonly("y1", &pdflib::page_item<pdflib::PAGE_HYPERLINK>::y1)
+    .def_readonly("uri", &pdflib::page_item<pdflib::PAGE_HYPERLINK>::uri);
 
   // ============= Container Type Bindings =============
 
   // PdfCells - iterable container of PdfCell objects
-  pybind11::class_<pdflib::pdf_resource<pdflib::PAGE_CELLS>>(m, "PdfCells")
-    .def("__len__", &pdflib::pdf_resource<pdflib::PAGE_CELLS>::size)
-    .def("__getitem__", [](pdflib::pdf_resource<pdflib::PAGE_CELLS>& self, size_t i)
-	 -> pdflib::pdf_resource<pdflib::PAGE_CELL>& {
+  pybind11::class_<pdflib::page_item<pdflib::PAGE_CELLS>>(m, "PdfCells")
+    .def("__len__", &pdflib::page_item<pdflib::PAGE_CELLS>::size)
+    .def("__getitem__", [](pdflib::page_item<pdflib::PAGE_CELLS>& self, size_t i)
+	 -> pdflib::page_item<pdflib::PAGE_CELL>& {
 	   if (i >= self.size()) {
 	     throw pybind11::index_error("index out of range");
 	   }
 	   return self[i];
 	 }, pybind11::return_value_policy::reference_internal)
-    .def("__iter__", [](pdflib::pdf_resource<pdflib::PAGE_CELLS>& self) {
+    .def("__iter__", [](pdflib::page_item<pdflib::PAGE_CELLS>& self) {
 	   return pybind11::make_iterator(self.begin(), self.end());
 	 }, pybind11::keep_alive<0, 1>());
 
   // PdfShapes - iterable container of PdfShape objects
-  pybind11::class_<pdflib::pdf_resource<pdflib::PAGE_SHAPES>>(m, "PdfShapes")
-    .def("__len__", &pdflib::pdf_resource<pdflib::PAGE_SHAPES>::size)
-    .def("__getitem__", [](pdflib::pdf_resource<pdflib::PAGE_SHAPES>& self, size_t i)
-	 -> pdflib::pdf_resource<pdflib::PAGE_SHAPE>& {
+  pybind11::class_<pdflib::page_item<pdflib::PAGE_SHAPES>>(m, "PdfShapes")
+    .def("__len__", &pdflib::page_item<pdflib::PAGE_SHAPES>::size)
+    .def("__getitem__", [](pdflib::page_item<pdflib::PAGE_SHAPES>& self, size_t i)
+	 -> pdflib::page_item<pdflib::PAGE_SHAPE>& {
 	   if (i >= self.size()) {
 	     throw pybind11::index_error("index out of range");
 	   }
 	   return self[i];
 	 }, pybind11::return_value_policy::reference_internal)
-    .def("__iter__", [](pdflib::pdf_resource<pdflib::PAGE_SHAPES>& self) {
+    .def("__iter__", [](pdflib::page_item<pdflib::PAGE_SHAPES>& self) {
 	   return pybind11::make_iterator(self.begin(), self.end());
 	 }, pybind11::keep_alive<0, 1>());
 
   // PdfImages - iterable container of PdfImage objects
-  pybind11::class_<pdflib::pdf_resource<pdflib::PAGE_IMAGES>>(m, "PdfImages")
-    .def("__len__", &pdflib::pdf_resource<pdflib::PAGE_IMAGES>::size)
-    .def("__getitem__", [](pdflib::pdf_resource<pdflib::PAGE_IMAGES>& self, size_t i)
-	 -> pdflib::pdf_resource<pdflib::PAGE_IMAGE>& {
+  pybind11::class_<pdflib::page_item<pdflib::PAGE_IMAGES>>(m, "PdfImages")
+    .def("__len__", &pdflib::page_item<pdflib::PAGE_IMAGES>::size)
+    .def("__getitem__", [](pdflib::page_item<pdflib::PAGE_IMAGES>& self, size_t i)
+	 -> pdflib::page_item<pdflib::PAGE_IMAGE>& {
 	   if (i >= self.size()) {
 	     throw pybind11::index_error("index out of range");
 	   }
 	   return self[i];
 	 }, pybind11::return_value_policy::reference_internal)
-    .def("__iter__", [](pdflib::pdf_resource<pdflib::PAGE_IMAGES>& self) {
+    .def("__iter__", [](pdflib::page_item<pdflib::PAGE_IMAGES>& self) {
+	   return pybind11::make_iterator(self.begin(), self.end());
+	 }, pybind11::keep_alive<0, 1>());
+
+  // PdfWidgets - iterable container of PdfWidget objects
+  pybind11::class_<pdflib::page_item<pdflib::PAGE_WIDGETS>>(m, "PdfWidgets")
+    .def("__len__", &pdflib::page_item<pdflib::PAGE_WIDGETS>::size)
+    .def("__getitem__", [](pdflib::page_item<pdflib::PAGE_WIDGETS>& self, size_t i)
+	 -> pdflib::page_item<pdflib::PAGE_WIDGET>& {
+	   if (i >= self.size()) {
+	     throw pybind11::index_error("index out of range");
+	   }
+	   return self[i];
+	 }, pybind11::return_value_policy::reference_internal)
+    .def("__iter__", [](pdflib::page_item<pdflib::PAGE_WIDGETS>& self) {
+	   return pybind11::make_iterator(self.begin(), self.end());
+	 }, pybind11::keep_alive<0, 1>());
+
+  // PdfHyperlinks - iterable container of PdfHyperlink objects
+  pybind11::class_<pdflib::page_item<pdflib::PAGE_HYPERLINKS>>(m, "PdfHyperlinks")
+    .def("__len__", &pdflib::page_item<pdflib::PAGE_HYPERLINKS>::size)
+    .def("__getitem__", [](pdflib::page_item<pdflib::PAGE_HYPERLINKS>& self, size_t i)
+	 -> pdflib::page_item<pdflib::PAGE_HYPERLINK>& {
+	   if (i >= self.size()) {
+	     throw pybind11::index_error("index out of range");
+	   }
+	   return self[i];
+	 }, pybind11::return_value_policy::reference_internal)
+    .def("__iter__", [](pdflib::page_item<pdflib::PAGE_HYPERLINKS>& self) {
 	   return pybind11::make_iterator(self.begin(), self.end());
 	 }, pybind11::keep_alive<0, 1>());
 
@@ -205,6 +258,12 @@ PYBIND11_MODULE(pdf_parsers, m) {
     .def("get_page_images", &pdflib::pdf_decoder<pdflib::PAGE>::get_page_images,
 	 pybind11::return_value_policy::reference_internal,
 	 "Get bitmap/image resources on the page")
+    .def("get_page_widgets", &pdflib::pdf_decoder<pdflib::PAGE>::get_page_widgets,
+	 pybind11::return_value_policy::reference_internal,
+	 "Get form field widgets on the page")
+    .def("get_page_hyperlinks", &pdflib::pdf_decoder<pdflib::PAGE>::get_page_hyperlinks,
+	 pybind11::return_value_policy::reference_internal,
+	 "Get hyperlink annotations on the page")
     .def("has_word_cells", &pdflib::pdf_decoder<pdflib::PAGE>::has_word_cells,
 	 "Check if word cells have been created")
     .def("has_line_cells", &pdflib::pdf_decoder<pdflib::PAGE>::has_line_cells,
@@ -260,6 +319,8 @@ PYBIND11_MODULE(pdf_parsers, m) {
 
   m.attr("TIMING_KEY_PROCESS_DOCUMENT_FROM_FILE") = pdflib::pdf_timings::KEY_PROCESS_DOCUMENT_FROM_FILE;
   m.attr("TIMING_KEY_PROCESS_DOCUMENT_FROM_BYTESIO") = pdflib::pdf_timings::KEY_PROCESS_DOCUMENT_FROM_BYTESIO;
+  m.attr("TIMING_KEY_QPDF_PROCESS") = pdflib::pdf_timings::KEY_QPDF_PROCESS;
+  m.attr("TIMING_KEY_EXTRACT_DOC_ANNOTATIONS") = pdflib::pdf_timings::KEY_EXTRACT_DOC_ANNOTATIONS;
   m.attr("TIMING_KEY_DECODE_DOCUMENT") = pdflib::pdf_timings::KEY_DECODE_DOCUMENT;
 
   m.attr("TIMING_PREFIX_DECODE_FONT") = pdflib::pdf_timings::PREFIX_DECODE_FONT;
@@ -329,17 +390,16 @@ PYBIND11_MODULE(pdf_parsers, m) {
         List[str]: A list of keys for the currently loaded documents.)")
     
     .def("load_document",
-	 [](
-        docling::docling_parser &self,
-        const std::string &key,
-        const std::string &filename,
-        std::optional<std::string>& password
-     ) -> bool {
+	 [](docling::docling_parser &self,
+	    const std::string &key,
+	    const std::string &filename,
+	    std::optional<std::string>& password
+	    ) -> bool {
 	   return self.load_document(key, filename, password);
 	 },
 	 pybind11::arg("key"),
 	 pybind11::arg("filename"),
-     pybind11::arg("password") = pybind11::none(),
+	 pybind11::arg("password") = pybind11::none(),
 	 R"(
     Load a document by key and filename.
 
@@ -352,17 +412,23 @@ PYBIND11_MODULE(pdf_parsers, m) {
         bool: True if the document was successfully loaded, False otherwise.)")
     
     .def("load_document_from_bytesio",
-	 [](docling::docling_parser &self, const std::string &key, pybind11::object bytes_io) -> bool {
-	   return self.load_document_from_bytesio(key, bytes_io);
+	 [](docling::docling_parser &self,
+	    const std::string &key,
+	    pybind11::object bytes_io,
+	    std::optional<std::string>& password
+	    ) -> bool {
+	   return self.load_document_from_bytesio(key, bytes_io, password);
 	 },
 	 pybind11::arg("key"),
 	 pybind11::arg("bytes_io"),
+	 pybind11::arg("password") = pybind11::none(),	 
 	 R"(
     Load a document by key from a BytesIO-like object.
 
     Parameters:
         key (str): The unique key to identify the document.
         bytes_io (Any): A BytesIO-like object containing the document data.
+        password (str, optional): Optional password for password-protected files
 
     Returns:
         bool: True if the document was successfully loaded, False otherwise.)")
@@ -456,7 +522,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
 	 [](docling::docling_parser &self,
 	    const std::string &key,
 	    int page,
-	    const pdflib::decode_page_config &config) -> std::shared_ptr<pdflib::pdf_decoder<pdflib::PAGE>> {
+	    const pdflib::decode_config &config) -> std::shared_ptr<pdflib::pdf_decoder<pdflib::PAGE>> {
 	   return self.get_page_decoder(key, page, config);
 	 },
 	 pybind11::arg("key"),
@@ -472,4 +538,135 @@ PYBIND11_MODULE(pdf_parsers, m) {
 
     Returns:
         PdfPageDecoder: A typed page decoder object.)");
+
+  // ============= Threaded PDF Parser =============
+
+  // PageDecodeResult - result of a threaded page decode task
+  pybind11::class_<docling::page_decode_result>(m, "PageDecodeResult",
+    R"(
+    Result of a threaded page decoding task.
+
+    Attributes:
+        doc_key (str): The document key this page belongs to.
+        page_number (int): The page number (0-indexed).
+        success (bool): Whether the decoding succeeded.
+    )")
+    .def_readonly("doc_key", &docling::page_decode_result::doc_key)
+    .def_readonly("page_number", &docling::page_decode_result::page_number)
+    .def_readonly("success", &docling::page_decode_result::success)
+    .def("get", [](docling::page_decode_result& self)
+         -> std::pair<std::shared_ptr<pdflib::pdf_decoder<pdflib::PAGE>>,
+                      std::unordered_map<std::string, double>> {
+           if(!self.success)
+             {
+               throw std::runtime_error("Cannot get result from failed task: " + self.error_message);
+             }
+           auto timings_map = self.page_decoder->get_timings().to_sum_map();
+           return std::make_pair(self.page_decoder, timings_map);
+         },
+         R"(
+    Get the page decoder and timing information.
+
+    Returns:
+        Tuple[PdfPageDecoder, Dict[str, float]]: The page decoder and timing data.
+
+    Raises:
+        RuntimeError: If the task was not successful.)")
+    .def("error", [](docling::page_decode_result& self) -> std::string {
+           return self.error_message;
+         },
+         R"(
+    Get the error message if the task failed.
+
+    Returns:
+        str: The error message.)");
+
+  // threaded_pdf_parser - parallel PDF parser with bounded result queue
+  pybind11::class_<docling::docling_threaded_parser>(m, "threaded_pdf_parser",
+    R"(
+    Threaded PDF parser that processes pages in parallel.
+
+    Loads multiple documents and decodes their pages using a thread pool.
+    Results are available via a bounded queue to control memory usage.
+    )")
+    .def(pybind11::init<const std::string&, int, int, pdflib::decode_config>(),
+         pybind11::arg("loglevel") = "fatal",
+         pybind11::arg("num_threads") = 4,
+         pybind11::arg("max_concurrent_results") = 32,
+         pybind11::arg("config") = pdflib::decode_config(),
+         R"(
+    Construct a threaded PDF parser.
+
+    Parameters:
+        loglevel (str): Logging level ('fatal', 'error', 'warning', 'info').
+        num_threads (int): Number of worker threads.
+        max_concurrent_results (int): Maximum results buffered before workers pause.
+        config (DecodePageConfig): Configuration for page decoding.)")
+
+    .def("load_document",
+         [](docling::docling_threaded_parser& self,
+            const std::string& key,
+            const std::string& filename,
+            std::optional<std::string>& password) -> bool {
+           return self.load_document(key, filename, password);
+         },
+         pybind11::arg("key"),
+         pybind11::arg("filename"),
+         pybind11::arg("password") = pybind11::none(),
+         R"(
+    Load a document by key and filename.
+
+    Parameters:
+        key (str): The unique key to identify the document.
+        filename (str): The path to the document file to load.
+        password (str, optional): Optional password for password-protected files.
+
+    Returns:
+        bool: True if the document was successfully loaded.)")
+
+    .def("load_document_from_bytesio",
+         [](docling::docling_threaded_parser& self,
+            const std::string& key,
+            pybind11::object bytes_io,
+            std::optional<std::string>& password) -> bool {
+           return self.load_document_from_bytesio(key, bytes_io, password);
+         },
+         pybind11::arg("key"),
+         pybind11::arg("bytes_io"),
+         pybind11::arg("password") = pybind11::none(),
+         R"(
+    Load a document from a BytesIO-like object.
+
+    Parameters:
+        key (str): The unique key to identify the document.
+        bytes_io (Any): A BytesIO-like object containing the document data.
+        password (str, optional): Optional password for password-protected files.
+
+    Returns:
+        bool: True if the document was successfully loaded.)")
+
+    .def("has_tasks",
+         [](docling::docling_threaded_parser& self) -> bool {
+           return self.has_tasks();
+         },
+         R"(
+    Check if there are remaining tasks to consume.
+
+    On first call, builds the task queue from all loaded documents and starts worker threads.
+
+    Returns:
+        bool: True if there are remaining results to consume.)")
+
+    .def("get_task",
+         [](docling::docling_threaded_parser& self) -> docling::page_decode_result {
+           pybind11::gil_scoped_release release;
+           return self.get_task();
+         },
+         R"(
+    Get the next completed page decode result.
+
+    Blocks until a result is available. Releases the GIL while waiting.
+
+    Returns:
+        PageDecodeResult: The result of a page decoding task.)");
 }

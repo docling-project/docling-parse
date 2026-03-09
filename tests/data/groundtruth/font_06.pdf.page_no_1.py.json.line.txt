@@ -1,0 +1,172 @@
+(049.61, 692.26) (470.47, 692.26) (470.47, 722.02) (049.61, 722.02)        /F1 Whitesides' Group: Writing a Paper**	<|special_separator|>
+(049.61, 653.82) (070.23, 653.82) (070.23, 673.70) (049.61, 673.70)        /F2 By	<|special_separator|>
+(075.91, 654.07) (238.32, 654.07) (238.32, 673.58) (075.91, 673.58)        /F3 George M. Whitesides	<|special_separator|>
+(238.39, 653.82) (246.86, 653.82) (246.86, 673.70) (238.39, 673.70)        /F2 *	<|special_separator|>
+(049.61, 614.56) (192.25, 614.56) (192.25, 627.66) (049.61, 627.66)        /F1 1. What is a Scientific Paper?	<|special_separator|>
+(058.11, 591.37) (290.53, 591.37) (290.53, 601.90) (058.11, 601.90)        /F2 Apaper is an organized description of hypotheses, data and	<|special_separator|>
+(049.61, 579.64) (290.53, 579.64) (290.53, 590.17) (049.61, 590.17)        /F2 conclusions, intended to instruct the reader. Papers are a cen-	<|special_separator|>
+(049.61, 567.90) (063.05, 567.90) (063.05, 578.43) (049.61, 578.43)        /F2 tral	<|special_separator|>
+(068.26, 567.90) (084.13, 567.90) (084.13, 578.43) (068.26, 578.43)        /F2 part	<|special_separator|>
+(089.40, 567.90) (097.34, 567.90) (097.34, 578.43) (089.40, 578.43)        /F2 of	<|special_separator|>
+(102.56, 567.90) (137.56, 567.90) (137.56, 578.43) (102.56, 578.43)        /F2 research.	<|special_separator|>
+(142.81, 567.90) (149.25, 567.90) (149.25, 578.43) (142.81, 578.43)        /F2 If	<|special_separator|>
+(154.49, 567.90) (172.32, 567.90) (172.32, 578.43) (154.49, 578.43)        /F2 your	<|special_separator|>
+(177.56, 567.90) (210.32, 567.90) (210.32, 578.43) (177.56, 578.43)        /F2 research	<|special_separator|>
+(215.54, 567.90) (233.38, 567.90) (233.38, 578.43) (215.54, 578.43)        /F2 does	<|special_separator|>
+(238.62, 567.90) (251.50, 567.90) (251.50, 578.43) (238.62, 578.43)        /F2 not	<|special_separator|>
+(256.76, 567.90) (290.56, 567.90) (290.56, 578.43) (256.76, 578.43)        /F2 generate	<|special_separator|>
+(049.61, 556.17) (290.51, 556.17) (290.51, 566.70) (049.61, 566.70)        /F2 papers, it might just as well not have been done. ªInteresting	<|special_separator|>
+(049.61, 544.43) (241.42, 544.43) (241.42, 554.96) (049.61, 554.96)        /F2 and unpublishedº is equivalent to ªnon-existentº.	<|special_separator|>
+(058.11, 532.70) (290.53, 532.70) (290.53, 543.23) (058.11, 543.23)        /F2 Realize that your objective in research is to formulate and	<|special_separator|>
+(049.61, 520.96) (290.54, 520.96) (290.54, 531.49) (049.61, 531.49)        /F2 test hypotheses, to draw conclusions from these tests, and to	<|special_separator|>
+(049.61, 509.29) (070.52, 509.29) (070.52, 519.81) (049.61, 519.81)        /F2 teach	<|special_separator|>
+(074.89, 509.29) (095.24, 509.29) (095.24, 519.81) (074.89, 519.81)        /F2 these	<|special_separator|>
+(099.55, 509.29) (144.26, 509.29) (144.26, 519.81) (099.55, 519.81)        /F2 conclusions	<|special_separator|>
+(148.65, 509.29) (156.58, 509.29) (156.58, 519.81) (148.65, 519.81)        /F2 to	<|special_separator|>
+(160.95, 509.29) (187.00, 509.29) (187.00, 519.81) (160.95, 519.81)        /F2 others.	<|special_separator|>
+(191.34, 509.29) (250.70, 509.29) (250.70, 519.81) (191.34, 519.81)        /F2 Your objective	<|special_separator|>
+(255.06, 509.29) (261.03, 509.29) (261.03, 519.81) (255.06, 519.81)        /F2 is	<|special_separator|>
+(265.37, 509.29) (278.26, 509.29) (278.26, 519.81) (265.37, 519.81)        /F2 not	<|special_separator|>
+(282.61, 509.29) (290.54, 509.29) (290.54, 519.81) (282.61, 519.81)        /F2 to	<|special_separator|>
+(049.61, 497.55) (105.43, 497.55) (105.43, 508.08) (049.61, 508.08)        /F2 ªcollect dataº.	<|special_separator|>
+(058.11, 485.82) (290.51, 485.82) (290.51, 496.34) (058.11, 496.34)        /F2 A paper is not just an archival device for storing a com-	<|special_separator|>
+(049.61, 474.08) (110.83, 474.08) (110.83, 484.61) (049.61, 484.61)        /F2 pleted research	<|special_separator|>
+(114.97, 474.08) (160.05, 474.08) (160.05, 484.61) (114.97, 484.61)        /F2 program; it	<|special_separator|>
+(164.18, 474.08) (170.15, 474.08) (170.15, 484.61) (164.18, 484.61)        /F2 is	<|special_separator|>
+(174.27, 474.08) (189.68, 474.08) (189.68, 484.61) (174.27, 484.61)        /F2 also	<|special_separator|>
+(193.77, 474.08) (237.11, 474.08) (237.11, 484.61) (193.77, 484.61)        /F2 a structure	<|special_separator|>
+(241.22, 474.08) (252.61, 474.08) (252.61, 484.61) (241.22, 484.61)        /F2 for	<|special_separator|>
+(256.71, 474.22) (290.51, 474.22) (290.51, 484.54) (256.71, 484.54)        /F3 planning	<|special_separator|>
+(049.61, 462.35) (290.52, 462.35) (290.52, 472.87) (049.61, 472.87)        /F2 your research in progress. If you clearly understand the pur-	<|special_separator|>
+(049.61, 450.61) (290.53, 450.61) (290.53, 461.14) (049.61, 461.14)        /F2 pose and form of a paper, it can be immensely useful to you in	<|special_separator|>
+(049.61, 439.01) (090.88, 439.01) (090.88, 449.34) (049.61, 449.34)        /F3 organizing	<|special_separator|>
+(093.88, 438.88) (290.54, 438.88) (290.54, 449.40) (093.88, 449.40)        /F2 and conducting your research. A good outline for	<|special_separator|>
+(049.61, 427.20) (290.52, 427.20) (290.52, 437.72) (049.61, 437.72)        /F2 the paper is also a good plan for the research program. You	<|special_separator|>
+(049.61, 415.46) (290.55, 415.46) (290.55, 425.99) (049.61, 425.99)        /F2 should write and rewrite these plans/outlines throughout the	<|special_separator|>
+(049.61, 403.73) (290.50, 403.73) (290.50, 414.25) (049.61, 414.25)        /F2 course of the research. At the beginning, you will have mostly	<|special_separator|>
+(049.61, 391.99) (290.50, 391.99) (290.50, 402.52) (049.61, 402.52)        /F2 plan; at the end, mostly outline. The continuous effort to un-	<|special_separator|>
+(049.61, 380.26) (290.52, 380.26) (290.52, 390.78) (049.61, 390.78)        /F2 derstand, analyze, summarize, and reformulate hypotheses on	<|special_separator|>
+(049.61, 368.52) (290.49, 368.52) (290.49, 379.05) (049.61, 379.05)        /F2 paper will be immensely more efficient for you than a process	<|special_separator|>
+(049.61, 356.79) (057.08, 356.79) (057.08, 367.31) (049.61, 367.31)        /F2 in	<|special_separator|>
+(061.46, 356.79) (133.02, 356.79) (133.02, 367.31) (061.46, 367.31)        /F2 which you collect	<|special_separator|>
+(137.42, 356.79) (154.32, 356.79) (154.32, 367.31) (137.42, 367.31)        /F2 data	<|special_separator|>
+(158.74, 356.79) (216.18, 356.79) (216.18, 367.31) (158.74, 367.31)        /F2 and only start	<|special_separator|>
+(220.59, 356.79) (290.54, 356.79) (290.54, 367.31) (220.59, 367.31)        /F2 to organize them	<|special_separator|>
+(049.61, 345.05) (188.73, 345.05) (188.73, 355.58) (049.61, 355.58)        /F2 when their collection is ªcompleteº.	<|special_separator|>
+(049.61, 309.67) (102.19, 309.67) (102.19, 322.77) (049.61, 322.77)        /F1 2. Outlines	<|special_separator|>
+(049.61, 286.40) (164.46, 286.40) (164.46, 297.11) (049.61, 297.11)        /F1 2.1. The Reason for Outlines	<|special_separator|>
+(058.11, 264.60) (061.56, 264.60) (061.56, 275.12) (058.11, 275.12)        /F2 I	<|special_separator|>
+(067.01, 264.60) (107.81, 264.60) (107.81, 275.12) (067.01, 275.12)        /F2 emphasize	<|special_separator|>
+(113.21, 264.60) (125.63, 264.60) (125.63, 275.12) (113.21, 275.12)        /F2 the	<|special_separator|>
+(131.07, 264.60) (157.95, 264.60) (157.95, 275.12) (131.07, 275.12)        /F2 central	<|special_separator|>
+(163.39, 264.60) (183.83, 264.60) (183.83, 275.12) (163.39, 275.12)        /F2 place	<|special_separator|>
+(189.29, 264.60) (197.23, 264.60) (197.23, 275.12) (189.29, 275.12)        /F2 of	<|special_separator|>
+(202.62, 264.60) (212.05, 264.60) (212.05, 275.12) (202.62, 275.12)        /F2 an	<|special_separator|>
+(217.47, 264.60) (244.83, 264.60) (244.83, 275.12) (217.47, 275.12)        /F2 outline	<|special_separator|>
+(250.29, 264.60) (257.76, 264.60) (257.76, 275.12) (250.29, 275.12)        /F2 in	<|special_separator|>
+(263.16, 264.60) (290.51, 264.60) (290.51, 275.12) (263.16, 275.12)        /F2 writing	<|special_separator|>
+(049.61, 252.86) (077.13, 252.86) (077.13, 263.39) (049.61, 263.39)        /F2 papers,	<|special_separator|>
+(081.81, 252.86) (119.53, 252.86) (119.53, 263.39) (081.81, 263.39)        /F2 preparing	<|special_separator|>
+(124.21, 252.86) (160.24, 252.86) (160.24, 263.39) (124.21, 263.39)        /F2 seminars,	<|special_separator|>
+(164.92, 252.86) (217.71, 252.86) (217.71, 263.39) (164.92, 263.39)        /F2 and planning	<|special_separator|>
+(222.40, 252.86) (257.41, 252.86) (257.41, 263.39) (222.40, 263.39)        /F2 research.	<|special_separator|>
+(262.09, 252.86) (265.54, 252.86) (265.54, 263.39) (262.09, 263.39)        /F2 I	<|special_separator|>
+(270.19, 252.86) (290.55, 252.86) (290.55, 263.39) (270.19, 263.39)        /F2 espe-	<|special_separator|>
+(049.61, 241.13) (245.28, 241.13) (245.28, 251.65) (049.61, 251.65)        /F2 cially believe that for you, and for me, it is most	<|special_separator|>
+(248.71, 241.26) (279.22, 241.26) (279.22, 251.59) (248.71, 251.59)        /F3 efficient	<|special_separator|>
+(282.62, 241.13) (290.55, 241.13) (290.55, 251.65) (282.62, 251.65)        /F2 to	<|special_separator|>
+(049.61, 229.39) (169.85, 229.39) (169.85, 239.92) (049.61, 239.92)        /F2 write papers from outlines. An	<|special_separator|>
+(172.52, 229.53) (198.93, 229.53) (198.93, 239.86) (172.52, 239.86)        /F3 outline	<|special_separator|>
+(201.60, 229.39) (290.55, 229.39) (290.55, 239.92) (201.60, 239.92)        /F2 is a written plan of the	<|special_separator|>
+(049.61, 217.66) (144.97, 217.66) (144.97, 228.18) (049.61, 228.18)        /F2 organization of a paper,	<|special_separator|>
+(148.14, 217.79) (183.99, 217.79) (183.99, 228.12) (148.14, 228.12)        /F3 including	<|special_separator|>
+(187.20, 217.66) (290.52, 217.66) (290.52, 228.18) (187.20, 228.18)        /F2 the data on which it rests.	<|special_separator|>
+(049.61, 205.92) (290.55, 205.92) (290.55, 216.45) (049.61, 216.45)        /F2 You should, in fact, think of an outline as a carefully orga-	<|special_separator|>
+(049.61, 194.19) (131.73, 194.19) (131.73, 204.71) (049.61, 204.71)        /F2 nized and presented	<|special_separator|>
+(136.12, 194.19) (147.04, 194.19) (147.04, 204.71) (136.12, 204.71)        /F2 set	<|special_separator|>
+(151.37, 194.19) (159.30, 194.19) (159.30, 204.71) (151.37, 204.71)        /F2 of	<|special_separator|>
+(163.61, 194.19) (182.76, 194.19) (182.76, 204.71) (163.61, 204.71)        /F2 data,	<|special_separator|>
+(187.08, 194.19) (203.98, 194.19) (203.98, 204.71) (187.08, 204.71)        /F2 with	<|special_separator|>
+(208.34, 194.19) (245.60, 194.19) (245.60, 204.71) (208.34, 204.71)        /F2 attendant	<|special_separator|>
+(249.90, 194.19) (290.52, 194.19) (290.52, 204.71) (249.90, 204.71)        /F2 objectives,	<|special_separator|>
+(049.61, 182.45) (276.43, 182.45) (276.43, 192.98) (049.61, 192.98)        /F2 hypotheses, and conclusions, rather than an outline of text.	<|special_separator|>
+(058.11, 170.77) (290.56, 170.77) (290.56, 181.30) (058.11, 181.30)        /F2 An outline itself contains little text. If you and I can agree	<|special_separator|>
+(049.61, 159.04) (290.52, 159.04) (290.52, 169.56) (049.61, 169.56)        /F2 on the details of the outline (that is, on the data and organiza-	<|special_separator|>
+(049.61, 147.30) (290.53, 147.30) (290.53, 157.83) (049.61, 157.83)        /F2 tion), the supporting text can be assembled fairly easily. If we	<|special_separator|>
+(304.73, 615.87) (314.63, 615.87) (314.63, 626.40) (304.73, 626.40)        /F2 do	<|special_separator|>
+(317.94, 616.01) (330.35, 616.01) (330.35, 626.34) (317.94, 626.34)        /F3 not	<|special_separator|>
+(333.64, 615.87) (545.67, 615.87) (545.67, 626.40) (333.64, 626.40)        /F2 agree on the outline, any text is useless. Much of the	<|special_separator|>
+(304.73, 604.27) (321.24, 604.27) (321.24, 614.60) (304.73, 614.60)        /F3 time	<|special_separator|>
+(323.89, 604.14) (513.69, 604.14) (513.69, 614.66) (323.89, 614.66)        /F2 in writing a paper goes into the text; most of the	<|special_separator|>
+(516.36, 604.27) (545.68, 604.27) (545.68, 614.60) (516.36, 614.60)        /F3 thought	<|special_separator|>
+(304.73, 592.40) (545.64, 592.40) (545.64, 602.93) (304.73, 602.93)        /F2 goes into the organization of the data and into the analysis. It	<|special_separator|>
+(304.73, 580.72) (545.63, 580.72) (545.63, 591.25) (304.73, 591.25)        /F2 can be relatively efficient in time to go through several (even	<|special_separator|>
+(304.73, 568.99) (356.93, 568.99) (356.93, 579.51) (304.73, 579.51)        /F2 many) cycles	<|special_separator|>
+(361.30, 568.99) (369.24, 568.99) (369.24, 579.51) (361.30, 579.51)        /F2 of	<|special_separator|>
+(373.66, 568.99) (414.91, 568.99) (414.91, 579.51) (373.66, 579.51)        /F2 an outline	<|special_separator|>
+(419.35, 568.99) (444.66, 568.99) (444.66, 579.51) (419.35, 579.51)        /F2 before	<|special_separator|>
+(449.06, 568.99) (487.35, 568.99) (487.35, 579.51) (449.06, 579.51)        /F2 beginning	<|special_separator|>
+(491.81, 568.99) (499.74, 568.99) (499.74, 579.51) (491.81, 579.51)        /F2 to	<|special_separator|>
+(504.17, 568.99) (524.04, 568.99) (524.04, 579.51) (504.17, 579.51)        /F2 write	<|special_separator|>
+(528.49, 568.99) (545.67, 568.99) (545.67, 579.51) (528.49, 579.51)        /F2 text;	<|special_separator|>
+(304.73, 557.25) (517.80, 557.25) (517.80, 567.78) (304.73, 567.78)        /F2 writing many versions of the full text of a paper is slow.	<|special_separator|>
+(313.23, 545.52) (545.66, 545.52) (545.66, 556.04) (313.23, 556.04)        /F2 All writing that I doÐpapers, reports, proposals (and, of	<|special_separator|>
+(304.73, 533.78) (545.66, 533.78) (545.66, 544.31) (304.73, 544.31)        /F2 course, slides for seminars)ÐI do from outlines. I urge you to	<|special_separator|>
+(304.73, 522.05) (421.23, 522.05) (421.23, 532.57) (304.73, 532.57)        /F2 learn how to use them as well.	<|special_separator|>
+(304.73, 486.87) (477.05, 486.87) (477.05, 497.59) (304.73, 497.59)        /F1 2.2. HowShould You Construct an Outline?	<|special_separator|>
+(313.23, 463.43) (364.46, 463.43) (364.46, 473.95) (313.23, 473.95)        /F2 The classical	<|special_separator|>
+(369.18, 463.43) (405.41, 463.43) (405.41, 473.95) (369.18, 473.95)        /F2 approach	<|special_separator|>
+(410.06, 463.43) (416.03, 463.43) (416.03, 473.95) (410.06, 473.95)        /F2 is	<|special_separator|>
+(420.72, 463.43) (428.65, 463.43) (428.65, 473.95) (420.72, 473.95)        /F2 to	<|special_separator|>
+(433.30, 463.43) (450.66, 463.43) (450.66, 473.95) (433.30, 473.95)        /F2 start	<|special_separator|>
+(455.36, 463.43) (472.25, 463.43) (472.25, 473.95) (455.36, 473.95)        /F2 with	<|special_separator|>
+(476.90, 463.43) (481.38, 463.43) (481.38, 473.95) (476.90, 473.95)        /F2 a	<|special_separator|>
+(486.08, 463.43) (507.93, 463.43) (507.93, 473.95) (486.08, 473.95)        /F2 blank	<|special_separator|>
+(512.61, 463.43) (533.06, 463.43) (533.06, 473.95) (512.61, 473.95)        /F2 piece	<|special_separator|>
+(537.73, 463.43) (545.66, 463.43) (545.66, 473.95) (537.73, 473.95)        /F2 of	<|special_separator|>
+(304.73, 451.69) (545.65, 451.69) (545.65, 462.22) (304.73, 462.22)        /F2 paper, and write down, in any order, all important ideas that	<|special_separator|>
+(304.73, 439.96) (545.64, 439.96) (545.64, 450.48) (304.73, 450.48)        /F2 occur to you concerning the paper. Ask yourself the obvious	<|special_separator|>
+(304.73, 428.22) (545.66, 428.22) (545.66, 438.75) (304.73, 438.75)        /F2 questions: ªWhy did I do this work?º; ªWhat does it mean?º;	<|special_separator|>
+(304.73, 416.49) (545.66, 416.49) (545.66, 427.01) (304.73, 427.01)        /F2 ªWhat hypotheses did I mean to test?º; ªWhat ones did I	<|special_separator|>
+(304.73, 404.81) (545.67, 404.81) (545.67, 415.33) (304.73, 415.33)        /F2 actually test?º; ªWhat were the results? Did the work yield a	<|special_separator|>
+(304.73, 393.07) (545.65, 393.07) (545.65, 403.60) (304.73, 403.60)        /F2 new method of compound? What?º; ªWhat measurements	<|special_separator|>
+(304.73, 381.34) (545.64, 381.34) (545.64, 391.86) (304.73, 391.86)        /F2 did I make?º; ªWhat compounds? How were they character-	<|special_separator|>
+(304.73, 369.60) (545.62, 369.60) (545.62, 380.13) (304.73, 380.13)        /F2 ized?º. Sketch possible equations, figures, and schemes. It is	<|special_separator|>
+(304.73, 357.87) (545.60, 357.87) (545.60, 368.39) (304.73, 368.39)        /F2 essential to try to get the major ideas. If you start the research	<|special_separator|>
+(304.73, 346.13) (545.65, 346.13) (545.65, 356.66) (304.73, 356.66)        /F2 to test one hypothesis, and decide, when you see what you	<|special_separator|>
+(304.73, 334.40) (545.62, 334.40) (545.62, 344.92) (304.73, 344.92)        /F2 have, that the data really seem to test some other hypothesis	<|special_separator|>
+(304.73, 322.66) (545.66, 322.66) (545.66, 333.19) (304.73, 333.19)        /F2 better, don't worry. Write them both down, and pick the best	<|special_separator|>
+(304.73, 310.98) (545.67, 310.98) (545.67, 321.51) (304.73, 321.51)        /F2 combinations of hypotheses, objectives, and data. Often the	<|special_separator|>
+(304.73, 299.25) (545.64, 299.25) (545.64, 309.77) (304.73, 309.77)        /F2 objectives of a paper when it is finished are different from	<|special_separator|>
+(304.73, 287.51) (545.62, 287.51) (545.62, 298.04) (304.73, 298.04)        /F2 those used to justify starting the work. Much of good science	<|special_separator|>
+(304.73, 275.78) (425.48, 275.78) (425.48, 286.30) (304.73, 286.30)        /F2 is opportunistic and revisionist.	<|special_separator|>
+(313.23, 264.04) (545.67, 264.04) (545.67, 274.57) (313.23, 274.57)        /F2 When you have written down what you can, start with an-	<|special_separator|>
+(304.73, 252.31) (545.64, 252.31) (545.64, 262.83) (304.73, 262.83)        /F2 other piece of paper and try to organize the jumble of the first	<|special_separator|>
+(304.73, 240.57) (518.54, 240.57) (518.54, 251.10) (304.73, 251.10)        /F2 one. Sort all of your ideas into three major heaps (1±3).	<|special_separator|>
+(304.73, 211.06) (362.59, 211.06) (362.59, 221.39) (304.73, 221.39)        /F3 1. Introduction	<|special_separator|>
+(313.23, 189.61) (545.66, 189.61) (545.66, 200.13) (313.23, 200.13)        /F2 Why did I do the work? What were the central motivations	<|special_separator|>
+(304.73, 177.87) (368.96, 177.87) (368.96, 188.40) (304.73, 188.40)        /F2 and hypotheses?	<|special_separator|>
+(304.73, 148.86) (403.87, 148.86) (403.87, 159.19) (304.73, 159.19)        /F3 2. Results and Discussion	<|special_separator|>
+(313.23, 127.41) (545.65, 127.41) (545.65, 137.94) (313.23, 137.94)        /F2 What were the results? How were compounds made and	<|special_separator|>
+(304.73, 115.68) (446.08, 115.68) (446.08, 126.21) (304.73, 126.21)        /F2 characterized? What was measured?	<|special_separator|>
+(304.73, 092.34) (361.56, 092.34) (361.56, 102.67) (304.73, 102.67)        /F3 3. Conclusions	<|special_separator|>
+(313.23, 070.89) (545.67, 070.89) (545.67, 081.42) (313.23, 081.42)        /F2 What does it all mean? What hypotheses were proved or	<|special_separator|>
+(304.73, 059.16) (542.68, 059.16) (542.68, 069.68) (304.73, 069.68)        /F2 disproved? What did I learn? Why does it make a difference?	<|special_separator|>
+(049.61, 028.28) (082.02, 028.28) (082.02, 036.11) (049.61, 036.11)        /F4 Adv. Mater.	<|special_separator|>
+(084.36, 028.20) (098.31, 028.20) (098.31, 036.07) (084.36, 036.07)        /F5 2004	<|special_separator|>
+(098.36, 028.27) (100.11, 028.27) (100.11, 036.10) (098.36, 036.10)        /F6 ,	<|special_separator|>
+(102.39, 028.28) (109.36, 028.28) (109.36, 036.11) (102.39, 036.11)        /F4 16	<|special_separator|>
+(109.42, 028.27) (164.04, 028.27) (164.04, 036.10) (109.42, 036.10)        /F6 , No. 15, August 4	<|special_separator|>
+(211.35, 027.67) (328.63, 027.67) (328.63, 037.79) (211.35, 037.79)        /F5 DOI: 10.1002/adma.200400767	<|special_separator|>
+(371.68, 028.27) (543.30, 028.27) (543.30, 036.10) (371.68, 036.10)        /F6 2004 WILEY-VCH Verlag GmbH &Co. KGaA, Weinheim	<|special_separator|>
+(561.77, 027.67) (579.70, 027.67) (579.70, 037.79) (561.77, 037.79)        /F5 1375	<|special_separator|>
+(049.61, 115.55) (157.32, 115.55) (157.32, 131.93) (049.61, 131.93)        /F2 ±	<|special_separator|>
+(053.57, 105.85) (061.55, 105.85) (061.55, 114.80) (053.57, 114.80)        /F6 [*]	<|special_separator|>
+(066.61, 105.85) (143.07, 105.85) (143.07, 114.80) (066.61, 114.80)        /F6 Prof. G. M. Whitesides	<|special_separator|>
+(066.61, 096.90) (223.72, 096.90) (223.72, 105.85) (066.61, 105.85)        /F6 Department of Chemistry and Chemical Biology	<|special_separator|>
+(066.61, 087.94) (128.52, 087.94) (128.52, 096.89) (066.61, 096.89)        /F6 Harvard University	<|special_separator|>
+(066.61, 078.98) (162.50, 078.98) (162.50, 087.93) (066.61, 087.93)        /F6 Cambridge, MA 02138 (USA)	<|special_separator|>
+(066.61, 070.02) (222.00, 070.02) (222.00, 078.97) (066.61, 078.97)        /F6 E-mail: gmwhitesides@gmwgroup.harvard.edu	<|special_separator|>
+(049.61, 058.91) (061.56, 058.91) (061.56, 067.86) (049.61, 067.86)        /F6 [**]	<|special_separator|>
+(066.10, 058.91) (260.91, 058.91) (260.91, 067.86) (066.10, 067.86)        /F6 The text is based on a handout created on October 4, 1989.	<|special_separator|>
+(574.43, 758.27) (574.43, 716.92) (589.37, 716.92) (589.37, 758.27)        /F7 ESSAY

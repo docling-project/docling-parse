@@ -18,7 +18,7 @@ namespace pdflib
 
     void print();
 
-    void parse(std::vector<qpdf_instruction>& instructions,
+    void parse(std::vector<qpdf_stream_instruction>& instructions,
                pdf_timings& timings,
                const std::string& key_root);
 
@@ -32,17 +32,17 @@ namespace pdflib
     std::string get_source(QPDFObjectHandle my_handle);
     std::string get_target(QPDFObjectHandle my_handle);
 
-    void parse_cmap_name(std::vector<qpdf_instruction>& parameters);
-    void parse_cmap_type(std::vector<qpdf_instruction>& parameters);
+    void parse_cmap_name(std::vector<qpdf_stream_instruction>& parameters);
+    void parse_cmap_type(std::vector<qpdf_stream_instruction>& parameters);
 
-    void parse_begincodespacerange(std::vector<qpdf_instruction>& parameters);
-    void parse_endcodespacerange(std::vector<qpdf_instruction>& parameters);
+    void parse_begincodespacerange(std::vector<qpdf_stream_instruction>& parameters);
+    void parse_endcodespacerange(std::vector<qpdf_stream_instruction>& parameters);
 
-    void parse_beginbfrange(std::vector<qpdf_instruction>& parameters);
-    void parse_endbfrange(std::vector<qpdf_instruction>& parameters);
+    void parse_beginbfrange(std::vector<qpdf_stream_instruction>& parameters);
+    void parse_endbfrange(std::vector<qpdf_stream_instruction>& parameters);
 
-    void parse_beginbfchar(std::vector<qpdf_instruction>& parameters);
-    void parse_endbfchar(std::vector<qpdf_instruction>& parameters);
+    void parse_beginbfchar(std::vector<qpdf_stream_instruction>& parameters);
+    void parse_endbfchar(std::vector<qpdf_stream_instruction>& parameters);
 
     void set_mapping(const std::string src,
                      const std::string tgt);
@@ -111,13 +111,13 @@ namespace pdflib
       }
   }
 
-  void cmap_parser::parse(std::vector<qpdf_instruction>& instructions,
+  void cmap_parser::parse(std::vector<qpdf_stream_instruction>& instructions,
                           pdf_timings& timings,
                           const std::string& key_root)
   {
     utils::timer total_timer;
 
-    std::vector<qpdf_instruction> parameters;
+    std::vector<qpdf_stream_instruction> parameters;
 
     for(auto& item:instructions)
       {
@@ -229,8 +229,7 @@ namespace pdflib
     std::string unparsed = handle.unparse();
     LOG_S(INFO) << " unparsed: '" << unparsed << "'";
 
-    // FIXME this might be too short
-    std::string result(64, ' ');
+    std::string result;
 
     // we have a hex-string ...
     if(unparsed.size()>0     and
@@ -250,46 +249,57 @@ namespace pdflib
 
         try
           {
-            auto itr = utf8::utf16to8(utf16_vec.begin(), utf16_vec.end(), result.begin());
-            result.erase(itr, result.end());
+            utf8::utf16to8(utf16_vec.begin(), utf16_vec.end(), std::back_inserter(result));
 
             //logging_lib::success("pdf-parser") << "SUCCES: able to parse the unicode hex-string \""
             //<< unparsed << "\" --> " << result;
           }
-        catch(...)
+        catch(const utf8::invalid_utf16& e)
           {
-            LOG_S(ERROR) << "Not able to parse the unicode hex-string \""
-                         << unparsed << "\"";
-
-            result = "GLYPH(cmap:" + unparsed + ")";
+            LOG_S(ERROR) << "Invalid UTF-16 sequence in hex-string \""
+                         << unparsed << "\": " << e.what();
+            result = "GLYPH<cmap:" + unparsed + ">";
+          }
+        catch(const utf8::exception& e)
+          {
+            LOG_S(ERROR) << "UTF-8 error parsing hex-string \""
+                         << unparsed << "\": " << e.what();
+            result = "GLYPH<cmap:" + unparsed + ">";
           }
       }
     else
       {
         std::string tmp = handle.getStringValue();
 
-        auto itr = result.begin();
         for(size_t i=0; i<tmp.size(); i+=number_of_chars)
           {
-            uint32_t i32=0;
+	    uint32_t i32=0;		
 
-            for(size_t j=0; j<number_of_chars; j+=1)
-	      {
-		i32 = (i32 << 8) + static_cast<unsigned char>(tmp.at(i+j));
-	      }
-	    
             try
               {
-                itr = utf8::append(i32, itr);
+		for(size_t j=0; j<number_of_chars and (i+j)<tmp.size(); j+=1)
+		  {
+		    i32 = (i32 << 8) + static_cast<unsigned char>(tmp.at(i+j));
+		  }
+		
+                utf8::append(i32, std::back_inserter(result));
               }
-            catch(...)
+            catch(const utf8::invalid_code_point& e)
               {
-                LOG_S(ERROR) << "Not able to parse the unicode string \""
-                             << tmp << "\" --> " << i32;
+                LOG_S(ERROR) << "Invalid code point 0x" << std::hex << static_cast<uint32_t>(e.code_point())
+                             << " in unicode string '" << tmp << "' with unparsed '" << unparsed << "'";
+
+		result = "GLYPH<cmap:" + unparsed + ">";
+              }
+            catch(const utf8::exception& e)
+              {
+                LOG_S(ERROR) << "UTF-8 error for value 0x" << std::hex << i32
+                             << " in unicode string \"" << tmp << "\": " << e.what();
+
+		result = "GLYPH<cmap:" + unparsed + ">";
               }
           }
 
-        result.erase(itr, result.end());
       }
 
     return result;
@@ -297,9 +307,6 @@ namespace pdflib
 
   void cmap_parser::remove_trailing_nulls(std::string& str)
   {
-    /* Legacy */
-    // str.erase(std::remove_if(str.begin(), str.end(), [] (char x) { return x==0; }), str.end());
-
     // Remove only trailing null bytes (not all nulls)
     while(not str.empty() && str.back() == '\0')
       {
@@ -311,13 +318,6 @@ namespace pdflib
         str = std::string(1, '\0');
       }
   }
-
-  // Legacy: static version with caching
-  //void cmap_parser::populate_range_mapping(uint32_t begin, uint32_t end,
-  //                                         std::vector<uint32_t>& tgts,
-  //                                         const std::pair<uint32_t, uint32_t>& csr_range,
-  //                                         std::unordered_map<uint32_t, std::string>& map,
-  //                                         bool cache)
 
   void cmap_parser::populate_range_mapping(uint32_t begin, uint32_t end,
                                            std::vector<uint32_t>& tgts)
@@ -367,23 +367,24 @@ namespace pdflib
 
         try
           {
-            std::string tmp(128, 0);
-            {
-              auto itr = tmp.begin();
-              if(is_identity)
-                {
-                  itr = utf8::append(src_codepoint, itr);
-                }
-              else
-                {
-                  for(auto tgt_uint : tgts)
-                    {
-                      itr = utf8::append(tgt_uint, itr);
-                    }
-                }
-              tmp.erase(itr, tmp.end());
-            }
-
+	    std::string tmp;
+	    {
+	      tmp.reserve(16); // optional, just a hint
+	      
+	      if (is_identity)
+		{
+		  utf8::append(src_codepoint, std::back_inserter(tmp));
+		}
+	      else
+		{
+		  for (auto tgt_uint : tgts)
+		    {
+		      utf8::append(tgt_uint, std::back_inserter(tmp));
+		    }
+		}
+	    }
+	    LOG_S(INFO) << "size(tmp-buffer): " << tmp.size();
+	    
             if(_map.count(src_codepoint) == 1)
               {
                 LOG_S(WARNING) << "overwriting number c=" << src_codepoint;
@@ -396,13 +397,13 @@ namespace pdflib
             else
               {
                 LOG_S(WARNING) << "invalid utf8 string -> iteration: " << src_codepoint;
-                _map[src_codepoint] = "UNICODE<" + std::to_string(src_codepoint) + ">";
+                _map[src_codepoint] = "GLYPH<unicode:" + std::to_string(src_codepoint) + ">";
               }
           }
         catch(const std::exception& exc)
           {
             LOG_S(WARNING) << "invalid utf8 string: " << exc.what() << " -> iteration: " << src_codepoint;
-            _map[src_codepoint] = "UNICODE<" + std::to_string(src_codepoint) + ">";
+            _map[src_codepoint] = "GLYPH<unicode:" + std::to_string(src_codepoint) + ">";
           }
 
         if(not is_identity)
@@ -413,6 +414,7 @@ namespace pdflib
   }
 
   // FIXME: not used code, just reference still ...
+  /*
   void cmap_parser::populate_range_mapping_legacy(uint32_t begin, uint32_t end,
                                                   const std::string& mapping,
                                                   std::vector<uint32_t>& tgts,
@@ -430,13 +432,8 @@ namespace pdflib
               {
                 try
                   {
-                    std::string tmp(128, 0);
-                    {
-                      auto itr = tmp.begin();
-                      itr = utf8::append(begin + i, itr);
-
-                      tmp.erase(itr, tmp.end());
-                    }
+                    std::string tmp;
+                    utf8::append(begin + i, std::back_inserter(tmp));
 
                     if(map.count(begin + i) == 1)
                       {
@@ -482,15 +479,11 @@ namespace pdflib
               {
                 try
                   {
-                    std::string tmp(128, 0);
-                    {
-                      auto itr = tmp.begin();
-                      for(auto tgt_uint : tgts)
-                        {
-                          itr = utf8::append(tgt_uint, itr);
-                        }
-                      tmp.erase(itr, tmp.end());
-                    }
+                    std::string tmp;
+                    for(auto tgt_uint : tgts)
+                      {
+                        utf8::append(tgt_uint, std::back_inserter(tmp));
+                      }
 
                     if(map.count(begin + i) == 1)
                       {
@@ -532,18 +525,19 @@ namespace pdflib
                      << tgts.at(0) << ", " << tgts.size() << "\t => Done!";
       }
   }
-
-  void cmap_parser::parse_cmap_name(std::vector<qpdf_instruction>& parameters)
+  */
+  
+  void cmap_parser::parse_cmap_name(std::vector<qpdf_stream_instruction>& parameters)
   {
     LOG_S(WARNING) << __FUNCTION__ << ": skipping ...";
   }
 
-  void cmap_parser::parse_cmap_type(std::vector<qpdf_instruction>& parameters)
+  void cmap_parser::parse_cmap_type(std::vector<qpdf_stream_instruction>& parameters)
   {
     LOG_S(WARNING) << __FUNCTION__ << ": skipping ...";
   }
 
-  void cmap_parser::parse_begincodespacerange(std::vector<qpdf_instruction>& parameters)
+  void cmap_parser::parse_begincodespacerange(std::vector<qpdf_stream_instruction>& parameters)
   {
     LOG_S(INFO) << __FUNCTION__;
 
@@ -565,7 +559,7 @@ namespace pdflib
     LOG_S(INFO) << __FUNCTION__ << " csr_cnt: " << csr_cnt;
   }
 
-  void cmap_parser::parse_endcodespacerange(std::vector<qpdf_instruction>& parameters)
+  void cmap_parser::parse_endcodespacerange(std::vector<qpdf_stream_instruction>& parameters)
   {
     LOG_S(INFO) << __FUNCTION__;
 
@@ -588,7 +582,7 @@ namespace pdflib
     LOG_S(INFO) << parameters[1].obj.unparse() << "\t" << csr_range.second;
   }
 
-  void cmap_parser::parse_beginbfrange(std::vector<qpdf_instruction>& parameters)
+  void cmap_parser::parse_beginbfrange(std::vector<qpdf_stream_instruction>& parameters)
   {
     LOG_S(INFO) << __FUNCTION__;
 
@@ -642,7 +636,7 @@ namespace pdflib
     return target;
   }
 
-  void cmap_parser::parse_endbfrange(std::vector<qpdf_instruction>& parameters)
+  void cmap_parser::parse_endbfrange(std::vector<qpdf_stream_instruction>& parameters)
   {
     LOG_S(INFO) << __FUNCTION__;
     
@@ -777,7 +771,7 @@ namespace pdflib
     if(itr_end != src_end.end())
       {
         LOG_S(WARNING) << "itr_end!=src_end.end() --> errors might occur in the cmap: "
-                       << "'" << src_end << "' -> " << end;;
+                       << "'" << src_end << "' -> " << end;
       }
 
     //LOG_S(INFO) << __FUNCTION__ << "\t"
@@ -788,11 +782,26 @@ namespace pdflib
     std::string mapping(tgt);
     std::vector<uint32_t> tgts;
 
+    if(!utf8::is_valid(tgt.begin(), tgt.end()))
+      {
+	LOG_S(WARNING) << "tgt is not valid UTF-8 (size=" << tgt.size() << ")";
+      }
+    
     auto itr_tgt = tgt.begin();
     while(itr_tgt != tgt.end())
       {
-        uint32_t tmp = utf8::next(itr_tgt, tgt.end());
-        tgts.push_back(tmp);
+	try
+	  {
+	    uint32_t tmp = utf8::next(itr_tgt, tgt.end());
+	    tgts.push_back(tmp);
+	  }
+	catch (const std::exception& e)
+	  {
+	    LOG_S(ERROR) << "Invalid UTF-8 in tgt near offset "
+			 << std::distance(tgt.begin(), itr_tgt)
+			 << ": " << e.what();
+	    break; // or replace with U+FFFD and advance carefully
+	  }	    
       }
 
     //LOG_S(INFO) << __FUNCTION__ << "\t"
@@ -851,7 +860,7 @@ namespace pdflib
       }
   }
 
-  void cmap_parser::parse_beginbfchar(std::vector<qpdf_instruction>& parameters)
+  void cmap_parser::parse_beginbfchar(std::vector<qpdf_stream_instruction>& parameters)
   {
     LOG_S(INFO) << __FUNCTION__;
 
@@ -870,7 +879,7 @@ namespace pdflib
       }
   }
 
-  void cmap_parser::parse_endbfchar(std::vector<qpdf_instruction>& parameters)
+  void cmap_parser::parse_endbfchar(std::vector<qpdf_stream_instruction>& parameters)
   {
     LOG_S(INFO) << __FUNCTION__ << ": starting ...";
 

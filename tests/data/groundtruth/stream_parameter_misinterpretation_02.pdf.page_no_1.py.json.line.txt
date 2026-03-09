@@ -1,5 +1,5 @@
 (106.62, 792.91) (493.38, 792.91) (493.38, 804.88) (106.62, 804.88)        /F2 PREFEITURA MUNICIPAL DE CONCEIÇÃO DO MATO DENTRO	<|special_separator|>
-(202.06, 760.08) (397.94, 760.08) (397.94, 771.13) (202.06, 771.13)        /F2 Nota Fiscal Eletrônica de Serviços	<|special_separator|>
+(202.06, 760.07) (397.94, 760.07) (397.94, 771.13) (202.06, 771.13)        /F2 Nota Fiscal Eletrônica de Serviços	<|special_separator|>
 (529.03, 814.88) (551.97, 814.88) (551.97, 821.33) (529.03, 821.33)        /F2 48/NFe	<|special_separator|>
 (022.00, 736.31) (078.41, 736.31) (078.41, 743.68) (022.00, 743.68)        /F2 Número / Série	<|special_separator|>
 (102.68, 736.31) (133.33, 736.31) (133.33, 743.69) (102.68, 743.69)        /F3 48 / NFe	<|special_separator|>

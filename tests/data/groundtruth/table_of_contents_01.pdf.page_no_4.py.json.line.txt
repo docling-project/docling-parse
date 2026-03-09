@@ -1,7 +1,7 @@
-(108.00, 754.57) (126.82, 754.57) (126.82, 763.12) (108.00, 763.12)       /F81 IBM	<|special_separator|>
-(399.97, 754.57) (504.00, 754.57) (504.00, 763.12) (399.97, 763.12)       /F81 Granite Language Models	<|special_separator|>
+(108.00, 754.56) (126.82, 754.56) (126.82, 763.12) (108.00, 763.12)       /F81 IBM	<|special_separator|>
+(399.97, 754.56) (504.00, 754.56) (504.00, 763.12) (399.97, 763.12)       /F81 Granite Language Models	<|special_separator|>
 (108.25, 698.11) (121.70, 698.11) (121.70, 706.66) (108.25, 706.66)       /F81 2.1	<|special_separator|>
-(132.16, 698.11) (201.23, 698.52) (201.23, 705.37) (132.16, 706.66)       /F81 DENSE MODELS	<|special_separator|>
+(132.16, 698.11) (201.23, 698.52) (201.23, 705.36) (132.16, 706.66)       /F81 DENSE MODELS	<|special_separator|>
 (108.00, 676.91) (504.00, 676.91) (504.00, 685.46) (108.00, 685.46)       /F81 Granite 3.0 2B and 8B dense models share a similar architecture as popular language models like	<|special_separator|>
 (108.00, 665.95) (504.35, 665.95) (504.35, 674.50) (108.00, 674.50)       /F81 Llama and our previous Granite Code models Mishra et al. (2024), ensuring strong compatibility	<|special_separator|>
 (107.64, 654.99) (328.26, 654.99) (328.26, 663.54) (107.64, 663.54)       /F81 with open-source inference and fine-tuning pipelines.	<|special_separator|>
@@ -10,24 +10,24 @@
 (108.00, 633.07) (504.00, 633.07) (504.00, 641.62) (108.00, 641.62)       /F81 performance, and Rotary Position Embedding (RoPE; Su et al. 2024) to model the relative position	<|special_separator|>
 (108.00, 622.11) (174.25, 622.11) (174.25, 630.66) (108.00, 630.66)       /F81 between tokens.	<|special_separator|>
 (180.10, 622.11) (504.00, 622.11) (504.00, 630.66) (180.10, 630.66)       /F81 For the MLP layers, Granite 3.0 Dense models use SwiGLU as the activation	<|special_separator|>
-(108.00, 611.15) (504.00, 611.15) (504.00, 619.71) (108.00, 619.71)       /F81 function. Before each MLP and attention layer, we use RMSNorm to normalize the layer's input. We	<|special_separator|>
-(108.00, 600.20) (504.00, 600.20) (504.00, 608.75) (108.00, 608.75)       /F81 also share parameters between the input embedding and the output linear transform. This reduces	<|special_separator|>
+(108.00, 611.15) (503.99, 611.15) (503.99, 619.71) (108.00, 619.71)       /F81 function. Before each MLP and attention layer, we use RMSNorm to normalize the layer's input. We	<|special_separator|>
+(108.00, 600.19) (504.00, 600.19) (504.00, 608.75) (108.00, 608.75)       /F81 also share parameters between the input embedding and the output linear transform. This reduces	<|special_separator|>
 (108.00, 589.24) (504.00, 589.24) (504.00, 597.79) (108.00, 597.79)       /F81 the size of the model, and we have observed that the tying of these embeddings have zero, or even a	<|special_separator|>
-(108.00, 578.28) (263.94, 578.28) (263.94, 586.83) (108.00, 586.83)       /F81 positive impact on model performance.	<|special_separator|>
+(108.00, 578.28) (263.93, 578.28) (263.93, 586.83) (108.00, 586.83)       /F81 positive impact on model performance.	<|special_separator|>
 (108.25, 551.57) (121.70, 551.57) (121.70, 560.13) (108.25, 560.13)       /F81 2.2	<|special_separator|>
 (132.16, 551.57) (264.00, 551.99) (264.00, 558.83) (132.16, 560.13)       /F81 MIXTURE-OF-EXPERT MODELS	<|special_separator|>
 (108.00, 530.37) (504.00, 530.37) (504.00, 538.92) (108.00, 538.92)       /F81 Granite 3.0 1B and 3B MoE models use similar architecture as Granite Dense models, with the	<|special_separator|>
-(108.00, 519.41) (456.02, 519.41) (456.02, 527.97) (108.00, 527.97)       /F81 MLP layers substituted with MoE layers. A Mixture of Experts (MoE) layer comprises	<|special_separator|>
+(108.00, 519.41) (456.03, 519.41) (456.03, 527.96) (108.00, 527.96)       /F81 MLP layers substituted with MoE layers. A Mixture of Experts (MoE) layer comprises	<|special_separator|>
 (458.52, 519.58) (466.52, 519.58) (466.52, 528.28) (458.52, 528.28)       /F31 N	<|special_separator|>
-(470.10, 519.41) (504.00, 519.41) (504.00, 527.97) (470.10, 527.97)       /F81 modules	<|special_separator|>
+(470.10, 519.41) (504.00, 519.41) (504.00, 527.96) (470.10, 527.96)       /F81 modules	<|special_separator|>
 (108.00, 508.62) (112.88, 508.62) (112.88, 517.33) (108.00, 517.33)       /F31 f	<|special_separator|>
 (112.88, 507.69) (116.85, 507.69) (116.85, 513.79) (112.88, 513.79)       /F27 1	<|special_separator|>
 (117.35, 508.62) (144.36, 508.62) (144.36, 517.33) (117.35, 517.33)       /F31 , . . . , f	<|special_separator|>
-(144.36, 507.69) (150.68, 507.69) (150.68, 513.79) (144.36, 513.79)       /F30 N	<|special_separator|>
+(144.36, 507.69) (150.67, 507.69) (150.67, 513.79) (144.36, 513.79)       /F30 N	<|special_separator|>
 (154.42, 508.45) (201.24, 508.45) (201.24, 517.01) (154.42, 517.01)       /F81 and a router	<|special_separator|>
 (203.74, 508.62) (208.49, 508.62) (208.49, 517.33) (203.74, 517.33)       /F31 g	<|special_separator|>
-(208.85, 508.62) (212.72, 508.62) (212.72, 517.33) (208.85, 517.33)       /F28 (	<|special_separator|>
-(212.72, 508.62) (217.36, 508.62) (217.36, 517.33) (212.72, 517.33)       /F31 e	<|special_separator|>
+(208.85, 508.62) (212.73, 508.62) (212.73, 517.33) (208.85, 517.33)       /F28 (	<|special_separator|>
+(212.73, 508.62) (217.36, 508.62) (217.36, 517.33) (212.73, 517.33)       /F31 e	<|special_separator|>
 (220.14, 508.76) (222.91, 508.76) (222.91, 517.33) (220.14, 517.33)       /F34 |	<|special_separator|>
 (225.69, 508.61) (231.74, 508.61) (231.74, 517.36) (225.69, 517.36)       /F55 x	<|special_separator|>
 (231.74, 508.62) (235.61, 508.62) (235.61, 517.33) (231.74, 517.33)       /F28 )	<|special_separator|>
@@ -54,14 +54,14 @@
 (208.78, 434.58) (212.65, 434.58) (212.65, 443.29) (208.78, 443.29)       /F28 (	<|special_separator|>
 (212.65, 434.58) (217.29, 434.58) (217.29, 443.29) (212.65, 443.29)       /F31 e	<|special_separator|>
 (220.06, 434.72) (222.83, 434.72) (222.83, 443.29) (220.06, 443.29)       /F34 |	<|special_separator|>
-(225.59, 434.57) (231.64, 434.57) (231.64, 443.32) (225.59, 443.32)       /F55 x	<|special_separator|>
+(225.60, 434.57) (231.64, 434.57) (231.64, 443.32) (225.60, 443.32)       /F55 x	<|special_separator|>
 (231.64, 434.58) (246.03, 434.58) (246.03, 443.29) (231.64, 443.29)       /F28 ) =	<|special_separator|>
 (248.80, 444.55) (256.27, 444.55) (256.27, 450.93) (248.80, 450.93)       /F21 {	<|special_separator|>
 (256.27, 440.36) (296.18, 440.36) (296.18, 449.07) (256.27, 449.07)       /F28 softmax (	<|special_separator|>
 (296.18, 440.20) (311.43, 440.20) (311.43, 448.75) (296.18, 448.75)       /F81 Top	<|special_separator|>
 (311.43, 440.36) (316.62, 440.36) (316.62, 449.07) (311.43, 449.07)       /F31 k	<|special_separator|>
-(318.59, 440.36) (322.46, 440.36) (322.46, 449.07) (318.59, 449.07)       /F28 (	<|special_separator|>
-(322.46, 440.35) (326.98, 440.35) (326.98, 449.10) (322.46, 449.10)       /F55 s	<|special_separator|>
+(318.59, 440.36) (322.47, 440.36) (322.47, 449.07) (318.59, 449.07)       /F28 (	<|special_separator|>
+(322.47, 440.35) (326.98, 440.35) (326.98, 449.10) (322.47, 449.10)       /F55 s	<|special_separator|>
 (326.98, 440.36) (334.73, 440.36) (334.73, 449.07) (326.98, 449.07)       /F28 ))	<|special_separator|>
 (334.73, 437.94) (337.55, 437.94) (337.55, 444.04) (334.73, 444.04)       /F30 i	<|special_separator|>
 (339.71, 440.36) (342.48, 440.36) (342.48, 449.07) (339.71, 449.07)       /F31 ,	<|special_separator|>
@@ -90,7 +90,7 @@
 (147.14, 407.24) (168.39, 407.24) (168.39, 413.34) (147.14, 413.34)       /F27 router	<|special_separator|>
 (171.71, 408.00) (336.41, 408.00) (336.41, 416.55) (171.71, 416.55)       /F81 is the expert embedding matrix of shape	<|special_separator|>
 (339.23, 408.17) (343.10, 408.17) (343.10, 416.87) (339.23, 416.87)       /F28 (	<|special_separator|>
-(343.10, 408.17) (364.31, 408.17) (364.31, 416.87) (343.10, 416.87)       /F31 N,D	<|special_separator|>
+(343.10, 408.17) (364.32, 408.17) (364.32, 416.87) (343.10, 416.87)       /F31 N,D	<|special_separator|>
 (364.32, 407.13) (376.33, 407.13) (376.33, 413.11) (364.32, 413.11)       /F81 emb	<|special_separator|>
 (376.82, 408.17) (380.70, 408.17) (380.70, 416.87) (376.82, 416.87)       /F28 )	<|special_separator|>
 (380.70, 408.00) (418.90, 408.00) (418.90, 416.55) (380.70, 416.55)       /F81 , and Top	<|special_separator|>
@@ -108,8 +108,8 @@
 (276.50, 356.29) (280.28, 356.29) (280.28, 362.39) (276.50, 362.39)       /F30 e	<|special_separator|>
 (280.28, 356.29) (290.37, 356.29) (290.37, 362.39) (280.28, 362.39)       /F27 =1	<|special_separator|>
 (292.29, 367.36) (297.04, 367.36) (297.04, 376.06) (292.29, 376.06)       /F31 g	<|special_separator|>
-(297.40, 367.36) (301.27, 367.36) (301.27, 376.06) (297.40, 376.06)       /F28 (	<|special_separator|>
-(301.28, 367.36) (305.92, 367.36) (305.92, 376.06) (301.28, 376.06)       /F31 e	<|special_separator|>
+(297.40, 367.36) (301.28, 367.36) (301.28, 376.06) (297.40, 376.06)       /F28 (	<|special_separator|>
+(301.28, 367.36) (305.91, 367.36) (305.91, 376.06) (301.28, 376.06)       /F31 e	<|special_separator|>
 (308.68, 367.50) (311.45, 367.50) (311.45, 376.06) (308.68, 376.06)       /F34 |	<|special_separator|>
 (314.22, 367.35) (320.26, 367.35) (320.26, 376.09) (314.22, 376.09)       /F55 x	<|special_separator|>
 (320.26, 367.36) (324.14, 367.36) (324.14, 376.06) (320.26, 376.06)       /F28 )	<|special_separator|>
@@ -119,11 +119,11 @@
 (340.49, 367.36) (344.36, 367.36) (344.36, 376.06) (340.49, 376.06)       /F28 (	<|special_separator|>
 (344.36, 367.35) (350.41, 367.35) (350.41, 376.09) (344.36, 376.09)       /F55 x	<|special_separator|>
 (350.41, 367.36) (354.28, 367.36) (354.28, 376.06) (350.41, 376.06)       /F28 )	<|special_separator|>
-(493.05, 367.19) (504.67, 367.19) (504.67, 375.75) (493.05, 375.75)       /F81 (3)	<|special_separator|>
+(493.05, 367.19) (504.67, 367.19) (504.67, 375.74) (493.05, 375.74)       /F81 (3)	<|special_separator|>
 (107.53, 337.61) (131.80, 337.61) (131.80, 346.16) (107.53, 346.16)       /F81 When	<|special_separator|>
 (134.84, 337.78) (139.59, 337.78) (139.59, 346.48) (134.84, 346.48)       /F31 g	<|special_separator|>
-(139.95, 337.78) (143.82, 337.78) (143.82, 346.48) (139.95, 346.48)       /F28 (	<|special_separator|>
-(143.82, 337.78) (148.46, 337.78) (148.46, 346.48) (143.82, 346.48)       /F31 e	<|special_separator|>
+(139.95, 337.78) (143.83, 337.78) (143.83, 346.48) (139.95, 346.48)       /F28 (	<|special_separator|>
+(143.83, 337.78) (148.46, 337.78) (148.46, 346.48) (143.83, 346.48)       /F31 e	<|special_separator|>
 (152.25, 337.92) (155.02, 337.92) (155.02, 346.48) (152.25, 346.48)       /F34 |	<|special_separator|>
 (158.81, 337.77) (164.86, 337.77) (164.86, 346.51) (158.81, 346.51)       /F55 x	<|special_separator|>
 (164.86, 337.78) (189.04, 337.78) (189.04, 346.48) (164.86, 346.48)       /F28 ) = 0	<|special_separator|>
@@ -136,7 +136,7 @@
 (220.76, 337.61) (504.00, 337.61) (504.00, 346.16) (220.76, 346.16)       /F81 will not need to be evaluated, thus reducing computation cost during	<|special_separator|>
 (108.00, 326.65) (472.21, 326.65) (472.21, 335.20) (108.00, 335.20)       /F81 training and inference. The key designs of the Granite MoE models are summarized below:	<|special_separator|>
 (108.00, 301.28) (216.00, 301.28) (216.00, 310.24) (108.00, 310.24)       /F90 Dropless Token Routing.	<|special_separator|>
-(225.96, 301.30) (504.00, 301.30) (504.00, 309.85) (225.96, 309.85)       /F81 Since each token selects experts independently, some experts could	<|special_separator|>
+(225.96, 301.29) (504.00, 301.29) (504.00, 309.85) (225.96, 309.85)       /F81 Since each token selects experts independently, some experts could	<|special_separator|>
 (108.00, 290.34) (505.25, 290.34) (505.25, 298.89) (108.00, 298.89)       /F81 receive more tokens than others. In previous MoE models, like Switch Transformer (Fedus et al.,	<|special_separator|>
 (108.00, 279.38) (504.00, 279.38) (504.00, 287.93) (108.00, 287.93)       /F81 2022) and Deepseek-V2 (Liu et al., 2024a), a capacity cap is set for each expert or device, and the	<|special_separator|>
 (108.00, 268.42) (504.35, 268.42) (504.35, 276.97) (108.00, 276.97)       /F81 extra tokens that exceed the cap are dropped. As observed in Gale et al. (2023), this cap negatively	<|special_separator|>
@@ -144,8 +144,8 @@
 (108.00, 246.50) (457.59, 246.50) (457.59, 255.05) (108.00, 255.05)       /F81 dropless MoE implementation, to avoid token dropping and improve training efficiency.	<|special_separator|>
 (108.00, 221.13) (199.34, 221.13) (199.34, 230.08) (108.00, 230.08)       /F90 Fine-grained Experts.	<|special_separator|>
 (209.30, 221.14) (504.00, 221.14) (504.00, 229.69) (209.30, 229.69)       /F81 Recent studies (Krajewski et al., 2024; Dai et al., 2024) suggest that setting	<|special_separator|>
-(108.00, 210.18) (504.00, 210.18) (504.00, 218.74) (108.00, 218.74)       /F81 the size of experts in MoE to mirror the feed-forward layer is not optimal. Instead, increasing the	<|special_separator|>
-(108.00, 199.22) (504.00, 199.22) (504.00, 207.78) (108.00, 207.78)       /F81 expert granularity, number of experts, and number of activated experts could increase the possible	<|special_separator|>
+(108.00, 210.18) (504.00, 210.18) (504.00, 218.73) (108.00, 218.73)       /F81 the size of experts in MoE to mirror the feed-forward layer is not optimal. Instead, increasing the	<|special_separator|>
+(108.00, 199.22) (503.99, 199.22) (503.99, 207.78) (108.00, 207.78)       /F81 expert granularity, number of experts, and number of activated experts could increase the possible	<|special_separator|>
 (108.00, 188.26) (504.00, 188.26) (504.00, 196.82) (108.00, 196.82)       /F81 combinations of experts and result in better model performance. Following these observations, we use	<|special_separator|>
 (108.00, 177.31) (505.24, 177.31) (505.24, 185.86) (108.00, 185.86)       /F81 fine-grained experts and a larger number of activated experts in Granite 3.0 MoE models. Specifically,	<|special_separator|>
 (107.64, 166.35) (160.48, 166.35) (160.48, 174.90) (107.64, 174.90)       /F81 we use a top-	<|special_separator|>
@@ -165,7 +165,7 @@
 (322.53, 100.34) (327.40, 100.34) (327.40, 109.05) (322.53, 109.05)       /F31 f	<|special_separator|>
 (327.40, 099.42) (330.22, 099.42) (330.22, 105.51) (327.40, 105.51)       /F30 i	<|special_separator|>
 (330.72, 100.34) (337.12, 100.34) (337.12, 109.05) (330.72, 109.05)       /F31 P	<|special_separator|>
-(337.12, 099.42) (339.94, 099.42) (339.94, 105.51) (337.12, 105.51)       /F30 i	<|special_separator|>
+(337.12, 099.42) (339.93, 099.42) (339.93, 105.51) (337.12, 105.51)       /F30 i	<|special_separator|>
 (493.05, 100.18) (504.67, 100.18) (504.67, 108.73) (493.05, 108.73)       /F81 (4)	<|special_separator|>
 (107.64, 071.03) (132.47, 071.03) (132.47, 079.58) (107.64, 079.58)       /F81 where	<|special_separator|>
 (135.09, 071.19) (143.10, 071.19) (143.10, 079.90) (135.09, 079.90)       /F31 N	<|special_separator|>
@@ -177,6 +177,6 @@
 (476.24, 070.27) (479.06, 070.27) (479.06, 076.37) (476.24, 076.37)       /F30 i	<|special_separator|>
 (482.18, 071.03) (504.00, 071.03) (504.00, 079.58) (482.18, 079.58)       /F81 is the	<|special_separator|>
 (108.00, 060.07) (318.04, 060.07) (318.04, 068.62) (108.00, 068.62)       /F81 fraction of the router probability allocated for expert	<|special_separator|>
-(320.52, 060.24) (323.95, 060.24) (323.95, 068.94) (320.52, 068.94)       /F31 i	<|special_separator|>
+(320.52, 060.24) (323.96, 060.24) (323.96, 068.94) (320.52, 068.94)       /F31 i	<|special_separator|>
 (323.96, 060.07) (504.00, 060.07) (504.00, 068.62) (323.96, 068.62)       /F81 . Intuitively, this loss penalises over-usage of	<|special_separator|>
 (303.33, 030.18) (308.32, 030.18) (308.32, 038.74) (303.33, 038.74)       /F81 4

@@ -6,6 +6,8 @@
 #include <qpdf/QPDFPageObjectHelper.hh>
 #include <qpdf/Buffer.hh>
 
+#include <parse/qpdf/qpdf_compat.h>
+
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -120,25 +122,24 @@ int main(int argc, char* argv[])
                     auto filters = get_filters(img);
 
                     std::shared_ptr<Buffer> data;
-		    //PointerHolder<Buffer> data;
                     bool wrote_decoded = false;
 
                     if (want_decoded)
                     {
                         try
                         {
-                            data = img.getStreamData();
+                            data = to_shared_ptr(img.getStreamData());
                             wrote_decoded = true;
                         }
                         catch (...)
                         {
-                            data = img.getRawStreamData();
+                            data = to_shared_ptr(img.getRawStreamData());
                             wrote_decoded = false;
                         }
                     }
                     else
                     {
-                        data = img.getRawStreamData();
+                        data = to_shared_ptr(img.getRawStreamData());
                         wrote_decoded = false;
                     }
 

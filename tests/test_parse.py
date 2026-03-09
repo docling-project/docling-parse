@@ -8,19 +8,44 @@ from typing import Dict, List, Union
 
 from docling_core.types.doc.page import (
     BitmapResource,
+    PdfHyperlink,
     PdfPageBoundaryType,
     PdfShape,
     PdfTableOfContents,
     PdfTextCell,
+    PdfWidget,
     SegmentedPdfPage,
     TextCell,
     TextCellUnit,
 )
 from pydantic import TypeAdapter
 
-from docling_parse.pdf_parser import DoclingPdfParser, PdfDocument
+from docling_parse.pdf_parser import DecodePageConfig, DoclingPdfParser, PdfDocument
 
 GENERATE = False
+
+
+def _round_floats(obj, ndigits=3):
+    """Recursively round all floats in a JSON-serializable structure."""
+    if isinstance(obj, float):
+        return round(obj, ndigits)
+    if isinstance(obj, dict):
+        return {k: _round_floats(v, ndigits) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_round_floats(v, ndigits) for v in obj]
+    return obj
+
+
+def save_as_json_rounded(page: SegmentedPdfPage, filename, indent=2, ndigits=3):
+    """Save SegmentedPdfPage as JSON with floats rounded to ndigits."""
+    from pathlib import Path
+
+    if isinstance(filename, str):
+        filename = Path(filename)
+    out = _round_floats(page.export_to_dict(), ndigits=ndigits)
+    with open(filename, "w", encoding="utf-8") as fw:
+        json.dump(out, fw, indent=indent)
+
 
 GROUNDTRUTH_FOLDER = "tests/data/groundtruth/"
 REGRESSION_FOLDER = "tests/data/regression/*.pdf"
@@ -156,6 +181,10 @@ def verify_shapes(
             true_shape.index == pred_shape.index
         ), "true_shape.index == pred_shape.index"
 
+        assert (
+            true_shape.parent_id == pred_shape.parent_id
+        ), "true_shape.parent_id == pred_shape.parent_id"
+
         true_points = true_shape.points
         pred_points = pred_shape.points
 
@@ -171,25 +200,132 @@ def verify_shapes(
                 abs(true_point[1] - pred_points[l][1]) < eps
             ), "abs(true_point[1]-pred_points[l][1])<eps"
 
-        # width has been deprecated to line_width
-        # assert (
-        #     abs(true_shape.width - pred_shape.width) < eps
-        # ), "abs(true_shape.width-pred_shape.width)<eps"
+        assert (
+            true_shape.has_graphics_state == pred_shape.has_graphics_state
+        ), "true_shape.has_graphics_state == pred_shape.has_graphics_state"
 
-        """
         assert (
-            true_shape.rgba.r == pred_shape.rgba.r
-        ), "true_shape.rgba.r == pred_shape.rgba.r"
+            abs(true_shape.line_width - pred_shape.line_width) < eps
+        ), "abs(true_shape.line_width - pred_shape.line_width) < eps"
         assert (
-            true_shape.rgba.g == pred_shape.rgba.g
-        ), "true_shape.rgba.g == pred_shape.rgba.g"
+            abs(true_shape.miter_limit - pred_shape.miter_limit) < eps
+        ), "abs(true_shape.miter_limit - pred_shape.miter_limit) < eps"
         assert (
-            true_shape.rgba.b == pred_shape.rgba.b
-        ), "true_shape.rgba.b == pred_shape.rgba.b"
+            true_shape.line_cap == pred_shape.line_cap
+        ), "true_shape.line_cap == pred_shape.line_cap"
         assert (
-            true_shape.rgba.a == pred_shape.rgba.a
-        ), "true_shape.rgba.a == pred_shape.rgba.a"
-        """
+            true_shape.line_join == pred_shape.line_join
+        ), "true_shape.line_join == pred_shape.line_join"
+        assert (
+            abs(true_shape.dash_phase - pred_shape.dash_phase) < eps
+        ), "abs(true_shape.dash_phase - pred_shape.dash_phase) < eps"
+        assert len(true_shape.dash_array) == len(
+            pred_shape.dash_array
+        ), "len(true_shape.dash_array) == len(pred_shape.dash_array)"
+        for j, true_dash in enumerate(true_shape.dash_array):
+            assert (
+                abs(true_dash - pred_shape.dash_array[j]) < eps
+            ), "abs(true_dash - pred_shape.dash_array[j]) < eps"
+        assert (
+            abs(true_shape.flatness - pred_shape.flatness) < eps
+        ), "abs(true_shape.flatness - pred_shape.flatness) < eps"
+
+        assert (
+            true_shape.rgb_stroking.r == pred_shape.rgb_stroking.r
+        ), "true_shape.rgb_stroking.r == pred_shape.rgb_stroking.r"
+        assert (
+            true_shape.rgb_stroking.g == pred_shape.rgb_stroking.g
+        ), "true_shape.rgb_stroking.g == pred_shape.rgb_stroking.g"
+        assert (
+            true_shape.rgb_stroking.b == pred_shape.rgb_stroking.b
+        ), "true_shape.rgb_stroking.b == pred_shape.rgb_stroking.b"
+
+        assert (
+            true_shape.rgb_filling.r == pred_shape.rgb_filling.r
+        ), "true_shape.rgb_filling.r == pred_shape.rgb_filling.r"
+        assert (
+            true_shape.rgb_filling.g == pred_shape.rgb_filling.g
+        ), "true_shape.rgb_filling.g == pred_shape.rgb_filling.g"
+        assert (
+            true_shape.rgb_filling.b == pred_shape.rgb_filling.b
+        ), "true_shape.rgb_filling.b == pred_shape.rgb_filling.b"
+
+    return True
+
+
+def verify_widgets(
+    true_widgets: List[PdfWidget], pred_widgets: List[PdfWidget], eps: float
+) -> bool:
+
+    assert len(true_widgets) == len(
+        pred_widgets
+    ), "len(true_widgets)==len(pred_widgets)"
+
+    for i, true_widget in enumerate(true_widgets):
+        pred_widget = pred_widgets[i]
+
+        assert (
+            true_widget.index == pred_widget.index
+        ), "true_widget.index == pred_widget.index"
+
+        true_rect = true_widget.rect.to_polygon()
+        pred_rect = pred_widget.rect.to_polygon()
+
+        for l in range(0, 4):
+            assert (
+                abs(true_rect[l][0] - pred_rect[l][0]) < eps
+            ), "abs(true_rect[l][0]-pred_rect[l][0])<eps"
+            assert (
+                abs(true_rect[l][1] - pred_rect[l][1]) < eps
+            ), "abs(true_rect[l][1]-pred_rect[l][1])<eps"
+
+        assert (
+            true_widget.widget_text == pred_widget.widget_text
+        ), "true_widget.widget_text == pred_widget.widget_text"
+        assert (
+            true_widget.widget_description == pred_widget.widget_description
+        ), "true_widget.widget_description == pred_widget.widget_description"
+        assert (
+            true_widget.widget_field_name == pred_widget.widget_field_name
+        ), "true_widget.widget_field_name == pred_widget.widget_field_name"
+        assert (
+            true_widget.widget_field_type == pred_widget.widget_field_type
+        ), "true_widget.widget_field_type == pred_widget.widget_field_type"
+
+    return True
+
+
+def verify_hyperlinks(
+    true_hyperlinks: List[PdfHyperlink],
+    pred_hyperlinks: List[PdfHyperlink],
+    eps: float,
+) -> bool:
+
+    assert len(true_hyperlinks) == len(
+        pred_hyperlinks
+    ), "len(true_hyperlinks)==len(pred_hyperlinks)"
+
+    for i, true_hyperlink in enumerate(true_hyperlinks):
+        pred_hyperlink = pred_hyperlinks[i]
+
+        assert (
+            true_hyperlink.index == pred_hyperlink.index
+        ), "true_hyperlink.index == pred_hyperlink.index"
+
+        true_rect = true_hyperlink.rect.to_polygon()
+        pred_rect = pred_hyperlink.rect.to_polygon()
+
+        for l in range(0, 4):
+            assert (
+                abs(true_rect[l][0] - pred_rect[l][0]) < eps
+            ), "abs(true_rect[l][0]-pred_rect[l][0])<eps"
+            assert (
+                abs(true_rect[l][1] - pred_rect[l][1]) < eps
+            ), "abs(true_rect[l][1]-pred_rect[l][1])<eps"
+
+        assert str(true_hyperlink.uri) == str(
+            pred_hyperlink.uri
+        ), "true_hyperlink.uri == pred_hyperlink.uri"
 
     return True
 
@@ -211,6 +347,8 @@ def verify_SegmentedPdfPage(
     )
 
     verify_shapes(true_page.shapes, pred_page.shapes, eps=eps)
+    verify_widgets(true_page.widgets, pred_page.widgets, eps=eps)
+    verify_hyperlinks(true_page.hyperlinks, pred_page.hyperlinks, eps=eps)
 
 
 def test_reference_documents_from_filenames():
@@ -224,7 +362,15 @@ def test_reference_documents_from_filenames():
 
     # this map restricts for pdf's with multiple pages
     # which pages will be tested
-    page_restrictions = {"deep-mediabox-inheritance.pdf": [2]}
+    page_restrictions = {
+        "deep-mediabox-inheritance.pdf": [2],
+        "font_06.pdf": [1],
+        "font_07.pdf": [1],
+    }
+
+    config = DecodePageConfig()
+    config.keep_glyphs = True
+    config.keep_qpdf_warnings = False
 
     for pdf_doc_path in pdf_docs:
         # print(f"parsing {pdf_doc_path}")
@@ -232,13 +378,13 @@ def test_reference_documents_from_filenames():
         pdf_doc: PdfDocument = parser.load(
             path_or_stream=pdf_doc_path,
             boundary_type=PdfPageBoundaryType.CROP_BOX,  # default: CROP_BOX
-            lazy=False,
-        )  # default: True
+            lazy=True,
+        )
         assert pdf_doc is not None
 
         # PdfDocument.iterate_pages() will automatically populate pages as they are yielded.
         # No need to call PdfDocument.load_all_pages() before.
-        for page_no, pred_page in pdf_doc.iterate_pages():
+        for page_no, pred_page in pdf_doc.iterate_pages(config=config):
             # print(f" -> Page {page_no} has {len(pred_page.sanitized.cells)} cells.")
 
             rname = os.path.basename(pdf_doc_path)
@@ -253,7 +399,7 @@ def test_reference_documents_from_filenames():
             SPECIAL_SEPERATOR = "\t<|special_separator|>\n"
 
             if GENERATE or (not os.path.exists(fname)):
-                pred_page.save_as_json(fname)
+                save_as_json_rounded(pred_page, fname)
 
                 for unit in [TextCellUnit.CHAR, TextCellUnit.WORD, TextCellUnit.LINE]:
                     lines = pred_page.export_to_textlines(
@@ -280,10 +426,9 @@ def test_reference_documents_from_filenames():
 
                     _fname = fname + f".{unit}.txt"
 
-                    lines = []
                     with open(_fname, "r") as fr:
                         content = fr.read()
-                        lines = content.split(SPECIAL_SEPERATOR)
+                        lines = content.split(SPECIAL_SEPERATOR) if content else []
 
                     assert len(lines) == len(
                         _lines

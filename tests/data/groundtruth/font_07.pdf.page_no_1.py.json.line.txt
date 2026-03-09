@@ -1,0 +1,198 @@
+(049.78, 668.22) (119.55, 670.74) (119.55, 685.45) (049.78, 694.02)        /F1 REVIEW	<|special_separator|>
+(051.02, 629.87) (400.71, 629.87) (400.71, 651.06) (051.02, 651.06)        /F1 Mechanomics: an emerging field	<|special_separator|>
+(051.02, 605.94) (430.00, 605.94) (430.00, 627.14) (051.02, 627.14)        /F1 between biology and biomechanics	<|special_separator|>
+(051.02, 573.00) (296.08, 573.00) (296.08, 582.22) (051.02, 582.22)        /F1 Jiawen Wang, Dongyuan Lü, Debin Mao, Mian Long	<|special_separator|>
+(296.16, 578.13) (303.80, 578.13) (303.80, 585.29) (296.16, 585.29)        /F3 &	<|special_separator|>
+(051.02, 552.52) (544.25, 552.52) (544.25, 560.81) (051.02, 560.81)        /F4 Center for Biomechanics and Bioengineering and Key Laboratory of Microgravity, Institute of Mechanics, Chinese Academy of	<|special_separator|>
+(051.02, 541.58) (180.73, 541.58) (180.73, 549.87) (051.02, 549.87)        /F4 Sciences, Beijing 100190, China	<|special_separator|>
+(051.02, 530.28) (061.20, 530.28) (061.20, 541.01) (051.02, 541.01)        /F3 &	<|special_separator|>
+(064.18, 530.63) (257.40, 530.63) (257.40, 538.93) (064.18, 538.93)        /F4 Correspondence: mlong@imech.ac.cn (M. Long)	<|special_separator|>
+(051.02, 517.71) (155.97, 517.71) (155.97, 526.00) (051.02, 526.00)        /F4 Received January 6, 2014	<|special_separator|>
+(164.47, 517.71) (267.38, 517.71) (267.38, 526.00) (164.47, 526.00)        /F4 Accepted March 10, 2014	<|special_separator|>
+(051.02, 473.79) (103.87, 473.79) (103.87, 483.00) (051.02, 483.00)        /F1 ABSTRACT	<|special_separator|>
+(051.02, 455.97) (137.17, 455.97) (137.17, 464.26) (051.02, 464.26)        /F1 Cells sense various	<|special_separator|>
+(141.34, 455.99) (170.98, 455.99) (170.98, 465.88) (141.34, 465.88)        /F5 in vivo	<|special_separator|>
+(175.13, 455.97) (287.71, 455.97) (287.71, 464.26) (175.13, 464.26)        /F1 mechanical stimuli, which	<|special_separator|>
+(051.02, 444.01) (079.38, 444.01) (079.38, 452.30) (051.02, 452.30)        /F1 initiate	<|special_separator|>
+(085.72, 444.01) (137.99, 444.01) (137.99, 452.30) (085.72, 452.30)        /F1 downstream	<|special_separator|>
+(144.28, 444.01) (183.11, 444.01) (183.11, 452.30) (144.28, 452.30)        /F1 signaling	<|special_separator|>
+(189.41, 444.01) (197.72, 444.01) (197.72, 452.30) (189.41, 452.30)        /F1 to	<|special_separator|>
+(204.04, 444.01) (252.40, 444.01) (252.40, 452.30) (204.04, 452.30)        /F1 mechanical	<|special_separator|>
+(258.69, 444.01) (287.72, 444.01) (287.72, 452.30) (258.69, 452.30)        /F1 forces.	<|special_separator|>
+(051.02, 432.05) (287.69, 432.05) (287.69, 440.34) (051.02, 440.34)        /F1 While a body of evidences is presented on the impact of	<|special_separator|>
+(051.02, 420.08) (079.47, 420.08) (079.47, 428.38) (051.02, 428.38)        /F1 limited	<|special_separator|>
+(086.06, 420.08) (134.42, 420.08) (134.42, 428.38) (086.06, 428.38)        /F1 mechanical	<|special_separator|>
+(140.94, 420.08) (184.25, 420.08) (184.25, 428.38) (140.94, 428.38)        /F1 regulators	<|special_separator|>
+(190.83, 420.08) (198.67, 420.08) (198.67, 428.38) (190.83, 428.38)        /F1 in	<|special_separator|>
+(205.17, 420.08) (223.38, 420.08) (223.38, 428.38) (205.17, 428.38)        /F1 past	<|special_separator|>
+(229.89, 420.08) (267.89, 420.08) (267.89, 428.38) (229.89, 428.38)        /F1 decades,	<|special_separator|>
+(274.45, 420.08) (287.71, 420.08) (287.71, 428.38) (274.45, 428.38)        /F1 the	<|special_separator|>
+(051.02, 408.12) (104.89, 408.12) (104.89, 416.41) (051.02, 416.41)        /F1 mechanisms	<|special_separator|>
+(111.29, 408.12) (129.03, 408.12) (129.03, 416.41) (111.29, 416.41)        /F1 how	<|special_separator|>
+(135.44, 408.12) (197.05, 408.12) (197.05, 416.41) (135.44, 416.41)        /F1 biomechanical	<|special_separator|>
+(203.47, 408.12) (247.92, 408.12) (247.92, 416.41) (203.47, 416.41)        /F1 responses	<|special_separator|>
+(254.27, 408.12) (287.68, 408.12) (287.68, 416.41) (254.27, 416.41)        /F1 globally	<|special_separator|>
+(051.02, 396.16) (287.71, 396.16) (287.71, 404.45) (051.02, 404.45)        /F1 affect cell function need to be addressed. Complexity	<|special_separator|>
+(051.02, 384.20) (119.48, 384.20) (119.48, 392.49) (051.02, 392.49)        /F1 and diversity of	<|special_separator|>
+(123.48, 384.22) (153.01, 384.22) (153.01, 394.11) (123.48, 394.11)        /F5 in vivo	<|special_separator|>
+(156.98, 384.20) (287.69, 384.20) (287.69, 392.49) (156.98, 392.49)        /F1 mechanical clues present dis-	<|special_separator|>
+(051.02, 372.24) (287.71, 372.24) (287.71, 380.53) (051.02, 380.53)        /F1 tinct patterns of shear flow, tensile stretch, or mechan-	<|special_separator|>
+(051.02, 360.33) (287.69, 360.33) (287.69, 368.62) (051.02, 368.62)        /F1 ical compression with various parametric combination	<|special_separator|>
+(051.02, 348.37) (059.33, 348.37) (059.33, 356.66) (051.02, 356.66)        /F1 of	<|special_separator|>
+(064.80, 348.37) (075.06, 348.37) (075.06, 356.66) (064.80, 356.66)        /F1 its	<|special_separator|>
+(080.51, 348.37) (127.73, 348.37) (127.73, 356.66) (080.51, 356.66)        /F1 magnitude,	<|special_separator|>
+(133.23, 348.37) (171.02, 348.37) (171.02, 356.66) (133.23, 356.66)        /F1 duration,	<|special_separator|>
+(176.49, 348.37) (185.35, 348.37) (185.35, 356.66) (176.49, 356.66)        /F1 or	<|special_separator|>
+(190.83, 348.37) (235.03, 348.37) (235.03, 356.66) (190.83, 356.66)        /F1 frequency.	<|special_separator|>
+(240.49, 348.37) (264.11, 348.37) (264.11, 356.66) (240.49, 356.66)        /F1 Thus,	<|special_separator|>
+(269.58, 348.37) (274.89, 348.37) (274.89, 356.66) (269.58, 356.66)        /F1 it	<|special_separator|>
+(280.35, 348.37) (287.72, 348.37) (287.72, 356.66) (280.35, 356.66)        /F1 is	<|special_separator|>
+(051.02, 336.41) (086.50, 336.41) (086.50, 344.70) (051.02, 344.70)        /F1 required	<|special_separator|>
+(092.86, 336.41) (101.17, 336.41) (101.17, 344.70) (092.86, 344.70)        /F1 to	<|special_separator|>
+(107.49, 336.41) (158.18, 336.41) (158.18, 344.70) (107.49, 344.70)        /F1 understand,	<|special_separator|>
+(164.52, 336.41) (184.21, 336.41) (184.21, 344.70) (164.52, 344.70)        /F1 from	<|special_separator|>
+(190.55, 336.41) (203.80, 336.41) (203.80, 344.70) (190.55, 344.70)        /F1 the	<|special_separator|>
+(210.16, 336.41) (250.94, 336.41) (250.94, 344.70) (210.16, 344.70)        /F1 viewpoint	<|special_separator|>
+(257.27, 336.41) (265.58, 336.41) (265.58, 344.70) (257.27, 344.70)        /F1 of	<|special_separator|>
+(271.96, 336.41) (287.73, 336.41) (287.73, 344.70) (271.96, 344.70)        /F1 me-	<|special_separator|>
+(051.02, 324.44) (110.42, 324.44) (110.42, 332.74) (051.02, 332.74)        /F1 chanobiology,	<|special_separator|>
+(115.49, 324.44) (135.64, 324.44) (135.64, 332.74) (115.49, 332.74)        /F1 what	<|special_separator|>
+(140.77, 324.44) (189.13, 324.44) (189.13, 332.74) (140.77, 332.74)        /F1 mechanical	<|special_separator|>
+(194.23, 324.44) (228.67, 324.44) (228.67, 332.74) (194.23, 332.74)        /F1 features	<|special_separator|>
+(233.75, 324.44) (242.05, 324.44) (242.05, 332.74) (233.75, 332.74)        /F1 of	<|special_separator|>
+(247.13, 324.44) (266.82, 324.44) (266.82, 332.74) (247.13, 332.74)        /F1 cells	<|special_separator|>
+(271.96, 324.44) (287.73, 324.44) (287.73, 332.74) (271.96, 332.74)        /F1 are,	<|special_separator|>
+(051.02, 312.48) (287.71, 312.48) (287.71, 320.78) (051.02, 320.78)        /F1 why mechanical properties are different among distinct	<|special_separator|>
+(051.02, 300.52) (065.77, 300.52) (065.77, 308.81) (051.02, 308.81)        /F1 cell	<|special_separator|>
+(070.87, 300.52) (096.44, 300.52) (096.44, 308.81) (070.87, 308.81)        /F1 types,	<|special_separator|>
+(101.54, 300.52) (171.85, 300.52) (171.85, 308.81) (101.54, 308.81)        /F1 and how forces	<|special_separator|>
+(176.94, 300.52) (190.29, 300.52) (190.29, 308.81) (176.94, 308.81)        /F1 are	<|special_separator|>
+(195.36, 300.52) (243.16, 300.52) (243.16, 308.81) (195.36, 308.81)        /F1 transduced	<|special_separator|>
+(248.26, 300.52) (287.68, 300.52) (287.68, 308.81) (248.26, 308.81)        /F1 to down-	<|special_separator|>
+(051.02, 288.56) (252.26, 288.56) (252.26, 296.85) (051.02, 296.85)        /F1 stream biochemical signals. Meanwhile, those	<|special_separator|>
+(256.48, 288.58) (264.32, 288.58) (264.32, 298.47) (256.48, 298.47)        /F5 in	<|special_separator|>
+(268.56, 288.58) (287.68, 288.58) (287.68, 298.47) (268.56, 298.47)        /F5 vitro	<|special_separator|>
+(051.02, 276.60) (287.72, 276.60) (287.72, 284.89) (051.02, 284.89)        /F1 isolated mechanical stimuli are usually coupled together	<|special_separator|>
+(051.02, 264.71) (079.93, 264.71) (079.93, 274.60) (051.02, 274.60)        /F5 in vivo	<|special_separator|>
+(079.94, 264.69) (287.73, 264.69) (287.73, 272.98) (079.94, 272.98)        /F1 , suggesting that the different factors that are in	<|special_separator|>
+(051.02, 252.73) (287.70, 252.73) (287.70, 261.02) (051.02, 261.02)        /F1 effect individually could be canceled out or orchestrated	<|special_separator|>
+(051.02, 240.77) (166.44, 240.77) (166.44, 249.06) (051.02, 249.06)        /F1 with each other. Evidently,	<|special_separator|>
+(170.53, 240.78) (196.20, 240.78) (196.20, 250.67) (170.53, 250.67)        /F5 omics	<|special_separator|>
+(200.30, 240.77) (287.67, 240.77) (287.67, 249.06) (200.30, 249.06)        /F1 analysis, a powerful	<|special_separator|>
+(051.02, 228.80) (287.69, 228.80) (287.69, 237.10) (051.02, 237.10)        /F1 tool in the field of system biology, is advantageous to	<|special_separator|>
+(051.02, 216.84) (287.71, 216.84) (287.71, 225.14) (051.02, 225.14)        /F1 combine with mechanobiology and then to map the full-	<|special_separator|>
+(051.02, 204.88) (287.70, 204.88) (287.70, 213.17) (051.02, 213.17)        /F1 set of mechanically sensitive proteins and transcripts	<|special_separator|>
+(051.02, 192.92) (087.54, 192.92) (087.54, 201.21) (051.02, 201.21)        /F1 encoded	<|special_separator|>
+(094.23, 192.92) (104.59, 192.92) (104.59, 201.21) (094.23, 201.21)        /F1 by	<|special_separator|>
+(111.29, 192.92) (121.55, 192.92) (121.55, 201.21) (111.29, 201.21)        /F1 its	<|special_separator|>
+(128.30, 192.92) (164.80, 192.92) (164.80, 201.21) (128.30, 201.21)        /F1 genome.	<|special_separator|>
+(171.50, 192.92) (189.70, 192.92) (189.70, 201.21) (171.50, 201.21)        /F1 This	<|special_separator|>
+(196.44, 192.92) (213.71, 192.92) (213.71, 201.21) (196.44, 201.21)        /F1 new	<|special_separator|>
+(220.42, 192.92) (260.38, 192.92) (260.38, 201.21) (220.42, 201.21)        /F1 emerging	<|special_separator|>
+(267.08, 192.94) (287.67, 192.92) (287.67, 201.21) (267.08, 202.74)        /F1 field,	<|special_separator|>
+(051.02, 180.96) (081.64, 180.96) (081.64, 189.25) (051.02, 189.25)        /F1 namely	<|special_separator|>
+(083.85, 180.98) (143.14, 180.98) (143.14, 190.86) (083.85, 190.86)        /F5 mechanomics	<|special_separator|>
+(143.15, 180.96) (287.70, 180.96) (287.70, 189.25) (143.15, 189.25)        /F1 , makes it possible to elucidate the	<|special_separator|>
+(051.03, 169.05) (287.70, 169.05) (287.70, 177.35) (051.03, 177.35)        /F1 global responses under systematically-varied mechani-	<|special_separator|>
+(051.03, 157.09) (287.71, 157.09) (287.71, 165.38) (051.03, 165.38)        /F1 cal stimuli. This review discusses the current advances	<|special_separator|>
+(051.03, 145.13) (141.59, 145.13) (141.59, 153.42) (051.03, 153.42)        /F1 in the related fields of	<|special_separator|>
+(143.83, 145.15) (203.12, 145.15) (203.12, 155.04) (143.83, 155.04)        /F5 mechanomics	<|special_separator|>
+(205.34, 145.13) (287.71, 145.13) (287.71, 153.42) (205.34, 153.42)        /F1 and elaborates how	<|special_separator|>
+(051.03, 133.17) (287.69, 133.17) (287.69, 141.46) (051.03, 141.46)        /F1 cells sense external forces and activate the biological	<|special_separator|>
+(051.03, 121.20) (097.89, 121.20) (097.89, 129.50) (051.03, 129.50)        /F1 responses.	<|special_separator|>
+(051.02, 097.06) (107.77, 097.06) (107.77, 106.28) (051.02, 106.28)        /F1 KEYWORDS	<|special_separator|>
+(120.53, 097.27) (248.06, 097.27) (248.06, 105.57) (120.53, 105.57)        /F4 mechanomics, mechanobiology,	<|special_separator|>
+(051.02, 085.31) (159.46, 085.31) (159.46, 093.60) (051.02, 093.60)        /F4 proteomics, transcriptomics	<|special_separator|>
+(307.56, 473.79) (380.69, 473.79) (380.69, 483.00) (307.56, 483.00)        /F1 INTRODUCTION	<|special_separator|>
+(307.56, 455.97) (544.31, 455.97) (544.31, 464.26) (307.56, 464.26)        /F4 Mechanical stimuli are crucial to many biological processes at	<|special_separator|>
+(307.56, 444.01) (361.23, 444.01) (361.23, 452.30) (307.56, 452.30)        /F4 organ, tissue,	<|special_separator|>
+(365.16, 444.01) (544.27, 444.01) (544.27, 452.30) (365.16, 452.30)        /F4 cell, and molecule levels. Shear flow, tensile	<|special_separator|>
+(307.56, 432.05) (516.50, 432.05) (516.50, 440.34) (307.56, 440.34)        /F4 stretch, and mechanical compression are most typical	<|special_separator|>
+(519.19, 432.07) (544.27, 432.07) (544.27, 440.34) (519.19, 440.34)        /F7 in vivo	<|special_separator|>
+(307.56, 420.08) (544.34, 420.08) (544.34, 428.38) (307.56, 428.38)        /F4 mechanical stimuli, which are in action alone or synergistically	<|special_separator|>
+(307.56, 408.12) (544.31, 408.12) (544.31, 416.41) (307.56, 416.41)        /F4 with other mechanical and even biochemical factors (Wang,	<|special_separator|>
+(307.56, 396.16) (544.34, 396.16) (544.34, 404.45) (307.56, 404.45)        /F4 2006; Cohen and Chen, 2008). For example, endothelial cells	<|special_separator|>
+(307.56, 384.20) (544.27, 384.20) (544.27, 392.49) (307.56, 392.49)        /F4 are subjected to blood shear flow and orientated towards the	<|special_separator|>
+(307.56, 372.25) (323.31, 372.24) (323.31, 380.53) (307.56, 382.05)        /F4 flow	<|special_separator|>
+(327.34, 372.24) (544.32, 372.24) (544.32, 380.53) (327.34, 380.53)        /F4 direction (Silkworth and Stehbens, 1975), extracellular	<|special_separator|>
+(307.56, 360.33) (544.25, 360.33) (544.25, 368.62) (307.56, 368.62)        /F4 matrices (ECMs) are stretched to mediate the outside-in sig-	<|special_separator|>
+(307.56, 348.37) (544.35, 348.37) (544.35, 356.66) (307.56, 356.66)        /F4 naling (Wright et al., 1997), and cartilage tissue is compressed	<|special_separator|>
+(307.56, 336.41) (544.31, 336.41) (544.31, 344.70) (307.56, 344.70)        /F4 to initiate interstitial fluid pressurization (Soltz and Ateshian,	<|special_separator|>
+(307.56, 324.44) (544.22, 324.44) (544.22, 332.74) (307.56, 332.74)        /F4 2000). A body of cues is known about how these mechanical	<|special_separator|>
+(307.56, 312.48) (544.31, 312.48) (544.31, 320.78) (307.56, 320.78)        /F4 stimuli affect cell morphology, proliferation, and differentiation.	<|special_separator|>
+(307.56, 300.52) (544.25, 300.52) (544.25, 308.81) (307.56, 308.81)        /F4 Evidently, it is difficult to elucidate what really happen at cellular	<|special_separator|>
+(307.56, 288.56) (544.31, 288.56) (544.31, 296.85) (307.56, 296.85)        /F4 and molecular levels if only a single type of mechanical stimuli	<|special_separator|>
+(307.56, 276.60) (544.31, 276.60) (544.31, 284.89) (307.56, 284.89)        /F4 oronesetofmechanicalparametersatagivenstimulusisused.	<|special_separator|>
+(318.90, 264.69) (544.24, 264.69) (544.24, 272.98) (318.90, 272.98)        /F4 Homeostatic imbalances are main driving forces to initiate	<|special_separator|>
+(307.56, 252.73) (358.53, 252.73) (358.53, 261.02) (307.56, 261.02)        /F4 physiological	<|special_separator|>
+(363.01, 252.73) (410.50, 252.73) (410.50, 261.02) (363.01, 261.02)        /F4 changes, in	<|special_separator|>
+(414.94, 252.73) (470.86, 252.73) (470.86, 261.02) (414.94, 261.02)        /F4 which various	<|special_separator|>
+(475.32, 252.73) (500.40, 252.73) (500.40, 261.02) (475.32, 261.02)        /F4 stimuli	<|special_separator|>
+(504.85, 252.73) (517.64, 252.73) (517.64, 261.02) (504.85, 261.02)        /F4 are	<|special_separator|>
+(522.15, 252.73) (544.26, 252.73) (544.26, 261.02) (522.15, 261.02)        /F4 moni-	<|special_separator|>
+(307.56, 240.77) (327.72, 240.77) (327.72, 249.06) (307.56, 249.06)        /F4 tored	<|special_separator|>
+(332.34, 240.77) (359.59, 240.77) (359.59, 249.06) (332.34, 249.06)        /F4 closely	<|special_separator|>
+(364.20, 240.77) (415.22, 240.77) (415.22, 249.06) (364.20, 249.06)        /F4 by receptors	<|special_separator|>
+(419.81, 240.77) (482.46, 240.77) (482.46, 249.06) (419.81, 249.06)        /F4 and sensors at	<|special_separator|>
+(487.05, 240.77) (518.95, 240.77) (518.95, 249.06) (487.05, 249.06)        /F4 different	<|special_separator|>
+(523.51, 240.77) (544.22, 240.77) (544.22, 249.06) (523.51, 249.06)        /F4 sites.	<|special_separator|>
+(307.56, 228.80) (544.24, 228.80) (544.24, 237.10) (307.56, 237.10)        /F4 Most of mechanoreceptors often react to shear flow, tensile	<|special_separator|>
+(307.56, 216.84) (544.27, 216.84) (544.27, 225.14) (307.56, 225.14)        /F4 stretch, or mechanical compression. When multiple mechan-	<|special_separator|>
+(307.56, 204.88) (320.90, 204.88) (320.90, 213.17) (307.56, 213.17)        /F4 ical	<|special_separator|>
+(325.76, 204.88) (350.85, 204.88) (350.85, 213.17) (325.76, 213.17)        /F4 stimuli	<|special_separator|>
+(355.69, 204.88) (363.53, 204.88) (363.53, 213.17) (355.69, 213.17)        /F4 or	<|special_separator|>
+(368.39, 204.88) (413.19, 204.88) (413.19, 213.17) (368.39, 213.17)        /F4 parameters	<|special_separator|>
+(418.06, 204.88) (430.84, 204.88) (430.84, 213.17) (418.06, 213.17)        /F4 are	<|special_separator|>
+(435.69, 204.88) (462.39, 204.88) (462.39, 213.17) (435.69, 213.17)        /F4 pooled	<|special_separator|>
+(467.27, 204.88) (501.72, 204.88) (501.72, 213.17) (467.27, 213.17)        /F4 together,	<|special_separator|>
+(506.56, 204.88) (532.02, 204.88) (532.02, 213.17) (506.56, 213.17)        /F4 part(s)	<|special_separator|>
+(536.89, 204.88) (544.26, 204.88) (544.26, 213.17) (536.89, 213.17)        /F4 of	<|special_separator|>
+(307.56, 192.92) (544.25, 192.92) (544.25, 201.21) (307.56, 201.21)        /F4 those molecular events presented in individual stimuli tests	<|special_separator|>
+(307.56, 180.96) (329.21, 180.96) (329.21, 189.25) (307.56, 189.25)        /F4 might	<|special_separator|>
+(335.00, 180.96) (344.90, 180.96) (344.90, 189.25) (335.00, 189.25)        /F4 be	<|special_separator|>
+(350.70, 180.96) (385.24, 180.96) (385.24, 189.25) (350.70, 189.25)        /F4 reserved	<|special_separator|>
+(391.01, 180.96) (432.84, 180.96) (432.84, 189.25) (391.01, 189.25)        /F4 constantly,	<|special_separator|>
+(438.64, 180.96) (470.65, 180.96) (470.65, 189.25) (438.64, 189.25)        /F4 fostered	<|special_separator|>
+(476.45, 180.96) (530.63, 180.96) (530.63, 189.25) (476.45, 189.25)        /F4 cooperatively,	<|special_separator|>
+(536.43, 180.96) (544.27, 180.96) (544.27, 189.25) (536.43, 189.25)        /F4 or	<|special_separator|>
+(307.56, 169.05) (544.27, 169.05) (544.27, 177.35) (307.56, 177.35)        /F4 canceled out each other, since the cross-talks existing in the	<|special_separator|>
+(307.56, 157.09) (544.21, 157.09) (544.21, 165.38) (307.56, 165.38)        /F4 mechanically sensitive genes and proteins would exert null,	<|special_separator|>
+(307.56, 145.13) (351.98, 145.13) (351.98, 153.42) (307.56, 153.42)        /F4 synergistic,	<|special_separator|>
+(357.00, 145.13) (364.83, 145.13) (364.83, 153.42) (357.00, 153.42)        /F4 or	<|special_separator|>
+(369.81, 145.13) (403.42, 145.13) (403.42, 153.42) (369.81, 153.42)        /F4 opposite	<|special_separator|>
+(408.42, 145.13) (436.97, 145.13) (436.97, 153.42) (408.42, 153.42)        /F4 effects.	<|special_separator|>
+(441.87, 145.13) (464.09, 145.13) (464.09, 153.42) (441.87, 153.42)        /F4 Thus,	<|special_separator|>
+(469.08, 145.13) (492.79, 145.13) (492.79, 153.42) (469.08, 153.42)        /F4 global	<|special_separator|>
+(497.82, 145.13) (531.90, 145.13) (531.90, 153.42) (497.82, 153.42)        /F4 mapping	<|special_separator|>
+(536.89, 145.13) (544.26, 145.13) (544.26, 153.42) (536.89, 153.42)        /F4 of	<|special_separator|>
+(307.56, 133.17) (343.12, 133.17) (343.12, 141.46) (307.56, 141.46)        /F4 activated	<|special_separator|>
+(347.87, 133.17) (427.94, 133.17) (427.94, 141.46) (347.87, 141.46)        /F4 genes and proteins	<|special_separator|>
+(432.68, 133.17) (447.42, 133.17) (447.42, 141.46) (432.68, 141.46)        /F4 that	<|special_separator|>
+(452.13, 133.17) (464.92, 133.17) (464.92, 141.46) (452.13, 141.46)        /F4 are	<|special_separator|>
+(469.65, 133.17) (515.11, 133.17) (515.11, 141.46) (469.65, 141.46)        /F4 responsible	<|special_separator|>
+(519.82, 133.17) (527.19, 133.17) (527.19, 141.46) (519.82, 141.46)        /F4 to	<|special_separator|>
+(531.95, 133.17) (544.27, 133.17) (544.27, 141.46) (531.95, 141.46)        /F4 the	<|special_separator|>
+(307.56, 121.20) (544.27, 121.20) (544.27, 129.50) (307.56, 129.50)        /F4 specific mechanical stimuli is required to conduct from the	<|special_separator|>
+(307.56, 109.24) (344.61, 109.24) (344.61, 117.54) (307.56, 117.54)        /F4 viewpoint	<|special_separator|>
+(349.17, 109.24) (356.54, 109.24) (356.54, 117.54) (349.17, 117.54)        /F4 of	<|special_separator|>
+(361.08, 109.24) (386.74, 109.24) (386.74, 117.54) (361.08, 117.54)        /F4 omics.	<|special_separator|>
+(391.30, 109.24) (398.67, 109.24) (398.67, 117.54) (391.30, 117.54)        /F4 In	<|special_separator|>
+(403.20, 109.24) (417.01, 109.24) (417.01, 117.54) (403.20, 117.54)        /F4 this	<|special_separator|>
+(421.57, 109.24) (449.22, 109.24) (449.22, 117.54) (421.57, 117.54)        /F4 review,	<|special_separator|>
+(453.77, 109.24) (481.85, 109.24) (481.85, 117.54) (453.77, 117.54)        /F4 cellular	<|special_separator|>
+(486.37, 109.24) (544.21, 109.24) (544.21, 117.54) (486.37, 117.54)        /F4 and molecular	<|special_separator|>
+(307.56, 097.28) (544.27, 097.28) (544.27, 105.57) (307.56, 105.57)        /F4 responses to mechanical stimuli were discussed, and the	<|special_separator|>
+(307.56, 085.32) (372.09, 085.32) (372.09, 093.61) (307.56, 093.61)        /F4 new conceptual	<|special_separator|>
+(377.24, 085.32) (423.06, 085.32) (423.06, 093.61) (377.24, 093.61)        /F4 terminology	<|special_separator|>
+(428.26, 085.32) (435.63, 085.32) (435.63, 093.61) (428.26, 093.61)        /F4 of	<|special_separator|>
+(440.79, 085.32) (495.68, 085.32) (495.68, 093.61) (440.79, 093.61)        /F4 mechanomics	<|special_separator|>
+(500.83, 085.32) (531.71, 085.32) (531.71, 093.61) (500.83, 093.61)        /F4 referred	<|special_separator|>
+(536.89, 085.32) (544.26, 085.32) (544.26, 093.61) (536.89, 093.61)        /F4 to	<|special_separator|>
+(159.19, 028.11) (165.17, 028.11) (165.17, 036.74) (159.19, 036.74)        /F8 ©	<|special_separator|>
+(167.81, 028.09) (544.28, 028.09) (544.28, 035.46) (167.81, 035.46)        /F4 The Author(s) 2014. This article is published with open access at Springerlink.com and journal.hep.com.cn	<|special_separator|>
+(050.46, 742.89) (158.01, 742.89) (158.01, 751.19) (050.46, 751.19)        /F4 Protein Cell 2014, 5(7):518	<|special_separator|>
+(158.00, 741.89) (162.95, 741.89) (162.95, 751.21) (158.00, 751.21)        /F9 -	<|special_separator|>
+(162.94, 742.89) (177.78, 742.89) (177.78, 751.19) (162.94, 751.19)        /F4 531	<|special_separator|>
+(050.46, 730.99) (181.25, 730.99) (181.25, 739.28) (050.46, 739.28)        /F4 DOI 10.1007/s13238-014-0057-9	<|special_separator|>
+(449.23, 729.64) (544.27, 729.64) (544.27, 744.38) (449.23, 744.38)        /F1 Protein&Cell	<|special_separator|>
+(024.44, 414.26) (024.44, 514.37) (009.69, 514.37) (009.69, 414.26)        /F1 Protein & Cell

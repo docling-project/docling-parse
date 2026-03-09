@@ -5,6 +5,10 @@ dist
 extlib_*/
 scratch_*
 perf/results/**
+perf/results_*
+perf/viz*
+tests/data/regression/*.json
+tests/data/cases/*.json
 
 # Created by https://www.toptal.com/developers/gitignore/api/python,macos,emacs,cmake,virtualenv
 # Edit at https://www.toptal.com/developers/gitignore?templates=python,macos,emacs,cmake,virtualenv

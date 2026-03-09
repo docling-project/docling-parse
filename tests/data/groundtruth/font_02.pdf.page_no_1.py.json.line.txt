@@ -1,5 +1,5 @@
 (072.00, 739.61) (535.26, 739.61) (535.26, 752.34) (072.00, 752.34)       /TT0 MOHAVE COMMUNITY COLLEGE                                                                                           BIO181 	<|special_separator|>
-(296.76, 048.53) (318.18, 048.53) (318.18, 058.91) (296.76, 058.91)       /TT1 133 	<|special_separator|>
+(296.76, 048.53) (318.18, 048.53) (318.18, 058.90) (296.76, 058.90)       /TT1 133 	<|special_separator|>
 (072.00, 035.81) (075.07, 035.81) (075.07, 046.19) (072.00, 046.19)       /TT1  	<|special_separator|>
 (529.92, 589.98) (532.35, 589.98) (532.35, 603.16) (529.92, 603.16)       /TT2  	<|special_separator|>
 (072.00, 567.03) (283.59, 567.03) (283.59, 578.92) (072.00, 578.92)       /TT2 3. Mix reagents by pipetting gently up and down.  	<|special_separator|>
@@ -17,7 +17,7 @@
 (090.00, 430.62) (094.14, 430.62) (094.14, 438.30) (090.00, 438.30)      /C2_0 •	<|special_separator|>
 (094.08, 429.99) (096.58, 429.99) (096.58, 438.44) (094.08, 438.44)       /TT1  	<|special_separator|>
 (108.00, 427.25) (184.63, 427.25) (184.63, 438.00) (108.00, 438.00)       /TT2 10x loading dye, 10 	<|special_separator|>
-(184.56, 427.25) (189.50, 427.25) (189.50, 438.00) (184.56, 438.00)      /C2_1 𝜇𝜇	<|special_separator|>
+(184.56, 427.25) (189.49, 427.25) (189.49, 438.00) (184.56, 438.00)      /C2_1 𝜇𝜇	<|special_separator|>
 (189.72, 427.25) (196.50, 427.25) (196.50, 438.00) (189.72, 438.00)       /TT2 L 	<|special_separator|>
 (072.00, 402.66) (167.58, 402.66) (167.58, 413.41) (072.00, 413.41)       /TT2 Supplies and Equipment 	<|special_separator|>
 (090.00, 380.94) (094.14, 380.94) (094.14, 388.62) (090.00, 388.62)      /C2_0 •	<|special_separator|>
@@ -46,10 +46,10 @@
 (072.00, 175.59) (074.19, 175.59) (074.19, 187.49) (072.00, 187.49)       /TT2  	<|special_separator|>
 (072.00, 149.92) (137.55, 149.92) (137.55, 161.81) (072.00, 161.81)       /TT2 While loading,  	<|special_separator|>
 (125.99, 127.24) (130.57, 127.24) (130.57, 135.74) (125.99, 135.74)      /C2_0 •	<|special_separator|>
-(130.56, 126.53) (133.32, 126.53) (133.32, 135.90) (130.56, 135.90)       /TT1  	<|special_separator|>
+(130.55, 126.54) (133.32, 126.54) (133.32, 135.90) (130.55, 135.90)       /TT1  	<|special_separator|>
 (143.99, 123.51) (540.72, 123.51) (540.72, 135.41) (143.99, 135.41)       /TT2 steady the pipet over the well using two hands. You may wish to place one or both elbows on 	<|special_separator|>
 (143.99, 111.87) (298.94, 111.87) (298.94, 123.76) (143.99, 123.76)       /TT2 the lab bench to steady your hands.  	<|special_separator|>
 (125.98, 103.23) (130.56, 103.23) (130.56, 111.73) (125.98, 111.73)      /C2_0 •	<|special_separator|>
 (130.54, 102.53) (133.31, 102.53) (133.31, 111.89) (130.54, 111.89)       /TT1  	<|special_separator|>
 (143.98, 099.51) (536.76, 099.51) (536.76, 111.40) (143.98, 111.40)       /TT2 be careful to expel any air in the pipet tip end before loading the gel. If an air bubble forms a 	<|special_separator|>
-(143.98, 087.86) (499.32, 087.86) (499.32, 099.76) (143.98, 099.76)       /TT2 cap over the well, the sample will flow into the buffer around the edges of the well.  
+(143.98, 087.87) (499.32, 087.87) (499.32, 099.76) (143.98, 099.76)       /TT2 cap over the well, the sample will flow into the buffer around the edges of the well.  

@@ -1,3 +1,78 @@
+## [v5.5.0](https://github.com/docling-project/docling-parse/releases/tag/v5.5.0) - 2026-03-04
+
+### Feature
+
+* Add parallelization for parsing ([#216](https://github.com/docling-project/docling-parse/issues/216)) ([`ae66f6d`](https://github.com/docling-project/docling-parse/commit/ae66f6ddf0c78c439bc731587abed08929e6a4f2))
+
+## [v5.4.2](https://github.com/docling-project/docling-parse/releases/tag/v5.4.2) - 2026-03-03
+
+### Fix
+
+* Ligatures and unicode chars in Differences ([#234](https://github.com/docling-project/docling-parse/issues/234)) ([`856c0fe`](https://github.com/docling-project/docling-parse/commit/856c0fedb988bd90b0f8204b57ec16d8657742eb))
+
+## [v5.4.1](https://github.com/docling-project/docling-parse/releases/tag/v5.4.1) - 2026-03-03
+
+### Fix
+
+* Map  characters into the proper chars ([#233](https://github.com/docling-project/docling-parse/issues/233)) ([`0316060`](https://github.com/docling-project/docling-parse/commit/0316060f2c9ec9f38e3f0e1e37ac37c001c9828d))
+* Robustify the page number count ([#232](https://github.com/docling-project/docling-parse/issues/232)) ([`a4fecd1`](https://github.com/docling-project/docling-parse/commit/a4fecd1e0643bb51ee785c6ea5f104f3d4034a96))
+
+## [v5.4.0](https://github.com/docling-project/docling-parse/releases/tag/v5.4.0) - 2026-02-24
+
+### Feature
+
+* Add config option to remove glyph output ([#231](https://github.com/docling-project/docling-parse/issues/231)) ([`9657023`](https://github.com/docling-project/docling-parse/commit/96570232f653b3588d88878b45d167f70d9ed654))
+
+### Fix
+
+* Updated the debug log ([#229](https://github.com/docling-project/docling-parse/issues/229)) ([`36eb392`](https://github.com/docling-project/docling-parse/commit/36eb3928fd57be02819a36fcadd8ce4d705511a5))
+
+## [v5.3.4](https://github.com/docling-project/docling-parse/releases/tag/v5.3.4) - 2026-02-23
+
+### Fix
+
+* Robustify parse of broken pdfs ([#228](https://github.com/docling-project/docling-parse/issues/228)) ([`e0264dd`](https://github.com/docling-project/docling-parse/commit/e0264dd22ddc204096290628ddbe85975aa79cc4))
+* Use only development groups and not extras ([#225](https://github.com/docling-project/docling-parse/issues/225)) ([`3eb7241`](https://github.com/docling-project/docling-parse/commit/3eb724169686c3fc0c7dcb24936ff06913a7966a))
+
+## [v5.3.3](https://github.com/docling-project/docling-parse/releases/tag/v5.3.3) - 2026-02-20
+
+### Fix
+
+* Replace fixed-size utf8::append buffers with std::back_inserter to prevent segfaults ([#224](https://github.com/docling-project/docling-parse/issues/224)) ([`237cef6`](https://github.com/docling-project/docling-parse/commit/237cef698a748049ea1c8eb534692085814880be))
+* Bridge PointerHolder<T> to std::shared_ptr<T> for qpdf 10.x + ([#221](https://github.com/docling-project/docling-parse/issues/221)) ([`b0817db`](https://github.com/docling-project/docling-parse/commit/b0817dbac14dee836ba274823c66337c2047b413))
+
+## [v5.3.2](https://github.com/docling-project/docling-parse/releases/tag/v5.3.2) - 2026-02-17
+
+### Fix
+
+* Rotated pages (missing commits) ([#219](https://github.com/docling-project/docling-parse/issues/219)) ([`6d98479`](https://github.com/docling-project/docling-parse/commit/6d984796a9e4c168019404581dbb963a0ce4c2b0))
+
+## [v5.3.1](https://github.com/docling-project/docling-parse/releases/tag/v5.3.1) - 2026-02-17
+
+### Fix
+
+* Deal with image containing rotated pages ([#217](https://github.com/docling-project/docling-parse/issues/217)) ([`0b592f6`](https://github.com/docling-project/docling-parse/commit/0b592f6d09fc20b0347d452b6a82d064d1a6e7dc))
+
+## [v5.3.0](https://github.com/docling-project/docling-parse/releases/tag/v5.3.0) - 2026-02-16
+
+### Feature
+
+* Refactor pdf resources to pdf page item ([#215](https://github.com/docling-project/docling-parse/issues/215)) ([`e7812a1`](https://github.com/docling-project/docling-parse/commit/e7812a122ae07a08318c74daac78214e36407954))
+* Refactored the code and removed a lot of extra json parameters ([#213](https://github.com/docling-project/docling-parse/issues/213)) ([`67d2922`](https://github.com/docling-project/docling-parse/commit/67d2922913b4579506c6525642170c5196e2791a))
+* Removing the json from the pdf-parser ([#210](https://github.com/docling-project/docling-parse/issues/210)) ([`3272dd8`](https://github.com/docling-project/docling-parse/commit/3272dd8d0b5f94f509555cf37a7517af570699a4))
+* Renaming lines to shapes and enriching with graphics (color, filling and stroking) ([#209](https://github.com/docling-project/docling-parse/issues/209)) ([`ea5f1d8`](https://github.com/docling-project/docling-parse/commit/ea5f1d8d7ba6d6b845fd5394c9dcf8eaba015657))
+* Add decoding config to decode_page ([#208](https://github.com/docling-project/docling-parse/issues/208)) ([`f01ce84`](https://github.com/docling-project/docling-parse/commit/f01ce848aa102a2a9440d3f2ddf34c228a002183))
+* Add-image-extraction ([#207](https://github.com/docling-project/docling-parse/issues/207)) ([`25672da`](https://github.com/docling-project/docling-parse/commit/25672da1e8a5bfb3994bf8fa5fc3a888ea3ec1ae))
+
+### Fix
+
+* Recursively traverse parent chain for inherited MediaBox ([#204](https://github.com/docling-project/docling-parse/issues/204)) ([`bb0b4ef`](https://github.com/docling-project/docling-parse/commit/bb0b4ef0b147bdaf1eabce1213bef4389308c4a9))
+
+### Performance
+
+* Improve recursive form xobject ([#212](https://github.com/docling-project/docling-parse/issues/212)) ([`2fd79a0`](https://github.com/docling-project/docling-parse/commit/2fd79a05c583cd20c43442078991c023b519e80d))
+* Default cmap speedup ([#203](https://github.com/docling-project/docling-parse/issues/203)) ([`82a0aaa`](https://github.com/docling-project/docling-parse/commit/82a0aaa791c6512a4a06ec2169dbf4c970c87993))
+
 ## [v5.2.0](https://github.com/docling-project/docling-parse/releases/tag/v5.2.0) - 2026-01-30
 
 ### Feature

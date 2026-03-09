@@ -133,39 +133,39 @@ namespace pdflib
 
     // General graphics state [Table 57 – Graphics State Operators p 127/135]
 
-    void w(std::vector<qpdf_instruction>& instructions);
-    void J(std::vector<qpdf_instruction>& instructions);
-    void j(std::vector<qpdf_instruction>& instructions);
-    void M(std::vector<qpdf_instruction>& instructions);
+    void w(std::vector<qpdf_stream_instruction>& instructions);
+    void J(std::vector<qpdf_stream_instruction>& instructions);
+    void j(std::vector<qpdf_stream_instruction>& instructions);
+    void M(std::vector<qpdf_stream_instruction>& instructions);
 
-    void d(std::vector<qpdf_instruction>& instructions);
-    void ri(std::vector<qpdf_instruction>& instructions);
-    void i(std::vector<qpdf_instruction>& instructions);
-    void gs(std::vector<qpdf_instruction>& instructions);
+    void d(std::vector<qpdf_stream_instruction>& instructions);
+    void ri(std::vector<qpdf_stream_instruction>& instructions);
+    void i(std::vector<qpdf_stream_instruction>& instructions);
+    void gs(std::vector<qpdf_stream_instruction>& instructions);
     
     // color-scheme Table 74 – Colour Operators [p 171/171]
 
-    void CS(std::vector<qpdf_instruction>& instructions);
-    void cs(std::vector<qpdf_instruction>& instructions);
+    void CS(std::vector<qpdf_stream_instruction>& instructions);
+    void cs(std::vector<qpdf_stream_instruction>& instructions);
 
-    void SC(std::vector<qpdf_instruction>& instructions);
-    void SCN(std::vector<qpdf_instruction>& instructions);
+    void SC(std::vector<qpdf_stream_instruction>& instructions);
+    void SCN(std::vector<qpdf_stream_instruction>& instructions);
 
-    void sc(std::vector<qpdf_instruction>& instructions);
-    void scn(std::vector<qpdf_instruction>& instructions);
+    void sc(std::vector<qpdf_stream_instruction>& instructions);
+    void scn(std::vector<qpdf_stream_instruction>& instructions);
     
-    void G(std::vector<qpdf_instruction>& instructions);
-    void g(std::vector<qpdf_instruction>& instructions);
+    void G(std::vector<qpdf_stream_instruction>& instructions);
+    void g(std::vector<qpdf_stream_instruction>& instructions);
 
-    void RG(std::vector<qpdf_instruction>& instructions);
-    void rg(std::vector<qpdf_instruction>& instructions);
+    void RG(std::vector<qpdf_stream_instruction>& instructions);
+    void rg(std::vector<qpdf_stream_instruction>& instructions);
 
-    void K(std::vector<qpdf_instruction>& instructions);
-    void k(std::vector<qpdf_instruction>& instructions);
+    void K(std::vector<qpdf_stream_instruction>& instructions);
+    void k(std::vector<qpdf_stream_instruction>& instructions);
 
     // shading
 
-    void sh(std::vector<qpdf_instruction>& instructions);
+    void sh(std::vector<qpdf_stream_instruction>& instructions);
 
     // Public getters for graphics state properties
     double get_line_width() const { return line_width; }
@@ -181,7 +181,7 @@ namespace pdflib
 
   private:
 
-    bool verify(std::vector<qpdf_instruction>& instructions,
+    bool verify(std::vector<qpdf_stream_instruction>& instructions,
 		std::size_t num_instr, std::string name);
     
   private:
@@ -263,7 +263,7 @@ namespace pdflib
     return *this;
   }
 
-  bool pdf_state<GRPH>::verify(std::vector<qpdf_instruction>& instructions,
+  bool pdf_state<GRPH>::verify(std::vector<qpdf_stream_instruction>& instructions,
 			       std::size_t num_instr, std::string name)
   {
     if(instructions.size()==num_instr)
@@ -296,28 +296,28 @@ namespace pdflib
     return false;
   }
   
-  void pdf_state<GRPH>::w(std::vector<qpdf_instruction>& instructions)
+  void pdf_state<GRPH>::w(std::vector<qpdf_stream_instruction>& instructions)
   {
     if(not verify(instructions, 1, __FUNCTION__) ) { return; }
     
     line_width = instructions[0].to_double();
   }
 
-  void pdf_state<GRPH>::J(std::vector<qpdf_instruction>& instructions)
+  void pdf_state<GRPH>::J(std::vector<qpdf_stream_instruction>& instructions)
   {
     if(not verify(instructions, 1, __FUNCTION__) ) { return; }
     
     line_cap = instructions[0].to_int();
   }
 
-  void pdf_state<GRPH>::j(std::vector<qpdf_instruction>& instructions)
+  void pdf_state<GRPH>::j(std::vector<qpdf_stream_instruction>& instructions)
   {
     if(not verify(instructions, 1, __FUNCTION__) ) { return; }
     
     line_join = instructions[0].to_int();
   }
 
-  void pdf_state<GRPH>::M(std::vector<qpdf_instruction>& instructions)
+  void pdf_state<GRPH>::M(std::vector<qpdf_stream_instruction>& instructions)
   {
     if(not verify(instructions, 1, __FUNCTION__) ) { return; }
     
@@ -325,7 +325,7 @@ namespace pdflib
   }
   
   // Table 56 – Examples of Line Dash Patterns [p 127/135]
-  void pdf_state<GRPH>::d(std::vector<qpdf_instruction>& instructions)
+  void pdf_state<GRPH>::d(std::vector<qpdf_stream_instruction>& instructions)
   {
     if(not verify(instructions, 2, __FUNCTION__) ) { return; }
  
@@ -378,12 +378,12 @@ namespace pdflib
       }
   }
 
-  void pdf_state<GRPH>::ri(std::vector<qpdf_instruction>& instructions)
+  void pdf_state<GRPH>::ri(std::vector<qpdf_stream_instruction>& instructions)
   {
     LOG_S(WARNING) << "implement " << __FUNCTION__ << ": " << instructions.size();
   }
 
-  void pdf_state<GRPH>::i(std::vector<qpdf_instruction>& instructions)
+  void pdf_state<GRPH>::i(std::vector<qpdf_stream_instruction>& instructions)
   {
     if(not verify(instructions, 1, __FUNCTION__) ) { return; }
     
@@ -399,7 +399,7 @@ namespace pdflib
       }
   }
 
-  void pdf_state<GRPH>::gs(std::vector<qpdf_instruction>& instructions)
+  void pdf_state<GRPH>::gs(std::vector<qpdf_stream_instruction>& instructions)
   {
     if(not verify(instructions, 1, __FUNCTION__) ) { return; }
     
@@ -416,37 +416,37 @@ namespace pdflib
       }
   }
 
-  void pdf_state<GRPH>::CS(std::vector<qpdf_instruction>& instructions)
+  void pdf_state<GRPH>::CS(std::vector<qpdf_stream_instruction>& instructions)
   {
     LOG_S(WARNING) << "implement " << __FUNCTION__ << ": " << instructions.size();
   }
 
-  void pdf_state<GRPH>::cs(std::vector<qpdf_instruction>& instructions)
+  void pdf_state<GRPH>::cs(std::vector<qpdf_stream_instruction>& instructions)
   {
     LOG_S(WARNING) << "implement " << __FUNCTION__ << ": " << instructions.size();
   }
   
-  void pdf_state<GRPH>::SC(std::vector<qpdf_instruction>& instructions)
+  void pdf_state<GRPH>::SC(std::vector<qpdf_stream_instruction>& instructions)
   {
     LOG_S(WARNING) << "implement " << __FUNCTION__ << ": " << instructions.size();
   }
 
-  void pdf_state<GRPH>::SCN(std::vector<qpdf_instruction>& instructions)
+  void pdf_state<GRPH>::SCN(std::vector<qpdf_stream_instruction>& instructions)
   {
     LOG_S(WARNING) << "implement " << __FUNCTION__ << ": " << instructions.size();
   }
   
-  void pdf_state<GRPH>::sc(std::vector<qpdf_instruction>& instructions)
+  void pdf_state<GRPH>::sc(std::vector<qpdf_stream_instruction>& instructions)
   {
     LOG_S(WARNING) << "implement " << __FUNCTION__ << ": " << instructions.size();
   }
 
-  void pdf_state<GRPH>::scn(std::vector<qpdf_instruction>& instructions)
+  void pdf_state<GRPH>::scn(std::vector<qpdf_stream_instruction>& instructions)
   {
     LOG_S(WARNING) << "implement " << __FUNCTION__ << ": " << instructions.size();
   }
   
-  void pdf_state<GRPH>::G(std::vector<qpdf_instruction>& instructions)
+  void pdf_state<GRPH>::G(std::vector<qpdf_stream_instruction>& instructions)
   {
     if(not verify(instructions, 1, __FUNCTION__) ) { return; }
     
@@ -459,7 +459,7 @@ namespace pdflib
     rgb_stroking_ops = {r, g, b};
   }
 
-  void pdf_state<GRPH>::g(std::vector<qpdf_instruction>& instructions)
+  void pdf_state<GRPH>::g(std::vector<qpdf_stream_instruction>& instructions)
   {
     if(not verify(instructions, 1, __FUNCTION__) ) { return; }
     
@@ -472,7 +472,7 @@ namespace pdflib
     rgb_stroking_ops = {r, g, b};
   }
   
-  void pdf_state<GRPH>::RG(std::vector<qpdf_instruction>& instructions)
+  void pdf_state<GRPH>::RG(std::vector<qpdf_stream_instruction>& instructions)
   {
     if(not verify(instructions, 3, __FUNCTION__) ) { return; }
     
@@ -485,7 +485,7 @@ namespace pdflib
     rgb_stroking_ops = {r, g, b};
   }
 
-  void pdf_state<GRPH>::rg(std::vector<qpdf_instruction>& instructions)
+  void pdf_state<GRPH>::rg(std::vector<qpdf_stream_instruction>& instructions)
   {
     //assert(instructions.size()==3);
     if(not verify(instructions, 3, __FUNCTION__) ) { return; }
@@ -499,7 +499,7 @@ namespace pdflib
     rgb_filling_ops = {r, g, b};
   }
   
-  void pdf_state<GRPH>::K(std::vector<qpdf_instruction>& instructions)
+  void pdf_state<GRPH>::K(std::vector<qpdf_stream_instruction>& instructions)
   {
     if(not verify(instructions, 4, __FUNCTION__) ) { return; }
     
@@ -517,7 +517,7 @@ namespace pdflib
     rgb_stroking_ops = {r, g, b};
   }
 
-  void pdf_state<GRPH>::k(std::vector<qpdf_instruction>& instructions)
+  void pdf_state<GRPH>::k(std::vector<qpdf_stream_instruction>& instructions)
   {
     if(not verify(instructions, 4, __FUNCTION__) ) { return; }
     

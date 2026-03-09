@@ -1,18 +1,18 @@
 //-*-C++-*-
 
-#ifndef PDF_PAGE_DIMENSION_RESOURCE_H
-#define PDF_PAGE_DIMENSION_RESOURCE_H
+#ifndef PAGE_ITEM_DIMENSION_H
+#define PAGE_ITEM_DIMENSION_H
 
 namespace pdflib
 {
 
   template<>
-  class pdf_resource<PAGE_DIMENSION>
+  class page_item<PAGE_DIMENSION>
   {
   public:
 
-    pdf_resource();
-    ~pdf_resource();
+    page_item();
+    ~page_item();
     
     void set_page_boundaries(std::string page_boundary);
     
@@ -49,7 +49,7 @@ namespace pdflib
     std::array<double, 4> art_bbox;
   };
 
-  pdf_resource<PAGE_DIMENSION>::pdf_resource():
+  page_item<PAGE_DIMENSION>::page_item():
     initialised(false),
     page_boundary(""),
     
@@ -63,10 +63,10 @@ namespace pdflib
     art_bbox({0,0,0,0})
   {}
 
-  pdf_resource<PAGE_DIMENSION>::~pdf_resource()
+  page_item<PAGE_DIMENSION>::~page_item()
   {}
 
-  void pdf_resource<PAGE_DIMENSION>::set_page_boundaries(std::string page_boundary_)
+  void page_item<PAGE_DIMENSION>::set_page_boundaries(std::string page_boundary_)
   {
     page_boundary = page_boundary_;
     
@@ -87,7 +87,7 @@ namespace pdflib
       }
   }
   
-  nlohmann::json pdf_resource<PAGE_DIMENSION>::get()
+  nlohmann::json page_item<PAGE_DIMENSION>::get()
   {
     nlohmann::json result;
     {
@@ -109,51 +109,82 @@ namespace pdflib
     return result;
   }
 
-  std::pair<double, double> pdf_resource<PAGE_DIMENSION>::rotate(int my_angle)
+  std::pair<double, double> page_item<PAGE_DIMENSION>::rotate(int my_angle)
   {
-    angle -= my_angle;
-
     LOG_S(INFO) << "my_angle: " << my_angle;
     
-    utils::values::rotate_inplace(my_angle, media_bbox);
+    // normalize the angle (after rotation, it should be zero)
+    angle -= my_angle;
 
-    LOG_S(INFO) << "media: "
+    LOG_S(INFO) << "media (before): "
 		<< media_bbox[0] << ", "
 		<< media_bbox[1] << ", "
 		<< media_bbox[2] << ", "
 		<< media_bbox[3];
     
-    utils::values::rotate_inplace(my_angle, crop_bbox);
-
-    LOG_S(INFO) << "crop: "
+    LOG_S(INFO) << "crop (before): "
 		<< crop_bbox[0] << ", "
 		<< crop_bbox[1] << ", "
 		<< crop_bbox[2] << ", "
 		<< crop_bbox[3];
+
+    std::pair<double, double> delta = {0.0, 0.0};
+    
+    switch(my_angle)
+      {
+      case 0:
+	{
+	  delta = {0.0, 0.0};
+	}
+	break;
 	
-    utils::values::rotate_inplace(my_angle, bleed_bbox);
-    utils::values::rotate_inplace(my_angle, trim_bbox);
-    utils::values::rotate_inplace(my_angle, art_bbox);
+      case 90:
+	{
+	  delta = {
+	    0.0,
+	    std::abs(media_bbox[2])
+	  };
+	}
+	break;
 
-    utils::values::rotate_inplace(my_angle, bbox);
-    
-    std::pair<double, double> delta = {0.0, std::abs(media_bbox[3])};
-    
-    media_bbox[3] += 2*delta.second;
-    crop_bbox[3] += 2*delta.second;
-    bleed_bbox[3] += 2*delta.second;
-    trim_bbox[3] += 2*delta.second;
-    art_bbox[3] += 2*delta.second;
-    
-    bbox[3] += 2*delta.second;
+      case 180:
+	{
+	  delta = {
+	    std::abs(media_bbox[2]),
+	    std::abs(media_bbox[3])
+	  };
+	}
+	break;
 
-    LOG_S(INFO) << "crop: "
+      case 270:
+	{
+	  delta = {
+	    std::abs(media_bbox[3]),
+	    0.0	    
+	  };	  
+	}
+	break;
+	
+      default:
+	{
+	  LOG_S(WARNING) << "might be unsupported rotation angle: " << my_angle;
+	}
+      }
+
+    utils::values::transform_bottomleft_bbox_inplace(my_angle, delta, crop_bbox);
+    utils::values::transform_bottomleft_bbox_inplace(my_angle, delta, media_bbox);
+    utils::values::transform_bottomleft_bbox_inplace(my_angle, delta, trim_bbox);
+    utils::values::transform_bottomleft_bbox_inplace(my_angle, delta, bleed_bbox);
+    utils::values::transform_bottomleft_bbox_inplace(my_angle, delta, art_bbox);
+    utils::values::transform_bottomleft_bbox_inplace(my_angle, delta, bbox);
+    
+    LOG_S(INFO) << "crop (after): "
 		<< crop_bbox[0] << ", "
 		<< crop_bbox[1] << ", "
 		<< crop_bbox[2] << ", "
 		<< crop_bbox[3];
 
-    LOG_S(INFO) << "bbox: "
+    LOG_S(INFO) << "bbox (after): "
 		<< bbox[0] << ", "
 		<< bbox[1] << ", "
 		<< bbox[2] << ", "
@@ -161,8 +192,9 @@ namespace pdflib
     
     return delta;
   }
-
-  std::array<double, 4> pdf_resource<PAGE_DIMENSION>::normalize_page_boundaries(std::array<double, 4> bbox, std::string name)
+  
+  
+  std::array<double, 4> page_item<PAGE_DIMENSION>::normalize_page_boundaries(std::array<double, 4> bbox, std::string name)
   {
     LOG_S(INFO) << __FUNCTION__;
     
@@ -189,7 +221,7 @@ namespace pdflib
     return bbox;
   }
   
-  bool pdf_resource<PAGE_DIMENSION>::init_from(nlohmann::json& data)
+  bool page_item<PAGE_DIMENSION>::init_from(nlohmann::json& data)
   {
     //LOG_S(INFO) << "reading: " << data.dump(2);
     LOG_S(INFO) << __FUNCTION__;
@@ -228,7 +260,7 @@ namespace pdflib
     return false;
   }
   
-  std::array<double, 4> pdf_resource<PAGE_DIMENSION>::qpdf_bbox_to_array(QPDFObjectHandle qpdf_arr,
+  std::array<double, 4> page_item<PAGE_DIMENSION>::qpdf_bbox_to_array(QPDFObjectHandle qpdf_arr,
 								       std::string name)
   {
     std::array<double, 4> result = {0, 0, 0, 0};
@@ -263,7 +295,7 @@ namespace pdflib
   }
 
   // Table 30, p 85
-  void pdf_resource<PAGE_DIMENSION>::execute(QPDFObjectHandle qpdf_page)
+  void page_item<PAGE_DIMENSION>::execute(QPDFObjectHandle qpdf_page)
   {
     LOG_S(INFO) << __FUNCTION__;
 

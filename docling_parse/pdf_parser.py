@@ -13,12 +13,14 @@ from docling_core.types.doc.page import (
     BoundingRectangle,
     ColorRGBA,
     Coord2D,
+    PdfHyperlink,
     PdfMetaData,
     PdfPageBoundaryType,
     PdfPageGeometry,
     PdfShape,
     PdfTableOfContents,
     PdfTextCell,
+    PdfWidget,
     SegmentedPdfPage,
     TextCell,
     TextDirection,
@@ -27,7 +29,9 @@ from PIL import Image as PILImage
 from pydantic import BaseModel, ConfigDict
 
 from docling_parse.pdf_parsers import DecodePageConfig  # type: ignore[import]
+from docling_parse.pdf_parsers import PageDecodeResult  # type: ignore[import]
 from docling_parse.pdf_parsers import pdf_parser  # type: ignore[import]
+from docling_parse.pdf_parsers import threaded_pdf_parser  # type: ignore[import]
 from docling_parse.pdf_parsers import (  # type: ignore[import]
     TIMING_KEY_CREATE_LINE_CELLS,
     TIMING_KEY_CREATE_WORD_CELLS,
@@ -44,8 +48,10 @@ from docling_parse.pdf_parsers import (  # type: ignore[import]
     TIMING_KEY_DECODE_XOBJECTS,
     TIMING_KEY_DECODE_XOBJECTS_TOTAL,
     TIMING_KEY_EXTRACT_ANNOTS_JSON,
+    TIMING_KEY_EXTRACT_DOC_ANNOTATIONS,
     TIMING_KEY_PROCESS_DOCUMENT_FROM_BYTESIO,
     TIMING_KEY_PROCESS_DOCUMENT_FROM_FILE,
+    TIMING_KEY_QPDF_PROCESS,
     TIMING_KEY_ROTATE_CONTENTS,
     TIMING_KEY_SANITISE_CONTENTS,
     TIMING_KEY_SANITIZE_CELLS,
@@ -425,13 +431,25 @@ class PdfDocument:
             coord_origin=CoordOrigin.BOTTOMLEFT,
         )
         art_bbox_obj = BoundingBox(
-            l=crop_bbox[0], b=crop_bbox[1], r=crop_bbox[2], t=crop_bbox[3]
+            l=crop_bbox[0],
+            b=crop_bbox[1],
+            r=crop_bbox[2],
+            t=crop_bbox[3],
+            coord_origin=CoordOrigin.BOTTOMLEFT,
         )
         media_bbox_obj = BoundingBox(
-            l=media_bbox[0], b=media_bbox[1], r=media_bbox[2], t=media_bbox[3]
+            l=media_bbox[0],
+            b=media_bbox[1],
+            r=media_bbox[2],
+            t=media_bbox[3],
+            coord_origin=CoordOrigin.BOTTOMLEFT,
         )
         crop_bbox_obj = BoundingBox(
-            l=crop_bbox[0], b=crop_bbox[1], r=crop_bbox[2], t=crop_bbox[3]
+            l=crop_bbox[0],
+            b=crop_bbox[1],
+            r=crop_bbox[2],
+            t=crop_bbox[3],
+            coord_origin=CoordOrigin.BOTTOMLEFT,
         )
 
         return PdfPageGeometry(
@@ -492,6 +510,15 @@ class PdfDocument:
             y_coords = shape.get_y()
             indices = shape.get_i()
 
+            """
+            print(f"{ind}\tlen(indices): {len(indices)} -> {len(x_coords)} -> {shape.get_rgb_filling_ops()}")
+            if len(indices)>2:
+                print(indices)
+
+            if ind>8:
+                break
+            """
+
             for l in range(0, len(indices), 2):
                 i0: int = indices[l + 0]
                 i1: int = indices[l + 1]
@@ -519,6 +546,59 @@ class PdfDocument:
                     rgb_filling=ColorRGBA(r=rgb_f[0], g=rgb_f[1], b=rgb_f[2]),
                 )
                 result.append(pdf_shape)
+
+        return result
+
+    def _to_widgets_from_decoder(self, widgets_container) -> List[PdfWidget]:
+        """Convert typed PdfWidgets container to list of PdfWidget objects."""
+        result: List[PdfWidget] = []
+
+        for ind, widget in enumerate(widgets_container):
+            rect = BoundingRectangle(
+                r_x0=widget.x0,
+                r_y0=widget.y0,
+                r_x1=widget.x1,
+                r_y1=widget.y0,
+                r_x2=widget.x1,
+                r_y2=widget.y1,
+                r_x3=widget.x0,
+                r_y3=widget.y1,
+            )
+            result.append(
+                PdfWidget(
+                    index=ind,
+                    rect=rect,
+                    widget_text=widget.text or None,
+                    widget_description=widget.description or None,
+                    widget_field_name=widget.field_name or None,
+                    widget_field_type=widget.field_type or None,
+                )
+            )
+
+        return result
+
+    def _to_hyperlinks_from_decoder(self, hyperlinks_container) -> List[PdfHyperlink]:
+        """Convert typed PdfHyperlinks container to list of PdfHyperlink objects."""
+        result: List[PdfHyperlink] = []
+
+        for ind, hyperlink in enumerate(hyperlinks_container):
+            rect = BoundingRectangle(
+                r_x0=hyperlink.x0,
+                r_y0=hyperlink.y0,
+                r_x1=hyperlink.x1,
+                r_y1=hyperlink.y0,
+                r_x2=hyperlink.x1,
+                r_y2=hyperlink.y1,
+                r_x3=hyperlink.x0,
+                r_y3=hyperlink.y1,
+            )
+            result.append(
+                PdfHyperlink(
+                    index=ind,
+                    rect=rect,
+                    uri=hyperlink.uri or None,
+                )
+            )
 
         return result
 
@@ -578,10 +658,7 @@ class PdfDocument:
 
             except Exception:
                 _log.debug(
-                    "Failed to extract image data for bitmap %d, "
-                    "falling back to placeholder",
-                    ind,
-                    exc_info=True,
+                    "Failed to extract image data for bitmap, falling back to placeholder"
                 )
 
             bitmap = BitmapResource(
@@ -601,6 +678,10 @@ class PdfDocument:
 
         char_cells = self._to_cells_from_decoder(page_decoder.get_char_cells())
         shapes = self._to_shapes_from_decoder(page_decoder.get_page_shapes())
+        widgets = self._to_widgets_from_decoder(page_decoder.get_page_widgets())
+        hyperlinks = self._to_hyperlinks_from_decoder(
+            page_decoder.get_page_hyperlinks()
+        )
         bitmap_resources = self._to_bitmap_resources_from_decoder(
             page_decoder.get_page_images()
         )
@@ -615,6 +696,8 @@ class PdfDocument:
             has_chars=len(char_cells) > 0,
             bitmap_resources=bitmap_resources,
             shapes=shapes,
+            widgets=widgets,
+            hyperlinks=hyperlinks,
         )
 
         if page_decoder.has_word_cells():
@@ -770,3 +853,123 @@ class DoclingPdfParser:
              bool: True if the document was successfully loaded, False otherwise.)")
         """
         return self.parser.load_document_from_bytesio(key=key, bytes_io=data)
+
+
+class ThreadedPdfParserConfig(BaseModel):
+    """Configuration for the threaded PDF parser.
+
+    Attributes:
+        loglevel: Logging level ('fatal', 'error', 'warning', 'info').
+        threads: Number of worker threads for parallel page decoding.
+        max_concurrent_results: Maximum results buffered before workers pause.
+    """
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    loglevel: str = "fatal"
+    threads: int = 4
+    max_concurrent_results: int = 32
+
+
+class DoclingThreadedPdfParser:
+    """Threaded PDF parser that decodes pages from multiple documents in parallel.
+
+    Usage::
+
+        parser_config = ThreadedPdfParserConfig(loglevel="fatal", threads=4, max_concurrent_results=32)
+        decode_config = DecodePageConfig()
+
+        parser = DoclingThreadedPdfParser(parser_config=parser_config, decode_config=decode_config)
+
+        for source in sources:
+            parser.load(source)
+
+        while parser.has_tasks():
+            task = parser.get_task()
+
+            if task.success:
+                page_decoder, timings = task.get()
+            else:
+                error_msg = task.error()
+    """
+
+    def __init__(
+        self,
+        parser_config: Optional[ThreadedPdfParserConfig] = None,
+        decode_config: Optional[DecodePageConfig] = None,
+    ):
+        if parser_config is None:
+            parser_config = ThreadedPdfParserConfig()
+        if decode_config is None:
+            decode_config = DecodePageConfig()
+
+        self._parser = threaded_pdf_parser(
+            loglevel=parser_config.loglevel,
+            num_threads=parser_config.threads,
+            max_concurrent_results=parser_config.max_concurrent_results,
+            config=decode_config,
+        )
+
+    def load(
+        self,
+        path_or_stream: Union[str, Path, BytesIO],
+        password: Optional[str] = None,
+    ) -> str:
+        """Load a document for parallel processing.
+
+        Parameters:
+            path_or_stream: File path or BytesIO object.
+            password: Optional password for protected files.
+
+        Returns:
+            str: The document key.
+        """
+        if isinstance(path_or_stream, str):
+            path_or_stream = Path(path_or_stream)
+
+        if isinstance(path_or_stream, Path):
+            key = f"key={str(path_or_stream)}"
+            success = self._parser.load_document(
+                key=key, filename=str(path_or_stream).encode("utf8"), password=password
+            )
+        elif isinstance(path_or_stream, BytesIO):
+            hasher = hashlib.sha256(usedforsecurity=False)
+            while chunk := path_or_stream.read(8192):
+                hasher.update(chunk)
+            path_or_stream.seek(0)
+            hash_val = hasher.hexdigest()
+
+            key = f"key={hash_val}"
+            success = self._parser.load_document_from_bytesio(
+                key=key, bytes_io=path_or_stream, password=password
+            )
+        else:
+            raise TypeError(
+                f"Expected str, Path, or BytesIO, got {type(path_or_stream)}"
+            )
+
+        if not success:
+            raise RuntimeError(f"Failed to load document with key {key}")
+
+        return key
+
+    def has_tasks(self) -> bool:
+        """Check if there are remaining tasks to consume.
+
+        On first call, builds the task queue and starts worker threads.
+
+        Returns:
+            bool: True if there are remaining results to consume.
+        """
+        return self._parser.has_tasks()
+
+    def get_task(self) -> "PageDecodeResult":
+        """Get the next completed page decode result.
+
+        Blocks until a result is available.
+
+        Returns:
+            PageDecodeResult: The result with doc_key, page_number, success flag.
+                Use task.get() to get (PdfPageDecoder, timings) or task.error() for error message.
+        """
+        return self._parser.get_task()

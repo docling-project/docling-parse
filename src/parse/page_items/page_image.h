@@ -1,7 +1,7 @@
 //-*-C++-*-
 
-#ifndef PDF_PAGE_IMAGE_RESOURCE_H
-#define PDF_PAGE_IMAGE_RESOURCE_H
+#ifndef PAGE_ITEM_IMAGE_H
+#define PAGE_ITEM_IMAGE_H
 
 // JPEG correction helpers
 #include <parse/utils/jpeg/jpeg_utils.h>
@@ -10,12 +10,12 @@ namespace pdflib
 {
 
   template<>
-  class pdf_resource<PAGE_IMAGE>
+  class page_item<PAGE_IMAGE>
   {
   public:
 
-    pdf_resource();
-    ~pdf_resource();
+    page_item();
+    ~page_item();
 
     nlohmann::json get();
 
@@ -74,7 +74,7 @@ namespace pdflib
     std::array<int, 3> rgb_filling_ops  = {0, 0, 0};
   };
 
-  pdf_resource<PAGE_IMAGE>::pdf_resource():
+  page_item<PAGE_IMAGE>::page_item():
     x0(0), y0(0), x1(0), y1(0),
     xobject_key(),
     image_width(0),
@@ -87,10 +87,10 @@ namespace pdflib
     decoded_stream_data(nullptr)
   {}
 
-  pdf_resource<PAGE_IMAGE>::~pdf_resource()
+  page_item<PAGE_IMAGE>::~page_item()
   {}
 
-  std::vector<std::string> pdf_resource<PAGE_IMAGE>::header = {
+  std::vector<std::string> page_item<PAGE_IMAGE>::header = {
     "x0",
     "y0",
     "x1",
@@ -106,7 +106,7 @@ namespace pdflib
     "rgb-filling"
   };
 
-  nlohmann::json pdf_resource<PAGE_IMAGE>::get()
+  nlohmann::json page_item<PAGE_IMAGE>::get()
   {
     nlohmann::json image;
 
@@ -130,14 +130,28 @@ namespace pdflib
     return image;
   }
 
-  void pdf_resource<PAGE_IMAGE>::rotate(int angle, std::pair<double, double> delta)
+  void page_item<PAGE_IMAGE>::rotate(int angle, std::pair<double, double> delta)
   {
+    // LOG_S(INFO) << "rotate & translate image: (x0: " << x0 << ", y0: " << y0 << ", x1: " << x1 << ", y1: " << y1 << ")"; 
+    
     utils::values::rotate_inplace(angle, x0, y0);
     utils::values::rotate_inplace(angle, x1, y1);
 
     utils::values::translate_inplace(delta, x0, y0);
     utils::values::translate_inplace(delta, x1, y1);
 
+    // LOG_S(INFO) << "into (x0: " << x0 << ", y0: " << y0 << ", x1: " << x1 << ", y1: " << y1 << ")"; 
+
+    // The bounding box always needs to have x0<x1 and y0<y1. If you want
+    // to keep the orientation of the image, we will need to add the rectangle
+    // as demonstrated in the page_cell.
+    
+    double x_min = std::min(x0, x1);
+    double x_max = std::max(x0, x1);
+
+    x0 = x_min;
+    x1 = x_max;
+    
     double y_min = std::min(y0, y1);
     double y_max = std::max(y0, y1);
 
@@ -145,18 +159,29 @@ namespace pdflib
     y1 = y_max;
   }
 
-  std::string pdf_resource<PAGE_IMAGE>::get_image_extension() const
+  std::string page_item<PAGE_IMAGE>::get_image_extension() const
   {
+    bool has_flate = false;
+
     for(auto const& f : filters)
       {
-        if(f == "/DCTDecode")  return ".jpg";
-        if(f == "/JPXDecode")  return ".jp2";
+        if(f == "/DCTDecode")   return ".jpg";
+        if(f == "/JPXDecode")   return ".jp2";
         if(f == "/JBIG2Decode") return ".jb2";
+        if(f == "/FlateDecode") has_flate = true;
       }
+
+    if(has_flate)
+      {
+        // Future: return ".png" for lossless export (requires libpng or lodepng).
+        return ".jpg";
+      }
+
+    LOG_S(WARNING) << "get_image_extension: no recognized filter, defaulting to .bin";
     return ".bin";
   }
 
-  void pdf_resource<PAGE_IMAGE>::save_to_file(std::filesystem::path const& path) const
+  void page_item<PAGE_IMAGE>::save_to_file(std::filesystem::path const& path) const
   {
     if(not raw_stream_data or raw_stream_data->getSize() == 0)
       {
@@ -235,7 +260,7 @@ namespace pdflib
                 << " bytes to " << path.string();
   }
 
-  void pdf_resource<PAGE_IMAGE>::save_decoded_to_file(std::filesystem::path const& path) const
+  void page_item<PAGE_IMAGE>::save_decoded_to_file(std::filesystem::path const& path) const
   {
     if(not decoded_stream_data or decoded_stream_data->getSize() == 0)
       {
@@ -257,18 +282,32 @@ namespace pdflib
                 << " bytes to " << path.string();
   }
 
-  std::string pdf_resource<PAGE_IMAGE>::get_image_format() const
+  std::string page_item<PAGE_IMAGE>::get_image_format() const
   {
+    // Image-format filters take priority — /FlateDecode is just transport
+    // compression and can appear alongside any of these.
+    bool has_flate = false;
+
     for(auto const& f : filters)
       {
-        if(f == "/DCTDecode")  { return "jpeg"; }
-        if(f == "/JPXDecode")  { return "jp2"; }
+        if(f == "/DCTDecode")   { return "jpeg"; }
+        if(f == "/JPXDecode")   { return "jp2"; }
         if(f == "/JBIG2Decode") { return "jbig2"; }
+        if(f == "/FlateDecode") { has_flate = true; }
       }
+
+    if(has_flate)
+      {
+        // /FlateDecode only (no image-format filter) → raw pixels after
+        // decompression.  We encode them as JPEG for a viewable output.
+        // Future: return "png" here for lossless export (requires libpng or lodepng).
+        return "jpeg";
+      }
+
     return "raw";
   }
 
-  std::string pdf_resource<PAGE_IMAGE>::get_pil_mode() const
+  std::string page_item<PAGE_IMAGE>::get_pil_mode() const
   {
     if(image_mask) { return "1"; }
     if(color_space == "/DeviceGray") { return "L"; }
@@ -281,12 +320,47 @@ namespace pdflib
     return "RGB";
   }
 
-  std::vector<unsigned char> pdf_resource<PAGE_IMAGE>::get_image_as_bytes() const
+  std::vector<unsigned char> page_item<PAGE_IMAGE>::get_image_as_bytes() const
   {
     std::string fmt = get_image_format();
 
     if(fmt == "jpeg")
       {
+        // Check whether the raw stream is actually JPEG-encoded (/DCTDecode)
+        // or raw pixels that we need to encode (e.g. /FlateDecode).
+        bool filters_have_dct = false;
+        for(auto const& f : filters) { if(f == "/DCTDecode") filters_have_dct = true; }
+
+        if(not filters_have_dct and decoded_stream_data and decoded_stream_data->getSize() > 0)
+          {
+            // Raw pixels (e.g. /FlateDecode) — encode to JPEG from the decoded stream,
+            // applying /Decode mapping (e.g. inversion for /DeviceGray with [1, 0]).
+            // Future: for lossless export, encode to PNG here instead
+            // (requires libpng or lodepng and a write_png_from_raw_pixels_to_memory() helper).
+            jpeg::jpeg_parameters params;
+            params.width              = image_width;
+            params.height             = image_height;
+            params.bits_per_component = bits_per_component;
+            params.color_space        = jpeg::to_color_space(color_space);
+            params.decode             = decode_array;
+            params.has_decode         = decode_present and not decode_array.empty();
+            params.image_mask         = image_mask;
+
+            auto result = jpeg::write_jpeg_from_raw_pixels_to_memory(
+                reinterpret_cast<unsigned char const*>(decoded_stream_data->getBuffer()),
+                static_cast<std::size_t>(decoded_stream_data->getSize()),
+                params);
+
+            if(not result.empty())
+              {
+                LOG_S(INFO) << "encoded raw pixels as JPEG in memory for xobject_key=" << xobject_key;
+                return result;
+              }
+
+            LOG_S(WARNING) << "JPEG encoding from raw pixels failed for xobject_key=" << xobject_key;
+            return {};
+          }
+
         if(not raw_stream_data or raw_stream_data->getSize() == 0)
           {
             LOG_S(WARNING) << "no raw stream data for JPEG image"
@@ -351,6 +425,7 @@ namespace pdflib
 
             if(not result.empty())
               {
+		LOG_S(INFO) << "corrected JPEG in image-buffer!";
                 return result;
               }
 
@@ -358,7 +433,11 @@ namespace pdflib
                            << xobject_key
                            << ", falling back to raw passthrough";
           }
-
+	else
+	  {
+	    LOG_S(INFO) << "JPEG does not need correction in image-buffer!";
+	  }
+	
         // Safe passthrough: return raw JPEG bytes
         auto* buf = reinterpret_cast<unsigned char const*>(
             raw_stream_data->getBuffer());

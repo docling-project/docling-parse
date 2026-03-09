@@ -16,7 +16,7 @@ namespace pdflib
 
   public:
 
-    std::vector<qpdf_instruction> instructions;
+    std::vector<qpdf_stream_instruction> instructions;
   };
 
   char_description::char_description()

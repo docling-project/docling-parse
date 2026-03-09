@@ -39,7 +39,7 @@ namespace pdflib
     QPDFObjectHandle get_grphs();
     QPDFObjectHandle get_xobjects();
 
-    std::vector<qpdf_instruction> parse_stream();
+    std::vector<qpdf_stream_instruction> parse_stream();
 
   private:
 
@@ -168,9 +168,9 @@ namespace pdflib
     return QPDFObjectHandle::newNull();
   }
 
-  std::vector<qpdf_instruction> pdf_resource<PAGE_XOBJECT_FORM>::parse_stream()
+  std::vector<qpdf_stream_instruction> pdf_resource<PAGE_XOBJECT_FORM>::parse_stream()
   {
-    std::vector<qpdf_instruction> stream;
+    std::vector<qpdf_stream_instruction> stream;
 
     // decode the stream
     try

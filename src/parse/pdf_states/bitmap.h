@@ -11,10 +11,10 @@ namespace pdflib
   {
   public:
 
-    pdf_state(const decode_page_config& config_,
+    pdf_state(const decode_config& config_,
               const pdf_state<GRPH>& grph_state_,
               std::array<double, 9>&    trafo_matrix_,
-              pdf_resource<PAGE_IMAGES>& page_images_,
+              page_item<PAGE_IMAGES>& page_images_,
               pdf_render_instructions&  instructions_);
 
     pdf_state(const pdf_state<BITMAP>& other);
@@ -27,21 +27,21 @@ namespace pdflib
 
   private:
 
-    const decode_page_config& config;
+    const decode_config& config;
     const pdf_state<GRPH>& grph_state;
 
     std::array<double, 9>& trafo_matrix;
 
-    pdf_resource<PAGE_IMAGES>& page_images;
+    page_item<PAGE_IMAGES>& page_images;
 
     pdf_render_instructions&  instructions;
   };
 
-  pdf_state<BITMAP>::pdf_state(const decode_page_config& config_,
+  pdf_state<BITMAP>::pdf_state(const decode_config& config_,
                                const pdf_state<GRPH>& grph_state_,
-                               std::array<double, 9>&    trafo_matrix_,
-                               pdf_resource<PAGE_IMAGES>& page_images_,
-                               pdf_render_instructions&  instructions_):
+                               std::array<double, 9>& trafo_matrix_,
+                               page_item<PAGE_IMAGES>& page_images_,
+                               pdf_render_instructions& instructions_):
     config(config_),
     grph_state(grph_state_),
     trafo_matrix(trafo_matrix_),
@@ -71,7 +71,7 @@ namespace pdflib
 
     LOG_S(INFO) << "starting to do " << __FUNCTION__;
     
-    pdf_resource<PAGE_IMAGE> image;
+    page_item<PAGE_IMAGE> image;
     {
       // FIXME clean up this crap
       std::array<double, 9> ctm = trafo_matrix;

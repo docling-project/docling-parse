@@ -1,33 +1,33 @@
 //-*-C++-*-
 
-#ifndef PDF_PAGE_SHAPES_RESOURCE_H
-#define PDF_PAGE_SHAPES_RESOURCE_H
+#ifndef PAGE_ITEM_SHAPES_H
+#define PAGE_ITEM_SHAPES_H
 
 namespace pdflib
 {
 
   template<>
-  class pdf_resource<PAGE_SHAPES>
+  class page_item<PAGE_SHAPES>
   {
-    typedef typename std::vector<pdf_resource<PAGE_SHAPE> >::iterator itr_type;
+    typedef typename std::vector<page_item<PAGE_SHAPE> >::iterator itr_type;
     
   public:
 
-    pdf_resource();
-    ~pdf_resource();
+    page_item();
+    ~page_item();
 
     nlohmann::json get();
     bool init_from(nlohmann::json& data);
 
     void rotate(int angle, std::pair<double, double> delta);
     
-    pdf_resource<PAGE_SHAPE>& operator[](size_t i);
+    page_item<PAGE_SHAPE>& operator[](size_t i);
 
     void clear();
     size_t size();
 
-    pdf_resource<PAGE_SHAPE>& back();
-    void push_back(pdf_resource<PAGE_SHAPE>& shape);
+    page_item<PAGE_SHAPE>& back();
+    void push_back(page_item<PAGE_SHAPE>& shape);
 
     itr_type begin() { return shapes.begin(); }
     itr_type end() { return shapes.end(); }
@@ -36,16 +36,16 @@ namespace pdflib
     
   private:
 
-    std::vector<pdf_resource<PAGE_SHAPE> > shapes;
+    std::vector<page_item<PAGE_SHAPE> > shapes;
   };
 
-  pdf_resource<PAGE_SHAPES>::pdf_resource()
+  page_item<PAGE_SHAPES>::page_item()
   {}
 
-  pdf_resource<PAGE_SHAPES>::~pdf_resource()
+  page_item<PAGE_SHAPES>::~page_item()
   {}
 
-  nlohmann::json pdf_resource<PAGE_SHAPES>::get()
+  nlohmann::json page_item<PAGE_SHAPES>::get()
   {
     nlohmann::json result = nlohmann::json::array();
 
@@ -60,7 +60,7 @@ namespace pdflib
     return result;
   }
 
-  bool pdf_resource<PAGE_SHAPES>::init_from(nlohmann::json& data)
+  bool page_item<PAGE_SHAPES>::init_from(nlohmann::json& data)
   {
     LOG_S(INFO) << __FUNCTION__;
     
@@ -79,7 +79,7 @@ namespace pdflib
     else
       {
 	std::stringstream ss;
-	ss << "can not initialise pdf_resource<PAGE_SHAPES> from "
+	ss << "can not initialise page_item<PAGE_SHAPES> from "
 	   << data.dump(2);
 
 	LOG_S(ERROR) << ss.str();
@@ -89,7 +89,7 @@ namespace pdflib
     return result;
   }
 
-  void pdf_resource<PAGE_SHAPES>::rotate(int angle, std::pair<double, double> delta)
+  void page_item<PAGE_SHAPES>::rotate(int angle, std::pair<double, double> delta)
   {
     LOG_S(INFO) << __FUNCTION__;
 
@@ -99,22 +99,22 @@ namespace pdflib
       }
   }
   
-  pdf_resource<PAGE_SHAPE>& pdf_resource<PAGE_SHAPES>::operator[](size_t i)
+  page_item<PAGE_SHAPE>& page_item<PAGE_SHAPES>::operator[](size_t i)
   {    
     return shapes.at(i);
   }
 
-  void pdf_resource<PAGE_SHAPES>::clear()
+  void page_item<PAGE_SHAPES>::clear()
   {
     shapes.clear();
   }
 
-  size_t pdf_resource<PAGE_SHAPES>::size()
+  size_t page_item<PAGE_SHAPES>::size()
   {
     return shapes.size();
   }
 
-  pdf_resource<PAGE_SHAPE>& pdf_resource<PAGE_SHAPES>::back()
+  page_item<PAGE_SHAPE>& page_item<PAGE_SHAPES>::back()
   {
     if(shapes.size()==0)
       {
@@ -126,7 +126,7 @@ namespace pdflib
     return shapes.back();
   }
 
-  void pdf_resource<PAGE_SHAPES>::push_back(pdf_resource<PAGE_SHAPE>& shape)
+  void page_item<PAGE_SHAPES>::push_back(page_item<PAGE_SHAPE>& shape)
   {
     shapes.push_back(shape);
   }

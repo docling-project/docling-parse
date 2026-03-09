@@ -45,11 +45,11 @@ namespace pdflib
     
   public:
 
-    pdf_state(const decode_page_config& config,
+    pdf_state(const decode_config& config,
               const pdf_state<GRPH>& grph_state_,
-              std::array<double, 9>&    trafo_matrix_,
-              pdf_resource<PAGE_SHAPES>& page_shapes_,
-	      pdf_render_instructions&  instructions_);
+              std::array<double, 9>& trafo_matrix_,
+              page_item<PAGE_SHAPES>& page_shapes_,
+	      pdf_render_instructions& instructions_);
 
     pdf_state(const pdf_state<SHAPE>& other);
 
@@ -57,41 +57,41 @@ namespace pdflib
 
     pdf_state<SHAPE>& operator=(const pdf_state<SHAPE>& other);
 
-    void m(std::vector<qpdf_instruction>& instructions);
-    void l(std::vector<qpdf_instruction>& instructions);
+    void m(std::vector<qpdf_stream_instruction>& instructions);
+    void l(std::vector<qpdf_stream_instruction>& instructions);
 
-    void c(std::vector<qpdf_instruction>& instructions);
-    void v(std::vector<qpdf_instruction>& instructions);
-    void y(std::vector<qpdf_instruction>& instructions);
+    void c(std::vector<qpdf_stream_instruction>& instructions);
+    void v(std::vector<qpdf_stream_instruction>& instructions);
+    void y(std::vector<qpdf_stream_instruction>& instructions);
 
-    void h(std::vector<qpdf_instruction>& instructions);
-    void re(std::vector<qpdf_instruction>& instructions);
+    void h(std::vector<qpdf_stream_instruction>& instructions);
+    void re(std::vector<qpdf_stream_instruction>& instructions);
 
-    void s(std::vector<qpdf_instruction>& instructions);
-    void S(std::vector<qpdf_instruction>& instructions);
+    void s(std::vector<qpdf_stream_instruction>& instructions);
+    void S(std::vector<qpdf_stream_instruction>& instructions);
 
-    void f(std::vector<qpdf_instruction>& instructions);
-    void fStar(std::vector<qpdf_instruction>& instructions);
+    void f(std::vector<qpdf_stream_instruction>& instructions);
+    void fStar(std::vector<qpdf_stream_instruction>& instructions);
 
-    void F(std::vector<qpdf_instruction>& instructions);
+    void F(std::vector<qpdf_stream_instruction>& instructions);
 
-    void B(std::vector<qpdf_instruction>& instructions);
-    void BStar(std::vector<qpdf_instruction>& instructions);
+    void B(std::vector<qpdf_stream_instruction>& instructions);
+    void BStar(std::vector<qpdf_stream_instruction>& instructions);
 
-    void b(std::vector<qpdf_instruction>& instructions);
-    void bStar(std::vector<qpdf_instruction>& instructions);
+    void b(std::vector<qpdf_stream_instruction>& instructions);
+    void bStar(std::vector<qpdf_stream_instruction>& instructions);
 
-    void W(std::vector<qpdf_instruction>& instructions);
-    void WStar(std::vector<qpdf_instruction>& instructions);
+    void W(std::vector<qpdf_stream_instruction>& instructions);
+    void WStar(std::vector<qpdf_stream_instruction>& instructions);
 
-    void n(std::vector<qpdf_instruction>& instructions);
+    void n(std::vector<qpdf_stream_instruction>& instructions);
 
   private:
 
-    bool verify(std::vector<qpdf_instruction>& instructions,
+    bool verify(std::vector<qpdf_stream_instruction>& instructions,
                 std::size_t num_instr, std::string name);
 
-    bool keep_shape(pdf_resource<PAGE_SHAPE>& shape);
+    bool keep_shape(page_item<PAGE_SHAPE>& shape);
 
     void close_last_path();
 
@@ -104,7 +104,7 @@ namespace pdflib
     void re(double x, double y,
             double w, double h);
 
-    void interpolate(pdf_resource<PAGE_SHAPE>& shape,
+    void interpolate(page_item<PAGE_SHAPE>& shape,
                      double x0, double y0,
                      double x1, double y1,
                      double x2, double y2,
@@ -113,26 +113,26 @@ namespace pdflib
 
   private:
 
-    const decode_page_config& config;
+    const decode_config& config;
     const pdf_state<GRPH>& grph_state;
 
-    std::array<double, 9>&    trafo_matrix;
+    std::array<double, 9>& trafo_matrix;
 
-    pdf_resource<PAGE_SHAPES>& page_shapes;
+    page_item<PAGE_SHAPES>& page_shapes;
 
-    pdf_render_instructions&  instructions;
+    pdf_render_instructions& instructions;
     
-    pdf_resource<PAGE_SHAPES>  curr_shapes;
-    pdf_resource<PAGE_SHAPES>  clippings;
+    page_item<PAGE_SHAPES> curr_shapes;
+    page_item<PAGE_SHAPES> clippings;
 
     clipping_path_mode_type clipping_path_mode;
   };
 
-  pdf_state<SHAPE>::pdf_state(const decode_page_config& config_,
+  pdf_state<SHAPE>::pdf_state(const decode_config& config_,
                               const pdf_state<GRPH>& grph_state_,
-                              std::array<double, 9>&    trafo_matrix_,
-                              pdf_resource<PAGE_SHAPES>& page_shapes_,
-			      pdf_render_instructions&  instructions_):
+                              std::array<double, 9>& trafo_matrix_,
+                              page_item<PAGE_SHAPES>& page_shapes_,
+			      pdf_render_instructions& instructions_):
     config(config_),
     grph_state(grph_state_),
 
@@ -192,7 +192,7 @@ namespace pdflib
     return *this;
   }
 
-  void pdf_state<SHAPE>::m(std::vector<qpdf_instruction>& instructions)
+  void pdf_state<SHAPE>::m(std::vector<qpdf_stream_instruction>& instructions)
   {
     if(not config.keep_shapes) { return; }
 
@@ -204,7 +204,7 @@ namespace pdflib
     this->m(x,y);
   }
 
-  void pdf_state<SHAPE>::l(std::vector<qpdf_instruction>& instructions)
+  void pdf_state<SHAPE>::l(std::vector<qpdf_stream_instruction>& instructions)
   {
     if(not config.keep_shapes) { return; }
 
@@ -216,29 +216,13 @@ namespace pdflib
     this->l(x,y);
   }
 
-  void pdf_state<SHAPE>::c(std::vector<qpdf_instruction>& instructions)
+  void pdf_state<SHAPE>::c(std::vector<qpdf_stream_instruction>& instructions)
   {
     if(not config.keep_shapes) { return; }
 
     if(not verify(instructions, 6, __FUNCTION__) ) { return; }
 
-    /*
-      if(curr_shapes.size()==0)
-      {
-      LOG_S(ERROR) << "applying 'c' on empty shapes";
-      return;
-      }
-    */
-
     auto& shape = curr_shapes.back();
-
-    /*
-      if(shape.size()==0)
-      {
-      LOG_S(ERROR) << "applying 'c' on empty shape";
-      return;
-      }
-    */
 
     std::pair<double, double> coor = shape.back();
 
@@ -257,7 +241,7 @@ namespace pdflib
     this->interpolate(shape, x0,y0, x1,y1, x2,y2, x3, y3, 8);
   }
 
-  void pdf_state<SHAPE>::v(std::vector<qpdf_instruction>& instructions)
+  void pdf_state<SHAPE>::v(std::vector<qpdf_stream_instruction>& instructions)
   {
     if(not config.keep_shapes) { return; }
 
@@ -281,7 +265,7 @@ namespace pdflib
     this->interpolate(shape, x0,y0, x1,y1, x2,y2, x3, y3, 8);
   }
 
-  void pdf_state<SHAPE>::y(std::vector<qpdf_instruction>& instructions)
+  void pdf_state<SHAPE>::y(std::vector<qpdf_stream_instruction>& instructions)
   {
     if(not config.keep_shapes) { return; }
 
@@ -305,7 +289,7 @@ namespace pdflib
     this->interpolate(shape, x0,y0, x1,y1, x2,y2, x3, y3, 8);
   }
 
-  void pdf_state<SHAPE>::h(std::vector<qpdf_instruction>& instructions)
+  void pdf_state<SHAPE>::h(std::vector<qpdf_stream_instruction>& instructions)
   {
     if(not config.keep_shapes) { return; }
 
@@ -314,7 +298,7 @@ namespace pdflib
     this->h();
   }
 
-  void pdf_state<SHAPE>::re(std::vector<qpdf_instruction>& instructions)
+  void pdf_state<SHAPE>::re(std::vector<qpdf_stream_instruction>& instructions)
   {
     if(not config.keep_shapes) { return; }
 
@@ -329,7 +313,7 @@ namespace pdflib
     this->re(x,y, w,h);
   }
 
-  void pdf_state<SHAPE>::s(std::vector<qpdf_instruction>& instructions)
+  void pdf_state<SHAPE>::s(std::vector<qpdf_stream_instruction>& instructions)
   {
     if(not config.keep_shapes) { return; }
 
@@ -338,14 +322,14 @@ namespace pdflib
     register_paths();
   }
 
-  void pdf_state<SHAPE>::S(std::vector<qpdf_instruction>& instructions)
+  void pdf_state<SHAPE>::S(std::vector<qpdf_stream_instruction>& instructions)
   {
     if(not config.keep_shapes) { return; }
 
     register_paths();
   }
 
-  void pdf_state<SHAPE>::f(std::vector<qpdf_instruction>& instructions)
+  void pdf_state<SHAPE>::f(std::vector<qpdf_stream_instruction>& instructions)
   {
     if(not config.keep_shapes) { return; }
 
@@ -354,14 +338,14 @@ namespace pdflib
     register_paths();
   }
 
-  void pdf_state<SHAPE>::F(std::vector<qpdf_instruction>& instructions)
+  void pdf_state<SHAPE>::F(std::vector<qpdf_stream_instruction>& instructions)
   {
     if(not config.keep_shapes) { return; }
 
     this->f(instructions);
   }
 
-  void pdf_state<SHAPE>::fStar(std::vector<qpdf_instruction>& instructions)
+  void pdf_state<SHAPE>::fStar(std::vector<qpdf_stream_instruction>& instructions)
   {
     if(not config.keep_shapes) { return; }
 
@@ -370,7 +354,7 @@ namespace pdflib
     register_paths();
   }
 
-  void pdf_state<SHAPE>::B(std::vector<qpdf_instruction>& instructions)
+  void pdf_state<SHAPE>::B(std::vector<qpdf_stream_instruction>& instructions)
   {
     if(not config.keep_shapes) { return; }
 
@@ -379,7 +363,7 @@ namespace pdflib
     register_paths();
   }
 
-  void pdf_state<SHAPE>::BStar(std::vector<qpdf_instruction>& instructions)
+  void pdf_state<SHAPE>::BStar(std::vector<qpdf_stream_instruction>& instructions)
   {
     if(not config.keep_shapes) { return; }
 
@@ -388,7 +372,7 @@ namespace pdflib
     register_paths();
   }
 
-  void pdf_state<SHAPE>::b(std::vector<qpdf_instruction>& instructions)
+  void pdf_state<SHAPE>::b(std::vector<qpdf_stream_instruction>& instructions)
   {
     if(not config.keep_shapes) { return; }
 
@@ -397,7 +381,7 @@ namespace pdflib
     register_paths();
   }
 
-  void pdf_state<SHAPE>::bStar(std::vector<qpdf_instruction>& instructions)
+  void pdf_state<SHAPE>::bStar(std::vector<qpdf_stream_instruction>& instructions)
   {
     if(not config.keep_shapes) { return; }
 
@@ -406,21 +390,21 @@ namespace pdflib
     register_paths();
   }
 
-  void pdf_state<SHAPE>::W(std::vector<qpdf_instruction>& instructions)
+  void pdf_state<SHAPE>::W(std::vector<qpdf_stream_instruction>& instructions)
   {
     if(not config.keep_shapes) { return; }
 
     clipping_path_mode = NONZERO_WINDING_NUMBER_RULE;
   }
 
-  void pdf_state<SHAPE>::WStar(std::vector<qpdf_instruction>& instructions)
+  void pdf_state<SHAPE>::WStar(std::vector<qpdf_stream_instruction>& instructions)
   {
     if(not config.keep_shapes) { return; }
 
     clipping_path_mode = EVEN_ODD_RULE;
   }
 
-  void pdf_state<SHAPE>::n(std::vector<qpdf_instruction>& instructions)
+  void pdf_state<SHAPE>::n(std::vector<qpdf_stream_instruction>& instructions)
   {
     if(not config.keep_shapes) { return; }
 
@@ -442,7 +426,7 @@ namespace pdflib
 
     curr_shapes.clear();
 
-    pdf_resource<PAGE_SHAPE> shape;
+    page_item<PAGE_SHAPE> shape;
     curr_shapes.push_back(shape);
   }
 
@@ -452,7 +436,7 @@ namespace pdflib
    ***
    *************************************/
 
-  bool pdf_state<SHAPE>::verify(std::vector<qpdf_instruction>& instructions,
+  bool pdf_state<SHAPE>::verify(std::vector<qpdf_stream_instruction>& instructions,
                                 std::size_t num_instr, std::string name)
   {
     if(instructions.size()==num_instr)
@@ -485,7 +469,7 @@ namespace pdflib
     return false;
   }
 
-  bool pdf_state<SHAPE>::keep_shape(pdf_resource<PAGE_SHAPE>& shape)
+  bool pdf_state<SHAPE>::keep_shape(page_item<PAGE_SHAPE>& shape)
   {
     if(shape.size()<2)
       {
@@ -553,6 +537,7 @@ namespace pdflib
         */
       }
 
+    LOG_S(INFO) << "#-current shapes: " << curr_shapes.size();
     for(int i=0; i<curr_shapes.size(); i++)
       {
         curr_shapes[i].transform(trafo_matrix);
@@ -581,6 +566,18 @@ namespace pdflib
               grph_state.get_rgb_stroking_ops(),
               grph_state.get_rgb_filling_ops());
 
+	    LOG_S(INFO) << "creating new shape " << page_shapes.size()
+			<< " with len(i): " << curr_shapes[i].get_i().size()
+			<< " with len(x): " << curr_shapes[i].get_x().size()
+			<< " with fill color: ("
+			<< curr_shapes[i].get_rgb_filling_ops()[0] << ", "
+			<< curr_shapes[i].get_rgb_filling_ops()[1] << ", "
+			<< curr_shapes[i].get_rgb_filling_ops()[1] << ")"
+			<< " with stroke color: ("
+			<< curr_shapes[i].get_rgb_stroking_ops()[0] << ", "
+			<< curr_shapes[i].get_rgb_stroking_ops()[1] << ", "
+			<< curr_shapes[i].get_rgb_stroking_ops()[1] << ")";
+	    
             page_shapes.push_back(curr_shapes[i]);
 
 	    {
@@ -591,7 +588,7 @@ namespace pdflib
           }
         else
           {
-            //LOG_S(WARNING) << " --> ignoring shape";
+            LOG_S(WARNING) << " --> ignoring shape";
           }
       }
     //LOG_S(INFO) << "--------------------------------------------------";
@@ -603,7 +600,7 @@ namespace pdflib
   {
     if(not config.keep_shapes) { return; }
 
-    pdf_resource<PAGE_SHAPE> shape;
+    page_item<PAGE_SHAPE> shape;
     curr_shapes.push_back(shape);
 
     this->l(x,y);
@@ -648,7 +645,7 @@ namespace pdflib
     shape.append(coor.first, coor.second);
 
     // add new shape segment
-    pdf_resource<PAGE_SHAPE> shape_;
+    page_item<PAGE_SHAPE> shape_;
     shape_.append(coor.first, coor.second);
 
     curr_shapes.push_back(shape_);
@@ -670,7 +667,7 @@ namespace pdflib
     this->h();
   }
 
-  void pdf_state<SHAPE>::interpolate(pdf_resource<PAGE_SHAPE>& shape,
+  void pdf_state<SHAPE>::interpolate(page_item<PAGE_SHAPE>& shape,
                                      double x0, double y0,
                                      double x1, double y1,
                                      double x2, double y2,

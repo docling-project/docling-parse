@@ -1,36 +1,36 @@
-(174.00, 714.79) (176.49, 714.79) (176.49, 724.25) (174.00, 724.25)        /R8  	<|special_separator|>
-(306.00, 714.79) (308.49, 714.79) (308.49, 724.25) (306.00, 724.25)        /R8  	<|special_separator|>
-(540.00, 714.79) (542.49, 714.79) (542.49, 724.25) (540.00, 724.25)        /R8  	<|special_separator|>
+(174.00, 714.79) (176.49, 714.79) (176.49, 724.24) (174.00, 724.24)        /R8  	<|special_separator|>
+(306.00, 714.79) (308.49, 714.79) (308.49, 724.24) (306.00, 724.24)        /R8  	<|special_separator|>
+(540.00, 714.79) (542.49, 714.79) (542.49, 724.24) (540.00, 724.24)        /R8  	<|special_separator|>
 (072.00, 036.87) (074.25, 036.87) (074.25, 045.39) (072.00, 045.39)        /R8  	<|special_separator|>
 (213.00, 036.87) (401.37, 036.87) (401.37, 045.39) (213.00, 045.39)        /R8 Ins&Bond Quote_4911 Augusta Ave_03.01.24 	<|special_separator|>
 (513.00, 036.87) (542.25, 036.87) (542.25, 045.39) (513.00, 045.39)        /R8 page 1 	<|special_separator|>
 (072.00, 674.40) (544.07, 674.40) (544.07, 696.77) (072.00, 696.77)       /R12 Insurance and Bond Quote - 4911 Augusta Ave 	<|special_separator|>
-(072.00, 649.71) (237.96, 649.71) (237.96, 660.00) (072.00, 660.00)       /R12 To:  Brandon Shaw, Ryan McKenzie 	<|special_separator|>
-(072.00, 625.11) (175.31, 625.11) (175.31, 635.39) (072.00, 635.39)       /R12 Bid Date - 03/01/2024 	<|special_separator|>
-(072.00, 600.63) (254.63, 600.63) (254.63, 610.91) (072.00, 610.91)       /R12 Prepared By: Edward Dwomoh-Appiah   	<|special_separator|>
+(072.00, 649.71) (237.95, 649.71) (237.95, 660.00) (072.00, 660.00)       /R12 To:  Brandon Shaw, Ryan McKenzie 	<|special_separator|>
+(072.00, 625.11) (175.31, 625.11) (175.31, 635.40) (072.00, 635.40)       /R12 Bid Date - 03/01/2024 	<|special_separator|>
+(072.00, 600.63) (254.63, 600.63) (254.63, 610.92) (072.00, 610.92)       /R12 Prepared By: Edward Dwomoh-Appiah   	<|special_separator|>
 (072.00, 576.03) (154.19, 576.03) (154.19, 586.32) (072.00, 586.32)       /R12 Date:  02/26/2024 	<|special_separator|>
 (072.00, 551.67) (289.19, 551.67) (289.19, 561.96) (072.00, 561.96)       /R12 Contract Entity: Clark Construction Group, LLC 	<|special_separator|>
 (072.00, 538.95) (175.26, 538.95) (175.26, 549.24) (072.00, 549.24)       /R12 Owner: Aurelie Capital	<|special_separator|>
-(175.20, 538.95) (177.96, 538.95) (177.96, 548.83) (175.20, 548.83)       /R14  	<|special_separator|>
-(072.00, 526.35) (245.75, 526.35) (245.75, 536.63) (072.00, 536.63)       /R12 Estimated Contract Value (CV): $60M 	<|special_separator|>
-(072.00, 513.75) (228.12, 513.75) (228.12, 524.03) (072.00, 524.03)       /R12 Construction Duration:  36 months 	<|special_separator|>
-(072.00, 501.03) (181.07, 501.03) (181.07, 511.31) (072.00, 511.31)       /R12 1 - year warranty period 	<|special_separator|>
-(072.00, 488.43) (208.56, 488.43) (208.56, 498.71) (072.00, 498.71)       /R12 Class B, General Construction 	<|special_separator|>
+(175.20, 538.95) (177.95, 538.95) (177.95, 548.83) (175.20, 548.83)       /R14  	<|special_separator|>
+(072.00, 526.35) (245.75, 526.35) (245.75, 536.64) (072.00, 536.64)       /R12 Estimated Contract Value (CV): $60M 	<|special_separator|>
+(072.00, 513.75) (228.11, 513.75) (228.11, 524.04) (072.00, 524.04)       /R12 Construction Duration:  36 months 	<|special_separator|>
+(072.00, 501.03) (181.07, 501.03) (181.07, 511.32) (072.00, 511.32)       /R12 1 - year warranty period 	<|special_separator|>
+(072.00, 488.43) (208.55, 488.43) (208.55, 498.72) (072.00, 498.72)       /R12 Class B, General Construction 	<|special_separator|>
 (072.00, 475.71) (189.59, 475.71) (189.59, 486.00) (072.00, 486.00)       /R12 Location:  Richmond, VA 	<|special_separator|>
-(072.00, 463.11) (157.91, 463.11) (157.91, 473.39) (072.00, 473.39)       /R12 Design-Build?  No 	<|special_separator|>
+(072.00, 463.11) (157.91, 463.11) (157.91, 473.40) (072.00, 473.40)       /R12 Design-Build?  No 	<|special_separator|>
 (072.00, 450.51) (159.11, 450.51) (159.11, 460.80) (072.00, 460.80)       /R12 Joint-Venture?  No 	<|special_separator|>
 (072.00, 437.79) (074.75, 437.79) (074.75, 448.08) (072.00, 448.08)       /R12  	<|special_separator|>
 (072.00, 425.19) (074.75, 425.19) (074.75, 435.48) (072.00, 435.48)       /R12  	<|special_separator|>
-(072.00, 412.47) (247.44, 412.47) (247.44, 422.35) (072.00, 422.35)       /R14 Liability Insurance - GL Only CCIP 	<|special_separator|>
+(072.00, 412.47) (247.43, 412.47) (247.43, 422.35) (072.00, 422.35)       /R14 Liability Insurance - GL Only CCIP 	<|special_separator|>
 (072.00, 399.87) (315.71, 399.87) (315.71, 409.75) (072.00, 409.75)       /R14 Rate:  $20.00/$1,000  of  total  contract  value  (CV). 	<|special_separator|>
 (318.12, 399.87) (542.75, 399.87) (542.75, 410.16) (318.12, 410.16)       /R12 Per  the  assumed  $60,000,000 CV,  your  liability 	<|special_separator|>
-(072.00, 387.27) (121.56, 387.27) (121.56, 397.56) (072.00, 397.56)       /R12 estimate is 	<|special_separator|>
-(121.56, 387.27) (179.28, 387.27) (179.28, 397.15) (121.56, 397.15)       /R14 $1,200,000.  	<|special_separator|>
+(072.00, 387.27) (121.55, 387.27) (121.55, 397.56) (072.00, 397.56)       /R12 estimate is 	<|special_separator|>
+(121.56, 387.27) (179.27, 387.27) (179.27, 397.15) (121.56, 397.15)       /R14 $1,200,000.  	<|special_separator|>
 (072.00, 374.55) (074.75, 374.55) (074.75, 384.43) (072.00, 384.43)       /R14  	<|special_separator|>
-(072.00, 361.95) (094.44, 361.95) (094.44, 372.24) (072.00, 372.24)       /R12 This 	<|special_separator|>
-(099.48, 361.95) (118.80, 361.95) (118.80, 372.24) (099.48, 372.24)       /R12 rate 	<|special_separator|>
-(123.72, 361.95) (155.28, 361.95) (155.28, 372.24) (123.72, 372.24)       /R12 covers 	<|special_separator|>
-(160.32, 361.95) (187.56, 361.95) (187.56, 372.24) (160.32, 372.24)       /R12 Clark 	<|special_separator|>
+(072.00, 361.95) (094.43, 361.95) (094.43, 372.24) (072.00, 372.24)       /R12 This 	<|special_separator|>
+(099.48, 361.95) (118.79, 361.95) (118.79, 372.24) (099.48, 372.24)       /R12 rate 	<|special_separator|>
+(123.72, 361.95) (155.27, 361.95) (155.27, 372.24) (123.72, 372.24)       /R12 covers 	<|special_separator|>
+(160.32, 361.95) (187.55, 361.95) (187.55, 372.24) (160.32, 372.24)       /R12 Clark 	<|special_separator|>
 (192.48, 361.95) (211.19, 361.95) (211.19, 372.24) (192.48, 372.24)       /R12 and 	<|special_separator|>
 (216.24, 361.95) (230.03, 361.95) (230.03, 372.24) (216.24, 372.24)       /R12 all 	<|special_separator|>
 (235.08, 361.95) (270.83, 361.95) (270.83, 372.24) (235.08, 372.24)       /R12 eligible 	<|special_separator|>
@@ -46,8 +46,8 @@
 (072.00, 311.31) (074.75, 311.31) (074.75, 321.60) (072.00, 321.60)       /R12  	<|special_separator|>
 (072.00, 298.71) (074.75, 298.71) (074.75, 309.00) (072.00, 309.00)       /R12  	<|special_separator|>
 (072.00, 285.99) (122.53, 285.99) (122.53, 295.87) (072.00, 295.87)       /R14 P&P Bond	<|special_separator|>
-(122.40, 285.99) (125.16, 285.99) (125.16, 296.28) (122.40, 296.28)       /R12  	<|special_separator|>
-(072.00, 273.39) (125.28, 273.39) (125.28, 283.68) (072.00, 283.68)       /R12 P&P Bond: 	<|special_separator|>
+(122.40, 285.99) (125.15, 285.99) (125.15, 296.28) (122.40, 296.28)       /R12  	<|special_separator|>
+(072.00, 273.39) (125.27, 273.39) (125.27, 283.68) (072.00, 283.68)       /R12 P&P Bond: 	<|special_separator|>
 (125.28, 273.39) (186.11, 273.39) (186.11, 283.27) (125.28, 283.27)       /R14  $6.76/$1,000	<|special_separator|>
 (186.12, 273.39) (392.63, 273.39) (392.63, 283.68) (186.12, 283.68)       /R12  of total contract value (CV).  Per the assumed 	<|special_separator|>
 (392.64, 273.39) (466.12, 273.39) (466.12, 283.27) (392.64, 283.27)       /R14 $60,000,000 CV	<|special_separator|>
@@ -63,11 +63,11 @@
 (072.00, 184.83) (074.75, 184.83) (074.75, 194.71) (072.00, 194.71)       /R14  	<|special_separator|>
 (072.00, 172.23) (135.97, 172.23) (135.97, 182.11) (072.00, 182.11)       /R14 Builders Risk	<|special_separator|>
 (135.96, 172.23) (144.47, 172.23) (144.47, 182.52) (135.96, 182.52)       /R12 :  	<|special_separator|>
-(072.00, 159.51) (528.35, 159.51) (528.35, 169.54) (072.00, 169.54)       /R16 An Owner provided builder's risk policy must be on an all-risk form with minimum LEG2 coverage for 	<|special_separator|>
+(071.99, 159.51) (528.35, 159.51) (528.35, 169.54) (071.99, 169.54)       /R16 An Owner provided builder's risk policy must be on an all-risk form with minimum LEG2 coverage for 	<|special_separator|>
 (072.00, 146.91) (533.15, 146.91) (533.15, 156.94) (072.00, 156.94)       /R16 damage resulting from faulty workmanship and must not contain any provisions that limit CCG's ability 	<|special_separator|>
-(072.00, 134.19) (541.08, 134.19) (541.08, 144.22) (072.00, 144.22)       /R16 to recoup its actual costs, including overhead, profit and delay related general conditions, incurred in the 	<|special_separator|>
-(072.00, 121.59) (517.08, 121.59) (517.08, 131.62) (072.00, 131.62)       /R16 course of repair of covered builder's risk losses.  The Owner procured policy, or a specimen of such 	<|special_separator|>
-(072.00, 108.99) (533.63, 108.99) (533.63, 119.02) (072.00, 119.02)       /R16 policy that the Owner plans to purchase, must be reviewed by risk management prior to execution of the 	<|special_separator|>
+(072.00, 134.19) (541.07, 134.19) (541.07, 144.22) (072.00, 144.22)       /R16 to recoup its actual costs, including overhead, profit and delay related general conditions, incurred in the 	<|special_separator|>
+(072.00, 121.59) (517.07, 121.59) (517.07, 131.62) (072.00, 131.62)       /R16 course of repair of covered builder's risk losses.  The Owner procured policy, or a specimen of such 	<|special_separator|>
+(071.99, 108.99) (533.63, 108.99) (533.63, 119.02) (071.99, 119.02)       /R16 policy that the Owner plans to purchase, must be reviewed by risk management prior to execution of the 	<|special_separator|>
 (072.00, 096.27) (108.78, 096.27) (108.78, 106.30) (072.00, 106.30)       /R16 contract	<|special_separator|>
 (108.84, 098.64) (116.63, 098.64) (116.63, 104.56) (108.84, 104.56)       /R18 .  	<|special_separator|>
-(116.64, 096.27) (530.03, 096.27) (530.03, 106.30) (116.64, 106.30)       /R16 Please note that if the Owner's policy does not meet Clark's satisfaction, the Owner will need 
+(116.63, 096.27) (530.03, 096.27) (530.03, 106.30) (116.63, 106.30)       /R16 Please note that if the Owner's policy does not meet Clark's satisfaction, the Owner will need 

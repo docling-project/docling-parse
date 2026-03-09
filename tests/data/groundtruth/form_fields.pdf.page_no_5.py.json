@@ -162546,15 +162546,88 @@
   "has_chars": true,
   "has_words": true,
   "has_lines": true,
+  "widgets": [],
+  "hyperlinks": [
+    {
+      "index": 0,
+      "rect": {
+        "r_x0": 378.05,
+        "r_y0": 485.438,
+        "r_x1": 559.22,
+        "r_y1": 485.438,
+        "r_x2": 559.22,
+        "r_y2": 497.338,
+        "r_x3": 378.05,
+        "r_y3": 497.338,
+        "coord_origin": "BOTTOMLEFT"
+      },
+      "uri": "https://www.canada.ca/fr/agence-revenu/services/services-electroniques/services-electroniques-entreprises/dossier-entreprise.html"
+    },
+    {
+      "index": 1,
+      "rect": {
+        "r_x0": 421.16,
+        "r_y0": 474.438,
+        "r_x1": 574.54,
+        "r_y1": 474.438,
+        "r_x2": 574.54,
+        "r_y2": 486.338,
+        "r_x3": 421.16,
+        "r_y3": 486.338,
+        "coord_origin": "BOTTOMLEFT"
+      },
+      "uri": "https://www.canada.ca/fr/agence-revenu/services/services-electroniques/representer-client.html"
+    },
+    {
+      "index": 2,
+      "rect": {
+        "r_x0": 323.34,
+        "r_y0": 433.438,
+        "r_x1": 434.49,
+        "r_y1": 433.438,
+        "r_x2": 434.49,
+        "r_y2": 445.338,
+        "r_x3": 323.34,
+        "r_y3": 445.338,
+        "coord_origin": "BOTTOMLEFT"
+      },
+      "uri": "https://www.canada.ca/fr/agence-revenu/services/services-electroniques/services-electroniques-particuliers/dossier-particuliers.html"
+    },
+    {
+      "index": 3,
+      "rect": {
+        "r_x0": 437.83,
+        "r_y0": 188.44,
+        "r_x1": 522.3,
+        "r_y1": 188.44,
+        "r_x2": 522.3,
+        "r_y2": 200.34,
+        "r_x3": 437.83,
+        "r_y3": 200.34,
+        "coord_origin": "BOTTOMLEFT"
+      },
+      "uri": "https://www.canada.ca/fr/agence-revenu/services/impot/entreprises/sujets/tps-tvh-entreprises.html"
+    },
+    {
+      "index": 4,
+      "rect": {
+        "r_x0": 323.34,
+        "r_y0": 147.438,
+        "r_x1": 470.04,
+        "r_y1": 147.438,
+        "r_x2": 470.04,
+        "r_y2": 159.338,
+        "r_x3": 323.34,
+        "r_y3": 159.338,
+        "coord_origin": "BOTTOMLEFT"
+      },
+      "uri": "https://www.canada.ca/fr/agence-revenu/services/impot/entreprises/sujets/tps-tvh-entreprises/formulaires-publications.html"
+    }
+  ],
+  "lines": [],
   "shapes": [
     {
       "index": 0,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
       "parent_id": 0,
       "points": [
         [
@@ -162566,17 +162639,30 @@
           486.794
         ]
       ],
-      "width": 1.0,
-      "coord_origin": "BOTTOMLEFT"
-    },
-    {
-      "index": 1,
-      "rgba": {
+      "coord_origin": "BOTTOMLEFT",
+      "has_graphics_state": true,
+      "line_width": 0.336,
+      "miter_limit": -1.0,
+      "line_cap": 2,
+      "line_join": -1,
+      "dash_phase": 0.0,
+      "dash_array": [],
+      "flatness": -1.0,
+      "rgb_stroking": {
         "r": 0,
         "g": 0,
         "b": 0,
         "a": 255
       },
+      "rgb_filling": {
+        "r": 0,
+        "g": 0,
+        "b": 0,
+        "a": 255
+      }
+    },
+    {
+      "index": 1,
       "parent_id": 0,
       "points": [
         [
@@ -162588,17 +162674,30 @@
           475.794
         ]
       ],
-      "width": 1.0,
-      "coord_origin": "BOTTOMLEFT"
-    },
-    {
-      "index": 2,
-      "rgba": {
+      "coord_origin": "BOTTOMLEFT",
+      "has_graphics_state": true,
+      "line_width": 0.336,
+      "miter_limit": -1.0,
+      "line_cap": 2,
+      "line_join": -1,
+      "dash_phase": 0.0,
+      "dash_array": [],
+      "flatness": -1.0,
+      "rgb_stroking": {
         "r": 0,
         "g": 0,
         "b": 0,
         "a": 255
       },
+      "rgb_filling": {
+        "r": 0,
+        "g": 0,
+        "b": 0,
+        "a": 255
+      }
+    },
+    {
+      "index": 2,
       "parent_id": 0,
       "points": [
         [
@@ -162610,17 +162709,30 @@
           434.794
         ]
       ],
-      "width": 1.0,
-      "coord_origin": "BOTTOMLEFT"
-    },
-    {
-      "index": 3,
-      "rgba": {
+      "coord_origin": "BOTTOMLEFT",
+      "has_graphics_state": true,
+      "line_width": 0.336,
+      "miter_limit": -1.0,
+      "line_cap": 2,
+      "line_join": -1,
+      "dash_phase": 0.0,
+      "dash_array": [],
+      "flatness": -1.0,
+      "rgb_stroking": {
         "r": 0,
         "g": 0,
         "b": 0,
         "a": 255
       },
+      "rgb_filling": {
+        "r": 0,
+        "g": 0,
+        "b": 0,
+        "a": 255
+      }
+    },
+    {
+      "index": 3,
       "parent_id": 0,
       "points": [
         [
@@ -162632,17 +162744,30 @@
           189.796
         ]
       ],
-      "width": 1.0,
-      "coord_origin": "BOTTOMLEFT"
-    },
-    {
-      "index": 4,
-      "rgba": {
+      "coord_origin": "BOTTOMLEFT",
+      "has_graphics_state": true,
+      "line_width": 0.336,
+      "miter_limit": -1.0,
+      "line_cap": 2,
+      "line_join": -1,
+      "dash_phase": 0.0,
+      "dash_array": [],
+      "flatness": -1.0,
+      "rgb_stroking": {
         "r": 0,
         "g": 0,
         "b": 0,
         "a": 255
       },
+      "rgb_filling": {
+        "r": 0,
+        "g": 0,
+        "b": 0,
+        "a": 255
+      }
+    },
+    {
+      "index": 4,
       "parent_id": 0,
       "points": [
         [
@@ -162654,8 +162779,27 @@
           148.794
         ]
       ],
-      "width": 1.0,
-      "coord_origin": "BOTTOMLEFT"
+      "coord_origin": "BOTTOMLEFT",
+      "has_graphics_state": true,
+      "line_width": 0.336,
+      "miter_limit": -1.0,
+      "line_cap": 2,
+      "line_join": -1,
+      "dash_phase": 0.0,
+      "dash_array": [],
+      "flatness": -1.0,
+      "rgb_stroking": {
+        "r": 0,
+        "g": 0,
+        "b": 0,
+        "a": 255
+      },
+      "rgb_filling": {
+        "r": 0,
+        "g": 0,
+        "b": 0,
+        "a": 255
+      }
     }
   ]
 }

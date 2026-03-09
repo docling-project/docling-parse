@@ -3,6 +3,8 @@
 #ifndef PDF_PAGE_FONT_RESOURCE_H
 #define PDF_PAGE_FONT_RESOURCE_H
 
+#include <parse/qpdf/qpdf_compat.h>
+
 namespace pdflib
 {
 
@@ -315,12 +317,8 @@ namespace pdflib
       {
         LOG_S(WARNING) << "font does not have numb_to_width for " << c
 		       << " nor a known font [base-font=" << base_font 
-		       << ", font-key=" << font_key << "]";
-      }
-
-    if(verbose)
-      {
-	LOG_S(WARNING) << "falling back on default width " << __FUNCTION__;
+		       << ", font-key=" << font_key << "]"
+		       << " --> falling back on default width in " << __FUNCTION__;
       }
     
     return 500.0;
@@ -384,11 +382,7 @@ namespace pdflib
             }
 	  else if(32<=c)
             {
-              std::string tmp(64, ' '); // have a good safety margin here!
-              auto itr = utf8::append(c, tmp.begin());
-
-              tmp.erase(itr, tmp.end());
-              result = tmp;
+              utf8::append(c, std::back_inserter(result));
             }
           else
             {
@@ -425,10 +419,8 @@ namespace pdflib
 	    }
 	  else if(32<=c)
             {
-              std::string tmp(64, ' '); // have a good safety margin here!
-
-              auto itr = utf8::append(c, tmp.begin());
-              tmp.erase(itr, tmp.end());
+              std::string tmp;
+              utf8::append(c, std::back_inserter(tmp));
 
 	      return tmp;
             }
@@ -728,7 +720,7 @@ namespace pdflib
 
 		if(qpdf_obj.isStream())
 		  {
-		    std::vector<qpdf_instruction> stream;
+		    std::vector<qpdf_stream_instruction> stream;
 
 		    // decode the stream
 		    {
@@ -764,8 +756,7 @@ namespace pdflib
           }
         else
           {
-            LOG_S(WARNING) << "font-encoding [object]: " << result.dump();
-            LOG_S(WARNING) << " --> font-encoding falling back to STANDARD";
+            LOG_S(WARNING) << " --> font-encoding falling back to STANDARD with font-encoding [object]: " << result.dump();
 
             encoding = STANDARD;
             has_explicit_encoding = false;
@@ -1000,7 +991,7 @@ namespace pdflib
 
 	if(qpdf_obj.isStream())
 	  {
-	    std::vector<qpdf_instruction> stream;
+	    std::vector<qpdf_stream_instruction> stream;
 	    
 	    // decode the stream
 	    {
@@ -1016,8 +1007,8 @@ namespace pdflib
 	  }
 
 	{
-	  auto buffer = qpdf_obj.getRawStreamData();
-	  
+	  auto buffer = to_shared_ptr(qpdf_obj.getRawStreamData());
+
 	  LOG_S(INFO) << "buffer-size: " << buffer->getSize();
 	  //LOG_S(INFO) << "buffer: " << buffer->getBuffer();
 
@@ -1039,7 +1030,7 @@ namespace pdflib
 	}
 
 	{
-	auto buffer = qpdf_obj.getStreamData(qpdf_dl_generalized);
+	auto buffer = to_shared_ptr(qpdf_obj.getStreamData(qpdf_dl_generalized));
 	  
 	LOG_S(INFO) << "buffer-size: " << buffer->getSize();
 	//LOG_S(INFO) << "buffer: " << buffer->getBuffer();
@@ -1054,7 +1045,7 @@ namespace pdflib
 
 	if(qpdf_obj.isStream())
 	  {
-	    std::vector<qpdf_instruction> stream;
+	    std::vector<qpdf_stream_instruction> stream;
 	    
 	    // decode the stream
 	    {
@@ -1075,7 +1066,7 @@ namespace pdflib
 
 	if(qpdf_obj.isStream())
 	  {
-	    std::vector<qpdf_instruction> stream;
+	    std::vector<qpdf_stream_instruction> stream;
 	    
 	    // decode the stream
 	    {
@@ -1362,21 +1353,30 @@ namespace pdflib
     {
       std::vector<std::string> keys = {"/Widths"};
 
-      if(utils::json::has(keys, json_font))
+      bool found_widths = false;
+      if(utils::json::has(keys, json_font) and (not found_widths))
         {
           auto result = utils::json::get(keys, json_font);
           LOG_S(INFO) << "widths: " << result.dump();
 
-          values = result.get<std::vector<double> >();
+	  if(result.is_array())
+	    {
+	      values = result.get<std::vector<double> >();
+	      found_widths = true;
+	    }
         }
-      else if(utils::json::has(keys, desc_font))
+      else if(utils::json::has(keys, desc_font) and (not found_widths))
         {
           auto result = utils::json::get(keys, desc_font);
           LOG_S(INFO) << "widths: " << result.dump();
 
-          values = result.get<std::vector<double> >();
+	  if(result.is_array())
+	    {
+	      values = result.get<std::vector<double> >();
+	      found_widths = true;
+	    }
         }
-      else
+      else if(not found_widths)
         {
           LOG_S(WARNING) << "could not find widths";
         }
@@ -1546,7 +1546,7 @@ namespace pdflib
 
 	if(qpdf_obj.isStream())
 	  {
-	    std::vector<qpdf_instruction> stream;
+	    std::vector<qpdf_stream_instruction> stream;
 	    
 	    // decode the stream
 	    {
@@ -1759,8 +1759,9 @@ namespace pdflib
 
     // Create a regex object
     std::regex re_01(R"(\/(.+)\.(.+))");
-    std::regex re_02(R"((\/)?(uni|UNI)([0-9A-Ea-e]{4}))");
+    std::regex re_02(R"((\/)?(uni|UNI)([0-9A-Fa-f]{4}))");
     std::regex re_03(R"((\/)(g|G)\d+)");
+    std::regex re_04(R"((\/)(C)(\d+))");
     
     if(utils::json::has(keys, json_font))
       {
@@ -1894,6 +1895,15 @@ namespace pdflib
 			//diff_numb_to_char[numb] = name;
 			//LOG_S(ERROR) << "weird differences["<<numb<<"] -> " << name;
 		      }
+		    else if(std::regex_match(name, match, re_04)) // if the name is of type /C<decimal> treat the number as a Unicode code point
+		      {
+			uint32_t codepoint = static_cast<uint32_t>(std::stoul(match[3].str()));
+			std::vector<uint32_t> vec = {codepoint};
+			diff_numb_to_char[numb] = utils::string::vec_to_utf8(vec);
+			LOG_S(INFO) << "differences[" << numb << "] -> " << name
+				    << " -> " << diff_numb_to_char[numb]
+				    << " (codepoint=" << codepoint << ")";
+		      }
                     else
                       {
                         diff_numb_to_char[numb] = name;
@@ -1957,7 +1967,7 @@ namespace pdflib
 		    throw std::logic_error(message);
 		  }
 		
-                std::vector<qpdf_instruction> stream={};
+                std::vector<qpdf_stream_instruction> stream={};
 
                 // decode the stream
                 {
