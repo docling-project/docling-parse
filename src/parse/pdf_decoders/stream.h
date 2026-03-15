@@ -58,7 +58,7 @@ namespace pdflib
     void Q();
     
     void execute_operator(qpdf_stream_instruction op,
-                          std::vector<qpdf_stream_instruction> parameters);
+                          std::vector<qpdf_stream_instruction>& parameters);
     
     void do_image(const std::string& xobj_name,
 		  const xobject_subtype_name& xobj_subtype);
@@ -468,7 +468,7 @@ namespace pdflib
   }
 
   void pdf_decoder<STREAM>::execute_operator(qpdf_stream_instruction              op,
-                                             std::vector<qpdf_stream_instruction> parameters)
+                                             std::vector<qpdf_stream_instruction>& parameters)
   {
     pdf_operator::operator_name name = pdf_operator::to_name(op.val);
 
