@@ -8,5 +8,6 @@
 #include "utils/timer.h"
 #include "utils/files.h"
 #include "utils/values.h"
+#include "utils/numeric.h"
 
 #endif

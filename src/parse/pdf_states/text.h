@@ -344,7 +344,7 @@ namespace pdflib
           }
         else if(item.isNumber())
           {
-            double value = item.getNumericValue();
+            double value = utils::numeric::locale_safe_numeric_value(item);
 
             double tx = - value / 1000.0 * font_size * h_scaling;
             double ty = 0;

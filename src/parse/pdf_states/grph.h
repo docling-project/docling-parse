@@ -342,7 +342,7 @@ namespace pdflib
 	    //assert(item.isNumber());
 	    if(item.isNumber())
 	      {
-		double val = item.getNumericValue();
+		double val = utils::numeric::locale_safe_numeric_value(item);
 		dash_array.push_back(val);
 	      }
 	    else

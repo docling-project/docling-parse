@@ -255,7 +255,7 @@ namespace pdflib
         else if(std::regex_match(line, match, expr))
           {
             int         numb = std::stoi(match[1]);
-            double      wval = std::stod(match[2]);
+            double      wval = utils::numeric::locale_safe_stod(match[2]);
             std::string name =           match[3] ;
 
             if(numb>=0 and name!="")
@@ -280,7 +280,7 @@ namespace pdflib
 
             if(elems.size()==2 and utils::string::is_number(elems[1]))
               {
-                properties[elems[0]] = std::stod(elems[1]);
+                properties[elems[0]] = utils::numeric::locale_safe_stod(elems[1]);
               }
             else if(elems.size()==2)
               {
@@ -288,11 +288,11 @@ namespace pdflib
               }
             else if(elems.size()>0 and elems[0]=="FontBBox")
               {
-                std::array<double, 4> bbox = { 
-                  std::stod(elems[1]),
-                  std::stod(elems[2]),
-                  std::stod(elems[3]),
-                  std::stod(elems[4])};
+                std::array<double, 4> bbox = {
+                  utils::numeric::locale_safe_stod(elems[1]),
+                  utils::numeric::locale_safe_stod(elems[2]),
+                  utils::numeric::locale_safe_stod(elems[3]),
+                  utils::numeric::locale_safe_stod(elems[4])};
 
                 properties[elems[0]] = bbox;
               }

@@ -178,7 +178,7 @@ namespace pdflib
           }
         else if(obj.isReal())
           {
-            double val = obj.getNumericValue();
+            double val = utils::numeric::locale_safe_numeric_value(obj);
             result = val;
           }
         else if(obj.isBool())

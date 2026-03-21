@@ -678,7 +678,7 @@ namespace pdflib
         QPDFObjectHandle num = rect.getArrayItem(l);
         if(num.isNumber())
           {
-            bbox[l] = num.getNumericValue();
+            bbox[l] = utils::numeric::locale_safe_numeric_value(num);
           }
       }
 
@@ -745,7 +745,7 @@ namespace pdflib
         QPDFObjectHandle num = rect.getArrayItem(l);
         if(num.isNumber())
           {
-            bbox[l] = num.getNumericValue();
+            bbox[l] = utils::numeric::locale_safe_numeric_value(num);
           }
       }
 
@@ -786,7 +786,7 @@ namespace pdflib
         QPDFObjectHandle num = rect.getArrayItem(l);
         if(num.isNumber())
           {
-            bbox[l] = num.getNumericValue();
+            bbox[l] = utils::numeric::locale_safe_numeric_value(num);
           }
       }
 
