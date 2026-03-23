@@ -89,6 +89,10 @@ namespace pdflib
     std::unordered_map<uint32_t, std::string> _map;
 
     cmap_value _cmap;
+
+    std::unordered_map<std::string, int> unknown_operators;
+
+    static const std::vector<std::string> known_operators;
   };
 
   cmap_parser::cmap_parser():
@@ -97,6 +101,23 @@ namespace pdflib
 
   cmap_parser::~cmap_parser()
   {}
+
+  // Known CMap operators, ordered longest-first to avoid false prefix
+  // matches (e.g. "begin" must not match before "beginbfrange").
+  const std::vector<std::string> cmap_parser::known_operators = {
+    "begincodespacerange", "endcodespacerange",
+    "beginnotdefrange",    "endnotdefrange",
+    "beginnotdefchar",     "endnotdefchar",
+    "beginbfrange",        "endbfrange",
+    "beginbfchar",         "endbfchar",
+    "begincmap",           "endcmap",
+    "findresource",        "defineresource",
+    "usecmap",             "currentdict",
+    "CMapName",            "CMapType",
+    "begin",               "end",
+    "dict",                "def",
+    "pop",
+  };
 
   cmap_value cmap_parser::get()
   {
@@ -129,23 +150,6 @@ namespace pdflib
           }
         else
           {
-	    // Known CMap operators, ordered longest-first to avoid false prefix
-	    // matches (e.g. "begin" must not match before "beginbfrange").
-	    static const std::vector<std::string> known_operators = {
-	      "begincodespacerange", "endcodespacerange",
-	      "beginnotdefrange",    "endnotdefrange",
-	      "beginnotdefchar",     "endnotdefchar",
-	      "beginbfrange",        "endbfrange",
-	      "beginbfchar",         "endbfchar",
-	      "begincmap",           "endcmap",
-	      "findresource",        "defineresource",
-	      "usecmap",             "currentdict",
-	      "CMapName",            "CMapType",
-	      "begin",               "end",
-	      "dict",                "def",
-	      "pop",
-	    };
-
 	    // Normalize: if the raw operator token starts with a known operator
 	    // name AND the remaining suffix is a pure integer (e.g.
 	    // "endcodespacerange60" -> operator "endcodespacerange", suffix "60"),
@@ -215,6 +219,7 @@ namespace pdflib
               }
             else
               {
+                unknown_operators[op_name]++;
                 LOG_S(WARNING) << "cmap ignoring " << op_name << " operator!";
               }
 
