@@ -34,7 +34,7 @@ int main(int argc, char* argv[])
   // Initialize loguru
   loguru::init(argc, argv);
 
-  bool do_sanitization = true;
+  bool do_sanitization = false;
 
   try
     {
@@ -123,17 +123,21 @@ int main(int argc, char* argv[])
 
 	// Decode and render
 	pdflib::renderer<pdflib::NAIVE> renderer;
-
+	
+	pdflib::decode_config page_config;
+	page_config.page_boundary = "crop_box";
+	page_config.do_sanitization = do_sanitization;
+	page_config.create_word_cells = false;
+	page_config.create_line_cells = false;
+	page_config.keep_shapes = true; //false;
+	page_config.keep_bitmaps = true; //false;
+	
 	if (page == -1)
 	  {
 	    // Decode all pages
 	    int num_pages = doc.get_number_of_pages();
 	    for (int p = 0; p < num_pages; p++) {
-	      pdflib::decode_config page_config;
-	      page_config.page_boundary = "crop_box";
-	      page_config.do_sanitization = do_sanitization;
-	      page_config.keep_shapes = false;
-	      page_config.keep_bitmaps = false;
+
 	      auto page_decoder = doc.decode_page(p, page_config);
 	      if (page_decoder) {
 		auto& instructions = page_decoder->get_instructions();
@@ -144,11 +148,6 @@ int main(int argc, char* argv[])
 	else
 	  {
 	    // Decode specific page
-	    pdflib::decode_config page_config;
-	    page_config.page_boundary = "crop_box";
-	    page_config.do_sanitization = do_sanitization;
-	    page_config.keep_shapes = false;
-	    page_config.keep_bitmaps = false;
 	    auto page_decoder = doc.decode_page(page, page_config);
 	    if (page_decoder)
 	      {
