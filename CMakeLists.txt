@@ -110,9 +110,10 @@ include(cmake/extlib_utf8.git.cmake)
 include(cmake/extlib_jpeg.cmake)
 # include(cmake/extlib_qpdf_v11.cmake)
 include(cmake/extlib_qpdf_v12.cmake)
+include(cmake/extlib_blend2d.cmake)
 
 # aggregate the targets created by the dependencies
-set(DEPENDENCIES qpdf jpeg utf8 json loguru cxxopts)
+set(DEPENDENCIES qpdf jpeg utf8 json loguru cxxopts blend2d)
 
 # ************************
 # *** libraries        ***

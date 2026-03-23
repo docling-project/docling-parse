@@ -16,6 +16,8 @@ namespace pdflib
 
   enum RENDERER_NAME {
     NAIVE,
+    SKIA,
+    BLEND2D,
     // OPENCV
   };
 
