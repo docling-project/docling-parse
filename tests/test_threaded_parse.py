@@ -65,7 +65,14 @@ def test_threaded_reference_documents_from_filenames():
         parser.load(pdf_doc_path)
 
     # Page restrictions (same as sequential test)
-    page_restrictions = {"deep-mediabox-inheritance.pdf": [2]}
+    page_restrictions = {
+        "deep-mediabox-inheritance.pdf": [2],
+        "font_06.pdf": [1],
+        "font_07.pdf": [1],
+        "font_08.pdf": [1],
+        "font_09.pdf": [1],
+        "font_10.pdf": [1],        
+    }
 
     # Collect all results
     results = {}

@@ -1,0 +1,301 @@
+(091.92, 719.47) (503.08, 719.47) (503.08, 738.94) (091.92, 738.94)       /Ty1 Delivering Document Conversion as a Cloud	<|special_separator|>
+(063.42, 693.45) (531.58, 693.45) (531.58, 712.91) (063.42, 712.91)       /Ty1 Service with High Throughput and Responsiveness	<|special_separator|>
+(118.41, 666.62) (128.30, 670.94) (128.30, 677.19) (118.41, 675.54)       /Ty1 1 st	<|special_separator|>
+(132.34, 666.62) (196.69, 666.62) (196.69, 675.54) (132.34, 675.54)       /Ty1 Christoph Auer	<|special_separator|>
+(130.61, 655.27) (184.49, 655.27) (184.49, 663.19) (130.61, 663.19)       /Ty2 IBM Research	<|special_separator|>
+(109.81, 643.67) (202.04, 643.67) (202.04, 651.78) (109.81, 651.78)       /Ty1 R¨ uschlikon, Switzerland	<|special_separator|>
+(117.65, 632.17) (197.46, 632.17) (197.46, 640.28) (117.65, 640.28)       /Ty1 cau@zurich.ibm.com	<|special_separator|>
+(104.30, 592.58) (114.98, 596.90) (114.98, 603.14) (104.30, 601.50)       /Ty1 4 th	<|special_separator|>
+(119.02, 592.58) (210.81, 592.58) (210.81, 601.50) (119.02, 601.50)       /Ty1 Cesar Berrospi Ramis	<|special_separator|>
+(130.61, 581.23) (184.49, 581.23) (184.49, 589.15) (130.61, 589.15)       /Ty2 IBM Research	<|special_separator|>
+(109.81, 569.63) (202.04, 569.63) (202.04, 577.74) (109.81, 577.74)       /Ty1 R¨ uschlikon, Switzerland	<|special_separator|>
+(117.65, 558.12) (197.46, 558.12) (197.46, 566.23) (117.65, 566.23)       /Ty1 ceb@zurich.ibm.com	<|special_separator|>
+(267.95, 666.62) (280.22, 670.94) (280.22, 677.19) (267.95, 675.54)       /Ty1 2 nd	<|special_separator|>
+(284.27, 666.62) (342.37, 666.62) (342.37, 675.54) (284.27, 675.54)       /Ty1 Michele Dolfi	<|special_separator|>
+(278.23, 655.27) (332.10, 655.27) (332.10, 663.19) (278.23, 663.19)       /Ty2 IBM Research	<|special_separator|>
+(257.42, 643.67) (349.65, 643.67) (349.65, 651.78) (257.42, 651.78)       /Ty1 R¨ uschlikon, Switzerland	<|special_separator|>
+(265.77, 632.17) (344.56, 632.17) (344.56, 640.28) (265.77, 640.28)       /Ty1 dol@zurich.ibm.com	<|special_separator|>
+(264.31, 592.58) (274.99, 596.90) (274.99, 603.14) (264.31, 601.50)       /Ty1 5 th	<|special_separator|>
+(279.03, 592.58) (346.02, 592.58) (346.02, 601.50) (279.03, 601.50)       /Ty1 Peter W.J. Staar	<|special_separator|>
+(278.23, 581.23) (332.10, 581.23) (332.10, 589.15) (278.23, 589.15)       /Ty2 IBM Research	<|special_separator|>
+(257.42, 569.63) (349.65, 569.63) (349.65, 577.74) (257.42, 577.74)       /Ty1 R¨ uschlikon, Switzerland	<|special_separator|>
+(266.29, 558.12) (344.03, 558.12) (344.03, 566.23) (266.29, 566.23)       /Ty1 taa@zurich.ibm.com	<|special_separator|>
+(404.37, 666.62) (415.45, 670.94) (415.45, 677.19) (404.37, 675.54)       /Ty1 3 rd	<|special_separator|>
+(419.49, 666.62) (485.85, 666.62) (485.85, 675.54) (419.49, 675.54)       /Ty1 Andr´ e Carvalho	<|special_separator|>
+(418.05, 655.27) (472.17, 655.27) (472.17, 663.19) (418.05, 663.19)       /Ty2 SoftINSA Lda.	<|special_separator|>
+(413.14, 643.67) (473.83, 643.67) (473.83, 651.78) (413.14, 651.78)       /Ty1 Tomar, Portugal	<|special_separator|>
+(399.52, 632.17) (490.70, 632.17) (490.70, 640.28) (399.52, 640.28)       /Ty1 afecarvalho@gmail.com	<|special_separator|>
+(066.98, 510.01) (095.80, 510.01) (095.80, 519.58) (066.98, 519.58)       /Ty3 Abstract	<|special_separator|>
+(095.82, 511.40) (291.92, 511.40) (291.92, 515.31) (095.82, 515.31)       /Ty4 -Document understanding is a key business process	<|special_separator|>
+(057.68, 502.10) (291.92, 502.10) (291.92, 506.01) (057.68, 506.01)       /Ty4 in the data-driven economy since documents are central to knowl-	<|special_separator|>
+(057.68, 492.81) (291.92, 492.81) (291.92, 496.72) (057.68, 496.72)       /Ty4 edge discovery and business insights. Converting documents into	<|special_separator|>
+(057.68, 483.51) (061.87, 483.51) (061.87, 487.42) (057.68, 487.42)       /Ty4 a	<|special_separator|>
+(067.05, 483.51) (141.26, 483.51) (141.26, 487.42) (067.05, 487.42)       /Ty4 machine-processable	<|special_separator|>
+(146.45, 483.51) (170.86, 483.51) (170.86, 487.42) (146.45, 487.42)       /Ty4 format	<|special_separator|>
+(176.05, 483.51) (181.63, 483.51) (181.63, 487.42) (176.05, 487.42)       /Ty4 is	<|special_separator|>
+(186.82, 483.51) (191.00, 483.51) (191.00, 487.42) (186.82, 487.42)       /Ty4 a	<|special_separator|>
+(196.19, 483.51) (232.44, 483.51) (232.44, 487.42) (196.19, 487.42)       /Ty4 particular	<|special_separator|>
+(237.63, 483.51) (271.09, 483.51) (271.09, 487.42) (237.63, 487.42)       /Ty4 challenge	<|special_separator|>
+(276.28, 483.51) (291.92, 483.51) (291.92, 487.42) (276.28, 487.42)       /Ty4 here	<|special_separator|>
+(057.68, 474.22) (291.92, 474.22) (291.92, 478.13) (057.68, 478.13)       /Ty4 due to their huge variability in formats and complex structure.	<|special_separator|>
+(057.68, 464.92) (103.00, 464.92) (103.00, 468.83) (057.68, 468.83)       /Ty4 Accordingly,	<|special_separator|>
+(107.81, 464.92) (171.18, 464.92) (171.18, 468.83) (107.81, 468.83)       /Ty4 many algorithms	<|special_separator|>
+(175.99, 464.92) (189.48, 464.92) (189.48, 468.83) (175.99, 468.83)       /Ty4 and	<|special_separator|>
+(194.29, 464.92) (256.90, 464.92) (256.90, 468.83) (194.29, 468.83)       /Ty4 machine-learning	<|special_separator|>
+(261.72, 464.92) (291.92, 464.92) (291.92, 468.83) (261.72, 468.83)       /Ty4 methods	<|special_separator|>
+(057.68, 455.62) (088.26, 455.62) (088.26, 459.54) (057.68, 459.54)       /Ty4 emerged	<|special_separator|>
+(092.99, 455.62) (099.96, 455.62) (099.96, 459.54) (092.99, 459.54)       /Ty4 to	<|special_separator|>
+(104.69, 455.62) (122.27, 455.62) (122.27, 459.54) (104.69, 459.54)       /Ty4 solve	<|special_separator|>
+(126.99, 455.62) (163.24, 455.62) (163.24, 459.54) (126.99, 459.54)       /Ty4 particular	<|special_separator|>
+(167.97, 455.62) (186.10, 455.62) (186.10, 459.54) (167.97, 459.54)       /Ty4 tasks	<|special_separator|>
+(190.83, 455.62) (207.10, 455.62) (207.10, 459.54) (190.83, 459.54)       /Ty4 such	<|special_separator|>
+(211.83, 455.62) (219.27, 455.62) (219.27, 459.54) (211.83, 459.54)       /Ty4 as	<|special_separator|>
+(224.00, 455.62) (250.50, 455.62) (250.50, 459.54) (224.00, 459.54)       /Ty4 Optical	<|special_separator|>
+(255.22, 455.62) (291.92, 455.62) (291.92, 459.54) (255.22, 459.54)       /Ty4 Character	<|special_separator|>
+(057.68, 446.33) (100.44, 446.33) (100.44, 450.24) (057.68, 450.24)       /Ty4 Recognition	<|special_separator|>
+(105.84, 446.33) (132.09, 446.33) (132.09, 450.24) (105.84, 450.24)       /Ty4 (OCR),	<|special_separator|>
+(137.48, 446.33) (159.58, 446.33) (159.58, 450.24) (137.48, 450.24)       /Ty4 layout	<|special_separator|>
+(164.97, 446.33) (195.43, 446.33) (195.43, 450.24) (164.97, 450.24)       /Ty4 analysis,	<|special_separator|>
+(200.81, 446.33) (254.09, 446.33) (254.09, 450.24) (200.81, 450.24)       /Ty4 table-structure	<|special_separator|>
+(259.49, 446.33) (291.92, 446.33) (291.92, 450.24) (259.49, 450.24)       /Ty4 recovery,	<|special_separator|>
+(057.68, 437.03) (078.45, 437.03) (078.45, 440.95) (057.68, 440.95)       /Ty4 figure	<|special_separator|>
+(083.73, 437.03) (137.89, 437.03) (137.89, 440.95) (083.73, 440.95)       /Ty4 understanding,	<|special_separator|>
+(143.16, 437.03) (155.47, 437.03) (155.47, 440.95) (143.16, 440.95)       /Ty4 etc.	<|special_separator|>
+(160.75, 437.03) (204.80, 437.03) (204.80, 440.95) (160.75, 440.95)       /Ty4 We observe	<|special_separator|>
+(210.08, 437.03) (221.23, 437.03) (221.23, 440.95) (210.08, 440.95)       /Ty4 the	<|special_separator|>
+(226.51, 437.03) (258.13, 437.03) (258.13, 440.95) (226.51, 440.95)       /Ty4 adoption	<|special_separator|>
+(263.40, 437.03) (270.37, 437.03) (270.37, 440.95) (263.40, 440.95)       /Ty4 of	<|special_separator|>
+(275.65, 437.03) (291.92, 437.03) (291.92, 440.95) (275.65, 440.95)       /Ty4 such	<|special_separator|>
+(057.68, 427.74) (087.89, 427.74) (087.89, 431.65) (057.68, 431.65)       /Ty4 methods	<|special_separator|>
+(092.89, 427.74) (099.86, 427.74) (099.86, 431.65) (092.89, 431.65)       /Ty4 in	<|special_separator|>
+(104.87, 427.74) (140.19, 427.74) (140.19, 431.65) (104.87, 431.65)       /Ty4 document	<|special_separator|>
+(145.18, 427.74) (197.25, 427.74) (197.25, 431.65) (145.18, 431.65)       /Ty4 understanding	<|special_separator|>
+(202.25, 427.74) (233.87, 427.74) (233.87, 431.65) (202.25, 431.65)       /Ty4 solutions	<|special_separator|>
+(238.86, 427.74) (264.26, 427.74) (264.26, 431.65) (238.86, 431.65)       /Ty4 offered	<|special_separator|>
+(269.26, 427.74) (278.10, 427.74) (278.10, 431.65) (269.26, 431.65)       /Ty4 by	<|special_separator|>
+(283.09, 427.74) (291.92, 427.74) (291.92, 431.65) (283.09, 431.65)       /Ty4 all	<|special_separator|>
+(057.68, 418.44) (079.52, 418.44) (079.52, 422.36) (057.68, 422.36)       /Ty4 major	<|special_separator|>
+(084.67, 418.44) (104.20, 418.44) (104.20, 422.36) (084.67, 422.36)       /Ty4 cloud	<|special_separator|>
+(109.35, 418.44) (145.60, 418.44) (145.60, 422.36) (109.35, 422.36)       /Ty4 providers.	<|special_separator|>
+(150.75, 418.44) (164.46, 418.44) (164.46, 422.36) (150.75, 422.36)       /Ty4 Yet,	<|special_separator|>
+(169.62, 418.44) (213.32, 418.44) (213.32, 422.36) (169.62, 422.36)       /Ty4 publications	<|special_separator|>
+(218.47, 418.44) (250.56, 418.44) (250.56, 422.36) (218.47, 422.36)       /Ty4 outlining	<|special_separator|>
+(255.71, 418.44) (270.50, 418.44) (270.50, 422.36) (255.71, 422.36)       /Ty4 how	<|special_separator|>
+(275.65, 418.44) (291.92, 418.44) (291.92, 422.36) (275.65, 422.36)       /Ty4 such	<|special_separator|>
+(057.68, 409.15) (085.47, 409.15) (085.47, 413.06) (057.68, 413.06)       /Ty4 services	<|special_separator|>
+(089.65, 409.15) (101.11, 409.15) (101.11, 413.06) (089.65, 413.06)       /Ty4 are	<|special_separator|>
+(105.28, 409.15) (136.43, 409.15) (136.43, 413.06) (105.28, 413.06)       /Ty4 designed	<|special_separator|>
+(140.61, 409.15) (193.59, 409.15) (193.59, 413.06) (140.61, 413.06)       /Ty4 and optimized	<|special_separator|>
+(197.77, 409.15) (204.74, 409.15) (204.74, 413.06) (197.77, 413.06)       /Ty4 to	<|special_separator|>
+(208.91, 409.15) (226.10, 409.15) (226.10, 413.06) (208.91, 413.06)       /Ty4 scale	<|special_separator|>
+(230.28, 409.15) (237.25, 409.15) (237.25, 413.06) (230.28, 413.06)       /Ty4 in	<|special_separator|>
+(241.44, 409.15) (252.59, 409.15) (252.59, 413.06) (241.44, 413.06)       /Ty4 the	<|special_separator|>
+(256.76, 409.15) (276.29, 409.15) (276.29, 413.06) (256.76, 413.06)       /Ty4 cloud	<|special_separator|>
+(280.46, 409.15) (291.92, 409.15) (291.92, 413.06) (280.46, 413.06)       /Ty4 are	<|special_separator|>
+(057.68, 399.85) (291.92, 399.85) (291.92, 403.76) (057.68, 403.76)       /Ty4 scarce. In this paper, we focus on the case of document conversion	<|special_separator|>
+(057.68, 390.56) (291.92, 390.56) (291.92, 394.47) (057.68, 394.47)       /Ty4 to illustrate the particular challenges of scaling a complex data	<|special_separator|>
+(057.68, 381.26) (291.92, 381.26) (291.92, 385.17) (057.68, 385.17)       /Ty4 processing pipeline with a strong reliance on machine-learning	<|special_separator|>
+(057.68, 371.97) (291.92, 371.97) (291.92, 375.88) (057.68, 375.88)       /Ty4 methods on cloud infrastructure. Our key objective is to achieve	<|special_separator|>
+(057.68, 362.67) (291.92, 362.67) (291.92, 366.58) (057.68, 366.58)       /Ty4 high scalability and responsiveness for different workload profiles	<|special_separator|>
+(057.68, 353.38) (291.92, 353.38) (291.92, 357.29) (057.68, 357.29)       /Ty4 in a well-defined resource budget. We outline the requirements,	<|special_separator|>
+(057.68, 344.08) (291.92, 344.08) (291.92, 347.99) (057.68, 347.99)       /Ty4 design, and implementation choices of our document conversion	<|special_separator|>
+(057.68, 334.79) (082.22, 334.79) (082.22, 338.70) (057.68, 338.70)       /Ty4 service	<|special_separator|>
+(087.05, 334.79) (100.53, 334.79) (100.53, 338.70) (087.05, 338.70)       /Ty4 and	<|special_separator|>
+(105.37, 334.79) (127.51, 334.79) (127.51, 338.70) (105.37, 338.70)       /Ty4 reflect	<|special_separator|>
+(132.34, 334.79) (141.17, 334.79) (141.17, 338.70) (132.34, 338.70)       /Ty4 on	<|special_separator|>
+(146.00, 334.79) (157.15, 334.79) (157.15, 338.70) (146.00, 338.70)       /Ty4 the	<|special_separator|>
+(161.99, 334.79) (198.70, 334.79) (198.70, 338.70) (161.99, 338.70)       /Ty4 challenges	<|special_separator|>
+(203.53, 334.79) (239.25, 334.79) (239.25, 338.70) (203.53, 338.70)       /Ty4 we faced.	<|special_separator|>
+(244.09, 334.79) (276.62, 334.79) (276.62, 338.70) (244.09, 338.70)       /Ty4 Evidence	<|special_separator|>
+(281.45, 334.79) (291.92, 334.79) (291.92, 338.70) (281.45, 338.70)       /Ty4 for	<|special_separator|>
+(057.68, 325.49) (068.84, 325.49) (068.84, 329.40) (057.68, 329.40)       /Ty4 the	<|special_separator|>
+(074.06, 325.49) (098.70, 325.49) (098.70, 329.40) (074.06, 329.40)       /Ty4 scaling	<|special_separator|>
+(103.94, 325.49) (135.33, 325.49) (135.33, 329.40) (103.94, 329.40)       /Ty4 behavior	<|special_separator|>
+(140.56, 325.49) (154.05, 325.49) (154.05, 329.40) (140.56, 329.40)       /Ty4 and	<|special_separator|>
+(159.29, 325.49) (189.64, 325.49) (189.64, 329.40) (159.29, 329.40)       /Ty4 resource	<|special_separator|>
+(194.87, 325.49) (228.33, 325.49) (228.33, 329.40) (194.87, 329.40)       /Ty4 efficiency	<|special_separator|>
+(233.56, 325.49) (239.14, 325.49) (239.14, 329.40) (233.56, 329.40)       /Ty4 is	<|special_separator|>
+(244.37, 325.49) (276.21, 325.49) (276.21, 329.40) (244.37, 329.40)       /Ty4 provided	<|special_separator|>
+(281.45, 325.49) (291.92, 325.49) (291.92, 329.40) (281.45, 329.40)       /Ty4 for	<|special_separator|>
+(057.68, 316.20) (291.92, 316.20) (291.92, 320.11) (057.68, 320.11)       /Ty4 two alternative workload distribution strategies and deployment	<|special_separator|>
+(057.68, 306.90) (291.92, 306.90) (291.92, 310.81) (057.68, 310.81)       /Ty4 configurations. Our best-performing method achieves sustained	<|special_separator|>
+(057.68, 297.61) (291.92, 297.61) (291.92, 301.52) (057.68, 301.52)       /Ty4 throughput of over one million PDF pages per hour on 3072 CPU	<|special_separator|>
+(057.68, 288.31) (142.77, 288.31) (142.77, 292.22) (057.68, 292.22)       /Ty4 cores across 192 nodes.	<|special_separator|>
+(066.98, 277.44) (086.96, 277.44) (086.96, 287.00) (066.98, 287.00)       /Ty3 Index	<|special_separator|>
+(092.26, 277.44) (113.33, 277.44) (113.33, 287.00) (092.26, 287.00)       /Ty3 Terms	<|special_separator|>
+(113.33, 278.82) (141.23, 278.82) (141.23, 282.73) (113.33, 282.73)       /Ty4 -cloud	<|special_separator|>
+(146.52, 278.82) (191.85, 278.82) (191.85, 282.73) (146.52, 282.73)       /Ty4 applications,	<|special_separator|>
+(197.15, 278.82) (232.46, 278.82) (232.46, 282.73) (197.15, 282.73)       /Ty4 document	<|special_separator|>
+(237.77, 278.82) (291.93, 278.82) (291.93, 282.73) (237.77, 282.73)       /Ty4 understanding,	<|special_separator|>
+(057.68, 269.52) (217.28, 269.52) (217.28, 273.43) (057.68, 273.43)       /Ty4 distributed computing, artificial intelligence	<|special_separator|>
+(138.53, 246.95) (211.08, 247.33) (211.08, 253.82) (138.53, 255.06)       /Ty1 I. INTRODUCTION	<|special_separator|>
+(066.98, 231.67) (291.92, 231.67) (291.92, 239.78) (066.98, 239.78)       /Ty1 Over the past decade, many organizations have accelerated	<|special_separator|>
+(057.68, 220.52) (074.72, 220.52) (074.72, 228.63) (057.68, 228.63)       /Ty1 their	<|special_separator|>
+(079.91, 220.52) (134.64, 220.52) (134.64, 228.63) (079.91, 228.63)       /Ty1 transformation	<|special_separator|>
+(139.82, 220.52) (154.28, 220.52) (154.28, 228.63) (139.82, 228.63)       /Ty1 into	<|special_separator|>
+(159.47, 220.52) (201.42, 220.52) (201.42, 228.63) (159.47, 228.63)       /Ty1 data-driven	<|special_separator|>
+(206.61, 220.52) (247.99, 220.52) (247.99, 228.63) (206.61, 228.63)       /Ty1 businesses,	<|special_separator|>
+(253.17, 220.52) (260.91, 220.52) (260.91, 228.63) (253.17, 228.63)       /Ty1 as	<|special_separator|>
+(266.10, 220.52) (291.92, 220.52) (291.92, 228.63) (266.10, 228.63)       /Ty1 studies	<|special_separator|>
+(057.68, 209.37) (291.92, 209.37) (291.92, 217.48) (057.68, 217.48)       /Ty1 have shown its positive impact in efficiency, decision making,	<|special_separator|>
+(057.68, 198.21) (065.43, 198.21) (065.43, 206.32) (057.68, 206.32)       /Ty1 or	<|special_separator|>
+(071.09, 198.21) (103.10, 198.21) (103.10, 206.32) (071.09, 206.32)       /Ty1 financial	<|special_separator|>
+(108.76, 198.21) (155.73, 198.21) (155.73, 206.32) (108.76, 206.32)       /Ty1 performance	<|special_separator|>
+(161.39, 198.21) (174.55, 198.21) (174.55, 206.32) (161.39, 206.32)       /Ty1 [1],	<|special_separator|>
+(180.21, 198.21) (193.37, 198.21) (193.37, 206.32) (180.21, 206.32)       /Ty1 [2].	<|special_separator|>
+(199.04, 198.21) (229.50, 198.21) (229.50, 206.32) (199.04, 206.32)       /Ty1 Leading	<|special_separator|>
+(235.16, 198.21) (274.91, 198.21) (274.91, 206.32) (235.16, 206.32)       /Ty1 companies	<|special_separator|>
+(280.57, 198.21) (291.92, 198.21) (291.92, 206.32) (280.57, 206.32)       /Ty1 are	<|special_separator|>
+(057.68, 187.06) (291.92, 187.06) (291.92, 195.17) (057.68, 195.17)       /Ty1 increasingly deploying workloads on public and private cloud	<|special_separator|>
+(057.68, 175.90) (291.92, 175.90) (291.92, 184.01) (057.68, 184.01)       /Ty1 infrastructure, including business intelligence processing and	<|special_separator|>
+(057.68, 164.75) (254.12, 164.75) (254.12, 172.86) (057.68, 172.86)       /Ty1 machine learning models in data analytics platforms	<|special_separator|>
+(259.53, 164.75) (291.92, 164.75) (291.92, 172.86) (259.53, 172.86)       /Ty1 [3]. This	<|special_separator|>
+(057.68, 153.59) (063.88, 153.59) (063.88, 161.70) (057.68, 161.70)       /Ty1 is	<|special_separator|>
+(068.82, 153.59) (100.88, 153.59) (100.88, 161.70) (068.82, 161.70)       /Ty1 owed to	<|special_separator|>
+(105.81, 153.59) (131.77, 153.59) (131.77, 161.70) (105.81, 161.70)       /Ty1 several	<|special_separator|>
+(136.69, 153.59) (161.89, 153.59) (161.89, 161.70) (136.69, 161.70)       /Ty1 factors	<|special_separator|>
+(166.83, 153.59) (183.87, 153.59) (183.87, 161.70) (166.83, 161.70)       /Ty1 such	<|special_separator|>
+(188.79, 153.59) (196.53, 153.59) (196.53, 161.70) (188.79, 161.70)       /Ty1 as	<|special_separator|>
+(201.47, 153.59) (218.00, 153.59) (218.00, 161.70) (201.47, 161.70)       /Ty1 high	<|special_separator|>
+(222.93, 153.59) (266.06, 153.59) (266.06, 161.70) (222.93, 161.70)       /Ty1 availability,	<|special_separator|>
+(270.99, 153.59) (291.92, 153.59) (291.92, 161.70) (270.99, 161.70)       /Ty1 lower	<|special_separator|>
+(057.68, 142.44) (072.66, 142.44) (072.66, 150.55) (057.68, 150.55)       /Ty1 cost	<|special_separator|>
+(076.84, 142.44) (087.68, 142.44) (087.68, 150.55) (076.84, 150.55)       /Ty1 for	<|special_separator|>
+(091.85, 142.44) (174.81, 142.44) (174.81, 150.55) (091.85, 150.55)       /Ty1 compute, and storage	<|special_separator|>
+(179.00, 142.44) (192.16, 142.44) (192.16, 150.55) (179.00, 150.55)       /Ty1 [4],	<|special_separator|>
+(196.34, 142.44) (204.08, 142.44) (204.08, 150.55) (196.34, 150.55)       /Ty1 as	<|special_separator|>
+(208.26, 142.44) (224.26, 142.44) (224.26, 150.55) (208.26, 150.55)       /Ty1 well	<|special_separator|>
+(228.45, 142.44) (236.19, 142.44) (236.19, 150.55) (228.45, 150.55)       /Ty1 as	<|special_separator|>
+(240.36, 142.44) (251.72, 142.44) (251.72, 150.55) (240.36, 150.55)       /Ty1 the	<|special_separator|>
+(255.90, 142.44) (291.92, 142.44) (291.92, 150.55) (255.90, 150.55)       /Ty1 flexibility	<|special_separator|>
+(057.68, 131.29) (291.92, 131.29) (291.92, 139.40) (057.68, 139.40)       /Ty1 to scale up or down a cloud-based business process to fit the	<|special_separator|>
+(057.68, 120.13) (291.92, 120.13) (291.92, 128.24) (057.68, 128.24)       /Ty1 operational needs. Workloads and services can be container-	<|special_separator|>
+(303.08, 510.53) (537.31, 510.53) (537.31, 518.64) (303.08, 518.64)       /Ty1 ized, deployed, and orchestrated through widely adopted and	<|special_separator|>
+(303.08, 499.38) (484.31, 499.38) (484.31, 507.49) (303.08, 507.49)       /Ty1 standardized platforms like Kubernetes [5], [6].	<|special_separator|>
+(312.37, 487.93) (337.61, 487.93) (337.61, 496.04) (312.37, 496.04)       /Ty1 A key	<|special_separator|>
+(342.94, 487.93) (374.26, 487.93) (374.26, 496.04) (342.94, 496.04)       /Ty1 business	<|special_separator|>
+(379.59, 487.93) (407.47, 487.93) (407.47, 496.04) (379.59, 496.04)       /Ty1 process	<|special_separator|>
+(412.80, 487.93) (442.27, 487.93) (442.27, 496.04) (412.80, 496.04)       /Ty1 relevant	<|special_separator|>
+(447.61, 487.93) (454.84, 487.93) (454.84, 496.04) (447.61, 496.04)       /Ty1 to	<|special_separator|>
+(460.17, 487.93) (480.69, 487.93) (480.69, 496.04) (460.17, 496.04)       /Ty1 many	<|special_separator|>
+(486.02, 487.93) (525.78, 487.93) (525.78, 496.04) (486.02, 496.04)       /Ty1 companies	<|special_separator|>
+(531.12, 487.93) (537.32, 487.93) (537.32, 496.04) (531.12, 496.04)       /Ty1 is	<|special_separator|>
+(303.08, 476.77) (537.31, 476.77) (537.31, 484.88) (303.08, 484.88)       /Ty1 document understanding. Documents may constitute contracts,	<|special_separator|>
+(303.08, 465.62) (537.31, 465.62) (537.31, 473.73) (303.08, 473.73)       /Ty1 guidelines, manuals, presentations, papers, etc., which contain	<|special_separator|>
+(303.08, 454.46) (334.34, 454.46) (334.34, 462.57) (303.08, 462.57)       /Ty1 valuable	<|special_separator|>
+(339.86, 454.46) (380.41, 454.46) (380.41, 462.57) (339.86, 462.57)       /Ty1 knowledge	<|special_separator|>
+(385.93, 454.46) (396.76, 454.46) (396.76, 462.57) (385.93, 462.57)       /Ty1 for	<|special_separator|>
+(402.28, 454.46) (419.32, 454.46) (419.32, 462.57) (402.28, 462.57)       /Ty1 their	<|special_separator|>
+(424.84, 454.46) (465.89, 454.46) (465.89, 462.57) (424.84, 462.57)       /Ty1 operations.	<|special_separator|>
+(471.41, 454.46) (517.85, 454.46) (517.85, 462.57) (471.41, 462.57)       /Ty1 We observe	<|special_separator|>
+(523.37, 454.46) (537.31, 454.46) (537.31, 462.57) (523.37, 462.57)       /Ty1 that	<|special_separator|>
+(303.08, 443.31) (537.31, 443.31) (537.31, 451.42) (303.08, 451.42)       /Ty1 several specialized companies and all major cloud providers	<|special_separator|>
+(303.08, 432.16) (320.90, 432.16) (320.90, 440.26) (303.08, 440.26)       /Ty1 offer	<|special_separator|>
+(325.53, 432.16) (361.15, 432.16) (361.15, 440.26) (325.53, 440.26)       /Ty1 dedicated	<|special_separator|>
+(365.77, 432.16) (395.71, 432.16) (395.71, 440.26) (365.77, 440.26)       /Ty1 services	<|special_separator|>
+(400.34, 432.16) (425.12, 432.16) (425.12, 440.26) (400.34, 440.26)       /Ty1 (SaaS)	<|special_separator|>
+(429.74, 432.16) (440.58, 432.16) (440.58, 440.26) (429.74, 440.26)       /Ty1 for	<|special_separator|>
+(445.21, 432.16) (472.34, 432.16) (472.34, 440.26) (445.21, 440.26)       /Ty1 various	<|special_separator|>
+(476.96, 432.16) (503.81, 432.16) (503.81, 440.26) (476.96, 440.26)       /Ty1 aspects	<|special_separator|>
+(508.43, 432.16) (516.18, 432.16) (516.18, 440.26) (508.43, 440.26)       /Ty1 of	<|special_separator|>
+(520.80, 432.16) (537.31, 432.16) (537.31, 440.26) (520.80, 440.26)       /Ty1 doc-	<|special_separator|>
+(303.08, 421.00) (537.31, 421.00) (537.31, 429.11) (303.08, 429.11)       /Ty1 ument understanding such as Optical Character Recognition	<|special_separator|>
+(303.08, 409.85) (537.32, 409.85) (537.32, 417.96) (303.08, 417.96)       /Ty1 (OCR) (e.g., Amazon Textract 1 ), forms, and invoice parsing	<|special_separator|>
+(303.08, 398.69) (347.62, 402.63) (347.62, 408.31) (303.08, 406.80)       /Ty1 (Docparser 2	<|special_separator|>
+(348.08, 398.69) (350.41, 398.69) (350.41, 406.80) (348.08, 406.80)       /Ty1 ,	<|special_separator|>
+(355.84, 398.69) (394.20, 402.63) (394.20, 408.31) (355.84, 406.80)       /Ty1 Nanonets 3	<|special_separator|>
+(394.67, 398.69) (396.99, 398.69) (396.99, 406.80) (394.67, 406.80)       /Ty1 ,	<|special_separator|>
+(402.42, 398.69) (429.78, 398.69) (429.78, 406.80) (402.42, 406.80)       /Ty1 Google	<|special_separator|>
+(435.22, 398.69) (473.94, 398.69) (473.94, 406.80) (435.22, 406.80)       /Ty1 Document	<|special_separator|>
+(479.37, 398.69) (492.44, 402.63) (492.44, 408.31) (479.37, 406.80)       /Ty1 AI 4	<|special_separator|>
+(492.90, 398.69) (495.22, 398.69) (495.22, 406.80) (492.90, 406.80)       /Ty1 ,	<|special_separator|>
+(500.65, 398.69) (537.31, 398.69) (537.31, 406.80) (500.65, 406.80)       /Ty1 Microsoft	<|special_separator|>
+(303.08, 387.54) (343.87, 387.54) (343.87, 395.65) (303.08, 395.65)       /Ty1 SharePoint	<|special_separator|>
+(348.54, 387.54) (377.48, 391.48) (377.48, 397.15) (348.54, 395.65)       /Ty1 Syntex 5	<|special_separator|>
+(377.94, 387.54) (383.36, 387.54) (383.36, 395.65) (377.94, 395.65)       /Ty1 ),	<|special_separator|>
+(388.03, 387.54) (395.77, 387.54) (395.77, 395.65) (388.03, 395.65)       /Ty1 or	<|special_separator|>
+(400.43, 387.54) (440.71, 387.54) (440.71, 395.65) (400.43, 395.65)       /Ty1 conversion	<|special_separator|>
+(445.38, 387.54) (453.12, 387.54) (453.12, 395.65) (445.38, 395.65)       /Ty1 of	<|special_separator|>
+(457.79, 387.54) (504.25, 387.54) (504.25, 395.65) (457.79, 395.65)       /Ty1 unstructured	<|special_separator|>
+(508.92, 387.54) (537.32, 387.54) (537.32, 395.65) (508.92, 395.65)       /Ty1 formats	<|special_separator|>
+(303.08, 376.38) (531.43, 380.32) (531.43, 386.00) (303.08, 384.49)       /Ty1 such as PDF into structured content (IBM Watson Discovery 6	<|special_separator|>
+(531.90, 376.38) (537.32, 376.38) (537.32, 384.49) (531.90, 384.49)       /Ty1 ).	<|special_separator|>
+(312.37, 364.93) (537.32, 364.93) (537.32, 373.04) (312.37, 373.04)       /Ty1 Conversion of PDF documents into a structured, machine-	<|special_separator|>
+(303.08, 353.78) (537.31, 353.78) (537.31, 361.89) (303.08, 361.89)       /Ty1 processable format is a particularly challenging business pro-	<|special_separator|>
+(303.08, 342.62) (318.56, 342.62) (318.56, 350.73) (303.08, 350.73)       /Ty1 cess	<|special_separator|>
+(322.99, 342.62) (348.07, 342.62) (348.07, 350.73) (322.99, 350.73)       /Ty1 due to	<|special_separator|>
+(352.49, 342.62) (363.85, 342.62) (363.85, 350.73) (352.49, 350.73)       /Ty1 the	<|special_separator|>
+(368.27, 342.62) (384.80, 342.62) (384.80, 350.73) (368.27, 350.73)       /Ty1 high	<|special_separator|>
+(389.22, 342.62) (427.20, 342.62) (427.20, 350.73) (389.22, 350.73)       /Ty1 variability	<|special_separator|>
+(431.63, 342.62) (525.15, 342.62) (525.15, 350.73) (431.63, 350.73)       /Ty1 and weak normalization	<|special_separator|>
+(529.57, 342.62) (537.31, 342.62) (537.31, 350.73) (529.57, 350.73)       /Ty1 of	<|special_separator|>
+(303.08, 331.47) (311.86, 331.47) (311.86, 339.58) (303.08, 339.58)       /Ty1 its	<|special_separator|>
+(317.37, 331.47) (338.81, 331.47) (338.81, 339.58) (317.37, 339.58)       /Ty1 input.	<|special_separator|>
+(344.33, 331.47) (353.91, 331.47) (353.91, 339.58) (344.33, 339.58)       /Ty1 To	<|special_separator|>
+(359.42, 331.47) (379.56, 331.47) (379.56, 339.58) (359.42, 339.58)       /Ty1 name	<|special_separator|>
+(385.07, 331.47) (389.20, 331.47) (389.20, 339.58) (385.07, 339.58)       /Ty1 a	<|special_separator|>
+(394.72, 331.47) (408.42, 331.47) (408.42, 339.58) (394.72, 339.58)       /Ty1 few	<|special_separator|>
+(413.93, 331.47) (456.28, 331.47) (456.28, 339.58) (413.93, 339.58)       /Ty1 dimensions	<|special_separator|>
+(461.79, 331.47) (469.53, 331.47) (469.53, 339.58) (461.79, 339.58)       /Ty1 of	<|special_separator|>
+(475.06, 331.47) (537.31, 331.47) (537.31, 339.58) (475.06, 339.58)       /Ty1 variability, PDF	<|special_separator|>
+(303.08, 320.32) (343.35, 320.32) (343.35, 328.43) (303.08, 328.43)       /Ty1 documents	<|special_separator|>
+(348.46, 320.32) (361.37, 320.32) (361.37, 328.43) (348.46, 328.43)       /Ty1 can	<|special_separator|>
+(366.48, 320.32) (375.25, 320.32) (375.25, 328.43) (366.48, 328.43)       /Ty1 be	<|special_separator|>
+(380.37, 320.32) (398.96, 320.32) (398.96, 328.43) (380.37, 328.43)       /Ty1 short	<|special_separator|>
+(404.07, 320.32) (411.81, 320.32) (411.81, 328.43) (404.07, 328.43)       /Ty1 or	<|special_separator|>
+(416.91, 320.32) (435.77, 320.32) (435.77, 328.43) (416.91, 328.43)       /Ty1 long,	<|special_separator|>
+(440.88, 320.32) (467.20, 320.32) (467.20, 328.43) (440.88, 328.43)       /Ty1 encode	<|special_separator|>
+(472.31, 320.32) (524.46, 320.32) (524.46, 328.43) (472.31, 328.43)       /Ty1 programmatic	<|special_separator|>
+(529.57, 320.32) (537.31, 320.32) (537.31, 328.43) (529.57, 328.43)       /Ty1 or	<|special_separator|>
+(303.08, 309.16) (537.31, 309.16) (537.31, 317.27) (303.08, 317.27)       /Ty1 scanned content, have simple or complex page layouts, may	<|special_separator|>
+(303.08, 298.01) (537.31, 298.01) (537.31, 306.12) (303.08, 306.12)       /Ty1 contain tables or figures, etc. Thus, the process of recovering	<|special_separator|>
+(303.08, 286.85) (320.11, 286.85) (320.11, 294.96) (303.08, 294.96)       /Ty1 their	<|special_separator|>
+(324.88, 286.85) (357.41, 286.85) (357.41, 294.96) (324.88, 294.96)       /Ty1 structure	<|special_separator|>
+(362.18, 286.85) (375.61, 286.85) (375.61, 294.96) (362.18, 294.96)       /Ty1 and	<|special_separator|>
+(380.38, 286.85) (417.41, 286.85) (417.41, 294.96) (380.38, 294.96)       /Ty1 extracting	<|special_separator|>
+(422.18, 286.85) (449.55, 286.85) (449.55, 294.96) (422.18, 294.96)       /Ty1 content	<|special_separator|>
+(454.32, 286.85) (461.55, 286.85) (461.55, 294.96) (454.32, 294.96)       /Ty1 in	<|special_separator|>
+(466.32, 286.85) (482.85, 286.85) (482.85, 294.96) (466.32, 294.96)       /Ty1 high	<|special_separator|>
+(487.62, 286.85) (508.28, 286.85) (508.28, 294.96) (487.62, 294.96)       /Ty1 detail	<|special_separator|>
+(513.05, 286.85) (537.31, 286.85) (537.31, 294.96) (513.05, 294.96)       /Ty1 entails	<|special_separator|>
+(303.08, 275.70) (537.31, 275.70) (537.31, 283.81) (303.08, 283.81)       /Ty1 several dynamic steps (see Fig. 1). On the computational side,	<|special_separator|>
+(303.08, 264.55) (537.31, 264.55) (537.31, 272.65) (303.08, 272.65)       /Ty1 this relies on multiple algorithms and machine-learning (ML)	<|special_separator|>
+(303.08, 253.39) (329.93, 253.39) (329.93, 261.50) (303.08, 261.50)       /Ty1 models	<|special_separator|>
+(334.81, 253.39) (376.11, 253.39) (376.11, 261.50) (334.81, 261.50)       /Ty1 specialized	<|special_separator|>
+(381.00, 253.39) (391.84, 253.39) (391.84, 261.50) (381.00, 261.50)       /Ty1 for	<|special_separator|>
+(396.72, 253.39) (432.34, 253.39) (432.34, 261.50) (396.72, 261.50)       /Ty1 particular	<|special_separator|>
+(437.22, 253.39) (458.13, 253.39) (458.13, 261.50) (437.22, 261.50)       /Ty1 tasks.	<|special_separator|>
+(463.02, 253.39) (499.68, 253.39) (499.68, 261.50) (463.02, 261.50)       /Ty1 Examples	<|special_separator|>
+(504.56, 253.39) (515.40, 253.39) (515.40, 261.50) (504.56, 261.50)       /Ty1 for	<|special_separator|>
+(520.28, 253.39) (537.31, 253.39) (537.31, 261.50) (520.28, 261.50)       /Ty1 such	<|special_separator|>
+(303.08, 242.24) (537.31, 242.24) (537.31, 250.35) (303.08, 250.35)       /Ty1 models include OCR [7], document layout analysis [8]-[10],	<|special_separator|>
+(303.08, 231.08) (537.31, 231.08) (537.31, 239.19) (303.08, 239.19)       /Ty1 table structure recovery [11], [12], figure understanding [13],	<|special_separator|>
+(303.08, 219.93) (337.65, 219.93) (337.65, 228.04) (303.08, 228.04)       /Ty1 reference	<|special_separator|>
+(341.94, 219.93) (387.54, 219.93) (387.54, 228.04) (341.94, 228.04)       /Ty1 and citation	<|special_separator|>
+(391.84, 219.93) (429.02, 219.93) (429.02, 228.04) (391.84, 228.04)       /Ty1 resolution	<|special_separator|>
+(433.31, 219.93) (451.12, 219.93) (451.12, 228.04) (433.31, 228.04)       /Ty1 [14],	<|special_separator|>
+(455.42, 219.93) (468.58, 219.93) (468.58, 228.04) (455.42, 228.04)       /Ty1 etc.	<|special_separator|>
+(472.87, 219.93) (521.66, 219.93) (521.66, 228.04) (472.87, 228.04)       /Ty1 Furthermore,	<|special_separator|>
+(525.96, 219.93) (537.31, 219.93) (537.31, 228.04) (525.96, 228.04)       /Ty1 the	<|special_separator|>
+(303.08, 208.77) (537.31, 208.77) (537.31, 216.88) (303.08, 216.88)       /Ty1 ML landscape is evolving rapidly, with new models frequently	<|special_separator|>
+(303.08, 197.62) (336.50, 197.62) (336.50, 205.73) (303.08, 205.73)       /Ty1 exposing	<|special_separator|>
+(342.22, 197.62) (388.18, 197.62) (388.18, 205.73) (342.22, 205.73)       /Ty1 significantly	<|special_separator|>
+(393.89, 197.62) (425.66, 197.62) (425.66, 205.73) (393.89, 205.73)       /Ty1 different	<|special_separator|>
+(431.38, 197.62) (484.55, 197.62) (484.55, 205.73) (431.38, 205.73)       /Ty1 characteristics	<|special_separator|>
+(490.26, 197.62) (497.49, 197.62) (497.49, 205.73) (490.26, 205.73)       /Ty1 in	<|special_separator|>
+(503.20, 197.62) (523.86, 197.62) (523.86, 205.73) (503.20, 205.73)       /Ty1 terms	<|special_separator|>
+(529.57, 197.62) (537.31, 197.62) (537.31, 205.73) (529.57, 205.73)       /Ty1 of	<|special_separator|>
+(303.08, 186.47) (356.26, 186.47) (356.26, 194.58) (303.08, 194.58)       /Ty1 computational	<|special_separator|>
+(361.60, 186.47) (397.34, 186.47) (397.34, 194.58) (361.60, 194.58)       /Ty1 expenses,	<|special_separator|>
+(402.67, 186.47) (433.66, 186.47) (433.66, 194.58) (402.67, 194.58)       /Ty1 memory	<|special_separator|>
+(438.99, 186.47) (462.48, 186.47) (462.48, 194.58) (438.99, 194.58)       /Ty1 usage,	<|special_separator|>
+(467.81, 186.47) (475.56, 186.47) (475.56, 194.58) (467.81, 194.58)       /Ty1 or	<|special_separator|>
+(480.89, 186.47) (521.66, 186.47) (521.66, 194.58) (480.89, 194.58)       /Ty1 accelerator	<|special_separator|>
+(527.00, 186.47) (537.31, 186.47) (537.31, 194.58) (527.00, 194.58)       /Ty1 re-	<|special_separator|>
+(310.51, 169.52) (409.79, 166.52) (409.79, 173.01) (310.51, 174.39)       /Ty1 1 https://aws.amazon.com/textract	<|special_separator|>
+(310.51, 160.32) (377.59, 157.32) (377.59, 163.81) (310.51, 165.19)       /Ty1 2 https://docparser.com	<|special_separator|>
+(310.51, 151.12) (411.02, 148.12) (411.02, 154.60) (310.51, 155.99)       /Ty1 3 https://nanonets.com/invoice-ocr	<|special_separator|>
+(310.51, 141.92) (426.96, 138.91) (426.96, 145.40) (310.51, 146.78)       /Ty1 4 https://cloud.google.com/document-ai	<|special_separator|>
+(310.51, 132.71) (521.55, 129.71) (521.55, 136.20) (310.51, 137.58)       /Ty1 5 https://docs.microsoft.com/en-us/microsoft-365/contentunderstanding	<|special_separator|>
+(310.51, 123.51) (450.96, 120.51) (450.96, 127.00) (310.51, 128.38)       /Ty1 6 https://www.ibm.com/cloud/watson-discovery	<|special_separator|>
+(045.97, 272.65) (045.97, 585.69) (029.50, 585.69) (029.50, 272.65)       /TT1 arXiv:2206.00785v1  [cs.DL]  1 Jun 2022
