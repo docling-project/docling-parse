@@ -37,12 +37,20 @@ namespace pdflib
     if(level==0 and obj.isDictionary() and
        obj.hasKey("/Annot"))
       {
-        result = to_json(obj.getKey("/Annot"), prev_objs, level, max_level);
+        QPDFObjectHandle annot = obj.getKey("/Annot");
+        if(not annot.isNull())
+          {
+            result = to_json(annot, prev_objs, level, max_level);
+          }
       }
     else if(level==0 and obj.isDictionary() and
             obj.hasKey("/Annots"))
       {
-        result = to_json(obj.getKey("/Annots"), prev_objs, level, max_level);
+        QPDFObjectHandle annots = obj.getKey("/Annots");
+        if(not annots.isNull())
+          {
+            result = to_json(annots, prev_objs, level, max_level);
+          }
       }
 
     return result;

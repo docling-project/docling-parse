@@ -594,14 +594,31 @@ namespace pdflib
       {
         LOG_S(INFO) << "found `/Annot`";
         QPDFObjectHandle annot = qpdf_page.getKey("/Annot");
-        extract_page_items_from_annots(annot);
+        if(annot.isNull())
+          {
+            LOG_S(WARNING) << "`/Annot` key exists but resolves to null, skipping";
+          }
+        else
+          {
+	    auto annot_json = to_json(annot);
+	    LOG_S(INFO) << "annot: " << annot_json.dump(2);
+	    
+            extract_page_items_from_annots(annot);
+          }
       }
 
     if(qpdf_page.hasKey("/Annots"))
       {
         LOG_S(INFO) << "found `/Annots`";
         QPDFObjectHandle annots = qpdf_page.getKey("/Annots");
-        extract_page_items_from_annots(annots);
+        if(annots.isNull())
+          {
+            LOG_S(WARNING) << "`/Annots` key exists but resolves to null, skipping";
+          }
+        else
+          {
+            extract_page_items_from_annots(annots);
+          }
       }
   }
 
@@ -620,8 +637,21 @@ namespace pdflib
       {
         QPDFObjectHandle annot = annots.getArrayItem(l);
 
-        //auto annot_json = to_json(annot);
-        //LOG_S(INFO) << "annot " << l << ": " << annot_json.dump(2);
+	if(annot.isString())
+	  {
+	    auto annots_json = to_json(annots);
+	    LOG_S(WARNING) << "skipping annot, it is a string: " << annots_json.dump(2); 	    
+	    continue;
+	  }
+
+	if(not annot.isDictionary())
+	  {
+	    LOG_S(WARNING) << "skipping annot, not of type `dict`!"; 	    
+	    continue;
+	  }
+	
+        // auto annot_json = to_json(annot);
+        // LOG_S(INFO) << "annot " << l << ": " << annot_json.dump(2);
 
         auto [has_type, type] = to_string(annot, "/Type");
         if((not has_type) or (type!="/Annot"))
