@@ -98,7 +98,7 @@ namespace pdflib
   inline void renderer<BLEND2D>::render_text(text_instruction& instr)
   {
     LOG_S(INFO) << __FUNCTION__;
-    
+
     if (shape_[0] == 0 or shape_[1] == 0) { return; }
 
     const double x0 = instr.get_r_x0(), y0 = canvas_y(instr.get_r_y0());
@@ -135,31 +135,31 @@ namespace pdflib
   inline void renderer<BLEND2D>::render_bitmap(bitmap_instruction& instr)
   {
     LOG_S(INFO) << __FUNCTION__;
-    
+
     if (shape_[0] == 0 or shape_[1] == 0)
-    {
-      LOG_S(WARNING) << __FUNCTION__ << ": canvas not initialised, skipping";
-      return;
-    }
+      {
+        LOG_S(WARNING) << __FUNCTION__ << ": canvas not initialised, skipping";
+        return;
+      }
 
     // Compute axis-aligned destination rectangle in canvas coordinates first,
     // so we can draw a placeholder even when pixel data is unavailable.
     const double x_min = std::min({instr.get_r_x0(), instr.get_r_x1(),
-                                   instr.get_r_x2(), instr.get_r_x3()});
+        instr.get_r_x2(), instr.get_r_x3()});
     const double x_max = std::max({instr.get_r_x0(), instr.get_r_x1(),
-                                   instr.get_r_x2(), instr.get_r_x3()});
+        instr.get_r_x2(), instr.get_r_x3()});
     const double y_min = std::min({instr.get_r_y0(), instr.get_r_y1(),
-                                   instr.get_r_y2(), instr.get_r_y3()});
+        instr.get_r_y2(), instr.get_r_y3()});
     const double y_max = std::max({instr.get_r_y0(), instr.get_r_y1(),
-                                   instr.get_r_y2(), instr.get_r_y3()});
+        instr.get_r_y2(), instr.get_r_y3()});
 
     const double dst_w = x_max - x_min;
     const double dst_h = y_max - y_min;
     if (dst_w <= 0.0 or dst_h <= 0.0)
-    {
-      LOG_S(WARNING) << __FUNCTION__ << ": degenerate destination rect, skipping";
-      return;
-    }
+      {
+        LOG_S(WARNING) << __FUNCTION__ << ": degenerate destination rect, skipping";
+        return;
+      }
 
     // canvas_y(y_max) gives the top-left y of the destination in canvas space.
     const double dst_x = x_min;
@@ -174,14 +174,15 @@ namespace pdflib
 
     BLContext ctx(image_);
 
-    if (not src_data or src_data->empty() or sh <= 0 or sw <= 0 or sc < 1)
-    {
-      // No pixel data — draw a semi-transparent yellow placeholder.
-      ctx.set_fill_style(BLRgba32(0x66FFFF00u)); // A=40%, R=255, G=255, B=0
-      ctx.fill_rect(dst_rect);
-      ctx.end();
-      return;
-    }
+    if ((not instr.has_data()) or sh <= 0 or sw <= 0 or sc < 1)
+      {
+        LOG_S(WARNING) << "No pixel data — draw a semi-transparent yellow placeholder.";
+        // No pixel data — draw a semi-transparent yellow placeholder.
+        ctx.set_fill_style(BLRgba32(0x66FFFF00u)); // A=40%, R=255, G=255, B=0
+        ctx.fill_rect(dst_rect);
+        ctx.end();
+        return;
+      }
 
     // Build a BLImage (PRGB32) from the raw channel data.
     BLImage src_img;
@@ -194,26 +195,26 @@ namespace pdflib
       const intptr_t stride = img_data.stride;
 
       for (int row = 0; row < sh; ++row)
-      {
-        auto* row_ptr = reinterpret_cast<uint32_t*>(base + row * stride);
-        for (int col = 0; col < sw; ++col)
         {
-          const int idx = (row * sw + col) * sc;
-          const uint8_t r = src_data->at(idx);
-          const uint8_t g = (sc >= 2) ? src_data->at(idx + 1) : r;
-          const uint8_t b = (sc >= 3) ? src_data->at(idx + 2) : r;
-          const uint8_t a = (sc >= 4) ? src_data->at(idx + 3) : 0xFFu;
+          auto* row_ptr = reinterpret_cast<uint32_t*>(base + row * stride);
+          for (int col = 0; col < sw; ++col)
+            {
+              const int idx = (row * sw + col) * sc;
+              const uint8_t r = src_data->at(idx);
+              const uint8_t g = (sc >= 2) ? src_data->at(idx + 1) : r;
+              const uint8_t b = (sc >= 3) ? src_data->at(idx + 2) : r;
+              const uint8_t a = (sc >= 4) ? src_data->at(idx + 3) : 0xFFu;
 
-          // Store as premultiplied ARGB (required by BL_FORMAT_PRGB32).
-          const uint32_t pm_r = static_cast<uint32_t>(r) * a / 255u;
-          const uint32_t pm_g = static_cast<uint32_t>(g) * a / 255u;
-          const uint32_t pm_b = static_cast<uint32_t>(b) * a / 255u;
-          row_ptr[col] = (static_cast<uint32_t>(a) << 24)
-                       | (pm_r                     << 16)
-                       | (pm_g                     <<  8)
-                       |  pm_b;
+              // Store as premultiplied ARGB (required by BL_FORMAT_PRGB32).
+              const uint32_t pm_r = static_cast<uint32_t>(r) * a / 255u;
+              const uint32_t pm_g = static_cast<uint32_t>(g) * a / 255u;
+              const uint32_t pm_b = static_cast<uint32_t>(b) * a / 255u;
+              row_ptr[col] = (static_cast<uint32_t>(a) << 24)
+                | (pm_r                     << 16)
+                | (pm_g                     <<  8)
+                |  pm_b;
+            }
         }
-      }
     }
 
     ctx.blit_image(dst_rect, src_img, BLRectI(0, 0, sw, sh));
@@ -227,7 +228,7 @@ namespace pdflib
   inline void renderer<BLEND2D>::render_shape(shape_instruction& instr)
   {
     LOG_S(INFO) << __FUNCTION__;
-    
+
     if (shape_[0] == 0 or shape_[1] == 0) { return; }
     if (instr.size() < 2) { return; }
 
@@ -238,10 +239,10 @@ namespace pdflib
     path.move_to(xs[0], canvas_y(ys[0]));
     LOG_S(INFO) << " -> add point: (" << xs[0] << ", " << ys[0] << ")";
     for (size_t i = 1; i < instr.size(); ++i)
-    {
-      LOG_S(INFO) << " -> add point: (" << xs[i] << ", " << ys[i] << ")";
-      path.line_to(xs[i], canvas_y(ys[i]));
-    }
+      {
+        LOG_S(INFO) << " -> add point: (" << xs[i] << ", " << ys[i] << ")";
+        path.line_to(xs[i], canvas_y(ys[i]));
+      }
 
     BLContext ctx(image_);
     ctx.set_stroke_style(BLRgba32(0xFF000000u));
@@ -264,35 +265,35 @@ namespace pdflib
     const int h = shape_[0];
     const int w = shape_[1];
     if (h == 0 or w == 0)
-    {
-      return std::make_shared<std::vector<uint8_t>>();
-    }
+      {
+        return std::make_shared<std::vector<uint8_t>>();
+      }
 
     BLImageData img_data;
     image_.get_data(&img_data);
 
     auto result = std::make_shared<std::vector<uint8_t>>(
-        static_cast<std::size_t>(h) * w * 4);
+                                                         static_cast<std::size_t>(h) * w * 4);
 
     const auto* base = static_cast<const uint8_t*>(img_data.pixel_data);
     const intptr_t stride = img_data.stride;
 
     for (int row = 0; row < h; ++row)
-    {
-      const auto* src_row =
-          reinterpret_cast<const uint32_t*>(base + row * stride);
-      uint8_t* dst_row = result->data() + row * w * 4;
-
-      for (int col = 0; col < w; ++col)
       {
-        // BL_FORMAT_PRGB32 value = A<<24 | R<<16 | G<<8 | B  (little-endian)
-        const uint32_t px = src_row[col];
-        dst_row[col * 4 + 0] = static_cast<uint8_t>((px >> 16) & 0xFFu); // R
-        dst_row[col * 4 + 1] = static_cast<uint8_t>((px >>  8) & 0xFFu); // G
-        dst_row[col * 4 + 2] = static_cast<uint8_t>((px >>  0) & 0xFFu); // B
-        dst_row[col * 4 + 3] = static_cast<uint8_t>((px >> 24) & 0xFFu); // A
+        const auto* src_row =
+          reinterpret_cast<const uint32_t*>(base + row * stride);
+        uint8_t* dst_row = result->data() + row * w * 4;
+
+        for (int col = 0; col < w; ++col)
+          {
+            // BL_FORMAT_PRGB32 value = A<<24 | R<<16 | G<<8 | B  (little-endian)
+            const uint32_t px = src_row[col];
+            dst_row[col * 4 + 0] = static_cast<uint8_t>((px >> 16) & 0xFFu); // R
+            dst_row[col * 4 + 1] = static_cast<uint8_t>((px >>  8) & 0xFFu); // G
+            dst_row[col * 4 + 2] = static_cast<uint8_t>((px >>  0) & 0xFFu); // B
+            dst_row[col * 4 + 3] = static_cast<uint8_t>((px >> 24) & 0xFFu); // A
+          }
       }
-    }
 
     return result;
   }
@@ -305,17 +306,17 @@ namespace pdflib
   {
 
     if (shape_[0] == 0 or shape_[1] == 0)
-    {
-      throw std::runtime_error("renderer<BLEND2D>::save: canvas is empty");
-    }
+      {
+        throw std::runtime_error("renderer<BLEND2D>::save: canvas is empty");
+      }
 
     const BLResult err = image_.write_to_file(path.c_str());
     if (err != BL_SUCCESS)
-    {
-      throw std::runtime_error(
-          "renderer<BLEND2D>::save: failed to write '" + path + "' "
-          "(BLResult=" + std::to_string(err) + ")");
-    }
+      {
+        throw std::runtime_error(
+                                 "renderer<BLEND2D>::save: failed to write '" + path + "' "
+                                 "(BLResult=" + std::to_string(err) + ")");
+      }
   }
 
   // ---------------------------------------------------------------------------
@@ -330,17 +331,17 @@ namespace pdflib
     namespace fs = std::filesystem;
 
     const std::string tmp =
-        (fs::temp_directory_path() / "blend2d_renderer_preview.png").string();
+      (fs::temp_directory_path() / "blend2d_renderer_preview.png").string();
 
     save(tmp);
 
     const std::string cmd =
 #if defined(_WIN32)
-        "start \"\" \"" + tmp + "\"";
+      "start \"\" \"" + tmp + "\"";
 #elif defined(__APPLE__)
-        "open " + tmp;
+    "open " + tmp;
 #else
-        "xdg-open " + tmp + " &";
+    "xdg-open " + tmp + " &";
 #endif
 
     std::system(cmd.c_str()); // NOLINT(cert-env33-c)

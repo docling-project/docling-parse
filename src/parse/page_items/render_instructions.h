@@ -117,6 +117,8 @@ namespace pdflib
     const std::shared_ptr<std::vector<uint8_t> >& get_data() const { return data; }
     const std::array<int, 3>& get_shape() const { return shape; }
 
+    bool has_data() const { return (data) and (not data->empty()); }
+
     double get_r_x0() const { return r_x0; }
     double get_r_y0() const { return r_y0; }
     double get_r_x1() const { return r_x1; }
