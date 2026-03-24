@@ -11,6 +11,13 @@
 
 namespace pdflib
 {
+  enum pixel_format {
+    PIXEL_FORMAT_UNKNOWN,
+    PIXEL_FORMAT_GRAY,   // 1 channel  (/DeviceGray)
+    PIXEL_FORMAT_RGB,    // 3 channels (/DeviceRGB)
+    PIXEL_FORMAT_CMYK,   // 4 channels (/DeviceCMYK)
+  };
+
   enum RENDER_INSTRUCTION_NAME {
     SIZE_INSTRUCTION, // set the size of the canvas on which we render
     TEXT_RENDER_INSTRUCTION, // render text on the canvas
@@ -100,6 +107,7 @@ namespace pdflib
     bitmap_instruction(std::string xobject_key,
 		       std::shared_ptr<std::vector<uint8_t> > data,
                        std::array<int, 3> shape,
+                       pixel_format fmt,
                        double r_x0, double r_y0,
                        double r_x1, double r_y1,
                        double r_x2, double r_y2,
@@ -107,15 +115,17 @@ namespace pdflib
       xobject_key(xobject_key),
       data(std::move(data)),
       shape(shape),
+      fmt(fmt),
       r_x0(r_x0), r_y0(r_y0),
       r_x1(r_x1), r_y1(r_y1),
       r_x2(r_x2), r_y2(r_y2),
       r_x3(r_x3), r_y3(r_y3) {}
 
     const std::string& get_key() const { return xobject_key; }
-    
+
     const std::shared_ptr<std::vector<uint8_t> >& get_data() const { return data; }
     const std::array<int, 3>& get_shape() const { return shape; }
+    pixel_format get_pixel_format() const { return fmt; }
 
     bool has_data() const { return (data) and (not data->empty()); }
 
@@ -134,6 +144,7 @@ namespace pdflib
     
     const std::shared_ptr<std::vector<uint8_t> > data;
     const std::array<int, 3> shape;
+    const pixel_format fmt;
 
     const double r_x0;
     const double r_y0;
