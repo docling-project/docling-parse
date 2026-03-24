@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <array>
 #include <climits>
+#include <cmath>
 #include <cstdlib>
 #include <filesystem>
 #include <memory>
@@ -36,6 +37,11 @@ namespace pdflib
     // When false the renderer always uses the hardcoded fallback font
     // (Helvetica / Arial) without any name lookup.
     bool resolve_fonts = true;
+
+    // Target canvas dimensions in pixels.  -1 means "use the PDF page size".
+    // If only one is set the other is derived to preserve the page aspect ratio.
+    int canvas_width  = -1;
+    int canvas_height = -1;
   };
 
   template<>
@@ -70,6 +76,8 @@ namespace pdflib
 
     mutable BLImage    image_;  // internal canvas (PRGB32 format)
     std::array<int, 3> shape_;  // {height, width, 4}
+    double scale_x_ = 1.0;     // pdf-to-canvas scale along x
+    double scale_y_ = 1.0;     // pdf-to-canvas scale along y
 
     // Lazily-built map from normalized font stem (e.g. "times new roman bold")
     // to its absolute file path.
@@ -81,11 +89,12 @@ namespace pdflib
     // Cache: cache_key → loaded BLFontFace.
     std::unordered_map<std::string, BLFontFace> font_cache_;
 
-    // Convert a PDF y-coordinate (origin bottom-left) to a canvas
-    // y-coordinate (origin top-left).
+    // Convert PDF coordinates (origin bottom-left) to canvas coordinates
+    // (origin top-left), applying scale.
+    double canvas_x(double pdf_x) const { return pdf_x * scale_x_; }
     double canvas_y(double pdf_y) const
     {
-      return static_cast<double>(shape_[0]) - pdf_y;
+      return static_cast<double>(shape_[0]) - pdf_y * scale_y_;
     }
 
     // Normalize a font name for fuzzy comparison:
@@ -243,10 +252,41 @@ namespace pdflib
   inline void renderer<BLEND2D>::set_size(size_instruction& instr)
   {
     const auto& bbox = instr.crop_bbox;
-    const int width  = bbox[2] - bbox[0];
-    const int height = bbox[3] - bbox[1];
+    const int pdf_w  = bbox[2] - bbox[0];
+    const int pdf_h  = bbox[3] - bbox[1];
 
-    if (width <= 0 or height <= 0) { return; }
+    if (pdf_w <= 0 or pdf_h <= 0) { return; }
+
+    // Apply canvas_width / canvas_height from config, preserving aspect ratio.
+    int width  = pdf_w;
+    int height = pdf_h;
+
+    const bool have_w = (config_.canvas_width  > 0);
+    const bool have_h = (config_.canvas_height > 0);
+
+    if (have_w and have_h)
+      {
+        width  = config_.canvas_width;
+        height = config_.canvas_height;
+      }
+    else if (have_w)
+      {
+        width  = config_.canvas_width;
+        height = static_cast<int>(
+          std::round(static_cast<double>(pdf_h) * width / pdf_w));
+      }
+    else if (have_h)
+      {
+        height = config_.canvas_height;
+        width  = static_cast<int>(
+          std::round(static_cast<double>(pdf_w) * height / pdf_h));
+      }
+
+    if (width <= 0) { width = 1; }
+    if (height <= 0) { height = 1; }
+
+    scale_x_ = static_cast<double>(width)  / pdf_w;
+    scale_y_ = static_cast<double>(height) / pdf_h;
 
     shape_ = {height, width, 4};
     image_.create(width, height, BL_FORMAT_PRGB32);
@@ -381,18 +421,15 @@ namespace pdflib
 
     if (shape_[0] == 0 or shape_[1] == 0) { return; }
 
-    // Quad corners in canvas space (y flipped).
-    const double x0 = instr.get_r_x0(), y0 = canvas_y(instr.get_r_y0());
-    const double x1 = instr.get_r_x1(), y1 = canvas_y(instr.get_r_y1());
-    const double x2 = instr.get_r_x2(), y2 = canvas_y(instr.get_r_y2());
-    const double x3 = instr.get_r_x3(), y3 = canvas_y(instr.get_r_y3());
+    // Quad corners in canvas space (scaled + y flipped).
+    const double x0 = canvas_x(instr.get_r_x0()), y0 = canvas_y(instr.get_r_y0());
+    const double x1 = canvas_x(instr.get_r_x1()), y1 = canvas_y(instr.get_r_y1());
+    const double x2 = canvas_x(instr.get_r_x2()), y2 = canvas_y(instr.get_r_y2());
+    const double x3 = canvas_x(instr.get_r_x3()), y3 = canvas_y(instr.get_r_y3());
 
-    // Font size: height of the quad in PDF user-space units, which equals
-    // the difference in canvas y between the bottom and top edges.
-    // canvas_y(y_bottom) - canvas_y(y_top) = y_top_pdf - y_bottom_pdf.
-    const double quad_w = instr.get_r_x1() - instr.get_r_x0();
-    const double quad_h = instr.get_r_y3() - instr.get_r_y0();
-    const double size   = (quad_h > 0.5) ? quad_h : instr.get_font_size();
+    // Font size in canvas pixels: scale the PDF quad height by scale_y_.
+    const double quad_h = std::abs(y3-y0);
+    const double size   = ((quad_h > 0.5) ? quad_h : instr.get_font_size()) * scale_y_;
 
     BLFontFace& face = resolve_font_face(instr.get_font_name(),
                                          instr.get_base_font());
@@ -457,28 +494,27 @@ namespace pdflib
         return;
       }
 
-    // Compute axis-aligned destination rectangle in canvas coordinates first,
-    // so we can draw a placeholder even when pixel data is unavailable.
-    const double x_min = std::min({instr.get_r_x0(), instr.get_r_x1(),
-        instr.get_r_x2(), instr.get_r_x3()});
-    const double x_max = std::max({instr.get_r_x0(), instr.get_r_x1(),
-        instr.get_r_x2(), instr.get_r_x3()});
-    const double y_min = std::min({instr.get_r_y0(), instr.get_r_y1(),
+    // Compute axis-aligned destination rectangle in canvas coordinates.
+    const double x_min = canvas_x(std::min({instr.get_r_x0(), instr.get_r_x1(),
+        instr.get_r_x2(), instr.get_r_x3()}));
+    const double x_max = canvas_x(std::max({instr.get_r_x0(), instr.get_r_x1(),
+        instr.get_r_x2(), instr.get_r_x3()}));
+    const double y_min_pdf = std::min({instr.get_r_y0(), instr.get_r_y1(),
         instr.get_r_y2(), instr.get_r_y3()});
-    const double y_max = std::max({instr.get_r_y0(), instr.get_r_y1(),
+    const double y_max_pdf = std::max({instr.get_r_y0(), instr.get_r_y1(),
         instr.get_r_y2(), instr.get_r_y3()});
 
     const double dst_w = x_max - x_min;
-    const double dst_h = y_max - y_min;
+    const double dst_h = (y_max_pdf - y_min_pdf) * scale_y_;
     if (dst_w <= 0.0 or dst_h <= 0.0)
       {
         LOG_S(WARNING) << __FUNCTION__ << ": degenerate destination rect, skipping";
         return;
       }
 
-    // canvas_y(y_max) gives the top-left y of the destination in canvas space.
+    // canvas_y(y_max_pdf) gives the top-left y of the destination in canvas space.
     const double dst_x = x_min;
-    const double dst_y = canvas_y(y_max);
+    const double dst_y = canvas_y(y_max_pdf);
     const BLRect dst_rect(dst_x, dst_y, dst_w, dst_h);
 
     const auto& src_data  = instr.get_data();
@@ -551,12 +587,12 @@ namespace pdflib
     const auto& ys = instr.get_y();
 
     BLPath path;
-    path.move_to(xs[0], canvas_y(ys[0]));
+    path.move_to(canvas_x(xs[0]), canvas_y(ys[0]));
     // LOG_S(INFO) << " -> add point: (" << xs[0] << ", " << ys[0] << ")";
     for (size_t i = 1; i < instr.size(); ++i)
       {
         // LOG_S(INFO) << " -> add point: (" << xs[i] << ", " << ys[i] << ")";
-        path.line_to(xs[i], canvas_y(ys[i]));
+        path.line_to(canvas_x(xs[i]), canvas_y(ys[i]));
       }
 
     BLContext ctx(image_);

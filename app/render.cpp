@@ -172,7 +172,14 @@ int main(int argc, char* argv[])
 
 	if (renderer_type == "BLEND2D")
 	  {
-	    pdflib::renderer<pdflib::BLEND2D> rnd;
+	    pdflib::blend2d_render_config cfg;
+	    cfg.draw_text_bbox = true;
+	    cfg.resolve_fonts = true;
+
+	    //cfg.canvas_width = 1200;
+	    // cfg.canvas_height = 1200;
+	    
+	    pdflib::renderer<pdflib::BLEND2D> rnd(cfg);
 	    if (!decode_and_render(doc, page, page_config, rnd)) { return 1; }
 	    rnd.show();
 	  }
