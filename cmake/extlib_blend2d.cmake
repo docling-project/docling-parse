@@ -12,17 +12,14 @@ else()
     include(FetchContent)
 
     # --- AsmJit (embedded by blend2d for JIT pipeline generation) ---
-    # Populate source only; blend2d adds it via add_subdirectory using ASMJIT_DIR.
-    FetchContent_Declare(
+    # Use the inline form of FetchContent_Populate (not deprecated) to download
+    # the source only. blend2d will add it via add_subdirectory using ASMJIT_DIR.
+    FetchContent_Populate(
         asmjit
         GIT_REPOSITORY https://github.com/asmjit/asmjit.git
         GIT_TAG        master
         GIT_SHALLOW    TRUE
     )
-    FetchContent_GetProperties(asmjit)
-    if(NOT asmjit_POPULATED)
-        FetchContent_Populate(asmjit)
-    endif()
     # Point blend2d to the downloaded asmjit source.
     set(ASMJIT_DIR "${asmjit_SOURCE_DIR}" CACHE PATH "Path to AsmJit source" FORCE)
 

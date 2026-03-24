@@ -12,7 +12,6 @@
 #include <cstdlib>
 #include <filesystem>
 #include <memory>
-#include <mutex>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -48,7 +47,6 @@ namespace pdflib
 
     mutable BLImage    image_;  // internal canvas (PRGB32 format)
     std::array<int, 3> shape_;  // {height, width, 4}
-    mutable std::mutex mtx_;
 
     // Convert a PDF y-coordinate (origin bottom-left) to a canvas
     // y-coordinate (origin top-left).
@@ -72,8 +70,6 @@ namespace pdflib
 
   inline void renderer<BLEND2D>::set_size(size_instruction& instr)
   {
-    std::lock_guard<std::mutex> lock(mtx_);
-
     const auto& bbox = instr.crop_bbox;
     const int width  = bbox[2] - bbox[0];
     const int height = bbox[3] - bbox[1];
@@ -101,7 +97,6 @@ namespace pdflib
 
   inline void renderer<BLEND2D>::render_text(text_instruction& instr)
   {
-    std::lock_guard<std::mutex> lock(mtx_);
     if (shape_[0] == 0 or shape_[1] == 0) { return; }
 
     const double x0 = instr.get_r_x0(), y0 = canvas_y(instr.get_r_y0());
@@ -137,7 +132,6 @@ namespace pdflib
 
   inline void renderer<BLEND2D>::render_bitmap(bitmap_instruction& instr)
   {
-    std::lock_guard<std::mutex> lock(mtx_);
     if (shape_[0] == 0 or shape_[1] == 0) { return; }
 
     const auto& src_data  = instr.get_data();
@@ -212,7 +206,6 @@ namespace pdflib
 
   inline void renderer<BLEND2D>::render_shape(shape_instruction& instr)
   {
-    std::lock_guard<std::mutex> lock(mtx_);
     if (shape_[0] == 0 or shape_[1] == 0) { return; }
     if (instr.size() < 2) { return; }
 
@@ -243,7 +236,6 @@ namespace pdflib
 
   inline std::shared_ptr<std::vector<uint8_t>> renderer<BLEND2D>::get_canvas() const
   {
-    std::lock_guard<std::mutex> lock(mtx_);
 
     const int h = shape_[0];
     const int w = shape_[1];
@@ -287,7 +279,6 @@ namespace pdflib
 
   inline void renderer<BLEND2D>::save(const std::string& path) const
   {
-    std::lock_guard<std::mutex> lock(mtx_);
 
     if (shape_[0] == 0 or shape_[1] == 0)
     {
@@ -317,7 +308,7 @@ namespace pdflib
     const std::string tmp =
         (fs::temp_directory_path() / "blend2d_renderer_preview.png").string();
 
-    save(tmp); // reuses the mutex-acquiring save(); called without the lock
+    save(tmp);
 
     const std::string cmd =
 #if defined(_WIN32)
