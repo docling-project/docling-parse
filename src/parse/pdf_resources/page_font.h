@@ -30,6 +30,7 @@ namespace pdflib
 
     std::string get_key();
     std::string get_name();
+    std::string get_base_font();
 
     double      get_width(uint32_t c, bool verbose=true);
     std::string get_string(uint32_t c);
@@ -264,6 +265,11 @@ namespace pdflib
   std::string pdf_resource<PAGE_FONT>::get_name()
   {
     return font_name;
+  }
+
+  std::string pdf_resource<PAGE_FONT>::get_base_font()
+  {
+    return base_font;
   }
 
   bool pdf_resource<PAGE_FONT>::numb_is_in_cmap(uint32_t v)

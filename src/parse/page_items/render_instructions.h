@@ -56,6 +56,10 @@ namespace pdflib
     text_instruction(std::string text,
                      std::string font_enc,
                      std::string font_key,
+                     std::string font_name,
+                     std::string encoding_name,
+                     std::string base_font,
+                     double font_size,
                      double r_x0, double r_y0,
                      double r_x1, double r_y1,
                      double r_x2, double r_y2,
@@ -63,6 +67,10 @@ namespace pdflib
       text(std::move(text)),
       font_enc(std::move(font_enc)),
       font_key(std::move(font_key)),
+      font_name(std::move(font_name)),
+      encoding_name(std::move(encoding_name)),
+      base_font(std::move(base_font)),
+      font_size(font_size),
       r_x0(r_x0), r_y0(r_y0),
       r_x1(r_x1), r_y1(r_y1),
       r_x2(r_x2), r_y2(r_y2),
@@ -72,6 +80,10 @@ namespace pdflib
 
     const std::string& get_font_enc() const { return font_enc; }
     const std::string& get_font_key() const { return font_key; }
+    const std::string& get_font_name() const { return font_name; }
+    const std::string& get_encoding_name() const { return encoding_name; }
+    const std::string& get_base_font() const { return base_font; }
+    double get_font_size() const { return font_size; }
 
     double get_r_x0() const { return r_x0; }
     double get_r_y0() const { return r_y0; }
@@ -88,6 +100,10 @@ namespace pdflib
 
     const std::string font_enc;
     const std::string font_key;
+    const std::string font_name;
+    const std::string encoding_name;
+    const std::string base_font;
+    const double font_size;
 
     const double r_x0;
     const double r_y0;
