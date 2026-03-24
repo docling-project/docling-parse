@@ -27,6 +27,42 @@ void set_loglevel(std::string level)
     }
 }
 
+template<typename Renderer>
+bool decode_and_render(pdflib::pdf_decoder<pdflib::DOCUMENT>& doc,
+                       int page,
+                       const pdflib::decode_config& page_config,
+                       Renderer& rnd)
+{
+  if (page == -1)
+    {
+      int num_pages = doc.get_number_of_pages();
+      for (int p = 0; p < num_pages; p++)
+        {
+          auto page_decoder = doc.decode_page(p, page_config);
+          if (page_decoder)
+            {
+              auto& instructions = page_decoder->get_instructions();
+              instructions.iterate_over_instructions(rnd);
+            }
+        }
+    }
+  else
+    {
+      auto page_decoder = doc.decode_page(page, page_config);
+      if (page_decoder)
+        {
+          auto& instructions = page_decoder->get_instructions();
+          instructions.iterate_over_instructions(rnd);
+        }
+      else
+        {
+          LOG_S(ERROR) << "Failed to decode page: " << page;
+          return false;
+        }
+    }
+  return true;
+}
+
 int main(int argc, char* argv[])
 {
   int orig_argc = argc;
@@ -46,6 +82,7 @@ int main(int argc, char* argv[])
 	("p,page", "Pages to process (default: -1 for all)", cxxopts::value<int>()->default_value("-1"))
 	("password", "Password for accessing encrypted, password-protected files", cxxopts::value<std::string>())
 	("o,output", "Output file", cxxopts::value<std::string>())
+	("r,renderer", "Renderer type [NAIVE, BLEND2D] (default: NAIVE)", cxxopts::value<std::string>()->default_value("NAIVE"))
 	("l,loglevel", "loglevel [error;warning;success;info]", cxxopts::value<std::string>())
 	("h,help", "Print usage");
 
@@ -121,9 +158,10 @@ int main(int argc, char* argv[])
 	  return 1;
 	}
 
-	// Decode and render
-	pdflib::renderer<pdflib::NAIVE> renderer;
-	
+	std::string renderer_type = result["renderer"].as<std::string>();
+	std::transform(renderer_type.begin(), renderer_type.end(), renderer_type.begin(),
+		       [](unsigned char c) { return std::toupper(c); });
+
 	pdflib::decode_config page_config;
 	page_config.page_boundary = "crop_box";
 	page_config.do_sanitization = do_sanitization;
@@ -131,34 +169,17 @@ int main(int argc, char* argv[])
 	page_config.create_line_cells = false;
 	page_config.keep_shapes = true; //false;
 	page_config.keep_bitmaps = true; //false;
-	
-	if (page == -1)
-	  {
-	    // Decode all pages
-	    int num_pages = doc.get_number_of_pages();
-	    for (int p = 0; p < num_pages; p++) {
 
-	      auto page_decoder = doc.decode_page(p, page_config);
-	      if (page_decoder) {
-		auto& instructions = page_decoder->get_instructions();
-		instructions.iterate_over_instructions(renderer);
-	      }
-	    }
+	if (renderer_type == "BLEND2D")
+	  {
+	    pdflib::renderer<pdflib::BLEND2D> rnd;
+	    if (!decode_and_render(doc, page, page_config, rnd)) { return 1; }
+	    rnd.show();
 	  }
 	else
 	  {
-	    // Decode specific page
-	    auto page_decoder = doc.decode_page(page, page_config);
-	    if (page_decoder)
-	      {
-		auto& instructions = page_decoder->get_instructions();
-		instructions.iterate_over_instructions(renderer);
-	      }
-	    else
-	      {
-		LOG_S(ERROR) << "Failed to decode page: " << page;
-		return 1;
-	      }
+	    pdflib::renderer<pdflib::NAIVE> rnd;
+	    if (!decode_and_render(doc, page, page_config, rnd)) { return 1; }
 	  }
 	
 	LOG_S(INFO) << "total-time [sec]: " << timer.get_time();

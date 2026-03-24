@@ -5,7 +5,7 @@
 
 #include <render/template_renderer.h>
 
-#include <blend2d.h>
+#include <blend2d/blend2d.h>
 
 #include <algorithm>
 #include <array>
@@ -78,16 +78,16 @@ namespace pdflib
     const int width  = bbox[2] - bbox[0];
     const int height = bbox[3] - bbox[1];
 
-    if (width <= 0 || height <= 0) return;
+    if (width <= 0 or height <= 0) { return; }
 
     shape_ = {height, width, 4};
     image_.create(width, height, BL_FORMAT_PRGB32);
 
     // Initialise canvas to opaque white.
     BLContext ctx(image_);
-    ctx.setCompOp(BL_COMP_OP_SRC_COPY);
-    ctx.setFillStyle(BLRgba32(0xFFFFFFFFu));
-    ctx.fillAll();
+    ctx.set_comp_op(BL_COMP_OP_SRC_COPY);
+    ctx.set_fill_style(BLRgba32(0xFFFFFFFFu));
+    ctx.fill_all();
     ctx.end();
   }
 
@@ -102,7 +102,7 @@ namespace pdflib
   inline void renderer<BLEND2D>::render_text(text_instruction& instr)
   {
     std::lock_guard<std::mutex> lock(mtx_);
-    if (shape_[0] == 0 || shape_[1] == 0) return;
+    if (shape_[0] == 0 or shape_[1] == 0) { return; }
 
     const double x0 = instr.get_r_x0(), y0 = canvas_y(instr.get_r_y0());
     const double x1 = instr.get_r_x1(), y1 = canvas_y(instr.get_r_y1());
@@ -110,20 +110,20 @@ namespace pdflib
     const double x3 = instr.get_r_x3(), y3 = canvas_y(instr.get_r_y3());
 
     BLPath path;
-    path.moveTo(x0, y0);
-    path.lineTo(x1, y1);
-    path.lineTo(x2, y2);
-    path.lineTo(x3, y3);
+    path.move_to(x0, y0);
+    path.line_to(x1, y1);
+    path.line_to(x2, y2);
+    path.line_to(x3, y3);
     path.close();
 
     BLContext ctx(image_);
     // Semi-transparent fill (~20 % opacity light blue)
-    ctx.setFillStyle(BLRgba32(0x33AEC6FFu));
-    ctx.fillPath(path);
+    ctx.set_fill_style(BLRgba32(0x33AEC6FFu));
+    ctx.fill_path(path);
     // Solid thin blue outline
-    ctx.setStrokeStyle(BLRgba32(0xFF1070C0u));
-    ctx.setStrokeWidth(0.5);
-    ctx.strokePath(path);
+    ctx.set_stroke_style(BLRgba32(0xFF1070C0u));
+    ctx.set_stroke_width(0.5);
+    ctx.stroke_path(path);
     ctx.end();
   }
 
@@ -138,7 +138,7 @@ namespace pdflib
   inline void renderer<BLEND2D>::render_bitmap(bitmap_instruction& instr)
   {
     std::lock_guard<std::mutex> lock(mtx_);
-    if (shape_[0] == 0 || shape_[1] == 0) return;
+    if (shape_[0] == 0 or shape_[1] == 0) { return; }
 
     const auto& src_data  = instr.get_data();
     const auto& src_shape = instr.get_shape(); // {height, width, channels}
@@ -146,7 +146,7 @@ namespace pdflib
     const int sw = src_shape[1];
     const int sc = src_shape[2];
 
-    if (!src_data || src_data->empty() || sh <= 0 || sw <= 0 || sc < 1) return;
+    if (not src_data or src_data->empty() or sh <= 0 or sw <= 0 or sc < 1) { return; }
 
     // Build a BLImage (PRGB32) from the raw channel data.
     BLImage src_img;
@@ -154,8 +154,8 @@ namespace pdflib
 
     {
       BLImageData img_data;
-      src_img.makeMutable(&img_data);
-      auto* base = static_cast<uint8_t*>(img_data.pixelData);
+      src_img.make_mutable(&img_data);
+      auto* base = static_cast<uint8_t*>(img_data.pixel_data);
       const intptr_t stride = img_data.stride;
 
       for (int row = 0; row < sh; ++row)
@@ -193,16 +193,16 @@ namespace pdflib
 
     const double dst_w = x_max - x_min;
     const double dst_h = y_max - y_min;
-    if (dst_w <= 0.0 || dst_h <= 0.0) return;
+    if (dst_w <= 0.0 or dst_h <= 0.0) { return; }
 
     // canvas_y(y_max) gives the top-left y of the destination in canvas space.
     const double dst_x = x_min;
     const double dst_y = canvas_y(y_max);
 
     BLContext ctx(image_);
-    ctx.blitScaledImage(BLRect(dst_x, dst_y, dst_w, dst_h),
-                        src_img,
-                        BLRectI(0, 0, sw, sh));
+    ctx.blit_image(BLRect(dst_x, dst_y, dst_w, dst_h),
+                   src_img,
+                   BLRectI(0, 0, sw, sh));
     ctx.end();
   }
 
@@ -213,21 +213,23 @@ namespace pdflib
   inline void renderer<BLEND2D>::render_shape(shape_instruction& instr)
   {
     std::lock_guard<std::mutex> lock(mtx_);
-    if (shape_[0] == 0 || shape_[1] == 0) return;
-    if (instr.size() < 2) return;
+    if (shape_[0] == 0 or shape_[1] == 0) { return; }
+    if (instr.size() < 2) { return; }
 
     const auto& xs = instr.get_x();
     const auto& ys = instr.get_y();
 
     BLPath path;
-    path.moveTo(xs[0], canvas_y(ys[0]));
+    path.move_to(xs[0], canvas_y(ys[0]));
     for (size_t i = 1; i < instr.size(); ++i)
-      path.lineTo(xs[i], canvas_y(ys[i]));
+    {
+      path.line_to(xs[i], canvas_y(ys[i]));
+    }
 
     BLContext ctx(image_);
-    ctx.setStrokeStyle(BLRgba32(0xFF000000u));
-    ctx.setStrokeWidth(1.0);
-    ctx.strokePath(path);
+    ctx.set_stroke_style(BLRgba32(0xFF000000u));
+    ctx.set_stroke_width(1.0);
+    ctx.stroke_path(path);
     ctx.end();
   }
 
@@ -245,16 +247,18 @@ namespace pdflib
 
     const int h = shape_[0];
     const int w = shape_[1];
-    if (h == 0 || w == 0)
+    if (h == 0 or w == 0)
+    {
       return std::make_shared<std::vector<uint8_t>>();
+    }
 
     BLImageData img_data;
-    image_.getData(&img_data);
+    image_.get_data(&img_data);
 
     auto result = std::make_shared<std::vector<uint8_t>>(
         static_cast<std::size_t>(h) * w * 4);
 
-    const auto* base = static_cast<const uint8_t*>(img_data.pixelData);
+    const auto* base = static_cast<const uint8_t*>(img_data.pixel_data);
     const intptr_t stride = img_data.stride;
 
     for (int row = 0; row < h; ++row)
@@ -285,14 +289,18 @@ namespace pdflib
   {
     std::lock_guard<std::mutex> lock(mtx_);
 
-    if (shape_[0] == 0 || shape_[1] == 0)
+    if (shape_[0] == 0 or shape_[1] == 0)
+    {
       throw std::runtime_error("renderer<BLEND2D>::save: canvas is empty");
+    }
 
-    const BLResult err = image_.writeToFile(path.c_str());
+    const BLResult err = image_.write_to_file(path.c_str());
     if (err != BL_SUCCESS)
+    {
       throw std::runtime_error(
           "renderer<BLEND2D>::save: failed to write '" + path + "' "
           "(BLResult=" + std::to_string(err) + ")");
+    }
   }
 
   // ---------------------------------------------------------------------------
