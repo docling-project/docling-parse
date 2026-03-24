@@ -97,6 +97,8 @@ namespace pdflib
 
   inline void renderer<BLEND2D>::render_text(text_instruction& instr)
   {
+    LOG_S(INFO) << __FUNCTION__;
+    
     if (shape_[0] == 0 or shape_[1] == 0) { return; }
 
     const double x0 = instr.get_r_x0(), y0 = canvas_y(instr.get_r_y0());
@@ -132,7 +134,37 @@ namespace pdflib
 
   inline void renderer<BLEND2D>::render_bitmap(bitmap_instruction& instr)
   {
-    if (shape_[0] == 0 or shape_[1] == 0) { return; }
+    LOG_S(INFO) << __FUNCTION__;
+    
+    if (shape_[0] == 0 or shape_[1] == 0)
+    {
+      LOG_S(WARNING) << __FUNCTION__ << ": canvas not initialised, skipping";
+      return;
+    }
+
+    // Compute axis-aligned destination rectangle in canvas coordinates first,
+    // so we can draw a placeholder even when pixel data is unavailable.
+    const double x_min = std::min({instr.get_r_x0(), instr.get_r_x1(),
+                                   instr.get_r_x2(), instr.get_r_x3()});
+    const double x_max = std::max({instr.get_r_x0(), instr.get_r_x1(),
+                                   instr.get_r_x2(), instr.get_r_x3()});
+    const double y_min = std::min({instr.get_r_y0(), instr.get_r_y1(),
+                                   instr.get_r_y2(), instr.get_r_y3()});
+    const double y_max = std::max({instr.get_r_y0(), instr.get_r_y1(),
+                                   instr.get_r_y2(), instr.get_r_y3()});
+
+    const double dst_w = x_max - x_min;
+    const double dst_h = y_max - y_min;
+    if (dst_w <= 0.0 or dst_h <= 0.0)
+    {
+      LOG_S(WARNING) << __FUNCTION__ << ": degenerate destination rect, skipping";
+      return;
+    }
+
+    // canvas_y(y_max) gives the top-left y of the destination in canvas space.
+    const double dst_x = x_min;
+    const double dst_y = canvas_y(y_max);
+    const BLRect dst_rect(dst_x, dst_y, dst_w, dst_h);
 
     const auto& src_data  = instr.get_data();
     const auto& src_shape = instr.get_shape(); // {height, width, channels}
@@ -140,7 +172,16 @@ namespace pdflib
     const int sw = src_shape[1];
     const int sc = src_shape[2];
 
-    if (not src_data or src_data->empty() or sh <= 0 or sw <= 0 or sc < 1) { return; }
+    BLContext ctx(image_);
+
+    if (not src_data or src_data->empty() or sh <= 0 or sw <= 0 or sc < 1)
+    {
+      // No pixel data — draw a semi-transparent yellow placeholder.
+      ctx.set_fill_style(BLRgba32(0x66FFFF00u)); // A=40%, R=255, G=255, B=0
+      ctx.fill_rect(dst_rect);
+      ctx.end();
+      return;
+    }
 
     // Build a BLImage (PRGB32) from the raw channel data.
     BLImage src_img;
@@ -175,28 +216,7 @@ namespace pdflib
       }
     }
 
-    // Compute axis-aligned destination rectangle in canvas coordinates.
-    const double x_min = std::min({instr.get_r_x0(), instr.get_r_x1(),
-                                   instr.get_r_x2(), instr.get_r_x3()});
-    const double x_max = std::max({instr.get_r_x0(), instr.get_r_x1(),
-                                   instr.get_r_x2(), instr.get_r_x3()});
-    const double y_min = std::min({instr.get_r_y0(), instr.get_r_y1(),
-                                   instr.get_r_y2(), instr.get_r_y3()});
-    const double y_max = std::max({instr.get_r_y0(), instr.get_r_y1(),
-                                   instr.get_r_y2(), instr.get_r_y3()});
-
-    const double dst_w = x_max - x_min;
-    const double dst_h = y_max - y_min;
-    if (dst_w <= 0.0 or dst_h <= 0.0) { return; }
-
-    // canvas_y(y_max) gives the top-left y of the destination in canvas space.
-    const double dst_x = x_min;
-    const double dst_y = canvas_y(y_max);
-
-    BLContext ctx(image_);
-    ctx.blit_image(BLRect(dst_x, dst_y, dst_w, dst_h),
-                   src_img,
-                   BLRectI(0, 0, sw, sh));
+    ctx.blit_image(dst_rect, src_img, BLRectI(0, 0, sw, sh));
     ctx.end();
   }
 
@@ -206,6 +226,8 @@ namespace pdflib
 
   inline void renderer<BLEND2D>::render_shape(shape_instruction& instr)
   {
+    LOG_S(INFO) << __FUNCTION__;
+    
     if (shape_[0] == 0 or shape_[1] == 0) { return; }
     if (instr.size() < 2) { return; }
 
@@ -214,8 +236,10 @@ namespace pdflib
 
     BLPath path;
     path.move_to(xs[0], canvas_y(ys[0]));
+    LOG_S(INFO) << " -> add point: (" << xs[0] << ", " << ys[0] << ")";
     for (size_t i = 1; i < instr.size(); ++i)
     {
+      LOG_S(INFO) << " -> add point: (" << xs[i] << ", " << ys[i] << ")";
       path.line_to(xs[i], canvas_y(ys[i]));
     }
 
