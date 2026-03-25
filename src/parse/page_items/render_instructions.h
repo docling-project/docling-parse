@@ -63,7 +63,9 @@ namespace pdflib
                      double r_x0, double r_y0,
                      double r_x1, double r_y1,
                      double r_x2, double r_y2,
-                     double r_x3, double r_y3):
+                     double r_x3, double r_y3,
+                     double font_ascent_norm, double font_descent_norm,
+		     double base_x0, double base_y0):
       text(std::move(text)),
       font_enc(std::move(font_enc)),
       font_key(std::move(font_key)),
@@ -74,7 +76,11 @@ namespace pdflib
       r_x0(r_x0), r_y0(r_y0),
       r_x1(r_x1), r_y1(r_y1),
       r_x2(r_x2), r_y2(r_y2),
-      r_x3(r_x3), r_y3(r_y3) {}
+      r_x3(r_x3), r_y3(r_y3),
+      font_ascent_norm(font_ascent_norm),
+      font_descent_norm(font_descent_norm),
+      base_x0(base_x0), base_y0(base_y0)
+    {}
 
     const std::string& get_text() const { return text; }
 
@@ -93,6 +99,12 @@ namespace pdflib
     double get_r_y2() const { return r_y2; }
     double get_r_x3() const { return r_x3; }
     double get_r_y3() const { return r_y3; }
+
+    double get_font_ascent_norm()  const { return font_ascent_norm; }
+    double get_font_descent_norm() const { return font_descent_norm; }
+
+    double get_base_x0() const { return base_x0; }
+    double get_base_y0() const { return base_y0; }
 
   private:
 
@@ -113,6 +125,12 @@ namespace pdflib
     const double r_y2;
     const double r_x3;
     const double r_y3;
+
+    const double font_ascent_norm;
+    const double font_descent_norm;
+
+    const double base_x0;
+    const double base_y0;    
   };
 
   class bitmap_instruction

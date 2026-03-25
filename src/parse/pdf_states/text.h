@@ -563,6 +563,8 @@ namespace pdflib
         cell.r_y3 = rect[7];
       }
 
+      std::array<double, 8> base = compute_rect(0, font_ascent*ratio, width);
+      
       std::array<double, 4> bbox = compute_bbox(rect);
       {
         cell.x0 = bbox[0];
@@ -612,7 +614,9 @@ namespace pdflib
                                 cell.r_x0, cell.r_y0,
                                 cell.r_x1, cell.r_y1,
                                 cell.r_x2, cell.r_y2,
-                                cell.r_x3, cell.r_y3);
+                                cell.r_x3, cell.r_y3,
+                                font_ascent*ratio, font_descent*ratio,
+				base[0], base[1]);
 
         instructions.add_text_instruction(std::move(tinstr));
       }

@@ -70,21 +70,44 @@ int main(int argc, char* argv[])
   // Initialize loguru
   loguru::init(argc, argv);
 
-  bool do_sanitization = false;
-
   try
     {
       cxxopts::Options options("PDFRenderer", "A program to render PDF pages");
 
       // Define the options
       options.add_options()
-	("i,input", "Input PDF file", cxxopts::value<std::string>())
-	("p,page", "Pages to process (default: -1 for all)", cxxopts::value<int>()->default_value("-1"))
-	("password", "Password for accessing encrypted, password-protected files", cxxopts::value<std::string>())
-	("o,output", "Output file", cxxopts::value<std::string>())
-	("r,renderer", "Renderer type [NAIVE, BLEND2D] (default: NAIVE)", cxxopts::value<std::string>()->default_value("NAIVE"))
-	("l,loglevel", "loglevel [error;warning;success;info]", cxxopts::value<std::string>())
-	("h,help", "Print usage");
+	("i,input",    "Input PDF file",                                                    cxxopts::value<std::string>())
+	("p,page",     "Pages to process (default: -1 for all)",                            cxxopts::value<int>()->default_value("-1"))
+	("password",   "Password for encrypted files",                                      cxxopts::value<std::string>())
+	("o,output",   "Output file",                                                       cxxopts::value<std::string>())
+	("r,renderer", "Renderer type [NAIVE, BLEND2D] (default: NAIVE)",                   cxxopts::value<std::string>()->default_value("NAIVE"))
+	("l,loglevel", "Log level [error, warning, info]",                                  cxxopts::value<std::string>())
+	("h,help",     "Print usage")
+
+        // ---- blend2d_render_config ----
+        ("draw-text-bbox", "Draw bounding quad around each text cell",                      cxxopts::value<bool>()->implicit_value("true"))
+        ("resolve-fonts",  "Resolve PDF font names to system fonts (default: true)",        cxxopts::value<bool>()->implicit_value("true"))
+        ("canvas-width",   "Canvas width in pixels (-1 = use page size)",                   cxxopts::value<int>())
+        ("canvas-height",  "Canvas height in pixels (-1 = use page size)",                  cxxopts::value<int>())
+
+        // ---- decode_config ----
+        ("page-boundary",   "Page boundary [crop_box, media_box, ...] (default: crop_box)", cxxopts::value<std::string>())
+        ("do-sanitization", "Run post-parse sanitization (default: true)",                  cxxopts::value<bool>()->implicit_value("true"))
+        ("keep-char-cells", "Keep individual character cells (default: true)",              cxxopts::value<bool>()->implicit_value("true"))
+        ("keep-shapes",     "Keep shape items (default: true)",                             cxxopts::value<bool>()->implicit_value("true"))
+        ("keep-bitmaps",    "Keep bitmap items (default: true)",                            cxxopts::value<bool>()->implicit_value("true"))
+        ("max-num-lines",   "Cap on number of lines per page (-1 = no cap)",                cxxopts::value<int>())
+        ("max-num-bitmaps", "Cap on number of bitmaps per page (-1 = no cap)",              cxxopts::value<int>())
+        ("create-word-cells",  "Build word-level cells (default: true)",                    cxxopts::value<bool>()->implicit_value("true"))
+        ("create-line-cells",  "Build line-level cells (default: true)",                    cxxopts::value<bool>()->implicit_value("true"))
+        ("enforce-same-font",  "Require same font within a word/line cell (default: true)", cxxopts::value<bool>()->implicit_value("true"))
+        ("horizontal-cell-tolerance", "Horizontal merge tolerance (default: 1.0)",          cxxopts::value<double>())
+        ("word-space-factor",  "Space-width factor for word merging (default: 0.33)",       cxxopts::value<double>())
+        ("line-space-factor",  "Space-width factor for line merging (default: 1.0)",        cxxopts::value<double>())
+        ("line-space-factor-with-space", "Space-width factor for line merging with space (default: 0.33)", cxxopts::value<double>())
+        ("keep-glyphs",        "Keep unmapped GLYPH<...> tokens (default: false)",          cxxopts::value<bool>()->implicit_value("true"))
+        ("keep-qpdf-warnings", "Emit QPDF warnings (default: false)",                       cxxopts::value<bool>()->implicit_value("true"))
+        ("populate-json",      "Populate JSON objects during decode (default: false)",       cxxopts::value<bool>()->implicit_value("true"));
 
       // Parse command line arguments
       auto result = options.parse(argc, argv);
@@ -162,23 +185,35 @@ int main(int argc, char* argv[])
 	std::transform(renderer_type.begin(), renderer_type.end(), renderer_type.begin(),
 		       [](unsigned char c) { return std::toupper(c); });
 
-	pdflib::decode_config page_config;
-	page_config.page_boundary = "crop_box";
-	page_config.do_sanitization = do_sanitization;
-	page_config.create_word_cells = false;
-	page_config.create_line_cells = false;
-	page_config.keep_shapes = true; //false;
-	page_config.keep_bitmaps = true; //false;
+	// --- decode_config ---
+	pdflib::decode_config page_config; // start from struct defaults
+	if (result.count("page-boundary"))            { page_config.page_boundary             = result["page-boundary"].as<std::string>(); }
+	if (result.count("do-sanitization"))          { page_config.do_sanitization            = result["do-sanitization"].as<bool>(); }
+	if (result.count("keep-char-cells"))          { page_config.keep_char_cells            = result["keep-char-cells"].as<bool>(); }
+	if (result.count("keep-shapes"))              { page_config.keep_shapes                = result["keep-shapes"].as<bool>(); }
+	if (result.count("keep-bitmaps"))             { page_config.keep_bitmaps               = result["keep-bitmaps"].as<bool>(); }
+	if (result.count("max-num-lines"))            { page_config.max_num_lines              = result["max-num-lines"].as<int>(); }
+	if (result.count("max-num-bitmaps"))          { page_config.max_num_bitmaps            = result["max-num-bitmaps"].as<int>(); }
+	if (result.count("create-word-cells"))        { page_config.create_word_cells          = result["create-word-cells"].as<bool>(); }
+	if (result.count("create-line-cells"))        { page_config.create_line_cells          = result["create-line-cells"].as<bool>(); }
+	if (result.count("enforce-same-font"))        { page_config.enforce_same_font          = result["enforce-same-font"].as<bool>(); }
+	if (result.count("horizontal-cell-tolerance")){ page_config.horizontal_cell_tolerance  = result["horizontal-cell-tolerance"].as<double>(); }
+	if (result.count("word-space-factor"))        { page_config.word_space_width_factor_for_merge = result["word-space-factor"].as<double>(); }
+	if (result.count("line-space-factor"))        { page_config.line_space_width_factor_for_merge = result["line-space-factor"].as<double>(); }
+	if (result.count("line-space-factor-with-space")) { page_config.line_space_width_factor_for_merge_with_space = result["line-space-factor-with-space"].as<double>(); }
+	if (result.count("keep-glyphs"))              { page_config.keep_glyphs               = result["keep-glyphs"].as<bool>(); }
+	if (result.count("keep-qpdf-warnings"))       { page_config.keep_qpdf_warnings        = result["keep-qpdf-warnings"].as<bool>(); }
+	if (result.count("populate-json"))            { page_config.populate_json_objects      = result["populate-json"].as<bool>(); }
 
 	if (renderer_type == "BLEND2D")
 	  {
-	    pdflib::blend2d_render_config cfg;
-	    cfg.draw_text_bbox = true;
-	    cfg.resolve_fonts = true;
+	    // --- blend2d_render_config ---
+	    pdflib::blend2d_render_config cfg; // start from struct defaults
+	    if (result.count("draw-text-bbox")) { cfg.draw_text_bbox = result["draw-text-bbox"].as<bool>(); }
+	    if (result.count("resolve-fonts"))  { cfg.resolve_fonts  = result["resolve-fonts"].as<bool>(); }
+	    if (result.count("canvas-width"))   { cfg.canvas_width   = result["canvas-width"].as<int>(); }
+	    if (result.count("canvas-height"))  { cfg.canvas_height  = result["canvas-height"].as<int>(); }
 
-	    //cfg.canvas_width = 1200;
-	    // cfg.canvas_height = 1200;
-	    
 	    pdflib::renderer<pdflib::BLEND2D> rnd(cfg);
 	    if (!decode_and_render(doc, page, page_config, rnd)) { return 1; }
 	    rnd.show();

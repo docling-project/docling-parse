@@ -54,6 +54,7 @@ namespace pdflib
 
     void set_size(size_instruction& instr);
     void render_text(text_instruction& instr);
+    void render_text_legacy(text_instruction& instr);
     void render_bitmap(bitmap_instruction& instr);
     void render_shape(shape_instruction& instr);
 
@@ -415,13 +416,15 @@ namespace pdflib
   // Falls back to drawing a thin blue quad outline when no font is available.
   // ---------------------------------------------------------------------------
 
-  inline void renderer<BLEND2D>::render_text(text_instruction& instr)
+  inline void renderer<BLEND2D>::render_text_legacy(text_instruction& instr)
   {
     LOG_S(INFO) << __FUNCTION__;
 
     if (shape_[0] == 0 or shape_[1] == 0) { return; }
 
     // Quad corners in canvas space (scaled + y flipped).
+    const double base_x0 = canvas_x(instr.get_base_x0()), base_y0 = canvas_y(instr.get_base_y0());
+
     const double x0 = canvas_x(instr.get_r_x0()), y0 = canvas_y(instr.get_r_y0());
     const double x1 = canvas_x(instr.get_r_x1()), y1 = canvas_y(instr.get_r_y1());
     const double x2 = canvas_x(instr.get_r_x2()), y2 = canvas_y(instr.get_r_y2());
@@ -435,7 +438,7 @@ namespace pdflib
                                          instr.get_base_font());
 
     LOG_S(INFO) << "face: " << face.is_valid();
-      
+
     // Build the bounding quad path (reused for optional outline and fallback).
     BLPath bbox_path;
     bbox_path.move_to(x0, y0);
@@ -452,7 +455,7 @@ namespace pdflib
         BLFont font;
         font.create_from_face(face, static_cast<float>(size));
         ctx.set_fill_style(BLRgba32(0xFF000000u)); // opaque black
-        ctx.fill_utf8_text(BLPoint(x0, y0), font, instr.get_text().c_str());
+        ctx.fill_utf8_text(BLPoint(base_x0, base_y0), font, instr.get_text().c_str());
 
         if (config_.draw_text_bbox)
           {
@@ -465,6 +468,113 @@ namespace pdflib
       {
         // No font available — draw the bounding quad so the text region is
         // at least visible regardless of the draw_text_bbox setting.
+        LOG_S(WARNING) << "render_text_legacy: no valid font for '"
+                       << instr.get_font_name() << "' / '"
+                       << instr.get_base_font() << "', drawing outline only";
+        ctx.set_stroke_style(BLRgba32(0xFF1070C0u));
+        ctx.set_stroke_width(0.5);
+        ctx.stroke_path(bbox_path);
+      }
+
+    ctx.end();
+  }
+
+  inline void renderer<BLEND2D>::render_text(text_instruction& instr)
+  {
+    LOG_S(INFO) << __FUNCTION__;
+
+    if (shape_[0] == 0 or shape_[1] == 0) { return; }
+
+    // Baseline origin and quad corners in canvas space (scaled + y flipped).
+    const double bx = canvas_x(instr.get_base_x0());
+    const double by = canvas_y(instr.get_base_y0());
+    const double x0 = canvas_x(instr.get_r_x0()), y0 = canvas_y(instr.get_r_y0());
+    const double x1 = canvas_x(instr.get_r_x1()), y1 = canvas_y(instr.get_r_y1());
+    const double x2 = canvas_x(instr.get_r_x2()), y2 = canvas_y(instr.get_r_y2());
+    const double x3 = canvas_x(instr.get_r_x3()), y3 = canvas_y(instr.get_r_y3());
+
+    // Cell height vector in canvas: from descender-left (x0,y0) to ascender-left (x3,y3).
+    const double hx = x3 - x0, hy = y3 - y0;
+    const double quad_h = std::sqrt(hx * hx + hy * hy);
+
+    // Em size in canvas pixels.
+    // The PDF cell spans (ascent_norm - descent_norm) per-1000 em units = quad_h px,
+    // so 1 em = 1000 * quad_h / (ascent_norm - descent_norm) px.
+    const double a_norm   = instr.get_font_ascent_norm();
+    const double d_norm   = instr.get_font_descent_norm();
+    const double cell_span = a_norm - d_norm; // per-1000 em units
+    const double em_size  = (cell_span > 1.0) ? (1000.0 * quad_h / cell_span) : quad_h;
+    const double size     = (em_size > 0.5) ? em_size : instr.get_font_size() * scale_y_;
+
+    // Build the bounding quad path (reused for optional outline / fallback).
+    BLPath bbox_path;
+    bbox_path.move_to(x0, y0);
+    bbox_path.line_to(x1, y1);
+    bbox_path.line_to(x2, y2);
+    bbox_path.line_to(x3, y3);
+    bbox_path.close();
+
+    BLFontFace& face = resolve_font_face(instr.get_font_name(),
+                                         instr.get_base_font());
+    LOG_S(INFO) << "face: " << face.is_valid();
+
+    BLContext ctx(image_);
+    LOG_S(INFO) << "writing text: `" << instr.get_text() << "`, size: " << size;
+
+    if (face.is_valid() and size > 0.5)
+      {
+        BLFont font;
+        font.create_from_face(face, static_cast<float>(size));
+
+        // Shape the single character to get its glyph ID.
+        BLGlyphBuffer gb;
+        gb.set_utf8_text(instr.get_text().c_str());
+        font.shape(gb);
+
+        if (!gb.is_empty())
+          {
+            const BLGlyphId glyph_id = gb.glyph_run().glyph_data_as<uint32_t>()[0];
+
+            // Build affine: glyph pixel space (y-down, baseline at origin)
+            //               → canvas space (y-down, baseline at (bx, by)).
+            //
+            // get_glyph_outlines returns coordinates in Blend2D's y-down space:
+            //   glyph +y = downward (towards descender)
+            //   glyph -y = upward  (towards ascender)
+            //
+            // The cell height vector (x0→x3) points from descender to ascender in canvas,
+            // i.e. it corresponds to the glyph -y direction.
+            // Therefore: glyph +y maps to the NEGATIVE of the cell height direction.
+            //
+            //   BLMatrix2D: out.x = gx*m00 + gy*m10 + m20
+            //               out.y = gx*m01 + gy*m11 + m21
+            const double up_x  =  hx / quad_h,  up_y  =  hy / quad_h;  // canvas "up" direction
+            const double adv_x = -up_y,          adv_y =  up_x;         // advance dir (90° CCW of up)
+            const double dn_x  = -up_x,          dn_y  = -up_y;         // glyph +y → downward in canvas
+            const BLMatrix2D m(adv_x, adv_y,
+                               dn_x,  dn_y,
+                               bx,    by);
+
+            BLPath glyph_path;
+            font.get_glyph_outlines(glyph_id, m, glyph_path);
+
+            if (!glyph_path.is_empty())
+              {
+                ctx.set_fill_style(BLRgba32(0xFF000000u)); // opaque black
+                ctx.fill_path(glyph_path);
+              }
+          }
+
+        if (config_.draw_text_bbox)
+          {
+            ctx.set_stroke_style(BLRgba32(0xFF1070C0u));
+            ctx.set_stroke_width(0.5);
+            ctx.stroke_path(bbox_path);
+          }
+      }
+    else
+      {
+        // No font available — draw the bounding quad outline.
         LOG_S(WARNING) << "render_text: no valid font for '"
                        << instr.get_font_name() << "' / '"
                        << instr.get_base_font() << "', drawing outline only";
