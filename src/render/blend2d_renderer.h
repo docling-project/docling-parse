@@ -30,6 +30,10 @@ namespace pdflib
 
   struct blend2d_render_config
   {
+    // Render the glyph outline for each text cell.
+    // When false and draw_text_bbox is true, only the bounding quad is drawn.
+    bool render_text = true;
+
     // Draw the bounding quad of each text cell as a thin blue outline.
     bool draw_text_bbox = false;
 
@@ -523,45 +527,48 @@ namespace pdflib
 
     if (face.is_valid() and size > 0.5)
       {
-        BLFont font;
-        font.create_from_face(face, static_cast<float>(size));
-
-        // Shape the single character to get its glyph ID.
-        BLGlyphBuffer gb;
-        gb.set_utf8_text(instr.get_text().c_str());
-        font.shape(gb);
-
-        if (!gb.is_empty())
+        if (config_.render_text)
           {
-            const BLGlyphId glyph_id = gb.glyph_run().glyph_data_as<uint32_t>()[0];
+            BLFont font;
+            font.create_from_face(face, static_cast<float>(size));
 
-            // Build affine: glyph pixel space (y-down, baseline at origin)
-            //               → canvas space (y-down, baseline at (bx, by)).
-            //
-            // get_glyph_outlines returns coordinates in Blend2D's y-down space:
-            //   glyph +y = downward (towards descender)
-            //   glyph -y = upward  (towards ascender)
-            //
-            // The cell height vector (x0→x3) points from descender to ascender in canvas,
-            // i.e. it corresponds to the glyph -y direction.
-            // Therefore: glyph +y maps to the NEGATIVE of the cell height direction.
-            //
-            //   BLMatrix2D: out.x = gx*m00 + gy*m10 + m20
-            //               out.y = gx*m01 + gy*m11 + m21
-            const double up_x  =  hx / quad_h,  up_y  =  hy / quad_h;  // canvas "up" direction
-            const double adv_x = -up_y,          adv_y =  up_x;         // advance dir (90° CCW of up)
-            const double dn_x  = -up_x,          dn_y  = -up_y;         // glyph +y → downward in canvas
-            const BLMatrix2D m(adv_x, adv_y,
-                               dn_x,  dn_y,
-                               bx,    by);
+            // Shape the single character to get its glyph ID.
+            BLGlyphBuffer gb;
+            gb.set_utf8_text(instr.get_text().c_str());
+            font.shape(gb);
 
-            BLPath glyph_path;
-            font.get_glyph_outlines(glyph_id, m, glyph_path);
-
-            if (!glyph_path.is_empty())
+            if (!gb.is_empty())
               {
-                ctx.set_fill_style(BLRgba32(0xFF000000u)); // opaque black
-                ctx.fill_path(glyph_path);
+                const BLGlyphId glyph_id = gb.glyph_run().glyph_data_as<uint32_t>()[0];
+
+                // Build affine: glyph pixel space (y-down, baseline at origin)
+                //               → canvas space (y-down, baseline at (bx, by)).
+                //
+                // get_glyph_outlines returns coordinates in Blend2D's y-down space:
+                //   glyph +y = downward (towards descender)
+                //   glyph -y = upward  (towards ascender)
+                //
+                // The cell height vector (x0→x3) points from descender to ascender in canvas,
+                // i.e. it corresponds to the glyph -y direction.
+                // Therefore: glyph +y maps to the NEGATIVE of the cell height direction.
+                //
+                //   BLMatrix2D: out.x = gx*m00 + gy*m10 + m20
+                //               out.y = gx*m01 + gy*m11 + m21
+                const double up_x  =  hx / quad_h,  up_y  =  hy / quad_h;  // canvas "up" direction
+                const double adv_x = -up_y,          adv_y =  up_x;         // advance dir (90° CCW of up)
+                const double dn_x  = -up_x,          dn_y  = -up_y;         // glyph +y → downward in canvas
+                const BLMatrix2D m(adv_x, adv_y,
+                                   dn_x,  dn_y,
+                                   bx,    by);
+
+                BLPath glyph_path;
+                font.get_glyph_outlines(glyph_id, m, glyph_path);
+
+                if (!glyph_path.is_empty())
+                  {
+                    ctx.set_fill_style(BLRgba32(0xFF000000u)); // opaque black
+                    ctx.fill_path(glyph_path);
+                  }
               }
           }
 

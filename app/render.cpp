@@ -85,6 +85,7 @@ int main(int argc, char* argv[])
 	("h,help",     "Print usage")
 
         // ---- blend2d_render_config ----
+        ("render-text",    "Render glyph outlines for text cells (default: true)",          cxxopts::value<bool>()->implicit_value("true"))
         ("draw-text-bbox", "Draw bounding quad around each text cell",                      cxxopts::value<bool>()->implicit_value("true"))
         ("resolve-fonts",  "Resolve PDF font names to system fonts (default: true)",        cxxopts::value<bool>()->implicit_value("true"))
         ("canvas-width",   "Canvas width in pixels (-1 = use page size)",                   cxxopts::value<int>())
@@ -209,6 +210,7 @@ int main(int argc, char* argv[])
 	  {
 	    // --- blend2d_render_config ---
 	    pdflib::blend2d_render_config cfg; // start from struct defaults
+	    if (result.count("render-text"))    { cfg.render_text    = result["render-text"].as<bool>(); }
 	    if (result.count("draw-text-bbox")) { cfg.draw_text_bbox = result["draw-text-bbox"].as<bool>(); }
 	    if (result.count("resolve-fonts"))  { cfg.resolve_fonts  = result["resolve-fonts"].as<bool>(); }
 	    if (result.count("canvas-width"))   { cfg.canvas_width   = result["canvas-width"].as<int>(); }
