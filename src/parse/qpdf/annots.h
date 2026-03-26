@@ -171,7 +171,8 @@ namespace pdflib
   
   /*** Table of Contents ***/
 
-  nlohmann::json extract_toc_entry_in_json(QPDF& pdf_obj, QPDFObjectHandle& node, int level)
+  nlohmann::json extract_toc_entry_in_json(QPDF& pdf_obj, QPDFObjectHandle& node, int level,
+                                           std::unordered_set<std::string>& visited)
   {
     LOG_S(INFO) << __FUNCTION__;
     
@@ -243,19 +244,20 @@ namespace pdflib
       {
         QPDFObjectHandle first = node.getKey("/First");
 
-	LOG_S(INFO) << "same: "<< first.unparse() << " == " << node.unparse(); 	
-	for(auto key : first.getKeys())
-	  {
-	    LOG_S(INFO) << "\t" << level << " -> key: " << key;
-	  }
-	
-	bool first_is_not_equal_to_node = (first.unparse()!=node.unparse());
-	
-        while(first.isDictionary() and first_is_not_equal_to_node)
+        while(first.isDictionary())
           {
-	    auto child = extract_toc_entry_in_json(pdf_obj, first, level+1);
+            // Check for circular reference
+            std::string obj_ref = first.unparse();
+            if (visited.count(obj_ref))
+              {
+                LOG_S(WARNING) << "Circular TOC reference detected, skipping: " << obj_ref;
+                break;
+              }
+            visited.insert(obj_ref);
+
+            auto child = extract_toc_entry_in_json(pdf_obj, first, level+1, visited);
             toc_entry["children"].push_back(child);
-	    
+
             if(first.hasKey("/Next"))
               {
                 first = first.getKey("/Next");
@@ -288,10 +290,22 @@ namespace pdflib
 
             toc = nlohmann::json::array({});
 
+            // Track visited nodes to prevent infinite loops
+            std::unordered_set<std::string> visited;
+
             while(first.isDictionary())
               {
+                // Check for circular reference
+                std::string obj_ref = first.unparse();
+                if (visited.count(obj_ref))
+                  {
+                    LOG_S(WARNING) << "Circular TOC reference detected at top level, skipping: " << obj_ref;
+                    break;
+                  }
+                visited.insert(obj_ref);
+
 		int level=0;
-                toc.push_back(extract_toc_entry_in_json(pdf_obj, first, level));
+                toc.push_back(extract_toc_entry_in_json(pdf_obj, first, level, visited));
 
                 if(first.hasKey("/Next"))
                   {
