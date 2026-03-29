@@ -135,9 +135,10 @@ namespace pdflib
 		  << image.raw_stream_data;
 
       // propagate PDF semantics for JPEG correction
-      image.decode_present = xobj.has_decode_array();
-      image.decode_array   = xobj.get_decode_array();
-      image.image_mask     = xobj.is_image_mask();
+      image.decode_present  = xobj.has_decode_array();
+      image.decode_array    = xobj.get_decode_array();
+      image.image_mask      = xobj.is_image_mask();
+      image.icc_components  = xobj.get_icc_components();
 
       // propagate graphics state
       image.has_graphics_state = true;
@@ -157,9 +158,44 @@ namespace pdflib
     pixel_format fmt = PIXEL_FORMAT_UNKNOWN;
 
     int channels = 0;
-    if      (image.color_space == "/DeviceGray") { fmt = PIXEL_FORMAT_GRAY; channels = 1; }
-    else if (image.color_space == "/DeviceRGB")  { fmt = PIXEL_FORMAT_RGB;  channels = 3; }
-    else if (image.color_space == "/DeviceCMYK") { fmt = PIXEL_FORMAT_CMYK; channels = 4; }
+    if(image.color_space == "/DeviceGray")
+      {
+        fmt = PIXEL_FORMAT_GRAY; channels = 1;
+      }
+    else if(image.color_space == "/DeviceRGB")
+      {
+        fmt = PIXEL_FORMAT_RGB; channels = 3;
+      }
+    else if(image.color_space == "/DeviceCMYK")
+      {
+        fmt = PIXEL_FORMAT_CMYK; channels = 4;
+      }
+    else if(image.color_space.find("/ICCBased") != std::string::npos
+            and image.icc_components > 0)
+      {
+        LOG_S(INFO) << "bitmap: ICCBased color space with N=" << image.icc_components
+                    << " for xobject_key=" << image.xobject_key;
+        if(image.icc_components == 1)
+          {
+            LOG_S(INFO) << "bitmap: treating ICCBased N=1 as DeviceGray";
+            fmt = PIXEL_FORMAT_GRAY; channels = 1;
+          }
+        else if(image.icc_components == 3)
+          {
+            LOG_S(INFO) << "bitmap: treating ICCBased N=3 as DeviceRGB";
+            fmt = PIXEL_FORMAT_RGB; channels = 3;
+          }
+        else if(image.icc_components == 4)
+          {
+            LOG_S(INFO) << "bitmap: treating ICCBased N=4 as DeviceCMYK";
+            fmt = PIXEL_FORMAT_CMYK; channels = 4;
+          }
+        else
+          {
+            LOG_S(WARNING) << "bitmap: ICCBased with unsupported N=" << image.icc_components
+                           << " for xobject_key=" << image.xobject_key;
+          }
+      }
     else
       {
         LOG_S(WARNING) << "bitmap: unsupported color space '" << image.color_space

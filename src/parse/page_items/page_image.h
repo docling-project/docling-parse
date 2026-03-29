@@ -73,6 +73,7 @@ namespace pdflib
     bool decode_present = false;
     std::vector<double> decode_array; // 2*ncomp when present
     bool image_mask = false;
+    int  icc_components = 0; // number of color components from /ICCBased /N entry; 0 if not ICCBased
 
     // graphics state properties
     bool               has_graphics_state = false;
@@ -319,10 +320,28 @@ namespace pdflib
 
   std::string page_item<PAGE_IMAGE>::get_pil_mode() const
   {
-    if(image_mask) { return "1"; }
-    if(color_space == "/DeviceGray") { return "L"; }
-    if(color_space == "/DeviceRGB")  { return "RGB"; }
-    if(color_space == "/DeviceCMYK") { return "CMYK"; }
+    if(image_mask)
+      {
+        return "1";
+      }
+    if(color_space == "/DeviceGray")
+      {
+        return "L";
+      }
+    if(color_space == "/DeviceRGB")
+      {
+        return "RGB";
+      }
+    if(color_space == "/DeviceCMYK")
+      {
+        return "CMYK";
+      }
+    if(color_space.find("/ICCBased") != std::string::npos and icc_components > 0)
+      {
+        if(icc_components == 1) { return "L"; }
+        if(icc_components == 3) { return "RGB"; }
+        if(icc_components == 4) { return "CMYK"; }
+      }
 
     LOG_S(WARNING) << "unknown color_space '" << color_space
                    << "' for xobject_key=" << xobject_key

@@ -30,6 +30,7 @@ namespace pdflib
     int                      get_image_height() const;
     int                      get_bits_per_component() const;
     std::string              get_color_space() const;
+    int                      get_icc_components() const;
     std::string              get_intent() const;
     std::vector<std::string> get_filters() const;
 
@@ -77,6 +78,7 @@ namespace pdflib
     int              image_height;
     int              bits_per_component;
     std::string      color_space;
+    int              icc_components = 0; // number of color components from /ICCBased /N entry; 0 if not ICCBased
     std::string      intent;
     std::vector<std::string> image_filters;
 
@@ -178,7 +180,10 @@ namespace pdflib
         LOG_S(WARNING) << "no `/BitsPerComponent` found";
       }
 
-    // /ColorSpace -- may be a name ("/DeviceRGB") or an array; store as string
+    // /ColorSpace -- may be a name ("/DeviceRGB") or an array; store as string.
+    // For /ICCBased arrays we additionally resolve the component count (/N) from
+    // the referenced stream via the raw QPDF handle, because to_json() loses the
+    // stream reference (rendering it as "8 0 R [stream]").
     if(json_xobject_dict.count("/ColorSpace"))
       {
         auto& cs = json_xobject_dict["/ColorSpace"];
@@ -189,6 +194,34 @@ namespace pdflib
         else
           {
             color_space = cs.dump();
+
+            auto qpdf_cs = qpdf_xobject_dict.getKey("/ColorSpace");
+            if(qpdf_cs.isArray() and qpdf_cs.getArrayNItems() >= 2)
+              {
+                auto name_obj = qpdf_cs.getArrayItem(0);
+                if(name_obj.isName() and name_obj.getName() == "/ICCBased")
+                  {
+                    auto icc_stream = qpdf_cs.getArrayItem(1);
+                    if(icc_stream.isStream())
+                      {
+                        auto icc_dict = icc_stream.getDict();
+                        LOG_S(INFO) << "ICCBased stream dict: " << to_json(icc_dict).dump(2);
+                        if(icc_dict.hasKey("/N") and icc_dict.getKey("/N").isInteger())
+                          {
+                            icc_components = icc_dict.getKey("/N").getIntValue();
+                            LOG_S(INFO) << "ICCBased color space: N=" << icc_components;
+                          }
+                        else
+                          {
+                            LOG_S(WARNING) << "ICCBased stream missing /N entry";
+                          }
+                      }
+                    else
+                      {
+                        LOG_S(WARNING) << "ICCBased: second array element is not a stream";
+                      }
+                  }
+              }
           }
       }
     else
@@ -360,6 +393,11 @@ namespace pdflib
   std::string pdf_resource<PAGE_XOBJECT_IMAGE>::get_color_space() const
   {
     return color_space;
+  }
+
+  int pdf_resource<PAGE_XOBJECT_IMAGE>::get_icc_components() const
+  {
+    return icc_components;
   }
 
   std::string pdf_resource<PAGE_XOBJECT_IMAGE>::get_intent() const
