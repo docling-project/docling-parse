@@ -1,3 +1,9 @@
+## [v5.6.1](https://github.com/docling-project/docling-parse/releases/tag/v5.6.1) - 2026-03-24
+
+### Fix
+
+* Bo10k document failures ([#244](https://github.com/docling-project/docling-parse/issues/244)) ([`1f650dd`](https://github.com/docling-project/docling-parse/commit/1f650dd412ee90dd1b43c2d6a27349dd791d0f68))
+
 ## [v5.6.0](https://github.com/docling-project/docling-parse/releases/tag/v5.6.0) - 2026-03-20
 
 ### Feature
