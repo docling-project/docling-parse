@@ -22,7 +22,7 @@ from pydantic import TypeAdapter
 
 from docling_parse.pdf_parser import DecodePageConfig, DoclingPdfParser, PdfDocument
 
-GENERATE = False
+GENERATE = True
 
 
 def _round_floats(obj, ndigits=3):
@@ -375,22 +375,29 @@ def test_reference_documents_from_filenames():
     config.keep_glyphs = True
     config.keep_qpdf_warnings = False
 
-    for pdf_doc_path in pdf_docs:
-        # print(f"parsing {pdf_doc_path}")
+    # Each entry: (doc_name, page_no_str, success, error_msg)
+    results: List[tuple] = []
 
-        pdf_doc: PdfDocument = parser.load(
-            path_or_stream=pdf_doc_path,
-            boundary_type=PdfPageBoundaryType.CROP_BOX,  # default: CROP_BOX
-            lazy=True,
-        )
-        assert pdf_doc is not None
+    for pdf_doc_path in pdf_docs:
+        rname = os.path.basename(pdf_doc_path)
+        print(f"parsing {pdf_doc_path}")
+
+        try:
+            pdf_doc: PdfDocument = parser.load(
+                path_or_stream=pdf_doc_path,
+                boundary_type=PdfPageBoundaryType.CROP_BOX,  # default: CROP_BOX
+                lazy=True,
+            )
+            assert pdf_doc is not None
+        except Exception as exc:
+            results.append((rname, "N/A", False, str(exc)))
+            continue
 
         # PdfDocument.iterate_pages() will automatically populate pages as they are yielded.
         # No need to call PdfDocument.load_all_pages() before.
         for page_no, pred_page in pdf_doc.iterate_pages(config=config):
-            # print(f" -> Page {page_no} has {len(pred_page.sanitized.cells)} cells.")
+            print(f" -> Page {page_no} has {len(pred_page.textline_cells)} cells.")
 
-            rname = os.path.basename(pdf_doc_path)
             fname = os.path.join(
                 GROUNDTRUTH_FOLDER, rname + f".page_no_{page_no}.py.json"
             )
@@ -401,59 +408,64 @@ def test_reference_documents_from_filenames():
 
             SPECIAL_SEPERATOR = "\t<|special_separator|>\n"
 
-            if GENERATE or (not os.path.exists(fname)):
-                save_as_json_rounded(pred_page, fname)
+            try:
+                if GENERATE or (not os.path.exists(fname)):
+                    save_as_json_rounded(pred_page, fname)
 
-                for unit in [TextCellUnit.CHAR, TextCellUnit.WORD, TextCellUnit.LINE]:
-                    lines = pred_page.export_to_textlines(
-                        cell_unit=unit,
-                        add_fontkey=True,
-                        add_fontname=False,
-                        add_location=True,
-                        add_text_direction=False,
-                    )
-                    _fname = fname + f".{unit}.txt"
-                    with open(_fname, "w") as fw:
-                        fw.write(SPECIAL_SEPERATOR.join(lines))
-            else:
-                # print(f"loading from {fname}")
+                    for unit in [TextCellUnit.CHAR, TextCellUnit.WORD, TextCellUnit.LINE]:
+                        lines = pred_page.export_to_textlines(
+                            cell_unit=unit,
+                            add_fontkey=True,
+                            add_fontname=False,
+                            add_location=True,
+                            add_text_direction=False,
+                        )
+                        _fname = fname + f".{unit}.txt"
+                        with open(_fname, "w") as fw:
+                            fw.write(SPECIAL_SEPERATOR.join(lines))
+                else:
+                    # print(f"loading from {fname}")
 
-                for unit in [TextCellUnit.CHAR, TextCellUnit.WORD, TextCellUnit.LINE]:
-                    _lines = pred_page.export_to_textlines(
-                        cell_unit=unit,
-                        add_fontkey=True,
-                        add_fontname=False,
-                        add_location=True,
-                        add_text_direction=False,
-                    )
+                    for unit in [TextCellUnit.CHAR, TextCellUnit.WORD, TextCellUnit.LINE]:
+                        _lines = pred_page.export_to_textlines(
+                            cell_unit=unit,
+                            add_fontkey=True,
+                            add_fontname=False,
+                            add_location=True,
+                            add_text_direction=False,
+                        )
 
-                    _fname = fname + f".{unit}.txt"
+                        _fname = fname + f".{unit}.txt"
 
-                    with open(_fname, "r") as fr:
-                        content = fr.read()
-                        lines = content.split(SPECIAL_SEPERATOR) if content else []
+                        with open(_fname, "r") as fr:
+                            content = fr.read()
+                            lines = content.split(SPECIAL_SEPERATOR) if content else []
 
-                    assert len(lines) == len(
-                        _lines
-                    ), f"len(lines) == len(_lines) => {len(lines)} == {len(_lines)} from {_fname} for {pdf_doc_path}"
+                        assert len(lines) == len(
+                            _lines
+                        ), f"len(lines) == len(_lines) => {len(lines)} == {len(_lines)} from {_fname} for {pdf_doc_path}"
 
-                    # this is a bit dangerous due to rounding errors ...
-                    """
-                    for i, line in enumerate(lines):
-                        assert (
-                            line == _lines[i]
-                        ), f"line == _lines[i] => {line} == {_lines[i]} in line {i} for {_fname}"
-                    """
+                        # this is a bit dangerous due to rounding errors ...
+                        """
+                        for i, line in enumerate(lines):
+                            assert (
+                                line == _lines[i]
+                            ), f"line == _lines[i] => {line} == {_lines[i]} in line {i} for {_fname}"
+                        """
 
-                true_page = SegmentedPdfPage.load_from_json(fname)
-                verify_SegmentedPdfPage(true_page, pred_page, filename=fname)
+                    true_page = SegmentedPdfPage.load_from_json(fname)
+                    verify_SegmentedPdfPage(true_page, pred_page, filename=fname)
 
-            img = pred_page.render_as_image(cell_unit=TextCellUnit.CHAR)
-            # img.show()
-            img = pred_page.render_as_image(cell_unit=TextCellUnit.WORD)
-            # img.show()
-            img = pred_page.render_as_image(cell_unit=TextCellUnit.LINE)
-            # img.show()
+                img = pred_page.render_as_image(cell_unit=TextCellUnit.CHAR)
+                # img.show()
+                img = pred_page.render_as_image(cell_unit=TextCellUnit.WORD)
+                # img.show()
+                img = pred_page.render_as_image(cell_unit=TextCellUnit.LINE)
+                # img.show()
+
+                results.append((rname, str(page_no), True, ""))
+            except Exception as exc:
+                results.append((rname, str(page_no), False, str(exc)))
 
             # print(f"unloading page: {page_no}")
             pdf_doc.unload_pages(page_range=(page_no, page_no + 1))
@@ -476,7 +488,23 @@ def test_reference_documents_from_filenames():
             print(f"meta: {meta}")
         """
 
-    assert True
+    # --- results table ---
+    from tabulate import tabulate
+
+    def _trunc(v, n=128):
+        s = str(v)
+        return s if len(s) <= n else s[:n - 3] + "..."
+
+    table = [
+        (_trunc(doc), page, "PASS" if ok else "FAIL", _trunc(err))
+        for doc, page, ok, err in results
+    ]
+    print("\n" + tabulate(table, headers=["document", "page", "status", "error"], tablefmt="grid") + "\n")
+
+    failed = [(doc, page, err) for doc, page, ok, err in results if not ok]
+    assert not failed, f"{len(failed)} page(s) failed: " + ", ".join(
+        f"{doc}@{page}" for doc, page, _ in failed
+    )
 
 
 def test_load_lazy_or_eager():

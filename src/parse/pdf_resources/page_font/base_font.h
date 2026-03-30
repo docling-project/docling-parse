@@ -34,6 +34,8 @@ namespace pdflib
 
     double get_ascend();
     double get_descend();
+    double get_capheight();
+    double get_xheight();
 
     std::array<double, 4> get_font_bbox();
 
@@ -197,6 +199,30 @@ namespace pdflib
     }
     
     return -1.;
+  }
+
+  double base_font::get_capheight()
+  {
+    initialise();
+
+    if(properties.count("CapHeight")==1)
+      {
+        return properties["CapHeight"].get<double>();
+      }
+
+    return get_ascend();
+  }
+
+  double base_font::get_xheight()
+  {
+    initialise();
+
+    if(properties.count("XHeight")==1)
+      {
+        return properties["XHeight"].get<double>();
+      }
+
+    return 0.;
   }
 
   std::array<double, 4> base_font::get_font_bbox()
