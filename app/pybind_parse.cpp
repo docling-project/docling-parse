@@ -9,6 +9,7 @@
 
 #include <pybind/docling_parser.h>
 #include <pybind/docling_threaded_parser.h>
+#include <pybind/docling_threaded_renderer.h>
 
 // Include parse headers for typed bindings
 #include <parse.h>
@@ -669,4 +670,124 @@ PYBIND11_MODULE(pdf_parsers, m) {
 
     Returns:
         PageDecodeResult: The result of a page decoding task.)");
+
+  // ============= Threaded PDF Renderer =============
+
+  // RenderConfig - configuration for the renderer
+  pybind11::class_<pdflib::render_config>(m, "RenderConfig",
+    R"(
+    Configuration parameters for page rendering.
+
+    Attributes:
+        render_text (bool): Render glyph outlines for text cells [default=true].
+        draw_text_bbox (bool): Draw bounding quad for each text cell [default=false].
+        resolve_fonts (bool): Resolve PDF font names to system fonts [default=true].
+        canvas_width (int): Target canvas width in pixels; -1 means use PDF page size [default=-1].
+        canvas_height (int): Target canvas height in pixels; -1 means use PDF page size [default=-1].
+    )")
+    .def(pybind11::init<>())
+    .def_readwrite("render_text",    &pdflib::render_config::render_text)
+    .def_readwrite("draw_text_bbox", &pdflib::render_config::draw_text_bbox)
+    .def_readwrite("resolve_fonts",  &pdflib::render_config::resolve_fonts)
+    .def_readwrite("canvas_width",   &pdflib::render_config::canvas_width)
+    .def_readwrite("canvas_height",  &pdflib::render_config::canvas_height);
+
+  // PageRenderResult - result of a threaded page render task
+  pybind11::class_<docling::page_render_result, docling::page_decode_result>(m, "PageRenderResult",
+    R"(
+    Result of a threaded page rendering task.
+
+    Inherits all attributes of PageDecodeResult and adds rendered image data.
+
+    Attributes:
+        image_data: Raw RGBA bytes of the rendered page (height x width x 4, row-major).
+        image_shape: Shape of the image as [height, width, channels].
+    )")
+    .def_readonly("image_shape", &docling::page_render_result::image_shape)
+    .def("get_image", [](docling::page_render_result& self)
+         -> pybind11::bytes {
+           if(not self.image_data or self.image_data->empty())
+             {
+               return pybind11::bytes();
+             }
+           return pybind11::bytes(
+             reinterpret_cast<const char*>(self.image_data->data()),
+             self.image_data->size());
+         },
+         R"(
+    Return the raw RGBA pixel data as Python bytes.
+
+    Use together with image_shape to reconstruct a PIL image:
+        result = renderer.get_task()
+        h, w, _ = result.image_shape
+        img = Image.frombuffer("RGBA", (w, h), result.get_image(), "raw", "RGBA", 0, 1)
+
+    Returns:
+        bytes: Raw RGBA pixel data, or empty bytes on failure.)");
+
+  // threaded_pdf_renderer - parallel PDF renderer with bounded result queue
+  pybind11::class_<docling::docling_threaded_renderer>(m, "threaded_pdf_renderer",
+    R"(
+    Threaded PDF renderer that decodes and renders pages in parallel.
+
+    Loads multiple documents and renders their pages using a thread pool.
+    Each result contains both the decoded page data and the rendered RGBA image.
+    Results are available via a bounded queue to control memory usage.
+    )")
+    .def(pybind11::init<const std::string&, int, int,
+                        pdflib::decode_config, pdflib::render_config>(),
+         pybind11::arg("loglevel")               = "fatal",
+         pybind11::arg("num_threads")            = 4,
+         pybind11::arg("max_concurrent_results") = 32,
+         pybind11::arg("decode_config")          = pdflib::decode_config(),
+         pybind11::arg("render_config")          = pdflib::render_config(),
+         R"(
+    Construct a threaded PDF renderer.
+
+    Parameters:
+        loglevel (str): Logging level ('fatal', 'error', 'warning', 'info').
+        num_threads (int): Number of worker threads.
+        max_concurrent_results (int): Maximum results buffered before workers pause.
+        decode_config (DecodePageConfig): Configuration for page decoding.
+        render_config (RenderConfig): Configuration for page rendering.)")
+
+    .def("load_document",
+         [](docling::docling_threaded_renderer& self,
+            const std::string& key,
+            const std::string& filename,
+            std::optional<std::string>& password) -> bool {
+           return self.load_document(key, filename, password);
+         },
+         pybind11::arg("key"),
+         pybind11::arg("filename"),
+         pybind11::arg("password") = pybind11::none())
+
+    .def("load_document_from_bytesio",
+         [](docling::docling_threaded_renderer& self,
+            const std::string& key,
+            pybind11::object bytes_io,
+            std::optional<std::string>& password) -> bool {
+           return self.load_document_from_bytesio(key, bytes_io, password);
+         },
+         pybind11::arg("key"),
+         pybind11::arg("bytes_io"),
+         pybind11::arg("password") = pybind11::none())
+
+    .def("has_tasks",
+         [](docling::docling_threaded_renderer& self) -> bool {
+           return self.has_tasks();
+         })
+
+    .def("get_task",
+         [](docling::docling_threaded_renderer& self) -> docling::page_render_result {
+           pybind11::gil_scoped_release release;
+           return self.get_task();
+         },
+         R"(
+    Get the next completed page render result.
+
+    Blocks until a result is available. Releases the GIL while waiting.
+
+    Returns:
+        PageRenderResult: The result of a page rendering task.)");
 }

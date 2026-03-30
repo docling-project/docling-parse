@@ -1,31 +1,51 @@
 //-*-C++-*-
 
-#ifndef PYBIND_THREADED_PDF_PARSER_H
-#define PYBIND_THREADED_PDF_PARSER_H
+#ifndef PYBIND_THREADED_PDF_RENDERER_H
+#define PYBIND_THREADED_PDF_RENDERER_H
+
+#include <array>
+#include <memory>
+#include <vector>
 
 #include <pybind/docling_threaded_base.h>
+#include <render/blend2d_renderer.h>
 
 namespace docling
 {
-  class docling_threaded_parser :
-    public docling_threaded_base<docling_threaded_parser, page_decode_result>
+  struct page_render_result : page_decode_result
+  {
+    // RGBA pixel data laid out as {height, width, 4} row-major top-to-bottom.
+    // Suitable for direct consumption by PIL:
+    //   Image.frombuffer("RGBA", (w, h), data, "raw", "RGBA", 0, 1)
+    std::shared_ptr<std::vector<unsigned char>> image_data;
+    std::array<int, 3> image_shape{0, 0, 4}; // {height, width, channels}
+  };
+
+  class docling_threaded_renderer :
+    public docling_threaded_base<docling_threaded_renderer, page_render_result>
   {
   public:
 
-    docling_threaded_parser(std::string loglevel,
-                            int num_threads,
-                            int max_concurrent_results,
-                            pdflib::decode_config config):
-      docling_threaded_base<docling_threaded_parser, page_decode_result>(loglevel,
-                                                                         num_threads,
-                                                                         max_concurrent_results,
-                                                                         config)
+    docling_threaded_renderer(std::string loglevel,
+                              int num_threads,
+                              int max_concurrent_results,
+                              pdflib::decode_config decode_config,
+                              pdflib::render_config render_config):
+      docling_threaded_base<docling_threaded_renderer, page_render_result>(loglevel,
+                                                                           num_threads,
+                                                                           max_concurrent_results,
+                                                                           decode_config),
+      render_cfg(render_config)
     {}
 
     void worker_loop();
+
+  private:
+
+    pdflib::render_config render_cfg;
   };
 
-  inline void docling_threaded_parser::worker_loop()
+  inline void docling_threaded_renderer::worker_loop()
   {
     while(true)
       {
@@ -45,7 +65,7 @@ namespace docling
         const std::string& doc_key = task.first;
         int page_number = task.second;
 
-        page_decode_result result;
+        page_render_result result;
         result.doc_key = doc_key;
         result.page_number = page_number;
 
@@ -78,14 +98,19 @@ namespace docling
                     page_decoder->create_line_cells(config);
                   }
 
+                pdflib::renderer<pdflib::BLEND2D> rnd(render_cfg);
+                page_decoder->get_instructions().iterate_over_instructions(rnd);
+
                 result.success = true;
                 result.page_decoder = page_decoder;
+                result.image_data   = rnd.get_canvas();
+                result.image_shape  = rnd.get_shape();
               }
           }
         catch(const std::exception& exc)
           {
             result.success = false;
-            result.error_message = "Error decoding page " + std::to_string(page_number)
+            result.error_message = "Error rendering page " + std::to_string(page_number)
               + " of " + doc_key + ": " + exc.what();
           }
 
