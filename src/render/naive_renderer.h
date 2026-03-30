@@ -14,6 +14,7 @@ namespace pdflib
   public:
 
     renderer();
+    explicit renderer(render_config config);
 
     void set_size(size_instruction& instr);
 
@@ -25,11 +26,18 @@ namespace pdflib
 
   private:
 
+    render_config config_;
     std::shared_ptr<std::vector<uint8_t> > canvas;
     std::array<int, 3> shape;
   };
 
   renderer<NAIVE>::renderer():
+    canvas(std::make_shared<std::vector<uint8_t> >()),
+    shape({0, 0, 3})
+  {}
+
+  inline renderer<NAIVE>::renderer(render_config config):
+    config_(config),
     canvas(std::make_shared<std::vector<uint8_t> >()),
     shape({0, 0, 3})
   {}

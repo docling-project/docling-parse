@@ -84,7 +84,7 @@ int main(int argc, char* argv[])
 	("l,loglevel", "Log level [error, warning, info]",                                  cxxopts::value<std::string>())
 	("h,help",     "Print usage")
 
-        // ---- blend2d_render_config ----
+        // ---- render_config ----
         ("render-text",    "Render glyph outlines for text cells (default: true)",          cxxopts::value<bool>()->implicit_value("true"))
         ("draw-text-bbox", "Draw bounding quad around each text cell",                      cxxopts::value<bool>()->implicit_value("true"))
         ("resolve-fonts",  "Resolve PDF font names to system fonts (default: true)",        cxxopts::value<bool>()->implicit_value("true"))
@@ -206,23 +206,23 @@ int main(int argc, char* argv[])
 	if (result.count("keep-qpdf-warnings"))       { page_config.keep_qpdf_warnings        = result["keep-qpdf-warnings"].as<bool>(); }
 	if (result.count("populate-json"))            { page_config.populate_json_objects      = result["populate-json"].as<bool>(); }
 
+	// --- render_config ---
+	pdflib::render_config cfg;
+	if (result.count("render-text"))    { cfg.render_text    = result["render-text"].as<bool>(); }
+	if (result.count("draw-text-bbox")) { cfg.draw_text_bbox = result["draw-text-bbox"].as<bool>(); }
+	if (result.count("resolve-fonts"))  { cfg.resolve_fonts  = result["resolve-fonts"].as<bool>(); }
+	if (result.count("canvas-width"))   { cfg.canvas_width   = result["canvas-width"].as<int>(); }
+	if (result.count("canvas-height"))  { cfg.canvas_height  = result["canvas-height"].as<int>(); }
+
 	if (renderer_type == "BLEND2D")
 	  {
-	    // --- blend2d_render_config ---
-	    pdflib::blend2d_render_config cfg; // start from struct defaults
-	    if (result.count("render-text"))    { cfg.render_text    = result["render-text"].as<bool>(); }
-	    if (result.count("draw-text-bbox")) { cfg.draw_text_bbox = result["draw-text-bbox"].as<bool>(); }
-	    if (result.count("resolve-fonts"))  { cfg.resolve_fonts  = result["resolve-fonts"].as<bool>(); }
-	    if (result.count("canvas-width"))   { cfg.canvas_width   = result["canvas-width"].as<int>(); }
-	    if (result.count("canvas-height"))  { cfg.canvas_height  = result["canvas-height"].as<int>(); }
-
 	    pdflib::renderer<pdflib::BLEND2D> rnd(cfg);
 	    if (!decode_and_render(doc, page, page_config, rnd)) { return 1; }
 	    rnd.show();
 	  }
 	else
 	  {
-	    pdflib::renderer<pdflib::NAIVE> rnd;
+	    pdflib::renderer<pdflib::NAIVE> rnd(cfg);
 	    if (!decode_and_render(doc, page, page_config, rnd)) { return 1; }
 	  }
 	

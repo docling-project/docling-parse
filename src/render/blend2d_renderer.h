@@ -4,6 +4,7 @@
 #define PDF_BLEND2D_RENDERER_H
 
 #include <render/template_renderer.h>
+#include <render/config.h>
 
 #include <blend2d/blend2d.h>
 
@@ -22,39 +23,13 @@
 
 namespace pdflib
 {
-  // ---------------------------------------------------------------------------
-  // blend2d_render_config
-  //
-  // Controls optional rendering behaviours for renderer<BLEND2D>.
-  // ---------------------------------------------------------------------------
-
-  struct blend2d_render_config
-  {
-    // Render the glyph outline for each text cell.
-    // When false and draw_text_bbox is true, only the bounding quad is drawn.
-    bool render_text = true;
-
-    // Draw the bounding quad of each text cell as a thin blue outline.
-    bool draw_text_bbox = false;
-
-    // Try to resolve the PDF font name / base_font to a system font file.
-    // When false the renderer always uses the hardcoded fallback font
-    // (Helvetica / Arial) without any name lookup.
-    bool resolve_fonts = true;
-
-    // Target canvas dimensions in pixels.  -1 means "use the PDF page size".
-    // If only one is set the other is derived to preserve the page aspect ratio.
-    int canvas_width  = -1;
-    int canvas_height = -1;
-  };
-
   template<>
   class renderer<BLEND2D>
   {
   public:
 
     renderer();
-    explicit renderer(blend2d_render_config config);
+    explicit renderer(render_config config);
 
     void set_size(size_instruction& instr);
     void render_text(text_instruction& instr);
@@ -77,7 +52,7 @@ namespace pdflib
 
   private:
 
-    blend2d_render_config config_;
+    render_config config_;
 
     mutable BLImage    image_;  // internal canvas (PRGB32 format)
     std::array<int, 3> shape_;  // {height, width, 4}
@@ -248,7 +223,7 @@ namespace pdflib
     : shape_({0, 0, 4})
   {}
 
-  inline renderer<BLEND2D>::renderer(blend2d_render_config config)
+  inline renderer<BLEND2D>::renderer(render_config config)
     : config_(config), shape_({0, 0, 4})
   {}
 
