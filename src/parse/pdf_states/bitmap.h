@@ -205,33 +205,24 @@ namespace pdflib
     if (channels > 0)
       {
         // Pick the best source of raw pixel bytes.
-        // decoded_stream_data: QPDF has already decompressed/decoded the stream
-        //   (handles /FlateDecode, /DCTDecode, /JPXDecode, …) — preferred.
-        // raw_stream_data fallback: only valid when there is no compression filter,
-        //   meaning the raw stream IS already the raw pixel bytes.
-        std::shared_ptr<Buffer> src;
-        if (image.decoded_stream_data and image.decoded_stream_data->getSize() > 0)
-          {
-            src = image.decoded_stream_data;
-          }
-        else if (image.filters.empty() and image.raw_stream_data and image.raw_stream_data->getSize() > 0)
-          {
-            LOG_S(WARNING) << "bitmap: decoded_stream_data unavailable, "
-                           << "falling back to raw_stream_data (no filter) "
-                           << "for xobject_key=" << image.xobject_key;
-            src = image.raw_stream_data;
-          }
-        else
-          {
-            LOG_S(WARNING) << "bitmap: no usable pixel data "
-                           << "for xobject_key=" << image.xobject_key;
-          }
+        //
+        // Priority:
+        //   1. decoded_stream_data — QPDF has already fully decoded the stream
+        //      (available for /FlateDecode and some /DCTDecode cases).
+        //   2. /DCTDecode via libjpeg — when QPDF could not decode the stream
+        //      in thread-safe mode, raw_stream_data IS the original JPEG bytes;
+        //      we decompress with libjpeg to get raw pixels directly.
+        //   3. raw_stream_data with no filter — the stream is already raw pixels.
 
-        if (src)
+        const bool has_dct = std::find(image.filters.begin(), image.filters.end(),
+                                       "/DCTDecode") != image.filters.end();
+
+        if (image.decoded_stream_data and image.decoded_stream_data->getSize() > 0)
           {
             const int w           = image.image_width;
             const int h           = image.image_height;
             const size_t expected = static_cast<size_t>(w) * h * channels;
+            const auto src        = image.decoded_stream_data;
 
             if (src->getSize() >= expected)
               {
@@ -241,10 +232,72 @@ namespace pdflib
               }
             else
               {
-                LOG_S(WARNING) << "bitmap: pixel buffer too small ("
+                LOG_S(WARNING) << "bitmap: decoded_stream_data too small ("
                                << src->getSize() << " < " << expected
                                << ") for xobject_key=" << image.xobject_key;
               }
+          }
+        else if (has_dct and image.raw_stream_data and image.raw_stream_data->getSize() > 0)
+          {
+            LOG_S(INFO) << "bitmap: decoded_stream_data unavailable for /DCTDecode image, "
+                        << "decoding JPEG via libjpeg "
+                        << "for xobject_key=" << image.xobject_key;
+
+            jpeg::ColorSpace cs = jpeg::icc_n_to_color_space(channels);
+
+            jpeg::jpeg_parameters params;
+            params.color_space = cs;
+            params.width       = image.image_width;
+            params.height      = image.image_height;
+            params.decode      = image.decode_array;
+            params.has_decode  = image.decode_present and not image.decode_array.empty();
+
+            auto decoded = jpeg::decode_jpeg_to_raw_pixels(
+                reinterpret_cast<unsigned char const*>(image.raw_stream_data->getBuffer()),
+                static_cast<std::size_t>(image.raw_stream_data->getSize()),
+                params);
+
+            if (not decoded.empty())
+              {
+                const int w = image.image_width;
+                const int h = image.image_height;
+                pixel_data  = std::make_shared<std::vector<uint8_t>>(std::move(decoded));
+                pixel_shape = {h, w, channels};
+              }
+            else
+              {
+                LOG_S(WARNING) << "bitmap: libjpeg decode failed "
+                               << "for xobject_key=" << image.xobject_key;
+              }
+          }
+        else if (image.filters.empty() and image.raw_stream_data and image.raw_stream_data->getSize() > 0)
+          {
+            LOG_S(WARNING) << "bitmap: decoded_stream_data unavailable, "
+                           << "falling back to raw_stream_data (no filter) "
+                           << "for xobject_key=" << image.xobject_key;
+
+            const int w           = image.image_width;
+            const int h           = image.image_height;
+            const size_t expected = static_cast<size_t>(w) * h * channels;
+            const auto src        = image.raw_stream_data;
+
+            if (src->getSize() >= expected)
+              {
+                const auto* raw = reinterpret_cast<const uint8_t*>(src->getBuffer());
+                pixel_data  = std::make_shared<std::vector<uint8_t>>(raw, raw + expected);
+                pixel_shape = {h, w, channels};
+              }
+            else
+              {
+                LOG_S(WARNING) << "bitmap: raw_stream_data too small ("
+                               << src->getSize() << " < " << expected
+                               << ") for xobject_key=" << image.xobject_key;
+              }
+          }
+        else
+          {
+            LOG_S(WARNING) << "bitmap: no usable pixel data "
+                           << "for xobject_key=" << image.xobject_key;
           }
       }
 

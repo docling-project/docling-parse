@@ -42,6 +42,17 @@ inline ColorSpace to_color_space(std::string const& cs)
   return ColorSpace::Unknown;
 }
 
+// Map an /ICCBased /N component count to the equivalent device colour space.
+inline ColorSpace icc_n_to_color_space(int n)
+{
+  switch(n) {
+    case 1: return ColorSpace::Gray;
+    case 3: return ColorSpace::RGB;
+    case 4: return ColorSpace::CMYK;
+    default: return ColorSpace::Unknown;
+  }
+}
+
 class jpeg_parameters {
 public:
   int width = 0;
@@ -728,6 +739,101 @@ inline std::vector<unsigned char> write_jpeg_from_raw_pixels_to_memory(
   free(outbuf);
 
   return result;
+}
+
+// ---------------------------------------------------------------------------
+// decode_jpeg_to_raw_pixels
+// ---------------------------------------------------------------------------
+// Decompresses a JPEG from memory and returns the raw interleaved pixel
+// bytes (e.g. R G B R G B … for RGB).  Applies the PDF /Decode mapping
+// after decompression.  Returns an empty vector on failure.
+//
+// This is used by the bitmap pipeline to obtain raw pixel data from
+// /DCTDecode streams when QPDF cannot provide a pre-decoded buffer (e.g.
+// in thread-safe page mode).
+// ---------------------------------------------------------------------------
+inline std::vector<unsigned char> decode_jpeg_to_raw_pixels(
+    unsigned char const* data, std::size_t size,
+    jpeg_parameters const& params)
+{
+  if(not data or size == 0) { return {}; }
+
+  if(not is_jpeg_data(data, size))
+    {
+      LOG_S(WARNING) << "decode_jpeg_to_raw_pixels"
+                     << ": data does not start with JPEG SOI marker, skipping";
+      return {};
+    }
+
+  jpeg_decompress_struct dinfo{};
+  jpeg_error_longjmp jerr{};
+  dinfo.err = jpeg_std_error(&jerr);
+  jerr.error_exit = jpeg_error_exit_longjmp;
+  jpeg_create_decompress(&dinfo);
+
+  if(setjmp(jerr.jmp))
+    {
+      jpeg_destroy_decompress(&dinfo);
+      return {};
+    }
+
+  jpeg_mem_src(&dinfo, const_cast<unsigned char*>(data),
+               static_cast<unsigned long>(size));
+
+  if(JPEG_HEADER_OK != jpeg_read_header(&dinfo, TRUE))
+    {
+      jpeg_destroy_decompress(&dinfo);
+      return {};
+    }
+
+  switch(params.color_space)
+    {
+      case ColorSpace::Gray: { dinfo.out_color_space = JCS_GRAYSCALE; break; }
+      case ColorSpace::RGB:  { dinfo.out_color_space = JCS_RGB;       break; }
+      case ColorSpace::CMYK: { dinfo.out_color_space = JCS_CMYK;      break; }
+      default: { break; }
+    }
+
+  jpeg_start_decompress(&dinfo);
+
+  const int         ncomp  = dinfo.output_components;
+  const std::size_t w      = dinfo.output_width;
+  const std::size_t h      = dinfo.output_height;
+  const std::size_t stride = w * static_cast<std::size_t>(ncomp);
+
+  std::vector<unsigned char> pixels(h * stride);
+
+  while(dinfo.output_scanline < dinfo.output_height)
+    {
+      unsigned char* row = &pixels[dinfo.output_scanline * stride];
+      JSAMPROW rows[1] = { row };
+      jpeg_read_scanlines(&dinfo, rows, 1);
+    }
+
+  jpeg_finish_decompress(&dinfo);
+  jpeg_destroy_decompress(&dinfo);
+
+  // Apply PDF /Decode mapping if present
+  if(params.has_decode and not params.decode.empty() and
+     static_cast<int>(params.decode.size()) >= 2 * ncomp)
+    {
+      for(std::size_t y = 0; y < h; ++y)
+        {
+          unsigned char* row = &pixels[y * stride];
+          for(std::size_t x = 0; x < w; ++x)
+            {
+              for(int c = 0; c < ncomp; ++c)
+                {
+                  double dmin = params.decode[2 * c + 0];
+                  double dmax = params.decode[2 * c + 1];
+                  row[x * ncomp + c] = apply_decode_component(
+                      row[x * ncomp + c], dmin, dmax);
+                }
+            }
+        }
+    }
+
+  return pixels;
 }
 
 } // namespace jpeg

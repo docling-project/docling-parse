@@ -130,6 +130,14 @@ namespace pdflib
     qpdf_xobject = qpdf_xobject_;
 
     parse();
+
+    // only for debug purpose ...
+    //{
+    //static int image_cnt = 0;
+    //image_cnt += 1;
+    //std::string fpath = "image_"+std::to_string(image_cnt);
+    //save_to_file(fpath.c_str());
+    //}
   }
 
   void pdf_resource<PAGE_XOBJECT_IMAGE>::parse()
@@ -294,6 +302,17 @@ namespace pdflib
 	      1, 0, 1, 0
 	    };
 	    decode_present = !decode_array.empty();
+	  }
+	else if(icc_components > 0)
+	  {
+	    // ICCBased: use identity decode [0 1] per component
+	    LOG_S(INFO) << "no `/Decode` found: using identity for ICCBased N=" << icc_components;
+	    for(int i = 0; i < icc_components; ++i)
+	      {
+		decode_array.push_back(0.0);
+		decode_array.push_back(1.0);
+	      }
+	    decode_present = not decode_array.empty();
 	  }
 	else
 	  {
@@ -499,28 +518,39 @@ namespace pdflib
 
     auto ext = path.extension().string();
     for(auto& c : ext) c = static_cast<char>(::tolower(c));
-    bool is_jpeg_ext = (ext == ".jpg" || ext == ".jpeg");
+    bool is_jpeg_ext = (ext == ".jpg" or ext == ".jpeg");
 
     bool filters_have_dct = false;
-    for(auto const& f : image_filters) { if(f == "/DCTDecode") filters_have_dct = true; }
+    for(auto const& f : image_filters)
+      {
+        if(f == "/DCTDecode") { filters_have_dct = true; }
+      }
+
+    // Resolve effective JPEG colour space: Device spaces map directly; for
+    // /ICCBased we use the /N component count to pick the Device equivalent.
+    jpeg::ColorSpace effective_cs = jpeg::to_color_space(color_space);
+    if(effective_cs == jpeg::ColorSpace::Unknown and icc_components > 0)
+      {
+        effective_cs = jpeg::icc_n_to_color_space(icc_components);
+      }
 
     auto is_safe_passthrough = [&]() -> bool {
-      if(!is_jpeg_ext) return false;
-      if(!filters_have_dct) return false;
-      if(bits_per_component != 8) return false;
-      if(!(color_space == "/DeviceRGB" || color_space == "/DeviceGray" || color_space == "/DeviceCMYK")) return false;
-      if(image_mask) return false;
-      if(decode_present && !decode_array.empty())
+      if(not is_jpeg_ext) { return false; }
+      if(not filters_have_dct) { return false; }
+      if(bits_per_component != 8) { return false; }
+      if(effective_cs == jpeg::ColorSpace::Unknown) { return false; }
+      if(image_mask) { return false; }
+      if(decode_present and not decode_array.empty())
         {
-          int ncomp = (color_space == "/DeviceGray") ? 1
-            : (color_space == "/DeviceCMYK") ? 4 : 3;
-          if(static_cast<int>(decode_array.size()) < 2*ncomp) return false;
+          int ncomp = (effective_cs == jpeg::ColorSpace::Gray) ? 1
+            : (effective_cs == jpeg::ColorSpace::CMYK) ? 4 : 3;
+          if(static_cast<int>(decode_array.size()) < 2*ncomp) { return false; }
           for(int c=0;c<ncomp;++c)
             {
               double dmin = decode_array[2*c+0];
               double dmax = decode_array[2*c+1];
-              if(!(std::abs(dmin - 0.0) < 1e-12 && std::abs(dmax - 1.0) < 1e-12))
-                return false;
+              if(not (std::abs(dmin - 0.0) < 1e-12 and std::abs(dmax - 1.0) < 1e-12))
+                { return false; }
             }
         }
       return true;
@@ -534,7 +564,7 @@ namespace pdflib
         params.width = image_width;
         params.height = image_height;
         params.bits_per_component = bits_per_component;
-        params.color_space = jpeg::to_color_space(color_space);
+        params.color_space = effective_cs;
         params.decode = decode_array;
         params.has_decode = decode_present and not decode_array.empty();
         params.image_mask = image_mask;
@@ -560,7 +590,7 @@ namespace pdflib
         params.width = image_width;
         params.height = image_height;
         params.bits_per_component = bits_per_component;
-        params.color_space = jpeg::to_color_space(color_space);
+        params.color_space = effective_cs;
         params.decode = decode_array;
         params.has_decode = decode_present and not decode_array.empty();
         params.image_mask = image_mask;
