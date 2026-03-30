@@ -412,7 +412,11 @@ def test_reference_documents_from_filenames():
                 if GENERATE or (not os.path.exists(fname)):
                     save_as_json_rounded(pred_page, fname)
 
-                    for unit in [TextCellUnit.CHAR, TextCellUnit.WORD, TextCellUnit.LINE]:
+                    for unit in [
+                        TextCellUnit.CHAR,
+                        TextCellUnit.WORD,
+                        TextCellUnit.LINE,
+                    ]:
                         lines = pred_page.export_to_textlines(
                             cell_unit=unit,
                             add_fontkey=True,
@@ -426,7 +430,11 @@ def test_reference_documents_from_filenames():
                 else:
                     # print(f"loading from {fname}")
 
-                    for unit in [TextCellUnit.CHAR, TextCellUnit.WORD, TextCellUnit.LINE]:
+                    for unit in [
+                        TextCellUnit.CHAR,
+                        TextCellUnit.WORD,
+                        TextCellUnit.LINE,
+                    ]:
                         _lines = pred_page.export_to_textlines(
                             cell_unit=unit,
                             add_fontkey=True,
@@ -493,13 +501,19 @@ def test_reference_documents_from_filenames():
 
     def _trunc(v, n=128):
         s = str(v)
-        return s if len(s) <= n else s[:n - 3] + "..."
+        return s if len(s) <= n else s[: n - 3] + "..."
 
     table = [
         (_trunc(doc), page, "PASS" if ok else "FAIL", _trunc(err))
         for doc, page, ok, err in results
     ]
-    print("\n" + tabulate(table, headers=["document", "page", "status", "error"], tablefmt="grid") + "\n")
+    print(
+        "\n"
+        + tabulate(
+            table, headers=["document", "page", "status", "error"], tablefmt="grid"
+        )
+        + "\n"
+    )
 
     failed = [(doc, page, err) for doc, page, ok, err in results if not ok]
     assert not failed, f"{len(failed)} page(s) failed: " + ", ".join(
