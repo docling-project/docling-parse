@@ -31,6 +31,9 @@ namespace pdflib
     int                      get_bits_per_component() const;
     std::string              get_color_space() const;
     int                      get_icc_components() const;
+    int                      get_indexed_hival() const;
+    std::string              get_indexed_base_cs() const;
+    std::shared_ptr<std::vector<uint8_t>> get_indexed_palette() const;
     std::string              get_intent() const;
     std::vector<std::string> get_filters() const;
 
@@ -78,7 +81,10 @@ namespace pdflib
     int              image_height;
     int              bits_per_component;
     std::string      color_space;
-    int              icc_components = 0; // number of color components from /ICCBased /N entry; 0 if not ICCBased
+    int              icc_components = 0;  // number of color components from /ICCBased /N entry; 0 if not ICCBased
+    int              indexed_hival  = -1; // hival from /Indexed color space; -1 if not Indexed
+    std::string      indexed_base_cs;    // base color space name for /Indexed (e.g. "/DeviceRGB")
+    std::shared_ptr<std::vector<uint8_t>> indexed_palette; // raw palette bytes: (hival+1)*ncomps bytes
     std::string      intent;
     std::vector<std::string> image_filters;
 
@@ -229,6 +235,62 @@ namespace pdflib
                         LOG_S(WARNING) << "ICCBased: second array element is not a stream";
                       }
                   }
+                else if(name_obj.isName() and name_obj.getName() == "/Indexed"
+                        and qpdf_cs.getArrayNItems() >= 3)
+                  {
+                    // [/Indexed, base, hival, lookup]
+
+                    // base color space
+                    auto base_obj = qpdf_cs.getArrayItem(1);
+                    if(base_obj.isName())
+                      {
+                        indexed_base_cs = base_obj.getName();
+                      }
+
+                    // hival
+                    auto hival_obj = qpdf_cs.getArrayItem(2);
+                    if(hival_obj.isInteger())
+                      {
+                        indexed_hival = static_cast<int>(hival_obj.getIntValue());
+                        LOG_S(INFO) << "Indexed color space: base=" << indexed_base_cs
+                                    << " hival=" << indexed_hival;
+                      }
+                    else
+                      {
+                        LOG_S(WARNING) << "Indexed color space: hival is not an integer";
+                      }
+
+                    // palette (lookup table): string or stream
+                    if(qpdf_cs.getArrayNItems() >= 4)
+                      {
+                        auto lookup_obj = qpdf_cs.getArrayItem(3);
+                        if(lookup_obj.isString())
+                          {
+                            std::string raw = lookup_obj.getStringValue();
+                            indexed_palette = std::make_shared<std::vector<uint8_t>>(
+                              raw.begin(), raw.end());
+                            LOG_S(INFO) << "Indexed palette: " << indexed_palette->size()
+                                        << " bytes (string)";
+                          }
+                        else if(lookup_obj.isStream())
+                          {
+                            auto stream_buf = to_shared_ptr(lookup_obj.getStreamData());
+                            if(stream_buf)
+                              {
+                                const auto* ptr = reinterpret_cast<const uint8_t*>(
+                                  stream_buf->getBuffer());
+                                indexed_palette = std::make_shared<std::vector<uint8_t>>(
+                                  ptr, ptr + stream_buf->getSize());
+                                LOG_S(INFO) << "Indexed palette: " << indexed_palette->size()
+                                            << " bytes (stream)";
+                              }
+                          }
+                        else
+                          {
+                            LOG_S(WARNING) << "Indexed color space: unrecognized lookup table type";
+                          }
+                      }
+                  }
               }
           }
       }
@@ -314,9 +376,16 @@ namespace pdflib
 	      }
 	    decode_present = not decode_array.empty();
 	  }
+	else if(indexed_hival >= 0)
+	  {
+	    // Indexed: default decode is [0, hival] (one component — the palette index)
+	    LOG_S(INFO) << "no `/Decode` found: using [0, " << indexed_hival << "] for Indexed color space";
+	    decode_array = { 0.0, static_cast<double>(indexed_hival) };
+	    decode_present = true;
+	  }
 	else
 	  {
-	    LOG_S(ERROR) << color_space << " is not part of [/DeviceGray, /DeviceRGB, /DeviceCMYK]";
+	    LOG_S(WARNING) << "no `/Decode` found and color space not recognized: " << color_space;
 	  }
       }
     LOG_S(INFO) << "image properties: "
@@ -417,6 +486,21 @@ namespace pdflib
   int pdf_resource<PAGE_XOBJECT_IMAGE>::get_icc_components() const
   {
     return icc_components;
+  }
+
+  int pdf_resource<PAGE_XOBJECT_IMAGE>::get_indexed_hival() const
+  {
+    return indexed_hival;
+  }
+
+  std::string pdf_resource<PAGE_XOBJECT_IMAGE>::get_indexed_base_cs() const
+  {
+    return indexed_base_cs;
+  }
+
+  std::shared_ptr<std::vector<uint8_t>> pdf_resource<PAGE_XOBJECT_IMAGE>::get_indexed_palette() const
+  {
+    return indexed_palette;
   }
 
   std::string pdf_resource<PAGE_XOBJECT_IMAGE>::get_intent() const

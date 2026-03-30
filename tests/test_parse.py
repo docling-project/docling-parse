@@ -22,7 +22,7 @@ from pydantic import TypeAdapter
 
 from docling_parse.pdf_parser import DecodePageConfig, DoclingPdfParser, PdfDocument
 
-GENERATE = True
+GENERATE = False
 
 
 def _round_floats(obj, ndigits=3):

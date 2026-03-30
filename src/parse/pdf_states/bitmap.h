@@ -140,6 +140,11 @@ namespace pdflib
       image.image_mask      = xobj.is_image_mask();
       image.icc_components  = xobj.get_icc_components();
 
+      // propagate /Indexed color space data
+      image.indexed_hival   = xobj.get_indexed_hival();
+      image.indexed_base_cs = xobj.get_indexed_base_cs();
+      image.indexed_palette = xobj.get_indexed_palette();
+
       // propagate graphics state
       image.has_graphics_state = true;
       image.rgb_stroking_ops   = grph_state.get_rgb_stroking_ops();
@@ -196,13 +201,89 @@ namespace pdflib
                            << " for xobject_key=" << image.xobject_key;
           }
       }
+    else if(image.indexed_palette and not image.indexed_palette->empty())
+      {
+        // /Indexed: expand palette indices into base color space pixels.
+        // Base color space channels determine the output format.
+        int ncomps = 0;
+        if(image.indexed_base_cs == "/DeviceGray")
+          {
+            fmt = PIXEL_FORMAT_GRAY; ncomps = 1;
+          }
+        else if(image.indexed_base_cs == "/DeviceRGB")
+          {
+            fmt = PIXEL_FORMAT_RGB; ncomps = 3;
+          }
+        else if(image.indexed_base_cs == "/DeviceCMYK")
+          {
+            fmt = PIXEL_FORMAT_CMYK; ncomps = 4;
+          }
+        else
+          {
+            LOG_S(WARNING) << "bitmap: Indexed with unsupported base color space '"
+                           << image.indexed_base_cs
+                           << "' for xobject_key=" << image.xobject_key;
+          }
+
+        if(ncomps > 0 and image.decoded_stream_data and image.decoded_stream_data->getSize() > 0)
+          {
+            const int w = image.image_width;
+            const int h = image.image_height;
+            const auto& palette = *image.indexed_palette;
+            const auto* indices = reinterpret_cast<const uint8_t*>(
+              image.decoded_stream_data->getBuffer());
+            const size_t n_indices = image.decoded_stream_data->getSize();
+
+            auto expanded = std::make_shared<std::vector<uint8_t>>();
+            expanded->reserve(static_cast<size_t>(w) * h * ncomps);
+
+            for(size_t i = 0; i < n_indices; ++i)
+              {
+                int idx = static_cast<int>(indices[i]);
+                // clamp to hival
+                if(image.indexed_hival >= 0 and idx > image.indexed_hival)
+                  {
+                    idx = image.indexed_hival;
+                  }
+                const size_t palette_offset = static_cast<size_t>(idx) * ncomps;
+                if(palette_offset + ncomps <= palette.size())
+                  {
+                    for(int c = 0; c < ncomps; ++c)
+                      {
+                        expanded->push_back(palette[palette_offset + c]);
+                      }
+                  }
+                else
+                  {
+                    // out-of-range index: fill with zeros
+                    for(int c = 0; c < ncomps; ++c)
+                      {
+                        expanded->push_back(0);
+                      }
+                  }
+              }
+
+            pixel_data  = std::move(expanded);
+            pixel_shape = {h, w, ncomps};
+            channels    = ncomps; // mark as handled
+            LOG_S(INFO) << "bitmap: expanded Indexed palette for xobject_key="
+                        << image.xobject_key
+                        << " (" << n_indices << " indices → "
+                        << pixel_data->size() << " bytes, ncomps=" << ncomps << ")";
+          }
+        else if(ncomps > 0)
+          {
+            LOG_S(WARNING) << "bitmap: Indexed color space but no decoded_stream_data "
+                           << "for xobject_key=" << image.xobject_key;
+          }
+      }
     else
       {
         LOG_S(WARNING) << "bitmap: unsupported color space '" << image.color_space
                        << "' for xobject_key=" << image.xobject_key;
       }
 
-    if (channels > 0)
+    if (channels > 0 and not pixel_data)
       {
         // Pick the best source of raw pixel bytes.
         //

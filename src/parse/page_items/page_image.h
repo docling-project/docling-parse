@@ -75,6 +75,11 @@ namespace pdflib
     bool image_mask = false;
     int  icc_components = 0; // number of color components from /ICCBased /N entry; 0 if not ICCBased
 
+    // /Indexed color space support
+    int              indexed_hival  = -1;
+    std::string      indexed_base_cs;
+    std::shared_ptr<std::vector<uint8_t>> indexed_palette;
+
     // graphics state properties
     bool               has_graphics_state = false;
     std::array<int, 3> rgb_stroking_ops = {0, 0, 0};
