@@ -9,6 +9,8 @@
 #include <array>
 #include <memory>
 
+#include <parse/enums.h>
+
 namespace pdflib
 {
   enum pixel_format {
@@ -196,18 +198,40 @@ namespace pdflib
     const static RENDER_INSTRUCTION_NAME instr = SHAPE_RENDER_INSTRUCTION;
 
     shape_instruction(std::vector<double> x,
-                      std::vector<double> y):
+                      std::vector<double> y,
+                      page_shape_closing_type closing_type,
+                      page_shape_type         shape_type,
+                      double                  line_width,
+                      std::array<int, 3>      rgb_stroking,
+                      std::array<int, 3>      rgb_filling):
       x(std::move(x)),
-      y(std::move(y)) {}
+      y(std::move(y)),
+      closing_type(closing_type),
+      shape_type(shape_type),
+      line_width(line_width),
+      rgb_stroking(rgb_stroking),
+      rgb_filling(rgb_filling) {}
 
     const std::vector<double>& get_x() const { return x; }
     const std::vector<double>& get_y() const { return y; }
     size_t size() const { return x.size(); }
 
+    page_shape_closing_type     get_closing_type()  const { return closing_type; }
+    page_shape_type             get_shape_type()    const { return shape_type; }
+    double                      get_line_width()    const { return line_width; }
+    const std::array<int, 3>&   get_rgb_stroking()  const { return rgb_stroking; }
+    const std::array<int, 3>&   get_rgb_filling()   const { return rgb_filling; }
+
   private:
 
     const std::vector<double> x;
     const std::vector<double> y;
+
+    const page_shape_closing_type closing_type;
+    const page_shape_type         shape_type;
+    const double                  line_width;
+    const std::array<int, 3>      rgb_stroking;
+    const std::array<int, 3>      rgb_filling;
   };
 
   class pdf_render_instructions

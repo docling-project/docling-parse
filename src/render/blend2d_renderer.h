@@ -83,6 +83,8 @@ namespace pdflib
     std::array<int, 3> shape_;  // {height, width, 4}
     double scale_x_ = 1.0;     // pdf-to-canvas scale along x
     double scale_y_ = 1.0;     // pdf-to-canvas scale along y
+    double origin_x_ = 0.0;    // crop_bbox x origin (pdf units)
+    double origin_y_ = 0.0;    // crop_bbox y origin (pdf units, y-up)
 
     // Lazily-built map from normalized font stem (e.g. "times new roman bold")
     // to its absolute file path.
@@ -94,12 +96,12 @@ namespace pdflib
     // Cache: cache_key → loaded BLFontFace.
     std::unordered_map<std::string, BLFontFace> font_cache_;
 
-    // Convert PDF coordinates (origin bottom-left) to canvas coordinates
-    // (origin top-left), applying scale.
-    double canvas_x(double pdf_x) const { return pdf_x * scale_x_; }
+    // Convert PDF coordinates (origin at crop_bbox bottom-left, y-up) to
+    // canvas coordinates (origin top-left, y-down), applying scale.
+    double canvas_x(double pdf_x) const { return (pdf_x - origin_x_) * scale_x_; }
     double canvas_y(double pdf_y) const
     {
-      return static_cast<double>(shape_[0]) - pdf_y * scale_y_;
+      return static_cast<double>(shape_[0]) - (pdf_y - origin_y_) * scale_y_;
     }
 
     // Normalize a font name for fuzzy comparison:
@@ -292,8 +294,17 @@ namespace pdflib
 
     scale_x_ = static_cast<double>(width)  / pdf_w;
     scale_y_ = static_cast<double>(height) / pdf_h;
+    origin_x_ = static_cast<double>(bbox[0]);
+    origin_y_ = static_cast<double>(bbox[1]);
 
     shape_ = {height, width, 4};
+
+    LOG_S(INFO) << "set_size:"
+                << " crop_bbox=[" << bbox[0] << "," << bbox[1] << "," << bbox[2] << "," << bbox[3] << "]"
+                << " pdf_size=" << pdf_w << "x" << pdf_h
+                << " canvas=" << width << "x" << height
+                << " scale=(" << scale_x_ << "," << scale_y_ << ")";
+
     image_.create(width, height, BL_FORMAT_PRGB32);
 
     // Initialise canvas to opaque white.
@@ -518,12 +529,20 @@ namespace pdflib
     bbox_path.line_to(x3, y3);
     bbox_path.close();
 
+    LOG_S(INFO) << "text=`" << instr.get_text() << "`"
+                << " base=(" << bx << "," << by << ")"
+                << " quad_h=" << quad_h
+                << " a_norm=" << a_norm << " d_norm=" << d_norm
+                << " cell_span=" << cell_span
+                << " em_size=" << em_size << " size=" << size;
+
     BLFontFace& face = resolve_font_face(instr.get_font_name(),
                                          instr.get_base_font());
-    LOG_S(INFO) << "face: " << face.is_valid();
+    LOG_S(INFO) << "face valid=" << face.is_valid()
+                << " font_name=`" << instr.get_font_name() << "`"
+                << " base_font=`" << instr.get_base_font() << "`";
 
     BLContext ctx(image_);
-    LOG_S(INFO) << "writing text: `" << instr.get_text() << "`, size: " << size;
 
     if (face.is_valid() and size > 0.5)
       {
@@ -537,9 +556,12 @@ namespace pdflib
             gb.set_utf8_text(instr.get_text().c_str());
             font.shape(gb);
 
+            LOG_S(INFO) << "glyph buffer empty=" << gb.is_empty();
+
             if (!gb.is_empty())
               {
                 const BLGlyphId glyph_id = gb.glyph_run().glyph_data_as<uint32_t>()[0];
+                LOG_S(INFO) << "glyph_id=" << glyph_id;
 
                 // Build affine: glyph pixel space (y-down, baseline at origin)
                 //               → canvas space (y-down, baseline at (bx, by)).
@@ -564,10 +586,18 @@ namespace pdflib
                 BLPath glyph_path;
                 font.get_glyph_outlines(glyph_id, m, glyph_path);
 
+                LOG_S(INFO) << "glyph_path empty=" << glyph_path.is_empty()
+                            << " transform=[[" << adv_x << "," << adv_y << "],[" << dn_x << "," << dn_y << "],[" << bx << "," << by << "]]";
+
                 if (!glyph_path.is_empty())
                   {
                     ctx.set_fill_style(BLRgba32(0xFF000000u)); // opaque black
                     ctx.fill_path(glyph_path);
+                    LOG_S(INFO) << "filled glyph path";
+                  }
+                else
+                  {
+                    LOG_S(WARNING) << "glyph_path is empty — nothing drawn for `" << instr.get_text() << "`";
                   }
               }
           }
@@ -705,16 +735,32 @@ namespace pdflib
 
     BLPath path;
     path.move_to(canvas_x(xs[0]), canvas_y(ys[0]));
-    // LOG_S(INFO) << " -> add point: (" << xs[0] << ", " << ys[0] << ")";
     for (size_t i = 1; i < instr.size(); ++i)
       {
-        // LOG_S(INFO) << " -> add point: (" << xs[i] << ", " << ys[i] << ")";
         path.line_to(canvas_x(xs[i]), canvas_y(ys[i]));
       }
 
+    /*
+    if (instr.get_closing_type() == CLOSED)
+      {
+        path.close();
+      }
+    */
+    
+    const auto& rgb = instr.get_rgb_stroking();
+    const uint32_t stroke_color =
+      (0xFFu                          << 24) |
+      (static_cast<uint32_t>(rgb[0])  << 16) |
+      (static_cast<uint32_t>(rgb[1])  <<  8) |
+       static_cast<uint32_t>(rgb[2]);
+
+    const double lw = (instr.get_line_width() > 0.0) ? instr.get_line_width() * scale_x_ : 1.0;
+
     BLContext ctx(image_);
-    ctx.set_stroke_style(BLRgba32(0xFF000000u));
-    ctx.set_stroke_width(1.0);
+    //ctx.set_stroke_style(BLRgba32(0xFF000000u));
+    ctx.set_stroke_style(BLRgba32(stroke_color));
+    //ctx.set_stroke_width(lw);
+    ctx.set_stroke_width(1);
     ctx.stroke_path(path);
     ctx.end();
   }

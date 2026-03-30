@@ -123,6 +123,18 @@ namespace pdflib
     XOBJECT_POSTSCRIPT
   };
 
+  enum page_shape_closing_type {
+    CLOSING_UNDEFINED,
+    OPEN,
+    CLOSED,
+  };
+
+  enum page_shape_type {
+    SHAPE_UNDEFINED,
+    LINE,        // straight line between two points
+    RECTANGLE,   // straight lines between four points (closed rectangle)
+    BEZIER,      // cubic Bézier curve (interpolated)
+  };
 
 }
 
