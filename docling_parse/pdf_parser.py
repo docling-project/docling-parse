@@ -30,6 +30,7 @@ from pydantic import BaseModel, ConfigDict
 
 from docling_parse.pdf_parsers import DecodePageConfig  # type: ignore[import]
 from docling_parse.pdf_parsers import PageDecodeResult  # type: ignore[import]
+from docling_parse.pdf_parsers import PdfPageDecoder  # type: ignore[import]
 from docling_parse.pdf_parsers import RenderConfig  # type: ignore[import]
 from docling_parse.pdf_parsers import pdf_parser  # type: ignore[import]
 from docling_parse.pdf_parsers import threaded_pdf_parser  # type: ignore[import]
@@ -1016,6 +1017,18 @@ class PdfPageRenderResult:
     def error(self) -> str:
         """Return the error message if rendering failed, empty string otherwise."""
         return self._raw.error_message if not self.success else ""
+
+    def get(self) -> Tuple[PdfPageDecoder, Dict[str, float]]:
+        """Return (page_decoder, timings) for the rendered page.
+
+        Delegates to the underlying PageDecodeResult.get() so that render
+        results can be used interchangeably with parse results when accessing
+        the decoded page data.
+
+        Raises:
+            RuntimeError: If the task was not successful.
+        """
+        return self._raw.get()
 
     def get_image(self) -> Optional[PILImage.Image]:
         """Convert rendered pixel data to a PIL RGBA Image.
