@@ -682,15 +682,17 @@ PYBIND11_MODULE(pdf_parsers, m) {
         render_text (bool): Render glyph outlines for text cells [default=true].
         draw_text_bbox (bool): Draw bounding quad for each text cell [default=false].
         resolve_fonts (bool): Resolve PDF font names to system fonts [default=true].
+        font_similarity_cutoff (float): Minimum Jaccard similarity for fuzzy font matching; candidates below this threshold fall back to the default font [default=0.25].
         canvas_width (int): Target canvas width in pixels; -1 means use PDF page size [default=-1].
         canvas_height (int): Target canvas height in pixels; -1 means use PDF page size [default=-1].
     )")
     .def(pybind11::init<>())
-    .def_readwrite("render_text",    &pdflib::render_config::render_text)
-    .def_readwrite("draw_text_bbox", &pdflib::render_config::draw_text_bbox)
-    .def_readwrite("resolve_fonts",  &pdflib::render_config::resolve_fonts)
-    .def_readwrite("canvas_width",   &pdflib::render_config::canvas_width)
-    .def_readwrite("canvas_height",  &pdflib::render_config::canvas_height);
+    .def_readwrite("render_text",             &pdflib::render_config::render_text)
+    .def_readwrite("draw_text_bbox",          &pdflib::render_config::draw_text_bbox)
+    .def_readwrite("resolve_fonts",           &pdflib::render_config::resolve_fonts)
+    .def_readwrite("font_similarity_cutoff",  &pdflib::render_config::font_similarity_cutoff)
+    .def_readwrite("canvas_width",            &pdflib::render_config::canvas_width)
+    .def_readwrite("canvas_height",           &pdflib::render_config::canvas_height);
 
   // PageRenderResult - result of a threaded page render task
   pybind11::class_<docling::page_render_result, docling::page_decode_result>(m, "PageRenderResult",

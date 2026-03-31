@@ -28,6 +28,12 @@ namespace pdflib
     // (Helvetica / Arial) without any name lookup.
     bool resolve_fonts = true;
 
+    // Minimum Jaccard similarity required when fuzzy-matching a PDF font name
+    // to a system font file.  Candidates below this threshold are rejected and
+    // the hardcoded fallback font is used instead.  Range [0, 1]; lower values
+    // accept weaker matches, higher values are more strict.
+    float font_similarity_cutoff = 0.25f;
+
     // Target canvas dimensions in pixels.  -1 means "use the PDF page size".
     // If only one is set the other is derived to preserve the page aspect ratio.
     int canvas_width  = -1;

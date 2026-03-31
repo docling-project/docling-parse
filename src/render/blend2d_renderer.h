@@ -33,6 +33,7 @@ namespace pdflib
 
     void set_size(size_instruction& instr);
     void render_text(text_instruction& instr);
+    void render_text_legacy_v2(text_instruction& instr);
     void render_text_legacy(text_instruction& instr);
     void render_bitmap(bitmap_instruction& instr);
     void render_shape(shape_instruction& instr);
@@ -179,9 +180,15 @@ namespace pdflib
       const auto q_toks = split_tokens(norm_query);
       if (q_toks.empty()) { return {}; }
 
+      // Minimum Jaccard similarity required to accept a fuzzy match.
+      // A raw intersection score of 1 on "regular" alone yields J ≈ 0.14
+      // (1 shared token out of 7 in the union), which is too low and causes
+      // wrong fonts (e.g. NotoSansMongolian for ShinMGoPr6N) to be selected.
+      const float kMinJaccard = config_.font_similarity_cutoff;
+
       std::string best_path;
-      int best_score      = 0;
-      int best_size_delta = INT_MAX;
+      float best_jaccard    = 0.0f;
+      int best_size_delta   = INT_MAX;
 
       for (const auto& [norm_name, path] : font_index_)
         {
@@ -195,12 +202,14 @@ namespace pdflib
                 }
             }
           if (score == 0) { continue; }
-          // Among equal scores prefer the candidate with the closest token count.
+          const float jaccard = static_cast<float>(score) /
+                                static_cast<float>(q_toks.size() + c_toks.size() - score);
+          if (jaccard < kMinJaccard) { continue; }
           const int delta = std::abs(static_cast<int>(c_toks.size()) -
                                      static_cast<int>(q_toks.size()));
-          if (score > best_score or (score == best_score and delta < best_size_delta))
+          if (jaccard > best_jaccard or (jaccard == best_jaccard and delta < best_size_delta))
             {
-              best_score      = score;
+              best_jaccard    = jaccard;
               best_size_delta = delta;
               best_path       = path;
             }
@@ -469,7 +478,17 @@ namespace pdflib
     ctx.end();
   }
 
-  inline void renderer<BLEND2D>::render_text(text_instruction& instr)
+  // ---------------------------------------------------------------------------
+  // render_text_legacy_v2
+  //
+  // Second-generation text renderer: manually shapes the input string, picks
+  // out glyph[0] and calls font.get_glyph_outlines() with a full affine matrix
+  // to support rotated text.  Superseded by render_text (v3) which uses the
+  // safer fill_utf8_text() high-level API with a context transform instead.
+  // Kept for comparison / reference.
+  // ---------------------------------------------------------------------------
+
+  inline void renderer<BLEND2D>::render_text_legacy_v2(text_instruction& instr)
   {
     LOG_S(INFO) << __FUNCTION__;
 
@@ -496,6 +515,12 @@ namespace pdflib
     const double em_size  = (cell_span > 1.0) ? (1000.0 * quad_h / cell_span) : quad_h;
     const double size     = (em_size > 0.5) ? em_size : instr.get_font_size() * scale_y_;
 
+    // Guard: degenerate cell — quad_h is too small to compute a valid direction
+    // vector.  Dividing by quad_h would produce NaN/Inf in the affine matrix,
+    // which causes a SIGBUS when Blend2D's JIT code applies the transform.
+    // Skip the glyph-outline path for such cells.
+    const bool degenerate_cell = (quad_h < 0.5);
+
     // Build the bounding quad path (reused for optional outline / fallback).
     BLPath bbox_path;
     bbox_path.move_to(x0, y0);
@@ -521,7 +546,7 @@ namespace pdflib
 
     if (face.is_valid() and size > 0.5)
       {
-        if (config_.render_text)
+        if (config_.render_text and not degenerate_cell)
           {
             BLFont font;
             font.create_from_face(face, static_cast<float>(size));
@@ -587,6 +612,124 @@ namespace pdflib
     else
       {
         // No font available — draw the bounding quad outline.
+        LOG_S(WARNING) << "render_text: no valid font for '"
+                       << instr.get_font_name() << "' / '"
+                       << instr.get_base_font() << "', drawing outline only";
+        ctx.set_stroke_style(BLRgba32(0xFF1070C0u));
+        ctx.set_stroke_width(0.5);
+        ctx.stroke_path(bbox_path);
+      }
+
+    ctx.end();
+  }
+
+  // ---------------------------------------------------------------------------
+  // render_text (v3)
+  //
+  // Third-generation text renderer.  Applies a full affine context transform
+  // to handle rotated / skewed text, then renders the complete string via
+  // fill_utf8_text() — Blend2D's stable high-level text API.
+  //
+  // Compared to render_text_legacy_v2 this avoids get_glyph_outlines(), which
+  // can cause SIGBUS on ARM64 macOS when certain system fonts (CFF/OTF) are
+  // resolved for PDFs with non-standard crop-box origins.  It also correctly
+  // renders multi-character text cells (legacy_v2 only drew glyph[0]).
+  // ---------------------------------------------------------------------------
+
+  inline void renderer<BLEND2D>::render_text(text_instruction& instr)
+  {
+    LOG_S(INFO) << __FUNCTION__;
+
+    if (shape_[0] == 0 or shape_[1] == 0) { return; }
+
+    // Baseline origin and quad corners in canvas space (scaled + y-flipped).
+    const double bx = canvas_x(instr.get_base_x0());
+    const double by = canvas_y(instr.get_base_y0());
+    const double x0 = canvas_x(instr.get_r_x0()), y0 = canvas_y(instr.get_r_y0());
+    const double x1 = canvas_x(instr.get_r_x1()), y1 = canvas_y(instr.get_r_y1());
+    const double x2 = canvas_x(instr.get_r_x2()), y2 = canvas_y(instr.get_r_y2());
+    const double x3 = canvas_x(instr.get_r_x3()), y3 = canvas_y(instr.get_r_y3());
+
+    // Cell height vector in canvas: from descender-left (x0,y0) to ascender-left (x3,y3).
+    const double hx = x3 - x0, hy = y3 - y0;
+    const double quad_h = std::sqrt(hx * hx + hy * hy);
+
+    // Em size in canvas pixels.
+    const double a_norm    = instr.get_font_ascent_norm();
+    const double d_norm    = instr.get_font_descent_norm();
+    const double cell_span = a_norm - d_norm; // per-1000 em units
+    const double em_size   = (cell_span > 1.0) ? (1000.0 * quad_h / cell_span) : quad_h;
+    const double size      = (em_size > 0.5) ? em_size : instr.get_font_size() * scale_y_;
+
+    // Degenerate cell: quad_h too small to build a valid direction vector.
+    // Dividing by quad_h would produce NaN/Inf in the affine matrix.
+    if (quad_h < 0.5) { return; }
+
+    // Build the bounding quad path (for optional bbox outline / fallback).
+    BLPath bbox_path;
+    bbox_path.move_to(x0, y0);
+    bbox_path.line_to(x1, y1);
+    bbox_path.line_to(x2, y2);
+    bbox_path.line_to(x3, y3);
+    bbox_path.close();
+
+    LOG_S(INFO) << "text=`" << instr.get_text() << "`"
+                << " base=(" << bx << "," << by << ")"
+                << " quad_h=" << quad_h
+                << " a_norm=" << a_norm << " d_norm=" << d_norm
+                << " cell_span=" << cell_span
+                << " em_size=" << em_size << " size=" << size;
+
+    BLFontFace& face = resolve_font_face(instr.get_font_name(),
+                                         instr.get_base_font());
+    LOG_S(INFO) << "face valid=" << face.is_valid()
+                << " font_name=`" << instr.get_font_name() << "`"
+                << " base_font=`" << instr.get_base_font() << "`";
+
+    BLContext ctx(image_);
+
+    if (face.is_valid() and size > 0.5)
+      {
+        if (config_.render_text)
+          {
+            BLFont font;
+            font.create_from_face(face, static_cast<float>(size));
+
+            // Build affine: text space (origin = baseline, y-down) → canvas space.
+            //
+            //   up   = (hx, hy) / quad_h  — canvas direction toward ascenders
+            //   adv  = perpendicular (90° CCW of up) — advance direction
+            //   dn   = -up                — y-down in glyph/text space
+            //
+            // BLMatrix2D: out.x = gx*m00 + gy*m10 + m20
+            //             out.y = gx*m01 + gy*m11 + m21
+            const double up_x  =  hx / quad_h,  up_y  =  hy / quad_h;
+            const double adv_x = -up_y,          adv_y =  up_x;
+            const double dn_x  = -up_x,          dn_y  = -up_y;
+            const BLMatrix2D ctm(adv_x, adv_y,
+                                 dn_x,  dn_y,
+                                 bx,    by);
+
+            ctx.save();
+            ctx.apply_transform(ctm);
+            ctx.set_fill_style(BLRgba32(0xFF000000u)); // opaque black
+            ctx.fill_utf8_text(BLPoint(0.0, 0.0), font, instr.get_text().c_str());
+            ctx.restore();
+
+            LOG_S(INFO) << "rendered `" << instr.get_text() << "`"
+                        << " ctm=[[" << adv_x << "," << adv_y << "],[" << dn_x << "," << dn_y << "],[" << bx << "," << by << "]]";
+          }
+
+        if (config_.draw_text_bbox)
+          {
+            ctx.set_stroke_style(BLRgba32(0xFF1070C0u));
+            ctx.set_stroke_width(0.5);
+            ctx.stroke_path(bbox_path);
+          }
+      }
+    else
+      {
+        // No valid font — draw the bounding quad outline.
         LOG_S(WARNING) << "render_text: no valid font for '"
                        << instr.get_font_name() << "' / '"
                        << instr.get_base_font() << "', drawing outline only";
@@ -729,12 +872,8 @@ namespace pdflib
       (static_cast<uint32_t>(rgb[1])  <<  8) |
        static_cast<uint32_t>(rgb[2]);
 
-    const double lw = (instr.get_line_width() > 0.0) ? instr.get_line_width() * scale_x_ : 1.0;
-
     BLContext ctx(image_);
-    //ctx.set_stroke_style(BLRgba32(0xFF000000u));
     ctx.set_stroke_style(BLRgba32(stroke_color));
-    //ctx.set_stroke_width(lw);
     ctx.set_stroke_width(1);
     ctx.stroke_path(path);
     ctx.end();

@@ -30,8 +30,10 @@ from pydantic import BaseModel, ConfigDict
 
 from docling_parse.pdf_parsers import DecodePageConfig  # type: ignore[import]
 from docling_parse.pdf_parsers import PageDecodeResult  # type: ignore[import]
+from docling_parse.pdf_parsers import RenderConfig  # type: ignore[import]
 from docling_parse.pdf_parsers import pdf_parser  # type: ignore[import]
 from docling_parse.pdf_parsers import threaded_pdf_parser  # type: ignore[import]
+from docling_parse.pdf_parsers import threaded_pdf_renderer  # type: ignore[import]
 from docling_parse.pdf_parsers import (  # type: ignore[import]
     TIMING_KEY_CREATE_LINE_CELLS,
     TIMING_KEY_CREATE_WORD_CELLS,
@@ -973,3 +975,174 @@ class DoclingThreadedPdfParser:
                 Use task.get() to get (PdfPageDecoder, timings) or task.error() for error message.
         """
         return self._parser.get_task()
+
+
+# ---------------------------------------------------------------------------
+# Threaded renderer
+# ---------------------------------------------------------------------------
+
+
+class ThreadedPdfRendererConfig(BaseModel):
+    """Configuration for the threaded PDF renderer.
+
+    Attributes:
+        loglevel: Logging level ('fatal', 'error', 'warning', 'info').
+        threads: Number of worker threads for parallel page rendering.
+        max_concurrent_results: Maximum results buffered before workers pause.
+    """
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    loglevel: str = "fatal"
+    threads: int = 4
+    max_concurrent_results: int = 32
+
+
+class PdfPageRenderResult:
+    """Wrapper around a raw C++ PageRenderResult providing PIL image conversion.
+
+    Attributes:
+        doc_key: Document key the page belongs to.
+        page_number: 0-indexed page number.
+        success: Whether rendering succeeded.
+    """
+
+    def __init__(self, raw):
+        self._raw = raw
+        self.doc_key: str = raw.doc_key
+        self.page_number: int = raw.page_number
+        self.success: bool = raw.success
+
+    def error(self) -> str:
+        """Return the error message if rendering failed, empty string otherwise."""
+        return self._raw.error_message if not self.success else ""
+
+    def get_image(self) -> Optional[PILImage.Image]:
+        """Convert rendered pixel data to a PIL RGBA Image.
+
+        Returns:
+            PIL.Image.Image in RGBA mode, or None if rendering failed.
+        """
+        if not self.success:
+            return None
+
+        raw_bytes = self._raw.get_image()
+        if not raw_bytes:
+            return None
+
+        h, w, _ = self._raw.image_shape
+        return PILImage.frombuffer("RGBA", (w, h), raw_bytes, "raw", "RGBA", 0, 1)
+
+
+class DoclingThreadedPdfRenderer:
+    """Threaded PDF renderer that decodes and renders pages from multiple documents in parallel.
+
+    Each result contains both the decoded page data (accessible via the page_decoder)
+    and the rendered RGBA image, produced in a single pass.
+
+    Usage::
+
+        render_config = RenderConfig()
+        decode_config = DecodePageConfig()
+        renderer_config = ThreadedPdfRendererConfig(threads=4)
+
+        renderer = DoclingThreadedPdfRenderer(
+            renderer_config=renderer_config,
+            decode_config=decode_config,
+            render_config=render_config,
+        )
+
+        for source in sources:
+            renderer.load(source)
+
+        while renderer.has_tasks():
+            result = renderer.get_task()
+            if result.success:
+                image = result.get_image()   # PIL RGBA Image
+            else:
+                print(result.error())
+    """
+
+    def __init__(
+        self,
+        renderer_config: Optional[ThreadedPdfRendererConfig] = None,
+        decode_config: Optional[DecodePageConfig] = None,
+        render_config: Optional[RenderConfig] = None,
+    ):
+        if renderer_config is None:
+            renderer_config = ThreadedPdfRendererConfig()
+        if decode_config is None:
+            decode_config = DecodePageConfig()
+        if render_config is None:
+            render_config = RenderConfig()
+
+        self._renderer = threaded_pdf_renderer(
+            loglevel=renderer_config.loglevel,
+            num_threads=renderer_config.threads,
+            max_concurrent_results=renderer_config.max_concurrent_results,
+            decode_config=decode_config,
+            render_config=render_config,
+        )
+
+    def load(
+        self,
+        path_or_stream: Union[str, Path, BytesIO],
+        password: Optional[str] = None,
+    ) -> str:
+        """Load a document for parallel rendering.
+
+        Parameters:
+            path_or_stream: File path or BytesIO object.
+            password: Optional password for protected files.
+
+        Returns:
+            str: The document key.
+        """
+        if isinstance(path_or_stream, str):
+            path_or_stream = Path(path_or_stream)
+
+        if isinstance(path_or_stream, Path):
+            key = f"key={str(path_or_stream)}"
+            success = self._renderer.load_document(
+                key=key, filename=str(path_or_stream).encode("utf8"), password=password
+            )
+        elif isinstance(path_or_stream, BytesIO):
+            hasher = hashlib.sha256(usedforsecurity=False)
+            while chunk := path_or_stream.read(8192):
+                hasher.update(chunk)
+            path_or_stream.seek(0)
+            hash_val = hasher.hexdigest()
+
+            key = f"key={hash_val}"
+            success = self._renderer.load_document_from_bytesio(
+                key=key, bytes_io=path_or_stream, password=password
+            )
+        else:
+            raise TypeError(
+                f"Expected str, Path, or BytesIO, got {type(path_or_stream)}"
+            )
+
+        if not success:
+            raise RuntimeError(f"Failed to load document with key {key}")
+
+        return key
+
+    def has_tasks(self) -> bool:
+        """Check if there are remaining tasks to consume.
+
+        On first call, builds the task queue and starts worker threads.
+
+        Returns:
+            bool: True if there are remaining results to consume.
+        """
+        return self._renderer.has_tasks()
+
+    def get_task(self) -> PdfPageRenderResult:
+        """Get the next completed page render result.
+
+        Blocks until a result is available.
+
+        Returns:
+            PdfPageRenderResult: wraps doc_key, page_number, success, and get_image().
+        """
+        return PdfPageRenderResult(self._renderer.get_task())
