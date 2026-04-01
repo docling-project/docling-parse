@@ -604,7 +604,10 @@ namespace pdflib
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    acroform_fonts = std::make_shared<pdf_resource<PAGE_FONTS>>();
+    // page_fonts is already fully populated (decode_fonts ran before us).
+    // Make it the base of the chain so AP streams can fall back to page-level
+    // fonts (e.g. /F2) without any re-parsing.
+    acroform_fonts = std::make_shared<pdf_resource<PAGE_FONTS>>(page_fonts);
 
     try
       {
@@ -853,6 +856,8 @@ namespace pdflib
   void pdf_decoder<PAGE>::add_textfield(QPDFObjectHandle annot,
 					const std::array<double, 4>& bbox)  
   {
+    LOG_S(INFO) << __FUNCTION__;
+    
     auto [has_value, text] = to_string(annot, "/V");
     if(not has_value)
       {
@@ -912,6 +917,8 @@ namespace pdflib
   void pdf_decoder<PAGE>::add_button(QPDFObjectHandle annot,
 				     const std::array<double, 4>& bbox)  
   {
+    LOG_S(INFO) << __FUNCTION__;
+    
     auto [has_value, text] = to_string(annot, "/V");
     if(not has_value)
       {
@@ -949,6 +956,8 @@ namespace pdflib
   void pdf_decoder<PAGE>::add_choice(QPDFObjectHandle annot,
 				     const std::array<double, 4>& bbox)  
   {
+    LOG_S(INFO) << __FUNCTION__;
+    
     auto [has_value, text] = to_string(annot, "/V");
     if(not has_value)
       {
@@ -986,6 +995,8 @@ namespace pdflib
   void pdf_decoder<PAGE>::add_signature(QPDFObjectHandle annot,
 					const std::array<double, 4>& bbox)  
   {
+    LOG_S(INFO) << __FUNCTION__;
+    
     auto [has_value, text] = to_string(annot, "/V");
     if(not has_value)
       {
@@ -1031,26 +1042,13 @@ namespace pdflib
         return;
       }
 
-    // Build a 3-level font fallback chain:
+    // Font fallback chain (built once in load_acroform_dr_fonts, reused here):
     //   ap_fonts  (AP stream's own /Resources/Font — most specific)
-    //     → page_level  (page fonts re-loaded from qpdf_fonts, e.g. /F2)
-    //       → acroform_fonts  (AcroForm /DR/Font, e.g. /Helv)
+    //     → acroform_fonts  (AcroForm /DR/Font, e.g. /Helv)
+    //       → page_fonts    (page-level fonts, e.g. /F2)
     //
-    // AP streams frequently omit /Resources/Font entirely and rely on the
-    // AcroForm /DR for standard aliases (/Helv) and on page-level fonts
-    // for embedded fonts (/F2, etc.).
-
-    // Level 3 (base): AcroForm /DR fonts
-    auto page_level = std::make_shared<pdf_resource<PAGE_FONTS>>(acroform_fonts);
-
-    // Level 2: page fonts (qpdf_fonts is the raw dict saved as a member)
-    if(qpdf_fonts.isInitialized() and qpdf_fonts.isDictionary())
-      {
-        page_level->set(qpdf_fonts, timings);
-      }
-
-    // Level 1: AP stream's own /Resources/Font (overrides both levels above)
-    auto ap_fonts = std::make_shared<pdf_resource<PAGE_FONTS>>(page_level);
+    // No re-parsing: page_fonts and acroform_fonts are already populated.
+    auto ap_fonts = std::make_shared<pdf_resource<PAGE_FONTS>>(acroform_fonts);
     if(ap_stream.hasKey("/Resources"))
       {
         auto ap_resources = ap_stream.getKey("/Resources");
