@@ -35,6 +35,7 @@ namespace pdflib
     void render_text(text_instruction& instr);
     void render_text_legacy_v2(text_instruction& instr);
     void render_text_legacy(text_instruction& instr);
+    void render_widget(text_widget_instruction& instr);
     void render_bitmap(bitmap_instruction& instr);
     void render_shape(shape_instruction& instr);
 
@@ -834,6 +835,35 @@ namespace pdflib
     }
 
     ctx.blit_image(dst_rect, src_img, BLRectI(0, 0, sw, sh));
+    ctx.end();
+  }
+
+  // ---------------------------------------------------------------------------
+  // render_widget
+  //
+  // Draws the widget's rotated bounding quad as a semi-transparent light-blue
+  // filled polygon.  The text value is not rendered.
+  // ---------------------------------------------------------------------------
+
+  inline void renderer<BLEND2D>::render_widget(text_widget_instruction& instr)
+  {
+    LOG_S(INFO) << __FUNCTION__ << "  text='" << instr.get_text() << "'";
+
+    if (shape_[0] == 0 or shape_[1] == 0) { return; }
+
+    BLPath path;
+    path.move_to(canvas_x(instr.get_r_x0()), canvas_y(instr.get_r_y0()));
+    path.line_to(canvas_x(instr.get_r_x1()), canvas_y(instr.get_r_y1()));
+    path.line_to(canvas_x(instr.get_r_x2()), canvas_y(instr.get_r_y2()));
+    path.line_to(canvas_x(instr.get_r_x3()), canvas_y(instr.get_r_y3()));
+    path.close();
+
+    BLContext ctx(image_);
+    ctx.set_fill_style(BLRgba32(0x660099FFu));   // A=40%, light blue
+    ctx.fill_path(path);
+    ctx.set_stroke_style(BLRgba32(0xFF0099FFu));  // A=100%, blue border
+    ctx.set_stroke_width(1);
+    ctx.stroke_path(path);
     ctx.end();
   }
 

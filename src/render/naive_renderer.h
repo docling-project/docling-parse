@@ -20,6 +20,8 @@ namespace pdflib
 
     void render_text(text_instruction& instr);
 
+    void render_widget(text_widget_instruction& instr);
+
     void render_bitmap(bitmap_instruction& instr);
 
     void render_shape(shape_instruction& instr);
@@ -64,6 +66,14 @@ namespace pdflib
                 << instr.get_r_x1() << ", " << instr.get_r_y1() << "), ("
                 << instr.get_r_x2() << ", " << instr.get_r_y2() << "), ("
                 << instr.get_r_x3() << ", " << instr.get_r_y3() << ")]";
+  }
+
+  inline void renderer<NAIVE>::render_widget(text_widget_instruction& instr)
+  {
+    LOG_S(INFO) << __FUNCTION__
+                << "  text='" << instr.get_text() << "'"
+                << "  bbox=[(" << instr.get_x0() << ", " << instr.get_y0() << "), ("
+                               << instr.get_x1() << ", " << instr.get_y1() << ")]";
   }
 
   inline void renderer<NAIVE>::render_bitmap(bitmap_instruction& instr)

@@ -23,6 +23,7 @@ namespace pdflib
   enum RENDER_INSTRUCTION_NAME {
     SIZE_INSTRUCTION, // set the size of the canvas on which we render
     TEXT_RENDER_INSTRUCTION, // render text on the canvas
+    TEXT_WIDGET_RENDER_INSTRUCTION, // render a fillable-field widget (bbox + value text)
     BITMAP_RENDER_INSTRUCTION, // paste bitmap image on the canvas
     SHAPE_RENDER_INSTRUCTION, // draw shapes (lines, shapes, filling, etc)
   };
@@ -135,6 +136,50 @@ namespace pdflib
     const double base_y0;    
   };
 
+  class text_widget_instruction
+  {
+  public:
+    const static RENDER_INSTRUCTION_NAME instr = TEXT_WIDGET_RENDER_INSTRUCTION;
+
+    text_widget_instruction(std::string text,
+                            double x0,  double y0,
+                            double x1,  double y1,
+                            double r_x0, double r_y0,
+                            double r_x1, double r_y1,
+                            double r_x2, double r_y2,
+                            double r_x3, double r_y3):
+      text_(std::move(text)),
+      x0_(x0),   y0_(y0),
+      x1_(x1),   y1_(y1),
+      r_x0_(r_x0), r_y0_(r_y0),
+      r_x1_(r_x1), r_y1_(r_y1),
+      r_x2_(r_x2), r_y2_(r_y2),
+      r_x3_(r_x3), r_y3_(r_y3)
+    {}
+
+    const std::string& get_text() const { return text_; }
+
+    double get_x0() const { return x0_; }
+    double get_y0() const { return y0_; }
+    double get_x1() const { return x1_; }
+    double get_y1() const { return y1_; }
+
+    double get_r_x0() const { return r_x0_; }
+    double get_r_y0() const { return r_y0_; }
+    double get_r_x1() const { return r_x1_; }
+    double get_r_y1() const { return r_y1_; }
+    double get_r_x2() const { return r_x2_; }
+    double get_r_y2() const { return r_y2_; }
+    double get_r_x3() const { return r_x3_; }
+    double get_r_y3() const { return r_y3_; }
+
+  private:
+    const std::string text_;
+    const double x0_,   y0_,   x1_,   y1_;
+    const double r_x0_, r_y0_, r_x1_, r_y1_;
+    const double r_x2_, r_y2_, r_x3_, r_y3_;
+  };
+
   class bitmap_instruction
   {
   public:
@@ -239,6 +284,7 @@ namespace pdflib
     typedef instruction instruction_type;
 
     typedef text_instruction text_instruction_type;
+    typedef text_widget_instruction text_widget_instruction_type;
     typedef bitmap_instruction bitmap_instruction_type;
     typedef shape_instruction shape_instruction_type;
 
@@ -251,6 +297,7 @@ namespace pdflib
 
     void add_size_instruction(size_instruction& instr);
     void add_text_instruction(text_instruction_type instr);
+    void add_widget_instruction(text_widget_instruction_type instr);
     void add_bitmap_instruction(bitmap_instruction_type instr);
     void add_shape_instruction(shape_instruction_type instr);
 
@@ -264,9 +311,10 @@ namespace pdflib
 
     std::vector<instruction_type> instructions;
 
-    std::vector<text_instruction_type> text_instructions;
-    std::vector<bitmap_instruction_type> bitmap_instructions;
-    std::vector<shape_instruction_type> shape_instructions;
+    std::vector<text_instruction_type>        text_instructions;
+    std::vector<text_widget_instruction_type> widget_instructions;
+    std::vector<bitmap_instruction_type>      bitmap_instructions;
+    std::vector<shape_instruction_type>       shape_instructions;
 
   };
 
@@ -289,6 +337,12 @@ namespace pdflib
   {
     instructions.emplace_back(TEXT_RENDER_INSTRUCTION, text_instructions.size());
     text_instructions.push_back(std::move(instr));
+  }
+
+  inline void pdf_render_instructions::add_widget_instruction(text_widget_instruction instr)
+  {
+    instructions.emplace_back(TEXT_WIDGET_RENDER_INSTRUCTION, widget_instructions.size());
+    widget_instructions.push_back(std::move(instr));
   }
 
   inline void pdf_render_instructions::add_bitmap_instruction(bitmap_instruction instr)
@@ -316,6 +370,13 @@ namespace pdflib
 	    {
 	      auto& text_instr = text_instructions.at(instr.index);
 	      renderer.render_text(text_instr);
+	    }
+	    break;
+
+	  case TEXT_WIDGET_RENDER_INSTRUCTION:
+	    {
+	      auto& widget_instr = widget_instructions.at(instr.index);
+	      renderer.render_widget(widget_instr);
 	    }
 	    break;
 

@@ -7,26 +7,22 @@ void set_loglevel(std::string level)
   if(level=="info")
     {
       loguru::g_stderr_verbosity = loguru::Verbosity_INFO;
-      //set_verbosity(loguru::Verbosity_INFO);
     }
   else if(level=="warning")
     {
       loguru::g_stderr_verbosity = loguru::Verbosity_WARNING;
-      //loguru::set_verbosity(loguru::Verbosity_WARNING);
     }
   else if(level=="error")
     {
       loguru::g_stderr_verbosity = loguru::Verbosity_ERROR;
-      //loguru::set_verbosity(loguru::Verbosity_ERROR);
     }
   else if(level=="fatal")
     {
       loguru::g_stderr_verbosity = loguru::Verbosity_FATAL;
-      //loguru::set_verbosity(loguru::Verbosity_ERROR);
     }
   else
     {
-      loguru::g_stderr_verbosity = loguru::Verbosity_ERROR;      
+      loguru::g_stderr_verbosity = loguru::Verbosity_ERROR;
     }
 }
 
@@ -71,68 +67,92 @@ int main(int argc, char* argv[]) {
   // Initialize loguru
   loguru::init(argc, argv);
 
-  bool do_sanitization = true;
-  bool keep_shapes = true;
-  bool keep_bitmaps = true;
-
   try {
     cxxopts::Options options("PDFProcessor", "A program to process PDF files or configuration files");
 
     // Define the options
     options.add_options()
-      ("i,input", "Input PDF file", cxxopts::value<std::string>())
-      ("c,config", "Config file", cxxopts::value<std::string>())
-      ("create-config", "Create config file", cxxopts::value<std::string>())
-      ("p,page", "Pages to process (default: -1 for all)", cxxopts::value<int>()->default_value("-1"))
-      ("password", "Password for accessing encrypted, password-protected files", cxxopts::value<std::string>())
-      ("o,output", "Output file", cxxopts::value<std::string>())
-      ("export-images", "Export images to directory", cxxopts::value<std::string>())
-      ("print-cells", "Print cells to stdout [char, word, line, all] (default: none)", cxxopts::value<std::string>())
-      ("keep-text", "Keep text cells in output (default: true)", cxxopts::value<bool>()->default_value("true"))
-      ("keep-shapes", "Keep shapes in output (default: true)", cxxopts::value<bool>()->default_value("true"))
-      ("keep-bitmaps", "Keep bitmaps in output (default: true)", cxxopts::value<bool>()->default_value("true"))
-      ("do-sanitation", "Do text sanitation (default: true)", cxxopts::value<bool>()->default_value("true"))
-      ("l,loglevel", "loglevel [error;warning;success;info]", cxxopts::value<std::string>())
-      ("h,help", "Print usage");
+      ("i,input",        "Input PDF file",                                                        cxxopts::value<std::string>())
+      ("c,config",       "Config file",                                                           cxxopts::value<std::string>())
+      ("create-config",  "Create config file",                                                    cxxopts::value<std::string>())
+      ("p,page",         "Pages to process (default: -1 for all)",                               cxxopts::value<int>()->default_value("-1"))
+      ("password",       "Password for accessing encrypted, password-protected files",            cxxopts::value<std::string>())
+      ("o,output",       "Output file",                                                           cxxopts::value<std::string>())
+      ("export-images",  "Export images to directory",                                            cxxopts::value<std::string>())
+      ("print-cells",    "Print cells to stdout [char, word, line, all] (default: none)",        cxxopts::value<std::string>())
+      ("l,loglevel",     "Log level [error, warning, info]",                                     cxxopts::value<std::string>())
+      ("h,help",         "Print usage")
+
+      // ---- decode_config ----
+      ("page-boundary",   "Page boundary [crop_box, media_box, ...] (default: crop_box)",        cxxopts::value<std::string>())
+      ("do-sanitization", "Run post-parse sanitization (default: true)",                         cxxopts::value<bool>()->implicit_value("true"))
+      ("keep-char-cells", "Keep individual character cells (default: true)",                     cxxopts::value<bool>()->implicit_value("true"))
+      ("keep-shapes",     "Keep shape items (default: true)",                                    cxxopts::value<bool>()->implicit_value("true"))
+      ("keep-bitmaps",    "Keep bitmap items (default: true)",                                   cxxopts::value<bool>()->implicit_value("true"))
+      ("max-num-lines",   "Cap on number of lines per page (-1 = no cap)",                       cxxopts::value<int>())
+      ("max-num-bitmaps", "Cap on number of bitmaps per page (-1 = no cap)",                    cxxopts::value<int>())
+      ("create-word-cells",  "Build word-level cells (default: true)",                           cxxopts::value<bool>()->implicit_value("true"))
+      ("create-line-cells",  "Build line-level cells (default: true)",                           cxxopts::value<bool>()->implicit_value("true"))
+      ("enforce-same-font",  "Require same font within a word/line cell (default: true)",        cxxopts::value<bool>()->implicit_value("true"))
+      ("horizontal-cell-tolerance", "Horizontal merge tolerance (default: 1.0)",                 cxxopts::value<double>())
+      ("word-space-factor",  "Space-width factor for word merging (default: 0.33)",              cxxopts::value<double>())
+      ("line-space-factor",  "Space-width factor for line merging (default: 1.0)",               cxxopts::value<double>())
+      ("line-space-factor-with-space", "Space-width factor for line merging with space (default: 0.33)", cxxopts::value<double>())
+      ("keep-glyphs",        "Keep unmapped GLYPH<...> tokens (default: false)",                 cxxopts::value<bool>()->implicit_value("true"))
+      ("keep-qpdf-warnings", "Emit QPDF warnings (default: false)",                              cxxopts::value<bool>()->implicit_value("true"))
+      ("populate-json",      "Populate JSON objects during decode (default: false)",              cxxopts::value<bool>()->implicit_value("true"));
 
     // Parse command line arguments
     auto result = options.parse(argc, argv);
 
     // Check if either input or config file is provided (mandatory)
     if (orig_argc == 1) {
-      LOG_S(INFO) << argc;
       LOG_F(ERROR, "Either input (-i) or config (-c) must be specified.");
       LOG_F(INFO, "%s", options.help().c_str());
       return 1;
     }
 
     std::string level = "warning";
-    if (result.count("loglevel")){
+    if (result.count("loglevel")) {
       level = result["loglevel"].as<std::string>();
 
       // Convert the string to lowercase
       std::transform(level.begin(), level.end(), level.begin(), [](unsigned char c) {
         return std::tolower(c);
       });
-      
+
       set_loglevel(level);
     }
 
-    do_sanitization = result["do-sanitation"].as<bool>();
-    bool keep_text = result["keep-text"].as<bool>();
-    keep_shapes = result["keep-shapes"].as<bool>();
-    keep_bitmaps = result["keep-bitmaps"].as<bool>();
+    // Help option or no arguments provided
+    if (result.count("help")) {
+      LOG_F(INFO, "%s", options.help().c_str());
+      return 0;
+    }
+
+    // --- decode_config ---
+    pdflib::decode_config page_config;
+    if (result.count("page-boundary"))            { page_config.page_boundary             = result["page-boundary"].as<std::string>(); }
+    if (result.count("do-sanitization"))          { page_config.do_sanitization            = result["do-sanitization"].as<bool>(); }
+    if (result.count("keep-char-cells"))          { page_config.keep_char_cells            = result["keep-char-cells"].as<bool>(); }
+    if (result.count("keep-shapes"))              { page_config.keep_shapes                = result["keep-shapes"].as<bool>(); }
+    if (result.count("keep-bitmaps"))             { page_config.keep_bitmaps               = result["keep-bitmaps"].as<bool>(); }
+    if (result.count("max-num-lines"))            { page_config.max_num_lines              = result["max-num-lines"].as<int>(); }
+    if (result.count("max-num-bitmaps"))          { page_config.max_num_bitmaps            = result["max-num-bitmaps"].as<int>(); }
+    if (result.count("create-word-cells"))        { page_config.create_word_cells          = result["create-word-cells"].as<bool>(); }
+    if (result.count("create-line-cells"))        { page_config.create_line_cells          = result["create-line-cells"].as<bool>(); }
+    if (result.count("enforce-same-font"))        { page_config.enforce_same_font          = result["enforce-same-font"].as<bool>(); }
+    if (result.count("horizontal-cell-tolerance")){ page_config.horizontal_cell_tolerance  = result["horizontal-cell-tolerance"].as<double>(); }
+    if (result.count("word-space-factor"))        { page_config.word_space_width_factor_for_merge = result["word-space-factor"].as<double>(); }
+    if (result.count("line-space-factor"))        { page_config.line_space_width_factor_for_merge = result["line-space-factor"].as<double>(); }
+    if (result.count("line-space-factor-with-space")) { page_config.line_space_width_factor_for_merge_with_space = result["line-space-factor-with-space"].as<double>(); }
+    if (result.count("keep-glyphs"))              { page_config.keep_glyphs               = result["keep-glyphs"].as<bool>(); }
+    if (result.count("keep-qpdf-warnings"))       { page_config.keep_qpdf_warnings        = result["keep-qpdf-warnings"].as<bool>(); }
+    if (result.count("populate-json"))            { page_config.populate_json_objects      = result["populate-json"].as<bool>(); }
 
     if (result.count("config")) {
       std::string config_file = result["config"].as<std::string>();
       LOG_F(INFO, "Config file: %s", config_file.c_str());
-
-      pdflib::decode_config page_config;
-
-      page_config.do_sanitization = do_sanitization;
-      page_config.keep_char_cells = keep_text;
-      page_config.keep_shapes = keep_shapes;
-      page_config.keep_bitmaps = keep_bitmaps;
 
       std::cout << "decode_config:\n" << page_config.to_string() << std::endl;
 
@@ -196,12 +216,6 @@ int main(int argc, char* argv[]) {
         config["password"] = result["password"].as<std::string>();
       }
 
-      pdflib::decode_config page_config;
-      page_config.do_sanitization = do_sanitization;
-      page_config.keep_char_cells = keep_text;
-      page_config.keep_shapes = keep_shapes;
-      page_config.keep_bitmaps = keep_bitmaps;
-
       std::cout << "decode_config:\n" << page_config.to_string() << std::endl;
 
       utils::timer timer;
@@ -233,13 +247,6 @@ int main(int argc, char* argv[]) {
       return 0;
     }
 
-    // Help option or no arguments provided
-    if (result.count("help")) {
-      LOG_F(INFO, "%s", options.help().c_str());
-      return 0;
-    }
-
-    //} catch (const cxxopts::OptionException& e) {
   } catch (const cxxopts::exceptions::exception& e) {
     LOG_F(ERROR, "Error parsing options: %s", e.what());
     return 1;

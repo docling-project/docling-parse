@@ -35,6 +35,8 @@ namespace pdflib
 
     void render_text(text_instruction& instr) { throw std::logic_error(__FUNCTION__); }
 
+    void render_widget(text_widget_instruction& instr) { throw std::logic_error(__FUNCTION__); }
+
     void render_bitmap(bitmap_instruction& instr) { throw std::logic_error(__FUNCTION__); }
 
     void render_shape(shape_instruction& instr) { throw std::logic_error(__FUNCTION__); }
