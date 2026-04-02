@@ -144,7 +144,7 @@ int main(int argc, char* argv[])
 	("p,page",     "Pages to process (default: -1 for all)",                            cxxopts::value<int>()->default_value("-1"))
 	("password",   "Password for encrypted files",                                      cxxopts::value<std::string>())
 	("o,output",   "Output file or output directory (for -d mode)",                     cxxopts::value<std::string>())
-	("r,renderer", "Renderer type [NAIVE, BLEND2D] (default: NAIVE)",                   cxxopts::value<std::string>()->default_value("NAIVE"))
+	("r,renderer", "Renderer type [NAIVE, BLEND2D] (default: NAIVE)",                   cxxopts::value<std::string>()->default_value("BLEND2D"))
 	("l,loglevel", "Log level [error, warning, info]",                                  cxxopts::value<std::string>())
 	("h,help",     "Print usage")
 

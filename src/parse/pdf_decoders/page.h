@@ -21,8 +21,8 @@ namespace pdflib
 
     // Thread-safe constructor: creates its own QPDF document from the shared buffer
     pdf_decoder(std::shared_ptr<std::string> buffer,
-		std::optional<std::string> password,
-		int page_num);
+                std::optional<std::string> password,
+                int page_num);
 
     ~pdf_decoder();
 
@@ -66,7 +66,7 @@ namespace pdflib
   private:
 
     void update_qpdf_logger();
-    
+
     void decode_dimensions();
 
     // Resources
@@ -128,19 +128,19 @@ namespace pdflib
     page_item<PAGE_DIMENSION> page_dimension;
 
     page_item<PAGE_CELLS>  page_cells;
-    page_item<PAGE_SHAPES>  page_shapes;
+    page_item<PAGE_SHAPES> page_shapes;
     page_item<PAGE_IMAGES> page_images;
 
     page_item<PAGE_WIDGETS>    page_widgets;
     page_item<PAGE_HYPERLINKS> page_hyperlinks;
 
     page_item<PAGE_CELLS>  cells;
-    page_item<PAGE_SHAPES>  shapes;
+    page_item<PAGE_SHAPES> shapes;
     page_item<PAGE_IMAGES> images;
 
     // Computed cell aggregations
-    page_item<PAGE_CELLS>  word_cells;
-    page_item<PAGE_CELLS>  line_cells;
+    page_item<PAGE_CELLS> word_cells;
+    page_item<PAGE_CELLS> line_cells;
     bool word_cells_created = false;
     bool line_cells_created = false;
 
@@ -171,8 +171,8 @@ namespace pdflib
   {}
 
   pdf_decoder<PAGE>::pdf_decoder(std::shared_ptr<std::string> buffer,
-				 std::optional<std::string> password,
-				 int page_num):
+                                 std::optional<std::string> password,
+                                 int page_num):
     thread_safe(true),
     owned_buffer(buffer),
     owned_qpdf_document(std::make_unique<QPDF>()),
@@ -188,24 +188,24 @@ namespace pdflib
 
     if(password.has_value())
       {
-	owned_qpdf_document->processMemoryFile(description.c_str(),
-					       owned_buffer->c_str(),
-					       owned_buffer->size(),
-					       password.value().c_str());
+        owned_qpdf_document->processMemoryFile(description.c_str(),
+                                               owned_buffer->c_str(),
+                                               owned_buffer->size(),
+                                               password.value().c_str());
       }
     else
       {
-	owned_qpdf_document->processMemoryFile(description.c_str(),
-					       owned_buffer->c_str(),
-					       owned_buffer->size());
+        owned_qpdf_document->processMemoryFile(description.c_str(),
+                                               owned_buffer->c_str(),
+                                               owned_buffer->size());
       }
-    
+
     std::vector<QPDFObjectHandle> pages = owned_qpdf_document->getAllPages();
 
     if(page_num < 0 || page_num >= static_cast<int>(pages.size()))
       {
-	LOG_S(ERROR) << "page " << page_num << " is out of bounds (0-" << pages.size()-1 << ")";
-	throw std::out_of_range("page number out of bounds: " + std::to_string(page_num));
+        LOG_S(ERROR) << "page " << page_num << " is out of bounds (0-" << pages.size()-1 << ")";
+        throw std::out_of_range("page number out of bounds: " + std::to_string(page_num));
       }
 
     qpdf_page = pages.at(page_num);
@@ -221,13 +221,13 @@ namespace pdflib
     if(loguru::g_stderr_verbosity==loguru::Verbosity_INFO or
        loguru::g_stderr_verbosity==loguru::Verbosity_WARNING)
       {
-	// ignore ...	
+        // ignore ...
       }
     else if(loguru::g_stderr_verbosity==loguru::Verbosity_ERROR or
-	    loguru::g_stderr_verbosity==loguru::Verbosity_FATAL)
+            loguru::g_stderr_verbosity==loguru::Verbosity_FATAL)
       {
-	owned_qpdf_document->setSuppressWarnings(true);
-	//qpdf_document.setMaxWarnings(0); only for later versions ...
+        owned_qpdf_document->setSuppressWarnings(true);
+        //qpdf_document.setMaxWarnings(0); only for later versions ...
       }
     else
       {
@@ -235,7 +235,7 @@ namespace pdflib
       }
   }
 
-  
+
   int pdf_decoder<PAGE>::get_page_number()
   {
     return page_number;
@@ -342,9 +342,9 @@ namespace pdflib
 
     if(owned_qpdf_document != nullptr)
       {
-	owned_qpdf_document->setSuppressWarnings(!config.keep_qpdf_warnings);
+        owned_qpdf_document->setSuppressWarnings(!config.keep_qpdf_warnings);
       }
-    
+
     utils::timer global, local;
 
     if(config.populate_json_objects)
@@ -442,7 +442,7 @@ namespace pdflib
     page_dimension.execute(qpdf_page);
 
     instructions.set_size_instruction(page_dimension.get_media_bbox(),
-				      page_dimension.get_crop_bbox());
+                                      page_dimension.get_crop_bbox());
   }
 
   void pdf_decoder<PAGE>::decode_resources(const decode_config& config)
@@ -578,8 +578,8 @@ namespace pdflib
                                        page_fonts,
                                        page_grphs,
                                        page_xobjects,
-				       instructions,
-				       timings);
+                                       instructions,
+                                       timings);
 
     int cnt = 0;
 
@@ -665,9 +665,9 @@ namespace pdflib
           }
         else
           {
-	    auto annot_json = to_json(annot);
-	    LOG_S(INFO) << "annot: " << annot_json.dump(2);
-	    
+            auto annot_json = to_json(annot);
+            LOG_S(INFO) << "annot: " << annot_json.dump(2);
+
             extract_page_items_from_annots(annot);
           }
       }
@@ -702,19 +702,19 @@ namespace pdflib
       {
         QPDFObjectHandle annot = annots.getArrayItem(l);
 
-	if(annot.isString())
-	  {
-	    auto annots_json = to_json(annots);
-	    LOG_S(WARNING) << "skipping annot, it is a string: " << annots_json.dump(2); 	    
-	    continue;
-	  }
+        if(annot.isString())
+          {
+            auto annots_json = to_json(annots);
+            LOG_S(WARNING) << "skipping annot, it is a string: " << annots_json.dump(2);
+            continue;
+          }
 
-	if(not annot.isDictionary())
-	  {
-	    LOG_S(WARNING) << "skipping annot, not of type `dict`!"; 	    
-	    continue;
-	  }
-	
+        if(not annot.isDictionary())
+          {
+            LOG_S(WARNING) << "skipping annot, not of type `dict`!";
+            continue;
+          }
+
         // auto annot_json = to_json(annot);
         // LOG_S(INFO) << "annot " << l << ": " << annot_json.dump(2);
 
@@ -732,22 +732,22 @@ namespace pdflib
 
         // LOG_S(INFO) << "type: " << type << ", subtype: " << subtype;
 
-	/*
-        if(subtype=="/Widget" and
+        /*
+          if(subtype=="/Widget" and
+          annot.hasKey("/Rect") and
+          annot.getKey("/Rect").isArray() and
+          annot.hasKey("/V") and
+          annot.hasKey("/T")
+          )
+          {
+          add_page_cell_from_annot(annot);
+          }
+          else*/
+        if(subtype=="/Link" and
            annot.hasKey("/Rect") and
            annot.getKey("/Rect").isArray() and
-           annot.hasKey("/V") and
-           annot.hasKey("/T")
+           annot.hasKey("/A")
            )
-          {
-            add_page_cell_from_annot(annot);
-          }	  
-	  else*/
-	if(subtype=="/Link" and
-                annot.hasKey("/Rect") and
-                annot.getKey("/Rect").isArray() and
-                annot.hasKey("/A")
-                )
           {
             add_page_hyperlink_from_annot(annot);
           }
@@ -768,7 +768,7 @@ namespace pdflib
   void pdf_decoder<PAGE>::add_page_hyperlink_from_annot(QPDFObjectHandle annot)
   {
     LOG_S(INFO) << __FUNCTION__;
-    
+
     auto rect = annot.getKey("/Rect");
 
     std::array<double, 4> bbox = {0., 0., 0., 0.};
@@ -811,7 +811,7 @@ namespace pdflib
   void pdf_decoder<PAGE>::add_page_widget_from_annot(QPDFObjectHandle annot)
   {
     LOG_S(INFO) << __FUNCTION__;
-    
+
     auto rect = annot.getKey("/Rect");
 
     std::array<double, 4> bbox = {0., 0., 0., 0.};
@@ -823,41 +823,41 @@ namespace pdflib
             bbox[l] = num.getNumericValue();
           }
       }
-    
+
     auto [has_value, ft_str] = to_string(annot, "/FT");
     if(not has_value)
       {
         ft_str = "";
       }
-    
+
     if(ft_str=="/Tx")
       {
-	add_textfield(annot, bbox);
+        add_textfield(annot, bbox);
       }
     else if(ft_str=="/Btn")
       {
-	add_button(annot, bbox);
+        add_button(annot, bbox);
       }
     else if(ft_str=="/Ch")
       {
-	add_choice(annot, bbox);
+        add_choice(annot, bbox);
       }
     else if(ft_str=="/Sig")
       {
-	add_signature(annot, bbox);
+        add_signature(annot, bbox);
       }
     else
       {
-	LOG_S(WARNING) << "undefined ft: " << ft_str;
+        LOG_S(WARNING) << "undefined ft: " << ft_str;
       }
 
   }
 
   void pdf_decoder<PAGE>::add_textfield(QPDFObjectHandle annot,
-					const std::array<double, 4>& bbox)  
+                                        const std::array<double, 4>& bbox)
   {
     LOG_S(INFO) << __FUNCTION__;
-    
+
     auto [has_value, text] = to_string(annot, "/V");
     if(not has_value)
       {
@@ -879,7 +879,7 @@ namespace pdflib
     page_item<PAGE_WIDGET> widget;
     {
       widget.name = TEXT_FIELD;
-      
+
       widget.x0 = bbox[0];
       widget.y0 = bbox[1];
       widget.x1 = bbox[2];
@@ -913,12 +913,12 @@ namespace pdflib
 
     decode_ap_stream(ap.getKey("/N"), bbox);
   }
-    
+
   void pdf_decoder<PAGE>::add_button(QPDFObjectHandle annot,
-				     const std::array<double, 4>& bbox)  
+                                     const std::array<double, 4>& bbox)
   {
     LOG_S(INFO) << __FUNCTION__;
-    
+
     auto [has_value, text] = to_string(annot, "/V");
     if(not has_value)
       {
@@ -940,7 +940,7 @@ namespace pdflib
     page_item<PAGE_WIDGET> widget;
     {
       widget.name = BUTTON;
-      
+
       widget.x0 = bbox[0];
       widget.y0 = bbox[1];
       widget.x1 = bbox[2];
@@ -954,10 +954,10 @@ namespace pdflib
   }
 
   void pdf_decoder<PAGE>::add_choice(QPDFObjectHandle annot,
-				     const std::array<double, 4>& bbox)  
+                                     const std::array<double, 4>& bbox)
   {
     LOG_S(INFO) << __FUNCTION__;
-    
+
     auto [has_value, text] = to_string(annot, "/V");
     if(not has_value)
       {
@@ -979,7 +979,7 @@ namespace pdflib
     page_item<PAGE_WIDGET> widget;
     {
       widget.name = CHOICE;
-      
+
       widget.x0 = bbox[0];
       widget.y0 = bbox[1];
       widget.x1 = bbox[2];
@@ -991,12 +991,12 @@ namespace pdflib
     }
     page_widgets.push_back(widget);
   }
-  
+
   void pdf_decoder<PAGE>::add_signature(QPDFObjectHandle annot,
-					const std::array<double, 4>& bbox)  
+                                        const std::array<double, 4>& bbox)
   {
     LOG_S(INFO) << __FUNCTION__;
-    
+
     auto [has_value, text] = to_string(annot, "/V");
     if(not has_value)
       {
@@ -1018,7 +1018,7 @@ namespace pdflib
     page_item<PAGE_WIDGET> widget;
     {
       widget.name = SIGNATURE;
-      
+
       widget.x0 = bbox[0];
       widget.y0 = bbox[1];
       widget.x1 = bbox[2];
@@ -1029,10 +1029,10 @@ namespace pdflib
       widget.field_type = field_type;
     }
     page_widgets.push_back(widget);
-  }  
-  
+  }
+
   void pdf_decoder<PAGE>::decode_ap_stream(QPDFObjectHandle ap_stream,
-                                            const std::array<double, 4>& bbox)
+                                           const std::array<double, 4>& bbox)
   {
     LOG_S(INFO) << __FUNCTION__;
 
