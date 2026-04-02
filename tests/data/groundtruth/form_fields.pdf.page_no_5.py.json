@@ -136379,35 +136379,6 @@
       "widget": false,
       "font_key": "/TT2",
       "font_name": "/AAAAAC+Helvetica"
-    },
-    {
-      "index": 4701,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 495.0,
-        "r_y0": 774.003,
-        "r_x1": 591.001,
-        "r_y1": 774.003,
-        "r_x2": 591.001,
-        "r_y2": 789.001,
-        "r_x3": 495.0,
-        "r_y3": 789.001,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "/Off",
-      "orig": "/Off",
-      "text_direction": "left_to_right",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": 0,
-      "widget": true,
-      "font_key": "Form-font",
-      "font_name": "Form-font"
     }
   ],
   "word_cells": [
@@ -158363,35 +158334,6 @@
       "widget": false,
       "font_key": "/TT2",
       "font_name": "/AAAAAC+Helvetica"
-    },
-    {
-      "index": 757,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
-      "rect": {
-        "r_x0": 495.0,
-        "r_y0": 774.003,
-        "r_x1": 591.001,
-        "r_y1": 774.003,
-        "r_x2": 591.001,
-        "r_y2": 789.001,
-        "r_x3": 495.0,
-        "r_y3": 789.001,
-        "coord_origin": "BOTTOMLEFT"
-      },
-      "text": "/Off",
-      "orig": "/Off",
-      "text_direction": "left_to_right",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": 0,
-      "widget": true,
-      "font_key": "Form-font",
-      "font_name": "Form-font"
     }
   ],
   "textline_cells": [
@@ -162512,15 +162454,14 @@
       "widget": false,
       "font_key": "/TT2",
       "font_name": "/AAAAAC+Helvetica"
-    },
+    }
+  ],
+  "has_chars": true,
+  "has_words": true,
+  "has_lines": true,
+  "widgets": [
     {
-      "index": 142,
-      "rgba": {
-        "r": 0,
-        "g": 0,
-        "b": 0,
-        "a": 255
-      },
+      "index": 0,
       "rect": {
         "r_x0": 495.0,
         "r_y0": 774.003,
@@ -162532,21 +162473,11 @@
         "r_y3": 789.001,
         "coord_origin": "BOTTOMLEFT"
       },
-      "text": "/Off",
-      "orig": "/Off",
-      "text_direction": "left_to_right",
-      "confidence": 1.0,
-      "from_ocr": false,
-      "rendering_mode": 0,
-      "widget": true,
-      "font_key": "Form-font",
-      "font_name": "Form-font"
+      "widget_text": "/Off",
+      "widget_field_name": "form1[0].#pageSet[0].Page1[4].ClearData_FR[0]",
+      "widget_field_type": "/Btn"
     }
   ],
-  "has_chars": true,
-  "has_words": true,
-  "has_lines": true,
-  "widgets": [],
   "hyperlinks": [
     {
       "index": 0,
