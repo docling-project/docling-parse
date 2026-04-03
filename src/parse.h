@@ -22,6 +22,9 @@
 #endif
 
 // specific libraries
+// NOTE: json.hpp must be included *before* cxxopts.hpp.
+// See https://github.com/docling-project/docling-parse/pull/248 for details.
+#include <nlohmann/json.hpp>
 #include <cxxopts.hpp>
 
 #define LOGURU_WITH_STREAMS 1
@@ -29,7 +32,6 @@
 
 //#include <utf8/utf8.h>
 #include <utf8.h>
-#include <nlohmann/json.hpp>
 
 #define POINTERHOLDER_TRANSITION 0 // eliminate warnings from QPDF
 #include <qpdf/QPDF.hh>
