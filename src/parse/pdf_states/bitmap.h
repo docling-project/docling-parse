@@ -3,6 +3,8 @@
 #ifndef PDF_BITMAP_STATE_H
 #define PDF_BITMAP_STATE_H
 
+#include <parse/utils/ccitt/ccitt_utils.h>
+
 namespace pdflib
 {
 
@@ -138,6 +140,10 @@ namespace pdflib
       image.decode_present  = xobj.has_decode_array();
       image.decode_array    = xobj.get_decode_array();
       image.image_mask      = xobj.is_image_mask();
+
+      // propagate /CCITTFaxDecode parameters
+      image.ccitt_k          = xobj.get_ccitt_k();
+      image.ccitt_black_is_1 = xobj.get_ccitt_black_is_1();
       image.icc_components  = xobj.get_icc_components();
 
       // propagate /Indexed color space data
@@ -348,6 +354,49 @@ namespace pdflib
             else
               {
                 LOG_S(WARNING) << "bitmap: libjpeg decode failed "
+                               << "for xobject_key=" << image.xobject_key;
+              }
+          }
+        else if (std::find(image.filters.begin(), image.filters.end(),
+                           "/CCITTFaxDecode") != image.filters.end()
+                 and image.raw_stream_data
+                 and image.raw_stream_data->getSize() > 0)
+          {
+            LOG_S(INFO) << "bitmap: decoded_stream_data unavailable for /CCITTFaxDecode image, "
+                        << "decoding via built-in CCITT decoder "
+                        << "for xobject_key=" << image.xobject_key;
+
+            const int w = image.image_width;
+            const int h = image.image_height;
+
+            auto decoded = ccitt::decode(
+                reinterpret_cast<const uint8_t*>(image.raw_stream_data->getBuffer()),
+                static_cast<size_t>(image.raw_stream_data->getSize()),
+                w, h,
+                image.ccitt_k,
+                image.ccitt_black_is_1);
+
+            if(not decoded.empty())
+              {
+                // --- TEMPORARY DEBUG: save the raw decoded pixels as a PNG ---
+                {
+                  // Strip the leading '/' that PDF keys always carry (e.g. "/Im0" → "Im0").
+                  std::string tmp_name = image.xobject_key;
+                  if(not tmp_name.empty() and tmp_name[0] == '/')
+                    {
+                      tmp_name = tmp_name.substr(1);
+                    }
+                  std::string dbg_path = "./tmp/ccitt_debug_" + tmp_name + ".png";
+
+                  LOG_S(WARNING) << "saving PNG image at: " << dbg_path;
+                  ccitt::save_debug_png(decoded, w, h, dbg_path);
+                }
+                pixel_data  = std::make_shared<std::vector<uint8_t>>(std::move(decoded));
+                pixel_shape = {h, w, channels};
+              }
+            else
+              {
+                LOG_S(WARNING) << "bitmap: CCITT decode failed "
                                << "for xobject_key=" << image.xobject_key;
               }
           }

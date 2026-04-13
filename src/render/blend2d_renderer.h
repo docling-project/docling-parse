@@ -801,6 +801,20 @@ namespace pdflib
         return;
       }
 
+    // Guard: pixel buffer must be large enough for the declared shape.
+    const size_t expected_bytes = static_cast<size_t>(sh) * sw * sc;
+    if (src_data->size() < expected_bytes)
+      {
+        LOG_S(WARNING) << __FUNCTION__ << ": pixel buffer too small ("
+                       << src_data->size() << " < " << expected_bytes
+                       << ") for shape " << sh << "x" << sw << "x" << sc
+                       << " — drawing placeholder";
+        ctx.set_fill_style(BLRgba32(0x66FFFF00u));
+        ctx.fill_rect(dst_rect);
+        ctx.end();
+        return;
+      }
+
     // Build a BLImage (PRGB32) from the raw channel data.
     BLImage src_img;
     src_img.create(sw, sh, BL_FORMAT_PRGB32);

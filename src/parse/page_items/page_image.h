@@ -80,6 +80,10 @@ namespace pdflib
     std::string      indexed_base_cs;
     std::shared_ptr<std::vector<uint8_t>> indexed_palette;
 
+    // /CCITTFaxDecode parameters (from /DecodeParms)
+    int  ccitt_k          = -1;    // /K: -1=Group4, 0=Group3-1D, >0=Group3-mixed
+    bool ccitt_black_is_1 = false; // /BlackIs1 flag from DecodeParms
+
     // graphics state properties
     bool               has_graphics_state = false;
     std::array<int, 3> rgb_stroking_ops = {0, 0, 0};

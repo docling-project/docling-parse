@@ -17,6 +17,9 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cstring>
+#include <fstream>
+#include <string>
 #include <vector>
 
 #ifndef LOGURU_WITH_STREAMS
@@ -39,14 +42,16 @@ public:
   BitReader(const uint8_t* data, size_t size);
 
   // Returns the next bit (0 or 1), or -1 when the buffer is exhausted.
-  int  read_bit();
-  bool at_end() const;
+  int    read_bit();
+  bool   at_end() const;
+  size_t bits_read() const;
 
 private:
   const uint8_t* data_;
   size_t         size_;
-  size_t         byte_;   // index of current byte
-  int            bit_;    // bit offset within current byte (0 = MSB)
+  size_t         byte_;       // index of current byte
+  int            bit_;        // bit offset within current byte (0 = MSB)
+  size_t         bits_read_;  // total bits consumed so far
 };
 
 // ============================================================
@@ -124,15 +129,20 @@ int find_b2(const std::vector<uint8_t>& ref, int b1, int width);
 
 // ============================================================
 // Decode one Group 4 (T.6) row.
-// `ref` = previous decoded row (pixel values 0/1); all-white for row 0.
-// `cur` = output pixel buffer (size `width`), pre-zeroed.
-// Returns true on success.
+// `ref`      = previous decoded row (pixel values 0/1); all-white for row 0.
+// `cur`      = output pixel buffer (size `width`), pre-zeroed.
+// `row_num`  = zero-based row index (used for logging only).
+// `hit_eofb` = set to true when the T.6 EOFB marker is detected; the caller
+//              should stop decoding further rows in that case.
+// Returns true on success or EOFB; false on hard error.
 // ============================================================
 
-bool decode_g4_row(BitReader& br,
-                   const std::vector<uint8_t>& ref,
-                   std::vector<uint8_t>& cur,
-                   int width);
+bool decode_g4_row(BitReader&                   br,
+                   const std::vector<uint8_t>&  ref,
+                   std::vector<uint8_t>&        cur,
+                   int                          width,
+                   int                          row_num,
+                   bool&                        hit_eofb);
 
 // ============================================================
 // Main decode entry point
@@ -140,9 +150,11 @@ bool decode_g4_row(BitReader& br,
 // raw_data / raw_size : compressed CCITT bytes
 // width, height       : image dimensions in pixels
 // k                   : /K parameter from /DecodeParms (-1 for Group 4)
+// black_is_1          : /BlackIs1 from /DecodeParms (default false)
 //
-// Returns width*height bytes (8-bit, top-to-bottom, left-to-right):
-//   0 = black pixel, 255 = white pixel.
+// Returns width*height bytes (8-bit, top-to-bottom, left-to-right).
+// With black_is_1=false (PDF default): 0=black, 255=white.
+// With black_is_1=true : 255=black,   0=white (CCITT natural, inverted output).
 // Returns an empty vector on failure.
 // ============================================================
 
@@ -150,7 +162,20 @@ std::vector<uint8_t> decode(const uint8_t* raw_data,
                              size_t         raw_size,
                              int            width,
                              int            height,
-                             int            k = -1);
+                             int            k          = -1,
+                             bool           black_is_1 = false);
+
+// ============================================================
+// PNG debug-save utility
+//
+// Writes a grayscale (8-bit) PNG file to `path`.
+// `pixels` must contain width*height bytes (one byte per pixel).
+// ============================================================
+
+void save_debug_png(const std::vector<uint8_t>& pixels,
+                    int                          width,
+                    int                          height,
+                    const std::string&           path);
 
 // ===========================================================
 // Implementations
@@ -159,7 +184,7 @@ std::vector<uint8_t> decode(const uint8_t* raw_data,
 // --- BitReader ---
 
 inline BitReader::BitReader(const uint8_t* data, size_t size)
-  : data_(data), size_(size), byte_(0), bit_(0)
+  : data_(data), size_(size), byte_(0), bit_(0), bits_read_(0)
 {}
 
 inline int BitReader::read_bit()
@@ -169,6 +194,7 @@ inline int BitReader::read_bit()
       return -1;
     }
   int b = (data_[byte_] >> (7 - bit_)) & 1;
+  ++bits_read_;
   if(++bit_ == 8)
     {
       bit_ = 0;
@@ -180,6 +206,11 @@ inline int BitReader::read_bit()
 inline bool BitReader::at_end() const
 {
   return byte_ >= size_;
+}
+
+inline size_t BitReader::bits_read() const
+{
+  return bits_read_;
 }
 
 // --- HuffTree ---
@@ -498,10 +529,12 @@ inline int find_b2(const std::vector<uint8_t>& ref, int b1, int width)
 
 // --- decode_g4_row ---
 
-inline bool decode_g4_row(BitReader&                    br,
+inline bool decode_g4_row(BitReader&                   br,
                            const std::vector<uint8_t>&  ref,
-                           std::vector<uint8_t>&         cur,
-                           int                           width)
+                           std::vector<uint8_t>&        cur,
+                           int                          width,
+                           int                          row_num,
+                           bool&                        hit_eofb)
 {
   // State:
   //   pos   = next pixel column to fill in `cur` (0-based)
@@ -510,6 +543,13 @@ inline bool decode_g4_row(BitReader&                    br,
   //
   // Fill semantics: fill cur[pos .. a1-1] with color, then pos=a1, color^=1.
   // (a1 is defined so that a1 >= pos always.)
+
+  // Log every 100 rows so we can track progress without flooding the log.
+  if(row_num % 100 == 0)
+    {
+      LOG_S(INFO) << "ccitt G4: decoding row " << row_num
+                  << " bit_pos=" << br.bits_read();
+    }
 
   int a0    = -1;
   int color =  0;  // white
@@ -523,20 +563,53 @@ inline bool decode_g4_row(BitReader&                    br,
   while(a0 < width - 1)
     {
       // --- Read one G4 mode codeword ---
+      // Count consecutive zero bits to detect EOFB (End-of-Facsimile Block).
+      // T.6 EOFB = two consecutive 000000000001 (12-bit) patterns.
+      // After 6 consecutive zeros the mode tree cannot match any valid codeword
+      // (deepest valid prefix is 5 zeros: VR3/VL3 start with 00000x1).
+      // 6+ consecutive zeros unambiguously signal EOFB.
+      int consecutive_zeros = 0;
       int mode = -1;
       for(;;)
         {
           int bit = br.read_bit();
           if(bit < 0)
             {
-              // End of compressed data — fill remaining pixels with current color
-              // and stop.  This can happen legitimately at the very last row.
+              // End of compressed data — fill remaining pixels with current color.
+              // This can happen legitimately at the very last row.
+              LOG_S(INFO) << "ccitt G4: end of data at row " << row_num
+                          << " a0=" << a0 << " (filling remainder with color=" << color << ")";
               for(int i = a0 + 1; i < width; ++i)
                 {
                   cur[i] = static_cast<uint8_t>(color);
                 }
               return true;
             }
+
+          if(bit == 0)
+            {
+              ++consecutive_zeros;
+            }
+          else
+            {
+              consecutive_zeros = 0;
+            }
+
+          // EOFB detection: 6+ consecutive zeros exceed any valid mode codeword prefix.
+          if(consecutive_zeros >= 6)
+            {
+              LOG_S(INFO) << "ccitt G4: EOFB detected at row " << row_num
+                          << " a0=" << a0 << " bit_pos=" << br.bits_read()
+                          << " (consecutive_zeros=" << consecutive_zeros << ")";
+              // Fill remainder of this row (which may be empty) and stop.
+              for(int i = a0 + 1; i < width; ++i)
+                {
+                  cur[i] = static_cast<uint8_t>(color);
+                }
+              hit_eofb = true;
+              return true;
+            }
+
           int v = mode_tree().step(mode_state, bit);
           if(v >= 0)
             {
@@ -545,7 +618,9 @@ inline bool decode_g4_row(BitReader&                    br,
             }
           if(v == -2)
             {
-              LOG_S(WARNING) << "ccitt G4: invalid mode codeword";
+              LOG_S(WARNING) << "ccitt G4: invalid mode codeword at row " << row_num
+                             << " a0=" << a0 << " bit_pos=" << br.bits_read()
+                             << " consecutive_zeros=" << consecutive_zeros;
               return false;
             }
         }
@@ -557,13 +632,20 @@ inline bool decode_g4_row(BitReader&                    br,
       if(mode == 0)
         {
           // --- Pass mode ---
-          // Fill a0+1 .. b2-1 with color; move a0 to b2; color unchanged.
+          // The coding line from a0+1 to b2 (inclusive) is all `color`.
+          // Fill a0+1 .. b2-1 in the loop; then explicitly set cur[b2]=color,
+          // because b2 becomes the new a0 and would otherwise go unwritten.
           int end = std::min(b2, width);
           for(int i = a0 + 1; i < end; ++i)
             {
               cur[i] = static_cast<uint8_t>(color);
             }
           a0 = b2;
+          // Write the boundary pixel (new a0 = b2).
+          if(a0 >= 0 and a0 < width)
+            {
+              cur[a0] = static_cast<uint8_t>(color);
+            }
         }
       else if(mode == 1)
         {
@@ -579,7 +661,7 @@ inline bool decode_g4_row(BitReader&                    br,
             {
               return false;
             }
-          int pos = a0 + 1;
+          int pos  = a0 + 1;
           int end1 = std::min(pos + run1, width);
           for(int i = pos; i < end1; ++i)
             {
@@ -595,7 +677,12 @@ inline bool decode_g4_row(BitReader&                    br,
       else
         {
           // --- Vertical mode (modes 2-8) ---
-          // a1 = b1 + offset; fill a0+1 .. a1-1 with color; flip color.
+          // a1 is the next changing element on the coding line:
+          //   positions a0+1 .. a1-1 have color `color` (the current run).
+          //   position a1 has color ~color (the next run's first pixel).
+          // Fill the current run, then explicitly write the changing element
+          // at a1 (= new a0) with the new color, since the next fill starts
+          // at a0+1 = a1+1 and would leave a1 unwritten.
           int offset = v_offset[mode];
           int a1     = b1 + offset;
           // Clamp to valid range
@@ -614,6 +701,11 @@ inline bool decode_g4_row(BitReader&                    br,
             }
           a0    = a1;
           color ^= 1;
+          // Write the changing element pixel (new a0 = a1) with the new color.
+          if(a0 >= 0 and a0 < width)
+            {
+              cur[a0] = static_cast<uint8_t>(color);
+            }
         }
     }
 
@@ -632,7 +724,8 @@ inline std::vector<uint8_t> decode(const uint8_t* raw_data,
                                     size_t         raw_size,
                                     int            width,
                                     int            height,
-                                    int            k)
+                                    int            k,
+                                    bool           black_is_1)
 {
   if(not raw_data or raw_size == 0 or width <= 0 or height <= 0)
     {
@@ -641,7 +734,8 @@ inline std::vector<uint8_t> decode(const uint8_t* raw_data,
     }
 
   LOG_S(INFO) << "ccitt::decode: " << width << "x" << height
-              << " k=" << k << " raw=" << raw_size << " bytes";
+              << " k=" << k << " black_is_1=" << black_is_1
+              << " raw=" << raw_size << " bytes";
 
   BitReader br(raw_data, raw_size);
 
@@ -651,16 +745,19 @@ inline std::vector<uint8_t> decode(const uint8_t* raw_data,
   std::vector<uint8_t> output;
   output.reserve(static_cast<size_t>(width) * static_cast<size_t>(height));
 
+  int rows_decoded = 0;
+
   for(int row = 0; row < height; ++row)
     {
       std::fill(cur.begin(), cur.end(), 0u);
 
-      bool ok = false;
+      bool ok       = false;
+      bool hit_eofb = false;
 
       if(k < 0)
         {
           // Group 4: all rows use 2-D coding
-          ok = decode_g4_row(br, ref, cur, width);
+          ok = decode_g4_row(br, ref, cur, width, row, hit_eofb);
         }
       else
         {
@@ -686,24 +783,337 @@ inline std::vector<uint8_t> decode(const uint8_t* raw_data,
           ok = decode_1d_row(br, cur, width);
         }
 
-      if(not ok and row == 0)
+      if(not ok)
         {
-          LOG_S(WARNING) << "ccitt::decode: failed on first row";
-          return {};
+          LOG_S(WARNING) << "ccitt::decode: decode_g4_row returned false at row " << row
+                         << " (" << rows_decoded << " rows decoded so far"
+                         << ", bit_pos=" << br.bits_read() << ")";
+          if(row == 0)
+            {
+              return {};
+            }
+          // Partial success: use whatever rows we have.
+          break;
+        }
+
+      ++rows_decoded;
+
+      // Stop as soon as EOFB was signalled — everything after is padding/garbage.
+      if(hit_eofb and false)
+        {
+          LOG_S(INFO) << "ccitt::decode: stopping after EOFB at row " << row;
+          // Emit the just-decoded row before breaking.
+          for(int x = 0; x < width; ++x)
+            {
+              if(black_is_1)
+                {
+                  output.push_back(cur[x] ? 255u : 0u);
+                }
+              else
+                {
+                  output.push_back(cur[x] ? 0u : 255u);
+                }
+            }
+          break;
         }
 
       // Map internal representation (0=white, 1=black) to 8-bit grayscale.
-      // PDF default for /CCITTFaxDecode: sample 0 = white.
+      //
+      // /BlackIs1=false (PDF default): normal convention — 0=black, 1=white.
+      //   CCITT "white" (our 0) → sample 1 → DeviceGray 1.0 = white → 255.
+      //   CCITT "black" (our 1) → sample 0 → DeviceGray 0.0 = black →   0.
+      //   Output: cur[x] ? 0u : 255u
+      //
+      // /BlackIs1=true: CCITT natural convention — 1=black, 0=white.
+      //   Output is inverted w.r.t. the default.
+      //   CCITT "white" (our 0) → 0 →   0 (renders as black in DeviceGray).
+      //   CCITT "black" (our 1) → 1 → 255 (renders as white in DeviceGray).
+      //   Output: cur[x] ? 255u : 0u
       for(int x = 0; x < width; ++x)
         {
-          output.push_back(cur[x] ? 0u : 255u);  // black=0, white=255
+          if(black_is_1)
+            {
+              output.push_back(cur[x] ? 255u : 0u);
+            }
+          else
+            {
+              output.push_back(cur[x] ? 0u : 255u);
+            }
         }
 
       std::swap(ref, cur);
     }
 
-  LOG_S(INFO) << "ccitt::decode: produced " << output.size() << " bytes";
+  // If EOFB terminated the stream before all rows were coded, pad the remaining
+  // rows with white so that output always has exactly width*height bytes.
+  // (Standard behaviour: rows not present in the stream are implicitly white.)
+  const size_t expected = static_cast<size_t>(width) * static_cast<size_t>(height);
+  if(output.size() < expected)
+    {
+      const uint8_t white_byte = black_is_1 ? 0u : 255u;
+      const size_t  missing    = expected - output.size();
+      LOG_S(INFO) << "ccitt::decode: padding " << (missing / width)
+                  << " missing rows with white";
+      output.resize(expected, white_byte);
+    }
+
+  LOG_S(INFO) << "ccitt::decode: produced " << output.size() << " bytes"
+              << " (" << rows_decoded << "/" << height << " rows decoded)";
   return output;
+}
+
+// ===========================================================
+// PNG debug-save utility (grayscale, 8-bit, no compression)
+// ===========================================================
+
+namespace png_internal
+{
+
+// Write a 32-bit big-endian value into a byte array at offset `off`.
+inline void write_u32be(std::vector<uint8_t>& buf, size_t off, uint32_t v)
+{
+  buf[off + 0] = static_cast<uint8_t>((v >> 24) & 0xFF);
+  buf[off + 1] = static_cast<uint8_t>((v >> 16) & 0xFF);
+  buf[off + 2] = static_cast<uint8_t>((v >>  8) & 0xFF);
+  buf[off + 3] = static_cast<uint8_t>((v      ) & 0xFF);
+}
+
+// Append a 32-bit big-endian value.
+inline void append_u32be(std::vector<uint8_t>& buf, uint32_t v)
+{
+  buf.push_back(static_cast<uint8_t>((v >> 24) & 0xFF));
+  buf.push_back(static_cast<uint8_t>((v >> 16) & 0xFF));
+  buf.push_back(static_cast<uint8_t>((v >>  8) & 0xFF));
+  buf.push_back(static_cast<uint8_t>((v      ) & 0xFF));
+}
+
+// Append a 16-bit little-endian value.
+inline void append_u16le(std::vector<uint8_t>& buf, uint16_t v)
+{
+  buf.push_back(static_cast<uint8_t>( v       & 0xFF));
+  buf.push_back(static_cast<uint8_t>((v >> 8) & 0xFF));
+}
+
+// CRC-32 (ISO 3309) — used by PNG chunks.
+inline uint32_t crc32_update(uint32_t crc, const uint8_t* data, size_t len)
+{
+  // Build the CRC-32 table (polynomial 0xEDB88320, reflected) on first call.
+  static uint32_t crc_table[256];
+  static bool     crc_table_ready = false;
+  if(not crc_table_ready)
+    {
+      for(uint32_t n = 0; n < 256; ++n)
+        {
+          uint32_t c = n;
+          for(int k = 0; k < 8; ++k)
+            {
+              if(c & 1U)
+                {
+                  c = 0xEDB88320U ^ (c >> 1);
+                }
+              else
+                {
+                  c >>= 1;
+                }
+            }
+          crc_table[n] = c;
+        }
+      crc_table_ready = true;
+    }
+  for(size_t i = 0; i < len; ++i)
+    {
+      crc = crc_table[(crc ^ data[i]) & 0xFFU] ^ (crc >> 8);
+    }
+  return crc;
+}
+
+inline uint32_t crc32_compute(const uint8_t* data, size_t len)
+{
+  return crc32_update(0xFFFFFFFFU, data, len) ^ 0xFFFFFFFFU;
+}
+
+// Adler-32 checksum — required by zlib.
+inline uint32_t adler32_compute(const uint8_t* data, size_t len)
+{
+  uint32_t s1 = 1;
+  uint32_t s2 = 0;
+  for(size_t i = 0; i < len; ++i)
+    {
+      s1 = (s1 + data[i]) % 65521U;
+      s2 = (s2 + s1)      % 65521U;
+    }
+  return (s2 << 16) | s1;
+}
+
+// Build a PNG chunk: 4-byte length + 4-byte type + data + 4-byte CRC.
+inline void append_png_chunk(std::vector<uint8_t>&       buf,
+                              const char*                  type,
+                              const std::vector<uint8_t>& data)
+{
+  uint32_t len = static_cast<uint32_t>(data.size());
+  append_u32be(buf, len);
+  // type bytes (4 bytes)
+  for(int i = 0; i < 4; ++i)
+    {
+      buf.push_back(static_cast<uint8_t>(type[i]));
+    }
+  // chunk data
+  for(uint8_t b : data)
+    {
+      buf.push_back(b);
+    }
+  // CRC over type+data
+  std::vector<uint8_t> crc_input;
+  crc_input.reserve(4 + data.size());
+  for(int i = 0; i < 4; ++i)
+    {
+      crc_input.push_back(static_cast<uint8_t>(type[i]));
+    }
+  for(uint8_t b : data)
+    {
+      crc_input.push_back(b);
+    }
+  uint32_t crc = crc32_compute(crc_input.data(), crc_input.size());
+  append_u32be(buf, crc);
+}
+
+// Build zlib-wrapped "stored" deflate (BTYPE=00, no compression).
+// Input: raw bytes.  Output: CMF + FLG + deflate-stored blocks + Adler-32.
+inline std::vector<uint8_t> zlib_store(const uint8_t* data, size_t len)
+{
+  std::vector<uint8_t> out;
+  // zlib header: CMF=0x78 (deflate, 32K window), FLG so that CMF*256+FLG % 31 == 0
+  // 0x7801 → 0x78*256 + 0x01 = 30721 = 991*31 → remainder 0. ✓
+  out.push_back(0x78);
+  out.push_back(0x01);
+
+  // Deflate stored blocks: each block holds at most 65535 bytes.
+  const size_t max_block = 65535;
+  size_t       offset    = 0;
+  while(offset < len or len == 0)
+    {
+      size_t block_len = std::min(len - offset, max_block);
+      bool   is_last   = (offset + block_len >= len);
+      // BFINAL + BTYPE=00
+      out.push_back(is_last ? 0x01 : 0x00);
+      // LEN (2 bytes LE)
+      append_u16le(out, static_cast<uint16_t>(block_len));
+      // NLEN = ~LEN (2 bytes LE)
+      append_u16le(out, static_cast<uint16_t>(~static_cast<uint16_t>(block_len)));
+      // raw data
+      for(size_t i = 0; i < block_len; ++i)
+        {
+          out.push_back(data[offset + i]);
+        }
+      offset += block_len;
+      if(len == 0)
+        {
+          break;
+        }
+    }
+
+  // Adler-32 of original data (big-endian)
+  uint32_t adler = adler32_compute(data, len);
+  append_u32be(out, adler);
+
+  return out;
+}
+
+}  // namespace png_internal
+
+// --- save_debug_png ---
+
+inline void save_debug_png(const std::vector<uint8_t>& pixels,
+                            int                          width,
+                            int                          height,
+                            const std::string&           path)
+{
+  if(pixels.empty() or width <= 0)
+    {
+      LOG_S(WARNING) << "save_debug_png: empty pixel data or invalid width";
+      return;
+    }
+  // Compute the actual height from the pixel count — partial decodes are fine.
+  int actual_height = static_cast<int>(pixels.size()) / width;
+  if(actual_height <= 0)
+    {
+      LOG_S(WARNING) << "save_debug_png: not enough pixels for even one row";
+      return;
+    }
+  if(actual_height != height)
+    {
+      LOG_S(INFO) << "save_debug_png: partial decode — saving " << actual_height
+                  << " of " << height << " rows";
+    }
+  height = actual_height;
+
+  using namespace png_internal;
+
+  std::vector<uint8_t> png;
+  png.reserve(pixels.size() + 4096);
+
+  // PNG signature
+  const uint8_t sig[8] = { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A };
+  for(uint8_t b : sig)
+    {
+      png.push_back(b);
+    }
+
+  // IHDR chunk
+  {
+    std::vector<uint8_t> ihdr(13, 0);
+    write_u32be(ihdr, 0, static_cast<uint32_t>(width));
+    write_u32be(ihdr, 4, static_cast<uint32_t>(height));
+    ihdr[8]  = 8;   // bit depth
+    ihdr[9]  = 0;   // color type: grayscale
+    ihdr[10] = 0;   // compression method: deflate
+    ihdr[11] = 0;   // filter method: adaptive
+    ihdr[12] = 0;   // interlace: none
+    append_png_chunk(png, "IHDR", ihdr);
+  }
+
+  // Build filtered scanline data: each row is prefixed by filter byte 0 (None).
+  std::vector<uint8_t> raw_idat;
+  raw_idat.reserve(static_cast<size_t>(height) * (static_cast<size_t>(width) + 1));
+  for(int row = 0; row < height; ++row)
+    {
+      raw_idat.push_back(0);  // filter type: None
+      const uint8_t* row_ptr = pixels.data() + static_cast<ptrdiff_t>(row * width);
+      for(int col = 0; col < width; ++col)
+        {
+          raw_idat.push_back(row_ptr[col]);
+        }
+    }
+
+  // Compress via zlib-stored and wrap as IDAT chunk.
+  {
+    std::vector<uint8_t> idat_data = zlib_store(raw_idat.data(), raw_idat.size());
+    append_png_chunk(png, "IDAT", idat_data);
+  }
+
+  // IEND chunk (empty data)
+  {
+    std::vector<uint8_t> empty;
+    append_png_chunk(png, "IEND", empty);
+  }
+
+  // Write to file
+  std::ofstream ofs(path, std::ios::binary);
+  if(not ofs)
+    {
+      LOG_S(WARNING) << "save_debug_png: cannot open file for writing: " << path;
+      return;
+    }
+  ofs.write(reinterpret_cast<const char*>(png.data()),
+            static_cast<std::streamsize>(png.size()));
+  if(ofs.good())
+    {
+      LOG_S(INFO) << "save_debug_png: wrote " << png.size() << " bytes to " << path;
+    }
+  else
+    {
+      LOG_S(WARNING) << "save_debug_png: write error for file " << path;
+    }
 }
 
 }  // namespace ccitt
