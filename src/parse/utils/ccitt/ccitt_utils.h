@@ -551,17 +551,31 @@ inline bool decode_g4_row(BitReader&                   br,
                   << " bit_pos=" << br.bits_read();
     }
 
+  // Detailed per-mode logging for rows near known trouble spots.
+  // Widen this window if the sync error moves.
+  const bool dbg = (row_num >= 608 and row_num <= 620);
+  if(dbg)
+    {
+      LOG_S(INFO) << "ccitt G4 [DBG] row=" << row_num
+                  << " start bit_pos=" << br.bits_read();
+    }
+
   int a0    = -1;
   int color =  0;  // white
 
   // Offsets for vertical modes: index = mode value (2-8)
   // mode 2=V0, 3=VR1, 4=VR2, 5=VR3, 6=VL1, 7=VL2, 8=VL3
   static const int v_offset[9] = { 0, 0, 0, 1, 2, 3, -1, -2, -3 };
+  static const char* const mode_name[9] =
+    { "Pass", "H", "V0", "VR1", "VR2", "VR3", "VL1", "VL2", "VL3" };
 
   int mode_state = 0;
 
   while(a0 < width - 1)
     {
+      const int    a0_before  = a0;
+      const size_t bit_before = br.bits_read();
+
       // --- Read one G4 mode codeword ---
       // Count consecutive zero bits to detect EOFB (End-of-Facsimile Block).
       // T.6 EOFB = two consecutive 000000000001 (12-bit) patterns.
@@ -595,13 +609,58 @@ inline bool decode_g4_row(BitReader&                   br,
               consecutive_zeros = 0;
             }
 
-          // EOFB detection: 6+ consecutive zeros exceed any valid mode codeword prefix.
+          // After 6 consecutive zeros the mode tree has no valid path.
+          // This is EITHER genuine EOFB (T.6 End-of-Facsimile Block = 000000000001)
+          // OR a mode-sync error from a previous decoding mistake.
+          // Distinguish them by scanning for more zeros:
+          //   < 11 total zeros before a '1'  →  sync error, fill row and continue
+          //   >= 11 zeros (followed by '1')   →  genuine EOFB, stop
           if(consecutive_zeros >= 6)
             {
-              LOG_S(INFO) << "ccitt G4: EOFB detected at row " << row_num
+              int total_zeros = consecutive_zeros;
+              bool early_one  = false;
+              while(total_zeros < 11)
+                {
+                  int b = br.read_bit();
+                  if(b < 0)
+                    {
+                      // Stream ended during scan — treat as EOFB.
+                      for(int i = a0 + 1; i < width; ++i)
+                        {
+                          cur[i] = static_cast<uint8_t>(color);
+                        }
+                      hit_eofb = true;
+                      return true;
+                    }
+                  if(b == 1)
+                    {
+                      early_one = true;
+                      break;
+                    }
+                  ++total_zeros;
+                }
+
+              if(early_one)
+                {
+                  // Fewer than 11 zeros before '1': mode-sync error, not EOFB.
+                  // Fill the rest of this row and let the outer loop continue.
+                  LOG_S(WARNING) << "ccitt G4: mode sync error at row " << row_num
+                                 << " a0=" << a0 << " bit_pos=" << br.bits_read()
+                                 << " (zeros=" << total_zeros << " < 11, not EOFB)"
+                                 << " — filling row and continuing";
+                  for(int i = a0 + 1; i < width; ++i)
+                    {
+                      cur[i] = static_cast<uint8_t>(color);
+                    }
+                  return true;  // hit_eofb stays false
+                }
+
+              // 11+ consecutive zeros: genuine EOFB.  Consume the terminating '1'.
+              int term = br.read_bit();
+              (void)term;
+              LOG_S(INFO) << "ccitt G4: EOFB at row " << row_num
                           << " a0=" << a0 << " bit_pos=" << br.bits_read()
-                          << " (consecutive_zeros=" << consecutive_zeros << ")";
-              // Fill remainder of this row (which may be empty) and stop.
+                          << " (zeros=" << total_zeros << ")";
               for(int i = a0 + 1; i < width; ++i)
                 {
                   cur[i] = static_cast<uint8_t>(color);
@@ -646,6 +705,14 @@ inline bool decode_g4_row(BitReader&                   br,
             {
               cur[a0] = static_cast<uint8_t>(color);
             }
+          if(dbg)
+            {
+              LOG_S(INFO) << "ccitt G4 [DBG] row=" << row_num
+                          << " Pass  a0: " << a0_before << "->" << a0
+                          << " b1=" << b1 << " b2=" << b2
+                          << " color=" << color
+                          << " bits=" << bit_before << "->" << br.bits_read();
+            }
         }
       else if(mode == 1)
         {
@@ -654,11 +721,19 @@ inline bool decode_g4_row(BitReader&                   br,
           int run1 = decode_1d_run(br, color);
           if(run1 < 0)
             {
+              LOG_S(WARNING) << "ccitt G4 [DBG] row=" << row_num
+                             << " H mode: run1 decode failed at a0=" << a0_before
+                             << " bit_pos=" << br.bits_read();
               return false;
             }
+          const size_t bit_after_run1 = br.bits_read();
           int run2 = decode_1d_run(br, color ^ 1);
           if(run2 < 0)
             {
+              LOG_S(WARNING) << "ccitt G4 [DBG] row=" << row_num
+                             << " H mode: run2 decode failed at a0=" << a0_before
+                             << " run1=" << run1
+                             << " bit_pos=" << br.bits_read();
               return false;
             }
           int pos  = a0 + 1;
@@ -673,6 +748,17 @@ inline bool decode_g4_row(BitReader&                   br,
               cur[i] = static_cast<uint8_t>(color ^ 1);
             }
           a0 = pos + run1 + run2 - 1;
+          if(dbg)
+            {
+              LOG_S(INFO) << "ccitt G4 [DBG] row=" << row_num
+                          << " H     a0: " << a0_before << "->" << a0
+                          << " run1=" << run1 << "(color=" << color << ")"
+                          << " run2=" << run2 << "(color=" << (color^1) << ")"
+                          << " bits=" << bit_before
+                          << " +" << (bit_after_run1 - bit_before)
+                          << " +" << (br.bits_read() - bit_after_run1)
+                          << " total=" << br.bits_read();
+            }
         }
       else
         {
@@ -705,6 +791,15 @@ inline bool decode_g4_row(BitReader&                   br,
           if(a0 >= 0 and a0 < width)
             {
               cur[a0] = static_cast<uint8_t>(color);
+            }
+          if(dbg)
+            {
+              LOG_S(INFO) << "ccitt G4 [DBG] row=" << row_num
+                          << " " << mode_name[mode]
+                          << "  a0: " << a0_before << "->" << a0
+                          << " b1=" << b1 << " offset=" << offset
+                          << " new_color=" << color
+                          << " bits=" << bit_before << "->" << br.bits_read();
             }
         }
     }
@@ -798,8 +893,8 @@ inline std::vector<uint8_t> decode(const uint8_t* raw_data,
 
       ++rows_decoded;
 
-      // Stop as soon as EOFB was signalled — everything after is padding/garbage.
-      if(hit_eofb and false)
+      // Stop as soon as genuine EOFB was signalled — everything after is padding/garbage.
+      if(hit_eofb)
         {
           LOG_S(INFO) << "ccitt::decode: stopping after EOFB at row " << row;
           // Emit the just-decoded row before breaking.
