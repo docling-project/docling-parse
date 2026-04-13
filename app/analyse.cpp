@@ -1,6 +1,7 @@
 //-*-C++-*-
 
 #include "parse.h"
+#include "render.h"
 
 struct ImageIssue
 {
@@ -10,8 +11,34 @@ struct ImageIssue
   std::string xobject_key;
   bool        raw_null;
   bool        decoded_null;
-  bool        render_failed;       // get_image_as_bytes() returned empty
+  bool        yellow_box;          // renderer would draw a yellow placeholder
   std::string rendered_page_file;  // path to rendered page image, if render_dir was given
+};
+
+// -----------------------------------------------------------------
+// Lightweight inspector: mirrors the exact renderer condition for a
+// yellow box and collects the xobject keys that would trigger it.
+//
+//   yellow box iff: not has_data()  OR  sh<=0  OR  sw<=0  OR  sc<1
+// -----------------------------------------------------------------
+struct yellow_box_inspector
+{
+  std::unordered_set<std::string> yellow_keys;
+
+  void set_size(pdflib::size_instruction&)              {}
+  void render_text(pdflib::text_instruction&)           {}
+  void render_widget(pdflib::text_widget_instruction&)  {}
+  void render_shape(pdflib::shape_instruction&)         {}
+
+  void render_bitmap(pdflib::bitmap_instruction& instr)
+  {
+    auto const& shape = instr.get_shape();
+    int sh = shape[0], sw = shape[1], sc = shape[2];
+    if ((not instr.has_data()) or sh <= 0 or sw <= 0 or sc < 1)
+      {
+        yellow_keys.insert(instr.get_key());
+      }
+  }
 };
 
 // -----------------------------------------------------------------
@@ -37,13 +64,17 @@ static int analyse_pdf(const std::string&      pdf_path,
   int num_pages = doc.get_number_of_pages();
   total_pages += num_pages;
 
+  // When rendering is requested we need the full instruction set.
+  // When only analysing streams, skip cells/shapes to go faster.
   pdflib::decode_config config;
-  config.keep_bitmaps       = true;
-  config.keep_char_cells    = false;
-  config.keep_shapes        = false;
-  config.do_sanitization    = false;
-  config.create_word_cells  = false;
-  config.create_line_cells  = false;
+  config.keep_bitmaps      = true;
+  config.keep_char_cells   = not render_dir.empty();
+  config.keep_shapes       = not render_dir.empty();
+  config.do_sanitization   = false;
+  config.create_word_cells = false;
+  config.create_line_cells = false;
+
+  pdflib::render_config render_cfg; // default render settings
 
   std::unordered_set<int> flagged_pages;
 
@@ -67,6 +98,13 @@ static int analyse_pdf(const std::string&      pdf_path,
           continue;
         }
 
+      // Run the yellow-box inspector over all bitmap instructions on
+      // this page — same condition the renderer uses.
+      yellow_box_inspector inspector;
+      page_dec->get_instructions().iterate_over_instructions(inspector);
+
+      // Check every image on this page for stream / render issues.
+      bool page_has_issue = false;
       auto& images = page_dec->get_page_images();
       for (std::size_t i = 0; i < images.size(); i++)
         {
@@ -77,22 +115,12 @@ static int analyse_pdf(const std::string&      pdf_path,
           bool decoded_null = (not img.decoded_stream_data
                                or img.decoded_stream_data->getSize() == 0);
 
-          bool render_failed = false;
-          try
-            {
-              std::vector<unsigned char> bytes = img.get_image_as_bytes();
-              render_failed = bytes.empty();
-            }
-          catch (std::exception const& exc)
-            {
-              LOG_S(WARNING) << pdf_path << " page " << (page_num + 1)
-                             << " image[" << i << "] get_image_as_bytes failed: "
-                             << exc.what();
-              render_failed = true;
-            }
+          bool yellow_box = (inspector.yellow_keys.count(img.xobject_key) > 0);
 
-          if ((raw_null and decoded_null) or render_failed)
+          if ((raw_null and decoded_null) or yellow_box)
             {
+              // Compute the rendered page path now; the file is written below
+              // once we know the full page is flagged.
               std::string rendered_page_file;
               if (not render_dir.empty())
                 {
@@ -108,9 +136,32 @@ static int analyse_pdf(const std::string&      pdf_path,
                                  img.xobject_key,
                                  raw_null,
                                  decoded_null,
-                                 render_failed,
+                                 yellow_box,
                                  rendered_page_file});
               flagged_pages.insert(page_num);
+              page_has_issue = true;
+            }
+        }
+
+      // Render and save the page image when this page has at least one issue.
+      if (page_has_issue and not render_dir.empty())
+        {
+          std::string stem = std::filesystem::path(pdf_path).stem().string()
+            + "_p" + std::to_string(page_num) + ".png";
+          std::string out_path =
+            (std::filesystem::path(render_dir) / stem).string();
+
+          try
+            {
+              pdflib::renderer<pdflib::BLEND2D> rnd(render_cfg);
+              page_dec->get_instructions().iterate_over_instructions(rnd);
+              rnd.save(out_path);
+              LOG_S(INFO) << "saved rendered page: " << out_path;
+            }
+          catch (std::exception const& exc)
+            {
+              LOG_S(WARNING) << "could not render page " << (page_num + 1)
+                             << " of " << pdf_path << ": " << exc.what();
             }
         }
     }
@@ -257,7 +308,7 @@ int main(int argc, char* argv[])
                             << "  xobj=" << (e.xobject_key.empty() ? "(none)" : e.xobject_key)
                             << "  raw=" << (e.raw_null ? "null" : "ok")
                             << "  decoded=" << (e.decoded_null ? "null" : "ok")
-                            << "  render=" << (e.render_failed ? "FAIL" : "ok");
+                            << "  yellow_box=" << (e.yellow_box ? "YES" : "no");
                   if (not e.rendered_page_file.empty())
                     {
                       std::cout << "  page_img=" << e.rendered_page_file;
@@ -299,7 +350,7 @@ int main(int argc, char* argv[])
               entry["xobject_key"]         = e.xobject_key;
               entry["raw_null"]            = e.raw_null;
               entry["decoded_null"]        = e.decoded_null;
-              entry["render_failed"]       = e.render_failed;
+              entry["yellow_box"]          = e.yellow_box;
               entry["rendered_page_file"]  = e.rendered_page_file;
               report.push_back(entry);
             }
