@@ -915,7 +915,7 @@ namespace pdflib
       }
     else
       {
-        LOG_S(ERROR) << "could not find font-bbox";
+        LOG_S(WARNING) << "could not find font-bbox";
       }
 
     if (json_bbox != nullptr)
@@ -1137,7 +1137,7 @@ namespace pdflib
             {
               // from times-Roman
               ascent = 683.0;
-              LOG_S(ERROR) << " -> falling back on the default value for ascent (=" << ascent << ")";
+              LOG_S(WARNING) << " -> falling back on the default value for ascent (=" << ascent << ")";
             }
         }
     }

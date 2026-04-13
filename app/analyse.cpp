@@ -2,30 +2,27 @@
 
 #include "parse.h"
 
-#include <filesystem>
-#include <iostream>
-#include <string>
-#include <vector>
-
-namespace fs = std::filesystem;
-
-struct NullStreamEntry
+struct ImageIssue
 {
   std::string pdf_path;
-  int         page_number;    // 0-based internally, printed as 1-based
-  std::size_t image_index;    // index within page_images
+  int         page_number;         // 0-based internally, printed as 1-based
+  std::size_t image_index;         // index within page_images
   std::string xobject_key;
   bool        raw_null;
   bool        decoded_null;
+  bool        render_failed;       // get_image_as_bytes() returned empty
+  std::string rendered_page_file;  // path to rendered page image, if render_dir was given
 };
 
 // -----------------------------------------------------------------
 // Analyse a single PDF and append findings to `entries`.
-// Returns the number of pages that contain at least one image with
-// both streams null.
+// Returns the number of pages that contain at least one image issue.
+// `total_pages` is incremented by the page count of this document.
 // -----------------------------------------------------------------
-static int analyse_pdf(const std::string&           pdf_path,
-                       std::vector<NullStreamEntry>& entries)
+static int analyse_pdf(const std::string&      pdf_path,
+                       std::vector<ImageIssue>& entries,
+                       int&                     total_pages,
+                       const std::string&       render_dir)
 {
   pdflib::pdf_decoder<pdflib::DOCUMENT> doc;
   std::optional<std::string> password = std::nullopt;
@@ -33,11 +30,12 @@ static int analyse_pdf(const std::string&           pdf_path,
 
   if (not doc.process_document_from_file(mutable_path, password))
     {
-      std::cerr << "[error] could not open: " << pdf_path << "\n";
+      LOG_S(ERROR) << "could not open: " << pdf_path;
       return 0;
     }
 
   int num_pages = doc.get_number_of_pages();
+  total_pages += num_pages;
 
   pdflib::decode_config config;
   config.keep_bitmaps       = true;
@@ -51,7 +49,19 @@ static int analyse_pdf(const std::string&           pdf_path,
 
   for (int page_num = 0; page_num < num_pages; page_num++)
     {
-      auto page_dec = doc.decode_page(page_num, config);
+      std::shared_ptr<pdflib::pdf_decoder<pdflib::PAGE>> page_dec;
+
+      try
+        {
+          page_dec = doc.decode_page(page_num, config);
+        }
+      catch (std::exception const& exc)
+        {
+          LOG_S(WARNING) << pdf_path << " page " << (page_num + 1)
+                         << " decode failed: " << exc.what();
+          continue;
+        }
+
       if (not page_dec)
         {
           continue;
@@ -67,14 +77,39 @@ static int analyse_pdf(const std::string&           pdf_path,
           bool decoded_null = (not img.decoded_stream_data
                                or img.decoded_stream_data->getSize() == 0);
 
-          if (raw_null and decoded_null)
+          bool render_failed = false;
+          try
             {
+              std::vector<unsigned char> bytes = img.get_image_as_bytes();
+              render_failed = bytes.empty();
+            }
+          catch (std::exception const& exc)
+            {
+              LOG_S(WARNING) << pdf_path << " page " << (page_num + 1)
+                             << " image[" << i << "] get_image_as_bytes failed: "
+                             << exc.what();
+              render_failed = true;
+            }
+
+          if ((raw_null and decoded_null) or render_failed)
+            {
+              std::string rendered_page_file;
+              if (not render_dir.empty())
+                {
+                  std::string stem = std::filesystem::path(pdf_path).stem().string()
+                    + "_p" + std::to_string(page_num) + ".png";
+                  rendered_page_file =
+                    (std::filesystem::path(render_dir) / stem).string();
+                }
+
               entries.push_back({pdf_path,
                                  page_num,
                                  i,
                                  img.xobject_key,
                                  raw_null,
-                                 decoded_null});
+                                 decoded_null,
+                                 render_failed,
+                                 rendered_page_file});
               flagged_pages.insert(page_num);
             }
         }
@@ -86,17 +121,17 @@ static int analyse_pdf(const std::string&           pdf_path,
 // -----------------------------------------------------------------
 // Collect PDF paths from either a single file or a directory.
 // -----------------------------------------------------------------
-static std::vector<fs::path> collect_pdfs(const fs::path& input)
+static std::vector<std::filesystem::path> collect_pdfs(const std::filesystem::path& input)
 {
-  std::vector<fs::path> paths;
+  std::vector<std::filesystem::path> paths;
 
-  if (fs::is_regular_file(input))
+  if (std::filesystem::is_regular_file(input))
     {
       paths.push_back(input);
     }
-  else if (fs::is_directory(input))
+  else if (std::filesystem::is_directory(input))
     {
-      for (auto const& entry : fs::recursive_directory_iterator(input))
+      for (auto const& entry : std::filesystem::recursive_directory_iterator(input))
         {
           if (entry.is_regular_file())
             {
@@ -114,8 +149,7 @@ static std::vector<fs::path> collect_pdfs(const fs::path& input)
     }
   else
     {
-      std::cerr << "[error] input is neither a file nor a directory: "
-                << input << "\n";
+      LOG_S(ERROR) << "input is neither a file nor a directory: " << input.string();
     }
 
   return paths;
@@ -137,10 +171,11 @@ int main(int argc, char* argv[])
                                "decoded_stream_data in PDF image XObjects");
 
       options.add_options()
-        ("i,input",    "Input PDF file or directory",    cxxopts::value<std::string>())
-        ("o,output",   "Output JSON file (optional)",    cxxopts::value<std::string>())
-        ("l,loglevel", "Log level [error, warning, info]", cxxopts::value<std::string>())
-        ("h,help",     "Print usage");
+        ("i,input",      "Input PDF file or directory",                    cxxopts::value<std::string>())
+        ("o,output",     "Output JSON file (optional)",                    cxxopts::value<std::string>())
+        ("r,render-dir", "Directory containing rendered page PNG images",  cxxopts::value<std::string>())
+        ("l,loglevel",   "Log level [error, warning, info]",               cxxopts::value<std::string>())
+        ("h,help",       "Print usage");
 
       auto result = options.parse(argc, argv);
 
@@ -162,29 +197,45 @@ int main(int argc, char* argv[])
 
       if (not result.count("input"))
         {
-          std::cerr << "[error] -i/--input is required\n";
+          LOG_S(ERROR) << "-i/--input is required";
           return 1;
         }
 
-      fs::path input_path = result["input"].as<std::string>();
-      std::vector<fs::path> pdf_paths = collect_pdfs(input_path);
+      std::filesystem::path input_path = result["input"].as<std::string>();
+      std::vector<std::filesystem::path> pdf_paths = collect_pdfs(input_path);
+
+      std::string render_dir;
+      if (result.count("render-dir"))
+        {
+          render_dir = result["render-dir"].as<std::string>();
+        }
 
       if (pdf_paths.empty())
         {
-          std::cerr << "[error] no PDF files found at: " << input_path << "\n";
+          LOG_S(ERROR) << "no PDF files found at: " << input_path.string();
           return 1;
         }
 
       std::cout << "Analysing " << pdf_paths.size() << " PDF file(s)...\n\n";
 
-      std::vector<NullStreamEntry> all_entries;
+      std::vector<ImageIssue> all_entries;
+      int total_pages         = 0;
       int total_flagged_pages = 0;
       int total_pdfs_with_issues = 0;
 
       for (auto const& pdf : pdf_paths)
         {
-          std::vector<NullStreamEntry> file_entries;
-          int flagged = analyse_pdf(pdf.string(), file_entries);
+          std::vector<ImageIssue> file_entries;
+          int flagged = 0;
+          try
+            {
+              flagged = analyse_pdf(pdf.string(), file_entries, total_pages, render_dir);
+            }
+          catch (std::exception const& exc)
+            {
+              LOG_S(ERROR) << pdf.string() << ": " << exc.what();
+              continue;
+            }
 
           if (flagged > 0)
             {
@@ -206,7 +257,12 @@ int main(int argc, char* argv[])
                             << "  xobj=" << (e.xobject_key.empty() ? "(none)" : e.xobject_key)
                             << "  raw=" << (e.raw_null ? "null" : "ok")
                             << "  decoded=" << (e.decoded_null ? "null" : "ok")
-                            << "\n";
+                            << "  render=" << (e.render_failed ? "FAIL" : "ok");
+                  if (not e.rendered_page_file.empty())
+                    {
+                      std::cout << "  page_img=" << e.rendered_page_file;
+                    }
+                  std::cout << "\n";
                 }
               std::cout << "\n";
 
@@ -224,9 +280,10 @@ int main(int argc, char* argv[])
       // Summary
       std::cout << "\n=== Summary ===\n";
       std::cout << "  PDFs scanned       : " << pdf_paths.size() << "\n";
+      std::cout << "  Total pages        : " << total_pages << "\n";
       std::cout << "  PDFs with issues   : " << total_pdfs_with_issues << "\n";
       std::cout << "  Pages with issues  : " << total_flagged_pages << "\n";
-      std::cout << "  Null-stream images : " << all_entries.size() << "\n";
+      std::cout << "  Images with issues : " << all_entries.size() << "\n";
 
       // Optional JSON output
       if (result.count("output"))
@@ -236,12 +293,14 @@ int main(int argc, char* argv[])
           for (auto const& e : all_entries)
             {
               nlohmann::json entry;
-              entry["pdf"]            = e.pdf_path;
-              entry["page"]           = e.page_number + 1; // 1-based
-              entry["image_index"]    = e.image_index;
-              entry["xobject_key"]    = e.xobject_key;
-              entry["raw_null"]       = e.raw_null;
-              entry["decoded_null"]   = e.decoded_null;
+              entry["pdf"]                 = e.pdf_path;
+              entry["page"]                = e.page_number + 1; // 1-based
+              entry["image_index"]         = e.image_index;
+              entry["xobject_key"]         = e.xobject_key;
+              entry["raw_null"]            = e.raw_null;
+              entry["decoded_null"]        = e.decoded_null;
+              entry["render_failed"]       = e.render_failed;
+              entry["rendered_page_file"]  = e.rendered_page_file;
               report.push_back(entry);
             }
 
@@ -254,7 +313,7 @@ int main(int argc, char* argv[])
             }
           else
             {
-              std::cerr << "[error] could not write to: " << out_path << "\n";
+              LOG_S(ERROR) << "could not write to: " << out_path;
             }
         }
 
@@ -262,12 +321,12 @@ int main(int argc, char* argv[])
     }
   catch (cxxopts::exceptions::exception const& e)
     {
-      std::cerr << "[error] option parsing: " << e.what() << "\n";
+      LOG_S(ERROR) << "option parsing: " << e.what();
       return 1;
     }
   catch (std::exception const& e)
     {
-      std::cerr << "[error] " << e.what() << "\n";
+      LOG_S(ERROR) << e.what();
       return 1;
     }
 }
