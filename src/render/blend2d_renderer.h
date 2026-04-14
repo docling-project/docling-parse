@@ -54,6 +54,14 @@ namespace pdflib
 
   private:
 
+    struct bitmap_quad
+    {
+      double x0, y0; // bottom-left
+      double x1, y1; // top-left
+      double x2, y2; // top-right
+      double x3, y3; // bottom-right
+    };
+
     render_config config_;
 
     mutable BLImage    image_;  // internal canvas (PRGB32 format)
@@ -265,6 +273,124 @@ namespace pdflib
     // system font if none can be resolved.  Results are cached.
     BLFontFace& resolve_font_face(const std::string& font_name,
                                   const std::string& base_font);
+
+    static bool nearly_equal(double a, double b, double eps = 1e-6)
+    {
+      return std::abs(a - b) <= eps;
+    }
+
+    static bool is_axis_aligned(bitmap_quad const& q, double eps = 1e-6)
+    {
+      return nearly_equal(q.x0, q.x1, eps) &&
+             nearly_equal(q.y1, q.y2, eps) &&
+             nearly_equal(q.x2, q.x3, eps) &&
+             nearly_equal(q.y0, q.y3, eps);
+    }
+
+    static bool is_right_angle_rotation(bitmap_quad const& q, int& quarter_turns, double eps = 1e-6)
+    {
+      const double ux = q.x2 - q.x1;
+      const double uy = q.y2 - q.y1;
+      const double vx = q.x0 - q.x1;
+      const double vy = q.y0 - q.y1;
+
+      const bool u_horizontal = nearly_equal(uy, 0.0, eps);
+      const bool u_vertical   = nearly_equal(ux, 0.0, eps);
+      const bool v_horizontal = nearly_equal(vy, 0.0, eps);
+      const bool v_vertical   = nearly_equal(vx, 0.0, eps);
+
+      if (not ((u_horizontal and v_vertical) or (u_vertical and v_horizontal)))
+        {
+          return false;
+        }
+
+      if (u_horizontal and v_vertical)
+        {
+          quarter_turns = (ux >= 0.0 and vy >= 0.0) ? 0 : 2;
+          return true;
+        }
+
+      if (u_vertical and v_horizontal)
+        {
+          quarter_turns = (uy >= 0.0 and vx >= 0.0) ? 3 : 1;
+          return true;
+        }
+
+      return false;
+    }
+
+    static BLPath make_quad_path(bitmap_quad const& q)
+    {
+      BLPath path;
+      path.move_to(q.x0, q.y0);
+      path.line_to(q.x1, q.y1);
+      path.line_to(q.x2, q.y2);
+      path.line_to(q.x3, q.y3);
+      path.close();
+      return path;
+    }
+
+    static BLRect axis_aligned_rect(bitmap_quad const& q)
+    {
+      const double x_min = std::min({q.x0, q.x1, q.x2, q.x3});
+      const double x_max = std::max({q.x0, q.x1, q.x2, q.x3});
+      const double y_min = std::min({q.y0, q.y1, q.y2, q.y3});
+      const double y_max = std::max({q.y0, q.y1, q.y2, q.y3});
+      return BLRect(x_min, y_min, x_max - x_min, y_max - y_min);
+    }
+
+    void render_bitmap_placeholder(BLContext& ctx, bitmap_quad const& q, bool axis_aligned)
+    {
+      ctx.set_fill_style(BLRgba32(0x66FFFF00u));
+      if (axis_aligned)
+        {
+          ctx.fill_rect(axis_aligned_rect(q));
+        }
+      else
+        {
+          ctx.fill_path(make_quad_path(q));
+        }
+    }
+
+    void render_bitmap_axis_aligned(BLContext& ctx, BLImage const& src_img, bitmap_quad const& q, int sw, int sh)
+    {
+      const BLRect dst_rect = axis_aligned_rect(q);
+      LOG_S(INFO) << "render_bitmap_axis_aligned"
+                  << " quad=[(" << q.x0 << "," << q.y0 << "),("
+                  << q.x1 << "," << q.y1 << "),("
+                  << q.x2 << "," << q.y2 << "),("
+                  << q.x3 << "," << q.y3 << ")]"
+                  << " src=" << sw << "x" << sh
+                  << " dst_rect=(" << dst_rect.x << ","
+                  << dst_rect.y << ","
+                  << dst_rect.w << ","
+                  << dst_rect.h << ")";
+      ctx.blit_image(dst_rect, src_img, BLRectI(0, 0, sw, sh));
+    }
+
+    void render_bitmap_affine(BLContext& ctx, BLImage const& src_img, bitmap_quad const& q, int sw, int sh)
+    {
+      const double m00 = (q.x2 - q.x1) / static_cast<double>(sw);
+      const double m01 = (q.y2 - q.y1) / static_cast<double>(sw);
+      const double m10 = (q.x0 - q.x1) / static_cast<double>(sh);
+      const double m11 = (q.y0 - q.y1) / static_cast<double>(sh);
+      const double m20 = q.x1;
+      const double m21 = q.y1;
+
+      LOG_S(INFO) << "render_bitmap_affine"
+                  << " quad=[(" << q.x0 << "," << q.y0 << "),("
+                  << q.x1 << "," << q.y1 << "),("
+                  << q.x2 << "," << q.y2 << "),("
+                  << q.x3 << "," << q.y3 << ")]"
+                  << " src=" << sw << "x" << sh
+                  << " ctm=[[" << m00 << "," << m01 << "],["
+                  << m10 << "," << m11 << "],["
+                  << m20 << "," << m21 << "]]";
+      ctx.save();
+      ctx.apply_transform(BLMatrix2D(m00, m01, m10, m11, m20, m21));
+      ctx.blit_image(BLRect(0, 0, sw, sh), src_img, BLRectI(0, 0, sw, sh));
+      ctx.restore();
+    }
   };
 
   // ---------------------------------------------------------------------------
@@ -851,28 +977,20 @@ namespace pdflib
         return;
       }
 
-    // Compute axis-aligned destination rectangle in canvas coordinates.
-    const double x_min = canvas_x(std::min({instr.get_r_x0(), instr.get_r_x1(),
-        instr.get_r_x2(), instr.get_r_x3()}));
-    const double x_max = canvas_x(std::max({instr.get_r_x0(), instr.get_r_x1(),
-        instr.get_r_x2(), instr.get_r_x3()}));
-    const double y_min_pdf = std::min({instr.get_r_y0(), instr.get_r_y1(),
-        instr.get_r_y2(), instr.get_r_y3()});
-    const double y_max_pdf = std::max({instr.get_r_y0(), instr.get_r_y1(),
-        instr.get_r_y2(), instr.get_r_y3()});
+    bitmap_quad q = {
+      canvas_x(instr.get_r_x0()), canvas_y(instr.get_r_y0()),
+      canvas_x(instr.get_r_x1()), canvas_y(instr.get_r_y1()),
+      canvas_x(instr.get_r_x2()), canvas_y(instr.get_r_y2()),
+      canvas_x(instr.get_r_x3()), canvas_y(instr.get_r_y3())
+    };
 
-    const double dst_w = x_max - x_min;
-    const double dst_h = (y_max_pdf - y_min_pdf) * scale_y_;
-    if (dst_w <= 0.0 or dst_h <= 0.0)
+    const double quad_top_w = std::hypot(q.x2 - q.x1, q.y2 - q.y1);
+    const double quad_left_h = std::hypot(q.x0 - q.x1, q.y0 - q.y1);
+    if (quad_top_w <= 0.0 or quad_left_h <= 0.0)
       {
-        LOG_S(WARNING) << __FUNCTION__ << ": degenerate destination rect, skipping";
+        LOG_S(WARNING) << __FUNCTION__ << ": degenerate destination quad, skipping";
         return;
       }
-
-    // canvas_y(y_max_pdf) gives the top-left y of the destination in canvas space.
-    const double dst_x = x_min;
-    const double dst_y = canvas_y(y_max_pdf);
-    const BLRect dst_rect(dst_x, dst_y, dst_w, dst_h);
 
     const auto& src_data  = instr.get_data();
     const auto& src_shape = instr.get_shape(); // {height, width, channels}
@@ -881,6 +999,23 @@ namespace pdflib
     const int sc = src_shape[2];
 
     BLContext ctx(image_);
+    const bool axis_aligned = is_axis_aligned(q);
+    int quarter_turns = -1;
+    const bool right_angle = is_right_angle_rotation(q, quarter_turns);
+
+    LOG_S(INFO) << "render_bitmap: quad=[("
+                << q.x0 << "," << q.y0 << "),("
+                << q.x1 << "," << q.y1 << "),("
+                << q.x2 << "," << q.y2 << "),("
+                << q.x3 << "," << q.y3 << ")]"
+                << " top_vec=(" << (q.x2 - q.x1) << "," << (q.y2 - q.y1) << ")"
+                << " left_vec=(" << (q.x0 - q.x1) << "," << (q.y0 - q.y1) << ")"
+                << " quad_top_w=" << quad_top_w
+                << " quad_left_h=" << quad_left_h
+                << " axis_aligned=" << (axis_aligned ? "true" : "false")
+                << " right_angle=" << (right_angle ? "true" : "false")
+                << " quarter_turns=" << quarter_turns
+                << " src=" << sw << "x" << sh << "x" << sc;
 
     if ((not instr.has_data()) or sh <= 0 or sw <= 0 or sc < 1)
       {
@@ -889,9 +1024,7 @@ namespace pdflib
                        << " shape=" << sh << "x" << sw << "x" << sc
                        << " has_data=" << (instr.has_data() ? "true" : "false")
                        << " — drawing semi-transparent yellow placeholder";
-        // No pixel data — draw a semi-transparent yellow placeholder.
-        ctx.set_fill_style(BLRgba32(0x66FFFF00u)); // A=40%, R=255, G=255, B=0
-        ctx.fill_rect(dst_rect);
+        render_bitmap_placeholder(ctx, q, axis_aligned);
         ctx.end();
         return;
       }
@@ -904,8 +1037,7 @@ namespace pdflib
                        << src_data->size() << " < " << expected_bytes
                        << ") for shape " << sh << "x" << sw << "x" << sc
                        << " — drawing placeholder";
-        ctx.set_fill_style(BLRgba32(0x66FFFF00u));
-        ctx.fill_rect(dst_rect);
+        render_bitmap_placeholder(ctx, q, axis_aligned);
         ctx.end();
         return;
       }
@@ -943,7 +1075,18 @@ namespace pdflib
         }
     }
 
-    ctx.blit_image(dst_rect, src_img, BLRectI(0, 0, sw, sh));
+    if (axis_aligned)
+      {
+        LOG_S(INFO) << "render_bitmap: selecting axis-aligned path";
+        render_bitmap_axis_aligned(ctx, src_img, q, sw, sh);
+      }
+    else
+      {
+        LOG_S(INFO) << "render_bitmap: selecting affine path"
+                    << " (right_angle=" << (right_angle ? "true" : "false")
+                    << ", quarter_turns=" << quarter_turns << ")";
+        render_bitmap_affine(ctx, src_img, q, sw, sh);
+      }
     ctx.end();
   }
 
