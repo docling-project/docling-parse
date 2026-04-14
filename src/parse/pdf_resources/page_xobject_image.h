@@ -254,6 +254,49 @@ namespace pdflib
                       {
                         indexed_base_cs = base_obj.getName();
                       }
+                    else if(base_obj.isArray() and base_obj.getArrayNItems() >= 2)
+                      {
+                        auto base_name = base_obj.getArrayItem(0);
+                        if(base_name.isName() and base_name.getName() == "/ICCBased")
+                          {
+                            auto icc_stream = base_obj.getArrayItem(1);
+                            if(icc_stream.isStream())
+                              {
+                                auto icc_dict = icc_stream.getDict();
+                                if(icc_dict.hasKey("/N") and icc_dict.getKey("/N").isInteger())
+                                  {
+                                    const int n = icc_dict.getKey("/N").getIntValue();
+                                    if(n == 1)      { indexed_base_cs = "/DeviceGray"; }
+                                    else if(n == 3) { indexed_base_cs = "/DeviceRGB"; }
+                                    else if(n == 4) { indexed_base_cs = "/DeviceCMYK"; }
+                                    else
+                                      {
+                                        LOG_S(WARNING) << "Indexed ICCBased base has unsupported /N="
+                                                       << n;
+                                      }
+                                    LOG_S(INFO) << "Indexed ICCBased base: N=" << n
+                                                << " -> " << indexed_base_cs;
+                                  }
+                                else
+                                  {
+                                    LOG_S(WARNING) << "Indexed ICCBased base missing /N entry";
+                                  }
+                              }
+                            else
+                              {
+                                LOG_S(WARNING) << "Indexed ICCBased base: second array element is not a stream";
+                              }
+                          }
+                        else if(base_name.isName())
+                          {
+                            indexed_base_cs = base_name.getName();
+                            LOG_S(INFO) << "Indexed array base color space: " << indexed_base_cs;
+                          }
+                      }
+                    else
+                      {
+                        LOG_S(WARNING) << "Indexed color space: unsupported base object type";
+                      }
 
                     // hival
                     auto hival_obj = qpdf_cs.getArrayItem(2);
