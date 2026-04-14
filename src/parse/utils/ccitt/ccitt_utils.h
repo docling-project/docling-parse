@@ -144,6 +144,14 @@ bool decode_g4_row(BitReader&                   br,
                    int                          row_num,
                    bool&                        hit_eofb);
 
+// Fill a half-open pixel span [from, to) with one binary color.
+// This keeps the mode handlers expressed in terms of changing elements
+// instead of mixing pixel indices and boundary pixels.
+void fill_binary_span(std::vector<uint8_t>& row,
+                      int                   from,
+                      int                   to,
+                      int                   color);
+
 // ============================================================
 // Main decode entry point
 //
@@ -527,6 +535,19 @@ inline int find_b2(const std::vector<uint8_t>& ref, int b1, int width)
   return width;
 }
 
+inline void fill_binary_span(std::vector<uint8_t>& row,
+                             int                   from,
+                             int                   to,
+                             int                   color)
+{
+  int begin = std::max(0, from);
+  int end   = std::min(static_cast<int>(row.size()), to);
+  for(int i = begin; i < end; ++i)
+    {
+      row[i] = static_cast<uint8_t>(color);
+    }
+}
+
 // --- decode_g4_row ---
 
 inline bool decode_g4_row(BitReader&                   br,
@@ -560,8 +581,18 @@ inline bool decode_g4_row(BitReader&                   br,
                   << " start bit_pos=" << br.bits_read();
     }
 
-  int a0    = -1;
-  int color =  0;  // white
+  // Decoder state:
+  //   a0        = last changing element on the coding line
+  //   run_start = first pixel column of the current run
+  //   color     = color of the current run
+  //
+  // `a0` and `run_start` intentionally stay separate.  CCITT defines `a0`
+  // in terms of changing elements, while raster output is expressed as
+  // half-open pixel spans.  Keeping both values explicit avoids the
+  // off-by-one drift that appears when one variable tries to play both roles.
+  int a0        = -1;
+  int run_start =  0;
+  int color     =  0;  // white
 
   // Offsets for vertical modes: index = mode value (2-8)
   // mode 2=V0, 3=VR1, 4=VR2, 5=VR3, 6=VL1, 7=VL2, 8=VL3
@@ -571,9 +602,10 @@ inline bool decode_g4_row(BitReader&                   br,
 
   int mode_state = 0;
 
-  while(a0 < width - 1)
+  while(run_start < width)
     {
       const int    a0_before  = a0;
+      const int    start_before = run_start;
       const size_t bit_before = br.bits_read();
 
       // --- Read one G4 mode codeword ---
@@ -593,10 +625,7 @@ inline bool decode_g4_row(BitReader&                   br,
               // This can happen legitimately at the very last row.
               LOG_S(INFO) << "ccitt G4: end of data at row " << row_num
                           << " a0=" << a0 << " (filling remainder with color=" << color << ")";
-              for(int i = a0 + 1; i < width; ++i)
-                {
-                  cur[i] = static_cast<uint8_t>(color);
-                }
+              fill_binary_span(cur, run_start, width, color);
               return true;
             }
 
@@ -625,10 +654,7 @@ inline bool decode_g4_row(BitReader&                   br,
                   if(b < 0)
                     {
                       // Stream ended during scan — treat as EOFB.
-                      for(int i = a0 + 1; i < width; ++i)
-                        {
-                          cur[i] = static_cast<uint8_t>(color);
-                        }
+                      fill_binary_span(cur, run_start, width, color);
                       hit_eofb = true;
                       return true;
                     }
@@ -642,17 +668,16 @@ inline bool decode_g4_row(BitReader&                   br,
 
               if(early_one)
                 {
-                  // Fewer than 11 zeros before '1': mode-sync error, not EOFB.
-                  // Fill the rest of this row and let the outer loop continue.
+                  // Six leading zeros cannot start any legal T.6 mode codeword.
+                  // If the pattern is not long enough to be EOFB, the row is
+                  // malformed.  PDF explicitly disallows generic resynchronization
+                  // for CCITTFaxDecode, so fail fast instead of consuming more
+                  // data and drifting further out of phase.
                   LOG_S(WARNING) << "ccitt G4: mode sync error at row " << row_num
                                  << " a0=" << a0 << " bit_pos=" << br.bits_read()
                                  << " (zeros=" << total_zeros << " < 11, not EOFB)"
-                                 << " — filling row and continuing";
-                  for(int i = a0 + 1; i < width; ++i)
-                    {
-                      cur[i] = static_cast<uint8_t>(color);
-                    }
-                  return true;  // hit_eofb stays false
+                                 << " — treating row as malformed";
+                  return false;
                 }
 
               // 11+ consecutive zeros: genuine EOFB.  Consume the terminating '1'.
@@ -661,10 +686,7 @@ inline bool decode_g4_row(BitReader&                   br,
               LOG_S(INFO) << "ccitt G4: EOFB at row " << row_num
                           << " a0=" << a0 << " bit_pos=" << br.bits_read()
                           << " (zeros=" << total_zeros << ")";
-              for(int i = a0 + 1; i < width; ++i)
-                {
-                  cur[i] = static_cast<uint8_t>(color);
-                }
+              fill_binary_span(cur, run_start, width, color);
               hit_eofb = true;
               return true;
             }
@@ -691,24 +713,16 @@ inline bool decode_g4_row(BitReader&                   br,
       if(mode == 0)
         {
           // --- Pass mode ---
-          // The coding line from a0+1 to b2 (inclusive) is all `color`.
-          // Fill a0+1 .. b2-1 in the loop; then explicitly set cur[b2]=color,
-          // because b2 becomes the new a0 and would otherwise go unwritten.
-          int end = std::min(b2, width);
-          for(int i = a0 + 1; i < end; ++i)
-            {
-              cur[i] = static_cast<uint8_t>(color);
-            }
-          a0 = b2;
-          // Write the boundary pixel (new a0 = b2).
-          if(a0 >= 0 and a0 < width)
-            {
-              cur[a0] = static_cast<uint8_t>(color);
-            }
+          // Pass skips the next pair of reference changing elements, so the
+          // current run extends from `run_start` up to the second one, `b2`.
+          fill_binary_span(cur, run_start, b2, color);
+          a0        = std::min(b2, width);
+          run_start = a0;
           if(dbg)
             {
               LOG_S(INFO) << "ccitt G4 [DBG] row=" << row_num
                           << " Pass  a0: " << a0_before << "->" << a0
+                          << " start=" << start_before << "->" << run_start
                           << " b1=" << b1 << " b2=" << b2
                           << " color=" << color
                           << " bits=" << bit_before << "->" << br.bits_read();
@@ -736,22 +750,20 @@ inline bool decode_g4_row(BitReader&                   br,
                              << " bit_pos=" << br.bits_read();
               return false;
             }
-          int pos  = a0 + 1;
-          int end1 = std::min(pos + run1, width);
-          for(int i = pos; i < end1; ++i)
-            {
-              cur[i] = static_cast<uint8_t>(color);
-            }
-          int end2 = std::min(pos + run1 + run2, width);
-          for(int i = end1; i < end2; ++i)
-            {
-              cur[i] = static_cast<uint8_t>(color ^ 1);
-            }
-          a0 = pos + run1 + run2 - 1;
+          // Horizontal mode encodes two explicit runs starting exactly at the
+          // current run boundary.  After both runs, the decoder is back to the
+          // same color that it had on entry, now starting at the next boundary.
+          int end1 = std::min(run_start + run1, width);
+          fill_binary_span(cur, run_start, end1, color);
+          int end2 = std::min(end1 + run2, width);
+          fill_binary_span(cur, end1, end2, color ^ 1);
+          a0        = std::min(run_start + run1 + run2, width);
+          run_start = a0;
           if(dbg)
             {
               LOG_S(INFO) << "ccitt G4 [DBG] row=" << row_num
                           << " H     a0: " << a0_before << "->" << a0
+                          << " start=" << start_before << "->" << run_start
                           << " run1=" << run1 << "(color=" << color << ")"
                           << " run2=" << run2 << "(color=" << (color^1) << ")"
                           << " bits=" << bit_before
@@ -763,40 +775,30 @@ inline bool decode_g4_row(BitReader&                   br,
       else
         {
           // --- Vertical mode (modes 2-8) ---
-          // a1 is the next changing element on the coding line:
-          //   positions a0+1 .. a1-1 have color `color` (the current run).
-          //   position a1 has color ~color (the next run's first pixel).
-          // Fill the current run, then explicitly write the changing element
-          // at a1 (= new a0) with the new color, since the next fill starts
-          // at a0+1 = a1+1 and would leave a1 unwritten.
+          // `a1` is the next changing element on the coding line.  The current
+          // run occupies the half-open span [run_start, a1); the next run starts
+          // at `a1` with the opposite color.
           int offset = v_offset[mode];
           int a1     = b1 + offset;
           // Clamp to valid range
-          if(a1 < a0 + 1)
+          if(a1 < run_start)
             {
-              a1 = a0 + 1;
+              a1 = run_start;
             }
           if(a1 > width)
             {
               a1 = width;
             }
-          int end = a1;
-          for(int i = a0 + 1; i < end; ++i)
-            {
-              cur[i] = static_cast<uint8_t>(color);
-            }
-          a0    = a1;
-          color ^= 1;
-          // Write the changing element pixel (new a0 = a1) with the new color.
-          if(a0 >= 0 and a0 < width)
-            {
-              cur[a0] = static_cast<uint8_t>(color);
-            }
+          fill_binary_span(cur, run_start, a1, color);
+          a0        = a1;
+          run_start = a1;
+          color    ^= 1;
           if(dbg)
             {
               LOG_S(INFO) << "ccitt G4 [DBG] row=" << row_num
                           << " " << mode_name[mode]
                           << "  a0: " << a0_before << "->" << a0
+                          << " start=" << start_before << "->" << run_start
                           << " b1=" << b1 << " offset=" << offset
                           << " new_color=" << color
                           << " bits=" << bit_before << "->" << br.bits_read();
@@ -805,10 +807,7 @@ inline bool decode_g4_row(BitReader&                   br,
     }
 
   // Fill any pixels that were not reached (e.g. final run of zero-offset V mode)
-  for(int i = a0 + 1; i < width; ++i)
-    {
-      cur[i] = static_cast<uint8_t>(color);
-    }
+  fill_binary_span(cur, run_start, width, color);
 
   return true;
 }
