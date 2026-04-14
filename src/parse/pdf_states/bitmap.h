@@ -169,7 +169,11 @@ namespace pdflib
     pixel_format fmt = PIXEL_FORMAT_UNKNOWN;
 
     int channels = 0;
-    if(image.color_space == "/DeviceGray")
+    if(image.image_mask)
+      {
+        fmt = PIXEL_FORMAT_GRAY; channels = 1;
+      }
+    else if(image.color_space == "/DeviceGray")
       {
         fmt = PIXEL_FORMAT_GRAY; channels = 1;
       }
@@ -303,6 +307,8 @@ namespace pdflib
 
         const bool has_dct = std::find(image.filters.begin(), image.filters.end(),
                                        "/DCTDecode") != image.filters.end();
+        const bool has_flate = std::find(image.filters.begin(), image.filters.end(),
+                                         "/FlateDecode") != image.filters.end();
 
         if (image.decoded_stream_data and image.decoded_stream_data->getSize() > 0)
           {
@@ -339,9 +345,10 @@ namespace pdflib
             params.decode      = image.decode_array;
             params.has_decode  = image.decode_present and not image.decode_array.empty();
 
-            auto decoded = jpeg::decode_jpeg_to_raw_pixels(
+            auto decoded = jpeg::decode_pdf_jpeg_stream_to_raw_pixels(
                 reinterpret_cast<unsigned char const*>(image.raw_stream_data->getBuffer()),
                 static_cast<std::size_t>(image.raw_stream_data->getSize()),
+                has_flate,
                 params);
 
             if (not decoded.empty())

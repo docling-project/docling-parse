@@ -10,8 +10,10 @@
 #include <cmath>
 #include <algorithm>
 #include <csetjmp>
+#include <limits>
 
 #include <jpeglib.h>
+#include <zlib.h>
 
 #ifndef LOGURU_WITH_STREAMS
 #define LOGURU_WITH_STREAMS 1
@@ -82,11 +84,63 @@ inline void jpeg_error_exit_longjmp(j_common_ptr cinfo)
 }
 
 // ---------------------------------------------------------------------------
-// Validate that data begins with the JPEG SOI marker (0xFF 0xD8)
+// Locate the JPEG SOI marker (0xFF 0xD8).
 // ---------------------------------------------------------------------------
+inline std::size_t find_jpeg_soi_offset(unsigned char const* data, std::size_t size)
+{
+  if(not data || size < 2) { return size; }
+
+  for(std::size_t i = 0; i + 1 < size; ++i)
+    {
+      if(data[i] == 0xFF && data[i + 1] == 0xD8)
+        {
+          return i;
+        }
+    }
+
+  return size;
+}
+
 inline bool is_jpeg_data(unsigned char const* data, std::size_t size)
 {
-  return size >= 2 && data[0] == 0xFF && data[1] == 0xD8;
+  return find_jpeg_soi_offset(data, size) == 0;
+}
+
+inline std::vector<unsigned char> inflate_pdf_stream(
+    unsigned char const* data, std::size_t size)
+{
+  if(not data || size == 0) { return {}; }
+  if(size > static_cast<std::size_t>(std::numeric_limits<uInt>::max())) { return {}; }
+
+  uLongf dest_size = std::max<uLongf>(size * 4, 4096);
+
+  for(int attempt = 0; attempt < 8; ++attempt)
+    {
+      std::vector<unsigned char> inflated(dest_size);
+      int rc = ::uncompress(inflated.data(), &dest_size,
+                            reinterpret_cast<Bytef const*>(data),
+                            static_cast<uInt>(size));
+      if(rc == Z_OK)
+        {
+          inflated.resize(dest_size);
+          return inflated;
+        }
+      if(rc != Z_BUF_ERROR)
+        {
+          LOG_S(INFO) << "inflate_pdf_stream"
+                      << ": zlib inflate failed with rc=" << rc;
+          return {};
+        }
+      if(dest_size >= static_cast<uLongf>(std::numeric_limits<uInt>::max() / 2))
+        {
+          break;
+        }
+      dest_size *= 2;
+    }
+
+  LOG_S(INFO) << "inflate_pdf_stream"
+              << ": zlib inflate did not converge for input_size=" << size;
+  return {};
 }
 
 // ---------------------------------------------------------------------------
@@ -159,15 +213,24 @@ inline bool write_corrected_jpeg_from_memory(
       return false;
     }
 
-  if(!is_jpeg_data(data, size))
+  const std::size_t soi = find_jpeg_soi_offset(data, size);
+  if(soi == size)
     {
       LOG_S(WARNING) << __FUNCTION__
-                     << ": data does not start with JPEG SOI marker"
+                     << ": JPEG SOI marker not found"
                      << " (starts with 0x" << std::hex
                      << static_cast<int>(data[0]) << " 0x"
                      << static_cast<int>(size > 1 ? data[1] : 0)
                      << std::dec << "), skipping";
       return false;
+    }
+  if(soi > 0)
+    {
+      LOG_S(INFO) << __FUNCTION__
+                  << ": found JPEG SOI marker at offset " << soi
+                  << ", skipping leading bytes";
+      data += soi;
+      size -= soi;
     }
 
   // --- Decompress --------------------------------------------------------
@@ -758,11 +821,20 @@ inline std::vector<unsigned char> decode_jpeg_to_raw_pixels(
 {
   if(not data or size == 0) { return {}; }
 
-  if(not is_jpeg_data(data, size))
+  const std::size_t soi = find_jpeg_soi_offset(data, size);
+  if(soi == size)
     {
       LOG_S(WARNING) << "decode_jpeg_to_raw_pixels"
-                     << ": data does not start with JPEG SOI marker, skipping";
+                     << ": JPEG SOI marker not found, skipping";
       return {};
+    }
+  if(soi > 0)
+    {
+      LOG_S(INFO) << "decode_jpeg_to_raw_pixels"
+                  << ": found JPEG SOI marker at offset " << soi
+                  << ", skipping leading bytes";
+      data += soi;
+      size -= soi;
     }
 
   jpeg_decompress_struct dinfo{};
@@ -834,6 +906,28 @@ inline std::vector<unsigned char> decode_jpeg_to_raw_pixels(
     }
 
   return pixels;
+}
+
+inline std::vector<unsigned char> decode_pdf_jpeg_stream_to_raw_pixels(
+    unsigned char const* data, std::size_t size,
+    bool has_flate_decode,
+    jpeg_parameters const& params)
+{
+  auto pixels = decode_jpeg_to_raw_pixels(data, size, params);
+  if(not pixels.empty() || not has_flate_decode)
+    {
+      return pixels;
+    }
+
+  auto inflated = inflate_pdf_stream(data, size);
+  if(inflated.empty())
+    {
+      return {};
+    }
+
+  LOG_S(INFO) << "decode_pdf_jpeg_stream_to_raw_pixels"
+              << ": inflated /FlateDecode wrapper before libjpeg";
+  return decode_jpeg_to_raw_pixels(inflated.data(), inflated.size(), params);
 }
 
 } // namespace jpeg
