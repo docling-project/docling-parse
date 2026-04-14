@@ -145,6 +145,7 @@ namespace pdflib
       image.ccitt_k          = xobj.get_ccitt_k();
       image.ccitt_black_is_1 = xobj.get_ccitt_black_is_1();
       image.icc_components  = xobj.get_icc_components();
+      image.jbig2_globals_data = xobj.get_jbig2_globals_data();
 
       // propagate /Indexed color space data
       image.indexed_hival   = xobj.get_indexed_hival();
@@ -399,6 +400,21 @@ namespace pdflib
                 LOG_S(WARNING) << "bitmap: libjpeg decode failed "
                                << "for xobject_key=" << image.xobject_key;
               }
+          }
+        else if (std::find(image.filters.begin(), image.filters.end(),
+                           "/JBIG2Decode") != image.filters.end()
+                 and image.raw_stream_data
+                 and image.raw_stream_data->getSize() > 0)
+          {
+            LOG_S(WARNING) << "bitmap: /JBIG2Decode image has no decoded pixel data yet"
+                           << " for xobject_key=" << image.xobject_key
+                           << " raw_size=" << image.raw_stream_data->getSize()
+                           << " has_globals="
+                           << ((image.jbig2_globals_data and image.jbig2_globals_data->getSize() > 0) ? "true" : "false")
+                           << " width=" << image.image_width
+                           << " height=" << image.image_height
+                           << " bpc=" << image.bits_per_component
+                           << " image_mask=" << (image.image_mask ? "true" : "false");
           }
         else if (std::find(image.filters.begin(), image.filters.end(),
                            "/CCITTFaxDecode") != image.filters.end()

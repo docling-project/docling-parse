@@ -45,6 +45,8 @@ namespace pdflib
     // /CCITTFaxDecode parameters (from /DecodeParms)
     int                      get_ccitt_k() const;
     bool                     get_ccitt_black_is_1() const;
+    bool                     has_jbig2_globals_data() const;
+    std::shared_ptr<Buffer>  get_jbig2_globals_data() const;
 
     bool                     has_raw_stream_data() const;
     std::shared_ptr<Buffer>  get_raw_stream_data() const;
@@ -104,6 +106,7 @@ namespace pdflib
     // /CCITTFaxDecode parameters from /DecodeParms
     int  ccitt_k          = -1;    // /K: -1=Group4, 0=Group3-1D, >0=Group3-mixed
     bool ccitt_black_is_1 = false; // /BlackIs1: true means 1-bit=black
+    std::shared_ptr<Buffer> jbig2_globals_data;
   };
 
   pdf_resource<PAGE_XOBJECT_IMAGE>::pdf_resource():
@@ -114,7 +117,8 @@ namespace pdflib
     intent(),
     image_filters(),
     raw_stream_data(nullptr),
-    decoded_stream_data(nullptr)
+    decoded_stream_data(nullptr),
+    jbig2_globals_data(nullptr)
   {}
 
   pdf_resource<PAGE_XOBJECT_IMAGE>::~pdf_resource()
@@ -460,6 +464,37 @@ namespace pdflib
               {
                 ccitt_black_is_1 = parms["/BlackIs1"].get<bool>();
               }
+
+            auto qpdf_dp = qpdf_xobject_dict.getKey("/DecodeParms");
+            QPDFObjectHandle qpdf_parms =
+              qpdf_dp.isDictionary() ? qpdf_dp
+              : (qpdf_dp.isArray() and qpdf_dp.getArrayNItems() > 0 and qpdf_dp.getArrayItem(0).isDictionary())
+                  ? qpdf_dp.getArrayItem(0)
+                  : QPDFObjectHandle();
+
+            if(qpdf_parms.isDictionary() and qpdf_parms.hasKey("/JBIG2Globals"))
+              {
+                auto globals_stream = qpdf_parms.getKey("/JBIG2Globals");
+                if(globals_stream.isStream())
+                  {
+                    try
+                      {
+                        jbig2_globals_data = to_shared_ptr(globals_stream.getRawStreamData());
+                        LOG_S(INFO) << "JBIG2Globals size: "
+                                    << (jbig2_globals_data ? jbig2_globals_data->getSize() : 0)
+                                    << " bytes";
+                      }
+                    catch(std::exception const& e)
+                      {
+                        LOG_S(WARNING) << "failed to get JBIG2Globals stream data: " << e.what();
+                        jbig2_globals_data = nullptr;
+                      }
+                  }
+                else
+                  {
+                    LOG_S(WARNING) << "/JBIG2Globals present but is not a stream";
+                  }
+              }
           }
       }
 
@@ -611,6 +646,16 @@ namespace pdflib
   bool pdf_resource<PAGE_XOBJECT_IMAGE>::get_ccitt_black_is_1() const
   {
     return ccitt_black_is_1;
+  }
+
+  bool pdf_resource<PAGE_XOBJECT_IMAGE>::has_jbig2_globals_data() const
+  {
+    return (jbig2_globals_data != nullptr && jbig2_globals_data->getSize() > 0);
+  }
+
+  std::shared_ptr<Buffer> pdf_resource<PAGE_XOBJECT_IMAGE>::get_jbig2_globals_data() const
+  {
+    return jbig2_globals_data;
   }
 
   bool pdf_resource<PAGE_XOBJECT_IMAGE>::has_raw_stream_data() const

@@ -83,6 +83,7 @@ namespace pdflib
     // /CCITTFaxDecode parameters (from /DecodeParms)
     int  ccitt_k          = -1;    // /K: -1=Group4, 0=Group3-1D, >0=Group3-mixed
     bool ccitt_black_is_1 = false; // /BlackIs1 flag from DecodeParms
+    std::shared_ptr<Buffer> jbig2_globals_data;
 
     // graphics state properties
     bool               has_graphics_state = false;
