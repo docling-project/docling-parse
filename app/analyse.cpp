@@ -75,6 +75,16 @@ static int analyse_pdf(const std::string&      pdf_path,
   config.create_line_cells = false;
 
   pdflib::render_config render_cfg; // default render settings
+  std::filesystem::path good_render_dir;
+  std::filesystem::path yellow_render_dir;
+
+  if (not render_dir.empty())
+    {
+      good_render_dir   = std::filesystem::path(render_dir) / "good";
+      yellow_render_dir = std::filesystem::path(render_dir) / "yellow";
+      std::filesystem::create_directories(good_render_dir);
+      std::filesystem::create_directories(yellow_render_dir);
+    }
 
   std::unordered_set<int> flagged_pages;
 
@@ -119,15 +129,14 @@ static int analyse_pdf(const std::string&      pdf_path,
 
           if ((raw_null and decoded_null) or yellow_box)
             {
-              // Compute the rendered page path now; the file is written below
-              // once we know the full page is flagged.
+              // Compute the rendered page path now; flagged pages are written
+              // below into the yellow/ subdirectory.
               std::string rendered_page_file;
               if (not render_dir.empty())
                 {
                   std::string stem = std::filesystem::path(pdf_path).stem().string()
                     + "_p" + std::to_string(page_num) + ".png";
-                  rendered_page_file =
-                    (std::filesystem::path(render_dir) / stem).string();
+                  rendered_page_file = (yellow_render_dir / stem).string();
                 }
 
               entries.push_back({pdf_path,
@@ -143,13 +152,14 @@ static int analyse_pdf(const std::string&      pdf_path,
             }
         }
 
-      // Render and save the page image when this page has at least one issue.
-      if (page_has_issue and not render_dir.empty())
+      // Render and save every page when rendering is requested.
+      // Clean pages go to good/, flagged pages go to yellow/.
+      if (not render_dir.empty())
         {
           std::string stem = std::filesystem::path(pdf_path).stem().string()
             + "_p" + std::to_string(page_num) + ".png";
-          std::string out_path =
-            (std::filesystem::path(render_dir) / stem).string();
+          std::filesystem::path out_dir = page_has_issue ? yellow_render_dir : good_render_dir;
+          std::string out_path = (out_dir / stem).string();
 
           try
             {
@@ -276,6 +286,8 @@ int main(int argc, char* argv[])
 
       for (auto const& pdf : pdf_paths)
         {
+          std::cout << "FILE: " << pdf.string() << "\n";
+
           std::vector<ImageIssue> file_entries;
           int flagged = 0;
           try
@@ -293,7 +305,6 @@ int main(int argc, char* argv[])
               total_pdfs_with_issues++;
               total_flagged_pages += flagged;
 
-              std::cout << "FILE: " << pdf.string() << "\n";
               std::cout << "  => " << flagged << " page(s) with null-stream images:\n";
 
               int last_page = -1;

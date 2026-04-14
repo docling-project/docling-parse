@@ -386,18 +386,21 @@ namespace pdflib
             if(not decoded.empty())
               {
                 // --- TEMPORARY DEBUG: save the raw decoded pixels as a PNG ---
-                {
-                  // Strip the leading '/' that PDF keys always carry (e.g. "/Im0" → "Im0").
-                  std::string tmp_name = image.xobject_key;
-                  if(not tmp_name.empty() and tmp_name[0] == '/')
-                    {
-                      tmp_name = tmp_name.substr(1);
-                    }
-                  std::string dbg_path = "./tmp/ccitt_debug_" + tmp_name + ".png";
-
-                  LOG_S(WARNING) << "saving PNG image at: " << dbg_path;
-                  ccitt::save_debug_png(decoded, w, h, dbg_path);
-                }
+		bool export_to_png_for_debug = false; // should always be false in production!!
+		if(export_to_png_for_debug)
+		  {
+		    // Strip the leading '/' that PDF keys always carry (e.g. "/Im0" → "Im0").
+		    std::string tmp_name = image.xobject_key;
+		    if(not tmp_name.empty() and tmp_name[0] == '/')
+		      {
+			tmp_name = tmp_name.substr(1);
+		      }
+		    std::string dbg_path = "./tmp/ccitt_debug_" + tmp_name + ".png";
+		    
+		    LOG_S(WARNING) << "saving PNG image at: " << dbg_path;
+		    ccitt::save_debug_png(decoded, w, h, dbg_path);
+		  }
+		
                 pixel_data  = std::make_shared<std::vector<uint8_t>>(std::move(decoded));
                 pixel_shape = {h, w, channels};
               }
