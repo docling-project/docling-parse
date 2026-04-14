@@ -169,6 +169,40 @@ namespace pdflib
     // Returns empty string if nothing scores > 0.
     std::string fuzzy_find_font(const std::string& norm_query)
     {
+      auto is_style_token = [](const std::string& tok) -> bool
+      {
+        static const std::array<const char*, 11> kStyleTokens = {
+          "regular", "normal", "roman", "book", "medium",
+          "bold", "italic", "oblique", "light", "thin", "black"
+        };
+        return std::find(kStyleTokens.begin(), kStyleTokens.end(), tok) != kStyleTokens.end();
+      };
+      auto significant_tokens = [&](const std::vector<std::string>& toks) -> std::vector<std::string>
+      {
+        std::vector<std::string> out;
+        for (const auto& tok : toks)
+          {
+            if (is_style_token(tok))
+              {
+                continue;
+              }
+            out.push_back(tok);
+          }
+        return out;
+      };
+      auto contains_all = [](const std::vector<std::string>& haystack,
+                             const std::vector<std::string>& needles) -> bool
+      {
+        for (const auto& needle : needles)
+          {
+            if (std::find(haystack.begin(), haystack.end(), needle) == haystack.end())
+              {
+                return false;
+              }
+          }
+        return true;
+      };
+
       auto split_tokens = [](const std::string& s) -> std::vector<std::string>
       {
         std::vector<std::string> toks;
@@ -180,6 +214,12 @@ namespace pdflib
 
       const auto q_toks = split_tokens(norm_query);
       if (q_toks.empty()) { return {}; }
+      const auto q_sig_toks = significant_tokens(q_toks);
+      if (q_sig_toks.empty()) { return {}; }
+
+      // Only accept candidates that preserve the full non-style family/script
+      // signature. This rejects matches like "noto sans jp" ->
+      // "noto sans mongolian".
 
       // Minimum Jaccard similarity required to accept a fuzzy match.
       // A raw intersection score of 1 on "regular" alone yields J ≈ 0.14
@@ -194,6 +234,8 @@ namespace pdflib
       for (const auto& [norm_name, path] : font_index_)
         {
           const auto c_toks = split_tokens(norm_name);
+          const auto c_sig_toks = significant_tokens(c_toks);
+          if (not contains_all(c_sig_toks, q_sig_toks)) { continue; }
           int score = 0;
           for (const auto& qt : q_toks)
             {
@@ -687,14 +729,36 @@ namespace pdflib
                 << " font_name=`" << instr.get_font_name() << "`"
                 << " base_font=`" << instr.get_base_font() << "`";
 
+    LOG_S(INFO) << "render_text: before BLContext construction";
     BLContext ctx(image_);
+    LOG_S(INFO) << "render_text: after BLContext construction";
+
+    auto draw_bbox_fallback = [&]()
+    {
+      ctx.set_stroke_style(BLRgba32(0xFF1070C0u));
+      ctx.set_stroke_width(0.5);
+      ctx.stroke_path(bbox_path);
+    };
 
     if (face.is_valid() and size > 0.5)
       {
         if (config_.render_text)
           {
+            LOG_S(INFO) << "render_text: before BLFont construction";
             BLFont font;
-            font.create_from_face(face, static_cast<float>(size));
+            LOG_S(INFO) << "render_text: before create_from_face size=" << size;
+            const BLResult font_res = font.create_from_face(face, static_cast<float>(size));
+            LOG_S(INFO) << "render_text: after create_from_face res=" << font_res;
+            if (font_res != BL_SUCCESS)
+              {
+                LOG_S(WARNING) << "render_text: create_from_face failed"
+                               << " (BLResult=" << font_res << ")"
+                               << " font_name=`" << instr.get_font_name() << "`"
+                               << " base_font=`" << instr.get_base_font() << "`";
+                draw_bbox_fallback();
+                ctx.end();
+                return;
+              }
 
             // Build affine: text space (origin = baseline, y-down) → canvas space.
             //
@@ -711,11 +775,38 @@ namespace pdflib
                                  dn_x,  dn_y,
                                  bx,    by);
 
+            LOG_S(INFO) << "render_text: before ctx.save";
             ctx.save();
-            ctx.apply_transform(ctm);
+            LOG_S(INFO) << "render_text: before apply_transform";
+            const BLResult transform_res = ctx.apply_transform(ctm);
+            LOG_S(INFO) << "render_text: after apply_transform res=" << transform_res;
+            if (transform_res != BL_SUCCESS)
+              {
+                ctx.restore();
+                LOG_S(WARNING) << "render_text: apply_transform failed"
+                               << " (BLResult=" << transform_res << ")";
+                draw_bbox_fallback();
+                ctx.end();
+                return;
+              }
+            LOG_S(INFO) << "render_text: before set_fill_style";
             ctx.set_fill_style(BLRgba32(0xFF000000u)); // opaque black
-            ctx.fill_utf8_text(BLPoint(0.0, 0.0), font, instr.get_text().c_str());
+            LOG_S(INFO) << "render_text: before fill_utf8_text";
+            const BLResult text_res =
+              ctx.fill_utf8_text(BLPoint(0.0, 0.0), font, instr.get_text().c_str());
+            LOG_S(INFO) << "render_text: after fill_utf8_text res=" << text_res;
+            LOG_S(INFO) << "render_text: before ctx.restore";
             ctx.restore();
+
+            if (text_res != BL_SUCCESS)
+              {
+                LOG_S(WARNING) << "render_text: fill_utf8_text failed"
+                               << " (BLResult=" << text_res << ")"
+                               << " text=`" << instr.get_text() << "`";
+                draw_bbox_fallback();
+                ctx.end();
+                return;
+              }
 
             LOG_S(INFO) << "rendered `" << instr.get_text() << "`"
                         << " ctm=[[" << adv_x << "," << adv_y << "],[" << dn_x << "," << dn_y << "],[" << bx << "," << by << "]]";
