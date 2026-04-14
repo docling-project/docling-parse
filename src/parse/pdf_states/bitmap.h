@@ -336,7 +336,11 @@ namespace pdflib
                         << "decoding JPEG via libjpeg "
                         << "for xobject_key=" << image.xobject_key;
 
-            jpeg::ColorSpace cs = jpeg::icc_n_to_color_space(channels);
+            jpeg::ColorSpace cs = jpeg::to_color_space(image.color_space);
+            if (cs == jpeg::ColorSpace::Unknown and image.icc_components > 0)
+              {
+                cs = jpeg::icc_n_to_color_space(image.icc_components);
+              }
 
             jpeg::jpeg_parameters params;
             params.color_space = cs;
@@ -344,6 +348,14 @@ namespace pdflib
             params.height      = image.image_height;
             params.decode      = image.decode_array;
             params.has_decode  = image.decode_present and not image.decode_array.empty();
+
+            LOG_S(INFO) << "bitmap: JPEG fallback parameters"
+                        << " xobject_key=" << image.xobject_key
+                        << " declared_cs=" << image.color_space
+                        << " icc_components=" << image.icc_components
+                        << " requested_cs=" << jpeg::color_space_name(cs)
+                        << " size=" << params.width << "x" << params.height
+                        << " decode_len=" << params.decode.size();
 
             auto decoded = jpeg::decode_pdf_jpeg_stream_to_raw_pixels(
                 reinterpret_cast<unsigned char const*>(image.raw_stream_data->getBuffer()),
@@ -353,10 +365,34 @@ namespace pdflib
 
             if (not decoded.empty())
               {
-                const int w = image.image_width;
-                const int h = image.image_height;
-                pixel_data  = std::make_shared<std::vector<uint8_t>>(std::move(decoded));
-                pixel_shape = {h, w, channels};
+                const int w = decoded.width  > 0 ? decoded.width  : image.image_width;
+                const int h = decoded.height > 0 ? decoded.height : image.image_height;
+                const int decoded_channels = decoded.components;
+                pixel_data  = std::make_shared<std::vector<uint8_t>>(std::move(decoded.pixels));
+                pixel_shape = {h, w, decoded_channels};
+                channels    = decoded_channels;
+
+                if(decoded_channels == 1)
+                  {
+                    fmt = PIXEL_FORMAT_GRAY;
+                  }
+                else if(decoded_channels == 3)
+                  {
+                    fmt = PIXEL_FORMAT_RGB;
+                  }
+                else if(decoded_channels == 4)
+                  {
+                    fmt = PIXEL_FORMAT_CMYK;
+                  }
+                else
+                  {
+                    fmt = PIXEL_FORMAT_UNKNOWN;
+                  }
+
+                LOG_S(INFO) << "bitmap: libjpeg decode succeeded "
+                            << "for xobject_key=" << image.xobject_key
+                            << " actual_cs=" << jpeg::color_space_name(decoded.color_space)
+                            << " actual_shape=" << h << "x" << w << "x" << decoded_channels;
               }
             else
               {

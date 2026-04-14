@@ -884,7 +884,11 @@ namespace pdflib
 
     if ((not instr.has_data()) or sh <= 0 or sw <= 0 or sc < 1)
       {
-        LOG_S(WARNING) << "No pixel data — draw a semi-transparent yellow placeholder.";
+        LOG_S(WARNING) << "render_bitmap: no pixel data for xobject_key="
+                       << instr.get_key()
+                       << " shape=" << sh << "x" << sw << "x" << sc
+                       << " has_data=" << (instr.has_data() ? "true" : "false")
+                       << " — drawing semi-transparent yellow placeholder";
         // No pixel data — draw a semi-transparent yellow placeholder.
         ctx.set_fill_style(BLRgba32(0x66FFFF00u)); // A=40%, R=255, G=255, B=0
         ctx.fill_rect(dst_rect);

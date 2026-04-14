@@ -66,6 +66,17 @@ public:
   bool image_mask = false;
 };
 
+class decoded_jpeg_result {
+public:
+  std::vector<unsigned char> pixels;
+  int width = 0;
+  int height = 0;
+  int components = 0;
+  ColorSpace color_space = ColorSpace::Unknown;
+
+  bool empty() const { return pixels.empty(); }
+};
+
 // ---------------------------------------------------------------------------
 // Custom libjpeg error handler that longjmp's instead of calling exit()
 // ---------------------------------------------------------------------------
@@ -815,7 +826,7 @@ inline std::vector<unsigned char> write_jpeg_from_raw_pixels_to_memory(
 // /DCTDecode streams when QPDF cannot provide a pre-decoded buffer (e.g.
 // in thread-safe page mode).
 // ---------------------------------------------------------------------------
-inline std::vector<unsigned char> decode_jpeg_to_raw_pixels(
+inline decoded_jpeg_result decode_jpeg_to_raw_pixels(
     unsigned char const* data, std::size_t size,
     jpeg_parameters const& params)
 {
@@ -837,78 +848,133 @@ inline std::vector<unsigned char> decode_jpeg_to_raw_pixels(
       size -= soi;
     }
 
-  jpeg_decompress_struct dinfo{};
-  jpeg_error_longjmp jerr{};
-  dinfo.err = jpeg_std_error(&jerr);
-  jerr.error_exit = jpeg_error_exit_longjmp;
-  jpeg_create_decompress(&dinfo);
+  auto try_decode = [&](bool force_output_cs,
+                        J_COLOR_SPACE requested_out_cs,
+                        char const* attempt_name) -> decoded_jpeg_result
+  {
+    jpeg_decompress_struct dinfo{};
+    jpeg_error_longjmp jerr{};
+    dinfo.err = jpeg_std_error(&jerr);
+    jerr.error_exit = jpeg_error_exit_longjmp;
+    jpeg_create_decompress(&dinfo);
 
-  if(setjmp(jerr.jmp))
-    {
-      jpeg_destroy_decompress(&dinfo);
-      return {};
-    }
+    if(setjmp(jerr.jmp))
+      {
+        LOG_S(WARNING) << "decode_jpeg_to_raw_pixels"
+                       << ": decode attempt failed: " << attempt_name;
+        jpeg_destroy_decompress(&dinfo);
+        return {};
+      }
 
-  jpeg_mem_src(&dinfo, const_cast<unsigned char*>(data),
-               static_cast<unsigned long>(size));
+    jpeg_mem_src(&dinfo, const_cast<unsigned char*>(data),
+                 static_cast<unsigned long>(size));
 
-  if(JPEG_HEADER_OK != jpeg_read_header(&dinfo, TRUE))
-    {
-      jpeg_destroy_decompress(&dinfo);
-      return {};
-    }
+    if(JPEG_HEADER_OK != jpeg_read_header(&dinfo, TRUE))
+      {
+        LOG_S(WARNING) << "decode_jpeg_to_raw_pixels"
+                       << ": jpeg_read_header failed for attempt " << attempt_name;
+        jpeg_destroy_decompress(&dinfo);
+        return {};
+      }
 
+    LOG_S(INFO) << "decode_jpeg_to_raw_pixels"
+                << ": attempt=" << attempt_name
+                << " jpeg_color_space=" << dinfo.jpeg_color_space
+                << " num_components=" << dinfo.num_components
+                << " image_width=" << dinfo.image_width
+                << " image_height=" << dinfo.image_height
+                << " requested_pdf_cs=" << color_space_name(params.color_space);
+
+    if(force_output_cs)
+      {
+        dinfo.out_color_space = requested_out_cs;
+      }
+
+    LOG_S(INFO) << "decode_jpeg_to_raw_pixels"
+                << ": attempt=" << attempt_name
+                << " out_color_space(before start)=" << dinfo.out_color_space;
+
+    jpeg_start_decompress(&dinfo);
+
+    decoded_jpeg_result result;
+    result.width      = static_cast<int>(dinfo.output_width);
+    result.height     = static_cast<int>(dinfo.output_height);
+    result.components = dinfo.output_components;
+    result.color_space = (result.components == 1) ? ColorSpace::Gray
+                       : (result.components == 3) ? ColorSpace::RGB
+                       : (result.components == 4) ? ColorSpace::CMYK
+                                                  : ColorSpace::Unknown;
+
+    const std::size_t stride =
+      static_cast<std::size_t>(result.width) * static_cast<std::size_t>(result.components);
+
+    LOG_S(INFO) << "decode_jpeg_to_raw_pixels"
+                << ": attempt=" << attempt_name
+                << " decompressed w=" << result.width
+                << " h=" << result.height
+                << " ncomp=" << result.components
+                << " inferred_cs=" << color_space_name(result.color_space)
+                << " out_color_space(after start)=" << dinfo.out_color_space;
+
+    result.pixels.resize(static_cast<std::size_t>(result.height) * stride);
+
+    while(dinfo.output_scanline < dinfo.output_height)
+      {
+        unsigned char* row = &result.pixels[dinfo.output_scanline * stride];
+        JSAMPROW rows[1] = { row };
+        jpeg_read_scanlines(&dinfo, rows, 1);
+      }
+
+    jpeg_finish_decompress(&dinfo);
+    jpeg_destroy_decompress(&dinfo);
+
+    if(params.has_decode and not params.decode.empty() and
+       static_cast<int>(params.decode.size()) >= 2 * result.components)
+      {
+        for(std::size_t y = 0; y < static_cast<std::size_t>(result.height); ++y)
+          {
+            unsigned char* row = &result.pixels[y * stride];
+            for(std::size_t x = 0; x < static_cast<std::size_t>(result.width); ++x)
+              {
+                for(int c = 0; c < result.components; ++c)
+                  {
+                    double dmin = params.decode[2 * c + 0];
+                    double dmax = params.decode[2 * c + 1];
+                    row[x * result.components + c] = apply_decode_component(
+                        row[x * result.components + c], dmin, dmax);
+                  }
+              }
+          }
+      }
+
+    return result;
+  };
+
+  J_COLOR_SPACE requested_out_cs = JCS_UNKNOWN;
+  bool have_requested_out_cs = true;
   switch(params.color_space)
     {
-      case ColorSpace::Gray: { dinfo.out_color_space = JCS_GRAYSCALE; break; }
-      case ColorSpace::RGB:  { dinfo.out_color_space = JCS_RGB;       break; }
-      case ColorSpace::CMYK: { dinfo.out_color_space = JCS_CMYK;      break; }
-      default: { break; }
+      case ColorSpace::Gray: { requested_out_cs = JCS_GRAYSCALE; break; }
+      case ColorSpace::RGB:  { requested_out_cs = JCS_RGB;       break; }
+      case ColorSpace::CMYK: { requested_out_cs = JCS_CMYK;      break; }
+      default: { have_requested_out_cs = false; break; }
     }
 
-  jpeg_start_decompress(&dinfo);
-
-  const int         ncomp  = dinfo.output_components;
-  const std::size_t w      = dinfo.output_width;
-  const std::size_t h      = dinfo.output_height;
-  const std::size_t stride = w * static_cast<std::size_t>(ncomp);
-
-  std::vector<unsigned char> pixels(h * stride);
-
-  while(dinfo.output_scanline < dinfo.output_height)
+  if(have_requested_out_cs)
     {
-      unsigned char* row = &pixels[dinfo.output_scanline * stride];
-      JSAMPROW rows[1] = { row };
-      jpeg_read_scanlines(&dinfo, rows, 1);
-    }
-
-  jpeg_finish_decompress(&dinfo);
-  jpeg_destroy_decompress(&dinfo);
-
-  // Apply PDF /Decode mapping if present
-  if(params.has_decode and not params.decode.empty() and
-     static_cast<int>(params.decode.size()) >= 2 * ncomp)
-    {
-      for(std::size_t y = 0; y < h; ++y)
+      auto decoded = try_decode(true, requested_out_cs, "requested-pdf-color-space");
+      if(not decoded.empty())
         {
-          unsigned char* row = &pixels[y * stride];
-          for(std::size_t x = 0; x < w; ++x)
-            {
-              for(int c = 0; c < ncomp; ++c)
-                {
-                  double dmin = params.decode[2 * c + 0];
-                  double dmax = params.decode[2 * c + 1];
-                  row[x * ncomp + c] = apply_decode_component(
-                      row[x * ncomp + c], dmin, dmax);
-                }
-            }
+          return decoded;
         }
     }
 
-  return pixels;
+  LOG_S(INFO) << "decode_jpeg_to_raw_pixels"
+              << ": retrying with native libjpeg output color space";
+  return try_decode(false, JCS_UNKNOWN, "native-libjpeg");
 }
 
-inline std::vector<unsigned char> decode_pdf_jpeg_stream_to_raw_pixels(
+inline decoded_jpeg_result decode_pdf_jpeg_stream_to_raw_pixels(
     unsigned char const* data, std::size_t size,
     bool has_flate_decode,
     jpeg_parameters const& params)
