@@ -997,6 +997,8 @@ namespace pdflib
     const int sh = src_shape[0];
     const int sw = src_shape[1];
     const int sc = src_shape[2];
+    const bool image_mask = instr.is_image_mask();
+    const auto fill_rgb = instr.get_rgb_filling();
 
     BLContext ctx(image_);
     const bool axis_aligned = is_axis_aligned(q);
@@ -1058,10 +1060,18 @@ namespace pdflib
           for (int col = 0; col < sw; ++col)
             {
               const int idx = (row * sw + col) * sc;
-              const uint8_t r = src_data->at(idx);
-              const uint8_t g = (sc >= 2) ? src_data->at(idx + 1) : r;
-              const uint8_t b = (sc >= 3) ? src_data->at(idx + 2) : r;
-              const uint8_t a = (sc >= 4) ? src_data->at(idx + 3) : 0xFFu;
+              uint8_t r = src_data->at(idx);
+              uint8_t g = (sc >= 2) ? src_data->at(idx + 1) : r;
+              uint8_t b = (sc >= 3) ? src_data->at(idx + 2) : r;
+              uint8_t a = (sc >= 4) ? src_data->at(idx + 3) : 0xFFu;
+
+              if (image_mask)
+                {
+                  a = static_cast<uint8_t>(0xFFu - src_data->at(idx));
+                  r = static_cast<uint8_t>(fill_rgb[0]);
+                  g = static_cast<uint8_t>(fill_rgb[1]);
+                  b = static_cast<uint8_t>(fill_rgb[2]);
+                }
 
               // Store as premultiplied ARGB (required by BL_FORMAT_PRGB32).
               const uint32_t pm_r = static_cast<uint32_t>(r) * a / 255u;

@@ -582,6 +582,8 @@ namespace pdflib
                               std::move(pixel_data),
                               pixel_shape,
                               fmt,
+                              image.image_mask,
+                              image.rgb_filling_ops,
                               image.r_x0, image.r_y0,
                               image.r_x1, image.r_y1,
                               image.r_x2, image.r_y2,

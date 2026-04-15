@@ -189,6 +189,8 @@ namespace pdflib
 		       std::shared_ptr<std::vector<uint8_t> > data,
                        std::array<int, 3> shape,
                        pixel_format fmt,
+                       bool image_mask,
+                       std::array<int, 3> rgb_filling,
                        double r_x0, double r_y0,
                        double r_x1, double r_y1,
                        double r_x2, double r_y2,
@@ -197,6 +199,8 @@ namespace pdflib
       data(std::move(data)),
       shape(shape),
       fmt(fmt),
+      image_mask(image_mask),
+      rgb_filling(rgb_filling),
       r_x0(r_x0), r_y0(r_y0),
       r_x1(r_x1), r_y1(r_y1),
       r_x2(r_x2), r_y2(r_y2),
@@ -207,6 +211,8 @@ namespace pdflib
     const std::shared_ptr<std::vector<uint8_t> >& get_data() const { return data; }
     const std::array<int, 3>& get_shape() const { return shape; }
     pixel_format get_pixel_format() const { return fmt; }
+    bool is_image_mask() const { return image_mask; }
+    const std::array<int, 3>& get_rgb_filling() const { return rgb_filling; }
 
     bool has_data() const { return (data) and (not data->empty()); }
 
@@ -226,6 +232,8 @@ namespace pdflib
     const std::shared_ptr<std::vector<uint8_t> > data;
     const std::array<int, 3> shape;
     const pixel_format fmt;
+    const bool image_mask;
+    const std::array<int, 3> rgb_filling;
 
     const double r_x0;
     const double r_y0;
