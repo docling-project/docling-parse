@@ -36,9 +36,8 @@ add_library(pdfium_jbig2 STATIC
 target_include_directories(pdfium_jbig2
     PRIVATE
         ${PDFIUM_JBIG2_ROOT}
+        $<TARGET_PROPERTY:loguru,INTERFACE_INCLUDE_DIRECTORIES>
 )
-
-target_link_libraries(pdfium_jbig2 PRIVATE loguru)
 
 set_property(TARGET pdfium_jbig2 PROPERTY CXX_STANDARD 20)
 set_target_properties(pdfium_jbig2 PROPERTIES POSITION_INDEPENDENT_CODE ON)

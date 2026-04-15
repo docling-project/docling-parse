@@ -15,6 +15,7 @@
 #include <utility>
 #include <vector>
 
+#define LOGURU_WITH_STREAMS 1
 #include <loguru.hpp>
 
 #include "core/fxcodec/jbig2/JBig2_ArithDecoder.h"
