@@ -4,6 +4,7 @@
 #define PDF_BITMAP_STATE_H
 
 #include <parse/utils/ccitt/ccitt_utils.h>
+#include <third_party/pdfium_jbig2.h>
 
 namespace pdflib
 {
@@ -73,7 +74,7 @@ namespace pdflib
   {
     if(not config.keep_bitmaps) { LOG_S(WARNING) << "skipping " << __FUNCTION__; return; }
 
-    LOG_S(INFO) << "starting to do " << __FUNCTION__;
+    LOG_S(INFO) << "starting to do " << __FUNCTION__ << " for xobject_key=" << xobj.get_key();
     
     page_item<PAGE_IMAGE> image;
 
@@ -134,7 +135,8 @@ namespace pdflib
       LOG_S(INFO) << "image with ("
 		  << image.x0 << ", " << image.y0 << ") x ("
 		  << image.x1 << ", " << image.y1 << "): "
-		  << image.raw_stream_data;
+		  << image.raw_stream_data
+		  << " xobject_key=" << image.xobject_key;
 
       // propagate PDF semantics for JPEG correction
       image.decode_present  = xobj.has_decode_array();
@@ -406,15 +408,69 @@ namespace pdflib
                  and image.raw_stream_data
                  and image.raw_stream_data->getSize() > 0)
           {
-            LOG_S(WARNING) << "bitmap: /JBIG2Decode image has no decoded pixel data yet"
-                           << " for xobject_key=" << image.xobject_key
-                           << " raw_size=" << image.raw_stream_data->getSize()
-                           << " has_globals="
-                           << ((image.jbig2_globals_data and image.jbig2_globals_data->getSize() > 0) ? "true" : "false")
-                           << " width=" << image.image_width
-                           << " height=" << image.image_height
-                           << " bpc=" << image.bits_per_component
-                           << " image_mask=" << (image.image_mask ? "true" : "false");
+            const int w = image.image_width;
+            const int h = image.image_height;
+
+            const auto* page_buf =
+                reinterpret_cast<const uint8_t*>(image.raw_stream_data->getBuffer());
+            const std::size_t page_size = image.raw_stream_data->getSize();
+
+            const uint8_t*  globals_buf  = nullptr;
+            std::size_t     globals_size = 0;
+            if (image.jbig2_globals_data and image.jbig2_globals_data->getSize() > 0)
+              {
+                globals_buf  = reinterpret_cast<const uint8_t*>(
+                    image.jbig2_globals_data->getBuffer());
+                globals_size = image.jbig2_globals_data->getSize();
+              }
+
+            LOG_S(INFO) << "bitmap: /JBIG2Decode image is getting decoded"
+                        << " for xobject_key=" << image.xobject_key
+                        << " raw_size=" << image.raw_stream_data->getSize()
+                        << " has_globals="
+                        << ((image.jbig2_globals_data and image.jbig2_globals_data->getSize() > 0) ? "true" : "false")
+                        << " width=" << image.image_width
+                        << " height=" << image.image_height
+                        << " bpc=" << image.bits_per_component
+                        << " image_mask=" << (image.image_mask ? "true" : "false");
+
+            auto bits = jbig2_decode(
+                {page_buf,    page_size},
+                {globals_buf, globals_size},
+                static_cast<uint32_t>(w),
+                static_cast<uint32_t>(h));
+
+            if (not bits.empty())
+              {
+                // Expand 1bpp packed bitmap → 8bpp grayscale (0x00=black, 0xFF=white).
+                // JBIG2 convention: bit 0 = white, bit 1 = black; MSB = leftmost pixel.
+                const uint32_t pitch = (static_cast<uint32_t>(w) + 7u) / 8u;
+                auto expanded = std::make_shared<std::vector<uint8_t>>();
+                expanded->reserve(static_cast<std::size_t>(w) * h);
+                for (int row = 0; row < h; ++row)
+                  {
+                    for (int col = 0; col < w; ++col)
+                      {
+                        const uint8_t byte = bits[row * pitch + col / 8];
+                        const bool    black = (byte >> (7 - (col % 8))) & 1u;
+                        expanded->push_back(black ? 0x00u : 0xFFu);
+                      }
+                  }
+
+                fmt         = PIXEL_FORMAT_GRAY;
+                pixel_data  = std::move(expanded);
+                pixel_shape = {h, w, 1};
+
+                LOG_S(INFO) << "bitmap: /JBIG2Decode decode succeeded"
+                            << " for xobject_key=" << image.xobject_key
+                            << " shape=" << h << "x" << w
+                            << " pixel_data_size=" << pixel_data->size();
+              }
+            else
+              {
+                LOG_S(WARNING) << "bitmap: /JBIG2Decode decode failed"
+                               << " for xobject_key=" << image.xobject_key;
+              }
           }
         else if (std::find(image.filters.begin(), image.filters.end(),
                            "/CCITTFaxDecode") != image.filters.end()

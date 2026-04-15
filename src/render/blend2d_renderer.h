@@ -969,7 +969,7 @@ namespace pdflib
 
   inline void renderer<BLEND2D>::render_bitmap(bitmap_instruction& instr)
   {
-    LOG_S(INFO) << __FUNCTION__;
+    LOG_S(INFO) << __FUNCTION__ << " for xobject_key=" << instr.get_key();
 
     if (shape_[0] == 0 or shape_[1] == 0)
       {

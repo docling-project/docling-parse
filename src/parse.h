@@ -41,6 +41,9 @@
 // code to locate pdf-resources (eg fonts)
 #include <resources.h>
 
+// third-party includes
+// #include <third_party/pdfium_jbig2.h>
+
 // specifics of parser
 #include <parse/enums.h>
 #include <parse/config.h>
