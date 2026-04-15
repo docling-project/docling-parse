@@ -4,6 +4,9 @@
 
 #include "third_party/pdfium_jbig2.h"
 
+#include <cstring>
+#include <iomanip>   // debug only — remove when hex-dump logging is removed
+#include <sstream>   // debug only — remove when hex-dump logging is removed
 #include <span>
 #include <vector>
 
@@ -12,6 +15,18 @@
 #include "core/fxcodec/jbig2/JBig2_DocumentContext.h"
 #include "core/fxcodec/jbig2/jbig2_decoder.h"
 #include "core/fxcrt/span.h"
+
+// DEBUG ONLY — remove together with <iomanip>/<sstream> includes above
+static std::string hex_preview(std::span<const uint8_t> data, std::size_t n = 16) {
+    std::ostringstream oss;
+    oss << std::hex << std::setfill('0');
+    for (std::size_t i = 0; i < std::min(n, data.size()); ++i) {
+        if (i) { oss << ' '; }
+        oss << std::setw(2) << static_cast<unsigned>(data[i]);
+    }
+    if (data.size() > n) { oss << " ..."; }
+    return oss.str();
+}
 
 static const char* fxcodec_status_name(FXCODEC_STATUS s) {
     switch (s) {
@@ -32,16 +47,28 @@ std::vector<uint8_t> jbig2_decode(
                 << " height=" << height
                 << " page_size=" << page_data.size()
                 << " globals_size=" << globals_data.size();
+    // DEBUG: first-bytes dump — remove when decode failure is resolved
+    LOG_S(INFO) << "jbig2_decode: page_data[0..63]    = " << hex_preview(page_data, 64);
+    LOG_S(INFO) << "jbig2_decode: globals_data[0..63] = " << hex_preview(globals_data, 64);
 
     if (width == 0 or height == 0 or page_data.empty()) {
         LOG_S(WARNING) << "jbig2_decode: rejected — zero width/height or empty page_data";
         return {};
     }
 
-    const uint32_t pitch    = (width + 7u) / 8u;
-    const std::size_t total = static_cast<std::size_t>(pitch) * height;
+    const uint32_t pitch         = (width + 7u) / 8u;
+    // PDFium's external-buffer image path requires a 4-byte-aligned stride.
+    // Some JBIG2 image widths produce a packed pitch that is not word-aligned
+    // (for example, width=325 -> pitch=41), which makes PDFium reject the
+    // destination buffer during the page-information segment. Decode into an
+    // aligned buffer first, then repack to the tight JBIG2 pitch before
+    // returning to the caller.
+    const uint32_t aligned_pitch = (pitch + 3u) & ~3u;
+    const std::size_t total      = static_cast<std::size_t>(aligned_pitch) * height;
 
-    LOG_S(INFO) << "jbig2_decode: pitch=" << pitch << " total_bytes=" << total;
+    LOG_S(INFO) << "jbig2_decode: pitch=" << pitch
+                << " aligned_pitch=" << aligned_pitch
+                << " total_bytes=" << total;
 
     std::vector<uint8_t> dest(total, 0xff);
 
@@ -63,7 +90,7 @@ std::vector<uint8_t> jbig2_decode(
         width,        height,
         src_span,     /*src_key=*/   0,
         global_span,  /*global_key=*/0,
-        dest_span,    pitch,
+        dest_span,    aligned_pitch,
         /*pPause=*/   nullptr,
         /*reject_large_regions_when_fuzzing=*/false);
 
@@ -85,5 +112,18 @@ std::vector<uint8_t> jbig2_decode(
 
     LOG_S(INFO) << "jbig2_decode: success after " << iteration << " continuation(s)"
                 << " total_bytes=" << total;
-    return dest;
+    if (aligned_pitch == pitch) {
+        return dest;
+    }
+
+    std::vector<uint8_t> packed(static_cast<std::size_t>(pitch) * height, 0xff);
+    for (std::uint32_t row = 0; row < height; ++row) {
+        // The caller expects tightly packed 1bpp rows. Only the decode buffer
+        // needs the PDFium-required padding.
+        std::memcpy(
+            packed.data() + static_cast<std::size_t>(row) * pitch,
+            dest.data() + static_cast<std::size_t>(row) * aligned_pitch,
+            pitch);
+    }
+    return packed;
 }

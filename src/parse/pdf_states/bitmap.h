@@ -405,15 +405,28 @@ namespace pdflib
           }
         else if (std::find(image.filters.begin(), image.filters.end(),
                            "/JBIG2Decode") != image.filters.end()
-                 and image.raw_stream_data
-                 and image.raw_stream_data->getSize() > 0)
+                 and ((image.raw_stream_data and image.raw_stream_data->getSize() > 0)
+                      or (image.decoded_stream_data and image.decoded_stream_data->getSize() > 0)))
           {
             const int w = image.image_width;
             const int h = image.image_height;
 
+            std::shared_ptr<Buffer> page_stream_data;
+            const char*             page_stream_source = "none";
+            if (image.decoded_stream_data and image.decoded_stream_data->getSize() > 0)
+              {
+                page_stream_data   = image.decoded_stream_data;
+                page_stream_source = "decoded";
+              }
+            else if (image.raw_stream_data and image.raw_stream_data->getSize() > 0)
+              {
+                page_stream_data   = image.raw_stream_data;
+                page_stream_source = "raw";
+              }
+
             const auto* page_buf =
-                reinterpret_cast<const uint8_t*>(image.raw_stream_data->getBuffer());
-            const std::size_t page_size = image.raw_stream_data->getSize();
+                reinterpret_cast<const uint8_t*>(page_stream_data->getBuffer());
+            const std::size_t page_size = page_stream_data->getSize();
 
             const uint8_t*  globals_buf  = nullptr;
             std::size_t     globals_size = 0;
@@ -426,7 +439,8 @@ namespace pdflib
 
             LOG_S(INFO) << "bitmap: /JBIG2Decode image is getting decoded"
                         << " for xobject_key=" << image.xobject_key
-                        << " raw_size=" << image.raw_stream_data->getSize()
+                        << " page_stream_source=" << page_stream_source
+                        << " page_size=" << page_size
                         << " has_globals="
                         << ((image.jbig2_globals_data and image.jbig2_globals_data->getSize() > 0) ? "true" : "false")
                         << " width=" << image.image_width

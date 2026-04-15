@@ -167,8 +167,8 @@ namespace pdflib
       json_xobject_dict = to_json(qpdf_xobject_dict);
     }
 
-    init_image_properties();
     init_filters();
+    init_image_properties();
     init_stream_data();
   }
 
@@ -447,15 +447,43 @@ namespace pdflib
     if(json_xobject_dict.count("/DecodeParms"))
       {
         auto& dp = json_xobject_dict["/DecodeParms"];
+        int decode_parms_index = -1;
+        for(std::size_t i = 0; i < image_filters.size(); ++i)
+          {
+            if(image_filters[i] == "/JBIG2Decode" or image_filters[i] == "/CCITTFaxDecode")
+              {
+                decode_parms_index = static_cast<int>(i);
+                break;
+              }
+          }
+        LOG_S(INFO) << "DecodeParms lookup for xobject_key=" << xobject_key
+                    << " filter_index=" << decode_parms_index
+                    << " filters=" << nlohmann::json(image_filters).dump();
+
         // DecodeParms can be a dict or an array of dicts (one per filter).
-        // For a single /CCITTFaxDecode we always look in the first (or only) dict.
-        auto* parms_ptr = dp.is_object() ? &dp
-                        : (dp.is_array() and not dp.empty() and dp[0].is_object())
-                            ? &dp[0]
-                            : nullptr;
+        // When it is an array, choose the object corresponding to the relevant
+        // filter instead of always assuming index 0.
+        auto* parms_ptr = dp.is_object() ? &dp : nullptr;
+        if(dp.is_array())
+          {
+            if(decode_parms_index >= 0
+               and decode_parms_index < static_cast<int>(dp.size())
+               and dp[decode_parms_index].is_object())
+              {
+                parms_ptr = &dp[decode_parms_index];
+              }
+            else if(not dp.empty() and dp[0].is_object())
+              {
+                LOG_S(WARNING) << "DecodeParms array missing dictionary at filter index "
+                               << decode_parms_index << ", falling back to index 0";
+                parms_ptr = &dp[0];
+              }
+          }
         if(parms_ptr)
           {
             auto& parms = *parms_ptr;
+            LOG_S(INFO) << "selected DecodeParms for xobject_key=" << xobject_key
+                        << ": " << parms.dump();
             if(parms.count("/K") and parms["/K"].is_number())
               {
                 ccitt_k = parms["/K"].get<int>();
@@ -466,11 +494,26 @@ namespace pdflib
               }
 
             auto qpdf_dp = qpdf_xobject_dict.getKey("/DecodeParms");
-            QPDFObjectHandle qpdf_parms =
-              qpdf_dp.isDictionary() ? qpdf_dp
-              : (qpdf_dp.isArray() and qpdf_dp.getArrayNItems() > 0 and qpdf_dp.getArrayItem(0).isDictionary())
-                  ? qpdf_dp.getArrayItem(0)
-                  : QPDFObjectHandle();
+            QPDFObjectHandle qpdf_parms;
+            if(qpdf_dp.isDictionary())
+              {
+                qpdf_parms = qpdf_dp;
+              }
+            else if(qpdf_dp.isArray())
+              {
+                if(decode_parms_index >= 0
+                   and decode_parms_index < qpdf_dp.getArrayNItems()
+                   and qpdf_dp.getArrayItem(decode_parms_index).isDictionary())
+                  {
+                    qpdf_parms = qpdf_dp.getArrayItem(decode_parms_index);
+                  }
+                else if(qpdf_dp.getArrayNItems() > 0 and qpdf_dp.getArrayItem(0).isDictionary())
+                  {
+                    LOG_S(WARNING) << "QPDF DecodeParms array missing dictionary at filter index "
+                                   << decode_parms_index << ", falling back to index 0";
+                    qpdf_parms = qpdf_dp.getArrayItem(0);
+                  }
+              }
 
             if(qpdf_parms.isDictionary() and qpdf_parms.hasKey("/JBIG2Globals"))
               {
@@ -479,15 +522,32 @@ namespace pdflib
                   {
                     try
                       {
-                        jbig2_globals_data = to_shared_ptr(globals_stream.getRawStreamData());
+                        jbig2_globals_data = to_shared_ptr(globals_stream.getStreamData());
+                        LOG_S(INFO) << "JBIG2Globals source=decoded for xobject_key="
+                                    << xobject_key;
                         LOG_S(INFO) << "JBIG2Globals size: "
                                     << (jbig2_globals_data ? jbig2_globals_data->getSize() : 0)
                                     << " bytes";
                       }
                     catch(std::exception const& e)
                       {
-                        LOG_S(WARNING) << "failed to get JBIG2Globals stream data: " << e.what();
-                        jbig2_globals_data = nullptr;
+                        LOG_S(WARNING) << "failed to get decoded JBIG2Globals stream data: "
+                                       << e.what() << " -- falling back to raw stream data";
+                        try
+                          {
+                            jbig2_globals_data = to_shared_ptr(globals_stream.getRawStreamData());
+                            LOG_S(INFO) << "JBIG2Globals source=raw for xobject_key="
+                                        << xobject_key;
+                            LOG_S(INFO) << "JBIG2Globals size: "
+                                        << (jbig2_globals_data ? jbig2_globals_data->getSize() : 0)
+                                        << " bytes";
+                          }
+                        catch(std::exception const& raw_e)
+                          {
+                            LOG_S(WARNING) << "failed to get raw JBIG2Globals stream data: "
+                                           << raw_e.what();
+                            jbig2_globals_data = nullptr;
+                          }
                       }
                   }
                 else

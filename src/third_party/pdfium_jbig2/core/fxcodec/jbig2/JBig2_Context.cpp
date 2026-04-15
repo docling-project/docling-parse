@@ -8,10 +8,14 @@
 
 #include <algorithm>
 #include <array>
+#include <iomanip>
 #include <limits>
 #include <list>
+#include <sstream>
 #include <utility>
 #include <vector>
+
+#include <loguru.hpp>
 
 #include "core/fxcodec/jbig2/JBig2_ArithDecoder.h"
 #include "core/fxcodec/jbig2/JBig2_BitStream.h"
@@ -43,6 +47,21 @@ JBig2ComposeOp GetRegionInfoComposeOp(const JBig2RegionInfo& ri) {
     return JBig2ComposeOp::JBIG2_COMPOSE_REPLACE;
   }
   return static_cast<JBig2ComposeOp>(ri.flags & 0x03);
+}
+
+std::string HexPreview(pdfium::span<const uint8_t> data, std::size_t n = 16) {
+  std::ostringstream oss;
+  oss << std::hex << std::setfill('0');
+  for (std::size_t i = 0; i < std::min(n, data.size()); ++i) {
+    if (i) {
+      oss << ' ';
+    }
+    oss << std::setw(2) << static_cast<unsigned>(data[i]);
+  }
+  if (data.size() > n) {
+    oss << " ...";
+  }
+  return oss.str();
 }
 
 }  // namespace
@@ -91,17 +110,32 @@ JBig2_Result CJBig2_Context::DecodeSequential(PauseIndicatorIface* pPause) {
   }
 
   while (stream_->getByteLeft() >= JBIG2_MIN_SEGMENT_SIZE) {
+    LOG_S(INFO) << "jbig2: decode loop"
+                << " offset=" << stream_->getOffset()
+                << " bytes_left=" << stream_->getByteLeft()
+                << " next_bytes="
+                << HexPreview(stream_->getBufSpan().subspan(stream_->getOffset()), 24);
     JBig2_Result nRet;
     if (!segment_) {
       segment_ = std::make_unique<CJBig2_Segment>();
       nRet = ParseSegmentHeader(segment_.get());
       if (nRet != JBig2_Result::kSuccess) {
+        LOG_S(WARNING) << "jbig2: ParseSegmentHeader failed"
+                       << " offset=" << stream_->getOffset()
+                       << " bytes_left=" << stream_->getByteLeft()
+                       << " next_bytes="
+                       << HexPreview(stream_->getBufSpan().subspan(stream_->getOffset()), 24);
         segment_.reset();
         return nRet;
       }
       offset_ = stream_->getOffset();
     }
     nRet = ParseSegmentData(segment_.get(), pPause);
+    LOG_S(INFO) << "jbig2: ParseSegmentData returned"
+                << " result=" << static_cast<int>(nRet)
+                << " processing_status=" << static_cast<int>(processing_status_)
+                << " stream_offset=" << stream_->getOffset()
+                << " bytes_left=" << stream_->getByteLeft();
     if (processing_status_ == FXCODEC_STATUS::kDecodeToBeContinued) {
       pause_step_ = 2;
       return JBig2_Result::kSuccess;
@@ -122,8 +156,14 @@ JBig2_Result CJBig2_Context::DecodeSequential(PauseIndicatorIface* pPause) {
       }
       offset_ = new_offset.ValueOrDie();
       stream_->setOffset(offset_);
+      LOG_S(INFO) << "jbig2: advanced to next segment"
+                  << " offset=" << offset_
+                  << " bytes_left=" << stream_->getByteLeft();
     } else {
       stream_->addOffset(4);
+      LOG_S(INFO) << "jbig2: advanced past unknown-length segment"
+                  << " offset=" << stream_->getOffset()
+                  << " bytes_left=" << stream_->getByteLeft();
     }
     segment_list_.push_back(std::move(segment_));
     if (stream_->getByteLeft() > 0 && page_ && pPause &&
@@ -294,6 +334,13 @@ JBig2_Result CJBig2_Context::ParseSegmentHeader(CJBig2_Segment* pSegment) {
   pSegment->key_ = stream_->getKey();
   pSegment->data_offset_ = stream_->getOffset();
   pSegment->state_ = JBIG2_SEGMENT_DATA_UNPARSED;
+  LOG_S(INFO) << "jbig2: parsed segment header"
+              << " number=" << pSegment->number_
+              << " type=" << static_cast<int>(pSegment->flags_.s.type)
+              << " page_association=" << pSegment->page_association_
+              << " data_length=" << pSegment->data_length_
+              << " referred_to_segment_count=" << pSegment->referred_to_segment_count_
+              << " data_offset=" << pSegment->data_offset_;
   return JBig2_Result::kSuccess;
 }
 
@@ -310,6 +357,12 @@ JBig2_Result CJBig2_Context::ParseSegmentData(CJBig2_Segment* pSegment,
 JBig2_Result CJBig2_Context::ProcessingParseSegmentData(
     CJBig2_Segment* pSegment,
     PauseIndicatorIface* pPause) {
+  LOG_S(INFO) << "jbig2: processing segment"
+              << " number=" << pSegment->number_
+              << " type=" << static_cast<int>(pSegment->flags_.s.type)
+              << " page_association=" << pSegment->page_association_
+              << " data_length=" << pSegment->data_length_
+              << " in_page=" << (in_page_ ? "true" : "false");
   switch (pSegment->flags_.s.type) {
     case 0:
       return ParseSymbolDict(pSegment);
