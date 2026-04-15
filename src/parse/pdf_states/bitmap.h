@@ -456,17 +456,32 @@ namespace pdflib
 
             if (not bits.empty())
               {
-                // Expand 1bpp packed bitmap → 8bpp grayscale (0x00=black, 0xFF=white).
-                // JBIG2 convention: bit 0 = white, bit 1 = black; MSB = leftmost pixel.
+                // Expand 1bpp packed bitmap → 8bpp grayscale.
+                // For ordinary JBIG2 images, bit 1 means black and bit 0 means white.
+                // For image masks, honor PDF /Decode semantics:
+                //   [0 1] => 0 paints, 1 leaves unchanged
+                //   [1 0] => reversed
                 const uint32_t pitch = (static_cast<uint32_t>(w) + 7u) / 8u;
                 auto expanded = std::make_shared<std::vector<uint8_t>>();
                 expanded->reserve(static_cast<std::size_t>(w) * h);
+                bool mask_zero_paints = true;
+                if (image.image_mask
+                    and image.decode_present
+                    and image.decode_array.size() >= 2)
+                  {
+                    mask_zero_paints =
+                      std::abs(image.decode_array[0] - 0.0) < 1e-12
+                      and std::abs(image.decode_array[1] - 1.0) < 1e-12;
+                  }
                 for (int row = 0; row < h; ++row)
                   {
                     for (int col = 0; col < w; ++col)
                       {
                         const uint8_t byte = bits[row * pitch + col / 8];
-                        const bool    black = (byte >> (7 - (col % 8))) & 1u;
+                        const bool    bit = ((byte >> (7 - (col % 8))) & 1u) != 0;
+                        const bool    black = image.image_mask
+                          ? (mask_zero_paints ? !bit : bit)
+                          : bit;
                         expanded->push_back(black ? 0x00u : 0xFFu);
                       }
                   }

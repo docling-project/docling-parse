@@ -392,9 +392,15 @@ namespace pdflib
       }
     else
       {
-	// p 210, table 90: Default decode arrays
-	if(color_space=="/DeviceGray")
+        if(image_mask)
+          {
+            LOG_S(INFO) << "no `/Decode` found: using default [0 1] for image mask";
+            decode_array = {0.0, 1.0};
+            decode_present = true;
+          }
+        else if(color_space=="/DeviceGray")
 	  {
+	    // p 210, table 90: Default decode arrays
 	    LOG_S(WARNING) << "no `/Decode` found: falling back on default for " << color_space;
 	    decode_array = {
 	      //1, 0
