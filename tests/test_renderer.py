@@ -1,21 +1,28 @@
 #!/usr/bin/env python
+import glob
 import hashlib
 import json
 import os
 from pathlib import Path
 
-from docling_parse.pdf_parser import DecodePageConfig, DoclingPdfParser, PdfDocument
+from docling_parse.pdf_parser import (
+    DecodePageConfig,
+    DoclingPdfRenderer,
+    PdfRenderDocument,
+)
 
 GENERATE = False
 
 GROUNDTRUTH_RENDERER_FOLDER = "tests/data/groundtruth_renderer"
+REGRESSION_FOLDER = "tests/data/regression/*.pdf"
 
-RENDER_CASES = {
-    "font_01.pdf": [1],
-    "rotated_page_01.pdf": [1],
-    "fillable_form.pdf": [1],
-    "indexed_iccbased.pdf": [1],
-    "rotated_image.pdf": [1],
+PAGE_RESTRICTIONS = {
+    "deep-mediabox-inheritance.pdf": [2],
+    "font_06.pdf": [1],
+    "font_07.pdf": [1],
+    "font_08.pdf": [1],
+    "font_09.pdf": [1],
+    "font_10.pdf": [1],
 }
 
 BITMAP_RESTRICTIONS = {
@@ -23,6 +30,7 @@ BITMAP_RESTRICTIONS = {
         1: [1, 5, 10, 15],
     },
 }
+MAX_BITMAPS_PER_PAGE = 5
 
 
 def _round_floats(obj, ndigits=3):
@@ -47,6 +55,10 @@ def _bitmap_json_path(pdf_name: str, page_no: int, bitmap_index: int) -> Path:
     return Path(f"{_page_prefix(pdf_name, page_no)}.bitmap_{bitmap_index}.json")
 
 
+def _full_page_png_path(pdf_name: str, page_no: int) -> Path:
+    return Path(f"{_page_prefix(pdf_name, page_no)}.full_page.png")
+
+
 def _write_json(path: Path, payload) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as fw:
@@ -58,14 +70,26 @@ def _load_json(path: Path):
         return json.load(fr)
 
 
-def _artifact_basename(pdf_name: str, page_no: int, bitmap_index: int, extension: str) -> str:
+def _artifact_basename(
+    pdf_name: str, page_no: int, bitmap_index: int, extension: str
+) -> str:
     return f"{pdf_name}.page_no_{page_no}.bitmap_{bitmap_index}{extension}"
 
 
+def _selected_bitmap_indices(pdf_name: str, page_no: int, num_bitmaps: int) -> set[int]:
+    restricted = BITMAP_RESTRICTIONS.get(pdf_name, {}).get(page_no)
+
+    if restricted is None:
+        return set(range(1, min(num_bitmaps, MAX_BITMAPS_PER_PAGE) + 1))
+
+    return set(restricted[:MAX_BITMAPS_PER_PAGE])
+
+
 def _export_or_verify_bitmaps(pdf_name: str, page_no: int, bitmaps) -> None:
+    selected = _selected_bitmap_indices(pdf_name, page_no, len(bitmaps))
+
     for bitmap_index, bitmap in enumerate(bitmaps, start=1):
-        allowed = BITMAP_RESTRICTIONS.get(pdf_name, {}).get(page_no)
-        if allowed is not None and bitmap_index not in allowed:
+        if bitmap_index not in selected:
             continue
 
         raw_sha256 = hashlib.sha256(bitmap["raw_data"]).hexdigest()
@@ -104,31 +128,50 @@ def _export_or_verify_bitmaps(pdf_name: str, page_no: int, bitmaps) -> None:
         ), f"bitmap artifact bytes mismatch for {artifact_path}"
 
 
-def test_render_reference_documents():
-    parser = DoclingPdfParser(loglevel="fatal")
+def _export_full_page_png(pdf_name: str, page_no: int, image) -> None:
+    out_path = _full_page_png_path(pdf_name, page_no)
+    if out_path.exists():
+        return
 
+    if image is None:
+        return
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    image.save(out_path, format="PNG")
+
+
+def test_render_reference_documents():
     config = DecodePageConfig()
     config.page_boundary = "crop_box"
     config.do_sanitization = False
     config.keep_glyphs = True
     config.keep_qpdf_warnings = False
+    renderer = DoclingPdfRenderer(loglevel="fatal", decode_config=config)
 
     results = []
 
-    for pdf_name, page_numbers in RENDER_CASES.items():
-        pdf_path = os.path.join("tests/data/regression", pdf_name)
+    pdf_paths = sorted(glob.glob(REGRESSION_FOLDER))
+    assert len(pdf_paths) > 0, "len(pdf_paths)==0 -> nothing to test"
 
-        pdf_doc: PdfDocument = parser.load(path_or_stream=pdf_path, lazy=True)
+    for pdf_path in pdf_paths:
+        pdf_name = os.path.basename(pdf_path)
+
+        pdf_doc: PdfRenderDocument = renderer.load(path_or_stream=pdf_path, lazy=True)
         assert pdf_doc is not None
 
-        for page_no in page_numbers:
+        for page_no in range(1, pdf_doc.number_of_pages() + 1):
+            if (
+                pdf_name in PAGE_RESTRICTIONS
+                and page_no not in PAGE_RESTRICTIONS[pdf_name]
+            ):
+                continue
+
             try:
-                page_decoder = pdf_doc._parser.get_page_decoder(
-                    key=pdf_doc._key,
-                    page=page_no - 1,
-                    config=config,
-                )
-                assert page_decoder is not None, f"failed to decode {pdf_name}@{page_no}"
+                render_result = pdf_doc.get_page(page_no)
+                assert (
+                    render_result is not None
+                ), f"failed to render {pdf_name}@{page_no}"
+                page_decoder, timings = render_result.get()
 
                 instructions = page_decoder.export_render_instructions_json()
                 instruction_path = _instruction_path(pdf_name, page_no)
@@ -143,12 +186,13 @@ def test_render_reference_documents():
 
                 bitmap_artifacts = page_decoder.export_bitmap_artifacts()
                 _export_or_verify_bitmaps(pdf_name, page_no, bitmap_artifacts)
+                _export_full_page_png(pdf_name, page_no, render_result.get_image())
 
                 results.append((pdf_name, page_no, True, ""))
             except Exception as exc:
                 results.append((pdf_name, page_no, False, str(exc)))
-            finally:
-                pdf_doc.unload_pages(page_range=(page_no, page_no + 1))
+
+        pdf_doc.unload()
 
     failed = [(doc, page, err) for doc, page, ok, err in results if not ok]
     assert not failed, f"{len(failed)} page(s) failed: " + ", ".join(
