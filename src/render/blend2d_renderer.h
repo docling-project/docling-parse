@@ -1145,7 +1145,10 @@ namespace pdflib
         }
     }
 
-    if (axis_aligned)
+    const bool can_use_axis_aligned_fast_path =
+      axis_aligned and right_angle and quarter_turns == 0;
+
+    if (can_use_axis_aligned_fast_path)
       {
         LOG_S(INFO) << "render_bitmap: selecting axis-aligned path";
         render_bitmap_axis_aligned(ctx, src_img, q, sw, sh);
