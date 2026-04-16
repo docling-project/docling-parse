@@ -14,6 +14,225 @@
 // Include parse headers for typed bindings
 #include <parse.h>
 
+namespace
+{
+  const char* pixel_format_name(pdflib::pixel_format fmt)
+  {
+    switch(fmt)
+      {
+      case pdflib::PIXEL_FORMAT_GRAY: return "gray";
+      case pdflib::PIXEL_FORMAT_RGB: return "rgb";
+      case pdflib::PIXEL_FORMAT_CMYK: return "cmyk";
+      default: return "unknown";
+      }
+  }
+
+  const char* instruction_name(pdflib::RENDER_INSTRUCTION_NAME name)
+  {
+    switch(name)
+      {
+      case pdflib::SIZE_INSTRUCTION: return "size";
+      case pdflib::TEXT_RENDER_INSTRUCTION: return "text";
+      case pdflib::TEXT_WIDGET_RENDER_INSTRUCTION: return "widget";
+      case pdflib::BITMAP_RENDER_INSTRUCTION: return "bitmap";
+      case pdflib::SHAPE_RENDER_INSTRUCTION: return "shape";
+      default: return "unknown";
+      }
+  }
+
+  pybind11::dict make_quad_dict(double x0, double y0,
+                                double x1, double y1,
+                                double x2, double y2,
+                                double x3, double y3)
+  {
+    pybind11::dict quad;
+    quad["r_x0"] = x0;
+    quad["r_y0"] = y0;
+    quad["r_x1"] = x1;
+    quad["r_y1"] = y1;
+    quad["r_x2"] = x2;
+    quad["r_y2"] = y2;
+    quad["r_x3"] = x3;
+    quad["r_y3"] = y3;
+    return quad;
+  }
+
+  struct render_instruction_export_visitor
+  {
+    pybind11::dict root;
+    pybind11::list instructions;
+
+    render_instruction_export_visitor()
+    {
+      root["instructions"] = instructions;
+    }
+
+    void set_size(pdflib::size_instruction& instr)
+    {
+      pybind11::dict size;
+      size["type"] = instruction_name(pdflib::SIZE_INSTRUCTION);
+      size["media_bbox"] = instr.media_bbox;
+      size["crop_bbox"] = instr.crop_bbox;
+      root["size_instruction"] = size;
+    }
+
+    void render_text(pdflib::text_instruction& instr)
+    {
+      pybind11::dict row;
+      row["type"] = instruction_name(pdflib::TEXT_RENDER_INSTRUCTION);
+      row["text"] = instr.get_text();
+      row["font_enc"] = instr.get_font_enc();
+      row["font_key"] = instr.get_font_key();
+      row["font_name"] = instr.get_font_name();
+      row["encoding_name"] = instr.get_encoding_name();
+      row["base_font"] = instr.get_base_font();
+      row["font_size"] = instr.get_font_size();
+      row["font_ascent_norm"] = instr.get_font_ascent_norm();
+      row["font_descent_norm"] = instr.get_font_descent_norm();
+      row["base_x0"] = instr.get_base_x0();
+      row["base_y0"] = instr.get_base_y0();
+      row["quad"] = make_quad_dict(
+        instr.get_r_x0(), instr.get_r_y0(),
+        instr.get_r_x1(), instr.get_r_y1(),
+        instr.get_r_x2(), instr.get_r_y2(),
+        instr.get_r_x3(), instr.get_r_y3());
+      instructions.append(row);
+    }
+
+    void render_widget(pdflib::text_widget_instruction& instr)
+    {
+      pybind11::dict row;
+      row["type"] = instruction_name(pdflib::TEXT_WIDGET_RENDER_INSTRUCTION);
+      row["text"] = instr.get_text();
+      row["bbox"] = std::array<double, 4>{
+        instr.get_x0(), instr.get_y0(), instr.get_x1(), instr.get_y1()};
+      row["quad"] = make_quad_dict(
+        instr.get_r_x0(), instr.get_r_y0(),
+        instr.get_r_x1(), instr.get_r_y1(),
+        instr.get_r_x2(), instr.get_r_y2(),
+        instr.get_r_x3(), instr.get_r_y3());
+      instructions.append(row);
+    }
+
+    void render_bitmap(pdflib::bitmap_instruction& instr)
+    {
+      pybind11::dict row;
+      row["type"] = instruction_name(pdflib::BITMAP_RENDER_INSTRUCTION);
+      row["xobject_key"] = instr.get_key();
+      row["shape"] = instr.get_shape();
+      row["pixel_format"] = pixel_format_name(instr.get_pixel_format());
+      row["image_mask"] = instr.is_image_mask();
+      row["rgb_filling"] = instr.get_rgb_filling();
+      row["quad"] = make_quad_dict(
+        instr.get_r_x0(), instr.get_r_y0(),
+        instr.get_r_x1(), instr.get_r_y1(),
+        instr.get_r_x2(), instr.get_r_y2(),
+        instr.get_r_x3(), instr.get_r_y3());
+      instructions.append(row);
+    }
+
+    void render_shape(pdflib::shape_instruction& instr)
+    {
+      pybind11::dict row;
+      row["type"] = instruction_name(pdflib::SHAPE_RENDER_INSTRUCTION);
+      row["x"] = instr.get_x();
+      row["y"] = instr.get_y();
+      row["closing_type"] = static_cast<int>(instr.get_closing_type());
+      row["shape_type"] = static_cast<int>(instr.get_shape_type());
+      row["line_width"] = instr.get_line_width();
+      row["rgb_stroking"] = instr.get_rgb_stroking();
+      row["rgb_filling"] = instr.get_rgb_filling();
+      instructions.append(row);
+    }
+  };
+
+  struct bitmap_artifact_export_visitor
+  {
+    pybind11::list artifacts;
+    int bitmap_index = 0;
+
+    void set_size(pdflib::size_instruction&) {}
+    void render_text(pdflib::text_instruction&) {}
+    void render_widget(pdflib::text_widget_instruction&) {}
+    void render_shape(pdflib::shape_instruction&) {}
+
+    void render_bitmap(pdflib::bitmap_instruction& instr)
+    {
+      ++bitmap_index;
+
+      pybind11::dict row;
+      row["index"] = bitmap_index;
+      row["xobject_key"] = instr.get_key();
+      row["shape"] = instr.get_shape();
+      row["pixel_format"] = pixel_format_name(instr.get_pixel_format());
+      row["image_mask"] = instr.is_image_mask();
+      row["rgb_filling"] = instr.get_rgb_filling();
+      row["quad"] = make_quad_dict(
+        instr.get_r_x0(), instr.get_r_y0(),
+        instr.get_r_x1(), instr.get_r_y1(),
+        instr.get_r_x2(), instr.get_r_y2(),
+        instr.get_r_x3(), instr.get_r_y3());
+
+      std::vector<uint8_t> encoded;
+      std::string extension = ".bin";
+
+      auto const& data = instr.get_data();
+      if(data)
+        {
+          row["raw_data"] = pybind11::bytes(
+            reinterpret_cast<char const*>(data->data()),
+            data->size());
+        }
+      else
+        {
+          row["raw_data"] = pybind11::bytes();
+        }
+
+      if(instr.has_data())
+        {
+          auto const& shape = instr.get_shape();
+          const int height = shape[0];
+          const int width = shape[1];
+
+          if(instr.get_pixel_format() == pdflib::PIXEL_FORMAT_GRAY)
+            {
+              encoded = pdflib::ccitt::encode_debug_png(*data, width, height);
+              extension = ".png";
+            }
+          else if(instr.get_pixel_format() == pdflib::PIXEL_FORMAT_RGB
+                  or instr.get_pixel_format() == pdflib::PIXEL_FORMAT_CMYK)
+            {
+              pdflib::jpeg::jpeg_parameters params;
+              params.width = width;
+              params.height = height;
+              params.bits_per_component = 8;
+              params.color_space =
+                (instr.get_pixel_format() == pdflib::PIXEL_FORMAT_RGB)
+                ? pdflib::jpeg::ColorSpace::RGB
+                : pdflib::jpeg::ColorSpace::CMYK;
+              encoded = pdflib::jpeg::write_jpeg_from_raw_pixels_to_memory(
+                reinterpret_cast<unsigned char const*>(data->data()),
+                data->size(),
+                params);
+              extension = ".jpg";
+            }
+
+          if(encoded.empty())
+            {
+              encoded.assign(data->begin(), data->end());
+              extension = ".bin";
+            }
+        }
+
+      row["extension"] = extension;
+      row["encoded_data"] = pybind11::bytes(
+        reinterpret_cast<char const*>(encoded.data()),
+        encoded.size());
+      artifacts.append(row);
+    }
+  };
+}
+
 PYBIND11_MODULE(pdf_parsers, m) {
 
   // ============= Decode Page Config =============
@@ -292,7 +511,21 @@ PYBIND11_MODULE(pdf_parsers, m) {
 	 "Recompute word cells from char cells with the given config")
     .def("create_line_cells", &pdflib::pdf_decoder<pdflib::PAGE>::create_line_cells,
 	 pybind11::arg("config"),
-	 "Recompute line cells from char cells with the given config");
+	 "Recompute line cells from char cells with the given config")
+    .def("export_render_instructions_json",
+         [](pdflib::pdf_decoder<pdflib::PAGE>& self) -> pybind11::dict {
+           render_instruction_export_visitor visitor;
+           self.get_instructions().iterate_over_instructions(visitor);
+           return visitor.root;
+         },
+         "Export render instructions in deterministic decode order")
+    .def("export_bitmap_artifacts",
+         [](pdflib::pdf_decoder<pdflib::PAGE>& self) -> pybind11::list {
+           bitmap_artifact_export_visitor visitor;
+           self.get_instructions().iterate_over_instructions(visitor);
+           return visitor.artifacts;
+         },
+         "Export bitmap artifacts as inspectable image bytes plus raw payload bytes");
 
   // ============= Timing Keys Constants =============
 

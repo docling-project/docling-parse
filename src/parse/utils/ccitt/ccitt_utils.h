@@ -1117,26 +1117,25 @@ inline std::vector<uint8_t> zlib_store(const uint8_t* data, size_t len)
 
 // --- save_debug_png ---
 
-inline void save_debug_png(const std::vector<uint8_t>& pixels,
-                            int                          width,
-                            int                          height,
-                            const std::string&           path)
+inline std::vector<uint8_t> encode_debug_png(const std::vector<uint8_t>& pixels,
+                                             int                          width,
+                                             int                          height)
 {
   if(pixels.empty() or width <= 0)
     {
-      LOG_S(WARNING) << "save_debug_png: empty pixel data or invalid width";
-      return;
+      LOG_S(WARNING) << "encode_debug_png: empty pixel data or invalid width";
+      return {};
     }
   // Compute the actual height from the pixel count — partial decodes are fine.
   int actual_height = static_cast<int>(pixels.size()) / width;
   if(actual_height <= 0)
     {
-      LOG_S(WARNING) << "save_debug_png: not enough pixels for even one row";
-      return;
+      LOG_S(WARNING) << "encode_debug_png: not enough pixels for even one row";
+      return {};
     }
   if(actual_height != height)
     {
-      LOG_S(INFO) << "save_debug_png: partial decode — saving " << actual_height
+      LOG_S(INFO) << "encode_debug_png: partial decode — saving " << actual_height
                   << " of " << height << " rows";
     }
   height = actual_height;
@@ -1190,6 +1189,20 @@ inline void save_debug_png(const std::vector<uint8_t>& pixels,
     std::vector<uint8_t> empty;
     append_png_chunk(png, "IEND", empty);
   }
+
+  return png;
+}
+
+inline void save_debug_png(const std::vector<uint8_t>& pixels,
+                            int                          width,
+                            int                          height,
+                            const std::string&           path)
+{
+  std::vector<uint8_t> png = encode_debug_png(pixels, width, height);
+  if(png.empty())
+    {
+      return;
+    }
 
   // Write to file
   std::ofstream ofs(path, std::ios::binary);
