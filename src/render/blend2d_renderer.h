@@ -999,6 +999,7 @@ namespace pdflib
     const int sw = src_shape[1];
     const int sc = src_shape[2];
     const bool image_mask = instr.is_image_mask();
+    const auto fmt = instr.get_pixel_format();
     const auto fill_rgb = instr.get_rgb_filling();
 
     BLContext ctx(image_);
@@ -1018,7 +1019,9 @@ namespace pdflib
                 << " axis_aligned=" << (axis_aligned ? "true" : "false")
                 << " right_angle=" << (right_angle ? "true" : "false")
                 << " quarter_turns=" << quarter_turns
-                << " src=" << sw << "x" << sh << "x" << sc;
+                << " src=" << sw << "x" << sh << "x" << sc
+                << " fmt=" << static_cast<int>(fmt)
+                << " image_mask=" << (image_mask ? "true" : "false");
 
     if ((not instr.has_data()) or sh <= 0 or sw <= 0 or sc < 1)
       {
@@ -1050,6 +1053,10 @@ namespace pdflib
       instr.has_alpha_data()
       and not image_mask
       and alpha_data->size() >= expected_alpha_bytes;
+    LOG_S(INFO) << "render_bitmap: alpha_state"
+                << " has_alpha=" << (instr.has_alpha_data() ? "true" : "false")
+                << " use_soft_mask_alpha=" << (use_soft_mask_alpha ? "true" : "false")
+                << " alpha_bytes=" << (alpha_data ? alpha_data->size() : 0);
     if(instr.has_alpha_data() and not use_soft_mask_alpha)
       {
         LOG_S(WARNING) << __FUNCTION__ << ": alpha buffer too small ("
@@ -1068,6 +1075,25 @@ namespace pdflib
       auto* base = static_cast<uint8_t*>(img_data.pixel_data);
       const intptr_t stride = img_data.stride;
 
+      if (fmt == PIXEL_FORMAT_CMYK && src_data->size() >= static_cast<size_t>(sc))
+        {
+          const uint8_t c = src_data->at(0);
+          const uint8_t m = (sc >= 2) ? src_data->at(1) : 0;
+          const uint8_t y = (sc >= 3) ? src_data->at(2) : 0;
+          const uint8_t k = (sc >= 4) ? src_data->at(3) : 0;
+          const uint8_t r = static_cast<uint8_t>(((255u - c) * (255u - k)) / 255u);
+          const uint8_t g = static_cast<uint8_t>(((255u - m) * (255u - k)) / 255u);
+          const uint8_t b = static_cast<uint8_t>(((255u - y) * (255u - k)) / 255u);
+          LOG_S(INFO) << "render_bitmap: cmyk_sample[0]"
+                      << " raw=(" << static_cast<int>(c) << ","
+                      << static_cast<int>(m) << ","
+                      << static_cast<int>(y) << ","
+                      << static_cast<int>(k) << ")"
+                      << " rgb=(" << static_cast<int>(r) << ","
+                      << static_cast<int>(g) << ","
+                      << static_cast<int>(b) << ")";
+        }
+
       for (int row = 0; row < sh; ++row)
         {
           auto* row_ptr = reinterpret_cast<uint32_t*>(base + row * stride);
@@ -1077,7 +1103,7 @@ namespace pdflib
               uint8_t r = src_data->at(idx);
               uint8_t g = (sc >= 2) ? src_data->at(idx + 1) : r;
               uint8_t b = (sc >= 3) ? src_data->at(idx + 2) : r;
-              uint8_t a = (sc >= 4) ? src_data->at(idx + 3) : 0xFFu;
+              uint8_t a = 0xFFu;
 
               if (image_mask)
                 {
@@ -1086,7 +1112,23 @@ namespace pdflib
                   g = static_cast<uint8_t>(fill_rgb[1]);
                   b = static_cast<uint8_t>(fill_rgb[2]);
                 }
-              else if(use_soft_mask_alpha)
+              else if (fmt == PIXEL_FORMAT_CMYK and sc >= 4)
+                {
+                  const uint8_t c = src_data->at(idx + 0);
+                  const uint8_t m = src_data->at(idx + 1);
+                  const uint8_t y = src_data->at(idx + 2);
+                  const uint8_t k = src_data->at(idx + 3);
+
+                  r = static_cast<uint8_t>((static_cast<unsigned int>(c) * k) / 255u);
+                  g = static_cast<uint8_t>((static_cast<unsigned int>(m) * k) / 255u);
+                  b = static_cast<uint8_t>((static_cast<unsigned int>(y) * k) / 255u);
+                }
+              else if (fmt == PIXEL_FORMAT_GRAY)
+                {
+                  g = r;
+                  b = r;
+                }
+              if (use_soft_mask_alpha and not image_mask)
                 {
                   a = alpha_data->at(static_cast<size_t>(row) * sw + col);
                 }

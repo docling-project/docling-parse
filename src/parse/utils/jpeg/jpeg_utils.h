@@ -85,6 +85,13 @@ struct jpeg_error_longjmp : public jpeg_error_mgr
   std::jmp_buf jmp;
 };
 
+inline void jpeg_output_message_loguru(j_common_ptr cinfo)
+{
+  char buf[JMSG_LENGTH_MAX];
+  (*cinfo->err->format_message)(cinfo, buf);
+  LOG_S(WARNING) << "libjpeg warning: " << buf;
+}
+
 inline void jpeg_error_exit_longjmp(j_common_ptr cinfo)
 {
   auto* myerr = reinterpret_cast<jpeg_error_longjmp*>(cinfo->err);
@@ -252,6 +259,7 @@ inline bool write_corrected_jpeg_from_memory(
 
   dinfo.err = jpeg_std_error(&jerr);
   jerr.error_exit = jpeg_error_exit_longjmp;
+  jerr.output_message = jpeg_output_message_loguru;
   jpeg_create_decompress(&dinfo);
 
   if(setjmp(jerr.jmp))
@@ -390,6 +398,7 @@ inline bool write_corrected_jpeg_from_memory(
   jpeg_error_longjmp cjerr{};
   cinfo.err = jpeg_std_error(&cjerr);
   cjerr.error_exit = jpeg_error_exit_longjmp;
+  cjerr.output_message = jpeg_output_message_loguru;
   jpeg_create_compress(&cinfo);
 
   std::FILE* outfile = std::fopen(path.string().c_str(), "wb");
@@ -468,6 +477,7 @@ inline std::vector<unsigned char> write_corrected_jpeg_to_memory(
   jpeg_error_longjmp jerr{};
   dinfo.err = jpeg_std_error(&jerr);
   jerr.error_exit = jpeg_error_exit_longjmp;
+  jerr.output_message = jpeg_output_message_loguru;
   jpeg_create_decompress(&dinfo);
 
   if(setjmp(jerr.jmp))
@@ -541,6 +551,7 @@ inline std::vector<unsigned char> write_corrected_jpeg_to_memory(
   jpeg_error_longjmp cjerr{};
   cinfo.err = jpeg_std_error(&cjerr);
   cjerr.error_exit = jpeg_error_exit_longjmp;
+  cjerr.output_message = jpeg_output_message_loguru;
   jpeg_create_compress(&cinfo);
 
   if(setjmp(cjerr.jmp))
@@ -670,6 +681,7 @@ inline bool write_jpeg_from_raw_pixels(
   jpeg_error_longjmp cjerr{};
   cinfo.err = jpeg_std_error(&cjerr);
   cjerr.error_exit = jpeg_error_exit_longjmp;
+  cjerr.output_message = jpeg_output_message_loguru;
   jpeg_create_compress(&cinfo);
 
   std::FILE* outfile = std::fopen(path.string().c_str(), "wb");
@@ -776,6 +788,7 @@ inline std::vector<unsigned char> write_jpeg_from_raw_pixels_to_memory(
   jpeg_error_longjmp cjerr{};
   cinfo.err = jpeg_std_error(&cjerr);
   cjerr.error_exit = jpeg_error_exit_longjmp;
+  cjerr.output_message = jpeg_output_message_loguru;
   jpeg_create_compress(&cinfo);
 
   if(setjmp(cjerr.jmp))
@@ -856,6 +869,7 @@ inline decoded_jpeg_result decode_jpeg_to_raw_pixels(
     jpeg_error_longjmp jerr{};
     dinfo.err = jpeg_std_error(&jerr);
     jerr.error_exit = jpeg_error_exit_longjmp;
+    jerr.output_message = jpeg_output_message_loguru;
     jpeg_create_decompress(&dinfo);
 
     if(setjmp(jerr.jmp))
