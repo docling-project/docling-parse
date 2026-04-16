@@ -108,7 +108,7 @@ namespace pdflib
     bool image_mask = false;
 
     // /CCITTFaxDecode parameters from /DecodeParms
-    int  ccitt_k          = -1;    // /K: -1=Group4, 0=Group3-1D, >0=Group3-mixed
+    int  ccitt_k          = 0;     // /K default per PDF spec: 0=Group3-1D, <0=Group4, >0=Group3-mixed
     bool ccitt_black_is_1 = false; // /BlackIs1: true means 1-bit=black
     std::shared_ptr<Buffer> jbig2_globals_data;
   };
