@@ -53,6 +53,8 @@ namespace pdflib
 
     bool                     has_decoded_stream_data() const;
     std::shared_ptr<Buffer>  get_decoded_stream_data() const;
+    bool                     has_soft_mask_data() const;
+    std::shared_ptr<std::vector<uint8_t>> get_soft_mask_data() const;
 
     // Determine file extension from filters (e.g. ".jpg", ".jp2", ".jb2", ".bin")
     std::string pick_extension() const;
@@ -72,6 +74,7 @@ namespace pdflib
     void init_filters();
 
     void init_stream_data();
+    void init_soft_mask_data();
 
   private:
 
@@ -97,6 +100,7 @@ namespace pdflib
     // Stream data
     std::shared_ptr<Buffer> raw_stream_data;
     std::shared_ptr<Buffer> decoded_stream_data;
+    std::shared_ptr<std::vector<uint8_t>> soft_mask_data;
 
     // PDF image semantics
     std::vector<double> decode_array; // length 2*ncomp when present
@@ -118,6 +122,7 @@ namespace pdflib
     image_filters(),
     raw_stream_data(nullptr),
     decoded_stream_data(nullptr),
+    soft_mask_data(nullptr),
     jbig2_globals_data(nullptr)
   {}
 
@@ -170,6 +175,7 @@ namespace pdflib
     init_filters();
     init_image_properties();
     init_stream_data();
+    init_soft_mask_data();
   }
 
   void pdf_resource<PAGE_XOBJECT_IMAGE>::init_image_properties()
@@ -637,6 +643,90 @@ namespace pdflib
       }
   }
 
+  void pdf_resource<PAGE_XOBJECT_IMAGE>::init_soft_mask_data()
+  {
+    soft_mask_data.reset();
+
+    if(not qpdf_xobject_dict.hasKey("/SMask"))
+      {
+        return;
+      }
+
+    auto qpdf_smask = qpdf_xobject_dict.getKey("/SMask");
+    if(not qpdf_smask.isStream())
+      {
+        LOG_S(WARNING) << "SMask present but is not a stream for xobject_key=" << xobject_key;
+        return;
+      }
+
+    pdf_resource<PAGE_XOBJECT_IMAGE> smask;
+    smask.set(xobject_key + "/SMask", qpdf_smask);
+
+    if(smask.get_image_width() != image_width or smask.get_image_height() != image_height)
+      {
+        LOG_S(WARNING) << "SMask size mismatch for xobject_key=" << xobject_key
+                       << " image=" << image_width << "x" << image_height
+                       << " smask=" << smask.get_image_width() << "x" << smask.get_image_height();
+        return;
+      }
+
+    const bool gray_mask =
+      smask.get_color_space() == "/DeviceGray"
+      or (smask.get_color_space().find("/ICCBased") != std::string::npos
+          and smask.get_icc_components() == 1);
+    if(not gray_mask)
+      {
+        LOG_S(WARNING) << "SMask color space unsupported for xobject_key=" << xobject_key
+                       << " smask_cs=" << smask.get_color_space()
+                       << " smask_icc_components=" << smask.get_icc_components();
+        return;
+      }
+
+    if(smask.get_bits_per_component() != 8)
+      {
+        LOG_S(WARNING) << "SMask bits/component unsupported for xobject_key=" << xobject_key
+                       << " smask_bpc=" << smask.get_bits_per_component();
+        return;
+      }
+
+    if(not smask.has_decoded_stream_data())
+      {
+        LOG_S(WARNING) << "SMask has no decoded stream data for xobject_key=" << xobject_key;
+        return;
+      }
+
+    auto smask_buf = smask.get_decoded_stream_data();
+    const size_t expected = static_cast<size_t>(image_width) * image_height;
+    if(smask_buf->getSize() < expected)
+      {
+        LOG_S(WARNING) << "SMask decoded stream too small for xobject_key=" << xobject_key
+                       << " size=" << smask_buf->getSize()
+                       << " expected>=" << expected;
+        return;
+      }
+
+    auto out = std::make_shared<std::vector<uint8_t>>();
+    out->resize(expected);
+
+    auto const* src = reinterpret_cast<uint8_t const*>(smask_buf->getBuffer());
+    auto const decode = smask.get_decode_array();
+    const bool has_decode = smask.has_decode_array() and decode.size() >= 2;
+    for(size_t i = 0; i < expected; ++i)
+      {
+        uint8_t alpha = src[i];
+        if(has_decode)
+          {
+            alpha = jpeg::apply_decode_component(alpha, decode[0], decode[1]);
+          }
+        (*out)[i] = alpha;
+      }
+
+    soft_mask_data = std::move(out);
+
+    LOG_S(INFO) << "decoded SMask for xobject_key=" << xobject_key
+                << " alpha_size=" << soft_mask_data->size();
+  }
+
   // --- Getters ---
 
   int pdf_resource<PAGE_XOBJECT_IMAGE>::get_image_width() const
@@ -742,6 +832,16 @@ namespace pdflib
   std::shared_ptr<Buffer> pdf_resource<PAGE_XOBJECT_IMAGE>::get_decoded_stream_data() const
   {
     return decoded_stream_data;
+  }
+
+  bool pdf_resource<PAGE_XOBJECT_IMAGE>::has_soft_mask_data() const
+  {
+    return (soft_mask_data != nullptr and not soft_mask_data->empty());
+  }
+
+  std::shared_ptr<std::vector<uint8_t>> pdf_resource<PAGE_XOBJECT_IMAGE>::get_soft_mask_data() const
+  {
+    return soft_mask_data;
   }
 
   // --- File I/O ---

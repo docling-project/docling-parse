@@ -131,6 +131,7 @@ namespace pdflib
       image.filters            = xobj.get_filters();
       image.raw_stream_data    = xobj.get_raw_stream_data();
       image.decoded_stream_data = xobj.get_decoded_stream_data();
+      image.soft_mask_data     = xobj.get_soft_mask_data();
 
       LOG_S(INFO) << "image with ("
 		  << image.x0 << ", " << image.y0 << ") x ("
@@ -580,6 +581,7 @@ namespace pdflib
 
     bitmap_instruction binstr(image.xobject_key,
                               std::move(pixel_data),
+                              image.soft_mask_data,
                               pixel_shape,
                               fmt,
                               image.image_mask,

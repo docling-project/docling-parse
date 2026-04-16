@@ -993,6 +993,7 @@ namespace pdflib
       }
 
     const auto& src_data  = instr.get_data();
+    const auto& alpha_data = instr.get_alpha_data();
     const auto& src_shape = instr.get_shape(); // {height, width, channels}
     const int sh = src_shape[0];
     const int sw = src_shape[1];
@@ -1044,6 +1045,19 @@ namespace pdflib
         return;
       }
 
+    const size_t expected_alpha_bytes = static_cast<size_t>(sh) * sw;
+    const bool use_soft_mask_alpha =
+      instr.has_alpha_data()
+      and not image_mask
+      and alpha_data->size() >= expected_alpha_bytes;
+    if(instr.has_alpha_data() and not use_soft_mask_alpha)
+      {
+        LOG_S(WARNING) << __FUNCTION__ << ": alpha buffer too small ("
+                       << alpha_data->size() << " < " << expected_alpha_bytes
+                       << ") for xobject_key=" << instr.get_key()
+                       << ", ignoring SMask";
+      }
+
     // Build a BLImage (PRGB32) from the raw channel data.
     BLImage src_img;
     src_img.create(sw, sh, BL_FORMAT_PRGB32);
@@ -1071,6 +1085,10 @@ namespace pdflib
                   r = static_cast<uint8_t>(fill_rgb[0]);
                   g = static_cast<uint8_t>(fill_rgb[1]);
                   b = static_cast<uint8_t>(fill_rgb[2]);
+                }
+              else if(use_soft_mask_alpha)
+                {
+                  a = alpha_data->at(static_cast<size_t>(row) * sw + col);
                 }
 
               // Store as premultiplied ARGB (required by BL_FORMAT_PRGB32).

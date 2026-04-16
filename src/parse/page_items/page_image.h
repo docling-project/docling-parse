@@ -68,6 +68,7 @@ namespace pdflib
     std::vector<std::string> filters;
     std::shared_ptr<Buffer>  raw_stream_data;
     std::shared_ptr<Buffer>  decoded_stream_data;
+    std::shared_ptr<std::vector<uint8_t>> soft_mask_data;
 
     // PDF image semantics copied from XObject
     bool decode_present = false;

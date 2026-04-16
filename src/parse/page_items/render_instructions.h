@@ -187,6 +187,7 @@ namespace pdflib
 
     bitmap_instruction(std::string xobject_key,
 		       std::shared_ptr<std::vector<uint8_t> > data,
+                       std::shared_ptr<std::vector<uint8_t> > alpha_data,
                        std::array<int, 3> shape,
                        pixel_format fmt,
                        bool image_mask,
@@ -197,6 +198,7 @@ namespace pdflib
                        double r_x3, double r_y3):
       xobject_key(xobject_key),
       data(std::move(data)),
+      alpha_data(std::move(alpha_data)),
       shape(shape),
       fmt(fmt),
       image_mask(image_mask),
@@ -209,12 +211,14 @@ namespace pdflib
     const std::string& get_key() const { return xobject_key; }
 
     const std::shared_ptr<std::vector<uint8_t> >& get_data() const { return data; }
+    const std::shared_ptr<std::vector<uint8_t> >& get_alpha_data() const { return alpha_data; }
     const std::array<int, 3>& get_shape() const { return shape; }
     pixel_format get_pixel_format() const { return fmt; }
     bool is_image_mask() const { return image_mask; }
     const std::array<int, 3>& get_rgb_filling() const { return rgb_filling; }
 
     bool has_data() const { return (data) and (not data->empty()); }
+    bool has_alpha_data() const { return (alpha_data) and (not alpha_data->empty()); }
 
     double get_r_x0() const { return r_x0; }
     double get_r_y0() const { return r_y0; }
@@ -230,6 +234,7 @@ namespace pdflib
     const std::string xobject_key;
     
     const std::shared_ptr<std::vector<uint8_t> > data;
+    const std::shared_ptr<std::vector<uint8_t> > alpha_data;
     const std::array<int, 3> shape;
     const pixel_format fmt;
     const bool image_mask;

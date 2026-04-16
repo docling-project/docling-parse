@@ -122,6 +122,7 @@ namespace
       row["shape"] = instr.get_shape();
       row["pixel_format"] = pixel_format_name(instr.get_pixel_format());
       row["image_mask"] = instr.is_image_mask();
+      row["has_soft_mask"] = instr.has_alpha_data();
       row["rgb_filling"] = instr.get_rgb_filling();
       row["quad"] = make_quad_dict(
         instr.get_r_x0(), instr.get_r_y0(),
@@ -166,6 +167,7 @@ namespace
       row["shape"] = instr.get_shape();
       row["pixel_format"] = pixel_format_name(instr.get_pixel_format());
       row["image_mask"] = instr.is_image_mask();
+      row["has_soft_mask"] = instr.has_alpha_data();
       row["rgb_filling"] = instr.get_rgb_filling();
       row["quad"] = make_quad_dict(
         instr.get_r_x0(), instr.get_r_y0(),
@@ -177,6 +179,7 @@ namespace
       std::string extension = ".bin";
 
       auto const& data = instr.get_data();
+      auto const& alpha_data = instr.get_alpha_data();
       if(data)
         {
           row["raw_data"] = pybind11::bytes(
@@ -202,6 +205,27 @@ namespace
           else if(instr.get_pixel_format() == pdflib::PIXEL_FORMAT_RGB
                   or instr.get_pixel_format() == pdflib::PIXEL_FORMAT_CMYK)
             {
+              std::vector<uint8_t> composited;
+              auto const* export_data = data.get();
+              if(instr.get_pixel_format() == pdflib::PIXEL_FORMAT_RGB
+                 and instr.has_alpha_data()
+                 and alpha_data->size() >= static_cast<size_t>(width) * height)
+                {
+                  composited.resize(static_cast<size_t>(width) * height * 3);
+                  for(int i = 0; i < width * height; ++i)
+                    {
+                      const uint8_t alpha = alpha_data->at(i);
+                      for(int c = 0; c < 3; ++c)
+                        {
+                          const uint8_t src = data->at(static_cast<size_t>(i) * 3 + c);
+                          composited[static_cast<size_t>(i) * 3 + c] =
+                            static_cast<uint8_t>((static_cast<unsigned int>(src) * alpha
+                                                  + 255u * (255u - alpha)) / 255u);
+                        }
+                    }
+                  export_data = &composited;
+                }
+
               pdflib::jpeg::jpeg_parameters params;
               params.width = width;
               params.height = height;
@@ -211,8 +235,8 @@ namespace
                 ? pdflib::jpeg::ColorSpace::RGB
                 : pdflib::jpeg::ColorSpace::CMYK;
               encoded = pdflib::jpeg::write_jpeg_from_raw_pixels_to_memory(
-                reinterpret_cast<unsigned char const*>(data->data()),
-                data->size(),
+                reinterpret_cast<unsigned char const*>(export_data->data()),
+                export_data->size(),
                 params);
               extension = ".jpg";
             }
