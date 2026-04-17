@@ -183,10 +183,14 @@ def test_render_reference_documents():
 
                     true_instructions_len = len(true_instructions["instructions"])
                     pred_instructions_len = len(pred_instructions["instructions"])
-                    
-                    assert true_instructions_len == pred_instructions_len, f"true_instructions_len==pred_instructions_len ({true_instructions_len}=={pred_instructions_len}) for {true_instruction_path}"
 
-                    for ind, true_instruction in enumerate(true_instructions["instructions"]):
+                    assert (
+                        true_instructions_len == pred_instructions_len
+                    ), f"true_instructions_len==pred_instructions_len ({true_instructions_len}=={pred_instructions_len}) for {true_instruction_path}"
+
+                    for ind, true_instruction in enumerate(
+                        true_instructions["instructions"]
+                    ):
                         assert true_instruction == _round_floats(
                             pred_instructions["instructions"][ind]
                         ), f"render instructions mismatch for {true_instruction_path}"
