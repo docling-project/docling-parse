@@ -82,7 +82,7 @@ def test_threaded_reference_documents_from_filenames():
         assert task.doc_key != "", "doc_key should not be empty"
 
         if task.success:
-            page_decoder, timings = task.get()
+            page_decoder, _timings = task.get()
             page_number = task.page_number  # 0-indexed
             doc_key = task.doc_key
 
@@ -100,7 +100,7 @@ def test_threaded_reference_documents_from_filenames():
 
     # Verify results against groundtruth (same logic as test_reference_documents_from_filenames)
     for pdf_doc_path in pdf_docs:
-        key = f"key={str(Path(pdf_doc_path))}"
+        key = f"key={Path(pdf_doc_path)!s}"
 
         assert key in results, f"No results found for {pdf_doc_path}"
 
@@ -147,7 +147,7 @@ def test_threaded_single_document():
         assert task.success, f"Failed to decode page {task.page_number}: {task.error()}"
         assert task.doc_key == key
 
-        page_decoder, timings = task.get()
+        _page_decoder, timings = task.get()
         assert isinstance(timings, dict)
         assert len(timings) > 0
 
@@ -204,7 +204,7 @@ def test_threaded_results_match_sequential():
         task = threaded_parser.get_task()
         assert task.success, f"Failed: {task.error()}"
 
-        page_decoder, timings = task.get()
+        page_decoder, _timings = task.get()
         pred_page = _build_segmented_page_from_decoder(page_decoder)
 
         if task.doc_key not in threaded_pages:
@@ -221,10 +221,6 @@ def test_threaded_results_match_sequential():
             seq_page = sequential_pages[key][page_no]
             thr_page = threaded_pages[key][page_no]
 
-            eps = max(
-                seq_page.dimension.width / 100.0, seq_page.dimension.height / 100.0
-            )
-
             """
             print(f"** Page {page_no} for {key} **")
             print(f" -> char-cells count for {key} page {page_no}: {len(seq_page.char_cells)} versus {len(thr_page.char_cells)}")
@@ -234,9 +230,9 @@ def test_threaded_results_match_sequential():
             """
 
             # Verify key fields match
-            assert len(seq_page.char_cells) == len(
-                thr_page.char_cells
-            ), f"char_cells count mismatch for {key} page {page_no}"
+            assert len(seq_page.char_cells) == len(thr_page.char_cells), (
+                f"char_cells count mismatch for {key} page {page_no}"
+            )
 
             """
             if len(seq_page.word_cells)!=len(thr_page.word_cells):
@@ -247,15 +243,15 @@ def test_threaded_results_match_sequential():
                     assert cell.text==thr_page.word_cells[i].text
             """
 
-            assert len(seq_page.word_cells) == len(
-                thr_page.word_cells
-            ), f"word_cells count mismatch for {key} page {page_no}"
-            assert len(seq_page.textline_cells) == len(
-                thr_page.textline_cells
-            ), f"textline_cells count mismatch for {key} page {page_no}"
-            assert len(seq_page.shapes) == len(
-                thr_page.shapes
-            ), f"shapes count mismatch for {key} page {page_no}"
+            assert len(seq_page.word_cells) == len(thr_page.word_cells), (
+                f"word_cells count mismatch for {key} page {page_no}"
+            )
+            assert len(seq_page.textline_cells) == len(thr_page.textline_cells), (
+                f"textline_cells count mismatch for {key} page {page_no}"
+            )
+            assert len(seq_page.shapes) == len(thr_page.shapes), (
+                f"shapes count mismatch for {key} page {page_no}"
+            )
 
 
 def test_threaded_backpressure():

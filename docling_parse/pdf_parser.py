@@ -28,13 +28,6 @@ from docling_core.types.doc.page import (
 from PIL import Image as PILImage
 from pydantic import BaseModel, ConfigDict
 
-from docling_parse.pdf_parsers import DecodePageConfig  # type: ignore[import]
-from docling_parse.pdf_parsers import PageDecodeResult  # type: ignore[import]
-from docling_parse.pdf_parsers import PdfPageDecoder  # type: ignore[import]
-from docling_parse.pdf_parsers import RenderConfig  # type: ignore[import]
-from docling_parse.pdf_parsers import pdf_parser  # type: ignore[import]
-from docling_parse.pdf_parsers import threaded_pdf_parser  # type: ignore[import]
-from docling_parse.pdf_parsers import threaded_pdf_renderer  # type: ignore[import]
 from docling_parse.pdf_parsers import (  # type: ignore[import]
     TIMING_KEY_CREATE_LINE_CELLS,
     TIMING_KEY_CREATE_WORD_CELLS,
@@ -65,9 +58,16 @@ from docling_parse.pdf_parsers import (  # type: ignore[import]
     TIMING_PREFIX_DECODE_PAGE,
     TIMING_PREFIX_DECODE_XOBJECT,
     TIMING_PREFIX_DECODING_PAGE,
+    DecodePageConfig,  # type: ignore[import]
+    PageDecodeResult,  # type: ignore[import]
+    PdfPageDecoder,  # type: ignore[import]
+    RenderConfig,  # type: ignore[import]
     get_decode_page_timing_keys,
     get_static_timing_keys,
     is_static_timing_key,
+    pdf_parser,  # type: ignore[import]
+    threaded_pdf_parser,  # type: ignore[import]
+    threaded_pdf_renderer,  # type: ignore[import]
 )
 
 # Configure logging
@@ -87,9 +87,9 @@ class PdfTocEntry(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     title: str
-    level: Optional[int] = None
-    page: Optional[int] = None
-    children: Optional[List["PdfTocEntry"]] = None
+    level: int | None = None
+    page: int | None = None
+    children: List["PdfTocEntry"] | None = None
 
 
 class PdfAnnotations(BaseModel):
@@ -104,10 +104,10 @@ class PdfAnnotations(BaseModel):
 
     model_config = ConfigDict(validate_assignment=True, extra="allow")
 
-    form: Optional[Dict[str, Any]] = None
-    language: Optional[str] = None
-    meta_xml: Optional[str] = None
-    table_of_contents: Optional[List[PdfTocEntry]] = None
+    form: Dict[str, Any] | None = None
+    language: str | None = None
+    meta_xml: str | None = None
+    table_of_contents: List[PdfTocEntry] | None = None
 
 
 class Timings(BaseModel):
@@ -183,7 +183,6 @@ class Timings(BaseModel):
 
 
 class PdfDocument:
-
     def __init__(
         self,
         parser: "pdf_parser",
@@ -194,9 +193,9 @@ class PdfDocument:
         self._key = key
         self._boundary_type = boundary_type
         self._pages: Dict[int, SegmentedPdfPage] = {}
-        self._toc: Optional[PdfTableOfContents] = None
-        self._meta: Optional[PdfMetaData] = None
-        self._annotations: Optional[PdfAnnotations] = None
+        self._toc: PdfTableOfContents | None = None
+        self._meta: PdfMetaData | None = None
+        self._annotations: PdfAnnotations | None = None
 
     def _default_config(self) -> DecodePageConfig:
         config = DecodePageConfig()
@@ -228,13 +227,12 @@ class PdfDocument:
         else:
             raise RuntimeError("This document is not loaded.")
 
-    def get_meta(self) -> Optional[PdfMetaData]:
+    def get_meta(self) -> PdfMetaData | None:
 
         if self._meta is not None:
             return self._meta
 
         if self.is_loaded():
-
             xml = self._parser.get_meta_xml(key=self._key)
 
             if xml is None:
@@ -249,7 +247,7 @@ class PdfDocument:
         else:
             raise RuntimeError("This document is not loaded.")
 
-    def get_table_of_contents(self) -> Optional[PdfTableOfContents]:
+    def get_table_of_contents(self) -> PdfTableOfContents | None:
         if self.is_loaded():
             toc = self._parser.get_table_of_contents(key=self._key)
 
@@ -269,21 +267,23 @@ class PdfDocument:
     def iterate_pages(
         self,
         *,
-        config: Optional[DecodePageConfig] = None,
+        config: DecodePageConfig | None = None,
     ) -> Iterator[Tuple[int, SegmentedPdfPage]]:
         if config is None:
             config = self._default_config()
         for page_no in range(self.number_of_pages()):
-            yield page_no + 1, self.get_page(
+            yield (
                 page_no + 1,
-                config=config,
+                self.get_page(
+                    page_no + 1,
+                    config=config,
+                ),
             )
 
     def _to_table_of_contents(self, toc: dict) -> List[PdfTableOfContents]:
 
         result = []
         for item in toc:
-
             subtoc = PdfTableOfContents(text=item["title"])
             if "children" in item:
                 subtoc.children = self._to_table_of_contents(toc=item["children"])
@@ -300,12 +300,12 @@ class PdfDocument:
                 level=item.get("level"),
                 page=item.get("page"),
             )
-            if "children" in item and item["children"]:
+            if item.get("children"):
                 entry.children = self._to_pdf_toc_entry(item["children"])
             result.append(entry)
         return result
 
-    def get_annotations(self) -> Optional[PdfAnnotations]:
+    def get_annotations(self) -> PdfAnnotations | None:
         """Get document annotations including form fields, language, metadata, and TOC.
 
         Returns:
@@ -341,7 +341,7 @@ class PdfDocument:
         self,
         page_no: int,
         *,
-        config: Optional[DecodePageConfig] = None,
+        config: DecodePageConfig | None = None,
     ) -> SegmentedPdfPage:
         """Get page using typed API (zero-copy from C++)."""
         if config is None:
@@ -352,7 +352,7 @@ class PdfDocument:
         self,
         page_no: int,
         *,
-        config: Optional[DecodePageConfig] = None,
+        config: DecodePageConfig | None = None,
     ) -> Tuple[SegmentedPdfPage, Timings]:
         """Get page along with timing information.
 
@@ -407,7 +407,7 @@ class PdfDocument:
 
         return segmented_page, timings
 
-    def load_all_pages(self, config: Optional[DecodePageConfig] = None):
+    def load_all_pages(self, config: DecodePageConfig | None = None):
         if config is None:
             config = self._default_config()
         for page_no in range(1, self.number_of_pages() + 1):
@@ -522,9 +522,9 @@ class PdfDocument:
                 break
             """
 
-            for l in range(0, len(indices), 2):
-                i0: int = indices[l + 0]
-                i1: int = indices[l + 1]
+            for pair_idx in range(0, len(indices), 2):
+                i0: int = indices[pair_idx + 0]
+                i1: int = indices[pair_idx + 1]
 
                 points: List[Coord2D] = []
                 for k in range(i0, i1):
@@ -535,7 +535,7 @@ class PdfDocument:
 
                 pdf_shape = PdfShape(
                     index=ind,
-                    parent_id=l,
+                    parent_id=pair_idx,
                     points=points,
                     has_graphics_state=shape.get_has_graphics_state(),
                     line_width=shape.get_line_width(),
@@ -652,7 +652,7 @@ class PdfDocument:
                         # Compute DPI from pixel dimensions and PDF bbox
                         bbox_width = abs(image.x1 - image.x0)
                         if bbox_width > 0 and image.image_width > 0:
-                            dpi = int(round(image.image_width * 72.0 / bbox_width))
+                            dpi = round(image.image_width * 72.0 / bbox_width)
                         else:
                             dpi = 72
 
@@ -760,7 +760,6 @@ class PdfDocument:
 
 
 class DoclingPdfParser:
-
     def __init__(self, loglevel: str = "fatal"):
         """
         Set the log level using a string label.
@@ -794,14 +793,14 @@ class DoclingPdfParser:
         path_or_stream: Union[str, Path, BytesIO],
         lazy: bool = True,
         boundary_type: PdfPageBoundaryType = PdfPageBoundaryType.CROP_BOX,
-        password: Optional[str] = None,
+        password: str | None = None,
     ) -> PdfDocument:
 
         if isinstance(path_or_stream, str):
             path_or_stream = Path(path_or_stream)
 
         if isinstance(path_or_stream, Path):
-            key = f"key={str(path_or_stream)}"  # use filepath as internal handle
+            key = f"key={path_or_stream!s}"  # use filepath as internal handle
             success = self._load_document(
                 key=key, filename=str(path_or_stream), password=password
             )
@@ -829,7 +828,7 @@ class DoclingPdfParser:
             raise RuntimeError(f"Failed to load document with key {key}")
 
     def _load_document(
-        self, key: str, filename: str, password: Optional[str] = None
+        self, key: str, filename: str, password: str | None = None
     ) -> bool:
         """Load a document by key and filename.
 
@@ -898,8 +897,8 @@ class DoclingThreadedPdfParser:
 
     def __init__(
         self,
-        parser_config: Optional[ThreadedPdfParserConfig] = None,
-        decode_config: Optional[DecodePageConfig] = None,
+        parser_config: ThreadedPdfParserConfig | None = None,
+        decode_config: DecodePageConfig | None = None,
     ):
         if parser_config is None:
             parser_config = ThreadedPdfParserConfig()
@@ -916,7 +915,7 @@ class DoclingThreadedPdfParser:
     def load(
         self,
         path_or_stream: Union[str, Path, BytesIO],
-        password: Optional[str] = None,
+        password: str | None = None,
     ) -> str:
         """Load a document for parallel processing.
 
@@ -931,7 +930,7 @@ class DoclingThreadedPdfParser:
             path_or_stream = Path(path_or_stream)
 
         if isinstance(path_or_stream, Path):
-            key = f"key={str(path_or_stream)}"
+            key = f"key={path_or_stream!s}"
             success = self._parser.load_document(
                 key=key, filename=str(path_or_stream).encode("utf8"), password=password
             )
@@ -1030,7 +1029,7 @@ class PdfPageRenderResult:
         """
         return self._raw.get()
 
-    def get_image(self) -> Optional[PILImage.Image]:
+    def get_image(self) -> PILImage.Image | None:
         """Convert rendered pixel data to a PIL RGBA Image.
 
         Returns:
@@ -1078,9 +1077,9 @@ class DoclingThreadedPdfRenderer:
 
     def __init__(
         self,
-        renderer_config: Optional[ThreadedPdfRendererConfig] = None,
-        decode_config: Optional[DecodePageConfig] = None,
-        render_config: Optional[RenderConfig] = None,
+        renderer_config: ThreadedPdfRendererConfig | None = None,
+        decode_config: DecodePageConfig | None = None,
+        render_config: RenderConfig | None = None,
     ):
         if renderer_config is None:
             renderer_config = ThreadedPdfRendererConfig()
@@ -1100,7 +1099,7 @@ class DoclingThreadedPdfRenderer:
     def load(
         self,
         path_or_stream: Union[str, Path, BytesIO],
-        password: Optional[str] = None,
+        password: str | None = None,
     ) -> str:
         """Load a document for parallel rendering.
 
@@ -1115,7 +1114,7 @@ class DoclingThreadedPdfRenderer:
             path_or_stream = Path(path_or_stream)
 
         if isinstance(path_or_stream, Path):
-            key = f"key={str(path_or_stream)}"
+            key = f"key={path_or_stream!s}"
             success = self._renderer.load_document(
                 key=key, filename=str(path_or_stream).encode("utf8"), password=password
             )
@@ -1170,7 +1169,7 @@ class PdfRenderDocument:
         renderer_config: ThreadedPdfRendererConfig,
         decode_config: DecodePageConfig,
         render_config: RenderConfig,
-        password: Optional[str] = None,
+        password: str | None = None,
     ):
         self._path_or_stream = path_or_stream
         self._parser_doc = parser_doc
@@ -1238,8 +1237,8 @@ class DoclingPdfRenderer:
     def __init__(
         self,
         loglevel: str = "fatal",
-        decode_config: Optional[DecodePageConfig] = None,
-        render_config: Optional[RenderConfig] = None,
+        decode_config: DecodePageConfig | None = None,
+        render_config: RenderConfig | None = None,
     ):
         self._loglevel = loglevel
         self._parser = DoclingPdfParser(loglevel=loglevel)
@@ -1256,7 +1255,7 @@ class DoclingPdfRenderer:
         path_or_stream: Union[str, Path, BytesIO],
         lazy: bool = True,
         boundary_type: PdfPageBoundaryType = PdfPageBoundaryType.CROP_BOX,
-        password: Optional[str] = None,
+        password: str | None = None,
     ) -> PdfRenderDocument:
         parser_doc = self._parser.load(
             path_or_stream=path_or_stream,

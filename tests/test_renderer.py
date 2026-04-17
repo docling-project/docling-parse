@@ -53,18 +53,18 @@ def _assert_json_matches_with_float_delta(
         return
 
     if isinstance(expected, float):
-        assert isinstance(
-            actual, (int, float)
-        ), f"{path}: expected float, got {type(actual).__name__}"
-        assert (
-            abs(expected - float(actual)) <= eps
-        ), f"{path}: abs({expected} - {actual}) > {eps}"
+        assert isinstance(actual, (int, float)), (
+            f"{path}: expected float, got {type(actual).__name__}"
+        )
+        assert abs(expected - float(actual)) <= eps, (
+            f"{path}: abs({expected} - {actual}) > {eps}"
+        )
         return
 
     if isinstance(expected, dict):
-        assert isinstance(
-            actual, dict
-        ), f"{path}: expected dict, got {type(actual).__name__}"
+        assert isinstance(actual, dict), (
+            f"{path}: expected dict, got {type(actual).__name__}"
+        )
         assert expected.keys() == actual.keys(), f"{path}: key mismatch"
         for key in expected:
             _assert_json_matches_with_float_delta(
@@ -73,9 +73,9 @@ def _assert_json_matches_with_float_delta(
         return
 
     if isinstance(expected, list):
-        assert isinstance(
-            actual, list
-        ), f"{path}: expected list, got {type(actual).__name__}"
+        assert isinstance(actual, list), (
+            f"{path}: expected list, got {type(actual).__name__}"
+        )
         assert len(expected) == len(actual), f"{path}: length mismatch"
         for idx, (expected_item, actual_item) in enumerate(zip(expected, actual)):
             _assert_json_matches_with_float_delta(
@@ -109,7 +109,7 @@ def _write_json(path: Path, payload) -> None:
 
 
 def _load_json(path: Path):
-    with open(path, "r", encoding="utf-8") as fr:
+    with open(path, encoding="utf-8") as fr:
         return json.load(fr)
 
 
@@ -160,15 +160,15 @@ def _export_or_verify_bitmaps(pdf_name: str, page_no: int, bitmaps) -> None:
             continue
 
         true_sidecar = _load_json(sidecar_path)
-        assert true_sidecar == _round_floats(
-            sidecar
-        ), f"bitmap metadata mismatch for {sidecar_path}"
+        assert true_sidecar == _round_floats(sidecar), (
+            f"bitmap metadata mismatch for {sidecar_path}"
+        )
 
         with open(artifact_path, "rb") as fr:
             true_bytes = fr.read()
-        assert (
-            true_bytes == bitmap["encoded_data"]
-        ), f"bitmap artifact bytes mismatch for {artifact_path}"
+        assert true_bytes == bitmap["encoded_data"], (
+            f"bitmap artifact bytes mismatch for {artifact_path}"
+        )
 
 
 def _export_full_page_png(pdf_name: str, page_no: int, image) -> None:
@@ -211,10 +211,10 @@ def test_render_reference_documents():
 
             try:
                 render_result = pdf_doc.get_page(page_no)
-                assert (
-                    render_result is not None
-                ), f"failed to render {pdf_name}@{page_no}"
-                page_decoder, timings = render_result.get()
+                assert render_result is not None, (
+                    f"failed to render {pdf_name}@{page_no}"
+                )
+                page_decoder, _timings = render_result.get()
 
                 pred_instructions = page_decoder.export_render_instructions_json()
                 true_instruction_path = _instruction_path(pdf_name, page_no)
@@ -227,9 +227,9 @@ def test_render_reference_documents():
                     true_instructions_len = len(true_instructions["instructions"])
                     pred_instructions_len = len(pred_instructions["instructions"])
 
-                    assert (
-                        true_instructions_len == pred_instructions_len
-                    ), f"true_instructions_len==pred_instructions_len ({true_instructions_len}=={pred_instructions_len}) for {true_instruction_path}"
+                    assert true_instructions_len == pred_instructions_len, (
+                        f"true_instructions_len==pred_instructions_len ({true_instructions_len}=={pred_instructions_len}) for {true_instruction_path}"
+                    )
 
                     for ind, true_instruction in enumerate(
                         true_instructions["instructions"]

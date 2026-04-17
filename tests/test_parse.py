@@ -57,28 +57,27 @@ def verify_bitmap_resources(
     eps: float,
 ) -> bool:
 
-    assert len(true_bitmap_resources) == len(
-        pred_bitmap_resources
-    ), "len(true_bitmap_resources)==len(pred_bitmap_resources)"
+    assert len(true_bitmap_resources) == len(pred_bitmap_resources), (
+        "len(true_bitmap_resources)==len(pred_bitmap_resources)"
+    )
 
     for i, true_bitmap_resource in enumerate(true_bitmap_resources):
-
         pred_bitmap_resource = pred_bitmap_resources[i]
 
-        assert (
-            true_bitmap_resource.index == pred_bitmap_resource.index
-        ), "true_bitmap_resource.ordering == pred_bitmap_resource.ordering"
+        assert true_bitmap_resource.index == pred_bitmap_resource.index, (
+            "true_bitmap_resource.ordering == pred_bitmap_resource.ordering"
+        )
 
         true_rect = true_bitmap_resource.rect.to_polygon()
         pred_rect = pred_bitmap_resource.rect.to_polygon()
 
-        for l in range(0, 4):
-            assert (
-                abs(true_rect[l][0] - pred_rect[l][0]) < eps
-            ), "abs(true_rect[l][0]-pred_rect[l][0])<eps"
-            assert (
-                abs(true_rect[l][1] - pred_rect[l][1]) < eps
-            ), "abs(true_rect[l][1]-pred_rect[l][1])<eps"
+        for point_idx in range(4):
+            assert abs(true_rect[point_idx][0] - pred_rect[point_idx][0]) < eps, (
+                "abs(true_rect[l][0]-pred_rect[l][0])<eps"
+            )
+            assert abs(true_rect[point_idx][1] - pred_rect[point_idx][1]) < eps, (
+                "abs(true_rect[l][1]-pred_rect[l][1])<eps"
+            )
 
     return True
 
@@ -106,61 +105,62 @@ def verify_cells(
     assert len(true_cells) == len(pred_cells), "len(true_cells)==len(pred_cells)"
 
     for i, true_cell in enumerate(true_cells):
-
         pred_cell = pred_cells[i]
 
         assert true_cell.index == pred_cell.index, "true_cell.index == pred_cell.index"
 
         assert (
             # true_cell.text == pred_cell.text
-            normalize_text(true_cell.text)
-            == normalize_text(pred_cell.text)
-        ), f"true_cell.text == pred_cell.text => {true_cell.text} == {pred_cell.text} for {filename}"
+            normalize_text(true_cell.text) == normalize_text(pred_cell.text)
+        ), (
+            f"true_cell.text == pred_cell.text => {true_cell.text} == {pred_cell.text} for {filename}"
+        )
         assert (
             # true_cell.orig == pred_cell.orig
-            normalize_text(true_cell.orig)
-            == normalize_text(pred_cell.orig)
-        ), f"true_cell.orig == pred_cell.orig => {true_cell.orig} == {pred_cell.orig} for {filename}"
+            normalize_text(true_cell.orig) == normalize_text(pred_cell.orig)
+        ), (
+            f"true_cell.orig == pred_cell.orig => {true_cell.orig} == {pred_cell.orig} for {filename}"
+        )
 
         true_rect = true_cell.rect.to_polygon()
         pred_rect = pred_cell.rect.to_polygon()
 
-        for l in range(0, 4):
-            assert (
-                abs(true_rect[l][0] - pred_rect[l][0]) < eps
-            ), f"abs(true_rect[{l}][0]-pred_rect[{l}][0])<eps -> abs({true_rect[l][0]}-{pred_rect[l][0]})<{eps} for {filename}"
+        for point_idx in range(4):
+            assert abs(true_rect[point_idx][0] - pred_rect[point_idx][0]) < eps, (
+                f"abs(true_rect[{point_idx}][0]-pred_rect[{point_idx}][0])<eps -> abs({true_rect[point_idx][0]}-{pred_rect[point_idx][0]})<{eps} for {filename}"
+            )
 
-            assert (
-                abs(true_rect[l][1] - pred_rect[l][1]) < eps
-            ), f"abs(true_rect[{l}][1]-pred_rect[{l}][1])<eps -> abs({true_rect[l][1]}-{pred_rect[l][1]})<{eps} for {filename}"
+            assert abs(true_rect[point_idx][1] - pred_rect[point_idx][1]) < eps, (
+                f"abs(true_rect[{point_idx}][1]-pred_rect[{point_idx}][1])<eps -> abs({true_rect[point_idx][1]}-{pred_rect[point_idx][1]})<{eps} for {filename}"
+            )
 
         # print("true-text: ", true_cell.text)
         # print("pred-text: ", pred_cell.text)
 
         if isinstance(true_cell, PdfTextCell) and isinstance(pred_cell, PdfTextCell):
-            assert (
-                true_cell.font_key == pred_cell.font_key
-            ), "true_cell.font_key == pred_cell.font_key"
-            assert (
-                true_cell.font_name == pred_cell.font_name
-            ), "true_cell.font_name == pred_cell.font_name"
+            assert true_cell.font_key == pred_cell.font_key, (
+                "true_cell.font_key == pred_cell.font_key"
+            )
+            assert true_cell.font_name == pred_cell.font_name, (
+                "true_cell.font_name == pred_cell.font_name"
+            )
 
-            assert (
-                true_cell.widget == pred_cell.widget
-            ), "true_cell.widget == pred_cell.widget"
+            assert true_cell.widget == pred_cell.widget, (
+                "true_cell.widget == pred_cell.widget"
+            )
 
-            assert (
-                true_cell.rgba.r == pred_cell.rgba.r
-            ), "true_cell.rgba.r == pred_cell.rgba.r"
-            assert (
-                true_cell.rgba.g == pred_cell.rgba.g
-            ), "true_cell.rgba.g == pred_cell.rgba.g"
-            assert (
-                true_cell.rgba.b == pred_cell.rgba.b
-            ), "true_cell.rgba.b == pred_cell.rgba.b"
-            assert (
-                true_cell.rgba.a == pred_cell.rgba.a
-            ), "true_cell.rgba.a == pred_cell.rgba.a"
+            assert true_cell.rgba.r == pred_cell.rgba.r, (
+                "true_cell.rgba.r == pred_cell.rgba.r"
+            )
+            assert true_cell.rgba.g == pred_cell.rgba.g, (
+                "true_cell.rgba.g == pred_cell.rgba.g"
+            )
+            assert true_cell.rgba.b == pred_cell.rgba.b, (
+                "true_cell.rgba.b == pred_cell.rgba.b"
+            )
+            assert true_cell.rgba.a == pred_cell.rgba.a, (
+                "true_cell.rgba.a == pred_cell.rgba.a"
+            )
         else:
             return False
 
@@ -174,81 +174,80 @@ def verify_shapes(
     assert len(true_shapes) == len(pred_shapes), "len(true_shapes)==len(pred_shapes)"
 
     for i, true_shape in enumerate(true_shapes):
-
         pred_shape = pred_shapes[i]
 
-        assert (
-            true_shape.index == pred_shape.index
-        ), "true_shape.index == pred_shape.index"
+        assert true_shape.index == pred_shape.index, (
+            "true_shape.index == pred_shape.index"
+        )
 
-        assert (
-            true_shape.parent_id == pred_shape.parent_id
-        ), "true_shape.parent_id == pred_shape.parent_id"
+        assert true_shape.parent_id == pred_shape.parent_id, (
+            "true_shape.parent_id == pred_shape.parent_id"
+        )
 
         true_points = true_shape.points
         pred_points = pred_shape.points
 
-        assert len(true_points) == len(
-            pred_points
-        ), "len(true_points) == len(pred_points)"
+        assert len(true_points) == len(pred_points), (
+            "len(true_points) == len(pred_points)"
+        )
 
-        for l, true_point in enumerate(true_points):
-            assert (
-                abs(true_point[0] - pred_points[l][0]) < eps
-            ), "abs(true_point[0]-pred_points[l][0])<eps"
-            assert (
-                abs(true_point[1] - pred_points[l][1]) < eps
-            ), "abs(true_point[1]-pred_points[l][1])<eps"
+        for point_idx, true_point in enumerate(true_points):
+            assert abs(true_point[0] - pred_points[point_idx][0]) < eps, (
+                "abs(true_point[0]-pred_points[l][0])<eps"
+            )
+            assert abs(true_point[1] - pred_points[point_idx][1]) < eps, (
+                "abs(true_point[1]-pred_points[l][1])<eps"
+            )
 
-        assert (
-            true_shape.has_graphics_state == pred_shape.has_graphics_state
-        ), "true_shape.has_graphics_state == pred_shape.has_graphics_state"
+        assert true_shape.has_graphics_state == pred_shape.has_graphics_state, (
+            "true_shape.has_graphics_state == pred_shape.has_graphics_state"
+        )
 
-        assert (
-            abs(true_shape.line_width - pred_shape.line_width) < eps
-        ), "abs(true_shape.line_width - pred_shape.line_width) < eps"
-        assert (
-            abs(true_shape.miter_limit - pred_shape.miter_limit) < eps
-        ), "abs(true_shape.miter_limit - pred_shape.miter_limit) < eps"
-        assert (
-            true_shape.line_cap == pred_shape.line_cap
-        ), "true_shape.line_cap == pred_shape.line_cap"
-        assert (
-            true_shape.line_join == pred_shape.line_join
-        ), "true_shape.line_join == pred_shape.line_join"
-        assert (
-            abs(true_shape.dash_phase - pred_shape.dash_phase) < eps
-        ), "abs(true_shape.dash_phase - pred_shape.dash_phase) < eps"
-        assert len(true_shape.dash_array) == len(
-            pred_shape.dash_array
-        ), "len(true_shape.dash_array) == len(pred_shape.dash_array)"
+        assert abs(true_shape.line_width - pred_shape.line_width) < eps, (
+            "abs(true_shape.line_width - pred_shape.line_width) < eps"
+        )
+        assert abs(true_shape.miter_limit - pred_shape.miter_limit) < eps, (
+            "abs(true_shape.miter_limit - pred_shape.miter_limit) < eps"
+        )
+        assert true_shape.line_cap == pred_shape.line_cap, (
+            "true_shape.line_cap == pred_shape.line_cap"
+        )
+        assert true_shape.line_join == pred_shape.line_join, (
+            "true_shape.line_join == pred_shape.line_join"
+        )
+        assert abs(true_shape.dash_phase - pred_shape.dash_phase) < eps, (
+            "abs(true_shape.dash_phase - pred_shape.dash_phase) < eps"
+        )
+        assert len(true_shape.dash_array) == len(pred_shape.dash_array), (
+            "len(true_shape.dash_array) == len(pred_shape.dash_array)"
+        )
         for j, true_dash in enumerate(true_shape.dash_array):
-            assert (
-                abs(true_dash - pred_shape.dash_array[j]) < eps
-            ), "abs(true_dash - pred_shape.dash_array[j]) < eps"
-        assert (
-            abs(true_shape.flatness - pred_shape.flatness) < eps
-        ), "abs(true_shape.flatness - pred_shape.flatness) < eps"
+            assert abs(true_dash - pred_shape.dash_array[j]) < eps, (
+                "abs(true_dash - pred_shape.dash_array[j]) < eps"
+            )
+        assert abs(true_shape.flatness - pred_shape.flatness) < eps, (
+            "abs(true_shape.flatness - pred_shape.flatness) < eps"
+        )
 
-        assert (
-            true_shape.rgb_stroking.r == pred_shape.rgb_stroking.r
-        ), "true_shape.rgb_stroking.r == pred_shape.rgb_stroking.r"
-        assert (
-            true_shape.rgb_stroking.g == pred_shape.rgb_stroking.g
-        ), "true_shape.rgb_stroking.g == pred_shape.rgb_stroking.g"
-        assert (
-            true_shape.rgb_stroking.b == pred_shape.rgb_stroking.b
-        ), "true_shape.rgb_stroking.b == pred_shape.rgb_stroking.b"
+        assert true_shape.rgb_stroking.r == pred_shape.rgb_stroking.r, (
+            "true_shape.rgb_stroking.r == pred_shape.rgb_stroking.r"
+        )
+        assert true_shape.rgb_stroking.g == pred_shape.rgb_stroking.g, (
+            "true_shape.rgb_stroking.g == pred_shape.rgb_stroking.g"
+        )
+        assert true_shape.rgb_stroking.b == pred_shape.rgb_stroking.b, (
+            "true_shape.rgb_stroking.b == pred_shape.rgb_stroking.b"
+        )
 
-        assert (
-            true_shape.rgb_filling.r == pred_shape.rgb_filling.r
-        ), "true_shape.rgb_filling.r == pred_shape.rgb_filling.r"
-        assert (
-            true_shape.rgb_filling.g == pred_shape.rgb_filling.g
-        ), "true_shape.rgb_filling.g == pred_shape.rgb_filling.g"
-        assert (
-            true_shape.rgb_filling.b == pred_shape.rgb_filling.b
-        ), "true_shape.rgb_filling.b == pred_shape.rgb_filling.b"
+        assert true_shape.rgb_filling.r == pred_shape.rgb_filling.r, (
+            "true_shape.rgb_filling.r == pred_shape.rgb_filling.r"
+        )
+        assert true_shape.rgb_filling.g == pred_shape.rgb_filling.g, (
+            "true_shape.rgb_filling.g == pred_shape.rgb_filling.g"
+        )
+        assert true_shape.rgb_filling.b == pred_shape.rgb_filling.b, (
+            "true_shape.rgb_filling.b == pred_shape.rgb_filling.b"
+        )
 
     return True
 
@@ -257,40 +256,40 @@ def verify_widgets(
     true_widgets: List[PdfWidget], pred_widgets: List[PdfWidget], eps: float
 ) -> bool:
 
-    assert len(true_widgets) == len(
-        pred_widgets
-    ), "len(true_widgets)==len(pred_widgets)"
+    assert len(true_widgets) == len(pred_widgets), (
+        "len(true_widgets)==len(pred_widgets)"
+    )
 
     for i, true_widget in enumerate(true_widgets):
         pred_widget = pred_widgets[i]
 
-        assert (
-            true_widget.index == pred_widget.index
-        ), "true_widget.index == pred_widget.index"
+        assert true_widget.index == pred_widget.index, (
+            "true_widget.index == pred_widget.index"
+        )
 
         true_rect = true_widget.rect.to_polygon()
         pred_rect = pred_widget.rect.to_polygon()
 
-        for l in range(0, 4):
-            assert (
-                abs(true_rect[l][0] - pred_rect[l][0]) < eps
-            ), "abs(true_rect[l][0]-pred_rect[l][0])<eps"
-            assert (
-                abs(true_rect[l][1] - pred_rect[l][1]) < eps
-            ), "abs(true_rect[l][1]-pred_rect[l][1])<eps"
+        for point_idx in range(4):
+            assert abs(true_rect[point_idx][0] - pred_rect[point_idx][0]) < eps, (
+                "abs(true_rect[l][0]-pred_rect[l][0])<eps"
+            )
+            assert abs(true_rect[point_idx][1] - pred_rect[point_idx][1]) < eps, (
+                "abs(true_rect[l][1]-pred_rect[l][1])<eps"
+            )
 
-        assert (
-            true_widget.widget_text == pred_widget.widget_text
-        ), "true_widget.widget_text == pred_widget.widget_text"
-        assert (
-            true_widget.widget_description == pred_widget.widget_description
-        ), "true_widget.widget_description == pred_widget.widget_description"
-        assert (
-            true_widget.widget_field_name == pred_widget.widget_field_name
-        ), "true_widget.widget_field_name == pred_widget.widget_field_name"
-        assert (
-            true_widget.widget_field_type == pred_widget.widget_field_type
-        ), "true_widget.widget_field_type == pred_widget.widget_field_type"
+        assert true_widget.widget_text == pred_widget.widget_text, (
+            "true_widget.widget_text == pred_widget.widget_text"
+        )
+        assert true_widget.widget_description == pred_widget.widget_description, (
+            "true_widget.widget_description == pred_widget.widget_description"
+        )
+        assert true_widget.widget_field_name == pred_widget.widget_field_name, (
+            "true_widget.widget_field_name == pred_widget.widget_field_name"
+        )
+        assert true_widget.widget_field_type == pred_widget.widget_field_type, (
+            "true_widget.widget_field_type == pred_widget.widget_field_type"
+        )
 
     return True
 
@@ -301,31 +300,31 @@ def verify_hyperlinks(
     eps: float,
 ) -> bool:
 
-    assert len(true_hyperlinks) == len(
-        pred_hyperlinks
-    ), "len(true_hyperlinks)==len(pred_hyperlinks)"
+    assert len(true_hyperlinks) == len(pred_hyperlinks), (
+        "len(true_hyperlinks)==len(pred_hyperlinks)"
+    )
 
     for i, true_hyperlink in enumerate(true_hyperlinks):
         pred_hyperlink = pred_hyperlinks[i]
 
-        assert (
-            true_hyperlink.index == pred_hyperlink.index
-        ), "true_hyperlink.index == pred_hyperlink.index"
+        assert true_hyperlink.index == pred_hyperlink.index, (
+            "true_hyperlink.index == pred_hyperlink.index"
+        )
 
         true_rect = true_hyperlink.rect.to_polygon()
         pred_rect = pred_hyperlink.rect.to_polygon()
 
-        for l in range(0, 4):
-            assert (
-                abs(true_rect[l][0] - pred_rect[l][0]) < eps
-            ), "abs(true_rect[l][0]-pred_rect[l][0])<eps"
-            assert (
-                abs(true_rect[l][1] - pred_rect[l][1]) < eps
-            ), "abs(true_rect[l][1]-pred_rect[l][1])<eps"
+        for point_idx in range(4):
+            assert abs(true_rect[point_idx][0] - pred_rect[point_idx][0]) < eps, (
+                "abs(true_rect[l][0]-pred_rect[l][0])<eps"
+            )
+            assert abs(true_rect[point_idx][1] - pred_rect[point_idx][1]) < eps, (
+                "abs(true_rect[l][1]-pred_rect[l][1])<eps"
+            )
 
-        assert str(true_hyperlink.uri) == str(
-            pred_hyperlink.uri
-        ), "true_hyperlink.uri == pred_hyperlink.uri"
+        assert str(true_hyperlink.uri) == str(pred_hyperlink.uri), (
+            "true_hyperlink.uri == pred_hyperlink.uri"
+        )
 
     return True
 
@@ -445,13 +444,13 @@ def test_reference_documents_from_filenames():
 
                         _fname = fname + f".{unit}.txt"
 
-                        with open(_fname, "r") as fr:
+                        with open(_fname) as fr:
                             content = fr.read()
                             lines = content.split(SPECIAL_SEPERATOR) if content else []
 
-                        assert len(lines) == len(
-                            _lines
-                        ), f"len(lines) == len(_lines) => {len(lines)} == {len(_lines)} from {_fname} for {pdf_doc_path}"
+                        assert len(lines) == len(_lines), (
+                            f"len(lines) == len(_lines) => {len(lines)} == {len(_lines)} from {_fname} for {pdf_doc_path}"
+                        )
 
                         # this is a bit dangerous due to rounding errors ...
                         """
@@ -464,12 +463,9 @@ def test_reference_documents_from_filenames():
                     true_page = SegmentedPdfPage.load_from_json(fname)
                     verify_SegmentedPdfPage(true_page, pred_page, filename=fname)
 
-                img = pred_page.render_as_image(cell_unit=TextCellUnit.CHAR)
-                # img.show()
-                img = pred_page.render_as_image(cell_unit=TextCellUnit.WORD)
-                # img.show()
-                img = pred_page.render_as_image(cell_unit=TextCellUnit.LINE)
-                # img.show()
+                pred_page.render_as_image(cell_unit=TextCellUnit.CHAR)
+                pred_page.render_as_image(cell_unit=TextCellUnit.WORD)
+                pred_page.render_as_image(cell_unit=TextCellUnit.LINE)
 
                 results.append((rname, str(page_no), True, ""))
             except Exception as exc:
@@ -478,7 +474,7 @@ def test_reference_documents_from_filenames():
             # print(f"unloading page: {page_no}")
             pdf_doc.unload_pages(page_range=(page_no, page_no + 1))
 
-        toc: PdfTableOfContents = pdf_doc.get_table_of_contents()
+        _toc: PdfTableOfContents = pdf_doc.get_table_of_contents()
         """
         if toc is not None:
             data = toc.export_to_dict()
@@ -806,17 +802,17 @@ def verify_annotations_recursive(true_annots, pred_annots):
             verify_annotations_recursive(true_annots[i], pred_annots[i])
 
     elif isinstance(true_annots, str):
-        assert (
-            true_annots == pred_annots
-        ), f"String mismatch: {true_annots}!={pred_annots}"
+        assert true_annots == pred_annots, (
+            f"String mismatch: {true_annots}!={pred_annots}"
+        )
 
     elif isinstance(true_annots, int):
         assert true_annots == pred_annots, f"Int mismatch: {true_annots}!={pred_annots}"
 
     elif isinstance(true_annots, float):
-        assert (
-            abs(true_annots - pred_annots) < 1e-6
-        ), f"Float mismatch: {true_annots}!={pred_annots}"
+        assert abs(true_annots - pred_annots) < 1e-6, (
+            f"Float mismatch: {true_annots}!={pred_annots}"
+        )
 
     elif true_annots is None:
         assert pred_annots is None, "Expected None"
@@ -844,9 +840,9 @@ def test_table_of_contents():
     # Verify expected top-level entries exist
     top_level_titles = [child.text for child in toc.children]
     assert "Introduction" in top_level_titles, "TOC should contain 'Introduction'"
-    assert (
-        "Model Architecture" in top_level_titles
-    ), "TOC should contain 'Model Architecture'"
+    assert "Model Architecture" in top_level_titles, (
+        "TOC should contain 'Model Architecture'"
+    )
     assert "Conclusion" in top_level_titles, "TOC should contain 'Conclusion'"
 
     # Verify nested structure exists
@@ -854,18 +850,18 @@ def test_table_of_contents():
         (child for child in toc.children if child.text == "Model Architecture"), None
     )
     assert model_arch_entry is not None, "Should find 'Model Architecture' entry"
-    assert (
-        model_arch_entry.children is not None
-    ), "'Model Architecture' should have children"
-    assert (
-        len(model_arch_entry.children) >= 2
-    ), "'Model Architecture' should have at least 2 children"
+    assert model_arch_entry.children is not None, (
+        "'Model Architecture' should have children"
+    )
+    assert len(model_arch_entry.children) >= 2, (
+        "'Model Architecture' should have at least 2 children"
+    )
 
     nested_titles = [child.text for child in model_arch_entry.children]
     assert "Dense Models" in nested_titles, "Should contain 'Dense Models' nested entry"
-    assert (
-        "Mixture-of-Expert models" in nested_titles
-    ), "Should contain 'Mixture-of-Expert models' nested entry"
+    assert "Mixture-of-Expert models" in nested_titles, (
+        "Should contain 'Mixture-of-Expert models' nested entry"
+    )
 
     # Test caching - calling again should return same instance
     toc2 = pdf_doc.get_table_of_contents()
@@ -874,12 +870,12 @@ def test_table_of_contents():
     # Test get_annotations().table_of_contents
     annotations = pdf_doc.get_annotations()
     assert annotations is not None, "Annotations should not be None"
-    assert (
-        annotations.table_of_contents is not None
-    ), "annotations.table_of_contents should not be None"
-    assert (
-        len(annotations.table_of_contents) > 0
-    ), "annotations.table_of_contents should have entries"
+    assert annotations.table_of_contents is not None, (
+        "annotations.table_of_contents should not be None"
+    )
+    assert len(annotations.table_of_contents) > 0, (
+        "annotations.table_of_contents should have entries"
+    )
 
     # Verify PdfTocEntry structure
     first_entry = annotations.table_of_contents[0]
@@ -891,15 +887,15 @@ def test_table_of_contents():
         (e for e in annotations.table_of_contents if e.title == "Model Architecture"),
         None,
     )
-    assert (
-        model_arch_annot is not None
-    ), "Should find 'Model Architecture' in annotations TOC"
-    assert (
-        model_arch_annot.children is not None
-    ), "'Model Architecture' annotation should have children"
-    assert (
-        len(model_arch_annot.children) >= 2
-    ), "'Model Architecture' annotation should have at least 2 children"
+    assert model_arch_annot is not None, (
+        "Should find 'Model Architecture' in annotations TOC"
+    )
+    assert model_arch_annot.children is not None, (
+        "'Model Architecture' annotation should have children"
+    )
+    assert len(model_arch_annot.children) >= 2, (
+        "'Model Architecture' annotation should have at least 2 children"
+    )
 
     for child in model_arch_annot.children:
         assert child.level == 1, "Children of top-level entry should have level 1"
@@ -948,7 +944,7 @@ def test_annotations_match_groundtruth():
         pred_annotations = pdf_doc.get_annotations()
 
         # Load groundtruth
-        with open(groundtruth_path, "r") as fr:
+        with open(groundtruth_path) as fr:
             true_doc = json.load(fr)
             true_annotations = true_doc["annotations"]
 

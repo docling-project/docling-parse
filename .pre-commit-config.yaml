@@ -2,25 +2,15 @@ fail_fast: true
 repos:
   - repo: local
     hooks:
-      - id: system
-        name: Black
-        entry: uv run black docling_parse tests
+      - id: ruff-format
+        name: Ruff formatter
+        entry: uv run ruff format docling_parse tests
         pass_filenames: false
         language: system
         files: '\.py$'
-  - repo: local
-    hooks:
-      - id: system
-        name: isort
-        entry: uv run isort docling_parse tests
-        pass_filenames: false
-        language: system
-        files: '\.py$'
-  - repo: local
-    hooks:
-      - id: autoflake
-        name: autoflake
-        entry: uv run autoflake docling_parse tests
+      - id: ruff-lint
+        name: Ruff linter
+        entry: uv run ruff check --fix docling_parse tests
         pass_filenames: false
         language: system
         files: '\.py$'
@@ -42,8 +32,8 @@ repos:
 #        files: '\.py$'	
   - repo: local
     hooks:
-      - id: system
-        name: uv check
+      - id: uv-lock
+        name: uv-lock
         entry: uv lock --check
         pass_filenames: false
         language: system

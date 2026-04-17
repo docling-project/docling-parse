@@ -50,9 +50,9 @@ def test_render_single_document():
 
         assert result.doc_key == key
         assert result.page_number >= 0
-        assert (
-            result.success
-        ), f"Render failed page {result.page_number}: {result.error()}"
+        assert result.success, (
+            f"Render failed page {result.page_number}: {result.error()}"
+        )
 
         image = result.get_image()
         assert image is not None, "get_image() returned None on success"
@@ -100,9 +100,9 @@ def test_render_multiple_documents():
         result = renderer.get_task()
         cnt += 1
 
-        assert (
-            result.success
-        ), f"Render failed doc-key: {result.doc_key}, page: {result.page_number}: {result.error()}"
+        assert result.success, (
+            f"Render failed doc-key: {result.doc_key}, page: {result.page_number}: {result.error()}"
+        )
         print(
             f"Render success ({cnt}): doc-key={result.doc_key}, page={result.page_number}"
         )
@@ -110,7 +110,7 @@ def test_render_multiple_documents():
         results_by_key.setdefault(result.doc_key, []).append(result.page_number)
 
         image = result.get_image()
-        assert image is not None, f"{img} is None"
+        assert image is not None, "image is None"
 
         # img.show()
 
@@ -286,7 +286,7 @@ def test_render_reference_documents_from_filenames():
         assert result.doc_key != "", "doc_key should not be empty"
 
         if result.success:
-            page_decoder, timings = result.get()
+            page_decoder, _timings = result.get()
             pred_page = _build_segmented_page_from_decoder(page_decoder)
 
             if result.doc_key not in results:
@@ -298,7 +298,7 @@ def test_render_reference_documents_from_filenames():
             )
 
     for pdf_doc_path in pdf_docs:
-        key = f"key={str(Path(pdf_doc_path))}"
+        key = f"key={Path(pdf_doc_path)!s}"
 
         assert key in results, f"No results found for {pdf_doc_path}"
 
