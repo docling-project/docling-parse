@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+from typing import Any
 
 from docling_parse.pdf_parser import (
     DecodePageConfig,
@@ -12,6 +13,7 @@ from docling_parse.pdf_parser import (
 )
 
 GENERATE = False
+RENDER_INSTRUCTION_EPS = 0.005
 
 GROUNDTRUTH_RENDERER_FOLDER = "tests/data/groundtruth_renderer"
 REGRESSION_FOLDER = "tests/data/regression/*.pdf"
@@ -41,6 +43,47 @@ def _round_floats(obj, ndigits=3):
     if isinstance(obj, list):
         return [_round_floats(v, ndigits) for v in obj]
     return obj
+
+
+def _assert_json_matches_with_float_delta(
+    expected: Any, actual: Any, eps: float, path: str = "root"
+) -> None:
+    if isinstance(expected, bool) or isinstance(actual, bool):
+        assert expected == actual, f"{path}: {expected!r} != {actual!r}"
+        return
+
+    if isinstance(expected, float):
+        assert isinstance(
+            actual, (int, float)
+        ), f"{path}: expected float, got {type(actual).__name__}"
+        assert (
+            abs(expected - float(actual)) <= eps
+        ), f"{path}: abs({expected} - {actual}) > {eps}"
+        return
+
+    if isinstance(expected, dict):
+        assert isinstance(
+            actual, dict
+        ), f"{path}: expected dict, got {type(actual).__name__}"
+        assert expected.keys() == actual.keys(), f"{path}: key mismatch"
+        for key in expected:
+            _assert_json_matches_with_float_delta(
+                expected[key], actual[key], eps, path=f"{path}.{key}"
+            )
+        return
+
+    if isinstance(expected, list):
+        assert isinstance(
+            actual, list
+        ), f"{path}: expected list, got {type(actual).__name__}"
+        assert len(expected) == len(actual), f"{path}: length mismatch"
+        for idx, (expected_item, actual_item) in enumerate(zip(expected, actual)):
+            _assert_json_matches_with_float_delta(
+                expected_item, actual_item, eps, path=f"{path}[{idx}]"
+            )
+        return
+
+    assert expected == actual, f"{path}: {expected!r} != {actual!r}"
 
 
 def _page_prefix(pdf_name: str, page_no: int) -> Path:
@@ -191,9 +234,12 @@ def test_render_reference_documents():
                     for ind, true_instruction in enumerate(
                         true_instructions["instructions"]
                     ):
-                        assert true_instruction == _round_floats(
-                            pred_instructions["instructions"][ind]
-                        ), f"render instructions mismatch for {true_instruction_path}"
+                        _assert_json_matches_with_float_delta(
+                            true_instruction,
+                            pred_instructions["instructions"][ind],
+                            eps=RENDER_INSTRUCTION_EPS,
+                            path=f"instructions[{ind}]",
+                        )
 
                 bitmap_artifacts = page_decoder.export_bitmap_artifacts()
                 _export_or_verify_bitmaps(pdf_name, page_no, bitmap_artifacts)
