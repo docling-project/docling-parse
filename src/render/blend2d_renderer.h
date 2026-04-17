@@ -198,12 +198,13 @@ namespace pdflib
           }
         return out;
       };
-      auto contains_all = [](const std::vector<std::string>& haystack,
-                             const std::vector<std::string>& needles) -> bool
+      auto vectors_equal = [](const std::vector<std::string>& lhs,
+                              const std::vector<std::string>& rhs) -> bool
       {
-        for (const auto& needle : needles)
+        if (lhs.size() != rhs.size()) { return false; }
+        for (size_t i = 0; i < lhs.size(); ++i)
           {
-            if (std::find(haystack.begin(), haystack.end(), needle) == haystack.end())
+            if (lhs[i] != rhs[i])
               {
                 return false;
               }
@@ -225,9 +226,10 @@ namespace pdflib
       const auto q_sig_toks = significant_tokens(q_toks);
       if (q_sig_toks.empty()) { return {}; }
 
-      // Only accept candidates that preserve the full non-style family/script
-      // signature. This rejects matches like "noto sans jp" ->
-      // "noto sans mongolian".
+      // Only accept candidates with the exact same significant family/script
+      // tokens. This rejects cross-script variants like:
+      //   "noto sans" -> "noto sans mongolian"
+      //   "noto sans jp" -> "noto sans mongolian"
 
       // Minimum Jaccard similarity required to accept a fuzzy match.
       // A raw intersection score of 1 on "regular" alone yields J ≈ 0.14
@@ -243,11 +245,12 @@ namespace pdflib
         {
           const auto c_toks = split_tokens(norm_name);
           const auto c_sig_toks = significant_tokens(c_toks);
-          if (not contains_all(c_sig_toks, q_sig_toks)) { continue; }
+          if (not vectors_equal(c_sig_toks, q_sig_toks)) { continue; }
           int score = 0;
-          for (const auto& qt : q_toks)
+          const auto max_tokens = std::min(q_toks.size(), c_toks.size());
+          for (size_t i = 0; i < max_tokens; ++i)
             {
-              if (std::find(c_toks.begin(), c_toks.end(), qt) != c_toks.end())
+              if (q_toks[i] == c_toks[i])
                 {
                   ++score;
                 }
@@ -918,6 +921,32 @@ namespace pdflib
             LOG_S(INFO) << "render_text: before set_fill_style";
             ctx.set_fill_style(BLRgba32(0xFF000000u)); // opaque black
             LOG_S(INFO) << "render_text: before fill_utf8_text";
+            BLGlyphBuffer gb;
+            gb.set_utf8_text(instr.get_text().c_str());
+            const BLResult shape_res = font.shape(gb);
+            LOG_S(INFO) << "render_text: after shape res=" << shape_res
+                        << " empty=" << gb.is_empty();
+            if (shape_res != BL_SUCCESS || gb.is_empty())
+              {
+                LOG_S(WARNING) << "render_text: shaping failed or produced no glyphs"
+                               << " (BLResult=" << shape_res << ")"
+                               << " text=`" << instr.get_text() << "`"
+                               << " font_name=`" << instr.get_font_name() << "`"
+                               << " base_font=`" << instr.get_base_font() << "`";
+                ctx.restore();
+                draw_bbox_fallback();
+                ctx.end();
+                return;
+              }
+            const auto* placement_data = gb.placement_data();
+            if (placement_data == nullptr)
+              {
+                LOG_S(WARNING) << "render_text: glyph placement data is null, using fallback";
+                ctx.restore();
+                draw_bbox_fallback();
+                ctx.end();
+                return;
+              }
             const BLResult text_res =
               ctx.fill_utf8_text(BLPoint(0.0, 0.0), font, instr.get_text().c_str());
             LOG_S(INFO) << "render_text: after fill_utf8_text res=" << text_res;
