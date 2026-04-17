@@ -173,16 +173,23 @@ def test_render_reference_documents():
                 ), f"failed to render {pdf_name}@{page_no}"
                 page_decoder, timings = render_result.get()
 
-                instructions = page_decoder.export_render_instructions_json()
-                instruction_path = _instruction_path(pdf_name, page_no)
+                pred_instructions = page_decoder.export_render_instructions_json()
+                true_instruction_path = _instruction_path(pdf_name, page_no)
 
-                if GENERATE or (not instruction_path.exists()):
-                    _write_json(instruction_path, instructions)
+                if GENERATE or (not true_instruction_path.exists()):
+                    _write_json(true_instruction_path, pred_instructions)
                 else:
-                    true_instructions = _load_json(instruction_path)
-                    assert true_instructions == _round_floats(
-                        instructions
-                    ), f"render instructions mismatch for {instruction_path}"
+                    true_instructions = _load_json(true_instruction_path)
+
+                    true_instructions_len = len(true_instructions["instructions"])
+                    pred_instructions_len = len(pred_instructions["instructions"])
+                    
+                    assert true_instructions_len == pred_instructions_len, f"true_instructions_len==pred_instructions_len ({true_instructions_len}=={pred_instructions_len}) for {true_instruction_path}"
+
+                    for ind, true_instruction in enumerate(true_instructions["instructions"]):
+                        assert true_instruction == _round_floats(
+                            pred_instructions["instructions"][ind]
+                        ), f"render instructions mismatch for {true_instruction_path}"
 
                 bitmap_artifacts = page_decoder.export_bitmap_artifacts()
                 _export_or_verify_bitmaps(pdf_name, page_no, bitmap_artifacts)
