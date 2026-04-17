@@ -1,37 +1,0 @@
-(073.14, 678.97) (536.86, 678.97) (536.86, 727.26) (073.14, 727.26)        /F0 READING TIPS FOR BABIES	<|special_separator|>
-(205.38, 744.41) (404.62, 744.41) (404.62, 772.58) (205.38, 772.58)        /F0 DIVE INTO READING	<|special_separator|>
-(172.14, 031.61) (437.86, 031.61) (437.86, 055.75) (172.14, 055.75)        /F0 LONG BEACH PUBLIC LIBRARY	<|special_separator|>
-(086.98, 012.80) (522.31, 012.80) (522.31, 024.88) (086.98, 024.88)        /F0 This information is available in alternative format by calling (562) 570-7500 or visiting www.lbpl.org	<|special_separator|>
-(035.64, 582.50) (378.78, 582.50) (378.78, 610.67) (035.64, 610.67)        /F0 Try out a few of these simple tips 	<|special_separator|>
-(043.70, 549.30) (370.71, 549.30) (370.71, 577.48) (043.70, 577.48)        /F0 to help your baby build a strong 	<|special_separator|>
-(042.30, 516.11) (365.70, 516.11) (365.70, 544.28) (042.30, 544.28)        /F0 foundation of pre-reading skills!	<|special_separator|>
-(033.00, 441.64) (266.86, 441.64) (266.86, 453.71) (033.00, 453.71)        /F0 •   A few minutes at a time is just fine! Your little one 	<|special_separator|>
-(033.00, 423.85) (278.50, 423.85) (278.50, 435.93) (033.00, 435.93)        /F0 may only be able to sit for a few minutes for a story. Let 	<|special_separator|>
-(033.00, 406.07) (273.62, 406.07) (273.62, 418.14) (033.00, 418.14)        /F0 them decide how much time you spend reading. Babies 	<|special_separator|>
-(033.00, 388.28) (284.80, 388.28) (284.80, 400.36) (033.00, 400.36)        /F0 may just want to play with the book! That's okay. Let your 	<|special_separator|>
-(033.00, 370.50) (274.93, 370.50) (274.93, 382.58) (033.00, 382.58)        /F0 little one experience books the way that interests them.	<|special_separator|>
-(033.00, 334.93) (267.80, 334.93) (267.80, 347.01) (033.00, 347.01)        /F0 •  Let your little one practice turning the pages of the 	<|special_separator|>
-(036.52, 317.15) (282.22, 317.15) (282.22, 329.22) (036.52, 329.22)        /F0 books you read together. Babies may not be able to turn 	<|special_separator|>
-(033.99, 299.36) (284.76, 299.36) (284.76, 311.44) (033.99, 311.44)        /F0 the pages of some books yet, but board books are a great 	<|special_separator|>
-(106.20, 281.58) (209.80, 281.58) (209.80, 293.66) (106.20, 293.66)        /F0 way to start practicing. 	<|special_separator|>
-(033.00, 246.01) (280.92, 246.01) (280.92, 258.09) (033.00, 258.09)        /F0 •   Read favorite stories and sing favorite songs over and 	<|special_separator|>
-(033.00, 228.23) (270.68, 228.23) (270.68, 240.30) (033.00, 240.30)        /F0 over again. Repeating books and songs will strengthen 	<|special_separator|>
-(033.00, 210.44) (252.24, 210.44) (252.24, 222.52) (033.00, 222.52)        /F0 language development and confidence in reading. 	<|special_separator|>
-(033.00, 174.88) (274.74, 174.88) (274.74, 186.95) (033.00, 186.95)        /F0 •   Children learn a lot based on your facial expressions 	<|special_separator|>
-(033.00, 157.09) (279.94, 157.09) (279.94, 169.17) (033.00, 169.17)        /F0 and body language. Sometimes sitting face to face while 	<|special_separator|>
-(033.00, 139.31) (272.35, 139.31) (272.35, 151.38) (033.00, 151.38)        /F0 reading together helps keep your little one interested. 	<|special_separator|>
-(327.14, 441.64) (578.80, 441.64) (578.80, 453.71) (327.14, 453.71)        /F0 •   Point to the words as you read to your baby. This helps 	<|special_separator|>
-(327.14, 423.85) (577.73, 423.85) (577.73, 435.93) (327.14, 435.93)        /F0 build concept of print and over time, your child will begin 	<|special_separator|>
-(327.14, 406.07) (547.50, 406.07) (547.50, 418.14) (327.14, 418.14)        /F0 to associate print on the page with spoken words. 	<|special_separator|>
-(327.14, 370.50) (574.61, 370.50) (574.61, 382.58) (327.14, 382.58)        /F0 •   Sing with your baby! Songs often have notes for every 	<|special_separator|>
-(327.14, 352.72) (558.34, 352.72) (558.34, 364.79) (327.14, 364.79)        /F0 syllable, so when you sing songs to your baby, you're 	<|special_separator|>
-(327.14, 334.93) (541.14, 334.93) (541.14, 347.01) (327.14, 347.01)        /F0 helping them hear that words can be broken into 	<|special_separator|>
-(327.14, 317.15) (372.35, 317.15) (372.35, 329.22) (327.14, 329.22)        /F0 syllables. 	<|special_separator|>
-(327.14, 281.58) (570.38, 281.58) (570.38, 293.66) (327.14, 293.66)        /F0 •   When your baby babbles at you, say something back! 	<|special_separator|>
-(327.14, 263.80) (567.70, 263.80) (567.70, 275.87) (327.14, 275.87)        /F0 Then pause and wait for an answer. Don't worry if your 	<|special_separator|>
-(327.14, 246.01) (540.01, 246.01) (540.01, 258.09) (327.14, 258.09)        /F0 child can't say anything back, or that you're not 	<|special_separator|>
-(327.14, 228.23) (564.36, 228.23) (564.36, 240.30) (327.14, 240.30)        /F0 understanding each other -- your baby is learning how 	<|special_separator|>
-(327.14, 210.44) (418.49, 210.44) (418.49, 222.52) (327.14, 222.52)        /F0 conversations work. 	<|special_separator|>
-(327.14, 174.88) (562.75, 174.88) (562.75, 186.95) (327.14, 186.95)        /F0 •   Singing and clapping to rhymes reinforces the idea 	<|special_separator|>
-(327.14, 157.09) (573.31, 157.09) (573.31, 169.17) (327.14, 169.17)        /F0 that words are made up of smaller sounds. This will help 	<|special_separator|>
-(327.14, 139.31) (513.82, 139.31) (513.82, 151.38) (327.14, 151.38)        /F0 later when they being to sound out words. 
