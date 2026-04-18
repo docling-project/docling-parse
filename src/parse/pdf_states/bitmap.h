@@ -3,6 +3,9 @@
 #ifndef PDF_BITMAP_STATE_H
 #define PDF_BITMAP_STATE_H
 
+#include <algorithm>
+#include <cmath>
+
 #include <parse/utils/ccitt/ccitt_utils.h>
 #include <parse/utils/jpx/jpx_utils.h>
 #include <third_party/pdfium_jbig2.h>
@@ -220,6 +223,124 @@ namespace pdflib
         return true;
       };
 
+    auto unpack_subbyte_samples_to_u8 =
+      [&](std::shared_ptr<Buffer> const& src,
+          int w,
+          int h,
+          int ncomps,
+          int bits_per_component,
+          std::vector<double> const& decode_array) -> bool
+      {
+        // QPDF's getStreamData() decodes the filter chain, but it does not
+        // expand sub-8-bit image samples into one byte per component. For a
+        // `/FlateDecode` image with `/BitsPerComponent 1`, the decoded stream
+        // therefore still contains packed bits (with producer-dependent row
+        // padding), while the renderer expects a dense 8-bit-per-component
+        // buffer. This helper performs that expansion and applies the image's
+        // `/Decode` mapping while unpacking.
+        if(not src or src->getSize() == 0 or w <= 0 or h <= 0 or ncomps <= 0)
+          {
+            return false;
+          }
+        if(bits_per_component <= 0 or bits_per_component >= 8)
+          {
+            return false;
+          }
+
+        const std::size_t row_bits =
+          static_cast<std::size_t>(w) * static_cast<std::size_t>(ncomps)
+          * static_cast<std::size_t>(bits_per_component);
+        const std::size_t min_row_bytes = (row_bits + 7u) / 8u;
+        if(min_row_bytes == 0)
+          {
+            return false;
+          }
+
+        const std::size_t src_size = src->getSize();
+        const std::size_t min_total = min_row_bytes * static_cast<std::size_t>(h);
+        if(src_size < min_total)
+          {
+            LOG_S(WARNING) << "bitmap: packed decoded_stream_data too small ("
+                           << src_size << " < " << min_total
+                           << ") for sub-byte image xobject_key=" << image.xobject_key
+                           << " width=" << w
+                           << " height=" << h
+                           << " channels=" << ncomps
+                           << " bpc=" << bits_per_component;
+            return false;
+          }
+
+        // Per the PDF spec, rows are exactly min_row_bytes wide. QPDF's
+        // getStreamData() may return more bytes than width*height*bpc/8 (e.g.
+        // trailing data), but those extra bytes are not per-row padding and must
+        // not be used to inflate the row stride.
+        const std::size_t row_stride = min_row_bytes;
+
+        const std::uint32_t sample_max = (1u << bits_per_component) - 1u;
+        auto decode_sample =
+          [&](int component_index, std::uint32_t raw_sample) -> std::uint8_t
+          {
+            const int pair_count = static_cast<int>(decode_array.size() / 2);
+            if(component_index < pair_count)
+              {
+                const double dmin = decode_array[2 * component_index + 0];
+                const double dmax = decode_array[2 * component_index + 1];
+                const double norm =
+                  static_cast<double>(raw_sample) / static_cast<double>(sample_max);
+                const double decoded = dmin + norm * (dmax - dmin);
+                const double clamped = std::clamp(decoded, 0.0, 1.0);
+                return static_cast<std::uint8_t>(std::lround(clamped * 255.0));
+              }
+
+            // Absent /Decode entry: fall back to PDF's identity mapping.
+            const double norm =
+              static_cast<double>(raw_sample) / static_cast<double>(sample_max);
+            return static_cast<std::uint8_t>(std::lround(norm * 255.0));
+          };
+
+        const auto* bytes = reinterpret_cast<const std::uint8_t*>(src->getBuffer());
+        auto expanded = std::make_shared<std::vector<uint8_t>>();
+        expanded->reserve(static_cast<std::size_t>(w) * h * ncomps);
+
+        for(int row = 0; row < h; ++row)
+          {
+            const auto* row_ptr = bytes + static_cast<std::size_t>(row) * row_stride;
+            std::size_t bit_offset = 0;
+            for(int col = 0; col < w; ++col)
+              {
+                for(int comp = 0; comp < ncomps; ++comp)
+                  {
+                    std::uint32_t raw_sample = 0u;
+                    for(int bit = 0; bit < bits_per_component; ++bit)
+                      {
+                        const std::size_t absolute_bit = bit_offset + static_cast<std::size_t>(bit);
+                        const std::size_t byte_index = absolute_bit / 8u;
+                        const int bit_in_byte = 7 - static_cast<int>(absolute_bit % 8u);
+                        const std::uint8_t byte = row_ptr[byte_index];
+                        raw_sample = (raw_sample << 1u)
+                          | static_cast<std::uint32_t>((byte >> bit_in_byte) & 1u);
+                      }
+                    expanded->push_back(decode_sample(comp, raw_sample));
+                    bit_offset += static_cast<std::size_t>(bits_per_component);
+                  }
+              }
+          }
+
+        pixel_data = std::move(expanded);
+        pixel_shape = {h, w, ncomps};
+        channels = ncomps;
+
+        LOG_S(INFO) << "bitmap: unpacked sub-byte decoded_stream_data"
+                    << " for xobject_key=" << image.xobject_key
+                    << " width=" << w
+                    << " height=" << h
+                    << " channels=" << ncomps
+                    << " bpc=" << bits_per_component
+                    << " row_stride=" << row_stride
+                    << " output_size=" << pixel_data->size();
+        return true;
+      };
+
     if(image.image_mask)
       {
         fmt = PIXEL_FORMAT_GRAY; channels = 1;
@@ -338,20 +459,36 @@ namespace pdflib
           {
             const int w           = image.image_width;
             const int h           = image.image_height;
-            const size_t expected = static_cast<size_t>(w) * h * channels;
             const auto src        = image.decoded_stream_data;
 
-            if (src->getSize() >= expected)
+            if(image.bits_per_component > 0 and image.bits_per_component < 8)
               {
-                const auto* raw = reinterpret_cast<const uint8_t*>(src->getBuffer());
-                pixel_data  = std::make_shared<std::vector<uint8_t>>(raw, raw + expected);
-                pixel_shape = {h, w, channels};
+                if(not unpack_subbyte_samples_to_u8(src,
+                                                    w,
+                                                    h,
+                                                    channels,
+                                                    image.bits_per_component,
+                                                    image.decode_array))
+                  {
+                    LOG_S(WARNING) << "bitmap: failed to unpack sub-byte decoded_stream_data "
+                                   << "for xobject_key=" << image.xobject_key;
+                  }
               }
             else
               {
-                LOG_S(WARNING) << "bitmap: decoded_stream_data too small ("
-                               << src->getSize() << " < " << expected
-                               << ") for xobject_key=" << image.xobject_key;
+                const size_t expected = static_cast<size_t>(w) * h * channels;
+                if (src->getSize() >= expected)
+                  {
+                    const auto* raw = reinterpret_cast<const uint8_t*>(src->getBuffer());
+                    pixel_data  = std::make_shared<std::vector<uint8_t>>(raw, raw + expected);
+                    pixel_shape = {h, w, channels};
+                  }
+                else
+                  {
+                    LOG_S(WARNING) << "bitmap: decoded_stream_data too small ("
+                                   << src->getSize() << " < " << expected
+                                   << ") for xobject_key=" << image.xobject_key;
+                  }
               }
           }
         else if (has_dct and image.raw_stream_data and image.raw_stream_data->getSize() > 0)
