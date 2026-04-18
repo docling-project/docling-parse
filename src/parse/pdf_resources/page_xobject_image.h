@@ -31,6 +31,8 @@ namespace pdflib
     int                      get_bits_per_component() const;
     std::string              get_color_space() const;
     int                      get_icc_components() const;
+    int                      get_device_n_components() const;
+    std::vector<std::string> get_device_n_names() const;
     int                      get_indexed_hival() const;
     std::string              get_indexed_base_cs() const;
     std::shared_ptr<std::vector<uint8_t>> get_indexed_palette() const;
@@ -91,6 +93,8 @@ namespace pdflib
     int              bits_per_component;
     std::string      color_space;
     int              icc_components = 0;  // number of color components from /ICCBased /N entry; 0 if not ICCBased
+    int              device_n_components = 0; // number of components from /DeviceN names array; 0 if not DeviceN
+    std::vector<std::string> device_n_names; // names from /DeviceN colorant array
     int              indexed_hival  = -1; // hival from /Indexed color space; -1 if not Indexed
     std::string      indexed_base_cs;    // base color space name for /Indexed (e.g. "/DeviceRGB")
     std::shared_ptr<std::vector<uint8_t>> indexed_palette; // raw palette bytes: (hival+1)*ncomps bytes
@@ -251,6 +255,28 @@ namespace pdflib
                     else
                       {
                         LOG_S(WARNING) << "ICCBased: second array element is not a stream";
+                      }
+                  }
+                else if(name_obj.isName() and name_obj.getName() == "/DeviceN")
+                  {
+                    device_n_names.clear();
+                    auto names_obj = qpdf_cs.getArrayItem(1);
+                    if(names_obj.isArray())
+                      {
+                        device_n_components = names_obj.getArrayNItems();
+                        for(int i = 0; i < names_obj.getArrayNItems(); ++i)
+                          {
+                            auto name = names_obj.getArrayItem(i);
+                            if(name.isName())
+                              {
+                                device_n_names.push_back(name.getName());
+                              }
+                          }
+                        LOG_S(INFO) << "DeviceN color space: N=" << device_n_components;
+                      }
+                    else
+                      {
+                        LOG_S(WARNING) << "DeviceN color space: names array missing";
                       }
                   }
                 else if(name_obj.isName() and name_obj.getName() == "/Indexed"
@@ -443,6 +469,22 @@ namespace pdflib
 	      }
 	    decode_present = not decode_array.empty();
 	  }
+        else if(device_n_components > 0)
+          {
+            const bool single_black =
+              device_n_components == 1
+              and device_n_names.size() == 1
+              and device_n_names[0] == "/Black";
+            LOG_S(INFO) << "no `/Decode` found: using default for DeviceN N="
+                        << device_n_components
+                        << " single_black=" << (single_black ? "true" : "false");
+            for(int i = 0; i < device_n_components; ++i)
+              {
+                decode_array.push_back(single_black ? 1.0 : 0.0);
+                decode_array.push_back(single_black ? 0.0 : 1.0);
+              }
+            decode_present = not decode_array.empty();
+          }
 	else if(indexed_hival >= 0)
 	  {
 	    // Indexed: default decode is [0, hival] (one component — the palette index)
@@ -752,6 +794,16 @@ namespace pdflib
   int pdf_resource<PAGE_XOBJECT_IMAGE>::get_icc_components() const
   {
     return icc_components;
+  }
+
+  int pdf_resource<PAGE_XOBJECT_IMAGE>::get_device_n_components() const
+  {
+    return device_n_components;
+  }
+
+  std::vector<std::string> pdf_resource<PAGE_XOBJECT_IMAGE>::get_device_n_names() const
+  {
+    return device_n_names;
   }
 
   int pdf_resource<PAGE_XOBJECT_IMAGE>::get_indexed_hival() const

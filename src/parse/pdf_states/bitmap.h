@@ -152,6 +152,8 @@ namespace pdflib
       image.ccitt_k          = xobj.get_ccitt_k();
       image.ccitt_black_is_1 = xobj.get_ccitt_black_is_1();
       image.icc_components  = xobj.get_icc_components();
+      image.device_n_components = xobj.get_device_n_components();
+      image.device_n_names = xobj.get_device_n_names();
       image.jbig2_globals_data = xobj.get_jbig2_globals_data();
 
       // propagate /Indexed color space data
@@ -177,6 +179,28 @@ namespace pdflib
     pixel_format fmt = PIXEL_FORMAT_UNKNOWN;
 
     int channels = 0;
+    auto apply_decode_to_u8_samples = [&](std::shared_ptr<std::vector<uint8_t>>& dst,
+                                          int ncomps) -> void
+      {
+        if(not dst or ncomps <= 0 or not image.decode_present or image.decode_array.size() < 2)
+          {
+            return;
+          }
+
+        const int pair_count = static_cast<int>(image.decode_array.size() / 2);
+        for(size_t i = 0; i < dst->size(); ++i)
+          {
+            const int comp = static_cast<int>(i % static_cast<size_t>(ncomps));
+            if(comp < pair_count)
+              {
+                (*dst)[i] = jpeg::apply_decode_component(
+                  (*dst)[i],
+                  image.decode_array[2 * comp + 0],
+                  image.decode_array[2 * comp + 1]);
+              }
+          }
+      };
+
     auto expand_indexed_samples = [&](int ncomps,
                                       const uint8_t* indices,
                                       size_t n_indices,
@@ -383,6 +407,30 @@ namespace pdflib
                            << " for xobject_key=" << image.xobject_key;
           }
       }
+    else if(image.color_space.find("/DeviceN") != std::string::npos
+            and image.device_n_components > 0)
+      {
+        LOG_S(INFO) << "bitmap: DeviceN color space with N=" << image.device_n_components
+                    << " for xobject_key=" << image.xobject_key;
+        if(image.device_n_components == 1)
+          {
+            fmt = PIXEL_FORMAT_GRAY; channels = 1;
+          }
+        else if(image.device_n_components == 3)
+          {
+            fmt = PIXEL_FORMAT_RGB; channels = 3;
+          }
+        else if(image.device_n_components == 4)
+          {
+            fmt = PIXEL_FORMAT_CMYK; channels = 4;
+          }
+        else
+          {
+            LOG_S(WARNING) << "bitmap: DeviceN with unsupported N="
+                           << image.device_n_components
+                           << " for xobject_key=" << image.xobject_key;
+          }
+      }
     else if(image.indexed_palette and not image.indexed_palette->empty())
       {
         // /Indexed: expand palette indices into base color space pixels.
@@ -481,6 +529,7 @@ namespace pdflib
                   {
                     const auto* raw = reinterpret_cast<const uint8_t*>(src->getBuffer());
                     pixel_data  = std::make_shared<std::vector<uint8_t>>(raw, raw + expected);
+                    apply_decode_to_u8_samples(pixel_data, channels);
                     pixel_shape = {h, w, channels};
                   }
                 else
@@ -618,6 +667,7 @@ namespace pdflib
                 else
                   {
                     pixel_data = std::make_shared<std::vector<uint8_t>>(std::move(decoded.pixels));
+                    apply_decode_to_u8_samples(pixel_data, decoded.components);
                     pixel_shape = {decoded.height, decoded.width, decoded.components};
                     channels = decoded.components;
 
