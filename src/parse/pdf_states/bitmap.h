@@ -4,6 +4,7 @@
 #define PDF_BITMAP_STATE_H
 
 #include <parse/utils/ccitt/ccitt_utils.h>
+#include <parse/utils/jpx/jpx_utils.h>
 #include <third_party/pdfium_jbig2.h>
 
 namespace pdflib
@@ -313,6 +314,8 @@ namespace pdflib
                                        "/DCTDecode") != image.filters.end();
         const bool has_flate = std::find(image.filters.begin(), image.filters.end(),
                                          "/FlateDecode") != image.filters.end();
+        const bool has_jpx = std::find(image.filters.begin(), image.filters.end(),
+                                       "/JPXDecode") != image.filters.end();
 
         if (image.decoded_stream_data and image.decoded_stream_data->getSize() > 0)
           {
@@ -401,6 +404,51 @@ namespace pdflib
             else
               {
                 LOG_S(WARNING) << "bitmap: libjpeg decode failed "
+                               << "for xobject_key=" << image.xobject_key;
+              }
+          }
+        else if (has_jpx and image.raw_stream_data and image.raw_stream_data->getSize() > 0)
+          {
+            LOG_S(INFO) << "bitmap: decoded_stream_data unavailable for /JPXDecode image, "
+                        << "decoding JPEG2000 via OpenJPEG "
+                        << "for xobject_key=" << image.xobject_key;
+
+            auto decoded = jpx::decode_jpx_to_raw_pixels(
+                reinterpret_cast<uint8_t const*>(image.raw_stream_data->getBuffer()),
+                static_cast<std::size_t>(image.raw_stream_data->getSize()));
+
+            if(not decoded.empty())
+              {
+                pixel_data = std::make_shared<std::vector<uint8_t>>(std::move(decoded.pixels));
+                pixel_shape = {decoded.height, decoded.width, decoded.components};
+                channels = decoded.components;
+
+                if(decoded.components == 1)
+                  {
+                    fmt = PIXEL_FORMAT_GRAY;
+                  }
+                else if(decoded.components == 3)
+                  {
+                    fmt = PIXEL_FORMAT_RGB;
+                  }
+                else if(decoded.components == 4)
+                  {
+                    fmt = PIXEL_FORMAT_CMYK;
+                  }
+                else
+                  {
+                    fmt = PIXEL_FORMAT_UNKNOWN;
+                  }
+
+                LOG_S(INFO) << "bitmap: OpenJPEG decode succeeded "
+                            << "for xobject_key=" << image.xobject_key
+                            << " actual_cs=" << jpeg::color_space_name(decoded.color_space)
+                            << " actual_shape=" << decoded.height << "x"
+                            << decoded.width << "x" << decoded.components;
+              }
+            else
+              {
+                LOG_S(WARNING) << "bitmap: OpenJPEG decode failed "
                                << "for xobject_key=" << image.xobject_key;
               }
           }
