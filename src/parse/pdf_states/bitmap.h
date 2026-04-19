@@ -160,6 +160,8 @@ namespace pdflib
       image.indexed_hival   = xobj.get_indexed_hival();
       image.indexed_base_cs = xobj.get_indexed_base_cs();
       image.indexed_palette = xobj.get_indexed_palette();
+      image.indexed_base_device_n_single_black =
+        xobj.get_indexed_base_device_n_single_black();
 
       // propagate graphics state
       image.has_graphics_state = true;
@@ -244,6 +246,16 @@ namespace pdflib
         pixel_data = std::move(expanded);
         pixel_shape = {h, w, ncomps};
         channels = ncomps;
+
+        if(image.indexed_base_device_n_single_black and ncomps == 1)
+          {
+            for(auto& sample : *pixel_data)
+              {
+                sample = static_cast<uint8_t>(255 - sample);
+              }
+            LOG_S(INFO) << "bitmap: inverted Indexed single-Black DeviceN palette "
+                        << "for xobject_key=" << image.xobject_key;
+          }
         return true;
       };
 

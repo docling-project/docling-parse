@@ -36,6 +36,7 @@ namespace pdflib
     int                      get_indexed_hival() const;
     std::string              get_indexed_base_cs() const;
     std::shared_ptr<std::vector<uint8_t>> get_indexed_palette() const;
+    bool                     get_indexed_base_device_n_single_black() const;
     std::string              get_intent() const;
     std::vector<std::string> get_filters() const;
 
@@ -98,6 +99,7 @@ namespace pdflib
     int              indexed_hival  = -1; // hival from /Indexed color space; -1 if not Indexed
     std::string      indexed_base_cs;    // base color space name for /Indexed (e.g. "/DeviceRGB")
     std::shared_ptr<std::vector<uint8_t>> indexed_palette; // raw palette bytes: (hival+1)*ncomps bytes
+    bool             indexed_base_device_n_single_black = false;
     std::string      intent;
     std::vector<std::string> image_filters;
 
@@ -286,6 +288,7 @@ namespace pdflib
 
                     // base color space
                     auto base_obj = qpdf_cs.getArrayItem(1);
+                    indexed_base_device_n_single_black = false;
                     if(base_obj.isName())
                       {
                         indexed_base_cs = base_obj.getName();
@@ -321,6 +324,40 @@ namespace pdflib
                             else
                               {
                                 LOG_S(WARNING) << "Indexed ICCBased base: second array element is not a stream";
+                              }
+                          }
+                        else if(base_name.isName() and base_name.getName() == "/DeviceN")
+                          {
+                            auto names_obj = base_obj.getArrayItem(1);
+                            if(names_obj.isArray())
+                              {
+                                std::vector<std::string> nested_names;
+                                for(int i = 0; i < names_obj.getArrayNItems(); ++i)
+                                  {
+                                    auto name = names_obj.getArrayItem(i);
+                                    if(name.isName())
+                                      {
+                                        nested_names.push_back(name.getName());
+                                      }
+                                  }
+
+                                const int nested_n = static_cast<int>(nested_names.size());
+                                const bool single_black =
+                                  nested_n == 1
+                                  and nested_names[0] == "/Black";
+                                indexed_base_device_n_single_black = single_black;
+
+                                if(single_black)       { indexed_base_cs = "/DeviceGray"; }
+                                else if(nested_n == 3) { indexed_base_cs = "/DeviceRGB"; }
+                                else if(nested_n == 4) { indexed_base_cs = "/DeviceCMYK"; }
+                                else
+                                  {
+                                    indexed_base_cs = "/DeviceN";
+                                    LOG_S(WARNING) << "Indexed DeviceN base has unsupported component layout N="
+                                                   << nested_n;
+                                  }
+                                LOG_S(INFO) << "Indexed DeviceN base: N=" << nested_n
+                                            << " -> " << indexed_base_cs;
                               }
                           }
                         else if(base_name.isName())
@@ -819,6 +856,11 @@ namespace pdflib
   std::shared_ptr<std::vector<uint8_t>> pdf_resource<PAGE_XOBJECT_IMAGE>::get_indexed_palette() const
   {
     return indexed_palette;
+  }
+
+  bool pdf_resource<PAGE_XOBJECT_IMAGE>::get_indexed_base_device_n_single_black() const
+  {
+    return indexed_base_device_n_single_black;
   }
 
   std::string pdf_resource<PAGE_XOBJECT_IMAGE>::get_intent() const

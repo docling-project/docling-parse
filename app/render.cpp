@@ -4,6 +4,18 @@
 #include "render.h"
 #include "parse/utils/bitmap/bitmap_exporter.h"
 
+namespace
+{
+std::filesystem::path page_pdf_output_path(std::filesystem::path const& export_dir,
+                                           std::filesystem::path const& pdf_path,
+                                           int page)
+{
+  return export_dir / (pdf_path.stem().string()
+                       + "_p" + std::to_string(page)
+                       + ".pdf");
+}
+}
+
 void set_loglevel(std::string level)
 {
   if(level=="info")
@@ -35,6 +47,8 @@ bool decode_and_render(pdflib::pdf_decoder<pdflib::DOCUMENT>& doc,
                        Renderer& rnd,
                        bool export_bitmaps,
                        std::filesystem::path const& bitmap_dir,
+                       bool export_page_pdf_files,
+                       std::filesystem::path const& page_pdf_dir,
                        std::string const& pdf_path)
 {
   if (page == -1)
@@ -52,6 +66,12 @@ bool decode_and_render(pdflib::pdf_decoder<pdflib::DOCUMENT>& doc,
                     bitmap_dir, pdf_path, p);
                   instructions.iterate_over_instructions(exporter);
                 }
+              if(export_page_pdf_files)
+                {
+                  page_decoder->save_pdf_page(page_pdf_output_path(page_pdf_dir,
+                                                                   pdf_path,
+                                                                   p));
+                }
               instructions.iterate_over_instructions(rnd);
             }
         }
@@ -67,6 +87,12 @@ bool decode_and_render(pdflib::pdf_decoder<pdflib::DOCUMENT>& doc,
               pdflib::bitmap_export::bitmap_exporter_visitor exporter(
                 bitmap_dir, pdf_path, page);
               instructions.iterate_over_instructions(exporter);
+            }
+          if(export_page_pdf_files)
+            {
+              page_decoder->save_pdf_page(page_pdf_output_path(page_pdf_dir,
+                                                               pdf_path,
+                                                               page));
             }
           instructions.iterate_over_instructions(rnd);
         }
@@ -89,7 +115,9 @@ int render_pdf_file(const std::string& pdf_path,
                     const RenderCfg& render_cfg,
                     bool save_output,
                     bool export_bitmaps,
-                    const std::string& bitmap_dir)
+                    const std::string& bitmap_dir,
+                    bool export_page_pdf_files,
+                    const std::string& page_pdf_dir)
 {
   pdflib::pdf_timings timings;
   pdflib::pdf_decoder<pdflib::DOCUMENT> doc(timings);
@@ -128,6 +156,12 @@ int render_pdf_file(const std::string& pdf_path,
             pdf_path,
             p);
           instructions.iterate_over_instructions(exporter);
+        }
+      if(export_page_pdf_files)
+        {
+          page_decoder->save_pdf_page(page_pdf_output_path(std::filesystem::path(page_pdf_dir),
+                                                           pdf_path,
+                                                           p));
         }
       instructions.iterate_over_instructions(rnd);
 
@@ -202,6 +236,8 @@ int main(int argc, char* argv[])
         ("keep-qpdf-warnings", "Emit QPDF warnings (default: false)",                       cxxopts::value<bool>()->implicit_value("true"))
         ("populate-json",      "Populate JSON objects during decode (default: false)",       cxxopts::value<bool>()->implicit_value("true"))
         ("export-bitmaps",     "Export decoded bitmap payloads encountered on each page (default: false)",
+                               cxxopts::value<bool>()->default_value("false"))
+        ("export-page-pdf",    "Export each selected page as a one-page PDF (default: false)",
                                cxxopts::value<bool>()->default_value("false"));
 
       // Parse command line arguments
@@ -267,6 +303,7 @@ int main(int argc, char* argv[])
       if (result.count("keep-qpdf-warnings"))       { page_config.keep_qpdf_warnings        = result["keep-qpdf-warnings"].as<bool>(); }
       if (result.count("populate-json"))            { page_config.populate_json_objects      = result["populate-json"].as<bool>(); }
       bool export_bitmaps = result["export-bitmaps"].as<bool>();
+      bool export_page_pdf_files = result["export-page-pdf"].as<bool>();
 
       // --- render_config ---
       pdflib::render_config cfg;
@@ -285,12 +322,21 @@ int main(int argc, char* argv[])
           std::string ifile = result["input"].as<std::string>();
           std::string ofile = ifile + ".rendered.json";
           std::string bitmap_dir = "./bitmaps_out";
+          std::string page_pdf_dir = "./pages_out";
           if(export_bitmaps and result.count("output"))
             {
               std::filesystem::path output_path = result["output"].as<std::string>();
               if(output_path.extension().empty())
                 {
                   bitmap_dir = (output_path / "bitmaps").string();
+                }
+            }
+          if(export_page_pdf_files and result.count("output"))
+            {
+              std::filesystem::path output_path = result["output"].as<std::string>();
+              if(output_path.extension().empty())
+                {
+                  page_pdf_dir = (output_path / "pages").string();
                 }
             }
 
@@ -328,6 +374,8 @@ int main(int argc, char* argv[])
               if (not decode_and_render(doc, page, page_config, rnd,
                                         export_bitmaps,
                                         std::filesystem::path(bitmap_dir),
+                                        export_page_pdf_files,
+                                        std::filesystem::path(page_pdf_dir),
                                         ifile)) { return 1; }
               rnd.show();
             }
@@ -337,6 +385,8 @@ int main(int argc, char* argv[])
               if (not decode_and_render(doc, page, page_config, rnd,
                                         export_bitmaps,
                                         std::filesystem::path(bitmap_dir),
+                                        export_page_pdf_files,
+                                        std::filesystem::path(page_pdf_dir),
                                         ifile)) { return 1; }
             }
 
@@ -354,6 +404,9 @@ int main(int argc, char* argv[])
           const std::string bitmap_dir = save
             ? (std::filesystem::path(out_dir) / "bitmaps").string()
             : "./bitmaps_out";
+          const std::string page_pdf_dir = save
+            ? (std::filesystem::path(out_dir) / "pages").string()
+            : "./pages_out";
 
           if (not std::filesystem::is_directory(dir_path))
             {
@@ -383,7 +436,9 @@ int main(int argc, char* argv[])
                                                 cfg,
                                                 save,
                                                 export_bitmaps,
-                                                bitmap_dir);
+                                                bitmap_dir,
+                                                export_page_pdf_files,
+                                                page_pdf_dir);
               if (pages == 0)
                 {
                   ++failed_files;
