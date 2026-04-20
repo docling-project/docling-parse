@@ -3,11 +3,70 @@
 #ifndef PDF_PAGE_XOBJECT_IMAGE_RESOURCE_H
 #define PDF_PAGE_XOBJECT_IMAGE_RESOURCE_H
 
+#include <cstdint>
+#include <cstring>
+
 #include <parse/utils/jpeg/jpeg_utils.h>
 #include <parse/qpdf/qpdf_compat.h>
 
 namespace pdflib
 {
+
+  namespace detail
+  {
+    inline int icc_signature_to_components(char const* sig)
+    {
+      if(std::memcmp(sig, "GRAY", 4) == 0) return 1;
+      if(std::memcmp(sig, "RGB ", 4) == 0) return 3;
+      if(std::memcmp(sig, "CMYK", 4) == 0) return 4;
+
+      if(sig[1] == 'C' and sig[2] == 'L' and sig[3] == 'R')
+        {
+          if(sig[0] >= '2' and sig[0] <= '9') return sig[0] - '0';
+          if(sig[0] >= 'A' and sig[0] <= 'F') return 10 + (sig[0] - 'A');
+        }
+
+      return 0;
+    }
+
+    inline int infer_icc_components_from_profile(QPDFObjectHandle icc_stream,
+                                                 std::string const& context)
+    {
+      if(not icc_stream.isStream())
+        {
+          LOG_S(WARNING) << context << ": ICC object is not a stream";
+          return 0;
+        }
+
+      try
+        {
+          auto profile = to_shared_ptr(icc_stream.getStreamData());
+          if(not profile or profile->getSize() < 20)
+            {
+              LOG_S(WARNING) << context << ": ICC profile too small to inspect";
+              return 0;
+            }
+
+          auto const* bytes = reinterpret_cast<std::uint8_t const*>(profile->getBuffer());
+          int const n = icc_signature_to_components(reinterpret_cast<char const*>(bytes + 16));
+
+          if(n > 0)
+            {
+              LOG_S(INFO) << context << ": inferred ICC components from profile header: N=" << n;
+            }
+          else
+            {
+              LOG_S(WARNING) << context << ": unsupported ICC data color space signature";
+            }
+          return n;
+        }
+      catch(std::exception const& e)
+        {
+          LOG_S(WARNING) << context << ": failed to inspect ICC profile stream: " << e.what();
+          return 0;
+        }
+    }
+  }
 
   template<>
   class pdf_resource<PAGE_XOBJECT_IMAGE>
@@ -252,6 +311,8 @@ namespace pdflib
                         else
                           {
                             LOG_S(WARNING) << "ICCBased stream missing /N entry";
+                            icc_components = detail::infer_icc_components_from_profile(
+                              icc_stream, "ICCBased");
                           }
                       }
                     else
@@ -319,6 +380,11 @@ namespace pdflib
                                 else
                                   {
                                     LOG_S(WARNING) << "Indexed ICCBased base missing /N entry";
+                                    const int n = detail::infer_icc_components_from_profile(
+                                      icc_stream, "Indexed ICCBased base");
+                                    if(n == 1)      { indexed_base_cs = "/DeviceGray"; }
+                                    else if(n == 3) { indexed_base_cs = "/DeviceRGB"; }
+                                    else if(n == 4) { indexed_base_cs = "/DeviceCMYK"; }
                                   }
                               }
                             else
