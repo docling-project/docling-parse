@@ -12,7 +12,7 @@ from docling_parse.pdf_parser import (
     PdfRenderDocument,
 )
 
-GENERATE = False
+GENERATE = True
 RENDER_INSTRUCTION_EPS = 0.005
 
 GROUNDTRUTH_RENDERER_FOLDER = "tests/data/groundtruth_renderer"
