@@ -82,6 +82,7 @@ namespace pdflib
     int              indexed_hival  = -1;
     std::string      indexed_base_cs;
     std::shared_ptr<std::vector<uint8_t>> indexed_palette;
+    std::vector<std::string> indexed_base_device_n_names;
     bool             indexed_base_device_n_single_black = false;
 
     // /CCITTFaxDecode parameters (from /DecodeParms)

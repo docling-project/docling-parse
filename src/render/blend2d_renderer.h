@@ -1148,9 +1148,18 @@ namespace pdflib
                   const uint8_t y = src_data->at(idx + 2);
                   const uint8_t k = src_data->at(idx + 3);
 
-                  r = static_cast<uint8_t>((static_cast<unsigned int>(c) * k) / 255u);
-                  g = static_cast<uint8_t>((static_cast<unsigned int>(m) * k) / 255u);
-                  b = static_cast<uint8_t>((static_cast<unsigned int>(y) * k) / 255u);
+                  if(instr.get_cmyk_convention() == CMYK_CONVENTION_PROCESS)
+                    {
+                      r = static_cast<uint8_t>(((255u - c) * (255u - k)) / 255u);
+                      g = static_cast<uint8_t>(((255u - m) * (255u - k)) / 255u);
+                      b = static_cast<uint8_t>(((255u - y) * (255u - k)) / 255u);
+                    }
+                  else
+                    {
+                      r = static_cast<uint8_t>((static_cast<unsigned int>(c) * k) / 255u);
+                      g = static_cast<uint8_t>((static_cast<unsigned int>(m) * k) / 255u);
+                      b = static_cast<uint8_t>((static_cast<unsigned int>(y) * k) / 255u);
+                    }
                 }
               else if (fmt == PIXEL_FORMAT_GRAY)
                 {

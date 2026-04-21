@@ -66,6 +66,71 @@ namespace pdflib
           return 0;
         }
     }
+
+    inline int cmyk_process_component_index(std::string const& name)
+    {
+      if(name == "/Cyan")    return 0;
+      if(name == "/Magenta") return 1;
+      if(name == "/Yellow")  return 2;
+      if(name == "/Black")   return 3;
+      return -1;
+    }
+
+    inline bool device_n_names_are_process_cmyk_subset(
+      std::vector<std::string> const& names)
+    {
+      if(names.empty())
+        {
+          return false;
+        }
+
+      for(auto const& name : names)
+        {
+          if(cmyk_process_component_index(name) < 0)
+            {
+              return false;
+            }
+        }
+
+      return true;
+    }
+
+    inline std::shared_ptr<std::vector<uint8_t>> expand_device_n_palette_to_cmyk(
+      std::shared_ptr<std::vector<uint8_t>> const& palette,
+      std::vector<std::string> const&              names)
+    {
+      if(not palette or names.empty())
+        {
+          return nullptr;
+        }
+
+      const std::size_t src_components = names.size();
+      if(src_components == 0 or (palette->size() % src_components) != 0)
+        {
+          return nullptr;
+        }
+
+      const std::size_t entry_count = palette->size() / src_components;
+      auto expanded = std::make_shared<std::vector<uint8_t>>();
+      expanded->assign(entry_count * 4u, 0u);
+
+      for(std::size_t entry = 0; entry < entry_count; ++entry)
+        {
+          const std::size_t src_offset = entry * src_components;
+          const std::size_t dst_offset = entry * 4u;
+          for(std::size_t i = 0; i < src_components; ++i)
+            {
+              const int dst_component = cmyk_process_component_index(names[i]);
+              if(dst_component >= 0)
+                {
+                  (*expanded)[dst_offset + static_cast<std::size_t>(dst_component)] =
+                    (*palette)[src_offset + i];
+                }
+            }
+        }
+
+      return expanded;
+    }
   }
 
   template<>
@@ -95,6 +160,7 @@ namespace pdflib
     int                      get_indexed_hival() const;
     std::string              get_indexed_base_cs() const;
     std::shared_ptr<std::vector<uint8_t>> get_indexed_palette() const;
+    std::vector<std::string> get_indexed_base_device_n_names() const;
     bool                     get_indexed_base_device_n_single_black() const;
     std::string              get_intent() const;
     std::vector<std::string> get_filters() const;
@@ -158,6 +224,7 @@ namespace pdflib
     int              indexed_hival  = -1; // hival from /Indexed color space; -1 if not Indexed
     std::string      indexed_base_cs;    // base color space name for /Indexed (e.g. "/DeviceRGB")
     std::shared_ptr<std::vector<uint8_t>> indexed_palette; // raw palette bytes: (hival+1)*ncomps bytes
+    std::vector<std::string> indexed_base_device_n_names;
     bool             indexed_base_device_n_single_black = false;
     std::string      intent;
     std::vector<std::string> image_filters;
@@ -350,6 +417,7 @@ namespace pdflib
                     // base color space
                     auto base_obj = qpdf_cs.getArrayItem(1);
                     indexed_base_device_n_single_black = false;
+                    indexed_base_device_n_names.clear();
                     if(base_obj.isName())
                       {
                         indexed_base_cs = base_obj.getName();
@@ -406,16 +474,31 @@ namespace pdflib
                                         nested_names.push_back(name.getName());
                                       }
                                   }
+                                indexed_base_device_n_names = nested_names;
 
                                 const int nested_n = static_cast<int>(nested_names.size());
                                 const bool single_black =
                                   nested_n == 1
                                   and nested_names[0] == "/Black";
+                                const bool process_cmyk_subset =
+                                  detail::device_n_names_are_process_cmyk_subset(nested_names);
                                 indexed_base_device_n_single_black = single_black;
 
                                 if(single_black)       { indexed_base_cs = "/DeviceGray"; }
-                                else if(nested_n == 3) { indexed_base_cs = "/DeviceRGB"; }
-                                else if(nested_n == 4) { indexed_base_cs = "/DeviceCMYK"; }
+                                else if(process_cmyk_subset)
+                                  {
+                                    indexed_base_cs = "/DeviceCMYK";
+                                    LOG_S(INFO) << "Indexed DeviceN base uses process CMYK subset; "
+                                                << "will expand palette to CMYK";
+                                  }
+                                else if(nested_n == 3)
+                                  {
+                                    indexed_base_cs = "/DeviceRGB";
+                                  }
+                                else if(nested_n == 4)
+                                  {
+                                    indexed_base_cs = "/DeviceCMYK";
+                                  }
                                 else
                                   {
                                     indexed_base_cs = "/DeviceN";
@@ -478,6 +561,26 @@ namespace pdflib
                         else
                           {
                             LOG_S(WARNING) << "Indexed color space: unrecognized lookup table type";
+                          }
+
+                        if(indexed_base_cs == "/DeviceCMYK"
+                           and not indexed_base_device_n_names.empty()
+                           and detail::device_n_names_are_process_cmyk_subset(
+                             indexed_base_device_n_names))
+                          {
+                            auto expanded =
+                              detail::expand_device_n_palette_to_cmyk(indexed_palette,
+                                                                      indexed_base_device_n_names);
+                            if(expanded)
+                              {
+                                indexed_palette = std::move(expanded);
+                                LOG_S(INFO) << "Indexed DeviceN palette expanded to CMYK: "
+                                            << indexed_palette->size() << " bytes";
+                              }
+                            else
+                              {
+                                LOG_S(WARNING) << "Indexed DeviceN palette expansion to CMYK failed";
+                              }
                           }
                       }
                   }
@@ -922,6 +1025,11 @@ namespace pdflib
   std::shared_ptr<std::vector<uint8_t>> pdf_resource<PAGE_XOBJECT_IMAGE>::get_indexed_palette() const
   {
     return indexed_palette;
+  }
+
+  std::vector<std::string> pdf_resource<PAGE_XOBJECT_IMAGE>::get_indexed_base_device_n_names() const
+  {
+    return indexed_base_device_n_names;
   }
 
   bool pdf_resource<PAGE_XOBJECT_IMAGE>::get_indexed_base_device_n_single_black() const

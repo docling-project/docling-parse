@@ -160,6 +160,7 @@ namespace pdflib
       image.indexed_hival   = xobj.get_indexed_hival();
       image.indexed_base_cs = xobj.get_indexed_base_cs();
       image.indexed_palette = xobj.get_indexed_palette();
+      image.indexed_base_device_n_names = xobj.get_indexed_base_device_n_names();
       image.indexed_base_device_n_single_black =
         xobj.get_indexed_base_device_n_single_black();
 
@@ -179,8 +180,28 @@ namespace pdflib
     std::shared_ptr<std::vector<uint8_t>> pixel_data;
     std::array<int, 3> pixel_shape = {0, 0, 0};
     pixel_format fmt = PIXEL_FORMAT_UNKNOWN;
+    cmyk_convention cmyk_conv = CMYK_CONVENTION_UNKNOWN;
 
     int channels = 0;
+    auto has_default_adobe_cmyk_decode = [&](std::vector<double> const& decode_array) -> bool
+      {
+        static constexpr double expected_decode[8] = {
+          1.0, 0.0, 1.0, 0.0,
+          1.0, 0.0, 1.0, 0.0
+        };
+        if(decode_array.size() < 8)
+          {
+            return false;
+          }
+        for(int i = 0; i < 8; ++i)
+          {
+            if(std::abs(decode_array[static_cast<std::size_t>(i)] - expected_decode[i]) > 1e-12)
+              {
+                return false;
+              }
+          }
+        return true;
+      };
     auto apply_decode_to_u8_samples = [&](std::shared_ptr<std::vector<uint8_t>>& dst,
                                           int ncomps) -> void
       {
@@ -246,6 +267,11 @@ namespace pdflib
         pixel_data = std::move(expanded);
         pixel_shape = {h, w, ncomps};
         channels = ncomps;
+        if(fmt == PIXEL_FORMAT_CMYK
+           and detail::device_n_names_are_process_cmyk_subset(image.indexed_base_device_n_names))
+          {
+            cmyk_conv = CMYK_CONVENTION_PROCESS;
+          }
 
         if(image.indexed_base_device_n_single_black and ncomps == 1)
           {
@@ -605,6 +631,10 @@ namespace pdflib
                 else if(decoded_channels == 4)
                   {
                     fmt = PIXEL_FORMAT_CMYK;
+                    if(image.decode_present and has_default_adobe_cmyk_decode(image.decode_array))
+                      {
+                        cmyk_conv = CMYK_CONVENTION_ADOBE_INVERTED;
+                      }
                   }
                 else
                   {
@@ -694,6 +724,7 @@ namespace pdflib
                     else if(decoded.components == 4)
                       {
                         fmt = PIXEL_FORMAT_CMYK;
+                        cmyk_conv = CMYK_CONVENTION_PROCESS;
                       }
                     else
                       {
@@ -891,6 +922,7 @@ namespace pdflib
     bitmap_instruction binstr(image.xobject_key,
                               std::move(pixel_data),
                               image.soft_mask_data,
+                              cmyk_conv,
                               pixel_shape,
                               fmt,
                               image.image_mask,
