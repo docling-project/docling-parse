@@ -37,10 +37,8 @@ else()
 
     if(WIN32)
         set(LCMS2_IMPORTED_LIB ${EXTERNALS_PREFIX_PATH}/lib/lcms2.lib)
-        set(LCMS2_BUILD_SHARED OFF)
     else()
         set(LCMS2_IMPORTED_LIB ${EXTERNALS_PREFIX_PATH}/lib/liblcms2.a)
-        set(LCMS2_BUILD_SHARED OFF)
     endif()
 
     ExternalProject_Add(extlib_lcms2
@@ -54,15 +52,14 @@ else()
 
         INSTALL_DIR ${EXTERNALS_PREFIX_PATH}
 
-        CMAKE_ARGS \\
-        -DCMAKE_POSITION_INDEPENDENT_CODE=ON \\
-        -DBUILD_SHARED_LIBS=${LCMS2_BUILD_SHARED} \\
-        -DCMAKE_BUILD_TYPE=Release \\
-        -DCMAKE_OSX_ARCHITECTURES=${CMAKE_OSX_ARCHITECTURES} \\
-        -DCMAKE_C_FLAGS=${ENV_ARCHFLAGS} \\
-        -DCMAKE_CXX_FLAGS=${ENV_ARCHFLAGS} \\
-        -DCMAKE_INSTALL_PREFIX=${EXTERNALS_PREFIX_PATH} \\
-        -DCMAKE_INSTALL_LIBDIR=${EXTERNALS_PREFIX_PATH}/lib
+        BUILD_IN_SOURCE ON
+        CONFIGURE_COMMAND ./configure
+            --prefix=${EXTERNALS_PREFIX_PATH}
+            --disable-shared
+            --enable-static
+            CFLAGS=-fPIC\ ${ENV_ARCHFLAGS}
+        BUILD_COMMAND make
+        INSTALL_COMMAND make install
 
         LOG_DOWNLOAD ON
     )
