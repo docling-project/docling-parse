@@ -19,6 +19,7 @@ else()
 
     set(OPENJPEG_URL https://github.com/uclouvain/openjpeg.git)
     set(OPENJPEG_TAG v2.5.3)
+    set(OPENJPEG_IMPORTED_LIB ${EXTERNALS_PREFIX_PATH}/lib/libopenjp2.a)
 
     ExternalProject_Add(extlib_openjpeg
 
@@ -41,6 +42,7 @@ else()
         -DBUILD_JPWL=OFF \\
         -DBUILD_THIRDPARTY=OFF \\
         -DBUILD_TESTING=OFF \\
+        -DBUILD_SHARED_LIBS=OFF \\
         -DCMAKE_INSTALL_LIBDIR=${EXTERNALS_PREFIX_PATH}/lib \\
         -DCMAKE_INSTALL_PREFIX=${EXTERNALS_PREFIX_PATH}
 
@@ -51,7 +53,7 @@ else()
     add_library(${ext_name} STATIC IMPORTED)
     add_dependencies(${ext_name} extlib_openjpeg)
     set_target_properties(${ext_name} PROPERTIES
-        IMPORTED_LOCATION ${EXTERNALS_PREFIX_PATH}/lib/libopenjp2.a
+        IMPORTED_LOCATION ${OPENJPEG_IMPORTED_LIB}
         INTERFACE_INCLUDE_DIRECTORIES "${EXTERNALS_PREFIX_PATH}/include/openjpeg-2.5;${EXTERNALS_PREFIX_PATH}/include"
     )
 
