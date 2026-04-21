@@ -55,6 +55,7 @@ else()
     set_target_properties(${ext_name} PROPERTIES
         IMPORTED_LOCATION ${OPENJPEG_IMPORTED_LIB}
         INTERFACE_INCLUDE_DIRECTORIES "${EXTERNALS_PREFIX_PATH}/include/openjpeg-2.5;${EXTERNALS_PREFIX_PATH}/include"
+        INTERFACE_COMPILE_DEFINITIONS "OPJ_STATIC"
     )
 
 endif()
