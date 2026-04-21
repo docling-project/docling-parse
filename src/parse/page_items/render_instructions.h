@@ -20,6 +20,12 @@ namespace pdflib
     PIXEL_FORMAT_CMYK,   // 4 channels (/DeviceCMYK)
   };
 
+  enum cmyk_convention {
+    CMYK_CONVENTION_UNKNOWN,
+    CMYK_CONVENTION_ADOBE_INVERTED,
+    CMYK_CONVENTION_PROCESS,
+  };
+
   enum RENDER_INSTRUCTION_NAME {
     SIZE_INSTRUCTION, // set the size of the canvas on which we render
     TEXT_RENDER_INSTRUCTION, // render text on the canvas
@@ -190,6 +196,7 @@ namespace pdflib
                        std::shared_ptr<std::vector<uint8_t> > alpha_data,
                        std::array<int, 3> shape,
                        pixel_format fmt,
+                       cmyk_convention cmyk_conv,
                        bool image_mask,
                        std::array<int, 3> rgb_filling,
                        double r_x0, double r_y0,
@@ -201,6 +208,7 @@ namespace pdflib
       alpha_data(std::move(alpha_data)),
       shape(shape),
       fmt(fmt),
+      cmyk_conv(cmyk_conv),
       image_mask(image_mask),
       rgb_filling(rgb_filling),
       r_x0(r_x0), r_y0(r_y0),
@@ -214,6 +222,7 @@ namespace pdflib
     const std::shared_ptr<std::vector<uint8_t> >& get_alpha_data() const { return alpha_data; }
     const std::array<int, 3>& get_shape() const { return shape; }
     pixel_format get_pixel_format() const { return fmt; }
+    cmyk_convention get_cmyk_convention() const { return cmyk_conv; }
     bool is_image_mask() const { return image_mask; }
     const std::array<int, 3>& get_rgb_filling() const { return rgb_filling; }
 
@@ -237,6 +246,7 @@ namespace pdflib
     const std::shared_ptr<std::vector<uint8_t> > alpha_data;
     const std::array<int, 3> shape;
     const pixel_format fmt;
+    const cmyk_convention cmyk_conv;
     const bool image_mask;
     const std::array<int, 3> rgb_filling;
 

@@ -3,7 +3,11 @@
 #ifndef PDF_BITMAP_STATE_H
 #define PDF_BITMAP_STATE_H
 
+#include <algorithm>
+#include <cmath>
+
 #include <parse/utils/ccitt/ccitt_utils.h>
+#include <parse/utils/jpx/jpx_utils.h>
 #include <third_party/pdfium_jbig2.h>
 
 namespace pdflib
@@ -148,12 +152,16 @@ namespace pdflib
       image.ccitt_k          = xobj.get_ccitt_k();
       image.ccitt_black_is_1 = xobj.get_ccitt_black_is_1();
       image.icc_components  = xobj.get_icc_components();
+      image.device_n_components = xobj.get_device_n_components();
+      image.device_n_names = xobj.get_device_n_names();
       image.jbig2_globals_data = xobj.get_jbig2_globals_data();
 
       // propagate /Indexed color space data
       image.indexed_hival   = xobj.get_indexed_hival();
       image.indexed_base_cs = xobj.get_indexed_base_cs();
       image.indexed_palette = xobj.get_indexed_palette();
+      image.indexed_base_device_n_single_black =
+        xobj.get_indexed_base_device_n_single_black();
 
       // propagate graphics state
       image.has_graphics_state = true;
@@ -171,8 +179,215 @@ namespace pdflib
     std::shared_ptr<std::vector<uint8_t>> pixel_data;
     std::array<int, 3> pixel_shape = {0, 0, 0};
     pixel_format fmt = PIXEL_FORMAT_UNKNOWN;
+    cmyk_convention cmyk_conv = CMYK_CONVENTION_UNKNOWN;
 
     int channels = 0;
+    auto is_adobe_inverted_decode = [&](int ncomps) -> bool
+      {
+        if(not image.decode_present or ncomps != 4)
+          {
+            return false;
+          }
+        if(image.decode_array.size() < 2u * static_cast<std::size_t>(ncomps))
+          {
+            return false;
+          }
+        for(int c = 0; c < ncomps; ++c)
+          {
+            const double dmin = image.decode_array[2 * c + 0];
+            const double dmax = image.decode_array[2 * c + 1];
+            if(std::abs(dmin - 1.0) > 1e-12 or std::abs(dmax - 0.0) > 1e-12)
+              {
+                return false;
+              }
+          }
+        return true;
+      };
+
+    auto apply_decode_to_u8_samples = [&](std::shared_ptr<std::vector<uint8_t>>& dst,
+                                          int ncomps) -> void
+      {
+        if(not dst or ncomps <= 0 or not image.decode_present or image.decode_array.size() < 2)
+          {
+            return;
+          }
+
+        const int pair_count = static_cast<int>(image.decode_array.size() / 2);
+        for(size_t i = 0; i < dst->size(); ++i)
+          {
+            const int comp = static_cast<int>(i % static_cast<size_t>(ncomps));
+            if(comp < pair_count)
+              {
+                (*dst)[i] = jpeg::apply_decode_component(
+                  (*dst)[i],
+                  image.decode_array[2 * comp + 0],
+                  image.decode_array[2 * comp + 1]);
+              }
+          }
+      };
+
+    auto expand_indexed_samples = [&](int ncomps,
+                                      const uint8_t* indices,
+                                      size_t n_indices,
+                                      int w,
+                                      int h) -> bool
+      {
+        if(ncomps <= 0 or not image.indexed_palette or image.indexed_palette->empty() or not indices)
+          {
+            return false;
+          }
+
+        const auto& palette = *image.indexed_palette;
+        auto expanded = std::make_shared<std::vector<uint8_t>>();
+        expanded->reserve(static_cast<size_t>(w) * h * ncomps);
+
+        for(size_t i = 0; i < n_indices; ++i)
+          {
+            int idx = static_cast<int>(indices[i]);
+            if(image.indexed_hival >= 0 and idx > image.indexed_hival)
+              {
+                idx = image.indexed_hival;
+              }
+
+            const size_t palette_offset = static_cast<size_t>(idx) * ncomps;
+            if(palette_offset + ncomps <= palette.size())
+              {
+                for(int c = 0; c < ncomps; ++c)
+                  {
+                    expanded->push_back(palette[palette_offset + c]);
+                  }
+              }
+            else
+              {
+                for(int c = 0; c < ncomps; ++c)
+                  {
+                    expanded->push_back(0);
+                  }
+              }
+          }
+
+        pixel_data = std::move(expanded);
+        pixel_shape = {h, w, ncomps};
+        channels = ncomps;
+
+        if(image.indexed_base_device_n_single_black and ncomps == 1)
+          {
+            for(auto& sample : *pixel_data)
+              {
+                sample = static_cast<uint8_t>(255 - sample);
+              }
+            LOG_S(INFO) << "bitmap: inverted Indexed single-Black DeviceN palette "
+                        << "for xobject_key=" << image.xobject_key;
+          }
+        return true;
+      };
+
+    auto unpack_subbyte_samples_to_u8 =
+      [&](std::shared_ptr<Buffer> const& src,
+          int w,
+          int h,
+          int ncomps,
+          int bits_per_component,
+          std::vector<double> const& decode_array) -> bool
+      {
+        if(not src or src->getSize() == 0 or w <= 0 or h <= 0 or ncomps <= 0)
+          {
+            return false;
+          }
+        if(bits_per_component <= 0 or bits_per_component >= 8)
+          {
+            return false;
+          }
+
+        const std::size_t row_bits =
+          static_cast<std::size_t>(w) * static_cast<std::size_t>(ncomps)
+          * static_cast<std::size_t>(bits_per_component);
+        const std::size_t min_row_bytes = (row_bits + 7u) / 8u;
+        if(min_row_bytes == 0)
+          {
+            return false;
+          }
+
+        const std::size_t src_size = src->getSize();
+        const std::size_t min_total = min_row_bytes * static_cast<std::size_t>(h);
+        if(src_size < min_total)
+          {
+            LOG_S(WARNING) << "bitmap: packed decoded_stream_data too small ("
+                           << src_size << " < " << min_total
+                           << ") for sub-byte image xobject_key=" << image.xobject_key
+                           << " width=" << w
+                           << " height=" << h
+                           << " channels=" << ncomps
+                           << " bpc=" << bits_per_component;
+            return false;
+          }
+
+        const std::size_t row_stride = min_row_bytes;
+
+        const std::uint32_t sample_max = (1u << bits_per_component) - 1u;
+        auto decode_sample =
+          [&](int component_index, std::uint32_t raw_sample) -> std::uint8_t
+          {
+            const int pair_count = static_cast<int>(decode_array.size() / 2);
+            if(component_index < pair_count)
+              {
+                const double dmin = decode_array[2 * component_index + 0];
+                const double dmax = decode_array[2 * component_index + 1];
+                const double norm =
+                  static_cast<double>(raw_sample) / static_cast<double>(sample_max);
+                const double decoded = dmin + norm * (dmax - dmin);
+                const double clamped = std::clamp(decoded, 0.0, 1.0);
+                return static_cast<std::uint8_t>(std::lround(clamped * 255.0));
+              }
+
+            const double norm =
+              static_cast<double>(raw_sample) / static_cast<double>(sample_max);
+            return static_cast<std::uint8_t>(std::lround(norm * 255.0));
+          };
+
+        const auto* bytes = reinterpret_cast<const std::uint8_t*>(src->getBuffer());
+        auto expanded = std::make_shared<std::vector<uint8_t>>();
+        expanded->reserve(static_cast<std::size_t>(w) * h * ncomps);
+
+        for(int row = 0; row < h; ++row)
+          {
+            const auto* row_ptr = bytes + static_cast<std::size_t>(row) * row_stride;
+            std::size_t bit_offset = 0;
+            for(int col = 0; col < w; ++col)
+              {
+                for(int comp = 0; comp < ncomps; ++comp)
+                  {
+                    std::uint32_t raw_sample = 0u;
+                    for(int bit = 0; bit < bits_per_component; ++bit)
+                      {
+                        const std::size_t absolute_bit = bit_offset + static_cast<std::size_t>(bit);
+                        const std::size_t byte_index = absolute_bit / 8u;
+                        const int bit_in_byte = 7 - static_cast<int>(absolute_bit % 8u);
+                        const std::uint8_t byte = row_ptr[byte_index];
+                        raw_sample = (raw_sample << 1u)
+                          | static_cast<std::uint32_t>((byte >> bit_in_byte) & 1u);
+                      }
+                    expanded->push_back(decode_sample(comp, raw_sample));
+                    bit_offset += static_cast<std::size_t>(bits_per_component);
+                  }
+              }
+          }
+
+        pixel_data = std::move(expanded);
+        pixel_shape = {h, w, ncomps};
+        channels = ncomps;
+
+        LOG_S(INFO) << "bitmap: unpacked sub-byte decoded_stream_data"
+                    << " for xobject_key=" << image.xobject_key
+                    << " width=" << w
+                    << " height=" << h
+                    << " channels=" << ncomps
+                    << " bpc=" << bits_per_component
+                    << " row_stride=" << row_stride
+                    << " output_size=" << pixel_data->size();
+        return true;
+      };
+
     if(image.image_mask)
       {
         fmt = PIXEL_FORMAT_GRAY; channels = 1;
@@ -188,6 +403,10 @@ namespace pdflib
     else if(image.color_space == "/DeviceCMYK")
       {
         fmt = PIXEL_FORMAT_CMYK; channels = 4;
+        if(is_adobe_inverted_decode(channels))
+          {
+            cmyk_conv = CMYK_CONVENTION_ADOBE_INVERTED;
+          }
       }
     else if(image.color_space.find("/ICCBased") != std::string::npos
             and image.icc_components > 0)
@@ -208,10 +427,36 @@ namespace pdflib
           {
             LOG_S(INFO) << "bitmap: treating ICCBased N=4 as DeviceCMYK";
             fmt = PIXEL_FORMAT_CMYK; channels = 4;
+            cmyk_conv = CMYK_CONVENTION_PROCESS;
           }
         else
           {
             LOG_S(WARNING) << "bitmap: ICCBased with unsupported N=" << image.icc_components
+                           << " for xobject_key=" << image.xobject_key;
+          }
+      }
+    else if(image.color_space.find("/DeviceN") != std::string::npos
+            and image.device_n_components > 0)
+      {
+        LOG_S(INFO) << "bitmap: DeviceN color space with N=" << image.device_n_components
+                    << " for xobject_key=" << image.xobject_key;
+        if(image.device_n_components == 1)
+          {
+            fmt = PIXEL_FORMAT_GRAY; channels = 1;
+          }
+        else if(image.device_n_components == 3)
+          {
+            fmt = PIXEL_FORMAT_RGB; channels = 3;
+          }
+        else if(image.device_n_components == 4)
+          {
+            fmt = PIXEL_FORMAT_CMYK; channels = 4;
+            cmyk_conv = CMYK_CONVENTION_PROCESS;
+          }
+        else
+          {
+            LOG_S(WARNING) << "bitmap: DeviceN with unsupported N="
+                           << image.device_n_components
                            << " for xobject_key=" << image.xobject_key;
           }
       }
@@ -231,6 +476,7 @@ namespace pdflib
         else if(image.indexed_base_cs == "/DeviceCMYK")
           {
             fmt = PIXEL_FORMAT_CMYK; ncomps = 4;
+            cmyk_conv = CMYK_CONVENTION_PROCESS;
           }
         else
           {
@@ -239,51 +485,22 @@ namespace pdflib
                            << "' for xobject_key=" << image.xobject_key;
           }
 
+        channels = ncomps;
+
         if(ncomps > 0 and image.decoded_stream_data and image.decoded_stream_data->getSize() > 0)
           {
             const int w = image.image_width;
             const int h = image.image_height;
-            const auto& palette = *image.indexed_palette;
             const auto* indices = reinterpret_cast<const uint8_t*>(
               image.decoded_stream_data->getBuffer());
             const size_t n_indices = image.decoded_stream_data->getSize();
-
-            auto expanded = std::make_shared<std::vector<uint8_t>>();
-            expanded->reserve(static_cast<size_t>(w) * h * ncomps);
-
-            for(size_t i = 0; i < n_indices; ++i)
+            if(expand_indexed_samples(ncomps, indices, n_indices, w, h))
               {
-                int idx = static_cast<int>(indices[i]);
-                // clamp to hival
-                if(image.indexed_hival >= 0 and idx > image.indexed_hival)
-                  {
-                    idx = image.indexed_hival;
-                  }
-                const size_t palette_offset = static_cast<size_t>(idx) * ncomps;
-                if(palette_offset + ncomps <= palette.size())
-                  {
-                    for(int c = 0; c < ncomps; ++c)
-                      {
-                        expanded->push_back(palette[palette_offset + c]);
-                      }
-                  }
-                else
-                  {
-                    // out-of-range index: fill with zeros
-                    for(int c = 0; c < ncomps; ++c)
-                      {
-                        expanded->push_back(0);
-                      }
-                  }
+                LOG_S(INFO) << "bitmap: expanded Indexed palette for xobject_key="
+                            << image.xobject_key
+                            << " (" << n_indices << " indices -> "
+                            << pixel_data->size() << " bytes, ncomps=" << ncomps << ")";
               }
-
-            pixel_data  = std::move(expanded);
-            pixel_shape = {h, w, ncomps};
-            channels    = ncomps; // mark as handled
-            LOG_S(INFO) << "bitmap: expanded Indexed palette for xobject_key="
-                        << image.xobject_key
-                        << " (" << n_indices << " indices → "
-                        << pixel_data->size() << " bytes, ncomps=" << ncomps << ")";
           }
         else if(ncomps > 0)
           {
@@ -313,25 +530,44 @@ namespace pdflib
                                        "/DCTDecode") != image.filters.end();
         const bool has_flate = std::find(image.filters.begin(), image.filters.end(),
                                          "/FlateDecode") != image.filters.end();
+        const bool has_jpx = std::find(image.filters.begin(), image.filters.end(),
+                                       "/JPXDecode") != image.filters.end();
 
         if (image.decoded_stream_data and image.decoded_stream_data->getSize() > 0)
           {
             const int w           = image.image_width;
             const int h           = image.image_height;
-            const size_t expected = static_cast<size_t>(w) * h * channels;
             const auto src        = image.decoded_stream_data;
 
-            if (src->getSize() >= expected)
+            if(image.bits_per_component > 0 and image.bits_per_component < 8)
               {
-                const auto* raw = reinterpret_cast<const uint8_t*>(src->getBuffer());
-                pixel_data  = std::make_shared<std::vector<uint8_t>>(raw, raw + expected);
-                pixel_shape = {h, w, channels};
+                if(not unpack_subbyte_samples_to_u8(src,
+                                                    w,
+                                                    h,
+                                                    channels,
+                                                    image.bits_per_component,
+                                                    image.decode_array))
+                  {
+                    LOG_S(WARNING) << "bitmap: failed to unpack sub-byte decoded_stream_data "
+                                   << "for xobject_key=" << image.xobject_key;
+                  }
               }
             else
               {
-                LOG_S(WARNING) << "bitmap: decoded_stream_data too small ("
-                               << src->getSize() << " < " << expected
-                               << ") for xobject_key=" << image.xobject_key;
+                const size_t expected = static_cast<size_t>(w) * h * channels;
+                if (src->getSize() >= expected)
+                  {
+                    const auto* raw = reinterpret_cast<const uint8_t*>(src->getBuffer());
+                    pixel_data  = std::make_shared<std::vector<uint8_t>>(raw, raw + expected);
+                    apply_decode_to_u8_samples(pixel_data, channels);
+                    pixel_shape = {h, w, channels};
+                  }
+                else
+                  {
+                    LOG_S(WARNING) << "bitmap: decoded_stream_data too small ("
+                                   << src->getSize() << " < " << expected
+                                   << ") for xobject_key=" << image.xobject_key;
+                  }
               }
           }
         else if (has_dct and image.raw_stream_data and image.raw_stream_data->getSize() > 0)
@@ -387,6 +623,10 @@ namespace pdflib
                 else if(decoded_channels == 4)
                   {
                     fmt = PIXEL_FORMAT_CMYK;
+                    if(is_adobe_inverted_decode(decoded_channels))
+                      {
+                        cmyk_conv = CMYK_CONVENTION_ADOBE_INVERTED;
+                      }
                   }
                 else
                   {
@@ -401,6 +641,98 @@ namespace pdflib
             else
               {
                 LOG_S(WARNING) << "bitmap: libjpeg decode failed "
+                               << "for xobject_key=" << image.xobject_key;
+              }
+          }
+        else if (has_jpx and image.raw_stream_data and image.raw_stream_data->getSize() > 0)
+          {
+            LOG_S(INFO) << "bitmap: decoded_stream_data unavailable for /JPXDecode image, "
+                        << "decoding JPEG2000 via OpenJPEG "
+                        << "for xobject_key=" << image.xobject_key;
+
+            auto decoded = jpx::decode_jpx_to_raw_pixels(
+                reinterpret_cast<uint8_t const*>(image.raw_stream_data->getBuffer()),
+                static_cast<std::size_t>(image.raw_stream_data->getSize()));
+
+            if(not decoded.empty())
+              {
+                if(image.indexed_palette and not image.indexed_palette->empty())
+                  {
+                    LOG_S(INFO) << "bitmap: Indexed JPX fallback metadata "
+                                << "xobject_key=" << image.xobject_key
+                                << " base_cs=" << image.indexed_base_cs
+                                << " expected_components=" << channels
+                                << " palette_bytes=" << image.indexed_palette->size()
+                                << " decoded_components=" << decoded.components;
+
+                    if(decoded.components == 1
+                       and expand_indexed_samples(channels,
+                                                  decoded.pixels.data(),
+                                                  decoded.pixels.size(),
+                                                  decoded.width,
+                                                  decoded.height))
+                      {
+                        LOG_S(INFO) << "bitmap: OpenJPEG decode succeeded for Indexed image "
+                                    << "xobject_key=" << image.xobject_key
+                                    << " actual_shape=" << decoded.height << "x"
+                                    << decoded.width << "x" << decoded.components
+                                    << " expanded_shape=" << pixel_shape[0] << "x"
+                                    << pixel_shape[1] << "x" << pixel_shape[2];
+                      }
+                    else if(decoded.components == channels)
+                      {
+                        pixel_data = std::make_shared<std::vector<uint8_t>>(std::move(decoded.pixels));
+                        pixel_shape = {decoded.height, decoded.width, decoded.components};
+
+                        LOG_S(INFO) << "bitmap: OpenJPEG returned already-expanded pixels "
+                                    << "for Indexed image xobject_key=" << image.xobject_key
+                                    << " actual_cs=" << jpeg::color_space_name(decoded.color_space)
+                                    << " actual_shape=" << decoded.height << "x"
+                                    << decoded.width << "x" << decoded.components;
+                      }
+                    else
+                      {
+                        LOG_S(WARNING) << "bitmap: OpenJPEG decode for Indexed image returned "
+                                       << decoded.components
+                                       << " components, expected 1, for xobject_key="
+                                       << image.xobject_key;
+                      }
+                  }
+                else
+                  {
+                    pixel_data = std::make_shared<std::vector<uint8_t>>(std::move(decoded.pixels));
+                    apply_decode_to_u8_samples(pixel_data, decoded.components);
+                    pixel_shape = {decoded.height, decoded.width, decoded.components};
+                    channels = decoded.components;
+
+                    if(decoded.components == 1)
+                      {
+                        fmt = PIXEL_FORMAT_GRAY;
+                      }
+                    else if(decoded.components == 3)
+                      {
+                        fmt = PIXEL_FORMAT_RGB;
+                      }
+                    else if(decoded.components == 4)
+                      {
+                        fmt = PIXEL_FORMAT_CMYK;
+                        cmyk_conv = CMYK_CONVENTION_PROCESS;
+                      }
+                    else
+                      {
+                        fmt = PIXEL_FORMAT_UNKNOWN;
+                      }
+
+                    LOG_S(INFO) << "bitmap: OpenJPEG decode succeeded "
+                                << "for xobject_key=" << image.xobject_key
+                                << " actual_cs=" << jpeg::color_space_name(decoded.color_space)
+                                << " actual_shape=" << decoded.height << "x"
+                                << decoded.width << "x" << decoded.components;
+                  }
+              }
+            else
+              {
+                LOG_S(WARNING) << "bitmap: OpenJPEG decode failed "
                                << "for xobject_key=" << image.xobject_key;
               }
           }
@@ -584,6 +916,7 @@ namespace pdflib
                               image.soft_mask_data,
                               pixel_shape,
                               fmt,
+                              cmyk_conv,
                               image.image_mask,
                               image.rgb_filling_ops,
                               image.r_x0, image.r_y0,

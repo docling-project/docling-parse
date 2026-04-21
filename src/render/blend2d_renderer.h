@@ -1029,6 +1029,7 @@ namespace pdflib
     const int sc = src_shape[2];
     const bool image_mask = instr.is_image_mask();
     const auto fmt = instr.get_pixel_format();
+    const auto cmyk_conv = instr.get_cmyk_convention();
     const auto fill_rgb = instr.get_rgb_filling();
 
     BLContext ctx(image_);
@@ -1104,23 +1105,36 @@ namespace pdflib
       auto* base = static_cast<uint8_t*>(img_data.pixel_data);
       const intptr_t stride = img_data.stride;
 
-      if (fmt == PIXEL_FORMAT_CMYK && src_data->size() >= static_cast<size_t>(sc))
-        {
-          const uint8_t c = src_data->at(0);
-          const uint8_t m = (sc >= 2) ? src_data->at(1) : 0;
-          const uint8_t y = (sc >= 3) ? src_data->at(2) : 0;
-          const uint8_t k = (sc >= 4) ? src_data->at(3) : 0;
-          const uint8_t r = static_cast<uint8_t>(((255u - c) * (255u - k)) / 255u);
-          const uint8_t g = static_cast<uint8_t>(((255u - m) * (255u - k)) / 255u);
-          const uint8_t b = static_cast<uint8_t>(((255u - y) * (255u - k)) / 255u);
-          LOG_S(INFO) << "render_bitmap: cmyk_sample[0]"
-                      << " raw=(" << static_cast<int>(c) << ","
-                      << static_cast<int>(m) << ","
-                      << static_cast<int>(y) << ","
-                      << static_cast<int>(k) << ")"
-                      << " rgb=(" << static_cast<int>(r) << ","
-                      << static_cast<int>(g) << ","
-                      << static_cast<int>(b) << ")";
+	      if (fmt == PIXEL_FORMAT_CMYK && src_data->size() >= static_cast<size_t>(sc))
+	        {
+	          const uint8_t c = src_data->at(0);
+	          const uint8_t m = (sc >= 2) ? src_data->at(1) : 0;
+	          const uint8_t y = (sc >= 3) ? src_data->at(2) : 0;
+	          const uint8_t k = (sc >= 4) ? src_data->at(3) : 0;
+	          uint8_t r = 0;
+	          uint8_t g = 0;
+	          uint8_t b = 0;
+	          if(cmyk_conv == CMYK_CONVENTION_ADOBE_INVERTED)
+	            {
+	              r = static_cast<uint8_t>((static_cast<unsigned int>(c) * k) / 255u);
+	              g = static_cast<uint8_t>((static_cast<unsigned int>(m) * k) / 255u);
+	              b = static_cast<uint8_t>((static_cast<unsigned int>(y) * k) / 255u);
+	            }
+	          else
+	            {
+	              r = static_cast<uint8_t>(((255u - c) * (255u - k)) / 255u);
+	              g = static_cast<uint8_t>(((255u - m) * (255u - k)) / 255u);
+	              b = static_cast<uint8_t>(((255u - y) * (255u - k)) / 255u);
+	            }
+	          LOG_S(INFO) << "render_bitmap: cmyk_sample[0]"
+	                      << " raw=(" << static_cast<int>(c) << ","
+	                      << static_cast<int>(m) << ","
+	                      << static_cast<int>(y) << ","
+	                      << static_cast<int>(k) << ")"
+	                      << " conv=" << static_cast<int>(cmyk_conv)
+	                      << " rgb=(" << static_cast<int>(r) << ","
+	                      << static_cast<int>(g) << ","
+	                      << static_cast<int>(b) << ")";
         }
 
       for (int row = 0; row < sh; ++row)
@@ -1141,17 +1155,25 @@ namespace pdflib
                   g = static_cast<uint8_t>(fill_rgb[1]);
                   b = static_cast<uint8_t>(fill_rgb[2]);
                 }
-              else if (fmt == PIXEL_FORMAT_CMYK and sc >= 4)
-                {
-                  const uint8_t c = src_data->at(idx + 0);
-                  const uint8_t m = src_data->at(idx + 1);
-                  const uint8_t y = src_data->at(idx + 2);
-                  const uint8_t k = src_data->at(idx + 3);
-
-                  r = static_cast<uint8_t>((static_cast<unsigned int>(c) * k) / 255u);
-                  g = static_cast<uint8_t>((static_cast<unsigned int>(m) * k) / 255u);
-                  b = static_cast<uint8_t>((static_cast<unsigned int>(y) * k) / 255u);
-                }
+	              else if (fmt == PIXEL_FORMAT_CMYK and sc >= 4)
+	                {
+	                  const uint8_t c = src_data->at(idx + 0);
+	                  const uint8_t m = src_data->at(idx + 1);
+	                  const uint8_t y = src_data->at(idx + 2);
+	                  const uint8_t k = src_data->at(idx + 3);
+	                  if(cmyk_conv == CMYK_CONVENTION_ADOBE_INVERTED)
+	                    {
+	                      r = static_cast<uint8_t>((static_cast<unsigned int>(c) * k) / 255u);
+	                      g = static_cast<uint8_t>((static_cast<unsigned int>(m) * k) / 255u);
+	                      b = static_cast<uint8_t>((static_cast<unsigned int>(y) * k) / 255u);
+	                    }
+	                  else
+	                    {
+	                      r = static_cast<uint8_t>(((255u - c) * (255u - k)) / 255u);
+	                      g = static_cast<uint8_t>(((255u - m) * (255u - k)) / 255u);
+	                      b = static_cast<uint8_t>(((255u - y) * (255u - k)) / 255u);
+	                    }
+	                }
               else if (fmt == PIXEL_FORMAT_GRAY)
                 {
                   g = r;
