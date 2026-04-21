@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <cstring>
 
+#include <parse/utils/color/icc_utils.h>
 #include <parse/utils/jpeg/jpeg_utils.h>
 #include <parse/qpdf/qpdf_compat.h>
 
@@ -224,6 +225,8 @@ namespace pdflib
     int              indexed_hival  = -1; // hival from /Indexed color space; -1 if not Indexed
     std::string      indexed_base_cs;    // base color space name for /Indexed (e.g. "/DeviceRGB")
     std::shared_ptr<std::vector<uint8_t>> indexed_palette; // raw palette bytes: (hival+1)*ncomps bytes
+    std::shared_ptr<std::vector<uint8_t>> indexed_base_icc_profile;
+    int              indexed_base_icc_components = 0;
     std::vector<std::string> indexed_base_device_n_names;
     bool             indexed_base_device_n_single_black = false;
     std::string      intent;
@@ -417,6 +420,8 @@ namespace pdflib
                     // base color space
                     auto base_obj = qpdf_cs.getArrayItem(1);
                     indexed_base_device_n_single_black = false;
+                    indexed_base_icc_profile.reset();
+                    indexed_base_icc_components = 0;
                     indexed_base_device_n_names.clear();
                     if(base_obj.isName())
                       {
@@ -430,10 +435,21 @@ namespace pdflib
                             auto icc_stream = base_obj.getArrayItem(1);
                             if(icc_stream.isStream())
                               {
+                                auto profile_buf = to_shared_ptr(icc_stream.getStreamData());
+                                if(profile_buf and profile_buf->getSize() > 0)
+                                  {
+                                    auto const* ptr = reinterpret_cast<const uint8_t*>(
+                                      profile_buf->getBuffer());
+                                    indexed_base_icc_profile =
+                                      std::make_shared<std::vector<uint8_t>>(
+                                        ptr, ptr + profile_buf->getSize());
+                                  }
+
                                 auto icc_dict = icc_stream.getDict();
                                 if(icc_dict.hasKey("/N") and icc_dict.getKey("/N").isInteger())
                                   {
                                     const int n = icc_dict.getKey("/N").getIntValue();
+                                    indexed_base_icc_components = n;
                                     if(n == 1)      { indexed_base_cs = "/DeviceGray"; }
                                     else if(n == 3) { indexed_base_cs = "/DeviceRGB"; }
                                     else if(n == 4) { indexed_base_cs = "/DeviceCMYK"; }
@@ -450,6 +466,7 @@ namespace pdflib
                                     LOG_S(WARNING) << "Indexed ICCBased base missing /N entry";
                                     const int n = detail::infer_icc_components_from_profile(
                                       icc_stream, "Indexed ICCBased base");
+                                    indexed_base_icc_components = n;
                                     if(n == 1)      { indexed_base_cs = "/DeviceGray"; }
                                     else if(n == 3) { indexed_base_cs = "/DeviceRGB"; }
                                     else if(n == 4) { indexed_base_cs = "/DeviceCMYK"; }
@@ -580,6 +597,32 @@ namespace pdflib
                             else
                               {
                                 LOG_S(WARNING) << "Indexed DeviceN palette expansion to CMYK failed";
+                              }
+                          }
+
+                        if(indexed_base_icc_profile
+                           and not indexed_base_icc_profile->empty()
+                           and indexed_base_icc_components > 0
+                           and indexed_palette
+                           and not indexed_palette->empty())
+                          {
+                            auto rgb_palette = icc::transform_palette_to_rgb(
+                              *indexed_palette,
+                              indexed_base_icc_components,
+                              *indexed_base_icc_profile);
+                            if(not rgb_palette.empty())
+                              {
+                                indexed_palette = std::make_shared<std::vector<uint8_t>>(
+                                  std::move(rgb_palette));
+                                indexed_base_cs = "/DeviceRGB";
+                                indexed_base_device_n_names.clear();
+                                indexed_base_device_n_single_black = false;
+                                LOG_S(INFO) << "Indexed ICCBased palette converted to RGB: "
+                                            << indexed_palette->size() << " bytes";
+                              }
+                            else
+                              {
+                                LOG_S(WARNING) << "Indexed ICCBased palette RGB conversion failed";
                               }
                           }
                       }
