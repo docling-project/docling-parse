@@ -73,9 +73,43 @@ public:
   int height = 0;
   int components = 0;
   ColorSpace color_space = ColorSpace::Unknown;
+  J_COLOR_SPACE jpeg_color_space = JCS_UNKNOWN;
+  J_COLOR_SPACE out_color_space = JCS_UNKNOWN;
 
   bool empty() const { return pixels.empty(); }
 };
+
+inline void convert_adobe_cmyk_to_rgb_inplace(decoded_jpeg_result& result)
+{
+  if(result.components != 4)
+    {
+      return;
+    }
+
+  std::vector<unsigned char> rgb;
+  rgb.resize(static_cast<std::size_t>(result.width)
+             * static_cast<std::size_t>(result.height) * 3u);
+
+  const std::size_t pixel_count =
+    static_cast<std::size_t>(result.width) * static_cast<std::size_t>(result.height);
+
+  for(std::size_t i = 0; i < pixel_count; ++i)
+    {
+      const uint8_t c = result.pixels[i * 4 + 0];
+      const uint8_t m = result.pixels[i * 4 + 1];
+      const uint8_t y = result.pixels[i * 4 + 2];
+      const uint8_t k = result.pixels[i * 4 + 3];
+
+      rgb[i * 3 + 0] = static_cast<uint8_t>((static_cast<unsigned int>(c) * k) / 255u);
+      rgb[i * 3 + 1] = static_cast<uint8_t>((static_cast<unsigned int>(m) * k) / 255u);
+      rgb[i * 3 + 2] = static_cast<uint8_t>((static_cast<unsigned int>(y) * k) / 255u);
+    }
+
+  result.pixels = std::move(rgb);
+  result.components = 3;
+  result.color_space = ColorSpace::RGB;
+  result.out_color_space = JCS_RGB;
+}
 
 // ---------------------------------------------------------------------------
 // Custom libjpeg error handler that longjmp's instead of calling exit()
@@ -914,6 +948,8 @@ inline decoded_jpeg_result decode_jpeg_to_raw_pixels(
     result.width      = static_cast<int>(dinfo.output_width);
     result.height     = static_cast<int>(dinfo.output_height);
     result.components = dinfo.output_components;
+    result.jpeg_color_space = dinfo.jpeg_color_space;
+    result.out_color_space = dinfo.out_color_space;
     result.color_space = (result.components == 1) ? ColorSpace::Gray
                        : (result.components == 3) ? ColorSpace::RGB
                        : (result.components == 4) ? ColorSpace::CMYK
@@ -985,7 +1021,25 @@ inline decoded_jpeg_result decode_jpeg_to_raw_pixels(
 
   LOG_S(INFO) << "decode_jpeg_to_raw_pixels"
               << ": retrying with native libjpeg output color space";
-  return try_decode(false, JCS_UNKNOWN, "native-libjpeg");
+  auto decoded = try_decode(false, JCS_UNKNOWN, "native-libjpeg");
+  if(decoded.empty())
+    {
+      return decoded;
+    }
+
+  if(params.color_space == ColorSpace::RGB
+     and decoded.components == 4
+     and (decoded.jpeg_color_space == JCS_YCCK
+          or decoded.jpeg_color_space == JCS_CMYK))
+    {
+      LOG_S(INFO) << "decode_jpeg_to_raw_pixels"
+                  << ": native 4-component JPEG for PDF RGB image; converting to RGB"
+                  << " jpeg_color_space=" << decoded.jpeg_color_space
+                  << " out_color_space=" << decoded.out_color_space;
+      convert_adobe_cmyk_to_rgb_inplace(decoded);
+    }
+
+  return decoded;
 }
 
 inline decoded_jpeg_result decode_pdf_jpeg_stream_to_raw_pixels(
