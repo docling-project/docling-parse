@@ -35,11 +35,7 @@ else()
     set(LCMS2_URL https://github.com/mm2/Little-CMS.git)
     set(LCMS2_TAG lcms2.17)
 
-    if(WIN32)
-        set(LCMS2_IMPORTED_LIB ${EXTERNALS_PREFIX_PATH}/lib/lcms2.lib)
-    else()
-        set(LCMS2_IMPORTED_LIB ${EXTERNALS_PREFIX_PATH}/lib/liblcms2.a)
-    endif()
+    set(LCMS2_IMPORTED_LIB ${EXTERNALS_PREFIX_PATH}/lib/liblcms2.a)
 
     ExternalProject_Add(extlib_lcms2
         PREFIX extlib_lcms2
