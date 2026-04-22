@@ -295,6 +295,15 @@ int main(int argc, char* argv[])
           else if (lvl == "error")   { loguru::g_stderr_verbosity = loguru::Verbosity_ERROR; }
         }
 
+      // --- Initialize fonts like app/render.cpp ---
+      {
+        nlohmann::json data;
+        std::string resource_dir = resource_utils::get_resources_dir(false).string();
+        data[pdflib::pdf_resource<pdflib::PAGE_FONT>::RESOURCE_DIR_KEY] = resource_dir;
+        std::unordered_map<std::string, double> font_timings;
+        pdflib::pdf_resource<pdflib::PAGE_FONT>::initialise(data, font_timings);
+      }
+
       if (not result.count("input"))
         {
           LOG_S(ERROR) << "-i/--input is required";
