@@ -19,6 +19,22 @@ namespace pdflib
       PATH_PAINTING
     };
 
+    /*
+      Table: PDF content stream operators
+
+      | Category             | Operators                                  |
+      | -------------------- | ------------------------------------------ |
+      | Graphics state       | w J j M d ri i gs q Q cm                   |
+      | Path                 | m l c v y h re S s f F f* B B* b b* n W W* |
+      | Text                 | BT ET Tc Tw Tz TL Tf Tr Ts Td TD Tm T* Tj TJ ' " |
+      | Color                | CS cs SC SCN sc scn G g RG rg K k          |
+      | XObject / shading    | Do sh                                      |
+      | Marked content       | MP DP BMC BDC EMC                          |
+      | Compatibility        | BX EX                                      |
+      | Inline image markers | BI ID EI                                   |
+      | Type 3 font metrics  | d0 d1                                      |
+     */
+    
     // Table 51 – Operator Categories [ p 119 ]
     enum operator_name {
 
@@ -34,9 +50,11 @@ namespace pdflib
       // color-scheme
       CS, cs, SC, SCN, sc, scn, G, g, RG, rg, K, k,
 
-      // text objects
+      // group objects
       BT, ET,
-
+      BX, EX,
+      BI, ID, EI, 
+      
       // Text state
       Tc, Tw, Tz, TL, Tf, Tr, Ts,
 
@@ -58,6 +76,12 @@ namespace pdflib
       // Marked content
       MP, DP, BMC, BDC, EMC,
 
+      // shading
+      sh,
+
+      // Type 3 font operators
+      d0, d1,
+      
       // dummy
       null
     };
@@ -94,6 +118,46 @@ namespace pdflib
         case k:
           {
             return COLOR_SCHEME;
+          }
+
+        case q:
+        case Q:
+        case cm:
+        case Do:
+        case BT:
+        case ET:
+        case BX:
+        case EX:
+        case BMC:
+        case BDC:
+        case EMC:
+        case BI:
+        case ID:
+        case EI:
+        case Tc:
+        case Tw:
+        case Tz:
+        case TL:
+        case Tf:
+        case Tr:
+        case Ts:
+        case Td:
+        case TD:
+        case Tm:
+        case TStar:
+        case Tj:
+        case TJ:
+        case accent:
+        case double_accent:
+        case W:
+        case WStar:
+        case MP:
+        case DP:
+        case sh:
+        case d0:
+        case d1:
+          {
+            return rest;
           }
 
           // lines
@@ -169,6 +233,11 @@ namespace pdflib
       // text objects
       else if(name=="BT") { return BT; }
       else if(name=="ET") { return ET; }
+      else if(name=="BX") { return BX; }
+      else if(name=="EX") { return EX; }
+      else if(name=="BI") { return BI; }
+      else if(name=="ID") { return ID; }
+      else if(name=="EI") { return EI; }
 
       // Text state
       else if(name=="Tc") { return Tc; }
@@ -222,6 +291,9 @@ namespace pdflib
       else if(name=="BMC")  { return BMC; }
       else if(name=="BDC")  { return BDC; }
       else if(name=="EMC")  { return EMC; }
+      else if(name=="sh")  { return sh; }
+      else if(name=="d0")  { return d0; }
+      else if(name=="d1")  { return d1; }
 
       else
         {
@@ -273,6 +345,11 @@ namespace pdflib
           // text
         case BT: return "BT";
         case ET: return "ET";
+        case BX: return "BX";
+        case EX: return "EX";
+        case BI: return "BI";
+        case ID: return "ID";
+        case EI: return "EI";
 
         case Tc: return "Tc";
 
@@ -320,6 +397,14 @@ namespace pdflib
 
 	case W: return "W";
 	case WStar: return "W*";
+        case MP: return "MP";
+        case DP: return "DP";
+        case BMC: return "BMC";
+        case BDC: return "BDC";
+        case EMC: return "EMC";
+        case sh: return "sh";
+        case d0: return "d0";
+        case d1: return "d1";
 
         default:
           {

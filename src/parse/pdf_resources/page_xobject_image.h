@@ -3,11 +3,136 @@
 #ifndef PDF_PAGE_XOBJECT_IMAGE_RESOURCE_H
 #define PDF_PAGE_XOBJECT_IMAGE_RESOURCE_H
 
+#include <cstdint>
+#include <cstring>
+
+#include <parse/utils/color/icc_utils.h>
 #include <parse/utils/jpeg/jpeg_utils.h>
 #include <parse/qpdf/qpdf_compat.h>
 
 namespace pdflib
 {
+
+  namespace detail
+  {
+    inline int icc_signature_to_components(char const* sig)
+    {
+      if(std::memcmp(sig, "GRAY", 4) == 0) return 1;
+      if(std::memcmp(sig, "RGB ", 4) == 0) return 3;
+      if(std::memcmp(sig, "CMYK", 4) == 0) return 4;
+
+      if(sig[1] == 'C' and sig[2] == 'L' and sig[3] == 'R')
+        {
+          if(sig[0] >= '2' and sig[0] <= '9') return sig[0] - '0';
+          if(sig[0] >= 'A' and sig[0] <= 'F') return 10 + (sig[0] - 'A');
+        }
+
+      return 0;
+    }
+
+    inline int infer_icc_components_from_profile(QPDFObjectHandle icc_stream,
+                                                 std::string const& context)
+    {
+      if(not icc_stream.isStream())
+        {
+          LOG_S(WARNING) << context << ": ICC object is not a stream";
+          return 0;
+        }
+
+      try
+        {
+          auto profile = to_shared_ptr(icc_stream.getStreamData());
+          if(not profile or profile->getSize() < 20)
+            {
+              LOG_S(WARNING) << context << ": ICC profile too small to inspect";
+              return 0;
+            }
+
+          auto const* bytes = reinterpret_cast<std::uint8_t const*>(profile->getBuffer());
+          int const n = icc_signature_to_components(reinterpret_cast<char const*>(bytes + 16));
+
+          if(n > 0)
+            {
+              LOG_S(INFO) << context << ": inferred ICC components from profile header: N=" << n;
+            }
+          else
+            {
+              LOG_S(WARNING) << context << ": unsupported ICC data color space signature";
+            }
+          return n;
+        }
+      catch(std::exception const& e)
+        {
+          LOG_S(WARNING) << context << ": failed to inspect ICC profile stream: " << e.what();
+          return 0;
+        }
+    }
+
+    inline int cmyk_process_component_index(std::string const& name)
+    {
+      if(name == "/Cyan")    return 0;
+      if(name == "/Magenta") return 1;
+      if(name == "/Yellow")  return 2;
+      if(name == "/Black")   return 3;
+      return -1;
+    }
+
+    inline bool device_n_names_are_process_cmyk_subset(
+      std::vector<std::string> const& names)
+    {
+      if(names.empty())
+        {
+          return false;
+        }
+
+      for(auto const& name : names)
+        {
+          if(cmyk_process_component_index(name) < 0)
+            {
+              return false;
+            }
+        }
+
+      return true;
+    }
+
+    inline std::shared_ptr<std::vector<uint8_t>> expand_device_n_palette_to_cmyk(
+      std::shared_ptr<std::vector<uint8_t>> const& palette,
+      std::vector<std::string> const&              names)
+    {
+      if(not palette or names.empty())
+        {
+          return nullptr;
+        }
+
+      const std::size_t src_components = names.size();
+      if(src_components == 0 or (palette->size() % src_components) != 0)
+        {
+          return nullptr;
+        }
+
+      const std::size_t entry_count = palette->size() / src_components;
+      auto expanded = std::make_shared<std::vector<uint8_t>>();
+      expanded->assign(entry_count * 4u, 0u);
+
+      for(std::size_t entry = 0; entry < entry_count; ++entry)
+        {
+          const std::size_t src_offset = entry * src_components;
+          const std::size_t dst_offset = entry * 4u;
+          for(std::size_t i = 0; i < src_components; ++i)
+            {
+              const int dst_component = cmyk_process_component_index(names[i]);
+              if(dst_component >= 0)
+                {
+                  (*expanded)[dst_offset + static_cast<std::size_t>(dst_component)] =
+                    (*palette)[src_offset + i];
+                }
+            }
+        }
+
+      return expanded;
+    }
+  }
 
   template<>
   class pdf_resource<PAGE_XOBJECT_IMAGE>
@@ -31,9 +156,13 @@ namespace pdflib
     int                      get_bits_per_component() const;
     std::string              get_color_space() const;
     int                      get_icc_components() const;
+    int                      get_device_n_components() const;
+    std::vector<std::string> get_device_n_names() const;
     int                      get_indexed_hival() const;
     std::string              get_indexed_base_cs() const;
     std::shared_ptr<std::vector<uint8_t>> get_indexed_palette() const;
+    std::vector<std::string> get_indexed_base_device_n_names() const;
+    bool                     get_indexed_base_device_n_single_black() const;
     std::string              get_intent() const;
     std::vector<std::string> get_filters() const;
 
@@ -91,9 +220,15 @@ namespace pdflib
     int              bits_per_component;
     std::string      color_space;
     int              icc_components = 0;  // number of color components from /ICCBased /N entry; 0 if not ICCBased
+    int              device_n_components = 0; // number of components from /DeviceN names array; 0 if not DeviceN
+    std::vector<std::string> device_n_names; // names from /DeviceN colorant array
     int              indexed_hival  = -1; // hival from /Indexed color space; -1 if not Indexed
     std::string      indexed_base_cs;    // base color space name for /Indexed (e.g. "/DeviceRGB")
     std::shared_ptr<std::vector<uint8_t>> indexed_palette; // raw palette bytes: (hival+1)*ncomps bytes
+    std::shared_ptr<std::vector<uint8_t>> indexed_base_icc_profile;
+    int              indexed_base_icc_components = 0;
+    std::vector<std::string> indexed_base_device_n_names;
+    bool             indexed_base_device_n_single_black = false;
     std::string      intent;
     std::vector<std::string> image_filters;
 
@@ -246,11 +381,35 @@ namespace pdflib
                         else
                           {
                             LOG_S(WARNING) << "ICCBased stream missing /N entry";
+                            icc_components = detail::infer_icc_components_from_profile(
+                              icc_stream, "ICCBased");
                           }
                       }
                     else
                       {
                         LOG_S(WARNING) << "ICCBased: second array element is not a stream";
+                      }
+                  }
+                else if(name_obj.isName() and name_obj.getName() == "/DeviceN")
+                  {
+                    device_n_names.clear();
+                    auto names_obj = qpdf_cs.getArrayItem(1);
+                    if(names_obj.isArray())
+                      {
+                        device_n_components = names_obj.getArrayNItems();
+                        for(int i = 0; i < names_obj.getArrayNItems(); ++i)
+                          {
+                            auto name = names_obj.getArrayItem(i);
+                            if(name.isName())
+                              {
+                                device_n_names.push_back(name.getName());
+                              }
+                          }
+                        LOG_S(INFO) << "DeviceN color space: N=" << device_n_components;
+                      }
+                    else
+                      {
+                        LOG_S(WARNING) << "DeviceN color space: names array missing";
                       }
                   }
                 else if(name_obj.isName() and name_obj.getName() == "/Indexed"
@@ -260,6 +419,10 @@ namespace pdflib
 
                     // base color space
                     auto base_obj = qpdf_cs.getArrayItem(1);
+                    indexed_base_device_n_single_black = false;
+                    indexed_base_icc_profile.reset();
+                    indexed_base_icc_components = 0;
+                    indexed_base_device_n_names.clear();
                     if(base_obj.isName())
                       {
                         indexed_base_cs = base_obj.getName();
@@ -272,10 +435,21 @@ namespace pdflib
                             auto icc_stream = base_obj.getArrayItem(1);
                             if(icc_stream.isStream())
                               {
+                                auto profile_buf = to_shared_ptr(icc_stream.getStreamData());
+                                if(profile_buf and profile_buf->getSize() > 0)
+                                  {
+                                    auto const* ptr = reinterpret_cast<const uint8_t*>(
+                                      profile_buf->getBuffer());
+                                    indexed_base_icc_profile =
+                                      std::make_shared<std::vector<uint8_t>>(
+                                        ptr, ptr + profile_buf->getSize());
+                                  }
+
                                 auto icc_dict = icc_stream.getDict();
                                 if(icc_dict.hasKey("/N") and icc_dict.getKey("/N").isInteger())
                                   {
                                     const int n = icc_dict.getKey("/N").getIntValue();
+                                    indexed_base_icc_components = n;
                                     if(n == 1)      { indexed_base_cs = "/DeviceGray"; }
                                     else if(n == 3) { indexed_base_cs = "/DeviceRGB"; }
                                     else if(n == 4) { indexed_base_cs = "/DeviceCMYK"; }
@@ -290,11 +464,66 @@ namespace pdflib
                                 else
                                   {
                                     LOG_S(WARNING) << "Indexed ICCBased base missing /N entry";
+                                    const int n = detail::infer_icc_components_from_profile(
+                                      icc_stream, "Indexed ICCBased base");
+                                    indexed_base_icc_components = n;
+                                    if(n == 1)      { indexed_base_cs = "/DeviceGray"; }
+                                    else if(n == 3) { indexed_base_cs = "/DeviceRGB"; }
+                                    else if(n == 4) { indexed_base_cs = "/DeviceCMYK"; }
                                   }
                               }
                             else
                               {
                                 LOG_S(WARNING) << "Indexed ICCBased base: second array element is not a stream";
+                              }
+                          }
+                        else if(base_name.isName() and base_name.getName() == "/DeviceN")
+                          {
+                            auto names_obj = base_obj.getArrayItem(1);
+                            if(names_obj.isArray())
+                              {
+                                std::vector<std::string> nested_names;
+                                for(int i = 0; i < names_obj.getArrayNItems(); ++i)
+                                  {
+                                    auto name = names_obj.getArrayItem(i);
+                                    if(name.isName())
+                                      {
+                                        nested_names.push_back(name.getName());
+                                      }
+                                  }
+                                indexed_base_device_n_names = nested_names;
+
+                                const int nested_n = static_cast<int>(nested_names.size());
+                                const bool single_black =
+                                  nested_n == 1
+                                  and nested_names[0] == "/Black";
+                                const bool process_cmyk_subset =
+                                  detail::device_n_names_are_process_cmyk_subset(nested_names);
+                                indexed_base_device_n_single_black = single_black;
+
+                                if(single_black)       { indexed_base_cs = "/DeviceGray"; }
+                                else if(process_cmyk_subset)
+                                  {
+                                    indexed_base_cs = "/DeviceCMYK";
+                                    LOG_S(INFO) << "Indexed DeviceN base uses process CMYK subset; "
+                                                << "will expand palette to CMYK";
+                                  }
+                                else if(nested_n == 3)
+                                  {
+                                    indexed_base_cs = "/DeviceRGB";
+                                  }
+                                else if(nested_n == 4)
+                                  {
+                                    indexed_base_cs = "/DeviceCMYK";
+                                  }
+                                else
+                                  {
+                                    indexed_base_cs = "/DeviceN";
+                                    LOG_S(WARNING) << "Indexed DeviceN base has unsupported component layout N="
+                                                   << nested_n;
+                                  }
+                                LOG_S(INFO) << "Indexed DeviceN base: N=" << nested_n
+                                            << " -> " << indexed_base_cs;
                               }
                           }
                         else if(base_name.isName())
@@ -349,6 +578,52 @@ namespace pdflib
                         else
                           {
                             LOG_S(WARNING) << "Indexed color space: unrecognized lookup table type";
+                          }
+
+                        if(indexed_base_cs == "/DeviceCMYK"
+                           and not indexed_base_device_n_names.empty()
+                           and detail::device_n_names_are_process_cmyk_subset(
+                             indexed_base_device_n_names))
+                          {
+                            auto expanded =
+                              detail::expand_device_n_palette_to_cmyk(indexed_palette,
+                                                                      indexed_base_device_n_names);
+                            if(expanded)
+                              {
+                                indexed_palette = std::move(expanded);
+                                LOG_S(INFO) << "Indexed DeviceN palette expanded to CMYK: "
+                                            << indexed_palette->size() << " bytes";
+                              }
+                            else
+                              {
+                                LOG_S(WARNING) << "Indexed DeviceN palette expansion to CMYK failed";
+                              }
+                          }
+
+                        if(indexed_base_icc_profile
+                           and not indexed_base_icc_profile->empty()
+                           and indexed_base_icc_components > 0
+                           and indexed_palette
+                           and not indexed_palette->empty())
+                          {
+                            auto rgb_palette = icc::transform_palette_to_rgb(
+                              *indexed_palette,
+                              indexed_base_icc_components,
+                              *indexed_base_icc_profile);
+                            if(not rgb_palette.empty())
+                              {
+                                indexed_palette = std::make_shared<std::vector<uint8_t>>(
+                                  std::move(rgb_palette));
+                                indexed_base_cs = "/DeviceRGB";
+                                indexed_base_device_n_names.clear();
+                                indexed_base_device_n_single_black = false;
+                                LOG_S(INFO) << "Indexed ICCBased palette converted to RGB: "
+                                            << indexed_palette->size() << " bytes";
+                              }
+                            else
+                              {
+                                LOG_S(WARNING) << "Indexed ICCBased palette RGB conversion failed";
+                              }
                           }
                       }
                   }
@@ -443,6 +718,22 @@ namespace pdflib
 	      }
 	    decode_present = not decode_array.empty();
 	  }
+        else if(device_n_components > 0)
+          {
+            const bool single_black =
+              device_n_components == 1
+              and device_n_names.size() == 1
+              and device_n_names[0] == "/Black";
+            LOG_S(INFO) << "no `/Decode` found: using default for DeviceN N="
+                        << device_n_components
+                        << " single_black=" << (single_black ? "true" : "false");
+            for(int i = 0; i < device_n_components; ++i)
+              {
+                decode_array.push_back(single_black ? 1.0 : 0.0);
+                decode_array.push_back(single_black ? 0.0 : 1.0);
+              }
+            decode_present = not decode_array.empty();
+          }
 	else if(indexed_hival >= 0)
 	  {
 	    // Indexed: default decode is [0, hival] (one component — the palette index)
@@ -754,6 +1045,16 @@ namespace pdflib
     return icc_components;
   }
 
+  int pdf_resource<PAGE_XOBJECT_IMAGE>::get_device_n_components() const
+  {
+    return device_n_components;
+  }
+
+  std::vector<std::string> pdf_resource<PAGE_XOBJECT_IMAGE>::get_device_n_names() const
+  {
+    return device_n_names;
+  }
+
   int pdf_resource<PAGE_XOBJECT_IMAGE>::get_indexed_hival() const
   {
     return indexed_hival;
@@ -767,6 +1068,16 @@ namespace pdflib
   std::shared_ptr<std::vector<uint8_t>> pdf_resource<PAGE_XOBJECT_IMAGE>::get_indexed_palette() const
   {
     return indexed_palette;
+  }
+
+  std::vector<std::string> pdf_resource<PAGE_XOBJECT_IMAGE>::get_indexed_base_device_n_names() const
+  {
+    return indexed_base_device_n_names;
+  }
+
+  bool pdf_resource<PAGE_XOBJECT_IMAGE>::get_indexed_base_device_n_single_black() const
+  {
+    return indexed_base_device_n_single_black;
   }
 
   std::string pdf_resource<PAGE_XOBJECT_IMAGE>::get_intent() const

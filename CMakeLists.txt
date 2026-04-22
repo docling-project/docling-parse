@@ -108,13 +108,15 @@ include(cmake/extlib_loguru.cmake)
 include(cmake/extlib_json.cmake)
 include(cmake/extlib_utf8.git.cmake)
 include(cmake/extlib_jpeg.cmake)
+include(cmake/extlib_openjpeg.cmake)
+include(cmake/extlib_lcms2.cmake)
 # include(cmake/extlib_qpdf_v11.cmake)
 include(cmake/extlib_qpdf_v12.cmake)
 include(cmake/extlib_blend2d.cmake)
 include(cmake/extlib_pdfium_jbig2.cmake)
 
 # aggregate the targets created by the dependencies
-set(DEPENDENCIES qpdf jpeg utf8 json loguru cxxopts blend2d pdfium_jbig2)
+set(DEPENDENCIES qpdf jpeg openjpeg lcms2 utf8 json loguru cxxopts blend2d pdfium_jbig2)
 
 # ************************
 # *** libraries        ***

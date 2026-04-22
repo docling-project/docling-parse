@@ -4,6 +4,16 @@
 #include "render.h"
 #include "parse/utils/bitmap/bitmap_exporter.h"
 
+namespace
+{
+std::filesystem::path page_pdf_output_path(std::filesystem::path const& image_path)
+{
+  std::filesystem::path pdf_path = image_path;
+  pdf_path.replace_extension(".pdf");
+  return pdf_path;
+}
+}
+
 struct ImageIssue
 {
   std::string pdf_path;
@@ -52,6 +62,7 @@ static int analyse_pdf(const std::string&      pdf_path,
                        int&                     total_pages,
                        const std::string&       render_dir,
                        bool                     export_bitmaps,
+                       bool                     export_page_pdf,
                        const std::string&       bitmap_dir,
                        int                      target_page)
 {
@@ -184,6 +195,10 @@ static int analyse_pdf(const std::string&      pdf_path,
               pdflib::renderer<pdflib::BLEND2D> rnd(render_cfg);
               page_dec->get_instructions().iterate_over_instructions(rnd);
               rnd.save(out_path);
+              if(export_page_pdf)
+                {
+                  page_dec->save_pdf_page(page_pdf_output_path(out_path));
+                }
               LOG_S(INFO) << "saved rendered page: " << out_path;
             }
           catch (std::exception const& exc)
@@ -257,6 +272,8 @@ int main(int argc, char* argv[])
                          cxxopts::value<int>()->default_value("-1"))
         ("export-bitmaps", "Export decoded bitmap payloads encountered on each page",
                            cxxopts::value<bool>()->implicit_value("true"))
+        ("export-page-pdf", "Export each rendered page as a sibling PDF",
+                            cxxopts::value<bool>()->implicit_value("true"))
         ("l,loglevel",   "Log level [error, warning, info]",               cxxopts::value<std::string>())
         ("h,help",       "Print usage");
 
@@ -300,6 +317,12 @@ int main(int argc, char* argv[])
           export_bitmaps = result["export-bitmaps"].as<bool>();
         }
 
+      bool export_page_pdf = false;
+      if(result.count("export-page-pdf"))
+        {
+          export_page_pdf = result["export-page-pdf"].as<bool>();
+        }
+
       std::string bitmap_dir;
       if(export_bitmaps)
         {
@@ -335,6 +358,7 @@ int main(int argc, char* argv[])
                                     total_pages,
                                     render_dir,
                                     export_bitmaps,
+                                    export_page_pdf,
                                     bitmap_dir,
                                     target_page);
             }

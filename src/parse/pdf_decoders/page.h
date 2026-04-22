@@ -5,7 +5,9 @@
 
 #include <optional>
 #include <qpdf/QPDF.hh>
+#include <qpdf/QPDFPageDocumentHelper.hh>
 #include <qpdf/QPDFPageObjectHelper.hh>
+#include <qpdf/QPDFWriter.hh>
 
 #include <nlohmann/json.hpp>
 
@@ -62,6 +64,9 @@ namespace pdflib
 
     // Get render instructions collected during decode
     pdf_render_instructions& get_instructions() { return instructions; }
+
+    // Export this page as a standalone one-page PDF.
+    void save_pdf_page(std::filesystem::path const& out_path) const;
 
   private:
 
@@ -239,6 +244,21 @@ namespace pdflib
   int pdf_decoder<PAGE>::get_page_number()
   {
     return page_number;
+  }
+
+  void pdf_decoder<PAGE>::save_pdf_page(std::filesystem::path const& out_path) const
+  {
+    std::filesystem::create_directories(out_path.parent_path());
+
+    QPDF out_pdf;
+    out_pdf.emptyPDF();
+
+    QPDFPageDocumentHelper out_pages(out_pdf);
+    QPDFPageObjectHelper source_page(qpdf_page);
+    out_pages.addPage(source_page, false);
+
+    QPDFWriter writer(out_pdf, out_path.string().c_str());
+    writer.write();
   }
 
   nlohmann::json pdf_decoder<PAGE>::get(const decode_config& config)

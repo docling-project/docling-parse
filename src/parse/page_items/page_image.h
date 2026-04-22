@@ -75,11 +75,15 @@ namespace pdflib
     std::vector<double> decode_array; // 2*ncomp when present
     bool image_mask = false;
     int  icc_components = 0; // number of color components from /ICCBased /N entry; 0 if not ICCBased
+    int  device_n_components = 0; // number of components from /DeviceN names array; 0 if not DeviceN
+    std::vector<std::string> device_n_names;
 
     // /Indexed color space support
     int              indexed_hival  = -1;
     std::string      indexed_base_cs;
     std::shared_ptr<std::vector<uint8_t>> indexed_palette;
+    std::vector<std::string> indexed_base_device_n_names;
+    bool             indexed_base_device_n_single_black = false;
 
     // /CCITTFaxDecode parameters (from /DecodeParms)
     int  ccitt_k          = 0;     // /K default per PDF spec: 0=Group3-1D, <0=Group4, >0=Group3-mixed
@@ -352,6 +356,12 @@ namespace pdflib
         if(icc_components == 1) { return "L"; }
         if(icc_components == 3) { return "RGB"; }
         if(icc_components == 4) { return "CMYK"; }
+      }
+    if(color_space.find("/DeviceN") != std::string::npos and device_n_components > 0)
+      {
+        if(device_n_components == 1) { return "L"; }
+        if(device_n_components == 3) { return "RGB"; }
+        if(device_n_components == 4) { return "CMYK"; }
       }
 
     LOG_S(WARNING) << "unknown color_space '" << color_space

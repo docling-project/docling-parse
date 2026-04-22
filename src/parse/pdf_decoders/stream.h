@@ -674,7 +674,7 @@ namespace pdflib
         break;
 
         /**************************************************
-         ***  text-objects
+         ***  group-objects
          **************************************************/
 
       case pdf_operator::BT:
@@ -696,6 +696,54 @@ namespace pdflib
         }
         break;
 
+      case pdf_operator::BX:
+        {
+          LOG_S(INFO) << "executing " << to_string(name);
+        }
+        break;
+
+      case pdf_operator::EX:
+        {
+          LOG_S(INFO) << "executing " << to_string(name);
+        }
+        break;
+
+      case pdf_operator::BMC:
+        {
+          LOG_S(INFO) << "executing " << to_string(name);
+        }
+        break;
+
+      case pdf_operator::BDC:
+        {
+          LOG_S(INFO) << "executing " << to_string(name);
+        }
+        break;
+
+      case pdf_operator::EMC:
+        {
+          LOG_S(INFO) << "executing " << to_string(name);
+        }
+        break;
+
+      case pdf_operator::BI:
+        {
+          LOG_S(INFO) << "executing " << to_string(name);
+        }
+        break;
+
+      case pdf_operator::ID:
+        {
+          LOG_S(INFO) << "executing " << to_string(name);
+        }
+        break;
+
+      case pdf_operator::EI:
+        {
+          LOG_S(INFO) << "executing " << to_string(name);
+        }
+        break;
+	
         /**************************************************
          ***  text-state
          **************************************************/
@@ -976,6 +1024,41 @@ namespace pdflib
         }
         break;
 
+      case pdf_operator::MP:
+        {
+          LOG_S(INFO) << "executing " << to_string(name);
+        }
+        break;
+
+      case pdf_operator::DP:
+        {
+          LOG_S(INFO) << "executing " << to_string(name);
+        }
+        break;
+
+      case pdf_operator::sh:
+        {
+          LOG_S(INFO) << "executing " << to_string(name);
+          //current_graphic_state().sh(parameters);
+        }
+        break;
+
+        /**************************************************
+         ***  Type 3 font metrics
+         **************************************************/
+
+      case pdf_operator::d0:
+        {
+          LOG_S(INFO) << "executing " << to_string(name);
+        }
+        break;
+
+      case pdf_operator::d1:
+        {
+          LOG_S(INFO) << "executing " << to_string(name);
+        }
+        break;
+	
         /**************************************************
          ***  other
          **************************************************/
