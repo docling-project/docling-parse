@@ -11,7 +11,7 @@ namespace pdflib
 
   public:
 
-    cmap_parser();
+    cmap_parser(bool keep_glyphs);
     ~cmap_parser();
 
     cmap_value get();
@@ -26,8 +26,8 @@ namespace pdflib
 
     static uint32_t    to_uint32(QPDFObjectHandle handle);
 
-    static std::string to_utf8(QPDFObjectHandle handle,
-                               size_t number_of_chars);
+    std::string to_utf8(QPDFObjectHandle handle,
+                        size_t number_of_chars);
 
     std::string get_source(QPDFObjectHandle my_handle);
     std::string get_target(QPDFObjectHandle my_handle);
@@ -78,6 +78,8 @@ namespace pdflib
 
   private:
 
+    const bool                    keep_glyphs;
+
     uint32_t                      char_count;
 
     uint32_t                      csr_cnt;
@@ -95,7 +97,8 @@ namespace pdflib
     static const std::vector<std::string> known_operators;
   };
 
-  cmap_parser::cmap_parser():
+  cmap_parser::cmap_parser(bool keep_glyphs_):
+    keep_glyphs(keep_glyphs_),
     char_count(0)
   {}
 
@@ -321,15 +324,15 @@ namespace pdflib
           }
         catch(const utf8::invalid_utf16& e)
           {
-            LOG_S(ERROR) << "Invalid UTF-16 sequence in hex-string \""
-                         << unparsed << "\": " << e.what();
-            result = "GLYPH<cmap:" + unparsed + ">";
+            LOG_S(WARNING) << "Invalid UTF-16 sequence in hex-string \""
+                           << unparsed << "\": " << e.what();
+            result = keep_glyphs ? "GLYPH<cmap:" + unparsed + ">" : "";
           }
         catch(const utf8::exception& e)
           {
-            LOG_S(ERROR) << "UTF-8 error parsing hex-string \""
-                         << unparsed << "\": " << e.what();
-            result = "GLYPH<cmap:" + unparsed + ">";
+            LOG_S(WARNING) << "UTF-8 error parsing hex-string \""
+                           << unparsed << "\": " << e.what();
+            result = keep_glyphs ? "GLYPH<cmap:" + unparsed + ">" : "";
           }
       }
     else
@@ -709,7 +712,7 @@ namespace pdflib
     const int num_params = 3*bf_cnt;
     if(parameters.size()==0)
       {
-	LOG_S(ERROR) << "skipping " << __FUNCTION__;
+	LOG_S(WARNING) << "skipping " << __FUNCTION__;
 	return;
       }
     else if(parameters.size()<num_params)

@@ -49,9 +49,10 @@ namespace pdflib
     // only needed for the cmap-resource files
     bool numb_is_in_cmap(uint32_t c); 
     
-    void set(std::string      font_key_,
-             nlohmann::json&  json_font_,
-             QPDFObjectHandle qpdf_font_);
+    void set(std::string             font_key_,
+             nlohmann::json&         json_font_,
+             QPDFObjectHandle        qpdf_font_,
+             const decode_config&    config);
 
   private:
 
@@ -79,7 +80,7 @@ namespace pdflib
     void init_widths();
     void init_ws();
 
-    void init_cmap(pdf_timings& timings);
+    void init_cmap(pdf_timings& timings, bool keep_glyphs);
     void init_cmap_resource();
 
     void init_differences();
@@ -582,9 +583,10 @@ namespace pdflib
       }
   }
 
-  void pdf_resource<PAGE_FONT>::set(std::string      font_key_,
-                                    nlohmann::json&  json_font_,
-                                    QPDFObjectHandle qpdf_font_)
+  void pdf_resource<PAGE_FONT>::set(std::string          font_key_,
+                                    nlohmann::json&      json_font_,
+                                    QPDFObjectHandle     qpdf_font_,
+                                    const decode_config& config)
   {
     LOG_S(INFO) << __FUNCTION__ << " font: " << font_key_;
 
@@ -643,7 +645,7 @@ namespace pdflib
     {
       utils::timer font_timer;
       
-      init_cmap(timings);
+      init_cmap(timings, config.keep_glyphs);
 
       double font_time = font_timer.get_time();
       timings.add_timing(pdf_timings::PREFIX_DECODE_FONT + font_key + " font-cmap", font_time);
@@ -1542,7 +1544,7 @@ namespace pdflib
       }
   }
 
-  void pdf_resource<PAGE_FONT>::init_cmap(pdf_timings& timings)
+  void pdf_resource<PAGE_FONT>::init_cmap(pdf_timings& timings, bool keep_glyphs)
   {
     LOG_S(INFO) << __FUNCTION__;
 
@@ -1586,7 +1588,7 @@ namespace pdflib
 	    {
 	      std::string key_root = pdf_timings::PREFIX_DECODE_FONT + font_key;
 
-	      cmap_parser parser;
+	      cmap_parser parser(keep_glyphs);
 	      parser.parse(stream, timings, key_root);
 
 	      //parser.print();

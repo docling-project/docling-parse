@@ -25,8 +25,9 @@ namespace pdflib
 
     pdf_resource<PAGE_FONT>& operator[](std::string fort_name);
 
-    void set(QPDFObjectHandle& qpdf_fonts_,
-             pdf_timings& timings);
+    void set(QPDFObjectHandle&    qpdf_fonts_,
+             pdf_timings&         timings,
+             const decode_config& config);
 
   private:
 
@@ -126,8 +127,9 @@ namespace pdflib
     return (page_fonts.begin()->second);
   }
   
-  void pdf_resource<PAGE_FONTS>::set(QPDFObjectHandle& qpdf_fonts,
-                                     pdf_timings& timings)
+  void pdf_resource<PAGE_FONTS>::set(QPDFObjectHandle&    qpdf_fonts,
+                                     pdf_timings&         timings,
+                                     const decode_config& config)
   {
     LOG_S(INFO) << __FUNCTION__;
 
@@ -145,7 +147,7 @@ namespace pdflib
 	LOG_S(INFO) << json_font.dump(2);
 	
 	pdf_resource<PAGE_FONT> page_font(timings);
-	page_font.set(key, json_font, qpdf_font);
+	page_font.set(key, json_font, qpdf_font, config);
 
 	if(page_fonts.count(key)==1)
 	  {

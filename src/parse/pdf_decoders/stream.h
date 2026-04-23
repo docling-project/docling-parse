@@ -385,7 +385,7 @@ namespace pdflib
       if(xobj.has_fonts())
         {
           QPDFObjectHandle xobj_fonts = xobj.get_fonts();
-          page_fonts_->set(xobj_fonts, timings);
+          page_fonts_->set(xobj_fonts, timings, config);
         }
 
       if(xobj.has_grphs())

@@ -207,6 +207,10 @@ static int analyse_pdf(const std::string&      pdf_path,
                              << " of " << pdf_path << ": " << exc.what();
             }
         }
+
+      // Release this page's cached decoder so its memory is reclaimed
+      // before we move on to the next page.
+      doc.unload_page(page_num);
     }
 
   return static_cast<int>(flagged_pages.size());

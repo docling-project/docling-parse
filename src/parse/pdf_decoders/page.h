@@ -80,7 +80,7 @@ namespace pdflib
 
     void decode_grphs();
 
-    void decode_fonts();
+    void decode_fonts(const decode_config& config);
 
     void decode_xobjects();
 
@@ -543,7 +543,7 @@ namespace pdflib
     if(qpdf_resources.hasKey("/Font"))
       {
         qpdf_fonts = qpdf_resources.getKey("/Font");
-        decode_fonts();
+        decode_fonts(config);
       }
     else
       {
@@ -568,11 +568,11 @@ namespace pdflib
     page_grphs->set(qpdf_grphs, timings);
   }
 
-  void pdf_decoder<PAGE>::decode_fonts()
+  void pdf_decoder<PAGE>::decode_fonts(const decode_config& config)
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    page_fonts->set(qpdf_fonts, timings);
+    page_fonts->set(qpdf_fonts, timings, config);
   }
 
   void pdf_decoder<PAGE>::decode_xobjects()
@@ -654,7 +654,7 @@ namespace pdflib
         if(not dr.isDictionary() or not dr.hasKey("/Font")) { return; }
 
         auto dr_font_dict = dr.getKey("/Font");
-        acroform_fonts->set(dr_font_dict, timings);
+        acroform_fonts->set(dr_font_dict, timings, page_config);
 
         LOG_S(INFO) << "loaded " << acroform_fonts->size() << " AcroForm /DR font(s)";
       }
@@ -1075,7 +1075,7 @@ namespace pdflib
         if(ap_resources.isDictionary() and ap_resources.hasKey("/Font"))
           {
             auto ap_font_dict = ap_resources.getKey("/Font");
-            ap_fonts->set(ap_font_dict, timings);
+            ap_fonts->set(ap_font_dict, timings, page_config);
           }
       }
 
