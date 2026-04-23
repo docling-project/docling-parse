@@ -1,3 +1,14 @@
+## [v5.10.0](https://github.com/docling-project/docling-parse/releases/tag/v5.10.0) - 2026-04-22
+
+### Feature
+
+* Add jpeg2000 pixel data ([#259](https://github.com/docling-project/docling-parse/issues/259)) ([`8546560`](https://github.com/docling-project/docling-parse/commit/85465604745ea515cbb0d9ef39ef94c42f3899fd))
+* Add jbig2 decoder ([#252](https://github.com/docling-project/docling-parse/issues/252)) ([`7be5d62`](https://github.com/docling-project/docling-parse/commit/7be5d6233688a609ff0d58dcd9870598a6b535b3))
+
+### Fix
+
+* Refactored the black to ruff ([#258](https://github.com/docling-project/docling-parse/issues/258)) ([`b5804c1`](https://github.com/docling-project/docling-parse/commit/b5804c16541a6d7f8eac2f575f4ca7c23d3219ae))
+
 ## [v5.9.0](https://github.com/docling-project/docling-parse/releases/tag/v5.9.0) - 2026-04-15
 
 ### Feature
