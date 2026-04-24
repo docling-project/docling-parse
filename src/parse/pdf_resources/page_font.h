@@ -43,6 +43,8 @@ namespace pdflib
 
     double get_capheight();
     double get_xheight();
+
+    std::array<double, 4> get_font_bbox() { return font_bbox; }
     
     std::string get_utf8_string(std::string line, bool is_hex_str);
 

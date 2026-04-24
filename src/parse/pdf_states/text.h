@@ -495,7 +495,7 @@ namespace pdflib
         return;
       }
 
-    //LOG_S(INFO) << __FUNCTION__ << " with text='" << text << "', width=" << width;
+    LOG_S(INFO) << __FUNCTION__ << " with text='" << text << "', width=" << width << " from base-font: " << font.get_base_font() << ", font-key: " << font.get_key();
 
     bool left_to_right = (not utils::string::is_right_to_left(text));
 
@@ -503,24 +503,11 @@ namespace pdflib
     double font_ascent  = font.get_ascent();
     double font_capheight  = font.get_capheight();
 
-    /*
-    if(left_to_right)
-      {
-	LOG_S(INFO) << "font_descent: " << font_descent << ", "
-		    << "font_ascent: " << font_ascent << ", "
-		    << "font_capheight: " << font_capheight << ", "
-		    << "capheight/ascent: " << font_capheight/font_ascent << ", "
-		    << "left_to_right: " << left_to_right << ", text: " << text;
-      }
-    else
-      {
-	LOG_S(WARNING) << "font_descent: " << font_descent << ", "
-		       << "font_ascent: " << font_ascent << ", "
-		       << "font_capheight: " << font_capheight << ", "
-		       << "capheight/ascent: " << font_capheight/font_ascent << ", "
-		       << "left_to_right: " << left_to_right << ", text: " << text;
-      }
-    */
+    LOG_S(INFO) << "font_descent: " << font_descent << ", "
+		<< "font_ascent: " << font_ascent << ", "
+		<< "font_capheight: " << font_capheight << ", "
+		<< "capheight/ascent: " << font_capheight/font_ascent << ", "
+		<< "left_to_right: " << left_to_right << ", text: " << text;
 
     double space_width=0;
     {
@@ -551,6 +538,8 @@ namespace pdflib
           ratio = font_capheight/font_ascent;
         }
 
+      LOG_S(INFO) << "ratio: " << ratio;
+
       std::array<double, 8> rect = compute_rect(font_descent*ratio, font_ascent*ratio, width);
       {
         cell.r_x0 = rect[0];
@@ -562,8 +551,24 @@ namespace pdflib
         cell.r_x3 = rect[6];
         cell.r_y3 = rect[7];
       }
+      auto font_bbox = font.get_font_bbox();
+      LOG_S(INFO)
+	<< "font-bbox: ["
+	<< font_bbox[0] << ", "
+	<< font_bbox[1] << ", "
+	<< font_bbox[2] << ", "
+	<< font_bbox[3] << "]";
+      
+      LOG_S(INFO)
+	<< "r_0: (" << cell.r_x0 << ", " << cell.r_y0 << "); "
+	<< "r_1: (" << cell.r_x1 << ", " << cell.r_y1 << "); "
+	<< "r_2: (" << cell.r_x2 << ", " << cell.r_y2 << "); "
+	<< "r_3: (" << cell.r_x3 << ", " << cell.r_y3 << "); ";
 
+      
       std::array<double, 8> base = compute_rect(0, font_ascent*ratio, width);
+
+      LOG_S(INFO) << "base_x0: " << base[0] << ", base_y0: " << base[1];
       
       std::array<double, 4> bbox = compute_bbox(rect);
       {
