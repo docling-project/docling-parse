@@ -315,9 +315,15 @@ namespace pdflib
             utf16_vec.push_back(i32);
           }
 
+        LOG_S(INFO) << "to_utf8(hex): number_of_chars=" << number_of_chars
+                    << ", utf16_vec.size()=" << utf16_vec.size()
+                    << ", hex=\"" << unparsed << "\"";
+
         try
           {
+            LOG_S(INFO) << "to_utf8(hex): calling utf8::utf16to8";
             utf8::utf16to8(utf16_vec.begin(), utf16_vec.end(), std::back_inserter(result));
+            LOG_S(INFO) << "to_utf8(hex): utf8::utf16to8 produced result.size()=" << result.size();
 
             //logging_lib::success("pdf-parser") << "SUCCES: able to parse the unicode hex-string \""
             //<< unparsed << "\" --> " << result;
@@ -338,6 +344,9 @@ namespace pdflib
     else
       {
         std::string tmp = handle.getStringValue();
+
+        LOG_S(INFO) << "to_utf8(raw): number_of_chars=" << number_of_chars
+                    << ", raw.size()=" << tmp.size();
 
         for(size_t i=0; i<tmp.size(); i+=number_of_chars)
           {

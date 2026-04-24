@@ -217,7 +217,10 @@ class PdfDocument:
     def unload_pages(self, page_range: tuple[int, int]):
         """unload page in range [page_range[0], page_range[1]["""
         for page_no in range(page_range[0], page_range[1]):
+            assert page_no>0, "Pdf page numbers start at 1"
+
             if page_no in self._pages:
+                
                 page_index = page_no - 1
                 self._parser.unload_document_page(key=self._key, page=page_index)
                 del self._pages[page_no]
@@ -1025,7 +1028,7 @@ class PdfPageRenderResult:
 
     def error(self) -> str:
         """Return the error message if rendering failed, empty string otherwise."""
-        return self._raw.error_message if not self.success else ""
+        return "" if self.success else self._raw.error()
 
     def get(self) -> Tuple[PdfPageDecoder, Dict[str, float]]:
         """Return (page_decoder, timings) for the rendered page.

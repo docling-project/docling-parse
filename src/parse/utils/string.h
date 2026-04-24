@@ -138,11 +138,16 @@ namespace utils
 
     std::string vec_to_utf8(std::vector<uint32_t>& vec)
     {
-      size_t      len = 64+8*vec.size();
-      std::string str(len, ' ');
+      std::string str;
+      str.reserve(64+8*vec.size());
 
-      auto itr = utf8::utf16to8(vec.begin(), vec.end(), str.begin());
-      str.erase(itr, str.end());
+      LOG_S(INFO) << "vec_to_utf8: vec.size()=" << vec.size()
+                  << ", reserved_len=" << str.capacity();
+      LOG_S(INFO) << "vec_to_utf8: calling utf8::utf16to8 with std::back_inserter";
+
+      utf8::utf16to8(vec.begin(), vec.end(), std::back_inserter(str));
+
+      LOG_S(INFO) << "vec_to_utf8: utf8::utf16to8 completed, result.size()=" << str.size();
 
       return str;
     }
