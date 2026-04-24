@@ -789,6 +789,15 @@ class DoclingPdfParser:
         """
         return self.parser.list_loaded_keys()
 
+    def list_loaded_keys_with_pages(self) -> List[Tuple[str, int]]:
+        """List loaded document keys together with loaded page indices.
+
+        Returns:
+            List[Tuple[str, int]]: A list of ``(key, page_index)`` pairs for
+            the currently loaded page decoders. ``page_index`` is 0-indexed.
+        """
+        return self.parser.list_loaded_keys_with_pages()
+
     def load(
         self,
         path_or_stream: Union[str, Path, BytesIO],

@@ -33,6 +33,7 @@ namespace docling
 
     bool is_loaded(std::string key);
     std::vector<std::string> list_loaded_keys();
+    std::vector<std::pair<std::string, int> > list_loaded_keys_with_pages();
 
     bool load_document(std::string key,
 		       std::string filename,
@@ -141,6 +142,28 @@ namespace docling
       }
 
     return keys;
+  }
+
+  std::vector<std::pair<std::string, int> > docling_parser::list_loaded_keys_with_pages()
+  {
+    std::vector<std::pair<std::string, int> > keys_with_pages = {};
+
+    for(const auto& pair : key2doc)
+      {
+        const std::string& key = pair.first;
+        const auto& doc_decoder = pair.second;
+
+        int num_pages = doc_decoder->get_number_of_pages();
+        for(int page_index = 0; page_index < num_pages; ++page_index)
+          {
+            if(doc_decoder->has_page_decoder(page_index))
+              {
+                keys_with_pages.emplace_back(key, page_index);
+              }
+          }
+      }
+
+    return keys_with_pages;
   }
 
   bool docling_parser::is_loaded(std::string key)

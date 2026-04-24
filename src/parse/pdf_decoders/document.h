@@ -478,12 +478,11 @@ namespace pdflib
       {
         page_decoders.erase(page_number);
         LOG_S(INFO) << "unloaded page decoder for page: " << page_number;
-	std::cout << "unloaded page decoder for page: " << page_number << "\n";
       }
     else
       {
 	LOG_S(ERROR) << "no page " << page_number << " in current document decoder.";
-	std::cout << "no page " << page_number << " in current document decoder.\n";
+        return false;
       }
     
     return true;

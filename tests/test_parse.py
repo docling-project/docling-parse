@@ -704,6 +704,28 @@ def test_unload_individual_pages():
     assert 3 not in pdf_doc._pages
 
 
+def test_list_loaded_keys_with_pages_uses_page_indices():
+    """Verify loaded page inspection reports internal 0-based page indices."""
+    filename = "tests/data/regression/table_of_contents_01.pdf"
+
+    parser = DoclingPdfParser(loglevel="fatal")
+    pdf_doc = parser.load(path_or_stream=filename, lazy=True)
+    key = f"key={filename}"
+
+    assert parser.list_loaded_keys_with_pages() == []
+
+    pdf_doc.get_page(1)
+    pdf_doc.get_page(3)
+
+    loaded = sorted(parser.list_loaded_keys_with_pages())
+    assert loaded == [(key, 0), (key, 2)]
+
+    pdf_doc.unload_pages(page_range=(1, 2))
+
+    loaded = sorted(parser.list_loaded_keys_with_pages())
+    assert loaded == [(key, 2)]
+
+
 def test_boundary_types():
     """Test loading PDF with different boundary types."""
     filename = "tests/data/regression/cropbox_versus_mediabox_01.pdf"

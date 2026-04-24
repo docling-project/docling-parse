@@ -646,6 +646,17 @@ PYBIND11_MODULE(pdf_parsers, m) {
 
     Returns:
         List[str]: A list of keys for the currently loaded documents.)")
+
+    .def("list_loaded_keys_with_pages",
+	 [](docling::docling_parser &self) -> std::vector<std::pair<std::string, int>> {
+	   return self.list_loaded_keys_with_pages();
+	 },
+	 R"(
+    List the loaded documents together with their currently loaded pages.
+
+    Returns:
+        List[Tuple[str, int]]: A list of ``(key, page_index)`` pairs for the
+        currently loaded page decoders. ``page_index`` is 0-indexed.)")
     
     .def("load_document",
 	 [](docling::docling_parser &self,
