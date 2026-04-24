@@ -217,8 +217,13 @@ class PdfDocument:
     def unload_pages(self, page_range: tuple[int, int]):
         """unload page in range [page_range[0], page_range[1]["""
         for page_no in range(page_range[0], page_range[1]):
+            if page_no < 1:
+                _log.error("page_no should always be >=1!")
+
             if page_no in self._pages:
-                self._parser.unload_document_page(key=self._key, page=page_no)
+                # we are using 0 indexing in the C++ docling-parse!
+                page_num = page_no - 1
+                self._parser.unload_document_page(key=self._key, page=page_num)
                 del self._pages[page_no]
 
     def number_of_pages(self) -> int:
