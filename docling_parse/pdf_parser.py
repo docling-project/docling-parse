@@ -218,7 +218,8 @@ class PdfDocument:
         """unload page in range [page_range[0], page_range[1]["""
         for page_no in range(page_range[0], page_range[1]):
             if page_no in self._pages:
-                self._parser.unload_document_page(key=self._key, page=page_no)
+                page_index = page_no - 1
+                self._parser.unload_document_page(key=self._key, page=page_index)
                 del self._pages[page_no]
 
     def number_of_pages(self) -> int:
