@@ -869,6 +869,13 @@ namespace pdflib
       ctx.stroke_path(bbox_path);
     };
 
+    auto draw_basepoint = [&]()
+    {
+      if (not config_.draw_text_basepoint) { return; }
+      ctx.set_fill_style(BLRgba32(0xFFFF0000u));
+      ctx.fill_circle(BLCircle(bx, by, 2.0));
+    };
+
     if (face.is_valid() and size > 0.5)
       {
         if (config_.render_text)
@@ -967,6 +974,8 @@ namespace pdflib
                         << " ctm=[[" << adv_x << "," << adv_y << "],[" << dn_x << "," << dn_y << "],[" << bx << "," << by << "]]";
           }
 
+        draw_basepoint();
+
         if (config_.draw_text_bbox)
           {
             ctx.set_stroke_style(BLRgba32(0xFF1070C0u));
@@ -977,6 +986,7 @@ namespace pdflib
     else
       {
         // No valid font — draw the bounding quad outline.
+        draw_basepoint();
         LOG_S(WARNING) << "render_text: no valid font for '"
                        << instr.get_font_name() << "' / '"
                        << instr.get_base_font() << "', drawing outline only";

@@ -23,6 +23,9 @@ namespace pdflib
     // Draw the bounding quad of each text cell as a thin blue outline.
     bool draw_text_bbox = false;
 
+    // Draw the text baseline origin as a small red dot.
+    bool draw_text_basepoint = false;
+
     // Try to resolve the PDF font name / base_font to a system font file.
     // When false the renderer always uses the hardcoded fallback font
     // (Helvetica / Arial) without any name lookup.
