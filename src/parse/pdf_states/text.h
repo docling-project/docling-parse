@@ -538,6 +538,19 @@ namespace pdflib
           ratio = font_capheight/font_ascent;
         }
 
+      if(font.has_char_bbox(text))
+        {
+          auto glyph_bbox = font.get_char_bbox(text);
+          font_descent = glyph_bbox[1];
+          font_ascent  = glyph_bbox[3];
+          ratio = 1.0;
+          LOG_S(INFO) << "using glyph-specific bbox for text='" << text << "'"
+                      << " bbox=[" << glyph_bbox[0] << ", "
+                      << glyph_bbox[1] << ", "
+                      << glyph_bbox[2] << ", "
+                      << glyph_bbox[3] << "]";
+        }
+
       LOG_S(INFO) << "ratio: " << ratio;
 
       std::array<double, 8> rect = compute_rect(font_descent*ratio, font_ascent*ratio, width);
