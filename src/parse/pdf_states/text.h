@@ -565,10 +565,23 @@ namespace pdflib
 	<< "r_2: (" << cell.r_x2 << ", " << cell.r_y2 << "); "
 	<< "r_3: (" << cell.r_x3 << ", " << cell.r_y3 << "); ";
 
-      
       std::array<double, 8> base = compute_rect(0, font_ascent*ratio, width);
 
-      LOG_S(INFO) << "base_x0: " << base[0] << ", base_y0: " << base[1];
+      // The true text baseline origin is (0, rise) in text space.
+      // Transform that point through the text matrix and then the CTM.
+      const double g_base_x = 0.0;
+      const double g_base_y = rise;
+
+      std::array<double, 9>& T_text = text_matrix;
+      const double t_base_x = T_text[0] * g_base_x + T_text[3] * g_base_y + T_text[6];
+      const double t_base_y = T_text[1] * g_base_x + T_text[4] * g_base_y + T_text[7];
+
+      std::array<double, 9>& T_ctm = trafo_matrix;
+      const double d_base_x = T_ctm[0] * t_base_x + T_ctm[3] * t_base_y + T_ctm[6];
+      const double d_base_y = T_ctm[1] * t_base_x + T_ctm[4] * t_base_y + T_ctm[7];
+
+      LOG_S(INFO) << "base_x0_old: " << base[0] << ", base_y0_old: " << base[1];
+      LOG_S(INFO) << "base_x0_new: " << d_base_x << ", base_y0_new: " << d_base_y;
       
       std::array<double, 4> bbox = compute_bbox(rect);
       {
@@ -621,7 +634,7 @@ namespace pdflib
                                 cell.r_x2, cell.r_y2,
                                 cell.r_x3, cell.r_y3,
                                 font_ascent*ratio, font_descent*ratio,
-				base[0], base[1]);
+				d_base_x, d_base_y);
 
         instructions.add_text_instruction(std::move(tinstr));
       }
