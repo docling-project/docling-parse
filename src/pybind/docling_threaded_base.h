@@ -392,7 +392,7 @@ namespace docling
   template<typename Derived, typename ResultType>
   void docling_threaded_base<Derived, ResultType>::validate_unload_state() const
   {
-    if(tasks_remaining.load() > 0 or active_workers.load() > 0)
+    if(tasks_remaining.load() > 0)
       {
         throw std::runtime_error("Cannot unload documents while threaded iteration is active");
       }

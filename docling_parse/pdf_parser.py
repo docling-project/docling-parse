@@ -926,9 +926,7 @@ class PageParseResult:
     ):
         self._raw = raw_result
         self._boundary_type = boundary_type
-        self._render_config = (
-            _copy_render_config(render_config) if render_config is not None else None
-        )
+        self._render_config = render_config
         self._page: SegmentedPdfPage | None = None
         self._page_decoder: PdfPageDecoder | None = None
         self._default_image: PILImage.Image | None = None
@@ -994,10 +992,6 @@ class PageParseResult:
         height, width, _ = self._raw.image_shape
         return width, height
 
-    def _scale_request_supported(self) -> bool:
-        render_config = self._rendering_config()
-        return render_config.scale > 0
-
     def _scale_abs_tolerance(self) -> float:
         if self.page_width <= 0 or self.page_height <= 0:
             return 0.0
@@ -1059,6 +1053,8 @@ class PageParseResult:
     ) -> PILImage.Image:
         if cropbox is None:
             return image
+        if self.page_width <= 0 or self.page_height <= 0:
+            return image
 
         cropbox_top_left = cropbox.to_top_left_origin(page_height=self.page_height)
         x_scale = image.width / self.page_width
@@ -1087,11 +1083,6 @@ class PageParseResult:
         if scale is not None:
             if scale <= 0:
                 raise ValueError(f"scale must be > 0, got {scale}")
-            if not self._scale_request_supported():
-                raise ValueError(
-                    "get_image(scale=...) requires render_config.scale to be set"
-                )
-
             render_config = self._rendering_config()
             if math.isclose(
                 scale,
@@ -1147,7 +1138,6 @@ def _copy_decode_config(src: DecodePageConfig) -> DecodePageConfig:
 
 
 def _copy_render_config(src: RenderConfig) -> RenderConfig:
-    _validate_render_config(src)
     dst = RenderConfig()
     dst.render_text = src.render_text
     dst.draw_text_bbox = src.draw_text_bbox
@@ -1176,6 +1166,11 @@ def _validate_render_config(src: RenderConfig) -> None:
         )
 
 
+def _validated_render_config(src: RenderConfig) -> RenderConfig:
+    _validate_render_config(src)
+    return _copy_render_config(src)
+
+
 class DoclingThreadedPdfParser:
     """Threaded PDF parser that decodes pages from multiple documents in parallel."""
 
@@ -1189,7 +1184,9 @@ class DoclingThreadedPdfParser:
 
         self._parser_config = parser_config
         if parser_config.render_config is not None:
-            _validate_render_config(parser_config.render_config)
+            parser_config.render_config = _validated_render_config(
+                parser_config.render_config
+            )
         self._decode_config = (
             _copy_decode_config(decode_config)
             if decode_config is not None

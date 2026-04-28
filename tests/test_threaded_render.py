@@ -236,15 +236,21 @@ def test_render_custom_render_config():
         assert result.get_image() is not None
 
 
-def test_get_image_scale_requires_scale_config():
-    parser = _make_parser()
+def test_get_image_scale_rerenders_for_canvas_config():
+    render_config = RenderConfig()
+    render_config.canvas_width = 1224
+    parser = _make_parser(render_config=render_config)
     parser.load(SAMPLE_PDF, page_numbers=[1])
 
     result = next(parser.iterate_results())
     assert result.success, result.error_message
 
-    with pytest.raises(ValueError):
-        result.get_image(scale=2.0)
+    scaled_image = result.get_image(scale=2.0)
+
+    assert scaled_image.size == (
+        round(result.page_width * 2.0),
+        round(result.page_height * 2.0),
+    )
 
 
 def test_get_image_rerenders_non_default_scale():

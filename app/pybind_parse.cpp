@@ -555,7 +555,10 @@ PYBIND11_MODULE(pdf_parsers, m) {
          [](pdflib::pdf_decoder<pdflib::PAGE>& self,
             const pdflib::render_config& config) -> pybind11::tuple {
            pdflib::renderer<pdflib::BLEND2D> rnd(config);
-           self.get_instructions().iterate_over_instructions(rnd);
+           {
+             pybind11::gil_scoped_release release;
+             self.get_instructions().iterate_over_instructions(rnd);
+           }
 
            auto canvas = rnd.get_canvas();
            const auto& shape = rnd.get_shape();
