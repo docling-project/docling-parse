@@ -88,7 +88,6 @@ Extract `PdfDocument._to_segmented_page_from_decoder` into a public, standalone 
 # docling_parse/pdf_parser.py
 def segmented_page_from_decoder(
     page_decoder: PdfPageDecoder,
-    config: DecodePageConfig,
     boundary_type: PdfPageBoundaryType = PdfPageBoundaryType.CROP_BOX,
 ) -> SegmentedPdfPage:
     """Convert a C++ PdfPageDecoder to a SegmentedPdfPage.
@@ -96,6 +95,9 @@ def segmented_page_from_decoder(
     This is the single canonical conversion point for both the sequential and
     threaded parse paths. PdfDocument._to_segmented_page_from_decoder() becomes
     a thin wrapper calling this function.
+
+    Note: DecodePageConfig is applied by the C++ decoder before this function
+    is called; there is nothing left to configure at the Python conversion stage.
     """
     ...
 ```
@@ -147,8 +149,8 @@ class PageParseResult:
     def get_page(self) -> SegmentedPdfPage:
         """Return the parsed page. Lazy: converts on first call, caches the result.
 
-        Calls segmented_page_from_decoder() internally using the config and
-        boundary_type from the parser that produced this result.
+        Calls segmented_page_from_decoder() internally using the boundary_type
+        from the parser that produced this result.
         Raises RuntimeError if success is False.
         """
         ...
@@ -309,7 +311,7 @@ The following remain exactly as-is. No signature changes, no behaviour changes:
 
 ---
 
-## Open questions
+## Resolved questions
 
-- Should `iterate_results()` accept a timeout parameter, or is that the caller's concern? *(Leaning toward caller's concern — the `has_tasks()` / `get_task()` escape hatch exists for manual control.)*
-- Should `render_config` live on `ThreadedPdfParserConfig`, or stay as a separate `DoclingThreadedPdfParser(..., render_config=...)` constructor argument? *(Leaning toward `ThreadedPdfParserConfig`: rendering is a threaded execution mode, while `DecodePageConfig` remains focused on decoded page content.)*
+- **`iterate_results()` timeout?** Decided no — the caller's concern. The `has_tasks()` / `get_task()` escape hatch exists for manual control.
+- **`render_config` on `ThreadedPdfParserConfig` or as a constructor argument?** Decided on `ThreadedPdfParserConfig`: rendering is a threaded execution mode, while `DecodePageConfig` remains focused on decoded page content. Implemented.
