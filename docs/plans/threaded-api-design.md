@@ -1,240 +1,275 @@
 # Threaded Parser Public API Design
 
-**Status:** Draft — in iteration  
-**Date:** 2026-04-24  
-**Scope:** `docling-parse` only — docling integration is a separate concern
+**Status:** Implemented  
+**Last updated:** 2026-04-28  
+**Scope:** `docling-parse` only
+
+This document is the consolidated design and behavior reference for the public threaded parser API in `docling-parse`.
+
+It supersedes the narrower `update-threaded-api.md` plan. The decisions from that follow-up plan are folded in here, and the examples below reflect the current implementation rather than an earlier proposal draft.
 
 ---
 
-## Constraints
+## Goals
 
-- **Sequential `PdfDocument`-based API is frozen.** No breaking changes to `DoclingPdfParser`, `PdfDocument`, `PdfDocument.get_page()`, `PdfDocument.iterate_pages()`, or any of their signatures. Existing code that uses the sequential path continues to work unchanged.
-- **Threaded API may break.** `DoclingThreadedPdfParser`, `PageDecodeResult`, `PdfPageRenderResult`, and `ThreadedPdfParserConfig` can all change. There are no known external users relying on the current threaded API shape.
-
----
-
-## Problems with the current threaded API
-
-### 1. C++ internals leak into user code
-
-`DoclingThreadedPdfParser.get_task()` returns a raw `PageDecodeResult` whose `.get()` returns `(PdfPageDecoder, timings_dict)`. `PdfPageDecoder` is a C++ binding object with no documented Python interface. Callers must know to call `PdfDocument._to_segmented_page_from_decoder()` on it — a private method not intended for external use.
-
-The benchmark works around this with:
-```python
-dummy_doc = PdfDocument.__new__(PdfDocument)
-dummy_doc._boundary_type = PdfPageBoundaryType.CROP_BOX
-seg_page = dummy_doc._to_segmented_page_from_decoder(page_decoder, config)
-```
-This is a hack that will break silently if `PdfDocument` internals change.
-
-`DoclingThreadedPdfRenderer.get_task()` has the same problem: `PdfPageRenderResult.get()` also returns `(PdfPageDecoder, timings_dict)`.
-
-The current split also exposes an implementation detail as a public API split. The renderer result is essentially a decoded page result plus an optional rendered image. Users should not have to pick a different threaded class and result type just because they want the image bytes produced during decode.
-
-### 2. Conversion logic is private and on the wrong class
-
-`PdfDocument._to_segmented_page_from_decoder()` converts `PdfPageDecoder → SegmentedPdfPage`. Logically this is a pure function: it does not depend on document state, only on `_boundary_type`. It belongs at module level, not as an instance method on `PdfDocument`.
-
-### 3. Page numbering inconsistency
-
-`PageDecodeResult.page_number` is **0-indexed**.  
-`PdfPageRenderResult.page_number` is also **0-indexed**.  
-`PdfDocument.get_page()` and `iterate_pages()` are **1-indexed**.  
-Callers of the threaded paths must remember to add 1. This is an unnecessary and error-prone divergence.
-
-### 4. No Pythonic iteration
-
-The `has_tasks()` / `get_task()` loop is functional but requires callers to write the same boilerplate every time. The sequential API provides `iterate_pages()`. Neither threaded class has an equivalent.
-
-### 5. `timings` returned as a raw dict
-
-The sequential path exposes the typed `Timings` model (with `.total()`, `.get()`, `.keys()`, etc.). The threaded `get()` returns a plain `dict`. These should be consistent.
-
-### 6. `boundary_type` has no home in the threaded path
-
-The sequential `DoclingPdfParser.load()` accepts `boundary_type`. There is no way to set it for the threaded parser — the conversion hack requires setting it manually on the dummy `PdfDocument` instance.
-
-### 7. No way to query page count before iteration
-
-After `parser.load()` / `renderer.load()`, callers have no way to ask how many pages a document has without starting iteration. This is needed by consumers that must pre-allocate structures or define termination conditions before any page arrives.
-
-### 8. Parser and renderer public APIs are redundant
-
-The public distinction between `DoclingThreadedPdfParser` and `DoclingThreadedPdfRenderer` is not strong enough to justify two APIs. Rendering does not produce a fundamentally different page outcome; it produces the same decoded page outcome with an additional optional image artifact. This should be represented as one threaded parser interface whose configuration decides whether page images are produced.
-
-This keeps user code stable when a workflow later starts needing page images: users change config and start calling `get_image()`, not swap classes, result types, and import paths.
-
-On the C++ side this is already mostly true structurally. `docling_threaded_parser` and `docling_threaded_renderer` both inherit from the same `docling_threaded_base<Derived, ResultType>`, and their worker loops perform the same document lookup, page decoder construction, `decode_page(config)`, optional word-cell creation, optional line-cell creation, result queueing, and error handling. The renderer adds only this extra step after decoding:
-
-```cpp
-pdflib::renderer<pdflib::BLEND2D> rnd(render_cfg);
-page_decoder->get_instructions().iterate_over_instructions(rnd);
-
-result.image_data = rnd.get_canvas();
-result.image_shape = rnd.get_shape();
-```
-
-So the current second backend is not a fundamentally different threading model. It is the same threaded decode pipeline with an optional render stage and a wider result payload.
+- Keep the sequential `PdfDocument`-based API stable.
+- Provide one public threaded parser entry point for both parse-only and parse-and-render workflows.
+- Hide C++ decoder objects from normal Python callers.
+- Keep page results typed, lazy, and consistent with the sequential API where possible.
+- Support selected-page scheduling and explicit cleanup for multi-document threaded workloads.
 
 ---
 
-## Proposed changes
+## Stable constraints
 
-### A. Public module-level conversion function
+- The sequential API remains unchanged:
+  - `DoclingPdfParser`
+  - `PdfDocument`
+  - `PdfDocument.get_page()`
+  - `PdfDocument.iterate_pages()`
+  - `PdfDocument.get_page_with_timings()`
+- The threaded API is the place where the public redesign happened.
+- Rendering remains optional and is enabled by configuration, not by switching to a separate public threaded class.
 
-Extract `PdfDocument._to_segmented_page_from_decoder` into a public, standalone function:
+---
+
+## Final public shape
+
+### One threaded parser interface
+
+The public threaded entry point is:
 
 ```python
-# docling_parse/pdf_parser.py
-def segmented_page_from_decoder(
-    page_decoder: PdfPageDecoder,
-    boundary_type: PdfPageBoundaryType = PdfPageBoundaryType.CROP_BOX,
-) -> SegmentedPdfPage:
-    """Convert a C++ PdfPageDecoder to a SegmentedPdfPage.
-
-    This is the single canonical conversion point for both the sequential and
-    threaded parse paths. PdfDocument._to_segmented_page_from_decoder() becomes
-    a thin wrapper calling this function.
-
-    Note: DecodePageConfig is applied by the C++ decoder before this function
-    is called; there is nothing left to configure at the Python conversion stage.
-    """
-    ...
+DoclingThreadedPdfParser(
+    parser_config: ThreadedPdfParserConfig | None = None,
+    decode_config: DecodePageConfig | None = None,
+)
 ```
 
-`PdfDocument._to_segmented_page_from_decoder()` delegates to this function, so the sequential path is untouched.
+There is no separate public `DoclingThreadedPdfRenderer` API anymore. Parse-only and parse-and-render share the same Python interface.
 
----
-
-### B. Configuration controls parse-only vs parse-and-render
-
-Keep one public threaded parser interface. Configuration, not the class name, decides whether page images are rendered.
+### Threaded parser configuration
 
 ```python
 class ThreadedPdfParserConfig(BaseModel):
     loglevel: str = "fatal"
     threads: int = 4
     max_concurrent_results: int = 32
-    boundary_type: PdfPageBoundaryType = PdfPageBoundaryType.CROP_BOX  # new
+    boundary_type: PdfPageBoundaryType = PdfPageBoundaryType.CROP_BOX
     render_config: RenderConfig | None = None
 ```
 
-When `render_config is None`, `DoclingThreadedPdfParser` uses the parse-only backend. When `render_config` is provided, it uses the threaded render backend internally and surfaces the same `PageParseResult` type with image access enabled.
+Key points:
 
-`DecodePageConfig` remains the decode configuration. Rendering should be activated by supplying `RenderConfig`, because render options such as canvas width and drawing flags already belong there. The key API point is that parse-only versus parse-and-render is a configuration choice on one threaded parser interface, not a separate public parser class.
+- `boundary_type` now has an explicit home in the threaded path.
+- `render_config=None` selects parse-only operation.
+- `render_config` present selects parse-and-render operation.
+- `DecodePageConfig` and `RenderConfig` stay separate because they configure different pipeline stages.
 
-Keep `DecodePageConfig` and `RenderConfig` as distinct types. They describe different pipeline stages:
+### Public result type
 
-- `DecodePageConfig` controls what is extracted from the PDF and how decoded page content is normalized: page boundary, sanitization, keeping chars/shapes/bitmaps, word and line cell creation, threading safety, glyph/debug retention, and related merge tolerances.
-- `RenderConfig` controls how an already decoded page is rasterized: whether to draw text, whether to draw text bounding boxes, font resolution behavior, font matching cutoff, and target canvas dimensions.
+`get_task()` and `iterate_results()` return `PageParseResult`.
 
-Merging render fields into `DecodePageConfig` would make parse-only callers carry rasterization settings that do not affect decoding, and it would blur the contract of `DecodePageConfig` in the frozen sequential parser API. The better shape is a composed threaded execution config: decoding remains configured by `DecodePageConfig`; rendering remains configured by `RenderConfig`; the threaded parser config decides whether a render stage is enabled.
+`PageParseResult` exposes:
+
+- `doc_key: str`
+- `page_number: int`
+- `page_width: float`
+- `page_height: float`
+- `success: bool`
+- `error_message: str`
+- `has_image: bool`
+- `get_page() -> SegmentedPdfPage`
+- `get_timings() -> Timings`
+- `get_image(...) -> PIL.Image.Image`
+
+Notable behavior:
+
+- `page_number` is 1-indexed, matching the sequential API.
+- `get_page()` is lazy and caches the converted `SegmentedPdfPage`.
+- `get_timings()` returns the typed `Timings` model, not a raw dict.
+- Failed results keep `page_width` and `page_height` at `0.0`, and `get_page()` / `get_image()` raise clearly.
 
 ---
 
-### C. Typed result object: `PageParseResult`
+## Why this design replaced the earlier threaded API
 
-Replace both raw `PageDecodeResult` and `PdfPageRenderResult` with a clean Python class. `PdfPageDecoder` never appears in user-facing code — the conversion happens inside `get_page()`.
+The old threaded surface had several problems:
+
+- It leaked `PdfPageDecoder` into user code.
+- It required private `PdfDocument` conversion helpers to turn results into `SegmentedPdfPage`.
+- It used 0-indexed page numbers, unlike the sequential API.
+- It split parsing and rendering into redundant public threaded classes.
+- It returned raw timing dicts instead of `Timings`.
+- It had no first-class selected-page scheduling or unload lifecycle on the Python API.
+
+The implemented design resolves those issues without changing the sequential parser contract.
+
+---
+
+## Conversion model
+
+The canonical conversion helper is now the public module-level function:
 
 ```python
-class PageParseResult:
-    """Outcome of one page processed by DoclingThreadedPdfParser."""
-
-    doc_key: str      # document identifier returned by .load()
-    page_number: int  # 1-indexed — consistent with the sequential API
-    page_width: float # page width in points (from boundary box; cheap, no full conversion needed)
-    page_height: float
-    success: bool
-
-    def get_page(self) -> SegmentedPdfPage:
-        """Return the parsed page. Lazy: converts on first call, caches the result.
-
-        Calls segmented_page_from_decoder() internally using the boundary_type
-        from the parser that produced this result.
-        Raises RuntimeError if success is False.
-        """
-        ...
-
-    def get_timings(self) -> Timings:
-        """Return structured timing data for this page parse."""
-        ...
-
-    def get_image(self) -> PILImage.Image:
-        """Return the rendered page image.
-
-        Raises RuntimeError if this result was produced with rendering disabled
-        or if success is False.
-        """
-        ...
-
-    @property
-    def has_image(self) -> bool:
-        """Whether get_image() can return a rendered image for this result."""
-        ...
-
-    @property
-    def error_message(self) -> str:
-        """Error description; empty string when successful."""
-        ...
+segmented_page_from_decoder(
+    page_decoder: PdfPageDecoder,
+    boundary_type: PdfPageBoundaryType = PdfPageBoundaryType.CROP_BOX,
+) -> SegmentedPdfPage
 ```
 
-`page_width` and `page_height` are extracted from `page_decoder.get_page_dimension()` without triggering the full `SegmentedPdfPage` conversion. Dimension decoding is a distinct internal step (see `TIMING_KEY_DECODE_DIMENSIONS`) and the data is available on the decoder object as soon as `get_task()` returns.
+This is used by both the sequential and threaded paths.
 
-`get_page()` is **lazy**: it converts on first call and caches the result. This keeps conversion cost on the worker/consumer thread rather than on the task-delivery path, and avoids wasted work on error paths where `get_page()` is never called.
-
-`get_image()` is available on the same result type but only succeeds when the parser was configured with `render_config`. A parse-only result has `has_image == False` and raises a clear `RuntimeError` from `get_image()`. This makes misuse fail loudly while keeping the page result type uniform.
+`PdfDocument._to_segmented_page_from_decoder()` still exists as a thin wrapper for internal sequential use, but threaded callers no longer need any private `PdfDocument` methods.
 
 ---
 
-### D. Iterator API on `DoclingThreadedPdfParser`
+## Document loading and scheduling
+
+### Loading
 
 ```python
-class DoclingThreadedPdfParser:
-
-    def page_count(self, doc_key: str) -> int:
-        """Return the total page count for a loaded document.
-
-        Available immediately after load(), before iteration begins.
-        """
-        ...
-
-    def iterate_results(self) -> Iterator[PageParseResult]:
-        """Yield page results as they complete.
-
-        Pages are returned in COMPLETION ORDER, not page-number order.
-        Worker threads start on the first call (same as has_tasks()).
-
-        Use result.page_number and result.doc_key to route results.
-        To process in page order, collect into a dict keyed by page_number
-        and sort after iteration is complete.
-        """
-        while self.has_tasks():
-            yield self.get_task()
-
-    def get_task(self) -> PageParseResult:   # return type changes
-        """Block until the next result is available and return it."""
-        ...
-
-    # has_tasks() is unchanged — stays for callers needing manual control
+doc_key = parser.load(
+    path_or_stream,
+    password: str | None = None,
+    page_numbers: Sequence[int] | None = None,
+)
 ```
 
+Behavior:
+
+- `page_numbers` is optional.
+- When provided, it is interpreted as 1-indexed physical page numbers.
+- The C++ layer normalizes the scheduled subset by sorting and de-duplicating it.
+- Out-of-range page numbers raise a `RuntimeError`.
+- The returned `doc_key` is the routing key for later results and metadata queries.
+
+### Page counts
+
+Two count queries are available immediately after `load()`:
+
+```python
+page_count(doc_key) -> int
+scheduled_page_count(doc_key) -> int
+```
+
+Semantics:
+
+- `page_count(doc_key)` is the physical page count of the loaded document.
+- `scheduled_page_count(doc_key)` is the number of pages that will actually be emitted by the threaded parser for that document.
+
+This distinction matters when `page_numbers` is used.
+
 ---
 
-### E. Remove the separate threaded renderer API
+## Result delivery model
 
-Do not introduce a second primary public interface for rendering. `DoclingThreadedPdfParser` should select the existing C++ threaded parser or renderer implementation internally based on `ThreadedPdfParserConfig.render_config`.
+### Completion order
 
-Longer term, the C++ implementation can also be collapsed into one threaded worker implementation with an optional render stage. That would remove the duplicated worker-loop logic and keep the only behavioral branch close to the actual difference: whether `RenderConfig` is present.
+`iterate_results()` yields results in completion order, not page-number order.
 
-Remove `DoclingThreadedPdfRenderer`, `PdfPageRenderResult`, and `ThreadedPdfRendererConfig` as part of the threaded API break. There is no stable public interface for the threaded component yet, so keeping deprecated aliases would add compatibility surface without protecting a real external contract.
+If callers need in-order processing, they should collect by `page_number` and sort after consumption.
 
-Documentation and examples should point users to `DoclingThreadedPdfParser` only.
+### Manual vs iterator control
+
+The threaded parser intentionally exposes both:
+
+- `has_tasks()`
+- `get_task()`
+- `iterate_results()`
+
+`has_tasks()` is not deprecated. It remains the manual-control escape hatch.
+
+Important runtime detail:
+
+- The first call to `has_tasks()` starts the threaded work by building the task queue and launching workers.
+- `iterate_results()` simply loops on `has_tasks()` and `get_task()`.
 
 ---
 
-## Resulting user-facing API
+## Cleanup and unload behavior
 
-**Parse only (no images):**
+The threaded parser now has explicit lifecycle cleanup:
+
+```python
+unload(doc_key: str) -> bool
+unload_all() -> None
+```
+
+Semantics:
+
+- `unload(doc_key)` removes one loaded document after threaded processing has completed.
+- `unload_all()` clears all loaded documents after threaded processing has completed.
+- Python-side count bookkeeping is cleared together with the underlying parser state.
+- `unload(doc_key)` is idempotent after successful consumption:
+  - first unload returns `True`
+  - unloading the same key again returns `False`
+- Unloading during active threaded iteration raises a clear runtime error.
+
+The current implementation defines "safe to unload" by checking whether results remain to be consumed, not whether worker threads have fully wound down. That matches the intended public contract: unloading should succeed once result consumption is complete.
+
+---
+
+## Image rendering model
+
+Rendering is available only when the parser was created with `parser_config.render_config`.
+
+For parse-only results:
+
+- `has_image` is `False`
+- `get_image(...)` raises `RuntimeError`
+
+For parse-and-render results:
+
+- the default render is produced during threaded parsing
+- the image is exposed lazily through `get_image(...)`
+
+### `get_image(...)` signature
+
+```python
+get_image(
+    scale: float | None = None,
+    canvas_size: tuple[int, int] | None = None,
+    cropbox: BoundingBox | None = None,
+) -> PIL.Image.Image
+```
+
+### Supported behavior
+
+- `scale` and `canvas_size` are mutually exclusive.
+- Calling `get_image()` with no arguments returns the default pre-rendered image.
+- Calling `get_image(scale=...)` performs a true rerender from the retained `PdfPageDecoder` when needed.
+- Calling `get_image(canvas_size=...)` rerenders to the requested canvas size when needed.
+- Calling `get_image(..., cropbox=...)` crops in Python after full-page rendering.
+
+### Important decisions reflected in the implementation
+
+- `get_image(scale=...)` is allowed whenever `render_config` is present.
+- It is not restricted to cases where the original `render_config` used `scale`.
+- A caller may configure the threaded parser with `canvas_width` / `canvas_height` and later request `get_image(scale=2.0)`.
+- Non-default scale requests rerender from the decoder; they do not resize the existing default bitmap.
+
+### Crop semantics
+
+- `cropbox` is specified in page coordinates.
+- Cropping is done in Python against the rendered full-page image.
+- Page-coordinate conversion uses the page height and rendered image dimensions.
+- Degenerate page dimensions are handled defensively by returning the uncropped image rather than dividing by zero.
+
+### Cache behavior
+
+- The default full-page image is cached lazily per `PageParseResult`.
+- Requests matching the default render can reuse that cached image.
+- Rerendered `scale` and `canvas_size` requests are generated on demand from the decoder.
+- There is no aggressive per-scale or per-crop cache inside `docling-parse`.
+
+### Thread efficiency
+
+The expensive C++ rerender path used by `PageParseResult.get_image(scale=...)` / `get_image(canvas_size=...)` releases the Python GIL during instruction replay, matching the threaded API's performance goals.
+
+---
+
+## Parse-only example
 
 ```python
 from docling_parse.pdf_parser import DoclingThreadedPdfParser, ThreadedPdfParserConfig
@@ -243,23 +278,30 @@ from docling_parse.pdf_parsers import DecodePageConfig
 decode_config = DecodePageConfig()
 decode_config.create_line_cells = True
 
-parser_config = ThreadedPdfParserConfig(threads=4, max_concurrent_results=32)
-parser = DoclingThreadedPdfParser(parser_config=parser_config, decode_config=decode_config)
+parser = DoclingThreadedPdfParser(
+    parser_config=ThreadedPdfParserConfig(threads=4),
+    decode_config=decode_config,
+)
 
-doc_key = parser.load(path)
-total = parser.page_count(doc_key)
+doc_key = parser.load(path, page_numbers=[1, 3, 5])
+total_pages = parser.page_count(doc_key)
+scheduled_pages = parser.scheduled_page_count(doc_key)
 
 for result in parser.iterate_results():
-    if result.success:
-        seg_page = result.get_page()      # SegmentedPdfPage, lazy
-        size = (result.page_width, result.page_height)  # available without get_page()
-    else:
-        print(f"p{result.page_number} ERROR: {result.error_message}")
+    if not result.success:
+        print(f"{result.doc_key} p{result.page_number}: {result.error_message}")
+        continue
+
+    page = result.get_page()
+    size = (result.page_width, result.page_height)
 ```
 
-**Parse and render (with images):**
+---
+
+## Parse-and-render example
 
 ```python
+from docling_core.types.doc.base import BoundingBox, CoordOrigin
 from docling_parse.pdf_parser import DoclingThreadedPdfParser, ThreadedPdfParserConfig
 from docling_parse.pdf_parsers import DecodePageConfig, RenderConfig
 
@@ -267,51 +309,59 @@ render_config = RenderConfig()
 render_config.canvas_width = 1024
 
 parser = DoclingThreadedPdfParser(
-    parser_config=ThreadedPdfParserConfig(threads=4, render_config=render_config),
+    parser_config=ThreadedPdfParserConfig(
+        threads=4,
+        render_config=render_config,
+    ),
     decode_config=DecodePageConfig(),
 )
 
 doc_key = parser.load(path)
-total = parser.page_count(doc_key)
 
 for result in parser.iterate_results():
-    if result.success:
-        seg_page = result.get_page()   # SegmentedPdfPage
-        image = result.get_image()     # PIL RGBA Image
-    else:
-        print(f"p{result.page_number} ERROR: {result.error_message}")
-```
+    if not result.success:
+        continue
 
-**In-order collection (when page order matters):**
-
-```python
-pages: dict[int, SegmentedPdfPage] = {}
-for result in parser.iterate_results():
-    if result.success:
-        pages[result.page_number] = result.get_page()
-
-for page_no in sorted(pages):
-    process(pages[page_no])
+    page = result.get_page()
+    default_image = result.get_image()
+    scaled_image = result.get_image(scale=2.0)
+    cropped = result.get_image(
+        scale=2.0,
+        cropbox=BoundingBox(
+            l=10,
+            t=20,
+            r=60,
+            b=90,
+            coord_origin=CoordOrigin.TOPLEFT,
+        ),
+    )
 ```
 
 ---
 
-## Sequential path — unchanged
+## Sequential path remains unchanged
 
-The following remain exactly as-is. No signature changes, no behaviour changes:
+No signatures or semantics were changed for the sequential parser stack.
+
+That includes:
 
 - `DoclingPdfParser`
 - `PdfDocument`
-- `PdfDocument.get_page(page_no, *, config)`
-- `PdfDocument.iterate_pages(*, config)`
-- `PdfDocument.get_page_with_timings(page_no, *, config)`
-- All `Timings`, `PdfAnnotations`, `PdfTocEntry` models
+- existing `PdfDocument` page access methods
+- existing typed models such as `Timings`
 
-`PdfDocument._to_segmented_page_from_decoder()` stays as a private method (it will delegate to the new public `segmented_page_from_decoder()` function internally). External callers should migrate to using `PageParseResult.get_page()` instead.
+The threaded redesign was intentionally isolated from the sequential API.
 
 ---
 
-## Resolved questions
+## Summary of implemented decisions
 
-- **`iterate_results()` timeout?** Decided no — the caller's concern. The `has_tasks()` / `get_task()` escape hatch exists for manual control.
-- **`render_config` on `ThreadedPdfParserConfig` or as a constructor argument?** Decided on `ThreadedPdfParserConfig`: rendering is a threaded execution mode, while `DecodePageConfig` remains focused on decoded page content. Implemented.
+- One public threaded parser interface, not separate parser and renderer APIs.
+- Typed `PageParseResult` objects instead of raw decoder-centric result objects.
+- Public `segmented_page_from_decoder(...)` as the canonical conversion entry point.
+- 1-indexed threaded `page_number`.
+- `boundary_type` configured on `ThreadedPdfParserConfig`.
+- `page_count()` plus `scheduled_page_count()` for subset-aware scheduling.
+- `unload()` and `unload_all()` as explicit threaded lifecycle cleanup.
+- `get_image(scale=...)`, `get_image(canvas_size=...)`, and Python-side `cropbox` support on `PageParseResult`.
+- True rerendering from the retained decoder for non-default render requests.
