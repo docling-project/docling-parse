@@ -6,6 +6,10 @@ on:
         description: "If true, the packages will be published."
         default: false
 
+concurrency:
+  group: wheels-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ inputs.publish }}
+  cancel-in-progress: ${{ !inputs.publish }}
+
 env:
   CMAKE_BUILD_TYPE: Release
 

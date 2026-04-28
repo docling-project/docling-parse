@@ -7,6 +7,10 @@ env:
   # disable keyring (https://github.com/actions/runner-images/issues/6185):
   PYTHON_KEYRING_BACKEND: keyring.backends.null.Keyring
 
+concurrency:
+  group: cd-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   code-checks:
     uses: ./.github/workflows/checks.yml
