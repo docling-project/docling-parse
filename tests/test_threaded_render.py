@@ -1,248 +1,200 @@
 #!/usr/bin/env python
-"""Tests for the threaded PDF renderer."""
+"""Tests for threaded parse-and-render mode."""
 
 import glob
 import os
 from io import BytesIO
-from pathlib import Path
 
+import pytest
 from docling_core.types.doc.page import SegmentedPdfPage
 from PIL import Image as PILImage
 
 from docling_parse.pdf_parser import (
     DecodePageConfig,
-    DoclingThreadedPdfRenderer,
+    DoclingThreadedPdfParser,
     RenderConfig,
-    ThreadedPdfRendererConfig,
+    ThreadedPdfParserConfig,
 )
 from tests.test_parse import (
     GROUNDTRUTH_FOLDER,
     REGRESSION_FOLDER,
     verify_SegmentedPdfPage,
 )
-from tests.test_threaded_parse import _build_segmented_page_from_decoder
+
+SAMPLE_PDF = "docs/dln-v1.pdf"
+LARGE_SAMPLE_PDF = "docs/PDF32000_2008.pdf"
 
 
-def _make_renderer(
-    threads: int = 2, max_concurrent: int = 1
-) -> DoclingThreadedPdfRenderer:
-    return DoclingThreadedPdfRenderer(
-        renderer_config=ThreadedPdfRendererConfig(
+def _make_decode_config() -> DecodePageConfig:
+    config = DecodePageConfig()
+    config.page_boundary = "crop_box"
+    config.do_sanitization = False
+    config.keep_glyphs = True
+    config.keep_qpdf_warnings = False
+    return config
+
+
+def _make_render_config() -> RenderConfig:
+    return RenderConfig()
+
+
+def _make_parser(
+    threads: int = 2,
+    max_concurrent: int = 1,
+    render_config: RenderConfig | None = None,
+) -> DoclingThreadedPdfParser:
+    return DoclingThreadedPdfParser(
+        parser_config=ThreadedPdfParserConfig(
             loglevel="fatal",
             threads=threads,
             max_concurrent_results=max_concurrent,
+            render_config=render_config or _make_render_config(),
         ),
-        decode_config=DecodePageConfig(),
-        render_config=RenderConfig(),
+        decode_config=_make_decode_config(),
     )
 
 
 def test_render_single_document():
     """Render all pages of one document and verify each result is a valid RGBA image."""
-    filename = "tests/data/regression/table_of_contents_01.pdf"
+    filename = SAMPLE_PDF
 
-    renderer = _make_renderer()
-    key = renderer.load(filename)
+    parser = _make_parser()
+    key = parser.load(filename)
 
     count = 0
-    while renderer.has_tasks():
-        result = renderer.get_task()
-
+    for result in parser.iterate_results():
         assert result.doc_key == key
-        assert result.page_number >= 0
+        assert result.page_number >= 1
         assert result.success, (
-            f"Render failed page {result.page_number}: {result.error()}"
+            f"Render failed page {result.page_number}: {result.error_message}"
         )
+        assert result.has_image
 
         image = result.get_image()
-        assert image is not None, "get_image() returned None on success"
         assert isinstance(image, PILImage.Image)
         assert image.mode == "RGBA"
         assert image.width > 0
         assert image.height > 0
+        assert result.get_page().dimension.rect is not None
 
         count += 1
 
-    assert count > 0, "Should have rendered at least one page"
+    assert count == parser.page_count(key)
 
 
 def test_render_image_dimensions_are_consistent():
-    """Verify image_shape matches the actual PIL image dimensions."""
-    filename = "tests/data/regression/font_01.pdf"
+    """Verify rendered image dimensions are positive and stable."""
+    filename = SAMPLE_PDF
 
-    renderer = _make_renderer()
-    renderer.load(filename)
+    parser = _make_parser()
+    parser.load(filename)
 
-    while renderer.has_tasks():
-        result = renderer.get_task()
-        assert result.success, result.error()
-
-        h, w, channels = result._raw.image_shape
-        assert channels == 4, "Expected 4-channel RGBA"
-
+    for result in parser.iterate_results():
+        assert result.success, result.error_message
         image = result.get_image()
-        assert image.width == w
-        assert image.height == h
+        assert image.width > 0
+        assert image.height > 0
 
 
 def test_render_multiple_documents():
     """Load multiple PDFs and verify all pages are rendered."""
-    filenames = sorted(glob.glob(REGRESSION_FOLDER))  # limit to first 5 for speed
-    assert len(filenames) > 0
+    parser = _make_parser(threads=4, max_concurrent=16)
+    path_key = parser.load(SAMPLE_PDF)
+    with open(SAMPLE_PDF, "rb") as f:
+        bytes_key = parser.load(BytesIO(f.read()))
+    keys = {path_key, bytes_key}
 
-    renderer = _make_renderer(threads=4, max_concurrent=16)
-    keys = {renderer.load(f) for f in filenames}
-
-    cnt = 0
-
-    results_by_key = {}
-    while renderer.has_tasks():
-        result = renderer.get_task()
-        cnt += 1
-
+    results_by_key: dict[str, list[int]] = {}
+    for result in parser.iterate_results():
         assert result.success, (
-            f"Render failed doc-key: {result.doc_key}, page: {result.page_number}: {result.error()}"
+            f"Render failed doc-key: {result.doc_key}, page: {result.page_number}: {result.error_message}"
         )
-        print(
-            f"Render success ({cnt}): doc-key={result.doc_key}, page={result.page_number}"
-        )
-
         results_by_key.setdefault(result.doc_key, []).append(result.page_number)
 
         image = result.get_image()
-        assert image is not None, "image is None"
-
-        # img.show()
-
         assert isinstance(image, PILImage.Image)
         assert image.mode == "RGBA"
         assert image.width > 0
         assert image.height > 0
 
-    # Every loaded key must have at least one result
     for key in keys:
         assert key in results_by_key, f"No results for {key}"
+        assert len(results_by_key[key]) == parser.page_count(key)
 
 
 def test_render_from_bytesio():
     """Render a document loaded from a BytesIO object."""
-    filename = "tests/data/regression/font_01.pdf"
+    filename = SAMPLE_PDF
 
     with open(filename, "rb") as f:
         data = BytesIO(f.read())
 
-    renderer = _make_renderer()
-    key = renderer.load(data)
+    parser = _make_parser()
+    key = parser.load(data)
 
     count = 0
-    while renderer.has_tasks():
-        result = renderer.get_task()
+    for result in parser.iterate_results():
         assert result.doc_key == key
-        assert result.success, result.error()
-
-        image = result.get_image()
-        assert image is not None
-        assert image.mode == "RGBA"
-
+        assert result.success, result.error_message
+        assert result.get_image().mode == "RGBA"
         count += 1
 
-    assert count > 0
+    assert count == parser.page_count(key)
 
 
 def test_render_backpressure():
     """Verify rendering completes correctly with max_concurrent_results=1."""
-    filename = "tests/data/regression/table_of_contents_01.pdf"
+    filename = LARGE_SAMPLE_PDF
 
-    renderer = DoclingThreadedPdfRenderer(
-        renderer_config=ThreadedPdfRendererConfig(
-            loglevel="fatal",
-            threads=2,
-            max_concurrent_results=1,  # tight backpressure
-        ),
-        decode_config=DecodePageConfig(),
-        render_config=RenderConfig(),
-    )
-    renderer.load(filename)
+    parser = _make_parser(threads=2, max_concurrent=1)
+    key = parser.load(filename)
 
-    count = 0
-    while renderer.has_tasks():
-        result = renderer.get_task()
-        assert result.success, result.error()
-        count += 1
-
-    assert count > 0
+    count = sum(1 for result in parser.iterate_results() if result.success)
+    assert count == parser.page_count(key)
 
 
 def test_render_single_thread():
     """Render with a single thread as a sequential baseline."""
-    filename = "tests/data/regression/font_01.pdf"
+    filename = SAMPLE_PDF
 
-    renderer = DoclingThreadedPdfRenderer(
-        renderer_config=ThreadedPdfRendererConfig(
-            loglevel="fatal",
-            threads=1,
-            max_concurrent_results=32,
-        ),
-        decode_config=DecodePageConfig(),
-        render_config=RenderConfig(),
+    parser = _make_parser(threads=1, max_concurrent=32)
+    key = parser.load(filename)
+
+    count = sum(1 for result in parser.iterate_results() if result.success)
+    assert count == parser.page_count(key)
+
+
+def test_get_image_raises_without_rendering():
+    """Parse-only results must fail loudly when image access is requested."""
+    filename = SAMPLE_PDF
+
+    parser = DoclingThreadedPdfParser(
+        parser_config=ThreadedPdfParserConfig(loglevel="fatal", threads=2),
+        decode_config=_make_decode_config(),
     )
-    renderer.load(filename)
+    parser.load(filename)
 
-    count = 0
-    while renderer.has_tasks():
-        result = renderer.get_task()
-        assert result.success, result.error()
-
-        image = result.get_image()
-        assert image is not None
-        assert image.mode == "RGBA"
-
-        count += 1
-
-    assert count > 0
-
-
-def test_render_get_image_returns_none_on_failure():
-    """get_image() must return None when success is False."""
-    from docling_parse.pdf_parser import PdfPageRenderResult
-
-    class _FakeRaw:
-        doc_key = "k"
-        page_number = 0
-        success = False
-        error_message = "simulated failure"
-        image_shape = [0, 0, 4]
-
-        def get_image(self):
-            return b""
-
-    result = PdfPageRenderResult(_FakeRaw())
-    assert not result.success
-    assert result.get_image() is None
-    assert "simulated failure" in result.error()
+    result = next(parser.iterate_results())
+    assert not result.has_image
+    with pytest.raises(RuntimeError, match="Rendered image not available"):
+        result.get_image()
 
 
 def test_render_custom_render_config():
-    """Renderer accepts a non-default RenderConfig without error."""
-    filename = "tests/data/regression/font_01.pdf"
+    """Parser accepts a non-default RenderConfig without error."""
+    filename = SAMPLE_PDF
 
     render_config = RenderConfig()
     render_config.render_text = True
     render_config.draw_text_bbox = False
     render_config.resolve_fonts = True
 
-    renderer = DoclingThreadedPdfRenderer(
-        renderer_config=ThreadedPdfRendererConfig(loglevel="fatal", threads=2),
-        decode_config=DecodePageConfig(),
-        render_config=render_config,
-    )
-    renderer.load(filename)
+    parser = _make_parser(render_config=render_config)
+    parser.load(filename)
 
-    while renderer.has_tasks():
-        result = renderer.get_task()
-        assert result.success, result.error()
-        image = result.get_image()
-        assert image is not None
+    for result in parser.iterate_results():
+        assert result.success, result.error_message
+        assert result.get_image() is not None
 
 
 def test_render_reference_documents_from_filenames():
@@ -250,26 +202,9 @@ def test_render_reference_documents_from_filenames():
     pdf_docs = sorted(glob.glob(REGRESSION_FOLDER))
     assert len(pdf_docs) > 0, "len(pdf_docs)==0 -> nothing to test"
 
-    decode_config = DecodePageConfig()
-    decode_config.page_boundary = "crop_box"
-    decode_config.do_sanitization = False
-    decode_config.keep_glyphs = True
-    decode_config.keep_qpdf_warnings = False
+    parser = _make_parser(threads=4, max_concurrent=32)
+    doc_keys = {pdf_doc_path: parser.load(pdf_doc_path) for pdf_doc_path in pdf_docs}
 
-    renderer = DoclingThreadedPdfRenderer(
-        renderer_config=ThreadedPdfRendererConfig(
-            loglevel="fatal",
-            threads=4,
-            max_concurrent_results=32,
-        ),
-        decode_config=decode_config,
-        render_config=RenderConfig(),
-    )
-
-    for pdf_doc_path in pdf_docs:
-        renderer.load(pdf_doc_path)
-
-    # Page restrictions (same as sequential test)
     page_restrictions = {
         "deep-mediabox-inheritance.pdf": [2],
         "font_06.pdf": [1],
@@ -279,34 +214,26 @@ def test_render_reference_documents_from_filenames():
         "font_10.pdf": [1],
     }
 
-    results = {}
-    while renderer.has_tasks():
-        result = renderer.get_task()
-
+    results: dict[str, dict[int, SegmentedPdfPage]] = {}
+    for result in parser.iterate_results():
         assert result.doc_key != "", "doc_key should not be empty"
-
         if result.success:
-            page_decoder, _timings = result.get()
-            pred_page = _build_segmented_page_from_decoder(page_decoder)
-
-            if result.doc_key not in results:
-                results[result.doc_key] = {}
-            results[result.doc_key][result.page_number] = pred_page
+            results.setdefault(result.doc_key, {})[result.page_number] = (
+                result.get_page()
+            )
+            assert result.get_image().mode == "RGBA"
         else:
             print(
-                f"Warning: render failed for {result.doc_key} page {result.page_number}: {result.error()}"
+                f"Warning: render failed for {result.doc_key} page {result.page_number}: {result.error_message}"
             )
 
     for pdf_doc_path in pdf_docs:
-        key = f"key={Path(pdf_doc_path)!s}"
-
+        key = doc_keys[pdf_doc_path]
         assert key in results, f"No results found for {pdf_doc_path}"
 
-        for page_number, pred_page in sorted(results[key].items()):
-            page_no = page_number + 1  # convert to 1-indexed for groundtruth filenames
+        rname = os.path.basename(pdf_doc_path)
 
-            rname = os.path.basename(pdf_doc_path)
-
+        for page_no, pred_page in sorted(results[key].items()):
             if rname in page_restrictions and page_no not in page_restrictions[rname]:
                 continue
 

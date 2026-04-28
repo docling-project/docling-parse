@@ -903,6 +903,20 @@ PYBIND11_MODULE(pdf_parsers, m) {
     Returns:
         bool: True if the document was successfully loaded.)")
 
+    .def("number_of_pages",
+         [](docling::docling_threaded_parser& self, const std::string& key) -> int {
+           return self.number_of_pages(key);
+         },
+         pybind11::arg("key"),
+         R"(
+    Return the number of pages in a loaded document.
+
+    Parameters:
+        key (str): The unique key identifying the document.
+
+    Returns:
+        int: Number of pages in the loaded document.)")
+
     .def("has_tasks",
          [](docling::docling_threaded_parser& self) -> bool {
            return self.has_tasks();
@@ -1031,6 +1045,12 @@ PYBIND11_MODULE(pdf_parsers, m) {
          pybind11::arg("key"),
          pybind11::arg("bytes_io"),
          pybind11::arg("password") = pybind11::none())
+
+    .def("number_of_pages",
+         [](docling::docling_threaded_renderer& self, const std::string& key) -> int {
+           return self.number_of_pages(key);
+         },
+         pybind11::arg("key"))
 
     .def("has_tasks",
          [](docling::docling_threaded_renderer& self) -> bool {

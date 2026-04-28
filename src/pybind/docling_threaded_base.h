@@ -69,6 +69,8 @@ namespace docling
                                     pybind11::object bytes_io,
                                     std::optional<std::string> password);
 
+    int number_of_pages(std::string key) const;
+
     bool has_tasks();
 
     ResultType get_task();
@@ -247,6 +249,18 @@ namespace docling
       }
 
     return false;
+  }
+
+  template<typename Derived, typename ResultType>
+  int docling_threaded_base<Derived, ResultType>::number_of_pages(std::string key) const
+  {
+    auto itr = key2doc.find(key);
+    if(itr == key2doc.end())
+      {
+        throw std::runtime_error("Document key not found: " + key);
+      }
+
+    return itr->second->get_number_of_pages();
   }
 
   template<typename Derived, typename ResultType>
