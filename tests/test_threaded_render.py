@@ -4,8 +4,10 @@
 import glob
 import os
 from io import BytesIO
+from pathlib import Path
 
 import pytest
+from docling_core.types.doc.base import BoundingBox, CoordOrigin
 from docling_core.types.doc.page import SegmentedPdfPage
 from PIL import Image as PILImage
 
@@ -52,6 +54,43 @@ def _make_parser(
         ),
         decode_config=_make_decode_config(),
     )
+
+
+def _write_variable_page_size_pdf(path: Path) -> None:
+    objects = [
+        "<< /Type /Catalog /Pages 2 0 R >>",
+        "<< /Type /Pages /Count 2 /Kids [3 0 R 5 0 R] >>",
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 300] /Contents 4 0 R >>",
+        "<< /Length 0 >>\nstream\n\nendstream",
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 400 500] /Contents 6 0 R >>",
+        "<< /Length 0 >>\nstream\n\nendstream",
+    ]
+
+    chunks = [b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n"]
+    offsets = [0]
+
+    for object_number, body in enumerate(objects, start=1):
+        offsets.append(sum(len(chunk) for chunk in chunks))
+        chunks.append(f"{object_number} 0 obj\n{body}\nendobj\n".encode("ascii"))
+
+    xref_offset = sum(len(chunk) for chunk in chunks)
+    xref_lines = [
+        "xref",
+        f"0 {len(objects) + 1}",
+        "0000000000 65535 f ",
+    ]
+    xref_lines.extend(f"{offset:010d} 00000 n " for offset in offsets[1:])
+    trailer = [
+        "trailer",
+        f"<< /Size {len(objects) + 1} /Root 1 0 R >>",
+        "startxref",
+        str(xref_offset),
+        "%%EOF",
+    ]
+    chunks.append(("\n".join(xref_lines) + "\n").encode("ascii"))
+    chunks.append(("\n".join(trailer) + "\n").encode("ascii"))
+
+    path.write_bytes(b"".join(chunks))
 
 
 def test_render_single_document():
@@ -195,6 +234,146 @@ def test_render_custom_render_config():
     for result in parser.iterate_results():
         assert result.success, result.error_message
         assert result.get_image() is not None
+
+
+def test_get_image_scale_requires_scale_config():
+    parser = _make_parser()
+    parser.load(SAMPLE_PDF, page_numbers=[1])
+
+    result = next(parser.iterate_results())
+    assert result.success, result.error_message
+
+    with pytest.raises(ValueError):
+        result.get_image(scale=2.0)
+
+
+def test_get_image_rerenders_non_default_scale():
+    render_config = RenderConfig()
+    render_config.scale = 1.0
+    parser = _make_parser(render_config=render_config)
+    parser.load(SAMPLE_PDF, page_numbers=[1])
+
+    result = next(parser.iterate_results())
+    assert result.success, result.error_message
+
+    default_image = result.get_image()
+    scaled_image = result.get_image(scale=2.0)
+
+    assert scaled_image.size == (
+        round(result.page_width * 2.0),
+        round(result.page_height * 2.0),
+    )
+    assert scaled_image.size != default_image.size
+
+
+def test_get_image_canvas_size_is_accepted_for_canvas_config():
+    render_config = RenderConfig()
+    render_config.canvas_width = 1224
+
+    parser = _make_parser(render_config=render_config)
+    parser.load(SAMPLE_PDF, page_numbers=[1])
+
+    result = next(parser.iterate_results())
+    assert result.success, result.error_message
+
+    default_image = result.get_image()
+    same_image = result.get_image(canvas_size=default_image.size)
+    custom_image = result.get_image(canvas_size=(600, 800))
+
+    assert same_image.size == default_image.size
+    assert custom_image.size == (600, 800)
+
+
+def test_get_image_canvas_size_is_accepted_for_scale_config():
+    render_config = RenderConfig()
+    render_config.scale = 2.0
+
+    parser = _make_parser(render_config=render_config)
+    parser.load(SAMPLE_PDF, page_numbers=[1])
+
+    result = next(parser.iterate_results())
+    assert result.success, result.error_message
+
+    default_image = result.get_image()
+    semantic_image = result.get_image(scale=1.0)
+    same_image = result.get_image(canvas_size=default_image.size)
+
+    assert default_image.size == (
+        round(result.page_width * 2.0),
+        round(result.page_height * 2.0),
+    )
+    assert semantic_image.size == (
+        round(result.page_width),
+        round(result.page_height),
+    )
+    assert same_image.size == default_image.size
+
+
+def test_get_image_rejects_scale_with_canvas_size():
+    render_config = RenderConfig()
+    render_config.scale = 1.0
+
+    parser = _make_parser(render_config=render_config)
+    parser.load(SAMPLE_PDF, page_numbers=[1])
+
+    result = next(parser.iterate_results())
+    assert result.success, result.error_message
+
+    with pytest.raises(ValueError):
+        result.get_image(scale=1.0, canvas_size=(100, 100))
+
+
+def test_render_config_rejects_scale_with_canvas_dimensions():
+    render_config = RenderConfig()
+    render_config.scale = 2.0
+    render_config.canvas_width = 1224
+
+    with pytest.raises(ValueError):
+        _make_parser(render_config=render_config)
+
+
+def test_get_image_crops_using_page_coordinates():
+    render_config = RenderConfig()
+    render_config.scale = 2.0
+    parser = _make_parser(render_config=render_config)
+    parser.load(SAMPLE_PDF, page_numbers=[1])
+
+    result = next(parser.iterate_results())
+    assert result.success, result.error_message
+
+    cropbox = BoundingBox(
+        l=10,
+        t=20,
+        r=60,
+        b=90,
+        coord_origin=CoordOrigin.TOPLEFT,
+    )
+    cropped = result.get_image(scale=2.0, cropbox=cropbox)
+
+    assert cropped.size == (
+        round((cropbox.r - cropbox.l) * 2.0),
+        round((cropbox.b - cropbox.t) * 2.0),
+    )
+
+
+def test_render_scale_config_handles_pages_with_different_sizes(tmp_path: Path):
+    pdf_path = tmp_path / "variable_page_sizes.pdf"
+    _write_variable_page_size_pdf(pdf_path)
+
+    render_config = RenderConfig()
+    render_config.scale = 2.0
+
+    parser = _make_parser(render_config=render_config)
+    parser.load(pdf_path)
+
+    sizes_by_page: dict[int, tuple[int, int]] = {}
+    for result in parser.iterate_results():
+        assert result.success, result.error_message
+        image = result.get_image()
+        sizes_by_page[result.page_number] = image.size
+
+    assert sizes_by_page[1] == (400, 600)
+    assert sizes_by_page[2] == (800, 1000)
 
 
 def test_render_reference_documents_from_filenames():

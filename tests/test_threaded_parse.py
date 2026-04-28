@@ -4,6 +4,7 @@
 import glob
 import os
 
+import pytest
 from docling_core.types.doc.page import PdfPageBoundaryType, SegmentedPdfPage
 
 from docling_parse.pdf_parser import (
@@ -214,3 +215,89 @@ def test_threaded_single_thread():
     key = parser.load(filename)
     count = sum(1 for result in parser.iterate_results() if result.success)
     assert count == parser.page_count(key)
+
+
+def test_threaded_selected_pages_schedule_subset():
+    parser = DoclingThreadedPdfParser(
+        parser_config=ThreadedPdfParserConfig(
+            loglevel="fatal",
+            threads=2,
+            max_concurrent_results=4,
+            boundary_type=PdfPageBoundaryType.CROP_BOX,
+        ),
+        decode_config=_make_decode_config(),
+    )
+
+    key = parser.load(LARGE_SAMPLE_PDF, page_numbers=[2, 1, 2])
+
+    assert parser.page_count(key) >= 2
+    assert parser.scheduled_page_count(key) == 2
+
+    emitted_pages = sorted(
+        result.page_number for result in parser.iterate_results() if result.success
+    )
+    assert emitted_pages == [1, 2]
+
+
+def test_threaded_selected_pages_invalid_page_number():
+    parser = DoclingThreadedPdfParser(
+        parser_config=ThreadedPdfParserConfig(loglevel="fatal", threads=2),
+        decode_config=_make_decode_config(),
+    )
+
+    with pytest.raises(RuntimeError, match="Invalid page number"):
+        parser.load(SAMPLE_PDF, page_numbers=[9999])
+
+
+def test_threaded_multiple_documents_with_different_subsets():
+    parser = DoclingThreadedPdfParser(
+        parser_config=ThreadedPdfParserConfig(
+            loglevel="fatal",
+            threads=4,
+            max_concurrent_results=8,
+            boundary_type=PdfPageBoundaryType.CROP_BOX,
+        ),
+        decode_config=_make_decode_config(),
+    )
+
+    path_key = parser.load(LARGE_SAMPLE_PDF, page_numbers=[1, 2])
+    bytes_key = parser.load(SAMPLE_PDF, page_numbers=[1])
+
+    results_by_key: dict[str, list[int]] = {}
+    for result in parser.iterate_results():
+        assert result.success, result.error_message
+        results_by_key.setdefault(result.doc_key, []).append(result.page_number)
+
+    assert sorted(results_by_key[path_key]) == [1, 2]
+    assert sorted(results_by_key[bytes_key]) == [1]
+    assert parser.scheduled_page_count(path_key) == 2
+    assert parser.scheduled_page_count(bytes_key) == 1
+
+
+def test_threaded_unload_after_consumption_is_idempotent():
+    parser = DoclingThreadedPdfParser(
+        parser_config=ThreadedPdfParserConfig(loglevel="fatal", threads=2),
+        decode_config=_make_decode_config(),
+    )
+
+    key = parser.load(SAMPLE_PDF, page_numbers=[1])
+    list(parser.iterate_results())
+
+    assert parser.unload(key) is True
+    assert parser.unload(key) is False
+
+    with pytest.raises(ValueError):
+        parser.page_count(key)
+
+
+def test_threaded_unload_during_active_iteration_raises():
+    parser = DoclingThreadedPdfParser(
+        parser_config=ThreadedPdfParserConfig(loglevel="fatal", threads=2),
+        decode_config=_make_decode_config(),
+    )
+
+    key = parser.load(SAMPLE_PDF)
+    assert parser.has_tasks()
+
+    with pytest.raises(RuntimeError, match="threaded iteration is active"):
+        parser.unload(key)

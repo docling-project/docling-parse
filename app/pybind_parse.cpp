@@ -10,6 +10,7 @@
 #include <pybind/docling_parser.h>
 #include <pybind/docling_threaded_parser.h>
 #include <pybind/docling_threaded_renderer.h>
+#include <render/blend2d_renderer.h>
 
 // Include parse headers for typed bindings
 #include <parse.h>
@@ -549,7 +550,26 @@ PYBIND11_MODULE(pdf_parsers, m) {
            self.get_instructions().iterate_over_instructions(visitor);
            return visitor.artifacts;
          },
-         "Export bitmap artifacts as inspectable image bytes plus raw payload bytes");
+         "Export bitmap artifacts as inspectable image bytes plus raw payload bytes")
+    .def("render_image",
+         [](pdflib::pdf_decoder<pdflib::PAGE>& self,
+            const pdflib::render_config& config) -> pybind11::tuple {
+           pdflib::renderer<pdflib::BLEND2D> rnd(config);
+           self.get_instructions().iterate_over_instructions(rnd);
+
+           auto canvas = rnd.get_canvas();
+           const auto& shape = rnd.get_shape();
+           pybind11::bytes image_bytes("");
+           if(canvas and not canvas->empty())
+             {
+               image_bytes = pybind11::bytes(
+                   reinterpret_cast<const char*>(canvas->data()),
+                   canvas->size());
+             }
+           return pybind11::make_tuple(image_bytes, shape);
+         },
+         pybind11::arg("config"),
+         "Render the decoded page to RGBA bytes using the provided RenderConfig");
 
   // ============= Timing Keys Constants =============
 
@@ -865,12 +885,14 @@ PYBIND11_MODULE(pdf_parsers, m) {
          [](docling::docling_threaded_parser& self,
             const std::string& key,
             const std::string& filename,
-            std::optional<std::string>& password) -> bool {
-           return self.load_document(key, filename, password);
+            std::optional<std::string>& password,
+            std::optional<std::vector<int>>& page_numbers) -> bool {
+           return self.load_document(key, filename, password, page_numbers);
          },
          pybind11::arg("key"),
          pybind11::arg("filename"),
          pybind11::arg("password") = pybind11::none(),
+         pybind11::arg("page_numbers") = pybind11::none(),
          R"(
     Load a document by key and filename.
 
@@ -878,6 +900,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
         key (str): The unique key to identify the document.
         filename (str): The path to the document file to load.
         password (str, optional): Optional password for password-protected files.
+        page_numbers (Sequence[int], optional): Selected 1-indexed physical pages to schedule.
 
     Returns:
         bool: True if the document was successfully loaded.)")
@@ -886,12 +909,14 @@ PYBIND11_MODULE(pdf_parsers, m) {
          [](docling::docling_threaded_parser& self,
             const std::string& key,
             pybind11::object bytes_io,
-            std::optional<std::string>& password) -> bool {
-           return self.load_document_from_bytesio(key, bytes_io, password);
+            std::optional<std::string>& password,
+            std::optional<std::vector<int>>& page_numbers) -> bool {
+           return self.load_document_from_bytesio(key, bytes_io, password, page_numbers);
          },
          pybind11::arg("key"),
          pybind11::arg("bytes_io"),
          pybind11::arg("password") = pybind11::none(),
+         pybind11::arg("page_numbers") = pybind11::none(),
          R"(
     Load a document from a BytesIO-like object.
 
@@ -899,6 +924,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
         key (str): The unique key to identify the document.
         bytes_io (Any): A BytesIO-like object containing the document data.
         password (str, optional): Optional password for password-protected files.
+        page_numbers (Sequence[int], optional): Selected 1-indexed physical pages to schedule.
 
     Returns:
         bool: True if the document was successfully loaded.)")
@@ -916,6 +942,35 @@ PYBIND11_MODULE(pdf_parsers, m) {
 
     Returns:
         int: Number of pages in the loaded document.)")
+    .def("scheduled_number_of_pages",
+         [](docling::docling_threaded_parser& self, const std::string& key) -> int {
+           return self.scheduled_number_of_pages(key);
+         },
+         pybind11::arg("key"),
+         R"(
+    Return the number of scheduled pages in a loaded document.
+
+    Parameters:
+        key (str): The unique key identifying the document.
+
+    Returns:
+        int: Number of pages that will be emitted by the threaded parser.)")
+    .def("unload_document",
+         [](docling::docling_threaded_parser& self, const std::string& key) -> bool {
+           return self.unload_document(key);
+         },
+         pybind11::arg("key"),
+         R"(
+    Unload one document after threaded processing is complete.
+
+    Returns:
+        bool: True when document state existed and was removed.)")
+    .def("unload_all_documents",
+         [](docling::docling_threaded_parser& self) {
+           self.unload_all_documents();
+         },
+         R"(
+    Unload all documents after threaded processing is complete.)")
 
     .def("has_tasks",
          [](docling::docling_threaded_parser& self) -> bool {
@@ -954,6 +1009,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
         draw_text_bbox (bool): Draw bounding quad for each text cell [default=false].
         resolve_fonts (bool): Resolve PDF font names to system fonts [default=true].
         font_similarity_cutoff (float): Minimum Jaccard similarity for fuzzy font matching; candidates below this threshold fall back to the default font [default=0.25].
+        scale (float): Target render scale in multiples of the PDF page size; -1 disables scale-based sizing [default=-1].
         canvas_width (int): Target canvas width in pixels; -1 means use PDF page size [default=-1].
         canvas_height (int): Target canvas height in pixels; -1 means use PDF page size [default=-1].
     )")
@@ -962,6 +1018,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
     .def_readwrite("draw_text_bbox",          &pdflib::render_config::draw_text_bbox)
     .def_readwrite("resolve_fonts",           &pdflib::render_config::resolve_fonts)
     .def_readwrite("font_similarity_cutoff",  &pdflib::render_config::font_similarity_cutoff)
+    .def_readwrite("scale",                   &pdflib::render_config::scale)
     .def_readwrite("canvas_width",            &pdflib::render_config::canvas_width)
     .def_readwrite("canvas_height",           &pdflib::render_config::canvas_height);
 
@@ -1028,29 +1085,47 @@ PYBIND11_MODULE(pdf_parsers, m) {
          [](docling::docling_threaded_renderer& self,
             const std::string& key,
             const std::string& filename,
-            std::optional<std::string>& password) -> bool {
-           return self.load_document(key, filename, password);
+            std::optional<std::string>& password,
+            std::optional<std::vector<int>>& page_numbers) -> bool {
+           return self.load_document(key, filename, password, page_numbers);
          },
          pybind11::arg("key"),
          pybind11::arg("filename"),
-         pybind11::arg("password") = pybind11::none())
+         pybind11::arg("password") = pybind11::none(),
+         pybind11::arg("page_numbers") = pybind11::none())
 
     .def("load_document_from_bytesio",
          [](docling::docling_threaded_renderer& self,
             const std::string& key,
             pybind11::object bytes_io,
-            std::optional<std::string>& password) -> bool {
-           return self.load_document_from_bytesio(key, bytes_io, password);
+            std::optional<std::string>& password,
+            std::optional<std::vector<int>>& page_numbers) -> bool {
+           return self.load_document_from_bytesio(key, bytes_io, password, page_numbers);
          },
          pybind11::arg("key"),
          pybind11::arg("bytes_io"),
-         pybind11::arg("password") = pybind11::none())
+         pybind11::arg("password") = pybind11::none(),
+         pybind11::arg("page_numbers") = pybind11::none())
 
     .def("number_of_pages",
          [](docling::docling_threaded_renderer& self, const std::string& key) -> int {
            return self.number_of_pages(key);
          },
          pybind11::arg("key"))
+    .def("scheduled_number_of_pages",
+         [](docling::docling_threaded_renderer& self, const std::string& key) -> int {
+           return self.scheduled_number_of_pages(key);
+         },
+         pybind11::arg("key"))
+    .def("unload_document",
+         [](docling::docling_threaded_renderer& self, const std::string& key) -> bool {
+           return self.unload_document(key);
+         },
+         pybind11::arg("key"))
+    .def("unload_all_documents",
+         [](docling::docling_threaded_renderer& self) {
+           self.unload_all_documents();
+         })
 
     .def("has_tasks",
          [](docling::docling_threaded_renderer& self) -> bool {

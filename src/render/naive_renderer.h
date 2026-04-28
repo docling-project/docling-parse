@@ -48,8 +48,10 @@ namespace pdflib
   {
     auto& bbox = instr.crop_bbox;
 
-    int width  = bbox[2] - bbox[0];
-    int height = bbox[3] - bbox[1];
+    const int pdf_width = bbox[2] - bbox[0];
+    const int pdf_height = bbox[3] - bbox[1];
+
+    const auto [width, height] = resolve_canvas_size(pdf_width, pdf_height, config_);
 
     shape = {height, width, 3};
     canvas->assign(height * width * 3, 255);

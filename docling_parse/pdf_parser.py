@@ -2,9 +2,10 @@
 
 import hashlib
 import logging
+import math
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
+from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple, Union
 
 from docling_core.types.doc.base import BoundingBox, CoordOrigin, ImageRefMode
 from docling_core.types.doc.document import ImageRef
@@ -921,13 +922,16 @@ class PageParseResult:
         raw_result,
         *,
         boundary_type: PdfPageBoundaryType,
-        rendering_enabled: bool,
+        render_config: RenderConfig | None,
     ):
         self._raw = raw_result
         self._boundary_type = boundary_type
-        self._rendering_enabled = rendering_enabled
+        self._render_config = (
+            _copy_render_config(render_config) if render_config is not None else None
+        )
         self._page: SegmentedPdfPage | None = None
         self._page_decoder: PdfPageDecoder | None = None
+        self._default_image: PILImage.Image | None = None
 
         self.doc_key: str = raw_result.doc_key
         self.page_number: int = raw_result.page_number + 1
@@ -947,7 +951,7 @@ class PageParseResult:
     @property
     def has_image(self) -> bool:
         """Whether get_image() can return a rendered image for this result."""
-        return self._rendering_enabled and self.success
+        return self._render_config is not None and self.success
 
     @property
     def error_message(self) -> str:
@@ -977,23 +981,139 @@ class PageParseResult:
         """Return structured timing data for this page parse."""
         return self._timings
 
-    def get_image(self) -> PILImage.Image:
-        """Return the rendered page image."""
-        self._require_page_decoder()
-
-        if not self._rendering_enabled:
+    def _rendering_config(self) -> RenderConfig:
+        if self._render_config is None:
             raise RuntimeError(
                 f"Rendered image not available for page {self.page_number} of {self.doc_key}"
             )
+        return _copy_render_config(self._render_config)
 
-        raw_bytes = self._raw.get_image()
+    def _default_canvas_size(self) -> tuple[int, int]:
+        self._require_page_decoder()
+        self._rendering_config()
+        height, width, _ = self._raw.image_shape
+        return width, height
+
+    def _scale_request_supported(self) -> bool:
+        render_config = self._rendering_config()
+        return render_config.scale > 0
+
+    def _scale_abs_tolerance(self) -> float:
+        if self.page_width <= 0 or self.page_height <= 0:
+            return 0.0
+        return max(0.5 / self.page_width, 0.5 / self.page_height)
+
+    @staticmethod
+    def _image_from_bytes(
+        raw_bytes: bytes, image_shape: Sequence[int]
+    ) -> PILImage.Image:
+        height, width, _ = image_shape
+        return PILImage.frombuffer(
+            "RGBA", (width, height), raw_bytes, "raw", "RGBA", 0, 1
+        ).copy()
+
+    def _get_default_image(self) -> PILImage.Image:
+        self._require_page_decoder()
+        self._rendering_config()
+
+        if self._default_image is None:
+            raw_bytes = self._raw.get_image()
+            if not raw_bytes:
+                raise RuntimeError(
+                    f"Rendered image is empty for page {self.page_number} of {self.doc_key}"
+                )
+            self._default_image = self._image_from_bytes(
+                raw_bytes, self._raw.image_shape
+            )
+        return self._default_image
+
+    def _render_image_at_scale(self, scale: float) -> PILImage.Image:
+        page_decoder = self._require_page_decoder()
+        render_config = self._rendering_config()
+        render_config.scale = scale
+        render_config.canvas_width = -1
+        render_config.canvas_height = -1
+        raw_bytes, image_shape = page_decoder.render_image(render_config)
         if not raw_bytes:
             raise RuntimeError(
                 f"Rendered image is empty for page {self.page_number} of {self.doc_key}"
             )
+        return self._image_from_bytes(raw_bytes, image_shape)
 
-        h, w, _ = self._raw.image_shape
-        return PILImage.frombuffer("RGBA", (w, h), raw_bytes, "raw", "RGBA", 0, 1)
+    def _render_image_at_canvas_size(
+        self, canvas_size: tuple[int, int]
+    ) -> PILImage.Image:
+        page_decoder = self._require_page_decoder()
+        render_config = self._rendering_config()
+        render_config.scale = -1.0
+        render_config.canvas_width, render_config.canvas_height = canvas_size
+        raw_bytes, image_shape = page_decoder.render_image(render_config)
+        if not raw_bytes:
+            raise RuntimeError(
+                f"Rendered image is empty for page {self.page_number} of {self.doc_key}"
+            )
+        return self._image_from_bytes(raw_bytes, image_shape)
+
+    def _crop_image(
+        self, image: PILImage.Image, cropbox: BoundingBox | None
+    ) -> PILImage.Image:
+        if cropbox is None:
+            return image
+
+        cropbox_top_left = cropbox.to_top_left_origin(page_height=self.page_height)
+        x_scale = image.width / self.page_width
+        y_scale = image.height / self.page_height
+
+        left = max(0, round(cropbox_top_left.l * x_scale))
+        top = max(0, round(cropbox_top_left.t * y_scale))
+        right = min(image.width, round(cropbox_top_left.r * x_scale))
+        bottom = min(image.height, round(cropbox_top_left.b * y_scale))
+        return image.crop((left, top, right, bottom))
+
+    def get_image(
+        self,
+        scale: float | None = None,
+        canvas_size: tuple[int, int] | None = None,
+        cropbox: BoundingBox | None = None,
+    ) -> PILImage.Image:
+        """Return the rendered page image."""
+        if scale is not None and canvas_size is not None:
+            raise ValueError("Provide either scale or canvas_size, not both")
+
+        if scale is None and canvas_size is None:
+            image = self._get_default_image()
+            return self._crop_image(image, cropbox)
+
+        if scale is not None:
+            if scale <= 0:
+                raise ValueError(f"scale must be > 0, got {scale}")
+            if not self._scale_request_supported():
+                raise ValueError(
+                    "get_image(scale=...) requires render_config.scale to be set"
+                )
+
+            render_config = self._rendering_config()
+            if math.isclose(
+                scale,
+                render_config.scale,
+                rel_tol=0.0,
+                abs_tol=self._scale_abs_tolerance(),
+            ):
+                image = self._get_default_image()
+            else:
+                image = self._render_image_at_scale(scale)
+        else:
+            assert canvas_size is not None
+            if canvas_size[0] <= 0 or canvas_size[1] <= 0:
+                raise ValueError(
+                    f"canvas_size must contain positive integers, got {canvas_size}"
+                )
+            if canvas_size == self._default_canvas_size():
+                image = self._get_default_image()
+            else:
+                image = self._render_image_at_canvas_size(canvas_size)
+
+        return self._crop_image(image, cropbox)
 
     def _export_render_instructions_json(self) -> Dict[str, Any]:
         return self._require_page_decoder().export_render_instructions_json()
@@ -1026,6 +1146,36 @@ def _copy_decode_config(src: DecodePageConfig) -> DecodePageConfig:
     return dst
 
 
+def _copy_render_config(src: RenderConfig) -> RenderConfig:
+    _validate_render_config(src)
+    dst = RenderConfig()
+    dst.render_text = src.render_text
+    dst.draw_text_bbox = src.draw_text_bbox
+    dst.resolve_fonts = src.resolve_fonts
+    dst.font_similarity_cutoff = src.font_similarity_cutoff
+    dst.scale = src.scale
+    dst.canvas_width = src.canvas_width
+    dst.canvas_height = src.canvas_height
+    return dst
+
+
+def _validate_render_config(src: RenderConfig) -> None:
+    have_scale = src.scale > 0
+    have_width = src.canvas_width > 0
+    have_height = src.canvas_height > 0
+
+    if src.scale != -1.0 and src.scale <= 0:
+        raise ValueError("render_config.scale must be > 0 or -1")
+    if src.canvas_width != -1 and src.canvas_width <= 0:
+        raise ValueError("render_config.canvas_width must be > 0 or -1")
+    if src.canvas_height != -1 and src.canvas_height <= 0:
+        raise ValueError("render_config.canvas_height must be > 0 or -1")
+    if have_scale and (have_width or have_height):
+        raise ValueError(
+            "render_config.scale cannot be combined with canvas_width or canvas_height"
+        )
+
+
 class DoclingThreadedPdfParser:
     """Threaded PDF parser that decodes pages from multiple documents in parallel."""
 
@@ -1038,6 +1188,8 @@ class DoclingThreadedPdfParser:
             parser_config = ThreadedPdfParserConfig()
 
         self._parser_config = parser_config
+        if parser_config.render_config is not None:
+            _validate_render_config(parser_config.render_config)
         self._decode_config = (
             _copy_decode_config(decode_config)
             if decode_config is not None
@@ -1045,6 +1197,7 @@ class DoclingThreadedPdfParser:
         )
         self._decode_config.page_boundary = parser_config.boundary_type.value
         self._page_counts: Dict[str, int] = {}
+        self._scheduled_page_counts: Dict[str, int] = {}
 
         if parser_config.render_config is None:
             self._parser = threaded_pdf_parser(
@@ -1066,12 +1219,14 @@ class DoclingThreadedPdfParser:
         self,
         path_or_stream: Union[str, Path, BytesIO],
         password: str | None = None,
+        page_numbers: Sequence[int] | None = None,
     ) -> str:
         """Load a document for parallel processing.
 
         Parameters:
             path_or_stream: File path or BytesIO object.
             password: Optional password for protected files.
+            page_numbers: Optional 1-indexed physical pages to schedule.
 
         Returns:
             str: The document key.
@@ -1082,7 +1237,10 @@ class DoclingThreadedPdfParser:
         if isinstance(path_or_stream, Path):
             key = f"key={path_or_stream!s}"
             success = self._parser.load_document(
-                key=key, filename=str(path_or_stream).encode("utf8"), password=password
+                key=key,
+                filename=str(path_or_stream).encode("utf8"),
+                password=password,
+                page_numbers=list(page_numbers) if page_numbers is not None else None,
             )
         elif isinstance(path_or_stream, BytesIO):
             hasher = hashlib.sha256(usedforsecurity=False)
@@ -1093,7 +1251,10 @@ class DoclingThreadedPdfParser:
 
             key = f"key={hash_val}"
             success = self._parser.load_document_from_bytesio(
-                key=key, bytes_io=path_or_stream, password=password
+                key=key,
+                bytes_io=path_or_stream,
+                password=password,
+                page_numbers=list(page_numbers) if page_numbers is not None else None,
             )
         else:
             raise TypeError(
@@ -1104,6 +1265,7 @@ class DoclingThreadedPdfParser:
             raise RuntimeError(f"Failed to load document with key {key}")
 
         self._page_counts[key] = self._parser.number_of_pages(key)
+        self._scheduled_page_counts[key] = self._parser.scheduled_number_of_pages(key)
         return key
 
     def page_count(self, doc_key: str) -> int:
@@ -1111,6 +1273,25 @@ class DoclingThreadedPdfParser:
         if doc_key not in self._page_counts:
             raise ValueError(f"Document key not loaded: {doc_key}")
         return self._page_counts[doc_key]
+
+    def scheduled_page_count(self, doc_key: str) -> int:
+        """Return the number of pages scheduled for threaded emission."""
+        if doc_key not in self._scheduled_page_counts:
+            raise ValueError(f"Document key not loaded: {doc_key}")
+        return self._scheduled_page_counts[doc_key]
+
+    def unload(self, doc_key: str) -> bool:
+        """Unload one document after threaded processing has completed."""
+        unloaded = self._parser.unload_document(doc_key)
+        self._page_counts.pop(doc_key, None)
+        self._scheduled_page_counts.pop(doc_key, None)
+        return unloaded
+
+    def unload_all(self) -> None:
+        """Unload all documents after threaded processing has completed."""
+        self._parser.unload_all_documents()
+        self._page_counts.clear()
+        self._scheduled_page_counts.clear()
 
     def has_tasks(self) -> bool:
         """Check if there are remaining tasks to consume.
@@ -1138,7 +1319,7 @@ class DoclingThreadedPdfParser:
         return PageParseResult(
             self._parser.get_task(),
             boundary_type=self._parser_config.boundary_type,
-            rendering_enabled=self._parser_config.render_config is not None,
+            render_config=self._parser_config.render_config,
         )
 
 
