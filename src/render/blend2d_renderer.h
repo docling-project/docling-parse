@@ -954,8 +954,66 @@ namespace pdflib
                 ctx.end();
                 return;
               }
+            BLPoint draw_origin(0.0, 0.0);
+            if (instr.has_glyph_bbox())
+              {
+                const BLGlyphId glyph_id = gb.glyph_run().glyph_data_as<uint32_t>()[0];
+                BLPath glyph_path;
+                const BLMatrix2D identity(1.0, 0.0,
+                                          0.0, 1.0,
+                                          0.0, 0.0);
+                const BLResult outline_res =
+                  font.get_glyph_outlines(glyph_id, identity, glyph_path);
+                LOG_S(INFO) << "render_text: glyph outline res=" << outline_res
+                            << " glyph_path empty=" << glyph_path.is_empty();
+                if (outline_res == BL_SUCCESS && !glyph_path.is_empty())
+                  {
+                    BLBox rendered_box;
+                    const BLResult bbox_res = glyph_path.get_bounding_box(&rendered_box);
+                    LOG_S(INFO) << "render_text: glyph outline bbox res=" << bbox_res;
+                    if (bbox_res != BL_SUCCESS)
+                      {
+                        LOG_S(WARNING) << "render_text: glyph outline bbox failed"
+                                       << " (BLResult=" << bbox_res << ")";
+                      }
+                    else
+                      {
+                        const double target_x0 = instr.get_g_x0() / 1000.0 * size;
+                        const double target_y0 = -instr.get_g_y1() / 1000.0 * size;
+                        const double target_x1 = instr.get_g_x1() / 1000.0 * size;
+                        const double target_y1 = -instr.get_g_y0() / 1000.0 * size;
+
+                        const double rendered_x0 = rendered_box.x0;
+                        const double rendered_y0 = rendered_box.y0;
+                        const double rendered_x1 = rendered_box.x1;
+                        const double rendered_y1 = rendered_box.y1;
+
+                        const double target_h = target_y1 - target_y0;
+                        const double base_to_top = std::abs(target_y0);
+                        const bool baseline_near_top =
+                          target_h > 0.0 && (base_to_top / target_h) < 0.25;
+
+                        if (baseline_near_top)
+                          {
+                            draw_origin.y = target_y0 - rendered_y0;
+                            LOG_S(INFO) << "render_text: aligning rendered top to target top"
+                                        << " target_y0=" << target_y0
+                                        << " rendered_y0=" << rendered_y0
+                                        << " draw_origin.y=" << draw_origin.y;
+                          }
+
+                        LOG_S(INFO) << "render_text: target bbox=["
+                                    << target_x0 << ", " << target_y0 << ", "
+                                    << target_x1 << ", " << target_y1 << "]"
+                                    << " rendered bbox=["
+                                    << rendered_x0 << ", " << rendered_y0 << ", "
+                                    << rendered_x1 << ", " << rendered_y1 << "]"
+                                    << " baseline_near_top=" << baseline_near_top;
+                      }
+                  }
+              }
             const BLResult text_res =
-              ctx.fill_utf8_text(BLPoint(0.0, 0.0), font, instr.get_text().c_str());
+              ctx.fill_utf8_text(draw_origin, font, instr.get_text().c_str());
             LOG_S(INFO) << "render_text: after fill_utf8_text res=" << text_res;
             LOG_S(INFO) << "render_text: before ctx.restore";
             ctx.restore();

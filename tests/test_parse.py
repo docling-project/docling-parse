@@ -449,7 +449,7 @@ def test_reference_documents_from_filenames():
                             lines = content.split(SPECIAL_SEPERATOR) if content else []
 
                         assert len(lines) == len(_lines), (
-                            f"len(lines) == len(_lines) => {len(lines)} == {len(_lines)} from {_fname} for {pdf_doc_path}"
+                            f"len(lines) == len(_lines) => {len(lines)} == {len(_lines)} in {unit} from {os.path.basename(_fname)} for {os.path.basename(pdf_doc_path)}"
                         )
 
                         # this is a bit dangerous due to rounding errors ...

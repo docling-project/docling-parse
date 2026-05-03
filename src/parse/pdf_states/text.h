@@ -502,6 +502,8 @@ namespace pdflib
     double font_descent = font.get_descent();
     double font_ascent  = font.get_ascent();
     double font_capheight  = font.get_capheight();
+    bool has_glyph_bbox = false;
+    std::array<double, 4> glyph_bbox = {0.0, 0.0, 0.0, 0.0};
 
     LOG_S(INFO) << "font_descent: " << font_descent << ", "
 		<< "font_ascent: " << font_ascent << ", "
@@ -540,7 +542,8 @@ namespace pdflib
 
       if(font.has_char_bbox(text))
         {
-          auto glyph_bbox = font.get_char_bbox(text);
+          glyph_bbox = font.get_char_bbox(text);
+          has_glyph_bbox = true;
           font_descent = glyph_bbox[1];
           font_ascent  = glyph_bbox[3];
           ratio = 1.0;
@@ -647,7 +650,10 @@ namespace pdflib
                                 cell.r_x2, cell.r_y2,
                                 cell.r_x3, cell.r_y3,
                                 font_ascent*ratio, font_descent*ratio,
-				d_base_x, d_base_y);
+				d_base_x, d_base_y,
+                                has_glyph_bbox,
+                                glyph_bbox[0], glyph_bbox[1],
+                                glyph_bbox[2], glyph_bbox[3]);
 
         instructions.add_text_instruction(std::move(tinstr));
       }
