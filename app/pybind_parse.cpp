@@ -9,9 +9,253 @@
 
 #include <pybind/docling_parser.h>
 #include <pybind/docling_threaded_parser.h>
+#include <pybind/docling_threaded_renderer.h>
 
 // Include parse headers for typed bindings
 #include <parse.h>
+
+namespace
+{
+  const char* pixel_format_name(pdflib::pixel_format fmt)
+  {
+    switch(fmt)
+      {
+      case pdflib::PIXEL_FORMAT_GRAY: return "gray";
+      case pdflib::PIXEL_FORMAT_RGB: return "rgb";
+      case pdflib::PIXEL_FORMAT_CMYK: return "cmyk";
+      default: return "unknown";
+      }
+  }
+
+  const char* instruction_name(pdflib::RENDER_INSTRUCTION_NAME name)
+  {
+    switch(name)
+      {
+      case pdflib::SIZE_INSTRUCTION: return "size";
+      case pdflib::TEXT_RENDER_INSTRUCTION: return "text";
+      case pdflib::TEXT_WIDGET_RENDER_INSTRUCTION: return "widget";
+      case pdflib::BITMAP_RENDER_INSTRUCTION: return "bitmap";
+      case pdflib::SHAPE_RENDER_INSTRUCTION: return "shape";
+      default: return "unknown";
+      }
+  }
+
+  pybind11::dict make_quad_dict(double x0, double y0,
+                                double x1, double y1,
+                                double x2, double y2,
+                                double x3, double y3)
+  {
+    pybind11::dict quad;
+    quad["r_x0"] = x0;
+    quad["r_y0"] = y0;
+    quad["r_x1"] = x1;
+    quad["r_y1"] = y1;
+    quad["r_x2"] = x2;
+    quad["r_y2"] = y2;
+    quad["r_x3"] = x3;
+    quad["r_y3"] = y3;
+    return quad;
+  }
+
+  struct render_instruction_export_visitor
+  {
+    pybind11::dict root;
+    pybind11::list instructions;
+
+    render_instruction_export_visitor()
+    {
+      root["instructions"] = instructions;
+    }
+
+    void set_size(pdflib::size_instruction& instr)
+    {
+      pybind11::dict size;
+      size["type"] = instruction_name(pdflib::SIZE_INSTRUCTION);
+      size["media_bbox"] = instr.media_bbox;
+      size["crop_bbox"] = instr.crop_bbox;
+      root["size_instruction"] = size;
+    }
+
+    void render_text(pdflib::text_instruction& instr)
+    {
+      pybind11::dict row;
+      row["type"] = instruction_name(pdflib::TEXT_RENDER_INSTRUCTION);
+      row["text"] = instr.get_text();
+      row["font_enc"] = instr.get_font_enc();
+      row["font_key"] = instr.get_font_key();
+      row["font_name"] = instr.get_font_name();
+      row["encoding_name"] = instr.get_encoding_name();
+      row["base_font"] = instr.get_base_font();
+      row["font_size"] = instr.get_font_size();
+      row["font_ascent_norm"] = instr.get_font_ascent_norm();
+      row["font_descent_norm"] = instr.get_font_descent_norm();
+      row["base_x0"] = instr.get_base_x0();
+      row["base_y0"] = instr.get_base_y0();
+      row["quad"] = make_quad_dict(
+        instr.get_r_x0(), instr.get_r_y0(),
+        instr.get_r_x1(), instr.get_r_y1(),
+        instr.get_r_x2(), instr.get_r_y2(),
+        instr.get_r_x3(), instr.get_r_y3());
+      instructions.append(row);
+    }
+
+    void render_widget(pdflib::text_widget_instruction& instr)
+    {
+      pybind11::dict row;
+      row["type"] = instruction_name(pdflib::TEXT_WIDGET_RENDER_INSTRUCTION);
+      row["text"] = instr.get_text();
+      row["bbox"] = std::array<double, 4>{
+        instr.get_x0(), instr.get_y0(), instr.get_x1(), instr.get_y1()};
+      row["quad"] = make_quad_dict(
+        instr.get_r_x0(), instr.get_r_y0(),
+        instr.get_r_x1(), instr.get_r_y1(),
+        instr.get_r_x2(), instr.get_r_y2(),
+        instr.get_r_x3(), instr.get_r_y3());
+      instructions.append(row);
+    }
+
+    void render_bitmap(pdflib::bitmap_instruction& instr)
+    {
+      pybind11::dict row;
+      row["type"] = instruction_name(pdflib::BITMAP_RENDER_INSTRUCTION);
+      row["xobject_key"] = instr.get_key();
+      row["shape"] = instr.get_shape();
+      row["pixel_format"] = pixel_format_name(instr.get_pixel_format());
+      row["image_mask"] = instr.is_image_mask();
+      row["has_soft_mask"] = instr.has_alpha_data();
+      row["rgb_filling"] = instr.get_rgb_filling();
+      row["quad"] = make_quad_dict(
+        instr.get_r_x0(), instr.get_r_y0(),
+        instr.get_r_x1(), instr.get_r_y1(),
+        instr.get_r_x2(), instr.get_r_y2(),
+        instr.get_r_x3(), instr.get_r_y3());
+      instructions.append(row);
+    }
+
+    void render_shape(pdflib::shape_instruction& instr)
+    {
+      pybind11::dict row;
+      row["type"] = instruction_name(pdflib::SHAPE_RENDER_INSTRUCTION);
+      row["x"] = instr.get_x();
+      row["y"] = instr.get_y();
+      row["closing_type"] = static_cast<int>(instr.get_closing_type());
+      row["shape_type"] = static_cast<int>(instr.get_shape_type());
+      row["line_width"] = instr.get_line_width();
+      row["rgb_stroking"] = instr.get_rgb_stroking();
+      row["rgb_filling"] = instr.get_rgb_filling();
+      instructions.append(row);
+    }
+  };
+
+  struct bitmap_artifact_export_visitor
+  {
+    pybind11::list artifacts;
+    int bitmap_index = 0;
+
+    void set_size(pdflib::size_instruction&) {}
+    void render_text(pdflib::text_instruction&) {}
+    void render_widget(pdflib::text_widget_instruction&) {}
+    void render_shape(pdflib::shape_instruction&) {}
+
+    void render_bitmap(pdflib::bitmap_instruction& instr)
+    {
+      ++bitmap_index;
+
+      pybind11::dict row;
+      row["index"] = bitmap_index;
+      row["xobject_key"] = instr.get_key();
+      row["shape"] = instr.get_shape();
+      row["pixel_format"] = pixel_format_name(instr.get_pixel_format());
+      row["image_mask"] = instr.is_image_mask();
+      row["has_soft_mask"] = instr.has_alpha_data();
+      row["rgb_filling"] = instr.get_rgb_filling();
+      row["quad"] = make_quad_dict(
+        instr.get_r_x0(), instr.get_r_y0(),
+        instr.get_r_x1(), instr.get_r_y1(),
+        instr.get_r_x2(), instr.get_r_y2(),
+        instr.get_r_x3(), instr.get_r_y3());
+
+      std::vector<uint8_t> encoded;
+      std::string extension = ".bin";
+
+      auto const& data = instr.get_data();
+      auto const& alpha_data = instr.get_alpha_data();
+      if(data)
+        {
+          row["raw_data"] = pybind11::bytes(
+            reinterpret_cast<char const*>(data->data()),
+            data->size());
+        }
+      else
+        {
+          row["raw_data"] = pybind11::bytes();
+        }
+
+      if(instr.has_data())
+        {
+          auto const& shape = instr.get_shape();
+          const int height = shape[0];
+          const int width = shape[1];
+
+          if(instr.get_pixel_format() == pdflib::PIXEL_FORMAT_GRAY)
+            {
+              encoded = pdflib::ccitt::encode_debug_png(*data, width, height);
+              extension = ".png";
+            }
+          else if(instr.get_pixel_format() == pdflib::PIXEL_FORMAT_RGB
+                  or instr.get_pixel_format() == pdflib::PIXEL_FORMAT_CMYK)
+            {
+              std::vector<uint8_t> composited;
+              auto const* export_data = data.get();
+              if(instr.get_pixel_format() == pdflib::PIXEL_FORMAT_RGB
+                 and instr.has_alpha_data()
+                 and alpha_data->size() >= static_cast<size_t>(width) * height)
+                {
+                  composited.resize(static_cast<size_t>(width) * height * 3);
+                  for(int i = 0; i < width * height; ++i)
+                    {
+                      const uint8_t alpha = alpha_data->at(i);
+                      for(int c = 0; c < 3; ++c)
+                        {
+                          const uint8_t src = data->at(static_cast<size_t>(i) * 3 + c);
+                          composited[static_cast<size_t>(i) * 3 + c] =
+                            static_cast<uint8_t>((static_cast<unsigned int>(src) * alpha
+                                                  + 255u * (255u - alpha)) / 255u);
+                        }
+                    }
+                  export_data = &composited;
+                }
+
+              pdflib::jpeg::jpeg_parameters params;
+              params.width = width;
+              params.height = height;
+              params.bits_per_component = 8;
+              params.color_space =
+                (instr.get_pixel_format() == pdflib::PIXEL_FORMAT_RGB)
+                ? pdflib::jpeg::ColorSpace::RGB
+                : pdflib::jpeg::ColorSpace::CMYK;
+              encoded = pdflib::jpeg::write_jpeg_from_raw_pixels_to_memory(
+                reinterpret_cast<unsigned char const*>(export_data->data()),
+                export_data->size(),
+                params);
+              extension = ".jpg";
+            }
+
+          if(encoded.empty())
+            {
+              encoded.assign(data->begin(), data->end());
+              extension = ".bin";
+            }
+        }
+
+      row["extension"] = extension;
+      row["encoded_data"] = pybind11::bytes(
+        reinterpret_cast<char const*>(encoded.data()),
+        encoded.size());
+      artifacts.append(row);
+    }
+  };
+}
 
 PYBIND11_MODULE(pdf_parsers, m) {
 
@@ -291,7 +535,21 @@ PYBIND11_MODULE(pdf_parsers, m) {
 	 "Recompute word cells from char cells with the given config")
     .def("create_line_cells", &pdflib::pdf_decoder<pdflib::PAGE>::create_line_cells,
 	 pybind11::arg("config"),
-	 "Recompute line cells from char cells with the given config");
+	 "Recompute line cells from char cells with the given config")
+    .def("export_render_instructions_json",
+         [](pdflib::pdf_decoder<pdflib::PAGE>& self) -> pybind11::dict {
+           render_instruction_export_visitor visitor;
+           self.get_instructions().iterate_over_instructions(visitor);
+           return visitor.root;
+         },
+         "Export render instructions in deterministic decode order")
+    .def("export_bitmap_artifacts",
+         [](pdflib::pdf_decoder<pdflib::PAGE>& self) -> pybind11::list {
+           bitmap_artifact_export_visitor visitor;
+           self.get_instructions().iterate_over_instructions(visitor);
+           return visitor.artifacts;
+         },
+         "Export bitmap artifacts as inspectable image bytes plus raw payload bytes");
 
   // ============= Timing Keys Constants =============
 
@@ -669,4 +927,126 @@ PYBIND11_MODULE(pdf_parsers, m) {
 
     Returns:
         PageDecodeResult: The result of a page decoding task.)");
+
+  // ============= Threaded PDF Renderer =============
+
+  // RenderConfig - configuration for the renderer
+  pybind11::class_<pdflib::render_config>(m, "RenderConfig",
+    R"(
+    Configuration parameters for page rendering.
+
+    Attributes:
+        render_text (bool): Render glyph outlines for text cells [default=true].
+        draw_text_bbox (bool): Draw bounding quad for each text cell [default=false].
+        resolve_fonts (bool): Resolve PDF font names to system fonts [default=true].
+        font_similarity_cutoff (float): Minimum Jaccard similarity for fuzzy font matching; candidates below this threshold fall back to the default font [default=0.25].
+        canvas_width (int): Target canvas width in pixels; -1 means use PDF page size [default=-1].
+        canvas_height (int): Target canvas height in pixels; -1 means use PDF page size [default=-1].
+    )")
+    .def(pybind11::init<>())
+    .def_readwrite("render_text",             &pdflib::render_config::render_text)
+    .def_readwrite("draw_text_bbox",          &pdflib::render_config::draw_text_bbox)
+    .def_readwrite("resolve_fonts",           &pdflib::render_config::resolve_fonts)
+    .def_readwrite("font_similarity_cutoff",  &pdflib::render_config::font_similarity_cutoff)
+    .def_readwrite("canvas_width",            &pdflib::render_config::canvas_width)
+    .def_readwrite("canvas_height",           &pdflib::render_config::canvas_height);
+
+  // PageRenderResult - result of a threaded page render task
+  pybind11::class_<docling::page_render_result, docling::page_decode_result>(m, "PageRenderResult",
+    R"(
+    Result of a threaded page rendering task.
+
+    Inherits all attributes of PageDecodeResult and adds rendered image data.
+
+    Attributes:
+        image_data: Raw RGBA bytes of the rendered page (height x width x 4, row-major).
+        image_shape: Shape of the image as [height, width, channels].
+    )")
+    .def_readonly("image_shape", &docling::page_render_result::image_shape)
+    .def("get_image", [](docling::page_render_result& self)
+         -> pybind11::bytes {
+           if(not self.image_data or self.image_data->empty())
+             {
+               return pybind11::bytes();
+             }
+           return pybind11::bytes(
+             reinterpret_cast<const char*>(self.image_data->data()),
+             self.image_data->size());
+         },
+         R"(
+    Return the raw RGBA pixel data as Python bytes.
+
+    Use together with image_shape to reconstruct a PIL image:
+        result = renderer.get_task()
+        h, w, _ = result.image_shape
+        img = Image.frombuffer("RGBA", (w, h), result.get_image(), "raw", "RGBA", 0, 1)
+
+    Returns:
+        bytes: Raw RGBA pixel data, or empty bytes on failure.)");
+
+  // threaded_pdf_renderer - parallel PDF renderer with bounded result queue
+  pybind11::class_<docling::docling_threaded_renderer>(m, "threaded_pdf_renderer",
+    R"(
+    Threaded PDF renderer that decodes and renders pages in parallel.
+
+    Loads multiple documents and renders their pages using a thread pool.
+    Each result contains both the decoded page data and the rendered RGBA image.
+    Results are available via a bounded queue to control memory usage.
+    )")
+    .def(pybind11::init<const std::string&, int, int,
+                        pdflib::decode_config, pdflib::render_config>(),
+         pybind11::arg("loglevel")               = "fatal",
+         pybind11::arg("num_threads")            = 4,
+         pybind11::arg("max_concurrent_results") = 32,
+         pybind11::arg("decode_config")          = pdflib::decode_config(),
+         pybind11::arg("render_config")          = pdflib::render_config(),
+         R"(
+    Construct a threaded PDF renderer.
+
+    Parameters:
+        loglevel (str): Logging level ('fatal', 'error', 'warning', 'info').
+        num_threads (int): Number of worker threads.
+        max_concurrent_results (int): Maximum results buffered before workers pause.
+        decode_config (DecodePageConfig): Configuration for page decoding.
+        render_config (RenderConfig): Configuration for page rendering.)")
+
+    .def("load_document",
+         [](docling::docling_threaded_renderer& self,
+            const std::string& key,
+            const std::string& filename,
+            std::optional<std::string>& password) -> bool {
+           return self.load_document(key, filename, password);
+         },
+         pybind11::arg("key"),
+         pybind11::arg("filename"),
+         pybind11::arg("password") = pybind11::none())
+
+    .def("load_document_from_bytesio",
+         [](docling::docling_threaded_renderer& self,
+            const std::string& key,
+            pybind11::object bytes_io,
+            std::optional<std::string>& password) -> bool {
+           return self.load_document_from_bytesio(key, bytes_io, password);
+         },
+         pybind11::arg("key"),
+         pybind11::arg("bytes_io"),
+         pybind11::arg("password") = pybind11::none())
+
+    .def("has_tasks",
+         [](docling::docling_threaded_renderer& self) -> bool {
+           return self.has_tasks();
+         })
+
+    .def("get_task",
+         [](docling::docling_threaded_renderer& self) -> docling::page_render_result {
+           pybind11::gil_scoped_release release;
+           return self.get_task();
+         },
+         R"(
+    Get the next completed page render result.
+
+    Blocks until a result is available. Releases the GIL while waiting.
+
+    Returns:
+        PageRenderResult: The result of a page rendering task.)");
 }

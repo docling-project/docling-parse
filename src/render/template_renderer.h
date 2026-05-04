@@ -10,12 +10,15 @@
 #include <memory>
 
 #include <parse/page_items/render_instructions.h>
+#include <render/config.h>
 
 namespace pdflib
 {
 
   enum RENDERER_NAME {
     NAIVE,
+    BLEND2D,
+    // SKIA,	
     // OPENCV
   };
 
@@ -26,10 +29,13 @@ namespace pdflib
   public:
 
     renderer() {}
+    explicit renderer(render_config config) {}
 
     void set_size(size_instruction& instr) { throw std::logic_error(__FUNCTION__); }
 
     void render_text(text_instruction& instr) { throw std::logic_error(__FUNCTION__); }
+
+    void render_widget(text_widget_instruction& instr) { throw std::logic_error(__FUNCTION__); }
 
     void render_bitmap(bitmap_instruction& instr) { throw std::logic_error(__FUNCTION__); }
 

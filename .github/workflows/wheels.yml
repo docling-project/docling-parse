@@ -6,6 +6,10 @@ on:
         description: "If true, the packages will be published."
         default: false
 
+concurrency:
+  group: wheels-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ inputs.publish }}
+  cancel-in-progress: ${{ !inputs.publish }}
+
 env:
   CMAKE_BUILD_TYPE: Release
 
@@ -103,7 +107,7 @@ jobs:
           CIBW_REPAIR_WHEEL_COMMAND_MACOS: ""  # do not run delocate-wheel before the re-tag
           CIBW_ENVIRONMENT: "MACOSX_DEPLOYMENT_TARGET=${{ matrix.os.min_macos_version }}.0"
           ARCHFLAGS: -arch x86_64
-          BUILD_THREADS: "4"
+          BUILD_THREADS: "1"
           PYTORCH_MPS_HIGH_WATERMARK_RATIO: "0.0"
         run: |
           PY_CACHE_TAG=$(uv run python -c 'import sys;print(sys.implementation.cache_tag)')

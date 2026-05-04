@@ -3,9 +3,11 @@
 #ifndef PAGE_ITEM_SHAPE_H
 #define PAGE_ITEM_SHAPE_H
 
+#include <parse/enums.h>
+
 namespace pdflib
 {
-
+  
   template<>
   class page_item<PAGE_SHAPE>
   {
@@ -30,6 +32,12 @@ namespace pdflib
                             double flatness_,
                             const std::array<int, 3>& rgb_stroking_ops_,
                             const std::array<int, 3>& rgb_filling_ops_);
+
+    page_shape_closing_type get_closing_type() const { return closing_type; }
+    page_shape_type         get_shape_type()   const { return shape_type; }
+
+    void set_closing_type(page_shape_closing_type ct) { closing_type = ct; }
+    void set_shape_type(page_shape_type st)           { shape_type   = st; }
 
     void append(double x_, double y_);
 
@@ -76,6 +84,9 @@ namespace pdflib
 
     std::array<int, 3> rgb_stroking_ops = {0, 0, 0};
     std::array<int, 3> rgb_filling_ops  = {0, 0, 0};
+
+    page_shape_closing_type closing_type = CLOSING_UNDEFINED;
+    page_shape_type         shape_type   = SHAPE_UNDEFINED;
   };
 
   page_item<PAGE_SHAPE>::page_item()
@@ -141,6 +152,9 @@ namespace pdflib
 
       result["rgb-stroking"] = rgb_stroking_ops;
       result["rgb-filling"]  = rgb_filling_ops;
+
+      result["closing-type"] = static_cast<int>(closing_type);
+      result["shape-type"]   = static_cast<int>(shape_type);
     }
     return result;
   }
@@ -170,6 +184,9 @@ namespace pdflib
 
 	if(data.count("rgb-stroking")) { rgb_stroking_ops = data["rgb-stroking"].get<std::array<int, 3> >(); }
 	if(data.count("rgb-filling"))  { rgb_filling_ops  = data["rgb-filling"].get<std::array<int, 3> >(); }
+
+	if(data.count("closing-type")) { closing_type = static_cast<page_shape_closing_type>(data["closing-type"].get<int>()); }
+	if(data.count("shape-type"))   { shape_type   = static_cast<page_shape_type>(data["shape-type"].get<int>()); }
 
 	return true;
       }

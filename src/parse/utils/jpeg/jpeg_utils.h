@@ -10,8 +10,10 @@
 #include <cmath>
 #include <algorithm>
 #include <csetjmp>
+#include <limits>
 
 #include <jpeglib.h>
+#include <zlib.h>
 
 #ifndef LOGURU_WITH_STREAMS
 #define LOGURU_WITH_STREAMS 1
@@ -42,6 +44,17 @@ inline ColorSpace to_color_space(std::string const& cs)
   return ColorSpace::Unknown;
 }
 
+// Map an /ICCBased /N component count to the equivalent device colour space.
+inline ColorSpace icc_n_to_color_space(int n)
+{
+  switch(n) {
+    case 1: return ColorSpace::Gray;
+    case 3: return ColorSpace::RGB;
+    case 4: return ColorSpace::CMYK;
+    default: return ColorSpace::Unknown;
+  }
+}
+
 class jpeg_parameters {
 public:
   int width = 0;
@@ -53,6 +66,17 @@ public:
   bool image_mask = false;
 };
 
+class decoded_jpeg_result {
+public:
+  std::vector<unsigned char> pixels;
+  int width = 0;
+  int height = 0;
+  int components = 0;
+  ColorSpace color_space = ColorSpace::Unknown;
+
+  bool empty() const { return pixels.empty(); }
+};
+
 // ---------------------------------------------------------------------------
 // Custom libjpeg error handler that longjmp's instead of calling exit()
 // ---------------------------------------------------------------------------
@@ -60,6 +84,13 @@ struct jpeg_error_longjmp : public jpeg_error_mgr
 {
   std::jmp_buf jmp;
 };
+
+inline void jpeg_output_message_loguru(j_common_ptr cinfo)
+{
+  char buf[JMSG_LENGTH_MAX];
+  (*cinfo->err->format_message)(cinfo, buf);
+  LOG_S(WARNING) << "libjpeg warning: " << buf;
+}
 
 inline void jpeg_error_exit_longjmp(j_common_ptr cinfo)
 {
@@ -71,11 +102,63 @@ inline void jpeg_error_exit_longjmp(j_common_ptr cinfo)
 }
 
 // ---------------------------------------------------------------------------
-// Validate that data begins with the JPEG SOI marker (0xFF 0xD8)
+// Locate the JPEG SOI marker (0xFF 0xD8).
 // ---------------------------------------------------------------------------
+inline std::size_t find_jpeg_soi_offset(unsigned char const* data, std::size_t size)
+{
+  if(not data || size < 2) { return size; }
+
+  for(std::size_t i = 0; i + 1 < size; ++i)
+    {
+      if(data[i] == 0xFF && data[i + 1] == 0xD8)
+        {
+          return i;
+        }
+    }
+
+  return size;
+}
+
 inline bool is_jpeg_data(unsigned char const* data, std::size_t size)
 {
-  return size >= 2 && data[0] == 0xFF && data[1] == 0xD8;
+  return find_jpeg_soi_offset(data, size) == 0;
+}
+
+inline std::vector<unsigned char> inflate_pdf_stream(
+    unsigned char const* data, std::size_t size)
+{
+  if(not data || size == 0) { return {}; }
+  if(size > static_cast<std::size_t>(std::numeric_limits<uInt>::max())) { return {}; }
+
+  uLongf dest_size = std::max<uLongf>(size * 4, 4096);
+
+  for(int attempt = 0; attempt < 8; ++attempt)
+    {
+      std::vector<unsigned char> inflated(dest_size);
+      int rc = ::uncompress(inflated.data(), &dest_size,
+                            reinterpret_cast<Bytef const*>(data),
+                            static_cast<uInt>(size));
+      if(rc == Z_OK)
+        {
+          inflated.resize(dest_size);
+          return inflated;
+        }
+      if(rc != Z_BUF_ERROR)
+        {
+          LOG_S(INFO) << "inflate_pdf_stream"
+                      << ": zlib inflate failed with rc=" << rc;
+          return {};
+        }
+      if(dest_size >= static_cast<uLongf>(std::numeric_limits<uInt>::max() / 2))
+        {
+          break;
+        }
+      dest_size *= 2;
+    }
+
+  LOG_S(INFO) << "inflate_pdf_stream"
+              << ": zlib inflate did not converge for input_size=" << size;
+  return {};
 }
 
 // ---------------------------------------------------------------------------
@@ -148,15 +231,24 @@ inline bool write_corrected_jpeg_from_memory(
       return false;
     }
 
-  if(!is_jpeg_data(data, size))
+  const std::size_t soi = find_jpeg_soi_offset(data, size);
+  if(soi == size)
     {
       LOG_S(WARNING) << __FUNCTION__
-                     << ": data does not start with JPEG SOI marker"
+                     << ": JPEG SOI marker not found"
                      << " (starts with 0x" << std::hex
                      << static_cast<int>(data[0]) << " 0x"
                      << static_cast<int>(size > 1 ? data[1] : 0)
                      << std::dec << "), skipping";
       return false;
+    }
+  if(soi > 0)
+    {
+      LOG_S(INFO) << __FUNCTION__
+                  << ": found JPEG SOI marker at offset " << soi
+                  << ", skipping leading bytes";
+      data += soi;
+      size -= soi;
     }
 
   // --- Decompress --------------------------------------------------------
@@ -167,6 +259,7 @@ inline bool write_corrected_jpeg_from_memory(
 
   dinfo.err = jpeg_std_error(&jerr);
   jerr.error_exit = jpeg_error_exit_longjmp;
+  jerr.output_message = jpeg_output_message_loguru;
   jpeg_create_decompress(&dinfo);
 
   if(setjmp(jerr.jmp))
@@ -305,6 +398,7 @@ inline bool write_corrected_jpeg_from_memory(
   jpeg_error_longjmp cjerr{};
   cinfo.err = jpeg_std_error(&cjerr);
   cjerr.error_exit = jpeg_error_exit_longjmp;
+  cjerr.output_message = jpeg_output_message_loguru;
   jpeg_create_compress(&cinfo);
 
   std::FILE* outfile = std::fopen(path.string().c_str(), "wb");
@@ -383,6 +477,7 @@ inline std::vector<unsigned char> write_corrected_jpeg_to_memory(
   jpeg_error_longjmp jerr{};
   dinfo.err = jpeg_std_error(&jerr);
   jerr.error_exit = jpeg_error_exit_longjmp;
+  jerr.output_message = jpeg_output_message_loguru;
   jpeg_create_decompress(&dinfo);
 
   if(setjmp(jerr.jmp))
@@ -456,6 +551,7 @@ inline std::vector<unsigned char> write_corrected_jpeg_to_memory(
   jpeg_error_longjmp cjerr{};
   cinfo.err = jpeg_std_error(&cjerr);
   cjerr.error_exit = jpeg_error_exit_longjmp;
+  cjerr.output_message = jpeg_output_message_loguru;
   jpeg_create_compress(&cinfo);
 
   if(setjmp(cjerr.jmp))
@@ -585,6 +681,7 @@ inline bool write_jpeg_from_raw_pixels(
   jpeg_error_longjmp cjerr{};
   cinfo.err = jpeg_std_error(&cjerr);
   cjerr.error_exit = jpeg_error_exit_longjmp;
+  cjerr.output_message = jpeg_output_message_loguru;
   jpeg_create_compress(&cinfo);
 
   std::FILE* outfile = std::fopen(path.string().c_str(), "wb");
@@ -691,6 +788,7 @@ inline std::vector<unsigned char> write_jpeg_from_raw_pixels_to_memory(
   jpeg_error_longjmp cjerr{};
   cinfo.err = jpeg_std_error(&cjerr);
   cjerr.error_exit = jpeg_error_exit_longjmp;
+  cjerr.output_message = jpeg_output_message_loguru;
   jpeg_create_compress(&cinfo);
 
   if(setjmp(cjerr.jmp))
@@ -728,6 +826,188 @@ inline std::vector<unsigned char> write_jpeg_from_raw_pixels_to_memory(
   free(outbuf);
 
   return result;
+}
+
+// ---------------------------------------------------------------------------
+// decode_jpeg_to_raw_pixels
+// ---------------------------------------------------------------------------
+// Decompresses a JPEG from memory and returns the raw interleaved pixel
+// bytes (e.g. R G B R G B … for RGB).  Applies the PDF /Decode mapping
+// after decompression.  Returns an empty vector on failure.
+//
+// This is used by the bitmap pipeline to obtain raw pixel data from
+// /DCTDecode streams when QPDF cannot provide a pre-decoded buffer (e.g.
+// in thread-safe page mode).
+// ---------------------------------------------------------------------------
+inline decoded_jpeg_result decode_jpeg_to_raw_pixels(
+    unsigned char const* data, std::size_t size,
+    jpeg_parameters const& params)
+{
+  if(not data or size == 0) { return {}; }
+
+  const std::size_t soi = find_jpeg_soi_offset(data, size);
+  if(soi == size)
+    {
+      LOG_S(WARNING) << "decode_jpeg_to_raw_pixels"
+                     << ": JPEG SOI marker not found, skipping";
+      return {};
+    }
+  if(soi > 0)
+    {
+      LOG_S(INFO) << "decode_jpeg_to_raw_pixels"
+                  << ": found JPEG SOI marker at offset " << soi
+                  << ", skipping leading bytes";
+      data += soi;
+      size -= soi;
+    }
+
+  auto try_decode = [&](bool force_output_cs,
+                        J_COLOR_SPACE requested_out_cs,
+                        char const* attempt_name) -> decoded_jpeg_result
+  {
+    jpeg_decompress_struct dinfo{};
+    jpeg_error_longjmp jerr{};
+    dinfo.err = jpeg_std_error(&jerr);
+    jerr.error_exit = jpeg_error_exit_longjmp;
+    jerr.output_message = jpeg_output_message_loguru;
+    jpeg_create_decompress(&dinfo);
+
+    if(setjmp(jerr.jmp))
+      {
+        LOG_S(WARNING) << "decode_jpeg_to_raw_pixels"
+                       << ": decode attempt failed: " << attempt_name;
+        jpeg_destroy_decompress(&dinfo);
+        return {};
+      }
+
+    jpeg_mem_src(&dinfo, const_cast<unsigned char*>(data),
+                 static_cast<unsigned long>(size));
+
+    if(JPEG_HEADER_OK != jpeg_read_header(&dinfo, TRUE))
+      {
+        LOG_S(WARNING) << "decode_jpeg_to_raw_pixels"
+                       << ": jpeg_read_header failed for attempt " << attempt_name;
+        jpeg_destroy_decompress(&dinfo);
+        return {};
+      }
+
+    LOG_S(INFO) << "decode_jpeg_to_raw_pixels"
+                << ": attempt=" << attempt_name
+                << " jpeg_color_space=" << dinfo.jpeg_color_space
+                << " num_components=" << dinfo.num_components
+                << " image_width=" << dinfo.image_width
+                << " image_height=" << dinfo.image_height
+                << " requested_pdf_cs=" << color_space_name(params.color_space);
+
+    if(force_output_cs)
+      {
+        dinfo.out_color_space = requested_out_cs;
+      }
+
+    LOG_S(INFO) << "decode_jpeg_to_raw_pixels"
+                << ": attempt=" << attempt_name
+                << " out_color_space(before start)=" << dinfo.out_color_space;
+
+    jpeg_start_decompress(&dinfo);
+
+    decoded_jpeg_result result;
+    result.width      = static_cast<int>(dinfo.output_width);
+    result.height     = static_cast<int>(dinfo.output_height);
+    result.components = dinfo.output_components;
+    result.color_space = (result.components == 1) ? ColorSpace::Gray
+                       : (result.components == 3) ? ColorSpace::RGB
+                       : (result.components == 4) ? ColorSpace::CMYK
+                                                  : ColorSpace::Unknown;
+
+    const std::size_t stride =
+      static_cast<std::size_t>(result.width) * static_cast<std::size_t>(result.components);
+
+    LOG_S(INFO) << "decode_jpeg_to_raw_pixels"
+                << ": attempt=" << attempt_name
+                << " decompressed w=" << result.width
+                << " h=" << result.height
+                << " ncomp=" << result.components
+                << " inferred_cs=" << color_space_name(result.color_space)
+                << " out_color_space(after start)=" << dinfo.out_color_space;
+
+    result.pixels.resize(static_cast<std::size_t>(result.height) * stride);
+
+    while(dinfo.output_scanline < dinfo.output_height)
+      {
+        unsigned char* row = &result.pixels[dinfo.output_scanline * stride];
+        JSAMPROW rows[1] = { row };
+        jpeg_read_scanlines(&dinfo, rows, 1);
+      }
+
+    jpeg_finish_decompress(&dinfo);
+    jpeg_destroy_decompress(&dinfo);
+
+    if(params.has_decode and not params.decode.empty() and
+       static_cast<int>(params.decode.size()) >= 2 * result.components)
+      {
+        for(std::size_t y = 0; y < static_cast<std::size_t>(result.height); ++y)
+          {
+            unsigned char* row = &result.pixels[y * stride];
+            for(std::size_t x = 0; x < static_cast<std::size_t>(result.width); ++x)
+              {
+                for(int c = 0; c < result.components; ++c)
+                  {
+                    double dmin = params.decode[2 * c + 0];
+                    double dmax = params.decode[2 * c + 1];
+                    row[x * result.components + c] = apply_decode_component(
+                        row[x * result.components + c], dmin, dmax);
+                  }
+              }
+          }
+      }
+
+    return result;
+  };
+
+  J_COLOR_SPACE requested_out_cs = JCS_UNKNOWN;
+  bool have_requested_out_cs = true;
+  switch(params.color_space)
+    {
+      case ColorSpace::Gray: { requested_out_cs = JCS_GRAYSCALE; break; }
+      case ColorSpace::RGB:  { requested_out_cs = JCS_RGB;       break; }
+      case ColorSpace::CMYK: { requested_out_cs = JCS_CMYK;      break; }
+      default: { have_requested_out_cs = false; break; }
+    }
+
+  if(have_requested_out_cs)
+    {
+      auto decoded = try_decode(true, requested_out_cs, "requested-pdf-color-space");
+      if(not decoded.empty())
+        {
+          return decoded;
+        }
+    }
+
+  LOG_S(INFO) << "decode_jpeg_to_raw_pixels"
+              << ": retrying with native libjpeg output color space";
+  return try_decode(false, JCS_UNKNOWN, "native-libjpeg");
+}
+
+inline decoded_jpeg_result decode_pdf_jpeg_stream_to_raw_pixels(
+    unsigned char const* data, std::size_t size,
+    bool has_flate_decode,
+    jpeg_parameters const& params)
+{
+  auto pixels = decode_jpeg_to_raw_pixels(data, size, params);
+  if(not pixels.empty() || not has_flate_decode)
+    {
+      return pixels;
+    }
+
+  auto inflated = inflate_pdf_stream(data, size);
+  if(inflated.empty())
+    {
+      return {};
+    }
+
+  LOG_S(INFO) << "decode_pdf_jpeg_stream_to_raw_pixels"
+              << ": inflated /FlateDecode wrapper before libjpeg";
+  return decode_jpeg_to_raw_pixels(inflated.data(), inflated.size(), params);
 }
 
 } // namespace jpeg

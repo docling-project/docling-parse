@@ -89,6 +89,10 @@ namespace pdflib
     std::unordered_map<uint32_t, std::string> _map;
 
     cmap_value _cmap;
+
+    std::unordered_map<std::string, int> unknown_operators;
+
+    static const std::vector<std::string> known_operators;
   };
 
   cmap_parser::cmap_parser():
@@ -97,6 +101,23 @@ namespace pdflib
 
   cmap_parser::~cmap_parser()
   {}
+
+  // Known CMap operators, ordered longest-first to avoid false prefix
+  // matches (e.g. "begin" must not match before "beginbfrange").
+  const std::vector<std::string> cmap_parser::known_operators = {
+    "begincodespacerange", "endcodespacerange",
+    "beginnotdefrange",    "endnotdefrange",
+    "beginnotdefchar",     "endnotdefchar",
+    "beginbfrange",        "endbfrange",
+    "beginbfchar",         "endbfchar",
+    "begincmap",           "endcmap",
+    "findresource",        "defineresource",
+    "usecmap",             "currentdict",
+    "CMapName",            "CMapType",
+    "begin",               "end",
+    "dict",                "def",
+    "pop",
+  };
 
   cmap_value cmap_parser::get()
   {
@@ -129,41 +150,68 @@ namespace pdflib
           }
         else
           {
-	    LOG_S(INFO) << item.key << ": " << item.val;
+	    // Normalize: if the raw operator token starts with a known operator
+	    // name AND the remaining suffix is a pure integer (e.g.
+	    // "endcodespacerange60" -> operator "endcodespacerange", suffix "60"),
+	    // strip the suffix so the dispatch below recognises it.
+	    // The suffix integer is injected at the front of parameters so it
+	    // becomes the first argument for the next operator.
+	    std::string op_name   = item.val;
+	    std::string op_suffix = "";
+	    for(const auto& known : known_operators)
+	      {
+	        if(op_name.size() > known.size() &&
+	           op_name.compare(0, known.size(), known) == 0)
+	          {
+	            std::string candidate_suffix = op_name.substr(known.size());
+	            if(utils::string::is_integer(candidate_suffix))
+	              {
+	                op_suffix = candidate_suffix;
+	                LOG_S(WARNING) << "cmap: normalizing operator '" << op_name
+	                               << "' -> '" << known
+	                               << "' (suffix '" << op_suffix
+	                               << "' will be injected as next parameter)";
+	                op_name = known;
+	              }
+	            break;
+	          }
+	      }
 
-            if(item.val=="CMapName")
+	    LOG_S(INFO) << item.key << ": " << op_name;
+
+            if(op_name=="CMapName")
               {
                 parse_cmap_name(parameters);
               }
-            else if(item.val=="CMapType")
+            else if(op_name=="CMapType")
               {
                 parse_cmap_type(parameters);
               }
-            else if(item.val=="begincodespacerange")
+            else if(op_name=="begincodespacerange")
               {
                 parse_begincodespacerange(parameters);
               }
-            else if(item.val=="endcodespacerange")
+            else if(op_name=="endcodespacerange")
               {
                 utils::timer op_timer;
                 parse_endcodespacerange(parameters);
                 timings.add_timing(key_root + pdf_timings::KEY_CMAP_PARSE_ENDCODESPACERANGE, op_timer.get_time());
               }
-            else if(item.val=="beginbfrange")
+            else if(op_name=="beginbfrange")
               {
                 parse_beginbfrange(parameters);
               }
-            else if(item.val=="endbfrange")
+            else if(op_name=="endbfrange")
               {
                 utils::timer op_timer;
                 parse_endbfrange(parameters);
                 timings.add_timing(key_root + pdf_timings::KEY_CMAP_PARSE_ENDBFRANGE, op_timer.get_time());
               }
-            else if(item.val=="beginbfchar")
+            else if(op_name=="beginbfchar")
               {
                 parse_beginbfchar(parameters);
               }
-            else if(item.val=="endbfchar")
+            else if(op_name=="endbfchar")
               {
                 utils::timer op_timer;
                 parse_endbfchar(parameters);
@@ -171,10 +219,27 @@ namespace pdflib
               }
             else
               {
-                LOG_S(WARNING) << "cmap ignoring " << item.val << " operator!";
+                unknown_operators[op_name]++;
+                LOG_S(WARNING) << "cmap ignoring " << op_name << " operator!";
               }
 
             parameters.clear();
+
+	    // If the operator had a numeric suffix (e.g. "endcodespacerange60"),
+	    // inject it as the first parameter for the next operator.
+	    // op_suffix is guaranteed to be a valid integer (checked via
+	    // utils::is_integer above), so stoll cannot throw here.
+	    if(!op_suffix.empty())
+	      {
+	        auto inj_obj = QPDFObjectHandle::newInteger(std::stoll(op_suffix));
+	        qpdf_stream_instruction inj;
+	        inj.obj = inj_obj;
+	        inj.key = "integer";
+	        inj.val = op_suffix;
+	        parameters.insert(parameters.begin(), inj);
+	        LOG_S(INFO) << "cmap: injected suffix '" << op_suffix
+	                    << "' as parameter for next operator";
+	      }
           }
       }
 
@@ -589,10 +654,11 @@ namespace pdflib
     const int num_params = 1;
     if(parameters.size()<num_params)
       {
-        std::string message = "parameters.size() < " + std::to_string(num_params);
+        std::string message = "parameters.size() < " + std::to_string(num_params) + ", defaulting to `bf_cnt=0`";
         LOG_S(ERROR) << message;
 
-        throw std::logic_error(message);
+	return;
+        //throw std::logic_error(message);	
       }
     else if(parameters.size()>num_params)
       {

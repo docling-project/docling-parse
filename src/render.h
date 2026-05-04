@@ -4,3 +4,4 @@
 
 #include <render/template_renderer.h>
 #include <render/naive_renderer.h>
+#include <render/blend2d_renderer.h>

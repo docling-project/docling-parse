@@ -223,6 +223,7 @@ namespace pdflib
     if(not verify(instructions, 6, __FUNCTION__) ) { return; }
 
     auto& shape = curr_shapes.back();
+    shape.set_shape_type(BEZIER);
 
     std::pair<double, double> coor = shape.back();
 
@@ -248,6 +249,7 @@ namespace pdflib
     if(not verify(instructions, 4, __FUNCTION__) ) { return; }
 
     auto& shape = curr_shapes.back();
+    shape.set_shape_type(BEZIER);
     std::pair<double, double> coor = shape.back();
 
     double x0 = coor.first;
@@ -272,6 +274,7 @@ namespace pdflib
     if(not verify(instructions, 4, __FUNCTION__) ) { return; }
 
     auto& shape = curr_shapes.back();
+    shape.set_shape_type(BEZIER);
     std::pair<double, double> coor = shape.back();
 
     double x0 = coor.first;
@@ -510,6 +513,7 @@ namespace pdflib
       {
         auto front = shape.back();
         shape.append(front.first, front.second);
+        shape.set_closing_type(CLOSED);
       }
     else
       {
@@ -582,7 +586,12 @@ namespace pdflib
 
 	    {
 	      shape_instruction shpinstr(curr_shapes[i].get_x(),
-					 curr_shapes[i].get_y());
+					 curr_shapes[i].get_y(),
+					 curr_shapes[i].get_closing_type(),
+					 curr_shapes[i].get_shape_type(),
+					 curr_shapes[i].get_line_width(),
+					 curr_shapes[i].get_rgb_stroking_ops(),
+					 curr_shapes[i].get_rgb_filling_ops());
 	      instructions.add_shape_instruction(std::move(shpinstr));
 	    }
           }
@@ -601,6 +610,8 @@ namespace pdflib
     if(not config.keep_shapes) { return; }
 
     page_item<PAGE_SHAPE> shape;
+    shape.set_closing_type(OPEN);
+    shape.set_shape_type(LINE);
     curr_shapes.push_back(shape);
 
     this->l(x,y);
@@ -643,6 +654,7 @@ namespace pdflib
     std::pair<double, double> coor = shape.front();
 
     shape.append(coor.first, coor.second);
+    shape.set_closing_type(CLOSED);
 
     // add new shape segment
     page_item<PAGE_SHAPE> shape_;
@@ -657,6 +669,7 @@ namespace pdflib
     if(not config.keep_shapes) { return; }
 
     this->m(x, y);
+    curr_shapes.back().set_shape_type(RECTANGLE);
 
     this->l(x+w, y);
 

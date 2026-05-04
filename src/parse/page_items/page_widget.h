@@ -20,6 +20,8 @@ namespace pdflib
 
   public:
 
+    widget_name name;
+    
     // Bounding box (in page coordinates)
     double x0;
     double y0;
@@ -34,6 +36,7 @@ namespace pdflib
   };
 
   page_item<PAGE_WIDGET>::page_item():
+    name(UNDEFINED),
     x0(0), y0(0), x1(0), y1(0),
     text(),
     description(),

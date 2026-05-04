@@ -146,7 +146,7 @@ def visualise_py(
     page_boundary: str = "crop_box",  # media_box
     category: str = "char",  # "both", "sanitized", "original"
     page_num: int = -1,
-    password: Optional[str] = None,
+    password: str | None = None,
 ):
     parser = DoclingPdfParser(loglevel=log_level)
 
@@ -156,7 +156,7 @@ def visualise_py(
 
     page_nos = [page_num]
     if page_num == -1:
-        page_nos = [(page_ind + 1) for page_ind in range(0, pdf_doc.number_of_pages())]
+        page_nos = [(page_ind + 1) for page_ind in range(pdf_doc.number_of_pages())]
 
     for page_no in page_nos:
         print(f"parsing {pdf_path} on page: {page_no}")
@@ -174,7 +174,6 @@ def visualise_py(
             )
 
         if category in ["all", "char"]:
-
             img = pdf_page.render_as_image(
                 cell_unit=TextCellUnit.CHAR,
                 draw_cells_bbox=(not display_text),

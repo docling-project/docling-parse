@@ -23,6 +23,15 @@ namespace pdflib
     PAGE_HYPERLINK,
     PAGE_HYPERLINKS   
   };
+
+  // "/FT": "/Tx" | "/Btn" | "/Ch" | "/Sig"
+  enum widget_name {
+    TEXT_FIELD, // type: {`/FT`: `/Tx`}
+    BUTTON, // type: { `/FT`: `/Btn`} 
+    CHOICE, // type: { `/FT`: `/Ch`}
+    SIGNATURE, // type: { `/FT`: `/Sig`}
+    UNDEFINED,
+  };
   
   template<item_name name>
   class page_item

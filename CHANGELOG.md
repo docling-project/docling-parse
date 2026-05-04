@@ -1,3 +1,54 @@
+## [v5.10.1](https://github.com/docling-project/docling-parse/releases/tag/v5.10.1) - 2026-04-24
+
+### Fix
+
+* Memory management for docling upstream ([#263](https://github.com/docling-project/docling-parse/issues/263)) ([`db84017`](https://github.com/docling-project/docling-parse/commit/db84017ca7fc15ee272860b9e461a1a593711cf4))
+
+## [v5.10.0](https://github.com/docling-project/docling-parse/releases/tag/v5.10.0) - 2026-04-22
+
+### Feature
+
+* Add jpeg2000 pixel data ([#259](https://github.com/docling-project/docling-parse/issues/259)) ([`8546560`](https://github.com/docling-project/docling-parse/commit/85465604745ea515cbb0d9ef39ef94c42f3899fd))
+* Add jbig2 decoder ([#252](https://github.com/docling-project/docling-parse/issues/252)) ([`7be5d62`](https://github.com/docling-project/docling-parse/commit/7be5d6233688a609ff0d58dcd9870598a6b535b3))
+
+### Fix
+
+* Refactored the black to ruff ([#258](https://github.com/docling-project/docling-parse/issues/258)) ([`b5804c1`](https://github.com/docling-project/docling-parse/commit/b5804c16541a6d7f8eac2f575f4ca7c23d3219ae))
+
+## [v5.9.0](https://github.com/docling-project/docling-parse/releases/tag/v5.9.0) - 2026-04-15
+
+### Feature
+
+* Adding the cpp analysis script and enhancing the extraction of bitmap types (fix for rotated images). ([#250](https://github.com/docling-project/docling-parse/issues/250)) ([`70fa300`](https://github.com/docling-project/docling-parse/commit/70fa30054ebafa1f0de160c8495701dc485eefca))
+
+## [v5.8.0](https://github.com/docling-project/docling-parse/releases/tag/v5.8.0) - 2026-04-08
+
+### Feature
+
+* Improve extraction from fillable fields ([#247](https://github.com/docling-project/docling-parse/issues/247)) ([`c3c1e85`](https://github.com/docling-project/docling-parse/commit/c3c1e85da3f90f69e03784e611864a67fc804d7e))
+
+### Fix
+
+* Boolean conversion ([#248](https://github.com/docling-project/docling-parse/issues/248)) ([`9ea4099`](https://github.com/docling-project/docling-parse/commit/9ea4099e825215642af72d67d470aed5b8698145))
+
+## [v5.7.0](https://github.com/docling-project/docling-parse/releases/tag/v5.7.0) - 2026-04-01
+
+### Feature
+
+* Extend the renderer ([#245](https://github.com/docling-project/docling-parse/issues/245)) ([`e7ef57f`](https://github.com/docling-project/docling-parse/commit/e7ef57fbf60ceefffe6b93b3eac9986870ea134b))
+
+## [v5.6.2](https://github.com/docling-project/docling-parse/releases/tag/v5.6.2) - 2026-03-29
+
+### Fix
+
+* Prevent infinite loop in TOC extraction with circular PDF refererences ([#246](https://github.com/docling-project/docling-parse/issues/246)) ([`092d1b8`](https://github.com/docling-project/docling-parse/commit/092d1b8aa289db8d0ab18db529578a4cbd5e6dc8))
+
+## [v5.6.1](https://github.com/docling-project/docling-parse/releases/tag/v5.6.1) - 2026-03-24
+
+### Fix
+
+* Bo10k document failures ([#244](https://github.com/docling-project/docling-parse/issues/244)) ([`1f650dd`](https://github.com/docling-project/docling-parse/commit/1f650dd412ee90dd1b43c2d6a27349dd791d0f68))
+
 ## [v5.6.0](https://github.com/docling-project/docling-parse/releases/tag/v5.6.0) - 2026-03-20
 
 ### Feature

@@ -1,8 +1,7 @@
 data_uni = []
 data_hex = []
 
-with open("MathematicalPi.dat.orig", "r") as fd:
-
+with open("MathematicalPi.dat.orig") as fd:
     lines = fd.readlines()
 
     for line in lines:
@@ -15,7 +14,7 @@ with open("MathematicalPi.dat.orig", "r") as fd:
             dec = int(parts[1].replace(" ", ""), 16)
             data_uni.append([parts[0], chr(dec), val])
 
-        except:
+        except ValueError:
             data_hex.append([parts[0], parts[1]])
 
 with open("MathematicalPi.hex.dat", "w") as fd:

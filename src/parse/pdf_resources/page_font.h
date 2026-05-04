@@ -30,6 +30,7 @@ namespace pdflib
 
     std::string get_key();
     std::string get_name();
+    std::string get_base_font();
 
     double      get_width(uint32_t c, bool verbose=true);
     std::string get_string(uint32_t c);
@@ -179,11 +180,6 @@ namespace pdflib
     std::string PDFS_RESOURCES_DIR = "../docling_parse/pdf_resources/";
     LOG_S(INFO) << "default pdf-resource-dir: " << PDFS_RESOURCES_DIR;
     
-    //if(data.count(RESOURCE_DIR_KEY)==0)
-    //{
-    //LOG_S(WARNING) << "resource-dir-key is missing '" << RESOURCE_DIR_KEY << "' in data: \n" << data.dump(2);
-    //}
-    
     //std::string pdf_resources_dir = data.value("pdf-resource-directory", PDFS_RESOURCES_DIR);
     std::string pdf_resources_dir = data.value(RESOURCE_DIR_KEY, PDFS_RESOURCES_DIR);
     pdf_resources_dir += (pdf_resources_dir.back()=='/'? "" : "/");
@@ -266,6 +262,11 @@ namespace pdflib
     return font_name;
   }
 
+  std::string pdf_resource<PAGE_FONT>::get_base_font()
+  {
+    return base_font;
+  }
+
   bool pdf_resource<PAGE_FONT>::numb_is_in_cmap(uint32_t v)
   {
     //LOG_S(INFO) << "# cmap: " << cmap_numb_to_char.size();
@@ -281,10 +282,13 @@ namespace pdflib
     else if(has_default_width)
       {
 	return default_width;
-      }
-    else if(bfonts.has_corresponding_font(font_name))
+      }    
+    else if(bfonts.has_corresponding_font(font_name) or
+	    bfonts.has_corresponding_font(base_font))
       {
-	std::string fontname = bfonts.get_corresponding_font(font_name);
+	std::string fontname = bfonts.has_corresponding_font(font_name)
+	  ? bfonts.get_corresponding_font(font_name)
+	  : bfonts.get_corresponding_font(base_font);
 	
         auto& bfont = bfonts.get(fontname);
 
@@ -316,7 +320,7 @@ namespace pdflib
     else if(verbose)
       {
         LOG_S(WARNING) << "font does not have numb_to_width for " << c
-		       << " nor a known font [base-font=" << base_font 
+		       << " nor a known font [base-font=" << base_font << ", font-name=" << font_name
 		       << ", font-key=" << font_key << "]"
 		       << " --> falling back on default width in " << __FUNCTION__;
       }
@@ -911,7 +915,7 @@ namespace pdflib
       }
     else
       {
-        LOG_S(ERROR) << "could not find font-bbox";
+        LOG_S(WARNING) << "could not find font-bbox";
       }
 
     if (json_bbox != nullptr)
@@ -1133,7 +1137,7 @@ namespace pdflib
             {
               // from times-Roman
               ascent = 683.0;
-              LOG_S(ERROR) << " -> falling back on the default value for ascent (=" << ascent << ")";
+              LOG_S(WARNING) << " -> falling back on the default value for ascent (=" << ascent << ")";
             }
         }
     }
@@ -1223,8 +1227,17 @@ namespace pdflib
         }
       else
         {
-          LOG_S(WARNING) << "'capheight' was not explicitely defined -> defaulting to ascent";
-	  capheight = ascent;
+          LOG_S(WARNING) << "'capheight' was not explicitely defined ...";
+	  if(bfonts.has(base_font))
+	    {
+	      capheight = bfonts[base_font].get_capheight();
+	      LOG_S(WARNING) << " -> capheight (=" << capheight << ") retrieved from base-font (=" << base_font << ")";
+	    }
+	  else
+	    {
+	      capheight = ascent;
+	      LOG_S(WARNING) << " -> capheight defaulting to ascent (=" << capheight << ")";
+	    }
         }
     }
 
@@ -1250,6 +1263,14 @@ namespace pdflib
       else
         {
           LOG_S(WARNING) << "'xheight' was not explicitely defined ...";
+	  if(bfonts.has(base_font))
+	    {
+	      xheight = bfonts[base_font].get_xheight();
+	      if(std::abs(xheight) > 1.e-3)
+		{
+		  LOG_S(WARNING) << " -> xheight (=" << xheight << ") retrieved from base-font (=" << base_font << ")";
+		}
+	    }
         }
     }
 
@@ -1861,6 +1882,54 @@ namespace pdflib
                         LOG_S(INFO) << "differences[" << numb << "] -> " << name_
 				    << " -> " << diff_numb_to_char[numb];
                       }
+		    else if(name_.find('_') != std::string::npos)
+		      {
+			// Adobe Glyph Naming: underscores separate ligature components
+			// e.g. /f_i -> fi (U+FB01), /f_f_i -> ffi (U+FB03)
+			// Strategy 1: remove underscores and look up the joined name
+			std::string joined = name_;
+			joined.erase(std::remove(joined.begin(), joined.end(), '_'), joined.end());
+			if(glyphs.has(joined))
+			  {
+			    diff_numb_to_char[numb] = glyphs[joined];
+			    LOG_S(INFO) << "differences[" << numb << "] -> " << name_
+					<< " -> " << diff_numb_to_char[numb]
+					<< " (ligature join)";
+			  }
+			else
+			  {
+			    // Strategy 2: decompose on '_' and concatenate each component
+			    std::string result;
+			    std::istringstream iss(name_);
+			    std::string component;
+			    bool all_found = true;
+			    while(std::getline(iss, component, '_'))
+			      {
+				if(glyphs.has(component))
+				  {
+				    result += glyphs[component];
+				  }
+				else
+				  {
+				    all_found = false;
+				    break;
+				  }
+			      }
+			    if(all_found and not result.empty())
+			      {
+				diff_numb_to_char[numb] = result;
+				LOG_S(INFO) << "differences[" << numb << "] -> " << name_
+					    << " -> " << diff_numb_to_char[numb]
+					    << " (ligature decompose)";
+			      }
+			    else
+			      {
+				diff_numb_to_char[numb] = name;
+				LOG_S(WARNING) << "differences[" << numb << "] -> " << name
+					       << " (unresolved ligature)";
+			      }
+			  }
+		      }
 		    /*
                     else if(name_.size()>0)
                       {

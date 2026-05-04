@@ -9,11 +9,27 @@
 #include <array>
 #include <memory>
 
+#include <parse/enums.h>
+
 namespace pdflib
 {
+  enum pixel_format {
+    PIXEL_FORMAT_UNKNOWN,
+    PIXEL_FORMAT_GRAY,   // 1 channel  (/DeviceGray)
+    PIXEL_FORMAT_RGB,    // 3 channels (/DeviceRGB)
+    PIXEL_FORMAT_CMYK,   // 4 channels (/DeviceCMYK)
+  };
+
+  enum cmyk_convention {
+    CMYK_CONVENTION_UNKNOWN,
+    CMYK_CONVENTION_ADOBE_INVERTED,
+    CMYK_CONVENTION_PROCESS,
+  };
+
   enum RENDER_INSTRUCTION_NAME {
     SIZE_INSTRUCTION, // set the size of the canvas on which we render
     TEXT_RENDER_INSTRUCTION, // render text on the canvas
+    TEXT_WIDGET_RENDER_INSTRUCTION, // render a fillable-field widget (bbox + value text)
     BITMAP_RENDER_INSTRUCTION, // paste bitmap image on the canvas
     SHAPE_RENDER_INSTRUCTION, // draw shapes (lines, shapes, filling, etc)
   };
@@ -49,22 +65,40 @@ namespace pdflib
     text_instruction(std::string text,
                      std::string font_enc,
                      std::string font_key,
+                     std::string font_name,
+                     std::string encoding_name,
+                     std::string base_font,
+                     double font_size,
                      double r_x0, double r_y0,
                      double r_x1, double r_y1,
                      double r_x2, double r_y2,
-                     double r_x3, double r_y3):
+                     double r_x3, double r_y3,
+                     double font_ascent_norm, double font_descent_norm,
+		     double base_x0, double base_y0):
       text(std::move(text)),
       font_enc(std::move(font_enc)),
       font_key(std::move(font_key)),
+      font_name(std::move(font_name)),
+      encoding_name(std::move(encoding_name)),
+      base_font(std::move(base_font)),
+      font_size(font_size),
       r_x0(r_x0), r_y0(r_y0),
       r_x1(r_x1), r_y1(r_y1),
       r_x2(r_x2), r_y2(r_y2),
-      r_x3(r_x3), r_y3(r_y3) {}
+      r_x3(r_x3), r_y3(r_y3),
+      font_ascent_norm(font_ascent_norm),
+      font_descent_norm(font_descent_norm),
+      base_x0(base_x0), base_y0(base_y0)
+    {}
 
     const std::string& get_text() const { return text; }
 
     const std::string& get_font_enc() const { return font_enc; }
     const std::string& get_font_key() const { return font_key; }
+    const std::string& get_font_name() const { return font_name; }
+    const std::string& get_encoding_name() const { return encoding_name; }
+    const std::string& get_base_font() const { return base_font; }
+    double get_font_size() const { return font_size; }
 
     double get_r_x0() const { return r_x0; }
     double get_r_y0() const { return r_y0; }
@@ -75,12 +109,22 @@ namespace pdflib
     double get_r_x3() const { return r_x3; }
     double get_r_y3() const { return r_y3; }
 
+    double get_font_ascent_norm()  const { return font_ascent_norm; }
+    double get_font_descent_norm() const { return font_descent_norm; }
+
+    double get_base_x0() const { return base_x0; }
+    double get_base_y0() const { return base_y0; }
+
   private:
 
     const std::string text;
 
     const std::string font_enc;
     const std::string font_key;
+    const std::string font_name;
+    const std::string encoding_name;
+    const std::string base_font;
+    const double font_size;
 
     const double r_x0;
     const double r_y0;
@@ -90,6 +134,56 @@ namespace pdflib
     const double r_y2;
     const double r_x3;
     const double r_y3;
+
+    const double font_ascent_norm;
+    const double font_descent_norm;
+
+    const double base_x0;
+    const double base_y0;    
+  };
+
+  class text_widget_instruction
+  {
+  public:
+    const static RENDER_INSTRUCTION_NAME instr = TEXT_WIDGET_RENDER_INSTRUCTION;
+
+    text_widget_instruction(std::string text,
+                            double x0,  double y0,
+                            double x1,  double y1,
+                            double r_x0, double r_y0,
+                            double r_x1, double r_y1,
+                            double r_x2, double r_y2,
+                            double r_x3, double r_y3):
+      text_(std::move(text)),
+      x0_(x0),   y0_(y0),
+      x1_(x1),   y1_(y1),
+      r_x0_(r_x0), r_y0_(r_y0),
+      r_x1_(r_x1), r_y1_(r_y1),
+      r_x2_(r_x2), r_y2_(r_y2),
+      r_x3_(r_x3), r_y3_(r_y3)
+    {}
+
+    const std::string& get_text() const { return text_; }
+
+    double get_x0() const { return x0_; }
+    double get_y0() const { return y0_; }
+    double get_x1() const { return x1_; }
+    double get_y1() const { return y1_; }
+
+    double get_r_x0() const { return r_x0_; }
+    double get_r_y0() const { return r_y0_; }
+    double get_r_x1() const { return r_x1_; }
+    double get_r_y1() const { return r_y1_; }
+    double get_r_x2() const { return r_x2_; }
+    double get_r_y2() const { return r_y2_; }
+    double get_r_x3() const { return r_x3_; }
+    double get_r_y3() const { return r_y3_; }
+
+  private:
+    const std::string text_;
+    const double x0_,   y0_,   x1_,   y1_;
+    const double r_x0_, r_y0_, r_x1_, r_y1_;
+    const double r_x2_, r_y2_, r_x3_, r_y3_;
   };
 
   class bitmap_instruction
@@ -99,23 +193,41 @@ namespace pdflib
 
     bitmap_instruction(std::string xobject_key,
 		       std::shared_ptr<std::vector<uint8_t> > data,
+                       std::shared_ptr<std::vector<uint8_t> > alpha_data,
+                       cmyk_convention cmyk_conv,
                        std::array<int, 3> shape,
+                       pixel_format fmt,
+                       bool image_mask,
+                       std::array<int, 3> rgb_filling,
                        double r_x0, double r_y0,
                        double r_x1, double r_y1,
                        double r_x2, double r_y2,
                        double r_x3, double r_y3):
       xobject_key(xobject_key),
       data(std::move(data)),
+      alpha_data(std::move(alpha_data)),
+      cmyk_conv(cmyk_conv),
       shape(shape),
+      fmt(fmt),
+      image_mask(image_mask),
+      rgb_filling(rgb_filling),
       r_x0(r_x0), r_y0(r_y0),
       r_x1(r_x1), r_y1(r_y1),
       r_x2(r_x2), r_y2(r_y2),
       r_x3(r_x3), r_y3(r_y3) {}
 
     const std::string& get_key() const { return xobject_key; }
-    
+
     const std::shared_ptr<std::vector<uint8_t> >& get_data() const { return data; }
+    const std::shared_ptr<std::vector<uint8_t> >& get_alpha_data() const { return alpha_data; }
+    cmyk_convention get_cmyk_convention() const { return cmyk_conv; }
     const std::array<int, 3>& get_shape() const { return shape; }
+    pixel_format get_pixel_format() const { return fmt; }
+    bool is_image_mask() const { return image_mask; }
+    const std::array<int, 3>& get_rgb_filling() const { return rgb_filling; }
+
+    bool has_data() const { return (data) and (not data->empty()); }
+    bool has_alpha_data() const { return (alpha_data) and (not alpha_data->empty()); }
 
     double get_r_x0() const { return r_x0; }
     double get_r_y0() const { return r_y0; }
@@ -131,7 +243,12 @@ namespace pdflib
     const std::string xobject_key;
     
     const std::shared_ptr<std::vector<uint8_t> > data;
+    const std::shared_ptr<std::vector<uint8_t> > alpha_data;
+    const cmyk_convention cmyk_conv;
     const std::array<int, 3> shape;
+    const pixel_format fmt;
+    const bool image_mask;
+    const std::array<int, 3> rgb_filling;
 
     const double r_x0;
     const double r_y0;
@@ -149,18 +266,40 @@ namespace pdflib
     const static RENDER_INSTRUCTION_NAME instr = SHAPE_RENDER_INSTRUCTION;
 
     shape_instruction(std::vector<double> x,
-                      std::vector<double> y):
+                      std::vector<double> y,
+                      page_shape_closing_type closing_type,
+                      page_shape_type         shape_type,
+                      double                  line_width,
+                      std::array<int, 3>      rgb_stroking,
+                      std::array<int, 3>      rgb_filling):
       x(std::move(x)),
-      y(std::move(y)) {}
+      y(std::move(y)),
+      closing_type(closing_type),
+      shape_type(shape_type),
+      line_width(line_width),
+      rgb_stroking(rgb_stroking),
+      rgb_filling(rgb_filling) {}
 
     const std::vector<double>& get_x() const { return x; }
     const std::vector<double>& get_y() const { return y; }
     size_t size() const { return x.size(); }
 
+    page_shape_closing_type     get_closing_type()  const { return closing_type; }
+    page_shape_type             get_shape_type()    const { return shape_type; }
+    double                      get_line_width()    const { return line_width; }
+    const std::array<int, 3>&   get_rgb_stroking()  const { return rgb_stroking; }
+    const std::array<int, 3>&   get_rgb_filling()   const { return rgb_filling; }
+
   private:
 
     const std::vector<double> x;
     const std::vector<double> y;
+
+    const page_shape_closing_type closing_type;
+    const page_shape_type         shape_type;
+    const double                  line_width;
+    const std::array<int, 3>      rgb_stroking;
+    const std::array<int, 3>      rgb_filling;
   };
 
   class pdf_render_instructions
@@ -168,6 +307,7 @@ namespace pdflib
     typedef instruction instruction_type;
 
     typedef text_instruction text_instruction_type;
+    typedef text_widget_instruction text_widget_instruction_type;
     typedef bitmap_instruction bitmap_instruction_type;
     typedef shape_instruction shape_instruction_type;
 
@@ -180,6 +320,7 @@ namespace pdflib
 
     void add_size_instruction(size_instruction& instr);
     void add_text_instruction(text_instruction_type instr);
+    void add_widget_instruction(text_widget_instruction_type instr);
     void add_bitmap_instruction(bitmap_instruction_type instr);
     void add_shape_instruction(shape_instruction_type instr);
 
@@ -193,9 +334,10 @@ namespace pdflib
 
     std::vector<instruction_type> instructions;
 
-    std::vector<text_instruction_type> text_instructions;
-    std::vector<bitmap_instruction_type> bitmap_instructions;
-    std::vector<shape_instruction_type> shape_instructions;
+    std::vector<text_instruction_type>        text_instructions;
+    std::vector<text_widget_instruction_type> widget_instructions;
+    std::vector<bitmap_instruction_type>      bitmap_instructions;
+    std::vector<shape_instruction_type>       shape_instructions;
 
   };
 
@@ -218,6 +360,12 @@ namespace pdflib
   {
     instructions.emplace_back(TEXT_RENDER_INSTRUCTION, text_instructions.size());
     text_instructions.push_back(std::move(instr));
+  }
+
+  inline void pdf_render_instructions::add_widget_instruction(text_widget_instruction instr)
+  {
+    instructions.emplace_back(TEXT_WIDGET_RENDER_INSTRUCTION, widget_instructions.size());
+    widget_instructions.push_back(std::move(instr));
   }
 
   inline void pdf_render_instructions::add_bitmap_instruction(bitmap_instruction instr)
@@ -245,6 +393,13 @@ namespace pdflib
 	    {
 	      auto& text_instr = text_instructions.at(instr.index);
 	      renderer.render_text(text_instr);
+	    }
+	    break;
+
+	  case TEXT_WIDGET_RENDER_INSTRUCTION:
+	    {
+	      auto& widget_instr = widget_instructions.at(instr.index);
+	      renderer.render_widget(widget_instr);
 	    }
 	    break;
 
