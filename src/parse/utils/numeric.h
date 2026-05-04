@@ -77,11 +77,17 @@ namespace utils
         {
           return static_cast<double>(obj.getIntValue());
         }
-
-      // obj.isReal() — re-parse from the string representation
-      // instead of relying on QPDF's atof()-based getNumericValue().
-      std::string repr = obj.getRealValue();
-      return locale_safe_stod(repr);
+      else if (obj.isReal())
+        {
+          // Re-parse from the string representation instead of
+          // relying on QPDF's atof()-based getNumericValue().
+          return locale_safe_stod(obj.getRealValue());
+        }
+      else
+        {
+          throw std::invalid_argument(
+            "locale_safe_numeric_value: QPDF object is neither integer nor real");
+        }
     }
 
   }
