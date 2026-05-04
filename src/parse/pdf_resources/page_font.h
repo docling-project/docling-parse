@@ -719,7 +719,7 @@ namespace pdflib
       init_font_name();
       init_font_bbox();
       init_font_matrix();
-      init_font_program();
+      // init_font_program(); // not really needed for now I believe
       
       init_ascent_and_descent();
       
