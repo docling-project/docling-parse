@@ -92,6 +92,8 @@ namespace pdflib
 
     double get_capheight();
     double get_xheight();
+    bool has_char_bbox(const uint32_t& c);
+    std::array<double, 4> get_char_bbox(const uint32_t& c);
     bool has_char_bbox(const std::string& c);
     std::array<double, 4> get_char_bbox(const std::string& c);
 
@@ -433,6 +435,32 @@ namespace pdflib
   double pdf_resource<PAGE_FONT>::get_xheight()
   {
     return xheight;
+  }
+
+  bool pdf_resource<PAGE_FONT>::has_char_bbox(const uint32_t& c)
+  {
+    if(bfonts.has_corresponding_font(font_name) or
+       bfonts.has_corresponding_font(base_font))
+      {
+        std::string fontname = bfonts.has_corresponding_font(font_name)
+          ? bfonts.get_corresponding_font(font_name)
+          : bfonts.get_corresponding_font(base_font);
+
+        auto& bfont = bfonts.get(fontname);
+        return bfont.has_char_bbox(c);
+      }
+
+    return false;
+  }
+
+  std::array<double, 4> pdf_resource<PAGE_FONT>::get_char_bbox(const uint32_t& c)
+  {
+    std::string fontname = bfonts.has_corresponding_font(font_name)
+      ? bfonts.get_corresponding_font(font_name)
+      : bfonts.get_corresponding_font(base_font);
+
+    auto& bfont = bfonts.get(fontname);
+    return bfont.get_char_bbox(c);
   }
 
   bool pdf_resource<PAGE_FONT>::has_char_bbox(const std::string& c)

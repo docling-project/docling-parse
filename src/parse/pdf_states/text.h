@@ -67,6 +67,7 @@ namespace pdflib
 
     void add_cell(pdf_resource<PAGE_FONT>& font,
                   std::string text,  double width,
+                  int glyph_code,
                   int stack_size,
                   std::vector<page_item<PAGE_CELL> >& cells);
 
@@ -464,7 +465,7 @@ namespace pdflib
             text  += chars_;
             width += char_width;
 
-            add_cell(font, text, width, stack_size, cells);
+            add_cell(font, text, width, static_cast<int>(item.first), stack_size, cells);
 
             move_cursor(delta_width, 0);
 
@@ -479,7 +480,7 @@ namespace pdflib
     //LOG_S(INFO) << "text-line: " << text;
     if(text.size()>0)
       {
-        add_cell(font, text, width, stack_size, cells);
+        add_cell(font, text, width, -1, stack_size, cells);
       }
 
     return cells;
@@ -487,6 +488,7 @@ namespace pdflib
 
   void pdf_state<TEXT>::add_cell(pdf_resource<PAGE_FONT>& font,
                                  std::string text, double width,
+                                 int glyph_code,
                                  int stack_size,
                                  std::vector<page_item<PAGE_CELL> >& cells)
   {
@@ -540,7 +542,21 @@ namespace pdflib
           ratio = font_capheight/font_ascent;
         }
 
-      if(font.has_char_bbox(text))
+      if(glyph_code >= 0 and font.has_char_bbox(static_cast<uint32_t>(glyph_code)))
+        {
+          glyph_bbox = font.get_char_bbox(static_cast<uint32_t>(glyph_code));
+          has_glyph_bbox = true;
+          font_descent = glyph_bbox[1];
+          font_ascent  = glyph_bbox[3];
+          ratio = 1.0;
+          LOG_S(INFO) << "using glyph-specific bbox for glyph-code=" << glyph_code
+                      << ", text='" << text << "'"
+                      << " bbox=[" << glyph_bbox[0] << ", "
+                      << glyph_bbox[1] << ", "
+                      << glyph_bbox[2] << ", "
+                      << glyph_bbox[3] << "]";
+        }
+      else if(font.has_char_bbox(text))
         {
           glyph_bbox = font.get_char_bbox(text);
           has_glyph_bbox = true;
