@@ -48,7 +48,7 @@ COMMA_LOCALES = [
 ]
 
 
-def _find_comma_locale() -> Optional[str]:
+def _find_comma_locale() -> str | None:
     """Return the first available locale that uses ',' as decimal separator."""
     for loc in COMMA_LOCALES:
         try:
@@ -138,7 +138,7 @@ class TestLocaleIndependentParsing:
         # Parse under C locale first (baseline)
         locale.setlocale(locale.LC_NUMERIC, "C")
         baseline_pdf = pdfs[0]
-        baseline_page, baseline_dim, _ = _parse_first_page(baseline_pdf)
+        _, baseline_dim, _ = _parse_first_page(baseline_pdf)
 
         # Now parse under hostile locale
         with hostile_locale():
@@ -164,18 +164,27 @@ class TestLocaleIndependentParsing:
 
         The pre-fix bug would truncate 612.0 → 612 (benign) but
         595.276 → 595 (wrong by 0.276 points, visible at high DPI).
+        Compare parsed dimensions under C vs comma locale — they must
+        agree exactly. (Absolute thresholds break on PDFs with
+        unusual coordinate origins, e.g. broken_media_box_v01.pdf.)
         """
         pdfs = _get_regression_pdfs()
         assert len(pdfs) > 0
 
-        with hostile_locale():
-            for pdf_path in pdfs[:5]:  # test first 5 for speed
-                _, dim, _ = _parse_first_page(pdf_path)
-                crop = dim.crop_bbox
+        for pdf_path in pdfs[:5]:  # test first 5 for speed
+            locale.setlocale(locale.LC_NUMERIC, "C")
+            _, baseline_dim, _ = _parse_first_page(pdf_path)
+            baseline = baseline_dim.crop_bbox
 
-                # Page dimensions should be reasonable (> 1 point)
-                assert crop.r > 1.0, f"Crop right={crop.r} looks truncated in {pdf_path}"
-                assert crop.t > 1.0, f"Crop top={crop.t} looks truncated in {pdf_path}"
+            with hostile_locale():
+                _, hostile_dim, _ = _parse_first_page(pdf_path)
+                hostile = hostile_dim.crop_bbox
+
+            for attr in ("l", "t", "r", "b"):
+                assert abs(getattr(baseline, attr) - getattr(hostile, attr)) < 1e-6, (
+                    f"crop_bbox.{attr} mismatch in {pdf_path}: "
+                    f"baseline={getattr(baseline, attr)} hostile={getattr(hostile, attr)}"
+                )
 
     @requires_comma_locale
     def test_text_cell_coordinates_under_comma_locale(self):
@@ -218,9 +227,7 @@ class TestLocaleIndependentParsing:
                     f"Cell {i} vertex {v} Y: {b_rect[v][1]} vs {h_rect[v][1]}"
                 )
 
-            assert bc.text == hc.text, (
-                f"Cell {i} text: '{bc.text}' vs '{hc.text}'"
-            )
+            assert bc.text == hc.text, f"Cell {i} text: '{bc.text}' vs '{hc.text}'"
 
 
 # ---------------------------------------------------------------------------
@@ -238,7 +245,7 @@ class TestFullPipelineLocaleResilience:
         assert len(pdfs) > 0
 
         failures = []
-        with hostile_locale() as loc:
+        with hostile_locale():
             for pdf_path in pdfs:
                 try:
                     parser = DoclingPdfParser(loglevel="fatal")
@@ -456,13 +463,15 @@ class TestCoordinateReproducibility:
             page = doc.get_page(1)
             dim = page.dimension
 
-            results.append({
-                "crop_r": dim.crop_bbox.r,
-                "crop_t": dim.crop_bbox.t,
-                "crop_l": dim.crop_bbox.l,
-                "crop_b": dim.crop_bbox.b,
-                "n_cells": len(page.char_cells),
-            })
+            results.append(
+                {
+                    "crop_r": dim.crop_bbox.r,
+                    "crop_t": dim.crop_bbox.t,
+                    "crop_l": dim.crop_bbox.l,
+                    "crop_b": dim.crop_bbox.b,
+                    "n_cells": len(page.char_cells),
+                }
+            )
 
         # Restore
         locale.setlocale(locale.LC_NUMERIC, "C")
@@ -522,6 +531,7 @@ class TestPythonLocaleGuard:
 
         # Re-trigger the guard (it runs at import time, but we can call it)
         import docling_parse
+
         docling_parse._ensure_safe_numeric_locale()
 
         conv = locale.localeconv()
@@ -537,9 +547,9 @@ class TestPythonLocaleGuard:
         locale.setlocale(locale.LC_NUMERIC, "C")
 
         import docling_parse
+
         docling_parse._ensure_safe_numeric_locale()
 
-        current = locale.getlocale(locale.LC_NUMERIC)
         # Should still be C or equivalent
         conv = locale.localeconv()
         assert conv["decimal_point"] == "."
