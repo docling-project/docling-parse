@@ -122,7 +122,9 @@ namespace pdflib
       "/standard/scripts.dat",
       "/standard/missing.dat",
 
-      "/custom/MathematicalPi/MathematicalPi.hex.dat"
+      "/custom/MathematicalPi/MathematicalPi.hex.dat",
+      "/custom/TeX/glyphs_01.dat",
+      "/custom/TeX/glyphs_03.dat"
     };
 
     for(auto path:paths_hex)
