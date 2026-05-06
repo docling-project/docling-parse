@@ -229,6 +229,7 @@ def test_render_custom_render_config():
     render_config = RenderConfig()
     render_config.render_text = True
     render_config.draw_text_bbox = False
+    render_config.fit_glyph_bbox_to_target = True
     render_config.resolve_fonts = True
 
     renderer = DoclingThreadedPdfRenderer(
@@ -243,6 +244,15 @@ def test_render_custom_render_config():
         assert result.success, result.error()
         image = result.get_image()
         assert image is not None
+
+
+def test_render_config_exposes_bbox_fit_flag():
+    """RenderConfig exposes the opt-in glyph bbox fit flag."""
+    render_config = RenderConfig()
+    assert render_config.fit_glyph_bbox_to_target is False
+
+    render_config.fit_glyph_bbox_to_target = True
+    assert render_config.fit_glyph_bbox_to_target is True
 
 
 def test_render_reference_documents_from_filenames():

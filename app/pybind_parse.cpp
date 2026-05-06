@@ -938,6 +938,8 @@ PYBIND11_MODULE(pdf_parsers, m) {
     Attributes:
         render_text (bool): Render glyph outlines for text cells [default=true].
         draw_text_bbox (bool): Draw bounding quad for each text cell [default=false].
+        draw_text_basepoint (bool): Draw the text baseline origin as a small red dot [default=false].
+        fit_glyph_bbox_to_target (bool): Uniformly rescale measured glyph outlines so the rendered bbox fits inside the target glyph bbox, with either width or height matching exactly [default=false].
         resolve_fonts (bool): Resolve PDF font names to system fonts [default=true].
         font_similarity_cutoff (float): Minimum Jaccard similarity for fuzzy font matching; candidates below this threshold fall back to the default font [default=0.25].
         canvas_width (int): Target canvas width in pixels; -1 means use PDF page size [default=-1].
@@ -946,6 +948,8 @@ PYBIND11_MODULE(pdf_parsers, m) {
     .def(pybind11::init<>())
     .def_readwrite("render_text",             &pdflib::render_config::render_text)
     .def_readwrite("draw_text_bbox",          &pdflib::render_config::draw_text_bbox)
+    .def_readwrite("draw_text_basepoint",     &pdflib::render_config::draw_text_basepoint)
+    .def_readwrite("fit_glyph_bbox_to_target",&pdflib::render_config::fit_glyph_bbox_to_target)
     .def_readwrite("resolve_fonts",           &pdflib::render_config::resolve_fonts)
     .def_readwrite("font_similarity_cutoff",  &pdflib::render_config::font_similarity_cutoff)
     .def_readwrite("canvas_width",            &pdflib::render_config::canvas_width)

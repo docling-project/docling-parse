@@ -213,6 +213,9 @@ int main(int argc, char* argv[])
         ("render-text",    "Render glyph outlines for text cells (default: true)",          cxxopts::value<bool>()->implicit_value("true"))
         ("draw-text-bbox", "Draw bounding quad around each text cell",                      cxxopts::value<bool>()->implicit_value("true"))
         ("draw-text-basepoint", "Draw the text base point as a small red dot",              cxxopts::value<bool>()->implicit_value("true"))
+        ("fit-glyph-bbox-to-target",
+         "Uniformly rescale measured glyph outlines so the rendered bbox fits inside the target glyph bbox and matches either its width or height",
+         cxxopts::value<bool>()->implicit_value("true"))
         ("resolve-fonts",           "Resolve PDF font names to system fonts (default: true)",                cxxopts::value<bool>()->implicit_value("true"))
         ("font-similarity-cutoff",  "Minimum Jaccard similarity for fuzzy font matching (default: 0.25)",    cxxopts::value<float>())
         ("canvas-width",            "Canvas width in pixels (-1 = use page size)",                           cxxopts::value<int>())
@@ -311,6 +314,7 @@ int main(int argc, char* argv[])
       if (result.count("render-text"))    { cfg.render_text    = result["render-text"].as<bool>(); }
       if (result.count("draw-text-bbox")) { cfg.draw_text_bbox = result["draw-text-bbox"].as<bool>(); }
       if (result.count("draw-text-basepoint")) { cfg.draw_text_basepoint = result["draw-text-basepoint"].as<bool>(); }
+      if (result.count("fit-glyph-bbox-to-target")) { cfg.fit_glyph_bbox_to_target = result["fit-glyph-bbox-to-target"].as<bool>(); }
       if (result.count("resolve-fonts"))          { cfg.resolve_fonts          = result["resolve-fonts"].as<bool>(); }
       if (result.count("font-similarity-cutoff")) { cfg.font_similarity_cutoff = result["font-similarity-cutoff"].as<float>(); }
       if (result.count("canvas-width"))           { cfg.canvas_width           = result["canvas-width"].as<int>(); }

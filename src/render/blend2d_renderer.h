@@ -955,6 +955,7 @@ namespace pdflib
                 return;
               }
             BLPoint draw_origin(0.0, 0.0);
+            double bbox_fit_scale = 1.0;
             if (instr.has_glyph_bbox())
               {
                 const BLGlyphId glyph_id = gb.glyph_run().glyph_data_as<uint32_t>()[0];
@@ -988,12 +989,30 @@ namespace pdflib
                         const double rendered_x1 = rendered_box.x1;
                         const double rendered_y1 = rendered_box.y1;
 
+                        const double target_w = target_x1 - target_x0;
                         const double target_h = target_y1 - target_y0;
+                        const double rendered_w = rendered_x1 - rendered_x0;
+                        const double rendered_h = rendered_y1 - rendered_y0;
                         const double base_to_top = std::abs(target_y0);
                         const bool baseline_near_top =
                           target_h > 0.0 && (base_to_top / target_h) < 0.25;
 
-                        if (baseline_near_top)
+                        if (config_.fit_glyph_bbox_to_target
+                            && target_w > 0.0
+                            && target_h > 0.0
+                            && rendered_w > 0.0
+                            && rendered_h > 0.0)
+                          {
+                            bbox_fit_scale = std::min(target_w / rendered_w,
+                                                      target_h / rendered_h);
+                            draw_origin.x = target_x0 - bbox_fit_scale * rendered_x0;
+                            draw_origin.y = target_y0 - bbox_fit_scale * rendered_y0;
+                            LOG_S(INFO) << "render_text: fitting rendered bbox to target bbox"
+                                        << " scale=" << bbox_fit_scale
+                                        << " draw_origin=(" << draw_origin.x
+                                        << "," << draw_origin.y << ")";
+                          }
+                        else if (baseline_near_top)
                           {
                             draw_origin.y = target_y0 - rendered_y0;
                             LOG_S(INFO) << "render_text: aligning rendered top to target top"
@@ -1008,9 +1027,35 @@ namespace pdflib
                                     << " rendered bbox=["
                                     << rendered_x0 << ", " << rendered_y0 << ", "
                                     << rendered_x1 << ", " << rendered_y1 << "]"
+                                    << " bbox_fit_scale=" << bbox_fit_scale
                                     << " baseline_near_top=" << baseline_near_top;
                       }
                   }
+              }
+
+            if (bbox_fit_scale != 1.0)
+              {
+                const BLResult translate_res = ctx.translate(draw_origin.x, draw_origin.y);
+                if (translate_res != BL_SUCCESS)
+                  {
+                    LOG_S(WARNING) << "render_text: translate failed"
+                                   << " (BLResult=" << translate_res << ")";
+                    ctx.restore();
+                    draw_bbox_fallback();
+                    ctx.end();
+                    return;
+                  }
+                const BLResult scale_res = ctx.scale(bbox_fit_scale);
+                if (scale_res != BL_SUCCESS)
+                  {
+                    LOG_S(WARNING) << "render_text: scale failed"
+                                   << " (BLResult=" << scale_res << ")";
+                    ctx.restore();
+                    draw_bbox_fallback();
+                    ctx.end();
+                    return;
+                  }
+                draw_origin.reset(0.0, 0.0);
               }
             const BLResult text_res =
               ctx.fill_utf8_text(draw_origin, font, instr.get_text().c_str());
