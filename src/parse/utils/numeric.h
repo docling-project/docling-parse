@@ -8,8 +8,8 @@
 // corrupted — "72.5" parses as 72.0 because the '.' is not recognised
 // as a decimal point.
 //
-// Solution: std::from_chars (C++17/20) is specified to be
-// locale-independent.  We provide two helpers:
+// Solution: parse using the classic C locale instead of the process locale.
+// We provide two helpers:
 //
 //   1. locale_safe_stod(str)         — drop-in replacement for std::stod
 //   2. locale_safe_numeric_value(obj) — safe wrapper around QPDF's
@@ -21,9 +21,9 @@
 #ifndef PDF_UTILS_NUMERIC_H
 #define PDF_UTILS_NUMERIC_H
 
-#include <charconv>
+#include <locale>
+#include <sstream>
 #include <string>
-#include <system_error>
 #include <stdexcept>
 
 namespace utils
@@ -33,30 +33,24 @@ namespace utils
 
     // Locale-independent replacement for std::stod().
     //
-    // Uses std::from_chars which is guaranteed by the C++ standard
-    // (since C++17, double support mandated in C++20 / all major
-    // compilers since GCC 11, Clang 16, MSVC 19.24) to ignore the
-    // current LC_NUMERIC setting.
+    // Uses a stream imbued with std::locale::classic(), which ignores the
+    // current LC_NUMERIC setting and remains portable across the older
+    // standard libraries used by the wheel build matrix.
     //
     // Throws std::invalid_argument on parse failure, matching the
     // contract of std::stod().
     inline double locale_safe_stod(const std::string& str)
     {
+      std::istringstream stream(str);
+      stream.imbue(std::locale::classic());
+
       double value = 0.0;
-      const char* first = str.data();
-      const char* last  = first + str.size();
+      stream >> value;
 
-      auto [ptr, ec] = std::from_chars(first, last, value);
-
-      if (ec == std::errc::invalid_argument)
+      if (stream.fail())
         {
           throw std::invalid_argument(
             "locale_safe_stod: no valid conversion for \"" + str + "\"");
-        }
-      if (ec == std::errc::result_out_of_range)
-        {
-          throw std::out_of_range(
-            "locale_safe_stod: out of range for \"" + str + "\"");
         }
 
       return value;
@@ -67,7 +61,7 @@ namespace utils
     // QPDF's getNumericValue() calls atof() internally for real
     // numbers, which is locale-sensitive.  For integers, getIntValue()
     // is safe (no decimal point involved).  For reals, we re-parse
-    // the string representation using from_chars.
+    // the string representation using locale_safe_stod().
     //
     // This function is a drop-in replacement for obj.getNumericValue()
     // anywhere a QPDFObjectHandle is known to be a number.
