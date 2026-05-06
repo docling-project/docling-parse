@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <climits>
 #include <cmath>
 #include <cstdlib>
@@ -139,6 +140,40 @@ namespace pdflib
           expanded.pop_back();
         }
       return expanded;
+    }
+
+    static bool should_fit_glyph_bbox_to_target(const std::string& text)
+    {
+      if (text.empty()) { return false; }
+
+      for (unsigned char ch : text)
+        {
+          if (ch >= 0x80)
+            {
+              return true;
+            }
+          switch (ch)
+            {
+            case '(':
+            case ')':
+            case '[':
+            case ']':
+            case '{':
+            case '}':
+            case '<':
+            case '>':
+              return true;
+            default:
+              break;
+            }
+          if (std::isalnum(ch) || std::ispunct(ch) || std::isspace(ch))
+            {
+              continue;
+            }
+          return true;
+        }
+
+      return false;
     }
 
     // Build font_index_ by scanning standard system font directories.
@@ -998,17 +1033,33 @@ namespace pdflib
                           target_h > 0.0 && (base_to_top / target_h) < 0.25;
 
                         if (config_.fit_glyph_bbox_to_target
+                            && should_fit_glyph_bbox_to_target(instr.get_text())
                             && target_w > 0.0
                             && target_h > 0.0
                             && rendered_w > 0.0
                             && rendered_h > 0.0)
                           {
-                            bbox_fit_scale = std::min(target_w / rendered_w,
-                                                      target_h / rendered_h);
+                            const double width_scale = target_w / rendered_w;
+                            const double height_scale = target_h / rendered_h;
+                            const bool width_limited = width_scale <= height_scale;
+                            bbox_fit_scale = std::min(width_scale, height_scale);
+                            const double target_center_y = 0.5 * (target_y0 + target_y1);
+                            const double rendered_center_y = 0.5 * (rendered_y0 + rendered_y1);
+
                             draw_origin.x = target_x0 - bbox_fit_scale * rendered_x0;
-                            draw_origin.y = target_y0 - bbox_fit_scale * rendered_y0;
+                            if (width_limited)
+                              {
+                                draw_origin.y =
+                                  target_center_y - bbox_fit_scale * rendered_center_y;
+                              }
+                            else
+                              {
+                                draw_origin.y =
+                                  target_y0 - bbox_fit_scale * rendered_y0;
+                              }
                             LOG_S(INFO) << "render_text: fitting rendered bbox to target bbox"
                                         << " scale=" << bbox_fit_scale
+                                        << " width_limited=" << width_limited
                                         << " draw_origin=(" << draw_origin.x
                                         << "," << draw_origin.y << ")";
                           }
