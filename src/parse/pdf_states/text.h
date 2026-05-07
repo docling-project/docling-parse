@@ -504,8 +504,6 @@ namespace pdflib
     double font_descent = font.get_descent();
     double font_ascent  = font.get_ascent();
     double font_capheight  = font.get_capheight();
-    bool has_glyph_bbox = false;
-    std::array<double, 4> glyph_bbox = {0.0, 0.0, 0.0, 0.0};
 
     LOG_S(INFO) << "font_descent: " << font_descent << ", "
 		<< "font_ascent: " << font_ascent << ", "
@@ -542,6 +540,7 @@ namespace pdflib
           ratio = font_capheight/font_ascent;
         }
 
+      /* // commented out for now ...
       if(glyph_code >= 0 and font.has_char_bbox(static_cast<uint32_t>(glyph_code)))
         {
           glyph_bbox = font.get_char_bbox(static_cast<uint32_t>(glyph_code));
@@ -569,7 +568,8 @@ namespace pdflib
                       << glyph_bbox[2] << ", "
                       << glyph_bbox[3] << "]";
         }
-
+      */
+      
       LOG_S(INFO) << "ratio: " << ratio;
 
       std::array<double, 8> rect = compute_rect(font_descent*ratio, font_ascent*ratio, width);
@@ -623,37 +623,63 @@ namespace pdflib
         cell.y1 = bbox[3];
       }
 
-      cell.text = text;
-      cell.rendering_mode = rendering_mode;
-
-      cell.space_width = space_width;
-
-      cell.enc_name = font.get_encoding_name();
-
-      cell.font_enc = to_string(font.get_encoding());
-      cell.font_key = font.get_key();
-
-      cell.font_name = font.get_name();
-      cell.font_size = font_size/1000.0;
-
-      cell.italic = false;
-      cell.bold   = false;
-
-      cell.ocr        = false;
-      cell.confidence = -1.0;
-
-      cell.stack_size  = stack_size;
-      cell.block_count = block_count;
-      cell.instr_count = instr_count;
-
-      cell.has_graphics_state = true;
-      cell.line_width         = grph_state.get_line_width();
-      cell.rgb_stroking_ops   = grph_state.get_rgb_stroking_ops();
-      cell.rgb_filling_ops    = grph_state.get_rgb_filling_ops();
-
+      {
+	cell.text = text;
+	cell.rendering_mode = rendering_mode;
+	
+	cell.space_width = space_width;
+	
+	cell.enc_name = font.get_encoding_name();
+	
+	cell.font_enc = to_string(font.get_encoding());
+	cell.font_key = font.get_key();
+	
+	cell.font_name = font.get_name();
+	cell.font_size = font_size/1000.0;
+	
+	cell.italic = false;
+	cell.bold   = false;
+	
+	cell.ocr        = false;
+	cell.confidence = -1.0;
+	
+	cell.stack_size  = stack_size;
+	cell.block_count = block_count;
+	cell.instr_count = instr_count;
+	
+	cell.has_graphics_state = true;
+	cell.line_width         = grph_state.get_line_width();
+	cell.rgb_stroking_ops   = grph_state.get_rgb_stroking_ops();
+	cell.rgb_filling_ops    = grph_state.get_rgb_filling_ops();
+      }
+      
       cells.push_back(cell);
 
       {
+	// some characters have specific bounding-box spec's
+	bool has_glyph_bbox = false;
+	std::array<double, 4> glyph_bbox = {0.0, 0.0, 0.0, 0.0};
+	
+	std::array<double, 8> glyph_rect = rect;
+	{
+	  if(glyph_code >= 0 and font.has_char_bbox(static_cast<uint32_t>(glyph_code)))
+	    {
+	      glyph_bbox = font.get_char_bbox(static_cast<uint32_t>(glyph_code));
+	      has_glyph_bbox = true;
+	      font_descent = glyph_bbox[1];
+	      font_ascent  = glyph_bbox[3];
+	      ratio = 1.0;
+	      LOG_S(INFO) << "using glyph-specific bbox for glyph-code=" << glyph_code
+			  << ", text='" << text << "'"
+			  << " bbox=[" << glyph_bbox[0] << ", "
+			  << glyph_bbox[1] << ", "
+			  << glyph_bbox[2] << ", "
+			  << glyph_bbox[3] << "]";
+	      
+	      glyph_rect = compute_rect(font_descent*ratio, font_ascent*ratio, width);
+	    }
+	}
+	
         text_instruction tinstr(cell.text,
                                 cell.font_enc,
                                 cell.font_key,
@@ -661,10 +687,10 @@ namespace pdflib
                                 cell.enc_name,
                                 font.get_base_font(),
                                 cell.font_size,
-                                cell.r_x0, cell.r_y0,
-                                cell.r_x1, cell.r_y1,
-                                cell.r_x2, cell.r_y2,
-                                cell.r_x3, cell.r_y3,
+                                glyph_rect.at(0), glyph_rect.at(1), 
+                                glyph_rect.at(2), glyph_rect.at(3),
+				glyph_rect.at(4), glyph_rect.at(5),
+				glyph_rect.at(6), glyph_rect.at(7), 
                                 font_ascent*ratio, font_descent*ratio,
 				d_base_x, d_base_y,
                                 has_glyph_bbox,
