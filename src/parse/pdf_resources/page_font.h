@@ -7,55 +7,6 @@
 
 namespace pdflib
 {
-  enum embedded_font_file_kind
-  {
-    FONT_FILE_NONE,
-    FONT_FILE_TYPE1,
-    FONT_FILE_TRUETYPE,
-    FONT_FILE_CFF
-  };
-
-  inline std::string to_string(embedded_font_file_kind kind)
-  {
-    switch(kind)
-      {
-      case FONT_FILE_NONE:     return "FONT_FILE_NONE";
-      case FONT_FILE_TYPE1:    return "FONT_FILE_TYPE1";
-      case FONT_FILE_TRUETYPE: return "FONT_FILE_TRUETYPE";
-      case FONT_FILE_CFF:      return "FONT_FILE_CFF";
-      }
-
-    return "FONT_FILE_UNKNOWN";
-  }
-
-  class embedded_font_program
-  {
-  public:
-    bool found = false;
-    embedded_font_file_kind kind = FONT_FILE_NONE;
-
-    std::string source_path;
-    std::string declared_subtype;
-    std::string base_font;
-    std::string font_name;
-
-    bool from_descendant_font = false;
-
-    nlohmann::json descriptor_json;
-    nlohmann::json stream_dict_json;
-    std::vector<qpdf_stream_instruction> decoded_stream;
-
-    int length  = -1;
-    int length1 = -1;
-    int length2 = -1;
-    int length3 = -1;
-
-    std::shared_ptr<Buffer> raw_data;
-    std::shared_ptr<Buffer> decoded_data;
-
-    size_t raw_size = 0;
-    size_t decoded_size = 0;
-  };
 
   template<>
   class pdf_resource<PAGE_FONT>

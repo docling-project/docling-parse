@@ -115,6 +115,27 @@ namespace pdflib
       }
   }
 
+  enum embedded_font_file_kind
+  {
+    FONT_FILE_NONE,
+    FONT_FILE_TYPE1,
+    FONT_FILE_TRUETYPE,
+    FONT_FILE_CFF
+  };
+
+  inline std::string to_string(embedded_font_file_kind kind)
+  {
+    switch(kind)
+      {
+      case FONT_FILE_NONE:     return "FONT_FILE_NONE";
+      case FONT_FILE_TYPE1:    return "FONT_FILE_TYPE1";
+      case FONT_FILE_TRUETYPE: return "FONT_FILE_TRUETYPE";
+      case FONT_FILE_CFF:      return "FONT_FILE_CFF";
+      }
+
+    return "FONT_FILE_UNKNOWN";
+  }
+  
   enum xobject_subtype_name {
     XOBJECT_UNKNOWN,
 
