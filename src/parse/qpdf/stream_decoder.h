@@ -134,7 +134,7 @@ namespace pdflib
 	    std::string mvalue = match[1].str();
 	    LOG_S(WARNING) << "match-1: " << std::setw(12) << row.key << " | " << row.val << " => new matched value: " << mvalue;
 
-	    double value = std::stod(mvalue);
+	    double value = utils::numeric::locale_safe_stod(mvalue);
 
 	    // Creating a real (floating-point) QPDFObjectHandle
 	    QPDFObjectHandle new_obj = QPDFObjectHandle::newReal(value);
@@ -148,7 +148,7 @@ namespace pdflib
 	    std::string mvalue = match[1].str() + match[4].str();
 	    LOG_S(WARNING) << "match-2: " << std::setw(12) << row.key << " | " << row.val << " => new matched value: " << mvalue;
 
-	    double value = std::stod(mvalue);
+	    double value = utils::numeric::locale_safe_stod(mvalue);
 
 	    // Creating a real (floating-point) QPDFObjectHandle
 	    QPDFObjectHandle new_obj = QPDFObjectHandle::newReal(value);
@@ -162,7 +162,7 @@ namespace pdflib
 	    std::string mvalue = match[3].str() + match[7].str();
 	    LOG_S(WARNING) << "match-3: " << std::setw(12) << row.key << " | " << row.val << " => new matched value: " << mvalue;
 
-	    double value = std::stod(mvalue);
+	    double value = utils::numeric::locale_safe_stod(mvalue);
 
 	    // Creating a real (floating-point) QPDFObjectHandle
 	    QPDFObjectHandle new_obj = QPDFObjectHandle::newReal(value);

@@ -108,7 +108,7 @@ namespace pdflib
 	throw std::logic_error(message);
       }
     
-    return obj.getNumericValue(); 
+    return utils::numeric::locale_safe_numeric_value(obj);
   } 
 
   std::string qpdf_stream_instruction::to_char_string() 

@@ -1,3 +1,9 @@
+## [v5.10.1](https://github.com/docling-project/docling-parse/releases/tag/v5.10.1) - 2026-04-24
+
+### Fix
+
+* Memory management for docling upstream ([#263](https://github.com/docling-project/docling-parse/issues/263)) ([`db84017`](https://github.com/docling-project/docling-parse/commit/db84017ca7fc15ee272860b9e461a1a593711cf4))
+
 ## [v5.10.0](https://github.com/docling-project/docling-parse/releases/tag/v5.10.0) - 2026-04-22
 
 ### Feature

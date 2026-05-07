@@ -282,7 +282,7 @@ namespace pdflib
 	QPDFObjectHandle item = qpdf_arr.getArrayItem(d);
 	if(item.isNumber())
 	  {
-	    result[d] = item.getNumericValue();
+	    result[d] = utils::numeric::locale_safe_numeric_value(item);
 	  }
 	else
 	  {

@@ -16,6 +16,10 @@ env:
   # disable keyring (https://github.com/actions/runner-images/issues/6185):
   PYTHON_KEYRING_BACKEND: keyring.backends.null.Keyring
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   code-checks:
     if: ${{ github.event_name == 'push' || (github.event.pull_request.head.repo.full_name != 'docling-project/docling-parse' && github.event.pull_request.head.repo.full_name != 'docling-project/docling-parse') }}
