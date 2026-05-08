@@ -469,9 +469,7 @@ def test_reference_documents_from_filenames():
                                 ), f"line == _lines[i] => {line} == {_lines[i]} in line {i} for {_fname}"
                             """
                         except AssertionError as exc:
-                            write_textline_delta(
-                                _lines, delta_fname, SPECIAL_SEPERATOR
-                            )
+                            write_textline_delta(_lines, delta_fname, SPECIAL_SEPERATOR)
                             results.append(
                                 (rname, str(page_no), str(unit), False, str(exc))
                             )
@@ -538,9 +536,7 @@ def test_reference_documents_from_filenames():
         + "\n"
     )
 
-    failed = [
-        (doc, page, mode, err) for doc, page, mode, ok, err in results if not ok
-    ]
+    failed = [(doc, page, mode, err) for doc, page, mode, ok, err in results if not ok]
     assert not failed, f"{len(failed)} page(s) failed: " + ", ".join(
         f"{doc}@{page}[{mode}]" for doc, page, mode, _ in failed
     )
