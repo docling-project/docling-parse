@@ -1,3 +1,17 @@
+## [v5.11.0](https://github.com/docling-project/docling-parse/releases/tag/v5.11.0) - 2026-05-08
+
+### Feature
+
+* Rendering of math and latex symbols ([#264](https://github.com/docling-project/docling-parse/issues/264)) ([`ac0a361`](https://github.com/docling-project/docling-parse/commit/ac0a361a4ffcb45cb04fc26fb77726f02a7eea5a))
+
+### Fix
+
+* Locale-independent float parsing (fixes docling#1455) ([#243](https://github.com/docling-project/docling-parse/issues/243)) ([`e56632d`](https://github.com/docling-project/docling-parse/commit/e56632d962d456cc7968cc9848b8528b32727e02))
+
+### Documentation
+
+* **security:** Document security processes ([#268](https://github.com/docling-project/docling-parse/issues/268)) ([`f1316fa`](https://github.com/docling-project/docling-parse/commit/f1316fa14bbfe27070f870f64585169df7b6fd6f))
+
 ## [v5.10.1](https://github.com/docling-project/docling-parse/releases/tag/v5.10.1) - 2026-04-24
 
 ### Fix

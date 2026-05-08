@@ -74,7 +74,10 @@ namespace pdflib
                      double r_x2, double r_y2,
                      double r_x3, double r_y3,
                      double font_ascent_norm, double font_descent_norm,
-		     double base_x0, double base_y0):
+		     double base_x0, double base_y0,
+                     bool has_glyph_bbox = false,
+                     double g_x0 = 0.0, double g_y0 = 0.0,
+                     double g_x1 = 0.0, double g_y1 = 0.0):
       text(std::move(text)),
       font_enc(std::move(font_enc)),
       font_key(std::move(font_key)),
@@ -88,7 +91,10 @@ namespace pdflib
       r_x3(r_x3), r_y3(r_y3),
       font_ascent_norm(font_ascent_norm),
       font_descent_norm(font_descent_norm),
-      base_x0(base_x0), base_y0(base_y0)
+      base_x0(base_x0), base_y0(base_y0),
+      has_glyph_bbox_(has_glyph_bbox),
+      g_x0_(g_x0), g_y0_(g_y0),
+      g_x1_(g_x1), g_y1_(g_y1)
     {}
 
     const std::string& get_text() const { return text; }
@@ -114,6 +120,11 @@ namespace pdflib
 
     double get_base_x0() const { return base_x0; }
     double get_base_y0() const { return base_y0; }
+    bool has_glyph_bbox() const { return has_glyph_bbox_; }
+    double get_g_x0() const { return g_x0_; }
+    double get_g_y0() const { return g_y0_; }
+    double get_g_x1() const { return g_x1_; }
+    double get_g_y1() const { return g_y1_; }
 
   private:
 
@@ -139,7 +150,13 @@ namespace pdflib
     const double font_descent_norm;
 
     const double base_x0;
-    const double base_y0;    
+    const double base_y0;
+
+    const bool has_glyph_bbox_;
+    const double g_x0_;
+    const double g_y0_;
+    const double g_x1_;
+    const double g_y1_;
   };
 
   class text_widget_instruction

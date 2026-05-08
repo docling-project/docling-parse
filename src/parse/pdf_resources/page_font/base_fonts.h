@@ -31,6 +31,7 @@ namespace pdflib
     base_font_type& get(std::string font_name);
 
     base_font_type& operator[](std::string font_name);
+    void verify_all();
 
     template<typename glyphs_type>
     void initialise(std::string filename, glyphs_type& glyphs);
@@ -155,6 +156,15 @@ namespace pdflib
   {
     std::string norm_name = normalise(font_name);
     return name_to_basefont.at(norm_name);
+  }
+
+  void base_fonts::verify_all()
+  {
+    for(auto& item : name_to_basefont)
+      {
+        LOG_S(INFO) << "verifying font: " << item.first;
+        item.second.initialise();
+      }
   }
 
   template<typename glyphs_type>

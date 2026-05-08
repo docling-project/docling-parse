@@ -84,6 +84,7 @@
 #include <parse/pdf_resources/page_font/cmap.h>
 #include <parse/pdf_resources/page_font/char_description.h>
 #include <parse/pdf_resources/page_font/char_processor.h>
+#include <parse/pdf_resources/page_font/embedded_font_program.h>
 
 #include <parse/pdf_resources/page_font.h>
 #include <parse/pdf_resources/page_fonts.h>

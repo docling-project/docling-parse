@@ -25,6 +25,11 @@ from docling_parse.pdf_parser import DecodePageConfig, DoclingPdfParser, PdfDocu
 GENERATE = False
 
 
+def write_textline_delta(lines: List[str], filename: str, separator: str) -> None:
+    with open(filename, "w", encoding="utf-8") as fw:
+        fw.write(separator.join(lines))
+
+
 def _round_floats(obj, ndigits=3):
     """Recursively round all floats in a JSON-serializable structure."""
     if isinstance(obj, float):
@@ -389,7 +394,7 @@ def test_reference_documents_from_filenames():
             )
             assert pdf_doc is not None
         except Exception as exc:
-            results.append((rname, "N/A", False, str(exc)))
+            results.append((rname, "N/A", "parser", False, str(exc)))
             continue
 
         # PdfDocument.iterate_pages() will automatically populate pages as they are yielded.
@@ -406,6 +411,8 @@ def test_reference_documents_from_filenames():
                 continue
 
             SPECIAL_SEPERATOR = "\t<|special_separator|>\n"
+
+            page_failed = False
 
             try:
                 if GENERATE or (not os.path.exists(fname)):
@@ -443,33 +450,49 @@ def test_reference_documents_from_filenames():
                         )
 
                         _fname = fname + f".{unit}.txt"
+                        delta_fname = fname + f".{unit}.delta.txt"
 
                         with open(_fname) as fr:
                             content = fr.read()
                             lines = content.split(SPECIAL_SEPERATOR) if content else []
 
-                        assert len(lines) == len(_lines), (
-                            f"len(lines) == len(_lines) => {len(lines)} == {len(_lines)} from {_fname} for {pdf_doc_path}"
-                        )
+                        try:
+                            assert len(lines) == len(_lines), (
+                                f"len(lines) == len(_lines) => {len(lines)} == {len(_lines)} in {unit} from {os.path.basename(_fname)} for {os.path.basename(pdf_doc_path)}"
+                            )
 
-                        # this is a bit dangerous due to rounding errors ...
-                        """
-                        for i, line in enumerate(lines):
-                            assert (
-                                line == _lines[i]
-                            ), f"line == _lines[i] => {line} == {_lines[i]} in line {i} for {_fname}"
-                        """
+                            # this is a bit dangerous due to rounding errors ...
+                            """
+                            for i, line in enumerate(lines):
+                                assert (
+                                    line == _lines[i]
+                                ), f"line == _lines[i] => {line} == {_lines[i]} in line {i} for {_fname}"
+                            """
+                        except AssertionError as exc:
+                            write_textline_delta(_lines, delta_fname, SPECIAL_SEPERATOR)
+                            results.append(
+                                (rname, str(page_no), str(unit), False, str(exc))
+                            )
+                            page_failed = True
+                        else:
+                            if os.path.exists(delta_fname):
+                                os.remove(delta_fname)
 
-                    true_page = SegmentedPdfPage.load_from_json(fname)
-                    verify_SegmentedPdfPage(true_page, pred_page, filename=fname)
+                    try:
+                        true_page = SegmentedPdfPage.load_from_json(fname)
+                        verify_SegmentedPdfPage(true_page, pred_page, filename=fname)
+                    except Exception as exc:
+                        results.append((rname, str(page_no), "page", False, str(exc)))
+                        page_failed = True
 
                 pred_page.render_as_image(cell_unit=TextCellUnit.CHAR)
                 pred_page.render_as_image(cell_unit=TextCellUnit.WORD)
                 pred_page.render_as_image(cell_unit=TextCellUnit.LINE)
 
-                results.append((rname, str(page_no), True, ""))
+                if not page_failed:
+                    results.append((rname, str(page_no), "all", True, ""))
             except Exception as exc:
-                results.append((rname, str(page_no), False, str(exc)))
+                results.append((rname, str(page_no), "page", False, str(exc)))
 
             # print(f"unloading page: {page_no}")
             pdf_doc.unload_pages(page_range=(page_no, page_no + 1))
@@ -500,20 +523,22 @@ def test_reference_documents_from_filenames():
         return s if len(s) <= n else s[: n - 3] + "..."
 
     table = [
-        (_trunc(doc), page, "PASS" if ok else "FAIL", _trunc(err))
-        for doc, page, ok, err in results
+        (_trunc(doc), page, mode, "PASS" if ok else "FAIL", _trunc(err))
+        for doc, page, mode, ok, err in results
     ]
     print(
         "\n"
         + tabulate(
-            table, headers=["document", "page", "status", "error"], tablefmt="grid"
+            table,
+            headers=["document", "page", "mode", "status", "error"],
+            tablefmt="grid",
         )
         + "\n"
     )
 
-    failed = [(doc, page, err) for doc, page, ok, err in results if not ok]
+    failed = [(doc, page, mode, err) for doc, page, mode, ok, err in results if not ok]
     assert not failed, f"{len(failed)} page(s) failed: " + ", ".join(
-        f"{doc}@{page}" for doc, page, _ in failed
+        f"{doc}@{page}[{mode}]" for doc, page, mode, _ in failed
     )
 
 

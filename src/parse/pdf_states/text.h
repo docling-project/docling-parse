@@ -67,6 +67,7 @@ namespace pdflib
 
     void add_cell(pdf_resource<PAGE_FONT>& font,
                   std::string text,  double width,
+                  int glyph_code,
                   int stack_size,
                   std::vector<page_item<PAGE_CELL> >& cells);
 
@@ -344,7 +345,7 @@ namespace pdflib
           }
         else if(item.isNumber())
           {
-            double value = item.getNumericValue();
+            double value = utils::numeric::locale_safe_numeric_value(item);
 
             double tx = - value / 1000.0 * font_size * h_scaling;
             double ty = 0;
@@ -464,7 +465,7 @@ namespace pdflib
             text  += chars_;
             width += char_width;
 
-            add_cell(font, text, width, stack_size, cells);
+            add_cell(font, text, width, static_cast<int>(item.first), stack_size, cells);
 
             move_cursor(delta_width, 0);
 
@@ -479,7 +480,7 @@ namespace pdflib
     //LOG_S(INFO) << "text-line: " << text;
     if(text.size()>0)
       {
-        add_cell(font, text, width, stack_size, cells);
+        add_cell(font, text, width, -1, stack_size, cells);
       }
 
     return cells;
@@ -487,6 +488,7 @@ namespace pdflib
 
   void pdf_state<TEXT>::add_cell(pdf_resource<PAGE_FONT>& font,
                                  std::string text, double width,
+                                 int glyph_code,
                                  int stack_size,
                                  std::vector<page_item<PAGE_CELL> >& cells)
   {
@@ -495,7 +497,7 @@ namespace pdflib
         return;
       }
 
-    //LOG_S(INFO) << __FUNCTION__ << " with text='" << text << "', width=" << width;
+    LOG_S(INFO) << __FUNCTION__ << " with text='" << text << "', width=" << width << " from base-font: " << font.get_base_font() << ", font-key: " << font.get_key();
 
     bool left_to_right = (not utils::string::is_right_to_left(text));
 
@@ -503,24 +505,11 @@ namespace pdflib
     double font_ascent  = font.get_ascent();
     double font_capheight  = font.get_capheight();
 
-    /*
-    if(left_to_right)
-      {
-	LOG_S(INFO) << "font_descent: " << font_descent << ", "
-		    << "font_ascent: " << font_ascent << ", "
-		    << "font_capheight: " << font_capheight << ", "
-		    << "capheight/ascent: " << font_capheight/font_ascent << ", "
-		    << "left_to_right: " << left_to_right << ", text: " << text;
-      }
-    else
-      {
-	LOG_S(WARNING) << "font_descent: " << font_descent << ", "
-		       << "font_ascent: " << font_ascent << ", "
-		       << "font_capheight: " << font_capheight << ", "
-		       << "capheight/ascent: " << font_capheight/font_ascent << ", "
-		       << "left_to_right: " << left_to_right << ", text: " << text;
-      }
-    */
+    LOG_S(INFO) << "font_descent: " << font_descent << ", "
+		<< "font_ascent: " << font_ascent << ", "
+		<< "font_capheight: " << font_capheight << ", "
+		<< "capheight/ascent: " << font_capheight/font_ascent << ", "
+		<< "left_to_right: " << left_to_right << ", text: " << text;
 
     double space_width=0;
     {
@@ -551,6 +540,38 @@ namespace pdflib
           ratio = font_capheight/font_ascent;
         }
 
+      /* // commented out for now ...
+      if(glyph_code >= 0 and font.has_char_bbox(static_cast<uint32_t>(glyph_code)))
+        {
+          glyph_bbox = font.get_char_bbox(static_cast<uint32_t>(glyph_code));
+          has_glyph_bbox = true;
+          font_descent = glyph_bbox[1];
+          font_ascent  = glyph_bbox[3];
+          ratio = 1.0;
+          LOG_S(INFO) << "using glyph-specific bbox for glyph-code=" << glyph_code
+                      << ", text='" << text << "'"
+                      << " bbox=[" << glyph_bbox[0] << ", "
+                      << glyph_bbox[1] << ", "
+                      << glyph_bbox[2] << ", "
+                      << glyph_bbox[3] << "]";
+        }
+      else if(font.has_char_bbox(text))
+        {
+          glyph_bbox = font.get_char_bbox(text);
+          has_glyph_bbox = true;
+          font_descent = glyph_bbox[1];
+          font_ascent  = glyph_bbox[3];
+          ratio = 1.0;
+          LOG_S(INFO) << "using glyph-specific bbox for text='" << text << "'"
+                      << " bbox=[" << glyph_bbox[0] << ", "
+                      << glyph_bbox[1] << ", "
+                      << glyph_bbox[2] << ", "
+                      << glyph_bbox[3] << "]";
+        }
+      */
+      
+      LOG_S(INFO) << "ratio: " << ratio;
+
       std::array<double, 8> rect = compute_rect(font_descent*ratio, font_ascent*ratio, width);
       {
         cell.r_x0 = rect[0];
@@ -562,8 +583,37 @@ namespace pdflib
         cell.r_x3 = rect[6];
         cell.r_y3 = rect[7];
       }
+      auto font_bbox = font.get_font_bbox();
+      LOG_S(INFO)
+	<< "font-bbox: ["
+	<< font_bbox[0] << ", "
+	<< font_bbox[1] << ", "
+	<< font_bbox[2] << ", "
+	<< font_bbox[3] << "]";
+      
+      LOG_S(INFO)
+	<< "r_0: (" << cell.r_x0 << ", " << cell.r_y0 << "); "
+	<< "r_1: (" << cell.r_x1 << ", " << cell.r_y1 << "); "
+	<< "r_2: (" << cell.r_x2 << ", " << cell.r_y2 << "); "
+	<< "r_3: (" << cell.r_x3 << ", " << cell.r_y3 << "); ";
 
       std::array<double, 8> base = compute_rect(0, font_ascent*ratio, width);
+
+      // The true text baseline origin is (0, rise) in text space.
+      // Transform that point through the text matrix and then the CTM.
+      const double g_base_x = 0.0;
+      const double g_base_y = rise;
+
+      std::array<double, 9>& T_text = text_matrix;
+      const double t_base_x = T_text[0] * g_base_x + T_text[3] * g_base_y + T_text[6];
+      const double t_base_y = T_text[1] * g_base_x + T_text[4] * g_base_y + T_text[7];
+
+      std::array<double, 9>& T_ctm = trafo_matrix;
+      const double d_base_x = T_ctm[0] * t_base_x + T_ctm[3] * t_base_y + T_ctm[6];
+      const double d_base_y = T_ctm[1] * t_base_x + T_ctm[4] * t_base_y + T_ctm[7];
+
+      LOG_S(INFO) << "base_x0_old: " << base[0] << ", base_y0_old: " << base[1];
+      LOG_S(INFO) << "base_x0_new: " << d_base_x << ", base_y0_new: " << d_base_y;
       
       std::array<double, 4> bbox = compute_bbox(rect);
       {
@@ -573,37 +623,63 @@ namespace pdflib
         cell.y1 = bbox[3];
       }
 
-      cell.text = text;
-      cell.rendering_mode = rendering_mode;
-
-      cell.space_width = space_width;
-
-      cell.enc_name = font.get_encoding_name();
-
-      cell.font_enc = to_string(font.get_encoding());
-      cell.font_key = font.get_key();
-
-      cell.font_name = font.get_name();
-      cell.font_size = font_size/1000.0;
-
-      cell.italic = false;
-      cell.bold   = false;
-
-      cell.ocr        = false;
-      cell.confidence = -1.0;
-
-      cell.stack_size  = stack_size;
-      cell.block_count = block_count;
-      cell.instr_count = instr_count;
-
-      cell.has_graphics_state = true;
-      cell.line_width         = grph_state.get_line_width();
-      cell.rgb_stroking_ops   = grph_state.get_rgb_stroking_ops();
-      cell.rgb_filling_ops    = grph_state.get_rgb_filling_ops();
-
+      {
+	cell.text = text;
+	cell.rendering_mode = rendering_mode;
+	
+	cell.space_width = space_width;
+	
+	cell.enc_name = font.get_encoding_name();
+	
+	cell.font_enc = to_string(font.get_encoding());
+	cell.font_key = font.get_key();
+	
+	cell.font_name = font.get_name();
+	cell.font_size = font_size/1000.0;
+	
+	cell.italic = false;
+	cell.bold   = false;
+	
+	cell.ocr        = false;
+	cell.confidence = -1.0;
+	
+	cell.stack_size  = stack_size;
+	cell.block_count = block_count;
+	cell.instr_count = instr_count;
+	
+	cell.has_graphics_state = true;
+	cell.line_width         = grph_state.get_line_width();
+	cell.rgb_stroking_ops   = grph_state.get_rgb_stroking_ops();
+	cell.rgb_filling_ops    = grph_state.get_rgb_filling_ops();
+      }
+      
       cells.push_back(cell);
 
       {
+	// some characters have specific bounding-box spec's
+	bool has_glyph_bbox = false;
+	std::array<double, 4> glyph_bbox = {0.0, 0.0, 0.0, 0.0};
+	
+	std::array<double, 8> glyph_rect = rect;
+	{
+	  if(glyph_code >= 0 and font.has_char_bbox(static_cast<uint32_t>(glyph_code)))
+	    {
+	      glyph_bbox = font.get_char_bbox(static_cast<uint32_t>(glyph_code));
+	      has_glyph_bbox = true;
+	      font_descent = glyph_bbox[1];
+	      font_ascent  = glyph_bbox[3];
+	      ratio = 1.0;
+	      LOG_S(INFO) << "using glyph-specific bbox for glyph-code=" << glyph_code
+			  << ", text='" << text << "'"
+			  << " bbox=[" << glyph_bbox[0] << ", "
+			  << glyph_bbox[1] << ", "
+			  << glyph_bbox[2] << ", "
+			  << glyph_bbox[3] << "]";
+	      
+	      glyph_rect = compute_rect(font_descent*ratio, font_ascent*ratio, width);
+	    }
+	}
+	
         text_instruction tinstr(cell.text,
                                 cell.font_enc,
                                 cell.font_key,
@@ -611,12 +687,15 @@ namespace pdflib
                                 cell.enc_name,
                                 font.get_base_font(),
                                 cell.font_size,
-                                cell.r_x0, cell.r_y0,
-                                cell.r_x1, cell.r_y1,
-                                cell.r_x2, cell.r_y2,
-                                cell.r_x3, cell.r_y3,
+                                glyph_rect.at(0), glyph_rect.at(1), 
+                                glyph_rect.at(2), glyph_rect.at(3),
+				glyph_rect.at(4), glyph_rect.at(5),
+				glyph_rect.at(6), glyph_rect.at(7), 
                                 font_ascent*ratio, font_descent*ratio,
-				base[0], base[1]);
+				d_base_x, d_base_y,
+                                has_glyph_bbox,
+                                glyph_bbox[0], glyph_bbox[1],
+                                glyph_bbox[2], glyph_bbox[3]);
 
         instructions.add_text_instruction(std::move(tinstr));
       }

@@ -27,6 +27,14 @@ namespace pdflib
     // Draw the bounding quad of each text cell as a thin blue outline.
     bool draw_text_bbox = false;
 
+    // Draw the text baseline origin as a small red dot.
+    bool draw_text_basepoint = false;
+
+    // Uniformly rescale measured glyph outlines so the rendered bbox fits
+    // inside the target glyph bbox while matching either the target width or
+    // target height exactly. Only applies when a glyph bbox is available.
+    bool fit_glyph_bbox_to_target = false;
+
     // Try to resolve the PDF font name / base_font to a system font file.
     // When false the renderer always uses the hardcoded fallback font
     // (Helvetica / Arial) without any name lookup.

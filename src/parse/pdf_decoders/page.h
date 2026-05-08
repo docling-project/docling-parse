@@ -90,6 +90,7 @@ namespace pdflib
     void decode_annots_from_qpdf();
     void extract_page_items_from_annots(QPDFObjectHandle annots);
 
+    void add_page_cell_from_annot(QPDFObjectHandle annot);
     void add_page_hyperlink_from_annot(QPDFObjectHandle annot);
     void add_page_widget_from_annot(QPDFObjectHandle annot);
 
@@ -785,6 +786,73 @@ namespace pdflib
       }
   }
 
+  void pdf_decoder<PAGE>::add_page_cell_from_annot(QPDFObjectHandle annot)
+  {
+    auto rect = annot.getKey("/Rect");
+
+    std::array<double, 4> bbox = {0., 0., 0., 0.};
+    for(int l=0; l<rect.getArrayNItems() and l<bbox.size(); l++)
+      {
+        QPDFObjectHandle num = rect.getArrayItem(l);
+        if(num.isNumber())
+          {
+            bbox[l] = utils::numeric::locale_safe_numeric_value(num);
+          }
+      }
+
+    auto [has_value, text] = to_string(annot, "/V");
+    if(not has_value)
+      {
+        text = "<unknown>";
+      }
+
+    page_item<PAGE_CELL> cell;
+    {
+      cell.widget = true;
+
+      cell.x0 = bbox[0];
+      cell.y0 = bbox[1];
+      cell.x1 = bbox[2];
+      cell.y1 = bbox[3];
+
+      cell.r_x0 = bbox[0];
+      cell.r_y0 = bbox[1];
+      cell.r_x1 = bbox[2];
+      cell.r_y1 = bbox[1];
+      cell.r_x2 = bbox[2];
+      cell.r_y2 = bbox[3];
+      cell.r_x3 = bbox[0];
+      cell.r_y3 = bbox[3];
+
+      cell.text = text;
+      cell.rendering_mode = 0;
+
+      cell.space_width = 0;
+      //cell.chars  = {};//chars;
+      //cell.widths = {};//widths;
+
+      cell.enc_name = "Form-font"; //font.get_encoding_name();
+
+      cell.font_enc = "Form-font"; //to_string(font.get_encoding());
+      cell.font_key = "Form-font"; //font.get_key();
+
+      cell.font_name = "Form-font"; //font.get_name();
+      cell.font_size = 0; //font_size/1000.0;
+
+      cell.italic = false;
+      cell.bold   = false;
+
+      cell.ocr        = false;
+      cell.confidence = -1.0;
+
+      cell.stack_size  = -1;
+      cell.block_count = -1;
+      cell.instr_count = -1;
+    }
+    page_cells.push_back(cell);
+
+  }
+
   void pdf_decoder<PAGE>::add_page_hyperlink_from_annot(QPDFObjectHandle annot)
   {
     LOG_S(INFO) << __FUNCTION__;
@@ -797,7 +865,7 @@ namespace pdflib
         QPDFObjectHandle num = rect.getArrayItem(l);
         if(num.isNumber())
           {
-            bbox[l] = num.getNumericValue();
+            bbox[l] = utils::numeric::locale_safe_numeric_value(num);
           }
       }
 
@@ -840,7 +908,7 @@ namespace pdflib
         QPDFObjectHandle num = rect.getArrayItem(l);
         if(num.isNumber())
           {
-            bbox[l] = num.getNumericValue();
+            bbox[l] = utils::numeric::locale_safe_numeric_value(num);
           }
       }
 

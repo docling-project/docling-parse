@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <climits>
 #include <cmath>
 #include <cstdlib>
@@ -139,6 +140,40 @@ namespace pdflib
           expanded.pop_back();
         }
       return expanded;
+    }
+
+    static bool should_fit_glyph_bbox_to_target(const std::string& text)
+    {
+      if (text.empty()) { return false; }
+
+      for (unsigned char ch : text)
+        {
+          if (ch >= 0x80)
+            {
+              return true;
+            }
+          switch (ch)
+            {
+            case '(':
+            case ')':
+            case '[':
+            case ']':
+            case '{':
+            case '}':
+            case '<':
+            case '>':
+              return true;
+            default:
+              break;
+            }
+          if (std::isalnum(ch) || std::ispunct(ch) || std::isspace(ch))
+            {
+              continue;
+            }
+          return true;
+        }
+
+      return false;
     }
 
     // Build font_index_ by scanning standard system font directories.
@@ -843,6 +878,13 @@ namespace pdflib
       ctx.stroke_path(bbox_path);
     };
 
+    auto draw_basepoint = [&]()
+    {
+      if (not config_.draw_text_basepoint) { return; }
+      ctx.set_fill_style(BLRgba32(0xFFFF0000u));
+      ctx.fill_circle(BLCircle(bx, by, 2.0));
+    };
+
     if (face.is_valid() and size > 0.5)
       {
         if (config_.render_text)
@@ -921,8 +963,127 @@ namespace pdflib
                 ctx.end();
                 return;
               }
+            BLPoint draw_origin(0.0, 0.0);
+            double bbox_fit_scale = 1.0;
+            if (instr.has_glyph_bbox())
+              {
+                const BLGlyphId glyph_id = gb.glyph_run().glyph_data_as<uint32_t>()[0];
+                BLPath glyph_path;
+                const BLMatrix2D identity(1.0, 0.0,
+                                          0.0, 1.0,
+                                          0.0, 0.0);
+                const BLResult outline_res =
+                  font.get_glyph_outlines(glyph_id, identity, glyph_path);
+                LOG_S(INFO) << "render_text: glyph outline res=" << outline_res
+                            << " glyph_path empty=" << glyph_path.is_empty();
+                if (outline_res == BL_SUCCESS && !glyph_path.is_empty())
+                  {
+                    BLBox rendered_box;
+                    const BLResult bbox_res = glyph_path.get_bounding_box(&rendered_box);
+                    LOG_S(INFO) << "render_text: glyph outline bbox res=" << bbox_res;
+                    if (bbox_res != BL_SUCCESS)
+                      {
+                        LOG_S(WARNING) << "render_text: glyph outline bbox failed"
+                                       << " (BLResult=" << bbox_res << ")";
+                      }
+                    else
+                      {
+                        const double target_x0 = instr.get_g_x0() / 1000.0 * size;
+                        const double target_y0 = -instr.get_g_y1() / 1000.0 * size;
+                        const double target_x1 = instr.get_g_x1() / 1000.0 * size;
+                        const double target_y1 = -instr.get_g_y0() / 1000.0 * size;
+
+                        const double rendered_x0 = rendered_box.x0;
+                        const double rendered_y0 = rendered_box.y0;
+                        const double rendered_x1 = rendered_box.x1;
+                        const double rendered_y1 = rendered_box.y1;
+
+                        const double target_w = target_x1 - target_x0;
+                        const double target_h = target_y1 - target_y0;
+                        const double rendered_w = rendered_x1 - rendered_x0;
+                        const double rendered_h = rendered_y1 - rendered_y0;
+                        const double base_to_top = std::abs(target_y0);
+                        const bool baseline_near_top =
+                          target_h > 0.0 && (base_to_top / target_h) < 0.25;
+
+                        if (config_.fit_glyph_bbox_to_target
+                            && should_fit_glyph_bbox_to_target(instr.get_text())
+                            && target_w > 0.0
+                            && target_h > 0.0
+                            && rendered_w > 0.0
+                            && rendered_h > 0.0)
+                          {
+                            const double width_scale = target_w / rendered_w;
+                            const double height_scale = target_h / rendered_h;
+                            const bool width_limited = width_scale <= height_scale;
+                            bbox_fit_scale = std::min(width_scale, height_scale);
+                            const double target_center_y = 0.5 * (target_y0 + target_y1);
+                            const double rendered_center_y = 0.5 * (rendered_y0 + rendered_y1);
+
+                            draw_origin.x = target_x0 - bbox_fit_scale * rendered_x0;
+                            if (width_limited)
+                              {
+                                draw_origin.y =
+                                  target_center_y - bbox_fit_scale * rendered_center_y;
+                              }
+                            else
+                              {
+                                draw_origin.y =
+                                  target_y0 - bbox_fit_scale * rendered_y0;
+                              }
+                            LOG_S(INFO) << "render_text: fitting rendered bbox to target bbox"
+                                        << " scale=" << bbox_fit_scale
+                                        << " width_limited=" << width_limited
+                                        << " draw_origin=(" << draw_origin.x
+                                        << "," << draw_origin.y << ")";
+                          }
+                        else if (baseline_near_top)
+                          {
+                            draw_origin.y = target_y0 - rendered_y0;
+                            LOG_S(INFO) << "render_text: aligning rendered top to target top"
+                                        << " target_y0=" << target_y0
+                                        << " rendered_y0=" << rendered_y0
+                                        << " draw_origin.y=" << draw_origin.y;
+                          }
+
+                        LOG_S(INFO) << "render_text: target bbox=["
+                                    << target_x0 << ", " << target_y0 << ", "
+                                    << target_x1 << ", " << target_y1 << "]"
+                                    << " rendered bbox=["
+                                    << rendered_x0 << ", " << rendered_y0 << ", "
+                                    << rendered_x1 << ", " << rendered_y1 << "]"
+                                    << " bbox_fit_scale=" << bbox_fit_scale
+                                    << " baseline_near_top=" << baseline_near_top;
+                      }
+                  }
+              }
+
+            if (bbox_fit_scale != 1.0)
+              {
+                const BLResult translate_res = ctx.translate(draw_origin.x, draw_origin.y);
+                if (translate_res != BL_SUCCESS)
+                  {
+                    LOG_S(WARNING) << "render_text: translate failed"
+                                   << " (BLResult=" << translate_res << ")";
+                    ctx.restore();
+                    draw_bbox_fallback();
+                    ctx.end();
+                    return;
+                  }
+                const BLResult scale_res = ctx.scale(bbox_fit_scale);
+                if (scale_res != BL_SUCCESS)
+                  {
+                    LOG_S(WARNING) << "render_text: scale failed"
+                                   << " (BLResult=" << scale_res << ")";
+                    ctx.restore();
+                    draw_bbox_fallback();
+                    ctx.end();
+                    return;
+                  }
+                draw_origin.reset(0.0, 0.0);
+              }
             const BLResult text_res =
-              ctx.fill_utf8_text(BLPoint(0.0, 0.0), font, instr.get_text().c_str());
+              ctx.fill_utf8_text(draw_origin, font, instr.get_text().c_str());
             LOG_S(INFO) << "render_text: after fill_utf8_text res=" << text_res;
             LOG_S(INFO) << "render_text: before ctx.restore";
             ctx.restore();
@@ -941,6 +1102,8 @@ namespace pdflib
                         << " ctm=[[" << adv_x << "," << adv_y << "],[" << dn_x << "," << dn_y << "],[" << bx << "," << by << "]]";
           }
 
+        draw_basepoint();
+
         if (config_.draw_text_bbox)
           {
             ctx.set_stroke_style(BLRgba32(0xFF1070C0u));
@@ -951,6 +1114,7 @@ namespace pdflib
     else
       {
         // No valid font — draw the bounding quad outline.
+        draw_basepoint();
         LOG_S(WARNING) << "render_text: no valid font for '"
                        << instr.get_font_name() << "' / '"
                        << instr.get_base_font() << "', drawing outline only";

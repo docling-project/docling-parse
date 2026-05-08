@@ -6,10 +6,7 @@ example input:
 {
     "data":
     {
-        "glyphs": "../docling_parse/pdf_resources/glyphs",
-        "cids": "../docling_parse/pdf_resources/cmap-resources",
-        "encodings": "../docling_parse/pdf_resources/encodings",
-        "fonts": "../docling_parse/pdf_resources/fonts"
+
     }
 }
 */
@@ -39,35 +36,28 @@ nlohmann::json read_input(std::string filename)
 
 int main(int argc, char *argv[])
 {
+  std::string glyphs_dir =  "../docling_parse/pdf_resources/glyphs";
+  std::string cids_dir = "../docling_parse/pdf_resources/cmap-resources";
+  std::string encodings_dir = "../docling_parse/pdf_resources/encodings";
+  std::string fonts_dir = "../docling_parse/pdf_resources/fonts";
+  
   loguru::init(argc, argv);
 
-  switch(argc)
-    {
-    case 2:
-      {        
-        LOG_S(INFO) << "input-file: " << argv[1];
-        nlohmann::json input = read_input(argv[1]);
+  pdflib::font_cids cids;
+  cids.initialise(cids_dir);
+  cids.decode_all();
+  
+  pdflib::font_glyphs glyphs;
+  glyphs.initialise(glyphs_dir);
 
-        pdflib::font_cids cids;
-        cids.initialise(input["data"]["cids"]);
-	cids.decode_all();
+  pdflib::font_encodings encodings;
+  encodings.initialise(encodings_dir, glyphs);
+  
+  pdflib::base_fonts fonts;
+  fonts.initialise(fonts_dir, glyphs);
 
-        pdflib::font_glyphs glyphs;
-        glyphs.initialise(input["data"]["glyphs"]);
-
-        pdflib::font_encodings encodings;
-        encodings.initialise(input["data"]["encodings"], glyphs);
-
-        pdflib::base_fonts fonts;
-        fonts.initialise(input["data"]["fonts"], glyphs);
-      }
-      break;
-
-    default:
-      {
-        LOG_S(ERROR) << "incorrect number of input-variables";
-      }      
-    }
+  fonts.verify_all();
+  glyphs.print_unknown_glyphs();
 
   return 0;
 }

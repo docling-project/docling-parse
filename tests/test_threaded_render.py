@@ -226,6 +226,7 @@ def test_render_custom_render_config():
     render_config = RenderConfig()
     render_config.render_text = True
     render_config.draw_text_bbox = False
+    render_config.fit_glyph_bbox_to_target = True
     render_config.resolve_fonts = True
 
     parser = _make_parser(render_config=render_config)
@@ -380,6 +381,15 @@ def test_render_scale_config_handles_pages_with_different_sizes(tmp_path: Path):
 
     assert sizes_by_page[1] == (400, 600)
     assert sizes_by_page[2] == (800, 1000)
+
+
+def test_render_config_exposes_bbox_fit_flag():
+    """RenderConfig exposes the opt-in glyph bbox fit flag."""
+    render_config = RenderConfig()
+    assert render_config.fit_glyph_bbox_to_target is False
+
+    render_config.fit_glyph_bbox_to_target = True
+    assert render_config.fit_glyph_bbox_to_target is True
 
 
 def test_render_reference_documents_from_filenames():

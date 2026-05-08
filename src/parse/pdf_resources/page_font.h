@@ -43,6 +43,13 @@ namespace pdflib
 
     double get_capheight();
     double get_xheight();
+    bool has_char_bbox(const uint32_t& c);
+    std::array<double, 4> get_char_bbox(const uint32_t& c);
+    bool has_char_bbox(const std::string& c);
+    std::array<double, 4> get_char_bbox(const std::string& c);
+
+    std::array<double, 4> get_font_bbox() { return font_bbox; }
+    const embedded_font_program& get_font_program() const { return font_program; }
     
     std::string get_utf8_string(std::string line, bool is_hex_str);
 
@@ -65,8 +72,19 @@ namespace pdflib
     void init_font_name();
     void init_font_bbox();
     void init_font_matrix();
-
-    //void init_fontfile3();
+    void init_font_program();
+    bool try_init_font_program_from_descriptor(QPDFObjectHandle font_obj,
+                                               nlohmann::json const& font_json,
+                                               bool from_descendant_font);
+    bool try_init_font_program_direct(QPDFObjectHandle font_obj,
+                                      nlohmann::json const& font_json,
+                                      bool from_descendant_font);
+    void populate_font_program(QPDFObjectHandle descriptor_obj,
+                               QPDFObjectHandle stream_obj,
+                               nlohmann::json const& descriptor_json,
+                               std::string const& source_path,
+                               embedded_font_file_kind kind,
+                               bool from_descendant_font);
     
     void init_ascent_and_descent();
 
@@ -149,6 +167,7 @@ namespace pdflib
     std::unordered_map<uint32_t, int> unknown_numbs;
 
     uint32_t space_index;
+    embedded_font_program font_program;
   };
 
   font_glyphs    pdf_resource<PAGE_FONT>::glyphs = font_glyphs();
@@ -367,6 +386,58 @@ namespace pdflib
   double pdf_resource<PAGE_FONT>::get_xheight()
   {
     return xheight;
+  }
+
+  bool pdf_resource<PAGE_FONT>::has_char_bbox(const uint32_t& c)
+  {
+    if(bfonts.has_corresponding_font(font_name) or
+       bfonts.has_corresponding_font(base_font))
+      {
+        std::string fontname = bfonts.has_corresponding_font(font_name)
+          ? bfonts.get_corresponding_font(font_name)
+          : bfonts.get_corresponding_font(base_font);
+
+        auto& bfont = bfonts.get(fontname);
+        return bfont.has_char_bbox(c);
+      }
+
+    return false;
+  }
+
+  std::array<double, 4> pdf_resource<PAGE_FONT>::get_char_bbox(const uint32_t& c)
+  {
+    std::string fontname = bfonts.has_corresponding_font(font_name)
+      ? bfonts.get_corresponding_font(font_name)
+      : bfonts.get_corresponding_font(base_font);
+
+    auto& bfont = bfonts.get(fontname);
+    return bfont.get_char_bbox(c);
+  }
+
+  bool pdf_resource<PAGE_FONT>::has_char_bbox(const std::string& c)
+  {
+    if(bfonts.has_corresponding_font(font_name) or
+       bfonts.has_corresponding_font(base_font))
+      {
+        std::string fontname = bfonts.has_corresponding_font(font_name)
+          ? bfonts.get_corresponding_font(font_name)
+          : bfonts.get_corresponding_font(base_font);
+
+        auto& bfont = bfonts.get(fontname);
+        return bfont.has_char_bbox(c);
+      }
+
+    return false;
+  }
+
+  std::array<double, 4> pdf_resource<PAGE_FONT>::get_char_bbox(const std::string& c)
+  {
+    std::string fontname = bfonts.has_corresponding_font(font_name)
+      ? bfonts.get_corresponding_font(font_name)
+      : bfonts.get_corresponding_font(base_font);
+
+    auto& bfont = bfonts.get(fontname);
+    return bfont.get_char_bbox(c);
   }
   
   std::string pdf_resource<PAGE_FONT>::get_string(uint32_t c)
@@ -627,8 +698,7 @@ namespace pdflib
       init_font_name();
       init_font_bbox();
       init_font_matrix();
-      
-      //init_fontfile3();
+      // init_font_program(); // not really needed for now I believe
       
       init_ascent_and_descent();
       
@@ -980,118 +1050,306 @@ namespace pdflib
                 << font_matrix[5] << "]";
   }
 
-
-  /*
-  void pdf_resource<PAGE_FONT>::init_fontfile3()
+  void pdf_resource<PAGE_FONT>::init_font_program()
   {
-    LOG_S(INFO) << __FUNCTION__;// << "\t" << json_font.dump(2);
+    LOG_S(INFO) << __FUNCTION__
+                << " for font-key=" << font_key
+                << " font-name=" << font_name
+                << " base-font=" << base_font
+                << " subtype=" << to_string(subtype);
 
-    std::vector<std::string> keys_0 = {"/FontDescriptor", "/FontFile3"};
-    std::vector<std::string> keys_1 = {"/FontFile3"};
+    font_program = embedded_font_program();
+    font_program.base_font = base_font;
+    font_program.font_name = font_name;
 
-    if(utils::json::has(keys_0, json_font))
+    bool found = false;
+
+    LOG_S(INFO) << __FUNCTION__ << ": probing primary font descriptor";
+    found = try_init_font_program_from_descriptor(qpdf_font, json_font, false);
+
+    if(not found and subtype==TYPE_0 and qpdf_font.hasKey("/DescendantFonts"))
       {
-	auto qpdf_obj = qpdf_font.getKey("/FontDescriptor").getKey("/FontFile3");
-
-	if(qpdf_obj.isStream())
-	  {
-	    std::vector<qpdf_stream_instruction> stream;
-	    
-	    // decode the stream
-	    {
-	      qpdf_stream_decoder decoder(stream);
-	      decoder.decode(qpdf_obj);
-	      
-	      decoder.print();
-	    }
-	  }
-	else
-	  {
-	    LOG_S(WARNING) << "fontfile3 is not a stream ...";
-	  }
-
-	{
-	  auto buffer = to_shared_ptr(qpdf_obj.getRawStreamData());
-
-	  LOG_S(INFO) << "buffer-size: " << buffer->getSize();
-	  //LOG_S(INFO) << "buffer: " << buffer->getBuffer();
-
-	  std::string filename = "fontfile.zip";
-	  std::ofstream outFile(filename, std::ios::binary);
-	  if (!outFile) {
-	    LOG_S(ERROR) << "opening file for writing: " << filename << std::endl;
-	    return;
-	  }
-
-	  outFile.write(reinterpret_cast<const char*>(buffer->getBuffer()), buffer->getSize());
-	  outFile.close();
-	  
-	  if (!outFile) {
-	    LOG_S(ERROR) << "Error occurred while writing to the file: " << filename << std::endl;
-	  } else {
-	    LOG_S(INFO) << "Buffer successfully written to " << filename << std::endl;
-	  }
-	}
-
-	{
-	auto buffer = to_shared_ptr(qpdf_obj.getStreamData(qpdf_dl_generalized));
-	  
-	LOG_S(INFO) << "buffer-size: " << buffer->getSize();
-	//LOG_S(INFO) << "buffer: " << buffer->getBuffer();
-	}
-	
-	//assert(false);
+        LOG_S(INFO) << __FUNCTION__ << ": probing descendant font descriptor";
+        auto desc_fonts = qpdf_font.getKey("/DescendantFonts");
+        if(desc_fonts.isArray() and desc_fonts.getArrayNItems() > 0)
+          {
+            auto qpdf_desc_font = desc_fonts.getArrayItem(0);
+            found = try_init_font_program_from_descriptor(qpdf_desc_font, desc_font, true);
+            if(not found)
+              {
+                LOG_S(INFO) << __FUNCTION__ << ": probing descendant font directly";
+                found = try_init_font_program_direct(qpdf_desc_font, desc_font, true);
+              }
+          }
+        else
+          {
+            LOG_S(INFO) << __FUNCTION__ << ": /DescendantFonts missing or empty at qpdf level";
+          }
       }
 
-    else if(utils::json::has(keys_0, desc_font))
+    if(not found)
       {
-	auto qpdf_obj = qpdf_desc_font.getKey("/FontDescriptor").getKey("/FontFile3");
-
-	if(qpdf_obj.isStream())
-	  {
-	    std::vector<qpdf_stream_instruction> stream;
-	    
-	    // decode the stream
-	    {
-	      qpdf_stream_decoder decoder(stream);
-	      decoder.decode(qpdf_obj);
-	      
-	      decoder.print();
-	    }
-	  }
-	else
-	  {
-	    LOG_S(WARNING) << "fontfile3 is not a stream ...";
-	  }
-      }    
-    else if(utils::json::has(keys_1, json_font))
-      {
-	auto qpdf_obj = qpdf_font.getKey("/FontFile3");
-
-	if(qpdf_obj.isStream())
-	  {
-	    std::vector<qpdf_stream_instruction> stream;
-	    
-	    // decode the stream
-	    {
-	      qpdf_stream_decoder decoder(stream);
-	      decoder.decode(qpdf_obj);
-	      
-	      decoder.print();
-	    }
-	  }
-	else
-	  {
-	    LOG_S(WARNING) << "fontfile3 is not a stream ...";
-	  }	  
+        LOG_S(INFO) << __FUNCTION__ << ": probing primary font object directly";
+        found = try_init_font_program_direct(qpdf_font, json_font, false);
       }
 
+    if(not found and subtype==TYPE_0 and qpdf_font.hasKey("/DescendantFonts"))
+      {
+        auto desc_fonts = qpdf_font.getKey("/DescendantFonts");
+        if(desc_fonts.isArray() and desc_fonts.getArrayNItems() > 0)
+          {
+            LOG_S(INFO) << __FUNCTION__ << ": probing descendant font directly as final fallback";
+            auto qpdf_desc_font = desc_fonts.getArrayItem(0);
+            found = try_init_font_program_direct(qpdf_desc_font, desc_font, true);
+          }
+      }
+
+    if(found)
+      {
+        LOG_S(INFO) << __FUNCTION__
+                    << ": found embedded font program"
+                    << " kind=" << to_string(font_program.kind)
+                    << " source=" << font_program.source_path
+                    << " declared-subtype=" << font_program.declared_subtype
+                    << " raw-size=" << font_program.raw_size
+                    << " decoded-size=" << font_program.decoded_size
+                    << " length=" << font_program.length
+                    << " length1=" << font_program.length1
+                    << " length2=" << font_program.length2
+                    << " length3=" << font_program.length3;
+      }
     else
       {
-	LOG_S(WARNING) << "no fontfile3 detected ...";
+        LOG_S(INFO) << __FUNCTION__ << ": no embedded font program found";
       }
   }
-  */
+
+  bool pdf_resource<PAGE_FONT>::try_init_font_program_from_descriptor(
+    QPDFObjectHandle font_obj,
+    nlohmann::json const& font_json,
+    bool from_descendant_font)
+  {
+    LOG_S(INFO) << __FUNCTION__
+                << ": from_descendant_font=" << from_descendant_font;
+
+    if(not font_obj.isDictionary())
+      {
+        LOG_S(INFO) << __FUNCTION__ << ": font object is not a dictionary";
+        return false;
+      }
+
+    if(not font_obj.hasKey("/FontDescriptor"))
+      {
+        LOG_S(INFO) << __FUNCTION__ << ": no /FontDescriptor on qpdf font object";
+        return false;
+      }
+
+    auto descriptor_obj = font_obj.getKey("/FontDescriptor");
+    if(not descriptor_obj.isDictionary())
+      {
+        LOG_S(INFO) << __FUNCTION__ << ": /FontDescriptor is not a dictionary";
+        return false;
+      }
+
+    nlohmann::json descriptor_json = nullptr;
+    if(font_json.is_object() and font_json.count("/FontDescriptor") == 1)
+      {
+        descriptor_json = font_json["/FontDescriptor"];
+      }
+
+    struct candidate_spec
+    {
+      const char* key;
+      embedded_font_file_kind kind;
+    };
+
+    const std::array<candidate_spec, 3> specs = {{
+        {"/FontFile",  FONT_FILE_TYPE1},
+        {"/FontFile2", FONT_FILE_TRUETYPE},
+        {"/FontFile3", FONT_FILE_CFF},
+      }};
+
+    for(const auto& spec : specs)
+      {
+        LOG_S(INFO) << __FUNCTION__ << ": checking descriptor key " << spec.key;
+        if(not descriptor_obj.hasKey(spec.key))
+          {
+            continue;
+          }
+
+        auto stream_obj = descriptor_obj.getKey(spec.key);
+        if(not stream_obj.isStream())
+          {
+            LOG_S(INFO) << __FUNCTION__ << ": key " << spec.key << " exists but is not a stream";
+            continue;
+          }
+
+        populate_font_program(descriptor_obj,
+                              stream_obj,
+                              descriptor_json,
+                              std::string("/FontDescriptor") + spec.key,
+                              spec.kind,
+                              from_descendant_font);
+        return true;
+      }
+
+    LOG_S(INFO) << __FUNCTION__ << ": no embedded font stream found in descriptor";
+    return false;
+  }
+
+  bool pdf_resource<PAGE_FONT>::try_init_font_program_direct(
+    QPDFObjectHandle font_obj,
+    nlohmann::json const& font_json,
+    bool from_descendant_font)
+  {
+    LOG_S(INFO) << __FUNCTION__
+                << ": from_descendant_font=" << from_descendant_font;
+
+    if(not font_obj.isDictionary())
+      {
+        LOG_S(INFO) << __FUNCTION__ << ": font object is not a dictionary";
+        return false;
+      }
+
+    struct candidate_spec
+    {
+      const char* key;
+      embedded_font_file_kind kind;
+    };
+
+    const std::array<candidate_spec, 3> specs = {{
+        {"/FontFile",  FONT_FILE_TYPE1},
+        {"/FontFile2", FONT_FILE_TRUETYPE},
+        {"/FontFile3", FONT_FILE_CFF},
+      }};
+
+    for(const auto& spec : specs)
+      {
+        LOG_S(INFO) << __FUNCTION__ << ": checking direct key " << spec.key;
+        if(not font_obj.hasKey(spec.key))
+          {
+            continue;
+          }
+
+        auto stream_obj = font_obj.getKey(spec.key);
+        if(not stream_obj.isStream())
+          {
+            LOG_S(INFO) << __FUNCTION__ << ": key " << spec.key << " exists but is not a stream";
+            continue;
+          }
+
+        populate_font_program(font_obj,
+                              stream_obj,
+                              font_json,
+                              spec.key,
+                              spec.kind,
+                              from_descendant_font);
+        return true;
+      }
+
+    LOG_S(INFO) << __FUNCTION__ << ": no direct embedded font stream found";
+    return false;
+  }
+
+  void pdf_resource<PAGE_FONT>::populate_font_program(
+    QPDFObjectHandle descriptor_obj,
+    QPDFObjectHandle stream_obj,
+    nlohmann::json const& descriptor_json,
+    std::string const& source_path,
+    embedded_font_file_kind kind,
+    bool from_descendant_font)
+  {
+    LOG_S(INFO) << __FUNCTION__
+                << ": source_path=" << source_path
+                << " kind=" << to_string(kind)
+                << " from_descendant_font=" << from_descendant_font;
+
+    font_program = embedded_font_program();
+    font_program.found = true;
+    font_program.kind = kind;
+    font_program.source_path = source_path;
+    font_program.base_font = base_font;
+    font_program.font_name = font_name;
+    font_program.from_descendant_font = from_descendant_font;
+    font_program.descriptor_json = descriptor_json;
+    font_program.stream_dict_json = to_json(stream_obj, {}, 0, 2);
+    LOG_S(INFO) << __FUNCTION__
+                << ": stream-dict-json=\n"
+                << font_program.stream_dict_json.dump(2);
+
+    auto subtype_info = to_string(stream_obj, "/Subtype");
+    if(subtype_info.first)
+      {
+        font_program.declared_subtype = subtype_info.second;
+      }
+
+    auto update_length = [&](const char* key, int& dst)
+    {
+      if(stream_obj.hasKey(key) and stream_obj.getKey(key).isInteger())
+        {
+          dst = stream_obj.getKey(key).getIntValue();
+          LOG_S(INFO) << __FUNCTION__ << ": " << key << "=" << dst;
+        }
+      else
+        {
+          LOG_S(INFO) << __FUNCTION__ << ": " << key << " not present as integer";
+        }
+    };
+
+    update_length("/Length", font_program.length);
+    update_length("/Length1", font_program.length1);
+    update_length("/Length2", font_program.length2);
+    update_length("/Length3", font_program.length3);
+
+    try
+      {
+        LOG_S(INFO) << __FUNCTION__ << ": decoding font stream with qpdf_stream_decoder";
+        qpdf_stream_decoder decoder(font_program.decoded_stream);
+        decoder.decode(stream_obj);
+        LOG_S(INFO) << __FUNCTION__
+                    << ": decoded stream instruction count="
+                    << font_program.decoded_stream.size();
+        decoder.print();
+      }
+    catch(const std::exception& e)
+      {
+        LOG_S(INFO) << __FUNCTION__ << ": failed to decode stream instructions: " << e.what();
+      }
+
+    try
+      {
+        font_program.raw_data = to_shared_ptr(stream_obj.getRawStreamData());
+        if(font_program.raw_data)
+          {
+            font_program.raw_size = font_program.raw_data->getSize();
+          }
+        LOG_S(INFO) << __FUNCTION__ << ": raw_size=" << font_program.raw_size;
+      }
+    catch(const std::exception& e)
+      {
+        LOG_S(INFO) << __FUNCTION__ << ": failed to read raw stream data: " << e.what();
+      }
+
+    try
+      {
+        font_program.decoded_data = to_shared_ptr(stream_obj.getStreamData(qpdf_dl_all));
+        if(font_program.decoded_data)
+          {
+            font_program.decoded_size = font_program.decoded_data->getSize();
+          }
+        LOG_S(INFO) << __FUNCTION__ << ": decoded_size=" << font_program.decoded_size;
+      }
+    catch(const std::exception& e)
+      {
+        LOG_S(INFO) << __FUNCTION__ << ": failed to read decoded stream data: " << e.what();
+      }
+
+    LOG_S(INFO) << __FUNCTION__
+                << ": completed"
+                << " kind=" << to_string(font_program.kind)
+                << " source=" << font_program.source_path
+                << " declared_subtype=" << font_program.declared_subtype;
+  }
   
   void pdf_resource<PAGE_FONT>::init_ascent_and_descent()
   {

@@ -23,10 +23,14 @@ namespace pdflib
     base_font& operator=(const base_font& other);
 
     bool has(uint32_t numb);
-    bool has(std::string c);
+    bool has(const std::string& c);
 
     double get_width(uint32_t numb);
-    double get_width(std::string c);
+    double get_width(const std::string& c);
+    bool has_char_bbox(const uint32_t& numb);
+    bool has_char_bbox(const std::string& c);
+    std::array<double, 4> get_char_bbox(const uint32_t& numb);
+    std::array<double, 4> get_char_bbox(const std::string& c);
 
     std::string get_string(uint32_t numb);
 
@@ -54,9 +58,12 @@ namespace pdflib
     
     std::unordered_map<uint32_t, std::string> numb_to_name;
     std::unordered_map<uint32_t, std::string> numb_to_utf8;
+    std::unordered_map<std::string, uint32_t> utf8_to_numb;
 
     std::unordered_map<uint32_t   , double> numb_to_width;
     std::unordered_map<std::string, double> name_to_width;
+    std::unordered_map<uint32_t, std::array<double, 4> > numb_to_bbox;
+    std::unordered_map<std::string, std::array<double, 4> > name_to_bbox;
   };
 
   base_font::base_font(std::string filename_,
@@ -92,19 +99,10 @@ namespace pdflib
     return (numb_to_utf8.count(numb)==1);
   }
 
-  bool base_font::has(std::string c)
+  bool base_font::has(const std::string& c)
   {
     initialise();
-
-    for(auto itr=numb_to_utf8.begin(); itr!=numb_to_utf8.end(); itr++)
-      {
-	if(c==itr->second)
-	  {
-	    return true;
-	  }
-      }
-
-    return false;
+    return (utf8_to_numb.count(c)==1);
   }
 
   double base_font::get_width(uint32_t numb)
@@ -114,21 +112,62 @@ namespace pdflib
     return numb_to_width.at(numb);
   }
 
-  double base_font::get_width(std::string c)
+  double base_font::get_width(const std::string& c)
   {
     initialise();
 
-    for(auto itr=numb_to_utf8.begin(); itr!=numb_to_utf8.end(); itr++)
+    if(utf8_to_numb.count(c)==1)
       {
-	if(c==itr->second and numb_to_width.count(itr->first))
-	  {
-	    return numb_to_width[itr->first];
-	  }
+        uint32_t numb = utf8_to_numb.at(c);
+        if(numb_to_width.count(numb))
+          {
+            return numb_to_width.at(numb);
+          }
       }
 
     LOG_S(ERROR) << "could not find width for '" << c << "'";
 
     return 500;
+  }
+
+  bool base_font::has_char_bbox(const uint32_t& numb)
+  {
+    initialise();
+    return (numb_to_bbox.count(numb)==1);
+  }
+
+  bool base_font::has_char_bbox(const std::string& c)
+  {
+    initialise();
+    if(utf8_to_numb.count(c)!=1)
+      {
+        return false;
+      }
+    return (numb_to_bbox.count(utf8_to_numb.at(c))==1);
+  }
+
+  std::array<double, 4> base_font::get_char_bbox(const uint32_t& numb)
+  {
+    initialise();
+    return numb_to_bbox.at(numb);
+  }
+
+  std::array<double, 4> base_font::get_char_bbox(const std::string& c)
+  {
+    initialise();
+    if(utf8_to_numb.count(c)==1)
+      {
+        uint32_t numb = utf8_to_numb.at(c);
+        if(numb_to_bbox.count(numb)==1)
+          {
+            return numb_to_bbox.at(numb);
+          }
+      }
+
+    std::stringstream ss;
+    ss << "could not find char bbox for '" << c << "'";
+    LOG_S(ERROR) << ss.str();
+    throw std::logic_error(ss.str());
   }
 
   std::string base_font::get_string(uint32_t numb)
@@ -258,9 +297,6 @@ namespace pdflib
     
     std::ifstream file(filename.c_str());
 
-    std::regex  expr("C\\s(-?\\d+)\\s;\\s[A-Z]+\\s(\\d+)\\s;\\s[A-Z]+\\s([A-Za-z0-9]+).*");
-    std::smatch match;
-
     std::string line;
     while (std::getline(file, line))
       {
@@ -278,11 +314,55 @@ namespace pdflib
           {
             continue;
           }
-        else if(std::regex_match(line, match, expr))
+        else if(line.size() > 2 and line[0] == 'C' and line[1] == ' ')
           {
-            int         numb = std::stoi(match[1]);
-            double      wval = std::stod(match[2]);
-            std::string name =           match[3] ;
+            std::vector<std::string> fields = utils::string::split(line, ";");
+            int numb = -1;
+            double wval = 0.0;
+            std::string name = "";
+            bool have_bbox = false;
+            std::array<double, 4> bbox = {0.0, 0.0, 0.0, 0.0};
+
+            for(auto& field : fields)
+              {
+                field = utils::string::strip(field);
+                if(field.empty())
+                  {
+                    continue;
+                  }
+
+                std::vector<std::string> elems = utils::string::split(field, " ");
+                std::vector<std::string> toks;
+                for(auto& elem : elems)
+                  {
+                    elem = utils::string::strip(elem);
+                    if(not elem.empty())
+                      {
+                        toks.push_back(elem);
+                      }
+                  }
+
+                if(toks.size() >= 2 and toks[0] == "C")
+                  {
+                    numb = std::stoi(toks[1]);
+                  }
+                else if(toks.size() >= 2 and toks[0] == "WX")
+                  {
+                    wval = utils::numeric::locale_safe_stod(toks[1]);
+                  }
+                else if(toks.size() >= 2 and toks[0] == "N")
+                  {
+                    name = toks[1];
+                  }
+                else if(toks.size() >= 5 and toks[0] == "B")
+                  {
+                    bbox[0] = std::stod(toks[1]);
+                    bbox[1] = std::stod(toks[2]);
+                    bbox[2] = std::stod(toks[3]);
+                    bbox[3] = std::stod(toks[4]);
+                    have_bbox = true;
+                  }
+              }
 
             if(numb>=0 and name!="")
               {
@@ -290,9 +370,19 @@ namespace pdflib
 
                 numb_to_name[uc] = name;
                 numb_to_utf8[uc] = glyphs[name];
+                utf8_to_numb[numb_to_utf8[uc]] = uc;
 
                 numb_to_width[uc] = wval;
                 name_to_width[name] = wval;
+                if(have_bbox)
+                  {
+                    numb_to_bbox[uc] = bbox;
+                    name_to_bbox[name] = bbox;
+                    LOG_S(INFO) << "char-bbox: "
+                                << uc << "\t" << name << "\t["
+                                << bbox[0] << ", " << bbox[1] << ", "
+                                << bbox[2] << ", " << bbox[3] << "]";
+                  }
               }
           }
         else
@@ -306,7 +396,7 @@ namespace pdflib
 
             if(elems.size()==2 and utils::string::is_number(elems[1]))
               {
-                properties[elems[0]] = std::stod(elems[1]);
+                properties[elems[0]] = utils::numeric::locale_safe_stod(elems[1]);
               }
             else if(elems.size()==2)
               {
@@ -314,11 +404,11 @@ namespace pdflib
               }
             else if(elems.size()>0 and elems[0]=="FontBBox")
               {
-                std::array<double, 4> bbox = { 
-                  std::stod(elems[1]),
-                  std::stod(elems[2]),
-                  std::stod(elems[3]),
-                  std::stod(elems[4])};
+                std::array<double, 4> bbox = {
+                  utils::numeric::locale_safe_stod(elems[1]),
+                  utils::numeric::locale_safe_stod(elems[2]),
+                  utils::numeric::locale_safe_stod(elems[3]),
+                  utils::numeric::locale_safe_stod(elems[4])};
 
                 properties[elems[0]] = bbox;
               }
