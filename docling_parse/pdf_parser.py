@@ -1318,4 +1318,3 @@ class DoclingThreadedPdfParser:
             boundary_type=self._parser_config.boundary_type,
             render_config=self._parser_config.render_config,
         )
-
