@@ -62,12 +62,12 @@ from docling_parse.pdf_parsers import (  # type: ignore[import]
     DecodePageConfig,  # type: ignore[import]
     PdfPageDecoder,  # type: ignore[import]
     RenderConfig,  # type: ignore[import]
+    _threaded_pdf_parser,  # type: ignore[import]
+    _threaded_pdf_renderer,  # type: ignore[import]
     get_decode_page_timing_keys,
     get_static_timing_keys,
     is_static_timing_key,
     pdf_parser,  # type: ignore[import]
-    _threaded_pdf_parser,  # type: ignore[import]
-    _threaded_pdf_renderer,  # type: ignore[import]
 )
 
 # Configure logging
@@ -1319,124 +1319,3 @@ class DoclingThreadedPdfParser:
             render_config=self._parser_config.render_config,
         )
 
-
-class PdfRenderDocument:
-    def __init__(
-        self,
-        *,
-        path_or_stream: Union[Path, bytes],
-        parser_doc: PdfDocument,
-        parser_config: ThreadedPdfParserConfig,
-        decode_config: DecodePageConfig,
-        password: str | None = None,
-    ):
-        self._path_or_stream = path_or_stream
-        self._parser_doc = parser_doc
-        self._parser_config = parser_config
-        self._decode_config = decode_config
-        self._password = password
-        self._pages: Dict[int, PageParseResult] = {}
-
-    def _make_renderer(self) -> "DoclingThreadedPdfParser":
-        return DoclingThreadedPdfParser(
-            parser_config=self._parser_config,
-            decode_config=self._decode_config,
-        )
-
-    def _load_source(self, renderer: "DoclingThreadedPdfParser") -> str:
-        if isinstance(self._path_or_stream, Path):
-            return renderer.load(self._path_or_stream, password=self._password)
-
-        return renderer.load(BytesIO(self._path_or_stream), password=self._password)
-
-    def _render_all_pages(self) -> None:
-        if len(self._pages) == self.number_of_pages():
-            return
-
-        renderer = self._make_renderer()
-        key = self._load_source(renderer)
-
-        while renderer.has_tasks():
-            result = renderer.get_task()
-            if result.doc_key != key:
-                continue
-            if not result.success:
-                raise RuntimeError(
-                    f"Failed to render page {result.page_number}: {result.error_message}"
-                )
-            self._pages[result.page_number] = result
-
-    def number_of_pages(self) -> int:
-        return self._parser_doc.number_of_pages()
-
-    def get_page(self, page_no: int) -> PageParseResult:
-        if not (1 <= page_no <= self.number_of_pages()):
-            raise ValueError(
-                f"incorrect page_no: {page_no} (min:1, max:{self.number_of_pages()})"
-            )
-
-        if page_no not in self._pages:
-            self._render_all_pages()
-
-        return self._pages[page_no]
-
-    def iterate_pages(self) -> Iterator[Tuple[int, PageParseResult]]:
-        self._render_all_pages()
-        for page_no in range(1, self.number_of_pages() + 1):
-            yield page_no, self._pages[page_no]
-
-    def unload(self) -> bool:
-        self._pages.clear()
-        return self._parser_doc.unload()
-
-
-class DoclingPdfRenderer:
-    def __init__(
-        self,
-        loglevel: str = "fatal",
-        decode_config: DecodePageConfig | None = None,
-        render_config: RenderConfig | None = None,
-    ):
-        self._loglevel = loglevel
-        self._parser = DoclingPdfParser(loglevel=loglevel)
-        self._decode_config = decode_config or DecodePageConfig()
-        self._render_config = render_config or RenderConfig()
-
-    def load(
-        self,
-        path_or_stream: Union[str, Path, BytesIO],
-        lazy: bool = True,
-        boundary_type: PdfPageBoundaryType = PdfPageBoundaryType.CROP_BOX,
-        password: str | None = None,
-    ) -> PdfRenderDocument:
-        parser_doc = self._parser.load(
-            path_or_stream=path_or_stream,
-            lazy=lazy,
-            boundary_type=boundary_type,
-            password=password,
-        )
-
-        if isinstance(path_or_stream, str):
-            source: Union[Path, bytes] = Path(path_or_stream)
-        elif isinstance(path_or_stream, Path):
-            source = path_or_stream
-        elif isinstance(path_or_stream, BytesIO):
-            source = path_or_stream.getvalue()
-        else:
-            raise TypeError(
-                f"Expected str, Path, or BytesIO, got {type(path_or_stream)}"
-            )
-
-        return PdfRenderDocument(
-            path_or_stream=source,
-            parser_doc=parser_doc,
-            parser_config=ThreadedPdfParserConfig(
-                loglevel=self._loglevel,
-                threads=1,
-                max_concurrent_results=1,
-                boundary_type=boundary_type,
-                render_config=self._render_config,
-            ),
-            decode_config=self._decode_config,
-            password=password,
-        )
