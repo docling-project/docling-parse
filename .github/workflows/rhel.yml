@@ -26,6 +26,7 @@ jobs:
       - name: Setup uv with python 3.11
         uses: astral-sh/setup-uv@v5
         with:
+          enable-cache: false
           python-version: 3.11
       - name: Install podman
         run: sudo apt-get update && sudo apt-get install -y podman
