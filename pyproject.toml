@@ -63,7 +63,7 @@ build = [
     "cmake>=3.27.0,<4.0.0"
 ]
 dev = [
-    "pytest>=7.4.2,<8.0.0",
+    "pytest>=9.0.3,<10.0.0",
     "ruff>=0.11,<1.0",
     "python-semantic-release>=7.32.2,<8.0.0",
     "pre-commit>=3.7.1,<4.0.0",
