@@ -7,6 +7,7 @@ import os
 import pytest
 from docling_core.types.doc.page import PdfPageBoundaryType, SegmentedPdfPage
 
+from docling_parse import pdf_parsers
 from docling_parse.pdf_parser import (
     DecodePageConfig,
     DoclingPdfParser,
@@ -30,6 +31,13 @@ def _make_decode_config() -> DecodePageConfig:
     config.keep_glyphs = True
     config.keep_qpdf_warnings = False
     return config
+
+
+def test_threaded_raw_pybind_types_are_internal():
+    assert not hasattr(pdf_parsers, "PageDecodeResult")
+    assert not hasattr(pdf_parsers, "threaded_pdf_parser")
+    assert not hasattr(pdf_parsers, "PageRenderResult")
+    assert not hasattr(pdf_parsers, "threaded_pdf_renderer")
 
 
 def test_threaded_reference_documents_from_filenames():

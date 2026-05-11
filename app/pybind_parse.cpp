@@ -822,10 +822,10 @@ PYBIND11_MODULE(pdf_parsers, m) {
 
   // ============= Threaded PDF Parser =============
 
-  // PageDecodeResult - result of a threaded page decode task
-  pybind11::class_<docling::page_decode_result>(m, "PageDecodeResult",
+  // _PageDecodeResult - internal result of a threaded page decode task
+  pybind11::class_<docling::page_decode_result>(m, "_PageDecodeResult",
     R"(
-    Result of a threaded page decoding task.
+    Internal result of a threaded page decoding task.
 
     Attributes:
         doc_key (str): The document key this page belongs to.
@@ -862,10 +862,10 @@ PYBIND11_MODULE(pdf_parsers, m) {
     Returns:
         str: The error message.)");
 
-  // threaded_pdf_parser - parallel PDF parser with bounded result queue
-  pybind11::class_<docling::docling_threaded_parser>(m, "threaded_pdf_parser",
+  // _threaded_pdf_parser - internal parallel PDF parser with bounded result queue
+  pybind11::class_<docling::docling_threaded_parser>(m, "_threaded_pdf_parser",
     R"(
-    Threaded PDF parser that processes pages in parallel.
+    Internal threaded PDF parser that processes pages in parallel.
 
     Loads multiple documents and decodes their pages using a thread pool.
     Results are available via a bounded queue to control memory usage.
@@ -998,7 +998,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
     Blocks until a result is available. Releases the GIL while waiting.
 
     Returns:
-        PageDecodeResult: The result of a page decoding task.)");
+        _PageDecodeResult: The result of a page decoding task.)");
 
   // ============= Threaded PDF Renderer =============
 
@@ -1029,12 +1029,12 @@ PYBIND11_MODULE(pdf_parsers, m) {
     .def_readwrite("canvas_width",            &pdflib::render_config::canvas_width)
     .def_readwrite("canvas_height",           &pdflib::render_config::canvas_height);
 
-  // PageRenderResult - result of a threaded page render task
-  pybind11::class_<docling::page_render_result, docling::page_decode_result>(m, "PageRenderResult",
+  // _PageRenderResult - internal result of a threaded page render task
+  pybind11::class_<docling::page_render_result, docling::page_decode_result>(m, "_PageRenderResult",
     R"(
-    Result of a threaded page rendering task.
+    Internal result of a threaded page rendering task.
 
-    Inherits all attributes of PageDecodeResult and adds rendered image data.
+    Inherits all attributes of _PageDecodeResult and adds rendered image data.
 
     Attributes:
         image_data: Raw RGBA bytes of the rendered page (height x width x 4, row-major).
@@ -1062,10 +1062,10 @@ PYBIND11_MODULE(pdf_parsers, m) {
     Returns:
         bytes: Raw RGBA pixel data, or empty bytes on failure.)");
 
-  // threaded_pdf_renderer - parallel PDF renderer with bounded result queue
-  pybind11::class_<docling::docling_threaded_renderer>(m, "threaded_pdf_renderer",
+  // _threaded_pdf_renderer - internal parallel PDF renderer with bounded result queue
+  pybind11::class_<docling::docling_threaded_renderer>(m, "_threaded_pdf_renderer",
     R"(
-    Threaded PDF renderer that decodes and renders pages in parallel.
+    Internal threaded PDF renderer that decodes and renders pages in parallel.
 
     Loads multiple documents and renders their pages using a thread pool.
     Each result contains both the decoded page data and the rendered RGBA image.
@@ -1150,5 +1150,5 @@ PYBIND11_MODULE(pdf_parsers, m) {
     Blocks until a result is available. Releases the GIL while waiting.
 
     Returns:
-        PageRenderResult: The result of a page rendering task.)");
+        _PageRenderResult: The result of a page rendering task.)");
 }

@@ -66,8 +66,8 @@ from docling_parse.pdf_parsers import (  # type: ignore[import]
     get_static_timing_keys,
     is_static_timing_key,
     pdf_parser,  # type: ignore[import]
-    threaded_pdf_parser,  # type: ignore[import]
-    threaded_pdf_renderer,  # type: ignore[import]
+    _threaded_pdf_parser,  # type: ignore[import]
+    _threaded_pdf_renderer,  # type: ignore[import]
 )
 
 # Configure logging
@@ -1197,14 +1197,14 @@ class DoclingThreadedPdfParser:
         self._scheduled_page_counts: Dict[str, int] = {}
 
         if parser_config.render_config is None:
-            self._parser = threaded_pdf_parser(
+            self._parser = _threaded_pdf_parser(
                 loglevel=parser_config.loglevel,
                 num_threads=parser_config.threads,
                 max_concurrent_results=parser_config.max_concurrent_results,
                 config=self._decode_config,
             )
         else:
-            self._parser = threaded_pdf_renderer(
+            self._parser = _threaded_pdf_renderer(
                 loglevel=parser_config.loglevel,
                 num_threads=parser_config.threads,
                 max_concurrent_results=parser_config.max_concurrent_results,
