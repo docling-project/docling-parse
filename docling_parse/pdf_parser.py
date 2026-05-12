@@ -2,9 +2,10 @@
 
 import hashlib
 import logging
+import math
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
+from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple, Union
 
 from docling_core.types.doc.base import BoundingBox, CoordOrigin, ImageRefMode
 from docling_core.types.doc.document import ImageRef
@@ -59,15 +60,14 @@ from docling_parse.pdf_parsers import (  # type: ignore[import]
     TIMING_PREFIX_DECODE_XOBJECT,
     TIMING_PREFIX_DECODING_PAGE,
     DecodePageConfig,  # type: ignore[import]
-    PageDecodeResult,  # type: ignore[import]
     PdfPageDecoder,  # type: ignore[import]
     RenderConfig,  # type: ignore[import]
+    _threaded_pdf_parser,  # type: ignore[import]
+    _threaded_pdf_renderer,  # type: ignore[import]
     get_decode_page_timing_keys,
     get_static_timing_keys,
     is_static_timing_key,
     pdf_parser,  # type: ignore[import]
-    threaded_pdf_parser,  # type: ignore[import]
-    threaded_pdf_renderer,  # type: ignore[import]
 )
 
 # Configure logging
@@ -180,6 +180,306 @@ class Timings(BaseModel):
     def decode_page_keys() -> List[str]:
         """Get timing keys used in decode_page method (in order, excluding global timer)."""
         return get_decode_page_timing_keys()
+
+
+def _to_bounding_rectangle(
+    bbox: tuple[float, float, float, float],
+) -> BoundingRectangle:
+    return BoundingRectangle(
+        r_x0=bbox[0],
+        r_y0=bbox[1],
+        r_x1=bbox[2],
+        r_y1=bbox[1],
+        r_x2=bbox[2],
+        r_y2=bbox[3],
+        r_x3=bbox[0],
+        r_y3=bbox[3],
+        coord_origin=CoordOrigin.BOTTOMLEFT,
+    )
+
+
+def _to_bounding_box(bbox: tuple[float, float, float, float]) -> BoundingBox:
+    return BoundingBox(
+        l=bbox[0],
+        b=bbox[1],
+        r=bbox[2],
+        t=bbox[3],
+        coord_origin=CoordOrigin.BOTTOMLEFT,
+    )
+
+
+def _get_boundary_bbox(
+    page_dim,
+    boundary_type: PdfPageBoundaryType,
+) -> tuple[float, float, float, float]:
+    media_bbox = tuple(page_dim.get_media_bbox())
+    crop_bbox = tuple(page_dim.get_crop_bbox())
+
+    if boundary_type == PdfPageBoundaryType.MEDIA_BOX:
+        return media_bbox
+
+    return crop_bbox
+
+
+def _to_page_geometry_from_decoder(
+    page_dim,
+    boundary_type: PdfPageBoundaryType,
+) -> PdfPageGeometry:
+    crop_bbox = tuple(page_dim.get_crop_bbox())
+    media_bbox = tuple(page_dim.get_media_bbox())
+    boundary_bbox = _get_boundary_bbox(page_dim, boundary_type)
+
+    return PdfPageGeometry(
+        angle=page_dim.get_angle(),
+        boundary_type=boundary_type,
+        rect=_to_bounding_rectangle(boundary_bbox),
+        art_bbox=_to_bounding_box(crop_bbox),
+        media_bbox=_to_bounding_box(media_bbox),
+        trim_bbox=_to_bounding_box(crop_bbox),
+        crop_bbox=_to_bounding_box(crop_bbox),
+        bleed_bbox=_to_bounding_box(crop_bbox),
+    )
+
+
+def _to_cells_from_decoder(cells_container) -> List[Union[PdfTextCell, TextCell]]:
+    result: List[Union[PdfTextCell, TextCell]] = []
+
+    for ind, cell in enumerate(cells_container):
+        result.append(
+            PdfTextCell(
+                rect=BoundingRectangle(
+                    r_x0=cell.r_x0,
+                    r_y0=cell.r_y0,
+                    r_x1=cell.r_x1,
+                    r_y1=cell.r_y1,
+                    r_x2=cell.r_x2,
+                    r_y2=cell.r_y2,
+                    r_x3=cell.r_x3,
+                    r_y3=cell.r_y3,
+                ),
+                text=cell.text,
+                orig=cell.text,
+                font_key=cell.font_key,
+                font_name=cell.font_name,
+                widget=cell.widget,
+                text_direction=(
+                    TextDirection.LEFT_TO_RIGHT
+                    if cell.left_to_right
+                    else TextDirection.RIGHT_TO_LEFT
+                ),
+                index=ind,
+                rendering_mode=cell.rendering_mode,
+            )
+        )
+
+    return result
+
+
+def _to_shapes_from_decoder(shapes_container) -> List[PdfShape]:
+    result: List[PdfShape] = []
+
+    for ind, shape in enumerate(shapes_container):
+        x_coords = shape.get_x()
+        y_coords = shape.get_y()
+        indices = shape.get_i()
+
+        for pair_idx in range(0, len(indices), 2):
+            i0: int = indices[pair_idx + 0]
+            i1: int = indices[pair_idx + 1]
+
+            points: List[Coord2D] = []
+            for k in range(i0, i1):
+                points.append(Coord2D(x_coords[k], y_coords[k]))
+
+            rgb_s = shape.get_rgb_stroking_ops()
+            rgb_f = shape.get_rgb_filling_ops()
+
+            result.append(
+                PdfShape(
+                    index=ind,
+                    parent_id=pair_idx,
+                    points=points,
+                    has_graphics_state=shape.get_has_graphics_state(),
+                    line_width=shape.get_line_width(),
+                    miter_limit=shape.get_miter_limit(),
+                    line_cap=shape.get_line_cap(),
+                    line_join=shape.get_line_join(),
+                    dash_phase=shape.get_dash_phase(),
+                    dash_array=list(shape.get_dash_array()),
+                    flatness=shape.get_flatness(),
+                    rgb_stroking=ColorRGBA(r=rgb_s[0], g=rgb_s[1], b=rgb_s[2]),
+                    rgb_filling=ColorRGBA(r=rgb_f[0], g=rgb_f[1], b=rgb_f[2]),
+                )
+            )
+
+    return result
+
+
+def _to_widgets_from_decoder(widgets_container) -> List[PdfWidget]:
+    result: List[PdfWidget] = []
+
+    for ind, widget in enumerate(widgets_container):
+        result.append(
+            PdfWidget(
+                index=ind,
+                rect=BoundingRectangle(
+                    r_x0=widget.x0,
+                    r_y0=widget.y0,
+                    r_x1=widget.x1,
+                    r_y1=widget.y0,
+                    r_x2=widget.x1,
+                    r_y2=widget.y1,
+                    r_x3=widget.x0,
+                    r_y3=widget.y1,
+                ),
+                widget_text=widget.text or None,
+                widget_description=widget.description or None,
+                widget_field_name=widget.field_name or None,
+                widget_field_type=widget.field_type or None,
+            )
+        )
+
+    return result
+
+
+def _to_hyperlinks_from_decoder(hyperlinks_container) -> List[PdfHyperlink]:
+    result: List[PdfHyperlink] = []
+
+    for ind, hyperlink in enumerate(hyperlinks_container):
+        result.append(
+            PdfHyperlink(
+                index=ind,
+                rect=BoundingRectangle(
+                    r_x0=hyperlink.x0,
+                    r_y0=hyperlink.y0,
+                    r_x1=hyperlink.x1,
+                    r_y1=hyperlink.y0,
+                    r_x2=hyperlink.x1,
+                    r_y2=hyperlink.y1,
+                    r_x3=hyperlink.x0,
+                    r_y3=hyperlink.y1,
+                ),
+                uri=hyperlink.uri or None,
+            )
+        )
+
+    return result
+
+
+def _to_bitmap_resources_from_decoder(images_container) -> List[BitmapResource]:
+    result: List[BitmapResource] = []
+
+    for ind, image in enumerate(images_container):
+        image_ref = None
+        mode = ImageRefMode.PLACEHOLDER
+
+        try:
+            image_bytes = image.get_image_as_bytes()
+
+            if image_bytes and len(image_bytes) > 0:
+                fmt = image.get_image_format()
+                pil_image: PILImage.Image | None = None
+
+                if fmt in ("jpeg", "jp2"):
+                    pil_image = PILImage.open(BytesIO(image_bytes))
+                elif fmt in ("raw", "jbig2"):
+                    pil_mode = image.get_pil_mode()
+                    w = image.image_width
+                    h = image.image_height
+                    if w > 0 and h > 0:
+                        pil_image = PILImage.frombytes(pil_mode, (w, h), image_bytes)
+
+                if pil_image is not None:
+                    if pil_image.mode != "RGBA":
+                        pil_image = pil_image.convert("RGBA")
+
+                    bbox_width = abs(image.x1 - image.x0)
+                    if bbox_width > 0 and image.image_width > 0:
+                        dpi = round(image.image_width * 72.0 / bbox_width)
+                    else:
+                        dpi = 72
+
+                    image_ref = ImageRef.from_pil(pil_image, dpi=dpi)
+                    mode = ImageRefMode.EMBEDDED
+
+        except Exception:
+            _log.debug(
+                "Failed to extract image data for bitmap, falling back to placeholder"
+            )
+
+        result.append(
+            BitmapResource(
+                index=ind,
+                rect=BoundingRectangle(
+                    r_x0=image.x0,
+                    r_y0=image.y0,
+                    r_x1=image.x1,
+                    r_y1=image.y0,
+                    r_x2=image.x1,
+                    r_y2=image.y1,
+                    r_x3=image.x0,
+                    r_y3=image.y1,
+                ),
+                uri=None,
+                image=image_ref,
+                mode=mode,
+            )
+        )
+
+    return result
+
+
+def segmented_page_from_decoder(
+    page_decoder: PdfPageDecoder,
+    boundary_type: PdfPageBoundaryType = PdfPageBoundaryType.CROP_BOX,
+) -> SegmentedPdfPage:
+    """Convert a C++ PdfPageDecoder to a SegmentedPdfPage."""
+    char_cells = _to_cells_from_decoder(page_decoder.get_char_cells())
+
+    segmented_page = SegmentedPdfPage(
+        dimension=_to_page_geometry_from_decoder(
+            page_decoder.get_page_dimension(), boundary_type
+        ),
+        char_cells=char_cells,
+        word_cells=[],
+        textline_cells=[],
+        has_chars=len(char_cells) > 0,
+        bitmap_resources=_to_bitmap_resources_from_decoder(
+            page_decoder.get_page_images()
+        ),
+        shapes=_to_shapes_from_decoder(page_decoder.get_page_shapes()),
+        widgets=_to_widgets_from_decoder(page_decoder.get_page_widgets()),
+        hyperlinks=_to_hyperlinks_from_decoder(page_decoder.get_page_hyperlinks()),
+    )
+
+    if page_decoder.has_word_cells():
+        segmented_page.word_cells = _to_cells_from_decoder(
+            page_decoder.get_word_cells()
+        )
+        segmented_page.has_words = len(segmented_page.word_cells) > 0
+
+    if page_decoder.has_line_cells():
+        segmented_page.textline_cells = _to_cells_from_decoder(
+            page_decoder.get_line_cells()
+        )
+        segmented_page.has_lines = len(segmented_page.textline_cells) > 0
+
+    return segmented_page
+
+
+def _timings_from_decoder(page_decoder: PdfPageDecoder) -> Timings:
+    return Timings(
+        data=dict(page_decoder.get_timings()),
+        raw_data=dict(page_decoder.get_timings_raw()),
+    )
+
+
+def _page_size_from_decoder(
+    page_decoder: PdfPageDecoder,
+    boundary_type: PdfPageBoundaryType,
+) -> tuple[float, float]:
+    bbox = _get_boundary_bbox(page_decoder.get_page_dimension(), boundary_type)
+    return abs(bbox[2] - bbox[0]), abs(bbox[3] - bbox[1])
 
 
 class PdfDocument:
@@ -402,7 +702,6 @@ class PdfDocument:
 
         segmented_page = self._to_segmented_page_from_decoder(
             page_decoder=page_decoder,
-            config=config,
         )
 
         # Get timings from the page decoder
@@ -420,307 +719,41 @@ class PdfDocument:
 
     def _to_page_geometry_from_decoder(self, page_dim) -> PdfPageGeometry:
         """Convert typed PdfPageDimension to PdfPageGeometry."""
-        crop_bbox = page_dim.get_crop_bbox()
-        media_bbox = page_dim.get_media_bbox()
-        angle = page_dim.get_angle()
-
-        # Use crop_box as default boundary
-        bbox = crop_bbox
-        # Build page rectangle as a BoundingRectangle (typed API expects this)
-        rect = BoundingRectangle(
-            r_x0=bbox[0],
-            r_y0=bbox[1],
-            r_x1=bbox[2],
-            r_y1=bbox[1],
-            r_x2=bbox[2],
-            r_y2=bbox[3],
-            r_x3=bbox[0],
-            r_y3=bbox[3],
-            coord_origin=CoordOrigin.BOTTOMLEFT,
-        )
-        art_bbox_obj = BoundingBox(
-            l=crop_bbox[0],
-            b=crop_bbox[1],
-            r=crop_bbox[2],
-            t=crop_bbox[3],
-            coord_origin=CoordOrigin.BOTTOMLEFT,
-        )
-        media_bbox_obj = BoundingBox(
-            l=media_bbox[0],
-            b=media_bbox[1],
-            r=media_bbox[2],
-            t=media_bbox[3],
-            coord_origin=CoordOrigin.BOTTOMLEFT,
-        )
-        crop_bbox_obj = BoundingBox(
-            l=crop_bbox[0],
-            b=crop_bbox[1],
-            r=crop_bbox[2],
-            t=crop_bbox[3],
-            coord_origin=CoordOrigin.BOTTOMLEFT,
-        )
-
-        return PdfPageGeometry(
-            angle=angle,
-            boundary_type=PdfPageBoundaryType(self._boundary_type),
-            rect=rect,
-            art_bbox=art_bbox_obj,
-            media_bbox=media_bbox_obj,
-            trim_bbox=crop_bbox_obj,
-            crop_bbox=crop_bbox_obj,
-            bleed_bbox=crop_bbox_obj,
-        )
+        return _to_page_geometry_from_decoder(page_dim, self._boundary_type)
 
     def _to_cells_from_decoder(
         self, cells_container
     ) -> List[Union[PdfTextCell, TextCell]]:
         """Convert typed PdfCells container to list of PdfTextCell objects."""
-        result: List[Union[PdfTextCell, TextCell]] = []
-
-        for ind, cell in enumerate(cells_container):
-            rect = BoundingRectangle(
-                r_x0=cell.r_x0,
-                r_y0=cell.r_y0,
-                r_x1=cell.r_x1,
-                r_y1=cell.r_y1,
-                r_x2=cell.r_x2,
-                r_y2=cell.r_y2,
-                r_x3=cell.r_x3,
-                r_y3=cell.r_y3,
-            )
-
-            result.append(
-                PdfTextCell(
-                    rect=rect,
-                    text=cell.text,
-                    orig=cell.text,
-                    font_key=cell.font_key,
-                    font_name=cell.font_name,
-                    widget=cell.widget,
-                    text_direction=(
-                        TextDirection.LEFT_TO_RIGHT
-                        if cell.left_to_right
-                        else TextDirection.RIGHT_TO_LEFT
-                    ),
-                    index=ind,
-                    rendering_mode=cell.rendering_mode,
-                )
-            )
-
-        return result
+        return _to_cells_from_decoder(cells_container)
 
     def _to_shapes_from_decoder(self, shapes_container) -> List[PdfShape]:
         """Convert typed PdfShapes container to list of PdfShape objects."""
-        result: List[PdfShape] = []
-
-        for ind, shape in enumerate(shapes_container):
-            x_coords = shape.get_x()
-            y_coords = shape.get_y()
-            indices = shape.get_i()
-
-            """
-            print(f"{ind}\tlen(indices): {len(indices)} -> {len(x_coords)} -> {shape.get_rgb_filling_ops()}")
-            if len(indices)>2:
-                print(indices)
-
-            if ind>8:
-                break
-            """
-
-            for pair_idx in range(0, len(indices), 2):
-                i0: int = indices[pair_idx + 0]
-                i1: int = indices[pair_idx + 1]
-
-                points: List[Coord2D] = []
-                for k in range(i0, i1):
-                    points.append(Coord2D(x_coords[k], y_coords[k]))
-
-                rgb_s = shape.get_rgb_stroking_ops()
-                rgb_f = shape.get_rgb_filling_ops()
-
-                pdf_shape = PdfShape(
-                    index=ind,
-                    parent_id=pair_idx,
-                    points=points,
-                    has_graphics_state=shape.get_has_graphics_state(),
-                    line_width=shape.get_line_width(),
-                    miter_limit=shape.get_miter_limit(),
-                    line_cap=shape.get_line_cap(),
-                    line_join=shape.get_line_join(),
-                    dash_phase=shape.get_dash_phase(),
-                    dash_array=list(shape.get_dash_array()),
-                    flatness=shape.get_flatness(),
-                    rgb_stroking=ColorRGBA(r=rgb_s[0], g=rgb_s[1], b=rgb_s[2]),
-                    rgb_filling=ColorRGBA(r=rgb_f[0], g=rgb_f[1], b=rgb_f[2]),
-                )
-                result.append(pdf_shape)
-
-        return result
+        return _to_shapes_from_decoder(shapes_container)
 
     def _to_widgets_from_decoder(self, widgets_container) -> List[PdfWidget]:
         """Convert typed PdfWidgets container to list of PdfWidget objects."""
-        result: List[PdfWidget] = []
-
-        for ind, widget in enumerate(widgets_container):
-            rect = BoundingRectangle(
-                r_x0=widget.x0,
-                r_y0=widget.y0,
-                r_x1=widget.x1,
-                r_y1=widget.y0,
-                r_x2=widget.x1,
-                r_y2=widget.y1,
-                r_x3=widget.x0,
-                r_y3=widget.y1,
-            )
-            result.append(
-                PdfWidget(
-                    index=ind,
-                    rect=rect,
-                    widget_text=widget.text or None,
-                    widget_description=widget.description or None,
-                    widget_field_name=widget.field_name or None,
-                    widget_field_type=widget.field_type or None,
-                )
-            )
-
-        return result
+        return _to_widgets_from_decoder(widgets_container)
 
     def _to_hyperlinks_from_decoder(self, hyperlinks_container) -> List[PdfHyperlink]:
         """Convert typed PdfHyperlinks container to list of PdfHyperlink objects."""
-        result: List[PdfHyperlink] = []
-
-        for ind, hyperlink in enumerate(hyperlinks_container):
-            rect = BoundingRectangle(
-                r_x0=hyperlink.x0,
-                r_y0=hyperlink.y0,
-                r_x1=hyperlink.x1,
-                r_y1=hyperlink.y0,
-                r_x2=hyperlink.x1,
-                r_y2=hyperlink.y1,
-                r_x3=hyperlink.x0,
-                r_y3=hyperlink.y1,
-            )
-            result.append(
-                PdfHyperlink(
-                    index=ind,
-                    rect=rect,
-                    uri=hyperlink.uri or None,
-                )
-            )
-
-        return result
+        return _to_hyperlinks_from_decoder(hyperlinks_container)
 
     def _to_bitmap_resources_from_decoder(
         self, images_container
     ) -> List[BitmapResource]:
         """Convert typed PdfImages container to list of BitmapResource objects."""
-        result: List[BitmapResource] = []
-
-        for ind, image in enumerate(images_container):
-            rect = BoundingRectangle(
-                r_x0=image.x0,
-                r_y0=image.y0,
-                r_x1=image.x1,
-                r_y1=image.y0,
-                r_x2=image.x1,
-                r_y2=image.y1,
-                r_x3=image.x0,
-                r_y3=image.y1,
-            )
-
-            image_ref = None
-            mode = ImageRefMode.PLACEHOLDER
-
-            try:
-                image_bytes = image.get_image_as_bytes()
-
-                if image_bytes and len(image_bytes) > 0:
-                    fmt = image.get_image_format()
-                    pil_image: PILImage.Image | None = None
-
-                    if fmt in ("jpeg", "jp2"):
-                        pil_image = PILImage.open(BytesIO(image_bytes))
-                    elif fmt in ("raw", "jbig2"):
-                        pil_mode = image.get_pil_mode()
-                        w = image.image_width
-                        h = image.image_height
-                        if w > 0 and h > 0:
-                            pil_image = PILImage.frombytes(
-                                pil_mode, (w, h), image_bytes
-                            )
-
-                    if pil_image is not None:
-                        # Normalize to RGBA for consistent downstream handling
-                        if pil_image.mode != "RGBA":
-                            pil_image = pil_image.convert("RGBA")
-
-                        # Compute DPI from pixel dimensions and PDF bbox
-                        bbox_width = abs(image.x1 - image.x0)
-                        if bbox_width > 0 and image.image_width > 0:
-                            dpi = round(image.image_width * 72.0 / bbox_width)
-                        else:
-                            dpi = 72
-
-                        image_ref = ImageRef.from_pil(pil_image, dpi=dpi)
-                        mode = ImageRefMode.EMBEDDED
-
-            except Exception:
-                _log.debug(
-                    "Failed to extract image data for bitmap, falling back to placeholder"
-                )
-
-            bitmap = BitmapResource(
-                index=ind, rect=rect, uri=None, image=image_ref, mode=mode
-            )
-            result.append(bitmap)
-
-        return result
+        return _to_bitmap_resources_from_decoder(images_container)
 
     def _to_segmented_page_from_decoder(
         self,
         page_decoder,
-        *,
-        config: DecodePageConfig,
     ) -> SegmentedPdfPage:
         """Convert typed PdfPageDecoder to SegmentedPdfPage (zero-copy path)."""
-
-        char_cells = self._to_cells_from_decoder(page_decoder.get_char_cells())
-        shapes = self._to_shapes_from_decoder(page_decoder.get_page_shapes())
-        widgets = self._to_widgets_from_decoder(page_decoder.get_page_widgets())
-        hyperlinks = self._to_hyperlinks_from_decoder(
-            page_decoder.get_page_hyperlinks()
+        return segmented_page_from_decoder(
+            page_decoder=page_decoder,
+            boundary_type=self._boundary_type,
         )
-        bitmap_resources = self._to_bitmap_resources_from_decoder(
-            page_decoder.get_page_images()
-        )
-
-        segmented_page = SegmentedPdfPage(
-            dimension=self._to_page_geometry_from_decoder(
-                page_decoder.get_page_dimension()
-            ),
-            char_cells=char_cells,
-            word_cells=[],
-            textline_cells=[],
-            has_chars=len(char_cells) > 0,
-            bitmap_resources=bitmap_resources,
-            shapes=shapes,
-            widgets=widgets,
-            hyperlinks=hyperlinks,
-        )
-
-        if page_decoder.has_word_cells():
-            segmented_page.word_cells = self._to_cells_from_decoder(
-                page_decoder.get_word_cells()
-            )
-            segmented_page.has_words = len(segmented_page.word_cells) > 0
-
-        if page_decoder.has_line_cells():
-            segmented_page.textline_cells = self._to_cells_from_decoder(
-                page_decoder.get_line_cells()
-            )
-            segmented_page.has_lines = len(segmented_page.textline_cells) > 0
-
-        return segmented_page
 
     def _get_page_typed(
         self,
@@ -755,7 +788,6 @@ class PdfDocument:
 
             self._pages[page_no] = self._to_segmented_page_from_decoder(
                 page_decoder=page_decoder,
-                config=config,
             )
             return self._pages[page_no]
 
@@ -869,6 +901,8 @@ class ThreadedPdfParserConfig(BaseModel):
         loglevel: Logging level ('fatal', 'error', 'warning', 'info').
         threads: Number of worker threads for parallel page decoding.
         max_concurrent_results: Maximum results buffered before workers pause.
+        boundary_type: Page boundary used for geometry conversion and page sizing.
+        render_config: Optional render configuration for parse-and-render mode.
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -876,29 +910,269 @@ class ThreadedPdfParserConfig(BaseModel):
     loglevel: str = "fatal"
     threads: int = 4
     max_concurrent_results: int = 32
+    boundary_type: PdfPageBoundaryType = PdfPageBoundaryType.CROP_BOX
+    render_config: RenderConfig | None = None
+
+
+class PageParseResult:
+    """Outcome of one page processed by DoclingThreadedPdfParser."""
+
+    def __init__(
+        self,
+        raw_result,
+        *,
+        boundary_type: PdfPageBoundaryType,
+        render_config: RenderConfig | None,
+    ):
+        self._raw = raw_result
+        self._boundary_type = boundary_type
+        self._render_config = render_config
+        self._page: SegmentedPdfPage | None = None
+        self._page_decoder: PdfPageDecoder | None = None
+        self._default_image: PILImage.Image | None = None
+
+        self.doc_key: str = raw_result.doc_key
+        self.page_number: int = raw_result.page_number + 1
+        self.success: bool = raw_result.success
+
+        if self.success:
+            self._page_decoder, _ = raw_result.get()
+            self._timings = _timings_from_decoder(self._page_decoder)
+            self.page_width, self.page_height = _page_size_from_decoder(
+                self._page_decoder, boundary_type
+            )
+        else:
+            self._timings = Timings()
+            self.page_width = 0.0
+            self.page_height = 0.0
+
+    @property
+    def has_image(self) -> bool:
+        """Whether get_image() can return a rendered image for this result."""
+        return self._render_config is not None and self.success
+
+    @property
+    def error_message(self) -> str:
+        """Error description; empty string when successful."""
+        if self.success:
+            return ""
+        return self._raw.error()
+
+    def _require_page_decoder(self) -> PdfPageDecoder:
+        if not self.success:
+            raise RuntimeError(
+                f"Cannot access failed page {self.page_number} for {self.doc_key}: {self.error_message}"
+            )
+        assert self._page_decoder is not None
+        return self._page_decoder
+
+    def get_page(self) -> SegmentedPdfPage:
+        """Return the parsed page, converting lazily on first access."""
+        if self._page is None:
+            self._page = segmented_page_from_decoder(
+                page_decoder=self._require_page_decoder(),
+                boundary_type=self._boundary_type,
+            )
+        return self._page
+
+    def get_timings(self) -> Timings:
+        """Return structured timing data for this page parse."""
+        return self._timings
+
+    def _rendering_config(self) -> RenderConfig:
+        if self._render_config is None:
+            raise RuntimeError(
+                f"Rendered image not available for page {self.page_number} of {self.doc_key}"
+            )
+        return _copy_render_config(self._render_config)
+
+    def _default_canvas_size(self) -> tuple[int, int]:
+        self._require_page_decoder()
+        self._rendering_config()
+        height, width, _ = self._raw.image_shape
+        return width, height
+
+    def _scale_abs_tolerance(self) -> float:
+        if self.page_width <= 0 or self.page_height <= 0:
+            return 0.0
+        return max(0.5 / self.page_width, 0.5 / self.page_height)
+
+    @staticmethod
+    def _image_from_bytes(
+        raw_bytes: bytes, image_shape: Sequence[int]
+    ) -> PILImage.Image:
+        height, width, _ = image_shape
+        return PILImage.frombuffer(
+            "RGBA", (width, height), raw_bytes, "raw", "RGBA", 0, 1
+        ).copy()
+
+    def _get_default_image(self) -> PILImage.Image:
+        self._require_page_decoder()
+        self._rendering_config()
+
+        if self._default_image is None:
+            raw_bytes = self._raw.get_image()
+            if not raw_bytes:
+                raise RuntimeError(
+                    f"Rendered image is empty for page {self.page_number} of {self.doc_key}"
+                )
+            self._default_image = self._image_from_bytes(
+                raw_bytes, self._raw.image_shape
+            )
+        return self._default_image
+
+    def _render_image_at_scale(self, scale: float) -> PILImage.Image:
+        page_decoder = self._require_page_decoder()
+        render_config = self._rendering_config()
+        render_config.scale = scale
+        render_config.canvas_width = -1
+        render_config.canvas_height = -1
+        raw_bytes, image_shape = page_decoder.render_image(render_config)
+        if not raw_bytes:
+            raise RuntimeError(
+                f"Rendered image is empty for page {self.page_number} of {self.doc_key}"
+            )
+        return self._image_from_bytes(raw_bytes, image_shape)
+
+    def _render_image_at_canvas_size(
+        self, canvas_size: tuple[int, int]
+    ) -> PILImage.Image:
+        page_decoder = self._require_page_decoder()
+        render_config = self._rendering_config()
+        render_config.scale = -1.0
+        render_config.canvas_width, render_config.canvas_height = canvas_size
+        raw_bytes, image_shape = page_decoder.render_image(render_config)
+        if not raw_bytes:
+            raise RuntimeError(
+                f"Rendered image is empty for page {self.page_number} of {self.doc_key}"
+            )
+        return self._image_from_bytes(raw_bytes, image_shape)
+
+    def _crop_image(
+        self, image: PILImage.Image, cropbox: BoundingBox | None
+    ) -> PILImage.Image:
+        if cropbox is None:
+            return image
+        if self.page_width <= 0 or self.page_height <= 0:
+            return image
+
+        cropbox_top_left = cropbox.to_top_left_origin(page_height=self.page_height)
+        x_scale = image.width / self.page_width
+        y_scale = image.height / self.page_height
+
+        left = max(0, round(cropbox_top_left.l * x_scale))
+        top = max(0, round(cropbox_top_left.t * y_scale))
+        right = min(image.width, round(cropbox_top_left.r * x_scale))
+        bottom = min(image.height, round(cropbox_top_left.b * y_scale))
+        return image.crop((left, top, right, bottom))
+
+    def get_image(
+        self,
+        scale: float | None = None,
+        canvas_size: tuple[int, int] | None = None,
+        cropbox: BoundingBox | None = None,
+    ) -> PILImage.Image:
+        """Return the rendered page image."""
+        if scale is not None and canvas_size is not None:
+            raise ValueError("Provide either scale or canvas_size, not both")
+
+        if scale is None and canvas_size is None:
+            image = self._get_default_image()
+            return self._crop_image(image, cropbox)
+
+        if scale is not None:
+            if scale <= 0:
+                raise ValueError(f"scale must be > 0, got {scale}")
+            render_config = self._rendering_config()
+            if math.isclose(
+                scale,
+                render_config.scale,
+                rel_tol=0.0,
+                abs_tol=self._scale_abs_tolerance(),
+            ):
+                image = self._get_default_image()
+            else:
+                image = self._render_image_at_scale(scale)
+        else:
+            assert canvas_size is not None
+            if canvas_size[0] <= 0 or canvas_size[1] <= 0:
+                raise ValueError(
+                    f"canvas_size must contain positive integers, got {canvas_size}"
+                )
+            if canvas_size == self._default_canvas_size():
+                image = self._get_default_image()
+            else:
+                image = self._render_image_at_canvas_size(canvas_size)
+
+        return self._crop_image(image, cropbox)
+
+    def _export_render_instructions_json(self) -> Dict[str, Any]:
+        return self._require_page_decoder().export_render_instructions_json()
+
+    def _export_bitmap_artifacts(self) -> List[Dict[str, Any]]:
+        return self._require_page_decoder().export_bitmap_artifacts()
+
+
+def _copy_decode_config(src: DecodePageConfig) -> DecodePageConfig:
+    dst = DecodePageConfig()
+    dst.page_boundary = src.page_boundary
+    dst.do_sanitization = src.do_sanitization
+    dst.keep_char_cells = src.keep_char_cells
+    dst.keep_shapes = src.keep_shapes
+    dst.keep_bitmaps = src.keep_bitmaps
+    dst.max_num_lines = src.max_num_lines
+    dst.max_num_bitmaps = src.max_num_bitmaps
+    dst.create_word_cells = src.create_word_cells
+    dst.create_line_cells = src.create_line_cells
+    dst.enforce_same_font = src.enforce_same_font
+    dst.horizontal_cell_tolerance = src.horizontal_cell_tolerance
+    dst.word_space_width_factor_for_merge = src.word_space_width_factor_for_merge
+    dst.line_space_width_factor_for_merge = src.line_space_width_factor_for_merge
+    dst.line_space_width_factor_for_merge_with_space = (
+        src.line_space_width_factor_for_merge_with_space
+    )
+    dst.do_thread_safe = src.do_thread_safe
+    dst.keep_glyphs = src.keep_glyphs
+    dst.keep_qpdf_warnings = src.keep_qpdf_warnings
+    return dst
+
+
+def _copy_render_config(src: RenderConfig) -> RenderConfig:
+    dst = RenderConfig()
+    dst.render_text = src.render_text
+    dst.draw_text_bbox = src.draw_text_bbox
+    dst.resolve_fonts = src.resolve_fonts
+    dst.font_similarity_cutoff = src.font_similarity_cutoff
+    dst.scale = src.scale
+    dst.canvas_width = src.canvas_width
+    dst.canvas_height = src.canvas_height
+    return dst
+
+
+def _validate_render_config(src: RenderConfig) -> None:
+    have_scale = src.scale > 0
+    have_width = src.canvas_width > 0
+    have_height = src.canvas_height > 0
+
+    if src.scale != -1.0 and src.scale <= 0:
+        raise ValueError("render_config.scale must be > 0 or -1")
+    if src.canvas_width != -1 and src.canvas_width <= 0:
+        raise ValueError("render_config.canvas_width must be > 0 or -1")
+    if src.canvas_height != -1 and src.canvas_height <= 0:
+        raise ValueError("render_config.canvas_height must be > 0 or -1")
+    if have_scale and (have_width or have_height):
+        raise ValueError(
+            "render_config.scale cannot be combined with canvas_width or canvas_height"
+        )
+
+
+def _validated_render_config(src: RenderConfig) -> RenderConfig:
+    _validate_render_config(src)
+    return _copy_render_config(src)
 
 
 class DoclingThreadedPdfParser:
-    """Threaded PDF parser that decodes pages from multiple documents in parallel.
-
-    Usage::
-
-        parser_config = ThreadedPdfParserConfig(loglevel="fatal", threads=4, max_concurrent_results=32)
-        decode_config = DecodePageConfig()
-
-        parser = DoclingThreadedPdfParser(parser_config=parser_config, decode_config=decode_config)
-
-        for source in sources:
-            parser.load(source)
-
-        while parser.has_tasks():
-            task = parser.get_task()
-
-            if task.success:
-                page_decoder, timings = task.get()
-            else:
-                error_msg = task.error()
-    """
+    """Threaded PDF parser that decodes pages from multiple documents in parallel."""
 
     def __init__(
         self,
@@ -907,26 +1181,49 @@ class DoclingThreadedPdfParser:
     ):
         if parser_config is None:
             parser_config = ThreadedPdfParserConfig()
-        if decode_config is None:
-            decode_config = DecodePageConfig()
 
-        self._parser = threaded_pdf_parser(
-            loglevel=parser_config.loglevel,
-            num_threads=parser_config.threads,
-            max_concurrent_results=parser_config.max_concurrent_results,
-            config=decode_config,
+        self._parser_config = parser_config
+        if parser_config.render_config is not None:
+            parser_config.render_config = _validated_render_config(
+                parser_config.render_config
+            )
+        self._decode_config = (
+            _copy_decode_config(decode_config)
+            if decode_config is not None
+            else DecodePageConfig()
         )
+        self._decode_config.page_boundary = parser_config.boundary_type.value
+        self._page_counts: Dict[str, int] = {}
+        self._scheduled_page_counts: Dict[str, int] = {}
+
+        if parser_config.render_config is None:
+            self._parser = _threaded_pdf_parser(
+                loglevel=parser_config.loglevel,
+                num_threads=parser_config.threads,
+                max_concurrent_results=parser_config.max_concurrent_results,
+                config=self._decode_config,
+            )
+        else:
+            self._parser = _threaded_pdf_renderer(
+                loglevel=parser_config.loglevel,
+                num_threads=parser_config.threads,
+                max_concurrent_results=parser_config.max_concurrent_results,
+                decode_config=self._decode_config,
+                render_config=parser_config.render_config,
+            )
 
     def load(
         self,
         path_or_stream: Union[str, Path, BytesIO],
         password: str | None = None,
+        page_numbers: Sequence[int] | None = None,
     ) -> str:
         """Load a document for parallel processing.
 
         Parameters:
             path_or_stream: File path or BytesIO object.
             password: Optional password for protected files.
+            page_numbers: Optional 1-indexed physical pages to schedule.
 
         Returns:
             str: The document key.
@@ -937,7 +1234,10 @@ class DoclingThreadedPdfParser:
         if isinstance(path_or_stream, Path):
             key = f"key={path_or_stream!s}"
             success = self._parser.load_document(
-                key=key, filename=str(path_or_stream).encode("utf8"), password=password
+                key=key,
+                filename=str(path_or_stream).encode("utf8"),
+                password=password,
+                page_numbers=list(page_numbers) if page_numbers is not None else None,
             )
         elif isinstance(path_or_stream, BytesIO):
             hasher = hashlib.sha256(usedforsecurity=False)
@@ -948,7 +1248,10 @@ class DoclingThreadedPdfParser:
 
             key = f"key={hash_val}"
             success = self._parser.load_document_from_bytesio(
-                key=key, bytes_io=path_or_stream, password=password
+                key=key,
+                bytes_io=path_or_stream,
+                password=password,
+                page_numbers=list(page_numbers) if page_numbers is not None else None,
             )
         else:
             raise TypeError(
@@ -958,7 +1261,34 @@ class DoclingThreadedPdfParser:
         if not success:
             raise RuntimeError(f"Failed to load document with key {key}")
 
+        self._page_counts[key] = self._parser.number_of_pages(key)
+        self._scheduled_page_counts[key] = self._parser.scheduled_number_of_pages(key)
         return key
+
+    def page_count(self, doc_key: str) -> int:
+        """Return the total page count for a loaded document."""
+        if doc_key not in self._page_counts:
+            raise ValueError(f"Document key not loaded: {doc_key}")
+        return self._page_counts[doc_key]
+
+    def scheduled_page_count(self, doc_key: str) -> int:
+        """Return the number of pages scheduled for threaded emission."""
+        if doc_key not in self._scheduled_page_counts:
+            raise ValueError(f"Document key not loaded: {doc_key}")
+        return self._scheduled_page_counts[doc_key]
+
+    def unload(self, doc_key: str) -> bool:
+        """Unload one document after threaded processing has completed."""
+        unloaded = self._parser.unload_document(doc_key)
+        self._page_counts.pop(doc_key, None)
+        self._scheduled_page_counts.pop(doc_key, None)
+        return unloaded
+
+    def unload_all(self) -> None:
+        """Unload all documents after threaded processing has completed."""
+        self._parser.unload_all_documents()
+        self._page_counts.clear()
+        self._scheduled_page_counts.clear()
 
     def has_tasks(self) -> bool:
         """Check if there are remaining tasks to consume.
@@ -970,321 +1300,21 @@ class DoclingThreadedPdfParser:
         """
         return self._parser.has_tasks()
 
-    def get_task(self) -> "PageDecodeResult":
+    def iterate_results(self) -> Iterator["PageParseResult"]:
+        """Yield page results in completion order."""
+        while self.has_tasks():
+            yield self.get_task()
+
+    def get_task(self) -> "PageParseResult":
         """Get the next completed page decode result.
 
         Blocks until a result is available.
 
         Returns:
-            PageDecodeResult: The result with doc_key, page_number, success flag.
-                Use task.get() to get (PdfPageDecoder, timings) or task.error() for error message.
+            PageParseResult: Parsed page result with lazy page conversion and optional image access.
         """
-        return self._parser.get_task()
-
-
-# ---------------------------------------------------------------------------
-# Threaded renderer
-# ---------------------------------------------------------------------------
-
-
-class ThreadedPdfRendererConfig(BaseModel):
-    """Configuration for the threaded PDF renderer.
-
-    Attributes:
-        loglevel: Logging level ('fatal', 'error', 'warning', 'info').
-        threads: Number of worker threads for parallel page rendering.
-        max_concurrent_results: Maximum results buffered before workers pause.
-    """
-
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-
-    loglevel: str = "fatal"
-    threads: int = 4
-    max_concurrent_results: int = 32
-
-
-class PdfPageRenderResult:
-    """Wrapper around a raw C++ PageRenderResult providing PIL image conversion.
-
-    Attributes:
-        doc_key: Document key the page belongs to.
-        page_number: 0-indexed page number.
-        success: Whether rendering succeeded.
-    """
-
-    def __init__(self, raw):
-        self._raw = raw
-        self.doc_key: str = raw.doc_key
-        self.page_number: int = raw.page_number
-        self.success: bool = raw.success
-
-    def error(self) -> str:
-        """Return the error message if rendering failed, empty string otherwise."""
-        return self._raw.error_message if not self.success else ""
-
-    def get(self) -> Tuple[PdfPageDecoder, Dict[str, float]]:
-        """Return (page_decoder, timings) for the rendered page.
-
-        Delegates to the underlying PageDecodeResult.get() so that render
-        results can be used interchangeably with parse results when accessing
-        the decoded page data.
-
-        Raises:
-            RuntimeError: If the task was not successful.
-        """
-        return self._raw.get()
-
-    def get_image(self) -> PILImage.Image | None:
-        """Convert rendered pixel data to a PIL RGBA Image.
-
-        Returns:
-            PIL.Image.Image in RGBA mode, or None if rendering failed.
-        """
-        if not self.success:
-            return None
-
-        raw_bytes = self._raw.get_image()
-        if not raw_bytes:
-            return None
-
-        h, w, _ = self._raw.image_shape
-        return PILImage.frombuffer("RGBA", (w, h), raw_bytes, "raw", "RGBA", 0, 1)
-
-
-class DoclingThreadedPdfRenderer:
-    """Threaded PDF renderer that decodes and renders pages from multiple documents in parallel.
-
-    Each result contains both the decoded page data (accessible via the page_decoder)
-    and the rendered RGBA image, produced in a single pass.
-
-    Usage::
-
-        render_config = RenderConfig()
-        decode_config = DecodePageConfig()
-        renderer_config = ThreadedPdfRendererConfig(threads=4)
-
-        renderer = DoclingThreadedPdfRenderer(
-            renderer_config=renderer_config,
-            decode_config=decode_config,
-            render_config=render_config,
-        )
-
-        for source in sources:
-            renderer.load(source)
-
-        while renderer.has_tasks():
-            result = renderer.get_task()
-            if result.success:
-                image = result.get_image()   # PIL RGBA Image
-            else:
-                print(result.error())
-    """
-
-    def __init__(
-        self,
-        renderer_config: ThreadedPdfRendererConfig | None = None,
-        decode_config: DecodePageConfig | None = None,
-        render_config: RenderConfig | None = None,
-    ):
-        if renderer_config is None:
-            renderer_config = ThreadedPdfRendererConfig()
-        if decode_config is None:
-            decode_config = DecodePageConfig()
-        if render_config is None:
-            render_config = RenderConfig()
-
-        self._renderer = threaded_pdf_renderer(
-            loglevel=renderer_config.loglevel,
-            num_threads=renderer_config.threads,
-            max_concurrent_results=renderer_config.max_concurrent_results,
-            decode_config=decode_config,
-            render_config=render_config,
-        )
-
-    def load(
-        self,
-        path_or_stream: Union[str, Path, BytesIO],
-        password: str | None = None,
-    ) -> str:
-        """Load a document for parallel rendering.
-
-        Parameters:
-            path_or_stream: File path or BytesIO object.
-            password: Optional password for protected files.
-
-        Returns:
-            str: The document key.
-        """
-        if isinstance(path_or_stream, str):
-            path_or_stream = Path(path_or_stream)
-
-        if isinstance(path_or_stream, Path):
-            key = f"key={path_or_stream!s}"
-            success = self._renderer.load_document(
-                key=key, filename=str(path_or_stream).encode("utf8"), password=password
-            )
-        elif isinstance(path_or_stream, BytesIO):
-            hasher = hashlib.sha256(usedforsecurity=False)
-            while chunk := path_or_stream.read(8192):
-                hasher.update(chunk)
-            path_or_stream.seek(0)
-            hash_val = hasher.hexdigest()
-
-            key = f"key={hash_val}"
-            success = self._renderer.load_document_from_bytesio(
-                key=key, bytes_io=path_or_stream, password=password
-            )
-        else:
-            raise TypeError(
-                f"Expected str, Path, or BytesIO, got {type(path_or_stream)}"
-            )
-
-        if not success:
-            raise RuntimeError(f"Failed to load document with key {key}")
-
-        return key
-
-    def has_tasks(self) -> bool:
-        """Check if there are remaining tasks to consume.
-
-        On first call, builds the task queue and starts worker threads.
-
-        Returns:
-            bool: True if there are remaining results to consume.
-        """
-        return self._renderer.has_tasks()
-
-    def get_task(self) -> PdfPageRenderResult:
-        """Get the next completed page render result.
-
-        Blocks until a result is available.
-
-        Returns:
-            PdfPageRenderResult: wraps doc_key, page_number, success, and get_image().
-        """
-        return PdfPageRenderResult(self._renderer.get_task())
-
-
-class PdfRenderDocument:
-    def __init__(
-        self,
-        *,
-        path_or_stream: Union[Path, bytes],
-        parser_doc: PdfDocument,
-        renderer_config: ThreadedPdfRendererConfig,
-        decode_config: DecodePageConfig,
-        render_config: RenderConfig,
-        password: str | None = None,
-    ):
-        self._path_or_stream = path_or_stream
-        self._parser_doc = parser_doc
-        self._renderer_config = renderer_config
-        self._decode_config = decode_config
-        self._render_config = render_config
-        self._password = password
-        self._pages: Dict[int, PdfPageRenderResult] = {}
-
-    def _make_renderer(self) -> "DoclingThreadedPdfRenderer":
-        return DoclingThreadedPdfRenderer(
-            renderer_config=self._renderer_config,
-            decode_config=self._decode_config,
-            render_config=self._render_config,
-        )
-
-    def _load_source(self, renderer: "DoclingThreadedPdfRenderer") -> str:
-        if isinstance(self._path_or_stream, Path):
-            return renderer.load(self._path_or_stream, password=self._password)
-
-        return renderer.load(BytesIO(self._path_or_stream), password=self._password)
-
-    def _render_all_pages(self) -> None:
-        if len(self._pages) == self.number_of_pages():
-            return
-
-        renderer = self._make_renderer()
-        key = self._load_source(renderer)
-
-        while renderer.has_tasks():
-            result = renderer.get_task()
-            if result.doc_key != key:
-                continue
-            if not result.success:
-                raise RuntimeError(
-                    f"Failed to render page {result.page_number + 1}: {result.error()}"
-                )
-            self._pages[result.page_number + 1] = result
-
-    def number_of_pages(self) -> int:
-        return self._parser_doc.number_of_pages()
-
-    def get_page(self, page_no: int) -> PdfPageRenderResult:
-        if not (1 <= page_no <= self.number_of_pages()):
-            raise ValueError(
-                f"incorrect page_no: {page_no} (min:1, max:{self.number_of_pages()})"
-            )
-
-        if page_no not in self._pages:
-            self._render_all_pages()
-
-        return self._pages[page_no]
-
-    def iterate_pages(self) -> Iterator[Tuple[int, PdfPageRenderResult]]:
-        self._render_all_pages()
-        for page_no in range(1, self.number_of_pages() + 1):
-            yield page_no, self._pages[page_no]
-
-    def unload(self) -> bool:
-        self._pages.clear()
-        return self._parser_doc.unload()
-
-
-class DoclingPdfRenderer:
-    def __init__(
-        self,
-        loglevel: str = "fatal",
-        decode_config: DecodePageConfig | None = None,
-        render_config: RenderConfig | None = None,
-    ):
-        self._loglevel = loglevel
-        self._parser = DoclingPdfParser(loglevel=loglevel)
-        self._renderer_config = ThreadedPdfRendererConfig(
-            loglevel=loglevel,
-            threads=1,
-            max_concurrent_results=1,
-        )
-        self._decode_config = decode_config or DecodePageConfig()
-        self._render_config = render_config or RenderConfig()
-
-    def load(
-        self,
-        path_or_stream: Union[str, Path, BytesIO],
-        lazy: bool = True,
-        boundary_type: PdfPageBoundaryType = PdfPageBoundaryType.CROP_BOX,
-        password: str | None = None,
-    ) -> PdfRenderDocument:
-        parser_doc = self._parser.load(
-            path_or_stream=path_or_stream,
-            lazy=lazy,
-            boundary_type=boundary_type,
-            password=password,
-        )
-
-        if isinstance(path_or_stream, str):
-            source: Union[Path, bytes] = Path(path_or_stream)
-        elif isinstance(path_or_stream, Path):
-            source = path_or_stream
-        elif isinstance(path_or_stream, BytesIO):
-            source = path_or_stream.getvalue()
-        else:
-            raise TypeError(
-                f"Expected str, Path, or BytesIO, got {type(path_or_stream)}"
-            )
-
-        return PdfRenderDocument(
-            path_or_stream=source,
-            parser_doc=parser_doc,
-            renderer_config=self._renderer_config,
-            decode_config=self._decode_config,
-            render_config=self._render_config,
-            password=password,
+        return PageParseResult(
+            self._parser.get_task(),
+            boundary_type=self._parser_config.boundary_type,
+            render_config=self._parser_config.render_config,
         )

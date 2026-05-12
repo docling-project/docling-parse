@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Thread-scaling benchmark for the docling-parse threaded renderer.
+Thread-scaling benchmark for docling-parse threaded parse-and-render mode.
 
-Renders all PDFs in a directory with DoclingThreadedPdfRenderer at
+Renders all PDFs in a directory with DoclingThreadedPdfParser at
 1, 2, 4, 8, 12 and 16 threads and prints a table of total wall time
 vs thread count.  A single-threaded pypdfium2 run (text + image at
 scale=2) is included as a reference baseline.
@@ -112,10 +112,10 @@ def run_threaded(
     canvas_width: int,
     total_pages: int,
 ) -> float:
-    """Run DoclingThreadedPdfRenderer over all PDFs. Returns wall time in seconds."""
+    """Run DoclingThreadedPdfParser with rendering enabled over all PDFs."""
     from docling_parse.pdf_parser import (
-        DoclingThreadedPdfRenderer,
-        ThreadedPdfRendererConfig,
+        DoclingThreadedPdfParser,
+        ThreadedPdfParserConfig,
     )
     from docling_parse.pdf_parsers import DecodePageConfig, RenderConfig  # type: ignore[import]
 
@@ -129,21 +129,21 @@ def run_threaded(
     render_config = RenderConfig()
     render_config.canvas_width = canvas_width
 
-    renderer_config = ThreadedPdfRendererConfig(
+    parser_config = ThreadedPdfParserConfig(
         loglevel="fatal",
         threads=num_threads,
         max_concurrent_results=max_concurrent_results,
+        render_config=render_config,
     )
 
-    renderer = DoclingThreadedPdfRenderer(
-        renderer_config=renderer_config,
+    parser = DoclingThreadedPdfParser(
+        parser_config=parser_config,
         decode_config=decode_config,
-        render_config=render_config,
     )
 
     for pdf_path in tqdm(pdf_paths, desc="  loading", unit="doc", leave=False):
         try:
-            renderer.load(str(pdf_path))
+            parser.load(str(pdf_path))
         except Exception as e:
             print(f"  threaded load error on {pdf_path}: {e}")
 
@@ -151,8 +151,7 @@ def run_threaded(
 
     errors = 0
     with tqdm(total=total_pages, desc="  rendering", unit="page") as pbar:
-        while renderer.has_tasks():
-            result = renderer.get_task()
+        for result in parser.iterate_results():
             if result.success:
                 _ = result.get_image()
             else:

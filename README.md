@@ -111,18 +111,18 @@ parser = DoclingThreadedPdfParser(
 
 # load one or more documents
 for source in ["doc_a.pdf", "doc_b.pdf"]:
-    parser.load(source)
+    doc_key = parser.load(source)
+    print(doc_key, parser.page_count(doc_key))
 
 # consume decoded pages as they become available
-while parser.has_tasks():
-    task = parser.get_task()
-
-    if task.success:
-        page_decoder, timings = task.get()
-        print(f"{task.doc_key} p{task.page_number}: "
-              f"{len(list(page_decoder.get_word_cells()))} words")
+for result in parser.iterate_results():
+    if result.success:
+        seg_page = result.get_page()
+        timings = result.get_timings()
+        print(f"{result.doc_key} p{result.page_number}: "
+              f"{len(seg_page.word_cells)} words in {timings.total():.3f}s")
     else:
-        print(f"error on {task.doc_key} p{task.page_number}: {task.error()}")
+        print(f"error on {result.doc_key} p{result.page_number}: {result.error_message}")
 ```
 
 Use the CLI

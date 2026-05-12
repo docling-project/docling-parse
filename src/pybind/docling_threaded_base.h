@@ -3,12 +3,15 @@
 #ifndef PYBIND_THREADED_PDF_BASE_H
 #define PYBIND_THREADED_PDF_BASE_H
 
+#include <algorithm>
 #include <atomic>
 #include <condition_variable>
 #include <mutex>
 #include <optional>
 #include <queue>
+#include <stdexcept>
 #include <thread>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -63,11 +66,19 @@ namespace docling
 
     bool load_document(std::string key,
                        std::string filename,
-                       std::optional<std::string> password);
+                       std::optional<std::string> password,
+                       std::optional<std::vector<int>> page_numbers = std::nullopt);
 
     bool load_document_from_bytesio(std::string key,
                                     pybind11::object bytes_io,
-                                    std::optional<std::string> password);
+                                    std::optional<std::string> password,
+                                    std::optional<std::vector<int>> page_numbers = std::nullopt);
+
+    int number_of_pages(std::string key) const;
+    int scheduled_number_of_pages(std::string key) const;
+
+    bool unload_document(std::string key);
+    void unload_all_documents();
 
     bool has_tasks();
 
@@ -76,6 +87,11 @@ namespace docling
   private:
 
     void set_loglevel_with_label(std::string level);
+    std::vector<int> normalise_page_numbers(const std::string& key,
+                                            int num_pages,
+                                            std::optional<std::vector<int>> page_numbers) const;
+    void validate_unload_state() const;
+    void reset_after_completion();
 
     void build_task_queue();
 
@@ -88,6 +104,7 @@ namespace docling
     int max_concurrent_results;
 
     std::unordered_map<std::string, doc_decoder_ptr_type> key2doc;
+    std::unordered_map<std::string, std::vector<int>> key2scheduled_pages;
 
     // Task queue: (doc_key, page_number) pairs
     std::queue<std::pair<std::string, int>> task_queue;
@@ -121,7 +138,8 @@ namespace docling
     config(config),
     num_threads(num_threads),
     max_concurrent_results(max_concurrent_results),
-    key2doc({})
+    key2doc({}),
+    key2scheduled_pages({})
   {
     set_loglevel_with_label(loglevel);
 
@@ -181,7 +199,8 @@ namespace docling
   bool docling_threaded_base<Derived, ResultType>::load_document(
       std::string key,
       std::string filename,
-      std::optional<std::string> password)
+      std::optional<std::string> password,
+      std::optional<std::vector<int>> page_numbers)
   {
     if(started.load())
       {
@@ -199,8 +218,30 @@ namespace docling
 
     if(std::filesystem::exists(path_filename))
       {
-        key2doc[key] = std::make_shared<doc_decoder_type>();
-        key2doc.at(key)->process_document_from_file(filename, password);
+        try
+          {
+            key2doc[key] = std::make_shared<doc_decoder_type>();
+            key2doc.at(key)->process_document_from_file(filename, password);
+          }
+        catch(const std::exception& exc)
+          {
+            key2doc.erase(key);
+            LOG_S(ERROR) << "could not decode file object for key=" << key;
+            return false;
+          }
+
+        try
+          {
+            key2scheduled_pages[key] = normalise_page_numbers(key,
+                                                              key2doc.at(key)->get_number_of_pages(),
+                                                              page_numbers);
+          }
+        catch(const std::exception& exc)
+          {
+            key2doc.erase(key);
+            key2scheduled_pages.erase(key);
+            throw;
+          }
         return true;
       }
 
@@ -212,7 +253,8 @@ namespace docling
   bool docling_threaded_base<Derived, ResultType>::load_document_from_bytesio(
       std::string key,
       pybind11::object bytes_io,
-      std::optional<std::string> password)
+      std::optional<std::string> password,
+      std::optional<std::vector<int>> page_numbers)
   {
     if(started.load())
       {
@@ -238,28 +280,159 @@ namespace docling
         key2doc[key] = std::make_shared<doc_decoder_type>();
         std::string description = "parsing of " + key + " from bytesio";
         key2doc.at(key)->process_document_from_bytesio(data_buffer, password, description);
-        return true;
       }
     catch(const std::exception& exc)
       {
+        key2doc.erase(key);
+        key2scheduled_pages.erase(key);
         LOG_S(ERROR) << "could not decode bytesio object for key=" << key;
         return false;
       }
 
-    return false;
+    try
+      {
+        key2scheduled_pages[key] = normalise_page_numbers(key,
+                                                          key2doc.at(key)->get_number_of_pages(),
+                                                          page_numbers);
+      }
+    catch(const std::exception& exc)
+      {
+        key2doc.erase(key);
+        key2scheduled_pages.erase(key);
+        throw;
+      }
+    return true;
+  }
+
+  template<typename Derived, typename ResultType>
+  int docling_threaded_base<Derived, ResultType>::number_of_pages(std::string key) const
+  {
+    auto itr = key2doc.find(key);
+    if(itr == key2doc.end())
+      {
+        throw std::runtime_error("Document key not found: " + key);
+      }
+
+    return itr->second->get_number_of_pages();
+  }
+
+  template<typename Derived, typename ResultType>
+  int docling_threaded_base<Derived, ResultType>::scheduled_number_of_pages(std::string key) const
+  {
+    auto itr = key2scheduled_pages.find(key);
+    if(itr == key2scheduled_pages.end())
+      {
+        throw std::runtime_error("Document key not found: " + key);
+      }
+
+    return static_cast<int>(itr->second.size());
+  }
+
+  template<typename Derived, typename ResultType>
+  bool docling_threaded_base<Derived, ResultType>::unload_document(std::string key)
+  {
+    validate_unload_state();
+
+    bool removed_doc = key2doc.erase(key) > 0;
+    bool removed_schedule = key2scheduled_pages.erase(key) > 0;
+
+    if(key2doc.empty())
+      {
+        reset_after_completion();
+      }
+
+    return removed_doc || removed_schedule;
+  }
+
+  template<typename Derived, typename ResultType>
+  void docling_threaded_base<Derived, ResultType>::unload_all_documents()
+  {
+    validate_unload_state();
+    key2doc.clear();
+    key2scheduled_pages.clear();
+    reset_after_completion();
+  }
+
+  template<typename Derived, typename ResultType>
+  std::vector<int> docling_threaded_base<Derived, ResultType>::normalise_page_numbers(
+      const std::string& key,
+      int num_pages,
+      std::optional<std::vector<int>> page_numbers) const
+  {
+    std::vector<int> scheduled_pages;
+
+    if(not page_numbers.has_value())
+      {
+        scheduled_pages.reserve(num_pages);
+        for(int page = 0; page < num_pages; ++page)
+          {
+            scheduled_pages.push_back(page);
+          }
+        return scheduled_pages;
+      }
+
+    scheduled_pages.reserve(page_numbers->size());
+    for(int page_number : *page_numbers)
+      {
+        if(page_number < 1 or page_number > num_pages)
+          {
+            throw std::runtime_error("Invalid page number " + std::to_string(page_number)
+                                     + " for document key " + key
+                                     + " with " + std::to_string(num_pages) + " pages");
+          }
+        scheduled_pages.push_back(page_number - 1);
+      }
+
+    std::sort(scheduled_pages.begin(), scheduled_pages.end());
+    scheduled_pages.erase(std::unique(scheduled_pages.begin(), scheduled_pages.end()),
+                          scheduled_pages.end());
+    return scheduled_pages;
+  }
+
+  template<typename Derived, typename ResultType>
+  void docling_threaded_base<Derived, ResultType>::validate_unload_state() const
+  {
+    if(tasks_remaining.load() > 0)
+      {
+        throw std::runtime_error("Cannot unload documents while threaded iteration is active");
+      }
+  }
+
+  template<typename Derived, typename ResultType>
+  void docling_threaded_base<Derived, ResultType>::reset_after_completion()
+  {
+    while(not task_queue.empty())
+      {
+        task_queue.pop();
+      }
+
+    while(not results_queue.empty())
+      {
+        results_queue.pop();
+      }
+
+    for(auto& worker : workers)
+      {
+        if(worker.joinable())
+          {
+            worker.join();
+          }
+      }
+    workers.clear();
+
+    tasks_remaining.store(0);
+    active_workers.store(0);
+    started.store(false);
   }
 
   template<typename Derived, typename ResultType>
   void docling_threaded_base<Derived, ResultType>::build_task_queue()
   {
-    for(const auto& pair : key2doc)
+    for(const auto& pair : key2scheduled_pages)
       {
-        const std::string& doc_key = pair.first;
-        int num_pages = pair.second->get_number_of_pages();
-
-        for(int page = 0; page < num_pages; page++)
+        for(int page : pair.second)
           {
-            task_queue.push(std::make_pair(doc_key, page));
+            task_queue.push(std::make_pair(pair.first, page));
           }
       }
 

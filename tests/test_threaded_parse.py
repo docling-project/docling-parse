@@ -3,15 +3,15 @@
 
 import glob
 import os
-from pathlib import Path
 
+import pytest
 from docling_core.types.doc.page import PdfPageBoundaryType, SegmentedPdfPage
 
+from docling_parse import pdf_parsers
 from docling_parse.pdf_parser import (
     DecodePageConfig,
     DoclingPdfParser,
     DoclingThreadedPdfParser,
-    PdfDocument,
     ThreadedPdfParserConfig,
 )
 from tests.test_parse import (
@@ -20,51 +20,43 @@ from tests.test_parse import (
     verify_SegmentedPdfPage,
 )
 
+SAMPLE_PDF = "docs/dln-v1.pdf"
+LARGE_SAMPLE_PDF = "docs/PDF32000_2008.pdf"
 
-def _build_segmented_page_from_decoder(
-    page_decoder, boundary_type=PdfPageBoundaryType.CROP_BOX
-):
-    """Build a SegmentedPdfPage from a page decoder, reusing PdfDocument's conversion logic."""
-    # Create a minimal PdfDocument just for its conversion methods
-    dummy_doc = PdfDocument.__new__(PdfDocument)
-    dummy_doc._boundary_type = boundary_type
+
+def _make_decode_config() -> DecodePageConfig:
     config = DecodePageConfig()
-    config.page_boundary = boundary_type.value
+    config.page_boundary = "crop_box"
     config.do_sanitization = False
+    config.keep_glyphs = True
     config.keep_qpdf_warnings = False
-    return dummy_doc._to_segmented_page_from_decoder(
-        page_decoder=page_decoder, config=config
-    )
+    return config
+
+
+def test_threaded_raw_pybind_types_are_internal():
+    assert not hasattr(pdf_parsers, "PageDecodeResult")
+    assert not hasattr(pdf_parsers, "threaded_pdf_parser")
+    assert not hasattr(pdf_parsers, "PageRenderResult")
+    assert not hasattr(pdf_parsers, "threaded_pdf_renderer")
 
 
 def test_threaded_reference_documents_from_filenames():
     """Load all regression PDFs, decode all pages in parallel, and verify against groundtruth."""
-
     pdf_docs = sorted(glob.glob(REGRESSION_FOLDER))
     assert len(pdf_docs) > 0, "len(pdf_docs)==0 -> nothing to test"
 
-    decode_config = DecodePageConfig()
-    decode_config.page_boundary = "crop_box"
-    decode_config.do_sanitization = False
-    decode_config.keep_glyphs = True
-    decode_config.keep_qpdf_warnings = False
-
-    parser_config = ThreadedPdfParserConfig(
-        loglevel="fatal",
-        threads=4,
-        max_concurrent_results=32,
-    )
-
     parser = DoclingThreadedPdfParser(
-        parser_config=parser_config,
-        decode_config=decode_config,
+        parser_config=ThreadedPdfParserConfig(
+            loglevel="fatal",
+            threads=4,
+            max_concurrent_results=32,
+            boundary_type=PdfPageBoundaryType.CROP_BOX,
+        ),
+        decode_config=_make_decode_config(),
     )
 
-    # Load all documents
-    for pdf_doc_path in pdf_docs:
-        parser.load(pdf_doc_path)
+    doc_keys = {pdf_doc_path: parser.load(pdf_doc_path) for pdf_doc_path in pdf_docs}
 
-    # Page restrictions (same as sequential test)
     page_restrictions = {
         "deep-mediabox-inheritance.pdf": [2],
         "font_06.pdf": [1],
@@ -74,42 +66,25 @@ def test_threaded_reference_documents_from_filenames():
         "font_10.pdf": [1],
     }
 
-    # Collect all results
-    results = {}
-    while parser.has_tasks():
-        task = parser.get_task()
-
-        assert task.doc_key != "", "doc_key should not be empty"
-
-        if task.success:
-            page_decoder, _timings = task.get()
-            page_number = task.page_number  # 0-indexed
-            doc_key = task.doc_key
-
-            pred_page = _build_segmented_page_from_decoder(page_decoder)
-
-            if doc_key not in results:
-                results[doc_key] = {}
-            results[doc_key][page_number] = pred_page
+    results: dict[str, dict[int, SegmentedPdfPage]] = {}
+    for result in parser.iterate_results():
+        assert result.doc_key != "", "doc_key should not be empty"
+        if result.success:
+            results.setdefault(result.doc_key, {})[result.page_number] = (
+                result.get_page()
+            )
         else:
-            error_msg = task.error()
-            # Some pages may fail, log but don't assert
             print(
-                f"Warning: task failed for {task.doc_key} page {task.page_number}: {error_msg}"
+                f"Warning: task failed for {result.doc_key} page {result.page_number}: {result.error_message}"
             )
 
-    # Verify results against groundtruth (same logic as test_reference_documents_from_filenames)
     for pdf_doc_path in pdf_docs:
-        key = f"key={Path(pdf_doc_path)!s}"
-
+        key = doc_keys[pdf_doc_path]
         assert key in results, f"No results found for {pdf_doc_path}"
 
-        for page_number, pred_page in sorted(results[key].items()):
-            page_no = page_number + 1  # convert to 1-indexed for groundtruth filenames
+        rname = os.path.basename(pdf_doc_path)
 
-            rname = os.path.basename(pdf_doc_path)
-
-            # Skip pages not in restrictions
+        for page_no, pred_page in sorted(results[key].items()):
             if rname in page_restrictions and page_no not in page_restrictions[rname]:
                 continue
 
@@ -124,59 +99,42 @@ def test_threaded_reference_documents_from_filenames():
 
 def test_threaded_single_document():
     """Test threaded parsing with a single document."""
-    filename = "tests/data/regression/table_of_contents_01.pdf"
-
-    decode_config = DecodePageConfig()
-    decode_config.page_boundary = "crop_box"
-    decode_config.do_sanitization = False
-    decode_config.keep_glyphs = True
-    decode_config.keep_qpdf_warnings = False
+    filename = SAMPLE_PDF
 
     parser = DoclingThreadedPdfParser(
         parser_config=ThreadedPdfParserConfig(
-            loglevel="fatal", threads=2, max_concurrent_results=4
+            loglevel="fatal",
+            threads=2,
+            max_concurrent_results=4,
+            boundary_type=PdfPageBoundaryType.CROP_BOX,
         ),
-        decode_config=decode_config,
+        decode_config=_make_decode_config(),
     )
 
     key = parser.load(filename)
+    assert parser.page_count(key) > 0
 
     count = 0
-    while parser.has_tasks():
-        task = parser.get_task()
-        assert task.success, f"Failed to decode page {task.page_number}: {task.error()}"
-        assert task.doc_key == key
-
-        _page_decoder, timings = task.get()
-        assert isinstance(timings, dict)
-        assert len(timings) > 0
-
+    for result in parser.iterate_results():
+        assert result.success, (
+            f"Failed to decode page {result.page_number}: {result.error_message}"
+        )
+        assert result.doc_key == key
+        assert result.page_width > 0
+        assert result.page_height > 0
+        assert result.get_timings().total() > 0
         count += 1
 
-    # Should have processed all pages
-    assert count > 0, "Should have processed at least one page"
+    assert count == parser.page_count(key)
 
 
 def test_threaded_results_match_sequential():
     """Verify threaded results match sequential results for the same documents."""
+    filenames = [SAMPLE_PDF]
+    decode_config = _make_decode_config()
 
-    """
-    filenames = [
-        "tests/data/regression/font_01.pdf",
-        "tests/data/regression/ligatures_01.pdf",
-    ]
-    """
-    filenames = glob.glob("tests/data/regression/*.pdf")
-
-    decode_config = DecodePageConfig()
-    decode_config.page_boundary = "crop_box"
-    decode_config.do_sanitization = False
-    decode_config.keep_glyphs = True
-    decode_config.keep_qpdf_warnings = False
-
-    # Sequential parsing
     seq_parser = DoclingPdfParser(loglevel="fatal")
-    sequential_pages = {}
+    sequential_pages: dict[str, dict[int, SegmentedPdfPage]] = {}
     for filename in filenames:
         pdf_doc = seq_parser.load(
             path_or_stream=filename,
@@ -187,32 +145,26 @@ def test_threaded_results_match_sequential():
         sequential_pages[key] = {}
         for page_no, page in pdf_doc.iterate_pages(config=decode_config):
             sequential_pages[key][page_no] = page
-            # print(f"seq: {key}, {page_no}")
 
-    # Threaded parsing
     threaded_parser = DoclingThreadedPdfParser(
         parser_config=ThreadedPdfParserConfig(
-            loglevel="fatal", threads=2, max_concurrent_results=4
+            loglevel="fatal",
+            threads=2,
+            max_concurrent_results=4,
+            boundary_type=PdfPageBoundaryType.CROP_BOX,
         ),
         decode_config=decode_config,
     )
     for filename in filenames:
         threaded_parser.load(filename)
 
-    threaded_pages = {}
-    while threaded_parser.has_tasks():
-        task = threaded_parser.get_task()
-        assert task.success, f"Failed: {task.error()}"
+    threaded_pages: dict[str, dict[int, SegmentedPdfPage]] = {}
+    for result in threaded_parser.iterate_results():
+        assert result.success, f"Failed: {result.error_message}"
+        threaded_pages.setdefault(result.doc_key, {})[result.page_number] = (
+            result.get_page()
+        )
 
-        page_decoder, _timings = task.get()
-        pred_page = _build_segmented_page_from_decoder(page_decoder)
-
-        if task.doc_key not in threaded_pages:
-            threaded_pages[task.doc_key] = {}
-        threaded_pages[task.doc_key][task.page_number + 1] = pred_page  # 1-indexed
-        # print(f"threaded: {task.doc_key}, {task.page_number + 1}")
-
-    # Compare
     for key in sequential_pages:
         assert key in threaded_pages, f"Missing key {key} in threaded results"
         for page_no in sequential_pages[key]:
@@ -221,28 +173,9 @@ def test_threaded_results_match_sequential():
             seq_page = sequential_pages[key][page_no]
             thr_page = threaded_pages[key][page_no]
 
-            """
-            print(f"** Page {page_no} for {key} **")
-            print(f" -> char-cells count for {key} page {page_no}: {len(seq_page.char_cells)} versus {len(thr_page.char_cells)}")
-            print(f" -> word-cells count for {key} page {page_no}: {len(seq_page.word_cells)} versus {len(thr_page.word_cells)}")
-            print(f" -> line-cells count for {key} page {page_no}: {len(seq_page.textline_cells)} versus {len(thr_page.textline_cells)}")
-            print(f" -> shapes count for {key} page {page_no}: {len(seq_page.shapes)} versus {len(thr_page.shapes)}")
-            """
-
-            # Verify key fields match
             assert len(seq_page.char_cells) == len(thr_page.char_cells), (
                 f"char_cells count mismatch for {key} page {page_no}"
             )
-
-            """
-            if len(seq_page.word_cells)!=len(thr_page.word_cells):
-                for i, cell in enumerate(seq_page.word_cells):
-                    print(f" === [{i}] === ")
-                    print(cell.text)
-                    print(thr_page.word_cells[i].text)
-                    assert cell.text==thr_page.word_cells[i].text
-            """
-
             assert len(seq_page.word_cells) == len(thr_page.word_cells), (
                 f"word_cells count mismatch for {key} page {page_no}"
             )
@@ -256,59 +189,123 @@ def test_threaded_results_match_sequential():
 
 def test_threaded_backpressure():
     """Test that backpressure works with max_concurrent_results=1."""
-    filename = "tests/data/regression/table_of_contents_01.pdf"
-
-    decode_config = DecodePageConfig()
-    decode_config.page_boundary = "crop_box"
-    decode_config.do_sanitization = False
-    decode_config.keep_glyphs = True
-    decode_config.keep_qpdf_warnings = False
+    filename = LARGE_SAMPLE_PDF
 
     parser = DoclingThreadedPdfParser(
         parser_config=ThreadedPdfParserConfig(
             loglevel="fatal",
             threads=2,
-            max_concurrent_results=1,  # Very tight backpressure
+            max_concurrent_results=1,
+            boundary_type=PdfPageBoundaryType.CROP_BOX,
         ),
-        decode_config=decode_config,
+        decode_config=_make_decode_config(),
     )
 
-    parser.load(filename)
-
-    count = 0
-    while parser.has_tasks():
-        task = parser.get_task()
-        assert task.success, f"Failed: {task.error()}"
-        count += 1
-
-    assert count > 0
+    key = parser.load(filename)
+    count = sum(1 for result in parser.iterate_results() if result.success)
+    assert count == parser.page_count(key)
 
 
 def test_threaded_single_thread():
     """Test threaded parsing with a single thread (sequential baseline)."""
-    filename = "tests/data/regression/font_01.pdf"
-
-    decode_config = DecodePageConfig()
-    decode_config.page_boundary = "crop_box"
-    decode_config.do_sanitization = False
-    decode_config.keep_glyphs = True
-    decode_config.keep_qpdf_warnings = False
+    filename = SAMPLE_PDF
 
     parser = DoclingThreadedPdfParser(
         parser_config=ThreadedPdfParserConfig(
             loglevel="fatal",
             threads=1,
             max_concurrent_results=32,
+            boundary_type=PdfPageBoundaryType.CROP_BOX,
         ),
-        decode_config=decode_config,
+        decode_config=_make_decode_config(),
     )
 
-    parser.load(filename)
+    key = parser.load(filename)
+    count = sum(1 for result in parser.iterate_results() if result.success)
+    assert count == parser.page_count(key)
 
-    count = 0
-    while parser.has_tasks():
-        task = parser.get_task()
-        assert task.success, f"Failed: {task.error()}"
-        count += 1
 
-    assert count > 0
+def test_threaded_selected_pages_schedule_subset():
+    parser = DoclingThreadedPdfParser(
+        parser_config=ThreadedPdfParserConfig(
+            loglevel="fatal",
+            threads=2,
+            max_concurrent_results=4,
+            boundary_type=PdfPageBoundaryType.CROP_BOX,
+        ),
+        decode_config=_make_decode_config(),
+    )
+
+    key = parser.load(LARGE_SAMPLE_PDF, page_numbers=[2, 1, 2])
+
+    assert parser.page_count(key) >= 2
+    assert parser.scheduled_page_count(key) == 2
+
+    emitted_pages = sorted(
+        result.page_number for result in parser.iterate_results() if result.success
+    )
+    assert emitted_pages == [1, 2]
+
+
+def test_threaded_selected_pages_invalid_page_number():
+    parser = DoclingThreadedPdfParser(
+        parser_config=ThreadedPdfParserConfig(loglevel="fatal", threads=2),
+        decode_config=_make_decode_config(),
+    )
+
+    with pytest.raises(RuntimeError, match="Invalid page number"):
+        parser.load(SAMPLE_PDF, page_numbers=[9999])
+
+
+def test_threaded_multiple_documents_with_different_subsets():
+    parser = DoclingThreadedPdfParser(
+        parser_config=ThreadedPdfParserConfig(
+            loglevel="fatal",
+            threads=4,
+            max_concurrent_results=8,
+            boundary_type=PdfPageBoundaryType.CROP_BOX,
+        ),
+        decode_config=_make_decode_config(),
+    )
+
+    path_key = parser.load(LARGE_SAMPLE_PDF, page_numbers=[1, 2])
+    bytes_key = parser.load(SAMPLE_PDF, page_numbers=[1])
+
+    results_by_key: dict[str, list[int]] = {}
+    for result in parser.iterate_results():
+        assert result.success, result.error_message
+        results_by_key.setdefault(result.doc_key, []).append(result.page_number)
+
+    assert sorted(results_by_key[path_key]) == [1, 2]
+    assert sorted(results_by_key[bytes_key]) == [1]
+    assert parser.scheduled_page_count(path_key) == 2
+    assert parser.scheduled_page_count(bytes_key) == 1
+
+
+def test_threaded_unload_after_consumption_is_idempotent():
+    parser = DoclingThreadedPdfParser(
+        parser_config=ThreadedPdfParserConfig(loglevel="fatal", threads=2),
+        decode_config=_make_decode_config(),
+    )
+
+    key = parser.load(SAMPLE_PDF, page_numbers=[1])
+    list(parser.iterate_results())
+
+    assert parser.unload(key) is True
+    assert parser.unload(key) is False
+
+    with pytest.raises(ValueError):
+        parser.page_count(key)
+
+
+def test_threaded_unload_during_active_iteration_raises():
+    parser = DoclingThreadedPdfParser(
+        parser_config=ThreadedPdfParserConfig(loglevel="fatal", threads=2),
+        decode_config=_make_decode_config(),
+    )
+
+    key = parser.load(SAMPLE_PDF)
+    assert parser.has_tasks()
+
+    with pytest.raises(RuntimeError, match="threaded iteration is active"):
+        parser.unload(key)

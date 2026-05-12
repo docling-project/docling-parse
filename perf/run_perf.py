@@ -311,20 +311,16 @@ def parse_with_docling_threaded(
         rows: List[Row] = []
         wall_start = time.perf_counter()
 
-        while parser.has_tasks():
+        for task in parser.iterate_results():
             t0 = time.perf_counter()
-            task = parser.get_task()
             t1 = time.perf_counter()
 
             if task.success:
-                page_decoder, timings_dict = task.get()
-                detail: dict = {}
-                for key, val in timings_dict.items():
-                    detail[key] = val
+                detail = dict(task.get_timings().items())
                 rows.append(
                     Row(
                         filename=task.doc_key,
-                        page_number=task.page_number + 1,
+                        page_number=task.page_number,
                         elapsed_sec=t1 - t0,
                         success=True,
                         error="",
@@ -335,10 +331,10 @@ def parse_with_docling_threaded(
                 rows.append(
                     Row(
                         filename=task.doc_key,
-                        page_number=task.page_number + 1,
+                        page_number=task.page_number,
                         elapsed_sec=t1 - t0,
                         success=False,
-                        error=task.error(),
+                        error=task.error_message,
                     )
                 )
 

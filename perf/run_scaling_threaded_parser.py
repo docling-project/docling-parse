@@ -96,23 +96,11 @@ def run_threaded(
 
     t0 = time.perf_counter()
 
-    from docling_parse.pdf_parser import PdfDocument
-    from docling_core.types.doc.page import PdfPageBoundaryType
-
-    # Reuse PdfDocument's conversion methods via a lightweight instance
-    dummy_doc = PdfDocument.__new__(PdfDocument)
-    dummy_doc._boundary_type = PdfPageBoundaryType.CROP_BOX
-
     count = 0
     errors = 0
-    while parser.has_tasks():
-        task = parser.get_task()
-        if task.success:
-            page_decoder, timings = task.get()
-            # Convert to SegmentedPdfPage (same work as sequential path)
-            _ = dummy_doc._to_segmented_page_from_decoder(
-                page_decoder=page_decoder, config=decode_config,
-            )
+    for result in parser.iterate_results():
+        if result.success:
+            _ = result.get_page()
             count += 1
         else:
             errors += 1

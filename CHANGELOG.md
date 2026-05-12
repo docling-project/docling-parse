@@ -1,3 +1,18 @@
+## [v6.0.0](https://github.com/docling-project/docling-parse/releases/tag/v6.0.0) - 2026-05-11
+
+### Feature
+
+* Public threaded PDF parser and rendering API ([#265](https://github.com/docling-project/docling-parse/issues/265)) ([`b066b26`](https://github.com/docling-project/docling-parse/commit/b066b2621511520087fe8ffc202cb5e015ec7508))
+
+### Fix
+
+* Upgrade packages for vulnerabilities ([#270](https://github.com/docling-project/docling-parse/issues/270)) ([`1515795`](https://github.com/docling-project/docling-parse/commit/15157952d3d033e4802f250cbca74615dcf767d8))
+* Upgraded pillow, requests, pygments, cryptography ([#269](https://github.com/docling-project/docling-parse/issues/269)) ([`a41ef14`](https://github.com/docling-project/docling-parse/commit/a41ef14bb2cfc998301d62e9b388403178fe53fb))
+
+### Breaking
+
+* Public threaded PDF parser and rendering API ([#265](https://github.com/docling-project/docling-parse/issues/265)) ([`b066b26`](https://github.com/docling-project/docling-parse/commit/b066b2621511520087fe8ffc202cb5e015ec7508))
+
 ## [v5.11.0](https://github.com/docling-project/docling-parse/releases/tag/v5.11.0) - 2026-05-08
 
 ### Feature

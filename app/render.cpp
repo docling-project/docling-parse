@@ -218,6 +218,7 @@ int main(int argc, char* argv[])
          cxxopts::value<bool>()->implicit_value("true"))
         ("resolve-fonts",           "Resolve PDF font names to system fonts (default: true)",                cxxopts::value<bool>()->implicit_value("true"))
         ("font-similarity-cutoff",  "Minimum Jaccard similarity for fuzzy font matching (default: 0.25)",    cxxopts::value<float>())
+        ("scale",                   "Canvas scale in multiples of the PDF page size (-1 = disabled)",        cxxopts::value<float>())
         ("canvas-width",            "Canvas width in pixels (-1 = use page size)",                           cxxopts::value<int>())
         ("canvas-height",           "Canvas height in pixels (-1 = use page size)",                          cxxopts::value<int>())
 
@@ -317,6 +318,7 @@ int main(int argc, char* argv[])
       if (result.count("fit-glyph-bbox-to-target")) { cfg.fit_glyph_bbox_to_target = result["fit-glyph-bbox-to-target"].as<bool>(); }
       if (result.count("resolve-fonts"))          { cfg.resolve_fonts          = result["resolve-fonts"].as<bool>(); }
       if (result.count("font-similarity-cutoff")) { cfg.font_similarity_cutoff = result["font-similarity-cutoff"].as<float>(); }
+      if (result.count("scale"))                  { cfg.scale                  = result["scale"].as<float>(); }
       if (result.count("canvas-width"))           { cfg.canvas_width           = result["canvas-width"].as<int>(); }
       if (result.count("canvas-height"))          { cfg.canvas_height          = result["canvas-height"].as<int>(); }
 

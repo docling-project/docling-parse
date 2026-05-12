@@ -455,33 +455,7 @@ namespace pdflib
 
     if (pdf_w <= 0 or pdf_h <= 0) { return; }
 
-    // Apply canvas_width / canvas_height from config, preserving aspect ratio.
-    int width  = pdf_w;
-    int height = pdf_h;
-
-    const bool have_w = (config_.canvas_width  > 0);
-    const bool have_h = (config_.canvas_height > 0);
-
-    if (have_w and have_h)
-      {
-        width  = config_.canvas_width;
-        height = config_.canvas_height;
-      }
-    else if (have_w)
-      {
-        width  = config_.canvas_width;
-        height = static_cast<int>(
-          std::round(static_cast<double>(pdf_h) * width / pdf_w));
-      }
-    else if (have_h)
-      {
-        height = config_.canvas_height;
-        width  = static_cast<int>(
-          std::round(static_cast<double>(pdf_w) * height / pdf_h));
-      }
-
-    if (width <= 0) { width = 1; }
-    if (height <= 0) { height = 1; }
+    const auto [width, height] = resolve_canvas_size(pdf_w, pdf_h, config_);
 
     scale_x_ = static_cast<double>(width)  / pdf_w;
     scale_y_ = static_cast<double>(height) / pdf_h;
