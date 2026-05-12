@@ -58,6 +58,7 @@ class PageRow:
 
 KNOWN_PARSERS = [
     # Known keys from perf/run_perf.py
+    "docling-threaded",
     "docling",
     "pdfplumber",
     "pypdfium2",

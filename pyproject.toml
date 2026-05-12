@@ -78,6 +78,7 @@ perf-test = [
     "pdfplumber>=0.11.7",
     "pymupdf>=1.26.4",
     "pypdfium2>=4.30.0",
+    "huggingface-hub>=1.11.0",
 ]
 
 

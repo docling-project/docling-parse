@@ -8,15 +8,15 @@ Input CSV format (as produced by perf/run_perf.py):
 
 What this script does:
   1) Reads a CSV and finds the top N slowest successful pages.
-  2) Loads those documents with docling-parse (typed or json pipeline selection).
+  2) Loads those documents with docling-parse via the typed pipeline.
   3) Retrieves detailed stage timings from the underlying parser.
   4) Outputs results based on mode:
      --top: CSV with static timings per pdf-page
      --nth: Table with all timings (static + dynamic) showing sum, avg, std, count
 
 Usage examples:
-  python perf/run_analysis.py perf/results/perf_docling_*.csv --top 25 --mode typed --loglevel fatal
-  python perf/run_analysis.py perf/results/perf_docling_20250915-151237.csv --mode json --nth 7
+  python perf/run_analysis.py perf/results/perf_docling_*.csv --top 25 --loglevel fatal
+  python perf/run_analysis.py perf/results/perf_docling_20250915-151237.csv --nth 7
 """
 
 from __future__ import annotations
@@ -130,7 +130,6 @@ def extract_timings_for_page(
 def analyze_pages(
     csv_path: Path,
     top_n: int | None,
-    mode: str,
     min_sec: float | None = None,
     *,
     nth: int | None = None,
@@ -328,12 +327,6 @@ def main(argv: List[str]) -> int:
         help="Optional minimum elapsed_sec threshold",
     )
     ap.add_argument(
-        "--mode",
-        choices=["typed", "json"],
-        default="typed",
-        help="Pipeline to trigger before fetching timings",
-    )
-    ap.add_argument(
         "--loglevel",
         choices=["fatal", "error", "warning", "info"],
         default="fatal",
@@ -366,7 +359,6 @@ def main(argv: List[str]) -> int:
         pages = analyze_pages(
             csv_path,
             top_n=args.top,
-            mode=args.mode,
             min_sec=args.min_sec,
             nth=args.nth,
             loglevel=args.loglevel,
