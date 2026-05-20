@@ -124,6 +124,8 @@ namespace docling
           results_queue.push(std::move(result));
           cv_results_available.notify_one();
         }
+
+        maybe_release_native_memory();
       }
 
     active_workers.fetch_sub(1);

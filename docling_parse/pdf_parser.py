@@ -1132,6 +1132,9 @@ def _copy_decode_config(src: DecodePageConfig) -> DecodePageConfig:
         src.line_space_width_factor_for_merge_with_space
     )
     dst.do_thread_safe = src.do_thread_safe
+    dst.release_native_memory_every_n_pages = (
+        src.release_native_memory_every_n_pages
+    )
     dst.keep_glyphs = src.keep_glyphs
     dst.keep_qpdf_warnings = src.keep_qpdf_warnings
     return dst

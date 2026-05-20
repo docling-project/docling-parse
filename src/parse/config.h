@@ -37,6 +37,7 @@ namespace pdflib
 
     // threading
     bool do_thread_safe = true; // slight compute/memory overhead in single threaded case
+    int release_native_memory_every_n_pages = 0; // 0 disables allocator trimming
 
     // debug: in production, we dont want to have ugly GLYPH<...> 
     bool keep_glyphs = false;
@@ -78,6 +79,7 @@ namespace pdflib
     j["line_space_width_factor_for_merge_with_space"] = line_space_width_factor_for_merge_with_space;
 
     j["populate_json_objects"] = populate_json_objects;
+    j["release_native_memory_every_n_pages"] = release_native_memory_every_n_pages;
 
     j["keep_glyphs"] = keep_glyphs;
     j["keep_qpdf_warnings"] = keep_qpdf_warnings;
@@ -110,6 +112,7 @@ namespace pdflib
     if(j.count("line_space_width_factor_for_merge_with_space")) { line_space_width_factor_for_merge_with_space = j["line_space_width_factor_for_merge_with_space"]; }
 
     if(j.count("populate_json_objects")) { populate_json_objects = j["populate_json_objects"]; }
+    if(j.count("release_native_memory_every_n_pages")) { release_native_memory_every_n_pages = j["release_native_memory_every_n_pages"]; }
 
     if(j.count("keep_glyphs")) { keep_glyphs = j["keep_glyphs"]; }
     if(j.count("keep_qpdf_warnings")) { keep_qpdf_warnings = j["keep_qpdf_warnings"]; }
@@ -164,6 +167,7 @@ namespace pdflib
        << std::setw(48) << "line_space_width_factor_for_merge" << line_space_width_factor_for_merge << "\n"
        << std::setw(48) << "line_space_width_factor_for_merge_with_space" << line_space_width_factor_for_merge_with_space << "\n"
        << std::setw(48) << "populate_json_objects" << (populate_json_objects ? "true" : "false") << "\n"
+       << std::setw(48) << "release_native_memory_every_n_pages" << release_native_memory_every_n_pages << "\n"
        << std::setw(48) << "keep_glyphs" << (keep_glyphs ? "true" : "false") << "\n"
        << std::setw(48) << "keep_qpdf_warnings" << (keep_qpdf_warnings ? "true" : "false") << "\n";
 

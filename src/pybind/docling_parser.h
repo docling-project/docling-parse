@@ -3,12 +3,14 @@
 #ifndef PYBIND_PDF_PARSER_H
 #define PYBIND_PDF_PARSER_H
 
+#include <atomic>
 #include <optional>
 #ifdef _WIN32
 #include <locale>
 #include <codecvt>
 #endif
 
+#include <pybind/native_memory.h>
 #include <pybind/docling_resources.h>
 
 #include <parse.h>
@@ -64,12 +66,14 @@ namespace docling
   private:
 
     bool verify_page_boundary(std::string page_boundary);
+    void maybe_release_native_memory(const pdflib::decode_config& config);
 
   private:
 
     std::string pdf_resources_dir;
 
     std::unordered_map<std::string, doc_decoder_ptr_type> key2doc;
+    std::atomic<int> total_processed_pages{0};
   };
 
   docling_parser::docling_parser():
@@ -217,6 +221,10 @@ namespace docling
     if(key2doc.count(key)==1)
       {
         key2doc.erase(key);
+        if(key2doc.empty())
+          {
+            total_processed_pages.store(0);
+          }
         return true;
       }
     else
@@ -264,6 +272,22 @@ namespace docling
   void docling_parser::unload_documents()
   {
     key2doc.clear();
+    total_processed_pages.store(0);
+  }
+
+  void docling_parser::maybe_release_native_memory(const pdflib::decode_config& config)
+  {
+    const int every_n = config.release_native_memory_every_n_pages;
+    if(every_n <= 0)
+      {
+        return;
+      }
+
+    const int processed = total_processed_pages.fetch_add(1, std::memory_order_relaxed) + 1;
+    if((processed % every_n) == 0)
+      {
+        release_native_memory();
+      }
   }
 
   int docling_parser::number_of_pages(std::string key)
@@ -341,7 +365,9 @@ namespace docling
       }
 
     auto& doc_decoder = itr->second;
-    return doc_decoder->decode_page(page, config);
+    auto page_decoder = doc_decoder->decode_page(page, config);
+    maybe_release_native_memory(config);
+    return page_decoder;
   }
 
 }

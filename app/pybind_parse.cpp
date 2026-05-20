@@ -293,6 +293,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
     .def_readwrite("line_space_width_factor_for_merge", &pdflib::decode_config::line_space_width_factor_for_merge)
     .def_readwrite("line_space_width_factor_for_merge_with_space", &pdflib::decode_config::line_space_width_factor_for_merge_with_space)
     .def_readwrite("do_thread_safe", &pdflib::decode_config::do_thread_safe)
+    .def_readwrite("release_native_memory_every_n_pages", &pdflib::decode_config::release_native_memory_every_n_pages)
     .def_readwrite("keep_glyphs", &pdflib::decode_config::keep_glyphs)
     .def_readwrite("keep_qpdf_warnings", &pdflib::decode_config::keep_qpdf_warnings);
 
