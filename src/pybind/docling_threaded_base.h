@@ -97,9 +97,10 @@ namespace docling
     void build_task_queue();
 
     void start_workers();
-    void maybe_release_native_memory();
 
   protected:
+
+    void maybe_release_native_memory();
 
     pdflib::decode_config config;
     int num_threads;
