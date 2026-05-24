@@ -36,12 +36,13 @@ namespace docling
               << ", free: " << ms.bytes_free << '\n';
   }
 
-  inline void release_native_memory()
+  inline void release_native_memory(int processed_pages)
   {
     std::cout << "heap before: \n";
     heapStats();
       
-    std::cout << "release_native_memory on ";
+    std::cout << "release_native_memory after " << processed_pages
+              << " processed pages on ";
 
 #if defined(__GLIBC__)
     std::cout << "linux\n";

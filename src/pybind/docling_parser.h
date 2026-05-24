@@ -286,7 +286,7 @@ namespace docling
     const int processed = total_processed_pages.fetch_add(1, std::memory_order_relaxed) + 1;
     if((processed % every_n) == 0)
       {
-        release_native_memory();
+        release_native_memory(processed);
       }
   }
 
