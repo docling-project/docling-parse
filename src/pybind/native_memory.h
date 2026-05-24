@@ -31,10 +31,9 @@ namespace docling
   void heapStats()
   {
     struct mstats ms = mstats();
-    malloc_printf("total: %zu, used: %zu, free: %zu\n",
-                  ms.bytes_total,
-                  ms.bytes_used,
-                  ms.bytes_free);
+    std::cout << "total: " << ms.bytes_total
+              << ", used: " << ms.bytes_used
+              << ", free: " << ms.bytes_free << '\n';
   }
 
   inline void release_native_memory()
