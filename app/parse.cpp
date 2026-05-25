@@ -2,6 +2,8 @@
 
 #include "parse.h"
 
+#include <sstream>
+
 void set_loglevel(std::string level)
 {
   if(level=="info")
@@ -26,9 +28,52 @@ void set_loglevel(std::string level)
     }
 }
 
+std::optional<std::vector<int>> parse_page_selection(const cxxopts::ParseResult& result)
+{
+  const bool has_page = result.count("page") && result["page"].as<int>() != -1;
+  const bool has_page_range = result.count("page-range");
+
+  if(has_page && has_page_range)
+    {
+      throw std::runtime_error("Use either --page or --page-range, not both");
+    }
+
+  if(has_page)
+    {
+      return std::vector<int>{result["page"].as<int>()};
+    }
+
+  if(!has_page_range)
+    {
+      return std::nullopt;
+    }
+
+  std::string raw = result["page-range"].as<std::string>();
+  size_t dash = raw.find('-');
+  if(dash == std::string::npos)
+    {
+      throw std::runtime_error("Page range must have form start-end");
+    }
+
+  int start = std::stoi(raw.substr(0, dash));
+  int end = std::stoi(raw.substr(dash + 1));
+  if(end < start)
+    {
+      throw std::runtime_error("Page range end must be >= start");
+    }
+
+  std::vector<int> pages;
+  pages.reserve(static_cast<size_t>(end - start + 1));
+  for(int page = start; page <= end; ++page)
+    {
+      pages.push_back(page);
+    }
+  return pages;
+}
+
 nlohmann::json create_config(std::filesystem::path ifile,
                              std::filesystem::path ofile,
-                             int page=-1,
+                             std::optional<std::vector<int>> pages=std::nullopt,
                              std::filesystem::path pdf_resource_dir="../docling_parse/pdf_resources/")
 {
   nlohmann::json config = nlohmann::json::object({});
@@ -46,10 +91,9 @@ nlohmann::json create_config(std::filesystem::path ifile,
         task["output"] = ofile;
       }
 
-    if(page!=-1)
+    if(pages.has_value())
       {
-        std::vector<int> pages = {page};
-        task["page-numbers"] = pages;
+        task["page-numbers"] = *pages;
       }
 
     tasks.push_back(task);
@@ -76,6 +120,7 @@ int main(int argc, char* argv[]) {
       ("c,config",       "Config file",                                                           cxxopts::value<std::string>())
       ("create-config",  "Create config file",                                                    cxxopts::value<std::string>())
       ("p,page",         "Pages to process (default: -1 for all)",                               cxxopts::value<int>()->default_value("-1"))
+      ("page-range",     "Inclusive page range to process, e.g. 10-20",                          cxxopts::value<std::string>())
       ("password",       "Password for accessing encrypted, password-protected files",            cxxopts::value<std::string>())
       ("o,output",       "Output file",                                                           cxxopts::value<std::string>())
       ("export-images",  "Export images to directory",                                            cxxopts::value<std::string>())
@@ -181,15 +226,14 @@ int main(int argc, char* argv[]) {
       std::string ifile = result["input"].as<std::string>();
       std::string ofile = "";
 
-      int page = result["page"].as<int>();
-      LOG_F(INFO, "Page to process: %d", page);
+      auto pages = parse_page_selection(result);
 
       if (result.count("output")) {
         ofile = result["output"].as<std::string>();
         LOG_F(INFO, "Output file: %s", ofile.c_str());
       }
 
-      auto config = create_config(ifile, ofile, page);
+      auto config = create_config(ifile, ofile, pages);
       LOG_S(INFO) << "config: \n" << config.dump(2);
     }
 
@@ -199,8 +243,7 @@ int main(int argc, char* argv[]) {
       std::string ifile = result["input"].as<std::string>();
       std::string ofile = ifile+".json";
 
-      int page = result["page"].as<int>();
-      LOG_F(INFO, "Page to process: %d", page);
+      auto pages = parse_page_selection(result);
 
       if (result.count("output")) {
         ofile = result["output"].as<std::string>();
@@ -210,7 +253,7 @@ int main(int argc, char* argv[]) {
         LOG_F(INFO, "No output file found, defaulting to %s", ofile.c_str());
       }
 
-      auto config = create_config(ifile, ofile, page);
+      auto config = create_config(ifile, ofile, pages);
       LOG_S(INFO) << "config: \n" << config.dump(2);
       if (result.count("password")) {
         config["password"] = result["password"].as<std::string>();
@@ -241,7 +284,7 @@ int main(int argc, char* argv[]) {
 
       if (result.count("export-images")) {
         std::string images_dir = result["export-images"].as<std::string>();
-        parser.export_images(images_dir, page);
+        parser.export_images(images_dir, result["page"].as<int>());
       }
 
       return 0;

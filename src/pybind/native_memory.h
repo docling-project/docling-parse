@@ -35,7 +35,7 @@ namespace docling
               << ", used: " << ms.bytes_used
               << ", free: " << ms.bytes_free << '\n';
   }
-
+  
   inline void release_native_memory(int processed_pages)
   {
     std::cout << "heap before: \n";

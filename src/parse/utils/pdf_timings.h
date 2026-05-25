@@ -56,6 +56,7 @@ namespace pdflib
     static const std::string KEY_PROCESS_DOCUMENT_FROM_FILE;
     static const std::string KEY_PROCESS_DOCUMENT_FROM_BYTESIO;
     static const std::string KEY_QPDF_PROCESS;
+    static const std::string KEY_QPDF_BUILD_THREAD_SAFE_BUFFER;
     static const std::string KEY_EXTRACT_DOC_ANNOTATIONS;
     static const std::string KEY_DECODE_DOCUMENT;
     static const std::string KEY_PROCESS_DOCUMENT_COMPONENTS;
@@ -333,6 +334,7 @@ namespace pdflib
   const std::string pdf_timings::KEY_PROCESS_DOCUMENT_FROM_FILE = "process_document_from_file";
   const std::string pdf_timings::KEY_PROCESS_DOCUMENT_FROM_BYTESIO = "process_document_from_bytesio";
   const std::string pdf_timings::KEY_QPDF_PROCESS = "qpdf_process";
+  const std::string pdf_timings::KEY_QPDF_BUILD_THREAD_SAFE_BUFFER = "qpdf_build_thread_safe_buffer";
   const std::string pdf_timings::KEY_EXTRACT_DOC_ANNOTATIONS = "extract_doc_annotations";
   const std::string pdf_timings::KEY_DECODE_DOCUMENT = "decode_document";
   const std::string pdf_timings::KEY_PROCESS_DOCUMENT_COMPONENTS = "decode_document_components";
@@ -374,6 +376,7 @@ namespace pdflib
       KEY_PROCESS_DOCUMENT_FROM_FILE,
       KEY_PROCESS_DOCUMENT_FROM_BYTESIO,
       KEY_QPDF_PROCESS,
+      KEY_QPDF_BUILD_THREAD_SAFE_BUFFER,
       KEY_EXTRACT_DOC_ANNOTATIONS,
       KEY_DECODE_DOCUMENT
     };

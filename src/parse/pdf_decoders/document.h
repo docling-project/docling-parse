@@ -4,8 +4,10 @@
 #define PDF_DOCUMENT_DECODER_H
 
 #include <fstream>
+#include <mutex>
 #include <optional>
 #include <qpdf/QPDF.hh>
+#include <qpdf/QPDFWriter.hh>
 //#include <qpdf/QPDFPageObjectHelper.hh>
 
 namespace pdflib
@@ -58,6 +60,7 @@ namespace pdflib
     pdf_timings& get_timings() { return timings; }
 
     std::shared_ptr<std::string> get_buffer() { return buffer; }
+    std::shared_ptr<std::string> get_thread_safe_buffer();
     std::optional<std::string> get_password() { return password; }
 
   private:
@@ -69,12 +72,16 @@ namespace pdflib
     void update_timings(pdf_timings& timings_, bool set_timer);
 
     bool process_document_components();
+    std::shared_ptr<std::string> build_canonical_thread_safe_buffer();
 
   private:
 
     std::string filename;
     std::shared_ptr<std::string> buffer; // keep a shared copy, in order to not let it expire
+    std::shared_ptr<std::string> thread_safe_buffer;
     std::optional<std::string> password; // stored for thread-safe page decoding
+    std::mutex thread_safe_buffer_mutex;
+    bool needs_thread_safe_canonicalization;
 
     pdf_timings timings;
 
@@ -95,7 +102,9 @@ namespace pdflib
   pdf_decoder<DOCUMENT>::pdf_decoder():
     filename(""),
     buffer(nullptr),
+    thread_safe_buffer(nullptr),
     password(std::nullopt),
+    needs_thread_safe_canonicalization(false),
 
     timings({}),
     qpdf_document(),
@@ -116,7 +125,9 @@ namespace pdflib
   pdf_decoder<DOCUMENT>::pdf_decoder(pdf_timings& timings_):
     filename(""),
     buffer(nullptr),
+    thread_safe_buffer(nullptr),
     password(std::nullopt),
+    needs_thread_safe_canonicalization(false),
 
     timings(timings_),
     qpdf_document(),
@@ -310,6 +321,7 @@ namespace pdflib
                                                             std::string description)
   {
     buffer = _buffer;
+    thread_safe_buffer.reset();
     password = _password;
     LOG_S(INFO) << "start processing buffer of size " << buffer->size() << " by qpdf ...";
 
@@ -333,6 +345,7 @@ namespace pdflib
         LOG_S(INFO) << "buffer processed by qpdf!";
 
         qpdf_root = qpdf_document.getRoot();
+        needs_thread_safe_canonicalization = qpdf_document.anyWarnings();
       }
     catch(const std::exception & exc)
       {
@@ -340,6 +353,7 @@ namespace pdflib
         return false;
       }
 
+    timings.add_timing(pdf_timings::KEY_QPDF_PROCESS, timer.get_time());
     timings.add_timing(pdf_timings::KEY_PROCESS_DOCUMENT_FROM_BYTESIO, timer.get_time());
 
     if(not process_document_components())
@@ -350,6 +364,59 @@ namespace pdflib
     ensure_annots_loaded();
 
     return true;
+  }
+
+  std::shared_ptr<std::string> pdf_decoder<DOCUMENT>::build_canonical_thread_safe_buffer()
+  {
+    utils::timer timer;
+    QPDFWriter writer(qpdf_document);
+    writer.setOutputMemory();
+    writer.setObjectStreamMode(qpdf_o_preserve);
+    writer.setStreamDataMode(qpdf_s_preserve);
+    writer.setPreserveEncryption(true);
+    writer.write();
+
+    auto out = writer.getBufferSharedPointer();
+    timings.add_timing(pdf_timings::KEY_QPDF_BUILD_THREAD_SAFE_BUFFER, timer.get_time());
+    return std::make_shared<std::string>(reinterpret_cast<char const*>(out->getBuffer()),
+                                         out->getSize());
+  }
+
+  std::shared_ptr<std::string> pdf_decoder<DOCUMENT>::get_thread_safe_buffer()
+  {
+    std::lock_guard<std::mutex> lock(thread_safe_buffer_mutex);
+
+    if(thread_safe_buffer)
+      {
+        return thread_safe_buffer;
+      }
+
+    // In thread-safe page mode each page decoder constructs its own QPDF
+    // instance from a shared byte buffer. For damaged PDFs, the initial parse
+    // may have already recovered the xref table, but reparsing the original
+    // bytes would force qpdf to redo that recovery work for every page. To
+    // avoid that, we lazily serialize the already-parsed document once and
+    // reuse the canonicalized bytes for all thread-safe page decoders.
+    //
+    // Trade-off: recovered PDFs keep an additional in-memory copy of the
+    // document, but avoid repeated xref reconstruction and warning-heavy page
+    // startup. Clean PDFs keep using the original buffer and pay no extra copy.
+    //
+    // `anyWarnings()` is intentionally broad for now. qpdf also exposes
+    // structured warnings via `getWarnings()` / `QPDFExc::getErrorCode()`, so
+    // this could later be narrowed to `qpdf_e_damaged_pdf` if we want to
+    // canonicalize only specific recovery scenarios.
+    if(!needs_thread_safe_canonicalization)
+      {
+        thread_safe_buffer = buffer;
+        return thread_safe_buffer;
+      }
+
+    LOG_S(INFO) << "building canonical thread-safe buffer for '" << filename << "'";
+    thread_safe_buffer = build_canonical_thread_safe_buffer();
+    LOG_S(INFO) << "canonical thread-safe buffer size: " << thread_safe_buffer->size();
+
+    return thread_safe_buffer;
   }
 
   void pdf_decoder<DOCUMENT>::decode_document(const decode_config& config)
@@ -433,8 +500,10 @@ namespace pdflib
 
       if(config.do_thread_safe)
         {
-          // creates its own QPDF document
-          page_decoder = std::make_shared<pdf_decoder<PAGE>>(buffer, password, page_number);	  
+          // creates its own QPDF document from a shared canonical buffer
+          page_decoder = std::make_shared<pdf_decoder<PAGE>>(get_thread_safe_buffer(),
+                                                             password,
+                                                             page_number);
         }
       else
         {
