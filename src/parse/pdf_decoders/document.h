@@ -480,7 +480,7 @@ namespace pdflib
     utils::timer timer;
 
     // Check bounds
-    if(page_number < 0 || page_number >= number_of_pages)
+    if((page_number < 0) or (page_number >= number_of_pages))
       {
         LOG_S(ERROR) << "page " << page_number << " is out of bounds (0-" << number_of_pages-1 << ")";
         return nullptr;
