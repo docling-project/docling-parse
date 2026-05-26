@@ -81,10 +81,7 @@ namespace docling
               {
                 auto& doc_decoder = itr->second;
 
-                auto page_decoder = std::make_shared<pdflib::pdf_decoder<pdflib::PAGE>>(
-                    doc_decoder->get_thread_safe_buffer(),
-                    doc_decoder->get_password(),
-                    page_number);
+                auto page_decoder = doc_decoder->make_thread_safe_page_decoder(page_number);
 
                 page_decoder->decode_page(config);
 

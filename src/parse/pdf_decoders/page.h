@@ -24,7 +24,8 @@ namespace pdflib
     // Thread-safe constructor: creates its own QPDF document from the shared buffer
     pdf_decoder(std::shared_ptr<std::string> buffer,
                 std::optional<std::string> password,
-                int page_num);
+                int orig_page_num, // original page-number of the pdf
+		int curr_page_num); // page number in the buffer. The buffer might only be a single pdf page
 
     ~pdf_decoder();
 
@@ -120,7 +121,8 @@ namespace pdflib
 
     QPDFObjectHandle qpdf_page;
 
-    int page_number;
+    int orig_page_number;
+    int curr_page_number;
 
     QPDFObjectHandle qpdf_resources;
     QPDFObjectHandle qpdf_grphs;
@@ -170,7 +172,8 @@ namespace pdflib
     owned_buffer(nullptr),
     owned_qpdf_document(nullptr),
     qpdf_page(page),
-    page_number(page_num),
+    orig_page_number(page_num),
+    curr_page_number(page_num),
     page_grphs(std::make_shared<pdf_resource<PAGE_GRPHS>>()),
     page_fonts(std::make_shared<pdf_resource<PAGE_FONTS>>()),
     page_xobjects(std::make_shared<pdf_resource<PAGE_XOBJECTS>>())
@@ -178,17 +181,19 @@ namespace pdflib
 
   pdf_decoder<PAGE>::pdf_decoder(std::shared_ptr<std::string> buffer,
                                  std::optional<std::string> password,
-                                 int page_num):
+                                 int orig_page_num,
+				 int curr_page_num):
     thread_safe(true),
     owned_buffer(buffer),
     owned_qpdf_document(std::make_unique<QPDF>()),
     qpdf_page(),
-    page_number(page_num),
+    orig_page_number(orig_page_num),
+    curr_page_number(curr_page_num),
     page_grphs(std::make_shared<pdf_resource<PAGE_GRPHS>>()),
     page_fonts(std::make_shared<pdf_resource<PAGE_FONTS>>()),
     page_xobjects(std::make_shared<pdf_resource<PAGE_XOBJECTS>>())
   {
-    std::string description = "thread-safe page " + std::to_string(page_num);
+    std::string description = "thread-safe page " + std::to_string(orig_page_num);
 
     update_qpdf_logger();
 
@@ -208,13 +213,13 @@ namespace pdflib
 
     std::vector<QPDFObjectHandle> pages = owned_qpdf_document->getAllPages();
 
-    if(page_num < 0 || page_num >= static_cast<int>(pages.size()))
+    if(curr_page_number < 0 || curr_page_number >= static_cast<int>(pages.size()))
       {
-        LOG_S(ERROR) << "page " << page_num << " is out of bounds (0-" << pages.size()-1 << ")";
-        throw std::out_of_range("page number out of bounds: " + std::to_string(page_num));
+        LOG_S(ERROR) << "page " << curr_page_num << " is out of bounds (0-" << pages.size()-1 << ")";
+        throw std::out_of_range("page number out of bounds: " + std::to_string(curr_page_number));
       }
 
-    qpdf_page = pages.at(page_num);
+    qpdf_page = pages.at(curr_page_number);
   }
 
   pdf_decoder<PAGE>::~pdf_decoder()
@@ -244,7 +249,7 @@ namespace pdflib
 
   int pdf_decoder<PAGE>::get_page_number()
   {
-    return page_number;
+    return orig_page_number;
   }
 
   void pdf_decoder<PAGE>::save_pdf_page(std::filesystem::path const& out_path) const
@@ -277,7 +282,7 @@ namespace pdflib
 
     nlohmann::json result;
     {
-      result["page_number"] = page_number;
+      result["page_number"] = orig_page_number;
 
       result["annotations"] = json_annots;
 
