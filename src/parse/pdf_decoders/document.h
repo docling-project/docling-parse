@@ -6,6 +6,7 @@
 #include <fstream>
 #include <mutex>
 #include <optional>
+#include <qpdf/QPDFAcroFormDocumentHelper.hh>
 #include <qpdf/QPDF.hh>
 #include <qpdf/QPDFWriter.hh>
 //#include <qpdf/QPDFPageObjectHelper.hh>
@@ -371,8 +372,13 @@ namespace pdflib
       out_pdf.emptyPDF();
       
       QPDFPageDocumentHelper out_pages(out_pdf);
+      QPDFAcroFormDocumentHelper out_afdh(out_pdf);
+      QPDFAcroFormDocumentHelper src_afdh(qpdf_document);
       QPDFPageObjectHelper source_page(qpdf_page);
-      out_pages.addPage(qpdf_page, false);
+      out_pages.addPage(source_page, false);
+      auto out_page = out_pages.getAllPages().at(0);
+      out_afdh.fixCopiedAnnotations(
+          out_page.getObjectHandle(), source_page.getObjectHandle(), src_afdh);
       
       QPDFWriter writer(out_pdf);
       writer.setOutputMemory();

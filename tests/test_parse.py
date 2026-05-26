@@ -109,6 +109,8 @@ def verify_cells(
 
     assert len(true_cells) == len(pred_cells), "len(true_cells)==len(pred_cells)"
 
+    # print(f"===================== {filename}")
+    
     for i, true_cell in enumerate(true_cells):
         pred_cell = pred_cells[i]
 
@@ -130,6 +132,12 @@ def verify_cells(
         true_rect = true_cell.rect.to_polygon()
         pred_rect = pred_cell.rect.to_polygon()
 
+        # print(f"[{i}] true-text: ", true_cell.text, " => ", true_rect)
+        # print(f"[{i}] pred-text: ", pred_cell.text, " => ", pred_rect)
+
+        # if(true_rect[0][1]-pred_rect[0][1])>eps:
+        #     input("continue")
+        
         for point_idx in range(4):
             assert abs(true_rect[point_idx][0] - pred_rect[point_idx][0]) < eps, (
                 f"abs(true_rect[{point_idx}][0]-pred_rect[{point_idx}][0])<eps -> abs({true_rect[point_idx][0]}-{pred_rect[point_idx][0]})<{eps} for {filename}"
@@ -139,9 +147,7 @@ def verify_cells(
                 f"abs(true_rect[{point_idx}][1]-pred_rect[{point_idx}][1])<eps -> abs({true_rect[point_idx][1]}-{pred_rect[point_idx][1]})<{eps} for {filename}"
             )
 
-        # print("true-text: ", true_cell.text)
-        # print("pred-text: ", pred_cell.text)
-
+        
         if isinstance(true_cell, PdfTextCell) and isinstance(pred_cell, PdfTextCell):
             assert true_cell.font_key == pred_cell.font_key, (
                 "true_cell.font_key == pred_cell.font_key"
@@ -335,7 +341,10 @@ def verify_hyperlinks(
 
 
 def verify_SegmentedPdfPage(
-    true_page: SegmentedPdfPage, pred_page: SegmentedPdfPage, filename: str
+    true_page: SegmentedPdfPage,
+    pred_page: SegmentedPdfPage,
+    filename: str,
+    cell_unit: TextCellUnit | None = None,
 ):
 
     eps = max(true_page.dimension.width / 100.0, true_page.dimension.height / 100.0)
@@ -344,11 +353,21 @@ def verify_SegmentedPdfPage(
         true_page.bitmap_resources, pred_page.bitmap_resources, eps=eps
     )
 
-    verify_cells(true_page.char_cells, pred_page.char_cells, eps=eps, filename=filename)
-    verify_cells(true_page.word_cells, pred_page.word_cells, eps=eps, filename=filename)
-    verify_cells(
-        true_page.textline_cells, pred_page.textline_cells, eps=eps, filename=filename
-    )
+    if cell_unit in (None, TextCellUnit.CHAR):
+        verify_cells(
+            true_page.char_cells, pred_page.char_cells, eps=eps, filename=filename
+        )
+    if cell_unit in (None, TextCellUnit.WORD):
+        verify_cells(
+            true_page.word_cells, pred_page.word_cells, eps=eps, filename=filename
+        )
+    if cell_unit in (None, TextCellUnit.LINE):
+        verify_cells(
+            true_page.textline_cells,
+            pred_page.textline_cells,
+            eps=eps,
+            filename=filename,
+        )
 
     verify_shapes(true_page.shapes, pred_page.shapes, eps=eps)
     verify_widgets(true_page.widgets, pred_page.widgets, eps=eps)
@@ -478,12 +497,21 @@ def test_reference_documents_from_filenames():
                             if os.path.exists(delta_fname):
                                 os.remove(delta_fname)
 
-                    try:
-                        true_page = SegmentedPdfPage.load_from_json(fname)
-                        verify_SegmentedPdfPage(true_page, pred_page, filename=fname)
-                    except Exception as exc:
-                        results.append((rname, str(page_no), "page", False, str(exc)))
-                        page_failed = True
+                    true_page = SegmentedPdfPage.load_from_json(fname)
+                    for unit in [
+                        TextCellUnit.CHAR,
+                        TextCellUnit.WORD,
+                        TextCellUnit.LINE,
+                    ]:
+                        try:
+                            verify_SegmentedPdfPage(
+                                true_page, pred_page, filename=fname, cell_unit=unit
+                            )
+                        except Exception as exc:
+                            results.append(
+                                (rname, str(page_no), str(unit), False, str(exc))
+                            )
+                            page_failed = True
 
                 pred_page.render_as_image(cell_unit=TextCellUnit.CHAR)
                 pred_page.render_as_image(cell_unit=TextCellUnit.WORD)
