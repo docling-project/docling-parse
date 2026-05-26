@@ -110,7 +110,7 @@ def verify_cells(
     assert len(true_cells) == len(pred_cells), "len(true_cells)==len(pred_cells)"
 
     # print(f"===================== {filename}")
-    
+
     for i, true_cell in enumerate(true_cells):
         pred_cell = pred_cells[i]
 
@@ -137,7 +137,7 @@ def verify_cells(
 
         # if(true_rect[0][1]-pred_rect[0][1])>eps:
         #     input("continue")
-        
+
         for point_idx in range(4):
             assert abs(true_rect[point_idx][0] - pred_rect[point_idx][0]) < eps, (
                 f"abs(true_rect[{point_idx}][0]-pred_rect[{point_idx}][0])<eps -> abs({true_rect[point_idx][0]}-{pred_rect[point_idx][0]})<{eps} for {filename}"
@@ -147,7 +147,6 @@ def verify_cells(
                 f"abs(true_rect[{point_idx}][1]-pred_rect[{point_idx}][1])<eps -> abs({true_rect[point_idx][1]}-{pred_rect[point_idx][1]})<{eps} for {filename}"
             )
 
-        
         if isinstance(true_cell, PdfTextCell) and isinstance(pred_cell, PdfTextCell):
             assert true_cell.font_key == pred_cell.font_key, (
                 "true_cell.font_key == pred_cell.font_key"
