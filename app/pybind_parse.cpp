@@ -269,7 +269,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
     Attributes:
         page_boundary (str): The page boundary specification [choices: crop_box, media_box].
         do_sanitization (bool): Sanitize the chars into lines [default=true].
-        keep_char_cells (bool): Keep all the individual char cells [default=true].
+        keep_char_cells (bool): Expose individual char cells in the decoded output. Internal base text cells are still built when words or lines are requested [default=true].
         keep_shapes (bool): Keep all the graphic shapes [default=true].
         keep_bitmaps (bool): Keep all the bitmap resources [default=true].
         max_num_lines (int): Maximum number of lines to keep (-1 means no cap) [default=-1].

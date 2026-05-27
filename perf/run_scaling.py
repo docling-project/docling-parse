@@ -7,7 +7,7 @@ scaling table.  Three modes are supported:
 
   parse   — decode-only (render_config=None); always includes a
             single-threaded DoclingPdfParser baseline.
-  render  — decode + rasterise (RenderConfig.canvas_width=...).
+  render  — decode + rasterise (RenderConfig.scale=...).
   both    — runs both of the above and prints two tables.
 
 Third-party single-threaded backends (selected via --other) are run as
@@ -104,7 +104,8 @@ def _decode_config():
     c = DecodePageConfig()
     c.keep_char_cells = False
     c.keep_shapes = False
-    c.keep_bitmaps = False
+    c.keep_bitmaps = True
+    c.materialize_bitmap_bytes = False
     c.create_word_cells = False
     c.create_line_cells = True
     return c
@@ -123,7 +124,7 @@ def run_sequential_parse(pdf_paths: List[Path]) -> float:
     parser = DoclingPdfParser(loglevel="fatal")
 
     t0 = time.perf_counter()
-    for pdf_path in pdf_paths:
+    for pdf_path in tqdm(pdf_paths, desc="  sequential parse", unit="doc", leave=False):
         try:
             doc = parser.load(str(pdf_path), lazy=True)
             for _, _ in doc.iterate_pages(config=config):
@@ -344,7 +345,7 @@ def run_threaded(
     total_pages: int,
     *,
     render: bool,
-    canvas_width: int,
+    scale: float,
 ) -> float:
     """Run DoclingThreadedPdfParser; render=True enables rasterisation."""
     from docling_parse.pdf_parser import (
@@ -358,7 +359,7 @@ def run_threaded(
     render_config = None
     if render:
         render_config = RenderConfig()
-        render_config.canvas_width = canvas_width
+        render_config.scale = scale
 
     parser_config = ThreadedPdfParserConfig(
         loglevel="fatal",
@@ -386,7 +387,7 @@ def run_threaded(
             if result.success:
                 if render:
                     _ = result.get_image()
-                    _ = result.get_page()
+                    #_ = result.get_page()
                 else:
                     _ = result.get_page()
             else:
@@ -473,7 +474,7 @@ def _run_one_mode(
     other_backends: List[str],
     *,
     render: bool,
-    canvas_width: int,
+    scale: float,
 ) -> Tuple[List[Tuple[str, float]], List[Tuple[int, float]]]:
     baselines: List[Tuple[str, float]] = []
 
@@ -505,7 +506,7 @@ def _run_one_mode(
             max_concurrent_results=max_concurrent_results,
             total_pages=total_pages,
             render=render,
-            canvas_width=canvas_width,
+            scale=scale,
         )
         threaded_results.append((n, t))
         print(f"  threads={n}: {t:.3f}s")
@@ -553,8 +554,8 @@ def main(argv: List[str]) -> int:
         help="Comma-separated list of thread counts to test (default: 1,2,4,8,12,16)",
     )
     ap.add_argument(
-        "--canvas-width", type=int, default=1024,
-        help="Canvas width in pixels for rendering (default: 1024; render/both modes only)",
+        "--scale", type=float, default=1.0,
+        help="Render scale for rendering (default: 1.0; render/both modes only)",
     )
     ap.add_argument(
         "--other",
@@ -588,7 +589,7 @@ def main(argv: List[str]) -> int:
     print(f"Max concurrent results: {args.max_concurrent_results}")
     print(f"Other backends: {other_backends if other_backends else '(none)'}")
     if args.mode in ("render", "both"):
-        print(f"Canvas width: {args.canvas_width}px")
+        print(f"Render scale: {args.scale}")
     print()
 
     modes_to_run = ["parse", "render"] if args.mode == "both" else [args.mode]
@@ -603,7 +604,7 @@ def main(argv: List[str]) -> int:
             total_pages,
             other_backends,
             render=render,
-            canvas_width=args.canvas_width,
+            scale=args.scale,
         )
         _print_table(title, baselines, threaded_results, total_pages)
 

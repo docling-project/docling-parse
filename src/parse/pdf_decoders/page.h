@@ -42,8 +42,9 @@ namespace pdflib
     page_item<PAGE_WIDGETS>& get_page_widgets() { return page_widgets; }
     page_item<PAGE_HYPERLINKS>& get_page_hyperlinks() { return page_hyperlinks; }
 
-    // Char, word and line cells (char_cells is alias for page_cells, word/line are computed)
-    page_item<PAGE_CELLS>& get_char_cells() { return page_cells; }
+    // page_cells is the internal base stream used to derive words/lines.
+    // char_cells is the public/exposed char output, which may be suppressed.
+    page_item<PAGE_CELLS>& get_char_cells() { return char_cells; }
     page_item<PAGE_CELLS>& get_word_cells() { return word_cells; }
     page_item<PAGE_CELLS>& get_line_cells() { return line_cells; }
 
@@ -136,6 +137,7 @@ namespace pdflib
     page_item<PAGE_DIMENSION> page_dimension;
 
     page_item<PAGE_CELLS>  page_cells;
+    page_item<PAGE_CELLS>  char_cells;
     page_item<PAGE_SHAPES> page_shapes;
     page_item<PAGE_IMAGES> page_images;
 
@@ -456,6 +458,15 @@ namespace pdflib
     else
       {
         LOG_S(WARNING) << "skipping sanitization!";
+      }
+
+    if(config.keep_char_cells)
+      {
+        char_cells = page_cells;
+      }
+    else
+      {
+        char_cells.clear();
       }
 
     timings.add_timing(pdf_timings::KEY_DECODE_PAGE, global.get_time());
