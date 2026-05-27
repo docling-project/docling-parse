@@ -83,8 +83,9 @@ namespace pdflib
 
     QPDF qpdf_document;
 
-    QPDFObjectHandle qpdf_root;
-    QPDFObjectHandle qpdf_pages;
+    //QPDFObjectHandle qpdf_root;
+    //QPDFObjectHandle qpdf_pages;
+    std::vector<QPDFObjectHandle> qpdf_pages;
 
     int number_of_pages;
 
@@ -105,8 +106,8 @@ namespace pdflib
     qpdf_document(),
 
     // have compatibulity between QPDF v10 and v11
-    qpdf_root(),
-    qpdf_pages(),
+    // qpdf_root(),
+    qpdf_pages({}),
 
     number_of_pages(-1),
 
@@ -127,8 +128,8 @@ namespace pdflib
     qpdf_document(),
 
     // have compatibulity between QPDF v10 and v11
-    qpdf_root(),
-    qpdf_pages(),
+    // qpdf_root(),
+    qpdf_pages({}),
 
     number_of_pages(-1),
 
@@ -151,6 +152,8 @@ namespace pdflib
 
     try
       {
+        QPDFObjectHandle qpdf_root = qpdf_document.getRoot();
+	
         utils::timer annots_timer;
         json_annots = extract_document_annotations_in_json(qpdf_document, qpdf_root);
 
@@ -251,12 +254,17 @@ namespace pdflib
 
 	timings.add_timing(pdf_timings::KEY_QPDF_PROCESS, process_timer.get_time());
 	
-        qpdf_root = qpdf_document.getRoot();
+        // qpdf_root = qpdf_document.getRoot();
 
 	if(qpdf_document.anyWarnings())
 	  {
 	    LOG_S(WARNING) << "qpdf detected inconsistencies!";
 	  }
+
+	qpdf_pages = qpdf_document.getAllPages();
+	number_of_pages = qpdf_pages.size();
+	
+        LOG_S(INFO) << "#-pages: " << number_of_pages;	
       }
     catch(const std::exception & exc)
       {
@@ -264,11 +272,13 @@ namespace pdflib
         return false;
       }
 
+    /*
     if(not process_document_components())
       {
         return false;
       }
-
+    */
+    
     ensure_annots_loaded();
 
     timings.add_timing(pdf_timings::KEY_PROCESS_DOCUMENT_FROM_BYTESIO, timer.get_time());
@@ -276,12 +286,14 @@ namespace pdflib
     return true;
   }
 
+  /*
   bool pdf_decoder<DOCUMENT>::process_document_components()
   {
     utils::timer timer;
 
     if(qpdf_root.hasKey("/Pages"))
       {
+
         qpdf_pages = qpdf_root.getKey("/Pages");
 
         if(qpdf_pages.hasKey("/Count"))
@@ -297,7 +309,7 @@ namespace pdflib
                 number_of_pages += 1;
               }
           }
-
+	
         LOG_S(INFO) << "#-pages: " << number_of_pages;
       }
     else
@@ -310,6 +322,8 @@ namespace pdflib
 
     return true;
   }
+  */
+
   
   std::shared_ptr<std::string> pdf_decoder<DOCUMENT>::get_thread_safe_page_buffer(int page_ind)
   {
@@ -320,7 +334,7 @@ namespace pdflib
 
     std::shared_ptr<std::string> result = nullptr;
     
-    std::vector<QPDFObjectHandle> qpdf_pages = qpdf_document.getAllPages();
+    // std::vector<QPDFObjectHandle> qpdf_pages = qpdf_document.getAllPages();
 
     QPDFObjectHandle qpdf_page = qpdf_pages.at(page_ind);
     
