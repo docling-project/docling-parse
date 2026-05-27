@@ -11,6 +11,8 @@
 
 #include <nlohmann/json.hpp>
 
+#include <parse/qpdf/logger.h>
+
 namespace pdflib
 {
 
@@ -70,8 +72,6 @@ namespace pdflib
     void save_pdf_page(std::filesystem::path const& out_path) const;
 
   private:
-
-    void update_qpdf_logger();
 
     void decode_dimensions();
 
@@ -195,7 +195,7 @@ namespace pdflib
   {
     std::string description = "thread-safe page " + std::to_string(orig_page_num);
 
-    update_qpdf_logger();
+    configure_qpdf_warnings(*owned_qpdf_document);
 
     if(password.has_value())
       {
@@ -226,26 +226,6 @@ namespace pdflib
   {
     LOG_S(INFO) << "releasing memory for pdf page decoder";
   }
-
-  void pdf_decoder<PAGE>::update_qpdf_logger()
-  {
-    if(loguru::g_stderr_verbosity==loguru::Verbosity_INFO or
-       loguru::g_stderr_verbosity==loguru::Verbosity_WARNING)
-      {
-        // ignore ...
-      }
-    else if(loguru::g_stderr_verbosity==loguru::Verbosity_ERROR or
-            loguru::g_stderr_verbosity==loguru::Verbosity_FATAL)
-      {
-        owned_qpdf_document->setSuppressWarnings(true);
-        //qpdf_document.setMaxWarnings(0); only for later versions ...
-      }
-    else
-      {
-
-      }
-  }
-
 
   int pdf_decoder<PAGE>::get_page_number()
   {
