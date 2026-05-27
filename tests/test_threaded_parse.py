@@ -309,3 +309,58 @@ def test_threaded_unload_during_active_iteration_raises():
 
     with pytest.raises(RuntimeError, match="threaded iteration is active"):
         parser.unload(key)
+
+
+BITMAP_PDF = "tests/data/regression/annots_01.pdf"
+
+
+def _make_bitmap_config() -> DecodePageConfig:
+    config = DecodePageConfig()
+    config.keep_bitmaps = True
+    config.do_sanitization = False
+    return config
+
+
+def test_threaded_bitmap_no_materialization_preserves_geometry():
+    """Threaded path: geometry matches between full and placeholder-only modes."""
+    from docling_core.types.doc.base import ImageRefMode
+
+    config_full = _make_bitmap_config()
+    config_full.materialize_bitmap_bytes = True
+
+    config_geo = _make_bitmap_config()
+    config_geo.materialize_bitmap_bytes = False
+
+    def _get_page1(decode_config: DecodePageConfig) -> "SegmentedPdfPage":
+        parser = DoclingThreadedPdfParser(
+            parser_config=ThreadedPdfParserConfig(loglevel="fatal", threads=2),
+            decode_config=decode_config,
+        )
+        parser.load(BITMAP_PDF)
+        return next(
+            r.get_page()
+            for r in parser.iterate_results()
+            if r.success and r.page_number == 1
+        )
+
+    page_full = _get_page1(config_full)
+    page_geo = _get_page1(config_geo)
+
+    assert len(page_full.bitmap_resources) > 0, "test PDF must contain bitmaps"
+    assert len(page_full.bitmap_resources) == len(page_geo.bitmap_resources)
+
+    eps = 1e-3
+    for i, (full, geo) in enumerate(
+        zip(page_full.bitmap_resources, page_geo.bitmap_resources)
+    ):
+        full_poly = full.rect.to_polygon()
+        geo_poly = geo.rect.to_polygon()
+        for pt in range(4):
+            assert abs(full_poly[pt][0] - geo_poly[pt][0]) < eps
+            assert abs(full_poly[pt][1] - geo_poly[pt][1]) < eps
+
+    for bm in page_geo.bitmap_resources:
+        assert bm.image is None
+        assert bm.mode == ImageRefMode.PLACEHOLDER
+
+    assert any(bm.image is not None for bm in page_full.bitmap_resources)

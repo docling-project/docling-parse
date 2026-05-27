@@ -1,5 +1,6 @@
 """Parser for PDF files"""
 
+import copy
 import hashlib
 import logging
 import math
@@ -366,46 +367,52 @@ def _to_hyperlinks_from_decoder(hyperlinks_container) -> List[PdfHyperlink]:
     return result
 
 
-def _to_bitmap_resources_from_decoder(images_container) -> List[BitmapResource]:
+def _to_bitmap_resources_from_decoder(
+    images_container,
+    materialize_bitmap_bytes: bool = True,
+) -> List[BitmapResource]:
     result: List[BitmapResource] = []
 
     for ind, image in enumerate(images_container):
         image_ref = None
         mode = ImageRefMode.PLACEHOLDER
 
-        try:
-            image_bytes = image.get_image_as_bytes()
+        if materialize_bitmap_bytes:
+            try:
+                image_bytes = image.get_image_as_bytes()
 
-            if image_bytes and len(image_bytes) > 0:
-                fmt = image.get_image_format()
-                pil_image: PILImage.Image | None = None
+                if image_bytes and len(image_bytes) > 0:
+                    fmt = image.get_image_format()
+                    pil_image: PILImage.Image | None = None
 
-                if fmt in ("jpeg", "jp2"):
-                    pil_image = PILImage.open(BytesIO(image_bytes))
-                elif fmt in ("raw", "jbig2"):
-                    pil_mode = image.get_pil_mode()
-                    w = image.image_width
-                    h = image.image_height
-                    if w > 0 and h > 0:
-                        pil_image = PILImage.frombytes(pil_mode, (w, h), image_bytes)
+                    if fmt in ("jpeg", "jp2"):
+                        pil_image = PILImage.open(BytesIO(image_bytes))
+                    elif fmt in ("raw", "jbig2"):
+                        pil_mode = image.get_pil_mode()
+                        w = image.image_width
+                        h = image.image_height
+                        if w > 0 and h > 0:
+                            pil_image = PILImage.frombytes(
+                                pil_mode, (w, h), image_bytes
+                            )
 
-                if pil_image is not None:
-                    if pil_image.mode != "RGBA":
-                        pil_image = pil_image.convert("RGBA")
+                    if pil_image is not None:
+                        if pil_image.mode != "RGBA":
+                            pil_image = pil_image.convert("RGBA")
 
-                    bbox_width = abs(image.x1 - image.x0)
-                    if bbox_width > 0 and image.image_width > 0:
-                        dpi = round(image.image_width * 72.0 / bbox_width)
-                    else:
-                        dpi = 72
+                        bbox_width = abs(image.x1 - image.x0)
+                        if bbox_width > 0 and image.image_width > 0:
+                            dpi = round(image.image_width * 72.0 / bbox_width)
+                        else:
+                            dpi = 72
 
-                    image_ref = ImageRef.from_pil(pil_image, dpi=dpi)
-                    mode = ImageRefMode.EMBEDDED
+                        image_ref = ImageRef.from_pil(pil_image, dpi=dpi)
+                        mode = ImageRefMode.EMBEDDED
 
-        except Exception:
-            _log.debug(
-                "Failed to extract image data for bitmap, falling back to placeholder"
-            )
+            except Exception:
+                _log.debug(
+                    "Failed to extract image data for bitmap, falling back to placeholder"
+                )
 
         result.append(
             BitmapResource(
@@ -432,6 +439,7 @@ def _to_bitmap_resources_from_decoder(images_container) -> List[BitmapResource]:
 def segmented_page_from_decoder(
     page_decoder: PdfPageDecoder,
     boundary_type: PdfPageBoundaryType = PdfPageBoundaryType.CROP_BOX,
+    materialize_bitmap_bytes: bool = True,
 ) -> SegmentedPdfPage:
     """Convert a C++ PdfPageDecoder to a SegmentedPdfPage."""
     char_cells = _to_cells_from_decoder(page_decoder.get_char_cells())
@@ -445,7 +453,8 @@ def segmented_page_from_decoder(
         textline_cells=[],
         has_chars=len(char_cells) > 0,
         bitmap_resources=_to_bitmap_resources_from_decoder(
-            page_decoder.get_page_images()
+            page_decoder.get_page_images(),
+            materialize_bitmap_bytes=materialize_bitmap_bytes,
         ),
         shapes=_to_shapes_from_decoder(page_decoder.get_page_shapes()),
         widgets=_to_widgets_from_decoder(page_decoder.get_page_widgets()),
@@ -492,7 +501,7 @@ class PdfDocument:
         self._parser: pdf_parser = parser
         self._key = key
         self._boundary_type = boundary_type
-        self._pages: Dict[int, SegmentedPdfPage] = {}
+        self._pages: Dict[tuple[int, bool], SegmentedPdfPage] = {}
         self._toc: PdfTableOfContents | None = None
         self._meta: PdfMetaData | None = None
         self._annotations: PdfAnnotations | None = None
@@ -520,11 +529,13 @@ class PdfDocument:
             if page_no < 1:
                 _log.error("page_no should always be >=1!")
 
-            if page_no in self._pages:
+            cache_keys = [k for k in self._pages if k[0] == page_no]
+            if cache_keys:
                 # we are using 0 indexing in the C++ docling-parse!
                 page_num = page_no - 1
                 self._parser.unload_document_page(key=self._key, page=page_num)
-                del self._pages[page_no]
+                for k in cache_keys:
+                    del self._pages[k]
 
     def number_of_pages(self) -> int:
         if self.is_loaded():
@@ -702,6 +713,7 @@ class PdfDocument:
 
         segmented_page = self._to_segmented_page_from_decoder(
             page_decoder=page_decoder,
+            materialize_bitmap_bytes=config.materialize_bitmap_bytes,
         )
 
         # Get timings from the page decoder
@@ -740,19 +752,26 @@ class PdfDocument:
         return _to_hyperlinks_from_decoder(hyperlinks_container)
 
     def _to_bitmap_resources_from_decoder(
-        self, images_container
+        self,
+        images_container,
+        materialize_bitmap_bytes: bool = True,
     ) -> List[BitmapResource]:
         """Convert typed PdfImages container to list of BitmapResource objects."""
-        return _to_bitmap_resources_from_decoder(images_container)
+        return _to_bitmap_resources_from_decoder(
+            images_container,
+            materialize_bitmap_bytes=materialize_bitmap_bytes,
+        )
 
     def _to_segmented_page_from_decoder(
         self,
         page_decoder,
+        materialize_bitmap_bytes: bool = True,
     ) -> SegmentedPdfPage:
         """Convert typed PdfPageDecoder to SegmentedPdfPage (zero-copy path)."""
         return segmented_page_from_decoder(
             page_decoder=page_decoder,
             boundary_type=self._boundary_type,
+            materialize_bitmap_bytes=materialize_bitmap_bytes,
         )
 
     def _get_page_typed(
@@ -773,8 +792,9 @@ class PdfDocument:
         Returns:
             SegmentedPdfPage with the parsed page data.
         """
-        if page_no in self._pages.keys():
-            return self._pages[page_no]
+        cache_key = (page_no, config.materialize_bitmap_bytes)
+        if cache_key in self._pages:
+            return self._pages[cache_key]
 
         if 1 <= page_no <= self.number_of_pages():
             page_decoder = self._parser.get_page_decoder(
@@ -786,10 +806,11 @@ class PdfDocument:
             if page_decoder is None:
                 raise ValueError(f"Failed to decode page {page_no}")
 
-            self._pages[page_no] = self._to_segmented_page_from_decoder(
+            self._pages[cache_key] = self._to_segmented_page_from_decoder(
                 page_decoder=page_decoder,
+                materialize_bitmap_bytes=config.materialize_bitmap_bytes,
             )
-            return self._pages[page_no]
+            return self._pages[cache_key]
 
         raise ValueError(
             f"incorrect page_no: {page_no} for key={self._key} (min:1, max:{self.number_of_pages()})"
@@ -923,10 +944,12 @@ class PageParseResult:
         *,
         boundary_type: PdfPageBoundaryType,
         render_config: RenderConfig | None,
+        decode_config: DecodePageConfig,
     ):
         self._raw = raw_result
         self._boundary_type = boundary_type
         self._render_config = render_config
+        self._decode_config = decode_config
         self._page: SegmentedPdfPage | None = None
         self._page_decoder: PdfPageDecoder | None = None
         self._default_image: PILImage.Image | None = None
@@ -972,6 +995,7 @@ class PageParseResult:
             self._page = segmented_page_from_decoder(
                 page_decoder=self._require_page_decoder(),
                 boundary_type=self._boundary_type,
+                materialize_bitmap_bytes=self._decode_config.materialize_bitmap_bytes,
             )
         return self._page
 
@@ -1113,31 +1137,6 @@ class PageParseResult:
         return self._require_page_decoder().export_bitmap_artifacts()
 
 
-def _copy_decode_config(src: DecodePageConfig) -> DecodePageConfig:
-    dst = DecodePageConfig()
-    dst.page_boundary = src.page_boundary
-    dst.do_sanitization = src.do_sanitization
-    dst.keep_char_cells = src.keep_char_cells
-    dst.keep_shapes = src.keep_shapes
-    dst.keep_bitmaps = src.keep_bitmaps
-    dst.max_num_lines = src.max_num_lines
-    dst.max_num_bitmaps = src.max_num_bitmaps
-    dst.create_word_cells = src.create_word_cells
-    dst.create_line_cells = src.create_line_cells
-    dst.enforce_same_font = src.enforce_same_font
-    dst.horizontal_cell_tolerance = src.horizontal_cell_tolerance
-    dst.word_space_width_factor_for_merge = src.word_space_width_factor_for_merge
-    dst.line_space_width_factor_for_merge = src.line_space_width_factor_for_merge
-    dst.line_space_width_factor_for_merge_with_space = (
-        src.line_space_width_factor_for_merge_with_space
-    )
-    dst.do_thread_safe = src.do_thread_safe
-    dst.release_native_memory_every_n_pages = src.release_native_memory_every_n_pages
-    dst.keep_glyphs = src.keep_glyphs
-    dst.keep_qpdf_warnings = src.keep_qpdf_warnings
-    return dst
-
-
 def _copy_render_config(src: RenderConfig) -> RenderConfig:
     dst = RenderConfig()
     dst.render_text = src.render_text
@@ -1189,7 +1188,7 @@ class DoclingThreadedPdfParser:
                 parser_config.render_config
             )
         self._decode_config = (
-            _copy_decode_config(decode_config)
+            copy.copy(decode_config)
             if decode_config is not None
             else DecodePageConfig()
         )
@@ -1318,4 +1317,5 @@ class DoclingThreadedPdfParser:
             self._parser.get_task(),
             boundary_type=self._parser_config.boundary_type,
             render_config=self._parser_config.render_config,
+            decode_config=self._decode_config,
         )

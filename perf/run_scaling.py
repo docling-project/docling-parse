@@ -386,6 +386,7 @@ def run_threaded(
             if result.success:
                 if render:
                     _ = result.get_image()
+                    _ = result.get_page()
                 else:
                     _ = result.get_page()
             else:
