@@ -12,6 +12,7 @@ from docling_parse.pdf_parser import (
     DecodePageConfig,
     DoclingPdfParser,
     DoclingThreadedPdfParser,
+    PageMaterializationConfig,
     ThreadedPdfParserConfig,
 )
 from tests.test_parse import (
@@ -327,26 +328,26 @@ def test_threaded_bitmap_no_materialization_preserves_geometry():
     """Threaded path: geometry matches between full and placeholder-only modes."""
     from docling_core.types.doc.base import ImageRefMode
 
-    config_full = _make_bitmap_config()
-    config_full.materialize_bitmap_bytes = True
+    config = _make_bitmap_config()
+    materialize_full = PageMaterializationConfig(materialize_bitmap_bytes=True)
+    materialize_geo = PageMaterializationConfig(materialize_bitmap_bytes=False)
 
-    config_geo = _make_bitmap_config()
-    config_geo.materialize_bitmap_bytes = False
-
-    def _get_page1(decode_config: DecodePageConfig) -> "SegmentedPdfPage":
+    def _get_page1(
+        materialization_config: PageMaterializationConfig,
+    ) -> "SegmentedPdfPage":
         parser = DoclingThreadedPdfParser(
             parser_config=ThreadedPdfParserConfig(loglevel="fatal", threads=2),
-            decode_config=decode_config,
+            decode_config=config,
         )
         parser.load(BITMAP_PDF)
         return next(
-            r.get_page()
+            r.get_page(materialization_config)
             for r in parser.iterate_results()
             if r.success and r.page_number == 1
         )
 
-    page_full = _get_page1(config_full)
-    page_geo = _get_page1(config_geo)
+    page_full = _get_page1(materialize_full)
+    page_geo = _get_page1(materialize_geo)
 
     assert len(page_full.bitmap_resources) > 0, "test PDF must contain bitmaps"
     assert len(page_full.bitmap_resources) == len(page_geo.bitmap_resources)

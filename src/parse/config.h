@@ -43,9 +43,6 @@ namespace pdflib
     bool keep_glyphs = false;
     bool keep_qpdf_warnings = false;
 
-    // consumed by Python layer only; C++ ignores this field
-    bool materialize_bitmap_bytes = true;
-
     nlohmann::json to_json() const;
     void from_json(const nlohmann::json& j);
 
@@ -86,7 +83,6 @@ namespace pdflib
 
     j["keep_glyphs"] = keep_glyphs;
     j["keep_qpdf_warnings"] = keep_qpdf_warnings;
-    j["materialize_bitmap_bytes"] = materialize_bitmap_bytes;
 
     return j;
   }
@@ -120,7 +116,6 @@ namespace pdflib
 
     if(j.count("keep_glyphs")) { keep_glyphs = j["keep_glyphs"]; }
     if(j.count("keep_qpdf_warnings")) { keep_qpdf_warnings = j["keep_qpdf_warnings"]; }
-    if(j.count("materialize_bitmap_bytes")) { materialize_bitmap_bytes = j["materialize_bitmap_bytes"]; }
   }
 
   bool decode_config::load(const std::string& filename)
@@ -174,8 +169,7 @@ namespace pdflib
        << std::setw(48) << "populate_json_objects" << (populate_json_objects ? "true" : "false") << "\n"
        << std::setw(48) << "release_native_memory_every_n_pages" << release_native_memory_every_n_pages << "\n"
        << std::setw(48) << "keep_glyphs" << (keep_glyphs ? "true" : "false") << "\n"
-       << std::setw(48) << "keep_qpdf_warnings" << (keep_qpdf_warnings ? "true" : "false") << "\n"
-       << std::setw(48) << "materialize_bitmap_bytes" << (materialize_bitmap_bytes ? "true" : "false") << "\n";
+       << std::setw(48) << "keep_qpdf_warnings" << (keep_qpdf_warnings ? "true" : "false") << "\n";
 
     return ss.str();
   }

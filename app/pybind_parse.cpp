@@ -276,7 +276,6 @@ PYBIND11_MODULE(pdf_parsers, m) {
         max_num_bitmaps (int): Maximum number of bitmaps to keep (-1 means no cap) [default=-1].
         keep_glyphs (bool): If true, keep GLYPH<...> fallback strings in output; if false, replace them with a space [default=false].
         keep_qpdf_warnings (bool): If true, QPDF warnings are emitted; if false, they are suppressed [default=false].
-        materialize_bitmap_bytes (bool): If true (default), bitmap byte data is extracted and embedded in BitmapResource objects. If false, only bitmap geometry (rectangles) is preserved and image bytes are skipped. Consumed by the Python layer only; has no effect in C++ [default=true].
     )")
     .def(pybind11::init<>())
     .def_readwrite("page_boundary", &pdflib::decode_config::page_boundary)
@@ -297,7 +296,6 @@ PYBIND11_MODULE(pdf_parsers, m) {
     .def_readwrite("release_native_memory_every_n_pages", &pdflib::decode_config::release_native_memory_every_n_pages)
     .def_readwrite("keep_glyphs", &pdflib::decode_config::keep_glyphs)
     .def_readwrite("keep_qpdf_warnings", &pdflib::decode_config::keep_qpdf_warnings)
-    .def_readwrite("materialize_bitmap_bytes", &pdflib::decode_config::materialize_bitmap_bytes)
     .def("__copy__", [](const pdflib::decode_config& self) { return self; })
     .def("__deepcopy__", [](const pdflib::decode_config& self, pybind11::dict) { return self; });
 

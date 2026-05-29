@@ -295,7 +295,6 @@ namespace
     config.release_native_memory_every_n_pages = 0;
     config.keep_glyphs = false;
     config.keep_qpdf_warnings = false;
-    config.materialize_bitmap_bytes = false;
     return config;
   }
 
@@ -833,7 +832,6 @@ namespace
       ("line-space-factor-with-space", "Space-width factor for line merging with space", cxxopts::value<double>())
       ("keep-glyphs", "Keep unmapped GLYPH<...> tokens", cxxopts::value<std::string>())
       ("keep-qpdf-warnings", "Emit QPDF warnings", cxxopts::value<std::string>())
-      ("materialize-bitmap-bytes", "Print-only parity with Python config; C++ ignores it", cxxopts::value<std::string>())
       ("h,help", "Print usage");
 
     options.parse_positional({"input"});
@@ -901,7 +899,6 @@ namespace
     if(result.count("line-space-factor-with-space")) { decode_config.line_space_width_factor_for_merge_with_space = result["line-space-factor-with-space"].as<double>(); }
     if(result.count("keep-glyphs")) { decode_config.keep_glyphs = parse_bool(result["keep-glyphs"].as<std::string>()); }
     if(result.count("keep-qpdf-warnings")) { decode_config.keep_qpdf_warnings = parse_bool(result["keep-qpdf-warnings"].as<std::string>()); }
-    if(result.count("materialize-bitmap-bytes")) { decode_config.materialize_bitmap_bytes = parse_bool(result["materialize-bitmap-bytes"].as<std::string>()); }
 
     decode_config.do_thread_safe = true;
     return cli;

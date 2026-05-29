@@ -20,7 +20,12 @@ from docling_core.types.doc.page import (
 )
 from pydantic import TypeAdapter
 
-from docling_parse.pdf_parser import DecodePageConfig, DoclingPdfParser, PdfDocument
+from docling_parse.pdf_parser import (
+    DecodePageConfig,
+    DoclingPdfParser,
+    PageMaterializationConfig,
+    PdfDocument,
+)
 
 GENERATE = False
 
@@ -1032,18 +1037,20 @@ def _make_bitmap_config() -> DecodePageConfig:
 
 
 def test_bitmap_no_materialization_preserves_geometry():
-    """bitmap_resources count and rects match regardless of materialize_bitmap_bytes."""
+    """bitmap_resources count and rects match regardless of bitmap bytes."""
     parser = DoclingPdfParser(loglevel="fatal")
     pdf_doc = parser.load(path_or_stream=BITMAP_PDF, lazy=True)
 
-    config_full = _make_bitmap_config()
-    config_full.materialize_bitmap_bytes = True
+    config = _make_bitmap_config()
+    materialize_full = PageMaterializationConfig(materialize_bitmap_bytes=True)
+    materialize_geo = PageMaterializationConfig(materialize_bitmap_bytes=False)
 
-    config_geo = _make_bitmap_config()
-    config_geo.materialize_bitmap_bytes = False
-
-    page_full = pdf_doc.get_page(1, config=config_full)
-    page_geo = pdf_doc.get_page(1, config=config_geo)
+    page_full = pdf_doc.get_page(
+        1, config=config, materialization_config=materialize_full
+    )
+    page_geo = pdf_doc.get_page(
+        1, config=config, materialization_config=materialize_geo
+    )
 
     assert len(page_full.bitmap_resources) == len(page_geo.bitmap_resources), (
         "bitmap count must match between full and geometry-only modes"
@@ -1068,24 +1075,24 @@ def test_bitmap_no_materialization_preserves_geometry():
 
 
 def test_bitmap_no_materialization_has_no_image():
-    """materialize_bitmap_bytes=False produces placeholder resources with image=None."""
+    """materialize_bitmap_bytes=False produces placeholders with image=None."""
     from docling_core.types.doc.base import ImageRefMode
 
     parser = DoclingPdfParser(loglevel="fatal")
     pdf_doc = parser.load(path_or_stream=BITMAP_PDF, lazy=True)
 
     config = _make_bitmap_config()
-    config.materialize_bitmap_bytes = False
+    materialize_geo = PageMaterializationConfig(materialize_bitmap_bytes=False)
 
-    page = pdf_doc.get_page(1, config=config)
+    page = pdf_doc.get_page(1, config=config, materialization_config=materialize_geo)
     assert len(page.bitmap_resources) > 0, "test PDF must contain bitmaps"
 
     for bm in page.bitmap_resources:
         assert bm.image is None, (
-            "image must be None when materialize_bitmap_bytes=False"
+            "image must be None when bitmap bytes are not materialized"
         )
         assert bm.mode == ImageRefMode.PLACEHOLDER, (
-            "mode must be PLACEHOLDER when materialize_bitmap_bytes=False"
+            "mode must be PLACEHOLDER when bitmap bytes are not materialized"
         )
 
 
@@ -1096,21 +1103,23 @@ def test_bitmap_materialization_cache_false_then_true():
     parser = DoclingPdfParser(loglevel="fatal")
     pdf_doc = parser.load(path_or_stream=BITMAP_PDF, lazy=True)
 
-    config_geo = _make_bitmap_config()
-    config_geo.materialize_bitmap_bytes = False
+    config = _make_bitmap_config()
+    materialize_geo = PageMaterializationConfig(materialize_bitmap_bytes=False)
+    materialize_full = PageMaterializationConfig(materialize_bitmap_bytes=True)
 
-    config_full = _make_bitmap_config()
-    config_full.materialize_bitmap_bytes = True
-
-    page_geo = pdf_doc.get_page(1, config=config_geo)
-    page_full = pdf_doc.get_page(1, config=config_full)
+    page_geo = pdf_doc.get_page(
+        1, config=config, materialization_config=materialize_geo
+    )
+    page_full = pdf_doc.get_page(
+        1, config=config, materialization_config=materialize_full
+    )
 
     for bm in page_geo.bitmap_resources:
         assert bm.image is None
         assert bm.mode == ImageRefMode.PLACEHOLDER
 
     assert any(bm.image is not None for bm in page_full.bitmap_resources), (
-        "at least one bitmap should be embedded when materialize_bitmap_bytes=True"
+        "at least one bitmap should be embedded when bitmap bytes are materialized"
     )
 
     pdf_doc.unload()
@@ -1123,17 +1132,19 @@ def test_bitmap_materialization_cache_true_then_false():
     parser = DoclingPdfParser(loglevel="fatal")
     pdf_doc = parser.load(path_or_stream=BITMAP_PDF, lazy=True)
 
-    config_full = _make_bitmap_config()
-    config_full.materialize_bitmap_bytes = True
+    config = _make_bitmap_config()
+    materialize_full = PageMaterializationConfig(materialize_bitmap_bytes=True)
+    materialize_geo = PageMaterializationConfig(materialize_bitmap_bytes=False)
 
-    config_geo = _make_bitmap_config()
-    config_geo.materialize_bitmap_bytes = False
-
-    page_full = pdf_doc.get_page(1, config=config_full)
-    page_geo = pdf_doc.get_page(1, config=config_geo)
+    page_full = pdf_doc.get_page(
+        1, config=config, materialization_config=materialize_full
+    )
+    page_geo = pdf_doc.get_page(
+        1, config=config, materialization_config=materialize_geo
+    )
 
     assert any(bm.image is not None for bm in page_full.bitmap_resources), (
-        "at least one bitmap should be embedded when materialize_bitmap_bytes=True"
+        "at least one bitmap should be embedded when bitmap bytes are materialized"
     )
 
     for bm in page_geo.bitmap_resources:

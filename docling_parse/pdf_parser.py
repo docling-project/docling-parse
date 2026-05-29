@@ -201,6 +201,35 @@ class PageRenderTimings(PageDecodeTimings):
     render_page_s: float = 0.0
 
 
+class PageMaterializationConfig(BaseModel):
+    """Controls which native page data is materialized into SegmentedPdfPage."""
+
+    model_config = ConfigDict(validate_assignment=True)
+
+    materialize_char_cells: bool = True
+    materialize_word_cells: bool = True
+    materialize_line_cells: bool = True
+    materialize_shapes: bool = True
+    materialize_bitmaps: bool = True
+    materialize_bitmap_bytes: bool = True
+
+    @classmethod
+    def from_decode_config(
+        cls, decode_config: DecodePageConfig
+    ) -> "PageMaterializationConfig":
+        return cls()
+
+    def cache_key(self) -> tuple[bool, bool, bool, bool, bool, bool]:
+        return (
+            self.materialize_char_cells,
+            self.materialize_word_cells,
+            self.materialize_line_cells,
+            self.materialize_shapes,
+            self.materialize_bitmaps,
+            self.materialize_bitmap_bytes,
+        )
+
+
 def _page_timings_from_raw(raw_timings) -> PageDecodeTimings | PageRenderTimings:
     data = {
         "make_page_decoder_s": raw_timings.make_page_decoder_s,
@@ -473,10 +502,17 @@ def _to_bitmap_resources_from_decoder(
 def segmented_page_from_decoder(
     page_decoder: PdfPageDecoder,
     boundary_type: PdfPageBoundaryType = PdfPageBoundaryType.CROP_BOX,
-    materialize_bitmap_bytes: bool = True,
+    materialization_config: PageMaterializationConfig | None = None,
 ) -> SegmentedPdfPage:
     """Convert a C++ PdfPageDecoder to a SegmentedPdfPage."""
-    char_cells = _to_cells_from_decoder(page_decoder.get_char_cells())
+    if materialization_config is None:
+        materialization_config = PageMaterializationConfig()
+
+    char_cells = (
+        _to_cells_from_decoder(page_decoder.get_char_cells())
+        if materialization_config.materialize_char_cells
+        else []
+    )
 
     segmented_page = SegmentedPdfPage(
         dimension=_to_page_geometry_from_decoder(
@@ -486,22 +522,30 @@ def segmented_page_from_decoder(
         word_cells=[],
         textline_cells=[],
         has_chars=len(char_cells) > 0,
-        bitmap_resources=_to_bitmap_resources_from_decoder(
-            page_decoder.get_page_images(),
-            materialize_bitmap_bytes=materialize_bitmap_bytes,
+        bitmap_resources=(
+            _to_bitmap_resources_from_decoder(
+                page_decoder.get_page_images(),
+                materialize_bitmap_bytes=materialization_config.materialize_bitmap_bytes,
+            )
+            if materialization_config.materialize_bitmaps
+            else []
         ),
-        shapes=_to_shapes_from_decoder(page_decoder.get_page_shapes()),
+        shapes=(
+            _to_shapes_from_decoder(page_decoder.get_page_shapes())
+            if materialization_config.materialize_shapes
+            else []
+        ),
         widgets=_to_widgets_from_decoder(page_decoder.get_page_widgets()),
         hyperlinks=_to_hyperlinks_from_decoder(page_decoder.get_page_hyperlinks()),
     )
 
-    if page_decoder.has_word_cells():
+    if materialization_config.materialize_word_cells and page_decoder.has_word_cells():
         segmented_page.word_cells = _to_cells_from_decoder(
             page_decoder.get_word_cells()
         )
         segmented_page.has_words = len(segmented_page.word_cells) > 0
 
-    if page_decoder.has_line_cells():
+    if materialization_config.materialize_line_cells and page_decoder.has_line_cells():
         segmented_page.textline_cells = _to_cells_from_decoder(
             page_decoder.get_line_cells()
         )
@@ -535,7 +579,9 @@ class PdfDocument:
         self._parser: pdf_parser = parser
         self._key = key
         self._boundary_type = boundary_type
-        self._pages: Dict[tuple[int, bool], SegmentedPdfPage] = {}
+        self._pages: Dict[
+            tuple[int, tuple[bool, bool, bool, bool, bool, bool]], SegmentedPdfPage
+        ] = {}
         self._toc: PdfTableOfContents | None = None
         self._meta: PdfMetaData | None = None
         self._annotations: PdfAnnotations | None = None
@@ -618,6 +664,7 @@ class PdfDocument:
         self,
         *,
         config: DecodePageConfig | None = None,
+        materialization_config: PageMaterializationConfig | None = None,
     ) -> Iterator[Tuple[int, SegmentedPdfPage]]:
         if config is None:
             config = self._default_config()
@@ -627,6 +674,7 @@ class PdfDocument:
                 self.get_page(
                     page_no + 1,
                     config=config,
+                    materialization_config=materialization_config,
                 ),
             )
 
@@ -692,17 +740,23 @@ class PdfDocument:
         page_no: int,
         *,
         config: DecodePageConfig | None = None,
+        materialization_config: PageMaterializationConfig | None = None,
     ) -> SegmentedPdfPage:
         """Get page using typed API (zero-copy from C++)."""
         if config is None:
             config = self._default_config()
-        return self._get_page_typed(page_no, config=config)
+        if materialization_config is None:
+            materialization_config = PageMaterializationConfig.from_decode_config(config)
+        return self._get_page_typed(
+            page_no, config=config, materialization_config=materialization_config
+        )
 
     def get_page_with_timings(
         self,
         page_no: int,
         *,
         config: DecodePageConfig | None = None,
+        materialization_config: PageMaterializationConfig | None = None,
     ) -> Tuple[SegmentedPdfPage, Timings]:
         """Get page along with timing information.
 
@@ -720,6 +774,8 @@ class PdfDocument:
         """
         if config is None:
             config = self._default_config()
+        if materialization_config is None:
+            materialization_config = PageMaterializationConfig.from_decode_config(config)
 
         if not (1 <= page_no <= self.number_of_pages()):
             raise ValueError(
@@ -727,13 +783,16 @@ class PdfDocument:
                 f"(min:1, max:{self.number_of_pages()})"
             )
 
-        return self._get_page_with_timings_typed(page_no, config=config)
+        return self._get_page_with_timings_typed(
+            page_no, config=config, materialization_config=materialization_config
+        )
 
     def _get_page_with_timings_typed(
         self,
         page_no: int,
         *,
         config: DecodePageConfig,
+        materialization_config: PageMaterializationConfig,
     ) -> Tuple[SegmentedPdfPage, Timings]:
         """Get page with timings using typed API."""
         page_decoder = self._parser.get_page_decoder(
@@ -747,7 +806,7 @@ class PdfDocument:
 
         segmented_page = self._to_segmented_page_from_decoder(
             page_decoder=page_decoder,
-            materialize_bitmap_bytes=config.materialize_bitmap_bytes,
+            materialization_config=materialization_config,
         )
 
         # Get timings from the page decoder
@@ -757,11 +816,21 @@ class PdfDocument:
 
         return segmented_page, timings
 
-    def load_all_pages(self, config: DecodePageConfig | None = None):
+    def load_all_pages(
+        self,
+        config: DecodePageConfig | None = None,
+        materialization_config: PageMaterializationConfig | None = None,
+    ):
         if config is None:
             config = self._default_config()
+        if materialization_config is None:
+            materialization_config = PageMaterializationConfig.from_decode_config(config)
         for page_no in range(1, self.number_of_pages() + 1):
-            self.get_page(page_no, config=config)
+            self.get_page(
+                page_no,
+                config=config,
+                materialization_config=materialization_config,
+            )
 
     def _to_page_geometry_from_decoder(self, page_dim) -> PdfPageGeometry:
         """Convert typed PdfPageDimension to PdfPageGeometry."""
@@ -799,13 +868,13 @@ class PdfDocument:
     def _to_segmented_page_from_decoder(
         self,
         page_decoder,
-        materialize_bitmap_bytes: bool = True,
+        materialization_config: PageMaterializationConfig | None = None,
     ) -> SegmentedPdfPage:
         """Convert typed PdfPageDecoder to SegmentedPdfPage (zero-copy path)."""
         return segmented_page_from_decoder(
             page_decoder=page_decoder,
             boundary_type=self._boundary_type,
-            materialize_bitmap_bytes=materialize_bitmap_bytes,
+            materialization_config=materialization_config,
         )
 
     def _get_page_typed(
@@ -813,6 +882,7 @@ class PdfDocument:
         page_no: int,
         *,
         config: DecodePageConfig,
+        materialization_config: PageMaterializationConfig,
     ) -> SegmentedPdfPage:
         """Get page using typed API (zero-copy from C++, faster than get_page).
 
@@ -826,7 +896,7 @@ class PdfDocument:
         Returns:
             SegmentedPdfPage with the parsed page data.
         """
-        cache_key = (page_no, config.materialize_bitmap_bytes)
+        cache_key = (page_no, materialization_config.cache_key())
         if cache_key in self._pages:
             return self._pages[cache_key]
 
@@ -842,7 +912,7 @@ class PdfDocument:
 
             self._pages[cache_key] = self._to_segmented_page_from_decoder(
                 page_decoder=page_decoder,
-                materialize_bitmap_bytes=config.materialize_bitmap_bytes,
+                materialization_config=materialization_config,
             )
             return self._pages[cache_key]
 
@@ -967,6 +1037,7 @@ class ThreadedPdfParserConfig(BaseModel):
     max_concurrent_results: int = 32
     boundary_type: PdfPageBoundaryType = PdfPageBoundaryType.CROP_BOX
     render_config: RenderConfig | None = None
+    page_materialization_config: PageMaterializationConfig | None = None
 
 
 class PageParseResult:
@@ -979,12 +1050,16 @@ class PageParseResult:
         boundary_type: PdfPageBoundaryType,
         render_config: RenderConfig | None,
         decode_config: DecodePageConfig,
+        materialization_config: PageMaterializationConfig,
     ):
         self._raw = raw_result
         self._boundary_type = boundary_type
         self._render_config = render_config
         self._decode_config = decode_config
-        self._page: SegmentedPdfPage | None = None
+        self._materialization_config = materialization_config
+        self._pages: Dict[
+            tuple[bool, bool, bool, bool, bool, bool], SegmentedPdfPage
+        ] = {}
         self._page_decoder: PdfPageDecoder | None = None
         self._default_image: PILImage.Image | None = None
 
@@ -1025,15 +1100,22 @@ class PageParseResult:
         assert self._page_decoder is not None
         return self._page_decoder
 
-    def get_page(self) -> SegmentedPdfPage:
+    def get_page(
+        self,
+        materialization_config: PageMaterializationConfig | None = None,
+    ) -> SegmentedPdfPage:
         """Return the parsed page, converting lazily on first access."""
-        if self._page is None:
-            self._page = segmented_page_from_decoder(
+        if materialization_config is None:
+            materialization_config = self._materialization_config
+
+        cache_key = materialization_config.cache_key()
+        if cache_key not in self._pages:
+            self._pages[cache_key] = segmented_page_from_decoder(
                 page_decoder=self._require_page_decoder(),
                 boundary_type=self._boundary_type,
-                materialize_bitmap_bytes=self._decode_config.materialize_bitmap_bytes,
+                materialization_config=materialization_config,
             )
-        return self._page
+        return self._pages[cache_key]
 
     def get_timings(self) -> Timings:
         """Return structured timing data for this page parse."""
@@ -1229,6 +1311,11 @@ class DoclingThreadedPdfParser:
             else DecodePageConfig()
         )
         self._decode_config.page_boundary = parser_config.boundary_type.value
+        self._materialization_config = (
+            parser_config.page_materialization_config
+            if parser_config.page_materialization_config is not None
+            else PageMaterializationConfig.from_decode_config(self._decode_config)
+        )
         self._page_counts: Dict[str, int] = {}
         self._scheduled_page_counts: Dict[str, int] = {}
 
@@ -1354,4 +1441,5 @@ class DoclingThreadedPdfParser:
             boundary_type=self._parser_config.boundary_type,
             render_config=self._parser_config.render_config,
             decode_config=self._decode_config,
+            materialization_config=self._materialization_config,
         )

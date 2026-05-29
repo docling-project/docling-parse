@@ -23,6 +23,9 @@ Usage:
     python perf/run_scaling.py                                   # HF default, render mode, pypdfium2
     python perf/run_scaling.py ./pdfs --mode parse
     python perf/run_scaling.py --mode both --other "pypdfium2;pymupdf"
+    python perf/run_scaling.py ./pdfs --mode render --keep-char-cells=true \
+        --create-word-cells=true --create-line-cells=true \
+        --keep-shapes=true --keep-bitmaps=true
 """
 
 from __future__ import annotations
@@ -146,29 +149,101 @@ def apply_max_pages(
 # -------- Decode config helper --------
 
 
-def _decode_config():
+def _str_to_bool(value: str | bool) -> bool:
+    if isinstance(value, bool):
+        return value
+    normalized = value.strip().lower()
+    if normalized in {"1", "true", "t", "yes", "y", "on"}:
+        return True
+    if normalized in {"0", "false", "f", "no", "n", "off"}:
+        return False
+    raise argparse.ArgumentTypeError(
+        f"expected a boolean value, got {value!r}; use true or false"
+    )
+
+
+def _add_bool_value_arg(
+    ap: argparse.ArgumentParser,
+    name: str,
+    *,
+    default: bool,
+    help: str,
+) -> None:
+    ap.add_argument(
+        f"--{name}",
+        type=_str_to_bool,
+        default=default,
+        metavar="{true,false}",
+        help=f"{help} (default: {str(default).lower()})",
+    )
+
+
+def _decode_options_from_args(args: argparse.Namespace) -> dict[str, bool]:
+    return {
+        "keep_char_cells": args.keep_char_cells,
+        "keep_shapes": args.keep_shapes,
+        "keep_bitmaps": args.keep_bitmaps,
+        "create_word_cells": args.create_word_cells,
+        "create_line_cells": args.create_line_cells,
+    }
+
+
+def _materialization_options_from_args(args: argparse.Namespace) -> dict[str, bool]:
+    return {
+        "materialize_char_cells": args.materialize_char_cells,
+        "materialize_word_cells": args.materialize_word_cells,
+        "materialize_line_cells": args.materialize_line_cells,
+        "materialize_shapes": args.materialize_shapes,
+        "materialize_bitmaps": args.materialize_bitmaps,
+        "materialize_bitmap_bytes": args.materialize_bitmap_bytes,
+    }
+
+
+def _materializes_page_data(materialization_options: dict[str, bool]) -> bool:
+    return any(
+        materialization_options[name]
+        for name in (
+            "materialize_char_cells",
+            "materialize_word_cells",
+            "materialize_line_cells",
+            "materialize_shapes",
+            "materialize_bitmaps",
+        )
+    )
+
+
+def _decode_config(decode_options: dict[str, bool]):
     from docling_parse.pdf_parsers import DecodePageConfig  # type: ignore[import]
 
     c = DecodePageConfig()
-    c.keep_char_cells = True
-    c.keep_shapes = False
-    # c.keep_bitmaps = True
-    c.keep_bitmaps = False
-    c.materialize_bitmap_bytes = False
-    c.create_word_cells = False
-    # c.create_line_cells = True
-    c.create_line_cells = False
+    c.keep_char_cells = decode_options["keep_char_cells"]
+    c.keep_shapes = decode_options["keep_shapes"]
+    c.keep_bitmaps = decode_options["keep_bitmaps"]
+    c.create_word_cells = decode_options["create_word_cells"]
+    c.create_line_cells = decode_options["create_line_cells"]
     return c
+
+
+def _materialization_config(materialization_options: dict[str, bool]):
+    from docling_parse.pdf_parser import PageMaterializationConfig
+
+    return PageMaterializationConfig(**materialization_options)
 
 
 def _config_rows(config, fields: List[str]) -> List[List[str]]:
     return [[field, getattr(config, field)] for field in fields]
 
 
-def _print_run_configs(*, render: bool, scale: float) -> None:
+def _print_run_configs(
+    *,
+    render: bool,
+    scale: float,
+    decode_options: dict[str, bool],
+    materialization_options: dict[str, bool],
+) -> None:
     from docling_parse.pdf_parsers import RenderConfig  # type: ignore[import]
 
-    decode_config = _decode_config()
+    decode_config = _decode_config(decode_options)
     decode_fields = [
         "page_boundary",
         "do_sanitization",
@@ -188,12 +263,29 @@ def _print_run_configs(*, render: bool, scale: float) -> None:
         "release_native_memory_every_n_pages",
         "keep_glyphs",
         "keep_qpdf_warnings",
-        "materialize_bitmap_bytes",
     ]
     print("Decode config:")
     print(
         tabulate(
             _config_rows(decode_config, decode_fields),
+            headers=["parameter", "value"],
+        )
+    )
+    print()
+
+    materialization_config = _materialization_config(materialization_options)
+    materialization_fields = [
+        "materialize_char_cells",
+        "materialize_word_cells",
+        "materialize_line_cells",
+        "materialize_shapes",
+        "materialize_bitmaps",
+        "materialize_bitmap_bytes",
+    ]
+    print("Materialization config:")
+    print(
+        tabulate(
+            _config_rows(materialization_config, materialization_fields),
             headers=["parameter", "value"],
         )
     )
@@ -274,12 +366,17 @@ def _timing_csv_row(
 # -------- Baselines --------
 
 
-def run_sequential_parse(pdf_schedule: List[Tuple[Path, List[int] | None]]) -> float:
+def run_sequential_parse(
+    pdf_schedule: List[Tuple[Path, List[int] | None]],
+    decode_options: dict[str, bool],
+    materialization_options: dict[str, bool],
+) -> float:
     """Sequential DoclingPdfParser decode (no render). Returns wall time in seconds."""
     from docling_parse.pdf_parser import DoclingPdfParser
 
-    config = _decode_config()
+    config = _decode_config(decode_options)
     config.do_thread_safe = False  # no need for isolated QPDF per page
+    materialization_config = _materialization_config(materialization_options)
 
     parser = DoclingPdfParser(loglevel="fatal")
 
@@ -290,11 +387,18 @@ def run_sequential_parse(pdf_schedule: List[Tuple[Path, List[int] | None]]) -> f
         try:
             doc = parser.load(str(pdf_path), lazy=True)
             if page_numbers is None:
-                for _, _ in doc.iterate_pages(config=config):
+                for _, _ in doc.iterate_pages(
+                    config=config,
+                    materialization_config=materialization_config,
+                ):
                     pass
             else:
                 for page_number in page_numbers:
-                    _ = doc.get_page(page_number, config=config)
+                    _ = doc.get_page(
+                        page_number,
+                        config=config,
+                        materialization_config=materialization_config,
+                    )
             doc.unload()
         except Exception as e:
             print(f"  sequential error on {pdf_path}: {e}")
@@ -532,17 +636,22 @@ def run_threaded(
     *,
     render: bool,
     scale: float,
+    decode_options: dict[str, bool],
+    materialization_options: dict[str, bool],
     enable_timing: bool,
     timing_csv: Path,
 ) -> float:
     """Run DoclingThreadedPdfParser; render=True enables rasterisation."""
     from docling_parse.pdf_parser import (
         DoclingThreadedPdfParser,
+        PageMaterializationConfig,
         ThreadedPdfParserConfig,
     )
     from docling_parse.pdf_parsers import RenderConfig  # type: ignore[import]
 
-    decode_config = _decode_config()
+    decode_config = _decode_config(decode_options)
+    materialization_config = PageMaterializationConfig(**materialization_options)
+    materialize_page = _materializes_page_data(materialization_options)
 
     render_config = None
     if render:
@@ -554,6 +663,7 @@ def run_threaded(
         threads=num_threads,
         max_concurrent_results=max_concurrent_results,
         render_config=render_config,
+        page_materialization_config=materialization_config,
     )
 
     parser = DoclingThreadedPdfParser(
@@ -591,7 +701,8 @@ def run_threaded(
                 if result.success:
                     if render:
                         img: PILImage = result.get_image()
-                        page: SegmentedPdfPage = result.get_page()
+                        if materialize_page:
+                            page: SegmentedPdfPage = result.get_page()
 
                         """
                         assert len(page.shapes)==0, "len(page.shapes)==0"
@@ -601,7 +712,8 @@ def run_threaded(
                             assert br.image==None
                         """
                     else:
-                        page = result.get_page()
+                        if materialize_page:
+                            page = result.get_page()
                 else:
                     errors += 1
 
@@ -700,6 +812,8 @@ def _run_one_mode(
     *,
     render: bool,
     scale: float,
+    decode_options: dict[str, bool],
+    materialization_options: dict[str, bool],
     enable_timing: bool,
     timing_csv: Path,
 ) -> Tuple[List[Tuple[str, float]], List[Tuple[int, float]]]:
@@ -709,7 +823,11 @@ def _run_one_mode(
     # (DoclingPdfParser has no rendering path).
     if not render:
         print("Running sequential (DoclingPdfParser) ...")
-        t = run_sequential_parse(pdf_schedule)
+        t = run_sequential_parse(
+            pdf_schedule,
+            decode_options,
+            materialization_options,
+        )
         print(f"  sequential: {t:.3f}s")
         baselines.append(("sequential docling (1t)", t))
         print()
@@ -734,6 +852,8 @@ def _run_one_mode(
             total_pages=total_pages,
             render=render,
             scale=scale,
+            decode_options=decode_options,
+            materialization_options=materialization_options,
             enable_timing=enable_timing,
             timing_csv=timing_csv,
         )
@@ -786,6 +906,72 @@ def main(argv: List[str]) -> int:
         "--scale", type=float, default=1.0,
         help="Render scale for rendering (default: 1.0; render/both modes only)",
     )
+    _add_bool_value_arg(
+        ap,
+        "keep-char-cells",
+        default=True,
+        help="Populate character cells and emit text render instructions",
+    )
+    _add_bool_value_arg(
+        ap,
+        "create-word-cells",
+        default=False,
+        help="Create word cells during decoding",
+    )
+    _add_bool_value_arg(
+        ap,
+        "create-line-cells",
+        default=False,
+        help="Create line cells during decoding",
+    )
+    _add_bool_value_arg(
+        ap,
+        "keep-shapes",
+        default=False,
+        help="Keep vector shape cells",
+    )
+    _add_bool_value_arg(
+        ap,
+        "keep-bitmaps",
+        default=False,
+        help="Keep bitmap resources/cells",
+    )
+    _add_bool_value_arg(
+        ap,
+        "materialize-char-cells",
+        default=False,
+        help="Materialize character cells into SegmentedPdfPage",
+    )
+    _add_bool_value_arg(
+        ap,
+        "materialize-word-cells",
+        default=False,
+        help="Materialize word cells into SegmentedPdfPage",
+    )
+    _add_bool_value_arg(
+        ap,
+        "materialize-line-cells",
+        default=False,
+        help="Materialize line cells into SegmentedPdfPage",
+    )
+    _add_bool_value_arg(
+        ap,
+        "materialize-shapes",
+        default=False,
+        help="Materialize vector shapes into SegmentedPdfPage",
+    )
+    _add_bool_value_arg(
+        ap,
+        "materialize-bitmaps",
+        default=False,
+        help="Materialize bitmap locations into SegmentedPdfPage",
+    )
+    _add_bool_value_arg(
+        ap,
+        "materialize-bitmap-bytes",
+        default=False,
+        help="Materialize bitmap image bytes when bitmap locations are materialized",
+    )
     ap.add_argument(
         "--other",
         type=str,
@@ -814,6 +1000,8 @@ def main(argv: List[str]) -> int:
     # Validate CLI args before doing any I/O (HF download, page counting).
     thread_counts = [int(x.strip()) for x in args.threads.split(",")]
     other_backends = parse_other_arg(args.other)
+    decode_options = _decode_options_from_args(args)
+    materialization_options = _materialization_options_from_args(args)
 
     pdfs = resolve_pdf_inputs(args.input, recursive=args.recursive)
     if not pdfs:
@@ -833,7 +1021,12 @@ def main(argv: List[str]) -> int:
     if args.mode in ("render", "both"):
         print(f"Render scale: {args.scale}")
     print()
-    _print_run_configs(render=args.mode in ("render", "both"), scale=args.scale)
+    _print_run_configs(
+        render=args.mode in ("render", "both"),
+        scale=args.scale,
+        decode_options=decode_options,
+        materialization_options=materialization_options,
+    )
     print()
 
     modes_to_run = ["parse", "render"] if args.mode == "both" else [args.mode]
@@ -849,6 +1042,8 @@ def main(argv: List[str]) -> int:
             other_backends,
             render=render,
             scale=args.scale,
+            decode_options=decode_options,
+            materialization_options=materialization_options,
             enable_timing=args.enable_timing,
             timing_csv=args.timing_csv,
         )
