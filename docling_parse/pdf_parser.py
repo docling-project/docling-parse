@@ -746,7 +746,9 @@ class PdfDocument:
         if config is None:
             config = self._default_config()
         if materialization_config is None:
-            materialization_config = PageMaterializationConfig.from_decode_config(config)
+            materialization_config = PageMaterializationConfig.from_decode_config(
+                config
+            )
         return self._get_page_typed(
             page_no, config=config, materialization_config=materialization_config
         )
@@ -775,7 +777,9 @@ class PdfDocument:
         if config is None:
             config = self._default_config()
         if materialization_config is None:
-            materialization_config = PageMaterializationConfig.from_decode_config(config)
+            materialization_config = PageMaterializationConfig.from_decode_config(
+                config
+            )
 
         if not (1 <= page_no <= self.number_of_pages()):
             raise ValueError(
@@ -824,7 +828,9 @@ class PdfDocument:
         if config is None:
             config = self._default_config()
         if materialization_config is None:
-            materialization_config = PageMaterializationConfig.from_decode_config(config)
+            materialization_config = PageMaterializationConfig.from_decode_config(
+                config
+            )
         for page_no in range(1, self.number_of_pages() + 1):
             self.get_page(
                 page_no,
