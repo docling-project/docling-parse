@@ -247,8 +247,8 @@ namespace
         std::chrono::duration<double>(clock_type::now() - start_).count();
       const double rate = elapsed > 0.0
         ? static_cast<double>(current) / elapsed : 0.0;
-      const double eta = (current > 0 and total_ > current)
-        ? elapsed * (static_cast<double>(total_ - current) / static_cast<double>(current))
+      const double total = (current > 0 and total_ > current)
+        ? elapsed * (static_cast<double>(total_) / static_cast<double>(current))
         : 0.0;
 
       std::cerr << "\r" << label_ << ": [";
@@ -261,8 +261,8 @@ namespace
                 << std::fixed << std::setprecision(1) << (fraction * 100.0)
                 << "% "
                 << std::fixed << std::setprecision(1) << rate << "/s "
-                << "elapsed " << format_duration(elapsed)
-                << " eta " << format_duration(eta)
+                << "elapsed: " << format_duration(elapsed) << " [sec]"
+                << " total: " << format_duration(total) << " [sec]"
                 << "      " << std::flush;
     }
 

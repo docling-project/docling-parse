@@ -66,6 +66,8 @@ namespace pdflib
     render_config config_;
 
     mutable BLImage    image_;  // internal canvas (PRGB32 format)
+    mutable BLContext  context_;
+    mutable bool       context_active_ = false;
     std::array<int, 3> shape_;  // {height, width, 4}
     double scale_x_ = 1.0;     // pdf-to-canvas scale along x
     double scale_y_ = 1.0;     // pdf-to-canvas scale along y
@@ -81,6 +83,9 @@ namespace pdflib
 
     // Cache: cache_key → loaded BLFontFace.
     std::unordered_map<std::string, BLFontFace> font_cache_;
+
+    BLContext& page_context();
+    void finish_page_context() const;
 
     // Convert PDF coordinates (origin at crop_bbox bottom-left, y-up) to
     // canvas coordinates (origin top-left, y-down), applying scale.
@@ -443,12 +448,55 @@ namespace pdflib
     : config_(config), shape_({0, 0, 4})
   {}
 
+  inline BLContext& renderer<BLEND2D>::page_context()
+  {
+    if (context_active_)
+      {
+        return context_;
+      }
+
+    if (shape_[0] == 0 or shape_[1] == 0)
+      {
+        throw std::runtime_error("renderer<BLEND2D>::page_context: canvas is empty");
+      }
+
+    const BLResult err = context_.begin(image_);
+    if (err != BL_SUCCESS)
+      {
+        throw std::runtime_error(
+          "renderer<BLEND2D>::page_context: failed to begin Blend2D context "
+          "(BLResult=" + std::to_string(err) + ")");
+      }
+
+    context_active_ = true;
+    return context_;
+  }
+
+  inline void renderer<BLEND2D>::finish_page_context() const
+  {
+    if (not context_active_)
+      {
+        return;
+      }
+
+    const BLResult err = context_.end();
+    context_active_ = false;
+    if (err != BL_SUCCESS)
+      {
+        throw std::runtime_error(
+          "renderer<BLEND2D>::finish_page_context: failed to end Blend2D context "
+          "(BLResult=" + std::to_string(err) + ")");
+      }
+  }
+
   // ---------------------------------------------------------------------------
   // set_size
   // ---------------------------------------------------------------------------
 
   inline void renderer<BLEND2D>::set_size(size_instruction& instr)
   {
+    finish_page_context();
+
     const auto& bbox = instr.crop_bbox;
     const int pdf_w  = bbox[2] - bbox[0];
     const int pdf_h  = bbox[3] - bbox[1];
@@ -473,11 +521,19 @@ namespace pdflib
     image_.create(width, height, BL_FORMAT_PRGB32);
 
     // Initialise canvas to opaque white.
-    BLContext ctx(image_);
-    ctx.set_comp_op(BL_COMP_OP_SRC_COPY);
-    ctx.set_fill_style(BLRgba32(0xFFFFFFFFu));
-    ctx.fill_all();
-    ctx.end();
+    const BLResult ctx_res = context_.begin(image_);
+    if (ctx_res != BL_SUCCESS)
+      {
+        throw std::runtime_error(
+          "renderer<BLEND2D>::set_size: failed to begin Blend2D context "
+          "(BLResult=" + std::to_string(ctx_res) + ")");
+      }
+    context_active_ = true;
+
+    context_.set_comp_op(BL_COMP_OP_SRC_COPY);
+    context_.set_fill_style(BLRgba32(0xFFFFFFFFu));
+    context_.fill_all();
+    context_.set_comp_op(BL_COMP_OP_SRC_OVER);
   }
 
   // ---------------------------------------------------------------------------
@@ -627,7 +683,7 @@ namespace pdflib
     bbox_path.line_to(x3, y3);
     bbox_path.close();
 
-    BLContext ctx(image_);
+    BLContext& ctx = page_context();
 
     LOG_S(INFO) << "writing text: `" << instr.get_text() << "`, size: " << size << "";
     if (face.is_valid() and size > 0.5)
@@ -655,8 +711,6 @@ namespace pdflib
         ctx.set_stroke_width(0.5);
         ctx.stroke_path(bbox_path);
       }
-
-    ctx.end();
   }
 
   // ---------------------------------------------------------------------------
@@ -723,7 +777,7 @@ namespace pdflib
                 << " font_name=`" << instr.get_font_name() << "`"
                 << " base_font=`" << instr.get_base_font() << "`";
 
-    BLContext ctx(image_);
+    BLContext& ctx = page_context();
 
     if (face.is_valid() and size > 0.5)
       {
@@ -800,8 +854,6 @@ namespace pdflib
         ctx.set_stroke_width(0.5);
         ctx.stroke_path(bbox_path);
       }
-
-    ctx.end();
   }
 
   // ---------------------------------------------------------------------------
@@ -867,9 +919,7 @@ namespace pdflib
                 << " font_name=`" << instr.get_font_name() << "`"
                 << " base_font=`" << instr.get_base_font() << "`";
 
-    LOG_S(INFO) << "render_text: before BLContext construction";
-    BLContext ctx(image_);
-    LOG_S(INFO) << "render_text: after BLContext construction";
+    BLContext& ctx = page_context();
 
     auto draw_bbox_fallback = [&]()
     {
@@ -901,7 +951,6 @@ namespace pdflib
                                << " font_name=`" << instr.get_font_name() << "`"
                                << " base_font=`" << instr.get_base_font() << "`";
                 draw_bbox_fallback();
-                ctx.end();
                 return;
               }
 
@@ -931,7 +980,6 @@ namespace pdflib
                 LOG_S(WARNING) << "render_text: apply_transform failed"
                                << " (BLResult=" << transform_res << ")";
                 draw_bbox_fallback();
-                ctx.end();
                 return;
               }
             LOG_S(INFO) << "render_text: before set_fill_style";
@@ -951,7 +999,6 @@ namespace pdflib
                                << " base_font=`" << instr.get_base_font() << "`";
                 ctx.restore();
                 draw_bbox_fallback();
-                ctx.end();
                 return;
               }
             const auto* placement_data = gb.placement_data();
@@ -960,7 +1007,6 @@ namespace pdflib
                 LOG_S(WARNING) << "render_text: glyph placement data is null, using fallback";
                 ctx.restore();
                 draw_bbox_fallback();
-                ctx.end();
                 return;
               }
             BLPoint draw_origin(0.0, 0.0);
@@ -1067,7 +1113,6 @@ namespace pdflib
                                    << " (BLResult=" << translate_res << ")";
                     ctx.restore();
                     draw_bbox_fallback();
-                    ctx.end();
                     return;
                   }
                 const BLResult scale_res = ctx.scale(bbox_fit_scale);
@@ -1077,7 +1122,6 @@ namespace pdflib
                                    << " (BLResult=" << scale_res << ")";
                     ctx.restore();
                     draw_bbox_fallback();
-                    ctx.end();
                     return;
                   }
                 draw_origin.reset(0.0, 0.0);
@@ -1094,7 +1138,6 @@ namespace pdflib
                                << " (BLResult=" << text_res << ")"
                                << " text=`" << instr.get_text() << "`";
                 draw_bbox_fallback();
-                ctx.end();
                 return;
               }
 
@@ -1122,8 +1165,6 @@ namespace pdflib
         ctx.set_stroke_width(0.5);
         ctx.stroke_path(bbox_path);
       }
-
-    ctx.end();
   }
 
   // ---------------------------------------------------------------------------
@@ -1169,7 +1210,7 @@ namespace pdflib
     const auto fmt = instr.get_pixel_format();
     const auto fill_rgb = instr.get_rgb_filling();
 
-    BLContext ctx(image_);
+    BLContext& ctx = page_context();
     const bool axis_aligned = is_axis_aligned(q);
     int quarter_turns = -1;
     const bool right_angle = is_right_angle_rotation(q, quarter_turns);
@@ -1198,7 +1239,6 @@ namespace pdflib
                        << " has_data=" << (instr.has_data() ? "true" : "false")
                        << " — drawing semi-transparent yellow placeholder";
         render_bitmap_placeholder(ctx, q, axis_aligned);
-        ctx.end();
         return;
       }
 
@@ -1211,7 +1251,6 @@ namespace pdflib
                        << ") for shape " << sh << "x" << sw << "x" << sc
                        << " — drawing placeholder";
         render_bitmap_placeholder(ctx, q, axis_aligned);
-        ctx.end();
         return;
       }
 
@@ -1336,7 +1375,6 @@ namespace pdflib
                     << ", quarter_turns=" << quarter_turns << ")";
         render_bitmap_affine(ctx, src_img, q, sw, sh);
       }
-    ctx.end();
   }
 
   // ---------------------------------------------------------------------------
@@ -1359,13 +1397,12 @@ namespace pdflib
     path.line_to(canvas_x(instr.get_r_x3()), canvas_y(instr.get_r_y3()));
     path.close();
 
-    BLContext ctx(image_);
+    BLContext& ctx = page_context();
     ctx.set_fill_style(BLRgba32(0x660099FFu));   // A=40%, light blue
     ctx.fill_path(path);
     ctx.set_stroke_style(BLRgba32(0xFF0099FFu));  // A=100%, blue border
     ctx.set_stroke_width(1);
     ctx.stroke_path(path);
-    ctx.end();
   }
 
   // ---------------------------------------------------------------------------
@@ -1403,11 +1440,10 @@ namespace pdflib
       (static_cast<uint32_t>(rgb[1])  <<  8) |
        static_cast<uint32_t>(rgb[2]);
 
-    BLContext ctx(image_);
+    BLContext& ctx = page_context();
     ctx.set_stroke_style(BLRgba32(stroke_color));
     ctx.set_stroke_width(1);
     ctx.stroke_path(path);
-    ctx.end();
   }
 
   // ---------------------------------------------------------------------------
@@ -1427,6 +1463,8 @@ namespace pdflib
       {
         return std::make_shared<std::vector<uint8_t>>();
       }
+
+    finish_page_context();
 
     BLImageData img_data;
     image_.get_data(&img_data);
@@ -1468,6 +1506,8 @@ namespace pdflib
       {
         throw std::runtime_error("renderer<BLEND2D>::save: canvas is empty");
       }
+
+    finish_page_context();
 
     const BLResult err = image_.write_to_file(path.c_str());
     if (err != BL_SUCCESS)
