@@ -64,7 +64,7 @@ namespace pdflib
 
   private:
 
-    std::shared_ptr<std::string> get_thread_safe_page_buffer(int page_ind);
+    std::pair<int, std::shared_ptr<std::string> > get_thread_safe_page_buffer(int page_ind);
 
     void ensure_annots_loaded();
 
@@ -266,14 +266,26 @@ namespace pdflib
     return true;
   }
 
-  std::shared_ptr<std::string> pdf_decoder<DOCUMENT>::get_thread_safe_page_buffer(int page_ind)
+  std::pair<int, std::shared_ptr<std::string> > pdf_decoder<DOCUMENT>::get_thread_safe_page_buffer(int page_ind)
   {
+    std::pair<int, std::shared_ptr<std::string> > result(-1, nullptr);
+
+    /*
+    if(not qpdf_document.anyWarnings())
+      {
+	result.first = page_ind;
+	result.second = buffer;
+
+	return result;
+      }
+    */
+    
     // Thread-safe decoding uses standalone one-page PDF buffers.
     // Page extraction and serialization are intentionally serialized, and
     // the mutex is expected to remain held across QPDFWriter::write().
     std::lock_guard<std::mutex> lock(thread_safe_buffer_mutex);
-
-    std::shared_ptr<std::string> result = nullptr;
+    
+    //std::shared_ptr<std::string> result = nullptr;
 
     QPDFObjectHandle qpdf_page = qpdf_pages.at(page_ind);
     
@@ -300,7 +312,8 @@ namespace pdflib
       
       auto out = writer.getBufferSharedPointer();
 
-      result = std::make_shared<std::string>(reinterpret_cast<char const*>(out->getBuffer()),
+      result.first = 0;
+      result.second = std::make_shared<std::string>(reinterpret_cast<char const*>(out->getBuffer()),
 					     out->getSize());
       
       LOG_S(INFO) << "writing a pdf-page buffer in " << page_timer.get_time() << " [sec]";
@@ -312,11 +325,17 @@ namespace pdflib
   pdf_decoder<DOCUMENT>::page_decoder_ptr
   pdf_decoder<DOCUMENT>::make_thread_safe_page_decoder(int page_number)
   {
-    std::shared_ptr<std::string> page_buffer = get_thread_safe_page_buffer(page_number);
+    std::pair<int, std::shared_ptr<std::string> > result = get_thread_safe_page_buffer(page_number);
+
+    int orig_page_number = page_number;
+    int curr_page_number = result.first;
+
+    std::shared_ptr<std::string> page_buffer = result.second;
+    
     return std::make_shared<pdf_decoder<PAGE>>(page_buffer,
                                                password,
-                                               page_number,
-                                               0);
+                                               orig_page_number,
+                                               curr_page_number);
   }
   
   void pdf_decoder<DOCUMENT>::decode_document(const decode_config& config)

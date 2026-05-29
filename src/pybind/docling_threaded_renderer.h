@@ -3,7 +3,7 @@
 #ifndef PYBIND_THREADED_PDF_RENDERER_H
 #define PYBIND_THREADED_PDF_RENDERER_H
 
-#include <array>
+#include <chrono>
 #include <memory>
 #include <vector>
 
@@ -12,15 +12,6 @@
 
 namespace docling
 {
-  struct page_render_result : page_decode_result
-  {
-    // RGBA pixel data laid out as {height, width, 4} row-major top-to-bottom.
-    // Suitable for direct consumption by PIL:
-    //   Image.frombuffer("RGBA", (w, h), data, "raw", "RGBA", 0, 1)
-    std::shared_ptr<std::vector<unsigned char>> image_data;
-    std::array<int, 3> image_shape{0, 0, 4}; // {height, width, channels}
-  };
-
   class docling_threaded_renderer :
     public docling_threaded_base<docling_threaded_renderer, page_render_result>
   {
@@ -47,6 +38,8 @@ namespace docling
 
   inline void docling_threaded_renderer::worker_loop()
   {
+    using clock_type = std::chrono::steady_clock;
+
     while(true)
       {
         std::pair<std::string, int> task;
@@ -81,23 +74,42 @@ namespace docling
               {
                 auto& doc_decoder = itr->second;
 
-                auto page_decoder = doc_decoder->make_thread_safe_page_decoder(page_number);
+                auto total_start = clock_type::now();
 
+                auto stage_start = clock_type::now();
+                auto page_decoder = doc_decoder->make_thread_safe_page_decoder(page_number);
+                result.timings.make_page_decoder_s
+                  = std::chrono::duration<double>(clock_type::now() - stage_start).count();
+
+                stage_start = clock_type::now();
                 page_decoder->decode_page(config);
+                result.timings.decode_page_s
+                  = std::chrono::duration<double>(clock_type::now() - stage_start).count();
 
                 if(config.create_word_cells)
                   {
+                    stage_start = clock_type::now();
                     page_decoder->create_word_cells(config);
+                    result.timings.create_word_cells_s
+                      = std::chrono::duration<double>(clock_type::now() - stage_start).count();
                   }
 
                 if(config.create_line_cells)
                   {
+                    stage_start = clock_type::now();
                     page_decoder->create_line_cells(config);
+                    result.timings.create_line_cells_s
+                      = std::chrono::duration<double>(clock_type::now() - stage_start).count();
                   }
 
+                stage_start = clock_type::now();
                 pdflib::renderer<pdflib::BLEND2D> rnd(render_cfg);
                 page_decoder->get_instructions().iterate_over_instructions(rnd);
+                result.timings.render_page_s
+                  = std::chrono::duration<double>(clock_type::now() - stage_start).count();
 
+                result.timings.total_s
+                  = std::chrono::duration<double>(clock_type::now() - total_start).count();
                 result.success = true;
                 result.page_decoder = page_decoder;
                 result.image_data   = rnd.get_canvas();

@@ -495,6 +495,11 @@ namespace pdflib
     const bool need_base_text_cells =
       config.keep_char_cells or config.create_word_cells or config.create_line_cells;
 
+    if(not need_base_text_cells)
+      {
+	return;
+      }
+    
     LOG_S(INFO) << __FUNCTION__ << " with text='" << text << "', width=" << width << " from base-font: " << font.get_base_font() << ", font-key: " << font.get_key();
 
     bool left_to_right = (not utils::string::is_right_to_left(text));

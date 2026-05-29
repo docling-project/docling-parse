@@ -115,6 +115,8 @@ def test_render_single_document():
         assert image.width > 0
         assert image.height > 0
         assert result.get_page().dimension.rect is not None
+        assert result.timings.total_s > 0
+        assert result.timings.render_page_s >= 0
 
         count += 1
 

@@ -183,6 +183,40 @@ class Timings(BaseModel):
         return get_decode_page_timing_keys()
 
 
+class PageDecodeTimings(BaseModel):
+    """Top-level timing breakdown for a threaded page decode task."""
+
+    model_config = ConfigDict(validate_assignment=True)
+
+    make_page_decoder_s: float = 0.0
+    decode_page_s: float = 0.0
+    create_word_cells_s: float = 0.0
+    create_line_cells_s: float = 0.0
+    total_s: float = 0.0
+
+
+class PageRenderTimings(PageDecodeTimings):
+    """Top-level timing breakdown for a threaded page render task."""
+
+    render_page_s: float = 0.0
+
+
+def _page_timings_from_raw(raw_timings) -> PageDecodeTimings | PageRenderTimings:
+    data = {
+        "make_page_decoder_s": raw_timings.make_page_decoder_s,
+        "decode_page_s": raw_timings.decode_page_s,
+        "create_word_cells_s": raw_timings.create_word_cells_s,
+        "create_line_cells_s": raw_timings.create_line_cells_s,
+        "total_s": raw_timings.total_s,
+    }
+    if hasattr(raw_timings, "render_page_s"):
+        return PageRenderTimings(
+            **data,
+            render_page_s=raw_timings.render_page_s,
+        )
+    return PageDecodeTimings(**data)
+
+
 def _to_bounding_rectangle(
     bbox: tuple[float, float, float, float],
 ) -> BoundingRectangle:
@@ -961,11 +995,13 @@ class PageParseResult:
         if self.success:
             self._page_decoder, _ = raw_result.get()
             self._timings = _timings_from_decoder(self._page_decoder)
+            self.timings = _page_timings_from_raw(raw_result.timings)
             self.page_width, self.page_height = _page_size_from_decoder(
                 self._page_decoder, boundary_type
             )
         else:
             self._timings = Timings()
+            self.timings = _page_timings_from_raw(raw_result.timings)
             self.page_width = 0.0
             self.page_height = 0.0
 

@@ -28,17 +28,25 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import csv
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import List, Tuple
 
+from docling_core.types.doc.page import SegmentedPdfPage
+from PIL import Image as PILImage
 from tabulate import tabulate
 from tqdm import tqdm
 
-
 DEFAULT_HF_REPO_ID = "docling-project/performance-dataset-bo767"
 HF_PDF_SUBDIR = "pdf"
+
+
+def _default_timing_csv_path() -> Path:
+    timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+    return Path(f"timing-{timestamp}.csv")
 
 
 # -------- Input resolution --------
@@ -79,20 +87,60 @@ def resolve_pdf_inputs(input_str: str, recursive: bool = False) -> List[Path]:
     return find_pdfs(pdf_dir, recursive=True)
 
 
-def count_pages(pdf_paths: List[Path]) -> int:
-    """Count total pages across all PDFs using DoclingPdfParser."""
+def page_counts(pdf_paths: List[Path]) -> List[Tuple[Path, int]]:
+    """Count pages per PDF using DoclingPdfParser."""
     from docling_parse.pdf_parser import DoclingPdfParser
 
     parser = DoclingPdfParser(loglevel="fatal")
-    total = 0
+    counts: List[Tuple[Path, int]] = []
     for pdf_path in tqdm(pdf_paths, desc="counting pages", unit="doc"):
         try:
             d = parser.load(str(pdf_path), lazy=True)
-            total += d.number_of_pages()
+            counts.append((pdf_path, d.number_of_pages()))
             d.unload()
         except Exception:
             pass
-    return total
+    return counts
+
+
+def apply_max_pages(
+    pdf_paths: List[Path], max_pages: int | None
+) -> Tuple[List[Tuple[Path, List[int] | None]], int]:
+    """Apply an exact total-page cap across PDFs in input order.
+
+    Returns a schedule of `(pdf_path, page_numbers)` where `page_numbers` is
+    `None` for all pages in a document, or an explicit 1-indexed subset for the
+    final truncated document. The second return value is the total scheduled
+    page count.
+    """
+    counts = page_counts(pdf_paths)
+    if max_pages is None:
+        return [(pdf_path, None) for pdf_path, _ in counts], sum(
+            count for _, count in counts
+        )
+
+    if max_pages <= 0:
+        return [], 0
+
+    schedule: List[Tuple[Path, List[int] | None]] = []
+    remaining = max_pages
+    total = 0
+
+    for pdf_path, count in counts:
+        if remaining <= 0:
+            break
+        if count <= remaining:
+            schedule.append((pdf_path, None))
+            remaining -= count
+            total += count
+        else:
+            page_numbers = list(range(1, remaining + 1))
+            schedule.append((pdf_path, page_numbers))
+            total += remaining
+            remaining = 0
+            break
+
+    return schedule, total
 
 
 # -------- Decode config helper --------
@@ -102,19 +150,131 @@ def _decode_config():
     from docling_parse.pdf_parsers import DecodePageConfig  # type: ignore[import]
 
     c = DecodePageConfig()
-    c.keep_char_cells = False
+    c.keep_char_cells = True
     c.keep_shapes = False
-    c.keep_bitmaps = True
+    # c.keep_bitmaps = True
+    c.keep_bitmaps = False
     c.materialize_bitmap_bytes = False
     c.create_word_cells = False
-    c.create_line_cells = True
+    # c.create_line_cells = True
+    c.create_line_cells = False
     return c
+
+
+def _config_rows(config, fields: List[str]) -> List[List[str]]:
+    return [[field, getattr(config, field)] for field in fields]
+
+
+def _print_run_configs(*, render: bool, scale: float) -> None:
+    from docling_parse.pdf_parsers import RenderConfig  # type: ignore[import]
+
+    decode_config = _decode_config()
+    decode_fields = [
+        "page_boundary",
+        "do_sanitization",
+        "keep_char_cells",
+        "keep_shapes",
+        "keep_bitmaps",
+        "max_num_lines",
+        "max_num_bitmaps",
+        "create_word_cells",
+        "create_line_cells",
+        "enforce_same_font",
+        "horizontal_cell_tolerance",
+        "word_space_width_factor_for_merge",
+        "line_space_width_factor_for_merge",
+        "line_space_width_factor_for_merge_with_space",
+        "do_thread_safe",
+        "release_native_memory_every_n_pages",
+        "keep_glyphs",
+        "keep_qpdf_warnings",
+        "materialize_bitmap_bytes",
+    ]
+    print("Decode config:")
+    print(
+        tabulate(
+            _config_rows(decode_config, decode_fields),
+            headers=["parameter", "value"],
+        )
+    )
+    print()
+
+    print("Render config:")
+    if not render:
+        print(tabulate([["enabled", False]], headers=["parameter", "value"]))
+        return
+
+    render_config = RenderConfig()
+    render_config.scale = scale
+    render_fields = [
+        "render_text",
+        "draw_text_bbox",
+        "draw_text_basepoint",
+        "fit_glyph_bbox_to_target",
+        "resolve_fonts",
+        "font_similarity_cutoff",
+        "scale",
+        "canvas_width",
+        "canvas_height",
+    ]
+    print(
+        tabulate(
+            _config_rows(render_config, render_fields),
+            headers=["parameter", "value"],
+        )
+    )
+
+
+def _timing_csv_fieldnames() -> List[str]:
+    return [
+        "mode",
+        "threads",
+        "render",
+        "doc_key",
+        "page_number",
+        "success",
+        "timing_total_s",
+        "timing_make_page_decoder_s",
+        "timing_decode_page_s",
+        "timing_create_word_cells_s",
+        "timing_create_line_cells_s",
+        "timing_render_page_s",
+        "error_message",
+    ]
+
+
+def _timing_csv_row(
+    *, mode: str, num_threads: int, render: bool, result
+) -> dict[str, object]:
+    row: dict[str, object] = {
+        "mode": mode,
+        "threads": num_threads,
+        "render": render,
+        "doc_key": result.doc_key,
+        "page_number": result.page_number,
+        "success": result.success,
+        "error_message": result.error_message,
+    }
+    timing_keys = _timing_csv_fieldnames()[7:-1]
+    if result.success:
+        timings = result.timings
+        row["timing_total_s"] = timings.total_s
+        row["timing_make_page_decoder_s"] = timings.make_page_decoder_s
+        row["timing_decode_page_s"] = timings.decode_page_s
+        row["timing_create_word_cells_s"] = timings.create_word_cells_s
+        row["timing_create_line_cells_s"] = timings.create_line_cells_s
+        row["timing_render_page_s"] = getattr(timings, "render_page_s", 0.0)
+    else:
+        row["timing_total_s"] = 0.0
+        for key in timing_keys:
+            row[key] = 0.0
+    return row
 
 
 # -------- Baselines --------
 
 
-def run_sequential_parse(pdf_paths: List[Path]) -> float:
+def run_sequential_parse(pdf_schedule: List[Tuple[Path, List[int] | None]]) -> float:
     """Sequential DoclingPdfParser decode (no render). Returns wall time in seconds."""
     from docling_parse.pdf_parser import DoclingPdfParser
 
@@ -124,18 +284,26 @@ def run_sequential_parse(pdf_paths: List[Path]) -> float:
     parser = DoclingPdfParser(loglevel="fatal")
 
     t0 = time.perf_counter()
-    for pdf_path in tqdm(pdf_paths, desc="  sequential parse", unit="doc", leave=False):
+    for pdf_path, page_numbers in tqdm(
+        pdf_schedule, desc="  sequential parse", unit="doc", leave=False
+    ):
         try:
             doc = parser.load(str(pdf_path), lazy=True)
-            for _, _ in doc.iterate_pages(config=config):
-                pass
+            if page_numbers is None:
+                for _, _ in doc.iterate_pages(config=config):
+                    pass
+            else:
+                for page_number in page_numbers:
+                    _ = doc.get_page(page_number, config=config)
             doc.unload()
         except Exception as e:
             print(f"  sequential error on {pdf_path}: {e}")
     return time.perf_counter() - t0
 
 
-def run_pypdfium_parse(pdf_paths: List[Path], total_pages: int) -> float:
+def run_pypdfium_parse(
+    pdf_schedule: List[Tuple[Path, List[int] | None]], total_pages: int
+) -> float:
     """Single-threaded pypdfium2 text extraction."""
     try:
         import pypdfium2 as pdfium  # type: ignore
@@ -146,7 +314,7 @@ def run_pypdfium_parse(pdf_paths: List[Path], total_pages: int) -> float:
     t0 = time.perf_counter()
     errors = 0
     with tqdm(total=total_pages, desc="  pypdfium2-parse", unit="page") as pbar:
-        for pdf_path in pdf_paths:
+        for pdf_path, page_numbers in pdf_schedule:
             try:
                 doc = pdfium.PdfDocument(str(pdf_path))
             except Exception as e:
@@ -154,7 +322,12 @@ def run_pypdfium_parse(pdf_paths: List[Path], total_pages: int) -> float:
                 errors += 1
                 continue
             try:
-                for i in range(len(doc)):
+                pages = (
+                    range(len(doc))
+                    if page_numbers is None
+                    else (page_number - 1 for page_number in page_numbers)
+                )
+                for i in pages:
                     try:
                         page = doc[i]
                         text_page = page.get_textpage()
@@ -177,7 +350,9 @@ def run_pypdfium_parse(pdf_paths: List[Path], total_pages: int) -> float:
     return time.perf_counter() - t0
 
 
-def run_pypdfium_render(pdf_paths: List[Path], total_pages: int) -> float:
+def run_pypdfium_render(
+    pdf_schedule: List[Tuple[Path, List[int] | None]], total_pages: int
+) -> float:
     """Single-threaded pypdfium2: text extract + scale=2 render to PIL."""
     try:
         import pypdfium2 as pdfium  # type: ignore
@@ -188,7 +363,7 @@ def run_pypdfium_render(pdf_paths: List[Path], total_pages: int) -> float:
     t0 = time.perf_counter()
     errors = 0
     with tqdm(total=total_pages, desc="  pypdfium2-render", unit="page") as pbar:
-        for pdf_path in pdf_paths:
+        for pdf_path, page_numbers in pdf_schedule:
             try:
                 doc = pdfium.PdfDocument(str(pdf_path))
             except Exception as e:
@@ -196,7 +371,12 @@ def run_pypdfium_render(pdf_paths: List[Path], total_pages: int) -> float:
                 errors += 1
                 continue
             try:
-                for i in range(len(doc)):
+                pages = (
+                    range(len(doc))
+                    if page_numbers is None
+                    else (page_number - 1 for page_number in page_numbers)
+                )
+                for i in pages:
                     try:
                         page = doc[i]
                         text_page = page.get_textpage()
@@ -222,7 +402,9 @@ def run_pypdfium_render(pdf_paths: List[Path], total_pages: int) -> float:
     return time.perf_counter() - t0
 
 
-def run_pymupdf_parse(pdf_paths: List[Path], total_pages: int) -> float:
+def run_pymupdf_parse(
+    pdf_schedule: List[Tuple[Path, List[int] | None]], total_pages: int
+) -> float:
     """Single-threaded pymupdf text extraction."""
     try:
         import fitz  # PyMuPDF
@@ -240,7 +422,7 @@ def run_pymupdf_parse(pdf_paths: List[Path], total_pages: int) -> float:
     t0 = time.perf_counter()
     errors = 0
     with tqdm(total=total_pages, desc="  pymupdf-parse", unit="page") as pbar:
-        for pdf_path in pdf_paths:
+        for pdf_path, page_numbers in pdf_schedule:
             try:
                 doc = fitz.open(str(pdf_path))
             except Exception as e:
@@ -248,7 +430,8 @@ def run_pymupdf_parse(pdf_paths: List[Path], total_pages: int) -> float:
                 errors += 1
                 continue
             try:
-                for page in doc:
+                pages = doc if page_numbers is None else (doc[page_number - 1] for page_number in page_numbers)
+                for page in pages:
                     try:
                         _ = page.get_text("text")
                     except Exception as e:
@@ -265,7 +448,9 @@ def run_pymupdf_parse(pdf_paths: List[Path], total_pages: int) -> float:
     return time.perf_counter() - t0
 
 
-def run_pymupdf_render(pdf_paths: List[Path], total_pages: int) -> float:
+def run_pymupdf_render(
+    pdf_schedule: List[Tuple[Path, List[int] | None]], total_pages: int
+) -> float:
     """Single-threaded pymupdf: text extract + scale=2 render to PIL."""
     try:
         import fitz  # PyMuPDF
@@ -282,7 +467,7 @@ def run_pymupdf_render(pdf_paths: List[Path], total_pages: int) -> float:
     t0 = time.perf_counter()
     errors = 0
     with tqdm(total=total_pages, desc="  pymupdf-render", unit="page") as pbar:
-        for pdf_path in pdf_paths:
+        for pdf_path, page_numbers in pdf_schedule:
             try:
                 doc = fitz.open(str(pdf_path))
             except Exception as e:
@@ -290,7 +475,8 @@ def run_pymupdf_render(pdf_paths: List[Path], total_pages: int) -> float:
                 errors += 1
                 continue
             try:
-                for page in doc:
+                pages = doc if page_numbers is None else (doc[page_number - 1] for page_number in page_numbers)
+                for page in pages:
                     try:
                         _ = page.get_text("text")
                         pix = page.get_pixmap(matrix=matrix)
@@ -339,13 +525,15 @@ def parse_other_arg(arg: str) -> List[str]:
 
 
 def run_threaded(
-    pdf_paths: List[Path],
+    pdf_schedule: List[Tuple[Path, List[int] | None]],
     num_threads: int,
     max_concurrent_results: int,
     total_pages: int,
     *,
     render: bool,
     scale: float,
+    enable_timing: bool,
+    timing_csv: Path,
 ) -> float:
     """Run DoclingThreadedPdfParser; render=True enables rasterisation."""
     from docling_parse.pdf_parser import (
@@ -373,26 +561,63 @@ def run_threaded(
         decode_config=decode_config,
     )
 
-    for pdf_path in tqdm(pdf_paths, desc="  loading", unit="doc", leave=False):
+    for pdf_path, page_numbers in tqdm(
+        pdf_schedule, desc="  loading", unit="doc", leave=False
+    ):
         try:
-            parser.load(str(pdf_path))
+            parser.load(str(pdf_path), page_numbers=page_numbers)
         except Exception as e:
             print(f"  threaded load error on {pdf_path}: {e}")
 
     desc = "  rendering" if render else "  parsing"
+    mode = "render" if render else "parse"
     t0 = time.perf_counter()
     errors = 0
-    with tqdm(total=total_pages, desc=desc, unit="page") as pbar:
-        for result in parser.iterate_results():
-            if result.success:
-                if render:
-                    _ = result.get_image()
-                    #_ = result.get_page()
+    timing_handle = None
+    timing_writer = None
+    try:
+        if enable_timing:
+            timing_csv.parent.mkdir(parents=True, exist_ok=True)
+            timing_handle = timing_csv.open("a", newline="", encoding="utf-8")
+            timing_writer = csv.DictWriter(
+                timing_handle,
+                fieldnames=_timing_csv_fieldnames(),
+            )
+            if timing_handle.tell() == 0:
+                timing_writer.writeheader()
+
+        with tqdm(total=total_pages, desc=desc, unit="page") as pbar:
+            for result in parser.iterate_results():
+                if result.success:
+                    if render:
+                        img: PILImage = result.get_image()
+                        page: SegmentedPdfPage = result.get_page()
+
+                        """
+                        assert len(page.shapes)==0, "len(page.shapes)==0"
+                        assert len(page.char_cells)==0, "len(page.char_cells)==0"
+
+                        for br in page.bitmap_resources:
+                            assert br.image==None
+                        """
+                    else:
+                        page = result.get_page()
                 else:
-                    _ = result.get_page()
-            else:
-                errors += 1
-            pbar.update(1)
+                    errors += 1
+
+                if timing_writer is not None:
+                    timing_writer.writerow(
+                        _timing_csv_row(
+                            mode=mode,
+                            num_threads=num_threads,
+                            render=render,
+                            result=result,
+                        )
+                    )
+                pbar.update(1)
+    finally:
+        if timing_handle is not None:
+            timing_handle.close()
     t1 = time.perf_counter()
     if errors:
         print(f"  threads={num_threads}: {errors} page errors")
@@ -467,7 +692,7 @@ def _print_table(
 
 
 def _run_one_mode(
-    pdf_paths: List[Path],
+    pdf_schedule: List[Tuple[Path, List[int] | None]],
     thread_counts: List[int],
     max_concurrent_results: int,
     total_pages: int,
@@ -475,6 +700,8 @@ def _run_one_mode(
     *,
     render: bool,
     scale: float,
+    enable_timing: bool,
+    timing_csv: Path,
 ) -> Tuple[List[Tuple[str, float]], List[Tuple[int, float]]]:
     baselines: List[Tuple[str, float]] = []
 
@@ -482,7 +709,7 @@ def _run_one_mode(
     # (DoclingPdfParser has no rendering path).
     if not render:
         print("Running sequential (DoclingPdfParser) ...")
-        t = run_sequential_parse(pdf_paths)
+        t = run_sequential_parse(pdf_schedule)
         print(f"  sequential: {t:.3f}s")
         baselines.append(("sequential docling (1t)", t))
         print()
@@ -491,7 +718,7 @@ def _run_one_mode(
     for name in other_backends:
         fn = OTHER_BACKENDS[name][stage]
         print(f"Running {name} {stage} reference (1 thread) ...")
-        t = fn(pdf_paths, total_pages)
+        t = fn(pdf_schedule, total_pages)
         print(f"  {name}: {t:.3f}s")
         baselines.append((f"{name} (1t)", t))
         print()
@@ -501,12 +728,14 @@ def _run_one_mode(
     for n in thread_counts:
         print(f"Running threaded {stage_label} with {n} threads ...")
         t = run_threaded(
-            pdf_paths,
+            pdf_schedule,
             num_threads=n,
             max_concurrent_results=max_concurrent_results,
             total_pages=total_pages,
             render=render,
             scale=scale,
+            enable_timing=enable_timing,
+            timing_csv=timing_csv,
         )
         threaded_results.append((n, t))
         print(f"  threads={n}: {t:.3f}s")
@@ -542,8 +771,8 @@ def main(argv: List[str]) -> int:
         help="Recurse into subdirectories (local paths only; HF downloads always recurse)",
     )
     ap.add_argument(
-        "--limit", "-l", type=int, default=None,
-        help="Maximum number of documents to process",
+        "--max-pages", "-l", type=int, default=None,
+        help="Maximum number of pages to process across all input PDFs",
     )
     ap.add_argument(
         "--max-concurrent-results", type=int, default=64,
@@ -567,6 +796,18 @@ def main(argv: List[str]) -> int:
             'Default: "pypdfium2". Use "" to skip.'
         ),
     )
+    ap.add_argument(
+        "--enable-timing",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Write one CSV timing row per page result (default: disabled)",
+    )
+    ap.add_argument(
+        "--timing-csv",
+        type=Path,
+        default=_default_timing_csv_path(),
+        help="CSV path used when --enable-timing is set",
+    )
 
     args = ap.parse_args(argv)
 
@@ -575,21 +816,24 @@ def main(argv: List[str]) -> int:
     other_backends = parse_other_arg(args.other)
 
     pdfs = resolve_pdf_inputs(args.input, recursive=args.recursive)
-    if args.limit is not None:
-        pdfs = pdfs[: args.limit]
     if not pdfs:
         print(f"No PDFs found for input: {args.input}", file=sys.stderr)
         return 2
 
-    total_pages = count_pages(pdfs)
+    pdf_schedule, total_pages = apply_max_pages(pdfs, args.max_pages)
+    if not pdf_schedule or total_pages <= 0:
+        print("No pages selected for benchmarking", file=sys.stderr)
+        return 2
 
-    print(f"Benchmark: {len(pdfs)} documents, {total_pages} total pages")
+    print(f"Benchmark: {len(pdf_schedule)} documents, {total_pages} total pages")
     print(f"Mode: {args.mode}")
     print(f"Thread counts to test: {thread_counts}")
     print(f"Max concurrent results: {args.max_concurrent_results}")
     print(f"Other backends: {other_backends if other_backends else '(none)'}")
     if args.mode in ("render", "both"):
         print(f"Render scale: {args.scale}")
+    print()
+    _print_run_configs(render=args.mode in ("render", "both"), scale=args.scale)
     print()
 
     modes_to_run = ["parse", "render"] if args.mode == "both" else [args.mode]
@@ -598,13 +842,15 @@ def main(argv: List[str]) -> int:
         title = "RENDER (decode + rasterise)" if render else "PARSE (decode only)"
         print(f"\n##### {title} #####")
         baselines, threaded_results = _run_one_mode(
-            pdfs,
+            pdf_schedule,
             thread_counts,
             args.max_concurrent_results,
             total_pages,
             other_backends,
             render=render,
             scale=args.scale,
+            enable_timing=args.enable_timing,
+            timing_csv=args.timing_csv,
         )
         _print_table(title, baselines, threaded_results, total_pages)
 

@@ -827,8 +827,29 @@ PYBIND11_MODULE(pdf_parsers, m) {
 
   // ============= Threaded PDF Parser =============
 
+  pybind11::class_<docling::page_decode_timings>(m, "_PageDecodeTimings",
+    R"(
+    Top-level timing breakdown for a threaded page decode task.
+    )")
+    .def_readonly("make_page_decoder_s", &docling::page_decode_timings::make_page_decoder_s)
+    .def_readonly("decode_page_s", &docling::page_decode_timings::decode_page_s)
+    .def_readonly("create_word_cells_s", &docling::page_decode_timings::create_word_cells_s)
+    .def_readonly("create_line_cells_s", &docling::page_decode_timings::create_line_cells_s)
+    .def_readonly("total_s", &docling::page_decode_timings::total_s);
+
+  pybind11::class_<docling::page_render_timings, docling::page_decode_timings>(m, "_PageRenderTimings",
+    R"(
+    Top-level timing breakdown for a threaded page render task.
+    )")
+    .def_readonly("render_page_s", &docling::page_render_timings::render_page_s);
+
+  pybind11::class_<docling::page_task_result>(m, "_PageTaskResult")
+    .def_readonly("doc_key", &docling::page_task_result::doc_key)
+    .def_readonly("page_number", &docling::page_task_result::page_number)
+    .def_readonly("success", &docling::page_task_result::success);
+
   // _PageDecodeResult - internal result of a threaded page decode task
-  pybind11::class_<docling::page_decode_result>(m, "_PageDecodeResult",
+  pybind11::class_<docling::page_decode_result, docling::page_task_result>(m, "_PageDecodeResult",
     R"(
     Internal result of a threaded page decoding task.
 
@@ -837,9 +858,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
         page_number (int): The page number (0-indexed).
         success (bool): Whether the decoding succeeded.
     )")
-    .def_readonly("doc_key", &docling::page_decode_result::doc_key)
-    .def_readonly("page_number", &docling::page_decode_result::page_number)
-    .def_readonly("success", &docling::page_decode_result::success)
+    .def_readonly("timings", &docling::page_decode_result::timings)
     .def("get", [](docling::page_decode_result& self)
          -> std::pair<std::shared_ptr<pdflib::pdf_decoder<pdflib::PAGE>>,
                       std::unordered_map<std::string, double>> {
@@ -1035,16 +1054,45 @@ PYBIND11_MODULE(pdf_parsers, m) {
     .def_readwrite("canvas_height",           &pdflib::render_config::canvas_height);
 
   // _PageRenderResult - internal result of a threaded page render task
-  pybind11::class_<docling::page_render_result, docling::page_decode_result>(m, "_PageRenderResult",
+  pybind11::class_<docling::page_render_result, docling::page_task_result>(m, "_PageRenderResult",
     R"(
     Internal result of a threaded page rendering task.
 
-    Inherits all attributes of _PageDecodeResult and adds rendered image data.
-
     Attributes:
+        doc_key (str): The document key this page belongs to.
+        page_number (int): The page number (0-indexed).
+        success (bool): Whether the rendering succeeded.
+        timings: Top-level timing breakdown for decode and render stages.
         image_data: Raw RGBA bytes of the rendered page (height x width x 4, row-major).
         image_shape: Shape of the image as [height, width, channels].
     )")
+    .def_readonly("timings", &docling::page_render_result::timings)
+    .def("get", [](docling::page_render_result& self)
+         -> std::pair<std::shared_ptr<pdflib::pdf_decoder<pdflib::PAGE>>,
+                      std::unordered_map<std::string, double>> {
+           if(!self.success)
+             {
+               throw std::runtime_error("Cannot get result from failed task: " + self.error_message);
+             }
+           auto timings_map = self.page_decoder->get_timings().to_sum_map();
+           return std::make_pair(self.page_decoder, timings_map);
+         },
+         R"(
+    Get the page decoder and decoder-internal timing information.
+
+    Returns:
+        Tuple[PdfPageDecoder, Dict[str, float]]: The page decoder and timing data.
+
+    Raises:
+        RuntimeError: If the task was not successful.)")
+    .def("error", [](docling::page_render_result& self) -> std::string {
+           return self.error_message;
+         },
+         R"(
+    Get the error message if the task failed.
+
+    Returns:
+        str: The error message.)")
     .def_readonly("image_shape", &docling::page_render_result::image_shape)
     .def("get_image", [](docling::page_render_result& self)
          -> pybind11::bytes {

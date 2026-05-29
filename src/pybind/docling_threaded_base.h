@@ -22,20 +22,12 @@
 
 #include <pybind/native_memory.h>
 #include <pybind/docling_resources.h>
+#include <pybind/docling_threaded_results.h>
 
 #include <parse.h>
 
 namespace docling
 {
-  struct page_decode_result
-  {
-    std::string doc_key;
-    int page_number;
-    bool success;
-    std::string error_message;
-    std::shared_ptr<pdflib::pdf_decoder<pdflib::PAGE>> page_decoder;
-  };
-
   // ---------------------------------------------------------------------------
   // docling_threaded_base<Derived, ResultType>
   //

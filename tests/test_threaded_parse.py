@@ -123,6 +123,8 @@ def test_threaded_single_document():
         assert result.page_width > 0
         assert result.page_height > 0
         assert result.get_timings().total() > 0
+        assert result.timings.total_s > 0
+        assert result.timings.decode_page_s > 0
         count += 1
 
     assert count == parser.page_count(key)

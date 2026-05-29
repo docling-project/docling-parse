@@ -3,6 +3,8 @@
 #ifndef PYBIND_THREADED_PDF_PARSER_H
 #define PYBIND_THREADED_PDF_PARSER_H
 
+#include <chrono>
+
 #include <pybind/docling_threaded_base.h>
 
 namespace docling
@@ -27,6 +29,8 @@ namespace docling
 
   inline void docling_threaded_parser::worker_loop()
   {
+    using clock_type = std::chrono::steady_clock;
+
     while(true)
       {
         std::pair<std::string, int> task;
@@ -61,20 +65,36 @@ namespace docling
               {
                 auto& doc_decoder = itr->second;
 
-                auto page_decoder = doc_decoder->make_thread_safe_page_decoder(page_number);
+                auto total_start = clock_type::now();
 
+                auto stage_start = clock_type::now();
+                auto page_decoder = doc_decoder->make_thread_safe_page_decoder(page_number);
+                result.timings.make_page_decoder_s
+                  = std::chrono::duration<double>(clock_type::now() - stage_start).count();
+
+                stage_start = clock_type::now();
                 page_decoder->decode_page(config);
+                result.timings.decode_page_s
+                  = std::chrono::duration<double>(clock_type::now() - stage_start).count();
 
                 if(config.create_word_cells)
                   {
+                    stage_start = clock_type::now();
                     page_decoder->create_word_cells(config);
+                    result.timings.create_word_cells_s
+                      = std::chrono::duration<double>(clock_type::now() - stage_start).count();
                   }
 
                 if(config.create_line_cells)
                   {
+                    stage_start = clock_type::now();
                     page_decoder->create_line_cells(config);
+                    result.timings.create_line_cells_s
+                      = std::chrono::duration<double>(clock_type::now() - stage_start).count();
                   }
 
+                result.timings.total_s
+                  = std::chrono::duration<double>(clock_type::now() - total_start).count();
                 result.success = true;
                 result.page_decoder = page_decoder;
               }
