@@ -21,20 +21,32 @@ namespace docling
                               int num_threads,
                               int max_concurrent_results,
                               pdflib::decode_config decode_config,
-                              pdflib::render_config render_config):
-      docling_threaded_base<docling_threaded_renderer, page_render_result>(loglevel,
-                                                                           num_threads,
-                                                                           max_concurrent_results,
-                                                                           decode_config),
-      render_cfg(render_config)
-    {}
+                              pdflib::render_config render_config);
 
     void worker_loop();
 
   private:
 
     pdflib::render_config render_cfg;
+
+    // Shared across workers; pages keep only their tiny local alias cache.
+    std::shared_ptr<pdflib::blend2d_font_resolver> font_resolver_;
   };
+
+  inline docling_threaded_renderer::docling_threaded_renderer(std::string loglevel,
+                                                              int num_threads,
+                                                              int max_concurrent_results,
+                                                              pdflib::decode_config decode_config,
+                                                              pdflib::render_config render_config):
+    docling_threaded_base<docling_threaded_renderer, page_render_result>(loglevel,
+                                                                         num_threads,
+                                                                         max_concurrent_results,
+                                                                         decode_config),
+    render_cfg(render_config),
+    font_resolver_(std::make_shared<pdflib::blend2d_font_resolver>())
+  {
+    font_resolver_->warm();
+  }
 
   inline void docling_threaded_renderer::worker_loop()
   {
@@ -103,7 +115,7 @@ namespace docling
                   }
 
                 stage_start = clock_type::now();
-                pdflib::renderer<pdflib::BLEND2D> rnd(render_cfg);
+                pdflib::renderer<pdflib::BLEND2D> rnd(render_cfg, font_resolver_);
                 page_decoder->get_instructions().iterate_over_instructions(rnd);
                 result.timings.render_page_s
                   = std::chrono::duration<double>(clock_type::now() - stage_start).count();

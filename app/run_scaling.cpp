@@ -24,6 +24,8 @@
 #include <utility>
 #include <vector>
 
+#include <sys/ioctl.h>
+
 namespace
 {
   using clock_type = std::chrono::steady_clock;
@@ -232,6 +234,16 @@ namespace
     }
 
   private:
+    static int terminal_width()
+    {
+      struct winsize size {};
+      if(ioctl(2, TIOCGWINSZ, &size) == 0 and size.ws_col > 0)
+        {
+          return static_cast<int>(size.ws_col);
+        }
+      return 100;
+    }
+
     void draw(int current, bool force)
     {
       if(total_ <= 0 and not force)
@@ -239,10 +251,8 @@ namespace
           return;
         }
 
-      const int width = 40;
       const double fraction = total_ > 0
         ? static_cast<double>(current) / static_cast<double>(total_) : 1.0;
-      const int filled = std::min(width, static_cast<int>(fraction * width));
       const double elapsed =
         std::chrono::duration<double>(clock_type::now() - start_).count();
       const double rate = elapsed > 0.0
@@ -251,19 +261,32 @@ namespace
         ? elapsed * (static_cast<double>(total_) / static_cast<double>(current))
         : 0.0;
 
-      std::cerr << "\r" << label_ << ": [";
+      std::ostringstream suffix;
+      suffix << "] "
+             << current << "/" << total_ << " "
+             << std::fixed << std::setprecision(1) << (fraction * 100.0)
+             << "% "
+             << std::fixed << std::setprecision(1) << rate << "/s "
+             << "elapsed: " << format_duration(elapsed) << " [sec]"
+             << " total: " << format_duration(total) << " [sec]";
+      const std::string suffix_text = suffix.str();
+
+      const std::string prefix = label_ + ": [";
+      const int available = terminal_width()
+        - static_cast<int>(prefix.size())
+        - static_cast<int>(suffix_text.size());
+      const int width = std::max(0, std::min(40, available));
+      const int filled = std::min(width, static_cast<int>(fraction * width));
+
+      std::ostringstream line;
+      line << prefix;
       for(int i = 0; i < width; ++i)
         {
-          std::cerr << (i < filled ? '#' : '-');
+          line << (i < filled ? '#' : '-');
         }
-      std::cerr << "] "
-                << current << "/" << total_ << " "
-                << std::fixed << std::setprecision(1) << (fraction * 100.0)
-                << "% "
-                << std::fixed << std::setprecision(1) << rate << "/s "
-                << "elapsed: " << format_duration(elapsed) << " [sec]"
-                << " total: " << format_duration(total) << " [sec]"
-                << "      " << std::flush;
+      line << suffix_text;
+
+      std::cerr << "\r\033[K" << line.str() << std::flush;
     }
 
   private:
@@ -548,7 +571,13 @@ namespace
       max_concurrent_results_(max_concurrent_results),
       decode_config_(decode_config),
       render_config_(render_config)
-    {}
+    {
+      if(render_config_.has_value())
+        {
+          font_resolver_ = std::make_shared<pdflib::blend2d_font_resolver>();
+          font_resolver_->warm();
+        }
+    }
 
     benchmark_result run(const std::string& mode,
                          bool enable_timing,
@@ -647,7 +676,7 @@ namespace
               if(render_config_.has_value())
                 {
                   stage_start = clock_type::now();
-                  pdflib::renderer<pdflib::BLEND2D> rnd(*render_config_);
+                  pdflib::renderer<pdflib::BLEND2D> rnd(*render_config_, font_resolver_);
                   page_decoder->get_instructions().iterate_over_instructions(rnd);
                   result.timings.render_page_s =
                     std::chrono::duration<double>(clock_type::now() - stage_start).count();
@@ -714,6 +743,7 @@ namespace
     int max_concurrent_results_;
     pdflib::decode_config decode_config_;
     std::optional<pdflib::render_config> render_config_;
+    std::shared_ptr<pdflib::blend2d_font_resolver> font_resolver_;
 
     std::vector<page_task> tasks_;
     std::atomic<std::size_t> next_task_{0};
