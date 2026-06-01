@@ -191,6 +191,12 @@ The latter will only work after a clean `git clone`. If you are developing and u
 rm -rf .venv; uv venv; uv pip install --force-reinstall --no-deps -e ".[perf-tools]"
 ```
 
+or 
+
+```sh
+BUILD_THREADS=12 uv pip install --force-reinstall --no-deps -e ".[perf]"
+```
+
 To test the package, run:
 
 ```sh
