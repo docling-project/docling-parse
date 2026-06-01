@@ -24,8 +24,6 @@
 #include <utility>
 #include <vector>
 
-#include <sys/ioctl.h>
-
 namespace
 {
   using clock_type = std::chrono::steady_clock;
@@ -234,16 +232,6 @@ namespace
     }
 
   private:
-    static int terminal_width()
-    {
-      struct winsize size {};
-      if(ioctl(2, TIOCGWINSZ, &size) == 0 and size.ws_col > 0)
-        {
-          return static_cast<int>(size.ws_col);
-        }
-      return 100;
-    }
-
     void draw(int current, bool force)
     {
       if(total_ <= 0 and not force)
@@ -272,7 +260,7 @@ namespace
       const std::string suffix_text = suffix.str();
 
       const std::string prefix = label_ + ": [";
-      const int available = terminal_width()
+      const int available = 100
         - static_cast<int>(prefix.size())
         - static_cast<int>(suffix_text.size());
       const int width = std::max(0, std::min(40, available));
