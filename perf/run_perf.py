@@ -28,9 +28,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from statistics import mean, median
 from typing import Callable, Iterable, List, Tuple
-from tqdm import tqdm
-from tabulate import tabulate
 
+from tabulate import tabulate
+from tqdm import tqdm
 
 # -------- Utilities --------
 
@@ -94,11 +94,24 @@ def _get_docling_static_timing_keys() -> List[str]:
 def parse_with_docling(use_bytesio: bool = False) -> Callable[[Path], Iterable[Row]]:
     def _runner(pdf_path: Path) -> Iterable[Row]:
         from io import BytesIO
-        from docling_parse.pdf_parser import DoclingPdfParser
-        from docling_parse.pdf_parsers import DecodePageConfig  # type: ignore[import]
+
         from docling_core.types.doc.page import PdfPageBoundaryType
 
+        from docling_parse.pdf_parser import (
+            DecodeConfig,
+            DoclingPdfParser,
+            PageContentConfig,
+            PageItemLevel,
+        )
+
         timing_keys = _get_docling_static_timing_keys()
+        content_config = PageContentConfig(
+            char_cells=PageItemLevel.SKIP,
+            word_cells=PageItemLevel.SKIP,
+            line_cells=PageItemLevel.MATERIALIZE,
+            shapes=PageItemLevel.SKIP,
+            bitmaps=PageItemLevel.SKIP,
+        )
 
         rows: List[Row] = []
         try:
@@ -111,6 +124,8 @@ def parse_with_docling(use_bytesio: bool = False) -> Callable[[Path], Iterable[R
                 source,
                 lazy=True,
                 boundary_type=PdfPageBoundaryType.CROP_BOX,
+                decode_config=DecodeConfig(),
+                content_config=content_config,
             )
             try:
                 n = doc.number_of_pages()
@@ -124,16 +139,7 @@ def parse_with_docling(use_bytesio: bool = False) -> Callable[[Path], Iterable[R
                 ok = True
                 detail: dict = {}
                 try:
-                    perf_config = DecodePageConfig()
-                    perf_config.keep_char_cells = False
-                    perf_config.keep_shapes = False
-                    perf_config.keep_bitmaps = False
-                    perf_config.create_word_cells = False
-                    perf_config.create_line_cells = True
-                    _, timings_obj = doc.get_page_with_timings(
-                        page_idx,
-                        config=perf_config,
-                    )
+                    _, timings_obj = doc.get_page_with_timings(page_idx)
                     static_t = timings_obj.get_static_timings()
                     for key in timing_keys:
                         detail[key] = static_t.get(key, 0.0)
@@ -178,7 +184,7 @@ def parse_with_pdfplumber(pdf_path: Path) -> Iterable[Row]:
                     ok = False
                     err = str(e)
                     print(f"error: {err}")
-                    
+
                 t1 = time.perf_counter()
                 rows.append(Row(str(pdf_path), idx + 1, t1 - t0, ok, err))
     except Exception as e:  # pragma: no cover
@@ -209,9 +215,9 @@ def parse_with_pypdfium2(pdf_path: Path) -> Iterable[Row]:
                 text_page = page.get_textpage()
 
                 # _ = textpage.get_text_range()  # extract all page text
-                for l in range(text_page.count_rects()):
-                    rect = text_page.get_rect(l)
-                    text_piece = text_page.get_text_bounded(*rect)
+                for rect_idx in range(text_page.count_rects()):
+                    rect = text_page.get_rect(rect_idx)
+                    _ = text_page.get_text_bounded(*rect)
                     # x0, y0, x1, y1 = rect
                     # print(f"{rect}: {text_piece}")
 
@@ -221,7 +227,7 @@ def parse_with_pypdfium2(pdf_path: Path) -> Iterable[Row]:
                 ok = False
                 err = str(e)
                 print(f"error: {err}")
-                
+
             t1 = time.perf_counter()
             rows.append(Row(str(pdf_path), i + 1, t1 - t0, ok, err))
     finally:
@@ -279,33 +285,37 @@ def parse_with_docling_threaded(
 
     def _runner(pdf_paths: List[Path]) -> Tuple[List[Row], float]:
         from docling_parse.pdf_parser import (
+            DecodeConfig,
             DoclingThreadedPdfParser,
+            PageContentConfig,
+            PageItemLevel,
             ThreadedPdfParserConfig,
         )
-        from docling_parse.pdf_parsers import DecodePageConfig  # type: ignore[import]
 
-        decode_config = DecodePageConfig()
-        decode_config.keep_char_cells = False
-        decode_config.keep_shapes = False
-        decode_config.keep_bitmaps = False
-        decode_config.create_word_cells = False
-        decode_config.create_line_cells = True
+        content_config = PageContentConfig(
+            char_cells=PageItemLevel.SKIP,
+            word_cells=PageItemLevel.SKIP,
+            line_cells=PageItemLevel.MATERIALIZE,
+            shapes=PageItemLevel.SKIP,
+            bitmaps=PageItemLevel.SKIP,
+        )
 
         parser_config = ThreadedPdfParserConfig(
             loglevel="fatal",
             threads=num_threads,
             max_concurrent_results=max_concurrent_results,
+            page_content_config=content_config,
         )
 
         parser = DoclingThreadedPdfParser(
             parser_config=parser_config,
-            decode_config=decode_config,
+            decode_config=DecodeConfig(),
         )
 
         for pdf_path in pdf_paths:
             try:
                 parser.load(str(pdf_path))
-            except Exception as e:
+            except Exception:
                 pass  # will surface as missing results below
 
         rows: List[Row] = []
@@ -364,7 +374,7 @@ def compute_stats(rows: List[Row]) -> dict:
     failed_pages = total_pages - ok_pages
     total_time = sum(times)
     stats = {
-        "files": len(set(r.filename for r in rows)),
+        "files": len({r.filename for r in rows}),
         "pages_total": total_pages,
         "pages_ok": ok_pages,
         "pages_failed": failed_pages,

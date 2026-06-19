@@ -4,10 +4,13 @@ import os
 from pathlib import Path
 from typing import Optional
 
-from docling_core.types.doc.page import SegmentedPdfPage, TextCellUnit
+from docling_core.types.doc.page import (
+    PdfPageBoundaryType,
+    SegmentedPdfPage,
+    TextCellUnit,
+)
 
-from docling_parse.pdf_parser import DoclingPdfParser, PdfDocument
-from docling_parse.pdf_parsers import DecodePageConfig  # type: ignore[import]
+from docling_parse.pdf_parser import DecodeConfig, DoclingPdfParser, PdfDocument
 
 
 def parse_args():
@@ -151,7 +154,11 @@ def visualise_py(
     parser = DoclingPdfParser(loglevel=log_level)
 
     pdf_doc: PdfDocument = parser.load(
-        path_or_stream=pdf_path, lazy=True, password=password
+        path_or_stream=pdf_path,
+        lazy=True,
+        password=password,
+        boundary_type=PdfPageBoundaryType(page_boundary),
+        decode_config=DecodeConfig(enforce_same_font=enforce_same_font),
     )
 
     page_nos = [page_num]
@@ -161,12 +168,7 @@ def visualise_py(
     for page_no in page_nos:
         print(f"parsing {pdf_path} on page: {page_no}")
 
-        config = DecodePageConfig()
-        config.enforce_same_font = enforce_same_font
-        pdf_page: SegmentedPdfPage = pdf_doc.get_page(
-            page_no=page_no,
-            config=config,
-        )
+        pdf_page: SegmentedPdfPage = pdf_doc.get_page(page_no=page_no)
 
         if os.path.exists(str(output_dir)):
             pdf_page.save_as_json(

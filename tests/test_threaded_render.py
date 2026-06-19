@@ -12,7 +12,7 @@ from docling_core.types.doc.page import SegmentedPdfPage
 from PIL import Image as PILImage
 
 from docling_parse.pdf_parser import (
-    DecodePageConfig,
+    DecodeConfig,
     DoclingThreadedPdfParser,
     RenderConfig,
     ThreadedPdfParserConfig,
@@ -27,13 +27,12 @@ SAMPLE_PDF = "docs/dln-v1.pdf"
 LARGE_SAMPLE_PDF = "docs/PDF32000_2008.pdf"
 
 
-def _make_decode_config() -> DecodePageConfig:
-    config = DecodePageConfig()
-    config.page_boundary = "crop_box"
-    config.do_sanitization = False
-    config.keep_glyphs = True
-    config.keep_qpdf_warnings = False
-    return config
+def _make_decode_config() -> DecodeConfig:
+    return DecodeConfig(
+        do_sanitization=False,
+        keep_glyphs=True,
+        keep_qpdf_warnings=False,
+    )
 
 
 def _make_render_config() -> RenderConfig:

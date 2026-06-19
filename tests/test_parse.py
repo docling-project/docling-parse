@@ -21,9 +21,10 @@ from docling_core.types.doc.page import (
 from pydantic import TypeAdapter
 
 from docling_parse.pdf_parser import (
-    DecodePageConfig,
+    DecodeConfig,
     DoclingPdfParser,
-    PageMaterializationConfig,
+    PageContentConfig,
+    PageItemLevel,
     PdfDocument,
 )
 
@@ -398,9 +399,9 @@ def test_reference_documents_from_filenames():
         "font_10.pdf": [1],
     }
 
-    config = DecodePageConfig()
-    config.keep_glyphs = True
-    config.keep_qpdf_warnings = False
+    config = DecodeConfig(
+        keep_glyphs=True, keep_qpdf_warnings=False, do_sanitization=True
+    )
 
     # Each entry: (doc_name, page_no_str, success, error_msg)
     results: List[tuple] = []
@@ -414,6 +415,7 @@ def test_reference_documents_from_filenames():
                 path_or_stream=pdf_doc_path,
                 boundary_type=PdfPageBoundaryType.CROP_BOX,  # default: CROP_BOX
                 lazy=True,
+                decode_config=config,
             )
             assert pdf_doc is not None
         except Exception as exc:
@@ -422,7 +424,7 @@ def test_reference_documents_from_filenames():
 
         # PdfDocument.iterate_pages() will automatically populate pages as they are yielded.
         # No need to call PdfDocument.load_all_pages() before.
-        for page_no, pred_page in pdf_doc.iterate_pages(config=config):
+        for page_no, pred_page in pdf_doc.iterate_pages():
             print(f" -> Page {page_no} has {len(pred_page.textline_cells)} cells.")
 
             fname = os.path.join(
@@ -1029,28 +1031,22 @@ def test_annotations_match_groundtruth():
 BITMAP_PDF = "tests/data/regression/annots_01.pdf"
 
 
-def _make_bitmap_config() -> DecodePageConfig:
-    config = DecodePageConfig()
-    config.keep_bitmaps = True
-    config.do_sanitization = False
-    return config
+def _make_bitmap_config() -> DecodeConfig:
+    return DecodeConfig(do_sanitization=False)
 
 
 def test_bitmap_no_materialization_preserves_geometry():
     """bitmap_resources count and rects match regardless of bitmap bytes."""
     parser = DoclingPdfParser(loglevel="fatal")
-    pdf_doc = parser.load(path_or_stream=BITMAP_PDF, lazy=True)
-
-    config = _make_bitmap_config()
-    materialize_full = PageMaterializationConfig(materialize_bitmap_bytes=True)
-    materialize_geo = PageMaterializationConfig(materialize_bitmap_bytes=False)
-
-    page_full = pdf_doc.get_page(
-        1, config=config, materialization_config=materialize_full
+    pdf_doc = parser.load(
+        path_or_stream=BITMAP_PDF, lazy=True, decode_config=_make_bitmap_config()
     )
-    page_geo = pdf_doc.get_page(
-        1, config=config, materialization_config=materialize_geo
-    )
+
+    materialize_full = PageContentConfig(include_bitmap_bytes=True)
+    materialize_geo = PageContentConfig(include_bitmap_bytes=False)
+
+    page_full = pdf_doc.get_page(1, content_config=materialize_full)
+    page_geo = pdf_doc.get_page(1, content_config=materialize_geo)
 
     assert len(page_full.bitmap_resources) == len(page_geo.bitmap_resources), (
         "bitmap count must match between full and geometry-only modes"
@@ -1075,16 +1071,17 @@ def test_bitmap_no_materialization_preserves_geometry():
 
 
 def test_bitmap_no_materialization_has_no_image():
-    """materialize_bitmap_bytes=False produces placeholders with image=None."""
+    """include_bitmap_bytes=False produces placeholders with image=None."""
     from docling_core.types.doc.base import ImageRefMode
 
     parser = DoclingPdfParser(loglevel="fatal")
-    pdf_doc = parser.load(path_or_stream=BITMAP_PDF, lazy=True)
+    pdf_doc = parser.load(
+        path_or_stream=BITMAP_PDF, lazy=True, decode_config=_make_bitmap_config()
+    )
 
-    config = _make_bitmap_config()
-    materialize_geo = PageMaterializationConfig(materialize_bitmap_bytes=False)
-
-    page = pdf_doc.get_page(1, config=config, materialization_config=materialize_geo)
+    page = pdf_doc.get_page(
+        1, content_config=PageContentConfig(include_bitmap_bytes=False)
+    )
     assert len(page.bitmap_resources) > 0, "test PDF must contain bitmaps"
 
     for bm in page.bitmap_resources:
@@ -1101,17 +1098,15 @@ def test_bitmap_materialization_cache_false_then_true():
     from docling_core.types.doc.base import ImageRefMode
 
     parser = DoclingPdfParser(loglevel="fatal")
-    pdf_doc = parser.load(path_or_stream=BITMAP_PDF, lazy=True)
-
-    config = _make_bitmap_config()
-    materialize_geo = PageMaterializationConfig(materialize_bitmap_bytes=False)
-    materialize_full = PageMaterializationConfig(materialize_bitmap_bytes=True)
+    pdf_doc = parser.load(
+        path_or_stream=BITMAP_PDF, lazy=True, decode_config=_make_bitmap_config()
+    )
 
     page_geo = pdf_doc.get_page(
-        1, config=config, materialization_config=materialize_geo
+        1, content_config=PageContentConfig(include_bitmap_bytes=False)
     )
     page_full = pdf_doc.get_page(
-        1, config=config, materialization_config=materialize_full
+        1, content_config=PageContentConfig(include_bitmap_bytes=True)
     )
 
     for bm in page_geo.bitmap_resources:
@@ -1130,17 +1125,15 @@ def test_bitmap_materialization_cache_true_then_false():
     from docling_core.types.doc.base import ImageRefMode
 
     parser = DoclingPdfParser(loglevel="fatal")
-    pdf_doc = parser.load(path_or_stream=BITMAP_PDF, lazy=True)
-
-    config = _make_bitmap_config()
-    materialize_full = PageMaterializationConfig(materialize_bitmap_bytes=True)
-    materialize_geo = PageMaterializationConfig(materialize_bitmap_bytes=False)
+    pdf_doc = parser.load(
+        path_or_stream=BITMAP_PDF, lazy=True, decode_config=_make_bitmap_config()
+    )
 
     page_full = pdf_doc.get_page(
-        1, config=config, materialization_config=materialize_full
+        1, content_config=PageContentConfig(include_bitmap_bytes=True)
     )
     page_geo = pdf_doc.get_page(
-        1, config=config, materialization_config=materialize_geo
+        1, content_config=PageContentConfig(include_bitmap_bytes=False)
     )
 
     assert any(bm.image is not None for bm in page_full.bitmap_resources), (
@@ -1151,4 +1144,56 @@ def test_bitmap_materialization_cache_true_then_false():
         assert bm.image is None
         assert bm.mode == ImageRefMode.PLACEHOLDER
 
+    pdf_doc.unload()
+
+
+# --- PageContentConfig redesign ---------------------------------------------
+
+TEXT_PDF = "docs/dln-v1.pdf"
+
+
+def test_word_cells_materialize_without_char_cells():
+    """Word cells can be produced without surfacing character cells."""
+    parser = DoclingPdfParser(loglevel="fatal")
+
+    skip = PageItemLevel.SKIP
+    mat = PageItemLevel.MATERIALIZE
+
+    # word_cells MATERIALIZE, char_cells SKIP -> words present, no char cells.
+    pdf_doc = parser.load(
+        path_or_stream=TEXT_PDF,
+        lazy=True,
+        content_config=PageContentConfig(char_cells=skip, word_cells=mat),
+    )
+    page = pdf_doc.get_page(1)
+    assert len(page.word_cells) > 0, "words must be present when word_cells=MATERIALIZE"
+    assert len(page.char_cells) == 0, "char cells must be absent when char_cells=SKIP"
+
+    # char_cells SKIP -> empty; word_cells SKIP -> empty.
+    page2 = pdf_doc.get_page(
+        1, content_config=PageContentConfig(char_cells=skip, word_cells=skip)
+    )
+    assert len(page2.char_cells) == 0
+    assert len(page2.word_cells) == 0
+    pdf_doc.unload()
+
+
+def test_content_escalation_redecodes_page():
+    """Opening without word cells, then requesting them, re-decodes the page."""
+    parser = DoclingPdfParser(loglevel="fatal")
+    pdf_doc = parser.load(
+        path_or_stream=TEXT_PDF,
+        lazy=True,
+        content_config=PageContentConfig(word_cells=PageItemLevel.SKIP),
+    )
+
+    page_no_words = pdf_doc.get_page(1)
+    assert len(page_no_words.word_cells) == 0, "words skipped at document default"
+
+    page_words = pdf_doc.get_page(
+        1, content_config=PageContentConfig(word_cells=PageItemLevel.MATERIALIZE)
+    )
+    assert len(page_words.word_cells) > 0, (
+        "escalation must re-decode the page and surface word cells"
+    )
     pdf_doc.unload()

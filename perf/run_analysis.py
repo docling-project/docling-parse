@@ -41,8 +41,6 @@ from docling_parse.pdf_parser import (
     get_static_timing_keys,
     is_static_timing_key,
 )
-from docling_parse.pdf_parsers import DecodePageConfig  # type: ignore[import]
-
 
 # -------------- Data types --------------
 
@@ -113,15 +111,10 @@ def timestamped_out_path(prefix: str = "analysis") -> Path:
 def extract_timings_for_page(
     doc,
     page_number: int,
-    *,
-    config: DecodePageConfig | None = None,
 ) -> Timings:
     """Run docling-parse on the given page and return Timings object."""
     try:
-        _, timings = doc.get_page_with_timings(
-            page_number,
-            config=config,
-        )
+        _, timings = doc.get_page_with_timings(page_number)
         return timings
     except Exception:
         return Timings()
@@ -212,7 +205,7 @@ def write_static_timings_csv(out_path: Path, pages: List[PageTimings]) -> None:
     # Get decode_page keys in order (excludes the global decode_page timer)
     decode_page_keys = get_decode_page_timing_keys()
 
-    header = ["filename", "page_number", "elapsed_original_sec"] + decode_page_keys
+    header = ["filename", "page_number", "elapsed_original_sec", *decode_page_keys]
 
     with out_path.open("w", newline="") as f:
         w = csv.writer(f)

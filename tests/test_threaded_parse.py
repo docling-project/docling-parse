@@ -7,12 +7,12 @@ import os
 import pytest
 from docling_core.types.doc.page import PdfPageBoundaryType, SegmentedPdfPage
 
-from docling_parse import pdf_parsers
 from docling_parse.pdf_parser import (
-    DecodePageConfig,
+    DecodeConfig,
     DoclingPdfParser,
     DoclingThreadedPdfParser,
-    PageMaterializationConfig,
+    PageContentConfig,
+    PageItemLevel,
     ThreadedPdfParserConfig,
 )
 from tests.test_parse import (
@@ -25,20 +25,12 @@ SAMPLE_PDF = "docs/dln-v1.pdf"
 LARGE_SAMPLE_PDF = "docs/PDF32000_2008.pdf"
 
 
-def _make_decode_config() -> DecodePageConfig:
-    config = DecodePageConfig()
-    config.page_boundary = "crop_box"
-    config.do_sanitization = False
-    config.keep_glyphs = True
-    config.keep_qpdf_warnings = False
-    return config
-
-
-def test_threaded_raw_pybind_types_are_internal():
-    assert not hasattr(pdf_parsers, "PageDecodeResult")
-    assert not hasattr(pdf_parsers, "threaded_pdf_parser")
-    assert not hasattr(pdf_parsers, "PageRenderResult")
-    assert not hasattr(pdf_parsers, "threaded_pdf_renderer")
+def _make_decode_config() -> DecodeConfig:
+    return DecodeConfig(
+        do_sanitization=False,
+        keep_glyphs=True,
+        keep_qpdf_warnings=False,
+    )
 
 
 def test_threaded_reference_documents_from_filenames():
@@ -143,10 +135,11 @@ def test_threaded_results_match_sequential():
             path_or_stream=filename,
             boundary_type=PdfPageBoundaryType.CROP_BOX,
             lazy=True,
+            decode_config=decode_config,
         )
         key = f"key={filename}"
         sequential_pages[key] = {}
-        for page_no, page in pdf_doc.iterate_pages(config=decode_config):
+        for page_no, page in pdf_doc.iterate_pages():
             sequential_pages[key][page_no] = page
 
     threaded_parser = DoclingThreadedPdfParser(
@@ -317,11 +310,8 @@ def test_threaded_unload_during_active_iteration_raises():
 BITMAP_PDF = "tests/data/regression/annots_01.pdf"
 
 
-def _make_bitmap_config() -> DecodePageConfig:
-    config = DecodePageConfig()
-    config.keep_bitmaps = True
-    config.do_sanitization = False
-    return config
+def _make_bitmap_config() -> DecodeConfig:
+    return DecodeConfig(do_sanitization=False)
 
 
 def test_threaded_bitmap_no_materialization_preserves_geometry():
@@ -329,11 +319,11 @@ def test_threaded_bitmap_no_materialization_preserves_geometry():
     from docling_core.types.doc.base import ImageRefMode
 
     config = _make_bitmap_config()
-    materialize_full = PageMaterializationConfig(materialize_bitmap_bytes=True)
-    materialize_geo = PageMaterializationConfig(materialize_bitmap_bytes=False)
+    materialize_full = PageContentConfig(include_bitmap_bytes=True)
+    materialize_geo = PageContentConfig(include_bitmap_bytes=False)
 
     def _get_page1(
-        materialization_config: PageMaterializationConfig,
+        content_config: PageContentConfig,
     ) -> "SegmentedPdfPage":
         parser = DoclingThreadedPdfParser(
             parser_config=ThreadedPdfParserConfig(loglevel="fatal", threads=2),
@@ -341,7 +331,7 @@ def test_threaded_bitmap_no_materialization_preserves_geometry():
         )
         parser.load(BITMAP_PDF)
         return next(
-            r.get_page(materialization_config)
+            r.get_page(content_config)
             for r in parser.iterate_results()
             if r.success and r.page_number == 1
         )
@@ -367,3 +357,64 @@ def test_threaded_bitmap_no_materialization_preserves_geometry():
         assert bm.mode == ImageRefMode.PLACEHOLDER
 
     assert any(bm.image is not None for bm in page_full.bitmap_resources)
+
+
+def _first_successful_result(parser):
+    return next(r for r in parser.iterate_results() if r.success)
+
+
+def test_threaded_result_upgrade_compute_to_materialize():
+    """A batch decoded at COMPUTE can surface those cells per result."""
+    parser = DoclingThreadedPdfParser(
+        parser_config=ThreadedPdfParserConfig(
+            loglevel="fatal",
+            threads=2,
+            page_content_config=PageContentConfig(word_cells=PageItemLevel.COMPUTE),
+        ),
+        decode_config=_make_decode_config(),
+    )
+    parser.load(SAMPLE_PDF)
+    result = _first_successful_result(parser)
+
+    # Batch default emit is COMPUTE -> not surfaced.
+    assert len(result.get_page().word_cells) == 0
+    # Upgrade COMPUTE -> MATERIALIZE: cells were computed in C++, now surfaced.
+    upgraded = result.get_page(PageContentConfig(word_cells=PageItemLevel.MATERIALIZE))
+    assert len(upgraded.word_cells) > 0
+
+
+def test_threaded_result_rejects_skipped_entity():
+    """Requesting an entity the batch skipped raises instead of yielding empty."""
+    parser = DoclingThreadedPdfParser(
+        parser_config=ThreadedPdfParserConfig(
+            loglevel="fatal",
+            threads=2,
+            page_content_config=PageContentConfig(word_cells=PageItemLevel.SKIP),
+        ),
+        decode_config=_make_decode_config(),
+    )
+    parser.load(SAMPLE_PDF)
+    result = _first_successful_result(parser)
+
+    with pytest.raises(ValueError, match="batch skipped"):
+        result.get_page(PageContentConfig(word_cells=PageItemLevel.MATERIALIZE))
+
+
+def test_threaded_result_rejects_skipped_entity_after_config_mutation():
+    """The rejection uses the compiled batch mask, not the caller's mutable config."""
+    content_config = PageContentConfig(word_cells=PageItemLevel.SKIP)
+    parser = DoclingThreadedPdfParser(
+        parser_config=ThreadedPdfParserConfig(
+            loglevel="fatal",
+            threads=2,
+            page_content_config=content_config,
+        ),
+        decode_config=_make_decode_config(),
+    )
+    content_config.word_cells = PageItemLevel.MATERIALIZE
+
+    parser.load(SAMPLE_PDF)
+    result = _first_successful_result(parser)
+
+    with pytest.raises(ValueError, match="batch skipped"):
+        result.get_page(PageContentConfig(word_cells=PageItemLevel.MATERIALIZE))

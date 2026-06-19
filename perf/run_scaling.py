@@ -38,8 +38,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Tuple
 
-from docling_core.types.doc.page import SegmentedPdfPage
-from PIL import Image as PILImage
 from tabulate import tabulate
 from tqdm import tqdm
 
@@ -212,26 +210,51 @@ def _materializes_page_data(materialization_options: dict[str, bool]) -> bool:
     )
 
 
-def _decode_config(decode_options: dict[str, bool]):
-    from docling_parse.pdf_parsers import DecodePageConfig  # type: ignore[import]
+def _decode_config():
+    from docling_parse.pdf_parser import DecodeConfig
 
-    c = DecodePageConfig()
-    c.keep_char_cells = decode_options["keep_char_cells"]
-    c.keep_shapes = decode_options["keep_shapes"]
-    c.keep_bitmaps = decode_options["keep_bitmaps"]
-    c.create_word_cells = decode_options["create_word_cells"]
-    c.create_line_cells = decode_options["create_line_cells"]
-    return c
+    return DecodeConfig()
 
 
-def _materialization_config(materialization_options: dict[str, bool]):
-    from docling_parse.pdf_parser import PageMaterializationConfig
+def _content_config(
+    decode_options: dict[str, bool], materialization_options: dict[str, bool]
+):
+    from docling_parse.pdf_parser import PageContentConfig, PageItemLevel
 
-    return PageMaterializationConfig(**materialization_options)
+    def _level(keep: bool, materialize: bool) -> PageItemLevel:
+        if materialize:
+            return PageItemLevel.MATERIALIZE
+        if keep:
+            return PageItemLevel.COMPUTE
+        return PageItemLevel.SKIP
+
+    return PageContentConfig(
+        char_cells=_level(
+            decode_options["keep_char_cells"],
+            materialization_options["materialize_char_cells"],
+        ),
+        word_cells=_level(
+            decode_options["create_word_cells"],
+            materialization_options["materialize_word_cells"],
+        ),
+        line_cells=_level(
+            decode_options["create_line_cells"],
+            materialization_options["materialize_line_cells"],
+        ),
+        shapes=_level(
+            decode_options["keep_shapes"],
+            materialization_options["materialize_shapes"],
+        ),
+        bitmaps=_level(
+            decode_options["keep_bitmaps"],
+            materialization_options["materialize_bitmaps"],
+        ),
+        include_bitmap_bytes=materialization_options["materialize_bitmap_bytes"],
+    )
 
 
-def _config_rows(config, fields: List[str]) -> List[List[str]]:
-    return [[field, getattr(config, field)] for field in fields]
+def _config_rows(values: dict[str, object], fields: List[str]) -> List[List[str]]:
+    return [[field, values[field]] for field in fields]
 
 
 def _print_run_configs(
@@ -243,22 +266,16 @@ def _print_run_configs(
 ) -> None:
     from docling_parse.pdf_parsers import RenderConfig  # type: ignore[import]
 
-    decode_config = _decode_config(decode_options)
+    decode_config = _decode_config()
     decode_fields = [
-        "page_boundary",
         "do_sanitization",
-        "keep_char_cells",
-        "keep_shapes",
-        "keep_bitmaps",
-        "max_num_lines",
-        "max_num_bitmaps",
-        "create_word_cells",
-        "create_line_cells",
         "enforce_same_font",
         "horizontal_cell_tolerance",
         "word_space_width_factor_for_merge",
         "line_space_width_factor_for_merge",
         "line_space_width_factor_for_merge_with_space",
+        "max_num_lines",
+        "max_num_bitmaps",
         "do_thread_safe",
         "release_native_memory_every_n_pages",
         "keep_glyphs",
@@ -267,25 +284,25 @@ def _print_run_configs(
     print("Decode config:")
     print(
         tabulate(
-            _config_rows(decode_config, decode_fields),
+            _config_rows(decode_config.model_dump(), decode_fields),
             headers=["parameter", "value"],
         )
     )
     print()
 
-    materialization_config = _materialization_config(materialization_options)
-    materialization_fields = [
-        "materialize_char_cells",
-        "materialize_word_cells",
-        "materialize_line_cells",
-        "materialize_shapes",
-        "materialize_bitmaps",
-        "materialize_bitmap_bytes",
+    content_config = _content_config(decode_options, materialization_options)
+    content_fields = [
+        "char_cells",
+        "word_cells",
+        "line_cells",
+        "shapes",
+        "bitmaps",
+        "include_bitmap_bytes",
     ]
-    print("Materialization config:")
+    print("Content config:")
     print(
         tabulate(
-            _config_rows(materialization_config, materialization_fields),
+            _config_rows(content_config.model_dump(), content_fields),
             headers=["parameter", "value"],
         )
     )
@@ -298,6 +315,17 @@ def _print_run_configs(
 
     render_config = RenderConfig()
     render_config.scale = scale
+    render_values = {
+        "render_text": render_config.render_text,
+        "draw_text_bbox": render_config.draw_text_bbox,
+        "draw_text_basepoint": render_config.draw_text_basepoint,
+        "fit_glyph_bbox_to_target": render_config.fit_glyph_bbox_to_target,
+        "resolve_fonts": render_config.resolve_fonts,
+        "font_similarity_cutoff": render_config.font_similarity_cutoff,
+        "scale": render_config.scale,
+        "canvas_width": render_config.canvas_width,
+        "canvas_height": render_config.canvas_height,
+    }
     render_fields = [
         "render_text",
         "draw_text_bbox",
@@ -311,7 +339,7 @@ def _print_run_configs(
     ]
     print(
         tabulate(
-            _config_rows(render_config, render_fields),
+            _config_rows(render_values, render_fields),
             headers=["parameter", "value"],
         )
     )
@@ -349,13 +377,17 @@ def _timing_csv_row(
     }
     timing_keys = _timing_csv_fieldnames()[7:-1]
     if result.success:
+        from docling_parse.pdf_parser import PageRenderTimings
+
         timings = result.timings
         row["timing_total_s"] = timings.total_s
         row["timing_make_page_decoder_s"] = timings.make_page_decoder_s
         row["timing_decode_page_s"] = timings.decode_page_s
         row["timing_create_word_cells_s"] = timings.create_word_cells_s
         row["timing_create_line_cells_s"] = timings.create_line_cells_s
-        row["timing_render_page_s"] = getattr(timings, "render_page_s", 0.0)
+        row["timing_render_page_s"] = (
+            timings.render_page_s if isinstance(timings, PageRenderTimings) else 0.0
+        )
     else:
         row["timing_total_s"] = 0.0
         for key in timing_keys:
@@ -374,9 +406,9 @@ def run_sequential_parse(
     """Sequential DoclingPdfParser decode (no render). Returns wall time in seconds."""
     from docling_parse.pdf_parser import DoclingPdfParser
 
-    config = _decode_config(decode_options)
+    config = _decode_config()
     config.do_thread_safe = False  # no need for isolated QPDF per page
-    materialization_config = _materialization_config(materialization_options)
+    content_config = _content_config(decode_options, materialization_options)
 
     parser = DoclingPdfParser(loglevel="fatal")
 
@@ -385,20 +417,18 @@ def run_sequential_parse(
         pdf_schedule, desc="  sequential parse", unit="doc", leave=False
     ):
         try:
-            doc = parser.load(str(pdf_path), lazy=True)
+            doc = parser.load(
+                str(pdf_path),
+                lazy=True,
+                decode_config=config,
+                content_config=content_config,
+            )
             if page_numbers is None:
-                for _, _ in doc.iterate_pages(
-                    config=config,
-                    materialization_config=materialization_config,
-                ):
+                for _, _ in doc.iterate_pages():
                     pass
             else:
                 for page_number in page_numbers:
-                    _ = doc.get_page(
-                        page_number,
-                        config=config,
-                        materialization_config=materialization_config,
-                    )
+                    _ = doc.get_page(page_number)
             doc.unload()
         except Exception as e:
             print(f"  sequential error on {pdf_path}: {e}")
@@ -435,8 +465,8 @@ def run_pypdfium_parse(
                     try:
                         page = doc[i]
                         text_page = page.get_textpage()
-                        for l in range(text_page.count_rects()):
-                            rect = text_page.get_rect(l)
+                        for rect_idx in range(text_page.count_rects()):
+                            rect = text_page.get_rect(rect_idx)
                             _ = text_page.get_text_bounded(*rect)
                         text_page.close()
                         page.close()
@@ -484,8 +514,8 @@ def run_pypdfium_render(
                     try:
                         page = doc[i]
                         text_page = page.get_textpage()
-                        for l in range(text_page.count_rects()):
-                            rect = text_page.get_rect(l)
+                        for rect_idx in range(text_page.count_rects()):
+                            rect = text_page.get_rect(rect_idx)
                             _ = text_page.get_text_bounded(*rect)
                         text_page.close()
                         bitmap = page.render(scale=2)
@@ -642,15 +672,15 @@ def run_threaded(
     timing_csv: Path,
 ) -> float:
     """Run DoclingThreadedPdfParser; render=True enables rasterisation."""
-    from docling_parse.pdf_parser import (
-        DoclingThreadedPdfParser,
-        PageMaterializationConfig,
-        ThreadedPdfParserConfig,
-    )
     from docling_parse.pdf_parsers import RenderConfig  # type: ignore[import]
 
-    decode_config = _decode_config(decode_options)
-    materialization_config = PageMaterializationConfig(**materialization_options)
+    from docling_parse.pdf_parser import (
+        DoclingThreadedPdfParser,
+        ThreadedPdfParserConfig,
+    )
+
+    decode_config = _decode_config()
+    content_config = _content_config(decode_options, materialization_options)
     materialize_page = _materializes_page_data(materialization_options)
 
     render_config = None
@@ -663,7 +693,7 @@ def run_threaded(
         threads=num_threads,
         max_concurrent_results=max_concurrent_results,
         render_config=render_config,
-        page_materialization_config=materialization_config,
+        page_content_config=content_config,
     )
 
     parser = DoclingThreadedPdfParser(
@@ -700,9 +730,9 @@ def run_threaded(
             for result in parser.iterate_results():
                 if result.success:
                     if render:
-                        img: PILImage = result.get_image()
+                        result.get_image()
                         if materialize_page:
-                            page: SegmentedPdfPage = result.get_page()
+                            result.get_page()
 
                         """
                         assert len(page.shapes)==0, "len(page.shapes)==0"
@@ -713,7 +743,7 @@ def run_threaded(
                         """
                     else:
                         if materialize_page:
-                            page = result.get_page()
+                            result.get_page()
                 else:
                     errors += 1
 
