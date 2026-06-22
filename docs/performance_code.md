@@ -1,130 +1,204 @@
-# Performance Benchmarking Guide
+# Performance benchmarking
 
-This page explains how to benchmark page-level PDF parsing with the `perf/run_perf.py` script. It supports multiple backends — including a multi-threaded mode — and produces a CSV plus summary stats for quick comparison.
+This page covers the current benchmark tooling in `docling-parse` after the v7
+config split.
+
+Use:
+
+- `perf/run_perf.py` for per-page CSV benchmarking
+- `perf/run_scaling.py` for threaded scaling, pages/sec, and render sweeps
 
 ## Prerequisites
+
 - Python 3.9+
-- Install the project in your environment. For optional parsers, install the perf extras:
-  - pip: `pip install .[perf-tools]`
-  - uv: `uv sync --group perf-test`
+- project installed in your environment
+- perf extras only if you want non-docling baselines:
 
-Optional parsers (pdfplumber, pypdfium2, pymupdf) are only needed when you select them via `-p`.
+```sh
+uv sync --group perf-test
+```
 
-## Script Overview
-- Entry point: `python perf/run_perf.py <input> [options]`
-- Input can be a single PDF file or a directory containing PDFs.
-- Output is a CSV file with one row per page and a printed summary.
+or:
 
-CSV columns:
-- `filename,page_number,elapsed_sec,success,error`
-- For docling backends, additional columns with per-step timing breakdowns and percentages are appended.
+```sh
+pip install .[perf-tools]
+```
 
-Summary includes overall totals and per-document tables with mean/median/min/max and p50/p90/p95/p99 percentiles.
+## `perf/run_perf.py`
 
-## Parser Backends
-Use `--parser/-p` to select the backend. Available options:
-- `docling` (default) — sequential, one page at a time
-- `docling-threaded` — parallel, multi-threaded with backpressure
+### What it does
+
+- accepts a PDF file or directory of PDFs
+- runs one backend
+- writes one CSV row per page
+- prints overall stats, per-document stats, and docling timing breakdowns
+
+### Backends
+
+- `docling`
+- `docling-threaded`
 - `pdfplumber`
-- `pypdfium2` (alias: `pypdfium`)
+- `pypdfium2` (`pypdfium` alias)
 - `pymupdf`
 
-## CLI Reference
+### CLI
 
-```
+```text
 python perf/run_perf.py <input> [options]
 
 positional arguments:
   input                      Path to a PDF file or directory of PDFs
 
 options:
-  --parser, -p PARSER        Parser backend (default: docling)
+  --parser, -p PARSER        Backend to benchmark
   --recursive, -r            Recurse into subdirectories
-  --output, -o PATH          Output CSV path (default: perf/results/perf_<parser>_<timestamp>.csv)
+  --output, -o PATH          Output CSV path
   --limit, -l N              Maximum number of documents to process
-  --bytesio                  (docling only) Load PDFs via BytesIO instead of file path
-  --threads, -t N            (docling-threaded only) Number of worker threads (default: 4)
-  --max-concurrent-results N (docling-threaded only) Max buffered results before workers pause (default: 64)
+  --bytesio                  Sequential docling only
+  --threads, -t N            Threaded docling only
+  --max-concurrent-results N Threaded docling only
 ```
 
-## Common Examples
-
-### Sequential (single-threaded) docling parsing
+### Examples
 
 ```sh
-# Single file
-python perf/run_perf.py ./docs/sample.pdf
-
-# Directory, recursive
 python perf/run_perf.py ./dataset -r -p docling
-```
-
-### Parallel (multi-threaded) docling parsing
-
-```sh
-# 4 threads (default), up to 64 buffered results
-python perf/run_perf.py ./dataset -r -p docling-threaded
-
-# 8 threads, tighter backpressure
+python perf/run_perf.py ./dataset -r -p docling-threaded --threads 8
 python perf/run_perf.py ./dataset -r -p docling-threaded --threads 8 --max-concurrent-results 32
-
-# Single thread (useful as a baseline to measure thread overhead)
-python perf/run_perf.py ./dataset -r -p docling-threaded --threads 1
-```
-
-### Compare with non-docling backends
-
-```sh
 python perf/run_perf.py ./dataset -r -p pdfplumber
 python perf/run_perf.py ./dataset -r -p pypdfium2
 python perf/run_perf.py ./dataset -r -p pymupdf
 ```
 
-## Output Location
-By default, results are written to:
+### Output
+
+The main CSV is written to:
+
 - `perf/results/perf_<parser>_<timestamp>.csv`
 
-Customize output path with `--output/-o`:
-```sh
-python perf/run_perf.py ./dataset -r -p docling          -o perf/results/sequential.csv
-python perf/run_perf.py ./dataset -r -p docling-threaded  -o perf/results/parallel_4t.csv
+For docling runs, extra timing columns are appended per row. A second CSV with
+per-document aggregates is also written next to the main one.
+
+### Interpretation
+
+- Sequential `docling`: `elapsed_sec` is page wall time.
+- Threaded `docling`: `elapsed_sec` is only the wait time for that emitted page result.
+- For threaded comparisons, use the printed total wall time and pages/sec.
+
+## `perf/run_scaling.py`
+
+### What it does
+
+- runs `DoclingThreadedPdfParser` across multiple thread counts
+- supports parse-only, render-only, or both
+- prints speedup tables and pages/sec
+- optionally writes one timing row per threaded page result
+
+### Inputs
+
+`run_scaling.py` accepts:
+
+- a local PDF file
+- a local directory of PDFs
+- a Hugging Face dataset repo id whose `pdf/` subdirectory contains PDFs
+
+If no input is provided, it defaults to
+`docling-project/performance-dataset-bo767`.
+
+### CLI
+
+```text
+python perf/run_scaling.py [input] [options]
+
+options:
+  --mode {parse,render,both}
+  --recursive, -r
+  --max-pages, -l N
+  --max-concurrent-results N
+  --threads 1,2,4,8,12,16
+  --scale FLOAT
+  --other "pypdfium2;pymupdf"
+  --enable-timing / --no-enable-timing
+  --timing-csv PATH
 ```
 
-## Tips for Fair Comparisons
-- Run sequential vs threaded in separate invocations and compare CSVs and printed summaries.
-- Pin the same `--recursive` and input set for both runs.
-- For `docling-threaded`, note that `elapsed_sec` per row measures the *wait time* for each result (not CPU time). The total wall time printed at the end is the true parallel throughput measure.
-- Consider two passes:
-  - Cold run: after a reboot or clearing OS caches (if feasible).
-  - Warm run: repeat the same command to observe cache effects.
-- Avoid other heavy workloads while benchmarking.
-- Record environment details (CPU, RAM, OS, Python, library versions).
+### v7 content-selection flags
 
-## Interpreting Results
+The scaling script still exposes decode-style and materialization-style booleans
+on the CLI, but internally compiles them into the new public config split.
 
-### Sequential (`docling`)
-- `elapsed_sec` measures wall-clock seconds per page parse.
+Decode-stage booleans:
 
-### Parallel (`docling-threaded`)
-- `elapsed_sec` per row is the time spent waiting for that specific result (includes queue wait time).
-- The **total wall time** printed at the end is the key metric — it reflects actual parallel throughput.
-- Compare `total wall time` of `docling-threaded` with `time_total_sec` of sequential `docling` to see the speedup.
+- `--keep-char-cells`
+- `--create-word-cells`
+- `--create-line-cells`
+- `--keep-shapes`
+- `--keep-bitmaps`
 
-### General
-- The summary shows overall averages and percentiles across all successful pages.
-- The per-document table helps identify outliers at the file level.
-- For docling backends, a timing breakdown table shows average time and percentage for each internal parsing step (resource decoding, content parsing, etc.).
+Materialization booleans:
 
-## Troubleshooting
-- "No PDFs found": verify the input path and file extensions (`.pdf`). Use `-r` for directories with nested PDFs.
-- Import errors for optional parsers: install extras (see Prerequisites) or switch `-p` to another backend.
-- Permission errors writing CSV: pass `-o` to a writable location.
+- `--materialize-char-cells`
+- `--materialize-word-cells`
+- `--materialize-line-cells`
+- `--materialize-shapes`
+- `--materialize-bitmaps`
+- `--materialize-bitmap-bytes`
 
-## Reproducible Runs (uv)
-If you use `uv`, sync the perf group and run:
+They map to:
+
+- `DecodeConfig` for compute tuning
+- `ContentConfig` with `ContentLevel.SKIP`, `COMPUTE`, and `COMPUTE_AND_MATERIALIZE`
+
+### Examples
+
 ```sh
-uv run python perf/run_perf.py ./dataset -r -p docling
-uv run python perf/run_perf.py ./dataset -r -p docling-threaded --threads 4
+python perf/run_scaling.py ./dataset --mode parse
+python perf/run_scaling.py ./dataset --mode render --threads 1,2,4,8,12,16
+python perf/run_scaling.py ./dataset --mode both --other "pypdfium2;pymupdf"
+python perf/run_scaling.py ./dataset --mode render --enable-timing
 ```
 
-This ensures a consistent environment for fair, repeatable measurements.
+### Reading the tables
+
+- `wall_time (s)`: end-to-end elapsed time for the whole selected page set
+- `pages/sec`: total scheduled pages divided by wall time
+- `ms/page`: wall time normalized by total scheduled pages
+- `vs threaded(1)`: speedup relative to the threaded parser with one worker
+- `vs <baseline>`: speedup relative to the named baseline
+
+Parse mode includes a sequential `DoclingPdfParser` baseline. Render mode does
+not, because the sequential parser has no render path.
+
+## Timing CSVs and visualization
+
+When `run_scaling.py` is called with `--enable-timing`, it writes a CSV with:
+
+- mode
+- threads
+- success
+- page number
+- `timing_total_s`
+- `timing_make_page_decoder_s`
+- `timing_decode_page_s`
+- `timing_create_word_cells_s`
+- `timing_create_line_cells_s`
+- `timing_render_page_s`
+
+Plot those timings with:
+
+```sh
+python perf/run_scaling_visualization.py timing.csv
+python perf/run_scaling_visualization.py timing.csv --mode render --bins 80
+```
+
+## Slow-page replay
+
+To inspect the slowest pages from a `run_perf.py` CSV:
+
+```sh
+python perf/run_analysis.py perf/results/perf_docling_20260622-120000.csv --top 25
+python perf/run_analysis.py perf/results/perf_docling_20260622-120000.csv --nth 7
+```
+
+This replays those pages through `DoclingPdfParser.get_page_with_timings()` and
+extracts detailed decode-stage timings.

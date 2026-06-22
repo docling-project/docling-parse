@@ -56,74 +56,150 @@ uv run python ./docling_parse/visualize.py -i <path-to-pdf-file> -c word --inter
 
 ## Quick start
 
-Install the package from Pypi
+Install the package from PyPI:
 
 ```sh
 pip install docling-parse
 ```
 
-Convert a PDF (look in the [visualize.py](docling_parse/visualize.py) for a more detailed information)
+### Sequential parsing
+
+`docling-parse` v7 split page parsing into two public configs:
+
+- `DecodeConfig`: how to compute pages. This is fixed when a document is opened.
+- `ContentConfig`: what to keep or materialize per page. This can be overridden per page.
 
 ```python
 from docling_core.types.doc.page import TextCellUnit
-from docling_parse.pdf_parser import DoclingPdfParser, PdfDocument
-
-parser = DoclingPdfParser()
-
-pdf_doc: PdfDocument = parser.load(
-    path_or_stream="<path-to-pdf>"
+from docling_parse.pdf_parser import (
+    ContentConfig,
+    ContentLevel,
+    DecodeConfig,
+    DoclingPdfParser,
 )
 
-# PdfDocument.iterate_pages() will automatically populate pages as they are yielded.
-for page_no, pred_page in pdf_doc.iterate_pages():
+parser = DoclingPdfParser(loglevel="fatal")
 
-    # iterate over the word-cells
-    for word in pred_page.iterate_cells(unit_type=TextCellUnit.WORD):
-        print(word.rect, ": ", word.text)
+pdf_doc = parser.load(
+    path_or_stream="<path-to-pdf>",
+    decode_config=DecodeConfig(
+        do_sanitization=True,
+        keep_glyphs=False,
+    ),
+    content_config=ContentConfig(
+        char_cells_content_level=ContentLevel.SKIP,
+        word_cells_content_level=ContentLevel.COMPUTE_AND_MATERIALIZE,
+        line_cells_content_level=ContentLevel.COMPUTE_AND_MATERIALIZE,
+        shapes_content_level=ContentLevel.SKIP,
+        bitmaps_content_level=ContentLevel.SKIP,
+    ),
+)
 
-        # create a PIL image with the char cells
-    img = pred_page.render_as_image(cell_unit=TextCellUnit.CHAR)
-    img.show()
+for page_no, page in pdf_doc.iterate_pages():
+    print(page_no, len(page.word_cells), len(page.textline_cells))
+
+    for word in page.iterate_cells(unit_type=TextCellUnit.WORD):
+        print(word.rect, word.text)
+
+    image = page.render_as_image(cell_unit=TextCellUnit.WORD)
+    image.show()
 ```
+
+If you open cheaply and later need richer output, request it per page. When the
+new `content_config` needs entities that were previously skipped, that page is
+re-decoded automatically:
+
+```python
+from docling_parse.pdf_parser import ContentConfig, ContentLevel
+
+page = pdf_doc.get_page(
+    1,
+    content_config=ContentConfig(
+        word_cells_content_level=ContentLevel.COMPUTE_AND_MATERIALIZE,
+        line_cells_content_level=ContentLevel.COMPUTE_AND_MATERIALIZE,
+    ),
+)
+```
+
+### v6 -> v7 migration
+
+The main API break in v7 is that the old public `DecodePageConfig` selection
+flags were split into two concerns:
+
+- `DecodeConfig`: compute-time tuning only
+- `ContentConfig`: what to skip, compute, or materialize per page
+
+In practice:
+
+- open-time `decode_config` replaces the old per-page decode tuning
+- per-page content selection now lives in `content_config`
+- `materialize_bitmap_bytes` became `include_bitmap_bytes`
+- threaded `page_materialization_config` became `page_content_config`
+
+Typical migration examples:
+
+- old `DecodePageConfig.keep_char_cells=True` -> `ContentConfig(char_cells_content_level=ContentLevel.COMPUTE_AND_MATERIALIZE)`
+- old `DecodePageConfig.create_word_cells=True` without surfacing them everywhere -> `ContentConfig(word_cells_content_level=ContentLevel.COMPUTE)`
+- old `materialize_bitmap_bytes=False` -> `ContentConfig(include_bitmap_bytes=False)`
+
+One semantic change matters: `decode_config` is now fixed when the document or
+threaded batch is opened. If you want richer page output later, override
+`content_config` on `get_page(...)` instead. On the sequential path this may
+re-decode that page; on the threaded path you can only materialize entities the
+batch already computed.
 
 ### Parallel parsing (multi-threaded)
 
-Parse pages from one or more PDFs in parallel using a thread pool with backpressure:
+Parse one or more PDFs in parallel with backpressure:
 
 ```python
 from docling_parse.pdf_parser import (
+    ContentConfig,
+    ContentLevel,
     DecodeConfig,
     DoclingThreadedPdfParser,
     ThreadedPdfParserConfig,
 )
 
-parser_config = ThreadedPdfParserConfig(
-    loglevel="fatal",
-    threads=4,                # worker threads
-    max_concurrent_results=32 # cap buffered results to limit memory
-)
-decode_config = DecodeConfig()
-
 parser = DoclingThreadedPdfParser(
-    parser_config=parser_config,
-    decode_config=decode_config,
+    parser_config=ThreadedPdfParserConfig(
+        loglevel="fatal",
+        threads=4,
+        max_concurrent_results=32,
+        page_content_config=ContentConfig(
+            word_cells_content_level=ContentLevel.COMPUTE,
+            line_cells_content_level=ContentLevel.COMPUTE_AND_MATERIALIZE,
+        ),
+    ),
+    decode_config=DecodeConfig(),
 )
 
-# load one or more documents
-for source in ["doc_a.pdf", "doc_b.pdf"]:
-    doc_key = parser.load(source)
-    print(doc_key, parser.page_count(doc_key))
+doc_key = parser.load("doc_a.pdf", page_numbers=[1, 3, 5])
+print(doc_key, parser.page_count(doc_key), parser.scheduled_page_count(doc_key))
 
-# consume decoded pages as they become available
 for result in parser.iterate_results():
-    if result.success:
-        seg_page = result.get_page()
-        timings = result.get_timings()
-        print(f"{result.doc_key} p{result.page_number}: "
-              f"{len(seg_page.word_cells)} words in {timings.total():.3f}s")
-    else:
-        print(f"error on {result.doc_key} p{result.page_number}: {result.error_message}")
+    if not result.success:
+        print(result.doc_key, result.page_number, result.error_message)
+        continue
+
+    # Batch decode kept word cells in C++, but did not materialize them by default.
+    page = result.get_page(
+        ContentConfig(
+            word_cells_content_level=ContentLevel.COMPUTE_AND_MATERIALIZE,
+            line_cells_content_level=ContentLevel.COMPUTE_AND_MATERIALIZE,
+        )
+    )
+    print(
+        result.doc_key,
+        result.page_number,
+        len(page.word_cells),
+        result.timings.total_s,
+    )
 ```
+
+For threaded parse-and-render workloads, set
+`ThreadedPdfParserConfig.render_config` and use `result.get_image()`,
+`result.get_image(scale=...)`, or `result.get_image(canvas_size=...)`.
 
 Use the CLI
 
@@ -140,7 +216,11 @@ options:
 
 ## Performance Benchmarks
 
-*Coming soon - benchmarks will be updated for the current parser version.*
+Current perf tooling lives under [`perf/`](./perf/README.md):
+
+- [`perf/run_perf.py`](./perf/run_perf.py): per-page CSV benchmarking across `docling`, `docling-threaded`, `pdfplumber`, `pypdfium2`, and `pymupdf`
+- [`perf/run_scaling.py`](./perf/run_scaling.py): pages/sec and scaling sweeps for threaded parse and render workloads
+- [`docs/performance_code.md`](./docs/performance_code.md): usage notes and interpretation
 
 For historical V1 vs V2 benchmarks, see [legacy_performance_benchmarks.md](./docs/legacy_performance_benchmarks.md).
 
