@@ -227,7 +227,9 @@ class ContentConfig(BaseModel):
     shapes_content_level: ContentLevel = ContentLevel.COMPUTE_AND_MATERIALIZE
     bitmaps_content_level: ContentLevel = ContentLevel.COMPUTE_AND_MATERIALIZE
 
-    include_bitmap_bytes: bool = True  # only effective when bitmaps == COMPUTE_AND_MATERIALIZE
+    include_bitmap_bytes: bool = (
+        True  # only effective when bitmaps == COMPUTE_AND_MATERIALIZE
+    )
 
     def cache_key(self) -> tuple[int, int, int, int, int, bool]:
         return (

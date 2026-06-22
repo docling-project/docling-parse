@@ -1199,7 +1199,9 @@ def test_content_escalation_redecodes_page():
 
     page_words = pdf_doc.get_page(
         1,
-        content_config=ContentConfig(word_cells_content_level=ContentLevel.COMPUTE_AND_MATERIALIZE),
+        content_config=ContentConfig(
+            word_cells_content_level=ContentLevel.COMPUTE_AND_MATERIALIZE
+        ),
     )
     assert len(page_words.word_cells) > 0, (
         "escalation must re-decode the page and surface word cells"
