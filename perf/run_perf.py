@@ -88,6 +88,7 @@ class Row:
 def _get_docling_static_timing_keys() -> List[str]:
     """Return all static timing keys from the C++ pybind module."""
     from docling_parse.pdf_parsers import get_static_timing_keys  # type: ignore[import]
+
     return sorted(get_static_timing_keys())
 
 
@@ -98,19 +99,19 @@ def parse_with_docling(use_bytesio: bool = False) -> Callable[[Path], Iterable[R
         from docling_core.types.doc.page import PdfPageBoundaryType
 
         from docling_parse.pdf_parser import (
+            ContentConfig,
+            ContentLevel,
             DecodeConfig,
             DoclingPdfParser,
-            PageContentConfig,
-            PageItemLevel,
         )
 
         timing_keys = _get_docling_static_timing_keys()
-        content_config = PageContentConfig(
-            char_cells=PageItemLevel.SKIP,
-            word_cells=PageItemLevel.SKIP,
-            line_cells=PageItemLevel.MATERIALIZE,
-            shapes=PageItemLevel.SKIP,
-            bitmaps=PageItemLevel.SKIP,
+        content_config = ContentConfig(
+            char_cells_content_level=ContentLevel.SKIP,
+            word_cells_content_level=ContentLevel.SKIP,
+            line_cells_content_level=ContentLevel.MATERIALIZE,
+            shapes_content_level=ContentLevel.SKIP,
+            bitmaps_content_level=ContentLevel.SKIP,
         )
 
         rows: List[Row] = []
@@ -285,19 +286,19 @@ def parse_with_docling_threaded(
 
     def _runner(pdf_paths: List[Path]) -> Tuple[List[Row], float]:
         from docling_parse.pdf_parser import (
+            ContentConfig,
+            ContentLevel,
             DecodeConfig,
             DoclingThreadedPdfParser,
-            PageContentConfig,
-            PageItemLevel,
             ThreadedPdfParserConfig,
         )
 
-        content_config = PageContentConfig(
-            char_cells=PageItemLevel.SKIP,
-            word_cells=PageItemLevel.SKIP,
-            line_cells=PageItemLevel.MATERIALIZE,
-            shapes=PageItemLevel.SKIP,
-            bitmaps=PageItemLevel.SKIP,
+        content_config = ContentConfig(
+            char_cells_content_level=ContentLevel.SKIP,
+            word_cells_content_level=ContentLevel.SKIP,
+            line_cells_content_level=ContentLevel.MATERIALIZE,
+            shapes_content_level=ContentLevel.SKIP,
+            bitmaps_content_level=ContentLevel.SKIP,
         )
 
         parser_config = ThreadedPdfParserConfig(
@@ -361,7 +362,9 @@ NON_DOCLING_PARSERS: dict[str, Callable[[Path], Iterable[Row]]] = {
     "pymupdf": parse_with_pymupdf,
 }
 
-ALL_PARSER_NAMES = sorted({"docling", "docling-threaded"} | set(NON_DOCLING_PARSERS.keys()))
+ALL_PARSER_NAMES = sorted(
+    {"docling", "docling-threaded"} | set(NON_DOCLING_PARSERS.keys())
+)
 
 
 # -------- Main program --------
@@ -399,8 +402,12 @@ def print_stats(stats: dict, parser_name: str) -> None:
     print(f" - pages failed: {stats['pages_failed']}")
     print(f" - total sec:    {fmt_seconds(stats['time_total_sec'])}")
     print(f" - avg sec/page: {fmt_seconds(stats['time_avg_sec'])}")
-    print(f" - p50: {fmt_seconds(stats['p50_sec'])}  p90: {fmt_seconds(stats['p90_sec'])}  p95: {fmt_seconds(stats['p95_sec'])}  p99: {fmt_seconds(stats['p99_sec'])}")
-    print(f" - min: {fmt_seconds(stats['min_sec'])}  max: {fmt_seconds(stats['max_sec'])}")
+    print(
+        f" - p50: {fmt_seconds(stats['p50_sec'])}  p90: {fmt_seconds(stats['p90_sec'])}  p95: {fmt_seconds(stats['p95_sec'])}  p99: {fmt_seconds(stats['p99_sec'])}"
+    )
+    print(
+        f" - min: {fmt_seconds(stats['min_sec'])}  max: {fmt_seconds(stats['max_sec'])}"
+    )
 
 
 def compute_per_document_stats(rows: List[Row]) -> List[dict]:
@@ -441,7 +448,18 @@ def print_per_document_table(rows: List[Row]) -> None:
         print("\nNo per-document stats to display (no successful pages).")
         return
 
-    headers = ["document", "pages", "total", "mean", "median", "min", "max", "p90", "p95", "p99"]
+    headers = [
+        "document",
+        "pages",
+        "total",
+        "mean",
+        "median",
+        "min",
+        "max",
+        "p90",
+        "p95",
+        "p99",
+    ]
     table_rows = []
     for s in per_doc:
         table_rows.append(
@@ -468,21 +486,37 @@ def write_per_document_csv(rows: List[Row], out_path: Path) -> Path:
     per_doc_path = out_path.with_name(out_path.stem + "_per_doc" + out_path.suffix)
     with per_doc_path.open("w", newline="") as f:
         w = csv.writer(f)
-        w.writerow(["basename", "document", "pages", "total", "mean", "median", "min", "max", "p90", "p95", "p99"])
+        w.writerow(
+            [
+                "basename",
+                "document",
+                "pages",
+                "total",
+                "mean",
+                "median",
+                "min",
+                "max",
+                "p90",
+                "p95",
+                "p99",
+            ]
+        )
         for s in per_doc:
-            w.writerow([
-                Path(s["document"]).name,
-                s["document"],
-                s["pages"],
-                fmt_seconds(s["total"]),
-                fmt_seconds(s["mean"]),
-                fmt_seconds(s["median"]),
-                fmt_seconds(s["min"]),
-                fmt_seconds(s["max"]),
-                fmt_seconds(s["p90"]),
-                fmt_seconds(s["p95"]),
-                fmt_seconds(s["p99"]),
-            ])
+            w.writerow(
+                [
+                    Path(s["document"]).name,
+                    s["document"],
+                    s["pages"],
+                    fmt_seconds(s["total"]),
+                    fmt_seconds(s["mean"]),
+                    fmt_seconds(s["median"]),
+                    fmt_seconds(s["min"]),
+                    fmt_seconds(s["max"]),
+                    fmt_seconds(s["p90"]),
+                    fmt_seconds(s["p95"]),
+                    fmt_seconds(s["p99"]),
+                ]
+            )
     return per_doc_path
 
 
@@ -509,7 +543,9 @@ def print_timing_breakdown(rows: List[Row], timing_keys: List[str]) -> None:
         key_total = sum(r.timings_detail.get(key, 0.0) for r in ok_rows)
         key_avg = key_total / n
         key_pct = (key_total / total_elapsed * 100.0) if total_elapsed > 0 else 0.0
-        table_rows.append([key, fmt_seconds(key_total), fmt_seconds(key_avg), f"{key_pct:.2f}%"])
+        table_rows.append(
+            [key, fmt_seconds(key_total), fmt_seconds(key_avg), f"{key_pct:.2f}%"]
+        )
 
     print("\nTiming breakdown (static keys, across all successful pages):")
     print(tabulate(table_rows, headers=headers))
@@ -587,7 +623,7 @@ def main(argv: List[str]) -> int:
     pdfs = find_pdfs(input_path, recursive=args.recursive)
 
     if args.limit is not None:
-        pdfs = pdfs[:args.limit]
+        pdfs = pdfs[: args.limit]
 
     if not pdfs:
         print(f"No PDFs found at {input_path}", file=sys.stderr)
@@ -625,7 +661,13 @@ def main(argv: List[str]) -> int:
             header.append(f"{key}_%")
         w.writerow(header)
         for r in rows:
-            row_data = [r.filename, r.page_number, f"{r.elapsed_sec:.9f}", int(r.success), r.error]
+            row_data = [
+                r.filename,
+                r.page_number,
+                f"{r.elapsed_sec:.9f}",
+                int(r.success),
+                r.error,
+            ]
             for key in timing_keys:
                 val = r.timings_detail.get(key, 0.0)
                 pct = (val / r.elapsed_sec * 100.0) if r.elapsed_sec > 0 else 0.0

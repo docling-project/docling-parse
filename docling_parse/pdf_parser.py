@@ -203,7 +203,7 @@ class PageRenderTimings(PageDecodeTimings):
     render_page_s: float = 0.0
 
 
-class PageItemLevel(IntEnum):
+class ContentLevel(IntEnum):
     """How far a page entity travels. Ordered: SKIP < COMPUTE < MATERIALIZE."""
 
     SKIP = 0  # not computed in C++, absent from SegmentedPdfPage
@@ -211,7 +211,7 @@ class PageItemLevel(IntEnum):
     MATERIALIZE = 2  # computed in C++ AND surfaced in SegmentedPdfPage
 
 
-class PageContentConfig(BaseModel):
+class ContentConfig(BaseModel):
     """Per-entity selection: skipped, computed-in-C++-only, or materialized.
 
     Field name is the entity; the value is the lifecycle level. Set per call
@@ -221,21 +221,21 @@ class PageContentConfig(BaseModel):
 
     model_config = ConfigDict(validate_assignment=True)
 
-    char_cells: PageItemLevel = PageItemLevel.MATERIALIZE
-    word_cells: PageItemLevel = PageItemLevel.MATERIALIZE
-    line_cells: PageItemLevel = PageItemLevel.MATERIALIZE
-    shapes: PageItemLevel = PageItemLevel.MATERIALIZE
-    bitmaps: PageItemLevel = PageItemLevel.MATERIALIZE
+    char_cells_content_level: ContentLevel = ContentLevel.MATERIALIZE
+    word_cells_content_level: ContentLevel = ContentLevel.MATERIALIZE
+    line_cells_content_level: ContentLevel = ContentLevel.MATERIALIZE
+    shapes_content_level: ContentLevel = ContentLevel.MATERIALIZE
+    bitmaps_content_level: ContentLevel = ContentLevel.MATERIALIZE
 
     include_bitmap_bytes: bool = True  # only effective when bitmaps == MATERIALIZE
 
     def cache_key(self) -> tuple[int, int, int, int, int, bool]:
         return (
-            int(self.char_cells),
-            int(self.word_cells),
-            int(self.line_cells),
-            int(self.shapes),
-            int(self.bitmaps),
+            int(self.char_cells_content_level),
+            int(self.word_cells_content_level),
+            int(self.line_cells_content_level),
+            int(self.shapes_content_level),
+            int(self.bitmaps_content_level),
             self.include_bitmap_bytes,
         )
 
@@ -245,7 +245,7 @@ class DecodeConfig(BaseModel):
 
     Fixed when the document is opened; the C++ page-decoder cache freezes these
     at first decode, so they cannot vary per page. Entity selection lives on
-    PageContentConfig instead.
+    ContentConfig instead.
     """
 
     model_config = ConfigDict(validate_assignment=True)
@@ -264,28 +264,13 @@ class DecodeConfig(BaseModel):
     keep_qpdf_warnings: bool = False
 
 
-# C++ decode-time switch mask: (keep_char, create_word, create_line, keep_shapes, keep_bitmaps)
-_DecodeMask = tuple[bool, bool, bool, bool, bool]
-
-
-def _decode_mask(content_config: PageContentConfig) -> _DecodeMask:
-    """The C++ decode-time switches a content_config needs (level >= COMPUTE)."""
-    c = PageItemLevel.COMPUTE
-    return (
-        content_config.char_cells >= c,
-        content_config.word_cells >= c,
-        content_config.line_cells >= c,
-        content_config.shapes >= c,
-        content_config.bitmaps >= c,
-    )
-
-
 def _compile_decode_config(
+    *,
     decode_config: DecodeConfig,
     page_boundary: str,
-    decode_mask: _DecodeMask,
+    content_config: ContentConfig,
 ) -> "_DecodePageConfig":
-    """Compile the public (DecodeConfig, content mask) into the C++ decode config."""
+    """Compile the public decode and content configs into the C++ decode config."""
     cpp = _DecodePageConfig()
     cpp.page_boundary = page_boundary
     cpp.do_sanitization = decode_config.do_sanitization
@@ -308,13 +293,17 @@ def _compile_decode_config(
     )
     cpp.keep_glyphs = decode_config.keep_glyphs
     cpp.keep_qpdf_warnings = decode_config.keep_qpdf_warnings
-    (
-        cpp.keep_char_cells,
-        cpp.create_word_cells,
-        cpp.create_line_cells,
-        cpp.keep_shapes,
-        cpp.keep_bitmaps,
-    ) = decode_mask
+    cpp.keep_char_cells = (
+        content_config.char_cells_content_level >= ContentLevel.COMPUTE
+    )
+    cpp.create_word_cells = (
+        content_config.word_cells_content_level >= ContentLevel.COMPUTE
+    )
+    cpp.create_line_cells = (
+        content_config.line_cells_content_level >= ContentLevel.COMPUTE
+    )
+    cpp.keep_shapes = content_config.shapes_content_level >= ContentLevel.COMPUTE
+    cpp.keep_bitmaps = content_config.bitmaps_content_level >= ContentLevel.COMPUTE
     return cpp
 
 
@@ -593,16 +582,16 @@ def _to_bitmap_resources_from_decoder(
 def segmented_page_from_decoder(
     page_decoder: PdfPageDecoder,
     boundary_type: PdfPageBoundaryType = PdfPageBoundaryType.CROP_BOX,
-    content_config: PageContentConfig | None = None,
+    content_config: ContentConfig | None = None,
 ) -> SegmentedPdfPage:
     """Convert a C++ PdfPageDecoder to a SegmentedPdfPage."""
     if content_config is None:
-        content_config = PageContentConfig()
-    MAT = PageItemLevel.MATERIALIZE
+        content_config = ContentConfig()
+    MAT = ContentLevel.MATERIALIZE
 
     char_cells = (
         _to_cells_from_decoder(page_decoder.get_char_cells())
-        if content_config.char_cells == MAT
+        if content_config.char_cells_content_level == MAT
         else []
     )
 
@@ -619,25 +608,25 @@ def segmented_page_from_decoder(
                 page_decoder.get_page_images(),
                 include_bitmap_bytes=content_config.include_bitmap_bytes,
             )
-            if content_config.bitmaps == MAT
+            if content_config.bitmaps_content_level == MAT
             else []
         ),
         shapes=(
             _to_shapes_from_decoder(page_decoder.get_page_shapes())
-            if content_config.shapes == MAT
+            if content_config.shapes_content_level == MAT
             else []
         ),
         widgets=_to_widgets_from_decoder(page_decoder.get_page_widgets()),
         hyperlinks=_to_hyperlinks_from_decoder(page_decoder.get_page_hyperlinks()),
     )
 
-    if content_config.word_cells == MAT and page_decoder.has_word_cells():
+    if content_config.word_cells_content_level == MAT and page_decoder.has_word_cells():
         segmented_page.word_cells = _to_cells_from_decoder(
             page_decoder.get_word_cells()
         )
         segmented_page.has_words = len(segmented_page.word_cells) > 0
 
-    if content_config.line_cells == MAT and page_decoder.has_line_cells():
+    if content_config.line_cells_content_level == MAT and page_decoder.has_line_cells():
         segmented_page.textline_cells = _to_cells_from_decoder(
             page_decoder.get_line_cells()
         )
@@ -668,24 +657,24 @@ class PdfDocument:
         key: str,
         boundary_type: PdfPageBoundaryType = PdfPageBoundaryType.CROP_BOX,
         decode_config: DecodeConfig | None = None,
-        content_config: PageContentConfig | None = None,
+        content_config: ContentConfig | None = None,
     ):
         self._parser: pdf_parser = parser
         self._key = key
         self._boundary_type = boundary_type
         self._decode_config = (decode_config or DecodeConfig()).model_copy()
-        self._content_config = (content_config or PageContentConfig()).model_copy()
+        self._content_config = (content_config or ContentConfig()).model_copy()
         self._pages: Dict[
             tuple[int, tuple[int, int, int, int, int, bool]], SegmentedPdfPage
         ] = {}
-        # Per page: the C++ decode-time mask the cached page-decoder satisfies.
-        self._decoded_masks: Dict[int, _DecodeMask] = {}
+        # Per page: the content config the cached page-decoder satisfies.
+        self._decoded_content_configs: Dict[int, ContentConfig] = {}
         self._toc: PdfTableOfContents | None = None
         self._meta: PdfMetaData | None = None
         self._annotations: PdfAnnotations | None = None
 
     def _ensure_page_decoder(
-        self, page_no: int, content_config: PageContentConfig
+        self, page_no: int, content_config: ContentConfig
     ) -> PdfPageDecoder:
         """Return a C++ page-decoder that satisfies content_config.
 
@@ -699,22 +688,59 @@ class PdfDocument:
                 f"(min:1, max:{self.number_of_pages()})"
             )
         page = page_no - 1
-        needed = _decode_mask(content_config)
-        have = self._decoded_masks.get(page_no)
+        needed = content_config.model_copy()
+        have = self._decoded_content_configs.get(page_no)
 
-        if have is not None and any(n and not h for n, h in zip(needed, have)):
-            needed = tuple(n or h for n, h in zip(needed, have))  # type: ignore[assignment]
+        if have is not None and (
+            (
+                needed.char_cells_content_level >= ContentLevel.COMPUTE
+                and have.char_cells_content_level < ContentLevel.COMPUTE
+            )
+            or (
+                needed.word_cells_content_level >= ContentLevel.COMPUTE
+                and have.word_cells_content_level < ContentLevel.COMPUTE
+            )
+            or (
+                needed.line_cells_content_level >= ContentLevel.COMPUTE
+                and have.line_cells_content_level < ContentLevel.COMPUTE
+            )
+            or (
+                needed.shapes_content_level >= ContentLevel.COMPUTE
+                and have.shapes_content_level < ContentLevel.COMPUTE
+            )
+            or (
+                needed.bitmaps_content_level >= ContentLevel.COMPUTE
+                and have.bitmaps_content_level < ContentLevel.COMPUTE
+            )
+        ):
+            needed.char_cells_content_level = max(
+                needed.char_cells_content_level, have.char_cells_content_level
+            )
+            needed.word_cells_content_level = max(
+                needed.word_cells_content_level, have.word_cells_content_level
+            )
+            needed.line_cells_content_level = max(
+                needed.line_cells_content_level, have.line_cells_content_level
+            )
+            needed.shapes_content_level = max(
+                needed.shapes_content_level, have.shapes_content_level
+            )
+            needed.bitmaps_content_level = max(
+                needed.bitmaps_content_level, have.bitmaps_content_level
+            )
             self._parser.unload_document_page(key=self._key, page=page)
             have = None
 
-        mask = needed if have is None else have
+        decode_content_config = needed if have is None else have
         cpp = _compile_decode_config(
-            self._decode_config, self._boundary_type.value, mask
+            decode_config=self._decode_config,
+            page_boundary=self._boundary_type.value,
+            content_config=decode_content_config,
         )
         decoder = self._parser.get_page_decoder(key=self._key, page=page, config=cpp)
         if decoder is None:
             raise ValueError(f"Failed to decode page {page_no}")
-        self._decoded_masks[page_no] = mask
+        self._decoded_content_configs[page_no] = decode_content_config.model_copy()
         return decoder
 
     def is_loaded(self) -> bool:
@@ -722,7 +748,7 @@ class PdfDocument:
 
     def unload(self) -> bool:
         self._pages.clear()
-        self._decoded_masks.clear()
+        self._decoded_content_configs.clear()
 
         if self.is_loaded():
             return self._parser.unload_document(self._key)
@@ -742,7 +768,7 @@ class PdfDocument:
                 self._parser.unload_document_page(key=self._key, page=page_num)
                 for k in cache_keys:
                     del self._pages[k]
-            self._decoded_masks.pop(page_no, None)
+            self._decoded_content_configs.pop(page_no, None)
 
     def number_of_pages(self) -> int:
         if self.is_loaded():
@@ -790,7 +816,7 @@ class PdfDocument:
     def iterate_pages(
         self,
         *,
-        content_config: PageContentConfig | None = None,
+        content_config: ContentConfig | None = None,
     ) -> Iterator[Tuple[int, SegmentedPdfPage]]:
         for page_no in range(self.number_of_pages()):
             yield (
@@ -859,7 +885,7 @@ class PdfDocument:
         self,
         page_no: int,
         *,
-        content_config: PageContentConfig | None = None,
+        content_config: ContentConfig | None = None,
     ) -> SegmentedPdfPage:
         """Get a page as SegmentedPdfPage (zero-copy from C++).
 
@@ -880,7 +906,7 @@ class PdfDocument:
         self,
         page_no: int,
         *,
-        content_config: PageContentConfig | None = None,
+        content_config: ContentConfig | None = None,
     ) -> Tuple[SegmentedPdfPage, Timings]:
         """Get a page along with timing information.
 
@@ -891,7 +917,7 @@ class PdfDocument:
         cc = content_config or self._content_config
         if 1 <= page_no <= self.number_of_pages():
             self._parser.unload_document_page(key=self._key, page=page_no - 1)
-            self._decoded_masks.pop(page_no, None)
+            self._decoded_content_configs.pop(page_no, None)
         decoder = self._ensure_page_decoder(page_no, cc)
         segmented_page = segmented_page_from_decoder(decoder, self._boundary_type, cc)
         timings = Timings(
@@ -902,7 +928,7 @@ class PdfDocument:
 
     def load_all_pages(
         self,
-        content_config: PageContentConfig | None = None,
+        content_config: ContentConfig | None = None,
     ):
         for page_no in range(1, self.number_of_pages() + 1):
             self.get_page(page_no, content_config=content_config)
@@ -944,7 +970,7 @@ class DoclingPdfParser:
         boundary_type: PdfPageBoundaryType = PdfPageBoundaryType.CROP_BOX,
         password: str | None = None,
         decode_config: DecodeConfig | None = None,
-        content_config: PageContentConfig | None = None,
+        content_config: ContentConfig | None = None,
     ) -> PdfDocument:
 
         if isinstance(path_or_stream, str):
@@ -1030,7 +1056,7 @@ class ThreadedPdfParserConfig(BaseModel):
     max_concurrent_results: int = 32
     boundary_type: PdfPageBoundaryType = PdfPageBoundaryType.CROP_BOX
     render_config: RenderConfig | None = None
-    page_content_config: PageContentConfig | None = None
+    page_content_config: ContentConfig | None = None
 
 
 class PageParseResult:
@@ -1042,14 +1068,14 @@ class PageParseResult:
         *,
         boundary_type: PdfPageBoundaryType,
         render_config: RenderConfig | None,
-        content_config: PageContentConfig,
-        batch_decode_mask: _DecodeMask,
+        content_config: ContentConfig,
+        batch_content_config: ContentConfig,
     ):
         self._raw = raw_result
         self._boundary_type = boundary_type
         self._render_config = render_config
         self._content_config = content_config
-        self._batch_decode_mask = batch_decode_mask
+        self._batch_content_config = batch_content_config
         self._pages: Dict[tuple[int, int, int, int, int, bool], SegmentedPdfPage] = {}
         self._page_decoder: PdfPageDecoder | None = None
         self._default_image: PILImage.Image | None = None
@@ -1093,7 +1119,7 @@ class PageParseResult:
 
     def get_page(
         self,
-        content_config: PageContentConfig | None = None,
+        content_config: ContentConfig | None = None,
     ) -> SegmentedPdfPage:
         """Return the parsed page, converting lazily on first access.
 
@@ -1109,8 +1135,28 @@ class PageParseResult:
         """
         cc = content_config or self._content_config
         if content_config is not None:
-            if any(
-                r and not b for r, b in zip(_decode_mask(cc), self._batch_decode_mask)
+            batch = self._batch_content_config
+            if (
+                (
+                    cc.char_cells_content_level >= ContentLevel.COMPUTE
+                    and batch.char_cells_content_level < ContentLevel.COMPUTE
+                )
+                or (
+                    cc.word_cells_content_level >= ContentLevel.COMPUTE
+                    and batch.word_cells_content_level < ContentLevel.COMPUTE
+                )
+                or (
+                    cc.line_cells_content_level >= ContentLevel.COMPUTE
+                    and batch.line_cells_content_level < ContentLevel.COMPUTE
+                )
+                or (
+                    cc.shapes_content_level >= ContentLevel.COMPUTE
+                    and batch.shapes_content_level < ContentLevel.COMPUTE
+                )
+                or (
+                    cc.bitmaps_content_level >= ContentLevel.COMPUTE
+                    and batch.bitmaps_content_level < ContentLevel.COMPUTE
+                )
             ):
                 raise ValueError(
                     "content_config requests an entity the batch skipped at "
@@ -1316,14 +1362,14 @@ class DoclingThreadedPdfParser:
             )
         self._decode_config = (decode_config or DecodeConfig()).model_copy()
         self._content_config = (
-            parser_config.page_content_config or PageContentConfig()
+            parser_config.page_content_config or ContentConfig()
         ).model_copy()
-        self._batch_decode_mask = _decode_mask(self._content_config)
+        self._batch_content_config = self._content_config.model_copy()
         # The threaded C++ parser decodes the whole batch with one fixed config.
         self._cpp_decode_config = _compile_decode_config(
-            self._decode_config,
-            parser_config.boundary_type.value,
-            self._batch_decode_mask,
+            decode_config=self._decode_config,
+            page_boundary=parser_config.boundary_type.value,
+            content_config=self._batch_content_config,
         )
         self._page_counts: Dict[str, int] = {}
         self._scheduled_page_counts: Dict[str, int] = {}
@@ -1450,5 +1496,5 @@ class DoclingThreadedPdfParser:
             boundary_type=self._parser_config.boundary_type,
             render_config=self._parser_config.render_config,
             content_config=self._content_config,
-            batch_decode_mask=self._batch_decode_mask,
+            batch_content_config=self._batch_content_config,
         )

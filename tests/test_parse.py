@@ -21,10 +21,10 @@ from docling_core.types.doc.page import (
 from pydantic import TypeAdapter
 
 from docling_parse.pdf_parser import (
+    ContentConfig,
+    ContentLevel,
     DecodeConfig,
     DoclingPdfParser,
-    PageContentConfig,
-    PageItemLevel,
     PdfDocument,
 )
 
@@ -1042,8 +1042,8 @@ def test_bitmap_no_materialization_preserves_geometry():
         path_or_stream=BITMAP_PDF, lazy=True, decode_config=_make_bitmap_config()
     )
 
-    materialize_full = PageContentConfig(include_bitmap_bytes=True)
-    materialize_geo = PageContentConfig(include_bitmap_bytes=False)
+    materialize_full = ContentConfig(include_bitmap_bytes=True)
+    materialize_geo = ContentConfig(include_bitmap_bytes=False)
 
     page_full = pdf_doc.get_page(1, content_config=materialize_full)
     page_geo = pdf_doc.get_page(1, content_config=materialize_geo)
@@ -1079,9 +1079,7 @@ def test_bitmap_no_materialization_has_no_image():
         path_or_stream=BITMAP_PDF, lazy=True, decode_config=_make_bitmap_config()
     )
 
-    page = pdf_doc.get_page(
-        1, content_config=PageContentConfig(include_bitmap_bytes=False)
-    )
+    page = pdf_doc.get_page(1, content_config=ContentConfig(include_bitmap_bytes=False))
     assert len(page.bitmap_resources) > 0, "test PDF must contain bitmaps"
 
     for bm in page.bitmap_resources:
@@ -1103,10 +1101,10 @@ def test_bitmap_materialization_cache_false_then_true():
     )
 
     page_geo = pdf_doc.get_page(
-        1, content_config=PageContentConfig(include_bitmap_bytes=False)
+        1, content_config=ContentConfig(include_bitmap_bytes=False)
     )
     page_full = pdf_doc.get_page(
-        1, content_config=PageContentConfig(include_bitmap_bytes=True)
+        1, content_config=ContentConfig(include_bitmap_bytes=True)
     )
 
     for bm in page_geo.bitmap_resources:
@@ -1130,10 +1128,10 @@ def test_bitmap_materialization_cache_true_then_false():
     )
 
     page_full = pdf_doc.get_page(
-        1, content_config=PageContentConfig(include_bitmap_bytes=True)
+        1, content_config=ContentConfig(include_bitmap_bytes=True)
     )
     page_geo = pdf_doc.get_page(
-        1, content_config=PageContentConfig(include_bitmap_bytes=False)
+        1, content_config=ContentConfig(include_bitmap_bytes=False)
     )
 
     assert any(bm.image is not None for bm in page_full.bitmap_resources), (
@@ -1147,7 +1145,7 @@ def test_bitmap_materialization_cache_true_then_false():
     pdf_doc.unload()
 
 
-# --- PageContentConfig redesign ---------------------------------------------
+# --- ContentConfig redesign ---------------------------------------------
 
 TEXT_PDF = "docs/dln-v1.pdf"
 
@@ -1156,22 +1154,31 @@ def test_word_cells_materialize_without_char_cells():
     """Word cells can be produced without surfacing character cells."""
     parser = DoclingPdfParser(loglevel="fatal")
 
-    skip = PageItemLevel.SKIP
-    mat = PageItemLevel.MATERIALIZE
+    skip = ContentLevel.SKIP
+    mat = ContentLevel.MATERIALIZE
 
     # word_cells MATERIALIZE, char_cells SKIP -> words present, no char cells.
     pdf_doc = parser.load(
         path_or_stream=TEXT_PDF,
         lazy=True,
-        content_config=PageContentConfig(char_cells=skip, word_cells=mat),
+        content_config=ContentConfig(
+            char_cells_content_level=skip, word_cells_content_level=mat
+        ),
     )
     page = pdf_doc.get_page(1)
-    assert len(page.word_cells) > 0, "words must be present when word_cells=MATERIALIZE"
-    assert len(page.char_cells) == 0, "char cells must be absent when char_cells=SKIP"
+    assert len(page.word_cells) > 0, (
+        "words must be present when word_cells_content_level=MATERIALIZE"
+    )
+    assert len(page.char_cells) == 0, (
+        "char cells must be absent when char_cells_content_level=SKIP"
+    )
 
     # char_cells SKIP -> empty; word_cells SKIP -> empty.
     page2 = pdf_doc.get_page(
-        1, content_config=PageContentConfig(char_cells=skip, word_cells=skip)
+        1,
+        content_config=ContentConfig(
+            char_cells_content_level=skip, word_cells_content_level=skip
+        ),
     )
     assert len(page2.char_cells) == 0
     assert len(page2.word_cells) == 0
@@ -1184,14 +1191,15 @@ def test_content_escalation_redecodes_page():
     pdf_doc = parser.load(
         path_or_stream=TEXT_PDF,
         lazy=True,
-        content_config=PageContentConfig(word_cells=PageItemLevel.SKIP),
+        content_config=ContentConfig(word_cells_content_level=ContentLevel.SKIP),
     )
 
     page_no_words = pdf_doc.get_page(1)
     assert len(page_no_words.word_cells) == 0, "words skipped at document default"
 
     page_words = pdf_doc.get_page(
-        1, content_config=PageContentConfig(word_cells=PageItemLevel.MATERIALIZE)
+        1,
+        content_config=ContentConfig(word_cells_content_level=ContentLevel.MATERIALIZE),
     )
     assert len(page_words.word_cells) > 0, (
         "escalation must re-decode the page and surface word cells"

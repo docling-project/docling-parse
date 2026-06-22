@@ -219,33 +219,33 @@ def _decode_config():
 def _content_config(
     decode_options: dict[str, bool], materialization_options: dict[str, bool]
 ):
-    from docling_parse.pdf_parser import PageContentConfig, PageItemLevel
+    from docling_parse.pdf_parser import ContentConfig, ContentLevel
 
-    def _level(keep: bool, materialize: bool) -> PageItemLevel:
+    def _level(keep: bool, materialize: bool) -> ContentLevel:
         if materialize:
-            return PageItemLevel.MATERIALIZE
+            return ContentLevel.MATERIALIZE
         if keep:
-            return PageItemLevel.COMPUTE
-        return PageItemLevel.SKIP
+            return ContentLevel.COMPUTE
+        return ContentLevel.SKIP
 
-    return PageContentConfig(
-        char_cells=_level(
+    return ContentConfig(
+        char_cells_content_level=_level(
             decode_options["keep_char_cells"],
             materialization_options["materialize_char_cells"],
         ),
-        word_cells=_level(
+        word_cells_content_level=_level(
             decode_options["create_word_cells"],
             materialization_options["materialize_word_cells"],
         ),
-        line_cells=_level(
+        line_cells_content_level=_level(
             decode_options["create_line_cells"],
             materialization_options["materialize_line_cells"],
         ),
-        shapes=_level(
+        shapes_content_level=_level(
             decode_options["keep_shapes"],
             materialization_options["materialize_shapes"],
         ),
-        bitmaps=_level(
+        bitmaps_content_level=_level(
             decode_options["keep_bitmaps"],
             materialization_options["materialize_bitmaps"],
         ),
@@ -564,7 +564,11 @@ def run_pymupdf_parse(
                 errors += 1
                 continue
             try:
-                pages = doc if page_numbers is None else (doc[page_number - 1] for page_number in page_numbers)
+                pages = (
+                    doc
+                    if page_numbers is None
+                    else (doc[page_number - 1] for page_number in page_numbers)
+                )
                 for page in pages:
                     try:
                         _ = page.get_text("text")
@@ -609,7 +613,11 @@ def run_pymupdf_render(
                 errors += 1
                 continue
             try:
-                pages = doc if page_numbers is None else (doc[page_number - 1] for page_number in page_numbers)
+                pages = (
+                    doc
+                    if page_numbers is None
+                    else (doc[page_number - 1] for page_number in page_numbers)
+                )
                 for page in pages:
                     try:
                         _ = page.get_text("text")
@@ -806,7 +814,11 @@ def _print_table(
 
     def _row(name: str, threads, t: float) -> List[str]:
         if _isnan(t):
-            return [name, str(threads), "n/a", "n/a"] + ["n/a"] * n_vs_baseline + ["n/a", "n/a"]
+            return (
+                [name, str(threads), "n/a", "n/a"]
+                + ["n/a"] * n_vs_baseline
+                + ["n/a", "n/a"]
+            )
         cells: List[str] = [name, str(threads), f"{t:.3f}"]
         vs_t1 = threaded_1 / t if t > 0 and not _isnan(threaded_1) else float("nan")
         cells.append(_fmt_speedup(vs_t1))
@@ -917,23 +929,34 @@ def main(argv: List[str]) -> int:
         help="Benchmark stage: parse (decode-only), render (decode+raster), or both (default: render)",
     )
     ap.add_argument(
-        "--recursive", "-r", action="store_true",
+        "--recursive",
+        "-r",
+        action="store_true",
         help="Recurse into subdirectories (local paths only; HF downloads always recurse)",
     )
     ap.add_argument(
-        "--max-pages", "-l", type=int, default=None,
+        "--max-pages",
+        "-l",
+        type=int,
+        default=None,
         help="Maximum number of pages to process across all input PDFs",
     )
     ap.add_argument(
-        "--max-concurrent-results", type=int, default=64,
+        "--max-concurrent-results",
+        type=int,
+        default=64,
         help="Max buffered results for the threaded parser/renderer (default: 64)",
     )
     ap.add_argument(
-        "--threads", type=str, default="1,2,4,8,12,16",
+        "--threads",
+        type=str,
+        default="1,2,4,8,12,16",
         help="Comma-separated list of thread counts to test (default: 1,2,4,8,12,16)",
     )
     ap.add_argument(
-        "--scale", type=float, default=1.0,
+        "--scale",
+        type=float,
+        default=1.0,
         help="Render scale for rendering (default: 1.0; render/both modes only)",
     )
     _add_bool_value_arg(
