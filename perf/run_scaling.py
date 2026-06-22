@@ -223,7 +223,7 @@ def _content_config(
 
     def _level(keep: bool, materialize: bool) -> ContentLevel:
         if materialize:
-            return ContentLevel.MATERIALIZE
+            return ContentLevel.COMPUTE_AND_MATERIALIZE
         if keep:
             return ContentLevel.COMPUTE
         return ContentLevel.SKIP
@@ -292,11 +292,11 @@ def _print_run_configs(
 
     content_config = _content_config(decode_options, materialization_options)
     content_fields = [
-        "char_cells",
-        "word_cells",
-        "line_cells",
-        "shapes",
-        "bitmaps",
+        "char_cells_content_level",
+        "word_cells_content_level",
+        "line_cells_content_level",
+        "shapes_content_level",
+        "bitmaps_content_level",
         "include_bitmap_bytes",
     ]
     print("Content config:")

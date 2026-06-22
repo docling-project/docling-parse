@@ -204,11 +204,11 @@ class PageRenderTimings(PageDecodeTimings):
 
 
 class ContentLevel(IntEnum):
-    """How far a page entity travels. Ordered: SKIP < COMPUTE < MATERIALIZE."""
+    """How far a page entity travels. Ordered: SKIP < COMPUTE < COMPUTE_AND_MATERIALIZE."""
 
     SKIP = 0  # not computed in C++, absent from SegmentedPdfPage
     COMPUTE = 1  # computed/retained in C++, NOT surfaced in SegmentedPdfPage
-    MATERIALIZE = 2  # computed in C++ AND surfaced in SegmentedPdfPage
+    COMPUTE_AND_MATERIALIZE = 2  # computed in C++ AND surfaced in SegmentedPdfPage
 
 
 class ContentConfig(BaseModel):
@@ -221,13 +221,13 @@ class ContentConfig(BaseModel):
 
     model_config = ConfigDict(validate_assignment=True)
 
-    char_cells_content_level: ContentLevel = ContentLevel.MATERIALIZE
-    word_cells_content_level: ContentLevel = ContentLevel.MATERIALIZE
-    line_cells_content_level: ContentLevel = ContentLevel.MATERIALIZE
-    shapes_content_level: ContentLevel = ContentLevel.MATERIALIZE
-    bitmaps_content_level: ContentLevel = ContentLevel.MATERIALIZE
+    char_cells_content_level: ContentLevel = ContentLevel.COMPUTE_AND_MATERIALIZE
+    word_cells_content_level: ContentLevel = ContentLevel.COMPUTE_AND_MATERIALIZE
+    line_cells_content_level: ContentLevel = ContentLevel.COMPUTE_AND_MATERIALIZE
+    shapes_content_level: ContentLevel = ContentLevel.COMPUTE_AND_MATERIALIZE
+    bitmaps_content_level: ContentLevel = ContentLevel.COMPUTE_AND_MATERIALIZE
 
-    include_bitmap_bytes: bool = True  # only effective when bitmaps == MATERIALIZE
+    include_bitmap_bytes: bool = True  # only effective when bitmaps == COMPUTE_AND_MATERIALIZE
 
     def cache_key(self) -> tuple[int, int, int, int, int, bool]:
         return (
@@ -587,7 +587,7 @@ def segmented_page_from_decoder(
     """Convert a C++ PdfPageDecoder to a SegmentedPdfPage."""
     if content_config is None:
         content_config = ContentConfig()
-    MAT = ContentLevel.MATERIALIZE
+    MAT = ContentLevel.COMPUTE_AND_MATERIALIZE
 
     char_cells = (
         _to_cells_from_decoder(page_decoder.get_char_cells())
@@ -1125,7 +1125,7 @@ class PageParseResult:
 
         The threaded batch decodes once, so content_config here only changes
         Python materialization, not the C++ decode. Any entity the batch
-        computed (level >= COMPUTE) may be raised to MATERIALIZE per result —
+        computed (level >= COMPUTE) may be raised to COMPUTE_AND_MATERIALIZE per result —
         this is the intended pattern: decode the batch at COMPUTE, then surface
         cells only on the pages that need them. You may also lower emit or
         toggle include_bitmap_bytes. The only rejected case is requesting an

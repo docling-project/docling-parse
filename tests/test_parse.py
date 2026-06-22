@@ -1155,9 +1155,9 @@ def test_word_cells_materialize_without_char_cells():
     parser = DoclingPdfParser(loglevel="fatal")
 
     skip = ContentLevel.SKIP
-    mat = ContentLevel.MATERIALIZE
+    mat = ContentLevel.COMPUTE_AND_MATERIALIZE
 
-    # word_cells MATERIALIZE, char_cells SKIP -> words present, no char cells.
+    # word_cells COMPUTE_AND_MATERIALIZE, char_cells SKIP -> words present, no char cells.
     pdf_doc = parser.load(
         path_or_stream=TEXT_PDF,
         lazy=True,
@@ -1167,7 +1167,7 @@ def test_word_cells_materialize_without_char_cells():
     )
     page = pdf_doc.get_page(1)
     assert len(page.word_cells) > 0, (
-        "words must be present when word_cells_content_level=MATERIALIZE"
+        "words must be present when word_cells_content_level=COMPUTE_AND_MATERIALIZE"
     )
     assert len(page.char_cells) == 0, (
         "char cells must be absent when char_cells_content_level=SKIP"
@@ -1199,7 +1199,7 @@ def test_content_escalation_redecodes_page():
 
     page_words = pdf_doc.get_page(
         1,
-        content_config=ContentConfig(word_cells_content_level=ContentLevel.MATERIALIZE),
+        content_config=ContentConfig(word_cells_content_level=ContentLevel.COMPUTE_AND_MATERIALIZE),
     )
     assert len(page_words.word_cells) > 0, (
         "escalation must re-decode the page and surface word cells"

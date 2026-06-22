@@ -380,9 +380,9 @@ def test_threaded_result_upgrade_compute_to_materialize():
 
     # Batch default emit is COMPUTE -> not surfaced.
     assert len(result.get_page().word_cells) == 0
-    # Upgrade COMPUTE -> MATERIALIZE: cells were computed in C++, now surfaced.
+    # Upgrade COMPUTE -> COMPUTE_AND_MATERIALIZE: cells were computed in C++, now surfaced.
     upgraded = result.get_page(
-        ContentConfig(word_cells_content_level=ContentLevel.MATERIALIZE)
+        ContentConfig(word_cells_content_level=ContentLevel.COMPUTE_AND_MATERIALIZE)
     )
     assert len(upgraded.word_cells) > 0
 
@@ -404,7 +404,7 @@ def test_threaded_result_rejects_skipped_entity():
 
     with pytest.raises(ValueError, match="batch skipped"):
         result.get_page(
-            ContentConfig(word_cells_content_level=ContentLevel.MATERIALIZE)
+            ContentConfig(word_cells_content_level=ContentLevel.COMPUTE_AND_MATERIALIZE)
         )
 
 
@@ -419,12 +419,12 @@ def test_threaded_result_rejects_skipped_entity_after_config_mutation():
         ),
         decode_config=_make_decode_config(),
     )
-    content_config.word_cells_content_level = ContentLevel.MATERIALIZE
+    content_config.word_cells_content_level = ContentLevel.COMPUTE_AND_MATERIALIZE
 
     parser.load(SAMPLE_PDF)
     result = _first_successful_result(parser)
 
     with pytest.raises(ValueError, match="batch skipped"):
         result.get_page(
-            ContentConfig(word_cells_content_level=ContentLevel.MATERIALIZE)
+            ContentConfig(word_cells_content_level=ContentLevel.COMPUTE_AND_MATERIALIZE)
         )

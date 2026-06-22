@@ -109,7 +109,7 @@ def parse_with_docling(use_bytesio: bool = False) -> Callable[[Path], Iterable[R
         content_config = ContentConfig(
             char_cells_content_level=ContentLevel.SKIP,
             word_cells_content_level=ContentLevel.SKIP,
-            line_cells_content_level=ContentLevel.MATERIALIZE,
+            line_cells_content_level=ContentLevel.COMPUTE_AND_MATERIALIZE,
             shapes_content_level=ContentLevel.SKIP,
             bitmaps_content_level=ContentLevel.SKIP,
         )
@@ -296,7 +296,7 @@ def parse_with_docling_threaded(
         content_config = ContentConfig(
             char_cells_content_level=ContentLevel.SKIP,
             word_cells_content_level=ContentLevel.SKIP,
-            line_cells_content_level=ContentLevel.MATERIALIZE,
+            line_cells_content_level=ContentLevel.COMPUTE_AND_MATERIALIZE,
             shapes_content_level=ContentLevel.SKIP,
             bitmaps_content_level=ContentLevel.SKIP,
         )
