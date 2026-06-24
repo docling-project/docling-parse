@@ -89,6 +89,24 @@ namespace pdflib
 
     // New: Persistent page decoders for typed API
     std::map<int, page_decoder_ptr> page_decoders;
+    std::list<int> page_access_order;
+    size_t max_cached_pages = 16;
+
+    void update_page_access(int page_number) {
+      // Remove from current position if exists
+      page_access_order.remove(page_number);
+      // Add to back (most recently used)
+      page_access_order.push_back(page_number);
+    }
+    
+    void evict_lru_page() {
+        if (!page_access_order.empty()) {
+            int lru_page = page_access_order.front();
+            page_access_order.pop_front();
+            page_decoders.erase(lru_page);
+            LOG_S(INFO) << "Evicted LRU page " << lru_page << " from cache";
+        }
+      }
   };
 
   pdf_decoder<DOCUMENT>::pdf_decoder():
@@ -450,6 +468,9 @@ namespace pdflib
 
     // Store in cache
     page_decoders[page_number] = page_decoder;
+    update_page_access(page_number);
+    // LRU eviction if cache exceeds limit
+    if(page_decoders.size() > max_cached_pages) evict_lru_page(); 
 
     std::stringstream ss;
     ss << pdf_timings::PREFIX_DECODE_PAGE << page_number;
@@ -463,6 +484,7 @@ namespace pdflib
     if(page_decoders.count(page_number) > 0)
       {
         page_decoders.erase(page_number);
+        page_access_order.remove(page_number); 
         LOG_S(INFO) << "unloaded page decoder for page: " << page_number;
       }
 
@@ -472,6 +494,7 @@ namespace pdflib
   bool pdf_decoder<DOCUMENT>::unload_pages()
   {
     page_decoders.clear();
+    page_access_order.clear();
     LOG_S(INFO) << "unloaded all page decoders";
 
     return true;
