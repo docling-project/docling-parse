@@ -282,7 +282,8 @@ namespace pdflib
 
 	double xobject_time = xobject_timer.get_time();
 	total_xobject_time += xobject_time;
-	timings.add_timing(pdf_timings::PREFIX_DECODE_XOBJECT + key, xobject_time);
+	// per-xobject (dynamic) timing disabled for now; only the total is reported
+	//timings.add_timing(pdf_timings::PREFIX_DECODE_XOBJECT + key, xobject_time);
       }
 
     timings.add_timing(pdf_timings::KEY_DECODE_XOBJECTS_TOTAL, total_xobject_time);

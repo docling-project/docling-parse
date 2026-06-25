@@ -145,7 +145,8 @@ namespace pdflib
 
 	double grph_time = grph_timer.get_time();
 	total_grph_time += grph_time;
-	timings.add_timing(pdf_timings::PREFIX_DECODE_GRPH + key, grph_time);
+	// per-grph (dynamic) timing disabled for now; only the total is reported
+	//timings.add_timing(pdf_timings::PREFIX_DECODE_GRPH + key, grph_time);
       }
 
     timings.add_timing(pdf_timings::KEY_DECODE_GRPHS_TOTAL, total_grph_time);

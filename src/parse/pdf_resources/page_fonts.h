@@ -157,7 +157,8 @@ namespace pdflib
 
 	double font_time = font_timer.get_time();
 	total_font_time += font_time;
-	timings.add_timing(pdf_timings::PREFIX_DECODE_FONT + key, font_time);
+	// per-font (dynamic) timing disabled for now; only the total is reported
+	//timings.add_timing(pdf_timings::PREFIX_DECODE_FONT + key, font_time);
       }
 
     timings.add_timing(pdf_timings::KEY_DECODE_FONTS_TOTAL, total_font_time);

@@ -208,15 +208,9 @@ int main(int argc, char* argv[]) {
       parser.parse(config_file, page_config);
 
       double total_time = timer.get_time();
-      std::cout << "\ntimings:\n";
-      for(const auto& [key, val] : parser.get_timings())
-        {
-          if(pdflib::pdf_timings::is_static_key(key))
-            {
-              std::cout << "  " << std::setw(48) << std::left << key << val << " [sec]\n";
-            }
-        }
-      std::cout << std::setw(48) << std::left << "  total-time" << total_time << " [sec]" << std::endl;
+      std::cout << "\ntimings:\n"
+                << pdflib::pdf_timings::format_tree_table(parser.get_timings(), total_time)
+                << std::endl;
 
       return 0;
     }
@@ -267,15 +261,9 @@ int main(int argc, char* argv[]) {
       parser.parse(config, page_config);
 
       double total_time = timer.get_time();
-      std::cout << "\ntimings:\n";
-      for(const auto& [key, val] : parser.get_timings())
-        {
-          if(pdflib::pdf_timings::is_static_key(key))
-            {
-              std::cout << "  " << std::setw(48) << std::left << key << val << " [sec]\n";
-            }
-        }
-      std::cout << std::setw(48) << std::left << "  total-time" << total_time << " [sec]" << std::endl;
+      std::cout << "\ntimings:\n"
+                << pdflib::pdf_timings::format_tree_table(parser.get_timings(), total_time)
+                << std::endl;
 
       if (result.count("print-cells")) {
         std::string mode = result["print-cells"].as<std::string>();

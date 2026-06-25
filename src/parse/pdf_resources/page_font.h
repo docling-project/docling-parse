@@ -684,7 +684,7 @@ namespace pdflib
       qpdf_font = qpdf_font_;
 
       double font_time = font_timer.get_time();
-      timings.add_timing(pdf_timings::PREFIX_DECODE_FONT + font_key + " init font-copy", font_time);            
+      timings.add_timing(pdf_timings::KEY_FONT_INIT_COPY, font_time);
     }
     
     {
@@ -707,7 +707,7 @@ namespace pdflib
       init_char_widths();
 
       double font_time = font_timer.get_time();
-      timings.add_timing(pdf_timings::PREFIX_DECODE_FONT + font_key + " init font-metrics", font_time);      
+      timings.add_timing(pdf_timings::KEY_FONT_INIT_METRICS, font_time);
     }
     
     {
@@ -716,7 +716,7 @@ namespace pdflib
       init_cmap(timings);
 
       double font_time = font_timer.get_time();
-      timings.add_timing(pdf_timings::PREFIX_DECODE_FONT + font_key + " font-cmap", font_time);
+      timings.add_timing(pdf_timings::KEY_FONT_CMAP, font_time);
     }
 
     {
@@ -725,8 +725,8 @@ namespace pdflib
       init_cmap_resource();
 
       double font_time = font_timer.get_time();
-      timings.add_timing(pdf_timings::PREFIX_DECODE_FONT + font_key + " font-cmap-resources", font_time);
-    }    
+      timings.add_timing(pdf_timings::KEY_FONT_CMAP_RESOURCES, font_time);
+    }
     
     LOG_S(INFO) << __FUNCTION__ << "\t cmap-init: " << cmap_initialized;
     LOG_S(INFO) << __FUNCTION__ << "\t cmap-size: " << cmap_numb_to_char.size();
@@ -741,7 +741,7 @@ namespace pdflib
       init_space_index();
 
       double font_time = font_timer.get_time();
-      timings.add_timing(pdf_timings::PREFIX_DECODE_FONT + font_key + " font-chars", font_time);      
+      timings.add_timing(pdf_timings::KEY_FONT_CHARS, font_time);
     }
     
     unknown_numbs.clear();
@@ -1837,12 +1837,14 @@ namespace pdflib
 	      //decoder.print();
 
 	      double font_time = font_timer.get_time();
-	      timings.add_timing(pdf_timings::PREFIX_DECODE_FONT + font_key + " font-cmap-stream-decode", font_time);	      
+	      timings.add_timing(pdf_timings::KEY_FONT_CMAP_STREAM_DECODE, font_time);
 	    }
-	    
+
 	    // interprete the stream
 	    {
-	      std::string key_root = pdf_timings::PREFIX_DECODE_FONT + font_key;
+	      // empty key_root => cmap timings aggregate into the static
+	      // cmap-parse-* keys (rather than per-font dynamic keys)
+	      std::string key_root = "";
 
 	      cmap_parser parser;
 	      parser.parse(stream, timings, key_root);

@@ -354,7 +354,10 @@ namespace pdflib
     LOG_S(INFO) << "Do_Image: image with `" << xobj_name << "`";
 
     pdf_resource<PAGE_XOBJECT_IMAGE>& xobj = page_xobjects->get_image(xobj_name);
+
+    utils::timer do_image_timer;
     current_bitmap_state().Do_image(xobj);
+    timings.add_timing(pdf_timings::KEY_DO_IMAGE_TOTAL, do_image_timer.get_time());
   }
 
   void pdf_decoder<STREAM>::do_form(const std::string& xobj_name,
@@ -409,7 +412,9 @@ namespace pdflib
       current_global_state().cm(xobj.get_matrix());
 
       {
+        utils::timer parse_stream_timer;
         std::vector<qpdf_stream_instruction> insts = xobj.parse_stream();
+        timings.add_timing(pdf_timings::KEY_PARSE_STREAM_TOTAL, parse_stream_timer.get_time());
 
         pdf_decoder<STREAM> new_stream(config,
 
