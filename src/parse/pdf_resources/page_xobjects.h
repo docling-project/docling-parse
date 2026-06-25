@@ -166,8 +166,15 @@ namespace pdflib
 	return XOBJECT_UNKNOWN;
       }
     
-    QPDFObjectHandle dict = qpdf_obj.getDict(); // only works on a stream! 
+    utils::timer subtype_timer;
+
+    QPDFObjectHandle dict = qpdf_obj.getDict(); // only works on a stream!
+    LOG_S(INFO) << __FUNCTION__ << ": getDict took " << subtype_timer.get_time(utils::MILLI_SEC) << " ms";
+
+    subtype_timer.reset();
     nlohmann::json json_dict = to_json(dict);
+    LOG_S(INFO) << __FUNCTION__ << ": to_json(dict) took " << subtype_timer.get_time(utils::MILLI_SEC)
+		<< " ms (recursively serialises the whole xobject dict just to read /Subtype)";
 
     if(json_dict.count("/Subtype"))
       {

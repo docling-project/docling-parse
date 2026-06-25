@@ -99,8 +99,15 @@ namespace pdflib
     LOG_S(INFO) << __FUNCTION__;
 
     {
+      utils::timer parse_timer;
+
       qpdf_xobject_dict = qpdf_xobject.getDict();
+      LOG_S(INFO) << __FUNCTION__ << ": getDict took " << parse_timer.get_time(utils::MILLI_SEC) << " ms";
+
+      parse_timer.reset();
       json_xobject_dict = to_json(qpdf_xobject_dict);
+      LOG_S(INFO) << __FUNCTION__ << ": to_json(qpdf_xobject_dict) took " << parse_timer.get_time(utils::MILLI_SEC)
+		  << " ms (recursively serialises the whole xobject dict + nested /Resources just to read /Matrix and /BBox)";
     }
 
     parse_matrix();
