@@ -162,6 +162,7 @@ namespace pdflib
       }
 
     timings.add_timing(pdf_timings::KEY_DECODE_FONTS_TOTAL, total_font_time);
+    timings.note_attributed(total_font_time);
   }
 
 }

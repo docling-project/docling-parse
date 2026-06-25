@@ -25,7 +25,9 @@ namespace pdflib
     nlohmann::json val;
   };
   
-  pdf_resource<PAGE_GRPH>::pdf_resource()
+  pdf_resource<PAGE_GRPH>::pdf_resource():
+    key(""),
+    val(nullptr)
   {}
   
   pdf_resource<PAGE_GRPH>::~pdf_resource()
@@ -40,9 +42,11 @@ namespace pdflib
 				    QPDFObjectHandle qpdf_grph)
   {
     key = key_;
-    val = to_json(qpdf_grph);
 
-    LOG_S(INFO) << key << ": " << val.dump(2);
+    // FIXME: skipping for now as there is no use ...
+    // val = to_json(qpdf_grph); 
+
+    //LOG_S(INFO) << key << ": " << val.dump(2);
   }
 
 }

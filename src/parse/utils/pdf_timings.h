@@ -65,8 +65,21 @@ namespace pdflib
     // Form xobject stream decompression + tokenization (do_form -> parse_stream)
     static const std::string KEY_PARSE_STREAM_TOTAL;
 
+    // Form xobject machinery: child-resource allocation, graphics-state copies
+    // (q()/Q()), stack copy (update_stack) -- i.e. do_form cost that is NOT
+    // resource-parsing, stream-decoding or nested interpretation.
+    static const std::string KEY_DO_FORM_MACHINERY;
+
     // Image xobject drawing/extraction (do_image -> Do_image)
     static const std::string KEY_DO_IMAGE_TOTAL;
+
+    // Top-level page content-stream tokenization (decode_contents -> decode)
+    static const std::string KEY_CONTENT_DECODE_TOTAL;
+
+    // Operator-execution self-time: time spent interpreting operators across
+    // all (recursion) levels, excluding the sub-work bucketed under the keys
+    // above. Derived as a residual in decode_contents.
+    static const std::string KEY_INTERPRETE_OPS_TOTAL;
 
     // Grphs timing keys
     static const std::string KEY_DECODE_GRPHS_TOTAL;
@@ -151,6 +164,21 @@ namespace pdflib
      */
     static std::string format_tree_table(const std::unordered_map<std::string, double>& sums,
                                           double total_time = -1.0);
+
+    /**
+     * @brief Accountancy used to derive operator self-time.
+     *
+     * Bucketed sub-tasks that run *inside* the interpretation loop
+     * (resource set(), parse_stream, do_image, do_form machinery) call
+     * note_attributed() with their measured duration. decode_contents reads
+     * attributed_total() before/after interpreting to compute the
+     * operator-execution self-time as: interprete_total - attributed_delta.
+     *
+     * This works because a single pdf_timings instance is threaded by
+     * reference through the page decoder and all (recursive) stream decoders.
+     */
+    void   note_attributed(double seconds);
+    double attributed_total() const;
 
     pdf_timings();
     ~pdf_timings();
@@ -248,6 +276,9 @@ namespace pdflib
      *        that children appear under their parent in a sensible order.
      */
     static const std::vector<std::pair<std::string, std::string>>& get_containment_pairs();
+
+    // running total of time attributed to bucketed sub-tasks
+    double attributed_seconds_ = 0.0;
 
     std::unordered_map<std::string, std::vector<double>> timings_;
   };
@@ -398,7 +429,10 @@ namespace pdflib
   const std::string pdf_timings::KEY_FONT_CHARS = "font: font-chars";
   const std::string pdf_timings::KEY_DECODE_XOBJECTS_TOTAL = "decode_xobjects_total";
   const std::string pdf_timings::KEY_PARSE_STREAM_TOTAL = "parse_stream_total";
+  const std::string pdf_timings::KEY_DO_FORM_MACHINERY = "do_form_machinery_total";
   const std::string pdf_timings::KEY_DO_IMAGE_TOTAL = "do_image_total";
+  const std::string pdf_timings::KEY_CONTENT_DECODE_TOTAL = "content_decode_total";
+  const std::string pdf_timings::KEY_INTERPRETE_OPS_TOTAL = "interprete_ops_total";
   const std::string pdf_timings::KEY_DECODE_GRPHS_TOTAL = "decode_grphs_total";
 
   // Additional decode_page step keys
@@ -455,7 +489,10 @@ namespace pdflib
       KEY_CMAP_PARSE_ENDCODESPACERANGE,
       KEY_DECODE_XOBJECTS_TOTAL,
       KEY_PARSE_STREAM_TOTAL,
+      KEY_DO_FORM_MACHINERY,
       KEY_DO_IMAGE_TOTAL,
+      KEY_CONTENT_DECODE_TOTAL,
+      KEY_INTERPRETE_OPS_TOTAL,
       KEY_DECODE_GRPHS_TOTAL,
       KEY_TO_JSON_PAGE,
       KEY_EXTRACT_ANNOTS_JSON,
@@ -529,10 +566,13 @@ namespace pdflib
       {KEY_SANITISE_CONTENTS,              KEY_DECODE_PAGE},
 
       // --- decode_contents sub-timings ---
+      {KEY_CONTENT_DECODE_TOTAL,           KEY_DECODE_CONTENTS},
+      {KEY_INTERPRETE_OPS_TOTAL,           KEY_DECODE_CONTENTS},
       {KEY_DECODE_XOBJECTS_TOTAL,          KEY_DECODE_CONTENTS},
       {KEY_DECODE_GRPHS_TOTAL,             KEY_DECODE_CONTENTS},
       {KEY_DECODE_FONTS_TOTAL,             KEY_DECODE_CONTENTS},
       {KEY_PARSE_STREAM_TOTAL,             KEY_DECODE_CONTENTS},
+      {KEY_DO_FORM_MACHINERY,              KEY_DECODE_CONTENTS},
       {KEY_DO_IMAGE_TOTAL,                 KEY_DECODE_CONTENTS},
 
       // --- sanitise_contents sub-timings ---
@@ -554,6 +594,16 @@ namespace pdflib
       {KEY_CMAP_PARSE_ENDCODESPACERANGE,   KEY_CMAP_PARSE_TOTAL},
     };
     return pairs;
+  }
+
+  void pdf_timings::note_attributed(double seconds)
+  {
+    attributed_seconds_ += seconds;
+  }
+
+  double pdf_timings::attributed_total() const
+  {
+    return attributed_seconds_;
   }
 
   std::string pdf_timings::get_parent_key(const std::string& key)

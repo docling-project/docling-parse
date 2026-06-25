@@ -287,6 +287,7 @@ namespace pdflib
       }
 
     timings.add_timing(pdf_timings::KEY_DECODE_XOBJECTS_TOTAL, total_xobject_time);
+    timings.note_attributed(total_xobject_time);
   }
 
 }

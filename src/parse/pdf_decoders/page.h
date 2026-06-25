@@ -600,21 +600,41 @@ namespace pdflib
 
     int cnt = 0;
 
+    // Split decode_contents into: page content-stream tokenization
+    // (content_decode_total) vs. operator-execution self-time
+    // (interprete_ops_total). The latter is the interpretation wall time minus
+    // the sub-work attributed to other buckets (resource set(), parse_stream,
+    // do_image, do_form machinery) while interpreting -- see note_attributed().
+    double interprete_seconds = 0.0;
+    double attributed_before  = timings.attributed_total();
+
     std::vector<qpdf_stream_instruction> parameters;
     for(auto content:contents)
       {
         LOG_S(INFO) << "--------------- start decoding content stream (" << (cnt++) << ")... ---------------";
 
-        stream_decoder.decode(content);
+        {
+          utils::timer content_decode_timer;
+          stream_decoder.decode(content);
+          timings.add_timing(pdf_timings::KEY_CONTENT_DECODE_TOTAL, content_decode_timer.get_time());
+        }
         //stream_decoder.print();
 
-        stream_decoder.interprete(parameters);
+        {
+          utils::timer interprete_timer;
+          stream_decoder.interprete(parameters);
+          interprete_seconds += interprete_timer.get_time();
+        }
 
         if(parameters.size()>0)
           {
             LOG_S(WARNING) << "stream is ending with non-zero number of parameters";
           }
       }
+
+    double attributed_during = timings.attributed_total() - attributed_before;
+    timings.add_timing(pdf_timings::KEY_INTERPRETE_OPS_TOTAL,
+                       interprete_seconds - attributed_during);
   }
 
   void pdf_decoder<PAGE>::load_acroform_dr_fonts()

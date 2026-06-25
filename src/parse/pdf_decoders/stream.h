@@ -357,13 +357,25 @@ namespace pdflib
 
     utils::timer do_image_timer;
     current_bitmap_state().Do_image(xobj);
-    timings.add_timing(pdf_timings::KEY_DO_IMAGE_TOTAL, do_image_timer.get_time());
+    double do_image_seconds = do_image_timer.get_time();
+    timings.add_timing(pdf_timings::KEY_DO_IMAGE_TOTAL, do_image_seconds);
+    timings.note_attributed(do_image_seconds);
   }
 
   void pdf_decoder<STREAM>::do_form(const std::string& xobj_name,
                                     const xobject_subtype_name& xobj_subtype)
   {
     LOG_S(INFO) << "Do_Form: XObject with name `" << xobj_name << "`";
+
+    // Time the whole call; the "machinery" cost (child-resource allocation,
+    // graphics-state copies via q()/Q(), stack copy in update_stack(), ...) is
+    // derived as: total - set() - parse_stream() - nested interprete(). The
+    // subtracted parts are bucketed under their own keys, so this residual is
+    // disjoint from them.
+    utils::timer do_form_timer;
+    double set_seconds          = 0.0;
+    double parse_stream_seconds = 0.0;
+    double interprete_seconds   = 0.0;
 
     pdf_resource<PAGE_XOBJECT_FORM>& xobj = page_xobjects->get_form(xobj_name);
 
@@ -373,11 +385,11 @@ namespace pdflib
       		<< bbox.at(1) << ", "
       		<< bbox.at(2) << ", "
       		<< bbox.at(3) << "]";
-    
+
     // check if (1) we keep data outside the page_boundary and
     // (2) if bbox is outside of page_boundary
     // please implement
-    
+
     // create child resources with parent link (no deep copy)
     auto page_fonts_    = std::make_shared<pdf_resource<PAGE_FONTS>>(page_fonts);
     auto page_grphs_    = std::make_shared<pdf_resource<PAGE_GRPHS>>(page_grphs);
@@ -385,6 +397,8 @@ namespace pdflib
 
     // parse the resources of the xobject into the child resources
     {
+      utils::timer set_timer;
+
       if(xobj.has_fonts())
         {
           QPDFObjectHandle xobj_fonts = xobj.get_fonts();
@@ -402,6 +416,8 @@ namespace pdflib
           QPDFObjectHandle xobj_xobjects = xobj.get_xobjects();
           page_xobjects_->set(xobj_xobjects, timings);
         }
+
+      set_seconds = set_timer.get_time();
     }
 
     {
@@ -414,7 +430,9 @@ namespace pdflib
       {
         utils::timer parse_stream_timer;
         std::vector<qpdf_stream_instruction> insts = xobj.parse_stream();
-        timings.add_timing(pdf_timings::KEY_PARSE_STREAM_TOTAL, parse_stream_timer.get_time());
+        parse_stream_seconds = parse_stream_timer.get_time();
+        timings.add_timing(pdf_timings::KEY_PARSE_STREAM_TOTAL, parse_stream_seconds);
+        timings.note_attributed(parse_stream_seconds);
 
         pdf_decoder<STREAM> new_stream(config,
 
@@ -430,12 +448,16 @@ namespace pdflib
                                        instructions,
 
                                        timings);
-	
+
         bool updated_stack = new_stream.update_stack(stack, stack_count);
 
         // copy the stack
         std::vector<qpdf_stream_instruction> parameters;
-        new_stream.interprete(insts, parameters);
+        {
+          utils::timer interprete_timer;
+          new_stream.interprete(insts, parameters);
+          interprete_seconds = interprete_timer.get_time();
+        }
 
         if(updated_stack)
           {
@@ -448,10 +470,16 @@ namespace pdflib
             unknown_operators.insert(item);
           }
       }
-      
+
       // pop-back the stack
       this->Q();
     }
+
+    // residual = state copies, child-resource allocation, stack handling, ...
+    double machinery_seconds = do_form_timer.get_time()
+                             - set_seconds - parse_stream_seconds - interprete_seconds;
+    timings.add_timing(pdf_timings::KEY_DO_FORM_MACHINERY, machinery_seconds);
+    timings.note_attributed(machinery_seconds);
 
     LOG_S(INFO) << "ending the execution of FORM XObject with name `" << xobj_name << "`";
 
