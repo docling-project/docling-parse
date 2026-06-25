@@ -54,7 +54,6 @@ namespace pdflib
     QPDFObjectHandle qpdf_xobject;
 
     QPDFObjectHandle qpdf_xobject_dict;
-    nlohmann::json   json_xobject_dict;
 
     std::string xobject_key;
 
@@ -98,17 +97,7 @@ namespace pdflib
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    {
-      utils::timer parse_timer;
-
-      qpdf_xobject_dict = qpdf_xobject.getDict();
-      LOG_S(INFO) << __FUNCTION__ << ": getDict took " << parse_timer.get_time(utils::MILLI_SEC) << " ms";
-
-      parse_timer.reset();
-      json_xobject_dict = to_json(qpdf_xobject_dict);
-      LOG_S(INFO) << __FUNCTION__ << ": to_json(qpdf_xobject_dict) took " << parse_timer.get_time(utils::MILLI_SEC)
-		  << " ms (recursively serialises the whole xobject dict + nested /Resources just to read /Matrix and /BBox)";
-    }
+    qpdf_xobject_dict = qpdf_xobject.getDict();
 
     parse_matrix();
     parse_bbox();
@@ -205,21 +194,32 @@ namespace pdflib
     
     matrix = {1., 0., 0., 1., 0., 0.};
 
-    std::vector<std::string> keys = {"/Matrix"};
-    if(utils::json::has(keys, json_xobject_dict))
+    // Read the '/Matrix' array directly off the qpdf dict instead of going
+    // through a full recursive to_json of the xobject dict.
+    if(qpdf_xobject_dict.hasKey("/Matrix") and qpdf_xobject_dict.getKey("/Matrix").isArray())
       {
-        nlohmann::json json_matrix = utils::json::get(keys, json_xobject_dict);
+        QPDFObjectHandle qpdf_matrix = qpdf_xobject_dict.getKey("/Matrix");
 
-        if(matrix.size()!=json_matrix.size())
+        if(matrix.size()!=qpdf_matrix.getArrayNItems())
           {
-            std::string message = "matrix.size()!=json_matrix.size()";
+            std::string message = "matrix.size()!=qpdf_matrix.getArrayNItems()";
             LOG_S(ERROR) << message;
             throw std::logic_error(message);
           }
 
         for(int l=0; l<matrix.size(); l++)
           {
-            matrix[l] = json_matrix[l].get<double>();
+            QPDFObjectHandle num = qpdf_matrix.getArrayItem(l);
+            if(num.isNumber())
+              {
+                matrix[l] = utils::numeric::locale_safe_numeric_value(num);
+              }
+            else
+              {
+                LOG_S(WARNING) << "'/Matrix'[" << l << "] is not a number (type: "
+                               << num.getTypeName() << "), keeping identity default "
+                               << matrix[l];
+              }
           }
 
 	LOG_S(INFO) << "matrix: ["
@@ -242,21 +242,32 @@ namespace pdflib
     
     bbox = {0., 0., 0., 0.};
 
-    std::vector<std::string> keys = {"/BBox"};
-    if(utils::json::has(keys, json_xobject_dict))
+    // Read the '/BBox' array directly off the qpdf dict instead of going
+    // through a full recursive to_json of the xobject dict.
+    if(qpdf_xobject_dict.hasKey("/BBox") and qpdf_xobject_dict.getKey("/BBox").isArray())
       {
-        nlohmann::json json_bbox = utils::json::get(keys, json_xobject_dict);
+        QPDFObjectHandle qpdf_bbox = qpdf_xobject_dict.getKey("/BBox");
 
-        if(bbox.size()!=json_bbox.size())
+        if(bbox.size()!=qpdf_bbox.getArrayNItems())
           {
-            std::string message = "bbox.size()!=json_bbox.size()";
+            std::string message = "bbox.size()!=qpdf_bbox.getArrayNItems()";
             LOG_S(ERROR) << message;
             throw std::logic_error(message);
           }
 
         for(int l=0; l<bbox.size(); l++)
           {
-            bbox[l] = json_bbox[l].get<double>();
+            QPDFObjectHandle num = qpdf_bbox.getArrayItem(l);
+            if(num.isNumber())
+              {
+                bbox[l] = utils::numeric::locale_safe_numeric_value(num);
+              }
+            else
+              {
+                LOG_S(ERROR) << "'/BBox'[" << l << "] is not a number (type: "
+                             << num.getTypeName() << "), keeping default "
+                             << bbox[l] << " (bbox is required!)";
+              }
           }
 
 	LOG_S(INFO) << "bbox: ["

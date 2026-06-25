@@ -166,32 +166,31 @@ namespace pdflib
 	return XOBJECT_UNKNOWN;
       }
     
-    utils::timer subtype_timer;
-
     QPDFObjectHandle dict = qpdf_obj.getDict(); // only works on a stream!
-    LOG_S(INFO) << __FUNCTION__ << ": getDict took " << subtype_timer.get_time(utils::MILLI_SEC) << " ms";
 
-    subtype_timer.reset();
-    nlohmann::json json_dict = to_json(dict);
-    LOG_S(INFO) << __FUNCTION__ << ": to_json(dict) took " << subtype_timer.get_time(utils::MILLI_SEC)
-		<< " ms (recursively serialises the whole xobject dict just to read /Subtype)";
-
-    if(json_dict.count("/Subtype"))
+    // Read only the '/Subtype' key directly instead of recursively serialising
+    // the whole xobject dict (including nested /Resources) into json.
+    std::string subtype = "";
+    if(dict.hasKey("/Subtype") and dict.getKey("/Subtype").isName())
       {
-        std::string subtype = json_dict["/Subtype"].get<std::string>();
+        subtype = dict.getKey("/Subtype").getName();
+      }
+    else if(dict.hasKey("/Subtype") and dict.getKey("/Subtype").isString())
+      {
+        subtype = dict.getKey("/Subtype").getUTF8Value();
+      }
 
-        if(subtype=="/Image")
-          {
-            return XOBJECT_IMAGE;
-          }
-        else if(subtype=="/Form")
-          {
-            return XOBJECT_FORM;
-          }
-        else if(subtype=="/PS")
-          {
-            return XOBJECT_POSTSCRIPT;
-          }
+    if(subtype=="/Image")
+      {
+        return XOBJECT_IMAGE;
+      }
+    else if(subtype=="/Form")
+      {
+        return XOBJECT_FORM;
+      }
+    else if(subtype=="/PS")
+      {
+        return XOBJECT_POSTSCRIPT;
       }
 
     LOG_S(ERROR) << "unknown XObject subtype";
