@@ -1,0 +1,170 @@
+#!/usr/bin/env python3
+"""Export a PDF to a DocLang archive (.dclx) using docling-parse.
+
+For every page the script takes the ``SegmentedPdfPage`` produced by
+docling-parse plus the rendered page image and assembles a
+``DoclingDocument``:
+
+  * each char / word / text cell (selected via ``-m/--mode``) becomes a
+    ``TextItem`` with a ``ProvenanceItem`` pointing at the cell's bounding box;
+  * the rendered page image is attached as the page's image in ``doc.pages``.
+
+The document is then serialized with ``save_as_doclang_archive`` to a ``.dclx``.
+
+Usage:
+    python scripts/export_dclx.py -i input.pdf [-m word] [-o out.dclx]
+
+Modes:
+    char  -> one TextItem per character cell
+    word  -> one TextItem per word cell
+    text  -> one TextItem per text line cell
+"""
+
+import argparse
+import sys
+from pathlib import Path
+
+from docling_core.types.doc.base import Size
+from docling_core.types.doc.document import (
+    DoclingDocument,
+    ImageRef,
+    ProvenanceItem,
+)
+from docling_core.types.doc.labels import DocItemLabel
+from docling_core.types.doc.page import TextCellUnit
+
+from docling_parse.pdf_parser import (
+    ContentConfig,
+    ContentLevel,
+    DoclingThreadedPdfParser,
+    RenderConfig,
+    ThreadedPdfParserConfig,
+)
+
+# Map the CLI mode onto the cell unit it materializes.
+MODE_TO_UNIT = {
+    "char": TextCellUnit.CHAR,
+    "word": TextCellUnit.WORD,
+    "text": TextCellUnit.LINE,
+}
+
+
+def parse_args(argv=None):
+    ap = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    ap.add_argument("-i", "--input", required=True, type=Path,
+                    help="Path to the input PDF.")
+    ap.add_argument("-m", "--mode", choices=sorted(MODE_TO_UNIT),
+                    default="word",
+                    help="Cell granularity exported as TextItems (default: word).")
+    ap.add_argument("-o", "--output", type=Path, default=None,
+                    help="Output .dclx path (default: <input>.<mode>.dclx).")
+    ap.add_argument("--scale", type=float, default=2.0,
+                    help="Page-image raster scale in pixels-per-point (default: 2.0).")
+    ap.add_argument("--threads", type=int, default=4,
+                    help="Worker threads for the parser (default: 4).")
+    return ap.parse_args(argv)
+
+
+def _content_config_for(mode: str) -> ContentConfig:
+    """Materialize exactly the cell unit needed for the requested mode."""
+    materialize = ContentLevel.COMPUTE_AND_MATERIALIZE
+    skip = ContentLevel.SKIP
+    return ContentConfig(
+        char_cells_content_level=materialize if mode == "char" else skip,
+        word_cells_content_level=materialize if mode == "word" else skip,
+        line_cells_content_level=materialize if mode == "text" else skip,
+    )
+
+
+def _add_page_to_doc(doc, page_no, page, image, dpi, unit):
+    """Attach one page (image + cells) to the DoclingDocument."""
+    doc.add_page(
+        page_no=page_no,
+        size=Size(width=page.dimension.width, height=page.dimension.height),
+        image=ImageRef.from_pil(image, dpi=dpi),
+    )
+
+    n_cells = 0
+    for cell in page.iterate_cells(unit):
+        text = cell.text
+        if not text:
+            continue
+        prov = ProvenanceItem(
+            page_no=page_no,
+            bbox=cell.rect.to_bounding_box(),
+            charspan=(0, len(text)),
+        )
+        doc.add_text(label=DocItemLabel.TEXT, text=text, orig=text, prov=prov)
+        n_cells += 1
+    return n_cells
+
+
+def export(input_path: Path, mode: str, scale: float, threads: int) -> DoclingDocument:
+    content_config = _content_config_for(mode)
+
+    render_config = RenderConfig()
+    render_config.render_text = True
+    render_config.scale = scale
+
+    parser = DoclingThreadedPdfParser(
+        parser_config=ThreadedPdfParserConfig(
+            threads=threads,
+            render_config=render_config,
+            page_content_config=content_config,
+        ),
+    )
+
+    # Results arrive in completion order, not page order; collect then sort so
+    # the DoclingDocument is assembled in natural reading order.
+    pages = {}
+    try:
+        parser.load(str(input_path))
+        for result in parser.iterate_results():
+            if not result.success:
+                print(f"  warning: page {result.page_number} failed: "
+                      f"{result.error_message}", file=sys.stderr)
+                continue
+            pages[result.page_number] = (
+                result.get_page(content_config),
+                result.get_image(scale=scale),
+            )
+    finally:
+        parser.unload_all()
+
+    doc = DoclingDocument(name=input_path.stem)
+    unit = MODE_TO_UNIT[mode]
+    dpi = int(round(72 * scale))
+
+    total_cells = 0
+    for page_no in sorted(pages):
+        page, image = pages[page_no]
+        n = _add_page_to_doc(doc, page_no, page, image, dpi, unit)
+        total_cells += n
+        print(f"  page {page_no}: {n} {mode} cell(s)")
+
+    print(f"Assembled DoclingDocument: {len(pages)} page(s), "
+          f"{total_cells} TextItem(s)")
+    return doc
+
+
+def main(argv=None):
+    args = parse_args(argv)
+
+    if not args.input.is_file():
+        print(f"error: input not found: {args.input}", file=sys.stderr)
+        return 1
+
+    print(f"Exporting '{args.input}' (mode={args.mode}, scale={args.scale}) ...")
+    doc = export(args.input, args.mode, args.scale, args.threads)
+
+    output = args.output or args.input.with_suffix(f".{args.mode}.dclx")
+    doc.save_as_doclang_archive(output)
+    print(f"Wrote {output}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
