@@ -193,6 +193,14 @@ namespace pdflib
       return BLRect(x_min, y_min, x_max - x_min, y_max - y_min);
     }
 
+    static bool rects_intersect(const BLRect& a, const BLRect& b)
+    {
+      return a.x < b.x + b.w and
+             b.x < a.x + a.w and
+             a.y < b.y + b.h and
+             b.y < a.y + a.h;
+    }
+
     bool get_axis_aligned_clip_rect(const clip_path_instruction& clip,
                                     BLRect& rect) const
     {
@@ -244,19 +252,32 @@ namespace pdflib
     }
 
     bool apply_bitmap_clip_state(BLContext& ctx,
-                                 const clip_state_instruction& clip_state) const
+                                 const clip_state_instruction& clip_state,
+                                 const BLRect& dst_rect) const
     {
       if(not clip_state.has_clip())
         {
-          return true;
+          return false;
         }
 
+      bool applied_clip = false;
       for(const auto& clip_path : clip_state.get_paths())
         {
           BLRect clip_rect;
           if(get_axis_aligned_clip_rect(clip_path, clip_rect))
             {
+              if(not rects_intersect(clip_rect, dst_rect))
+                {
+                  LOG_S(WARNING) << "render_bitmap: skipping non-overlapping clip rect"
+                                 << " clip=(" << clip_rect.x << ", " << clip_rect.y
+                                 << ", " << clip_rect.w << ", " << clip_rect.h << ")"
+                                 << " dst=(" << dst_rect.x << ", " << dst_rect.y
+                                 << ", " << dst_rect.w << ", " << dst_rect.h << ")";
+                  continue;
+                }
+
               ctx.clip_to_rect(clip_rect);
+              applied_clip = true;
             }
           else
             {
@@ -264,7 +285,7 @@ namespace pdflib
             }
         }
 
-      return true;
+      return applied_clip;
     }
 
     void render_bitmap_placeholder(BLContext& ctx, bitmap_quad const& q, bool axis_aligned)
@@ -1180,13 +1201,20 @@ namespace pdflib
       axis_aligned and right_angle and quarter_turns == 0;
 
     const bool has_clip = instr.has_clip_state();
+    bool clip_active = false;
     if(has_clip)
       {
         LOG_S(INFO) << "render_bitmap: applying "
                     << instr.get_clip_state().get_paths().size()
                     << " clip path(s)";
         ctx.save();
-        apply_bitmap_clip_state(ctx, instr.get_clip_state());
+        clip_active = apply_bitmap_clip_state(ctx,
+                                              instr.get_clip_state(),
+                                              axis_aligned_rect(q));
+        if(not clip_active)
+          {
+            ctx.restore();
+          }
       }
 
     if (can_use_axis_aligned_fast_path)
@@ -1202,7 +1230,7 @@ namespace pdflib
         render_bitmap_affine(ctx, src_img, q, sw, sh);
       }
 
-    if(has_clip)
+    if(clip_active)
       {
         ctx.restore();
       }
