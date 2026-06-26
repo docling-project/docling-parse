@@ -201,6 +201,13 @@ namespace pdflib
              b.y < a.y + a.h;
     }
 
+    enum bitmap_clip_result
+    {
+      BITMAP_CLIP_NONE,
+      BITMAP_CLIP_APPLIED,
+      BITMAP_CLIP_EMPTY,
+    };
+
     bool get_axis_aligned_clip_rect(const clip_path_instruction& clip,
                                     BLRect& rect) const
     {
@@ -227,7 +234,9 @@ namespace pdflib
           y_max = std::max(y_max, y);
         }
 
-      if(x_max <= x_min or y_max <= y_min)
+      static constexpr double min_canvas_clip_extent = 1e-3;
+      if(x_max - x_min <= min_canvas_clip_extent or
+         y_max - y_min <= min_canvas_clip_extent)
         {
           return false;
         }
@@ -251,13 +260,14 @@ namespace pdflib
       return true;
     }
 
-    bool apply_bitmap_clip_state(BLContext& ctx,
-                                 const clip_state_instruction& clip_state,
-                                 const BLRect& dst_rect) const
+    bitmap_clip_result apply_bitmap_clip_state(
+      BLContext& ctx,
+      const clip_state_instruction& clip_state,
+      const BLRect& dst_rect) const
     {
       if(not clip_state.has_clip())
         {
-          return false;
+          return BITMAP_CLIP_NONE;
         }
 
       bool applied_clip = false;
@@ -268,12 +278,12 @@ namespace pdflib
             {
               if(not rects_intersect(clip_rect, dst_rect))
                 {
-                  LOG_S(WARNING) << "render_bitmap: skipping non-overlapping clip rect"
-                                 << " clip=(" << clip_rect.x << ", " << clip_rect.y
-                                 << ", " << clip_rect.w << ", " << clip_rect.h << ")"
-                                 << " dst=(" << dst_rect.x << ", " << dst_rect.y
-                                 << ", " << dst_rect.w << ", " << dst_rect.h << ")";
-                  continue;
+                  LOG_S(INFO) << "render_bitmap: empty image clip"
+                              << " clip=(" << clip_rect.x << ", " << clip_rect.y
+                              << ", " << clip_rect.w << ", " << clip_rect.h << ")"
+                              << " dst=(" << dst_rect.x << ", " << dst_rect.y
+                              << ", " << dst_rect.w << ", " << dst_rect.h << ")";
+                  return BITMAP_CLIP_EMPTY;
                 }
 
               ctx.clip_to_rect(clip_rect);
@@ -285,7 +295,7 @@ namespace pdflib
             }
         }
 
-      return applied_clip;
+      return applied_clip ? BITMAP_CLIP_APPLIED : BITMAP_CLIP_NONE;
     }
 
     void render_bitmap_placeholder(BLContext& ctx, bitmap_quad const& q, bool axis_aligned)
@@ -1208,9 +1218,17 @@ namespace pdflib
                     << instr.get_clip_state().get_paths().size()
                     << " clip path(s)";
         ctx.save();
-        clip_active = apply_bitmap_clip_state(ctx,
-                                              instr.get_clip_state(),
-                                              axis_aligned_rect(q));
+        const bitmap_clip_result clip_result =
+          apply_bitmap_clip_state(ctx,
+                                  instr.get_clip_state(),
+                                  axis_aligned_rect(q));
+        if(clip_result == BITMAP_CLIP_EMPTY)
+          {
+            ctx.restore();
+            return;
+          }
+
+        clip_active = clip_result == BITMAP_CLIP_APPLIED;
         if(not clip_active)
           {
             ctx.restore();

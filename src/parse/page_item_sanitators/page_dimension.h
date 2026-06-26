@@ -319,6 +319,34 @@ namespace pdflib
 	    itr->x1 = x1 - page_bbox[0];
 	    itr->y1 = y1 - page_bbox[1];
 
+            if(itr->has_visible_bbox)
+              {
+                std::array<double, 4> visible_bbox = {
+                  itr->visible_x0,
+                  itr->visible_y0,
+                  itr->visible_x1,
+                  itr->visible_y1
+                };
+
+                double visible_x0 = std::max(page_bbox[0], visible_bbox[0]);
+                double visible_y0 = std::max(page_bbox[1], visible_bbox[1]);
+                double visible_x1 = std::min(page_bbox[2], visible_bbox[2]);
+                double visible_y1 = std::min(page_bbox[3], visible_bbox[3]);
+
+                if(visible_x1 <= visible_x0 or visible_y1 <= visible_y0)
+                  {
+                    itr->is_visible = false;
+                    itr->has_visible_bbox = false;
+                  }
+                else
+                  {
+                    itr->visible_x0 = visible_x0 - page_bbox[0];
+                    itr->visible_y0 = visible_y0 - page_bbox[1];
+                    itr->visible_x1 = visible_x1 - page_bbox[0];
+                    itr->visible_y1 = visible_y1 - page_bbox[1];
+                  }
+              }
+
 	    LOG_S(INFO) << "keeping image: ("
 			<< itr->x0 << ", " << itr->y0 << ", " << itr->x1 << ", " << itr->y1 << ")";
 	    
