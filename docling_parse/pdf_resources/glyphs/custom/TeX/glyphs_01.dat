@@ -4,7 +4,6 @@
 # multiple Unicode scalar values, separated by commas, analogous to
 # otftotfm's "% UNICODING" comments.
 ###############################################################################
-Delta;2206,0394
 Ifractur;2111
 FFsmall;F766 F766,0066 0066
 FFIsmall;F766 F766 F769,0066 0066 0069
@@ -14,33 +13,20 @@ FLsmall;F766 F76C,0066 006C
 Germandbls;0053 0053
 Germandblssmall;F773 F773,0073 0073
 Ng;014A
-Omega;2126,03A9
 Rfractur;211C
 SS;0053 0053
 SSsmall;F773 F773,0073 0073
 # altselector: invalid Unicode
 # altselector;D802
-angbracketleft;27E8,2329
-angbracketright;27E9,232A
 arrowbothv;2195
 arrowdblbothv;21D5
-arrowleftbothalf;21BD
-arrowlefttophalf;21BC
-arrownortheast;2197
-arrownorthwest;2196
-arrowrightbothalf;21C1
-arrowrighttophalf;21C0
-arrowsoutheast;2198
-arrowsouthwest;2199
 # ascendercompwordmark: taller cwm, invalid Unicode
 # ascendercompwordmark;D80A
 asteriskcentered;2217
-bardbl;2225
 # capitalcompwordmark: taller cwm, invalid Unicode
 # capitalcompwordmark;D809
 ceilingleft;2308
 ceilingright;2309
-circlecopyrt;20DD,25CB
 circledivide;2298
 circledot;2299
 circleminus;2296
@@ -50,15 +36,7 @@ ct;0063 0074
 cwm;200C
 dblbracketleft;27E6
 dblbracketright;27E7
-# U+2662 is WHITE DIAMOND SUIT
-# U+25CA is LOZENGE
-# U+2666 is BLACK DIAMOND SUIT
-diamond;2662,25CA,2666
 diamondmath;22C4
-# U+0237 is the proposed allocation for dotless j as of Unicode 4.0
-# U+1D6A5 is the mathematical italic version approved in Unicode 5.0
-dotlessj;0237,F6BE,1D6A5
-emptyset;2205,F638
 # emptyslot: invalid Unicode; the user explicitly wants this slot empty
 # emptyslot;D801
 epsilon1;03F5
@@ -71,7 +49,6 @@ follows;227B
 followsequal;2AB0
 followsorcurly;227D
 greatermuch;226B
-heart;2661,2665
 interrobang;203D
 interrobangdown;2E18
 intersectionsq;2293
@@ -88,15 +65,9 @@ negationslash;0338
 ng;014B
 owner;220B
 pertenthousand;2031
-# TeX encodings such as 'texmital.enc' disagree with Unicode and the Adobe
-# glyph list; in TeX, the "straight" form of phi takes the name "phi",
-# whereas the more-common "loopy" form of phi, \varphi, takes the name "phi1".
-phi;03D5,03C6
-phi1;03C6
 pi1;03D6
 precedesequal;2AAF
 precedesorcurly;227C
-prime;2032,02B9
 rho1;03F1
 # ringfitted: a ring character centered on the x-width of A, invalid Unicode
 # ringfitted;D80D
@@ -208,8 +179,6 @@ harpoonleftright;21CC
 harpoonrightleft;21CB
 harpoonupleft;21BF
 harpoonupright;21BE
-# U+22BA may be larger than MSAM intercal
-intercal;22BA
 intersectiondbl;22D2
 lessdbleqlgreater;2A8B
 lessdblequal;2266
@@ -277,10 +246,6 @@ uprise;22CF
 # --
 # -- These character names are used in the MSBM fonts
 # --
-# U+1D7CB MATHEMATICAL BOLD SMALL DIGAMMA is the closest match to MSBM,
-# although MSBM Digamma's spelling indicates that a capital was intended
-# U+03DD GREEK SMALL LETTER DIGAMMA for fallback
-Digamma;1D7CB,03DD
 # U+2132 TURNED CAPITAL F is shown as seriffed, MSBM Finv is sans
 Finv;2132
 # U+2141 TURNED SANS-SERIF CAPITAL G is turned, MSBM Gmir is only reversed
