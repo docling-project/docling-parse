@@ -69,18 +69,23 @@ def parse_args(argv=None):
 
 
 def _content_config_for(mode: str) -> ContentConfig:
-    """Materialize exactly the cell unit needed for the requested mode."""
+    """Materialize the cell unit for the mode plus the page bitmaps."""
     materialize = ContentLevel.COMPUTE_AND_MATERIALIZE
     skip = ContentLevel.SKIP
     return ContentConfig(
         char_cells_content_level=materialize if mode == "char" else skip,
         word_cells_content_level=materialize if mode == "word" else skip,
         line_cells_content_level=materialize if mode == "text" else skip,
+        bitmaps_content_level=materialize,
+        include_bitmap_bytes=True,
     )
 
 
 def _add_page_to_doc(doc, page_no, page, image, dpi, unit):
-    """Attach one page (image + cells) to the DoclingDocument."""
+    """Attach one page (image + text cells + picture bitmaps) to the doc.
+
+    Returns (n_text_cells, n_pictures).
+    """
     doc.add_page(
         page_no=page_no,
         size=Size(width=page.dimension.width, height=page.dimension.height),
@@ -99,7 +104,20 @@ def _add_page_to_doc(doc, page_no, page, image, dpi, unit):
         )
         doc.add_text(label=DocItemLabel.TEXT, text=text, orig=text, prov=prov)
         n_cells += 1
-    return n_cells
+
+    n_pictures = 0
+    for bitmap in page.bitmap_resources:
+        if bitmap.image is None:
+            continue
+        prov = ProvenanceItem(
+            page_no=page_no,
+            bbox=bitmap.rect.to_bounding_box(),
+            charspan=(0, 0),
+        )
+        doc.add_picture(image=bitmap.image, prov=prov)
+        n_pictures += 1
+
+    return n_cells, n_pictures
 
 
 def export(input_path: Path, mode: str, scale: float, threads: int) -> DoclingDocument:
@@ -139,14 +157,16 @@ def export(input_path: Path, mode: str, scale: float, threads: int) -> DoclingDo
     dpi = int(round(72 * scale))
 
     total_cells = 0
+    total_pictures = 0
     for page_no in sorted(pages):
         page, image = pages[page_no]
-        n = _add_page_to_doc(doc, page_no, page, image, dpi, unit)
-        total_cells += n
-        print(f"  page {page_no}: {n} {mode} cell(s)")
+        n_cells, n_pics = _add_page_to_doc(doc, page_no, page, image, dpi, unit)
+        total_cells += n_cells
+        total_pictures += n_pics
+        print(f"  page {page_no}: {n_cells} {mode} cell(s), {n_pics} picture(s)")
 
     print(f"Assembled DoclingDocument: {len(pages)} page(s), "
-          f"{total_cells} TextItem(s)")
+          f"{total_cells} TextItem(s), {total_pictures} PictureItem(s)")
     return doc
 
 
