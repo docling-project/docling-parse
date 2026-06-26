@@ -30,11 +30,13 @@ namespace pdflib
 
     pdf_state<BITMAP>& operator=(const pdf_state<BITMAP>& other);
 
-    void Do_image(pdf_resource<PAGE_XOBJECT_IMAGE>& xobj);
+    void Do_image(pdf_resource<PAGE_XOBJECT_IMAGE>& xobj,
+                  clip_state_instruction clip_state = clip_state_instruction());
 
   private:
 
-    void add_bitmap_instruction(const page_item<PAGE_IMAGE>& image);
+    void add_bitmap_instruction(const page_item<PAGE_IMAGE>& image,
+                                clip_state_instruction clip_state);
 
     const decode_config& config;
     const pdf_state<GRPH>& grph_state;
@@ -74,7 +76,8 @@ namespace pdflib
     return *this;
   }
 
-  void pdf_state<BITMAP>::Do_image(pdf_resource<PAGE_XOBJECT_IMAGE>& xobj)
+  void pdf_state<BITMAP>::Do_image(pdf_resource<PAGE_XOBJECT_IMAGE>& xobj,
+                                   clip_state_instruction clip_state)
   {
     if(not config.keep_bitmaps) { LOG_S(WARNING) << "skipping " << __FUNCTION__; return; }
 
@@ -172,10 +175,11 @@ namespace pdflib
 
     page_images.push_back(image);
 
-    add_bitmap_instruction(image);
+    add_bitmap_instruction(image, std::move(clip_state));
   }
 
-  void pdf_state<BITMAP>::add_bitmap_instruction(const page_item<PAGE_IMAGE>& image)
+  void pdf_state<BITMAP>::add_bitmap_instruction(const page_item<PAGE_IMAGE>& image,
+                                                 clip_state_instruction clip_state)
   {
     std::shared_ptr<std::vector<uint8_t>> pixel_data;
     std::array<int, 3> pixel_shape = {0, 0, 0};
@@ -930,7 +934,8 @@ namespace pdflib
                               image.r_x0, image.r_y0,
                               image.r_x1, image.r_y1,
                               image.r_x2, image.r_y2,
-                              image.r_x3, image.r_y3);
+                              image.r_x3, image.r_y3,
+                              std::move(clip_state));
     instructions.add_bitmap_instruction(std::move(binstr));
   }
 

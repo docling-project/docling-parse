@@ -86,6 +86,8 @@ namespace pdflib
 
     void n(std::vector<qpdf_stream_instruction>& instructions);
 
+    clip_state_instruction get_clip_state();
+
   private:
 
     bool verify(std::vector<qpdf_stream_instruction>& instructions,
@@ -126,6 +128,7 @@ namespace pdflib
     page_item<PAGE_SHAPES> clippings;
 
     clipping_path_mode_type clipping_path_mode;
+    bool clipping_path_pending;
   };
 
   pdf_state<SHAPE>::pdf_state(const decode_config& config_,
@@ -144,7 +147,8 @@ namespace pdflib
     curr_shapes(),
     clippings(),
 
-    clipping_path_mode(NO_CLIPPING_PATH_RULE)
+    clipping_path_mode(NO_CLIPPING_PATH_RULE),
+    clipping_path_pending(false)
   {
     //LOG_S(INFO) << "pdf_state<SHAPE>";
   }
@@ -188,6 +192,8 @@ namespace pdflib
   {
     this->curr_shapes = other.curr_shapes;
     this->clippings  = other.clippings;
+    this->clipping_path_mode = other.clipping_path_mode;
+    this->clipping_path_pending = other.clipping_path_pending;
 
     return *this;
   }
@@ -398,6 +404,7 @@ namespace pdflib
     if(not config.keep_shapes) { return; }
 
     clipping_path_mode = NONZERO_WINDING_NUMBER_RULE;
+    clipping_path_pending = true;
   }
 
   void pdf_state<SHAPE>::WStar(std::vector<qpdf_stream_instruction>& instructions)
@@ -405,26 +412,63 @@ namespace pdflib
     if(not config.keep_shapes) { return; }
 
     clipping_path_mode = EVEN_ODD_RULE;
+    clipping_path_pending = true;
+  }
+
+  clip_state_instruction pdf_state<SHAPE>::get_clip_state()
+  {
+    if(clipping_path_mode == NO_CLIPPING_PATH_RULE or clippings.size() == 0)
+      {
+        return clip_state_instruction();
+      }
+
+    clip_rule rule = CLIP_RULE_NONE;
+    if(clipping_path_mode == NONZERO_WINDING_NUMBER_RULE)
+      {
+        rule = CLIP_RULE_NONZERO;
+      }
+    else if(clipping_path_mode == EVEN_ODD_RULE)
+      {
+        rule = CLIP_RULE_EVEN_ODD;
+      }
+
+    std::vector<clip_path_instruction> paths;
+    for(int l = 0; l < clippings.size(); l++)
+      {
+        auto& shape = clippings[l];
+        paths.emplace_back(shape.get_x(),
+                           shape.get_y(),
+                           shape.get_closing_type(),
+                           shape.get_shape_type());
+      }
+
+    return clip_state_instruction(rule, std::move(paths));
   }
 
   void pdf_state<SHAPE>::n(std::vector<qpdf_stream_instruction>& instructions)
   {
     if(not config.keep_shapes) { return; }
 
-    clippings.clear();
-
-    for(int l=0; l<curr_shapes.size(); l++)
+    if(clipping_path_pending)
       {
-        auto& shape = curr_shapes[l];
+        clippings.clear();
 
-        if(shape.size()>0)
+        for(int l=0; l<curr_shapes.size(); l++)
           {
-            clippings.push_back(shape);
+            auto shape = curr_shapes[l];
+
+            if(keep_shape(shape))
+              {
+                shape.transform(trafo_matrix);
+                clippings.push_back(shape);
+              }
+            else
+              {
+                LOG_S(WARNING) << "ignoring a shape of size 0";
+              }
           }
-        else
-          {
-            LOG_S(WARNING) << "ignoring a shape of size 0";
-          }
+
+        clipping_path_pending = false;
       }
 
     curr_shapes.clear();

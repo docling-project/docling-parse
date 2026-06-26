@@ -356,7 +356,7 @@ namespace pdflib
     pdf_resource<PAGE_XOBJECT_IMAGE>& xobj = page_xobjects->get_image(xobj_name);
 
     utils::timer do_image_timer;
-    current_bitmap_state().Do_image(xobj);
+    current_bitmap_state().Do_image(xobj, current_shape_state().get_clip_state());
     double do_image_seconds = do_image_timer.get_time();
     timings.add_timing(pdf_timings::KEY_DO_IMAGE_TOTAL, do_image_seconds);
     timings.note_attributed(do_image_seconds);
