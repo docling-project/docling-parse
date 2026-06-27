@@ -30,7 +30,6 @@ from docling_parse.pdf_parser import (
 
 GENERATE = False
 
-
 def write_textline_delta(lines: List[str], filename: str, separator: str) -> None:
     with open(filename, "w", encoding="utf-8") as fw:
         fw.write(separator.join(lines))
@@ -397,6 +396,7 @@ def test_reference_documents_from_filenames():
         "font_08.pdf": [1],
         "font_09.pdf": [1],
         "font_10.pdf": [1],
+        "2508.13113v2.pdf": [2, 9, 17],
     }
 
     config = DecodeConfig(
