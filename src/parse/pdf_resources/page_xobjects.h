@@ -5,6 +5,136 @@
 
 namespace pdflib
 {
+  class qpdf_objgen_hash
+  {
+  public:
+
+    std::size_t operator()(QPDFObjGen const& og) const;
+  };
+
+  class xobject_parse_cache
+  {
+  public:
+
+    bool find_subtype(QPDFObjGen const& og,
+                      xobject_subtype_name& subtype) const;
+
+    void store_subtype(QPDFObjGen const& og,
+                       xobject_subtype_name subtype);
+
+    std::shared_ptr<const pdf_resource<PAGE_XOBJECT_IMAGE> > find_image(QPDFObjGen const& og) const;
+
+    void store_image(QPDFObjGen const& og,
+                     std::shared_ptr<const pdf_resource<PAGE_XOBJECT_IMAGE> > xobj);
+
+    std::shared_ptr<const pdf_resource<PAGE_XOBJECT_FORM> > find_form(QPDFObjGen const& og) const;
+
+    void store_form(QPDFObjGen const& og,
+                    std::shared_ptr<const pdf_resource<PAGE_XOBJECT_FORM> > xobj);
+
+    std::shared_ptr<const pdf_resource<PAGE_XOBJECT_POSTSCRIPT> > find_postscript(QPDFObjGen const& og) const;
+
+    void store_postscript(QPDFObjGen const& og,
+                          std::shared_ptr<const pdf_resource<PAGE_XOBJECT_POSTSCRIPT> > xobj);
+
+  private:
+
+    std::unordered_map<QPDFObjGen,
+                       xobject_subtype_name,
+                       qpdf_objgen_hash> subtype_;
+    std::unordered_map<QPDFObjGen,
+                       std::shared_ptr<const pdf_resource<PAGE_XOBJECT_IMAGE> >,
+                       qpdf_objgen_hash> image_;
+    std::unordered_map<QPDFObjGen,
+                       std::shared_ptr<const pdf_resource<PAGE_XOBJECT_FORM> >,
+                       qpdf_objgen_hash> form_;
+    std::unordered_map<QPDFObjGen,
+                       std::shared_ptr<const pdf_resource<PAGE_XOBJECT_POSTSCRIPT> >,
+                       qpdf_objgen_hash> postscript_;
+  };
+
+  inline std::size_t qpdf_objgen_hash::operator()(QPDFObjGen const& og) const
+  {
+    std::size_t h1 = std::hash<int>{}(og.getObj());
+    std::size_t h2 = std::hash<int>{}(og.getGen());
+    return h1 ^ (h2 + 0x9e3779b9 + (h1 << 6) + (h1 >> 2));
+  }
+
+  inline bool xobject_parse_cache::find_subtype(QPDFObjGen const& og,
+                                                xobject_subtype_name& subtype) const
+  {
+    auto itr = subtype_.find(og);
+    if(itr==subtype_.end())
+      {
+        return false;
+      }
+
+    subtype = itr->second;
+    return true;
+  }
+
+  inline void xobject_parse_cache::store_subtype(QPDFObjGen const& og,
+                                                 xobject_subtype_name subtype)
+  {
+    subtype_[og] = subtype;
+  }
+
+  inline std::shared_ptr<const pdf_resource<PAGE_XOBJECT_IMAGE> >
+  xobject_parse_cache::find_image(QPDFObjGen const& og) const
+  {
+    auto itr = image_.find(og);
+    if(itr==image_.end())
+      {
+        return nullptr;
+      }
+
+    return itr->second;
+  }
+
+  inline void
+  xobject_parse_cache::store_image(QPDFObjGen const& og,
+                                   std::shared_ptr<const pdf_resource<PAGE_XOBJECT_IMAGE> > xobj)
+  {
+    image_[og] = xobj;
+  }
+
+  inline std::shared_ptr<const pdf_resource<PAGE_XOBJECT_FORM> >
+  xobject_parse_cache::find_form(QPDFObjGen const& og) const
+  {
+    auto itr = form_.find(og);
+    if(itr==form_.end())
+      {
+        return nullptr;
+      }
+
+    return itr->second;
+  }
+
+  inline void
+  xobject_parse_cache::store_form(QPDFObjGen const& og,
+                                  std::shared_ptr<const pdf_resource<PAGE_XOBJECT_FORM> > xobj)
+  {
+    form_[og] = xobj;
+  }
+
+  inline std::shared_ptr<const pdf_resource<PAGE_XOBJECT_POSTSCRIPT> >
+  xobject_parse_cache::find_postscript(QPDFObjGen const& og) const
+  {
+    auto itr = postscript_.find(og);
+    if(itr==postscript_.end())
+      {
+        return nullptr;
+      }
+
+    return itr->second;
+  }
+
+  inline void
+  xobject_parse_cache::store_postscript(QPDFObjGen const& og,
+                                        std::shared_ptr<const pdf_resource<PAGE_XOBJECT_POSTSCRIPT> > xobj)
+  {
+    postscript_[og] = xobj;
+  }
 
   template<>
   class pdf_resource<PAGE_XOBJECTS>
@@ -21,9 +151,9 @@ namespace pdflib
 
     xobject_subtype_name get_subtype(std::string name);
 
-    pdf_resource<PAGE_XOBJECT_IMAGE>&      get_image(std::string name);
-    pdf_resource<PAGE_XOBJECT_FORM>&       get_form(std::string name);
-    pdf_resource<PAGE_XOBJECT_POSTSCRIPT>& get_postscript(std::string name);
+    const pdf_resource<PAGE_XOBJECT_IMAGE>&      get_image(std::string name);
+    const pdf_resource<PAGE_XOBJECT_FORM>&       get_form(std::string name);
+    const pdf_resource<PAGE_XOBJECT_POSTSCRIPT>& get_postscript(std::string name);
 
     void set(QPDFObjectHandle& qpdf_xobjects_,
              pdf_timings& timings);
@@ -33,18 +163,21 @@ namespace pdflib
     static xobject_subtype_name detect_subtype(QPDFObjectHandle& qpdf_obj);
 
     std::shared_ptr<pdf_resource<PAGE_XOBJECTS>> parent_;
+    std::shared_ptr<xobject_parse_cache> parse_cache_;
     
-    std::unordered_map<std::string, pdf_resource<PAGE_XOBJECT_IMAGE> >      image_xobjects;
-    std::unordered_map<std::string, pdf_resource<PAGE_XOBJECT_FORM> >       form_xobjects;
-    std::unordered_map<std::string, pdf_resource<PAGE_XOBJECT_POSTSCRIPT> > postscript_xobjects;
+    std::unordered_map<std::string, std::shared_ptr<const pdf_resource<PAGE_XOBJECT_IMAGE> > >      image_xobjects;
+    std::unordered_map<std::string, std::shared_ptr<const pdf_resource<PAGE_XOBJECT_FORM> > >       form_xobjects;
+    std::unordered_map<std::string, std::shared_ptr<const pdf_resource<PAGE_XOBJECT_POSTSCRIPT> > > postscript_xobjects;
   };
 
   pdf_resource<PAGE_XOBJECTS>::pdf_resource():
-    parent_(nullptr)
+    parent_(nullptr),
+    parse_cache_(std::make_shared<xobject_parse_cache>())
   {}
 
   pdf_resource<PAGE_XOBJECTS>::pdf_resource(std::shared_ptr<pdf_resource<PAGE_XOBJECTS>> parent):
-    parent_(parent)
+    parent_(parent),
+    parse_cache_(parent ? parent->parse_cache_ : std::make_shared<xobject_parse_cache>())
   {}
 
   pdf_resource<PAGE_XOBJECTS>::~pdf_resource()
@@ -56,17 +189,17 @@ namespace pdflib
 
     for(auto& itr : image_xobjects)
       {
-        result[itr.first] = itr.second.get();
+        result[itr.first] = itr.second->get();
       }
 
     for(auto& itr : form_xobjects)
       {
-        result[itr.first] = itr.second.get();
+        result[itr.first] = itr.second->get();
       }
 
     for(auto& itr : postscript_xobjects)
       {
-        result[itr.first] = itr.second.get();
+        result[itr.first] = itr.second->get();
       }
 
     return result;
@@ -111,11 +244,11 @@ namespace pdflib
     return XOBJECT_UNKNOWN;
   }
 
-  pdf_resource<PAGE_XOBJECT_IMAGE>& pdf_resource<PAGE_XOBJECTS>::get_image(std::string name)
+  const pdf_resource<PAGE_XOBJECT_IMAGE>& pdf_resource<PAGE_XOBJECTS>::get_image(std::string name)
   {
     if(image_xobjects.count(name)==1)
       {
-        return image_xobjects.at(name);
+        return *image_xobjects.at(name);
       }
     if(parent_)
       {
@@ -126,11 +259,11 @@ namespace pdflib
     throw std::logic_error(message);
   }
 
-  pdf_resource<PAGE_XOBJECT_FORM>& pdf_resource<PAGE_XOBJECTS>::get_form(std::string name)
+  const pdf_resource<PAGE_XOBJECT_FORM>& pdf_resource<PAGE_XOBJECTS>::get_form(std::string name)
   {
     if(form_xobjects.count(name)==1)
       {
-        return form_xobjects.at(name);
+        return *form_xobjects.at(name);
       }
     if(parent_)
       {
@@ -141,11 +274,11 @@ namespace pdflib
     throw std::logic_error(message);
   }
 
-  pdf_resource<PAGE_XOBJECT_POSTSCRIPT>& pdf_resource<PAGE_XOBJECTS>::get_postscript(std::string name)
+  const pdf_resource<PAGE_XOBJECT_POSTSCRIPT>& pdf_resource<PAGE_XOBJECTS>::get_postscript(std::string name)
   {
     if(postscript_xobjects.count(name)==1)
       {
-        return postscript_xobjects.at(name);
+        return *postscript_xobjects.at(name);
       }
     if(parent_)
       {
@@ -218,7 +351,22 @@ namespace pdflib
         LOG_S(INFO) << "decoding xobject: " << key << "\t" << (++cnt) << "/" << len;
 
 	QPDFObjectHandle qpdf_obj = qpdf_xobjects.getKey(key);
-	xobject_subtype_name subtype = detect_subtype(qpdf_obj);
+        const bool cacheable = qpdf_obj.isIndirect();
+        QPDFObjGen og;
+        if(cacheable)
+          {
+            og = qpdf_obj.getObjGen();
+          }
+
+	xobject_subtype_name subtype = XOBJECT_UNKNOWN;
+        if(not(cacheable and parse_cache_->find_subtype(og, subtype)))
+          {
+	    subtype = detect_subtype(qpdf_obj);
+            if(cacheable)
+              {
+                parse_cache_->store_subtype(og, subtype);
+              }
+          }
 	
 	utils::timer xobject_timer;
 
@@ -231,8 +379,20 @@ namespace pdflib
 		  LOG_S(ERROR) << key << " is already in image_xobjects, overwriting ...";
 		}
 
-	      pdf_resource<PAGE_XOBJECT_IMAGE> xobj;
-	      xobj.set(key, qpdf_obj);
+	      std::shared_ptr<const pdf_resource<PAGE_XOBJECT_IMAGE> > xobj =
+                cacheable ? parse_cache_->find_image(og) : nullptr;
+
+              if(not xobj)
+                {
+                  auto parsed_xobj = std::make_shared<pdf_resource<PAGE_XOBJECT_IMAGE>>();
+                  parsed_xobj->set(key, qpdf_obj);
+                  xobj = parsed_xobj;
+
+                  if(cacheable)
+                    {
+                      parse_cache_->store_image(og, xobj);
+                    }
+                }
 
 	      //to be commented out!!	      
 	      //{
@@ -254,8 +414,21 @@ namespace pdflib
 		  LOG_S(ERROR) << key << " is already in form_xobjects, overwriting ...";
 		}
 
-	      pdf_resource<PAGE_XOBJECT_FORM> xobj;
-	      xobj.set(key, qpdf_obj);
+	      std::shared_ptr<const pdf_resource<PAGE_XOBJECT_FORM> > xobj =
+                cacheable ? parse_cache_->find_form(og) : nullptr;
+
+              if(not xobj)
+                {
+                  auto parsed_xobj = std::make_shared<pdf_resource<PAGE_XOBJECT_FORM>>();
+                  parsed_xobj->set(key, qpdf_obj);
+                  xobj = parsed_xobj;
+
+                  if(cacheable)
+                    {
+                      parse_cache_->store_form(og, xobj);
+                    }
+                }
+
 	      form_xobjects[key] = xobj;
 	    }
 	    break;
@@ -267,8 +440,21 @@ namespace pdflib
 		  LOG_S(ERROR) << key << " is already in postscript_xobjects, overwriting ...";
 		}
 
-	      pdf_resource<PAGE_XOBJECT_POSTSCRIPT> xobj;
-	      xobj.set(key, qpdf_obj);
+	      std::shared_ptr<const pdf_resource<PAGE_XOBJECT_POSTSCRIPT> > xobj =
+                cacheable ? parse_cache_->find_postscript(og) : nullptr;
+
+              if(not xobj)
+                {
+                  auto parsed_xobj = std::make_shared<pdf_resource<PAGE_XOBJECT_POSTSCRIPT>>();
+                  parsed_xobj->set(key, qpdf_obj);
+                  xobj = parsed_xobj;
+
+                  if(cacheable)
+                    {
+                      parse_cache_->store_postscript(og, xobj);
+                    }
+                }
+
 	      postscript_xobjects[key] = xobj;
 	    }
 	    break;

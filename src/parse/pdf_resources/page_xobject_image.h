@@ -142,7 +142,7 @@ namespace pdflib
     pdf_resource();
     ~pdf_resource();
 
-    nlohmann::json get();
+    nlohmann::json get() const;
 
     std::string              get_key() const;
     xobject_subtype_name     get_subtype() const;
@@ -264,7 +264,7 @@ namespace pdflib
   pdf_resource<PAGE_XOBJECT_IMAGE>::~pdf_resource()
   {}
 
-  nlohmann::json pdf_resource<PAGE_XOBJECT_IMAGE>::get()
+  nlohmann::json pdf_resource<PAGE_XOBJECT_IMAGE>::get() const
   {
     return to_json(qpdf_xobject);
   }

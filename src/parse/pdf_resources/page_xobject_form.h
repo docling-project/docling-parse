@@ -19,7 +19,7 @@ namespace pdflib
     pdf_resource();
     ~pdf_resource();
 
-    nlohmann::json get();
+    nlohmann::json get() const;
 
     std::string          get_key() const;
     xobject_subtype_name get_subtype() const;
@@ -28,18 +28,18 @@ namespace pdflib
              QPDFObjectHandle qpdf_xobject_);
 
     // Form-specific API
-    std::array<double, 6> get_matrix();
-    std::array<double, 4> get_bbox();
+    std::array<double, 6> get_matrix() const;
+    std::array<double, 4> get_bbox() const;
 
-    bool has_fonts();
-    bool has_grphs();
-    bool has_xobjects();
+    bool has_fonts() const;
+    bool has_grphs() const;
+    bool has_xobjects() const;
 
-    QPDFObjectHandle get_fonts();
-    QPDFObjectHandle get_grphs();
-    QPDFObjectHandle get_xobjects();
+    QPDFObjectHandle get_fonts() const;
+    QPDFObjectHandle get_grphs() const;
+    QPDFObjectHandle get_xobjects() const;
 
-    std::vector<qpdf_stream_instruction> parse_stream();
+    std::vector<qpdf_stream_instruction> parse_stream() const;
 
   private:
 
@@ -67,7 +67,7 @@ namespace pdflib
   pdf_resource<PAGE_XOBJECT_FORM>::~pdf_resource()
   {}
 
-  nlohmann::json pdf_resource<PAGE_XOBJECT_FORM>::get()
+  nlohmann::json pdf_resource<PAGE_XOBJECT_FORM>::get() const
   {
     return to_json(qpdf_xobject);
   }
@@ -103,68 +103,74 @@ namespace pdflib
     parse_bbox();
   }
 
-  std::array<double, 6> pdf_resource<PAGE_XOBJECT_FORM>::get_matrix()
+  std::array<double, 6> pdf_resource<PAGE_XOBJECT_FORM>::get_matrix() const
   {
     return matrix;
   }
 
-  std::array<double, 4> pdf_resource<PAGE_XOBJECT_FORM>::get_bbox()
+  std::array<double, 4> pdf_resource<PAGE_XOBJECT_FORM>::get_bbox() const
   {
     return bbox;
   }
 
-  bool pdf_resource<PAGE_XOBJECT_FORM>::has_fonts()
+  bool pdf_resource<PAGE_XOBJECT_FORM>::has_fonts() const
   {
-    return qpdf_xobject_dict.hasKey(RESOURCES_KEY) and
-           qpdf_xobject_dict.getKey(RESOURCES_KEY).hasKey(FONTS_KEY);
+    QPDFObjectHandle qpdf_xobject_dict_ = qpdf_xobject_dict;
+    return qpdf_xobject_dict_.hasKey(RESOURCES_KEY) and
+           qpdf_xobject_dict_.getKey(RESOURCES_KEY).hasKey(FONTS_KEY);
   }
 
-  bool pdf_resource<PAGE_XOBJECT_FORM>::has_grphs()
+  bool pdf_resource<PAGE_XOBJECT_FORM>::has_grphs() const
   {
-    return qpdf_xobject_dict.hasKey(RESOURCES_KEY) and
-           qpdf_xobject_dict.getKey(RESOURCES_KEY).hasKey(GRPHS_KEY);
+    QPDFObjectHandle qpdf_xobject_dict_ = qpdf_xobject_dict;
+    return qpdf_xobject_dict_.hasKey(RESOURCES_KEY) and
+           qpdf_xobject_dict_.getKey(RESOURCES_KEY).hasKey(GRPHS_KEY);
   }
 
-  bool pdf_resource<PAGE_XOBJECT_FORM>::has_xobjects()
+  bool pdf_resource<PAGE_XOBJECT_FORM>::has_xobjects() const
   {
-    return qpdf_xobject_dict.hasKey(RESOURCES_KEY) and
-           qpdf_xobject_dict.getKey(RESOURCES_KEY).hasKey(XOBJS_KEY);
+    QPDFObjectHandle qpdf_xobject_dict_ = qpdf_xobject_dict;
+    return qpdf_xobject_dict_.hasKey(RESOURCES_KEY) and
+           qpdf_xobject_dict_.getKey(RESOURCES_KEY).hasKey(XOBJS_KEY);
   }
 
-  QPDFObjectHandle pdf_resource<PAGE_XOBJECT_FORM>::get_fonts()
+  QPDFObjectHandle pdf_resource<PAGE_XOBJECT_FORM>::get_fonts() const
   {
     if(has_fonts())
       {
-	return qpdf_xobject_dict.getKey(RESOURCES_KEY).getKey(FONTS_KEY);
+        QPDFObjectHandle qpdf_xobject_dict_ = qpdf_xobject_dict;
+	return qpdf_xobject_dict_.getKey(RESOURCES_KEY).getKey(FONTS_KEY);
       }
 
     // LOG_S(WARNING) << "no '/Font' key detected in xobject dict";
     return QPDFObjectHandle::newNull();
   }
 
-  QPDFObjectHandle pdf_resource<PAGE_XOBJECT_FORM>::get_grphs()
+  QPDFObjectHandle pdf_resource<PAGE_XOBJECT_FORM>::get_grphs() const
   {
     if(has_grphs())
       {
-	return qpdf_xobject_dict.getKey(RESOURCES_KEY).getKey(GRPHS_KEY);
+        QPDFObjectHandle qpdf_xobject_dict_ = qpdf_xobject_dict;
+	return qpdf_xobject_dict_.getKey(RESOURCES_KEY).getKey(GRPHS_KEY);
       }
 
     // LOG_S(WARNING) << "no '/ExtGState' key detected in xobject dict";
     return QPDFObjectHandle::newNull();
   }
 
-  QPDFObjectHandle pdf_resource<PAGE_XOBJECT_FORM>::get_xobjects()
+  QPDFObjectHandle pdf_resource<PAGE_XOBJECT_FORM>::get_xobjects() const
   {
     if(has_xobjects())
       {
-	return qpdf_xobject_dict.getKey(RESOURCES_KEY).getKey(XOBJS_KEY);
+        QPDFObjectHandle qpdf_xobject_dict_ = qpdf_xobject_dict;
+	return qpdf_xobject_dict_.getKey(RESOURCES_KEY).getKey(XOBJS_KEY);
       }
 
     // LOG_S(WARNING) << "no '/XObject' key detected in xobject dict";
     return QPDFObjectHandle::newNull();
   }
 
-  std::vector<qpdf_stream_instruction> pdf_resource<PAGE_XOBJECT_FORM>::parse_stream()
+  std::vector<qpdf_stream_instruction> pdf_resource<PAGE_XOBJECT_FORM>::parse_stream() const
   {
     std::vector<qpdf_stream_instruction> stream;
 
@@ -172,7 +178,8 @@ namespace pdflib
     try
       {
         qpdf_stream_decoder decoder(stream);
-        decoder.decode(qpdf_xobject);
+        QPDFObjectHandle qpdf_xobject_ = qpdf_xobject;
+        decoder.decode(qpdf_xobject_);
 
         decoder.print();
       }
