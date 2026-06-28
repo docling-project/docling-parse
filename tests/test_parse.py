@@ -30,6 +30,7 @@ from docling_parse.pdf_parser import (
 
 GENERATE = False
 
+
 def write_textline_delta(lines: List[str], filename: str, separator: str) -> None:
     with open(filename, "w", encoding="utf-8") as fw:
         fw.write(separator.join(lines))
