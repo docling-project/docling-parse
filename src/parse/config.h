@@ -22,6 +22,9 @@ namespace pdflib
     int max_num_bitmaps = -1; // -1 means no cap
     double min_visible_clip_extent = DEFAULT_MIN_VISIBLE_CLIP_EXTENT;
 
+    // max pages held in decoder_pages cache
+    int max_cached_pages = 32;
+
     bool create_word_cells = true;
     bool create_line_cells = true;
     bool enforce_same_font = true;      // word & line cell creation
@@ -70,6 +73,7 @@ namespace pdflib
     j["max_num_lines"] = max_num_lines;
     j["max_num_bitmaps"] = max_num_bitmaps;
     j["min_visible_clip_extent"] = min_visible_clip_extent;
+    j["max_cached_pages"] = max_cached_pages;
 
     j["create_word_cells"] = create_word_cells;
     j["create_line_cells"] = create_line_cells;
@@ -104,6 +108,7 @@ namespace pdflib
     if(j.count("max_num_lines")) { max_num_lines = j["max_num_lines"]; }
     if(j.count("max_num_bitmaps")) { max_num_bitmaps = j["max_num_bitmaps"]; }
     if(j.count("min_visible_clip_extent")) { min_visible_clip_extent = j["min_visible_clip_extent"]; }
+    if(j.count("max_cached_pages")) { max_cached_pages = j["max_cached_pages"]; }
 
     if(j.count("create_word_cells")) { create_word_cells = j["create_word_cells"]; }
     if(j.count("create_line_cells")) { create_line_cells = j["create_line_cells"]; }
@@ -165,6 +170,7 @@ namespace pdflib
        << std::setw(48) << "max_num_lines" << max_num_lines << "\n"
        << std::setw(48) << "max_num_bitmaps" << max_num_bitmaps << "\n"
        << std::setw(48) << "min_visible_clip_extent" << min_visible_clip_extent << "\n"
+       << std::setw(48) << "max_cached_pages" << max_cached_pages << "\n"
        << std::setw(48) << "create_word_cells" << (create_word_cells ? "true" : "false") << "\n"
        << std::setw(48) << "create_line_cells" << (create_line_cells ? "true" : "false") << "\n"
        << std::setw(48) << "enforce_same_font" << (enforce_same_font ? "true" : "false") << "\n"

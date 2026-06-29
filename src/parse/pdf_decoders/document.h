@@ -90,7 +90,6 @@ namespace pdflib
     // New: Persistent page decoders for typed API
     std::map<int, page_decoder_ptr> page_decoders;
     std::list<int> page_access_order;
-    size_t max_cached_pages = 16;
 
     void update_page_access(int page_number) {
       // Remove from current position if exists
@@ -469,8 +468,12 @@ namespace pdflib
     // Store in cache
     page_decoders[page_number] = page_decoder;
     update_page_access(page_number);
+
     // LRU eviction if cache exceeds limit
-    if(page_decoders.size() > max_cached_pages) evict_lru_page(); 
+    if((config.max_cached_pages >= 0) and (page_decoders.size() > static_cast<size_t>(config.max_cached_pages)))
+      {
+        evict_lru_page(); 
+      }
 
     std::stringstream ss;
     ss << pdf_timings::PREFIX_DECODE_PAGE << page_number;

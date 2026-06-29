@@ -275,6 +275,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
         max_num_lines (int): Maximum number of lines to keep (-1 means no cap) [default=-1].
         max_num_bitmaps (int): Maximum number of bitmaps to keep (-1 means no cap) [default=-1].
         min_visible_clip_extent (float): Minimum clip width/height treated as a usable image clip [default=1e-3].
+        max_cached_pages (int): Maximum number of page decoders in the LRU cache (-1 means no cap) [default=32].
         keep_glyphs (bool): If true, keep GLYPH<...> fallback strings in output; if false, replace them with a space [default=false].
         keep_qpdf_warnings (bool): If true, QPDF warnings are emitted; if false, they are suppressed [default=false].
     )")
@@ -287,6 +288,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
     .def_readwrite("max_num_lines", &pdflib::decode_config::max_num_lines)
     .def_readwrite("max_num_bitmaps", &pdflib::decode_config::max_num_bitmaps)
     .def_readwrite("min_visible_clip_extent", &pdflib::decode_config::min_visible_clip_extent)
+    .def_readwrite("max_cached_pages", &pdflib::decode_config::max_cached_pages)
     .def_readwrite("create_word_cells", &pdflib::decode_config::create_word_cells)
     .def_readwrite("create_line_cells", &pdflib::decode_config::create_line_cells)
     .def_readwrite("enforce_same_font", &pdflib::decode_config::enforce_same_font)

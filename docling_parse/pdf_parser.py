@@ -261,6 +261,7 @@ class DecodeConfig(BaseModel):
     max_num_lines: int = -1
     max_num_bitmaps: int = -1
     min_visible_clip_extent: float = 1e-3
+    max_cached_pages: int = 32
     do_thread_safe: bool = True
     release_native_memory_every_n_pages: int = 0
     keep_glyphs: bool = False
@@ -291,6 +292,7 @@ def _compile_decode_config(
     cpp.max_num_lines = decode_config.max_num_lines
     cpp.max_num_bitmaps = decode_config.max_num_bitmaps
     cpp.min_visible_clip_extent = decode_config.min_visible_clip_extent
+    cpp.max_cached_pages = decode_config.max_cached_pages
     cpp.do_thread_safe = decode_config.do_thread_safe
     cpp.release_native_memory_every_n_pages = (
         decode_config.release_native_memory_every_n_pages
