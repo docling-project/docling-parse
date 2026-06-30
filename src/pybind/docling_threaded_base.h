@@ -217,7 +217,9 @@ namespace docling
         try
           {
             key2doc[key] = std::make_shared<doc_decoder_type>();
-            key2doc.at(key)->process_document_from_file(filename, password);
+            key2doc.at(key)->process_document_from_file(filename,
+                                                        password,
+                                                        config.keep_qpdf_warnings);
           }
         catch(const std::exception& exc)
           {
@@ -275,7 +277,10 @@ namespace docling
       {
         key2doc[key] = std::make_shared<doc_decoder_type>();
         std::string description = "parsing of " + key + " from bytesio";
-        key2doc.at(key)->process_document_from_bytesio(data_buffer, password, description);
+        key2doc.at(key)->process_document_from_bytesio(data_buffer,
+                                                       password,
+                                                       description,
+                                                       config.keep_qpdf_warnings);
       }
     catch(const std::exception& exc)
       {

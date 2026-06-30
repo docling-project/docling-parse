@@ -1,3 +1,9 @@
+## [v7.2.0](https://github.com/docling-project/docling-parse/releases/tag/v7.2.0) - 2026-06-29
+
+### Feature
+
+* Upgrade bitmap rendering with clipping ([#284](https://github.com/docling-project/docling-parse/issues/284)) ([`b55da56`](https://github.com/docling-project/docling-parse/commit/b55da563b9eda2da30c9dead373d54656fb5f01f))
+
 ## [v7.1.0](https://github.com/docling-project/docling-parse/releases/tag/v7.1.0) - 2026-06-26
 
 ### Feature

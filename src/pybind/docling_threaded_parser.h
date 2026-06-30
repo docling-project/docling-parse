@@ -68,7 +68,9 @@ namespace docling
                 auto total_start = clock_type::now();
 
                 auto stage_start = clock_type::now();
-                auto page_decoder = doc_decoder->make_thread_safe_page_decoder(page_number);
+                auto page_decoder = doc_decoder->make_thread_safe_page_decoder(
+                  page_number,
+                  config.keep_qpdf_warnings);
                 result.timings.make_page_decoder_s
                   = std::chrono::duration<double>(clock_type::now() - stage_start).count();
 

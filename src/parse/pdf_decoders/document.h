@@ -36,11 +36,13 @@ namespace pdflib
     nlohmann::json get_table_of_contents();
 
     bool process_document_from_file(std::string& _filename,
-                                    std::optional<std::string>& _password);
+                                    std::optional<std::string>& _password,
+                                    bool keep_qpdf_warnings = false);
 
     bool process_document_from_bytesio(std::shared_ptr<std::string> _buffer,
                                        std::optional<std::string>& _password,
-                                       std::string description = "processing buffer");
+                                       std::string description = "processing buffer",
+                                       bool keep_qpdf_warnings = false);
 
     void decode_document(const decode_config& config);
 
@@ -50,7 +52,8 @@ namespace pdflib
     // Decode a single page and return the page decoder directly
     page_decoder_ptr decode_page(int page_number,
                                  const decode_config& config);
-    page_decoder_ptr make_thread_safe_page_decoder(int page_number);
+    page_decoder_ptr make_thread_safe_page_decoder(int page_number,
+                                                   bool keep_qpdf_warnings);
     
     // New: Direct access to page decoders (typed API)
     bool has_page_decoder(int page_number);
@@ -64,7 +67,9 @@ namespace pdflib
 
   private:
 
-    std::pair<int, std::shared_ptr<std::string> > get_thread_safe_page_buffer(int page_ind);
+    std::pair<int, std::shared_ptr<std::string> > get_thread_safe_page_buffer(
+      int page_ind,
+      bool keep_qpdf_warnings);
 
     void ensure_annots_loaded();
 
@@ -176,7 +181,8 @@ namespace pdflib
   }
 
   bool pdf_decoder<DOCUMENT>::process_document_from_file(std::string& _filename,
-                                                         std::optional<std::string>& _password)
+                                                         std::optional<std::string>& _password,
+                                                         bool keep_qpdf_warnings)
   {
     filename = _filename; // save it
     LOG_S(INFO) << "start processing '" << filename << "' by reading into memory ...";
@@ -203,7 +209,10 @@ namespace pdflib
     ifs.close();
 
     std::string description = "processing file " + filename;
-    bool result = process_document_from_bytesio(file_buffer, _password, description);
+    bool result = process_document_from_bytesio(file_buffer,
+                                                _password,
+                                                description,
+                                                keep_qpdf_warnings);
 
     double total_elapsed = timer.get_time();
     timings.add_timing(pdf_timings::KEY_PROCESS_DOCUMENT_FROM_FILE, total_elapsed);
@@ -213,7 +222,8 @@ namespace pdflib
 
   bool pdf_decoder<DOCUMENT>::process_document_from_bytesio(std::shared_ptr<std::string> _buffer,
                                                             std::optional<std::string>& _password,
-                                                            std::string description)
+                                                            std::string description,
+                                                            bool keep_qpdf_warnings)
   {
     buffer = _buffer;
     password = _password;
@@ -224,6 +234,8 @@ namespace pdflib
     
     try
       {
+        qpdf_document.setSuppressWarnings(!keep_qpdf_warnings);
+
 	utils::timer process_timer;
 
         if(password.has_value())
@@ -243,7 +255,7 @@ namespace pdflib
 
 	timings.add_timing(pdf_timings::KEY_QPDF_PROCESS, process_timer.get_time());
 
-	if(qpdf_document.anyWarnings())
+	if(keep_qpdf_warnings and qpdf_document.anyWarnings())
 	  {
 	    LOG_S(WARNING) << "qpdf detected inconsistencies!";
 	  }
@@ -266,7 +278,9 @@ namespace pdflib
     return true;
   }
 
-  std::pair<int, std::shared_ptr<std::string> > pdf_decoder<DOCUMENT>::get_thread_safe_page_buffer(int page_ind)
+  std::pair<int, std::shared_ptr<std::string> > pdf_decoder<DOCUMENT>::get_thread_safe_page_buffer(
+    int page_ind,
+    bool keep_qpdf_warnings)
   {
     std::pair<int, std::shared_ptr<std::string> > result(-1, nullptr);
 
@@ -292,6 +306,7 @@ namespace pdflib
     {
       utils::timer page_timer;
       QPDF out_pdf;
+      out_pdf.setSuppressWarnings(!keep_qpdf_warnings);
       out_pdf.emptyPDF();
       
       QPDFPageDocumentHelper out_pages(out_pdf);
@@ -323,9 +338,11 @@ namespace pdflib
   }
 
   pdf_decoder<DOCUMENT>::page_decoder_ptr
-  pdf_decoder<DOCUMENT>::make_thread_safe_page_decoder(int page_number)
+  pdf_decoder<DOCUMENT>::make_thread_safe_page_decoder(int page_number,
+                                                       bool keep_qpdf_warnings)
   {
-    std::pair<int, std::shared_ptr<std::string> > result = get_thread_safe_page_buffer(page_number);
+    std::pair<int, std::shared_ptr<std::string> > result =
+      get_thread_safe_page_buffer(page_number, keep_qpdf_warnings);
 
     int orig_page_number = page_number;
     int curr_page_number = result.first;
@@ -335,7 +352,8 @@ namespace pdflib
     return std::make_shared<pdf_decoder<PAGE>>(page_buffer,
                                                password,
                                                orig_page_number,
-                                               curr_page_number);
+                                               curr_page_number,
+                                               keep_qpdf_warnings);
   }
   
   void pdf_decoder<DOCUMENT>::decode_document(const decode_config& config)
@@ -420,7 +438,8 @@ namespace pdflib
       if(config.do_thread_safe)
         {
 	  LOG_S(INFO) << "decoding page thread-safe";
-          page_decoder = make_thread_safe_page_decoder(page_number);
+          page_decoder = make_thread_safe_page_decoder(page_number,
+                                                       config.keep_qpdf_warnings);
         }
       else
         {

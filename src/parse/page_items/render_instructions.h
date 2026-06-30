@@ -3,11 +3,13 @@
 #ifndef PAGE_ITEM_RENDER_INSTRUCTION_H
 #define PAGE_ITEM_RENDER_INSTRUCTION_H
 
+#include <algorithm>
 #include <cstdint>
 #include <string>
 #include <vector>
 #include <array>
 #include <memory>
+#include <utility>
 
 #include <parse/enums.h>
 
@@ -25,6 +27,85 @@ namespace pdflib
     CMYK_CONVENTION_ADOBE_INVERTED,
     CMYK_CONVENTION_PROCESS,
   };
+
+  enum clip_rule {
+    CLIP_RULE_NONE,
+    CLIP_RULE_NONZERO,
+    CLIP_RULE_EVEN_ODD,
+  };
+
+  class clip_path_instruction
+  {
+  public:
+    clip_path_instruction();
+    clip_path_instruction(std::vector<double> x,
+                          std::vector<double> y,
+                          page_shape_closing_type closing_type,
+                          page_shape_type shape_type);
+
+    const std::vector<double>& get_x() const { return x; }
+    const std::vector<double>& get_y() const { return y; }
+    page_shape_closing_type get_closing_type() const { return closing_type; }
+    page_shape_type get_shape_type() const { return shape_type; }
+
+    bool empty() const { return x.empty() or y.empty(); }
+    size_t size() const { return std::min(x.size(), y.size()); }
+
+  private:
+    std::vector<double> x;
+    std::vector<double> y;
+    page_shape_closing_type closing_type;
+    page_shape_type shape_type;
+  };
+
+  inline clip_path_instruction::clip_path_instruction():
+    x(),
+    y(),
+    closing_type(CLOSING_UNDEFINED),
+    shape_type(SHAPE_UNDEFINED)
+  {}
+
+  inline clip_path_instruction::clip_path_instruction(std::vector<double> x_,
+                                                      std::vector<double> y_,
+                                                      page_shape_closing_type closing_type_,
+                                                      page_shape_type shape_type_):
+    x(std::move(x_)),
+    y(std::move(y_)),
+    closing_type(closing_type_),
+    shape_type(shape_type_)
+  {}
+
+  class clip_state_instruction
+  {
+  public:
+    clip_state_instruction();
+    clip_state_instruction(clip_rule rule,
+                           std::vector<clip_path_instruction> paths);
+
+    clip_rule get_rule() const { return rule; }
+    const std::vector<clip_path_instruction>& get_paths() const { return paths; }
+
+    bool has_clip() const
+    {
+      return rule != CLIP_RULE_NONE and not paths.empty();
+    }
+
+  private:
+    clip_rule rule;
+    std::vector<clip_path_instruction> paths;
+  };
+
+  inline clip_state_instruction::clip_state_instruction():
+    rule(CLIP_RULE_NONE),
+    paths()
+  {}
+
+  inline clip_state_instruction::clip_state_instruction(
+    clip_rule rule_,
+    std::vector<clip_path_instruction> paths_):
+    rule(rule_),
+    paths(std::move(paths_))
+  {}
 
   enum RENDER_INSTRUCTION_NAME {
     SIZE_INSTRUCTION, // set the size of the canvas on which we render
@@ -219,7 +300,8 @@ namespace pdflib
                        double r_x0, double r_y0,
                        double r_x1, double r_y1,
                        double r_x2, double r_y2,
-                       double r_x3, double r_y3):
+                       double r_x3, double r_y3,
+                       clip_state_instruction clip_state = clip_state_instruction()):
       xobject_key(xobject_key),
       data(std::move(data)),
       alpha_data(std::move(alpha_data)),
@@ -231,7 +313,8 @@ namespace pdflib
       r_x0(r_x0), r_y0(r_y0),
       r_x1(r_x1), r_y1(r_y1),
       r_x2(r_x2), r_y2(r_y2),
-      r_x3(r_x3), r_y3(r_y3) {}
+      r_x3(r_x3), r_y3(r_y3),
+      clip_state(std::move(clip_state)) {}
 
     const std::string& get_key() const { return xobject_key; }
 
@@ -255,6 +338,9 @@ namespace pdflib
     double get_r_x3() const { return r_x3; }
     double get_r_y3() const { return r_y3; }
 
+    const clip_state_instruction& get_clip_state() const { return clip_state; }
+    bool has_clip_state() const { return clip_state.has_clip(); }
+
   private:
 
     const std::string xobject_key;
@@ -275,6 +361,8 @@ namespace pdflib
     const double r_y2;
     const double r_x3;
     const double r_y3;
+
+    const clip_state_instruction clip_state;
   };
 
   class shape_instruction

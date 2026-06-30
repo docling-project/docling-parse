@@ -636,7 +636,9 @@ namespace
               auto total_start = clock_type::now();
 
               auto stage_start = clock_type::now();
-              auto page_decoder = docs_[task.doc_index]->make_thread_safe_page_decoder(task.page_number);
+              auto page_decoder = docs_[task.doc_index]->make_thread_safe_page_decoder(
+                task.page_number,
+                decode_config_.keep_qpdf_warnings);
               result.timings.make_page_decoder_s =
                 std::chrono::duration<double>(clock_type::now() - stage_start).count();
 
