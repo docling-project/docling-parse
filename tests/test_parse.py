@@ -113,7 +113,7 @@ def verify_bitmap_resources(
 ) -> bool:
     # true_bitmap_resources = _sanitize_bitmap_resources(true_bitmap_resources)
     # pred_bitmap_resources = _sanitize_bitmap_resources(pred_bitmap_resources)
-    
+
     return _verify_bitmap_resources(
         true_bitmap_resources=true_bitmap_resources,
         pred_bitmap_resources=pred_bitmap_resources,
@@ -127,8 +127,6 @@ def _verify_bitmap_resources(
     eps: float,
 ) -> bool:
 
-    print("bitmap resource count: ", f"true: {len(true_bitmap_resources)}, pred: {len(pred_bitmap_resources)}")
-    
     assert len(true_bitmap_resources) == len(pred_bitmap_resources), (
         "bitmap resource count mismatch: "
         f"expected {len(true_bitmap_resources)}, got {len(pred_bitmap_resources)}"

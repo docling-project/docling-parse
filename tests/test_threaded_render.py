@@ -437,9 +437,9 @@ def test_render_reference_documents_from_filenames():
             assert result.get_image().mode == "RGBA"
         else:
             pdf_doc_path = key_to_path.get(result.doc_key, result.doc_key)
-            exc = AssertionError(result.error_message)
+            err = AssertionError(result.error_message)
             if first_failure is None:
-                first_failure = (exc, exc.__traceback__)
+                first_failure = (err, err.__traceback__)
             test_results.append(
                 (
                     os.path.basename(pdf_doc_path),
@@ -456,11 +456,11 @@ def test_render_reference_documents_from_filenames():
 
         key = doc_keys[pdf_doc_path]
         if key not in results:
-            exc = AssertionError(f"No results found for {pdf_doc_path}")
+            err = AssertionError(f"No results found for {pdf_doc_path}")
             if first_failure is None:
-                first_failure = (exc, exc.__traceback__)
+                first_failure = (err, err.__traceback__)
             test_results.append(
-                (os.path.basename(pdf_doc_path), "N/A", "render", False, str(exc))
+                (os.path.basename(pdf_doc_path), "N/A", "render", False, str(err))
             )
             continue
 
@@ -475,10 +475,10 @@ def test_render_reference_documents_from_filenames():
             )
 
             if not os.path.exists(fname):
-                exc = AssertionError(f"missing groundtruth file: {fname}")
+                err = AssertionError(f"missing groundtruth file: {fname}")
                 if first_failure is None:
-                    first_failure = (exc, exc.__traceback__)
-                test_results.append((rname, str(page_no), "all", False, str(exc)))
+                    first_failure = (err, err.__traceback__)
+                test_results.append((rname, str(page_no), "all", False, str(err)))
                 continue
 
             try:
@@ -492,13 +492,11 @@ def test_render_reference_documents_from_filenames():
                 test_results.append((rname, str(page_no), "all", True, ""))
 
     failed = [
-        (doc, page, mode, err)
-        for doc, page, mode, ok, err in test_results
-        if not ok
+        (doc, page, mode, err) for doc, page, mode, ok, err in test_results if not ok
     ]
     if first_failure is not None:
-        exc, tb = first_failure
-        raise exc.with_traceback(tb)
+        failure, tb = first_failure
+        raise failure.with_traceback(tb)
 
     assert not failed, f"{len(failed)} page(s) failed: " + ", ".join(
         f"{doc}@{page}[{mode}]" for doc, page, mode, _ in failed
