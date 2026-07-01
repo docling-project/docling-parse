@@ -432,7 +432,9 @@ namespace docling
       }
 
     auto& doc_decoder = itr->second;
-    auto page_decoder = doc_decoder->make_thread_safe_page_decoder(page);
+    auto page_decoder = doc_decoder->make_thread_safe_page_decoder(
+      page,
+      config.keep_qpdf_warnings);
     page_decoder->decode_page(config);
 
     if(config.create_word_cells)
