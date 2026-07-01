@@ -272,11 +272,10 @@ jobs:
         if: ${{ matrix.os.platform_id == 'win_arm64' }}
         shell: pwsh
         run: |
-          Invoke-RestMethod -Uri 'https://get.scoop.sh' | Invoke-Expression
-          echo "C:/Users/runneradmin/scoop/shims" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          scoop bucket add extras
-          scoop install zlib
-          regedit /s "C:\Users\runneradmin\scoop\apps\zlib\current\register.reg"
+          New-Item -Path 'C:\windows-libs\zlib-ng-arm64' -ItemType Directory -Force
+          Invoke-WebRequest -Uri 'https://github.com/zlib-ng/zlib-ng/releases/download/2.3.3/zlib-ng-win-arm64-compat.zip' -OutFile 'C:\windows-libs\zlib-ng-win-arm64-compat.zip'
+          Expand-Archive -Path 'C:\windows-libs\zlib-ng-win-arm64-compat.zip' -DestinationPath 'C:\windows-libs\zlib-ng-arm64' -Force
+          Get-ChildItem -Path 'C:\windows-libs\zlib-ng-arm64' -Recurse
 
       - name: Set up NASM assembler [windows]
         if: ${{ matrix.os.platform == 'windows' }}
@@ -306,6 +305,11 @@ jobs:
           }
           else {
               Add-Content -Path $env:GITHUB_ENV -Value "CIBW_ARCHS=ARM64"
+              Add-Content -Path $env:GITHUB_ENV -Value "ZLIB_ROOT=C:/windows-libs/zlib-ng-arm64"
+              Add-Content -Path $env:GITHUB_ENV -Value "CMAKE_PREFIX_PATH=C:/windows-libs/zlib-ng-arm64;C:/windows-libs/zlib-ng-arm64/lib/cmake/ZLIB"
+              Add-Content -Path $env:GITHUB_ENV -Value "CMAKE_LIBRARY_PATH=C:/windows-libs/zlib-ng-arm64/lib"
+              Add-Content -Path $env:GITHUB_ENV -Value "CMAKE_INCLUDE_PATH=C:/windows-libs/zlib-ng-arm64/include"
+              Add-Content -Path $env:GITHUB_ENV -Value "PATH=C:/windows-libs/zlib-ng-arm64/bin;$env:PATH"
           }
           Add-Content -Path $env:GITHUB_ENV -Value 'PYTHON_MODULE_EXTENSION=${SETUPTOOLS_EXT_SUFFIX}'
 
