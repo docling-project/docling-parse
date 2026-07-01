@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import copy
 import glob
 import json
 import os
@@ -62,14 +63,73 @@ GROUNDTRUTH_FOLDER = "tests/data/groundtruth/"
 REGRESSION_FOLDER = "tests/data/regression/*.pdf"
 
 
+def _truncate_data_uri(uri, max_chars: int = 64):
+    if uri is None:
+        return uri
+
+    value = str(uri)
+    marker = "base64,"
+    if not value.startswith("data:") or marker not in value:
+        return uri
+
+    prefix, payload = value.split(marker, 1)
+    return f"{prefix}{marker}{payload[:max_chars]}..."
+
+
+def _set_attr(obj, name: str, value) -> None:
+    try:
+        setattr(obj, name, value)
+    except Exception:
+        object.__setattr__(obj, name, value)
+
+
+def _sanitize_bitmap_resources(
+    bitmap_resources: List[BitmapResource],
+) -> List[BitmapResource]:
+    sanitized = copy.deepcopy(bitmap_resources)
+
+    for bitmap_resource in sanitized:
+        if bitmap_resource.uri is not None:
+            _set_attr(
+                bitmap_resource,
+                "uri",
+                _truncate_data_uri(bitmap_resource.uri),
+            )
+
+        if bitmap_resource.image is not None and bitmap_resource.image.uri is not None:
+            _set_attr(
+                bitmap_resource.image,
+                "uri",
+                _truncate_data_uri(bitmap_resource.image.uri),
+            )
+
+    return sanitized
+
+
 def verify_bitmap_resources(
+    true_bitmap_resources: List[BitmapResource],
+    pred_bitmap_resources: List[BitmapResource],
+    eps: float,
+) -> bool:
+    # true_bitmap_resources = _sanitize_bitmap_resources(true_bitmap_resources)
+    # pred_bitmap_resources = _sanitize_bitmap_resources(pred_bitmap_resources)
+
+    return _verify_bitmap_resources(
+        true_bitmap_resources=true_bitmap_resources,
+        pred_bitmap_resources=pred_bitmap_resources,
+        eps=eps,
+    )
+
+
+def _verify_bitmap_resources(
     true_bitmap_resources: List[BitmapResource],
     pred_bitmap_resources: List[BitmapResource],
     eps: float,
 ) -> bool:
 
     assert len(true_bitmap_resources) == len(pred_bitmap_resources), (
-        "len(true_bitmap_resources)==len(pred_bitmap_resources)"
+        "bitmap resource count mismatch: "
+        f"expected {len(true_bitmap_resources)}, got {len(pred_bitmap_resources)}"
     )
 
     for i, true_bitmap_resource in enumerate(true_bitmap_resources):
@@ -397,6 +457,7 @@ def test_reference_documents_from_filenames():
         "font_08.pdf": [1],
         "font_09.pdf": [1],
         "font_10.pdf": [1],
+        "2508.13113v2.pdf": [2, 9, 17],
     }
 
     config = DecodeConfig(

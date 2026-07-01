@@ -29,7 +29,7 @@ LARGE_SAMPLE_PDF = "docs/PDF32000_2008.pdf"
 
 def _make_decode_config() -> DecodeConfig:
     return DecodeConfig(
-        do_sanitization=False,
+        do_sanitization=True,
         keep_glyphs=True,
         keep_qpdf_warnings=False,
     )
@@ -399,7 +399,6 @@ def test_render_reference_documents_from_filenames():
     assert len(pdf_docs) > 0, "len(pdf_docs)==0 -> nothing to test"
 
     parser = _make_parser(threads=4, max_concurrent=32)
-    doc_keys = {pdf_doc_path: parser.load(pdf_doc_path) for pdf_doc_path in pdf_docs}
 
     page_restrictions = {
         "deep-mediabox-inheritance.pdf": [2],
@@ -408,7 +407,25 @@ def test_render_reference_documents_from_filenames():
         "font_08.pdf": [1],
         "font_09.pdf": [1],
         "font_10.pdf": [1],
+        "2508.13113v2.pdf": [2, 9, 17],
     }
+
+    test_results: list[tuple[str, str, str, bool, str]] = []
+    first_failure: tuple[BaseException, object] | None = None
+    doc_keys: dict[str, str] = {}
+    key_to_path: dict[str, str] = {}
+
+    for pdf_doc_path in pdf_docs:
+        rname = os.path.basename(pdf_doc_path)
+        try:
+            key = parser.load(pdf_doc_path)
+        except Exception as exc:
+            if first_failure is None:
+                first_failure = (exc, exc.__traceback__)
+            test_results.append((rname, "N/A", "parser", False, str(exc)))
+            continue
+        doc_keys[pdf_doc_path] = key
+        key_to_path[key] = pdf_doc_path
 
     results: dict[str, dict[int, SegmentedPdfPage]] = {}
     for result in parser.iterate_results():
@@ -419,13 +436,33 @@ def test_render_reference_documents_from_filenames():
             )
             assert result.get_image().mode == "RGBA"
         else:
-            print(
-                f"Warning: render failed for {result.doc_key} page {result.page_number}: {result.error_message}"
+            pdf_doc_path = key_to_path.get(result.doc_key, result.doc_key)
+            err = AssertionError(result.error_message)
+            if first_failure is None:
+                first_failure = (err, err.__traceback__)
+            test_results.append(
+                (
+                    os.path.basename(pdf_doc_path),
+                    str(result.page_number),
+                    "render",
+                    False,
+                    result.error_message,
+                )
             )
 
     for pdf_doc_path in pdf_docs:
+        if pdf_doc_path not in doc_keys:
+            continue
+
         key = doc_keys[pdf_doc_path]
-        assert key in results, f"No results found for {pdf_doc_path}"
+        if key not in results:
+            err = AssertionError(f"No results found for {pdf_doc_path}")
+            if first_failure is None:
+                first_failure = (err, err.__traceback__)
+            test_results.append(
+                (os.path.basename(pdf_doc_path), "N/A", "render", False, str(err))
+            )
+            continue
 
         rname = os.path.basename(pdf_doc_path)
 
@@ -437,6 +474,30 @@ def test_render_reference_documents_from_filenames():
                 GROUNDTRUTH_FOLDER, rname + f".page_no_{page_no}.py.json"
             )
 
-            if os.path.exists(fname):
+            if not os.path.exists(fname):
+                err = AssertionError(f"missing groundtruth file: {fname}")
+                if first_failure is None:
+                    first_failure = (err, err.__traceback__)
+                test_results.append((rname, str(page_no), "all", False, str(err)))
+                continue
+
+            try:
                 true_page = SegmentedPdfPage.load_from_json(fname)
                 verify_SegmentedPdfPage(true_page, pred_page, filename=fname)
+            except Exception as exc:
+                if first_failure is None:
+                    first_failure = (exc, exc.__traceback__)
+                test_results.append((rname, str(page_no), "all", False, str(exc)))
+            else:
+                test_results.append((rname, str(page_no), "all", True, ""))
+
+    failed = [
+        (doc, page, mode, err) for doc, page, mode, ok, err in test_results if not ok
+    ]
+    if first_failure is not None:
+        failure, tb = first_failure
+        raise failure.with_traceback(tb)
+
+    assert not failed, f"{len(failed)} page(s) failed: " + ", ".join(
+        f"{doc}@{page}[{mode}]" for doc, page, mode, _ in failed
+    )

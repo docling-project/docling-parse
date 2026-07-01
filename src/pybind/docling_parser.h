@@ -37,11 +37,13 @@ namespace docling
 
     bool load_document(std::string key,
 		       std::string filename,
-		       std::optional<std::string> password);
+		       std::optional<std::string> password,
+                       bool keep_qpdf_warnings = false);
     
     bool load_document_from_bytesio(std::string key,
 				    pybind11::object bytes_io,
-				    std::optional<std::string> password);
+				    std::optional<std::string> password,
+                                    bool keep_qpdf_warnings = false);
 
     bool unload_document(std::string key);
     bool unload_document_pages(std::string key);
@@ -151,7 +153,8 @@ namespace docling
 
   bool docling_parser::load_document(std::string key,
 				     std::string filename,
-				     std::optional<std::string> password)
+				     std::optional<std::string> password,
+                                     bool keep_qpdf_warnings)
   {
 #ifdef _WIN32
     // Convert UTF-8 string to UTF-16 wstring
@@ -167,7 +170,9 @@ namespace docling
         remove_page_decoders(key);
 
         doc_decoders[key] = std::make_shared<doc_decoder_type>();
-        doc_decoders.at(key)->process_document_from_file(filename, password);
+        doc_decoders.at(key)->process_document_from_file(filename,
+                                                         password,
+                                                         keep_qpdf_warnings);
 
         return true;
       }
@@ -178,7 +183,8 @@ namespace docling
 
   bool docling_parser::load_document_from_bytesio(std::string key,
 						  pybind11::object bytes_io,
-						  std::optional<std::string> password)
+						  std::optional<std::string> password,
+                                                  bool keep_qpdf_warnings)
   {
     // logging_lib::info("pdf-parser") << __FILE__ << ":" << __LINE__ << "\t" << __FUNCTION__;
     LOG_S(INFO) << __FILE__ << ":" << __LINE__ << "\t" << __FUNCTION__;
@@ -204,7 +210,10 @@ namespace docling
 
         doc_decoders[key] = std::make_shared<doc_decoder_type>();
         std::string description = "parsing of " + key + " from bytesio";
-        doc_decoders.at(key)->process_document_from_bytesio(data_buffer, password, description);
+        doc_decoders.at(key)->process_document_from_bytesio(data_buffer,
+                                                            password,
+                                                            description,
+                                                            keep_qpdf_warnings);
 
         return true;
       }

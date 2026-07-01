@@ -27,7 +27,8 @@ namespace pdflib
     pdf_decoder(std::shared_ptr<std::string> buffer,
                 std::optional<std::string> password,
                 int orig_page_num, // original page-number of the pdf
-		int curr_page_num); // page number in the buffer. The buffer might only be a single pdf page
+		int curr_page_num, // page number in the buffer. The buffer might only be a single pdf page
+                bool keep_qpdf_warnings = false);
 
     ~pdf_decoder();
 
@@ -184,7 +185,8 @@ namespace pdflib
   pdf_decoder<PAGE>::pdf_decoder(std::shared_ptr<std::string> buffer,
                                  std::optional<std::string> password,
                                  int orig_page_num,
-				 int curr_page_num):
+				 int curr_page_num,
+                                 bool keep_qpdf_warnings):
     thread_safe(true),
     owned_buffer(buffer),
     owned_qpdf_document(std::make_unique<QPDF>()),
@@ -198,6 +200,7 @@ namespace pdflib
     std::string description = "thread-safe page " + std::to_string(orig_page_num);
 
     configure_qpdf_warnings(*owned_qpdf_document);
+    owned_qpdf_document->setSuppressWarnings(!keep_qpdf_warnings);
 
     if(password.has_value())
       {

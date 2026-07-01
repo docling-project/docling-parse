@@ -274,6 +274,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
         keep_bitmaps (bool): Keep all the bitmap resources [default=true].
         max_num_lines (int): Maximum number of lines to keep (-1 means no cap) [default=-1].
         max_num_bitmaps (int): Maximum number of bitmaps to keep (-1 means no cap) [default=-1].
+        min_visible_clip_extent (float): Minimum clip width/height treated as a usable image clip [default=1e-3].
         keep_glyphs (bool): If true, keep GLYPH<...> fallback strings in output; if false, replace them with a space [default=false].
         keep_qpdf_warnings (bool): If true, QPDF warnings are emitted; if false, they are suppressed [default=false].
     )")
@@ -285,6 +286,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
     .def_readwrite("keep_bitmaps", &pdflib::decode_config::keep_bitmaps)
     .def_readwrite("max_num_lines", &pdflib::decode_config::max_num_lines)
     .def_readwrite("max_num_bitmaps", &pdflib::decode_config::max_num_bitmaps)
+    .def_readwrite("min_visible_clip_extent", &pdflib::decode_config::min_visible_clip_extent)
     .def_readwrite("create_word_cells", &pdflib::decode_config::create_word_cells)
     .def_readwrite("create_line_cells", &pdflib::decode_config::create_line_cells)
     .def_readwrite("enforce_same_font", &pdflib::decode_config::enforce_same_font)
@@ -367,6 +369,12 @@ PYBIND11_MODULE(pdf_parsers, m) {
     .def_readonly("y0", &pdflib::page_item<pdflib::PAGE_IMAGE>::y0)
     .def_readonly("x1", &pdflib::page_item<pdflib::PAGE_IMAGE>::x1)
     .def_readonly("y1", &pdflib::page_item<pdflib::PAGE_IMAGE>::y1)
+    .def_readonly("is_visible", &pdflib::page_item<pdflib::PAGE_IMAGE>::is_visible)
+    .def_readonly("has_visible_bbox", &pdflib::page_item<pdflib::PAGE_IMAGE>::has_visible_bbox)
+    .def_readonly("visible_x0", &pdflib::page_item<pdflib::PAGE_IMAGE>::visible_x0)
+    .def_readonly("visible_y0", &pdflib::page_item<pdflib::PAGE_IMAGE>::visible_y0)
+    .def_readonly("visible_x1", &pdflib::page_item<pdflib::PAGE_IMAGE>::visible_x1)
+    .def_readonly("visible_y1", &pdflib::page_item<pdflib::PAGE_IMAGE>::visible_y1)
     .def_readonly("image_width", &pdflib::page_item<pdflib::PAGE_IMAGE>::image_width)
     .def_readonly("image_height", &pdflib::page_item<pdflib::PAGE_IMAGE>::image_height)
     .def("get_image_format", &pdflib::page_item<pdflib::PAGE_IMAGE>::get_image_format,
@@ -677,13 +685,15 @@ PYBIND11_MODULE(pdf_parsers, m) {
 	 [](docling::docling_parser &self,
 	    const std::string &key,
 	    const std::string &filename,
-	    std::optional<std::string>& password
+	    std::optional<std::string>& password,
+	    bool keep_qpdf_warnings
 	    ) -> bool {
-	   return self.load_document(key, filename, password);
+	   return self.load_document(key, filename, password, keep_qpdf_warnings);
 	 },
 	 pybind11::arg("key"),
 	 pybind11::arg("filename"),
 	 pybind11::arg("password") = pybind11::none(),
+	 pybind11::arg("keep_qpdf_warnings") = false,
 	 R"(
     Load a document by key and filename.
 
@@ -699,13 +709,18 @@ PYBIND11_MODULE(pdf_parsers, m) {
 	 [](docling::docling_parser &self,
 	    const std::string &key,
 	    pybind11::object bytes_io,
-	    std::optional<std::string>& password
+	    std::optional<std::string>& password,
+	    bool keep_qpdf_warnings
 	    ) -> bool {
-	   return self.load_document_from_bytesio(key, bytes_io, password);
+	   return self.load_document_from_bytesio(key,
+                                                  bytes_io,
+                                                  password,
+                                                  keep_qpdf_warnings);
 	 },
 	 pybind11::arg("key"),
 	 pybind11::arg("bytes_io"),
-	 pybind11::arg("password") = pybind11::none(),	 
+	 pybind11::arg("password") = pybind11::none(),
+	 pybind11::arg("keep_qpdf_warnings") = false,
 	 R"(
     Load a document by key from a BytesIO-like object.
 

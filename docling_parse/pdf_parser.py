@@ -260,6 +260,7 @@ class DecodeConfig(BaseModel):
     line_space_width_factor_for_merge_with_space: float = 0.33
     max_num_lines: int = -1
     max_num_bitmaps: int = -1
+    min_visible_clip_extent: float = 1e-3
     do_thread_safe: bool = True
     release_native_memory_every_n_pages: int = 0
     keep_glyphs: bool = False
@@ -289,6 +290,7 @@ def _compile_decode_config(
     )
     cpp.max_num_lines = decode_config.max_num_lines
     cpp.max_num_bitmaps = decode_config.max_num_bitmaps
+    cpp.min_visible_clip_extent = decode_config.min_visible_clip_extent
     cpp.do_thread_safe = decode_config.do_thread_safe
     cpp.release_native_memory_every_n_pages = (
         decode_config.release_native_memory_every_n_pages
@@ -519,8 +521,21 @@ def _to_bitmap_resources_from_decoder(
     result: List[BitmapResource] = []
 
     for ind, image in enumerate(images_container):
+        if not getattr(image, "is_visible", True):
+            continue
+
         image_ref = None
         mode = ImageRefMode.PLACEHOLDER
+        bbox_x0 = image.x0
+        bbox_y0 = image.y0
+        bbox_x1 = image.x1
+        bbox_y1 = image.y1
+
+        if getattr(image, "has_visible_bbox", False):
+            bbox_x0 = image.visible_x0
+            bbox_y0 = image.visible_y0
+            bbox_x1 = image.visible_x1
+            bbox_y1 = image.visible_y1
 
         if include_bitmap_bytes:
             try:
@@ -545,7 +560,7 @@ def _to_bitmap_resources_from_decoder(
                         if pil_image.mode != "RGBA":
                             pil_image = pil_image.convert("RGBA")
 
-                        bbox_width = abs(image.x1 - image.x0)
+                        bbox_width = abs(bbox_x1 - bbox_x0)
                         if bbox_width > 0 and image.image_width > 0:
                             dpi = round(image.image_width * 72.0 / bbox_width)
                         else:
@@ -561,16 +576,16 @@ def _to_bitmap_resources_from_decoder(
 
         result.append(
             BitmapResource(
-                index=ind,
+                index=len(result),
                 rect=BoundingRectangle(
-                    r_x0=image.x0,
-                    r_y0=image.y0,
-                    r_x1=image.x1,
-                    r_y1=image.y0,
-                    r_x2=image.x1,
-                    r_y2=image.y1,
-                    r_x3=image.x0,
-                    r_y3=image.y1,
+                    r_x0=bbox_x0,
+                    r_y0=bbox_y0,
+                    r_x1=bbox_x1,
+                    r_y1=bbox_y0,
+                    r_x2=bbox_x1,
+                    r_y2=bbox_y1,
+                    r_x3=bbox_x0,
+                    r_y3=bbox_y1,
                 ),
                 uri=None,
                 image=image_ref,
@@ -978,10 +993,15 @@ class DoclingPdfParser:
         if isinstance(path_or_stream, str):
             path_or_stream = Path(path_or_stream)
 
+        effective_decode_config = decode_config or DecodeConfig()
+
         if isinstance(path_or_stream, Path):
             key = f"key={path_or_stream!s}"  # use filepath as internal handle
             success = self._load_document(
-                key=key, filename=str(path_or_stream), password=password
+                key=key,
+                filename=str(path_or_stream),
+                password=password,
+                keep_qpdf_warnings=effective_decode_config.keep_qpdf_warnings,
             )
 
         elif isinstance(path_or_stream, BytesIO):
@@ -993,14 +1013,19 @@ class DoclingPdfParser:
             hash = hasher.hexdigest()
 
             key = f"key={hash}"  # use md5 hash as internal handle
-            success = self._load_document_from_bytesio(key=key, data=path_or_stream)
+            success = self._load_document_from_bytesio(
+                key=key,
+                data=path_or_stream,
+                password=password,
+                keep_qpdf_warnings=effective_decode_config.keep_qpdf_warnings,
+            )
 
         if success:
             result_doc = PdfDocument(
                 parser=self.parser,
                 key=key,
                 boundary_type=boundary_type,
-                decode_config=decode_config,
+                decode_config=effective_decode_config,
                 content_config=content_config,
             )
             if not lazy:  # eagerly parse the pages at init time if desired
@@ -1011,7 +1036,11 @@ class DoclingPdfParser:
             raise RuntimeError(f"Failed to load document with key {key}")
 
     def _load_document(
-        self, key: str, filename: str, password: str | None = None
+        self,
+        key: str,
+        filename: str,
+        password: str | None = None,
+        keep_qpdf_warnings: bool = False,
     ) -> bool:
         """Load a document by key and filename.
 
@@ -1024,10 +1053,19 @@ class DoclingPdfParser:
             bool: True if the document was successfully loaded, False otherwise.)")
         """
         return self.parser.load_document(
-            key=key, filename=filename.encode("utf8"), password=password
+            key=key,
+            filename=filename.encode("utf8"),
+            password=password,
+            keep_qpdf_warnings=keep_qpdf_warnings,
         )
 
-    def _load_document_from_bytesio(self, key: str, data: BytesIO) -> bool:
+    def _load_document_from_bytesio(
+        self,
+        key: str,
+        data: BytesIO,
+        password: str | None = None,
+        keep_qpdf_warnings: bool = False,
+    ) -> bool:
         """Load a document by key from a BytesIO-like object.
 
         Parameters:
@@ -1037,7 +1075,12 @@ class DoclingPdfParser:
         Returns:
              bool: True if the document was successfully loaded, False otherwise.)")
         """
-        return self.parser.load_document_from_bytesio(key=key, bytes_io=data)
+        return self.parser.load_document_from_bytesio(
+            key=key,
+            bytes_io=data,
+            password=password,
+            keep_qpdf_warnings=keep_qpdf_warnings,
+        )
 
 
 class ThreadedPdfParserConfig(BaseModel):

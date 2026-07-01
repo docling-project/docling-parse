@@ -52,6 +52,14 @@ namespace pdflib
     double x1;
     double y1;
 
+    // Visible bounding box after clipping, in page coordinates.
+    bool is_visible;
+    bool has_visible_bbox;
+    double visible_x0;
+    double visible_y0;
+    double visible_x1;
+    double visible_y1;
+
     // Quad corners in page coordinates (not exported)
     double r_x0, r_y0;
     double r_x1, r_y1;
@@ -98,6 +106,9 @@ namespace pdflib
 
   page_item<PAGE_IMAGE>::page_item():
     x0(0), y0(0), x1(0), y1(0),
+    is_visible(true),
+    has_visible_bbox(false),
+    visible_x0(0), visible_y0(0), visible_x1(0), visible_y1(0),
     r_x0(0), r_y0(0),
     r_x1(0), r_y1(0),
     r_x2(0), r_y2(0),
@@ -166,6 +177,15 @@ namespace pdflib
     utils::values::translate_inplace(delta, x0, y0);
     utils::values::translate_inplace(delta, x1, y1);
 
+    if(has_visible_bbox)
+      {
+        utils::values::rotate_inplace(angle, visible_x0, visible_y0);
+        utils::values::rotate_inplace(angle, visible_x1, visible_y1);
+
+        utils::values::translate_inplace(delta, visible_x0, visible_y0);
+        utils::values::translate_inplace(delta, visible_x1, visible_y1);
+      }
+
     // LOG_S(INFO) << "into (x0: " << x0 << ", y0: " << y0 << ", x1: " << x1 << ", y1: " << y1 << ")"; 
 
     // The bounding box always needs to have x0<x1 and y0<y1. If you want
@@ -183,6 +203,21 @@ namespace pdflib
 
     y0 = y_min;
     y1 = y_max;
+
+    if(has_visible_bbox)
+      {
+        double visible_x_min = std::min(visible_x0, visible_x1);
+        double visible_x_max = std::max(visible_x0, visible_x1);
+
+        visible_x0 = visible_x_min;
+        visible_x1 = visible_x_max;
+
+        double visible_y_min = std::min(visible_y0, visible_y1);
+        double visible_y_max = std::max(visible_y0, visible_y1);
+
+        visible_y0 = visible_y_min;
+        visible_y1 = visible_y_max;
+      }
   }
 
   std::string page_item<PAGE_IMAGE>::get_image_extension() const

@@ -30,11 +30,32 @@ namespace pdflib
 
     pdf_state<BITMAP>& operator=(const pdf_state<BITMAP>& other);
 
-    void Do_image(pdf_resource<PAGE_XOBJECT_IMAGE>& xobj);
+    void Do_image(const std::string& xobject_key,
+                  const pdf_resource<PAGE_XOBJECT_IMAGE>& xobj,
+                  clip_state_instruction clip_state = clip_state_instruction());
 
   private:
 
-    void add_bitmap_instruction(const page_item<PAGE_IMAGE>& image);
+    enum visible_bbox_state
+    {
+      VISIBLE_BBOX_NONE,
+      VISIBLE_BBOX_CLIPPED,
+      VISIBLE_BBOX_EMPTY,
+    };
+
+    void add_bitmap_instruction(const page_item<PAGE_IMAGE>& image,
+                                clip_state_instruction clip_state);
+
+    bool get_clip_path_bbox(const clip_path_instruction& clip_path,
+                            std::array<double, 4>& bbox) const;
+
+    bool intersect_bbox(std::array<double, 4>& bbox,
+                        const std::array<double, 4>& clip_bbox) const;
+
+    visible_bbox_state compute_visible_bbox(
+      const page_item<PAGE_IMAGE>& image,
+      const clip_state_instruction& clip_state,
+      std::array<double, 4>& visible_bbox) const;
 
     const decode_config& config;
     const pdf_state<GRPH>& grph_state;
@@ -74,13 +95,108 @@ namespace pdflib
     return *this;
   }
 
-  void pdf_state<BITMAP>::Do_image(pdf_resource<PAGE_XOBJECT_IMAGE>& xobj)
+  bool pdf_state<BITMAP>::get_clip_path_bbox(const clip_path_instruction& clip_path,
+                                             std::array<double, 4>& bbox) const
+  {
+    if(clip_path.empty())
+      {
+        return false;
+      }
+
+    const auto& xs = clip_path.get_x();
+    const auto& ys = clip_path.get_y();
+    const size_t n = clip_path.size();
+
+    double x_min = xs[0];
+    double x_max = xs[0];
+    double y_min = ys[0];
+    double y_max = ys[0];
+
+    for(size_t i = 1; i < n; i++)
+      {
+        x_min = std::min(x_min, xs[i]);
+        x_max = std::max(x_max, xs[i]);
+        y_min = std::min(y_min, ys[i]);
+        y_max = std::max(y_max, ys[i]);
+      }
+
+    if(x_max - x_min <= config.min_visible_clip_extent or
+       y_max - y_min <= config.min_visible_clip_extent)
+      {
+        return false;
+      }
+
+    bbox = {x_min, y_min, x_max, y_max};
+    return true;
+  }
+
+  bool pdf_state<BITMAP>::intersect_bbox(std::array<double, 4>& bbox,
+                                         const std::array<double, 4>& clip_bbox) const
+  {
+    const double x0 = std::max(bbox[0], clip_bbox[0]);
+    const double y0 = std::max(bbox[1], clip_bbox[1]);
+    const double x1 = std::min(bbox[2], clip_bbox[2]);
+    const double y1 = std::min(bbox[3], clip_bbox[3]);
+
+    if(x1 <= x0 or y1 <= y0)
+      {
+        return false;
+      }
+
+    bbox = {x0, y0, x1, y1};
+    return true;
+  }
+
+  pdf_state<BITMAP>::visible_bbox_state pdf_state<BITMAP>::compute_visible_bbox(
+    const page_item<PAGE_IMAGE>& image,
+    const clip_state_instruction& clip_state,
+    std::array<double, 4>& visible_bbox) const
+  {
+    if(not clip_state.has_clip())
+      {
+        return VISIBLE_BBOX_NONE;
+      }
+
+    visible_bbox = {image.x0, image.y0, image.x1, image.y1};
+
+    bool applied_clip = false;
+    for(const auto& clip_path : clip_state.get_paths())
+      {
+        std::array<double, 4> clip_bbox = {0.0, 0.0, 0.0, 0.0};
+        if(not get_clip_path_bbox(clip_path, clip_bbox))
+          {
+            continue;
+          }
+
+        std::array<double, 4> candidate = visible_bbox;
+        if(not intersect_bbox(candidate, clip_bbox))
+          {
+            LOG_S(INFO) << "bitmap: empty visible bbox after clip"
+                        << " for xobject_key=" << image.xobject_key
+                           << " clip=(" << clip_bbox[0] << ", " << clip_bbox[1]
+                           << ", " << clip_bbox[2] << ", " << clip_bbox[3] << ")"
+                           << " image=(" << image.x0 << ", " << image.y0
+                           << ", " << image.x1 << ", " << image.y1 << ")";
+            return VISIBLE_BBOX_EMPTY;
+          }
+
+        visible_bbox = candidate;
+        applied_clip = true;
+      }
+
+    return applied_clip ? VISIBLE_BBOX_CLIPPED : VISIBLE_BBOX_NONE;
+  }
+
+  void pdf_state<BITMAP>::Do_image(const std::string& xobject_key,
+                                   const pdf_resource<PAGE_XOBJECT_IMAGE>& xobj,
+                                   clip_state_instruction clip_state)
   {
     if(not config.keep_bitmaps) { LOG_S(WARNING) << "skipping " << __FUNCTION__; return; }
 
-    LOG_S(INFO) << "starting to do " << __FUNCTION__ << " for xobject_key=" << xobj.get_key();
+    LOG_S(INFO) << "starting to do " << __FUNCTION__ << " for xobject_key=" << xobject_key;
     
     page_item<PAGE_IMAGE> image;
+    image.xobject_key = xobject_key;
 
     // --- Compute quad corners and bounding box via the CTM ---
     {
@@ -122,11 +238,27 @@ namespace pdflib
       image.r_x1 = d_1[0]; image.r_y1 = d_1[1];
       image.r_x2 = d_2[0]; image.r_y2 = d_2[1];
       image.r_x3 = d_3[0]; image.r_y3 = d_3[1];
+
+      std::array<double, 4> visible_bbox = {0.0, 0.0, 0.0, 0.0};
+      const visible_bbox_state bbox_state =
+        compute_visible_bbox(image, clip_state, visible_bbox);
+      if(bbox_state == VISIBLE_BBOX_CLIPPED)
+        {
+          image.has_visible_bbox = true;
+          image.visible_x0 = visible_bbox[0];
+          image.visible_y0 = visible_bbox[1];
+          image.visible_x1 = visible_bbox[2];
+          image.visible_y1 = visible_bbox[3];
+        }
+      else if(bbox_state == VISIBLE_BBOX_EMPTY)
+        {
+          image.is_visible = false;
+        }
     }
 
     // --- Populate image properties from the XObject ---
     {
-      image.xobject_key        = xobj.get_key();
+      image.xobject_key        = xobject_key;
       image.image_width        = xobj.get_image_width();
       image.image_height       = xobj.get_image_height();
       image.bits_per_component = xobj.get_bits_per_component();
@@ -172,10 +304,11 @@ namespace pdflib
 
     page_images.push_back(image);
 
-    add_bitmap_instruction(image);
+    add_bitmap_instruction(image, std::move(clip_state));
   }
 
-  void pdf_state<BITMAP>::add_bitmap_instruction(const page_item<PAGE_IMAGE>& image)
+  void pdf_state<BITMAP>::add_bitmap_instruction(const page_item<PAGE_IMAGE>& image,
+                                                 clip_state_instruction clip_state)
   {
     std::shared_ptr<std::vector<uint8_t>> pixel_data;
     std::array<int, 3> pixel_shape = {0, 0, 0};
@@ -930,7 +1063,8 @@ namespace pdflib
                               image.r_x0, image.r_y0,
                               image.r_x1, image.r_y1,
                               image.r_x2, image.r_y2,
-                              image.r_x3, image.r_y3);
+                              image.r_x3, image.r_y3,
+                              std::move(clip_state));
     instructions.add_bitmap_instruction(std::move(binstr));
   }
 

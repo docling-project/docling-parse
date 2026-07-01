@@ -14,7 +14,7 @@ namespace pdflib
     pdf_resource();
     ~pdf_resource();
 
-    nlohmann::json get();
+    nlohmann::json get() const;
 
     std::string          get_key() const;
     xobject_subtype_name get_subtype() const;
@@ -42,7 +42,7 @@ namespace pdflib
   pdf_resource<PAGE_XOBJECT_POSTSCRIPT>::~pdf_resource()
   {}
 
-  nlohmann::json pdf_resource<PAGE_XOBJECT_POSTSCRIPT>::get()
+  nlohmann::json pdf_resource<PAGE_XOBJECT_POSTSCRIPT>::get() const
   {
     return to_json(qpdf_xobject);
   }

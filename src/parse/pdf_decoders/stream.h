@@ -353,10 +353,12 @@ namespace pdflib
   {
     LOG_S(INFO) << "Do_Image: image with `" << xobj_name << "`";
 
-    pdf_resource<PAGE_XOBJECT_IMAGE>& xobj = page_xobjects->get_image(xobj_name);
+    const pdf_resource<PAGE_XOBJECT_IMAGE>& xobj = page_xobjects->get_image(xobj_name);
 
     utils::timer do_image_timer;
-    current_bitmap_state().Do_image(xobj);
+    current_bitmap_state().Do_image(xobj_name,
+                                    xobj,
+                                    current_shape_state().get_clip_state());
     double do_image_seconds = do_image_timer.get_time();
     timings.add_timing(pdf_timings::KEY_DO_IMAGE_TOTAL, do_image_seconds);
     timings.note_attributed(do_image_seconds);
@@ -377,7 +379,7 @@ namespace pdflib
     double parse_stream_seconds = 0.0;
     double interprete_seconds   = 0.0;
 
-    pdf_resource<PAGE_XOBJECT_FORM>& xobj = page_xobjects->get_form(xobj_name);
+    const pdf_resource<PAGE_XOBJECT_FORM>& xobj = page_xobjects->get_form(xobj_name);
 
     std::array<double, 4> bbox = xobj.get_bbox();
     LOG_S(INFO) << "form bbox: ["
