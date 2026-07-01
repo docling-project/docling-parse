@@ -268,6 +268,17 @@ jobs:
           Expand-Archive -Path 'C:\windows-libs\qpdf-external-libs-bin.zip' -DestinationPath 'C:\windows-libs' -Force
           Get-ChildItem -Path 'C:\windows-libs' -Recurse
           
+      - name: Install Zlib [windows arm64]
+        if: ${{ matrix.os.platform_id == 'win_arm64' }}
+        shell: pwsh
+        run: |
+          echo "C:/Users/runneradmin/scoop/shims" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          Import-Module "$env:ChocolateyInstall\helpers\chocolateyProfile.psm1"
+          refreshenv
+          scoop bucket add extras
+          scoop install zlib
+          regedit /s "C:\Users\runneradmin\scoop\apps\zlib\current\register.reg"
+
       - name: Set up NASM assembler [windows]
         if: ${{ matrix.os.platform == 'windows' }}
         shell: pwsh
@@ -297,6 +308,7 @@ jobs:
           else {
               Add-Content -Path $env:GITHUB_ENV -Value "CIBW_ARCHS=ARM64"
           }
+          Add-Content -Path $env:GITHUB_ENV -Value 'PYTHON_MODULE_EXTENSION=${SETUPTOOLS_EXT_SUFFIX}'
 
       - name: Build wheels [windows]
         if: ${{ matrix.os.platform == 'windows' }}
