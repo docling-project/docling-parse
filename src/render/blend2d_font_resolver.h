@@ -175,8 +175,8 @@ namespace pdflib
 
     if (not font_path.has_value() or font_path->empty())
       {
-        LOG_S(INFO) << "blend2d font resolver: using fallback font"
-                    << " selected_key=`" << cache_key << "`";
+        LOG_S(WARNING) << "blend2d font resolver: using fallback font"
+		       << " selected_key=`" << cache_key << "`";
         font_path = fallback_font_path();
       }
 
@@ -187,9 +187,9 @@ namespace pdflib
         return {};
       }
 
-    LOG_S(INFO) << "blend2d font resolver: loading resolved font"
-                << " selected_key=`" << cache_key << "`"
-                << " path=`" << *font_path << "`";
+    LOG_S(WARNING) << "blend2d font resolver: loading resolved font"
+		   << " selected_key=`" << cache_key << "`"
+		   << " path=`" << *font_path << "`";
     return load_font_face(*font_path);
   }
 
@@ -429,11 +429,11 @@ namespace pdflib
         const auto c_sig_toks = significant_tokens(c_toks);
         if (c_sig_toks != q_sig_toks)
           {
-            LOG_S(INFO) << "blend2d font resolver: fuzzy candidate"
-                        << " query=`" << norm_query << "`"
-                        << " candidate=`" << norm_name << "`"
-                        << " path=`" << path << "`"
-                        << " rejected=significant_tokens_mismatch";
+            //LOG_S(INFO) << "blend2d font resolver: fuzzy candidate"
+            //            << " query=`" << norm_query << "`"
+            //            << " candidate=`" << norm_name << "`"
+            //            << " path=`" << path << "`"
+            //            << " rejected=significant_tokens_mismatch";
             continue;
           }
 
