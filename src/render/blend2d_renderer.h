@@ -14,6 +14,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstdlib>
+#include <filesystem>
 #include <limits>
 #include <memory>
 #include <stdexcept>
@@ -28,22 +29,58 @@ namespace pdflib
   {
   public:
 
+    // Creates a renderer with the default render_config and the shared default
+    // Blend2D font resolver. A canvas is not allocated until set_size() receives
+    // the page size instruction.
     renderer();
+
+    // Creates a renderer with caller-provided rendering options and the shared
+    // default font resolver. The config controls canvas sizing, text/bbox debug
+    // drawing, font lookup, and glyph bbox fitting behavior.
     explicit renderer(render_config config);
+
+    // Creates a renderer with caller-provided rendering options and an explicit
+    // font resolver. Passing nullptr falls back to the shared default resolver.
+    // This constructor is useful for threaded rendering, where a warmed resolver
+    // can be shared across page renderers.
     explicit renderer(render_config config,
                       std::shared_ptr<blend2d_font_resolver> font_resolver);
 
+    // Initializes the page canvas from the PDF crop box and render_config. This
+    // computes the PDF-to-canvas scale/origin, creates a PRGB32 Blend2D image,
+    // starts the page context, and fills the canvas with opaque white.
     void set_size(size_instruction& instr);
+
+    // Renders one text cell into the page canvas. The method converts the PDF
+    // baseline and glyph quad into canvas coordinates, resolves the requested
+    // font, applies an affine transform for rotated/skewed text, optionally
+    // adjusts glyph placement from glyph bbox metadata, and draws the UTF-8 text
+    // through Blend2D's high-level text API. When rendering fails it draws the
+    // text bbox fallback so the cell remains visible.
     void render_text(text_instruction& instr);
-    void render_text_legacy_v2(text_instruction& instr);
-    void render_text_legacy(text_instruction& instr);
+
+    // Draws a text widget annotation as a translucent filled quadrilateral with
+    // a blue outline. This currently visualizes the widget bounds only; it does
+    // not render the widget's text value.
     void render_widget(text_widget_instruction& instr);
+
+    // Renders one bitmap/image XObject. The method validates the image buffers,
+    // converts the source pixels and optional soft mask into a PRGB32 BLImage,
+    // applies supported rectangular clipping, and blits either with the
+    // axis-aligned fast path or a full affine transform for rotated/skewed quads.
     void render_bitmap(bitmap_instruction& instr);
+
+    // Strokes a parsed vector shape/polyline in canvas coordinates using the
+    // instruction's stroking color. Filled paths and close-path semantics are
+    // not currently implemented here.
     void render_shape(shape_instruction& instr);
 
     // Returns the rendered canvas as RGBA bytes, row-major top-to-bottom.
     // The associated shape is {height, width, 4}.
     std::shared_ptr<std::vector<uint8_t>> get_canvas() const;
+
+    // Returns the current canvas shape as {height, width, channels}. Before
+    // set_size() this is {0, 0, 4}.
     const std::array<int, 3>& get_shape() const { return shape_; }
 
     // Save the canvas to a file.  The format is inferred from the extension
@@ -64,6 +101,25 @@ namespace pdflib
       double x3, y3; // bottom-right
     };
 
+    struct text_geometry
+    {
+      double bx = 0.0;
+      double by = 0.0;
+      bitmap_quad bbox{};
+      double hx = 0.0;
+      double hy = 0.0;
+      double quad_h = 0.0;
+      double size = 0.0;
+    };
+
+    struct text_draw_adjustment
+    {
+      BLPoint draw_origin = BLPoint(0.0, 0.0);
+      double bbox_fit_scale = 1.0;
+      bool has_render_bbox = false;
+      BLBox render_bbox{};
+    };
+
     render_config config_;
 
     mutable BLImage    image_;  // internal canvas (PRGB32 format)
@@ -78,7 +134,12 @@ namespace pdflib
     std::shared_ptr<blend2d_font_resolver> font_resolver_;
     std::unordered_map<std::string, BLFontFace> local_font_cache_;
 
+    // Returns the active Blend2D context for the page, starting it lazily if
+    // necessary. Throws when called before a non-empty canvas has been created.
     BLContext& page_context();
+
+    // Ends the active Blend2D context if one is open. This flushes pending
+    // drawing operations before canvas extraction or file output.
     void finish_page_context() const;
 
     // Convert PDF coordinates (origin at crop_bbox bottom-left, y-up) to
@@ -89,6 +150,11 @@ namespace pdflib
       return static_cast<double>(shape_[0]) - (pdf_y - origin_y_) * scale_y_;
     }
 
+    // Decides whether a text cell should use glyph-bbox fitting when glyph bbox
+    // metadata is available. ASCII alphanumeric/punctuation/space text usually
+    // renders acceptably with normal font metrics, while non-ASCII and bracket-
+    // like glyphs are more likely to need bbox fitting to match PDF extraction
+    // geometry.
     static bool should_fit_glyph_bbox_to_target(const std::string& text)
     {
       if (text.empty()) { return false; }
@@ -128,11 +194,56 @@ namespace pdflib
     BLFontFace resolve_font_face(const std::string& font_name,
                                  const std::string& base_font);
 
+    // Computes the canvas-space baseline, bounding quad, text cell height
+    // vector, and Blend2D font size for one text instruction.
+    text_geometry make_text_geometry(text_instruction& instr) const;
+
+    // Builds the affine transform that maps Blend2D text coordinates into the
+    // target PDF text cell in canvas space.
+    static BLMatrix2D make_text_transform(const text_geometry& geom);
+
+    // Applies the same text-space to canvas-space transform used for drawing to
+    // a single point.
+    static BLPoint transform_text_point(const text_geometry& geom,
+                                        const BLPoint& p);
+
+    // Converts a text-space bounding box into a canvas-space quad.
+    static bitmap_quad transform_text_box(const text_geometry& geom,
+                                          const BLBox& box);
+
+    // Emits the concise per-text log requested for comparing the target text
+    // rectangle with the actual rendered glyph rectangle.
+    static void log_text_render_rect(const std::string& text,
+                                     const bitmap_quad& target_rect,
+                                     const bitmap_quad& render_rect);
+
+    // Draws the standard thin blue text bbox outline used both for explicit
+    // debug output and as a fallback when text rendering fails.
+    static void stroke_text_bbox(BLContext& ctx, const BLPath& bbox_path);
+
+    // Draws the optional red baseline origin marker for text placement
+    // debugging.
+    void draw_text_basepoint(BLContext& ctx, const text_geometry& geom) const;
+
+    // Computes optional glyph bbox origin/scale adjustment. The result is the
+    // local text-space origin and scale to apply before fill_utf8_text().
+    text_draw_adjustment calculate_glyph_bbox_adjustment(
+      BLFont& font,
+      BLGlyphBuffer& gb,
+      text_instruction& instr,
+      double size) const;
+
+    // Compares floating-point canvas coordinates with a small tolerance. Used
+    // by geometry classification helpers to avoid treating tiny conversion
+    // differences as rotations or non-rectangular clips.
     static bool nearly_equal(double a, double b, double eps = 1e-6)
     {
       return std::abs(a - b) <= eps;
     }
 
+    // Returns true when the bitmap quad edges are parallel to the canvas axes.
+    // This identifies the simplest destination geometry, but does not by itself
+    // prove the source image orientation is unrotated.
     static bool is_axis_aligned(bitmap_quad const& q, double eps = 1e-6)
     {
       return nearly_equal(q.x0, q.x1, eps) &&
@@ -141,6 +252,10 @@ namespace pdflib
              nearly_equal(q.y0, q.y3, eps);
     }
 
+    // Detects bitmap quads that represent a multiple-of-90-degree rotation and
+    // writes the detected number of quarter turns. The renderer currently uses
+    // this with is_axis_aligned() to choose the unrotated fast path; other
+    // rotations go through affine rendering.
     static bool is_right_angle_rotation(bitmap_quad const& q, int& quarter_turns, double eps = 1e-6)
     {
       const double ux = q.x2 - q.x1;
@@ -173,6 +288,8 @@ namespace pdflib
       return false;
     }
 
+    // Builds a closed Blend2D path from a four-corner bitmap/text/widget quad in
+    // canvas coordinates.
     static BLPath make_quad_path(bitmap_quad const& q)
     {
       BLPath path;
@@ -184,6 +301,8 @@ namespace pdflib
       return path;
     }
 
+    // Returns the axis-aligned bounding rectangle that encloses all four quad
+    // corners. Used by fast-path bitmap blits, placeholders, and clip checks.
     static BLRect axis_aligned_rect(bitmap_quad const& q)
     {
       const double x_min = std::min({q.x0, q.x1, q.x2, q.x3});
@@ -193,6 +312,8 @@ namespace pdflib
       return BLRect(x_min, y_min, x_max - x_min, y_max - y_min);
     }
 
+    // Returns true when two canvas rectangles overlap with positive area.
+    // Touching edges are treated as non-intersecting.
     static bool rects_intersect(const BLRect& a, const BLRect& b)
     {
       return a.x < b.x + b.w and
@@ -208,6 +329,10 @@ namespace pdflib
       BITMAP_CLIP_EMPTY,
     };
 
+    // Converts a parsed rectangular clip path into a canvas-space BLRect when
+    // all clip vertices lie on the rectangle edges. Non-rectangular, degenerate,
+    // or unsupported clip paths return false so callers can skip them without
+    // corrupting the Blend2D clip state.
     bool get_axis_aligned_clip_rect(const clip_path_instruction& clip,
                                     BLRect& rect) const
     {
@@ -260,6 +385,10 @@ namespace pdflib
       return true;
     }
 
+    // Applies the bitmap instruction's clip paths to the Blend2D context. Only
+    // axis-aligned rectangular clips are supported. The return value tells the
+    // caller whether no clip was present, a clip was applied, or the destination
+    // is fully outside the clip and bitmap rendering can be skipped.
     bitmap_clip_result apply_bitmap_clip_state(
       BLContext& ctx,
       const clip_state_instruction& clip_state,
@@ -298,6 +427,8 @@ namespace pdflib
       return applied_clip ? BITMAP_CLIP_APPLIED : BITMAP_CLIP_NONE;
     }
 
+    // Draws a semi-transparent yellow placeholder over the bitmap destination
+    // quad. This makes missing or invalid image data visible in debug renders.
     void render_bitmap_placeholder(BLContext& ctx, bitmap_quad const& q, bool axis_aligned)
     {
       ctx.set_fill_style(BLRgba32(0x66FFFF00u));
@@ -311,6 +442,17 @@ namespace pdflib
         }
     }
 
+    // Converts the bitmap instruction's source channels and optional soft mask
+    // into the premultiplied PRGB32 Blend2D image format expected by blit_image().
+    BLImage build_bitmap_image(bitmap_instruction& instr,
+                               int sw,
+                               int sh,
+                               int sc,
+                               bool use_soft_mask_alpha) const;
+
+    // Blits an unrotated, axis-aligned source image into the destination
+    // rectangle. This is the simple fast path used when the quad has no rotation
+    // or skew relative to the canvas.
     void render_bitmap_axis_aligned(BLContext& ctx, BLImage const& src_img, bitmap_quad const& q, int sw, int sh)
     {
       const BLRect dst_rect = axis_aligned_rect(q);
@@ -327,6 +469,9 @@ namespace pdflib
       ctx.blit_image(dst_rect, src_img, BLRectI(0, 0, sw, sh));
     }
 
+    // Blits a source image through an affine transform derived from the
+    // destination quad. This handles rotated and skewed image placement by
+    // mapping source image coordinates into canvas coordinates.
     void render_bitmap_affine(BLContext& ctx, BLImage const& src_img, bitmap_quad const& q, int sw, int sh)
     {
       const double m00 = (q.x2 - q.x1) / static_cast<double>(sw);
@@ -480,240 +625,360 @@ namespace pdflib
     auto itr = local_font_cache_.find(cache_key);
     if (itr != local_font_cache_.end())
       {
+        LOG_S(INFO) << "render_text: local font cache hit"
+                    << " font_name=`" << font_name << "`"
+                    << " base_font=`" << base_font << "`"
+                    << " cache_key=`" << cache_key << "`"
+                    << " valid=" << (itr->second.is_valid() ? "true" : "false");
         return itr->second;
       }
 
+    LOG_S(INFO) << "render_text: local font cache miss"
+                << " font_name=`" << font_name << "`"
+                << " base_font=`" << base_font << "`"
+                << " cache_key=`" << cache_key << "`";
     BLFontFace face = font_resolver_->resolve_font_face(cache_key,
                                                         base_font,
                                                         config_.resolve_fonts,
                                                         config_.font_similarity_cutoff);
     auto [inserted_itr, inserted] = local_font_cache_.emplace(cache_key, face);
+    LOG_S(INFO) << "render_text: resolved font face"
+                << " font_name=`" << font_name << "`"
+                << " base_font=`" << base_font << "`"
+                << " cache_key=`" << cache_key << "`"
+                << " valid=" << (inserted_itr->second.is_valid() ? "true" : "false");
     return inserted_itr->second;
+  }
+
+  inline renderer<BLEND2D>::text_geometry renderer<BLEND2D>::make_text_geometry(
+      text_instruction& instr) const
+  {
+    text_geometry geom;
+    geom.bx = canvas_x(instr.get_base_x0());
+    geom.by = canvas_y(instr.get_base_y0());
+    geom.bbox = {
+      canvas_x(instr.get_r_x0()), canvas_y(instr.get_r_y0()),
+      canvas_x(instr.get_r_x1()), canvas_y(instr.get_r_y1()),
+      canvas_x(instr.get_r_x2()), canvas_y(instr.get_r_y2()),
+      canvas_x(instr.get_r_x3()), canvas_y(instr.get_r_y3())
+    };
+
+    geom.hx = geom.bbox.x3 - geom.bbox.x0;
+    geom.hy = geom.bbox.y3 - geom.bbox.y0;
+    geom.quad_h = std::sqrt(geom.hx * geom.hx + geom.hy * geom.hy);
+
+    const double a_norm = instr.get_font_ascent_norm();
+    const double d_norm = instr.get_font_descent_norm();
+    const double cell_span = a_norm - d_norm; // per-1000 em units
+    const double em_size =
+      (cell_span > 1.0) ? (1000.0 * geom.quad_h / cell_span) : geom.quad_h;
+    geom.size =
+      (em_size > 0.5) ? em_size : instr.get_font_size() * scale_y_;
+
+    return geom;
+  }
+
+  inline BLMatrix2D renderer<BLEND2D>::make_text_transform(
+      const text_geometry& geom)
+  {
+    // Build affine: text space (origin = baseline, y-down) -> canvas space.
+    //
+    //   up   = (hx, hy) / quad_h  - canvas direction toward ascenders
+    //   adv  = perpendicular (90 deg CCW of up) - advance direction
+    //   dn   = -up                - y-down in glyph/text space
+    //
+    // BLMatrix2D: out.x = gx*m00 + gy*m10 + m20
+    //             out.y = gx*m01 + gy*m11 + m21
+    const double up_x  =  geom.hx / geom.quad_h;
+    const double up_y  =  geom.hy / geom.quad_h;
+    const double adv_x = -up_y;
+    const double adv_y =  up_x;
+    const double dn_x  = -up_x;
+    const double dn_y  = -up_y;
+
+    return BLMatrix2D(adv_x,  adv_y,
+                      dn_x,   dn_y,
+                      geom.bx, geom.by);
+  }
+
+  inline BLPoint renderer<BLEND2D>::transform_text_point(
+      const text_geometry& geom,
+      const BLPoint& p)
+  {
+    const double up_x  =  geom.hx / geom.quad_h;
+    const double up_y  =  geom.hy / geom.quad_h;
+    const double adv_x = -up_y;
+    const double adv_y =  up_x;
+    const double dn_x  = -up_x;
+    const double dn_y  = -up_y;
+
+    return BLPoint(p.x * adv_x + p.y * dn_x + geom.bx,
+                   p.x * adv_y + p.y * dn_y + geom.by);
+  }
+
+  inline renderer<BLEND2D>::bitmap_quad renderer<BLEND2D>::transform_text_box(
+      const text_geometry& geom,
+      const BLBox& box)
+  {
+    const BLPoint p0 = transform_text_point(geom, BLPoint(box.x0, box.y1));
+    const BLPoint p1 = transform_text_point(geom, BLPoint(box.x0, box.y0));
+    const BLPoint p2 = transform_text_point(geom, BLPoint(box.x1, box.y0));
+    const BLPoint p3 = transform_text_point(geom, BLPoint(box.x1, box.y1));
+    return {p0.x, p0.y, p1.x, p1.y, p2.x, p2.y, p3.x, p3.y};
+  }
+
+  inline void renderer<BLEND2D>::log_text_render_rect(
+      const std::string& text,
+      const bitmap_quad& target_rect,
+      const bitmap_quad& render_rect)
+  {
+    LOG_S(INFO) << "render_text: text: `" << text << "`"
+                << ", target-rect: [("
+                << target_rect.x0 << ", " << target_rect.y0 << "), ("
+                << target_rect.x1 << ", " << target_rect.y1 << "), ("
+                << target_rect.x2 << ", " << target_rect.y2 << "), ("
+                << target_rect.x3 << ", " << target_rect.y3 << ")]"
+                << ", render-rect: [("
+                << render_rect.x0 << ", " << render_rect.y0 << "), ("
+                << render_rect.x1 << ", " << render_rect.y1 << "), ("
+                << render_rect.x2 << ", " << render_rect.y2 << "), ("
+                << render_rect.x3 << ", " << render_rect.y3 << ")]";
+  }
+
+  inline void renderer<BLEND2D>::stroke_text_bbox(BLContext& ctx,
+                                                  const BLPath& bbox_path)
+  {
+    ctx.set_stroke_style(BLRgba32(0xFF1070C0u));
+    ctx.set_stroke_width(0.5);
+    ctx.stroke_path(bbox_path);
+  }
+
+  inline void renderer<BLEND2D>::draw_text_basepoint(
+      BLContext& ctx,
+      const text_geometry& geom) const
+  {
+    if (not config_.draw_text_basepoint) { return; }
+    ctx.set_fill_style(BLRgba32(0xFFFF0000u));
+    ctx.fill_circle(BLCircle(geom.bx, geom.by, 2.0));
+  }
+
+  inline renderer<BLEND2D>::text_draw_adjustment
+  renderer<BLEND2D>::calculate_glyph_bbox_adjustment(
+      BLFont& font,
+      BLGlyphBuffer& gb,
+      text_instruction& instr,
+      double size) const
+  {
+    text_draw_adjustment adjustment;
+
+    const BLGlyphId glyph_id = gb.glyph_run().glyph_data_as<uint32_t>()[0];
+    BLPath glyph_path;
+    const BLMatrix2D identity(1.0, 0.0,
+                              0.0, 1.0,
+                              0.0, 0.0);
+    const BLResult outline_res =
+      font.get_glyph_outlines(glyph_id, identity, glyph_path);
+    //LOG_S(INFO) << "render_text: glyph outline res=" << outline_res
+    //<< " glyph_path empty=" << glyph_path.is_empty();
+    if (outline_res != BL_SUCCESS || glyph_path.is_empty())
+      {
+        return adjustment;
+      }
+
+    BLBox rendered_box;
+    const BLResult bbox_res = glyph_path.get_bounding_box(&rendered_box);
+    //LOG_S(INFO) << "render_text: glyph outline bbox res=" << bbox_res;
+
+    if (bbox_res != BL_SUCCESS)
+      {
+        LOG_S(WARNING) << "render_text: glyph outline bbox failed"
+                       << " (BLResult=" << bbox_res << ")";
+        return adjustment;
+      }
+
+    const double target_x0 = instr.get_g_x0() / 1000.0 * size;
+    const double target_y0 = -instr.get_g_y1() / 1000.0 * size;
+    const double target_x1 = instr.get_g_x1() / 1000.0 * size;
+    const double target_y1 = -instr.get_g_y0() / 1000.0 * size;
+
+    const double rendered_x0 = rendered_box.x0;
+    const double rendered_y0 = rendered_box.y0;
+    const double rendered_x1 = rendered_box.x1;
+    const double rendered_y1 = rendered_box.y1;
+    adjustment.has_render_bbox = true;
+    adjustment.render_bbox = rendered_box;
+
+    const double target_w = target_x1 - target_x0;
+    const double target_h = target_y1 - target_y0;
+    const double rendered_w = rendered_x1 - rendered_x0;
+    const double rendered_h = rendered_y1 - rendered_y0;
+    bool baseline_near_top = false;
+
+    if (instr.has_glyph_bbox())
+      {
+        const double base_to_top = std::abs(target_y0);
+        baseline_near_top =
+          target_h > 0.0 && (base_to_top / target_h) < 0.25;
+      }
+
+    if (instr.has_glyph_bbox()
+        && config_.fit_glyph_bbox_to_target
+        && should_fit_glyph_bbox_to_target(instr.get_text())
+        && target_w > 0.0
+        && target_h > 0.0
+        && rendered_w > 0.0
+        && rendered_h > 0.0)
+      {
+        const double width_scale = target_w / rendered_w;
+        const double height_scale = target_h / rendered_h;
+        const bool width_limited = width_scale <= height_scale;
+        adjustment.bbox_fit_scale = std::min(width_scale, height_scale);
+        const double target_center_y = 0.5 * (target_y0 + target_y1);
+        const double rendered_center_y = 0.5 * (rendered_y0 + rendered_y1);
+
+        adjustment.draw_origin.x =
+          target_x0 - adjustment.bbox_fit_scale * rendered_x0;
+        if (width_limited)
+          {
+            adjustment.draw_origin.y =
+              target_center_y - adjustment.bbox_fit_scale * rendered_center_y;
+          }
+        else
+          {
+            adjustment.draw_origin.y =
+              target_y0 - adjustment.bbox_fit_scale * rendered_y0;
+          }
+        LOG_S(INFO) << "render_text: fitting rendered bbox to target bbox"
+                    << " scale=" << adjustment.bbox_fit_scale
+                    << " width_limited=" << width_limited
+                    << " draw_origin=(" << adjustment.draw_origin.x
+                    << "," << adjustment.draw_origin.y << ")";
+      }
+    else if (baseline_near_top)
+      {
+        adjustment.draw_origin.y = target_y0 - rendered_y0;
+        LOG_S(INFO) << "render_text: aligning rendered top to target top"
+                    << " target_y0=" << target_y0
+                    << " rendered_y0=" << rendered_y0
+                    << " draw_origin.y=" << adjustment.draw_origin.y;
+      }
+
+    return adjustment;
+  }
+
+  inline BLImage renderer<BLEND2D>::build_bitmap_image(
+      bitmap_instruction& instr,
+      int sw,
+      int sh,
+      int sc,
+      bool use_soft_mask_alpha) const
+  {
+    const auto& src_data = instr.get_data();
+    const auto& alpha_data = instr.get_alpha_data();
+    const bool image_mask = instr.is_image_mask();
+    const auto fmt = instr.get_pixel_format();
+    const auto fill_rgb = instr.get_rgb_filling();
+
+    BLImage src_img;
+    src_img.create(sw, sh, BL_FORMAT_PRGB32);
+
+    BLImageData img_data;
+    src_img.make_mutable(&img_data);
+    auto* base = static_cast<uint8_t*>(img_data.pixel_data);
+    const intptr_t stride = img_data.stride;
+
+    if (fmt == PIXEL_FORMAT_CMYK && src_data->size() >= static_cast<size_t>(sc))
+      {
+        const uint8_t c = src_data->at(0);
+        const uint8_t m = (sc >= 2) ? src_data->at(1) : 0;
+        const uint8_t y = (sc >= 3) ? src_data->at(2) : 0;
+        const uint8_t k = (sc >= 4) ? src_data->at(3) : 0;
+        const uint8_t r = static_cast<uint8_t>(((255u - c) * (255u - k)) / 255u);
+        const uint8_t g = static_cast<uint8_t>(((255u - m) * (255u - k)) / 255u);
+        const uint8_t b = static_cast<uint8_t>(((255u - y) * (255u - k)) / 255u);
+        LOG_S(INFO) << "render_bitmap: cmyk_sample[0]"
+                    << " raw=(" << static_cast<int>(c) << ","
+                    << static_cast<int>(m) << ","
+                    << static_cast<int>(y) << ","
+                    << static_cast<int>(k) << ")"
+                    << " rgb=(" << static_cast<int>(r) << ","
+                    << static_cast<int>(g) << ","
+                    << static_cast<int>(b) << ")";
+      }
+
+    for (int row = 0; row < sh; ++row)
+      {
+        auto* row_ptr = reinterpret_cast<uint32_t*>(base + row * stride);
+        for (int col = 0; col < sw; ++col)
+          {
+            const int idx = (row * sw + col) * sc;
+            uint8_t r = src_data->at(idx);
+            uint8_t g = (sc >= 2) ? src_data->at(idx + 1) : r;
+            uint8_t b = (sc >= 3) ? src_data->at(idx + 2) : r;
+            uint8_t a = 0xFFu;
+
+            if (image_mask)
+              {
+                a = static_cast<uint8_t>(0xFFu - src_data->at(idx));
+                r = static_cast<uint8_t>(fill_rgb[0]);
+                g = static_cast<uint8_t>(fill_rgb[1]);
+                b = static_cast<uint8_t>(fill_rgb[2]);
+              }
+            else if (fmt == PIXEL_FORMAT_CMYK and sc >= 4)
+              {
+                const uint8_t c = src_data->at(idx + 0);
+                const uint8_t m = src_data->at(idx + 1);
+                const uint8_t y = src_data->at(idx + 2);
+                const uint8_t k = src_data->at(idx + 3);
+
+                if(instr.get_cmyk_convention() == CMYK_CONVENTION_PROCESS)
+                  {
+                    r = static_cast<uint8_t>(((255u - c) * (255u - k)) / 255u);
+                    g = static_cast<uint8_t>(((255u - m) * (255u - k)) / 255u);
+                    b = static_cast<uint8_t>(((255u - y) * (255u - k)) / 255u);
+                  }
+                else
+                  {
+                    r = static_cast<uint8_t>((static_cast<unsigned int>(c) * k) / 255u);
+                    g = static_cast<uint8_t>((static_cast<unsigned int>(m) * k) / 255u);
+                    b = static_cast<uint8_t>((static_cast<unsigned int>(y) * k) / 255u);
+                  }
+              }
+            else if (fmt == PIXEL_FORMAT_GRAY)
+              {
+                g = r;
+                b = r;
+              }
+            if (use_soft_mask_alpha and not image_mask)
+              {
+                a = alpha_data->at(static_cast<size_t>(row) * sw + col);
+              }
+
+            // Store as premultiplied ARGB (required by BL_FORMAT_PRGB32).
+            const uint32_t pm_r = static_cast<uint32_t>(r) * a / 255u;
+            const uint32_t pm_g = static_cast<uint32_t>(g) * a / 255u;
+            const uint32_t pm_b = static_cast<uint32_t>(b) * a / 255u;
+            row_ptr[col] = (static_cast<uint32_t>(a) << 24)
+              | (pm_r                     << 16)
+              | (pm_g                     <<  8)
+              |  pm_b;
+          }
+      }
+
+    return src_img;
   }
 
   // ---------------------------------------------------------------------------
   // render_text
   //
-  // Renders the UTF-8 text string at the baseline origin derived from the
-  // quad corners, using a font resolved from font_name / base_font.
-  // Falls back to drawing a thin blue quad outline when no font is available.
-  // ---------------------------------------------------------------------------
-
-  inline void renderer<BLEND2D>::render_text_legacy(text_instruction& instr)
-  {
-    LOG_S(INFO) << __FUNCTION__;
-
-    if (shape_[0] == 0 or shape_[1] == 0) { return; }
-
-    // Quad corners in canvas space (scaled + y flipped).
-    const double base_x0 = canvas_x(instr.get_base_x0()), base_y0 = canvas_y(instr.get_base_y0());
-
-    const double x0 = canvas_x(instr.get_r_x0()), y0 = canvas_y(instr.get_r_y0());
-    const double x1 = canvas_x(instr.get_r_x1()), y1 = canvas_y(instr.get_r_y1());
-    const double x2 = canvas_x(instr.get_r_x2()), y2 = canvas_y(instr.get_r_y2());
-    const double x3 = canvas_x(instr.get_r_x3()), y3 = canvas_y(instr.get_r_y3());
-
-    // Font size in canvas pixels: scale the PDF quad height by scale_y_.
-    const double quad_h = std::abs(y3-y0);
-    const double size   = ((quad_h > 0.5) ? quad_h : instr.get_font_size()) * scale_y_;
-
-    BLFontFace face = resolve_font_face(instr.get_font_name(),
-                                        instr.get_base_font());
-
-    LOG_S(INFO) << "face: " << face.is_valid();
-
-    // Build the bounding quad path (reused for optional outline and fallback).
-    BLPath bbox_path;
-    bbox_path.move_to(x0, y0);
-    bbox_path.line_to(x1, y1);
-    bbox_path.line_to(x2, y2);
-    bbox_path.line_to(x3, y3);
-    bbox_path.close();
-
-    BLContext& ctx = page_context();
-
-    LOG_S(INFO) << "writing text: `" << instr.get_text() << "`, size: " << size << "";
-    if (face.is_valid() and size > 0.5)
-      {
-        BLFont font;
-        font.create_from_face(face, static_cast<float>(size));
-        ctx.set_fill_style(BLRgba32(0xFF000000u)); // opaque black
-        ctx.fill_utf8_text(BLPoint(base_x0, base_y0), font, instr.get_text().c_str());
-
-        if (config_.draw_text_bbox)
-          {
-            ctx.set_stroke_style(BLRgba32(0xFF1070C0u));
-            ctx.set_stroke_width(0.5);
-            ctx.stroke_path(bbox_path);
-          }
-      }
-    else
-      {
-        // No font available — draw the bounding quad so the text region is
-        // at least visible regardless of the draw_text_bbox setting.
-        LOG_S(WARNING) << "render_text_legacy: no valid font for '"
-                       << instr.get_font_name() << "' / '"
-                       << instr.get_base_font() << "', drawing outline only";
-        ctx.set_stroke_style(BLRgba32(0xFF1070C0u));
-        ctx.set_stroke_width(0.5);
-        ctx.stroke_path(bbox_path);
-      }
-  }
-
-  // ---------------------------------------------------------------------------
-  // render_text_legacy_v2
-  //
-  // Second-generation text renderer: manually shapes the input string, picks
-  // out glyph[0] and calls font.get_glyph_outlines() with a full affine matrix
-  // to support rotated text.  Superseded by render_text (v3) which uses the
-  // safer fill_utf8_text() high-level API with a context transform instead.
-  // Kept for comparison / reference.
-  // ---------------------------------------------------------------------------
-
-  inline void renderer<BLEND2D>::render_text_legacy_v2(text_instruction& instr)
-  {
-    LOG_S(INFO) << __FUNCTION__;
-
-    if (shape_[0] == 0 or shape_[1] == 0) { return; }
-
-    // Baseline origin and quad corners in canvas space (scaled + y flipped).
-    const double bx = canvas_x(instr.get_base_x0());
-    const double by = canvas_y(instr.get_base_y0());
-    const double x0 = canvas_x(instr.get_r_x0()), y0 = canvas_y(instr.get_r_y0());
-    const double x1 = canvas_x(instr.get_r_x1()), y1 = canvas_y(instr.get_r_y1());
-    const double x2 = canvas_x(instr.get_r_x2()), y2 = canvas_y(instr.get_r_y2());
-    const double x3 = canvas_x(instr.get_r_x3()), y3 = canvas_y(instr.get_r_y3());
-
-    // Cell height vector in canvas: from descender-left (x0,y0) to ascender-left (x3,y3).
-    const double hx = x3 - x0, hy = y3 - y0;
-    const double quad_h = std::sqrt(hx * hx + hy * hy);
-
-    // Em size in canvas pixels.
-    // The PDF cell spans (ascent_norm - descent_norm) per-1000 em units = quad_h px,
-    // so 1 em = 1000 * quad_h / (ascent_norm - descent_norm) px.
-    const double a_norm   = instr.get_font_ascent_norm();
-    const double d_norm   = instr.get_font_descent_norm();
-    const double cell_span = a_norm - d_norm; // per-1000 em units
-    const double em_size  = (cell_span > 1.0) ? (1000.0 * quad_h / cell_span) : quad_h;
-    const double size     = (em_size > 0.5) ? em_size : instr.get_font_size() * scale_y_;
-
-    // Guard: degenerate cell — quad_h is too small to compute a valid direction
-    // vector.  Dividing by quad_h would produce NaN/Inf in the affine matrix,
-    // which causes a SIGBUS when Blend2D's JIT code applies the transform.
-    // Skip the glyph-outline path for such cells.
-    const bool degenerate_cell = (quad_h < 0.5);
-
-    // Build the bounding quad path (reused for optional outline / fallback).
-    BLPath bbox_path;
-    bbox_path.move_to(x0, y0);
-    bbox_path.line_to(x1, y1);
-    bbox_path.line_to(x2, y2);
-    bbox_path.line_to(x3, y3);
-    bbox_path.close();
-
-    LOG_S(INFO) << "text=`" << instr.get_text() << "`"
-                << " base=(" << bx << "," << by << ")"
-                << " quad_h=" << quad_h
-                << " a_norm=" << a_norm << " d_norm=" << d_norm
-                << " cell_span=" << cell_span
-                << " em_size=" << em_size << " size=" << size;
-
-    BLFontFace face = resolve_font_face(instr.get_font_name(),
-                                        instr.get_base_font());
-    LOG_S(INFO) << "face valid=" << face.is_valid()
-                << " font_name=`" << instr.get_font_name() << "`"
-                << " base_font=`" << instr.get_base_font() << "`";
-
-    BLContext& ctx = page_context();
-
-    if (face.is_valid() and size > 0.5)
-      {
-        if (config_.render_text and not degenerate_cell)
-          {
-            BLFont font;
-            font.create_from_face(face, static_cast<float>(size));
-
-            // Shape the single character to get its glyph ID.
-            BLGlyphBuffer gb;
-            gb.set_utf8_text(instr.get_text().c_str());
-            font.shape(gb);
-
-            LOG_S(INFO) << "glyph buffer empty=" << gb.is_empty();
-
-            if (!gb.is_empty())
-              {
-                const BLGlyphId glyph_id = gb.glyph_run().glyph_data_as<uint32_t>()[0];
-                LOG_S(INFO) << "glyph_id=" << glyph_id;
-
-                // Build affine: glyph pixel space (y-down, baseline at origin)
-                //               → canvas space (y-down, baseline at (bx, by)).
-                //
-                // get_glyph_outlines returns coordinates in Blend2D's y-down space:
-                //   glyph +y = downward (towards descender)
-                //   glyph -y = upward  (towards ascender)
-                //
-                // The cell height vector (x0→x3) points from descender to ascender in canvas,
-                // i.e. it corresponds to the glyph -y direction.
-                // Therefore: glyph +y maps to the NEGATIVE of the cell height direction.
-                //
-                //   BLMatrix2D: out.x = gx*m00 + gy*m10 + m20
-                //               out.y = gx*m01 + gy*m11 + m21
-                const double up_x  =  hx / quad_h,  up_y  =  hy / quad_h;  // canvas "up" direction
-                const double adv_x = -up_y,          adv_y =  up_x;         // advance dir (90° CCW of up)
-                const double dn_x  = -up_x,          dn_y  = -up_y;         // glyph +y → downward in canvas
-                const BLMatrix2D m(adv_x, adv_y,
-                                   dn_x,  dn_y,
-                                   bx,    by);
-
-                BLPath glyph_path;
-                font.get_glyph_outlines(glyph_id, m, glyph_path);
-
-                LOG_S(INFO) << "glyph_path empty=" << glyph_path.is_empty()
-                            << " transform=[[" << adv_x << "," << adv_y << "],[" << dn_x << "," << dn_y << "],[" << bx << "," << by << "]]";
-
-                if (!glyph_path.is_empty())
-                  {
-                    ctx.set_fill_style(BLRgba32(0xFF000000u)); // opaque black
-                    ctx.fill_path(glyph_path);
-                    LOG_S(INFO) << "filled glyph path";
-                  }
-                else
-                  {
-                    LOG_S(WARNING) << "glyph_path is empty — nothing drawn for `" << instr.get_text() << "`";
-                  }
-              }
-          }
-
-        if (config_.draw_text_bbox)
-          {
-            ctx.set_stroke_style(BLRgba32(0xFF1070C0u));
-            ctx.set_stroke_width(0.5);
-            ctx.stroke_path(bbox_path);
-          }
-      }
-    else
-      {
-        // No font available — draw the bounding quad outline.
-        LOG_S(WARNING) << "render_text: no valid font for '"
-                       << instr.get_font_name() << "' / '"
-                       << instr.get_base_font() << "', drawing outline only";
-        ctx.set_stroke_style(BLRgba32(0xFF1070C0u));
-        ctx.set_stroke_width(0.5);
-        ctx.stroke_path(bbox_path);
-      }
-  }
-
-  // ---------------------------------------------------------------------------
-  // render_text (v3)
-  //
-  // Third-generation text renderer.  Applies a full affine context transform
+  // Applies a full affine context transform
   // to handle rotated / skewed text, then renders the complete string via
   // fill_utf8_text() — Blend2D's stable high-level text API.
   //
-  // Compared to render_text_legacy_v2 this avoids get_glyph_outlines(), which
-  // can cause SIGBUS on ARM64 macOS when certain system fonts (CFF/OTF) are
-  // resolved for PDFs with non-standard crop-box origins.  It also correctly
-  // renders multi-character text cells (legacy_v2 only drew glyph[0]).
+  // The renderer avoids using glyph-outline rendering for the main text path,
+  // because get_glyph_outlines() has triggered platform-specific crashes with
+  // some system fonts. The outline API is still used only for optional glyph
+  // bbox measurement before text is drawn with fill_utf8_text().
   // ---------------------------------------------------------------------------
 
   inline void renderer<BLEND2D>::render_text(text_instruction& instr)
@@ -722,36 +987,14 @@ namespace pdflib
 
     if (shape_[0] == 0 or shape_[1] == 0) { return; }
 
-    // Baseline origin and quad corners in canvas space (scaled + y-flipped).
-    const double bx = canvas_x(instr.get_base_x0());
-    const double by = canvas_y(instr.get_base_y0());
-    const double x0 = canvas_x(instr.get_r_x0()), y0 = canvas_y(instr.get_r_y0());
-    const double x1 = canvas_x(instr.get_r_x1()), y1 = canvas_y(instr.get_r_y1());
-    const double x2 = canvas_x(instr.get_r_x2()), y2 = canvas_y(instr.get_r_y2());
-    const double x3 = canvas_x(instr.get_r_x3()), y3 = canvas_y(instr.get_r_y3());
-
-    // Cell height vector in canvas: from descender-left (x0,y0) to ascender-left (x3,y3).
-    const double hx = x3 - x0, hy = y3 - y0;
-    const double quad_h = std::sqrt(hx * hx + hy * hy);
-
-    // Em size in canvas pixels.
-    const double a_norm    = instr.get_font_ascent_norm();
-    const double d_norm    = instr.get_font_descent_norm();
-    const double cell_span = a_norm - d_norm; // per-1000 em units
-    const double em_size   = (cell_span > 1.0) ? (1000.0 * quad_h / cell_span) : quad_h;
-    const double size      = (em_size > 0.5) ? em_size : instr.get_font_size() * scale_y_;
+    const text_geometry geom = make_text_geometry(instr);
 
     // Degenerate cell: quad_h too small to build a valid direction vector.
     // Dividing by quad_h would produce NaN/Inf in the affine matrix.
-    if (quad_h < 0.5) { return; }
+    if (geom.quad_h < 0.5) { return; }
 
     // Build the bounding quad path (for optional bbox outline / fallback).
-    BLPath bbox_path;
-    bbox_path.move_to(x0, y0);
-    bbox_path.line_to(x1, y1);
-    bbox_path.line_to(x2, y2);
-    bbox_path.line_to(x3, y3);
-    bbox_path.close();
+    const BLPath bbox_path = make_quad_path(geom.bbox);
 
     // LOG_S(INFO) << "text=`" << instr.get_text() << "`"
     //             << " base=(" << bx << "," << by << ")"
@@ -770,26 +1013,18 @@ namespace pdflib
 
     auto draw_bbox_fallback = [&]()
     {
-      ctx.set_stroke_style(BLRgba32(0xFF1070C0u));
-      ctx.set_stroke_width(0.5);
-      ctx.stroke_path(bbox_path);
+      stroke_text_bbox(ctx, bbox_path);
     };
 
-    auto draw_basepoint = [&]()
-    {
-      if (not config_.draw_text_basepoint) { return; }
-      ctx.set_fill_style(BLRgba32(0xFFFF0000u));
-      ctx.fill_circle(BLCircle(bx, by, 2.0));
-    };
-
-    if (face.is_valid() and size > 0.5)
+    if (face.is_valid() and geom.size > 0.5)
       {
         if (config_.render_text)
           {
             // LOG_S(INFO) << "render_text: before BLFont construction";
             BLFont font;
             // LOG_S(INFO) << "render_text: before create_from_face size=" << size;
-            const BLResult font_res = font.create_from_face(face, static_cast<float>(size));
+            const BLResult font_res =
+              font.create_from_face(face, static_cast<float>(geom.size));
             // LOG_S(INFO) << "render_text: after create_from_face res=" << font_res;
             if (font_res != BL_SUCCESS)
               {
@@ -801,21 +1036,7 @@ namespace pdflib
                 return;
               }
 
-            // Build affine: text space (origin = baseline, y-down) → canvas space.
-            //
-            //   up   = (hx, hy) / quad_h  — canvas direction toward ascenders
-            //   adv  = perpendicular (90° CCW of up) — advance direction
-            //   dn   = -up                — y-down in glyph/text space
-            //
-            // BLMatrix2D: out.x = gx*m00 + gy*m10 + m20
-            //             out.y = gx*m01 + gy*m11 + m21
-            const double up_x  =  hx / quad_h,  up_y  =  hy / quad_h;
-            const double adv_x = -up_y,          adv_y =  up_x;
-            const double dn_x  = -up_x,          dn_y  = -up_y;
-            const BLMatrix2D ctm(adv_x, adv_y,
-                                 dn_x,  dn_y,
-                                 bx,    by);
-
+            const BLMatrix2D ctm = make_text_transform(geom);
             // LOG_S(INFO) << "render_text: before ctx.save";
             ctx.save();
             // LOG_S(INFO) << "render_text: before apply_transform";
@@ -856,106 +1077,31 @@ namespace pdflib
                 draw_bbox_fallback();
                 return;
               }
-            BLPoint draw_origin(0.0, 0.0);
-            double bbox_fit_scale = 1.0;
-            if (instr.has_glyph_bbox())
+            text_draw_adjustment adjustment =
+              calculate_glyph_bbox_adjustment(font, gb, instr, geom.size);
+
+            BLBox adjusted_render_box;
+            if (adjustment.has_render_bbox)
               {
-                const BLGlyphId glyph_id = gb.glyph_run().glyph_data_as<uint32_t>()[0];
-                BLPath glyph_path;
-                const BLMatrix2D identity(1.0, 0.0,
-                                          0.0, 1.0,
-                                          0.0, 0.0);
-                const BLResult outline_res =
-                  font.get_glyph_outlines(glyph_id, identity, glyph_path);
-                //LOG_S(INFO) << "render_text: glyph outline res=" << outline_res
-		//<< " glyph_path empty=" << glyph_path.is_empty();
-                if (outline_res == BL_SUCCESS && !glyph_path.is_empty())
-                  {
-                    BLBox rendered_box;
-                    const BLResult bbox_res = glyph_path.get_bounding_box(&rendered_box);
-                    //LOG_S(INFO) << "render_text: glyph outline bbox res=" << bbox_res;
-
-		    if (bbox_res != BL_SUCCESS)
-                      {
-                        LOG_S(WARNING) << "render_text: glyph outline bbox failed"
-                                       << " (BLResult=" << bbox_res << ")";
-                      }
-                    else
-                      {
-                        const double target_x0 = instr.get_g_x0() / 1000.0 * size;
-                        const double target_y0 = -instr.get_g_y1() / 1000.0 * size;
-                        const double target_x1 = instr.get_g_x1() / 1000.0 * size;
-                        const double target_y1 = -instr.get_g_y0() / 1000.0 * size;
-
-                        const double rendered_x0 = rendered_box.x0;
-                        const double rendered_y0 = rendered_box.y0;
-                        const double rendered_x1 = rendered_box.x1;
-                        const double rendered_y1 = rendered_box.y1;
-
-                        const double target_w = target_x1 - target_x0;
-                        const double target_h = target_y1 - target_y0;
-                        const double rendered_w = rendered_x1 - rendered_x0;
-                        const double rendered_h = rendered_y1 - rendered_y0;
-                        const double base_to_top = std::abs(target_y0);
-                        const bool baseline_near_top =
-                          target_h > 0.0 && (base_to_top / target_h) < 0.25;
-
-                        if (config_.fit_glyph_bbox_to_target
-                            && should_fit_glyph_bbox_to_target(instr.get_text())
-                            && target_w > 0.0
-                            && target_h > 0.0
-                            && rendered_w > 0.0
-                            && rendered_h > 0.0)
-                          {
-                            const double width_scale = target_w / rendered_w;
-                            const double height_scale = target_h / rendered_h;
-                            const bool width_limited = width_scale <= height_scale;
-                            bbox_fit_scale = std::min(width_scale, height_scale);
-                            const double target_center_y = 0.5 * (target_y0 + target_y1);
-                            const double rendered_center_y = 0.5 * (rendered_y0 + rendered_y1);
-
-                            draw_origin.x = target_x0 - bbox_fit_scale * rendered_x0;
-                            if (width_limited)
-                              {
-                                draw_origin.y =
-                                  target_center_y - bbox_fit_scale * rendered_center_y;
-                              }
-                            else
-                              {
-                                draw_origin.y =
-                                  target_y0 - bbox_fit_scale * rendered_y0;
-                              }
-                            LOG_S(INFO) << "render_text: fitting rendered bbox to target bbox"
-                                        << " scale=" << bbox_fit_scale
-                                        << " width_limited=" << width_limited
-                                        << " draw_origin=(" << draw_origin.x
-                                        << "," << draw_origin.y << ")";
-                          }
-                        else if (baseline_near_top)
-                          {
-                            draw_origin.y = target_y0 - rendered_y0;
-                            LOG_S(INFO) << "render_text: aligning rendered top to target top"
-                                        << " target_y0=" << target_y0
-                                        << " rendered_y0=" << rendered_y0
-                                        << " draw_origin.y=" << draw_origin.y;
-                          }
-
-                        LOG_S(INFO) << "render_text: `" << instr.get_text()
-				    << "` target bbox=["
-                                    << target_x0 << ", " << target_y0 << ", "
-                                    << target_x1 << ", " << target_y1 << "]"
-                                    << " rendered bbox=["
-                                    << rendered_x0 << ", " << rendered_y0 << ", "
-                                    << rendered_x1 << ", " << rendered_y1 << "]"
-                                    << " bbox_fit_scale=" << bbox_fit_scale
-                                    << " baseline_near_top=" << baseline_near_top;
-                      }
-                  }
+                adjusted_render_box.x0 =
+                  adjustment.draw_origin.x +
+                  adjustment.bbox_fit_scale * adjustment.render_bbox.x0;
+                adjusted_render_box.y0 =
+                  adjustment.draw_origin.y +
+                  adjustment.bbox_fit_scale * adjustment.render_bbox.y0;
+                adjusted_render_box.x1 =
+                  adjustment.draw_origin.x +
+                  adjustment.bbox_fit_scale * adjustment.render_bbox.x1;
+                adjusted_render_box.y1 =
+                  adjustment.draw_origin.y +
+                  adjustment.bbox_fit_scale * adjustment.render_bbox.y1;
               }
 
-            if (bbox_fit_scale != 1.0)
+            if (adjustment.bbox_fit_scale != 1.0)
               {
-                const BLResult translate_res = ctx.translate(draw_origin.x, draw_origin.y);
+                const BLResult translate_res =
+                  ctx.translate(adjustment.draw_origin.x,
+                                adjustment.draw_origin.y);
                 if (translate_res != BL_SUCCESS)
                   {
                     LOG_S(WARNING) << "render_text: translate failed"
@@ -964,7 +1110,7 @@ namespace pdflib
                     draw_bbox_fallback();
                     return;
                   }
-                const BLResult scale_res = ctx.scale(bbox_fit_scale);
+                const BLResult scale_res = ctx.scale(adjustment.bbox_fit_scale);
                 if (scale_res != BL_SUCCESS)
                   {
                     LOG_S(WARNING) << "render_text: scale failed"
@@ -973,10 +1119,12 @@ namespace pdflib
                     draw_bbox_fallback();
                     return;
                   }
-                draw_origin.reset(0.0, 0.0);
+                adjustment.draw_origin.reset(0.0, 0.0);
               }
             const BLResult text_res =
-              ctx.fill_utf8_text(draw_origin, font, instr.get_text().c_str());
+              ctx.fill_utf8_text(adjustment.draw_origin,
+                                 font,
+                                 instr.get_text().c_str());
             // LOG_S(INFO) << "render_text: after fill_utf8_text res=" << text_res;
             // LOG_S(INFO) << "render_text: before ctx.restore";
             ctx.restore();
@@ -990,38 +1138,42 @@ namespace pdflib
                 return;
               }
 
+            if (adjustment.has_render_bbox)
+              {
+                log_text_render_rect(instr.get_text(),
+                                     geom.bbox,
+                                     transform_text_box(geom,
+                                                        adjusted_render_box));
+              }
+
             // LOG_S(INFO) << "rendered `" << instr.get_text() << "`"
             //             << " ctm=[[" << adv_x << "," << adv_y << "],[" << dn_x << "," << dn_y << "],[" << bx << "," << by << "]]";
           }
 
-        draw_basepoint();
+        draw_text_basepoint(ctx, geom);
 
         if (config_.draw_text_bbox)
           {
-            ctx.set_stroke_style(BLRgba32(0xFF1070C0u));
-            ctx.set_stroke_width(0.5);
-            ctx.stroke_path(bbox_path);
+            stroke_text_bbox(ctx, bbox_path);
           }
       }
     else
       {
         // No valid font — draw the bounding quad outline.
-        draw_basepoint();
+        draw_text_basepoint(ctx, geom);
         LOG_S(WARNING) << "render_text: no valid font for '"
                        << instr.get_font_name() << "' / '"
                        << instr.get_base_font() << "', drawing outline only";
-        ctx.set_stroke_style(BLRgba32(0xFF1070C0u));
-        ctx.set_stroke_width(0.5);
-        ctx.stroke_path(bbox_path);
+        stroke_text_bbox(ctx, bbox_path);
       }
   }
 
   // ---------------------------------------------------------------------------
   // render_bitmap
   //
-  // Converts the raw pixel data into a BLImage and blits it into the
-  // axis-aligned bounding box of the destination quad (y-flipped).
-  // For non-axis-aligned quads a full affine transform would be needed.
+  // Converts raw pixel data and optional alpha data into a PRGB32 BLImage,
+  // applies supported clipping, and blits the image into the destination quad
+  // using either the axis-aligned fast path or an affine transform.
   // ---------------------------------------------------------------------------
 
   inline void renderer<BLEND2D>::render_bitmap(bitmap_instruction& instr)
@@ -1057,7 +1209,6 @@ namespace pdflib
     const int sc = src_shape[2];
     const bool image_mask = instr.is_image_mask();
     const auto fmt = instr.get_pixel_format();
-    const auto fill_rgb = instr.get_rgb_filling();
 
     BLContext& ctx = page_context();
     const bool axis_aligned = is_axis_aligned(q);
@@ -1120,94 +1271,8 @@ namespace pdflib
                        << ", ignoring SMask";
       }
 
-    // Build a BLImage (PRGB32) from the raw channel data.
-    BLImage src_img;
-    src_img.create(sw, sh, BL_FORMAT_PRGB32);
-
-    {
-      BLImageData img_data;
-      src_img.make_mutable(&img_data);
-      auto* base = static_cast<uint8_t*>(img_data.pixel_data);
-      const intptr_t stride = img_data.stride;
-
-      if (fmt == PIXEL_FORMAT_CMYK && src_data->size() >= static_cast<size_t>(sc))
-        {
-          const uint8_t c = src_data->at(0);
-          const uint8_t m = (sc >= 2) ? src_data->at(1) : 0;
-          const uint8_t y = (sc >= 3) ? src_data->at(2) : 0;
-          const uint8_t k = (sc >= 4) ? src_data->at(3) : 0;
-          const uint8_t r = static_cast<uint8_t>(((255u - c) * (255u - k)) / 255u);
-          const uint8_t g = static_cast<uint8_t>(((255u - m) * (255u - k)) / 255u);
-          const uint8_t b = static_cast<uint8_t>(((255u - y) * (255u - k)) / 255u);
-          LOG_S(INFO) << "render_bitmap: cmyk_sample[0]"
-                      << " raw=(" << static_cast<int>(c) << ","
-                      << static_cast<int>(m) << ","
-                      << static_cast<int>(y) << ","
-                      << static_cast<int>(k) << ")"
-                      << " rgb=(" << static_cast<int>(r) << ","
-                      << static_cast<int>(g) << ","
-                      << static_cast<int>(b) << ")";
-        }
-
-      for (int row = 0; row < sh; ++row)
-        {
-          auto* row_ptr = reinterpret_cast<uint32_t*>(base + row * stride);
-          for (int col = 0; col < sw; ++col)
-            {
-              const int idx = (row * sw + col) * sc;
-              uint8_t r = src_data->at(idx);
-              uint8_t g = (sc >= 2) ? src_data->at(idx + 1) : r;
-              uint8_t b = (sc >= 3) ? src_data->at(idx + 2) : r;
-              uint8_t a = 0xFFu;
-
-              if (image_mask)
-                {
-                  a = static_cast<uint8_t>(0xFFu - src_data->at(idx));
-                  r = static_cast<uint8_t>(fill_rgb[0]);
-                  g = static_cast<uint8_t>(fill_rgb[1]);
-                  b = static_cast<uint8_t>(fill_rgb[2]);
-                }
-              else if (fmt == PIXEL_FORMAT_CMYK and sc >= 4)
-                {
-                  const uint8_t c = src_data->at(idx + 0);
-                  const uint8_t m = src_data->at(idx + 1);
-                  const uint8_t y = src_data->at(idx + 2);
-                  const uint8_t k = src_data->at(idx + 3);
-
-                  if(instr.get_cmyk_convention() == CMYK_CONVENTION_PROCESS)
-                    {
-                      r = static_cast<uint8_t>(((255u - c) * (255u - k)) / 255u);
-                      g = static_cast<uint8_t>(((255u - m) * (255u - k)) / 255u);
-                      b = static_cast<uint8_t>(((255u - y) * (255u - k)) / 255u);
-                    }
-                  else
-                    {
-                      r = static_cast<uint8_t>((static_cast<unsigned int>(c) * k) / 255u);
-                      g = static_cast<uint8_t>((static_cast<unsigned int>(m) * k) / 255u);
-                      b = static_cast<uint8_t>((static_cast<unsigned int>(y) * k) / 255u);
-                    }
-                }
-              else if (fmt == PIXEL_FORMAT_GRAY)
-                {
-                  g = r;
-                  b = r;
-                }
-              if (use_soft_mask_alpha and not image_mask)
-                {
-                  a = alpha_data->at(static_cast<size_t>(row) * sw + col);
-                }
-
-              // Store as premultiplied ARGB (required by BL_FORMAT_PRGB32).
-              const uint32_t pm_r = static_cast<uint32_t>(r) * a / 255u;
-              const uint32_t pm_g = static_cast<uint32_t>(g) * a / 255u;
-              const uint32_t pm_b = static_cast<uint32_t>(b) * a / 255u;
-              row_ptr[col] = (static_cast<uint32_t>(a) << 24)
-                | (pm_r                     << 16)
-                | (pm_g                     <<  8)
-                |  pm_b;
-            }
-        }
-    }
+    const BLImage src_img =
+      build_bitmap_image(instr, sw, sh, sc, use_soft_mask_alpha);
 
     const bool can_use_axis_aligned_fast_path =
       axis_aligned and right_angle and quarter_turns == 0;

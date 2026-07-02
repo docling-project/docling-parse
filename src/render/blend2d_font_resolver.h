@@ -15,7 +15,6 @@
 #include <cctype>
 #include <cmath>
 #include <climits>
-#include <cstdlib>
 #include <filesystem>
 #include <memory>
 #include <mutex>
@@ -31,12 +30,27 @@ namespace pdflib
   class blend2d_font_resolver
   {
   public:
+    // Constructs an empty resolver. The font index is built lazily by warm()
+    // or by the first resolving call, so construction is cheap and does not
+    // touch the filesystem.
     blend2d_font_resolver();
 
+    // Returns the process-wide resolver used by default renderer instances.
+    // The shared resolver is warmed before publication so common rendering
+    // paths can reuse the same font index and loaded BLFontFace cache.
     static std::shared_ptr<blend2d_font_resolver> default_resolver();
 
+    // Builds the system font index once. This method is safe to call multiple
+    // times and from multiple threads; std::call_once guarantees that the
+    // directory scan runs at most once per resolver instance.
     void warm();
 
+    // Resolves the PDF font identifiers to a Blend2D font face. font_name is
+    // preferred unless it is empty or "null", otherwise base_font is used.
+    // When resolve_fonts is true the selected name is matched against indexed
+    // system fonts using exact and fuzzy matching. If lookup fails, or font
+    // resolving is disabled, the method falls back to a known system font.
+    // Returns an invalid BLFontFace when no fallback font can be loaded.
     BLFontFace resolve_font_face(const std::string& font_name,
                                  const std::string& base_font,
                                  bool resolve_fonts,
@@ -57,20 +71,53 @@ namespace pdflib
       std::size_t operator()(const match_cache_key& key) const;
     };
 
+    // Normalizes a PDF/system font name into the comparable form used by the
+    // resolver index. This strips PDF subset prefixes, replaces hyphens with
+    // spaces, splits camel-case family/style names, lowercases ASCII text, and
+    // removes common PostScript suffixes such as "PSMT".
     static std::string normalize_font_name(const std::string& name);
+
+    // Splits a normalized font name on whitespace while preserving token order.
     static std::vector<std::string> split_tokens(const std::string& s);
+
+    // Returns true for weight/style descriptors that should not participate
+    // in family identity matching. These tokens can still affect fuzzy score,
+    // but are ignored when deciding whether two font names are comparable.
     static bool is_style_token(const std::string& tok);
+
+    // Returns only non-style tokens from a tokenized font name. This is used
+    // to require family-level equality before accepting a fuzzy style match.
     static std::vector<std::string> significant_tokens(const std::vector<std::string>& toks);
-    static bool vectors_equal(const std::vector<std::string>& lhs,
-                              const std::vector<std::string>& rhs);
+
+    // Converts a floating similarity cutoff into a stable integer cache key,
+    // avoiding direct float keys in unordered_map.
     static int quantized_cutoff(float cutoff);
+
+    // Returns the first known fallback font path that exists on this system.
+    // The resolver currently targets macOS font locations used by the rest of
+    // this Blend2D renderer path.
     static std::optional<std::string> fallback_font_path();
 
+    // Scans known font directories and builds a normalized-name to file-path
+    // index. The first file for a normalized name wins, which keeps matching
+    // deterministic across later duplicate family/style files.
     void build_font_index();
+
+    // Resolves a selected PDF font cache key to a system font path. This method
+    // handles warming, exact lookup, fuzzy lookup, and match-result caching.
     std::optional<std::string> resolve_font_path(const std::string& cache_key,
                                                  float font_similarity_cutoff);
+
+    // Finds the best indexed font path for a normalized query. Candidates must
+    // have the same significant family tokens; among those, the method scores
+    // ordered token overlap with a Jaccard-like ratio and prefers the highest
+    // score, breaking ties by the smallest token-count delta.
     std::optional<std::string> fuzzy_find_font(const std::string& norm_query,
                                                float font_similarity_cutoff) const;
+
+    // Loads a Blend2D font face from disk and caches the result by file path.
+    // Invalid load attempts are cached too, preventing repeated filesystem and
+    // Blend2D work for paths that cannot produce a usable face.
     BLFontFace load_font_face(const std::string& path);
 
     std::once_flag index_once_;
@@ -113,6 +160,13 @@ namespace pdflib
     const std::string& cache_key = (not font_name.empty() and font_name != "null")
       ? font_name : base_font;
 
+    LOG_S(INFO) << "blend2d font resolver: resolve_font_face"
+                << " font_name=`" << font_name << "`"
+                << " base_font=`" << base_font << "`"
+                << " selected_key=`" << cache_key << "`"
+                << " resolve_fonts=" << (resolve_fonts ? "true" : "false")
+                << " similarity_cutoff=" << font_similarity_cutoff;
+
     std::optional<std::string> font_path;
     if (resolve_fonts)
       {
@@ -121,14 +175,21 @@ namespace pdflib
 
     if (not font_path.has_value() or font_path->empty())
       {
+        LOG_S(INFO) << "blend2d font resolver: using fallback font"
+                    << " selected_key=`" << cache_key << "`";
         font_path = fallback_font_path();
       }
 
     if (not font_path.has_value() or font_path->empty())
       {
+        LOG_S(INFO) << "blend2d font resolver: no font path available"
+                    << " selected_key=`" << cache_key << "`";
         return {};
       }
 
+    LOG_S(INFO) << "blend2d font resolver: loading resolved font"
+                << " selected_key=`" << cache_key << "`"
+                << " path=`" << *font_path << "`";
     return load_font_face(*font_path);
   }
 
@@ -226,20 +287,6 @@ namespace pdflib
     return out;
   }
 
-  inline bool blend2d_font_resolver::vectors_equal(const std::vector<std::string>& lhs,
-                                                   const std::vector<std::string>& rhs)
-  {
-    if (lhs.size() != rhs.size()) { return false; }
-    for (size_t i = 0; i < lhs.size(); ++i)
-      {
-        if (lhs[i] != rhs[i])
-          {
-            return false;
-          }
-      }
-    return true;
-  }
-
   inline int blend2d_font_resolver::quantized_cutoff(float cutoff)
   {
     return static_cast<int>(std::lround(cutoff * 10000.0f));
@@ -322,9 +369,18 @@ namespace pdflib
       auto itr = match_cache_.find(match_key);
       if (itr != match_cache_.end())
         {
+          LOG_S(INFO) << "blend2d font resolver: match cache hit"
+                      << " query=`" << match_key.normalized_query << "`"
+                      << " cutoff_x10000=" << match_key.cutoff_x10000
+                      << " path=`" << (itr->second.has_value() ? *itr->second : std::string())
+                      << "`";
           return itr->second;
         }
     }
+
+    LOG_S(INFO) << "blend2d font resolver: match cache miss"
+                << " query=`" << match_key.normalized_query << "`"
+                << " cutoff_x10000=" << match_key.cutoff_x10000;
 
     std::optional<std::string> found_path;
 
@@ -332,11 +388,18 @@ namespace pdflib
     if (exact != font_index_.end())
       {
         found_path = exact->second;
+        LOG_S(INFO) << "blend2d font resolver: exact font match"
+                    << " query=`" << match_key.normalized_query << "`"
+                    << " path=`" << *found_path << "`";
       }
     else
       {
         found_path = fuzzy_find_font(match_key.normalized_query,
                                      font_similarity_cutoff);
+        LOG_S(INFO) << "blend2d font resolver: fuzzy font match result"
+                    << " query=`" << match_key.normalized_query << "`"
+                    << " path=`" << (found_path.has_value() ? *found_path : std::string())
+                    << "`";
       }
 
     {
@@ -364,7 +427,15 @@ namespace pdflib
       {
         const auto c_toks = split_tokens(norm_name);
         const auto c_sig_toks = significant_tokens(c_toks);
-        if (not vectors_equal(c_sig_toks, q_sig_toks)) { continue; }
+        if (c_sig_toks != q_sig_toks)
+          {
+            LOG_S(INFO) << "blend2d font resolver: fuzzy candidate"
+                        << " query=`" << norm_query << "`"
+                        << " candidate=`" << norm_name << "`"
+                        << " path=`" << path << "`"
+                        << " rejected=significant_tokens_mismatch";
+            continue;
+          }
 
         int score = 0;
         const auto max_tokens = std::min(q_toks.size(), c_toks.size());
@@ -376,14 +447,41 @@ namespace pdflib
               }
           }
 
-        if (score == 0) { continue; }
+        if (score == 0)
+          {
+            LOG_S(INFO) << "blend2d font resolver: fuzzy candidate"
+                        << " query=`" << norm_query << "`"
+                        << " candidate=`" << norm_name << "`"
+                        << " path=`" << path << "`"
+                        << " rejected=no_ordered_token_overlap";
+            continue;
+          }
 
         const float jaccard = static_cast<float>(score) /
           static_cast<float>(q_toks.size() + c_toks.size() - score);
-        if (jaccard < font_similarity_cutoff) { continue; }
+        if (jaccard < font_similarity_cutoff)
+          {
+            LOG_S(INFO) << "blend2d font resolver: fuzzy candidate"
+                        << " query=`" << norm_query << "`"
+                        << " candidate=`" << norm_name << "`"
+                        << " path=`" << path << "`"
+                        << " score=" << score
+                        << " jaccard=" << jaccard
+                        << " cutoff=" << font_similarity_cutoff
+                        << " rejected=below_cutoff";
+            continue;
+          }
 
         const int delta = std::abs(static_cast<int>(c_toks.size()) -
                                    static_cast<int>(q_toks.size()));
+        LOG_S(INFO) << "blend2d font resolver: fuzzy candidate"
+                    << " query=`" << norm_query << "`"
+                    << " candidate=`" << norm_name << "`"
+                    << " path=`" << path << "`"
+                    << " score=" << score
+                    << " jaccard=" << jaccard
+                    << " token_delta=" << delta
+                    << " accepted=true";
         if (jaccard > best_jaccard or
             (jaccard == best_jaccard and delta < best_size_delta))
           {
@@ -393,6 +491,12 @@ namespace pdflib
           }
       }
 
+    LOG_S(INFO) << "blend2d font resolver: fuzzy_find_font"
+                << " query=`" << norm_query << "`"
+                << " best_jaccard=" << best_jaccard
+                << " best_size_delta=" << best_size_delta
+                << " path=`" << (best_path.has_value() ? *best_path : std::string())
+                << "`";
     return best_path;
   }
 
@@ -403,6 +507,9 @@ namespace pdflib
       auto itr = face_cache_.find(path);
       if (itr != face_cache_.end())
         {
+          LOG_S(INFO) << "blend2d font resolver: face cache hit"
+                      << " path=`" << path << "`"
+                      << " valid=" << (itr->second.is_valid() ? "true" : "false");
           return itr->second;
         }
     }
@@ -413,10 +520,16 @@ namespace pdflib
                                                     path.c_str(),
                                                     static_cast<BLFileReadFlags>(BL_FILE_READ_MMAP_ENABLED |
                                                                                  BL_FILE_READ_MMAP_AVOID_SMALL));
+    BLResult face_res = BL_ERROR_INVALID_VALUE;
     if (data_res == BL_SUCCESS)
       {
-        face.create_from_data(data, 0);
+        face_res = face.create_from_data(data, 0);
       }
+    LOG_S(INFO) << "blend2d font resolver: loaded font face"
+                << " path=`" << path << "`"
+                << " data_res=" << data_res
+                << " face_res=" << face_res
+                << " valid=" << (face.is_valid() ? "true" : "false");
 
     {
       std::unique_lock lock(face_cache_mutex_);
