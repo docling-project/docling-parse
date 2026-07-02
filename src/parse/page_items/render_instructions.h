@@ -12,6 +12,7 @@
 #include <utility>
 
 #include <parse/enums.h>
+#include <parse/page_items/embedded_font_blob.h>
 
 namespace pdflib
 {
@@ -207,6 +208,19 @@ namespace pdflib
     double get_g_x1() const { return g_x1_; }
     double get_g_y1() const { return g_y1_; }
 
+    // Optional embedded font program shared by all text instructions of one
+    // PDF font resource. Set after construction to keep the (already long)
+    // constructor signature stable; may be null.
+    void set_embedded_font(std::shared_ptr<const embedded_font_blob> blob);
+    const std::shared_ptr<const embedded_font_blob>& get_embedded_font() const;
+    bool has_embedded_font() const;
+
+    // Optional decoded PDF character code (or CID for composite fonts) of a
+    // single-character text cell; -1 when unknown or multi-character. Needed
+    // later for glyph-identity rendering of symbolic/subset fonts.
+    void set_char_code(int64_t char_code);
+    int64_t get_char_code() const;
+
   private:
 
     const std::string text;
@@ -238,7 +252,35 @@ namespace pdflib
     const double g_y0_;
     const double g_x1_;
     const double g_y1_;
+
+    std::shared_ptr<const embedded_font_blob> embedded_font_;
+    int64_t char_code_ = -1;
   };
+
+  inline void text_instruction::set_embedded_font(std::shared_ptr<const embedded_font_blob> blob)
+  {
+    embedded_font_ = std::move(blob);
+  }
+
+  inline const std::shared_ptr<const embedded_font_blob>& text_instruction::get_embedded_font() const
+  {
+    return embedded_font_;
+  }
+
+  inline bool text_instruction::has_embedded_font() const
+  {
+    return embedded_font_ != nullptr and embedded_font_->has_bytes();
+  }
+
+  inline void text_instruction::set_char_code(int64_t char_code)
+  {
+    char_code_ = char_code;
+  }
+
+  inline int64_t text_instruction::get_char_code() const
+  {
+    return char_code_;
+  }
 
   class text_widget_instruction
   {

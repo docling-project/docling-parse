@@ -92,6 +92,21 @@ namespace
       row["font_descent_norm"] = instr.get_font_descent_norm();
       row["base_x0"] = instr.get_base_x0();
       row["base_y0"] = instr.get_base_y0();
+      row["char_code"] = instr.get_char_code();
+      // Embedded font metadata only — never the raw font bytes.
+      row["has_embedded_font"] = instr.has_embedded_font();
+      if(instr.has_embedded_font())
+        {
+          const auto& blob = instr.get_embedded_font();
+          pybind11::dict embedded;
+          embedded["source_key"] = blob->get_source_key();
+          embedded["format"] = pdflib::to_string(blob->get_format());
+          embedded["byte_size"] = blob->byte_size();
+          embedded["cache_key"] = blob->get_cache_key();
+          embedded["is_cid_font"] = blob->get_is_cid_font();
+          embedded["cid_to_gid_identity"] = blob->get_cid_to_gid_identity();
+          row["embedded_font"] = embedded;
+        }
       row["quad"] = make_quad_dict(
         instr.get_r_x0(), instr.get_r_y0(),
         instr.get_r_x1(), instr.get_r_y1(),
@@ -298,6 +313,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
     .def_readwrite("release_native_memory_every_n_pages", &pdflib::decode_config::release_native_memory_every_n_pages)
     .def_readwrite("keep_glyphs", &pdflib::decode_config::keep_glyphs)
     .def_readwrite("keep_qpdf_warnings", &pdflib::decode_config::keep_qpdf_warnings)
+    .def_readwrite("extract_font_programs", &pdflib::decode_config::extract_font_programs)
     .def("__copy__", [](const pdflib::decode_config& self) { return self; })
     .def("__deepcopy__", [](const pdflib::decode_config& self, pybind11::dict) { return self; });
 
@@ -1050,6 +1066,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
         draw_text_basepoint (bool): Draw the text baseline origin as a small red dot [default=false].
         fit_glyph_bbox_to_target (bool): Uniformly rescale measured glyph outlines so the rendered bbox fits inside the target glyph bbox, with either width or height matching exactly [default=false].
         resolve_fonts (bool): Resolve PDF font names to system fonts [default=true].
+        use_embedded_fonts (bool): Prefer embedded font programs over system font resolution when the PDF provides them and they are loadable [default=true].
         font_similarity_cutoff (float): Minimum Jaccard similarity for fuzzy font matching; candidates below this threshold fall back to the default font [default=0.25].
         scale (float): Target render scale in multiples of the PDF page size; -1 disables scale-based sizing [default=-1].
         canvas_width (int): Target canvas width in pixels; -1 means use PDF page size [default=-1].
@@ -1061,6 +1078,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
     .def_readwrite("draw_text_basepoint",     &pdflib::render_config::draw_text_basepoint)
     .def_readwrite("fit_glyph_bbox_to_target",&pdflib::render_config::fit_glyph_bbox_to_target)
     .def_readwrite("resolve_fonts",           &pdflib::render_config::resolve_fonts)
+    .def_readwrite("use_embedded_fonts",      &pdflib::render_config::use_embedded_fonts)
     .def_readwrite("font_similarity_cutoff",  &pdflib::render_config::font_similarity_cutoff)
     .def_readwrite("scale",                   &pdflib::render_config::scale)
     .def_readwrite("canvas_width",            &pdflib::render_config::canvas_width)

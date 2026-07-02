@@ -50,6 +50,11 @@ namespace pdflib
 
     std::array<double, 4> get_font_bbox() { return font_bbox; }
     const embedded_font_program& get_font_program() const { return font_program; }
+
+    // Lazily extracts the embedded font program (first call only) and returns
+    // the shared render-facing blob; null when the font has no usable embedded
+    // program. All text instructions of this font share the same blob.
+    std::shared_ptr<const embedded_font_blob> get_embedded_font_blob();
     
     std::string get_utf8_string(std::string line, bool is_hex_str);
 
@@ -85,6 +90,10 @@ namespace pdflib
                                std::string const& source_path,
                                embedded_font_file_kind kind,
                                bool from_descendant_font);
+
+    embedded_font_format resolve_embedded_font_format() const;
+    bool resolve_cid_to_gid_identity() const;
+    void build_embedded_font_blob();
     
     void init_ascent_and_descent();
 
@@ -168,6 +177,9 @@ namespace pdflib
 
     uint32_t space_index;
     embedded_font_program font_program;
+
+    bool font_blob_initialized = false;
+    std::shared_ptr<const embedded_font_blob> font_blob;
   };
 
   font_glyphs    pdf_resource<PAGE_FONT>::glyphs = font_glyphs();
@@ -698,7 +710,7 @@ namespace pdflib
       init_font_name();
       init_font_bbox();
       init_font_matrix();
-      // init_font_program(); // not really needed for now I believe
+      // init_font_program(); // extraction is lazy: see get_embedded_font_blob()
       
       init_ascent_and_descent();
       
@@ -1273,9 +1285,10 @@ namespace pdflib
     font_program.from_descendant_font = from_descendant_font;
     font_program.descriptor_json = descriptor_json;
     font_program.stream_dict_json = to_json(stream_obj, {}, 0, 2);
-    LOG_S(INFO) << __FUNCTION__
-                << ": stream-dict-json=\n"
-                << font_program.stream_dict_json.dump(2);
+    // Disabled: dumping the full stream dictionary per font floods the logs.
+    // LOG_S(INFO) << __FUNCTION__
+    //             << ": stream-dict-json=\n"
+    //             << font_program.stream_dict_json.dump(2);
 
     auto subtype_info = to_string(stream_obj, "/Subtype");
     if(subtype_info.first)
@@ -1301,34 +1314,38 @@ namespace pdflib
     update_length("/Length2", font_program.length2);
     update_length("/Length3", font_program.length3);
 
-    try
-      {
-        LOG_S(INFO) << __FUNCTION__ << ": decoding font stream with qpdf_stream_decoder";
-        qpdf_stream_decoder decoder(font_program.decoded_stream);
-        decoder.decode(stream_obj);
-        LOG_S(INFO) << __FUNCTION__
-                    << ": decoded stream instruction count="
-                    << font_program.decoded_stream.size();
-        decoder.print();
-      }
-    catch(const std::exception& e)
-      {
-        LOG_S(INFO) << __FUNCTION__ << ": failed to decode stream instructions: " << e.what();
-      }
+    // Disabled: a font program is binary data, not a content stream —
+    // running the instruction decoder over it is meaningless work.
+    // try
+    //   {
+    //     LOG_S(INFO) << __FUNCTION__ << ": decoding font stream with qpdf_stream_decoder";
+    //     qpdf_stream_decoder decoder(font_program.decoded_stream);
+    //     decoder.decode(stream_obj);
+    //     LOG_S(INFO) << __FUNCTION__
+    //                 << ": decoded stream instruction count="
+    //                 << font_program.decoded_stream.size();
+    //     decoder.print();
+    //   }
+    // catch(const std::exception& e)
+    //   {
+    //     LOG_S(INFO) << __FUNCTION__ << ": failed to decode stream instructions: " << e.what();
+    //   }
 
-    try
-      {
-        font_program.raw_data = to_shared_ptr(stream_obj.getRawStreamData());
-        if(font_program.raw_data)
-          {
-            font_program.raw_size = font_program.raw_data->getSize();
-          }
-        LOG_S(INFO) << __FUNCTION__ << ": raw_size=" << font_program.raw_size;
-      }
-    catch(const std::exception& e)
-      {
-        LOG_S(INFO) << __FUNCTION__ << ": failed to read raw stream data: " << e.what();
-      }
+    // Disabled: keeping raw (compressed) bytes next to the decoded bytes
+    // doubles the memory per font; the renderer only needs decoded bytes.
+    // try
+    //   {
+    //     font_program.raw_data = to_shared_ptr(stream_obj.getRawStreamData());
+    //     if(font_program.raw_data)
+    //       {
+    //         font_program.raw_size = font_program.raw_data->getSize();
+    //       }
+    //     LOG_S(INFO) << __FUNCTION__ << ": raw_size=" << font_program.raw_size;
+    //   }
+    // catch(const std::exception& e)
+    //   {
+    //     LOG_S(INFO) << __FUNCTION__ << ": failed to read raw stream data: " << e.what();
+    //   }
 
     try
       {
@@ -1350,7 +1367,115 @@ namespace pdflib
                 << " source=" << font_program.source_path
                 << " declared_subtype=" << font_program.declared_subtype;
   }
-  
+
+  std::shared_ptr<const embedded_font_blob> pdf_resource<PAGE_FONT>::get_embedded_font_blob()
+  {
+    if(not font_blob_initialized)
+      {
+        font_blob_initialized = true;
+
+        init_font_program();
+        build_embedded_font_blob();
+      }
+
+    return font_blob;
+  }
+
+  embedded_font_format pdf_resource<PAGE_FONT>::resolve_embedded_font_format() const
+  {
+    switch(font_program.kind)
+      {
+      case FONT_FILE_TYPE1:
+        {
+          return embedded_font_format::TYPE1;
+        }
+      case FONT_FILE_TRUETYPE:
+        {
+          return embedded_font_format::TRUETYPE;
+        }
+      case FONT_FILE_CFF:
+        {
+          if(font_program.declared_subtype == "/Type1C")
+            {
+              return embedded_font_format::TYPE1C;
+            }
+          if(font_program.declared_subtype == "/CIDFontType0C")
+            {
+              return embedded_font_format::CID_TYPE0C;
+            }
+          if(font_program.declared_subtype == "/OpenType")
+            {
+              return embedded_font_format::OPENTYPE;
+            }
+          return embedded_font_format::UNKNOWN;
+        }
+      default:
+        {
+          return embedded_font_format::UNKNOWN;
+        }
+      }
+  }
+
+  bool pdf_resource<PAGE_FONT>::resolve_cid_to_gid_identity() const
+  {
+    if(subtype != TYPE_0)
+      {
+        return false;
+      }
+
+    // PDF spec: /CIDToGIDMap defaults to /Identity when absent. Any stream
+    // value means an explicit map that we do not resolve here.
+    std::vector<std::string> keys = {"/CIDToGIDMap"};
+    if(not utils::json::has(keys, desc_font))
+      {
+        return true;
+      }
+
+    nlohmann::json value = utils::json::get(keys, desc_font);
+    return value.is_string() and value.get<std::string>() == "/Identity";
+  }
+
+  void pdf_resource<PAGE_FONT>::build_embedded_font_blob()
+  {
+    if(not font_program.found or
+       not font_program.decoded_data or
+       font_program.decoded_data->getSize() == 0)
+      {
+        LOG_S(INFO) << __FUNCTION__ << ": no embedded font bytes for font-key=" << font_key;
+        return;
+      }
+
+    auto bytes = std::make_shared<std::vector<uint8_t> >(
+      font_program.decoded_data->getBuffer(),
+      font_program.decoded_data->getBuffer() + font_program.decoded_data->getSize());
+
+    // The blob owns the only long-lived copy; drop the qpdf buffer so the
+    // bytes are not held twice.
+    font_program.decoded_data.reset();
+
+    embedded_font_format format = resolve_embedded_font_format();
+
+    font_blob = std::make_shared<const embedded_font_blob>(
+      embedded_font_blob::compute_cache_key(*bytes),
+      font_name,
+      base_font,
+      font_program.source_path,
+      format,
+      subtype == TYPE_0,
+      resolve_cid_to_gid_identity(),
+      std::move(bytes));
+
+    LOG_S(INFO) << __FUNCTION__
+                << ": font-key=" << font_key
+                << " font-name=" << font_name
+                << " source=" << font_blob->get_source_key()
+                << " format=" << to_string(font_blob->get_format())
+                << " bytes=" << font_blob->byte_size()
+                << " cache-key=" << font_blob->get_cache_key()
+                << " cid=" << font_blob->get_is_cid_font()
+                << " cid-to-gid-identity=" << font_blob->get_cid_to_gid_identity();
+  }
+
   void pdf_resource<PAGE_FONT>::init_ascent_and_descent()
   {
     LOG_S(INFO) << __FUNCTION__;

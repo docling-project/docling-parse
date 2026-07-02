@@ -135,6 +135,35 @@ namespace pdflib
 
     return "FONT_FILE_UNKNOWN";
   }
+
+  // Distinguishes the /FontFile3 subtypes that embedded_font_file_kind folds
+  // into FONT_FILE_CFF. The renderer needs this: Blend2D loads only SFNT
+  // containers (TRUETYPE/OPENTYPE), while TYPE1/TYPE1C/CID_TYPE0C need a
+  // different backend.
+  enum class embedded_font_format
+  {
+    UNKNOWN,
+    TYPE1,      // /FontFile  (PFA/PFB)
+    TRUETYPE,   // /FontFile2
+    TYPE1C,     // /FontFile3 /Subtype /Type1C (bare CFF)
+    CID_TYPE0C, // /FontFile3 /Subtype /CIDFontType0C (CID-keyed bare CFF)
+    OPENTYPE    // /FontFile3 /Subtype /OpenType
+  };
+
+  inline std::string to_string(embedded_font_format format)
+  {
+    switch(format)
+      {
+      case embedded_font_format::UNKNOWN:    return "UNKNOWN";
+      case embedded_font_format::TYPE1:      return "TYPE1";
+      case embedded_font_format::TRUETYPE:   return "TRUETYPE";
+      case embedded_font_format::TYPE1C:     return "TYPE1C";
+      case embedded_font_format::CID_TYPE0C: return "CID_TYPE0C";
+      case embedded_font_format::OPENTYPE:   return "OPENTYPE";
+      }
+
+    return "UNKNOWN";
+  }
   
   enum xobject_subtype_name {
     XOBJECT_UNKNOWN,

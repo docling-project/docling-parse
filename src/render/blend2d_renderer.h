@@ -6,6 +6,7 @@
 #include <render/template_renderer.h>
 #include <render/config.h>
 #include <render/blend2d_font_resolver.h>
+#include <render/blend2d_embedded_font_cache.h>
 
 #include <blend2d/blend2d.h>
 
@@ -45,6 +46,13 @@ namespace pdflib
     // can be shared across page renderers.
     explicit renderer(render_config config,
                       std::shared_ptr<blend2d_font_resolver> font_resolver);
+
+    // Same as above, additionally sharing an embedded font cache so that
+    // embedded font programs are loaded once per document instead of once per
+    // page renderer. Passing nullptr creates a private cache.
+    explicit renderer(render_config config,
+                      std::shared_ptr<blend2d_font_resolver> font_resolver,
+                      std::shared_ptr<blend2d_embedded_font_cache> embedded_font_cache);
 
     // Initializes the page canvas from the PDF crop box and render_config. This
     // computes the PDF-to-canvas scale/origin, creates a PRGB32 Blend2D image,
@@ -132,6 +140,7 @@ namespace pdflib
     double origin_y_ = 0.0;    // crop_bbox y origin (pdf units, y-up)
 
     std::shared_ptr<blend2d_font_resolver> font_resolver_;
+    std::shared_ptr<blend2d_embedded_font_cache> embedded_font_cache_;
     std::unordered_map<std::string, BLFontFace> local_font_cache_;
 
     // Returns the active Blend2D context for the page, starting it lazily if
@@ -193,6 +202,27 @@ namespace pdflib
     // system font if none can be resolved.  Results are cached.
     BLFontFace resolve_font_face(const std::string& font_name,
                                  const std::string& base_font);
+
+    // Returns true when every glyph in the shaped buffer is glyph id 0
+    // (.notdef). Shaping against an embedded subset font succeeds even when
+    // the font has no glyph for the codepoint, so this — not a shaping error —
+    // signals that the embedded face cannot draw the cell.
+    static bool glyph_run_all_notdef(const BLGlyphBuffer& gb)
+    {
+      const size_t count = gb.size();
+      const uint32_t* glyph_ids = gb.glyph_run().glyph_data_as<uint32_t>();
+      if (count == 0 or glyph_ids == nullptr) { return true; }
+
+      for (size_t i = 0; i < count; ++i)
+        {
+          if (glyph_ids[i] != 0)
+            {
+              return false;
+            }
+        }
+
+      return true;
+    }
 
     // Computes the canvas-space baseline, bounding quad, text cell height
     // vector, and Blend2D font size for one text instruction.
@@ -503,13 +533,15 @@ namespace pdflib
 
   inline renderer<BLEND2D>::renderer()
     : shape_({0, 0, 4}),
-      font_resolver_(blend2d_font_resolver::default_resolver())
+      font_resolver_(blend2d_font_resolver::default_resolver()),
+      embedded_font_cache_(std::make_shared<blend2d_embedded_font_cache>())
   {}
 
   inline renderer<BLEND2D>::renderer(render_config config)
     : config_(config),
       shape_({0, 0, 4}),
-      font_resolver_(blend2d_font_resolver::default_resolver())
+      font_resolver_(blend2d_font_resolver::default_resolver()),
+      embedded_font_cache_(std::make_shared<blend2d_embedded_font_cache>())
   {}
 
   inline renderer<BLEND2D>::renderer(render_config config,
@@ -517,7 +549,20 @@ namespace pdflib
     : config_(config),
       shape_({0, 0, 4}),
       font_resolver_(font_resolver ? std::move(font_resolver)
-                                   : blend2d_font_resolver::default_resolver())
+                                   : blend2d_font_resolver::default_resolver()),
+      embedded_font_cache_(std::make_shared<blend2d_embedded_font_cache>())
+  {}
+
+  inline renderer<BLEND2D>::renderer(render_config config,
+                                     std::shared_ptr<blend2d_font_resolver> font_resolver,
+                                     std::shared_ptr<blend2d_embedded_font_cache> embedded_font_cache)
+    : config_(config),
+      shape_({0, 0, 4}),
+      font_resolver_(font_resolver ? std::move(font_resolver)
+                                   : blend2d_font_resolver::default_resolver()),
+      embedded_font_cache_(embedded_font_cache
+                             ? std::move(embedded_font_cache)
+                             : std::make_shared<blend2d_embedded_font_cache>())
   {}
 
   inline BLContext& renderer<BLEND2D>::page_context()
@@ -1003,11 +1048,32 @@ namespace pdflib
     //             << " cell_span=" << cell_span
     //             << " em_size=" << em_size << " size=" << size;
 
-    BLFontFace face = resolve_font_face(instr.get_font_name(),
-                                        instr.get_base_font());
+    // Resolution order: embedded font program (if carried by the instruction
+    // and loadable by Blend2D) → system font resolver → hardcoded fallback.
+    bool using_embedded_font = false;
+    BLFontFace face;
+    if (config_.use_embedded_fonts and instr.has_embedded_font())
+      {
+        face = embedded_font_cache_->resolve(instr.get_embedded_font());
+        using_embedded_font = face.is_valid();
+        if (not using_embedded_font)
+          {
+            LOG_S(INFO) << "render_text: embedded font not loadable"
+                        << " font_name=`" << instr.get_font_name() << "`"
+                        << " format=" << to_string(instr.get_embedded_font()->get_format())
+                        << " — using system resolver";
+          }
+      }
+
+    if (not using_embedded_font)
+      {
+        face = resolve_font_face(instr.get_font_name(),
+                                 instr.get_base_font());
+      }
     // LOG_S(INFO) << "face valid=" << face.is_valid()
     //             << " font_name=`" << instr.get_font_name() << "`"
-    //             << " base_font=`" << instr.get_base_font() << "`";
+    //             << " base_font=`" << instr.get_base_font() << "`"
+    //             << " embedded=" << using_embedded_font;
 
     BLContext& ctx = page_context();
 
@@ -1069,6 +1135,34 @@ namespace pdflib
                 draw_bbox_fallback();
                 return;
               }
+
+            if (using_embedded_font and glyph_run_all_notdef(gb))
+              {
+                // Shaping against an embedded subset font "succeeds" with
+                // glyph id 0 when the font simply lacks the glyph; drawing
+                // would produce blank/tofu output. Fall back to the system
+                // face for this cell only.
+                LOG_S(INFO) << "render_text: embedded face has no glyph"
+                            << " text=`" << instr.get_text() << "`"
+                            << " font_name=`" << instr.get_font_name() << "`"
+                            << " — falling back to system font";
+
+                BLFontFace system_face = resolve_font_face(instr.get_font_name(),
+                                                           instr.get_base_font());
+                BLFont system_font;
+                if (system_face.is_valid() and
+                    system_font.create_from_face(system_face,
+                                                 static_cast<float>(geom.size)) == BL_SUCCESS)
+                  {
+                    gb.set_utf8_text(instr.get_text().c_str());
+                    if (system_font.shape(gb) == BL_SUCCESS and not gb.is_empty())
+                      {
+                        font = system_font;
+                        using_embedded_font = false;
+                      }
+                  }
+              }
+
             const auto* placement_data = gb.placement_data();
             if (placement_data == nullptr)
               {

@@ -693,15 +693,26 @@ namespace pdflib
                                 cell.enc_name,
                                 font.get_base_font(),
                                 cell.font_size,
-                                glyph_rect.at(0), glyph_rect.at(1), 
+                                glyph_rect.at(0), glyph_rect.at(1),
                                 glyph_rect.at(2), glyph_rect.at(3),
 				glyph_rect.at(4), glyph_rect.at(5),
-				glyph_rect.at(6), glyph_rect.at(7), 
+				glyph_rect.at(6), glyph_rect.at(7),
                                 font_ascent*ratio, font_descent*ratio,
 				d_base_x, d_base_y,
                                 has_glyph_bbox,
                                 glyph_bbox[0], glyph_bbox[1],
                                 glyph_bbox[2], glyph_bbox[3]);
+
+        tinstr.set_char_code(glyph_code);
+
+        if(config.extract_font_programs)
+          {
+            auto font_blob = font.get_embedded_font_blob();
+            if(font_blob != nullptr and font_blob->has_bytes())
+              {
+                tinstr.set_embedded_font(font_blob);
+              }
+          }
 
         instructions.add_text_instruction(std::move(tinstr));
       }

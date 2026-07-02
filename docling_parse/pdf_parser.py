@@ -1360,6 +1360,7 @@ def _copy_render_config(src: RenderConfig) -> RenderConfig:
     dst.render_text = src.render_text
     dst.draw_text_bbox = src.draw_text_bbox
     dst.resolve_fonts = src.resolve_fonts
+    dst.use_embedded_fonts = src.use_embedded_fonts
     dst.font_similarity_cutoff = src.font_similarity_cutoff
     dst.scale = src.scale
     dst.canvas_width = src.canvas_width
