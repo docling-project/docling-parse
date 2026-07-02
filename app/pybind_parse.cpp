@@ -1066,7 +1066,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
         draw_text_basepoint (bool): Draw the text baseline origin as a small red dot [default=false].
         fit_glyph_bbox_to_target (bool): Uniformly rescale measured glyph outlines so the rendered bbox fits inside the target glyph bbox, with either width or height matching exactly [default=false].
         resolve_fonts (bool): Resolve PDF font names to system fonts [default=true].
-        use_embedded_fonts (bool): Prefer embedded font programs over system font resolution when the PDF provides them and they are loadable [default=true].
+        use_embedded_fonts (bool): Prefer embedded font programs (TrueType/OpenType via Blend2D, Type 1/CFF via FreeType outlines) over system font resolution [default=true].
         font_similarity_cutoff (float): Minimum Jaccard similarity for fuzzy font matching; candidates below this threshold fall back to the default font [default=0.25].
         scale (float): Target render scale in multiples of the PDF page size; -1 disables scale-based sizing [default=-1].
         canvas_width (int): Target canvas width in pixels; -1 means use PDF page size [default=-1].

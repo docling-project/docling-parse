@@ -36,6 +36,10 @@ namespace docling
     // process instead of once per page. Safe across documents: entries are
     // keyed by a content hash of the font bytes, not by PDF object ids.
     std::shared_ptr<pdflib::blend2d_embedded_font_cache> embedded_font_cache_;
+
+    // Same sharing/keying for the Type 1 / bare CFF programs that Blend2D
+    // cannot load; FreeType serializes internally on its own mutex.
+    std::shared_ptr<pdflib::freetype_embedded_font_cache> freetype_font_cache_;
   };
 
   inline docling_threaded_renderer::docling_threaded_renderer(std::string loglevel,
@@ -49,7 +53,8 @@ namespace docling
                                                                          decode_config),
     render_cfg(render_config),
     font_resolver_(std::make_shared<pdflib::blend2d_font_resolver>()),
-    embedded_font_cache_(std::make_shared<pdflib::blend2d_embedded_font_cache>())
+    embedded_font_cache_(std::make_shared<pdflib::blend2d_embedded_font_cache>()),
+    freetype_font_cache_(std::make_shared<pdflib::freetype_embedded_font_cache>())
   {
     font_resolver_->warm();
 
@@ -129,7 +134,8 @@ namespace docling
                 stage_start = clock_type::now();
                 pdflib::renderer<pdflib::BLEND2D> rnd(render_cfg,
                                                       font_resolver_,
-                                                      embedded_font_cache_);
+                                                      embedded_font_cache_,
+                                                      freetype_font_cache_);
                 page_decoder->get_instructions().iterate_over_instructions(rnd);
                 result.timings.render_page_s
                   = std::chrono::duration<double>(clock_type::now() - stage_start).count();

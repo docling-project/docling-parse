@@ -7,6 +7,7 @@
 #include <render/config.h>
 #include <render/blend2d_font_resolver.h>
 #include <render/blend2d_embedded_font_cache.h>
+#include <render/freetype_embedded_font_cache.h>
 
 #include <blend2d/blend2d.h>
 
@@ -47,12 +48,15 @@ namespace pdflib
     explicit renderer(render_config config,
                       std::shared_ptr<blend2d_font_resolver> font_resolver);
 
-    // Same as above, additionally sharing an embedded font cache so that
-    // embedded font programs are loaded once per document instead of once per
-    // page renderer. Passing nullptr creates a private cache.
+    // Same as above, additionally sharing an embedded font cache (SFNT
+    // programs loaded natively by Blend2D) and a FreeType cache (Type 1 /
+    // bare CFF programs rendered as outline paths), so embedded font programs
+    // are loaded once per document instead of once per page renderer.
+    // Passing nullptr for either creates a private cache.
     explicit renderer(render_config config,
                       std::shared_ptr<blend2d_font_resolver> font_resolver,
-                      std::shared_ptr<blend2d_embedded_font_cache> embedded_font_cache);
+                      std::shared_ptr<blend2d_embedded_font_cache> embedded_font_cache,
+                      std::shared_ptr<freetype_embedded_font_cache> freetype_font_cache = nullptr);
 
     // Initializes the page canvas from the PDF crop box and render_config. This
     // computes the PDF-to-canvas scale/origin, creates a PRGB32 Blend2D image,
@@ -141,6 +145,7 @@ namespace pdflib
 
     std::shared_ptr<blend2d_font_resolver> font_resolver_;
     std::shared_ptr<blend2d_embedded_font_cache> embedded_font_cache_;
+    std::shared_ptr<freetype_embedded_font_cache> freetype_font_cache_;
     std::unordered_map<std::string, BLFontFace> local_font_cache_;
 
     // Returns the active Blend2D context for the page, starting it lazily if
@@ -223,6 +228,15 @@ namespace pdflib
 
       return true;
     }
+
+    // Draws a text cell whose embedded font program Blend2D cannot load
+    // (Type 1, bare CFF) by filling FreeType-decomposed outline paths.
+    // Returns true when the cell was fully handled (including the optional
+    // basepoint/bbox debug drawing); false means the caller should continue
+    // with the system font path.
+    bool render_text_freetype(text_instruction& instr,
+                              const text_geometry& geom,
+                              const BLPath& bbox_path);
 
     // Computes the canvas-space baseline, bounding quad, text cell height
     // vector, and Blend2D font size for one text instruction.
@@ -534,14 +548,16 @@ namespace pdflib
   inline renderer<BLEND2D>::renderer()
     : shape_({0, 0, 4}),
       font_resolver_(blend2d_font_resolver::default_resolver()),
-      embedded_font_cache_(std::make_shared<blend2d_embedded_font_cache>())
+      embedded_font_cache_(std::make_shared<blend2d_embedded_font_cache>()),
+      freetype_font_cache_(std::make_shared<freetype_embedded_font_cache>())
   {}
 
   inline renderer<BLEND2D>::renderer(render_config config)
     : config_(config),
       shape_({0, 0, 4}),
       font_resolver_(blend2d_font_resolver::default_resolver()),
-      embedded_font_cache_(std::make_shared<blend2d_embedded_font_cache>())
+      embedded_font_cache_(std::make_shared<blend2d_embedded_font_cache>()),
+      freetype_font_cache_(std::make_shared<freetype_embedded_font_cache>())
   {}
 
   inline renderer<BLEND2D>::renderer(render_config config,
@@ -550,19 +566,24 @@ namespace pdflib
       shape_({0, 0, 4}),
       font_resolver_(font_resolver ? std::move(font_resolver)
                                    : blend2d_font_resolver::default_resolver()),
-      embedded_font_cache_(std::make_shared<blend2d_embedded_font_cache>())
+      embedded_font_cache_(std::make_shared<blend2d_embedded_font_cache>()),
+      freetype_font_cache_(std::make_shared<freetype_embedded_font_cache>())
   {}
 
   inline renderer<BLEND2D>::renderer(render_config config,
                                      std::shared_ptr<blend2d_font_resolver> font_resolver,
-                                     std::shared_ptr<blend2d_embedded_font_cache> embedded_font_cache)
+                                     std::shared_ptr<blend2d_embedded_font_cache> embedded_font_cache,
+                                     std::shared_ptr<freetype_embedded_font_cache> freetype_font_cache)
     : config_(config),
       shape_({0, 0, 4}),
       font_resolver_(font_resolver ? std::move(font_resolver)
                                    : blend2d_font_resolver::default_resolver()),
       embedded_font_cache_(embedded_font_cache
                              ? std::move(embedded_font_cache)
-                             : std::make_shared<blend2d_embedded_font_cache>())
+                             : std::make_shared<blend2d_embedded_font_cache>()),
+      freetype_font_cache_(freetype_font_cache
+                             ? std::move(freetype_font_cache)
+                             : std::make_shared<freetype_embedded_font_cache>())
   {}
 
   inline BLContext& renderer<BLEND2D>::page_context()
@@ -1014,6 +1035,68 @@ namespace pdflib
   }
 
   // ---------------------------------------------------------------------------
+  // render_text_freetype
+  //
+  // Fallback path for embedded font programs Blend2D cannot load (Type 1,
+  // bare CFF): FreeType maps the cell's character code through the font's
+  // builtin encoding and decomposes the glyph outlines into a BLPath, which
+  // is filled under the same text transform as the regular path.
+  // ---------------------------------------------------------------------------
+
+  inline bool renderer<BLEND2D>::render_text_freetype(text_instruction& instr,
+                                                      const text_geometry& geom,
+                                                      const BLPath& bbox_path)
+  {
+    if (freetype_font_cache_ == nullptr or not freetype_font_cache_->available())
+      {
+        return false;
+      }
+
+    // With text rendering disabled the regular path handles the debug-only
+    // drawing (basepoint/bbox) through the system-resolved face.
+    if (not config_.render_text) { return false; }
+
+    if (geom.size <= 0.5) { return false; }
+
+    BLPath text_path;
+    if (not freetype_font_cache_->build_text_path(instr.get_embedded_font(),
+                                                  instr.get_text(),
+                                                  instr.get_char_code(),
+                                                  geom.size,
+                                                  text_path))
+      {
+        return false;
+      }
+
+    BLContext& ctx = page_context();
+
+    ctx.save();
+    const BLResult transform_res = ctx.apply_transform(make_text_transform(geom));
+    if (transform_res != BL_SUCCESS)
+      {
+        ctx.restore();
+        LOG_S(WARNING) << "render_text_freetype: apply_transform failed"
+                       << " (BLResult=" << transform_res << ")";
+        return false;
+      }
+
+    ctx.set_fill_style(BLRgba32(0xFF000000u)); // opaque black
+    if (not text_path.is_empty())
+      {
+        ctx.fill_path(text_path);
+      }
+    ctx.restore();
+
+    draw_text_basepoint(ctx, geom);
+    if (config_.draw_text_bbox)
+      {
+        stroke_text_bbox(ctx, bbox_path);
+      }
+
+    return true;
+  }
+
+  // ---------------------------------------------------------------------------
   // render_text
   //
   // Applies a full affine context transform
@@ -1048,8 +1131,9 @@ namespace pdflib
     //             << " cell_span=" << cell_span
     //             << " em_size=" << em_size << " size=" << size;
 
-    // Resolution order: embedded font program (if carried by the instruction
-    // and loadable by Blend2D) → system font resolver → hardcoded fallback.
+    // Resolution order: embedded font program — natively in Blend2D (SFNT)
+    // or as FreeType outline paths (Type 1, bare CFF) — then the system font
+    // resolver, then the hardcoded fallback.
     bool using_embedded_font = false;
     BLFontFace face;
     if (config_.use_embedded_fonts and instr.has_embedded_font())
@@ -1058,6 +1142,11 @@ namespace pdflib
         using_embedded_font = face.is_valid();
         if (not using_embedded_font)
           {
+            if (render_text_freetype(instr, geom, bbox_path))
+              {
+                return;
+              }
+
             LOG_S(INFO) << "render_text: embedded font not loadable"
                         << " font_name=`" << instr.get_font_name() << "`"
                         << " format=" << to_string(instr.get_embedded_font()->get_format())

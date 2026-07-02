@@ -6,11 +6,10 @@ font programs:
 
 - raw Type 1 (``/FontFile``: NimbusRomNo9L, CMR/CMSY/CMTT/CMMI TeX fonts) on
   the text pages (e.g. page 1) — Blend2D cannot load these, so the renderer
-  must fall back to the system resolver and produce output identical to the
-  pre-embedded behaviour;
+  draws them as FreeType-decomposed outline paths;
 - TrueType (``/FontFile2``: DejaVu Serif/Sans subsets) inside the figure Form
-  XObjects on pages 8, 17, 20, 21 and 22 — Blend2D loads these, so the
-  embedded face is actually used for drawing.
+  XObjects on pages 8, 17, 20, 21 and 22 — Blend2D loads these natively, so
+  the embedded face is used for drawing directly.
 """
 
 from io import BytesIO
@@ -109,25 +108,30 @@ def test_embedded_truetype_changes_rendering():
     assert image_on.tobytes() != image_off.tobytes()
 
 
-def test_unloadable_type1_falls_back_to_identical_output():
-    """Type 1 embedded fonts cannot load in Blend2D; output must not change.
+def test_embedded_type1_changes_rendering():
+    """Type 1 embedded fonts render through the FreeType outline path.
 
-    The embedded-font path caches the load failure and falls back to the
-    system resolver, so a page with only /FontFile fonts renders byte-for-byte
-    the same whether the embedded path is enabled or not — and must not crash.
+    Blend2D rejects raw /FontFile programs, so the renderer decomposes their
+    glyph outlines with FreeType instead of substituting a system font. With
+    resolve_fonts=False the alternative is the hardcoded fallback font, so
+    using the embedded CM/Nimbus outlines must change the output on every
+    platform — and must not crash on the TeX subset fonts.
     """
     embedded_on = RenderConfig()
+    embedded_on.resolve_fonts = False
     embedded_on.use_embedded_fonts = True
 
     embedded_off = RenderConfig()
+    embedded_off.resolve_fonts = False
     embedded_off.use_embedded_fonts = False
 
     image_on = _render_page(TYPE1_ONLY_PAGE, embedded_on)
     image_off = _render_page(TYPE1_ONLY_PAGE, embedded_off)
 
     assert not _is_blank(image_on)
+    assert not _is_blank(image_off)
     assert image_on.size == image_off.size
-    assert image_on.tobytes() == image_off.tobytes()
+    assert image_on.tobytes() != image_off.tobytes()
 
 
 def test_embedded_fonts_render_all_font_pages():

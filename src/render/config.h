@@ -40,13 +40,15 @@ namespace pdflib
     // (Helvetica / Arial) without any name lookup.
     bool resolve_fonts = true;
 
-    // Prefer the embedded font program (/FontFile2, /FontFile3 /OpenType)
-    // over system font resolution when the text instruction carries one and
-    // Blend2D can load it. Cells whose glyphs are missing from the embedded
-    // (usually subset) font fall back to the system-resolved font, so turning
-    // this off only forces the pre-embedded behaviour for A/B comparisons.
-    // Independent of resolve_fonts: with resolve_fonts=false the fallback is
-    // the hardcoded font instead of a name lookup.
+    // Prefer the embedded font program over system font resolution when the
+    // text instruction carries one. SFNT programs (/FontFile2, /FontFile3
+    // /OpenType) load natively in Blend2D; Type 1 and bare CFF programs
+    // (/FontFile, /FontFile3 /Type1C, /CIDFontType0C) render as
+    // FreeType-decomposed outline paths. Cells whose glyphs are missing from
+    // the embedded (usually subset) font fall back to the system-resolved
+    // font, so turning this off only forces the pre-embedded behaviour for
+    // A/B comparisons. Independent of resolve_fonts: with resolve_fonts=false
+    // the fallback is the hardcoded font instead of a name lookup.
     bool use_embedded_fonts = true;
 
     // Minimum Jaccard similarity required when fuzzy-matching a PDF font name
