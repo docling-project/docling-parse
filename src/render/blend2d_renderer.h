@@ -718,7 +718,7 @@ namespace pdflib
 
   inline void renderer<BLEND2D>::render_text(text_instruction& instr)
   {
-    LOG_S(INFO) << __FUNCTION__;
+    // LOG_S(INFO) << __FUNCTION__;
 
     if (shape_[0] == 0 or shape_[1] == 0) { return; }
 
@@ -753,18 +753,18 @@ namespace pdflib
     bbox_path.line_to(x3, y3);
     bbox_path.close();
 
-    LOG_S(INFO) << "text=`" << instr.get_text() << "`"
-                << " base=(" << bx << "," << by << ")"
-                << " quad_h=" << quad_h
-                << " a_norm=" << a_norm << " d_norm=" << d_norm
-                << " cell_span=" << cell_span
-                << " em_size=" << em_size << " size=" << size;
+    // LOG_S(INFO) << "text=`" << instr.get_text() << "`"
+    //             << " base=(" << bx << "," << by << ")"
+    //             << " quad_h=" << quad_h
+    //             << " a_norm=" << a_norm << " d_norm=" << d_norm
+    //             << " cell_span=" << cell_span
+    //             << " em_size=" << em_size << " size=" << size;
 
     BLFontFace face = resolve_font_face(instr.get_font_name(),
                                         instr.get_base_font());
-    LOG_S(INFO) << "face valid=" << face.is_valid()
-                << " font_name=`" << instr.get_font_name() << "`"
-                << " base_font=`" << instr.get_base_font() << "`";
+    // LOG_S(INFO) << "face valid=" << face.is_valid()
+    //             << " font_name=`" << instr.get_font_name() << "`"
+    //             << " base_font=`" << instr.get_base_font() << "`";
 
     BLContext& ctx = page_context();
 
@@ -786,11 +786,11 @@ namespace pdflib
       {
         if (config_.render_text)
           {
-            LOG_S(INFO) << "render_text: before BLFont construction";
+            // LOG_S(INFO) << "render_text: before BLFont construction";
             BLFont font;
-            LOG_S(INFO) << "render_text: before create_from_face size=" << size;
+            // LOG_S(INFO) << "render_text: before create_from_face size=" << size;
             const BLResult font_res = font.create_from_face(face, static_cast<float>(size));
-            LOG_S(INFO) << "render_text: after create_from_face res=" << font_res;
+            // LOG_S(INFO) << "render_text: after create_from_face res=" << font_res;
             if (font_res != BL_SUCCESS)
               {
                 LOG_S(WARNING) << "render_text: create_from_face failed"
@@ -816,11 +816,11 @@ namespace pdflib
                                  dn_x,  dn_y,
                                  bx,    by);
 
-            LOG_S(INFO) << "render_text: before ctx.save";
+            // LOG_S(INFO) << "render_text: before ctx.save";
             ctx.save();
-            LOG_S(INFO) << "render_text: before apply_transform";
+            // LOG_S(INFO) << "render_text: before apply_transform";
             const BLResult transform_res = ctx.apply_transform(ctm);
-            LOG_S(INFO) << "render_text: after apply_transform res=" << transform_res;
+            // LOG_S(INFO) << "render_text: after apply_transform res=" << transform_res;
             if (transform_res != BL_SUCCESS)
               {
                 ctx.restore();
@@ -829,14 +829,14 @@ namespace pdflib
                 draw_bbox_fallback();
                 return;
               }
-            LOG_S(INFO) << "render_text: before set_fill_style";
+            // LOG_S(INFO) << "render_text: before set_fill_style";
             ctx.set_fill_style(BLRgba32(0xFF000000u)); // opaque black
-            LOG_S(INFO) << "render_text: before fill_utf8_text";
+            // LOG_S(INFO) << "render_text: before fill_utf8_text";
             BLGlyphBuffer gb;
             gb.set_utf8_text(instr.get_text().c_str());
             const BLResult shape_res = font.shape(gb);
-            LOG_S(INFO) << "render_text: after shape res=" << shape_res
-                        << " empty=" << gb.is_empty();
+            // LOG_S(INFO) << "render_text: after shape res=" << shape_res
+            //             << " empty=" << gb.is_empty();
             if (shape_res != BL_SUCCESS || gb.is_empty())
               {
                 LOG_S(WARNING) << "render_text: shaping failed or produced no glyphs"
@@ -867,14 +867,15 @@ namespace pdflib
                                           0.0, 0.0);
                 const BLResult outline_res =
                   font.get_glyph_outlines(glyph_id, identity, glyph_path);
-                LOG_S(INFO) << "render_text: glyph outline res=" << outline_res
-                            << " glyph_path empty=" << glyph_path.is_empty();
+                //LOG_S(INFO) << "render_text: glyph outline res=" << outline_res
+		//<< " glyph_path empty=" << glyph_path.is_empty();
                 if (outline_res == BL_SUCCESS && !glyph_path.is_empty())
                   {
                     BLBox rendered_box;
                     const BLResult bbox_res = glyph_path.get_bounding_box(&rendered_box);
-                    LOG_S(INFO) << "render_text: glyph outline bbox res=" << bbox_res;
-                    if (bbox_res != BL_SUCCESS)
+                    //LOG_S(INFO) << "render_text: glyph outline bbox res=" << bbox_res;
+
+		    if (bbox_res != BL_SUCCESS)
                       {
                         LOG_S(WARNING) << "render_text: glyph outline bbox failed"
                                        << " (BLResult=" << bbox_res << ")";
@@ -939,7 +940,8 @@ namespace pdflib
                                         << " draw_origin.y=" << draw_origin.y;
                           }
 
-                        LOG_S(INFO) << "render_text: target bbox=["
+                        LOG_S(INFO) << "render_text: `" << instr.get_text()
+				    << "` target bbox=["
                                     << target_x0 << ", " << target_y0 << ", "
                                     << target_x1 << ", " << target_y1 << "]"
                                     << " rendered bbox=["
@@ -975,8 +977,8 @@ namespace pdflib
               }
             const BLResult text_res =
               ctx.fill_utf8_text(draw_origin, font, instr.get_text().c_str());
-            LOG_S(INFO) << "render_text: after fill_utf8_text res=" << text_res;
-            LOG_S(INFO) << "render_text: before ctx.restore";
+            // LOG_S(INFO) << "render_text: after fill_utf8_text res=" << text_res;
+            // LOG_S(INFO) << "render_text: before ctx.restore";
             ctx.restore();
 
             if (text_res != BL_SUCCESS)
@@ -988,8 +990,8 @@ namespace pdflib
                 return;
               }
 
-            LOG_S(INFO) << "rendered `" << instr.get_text() << "`"
-                        << " ctm=[[" << adv_x << "," << adv_y << "],[" << dn_x << "," << dn_y << "],[" << bx << "," << by << "]]";
+            // LOG_S(INFO) << "rendered `" << instr.get_text() << "`"
+            //             << " ctm=[[" << adv_x << "," << adv_y << "],[" << dn_x << "," << dn_y << "],[" << bx << "," << by << "]]";
           }
 
         draw_basepoint();

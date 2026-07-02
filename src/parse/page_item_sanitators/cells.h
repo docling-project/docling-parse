@@ -450,7 +450,7 @@ namespace pdflib
 	  {
 	    continue;
 	  }
-	LOG_S(INFO) << "start merging cell-" << i << ": '" << cells[i].text << "'";
+	// LOG_S(INFO) << "start merging cell-" << i << ": '" << cells[i].text << "'";
 
 	for(int j=i+1; j<cells.size(); j++)
 	  {
@@ -492,7 +492,7 @@ namespace pdflib
 		// after a ligature and returns to normal once the inflated bbox is absorbed.
 		cells[i].last_merged_cell_was_ligature = utils::string::is_ligature(cells[j].text);
 		cells[j].active = false;
-		LOG_S(INFO) << " -> merging cell-" << i << " with " << j << " '" << cells[j].text << "'"<< ": " << cells[i].text;
+		// LOG_S(INFO) << " -> merging cell-" << i << " with " << j << " '" << cells[j].text << "'"<< ": " << cells[i].text;
 	      }
 	    else if(allow_reverse and cells[j].is_adjacent_to(cells[i], delta_0, adj_eps_d1))
 	      {
@@ -536,7 +536,7 @@ namespace pdflib
 	  {
 	    continue;
 	  }
-	LOG_S(INFO) << "start merging cell-" << i << ": '" << cells[i].text << "'";
+	// LOG_S(INFO) << "start merging cell-" << i << ": '" << cells[i].text << "'";
 
 	for(int j=i-1; j>=0; j--)
 	  {
