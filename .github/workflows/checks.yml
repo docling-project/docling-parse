@@ -25,6 +25,10 @@ jobs:
           uv sync --frozen --all-extras
           ls -l
           ls -l docling_parse
+          # setuptools' editable_wheel demotes native build failures to a
+          # warning, leaving an importable package without the extension;
+          # fail loudly here instead of at pytest collection.
+          ls docling_parse/pdf_parsers*.so
       - name: Run styling check
         run: |
           uv run pre-commit run --all-files

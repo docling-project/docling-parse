@@ -49,7 +49,7 @@ Iroman;0406
 # Unicode approximations for text extraction)
 # OT1 slot 040: the crossbar overlaid on l/L to build lslash; zero-width
 # space keeps extracted text clean ("suppress"+"l" -> "l")
-suppress;200B
+# suppress;200B
 # vertical extension module of big double arrows (cmex-style fonts)
 arrowvertexdbl;2016
 # MSBM short vertical bar (negation piece)

@@ -492,7 +492,8 @@ namespace pdflib
 		// after a ligature and returns to normal once the inflated bbox is absorbed.
 		cells[i].last_merged_cell_was_ligature = utils::string::is_ligature(cells[j].text);
 		cells[j].active = false;
-		// LOG_S(INFO) << " -> merging cell-" << i << " with " << j << " '" << cells[j].text << "'"<< ": " << cells[i].text;
+
+		LOG_S(INFO) << " -> merging cell-" << i << " with " << j << " '" << cells[j].text << "'"<< ": " << cells[i].text;
 	      }
 	    else if(allow_reverse and cells[j].is_adjacent_to(cells[i], delta_0, adj_eps_d1))
 	      {

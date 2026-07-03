@@ -42,6 +42,12 @@ else()
         -DCMAKE_POSITION_INDEPENDENT_CODE=ON \\
         -DCMAKE_OSX_ARCHITECTURES=${CMAKE_OSX_ARCHITECTURES} \\
         -DCMAKE_C_FLAGS=${ENV_ARCHFLAGS} \\
+        # Pin the sub-build type and disable FreeType's forced "d" debug
+        # postfix: with the outer CMAKE_BUILD_TYPE=Debug (e.g. the CI checks
+        # workflow) FreeType would otherwise install libfreetyped.a and the
+        # IMPORTED_LOCATION below would dangle, breaking the final link.
+        -DCMAKE_BUILD_TYPE=Release \\
+        -DDISABLE_FORCE_DEBUG_POSTFIX=ON \\
         -DBUILD_SHARED_LIBS=OFF \\
         -DFT_DISABLE_ZLIB=ON \\
         -DFT_DISABLE_BZIP2=ON \\
