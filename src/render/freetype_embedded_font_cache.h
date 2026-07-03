@@ -30,13 +30,16 @@ namespace pdflib
   // FreeType, and converts glyph outlines into BLPath objects so that Blend2D
   // still performs all rasterization.
   //
-  // Character mapping: for a single-character cell the decoded PDF character
-  // code is resolved through the font's builtin encoding (Adobe custom /
-  // standard / Latin-1 charmaps — this is the faithful path for TeX fonts,
-  // whose PDF character codes are the font's own encoding), with the Unicode
-  // charmap as fallback; CID fonts with an identity CIDToGIDMap use the CID
-  // directly as glyph index. When nothing maps, the caller falls back to the
-  // system-resolved font for that cell.
+  // Glyph identity is resolved in decreasing order of authority:
+  //   1. CID with identity CIDToGIDMap — the CID is the glyph index;
+  //   2. the glyph name assigned by /Encoding /Differences (FT_Get_Name_Index);
+  //   3. the decoded PDF character code through the font's builtin encoding
+  //      (Adobe custom / standard / Latin-1, and MS symbol with the 0xF000
+  //      offset convention) — the faithful path for TeX fonts, whose PDF
+  //      character codes are the font's own encoding;
+  //   4. the Unicode codepoints of the cell text.
+  // When nothing maps, the caller falls back to the system-resolved font for
+  // that cell.
   //
   // FreeType is not thread-safe, so every entry point serializes on one
   // mutex; decomposed glyph paths are cached per face (in font units) to keep
@@ -64,6 +67,7 @@ namespace pdflib
     bool build_text_path(const std::shared_ptr<const embedded_font_blob>& blob,
                          const std::string& utf8_text,
                          int64_t char_code,
+                         const std::string& glyph_name,
                          double size,
                          BLPath& path);
 
@@ -96,6 +100,7 @@ namespace pdflib
                                const std::shared_ptr<const embedded_font_blob>& blob,
                                const std::string& utf8_text,
                                int64_t char_code,
+                               const std::string& glyph_name,
                                std::vector<FT_UInt>& glyph_indices);
 
     FT_UInt char_code_to_glyph_index(FT_Face face, FT_ULong code);
@@ -149,6 +154,7 @@ namespace pdflib
       const std::shared_ptr<const embedded_font_blob>& blob,
       const std::string& utf8_text,
       int64_t char_code,
+      const std::string& glyph_name,
       double size,
       BLPath& path)
   {
@@ -166,7 +172,7 @@ namespace pdflib
       }
 
     std::vector<FT_UInt> glyph_indices;
-    if(not resolve_glyph_indices(entry, blob, utf8_text, char_code, glyph_indices))
+    if(not resolve_glyph_indices(entry, blob, utf8_text, char_code, glyph_name, glyph_indices))
       {
         return false;
       }
@@ -251,6 +257,7 @@ namespace pdflib
       const std::shared_ptr<const embedded_font_blob>& blob,
       const std::string& utf8_text,
       int64_t char_code,
+      const std::string& glyph_name,
       std::vector<FT_UInt>& glyph_indices)
   {
     glyph_indices.clear();
@@ -265,6 +272,19 @@ namespace pdflib
             return true;
           }
         return false;
+      }
+
+    // /Encoding /Differences overrides the builtin encoding, so its glyph
+    // name is the most authoritative identity when present.
+    if(not glyph_name.empty() and FT_HAS_GLYPH_NAMES(entry.face))
+      {
+        const FT_UInt glyph_index =
+          FT_Get_Name_Index(entry.face, glyph_name.c_str());
+        if(glyph_index != 0)
+          {
+            glyph_indices.push_back(glyph_index);
+            return true;
+          }
       }
 
     // Single-character cell: the decoded PDF character code through the
@@ -329,6 +349,20 @@ namespace pdflib
           {
             return glyph_index;
           }
+      }
+
+    // Symbolic TrueType fonts (rejected by Blend2D when they lack a Unicode
+    // cmap) expose a (3,0) symbol cmap; by convention the byte codes live in
+    // the private-use range at 0xF000.
+    if(code <= 0xFF and FT_Select_Charmap(face, FT_ENCODING_MS_SYMBOL) == 0)
+      {
+        const FT_UInt glyph_index = FT_Get_Char_Index(face, 0xF000u + code);
+        if(glyph_index != 0)
+          {
+            return glyph_index;
+          }
+
+        return FT_Get_Char_Index(face, code);
       }
 
     return 0;

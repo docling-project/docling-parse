@@ -55,6 +55,11 @@ namespace pdflib
     // the shared render-facing blob; null when the font has no usable embedded
     // program. All text instructions of this font share the same blob.
     std::shared_ptr<const embedded_font_blob> get_embedded_font_blob();
+
+    // Raw glyph name (no leading '/') that /Encoding /Differences assigns to
+    // this character code; empty when the code has no override. Used by the
+    // renderer for glyph-identity lookups in embedded font programs.
+    std::string get_glyph_name(uint32_t code);
     
     std::string get_utf8_string(std::string line, bool is_hex_str);
 
@@ -172,6 +177,7 @@ namespace pdflib
     //std::unordered_map<uint32_t, std::string> cmap_numb_to_char;
     cmap_value cmap_numb_to_char;
     std::unordered_map<uint32_t, std::string> diff_numb_to_char;
+    std::unordered_map<uint32_t, std::string> diff_numb_to_name;
 
     std::unordered_map<uint32_t, int> unknown_numbs;
 
@@ -1381,6 +1387,17 @@ namespace pdflib
     return font_blob;
   }
 
+  std::string pdf_resource<PAGE_FONT>::get_glyph_name(uint32_t code)
+  {
+    auto itr = diff_numb_to_name.find(code);
+    if(itr != diff_numb_to_name.end())
+      {
+        return itr->second;
+      }
+
+    return "";
+  }
+
   embedded_font_format pdf_resource<PAGE_FONT>::resolve_embedded_font_format() const
   {
     switch(font_program.kind)
@@ -2206,6 +2223,14 @@ namespace pdflib
                       }
 		    else
 		      {}
+
+		    // Keep the raw glyph name (with any ".suffix", without the
+		    // leading '/'): it is the identity of the glyph inside the
+		    // embedded font program.
+		    if(numb >= 0 and name.size() > 1 and name[0] == '/')
+		      {
+			diff_numb_to_name[numb] = name.substr(1);
+		      }
 
 		    LOG_S(INFO) << name << ", in cmap: " << cmap_numb_to_char.count(numb) << ", #-names: " << name_to_descr.size() << ", type: " << subtype;
 		    

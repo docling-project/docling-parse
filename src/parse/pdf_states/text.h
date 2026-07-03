@@ -704,6 +704,10 @@ namespace pdflib
                                 glyph_bbox[2], glyph_bbox[3]);
 
         tinstr.set_char_code(glyph_code);
+        if(glyph_code >= 0)
+          {
+            tinstr.set_glyph_name(font.get_glyph_name(static_cast<uint32_t>(glyph_code)));
+          }
 
         if(config.extract_font_programs)
           {

@@ -221,6 +221,12 @@ namespace pdflib
     void set_char_code(int64_t char_code);
     int64_t get_char_code() const;
 
+    // Optional glyph name assigned to the character code by the PDF's
+    // /Encoding /Differences; empty when none. This is the authoritative
+    // glyph identity inside the embedded font program.
+    void set_glyph_name(std::string glyph_name);
+    const std::string& get_glyph_name() const;
+
   private:
 
     const std::string text;
@@ -255,6 +261,7 @@ namespace pdflib
 
     std::shared_ptr<const embedded_font_blob> embedded_font_;
     int64_t char_code_ = -1;
+    std::string glyph_name_;
   };
 
   inline void text_instruction::set_embedded_font(std::shared_ptr<const embedded_font_blob> blob)
@@ -280,6 +287,16 @@ namespace pdflib
   inline int64_t text_instruction::get_char_code() const
   {
     return char_code_;
+  }
+
+  inline void text_instruction::set_glyph_name(std::string glyph_name)
+  {
+    glyph_name_ = std::move(glyph_name);
+  }
+
+  inline const std::string& text_instruction::get_glyph_name() const
+  {
+    return glyph_name_;
   }
 
   class text_widget_instruction

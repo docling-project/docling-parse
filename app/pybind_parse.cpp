@@ -93,6 +93,7 @@ namespace
       row["base_x0"] = instr.get_base_x0();
       row["base_y0"] = instr.get_base_y0();
       row["char_code"] = instr.get_char_code();
+      row["glyph_name"] = instr.get_glyph_name();
       // Embedded font metadata only — never the raw font bytes.
       row["has_embedded_font"] = instr.has_embedded_font();
       if(instr.has_embedded_font())

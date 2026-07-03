@@ -227,6 +227,23 @@ def test_char_code_is_exported_for_single_char_cells():
     assert len(coded) > 0, "no instruction carries a character code"
 
 
+def test_glyph_names_are_exported_for_differences_encodings():
+    """Cells of fonts with /Encoding /Differences expose their glyph name.
+
+    The page-1 NimbusRomNo9L fonts carry a /Differences array, so at least
+    some single-character cells must expose the glyph name that identifies
+    the glyph inside the embedded font program.
+    """
+    rows = _export_text_instructions(TYPE1_ONLY_PAGE)
+
+    named = [row for row in rows if row["glyph_name"] != ""]
+    assert len(named) > 0, "no instruction carries a glyph name"
+
+    for row in named:
+        assert row["char_code"] >= 0
+        assert not row["glyph_name"].startswith("/")
+
+
 def test_embedded_face_cache_is_shared_across_documents():
     """Two documents with identical fonts share one embedded-face cache.
 
