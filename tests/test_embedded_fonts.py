@@ -14,6 +14,9 @@ font programs:
 
 from io import BytesIO
 
+from docling_parse.pdf_parsers import (  # type: ignore[import]
+    DecodePageConfig as _DecodePageConfig,
+)
 from PIL import Image as PILImage
 
 from docling_parse.pdf_parser import (
@@ -21,9 +24,6 @@ from docling_parse.pdf_parser import (
     DoclingThreadedPdfParser,
     RenderConfig,
     ThreadedPdfParserConfig,
-)
-from docling_parse.pdf_parsers import (  # type: ignore[import]
-    DecodePageConfig as _DecodePageConfig,
 )
 
 ARXIV_PDF = "tests/data/regression/2508.13113v2.pdf"
