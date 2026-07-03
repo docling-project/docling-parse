@@ -16,6 +16,7 @@ uv run python ./docling_parse/visualize.py -i <path-to-pdf-file> -c word --inter
 ```
 
 <table>
+
   <tr>
     <th>original</th>
     <th>char</th>
