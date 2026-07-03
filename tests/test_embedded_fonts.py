@@ -166,11 +166,7 @@ def _export_text_instructions(page_number: int) -> list:
     assert result.success, result.error_message
 
     exported = result._export_render_instructions_json()
-    return [
-        row
-        for row in exported["instructions"]
-        if row["type"] == "TEXT_RENDER_INSTRUCTION"
-    ]
+    return [row for row in exported["instructions"] if row["type"] == "text"]
 
 
 def test_extraction_attaches_embedded_font_metadata():
