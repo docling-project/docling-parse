@@ -186,6 +186,26 @@ namespace pdflib
     BEZIER,      // cubic Bézier curve (interpolated)
   };
 
+  // How a path-painting operator paints the current path
+  enum shape_paint_mode {
+    SHAPE_PAINT_STROKE,        // S, s
+    SHAPE_PAINT_FILL,          // f, F, f*
+    SHAPE_PAINT_FILL_STROKE,   // B, B*, b, b*
+  };
+
+  enum shape_fill_rule {
+    SHAPE_FILL_NONZERO,        // f, B, b
+    SHAPE_FILL_EVEN_ODD,       // f*, B*, b*
+  };
+
+  // Exact path segment commands (each subpath starts with an implicit
+  // move-to). Kept alongside the flattened polyline so the renderer can
+  // rebuild true curves at device resolution.
+  enum shape_segment_op {
+    SEGMENT_LINE_TO,    // consumes 1 point:  end
+    SEGMENT_CUBIC_TO,   // consumes 3 points: ctrl1, ctrl2, end
+  };
+
 }
 
 #endif

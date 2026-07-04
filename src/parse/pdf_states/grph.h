@@ -183,7 +183,19 @@ namespace pdflib
 
     bool verify(std::vector<qpdf_stream_instruction>& instructions,
 		std::size_t num_instr, std::string name);
-    
+
+    // Fallback color mapping for SC/sc/SCN/scn: the current color space was
+    // set via CS/cs (ICCBased, CalRGB, Separation, ...), which we do not
+    // resolve; interpret the numeric operands by their count instead
+    // (1 -> gray, 3 -> RGB, 4 -> CMYK). Returns false and leaves rgb
+    // untouched for pattern-name operands or unsupported counts.
+    bool set_color_by_operand_count(std::vector<qpdf_stream_instruction>& instructions,
+                                    std::array<int, 3>& rgb,
+                                    std::string name);
+
+    static std::array<int, 3> gray_to_rgb(double gray);
+    static std::array<int, 3> cmyk_to_rgb(double c, double m, double y, double k);
+
   private:
     
     std::array<double, 9>& trafo_matrix;
@@ -217,17 +229,20 @@ namespace pdflib
     null_grph_key("null"),
     curr_grph_key(null_grph_key),
 
-    line_width(-1),
-    miter_limit(-1),
+    // PDF-spec defaults (Table 52 – Device-Independent Graphics State):
+    // width 1.0, butt cap (0), miter join (0), miter limit 10.0,
+    // solid dash, flatness 1.0, black stroke/fill
+    line_width(1.0),
+    miter_limit(10.0),
 
-    line_cap(-1),
-    line_join(-1),
+    line_cap(0),
+    line_join(0),
 
     dash_phase(0),
     dash_array({}),
 
-    flatness(-1),
-    
+    flatness(1.0),
+
     rgb_stroking_ops({0,0,0}),
     rgb_filling_ops({0,0,0})
   {}
@@ -295,7 +310,68 @@ namespace pdflib
 
     return false;
   }
-  
+
+  std::array<int, 3> pdf_state<GRPH>::gray_to_rgb(double gray)
+  {
+    int v = static_cast<int>(std::round(255.0*gray));
+    return {v, v, v};
+  }
+
+  std::array<int, 3> pdf_state<GRPH>::cmyk_to_rgb(double c, double m, double y, double k)
+  {
+    int r = static_cast<int>(std::round(255.0 * (1.0 - c) * (1.0 - k)));
+    int g = static_cast<int>(std::round(255.0 * (1.0 - m) * (1.0 - k)));
+    int b = static_cast<int>(std::round(255.0 * (1.0 - y) * (1.0 - k)));
+    return {r, g, b};
+  }
+
+  bool pdf_state<GRPH>::set_color_by_operand_count(std::vector<qpdf_stream_instruction>& instructions,
+                                                   std::array<int, 3>& rgb,
+                                                   std::string name)
+  {
+    std::vector<double> comps;
+    for(auto& instr : instructions)
+      {
+        if(instr.is_number())
+          {
+            comps.push_back(instr.to_double());
+          }
+        else // pattern name operand (SCN/scn) or unexpected type
+          {
+            LOG_S(WARNING) << name << ": non-numeric operand "
+                           << instr.unparse() << ", keeping current color";
+            return false;
+          }
+      }
+
+    switch(comps.size())
+      {
+      case 1:
+        {
+          rgb = gray_to_rgb(comps[0]);
+          return true;
+        }
+      case 3:
+        {
+          rgb = {static_cast<int>(std::round(255.0*comps[0])),
+                 static_cast<int>(std::round(255.0*comps[1])),
+                 static_cast<int>(std::round(255.0*comps[2]))};
+          return true;
+        }
+      case 4:
+        {
+          rgb = cmyk_to_rgb(comps[0], comps[1], comps[2], comps[3]);
+          return true;
+        }
+      default:
+        {
+          LOG_S(WARNING) << name << ": unsupported number of color components ("
+                         << comps.size() << "), keeping current color";
+          return false;
+        }
+      }
+  }
+
   void pdf_state<GRPH>::w(std::vector<qpdf_stream_instruction>& instructions)
   {
     if(not verify(instructions, 1, __FUNCTION__) ) { return; }
@@ -416,123 +492,133 @@ namespace pdflib
       }
   }
 
+  // Per PDF spec, CS/cs also reset the current color to the color space's
+  // initial value: black for the device spaces. The color space itself is
+  // not resolved here (ICCBased, Separation, ... operands are handled by
+  // the operand-count fallback in SC/SCN/sc/scn).
   void pdf_state<GRPH>::CS(std::vector<qpdf_stream_instruction>& instructions)
   {
-    LOG_S(WARNING) << "implement " << __FUNCTION__ << ": " << instructions.size();
+    if(not verify(instructions, 1, __FUNCTION__) ) { return; }
+
+    std::string cs_name = instructions[0].is_string()?
+      instructions[0].to_utf8_string() : instructions[0].unparse();
+    if(not cs_name.empty() and cs_name.front()=='/') { cs_name = cs_name.substr(1); }
+
+    if(cs_name=="DeviceGray" or cs_name=="DeviceRGB" or cs_name=="DeviceCMYK" or
+       cs_name=="CalGray" or cs_name=="CalRGB")
+      {
+        rgb_stroking_ops = {0, 0, 0};
+      }
+    else if(cs_name=="Pattern")
+      {
+        // pattern paint is unsupported; keep the current color
+      }
+    else
+      {
+        LOG_S(WARNING) << __FUNCTION__ << ": unresolved color space " << cs_name
+                       << ", colors fall back to operand-count mapping";
+      }
   }
 
   void pdf_state<GRPH>::cs(std::vector<qpdf_stream_instruction>& instructions)
   {
-    LOG_S(WARNING) << "implement " << __FUNCTION__ << ": " << instructions.size();
+    if(not verify(instructions, 1, __FUNCTION__) ) { return; }
+
+    std::string cs_name = instructions[0].is_string()?
+      instructions[0].to_utf8_string() : instructions[0].unparse();
+    if(not cs_name.empty() and cs_name.front()=='/') { cs_name = cs_name.substr(1); }
+
+    if(cs_name=="DeviceGray" or cs_name=="DeviceRGB" or cs_name=="DeviceCMYK" or
+       cs_name=="CalGray" or cs_name=="CalRGB")
+      {
+        rgb_filling_ops = {0, 0, 0};
+      }
+    else if(cs_name=="Pattern")
+      {
+        // pattern paint is unsupported; keep the current color
+      }
+    else
+      {
+        LOG_S(WARNING) << __FUNCTION__ << ": unresolved color space " << cs_name
+                       << ", colors fall back to operand-count mapping";
+      }
   }
-  
+
   void pdf_state<GRPH>::SC(std::vector<qpdf_stream_instruction>& instructions)
   {
-    LOG_S(WARNING) << "implement " << __FUNCTION__ << ": " << instructions.size();
+    set_color_by_operand_count(instructions, rgb_stroking_ops, __FUNCTION__);
   }
 
   void pdf_state<GRPH>::SCN(std::vector<qpdf_stream_instruction>& instructions)
   {
-    LOG_S(WARNING) << "implement " << __FUNCTION__ << ": " << instructions.size();
+    set_color_by_operand_count(instructions, rgb_stroking_ops, __FUNCTION__);
   }
-  
+
   void pdf_state<GRPH>::sc(std::vector<qpdf_stream_instruction>& instructions)
   {
-    LOG_S(WARNING) << "implement " << __FUNCTION__ << ": " << instructions.size();
+    set_color_by_operand_count(instructions, rgb_filling_ops, __FUNCTION__);
   }
 
   void pdf_state<GRPH>::scn(std::vector<qpdf_stream_instruction>& instructions)
   {
-    LOG_S(WARNING) << "implement " << __FUNCTION__ << ": " << instructions.size();
+    set_color_by_operand_count(instructions, rgb_filling_ops, __FUNCTION__);
   }
   
   void pdf_state<GRPH>::G(std::vector<qpdf_stream_instruction>& instructions)
   {
     if(not verify(instructions, 1, __FUNCTION__) ) { return; }
-    
-    int r = std::round(255.0*instructions[0].to_double());
-    int g = std::round(255.0*instructions[0].to_double());
-    int b = std::round(255.0*instructions[0].to_double());
 
-    //LOG_S(INFO) << "rgb: {" << r << ", " << g << ", " << b << "}";
-
-    rgb_stroking_ops = {r, g, b};
+    rgb_stroking_ops = gray_to_rgb(instructions[0].to_double());
   }
 
+  // `g` is the NON-stroking (fill) gray operator
   void pdf_state<GRPH>::g(std::vector<qpdf_stream_instruction>& instructions)
   {
     if(not verify(instructions, 1, __FUNCTION__) ) { return; }
-    
-    int r = std::round(255.0*instructions[0].to_double());
-    int g = std::round(255.0*instructions[0].to_double());
-    int b = std::round(255.0*instructions[0].to_double());
 
-    //LOG_S(INFO) << "rgb: {" << r << ", " << g << ", " << b << "}";
-
-    rgb_stroking_ops = {r, g, b};
+    rgb_filling_ops = gray_to_rgb(instructions[0].to_double());
   }
-  
+
   void pdf_state<GRPH>::RG(std::vector<qpdf_stream_instruction>& instructions)
   {
     if(not verify(instructions, 3, __FUNCTION__) ) { return; }
     
-    int r = std::round(255.0*instructions[0].to_double());
-    int g = std::round(255.0*instructions[1].to_double());
-    int b = std::round(255.0*instructions[2].to_double());
-
-    LOG_S(INFO) << "rgb: {" << r << ", " << g << ", " << b << "}";
+    int r = static_cast<int>(std::round(255.0*instructions[0].to_double()));
+    int g = static_cast<int>(std::round(255.0*instructions[1].to_double()));
+    int b = static_cast<int>(std::round(255.0*instructions[2].to_double()));
 
     rgb_stroking_ops = {r, g, b};
   }
 
   void pdf_state<GRPH>::rg(std::vector<qpdf_stream_instruction>& instructions)
   {
-    //assert(instructions.size()==3);
     if(not verify(instructions, 3, __FUNCTION__) ) { return; }
-    
-    int r = std::round(255.0*instructions[0].to_double());
-    int g = std::round(255.0*instructions[1].to_double());
-    int b = std::round(255.0*instructions[2].to_double());
 
-    LOG_S(INFO) << "rgb: {" << r << ", " << g << ", " << b << "}";
+    int r = static_cast<int>(std::round(255.0*instructions[0].to_double()));
+    int g = static_cast<int>(std::round(255.0*instructions[1].to_double()));
+    int b = static_cast<int>(std::round(255.0*instructions[2].to_double()));
 
     rgb_filling_ops = {r, g, b};
   }
-  
+
   void pdf_state<GRPH>::K(std::vector<qpdf_stream_instruction>& instructions)
   {
     if(not verify(instructions, 4, __FUNCTION__) ) { return; }
-    
-    double c = instructions[0].to_double();
-    double m = instructions[1].to_double();
-    double y = instructions[2].to_double();
-    double k = instructions[3].to_double();
 
-    int r = std::round(255.0 * (1.0 - c) * (1.0 - k));
-    int g = std::round(255.0 * (1.0 - m) * (1.0 - k));
-    int b = std::round(255.0 * (1.0 - y) * (1.0 - k));
-
-    LOG_S(INFO) << "rgb: {" << r << ", " << g << ", " << b << "}";
-
-    rgb_stroking_ops = {r, g, b};
+    rgb_stroking_ops = cmyk_to_rgb(instructions[0].to_double(),
+                                   instructions[1].to_double(),
+                                   instructions[2].to_double(),
+                                   instructions[3].to_double());
   }
 
   void pdf_state<GRPH>::k(std::vector<qpdf_stream_instruction>& instructions)
   {
     if(not verify(instructions, 4, __FUNCTION__) ) { return; }
-    
-    double c = instructions[0].to_double();
-    double m = instructions[1].to_double();
-    double y = instructions[2].to_double();
-    double k = instructions[3].to_double();
 
-    int r = std::round(255.0 * (1.0 - c) * (1.0 - k));
-    int g = std::round(255.0 * (1.0 - m) * (1.0 - k));
-    int b = std::round(255.0 * (1.0 - y) * (1.0 - k));
-
-    LOG_S(INFO) << "rgb: {" << r << ", " << g << ", " << b << "}";
-
-    rgb_filling_ops = {r, g, b};
+    rgb_filling_ops = cmyk_to_rgb(instructions[0].to_double(),
+                                  instructions[1].to_double(),
+                                  instructions[2].to_double(),
+                                  instructions[3].to_double());
   }
   
 }

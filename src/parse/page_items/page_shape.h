@@ -41,6 +41,20 @@ namespace pdflib
 
     void append(double x_, double y_);
 
+    // Dual-track geometry: `append` only extends the flattened polyline
+    // (JSON output, bbox/degeneracy checks); the methods below additionally
+    // record the exact segment structure so the renderer can rebuild true
+    // curves. The subpath start (move-to) is the first plain `append`;
+    // closing edges are expressed via closing_type, not as a segment.
+    void append_line_segment(double x_, double y_);
+    void append_cubic_segment(double x1_, double y1_,
+                              double x2_, double y2_,
+                              double x3_, double y3_);
+
+    const std::vector<shape_segment_op>& get_seg_ops() const { return seg_ops; }
+    const std::vector<double>& get_seg_x() const { return seg_x; }
+    const std::vector<double>& get_seg_y() const { return seg_y; }
+
     size_t size();
 
     std::pair<double, double> front();
@@ -64,9 +78,14 @@ namespace pdflib
 
   private:
 
-    std::vector<int>    i;    
+    std::vector<int>    i;
     std::vector<double> x;
     std::vector<double> y;
+
+    // exact segment structure (not serialized; render-instruction path only)
+    std::vector<shape_segment_op> seg_ops;
+    std::vector<double>           seg_x; // op-consumed points,
+    std::vector<double>           seg_y; // in op order
 
     // graphics state properties
     bool has_graphics_state = false;
@@ -206,6 +225,14 @@ namespace pdflib
 	utils::values::rotate_inplace(angle, x.at(l), y.at(l));
 	utils::values::translate_inplace(delta, x.at(l), y.at(l));
       }
+
+    // affine maps transform Bézier control points exactly, so the segment
+    // track follows the same point-wise mapping as the polyline
+    for(size_t l=0; l<seg_x.size(); l++)
+      {
+	utils::values::rotate_inplace(angle, seg_x.at(l), seg_y.at(l));
+	utils::values::translate_inplace(delta, seg_x.at(l), seg_y.at(l));
+      }
   }
   
   void page_item<PAGE_SHAPE>::append(double x_, double y_)
@@ -214,6 +241,37 @@ namespace pdflib
     y.push_back(y_);
 
     i.back() += 1;
+  }
+
+  void page_item<PAGE_SHAPE>::append_line_segment(double x_, double y_)
+  {
+    // the first point of a subpath is the move-to, not a segment
+    if(not x.empty())
+      {
+        seg_ops.push_back(SEGMENT_LINE_TO);
+        seg_x.push_back(x_);
+        seg_y.push_back(y_);
+      }
+
+    this->append(x_, y_);
+  }
+
+  void page_item<PAGE_SHAPE>::append_cubic_segment(double x1_, double y1_,
+                                                   double x2_, double y2_,
+                                                   double x3_, double y3_)
+  {
+    // records only the exact curve; the caller appends the flattened
+    // samples through `append` (interpolate) to keep the polyline intact
+    seg_ops.push_back(SEGMENT_CUBIC_TO);
+
+    seg_x.push_back(x1_);
+    seg_y.push_back(y1_);
+
+    seg_x.push_back(x2_);
+    seg_y.push_back(y2_);
+
+    seg_x.push_back(x3_);
+    seg_y.push_back(y3_);
   }
 
   size_t page_item<PAGE_SHAPE>::size()
@@ -279,22 +337,37 @@ namespace pdflib
         // p 120
         for(int j=0; j<3; j++)
           {
-            //LOG_S(WARNING) << trafo_matrix[0*3+j] << "\t" << trafo_matrix[1*3+j] << "\t" << trafo_matrix[2*3+j];
-
             for(int i=0; i<3; i++)
               {
                 d[j] += u[i]*trafo_matrix[i*3+j];
               }
-
-            //LOG_S(WARNING) << x[0] << "\t" << y[0] << "\t -> \t" << d[0] << "\t" << d[1];
           }
 
         x_.push_back(d[0]);
         y_.push_back(d[1]);
       }
-    
+
     x = x_;
     y = y_;
+
+    // affine maps transform Bézier control points exactly, so the segment
+    // track follows the same point-wise mapping as the polyline
+    for(size_t l=0; l<seg_x.size(); l++)
+      {
+        std::array<double, 3> u = {seg_x[l], seg_y[l], 1.0};
+        std::array<double, 3> d = {0.0, 0.0, 0.0};
+
+        for(int j=0; j<3; j++)
+          {
+            for(int i=0; i<3; i++)
+              {
+                d[j] += u[i]*trafo_matrix[i*3+j];
+              }
+          }
+
+        seg_x[l] = d[0];
+        seg_y[l] = d[1];
+      }
   }
   
 }

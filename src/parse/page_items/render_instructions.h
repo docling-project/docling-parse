@@ -424,46 +424,149 @@ namespace pdflib
     const clip_state_instruction clip_state;
   };
 
+  // One subpath of a painted path: an implicit move-to (x0, y0) followed by
+  // a run of segment ops. SEGMENT_LINE_TO consumes one coordinate pair from
+  // px/py, SEGMENT_CUBIC_TO consumes three (ctrl1, ctrl2, end) — mirroring
+  // BLPath's command/vertex-array model, so the renderer can rebuild true
+  // curves instead of flattened polylines.
+  class shape_subpath
+  {
+  public:
+    shape_subpath();
+    shape_subpath(double x0, double y0,
+                  std::vector<shape_segment_op> ops,
+                  std::vector<double> px,
+                  std::vector<double> py,
+                  page_shape_closing_type closing_type,
+                  page_shape_type shape_type);
+
+    double get_x0() const { return x0; }
+    double get_y0() const { return y0; }
+
+    const std::vector<shape_segment_op>& get_ops() const { return ops; }
+    const std::vector<double>& get_px() const { return px; }
+    const std::vector<double>& get_py() const { return py; }
+
+    page_shape_closing_type get_closing_type() const { return closing_type; }
+    page_shape_type         get_shape_type()   const { return shape_type; }
+
+    bool empty() const { return ops.empty(); }
+
+  private:
+
+    double x0; // subpath start (move-to)
+    double y0;
+
+    std::vector<shape_segment_op> ops;
+    std::vector<double> px; // op-consumed points,
+    std::vector<double> py; // in op order
+
+    page_shape_closing_type closing_type;
+    page_shape_type         shape_type;
+  };
+
+  inline shape_subpath::shape_subpath():
+    x0(0.0),
+    y0(0.0),
+    ops(),
+    px(),
+    py(),
+    closing_type(CLOSING_UNDEFINED),
+    shape_type(SHAPE_UNDEFINED)
+  {}
+
+  inline shape_subpath::shape_subpath(double x0_, double y0_,
+                                      std::vector<shape_segment_op> ops_,
+                                      std::vector<double> px_,
+                                      std::vector<double> py_,
+                                      page_shape_closing_type closing_type_,
+                                      page_shape_type shape_type_):
+    x0(x0_),
+    y0(y0_),
+    ops(std::move(ops_)),
+    px(std::move(px_)),
+    py(std::move(py_)),
+    closing_type(closing_type_),
+    shape_type(shape_type_)
+  {}
+
+  // One path-painting operator (S, s, f, F, f*, B, B*, b, b*): all subpaths
+  // of the painted path plus the graphics-state parameters needed to color
+  // it. Fill rules operate on the whole path, so the subpaths must stay in
+  // one instruction (a rectangle-with-hole is two subpaths of one fill).
   class shape_instruction
   {
   public:
     const static RENDER_INSTRUCTION_NAME instr = SHAPE_RENDER_INSTRUCTION;
 
-    shape_instruction(std::vector<double> x,
-                      std::vector<double> y,
-                      page_shape_closing_type closing_type,
-                      page_shape_type         shape_type,
+    shape_instruction(std::vector<shape_subpath> subpaths,
+                      shape_paint_mode        paint_mode,
+                      shape_fill_rule         fill_rule,
                       double                  line_width,
+                      int                     line_cap,
+                      int                     line_join,
+                      double                  miter_limit,
+                      std::vector<double>     dash_array,
+                      double                  dash_phase,
                       std::array<int, 3>      rgb_stroking,
-                      std::array<int, 3>      rgb_filling):
-      x(std::move(x)),
-      y(std::move(y)),
-      closing_type(closing_type),
-      shape_type(shape_type),
+                      std::array<int, 3>      rgb_filling,
+                      clip_state_instruction  clip_state = clip_state_instruction()):
+      subpaths(std::move(subpaths)),
+      paint_mode(paint_mode),
+      fill_rule(fill_rule),
       line_width(line_width),
+      line_cap(line_cap),
+      line_join(line_join),
+      miter_limit(miter_limit),
+      dash_array(std::move(dash_array)),
+      dash_phase(dash_phase),
       rgb_stroking(rgb_stroking),
-      rgb_filling(rgb_filling) {}
+      rgb_filling(rgb_filling),
+      clip_state(std::move(clip_state)) {}
 
-    const std::vector<double>& get_x() const { return x; }
-    const std::vector<double>& get_y() const { return y; }
-    size_t size() const { return x.size(); }
+    const std::vector<shape_subpath>& get_subpaths() const { return subpaths; }
 
-    page_shape_closing_type     get_closing_type()  const { return closing_type; }
-    page_shape_type             get_shape_type()    const { return shape_type; }
+    // total number of points (subpath starts + op-consumed points)
+    size_t size() const
+    {
+      size_t n = 0;
+      for(const auto& sp : subpaths)
+        {
+          n += 1 + sp.get_px().size();
+        }
+      return n;
+    }
+
+    shape_paint_mode            get_paint_mode()    const { return paint_mode; }
+    shape_fill_rule             get_fill_rule()     const { return fill_rule; }
     double                      get_line_width()    const { return line_width; }
+    int                         get_line_cap()      const { return line_cap; }
+    int                         get_line_join()     const { return line_join; }
+    double                      get_miter_limit()   const { return miter_limit; }
+    const std::vector<double>&  get_dash_array()    const { return dash_array; }
+    double                      get_dash_phase()    const { return dash_phase; }
     const std::array<int, 3>&   get_rgb_stroking()  const { return rgb_stroking; }
     const std::array<int, 3>&   get_rgb_filling()   const { return rgb_filling; }
 
+    const clip_state_instruction& get_clip_state() const { return clip_state; }
+    bool has_clip_state() const { return clip_state.has_clip(); }
+
   private:
 
-    const std::vector<double> x;
-    const std::vector<double> y;
+    const std::vector<shape_subpath> subpaths;
 
-    const page_shape_closing_type closing_type;
-    const page_shape_type         shape_type;
+    const shape_paint_mode        paint_mode;
+    const shape_fill_rule         fill_rule;
     const double                  line_width;
+    const int                     line_cap;
+    const int                     line_join;
+    const double                  miter_limit;
+    const std::vector<double>     dash_array;
+    const double                  dash_phase;
     const std::array<int, 3>      rgb_stroking;
     const std::array<int, 3>      rgb_filling;
+
+    const clip_state_instruction  clip_state;
   };
 
   class pdf_render_instructions
