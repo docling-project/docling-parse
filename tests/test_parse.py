@@ -29,8 +29,6 @@ from docling_parse.pdf_parser import (
     PdfDocument,
 )
 
-GENERATE = False
-
 
 def write_textline_delta(lines: List[str], filename: str, separator: str) -> None:
     with open(filename, "w", encoding="utf-8") as fw:
@@ -439,7 +437,7 @@ def verify_SegmentedPdfPage(
     verify_hyperlinks(true_page.hyperlinks, pred_page.hyperlinks, eps=eps)
 
 
-def test_reference_documents_from_filenames():
+def test_reference_documents_from_filenames(update_groundtruth: bool):
 
     parser = DoclingPdfParser(loglevel="fatal")
     # parser = DoclingPdfParser(loglevel="info")
@@ -501,7 +499,7 @@ def test_reference_documents_from_filenames():
             page_failed = False
 
             try:
-                if GENERATE or (not os.path.exists(fname)):
+                if update_groundtruth or (not os.path.exists(fname)):
                     save_as_json_rounded(pred_page, fname)
 
                     for unit in [
@@ -592,7 +590,7 @@ def test_reference_documents_from_filenames():
             # print(f"unloading page: {page_no}")
             pdf_doc.unload_pages(page_range=(page_no, page_no + 1))
 
-        _toc: PdfTableOfContents = pdf_doc.get_table_of_contents()
+        _toc: PdfTableOfContents | None = pdf_doc.get_table_of_contents()
         """
         if toc is not None:
             data = toc.export_to_dict()

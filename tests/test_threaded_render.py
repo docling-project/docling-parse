@@ -5,6 +5,7 @@ import glob
 import os
 from io import BytesIO
 from pathlib import Path
+from types import TracebackType
 
 import pytest
 from docling_core.types.doc.base import BoundingBox, CoordOrigin
@@ -17,6 +18,13 @@ from docling_parse.pdf_parser import (
     RenderConfig,
     ThreadedPdfParserConfig,
 )
+from tests.rendering_regression import (
+    ImageTolerance,
+    compare_bitmap_artifacts,
+    compare_images,
+    compare_render_instructions,
+    write_renderer_groundtruth,
+)
 from tests.test_parse import (
     GROUNDTRUTH_FOLDER,
     REGRESSION_FOLDER,
@@ -25,6 +33,43 @@ from tests.test_parse import (
 
 SAMPLE_PDF = "docs/dln-v1.pdf"
 LARGE_SAMPLE_PDF = "docs/PDF32000_2008.pdf"
+
+RENDERER_REGRESSION_PAGES = {
+    "annots_02.pdf": [1],
+    "bitmap_decoding_01.pdf": [1],
+    "ccitt_complex_image_scan.pdf": [1],
+    "ccitt_with_invisiable_text.pdf": [1],
+    "complex_invisible_fonts_02.pdf": [1],
+    "deep-mediabox-inheritance.pdf": [2],
+    "device_gray_01.pdf": [1],
+    "duplicate_bold_text_01.pdf": [1],
+    "font_01.pdf": [1],
+    "font_02.pdf": [1],
+    "font_04.pdf": [1],
+    "font_05.pdf": [1],
+    "font_06.pdf": [1],
+    "font_07.pdf": [1],
+    "font_08.pdf": [1],
+    "font_09.pdf": [1],
+    "form_fields.pdf": [1, 2, 4, 5],
+    "jpeg_2000_01.pdf": [1],
+    "ligatures_01.pdf": [2, 3, 4],
+    "macroman_encoding_bug_demo.pdf": [1],
+    "ocr_test_rotated_000.pdf": [1],
+    "ocr_test_rotated_090.pdf": [1],
+    "ocr_test_rotated_180.pdf": [1],
+    "ocr_test_rotated_270.pdf": [1],
+    "rotated_page_01.pdf": [1],
+    "table_of_contents_01.pdf": [3, 4],
+    "test-parent-mediabox.pdf": [1],
+    "type3_fonts.pdf": [1],
+}
+
+RENDERER_IMAGE_TOLERANCE = ImageTolerance(
+    pixel_threshold=12,
+    mean_abs_error=2.0,
+    changed_pixels_ratio=0.03,
+)
 
 
 def _make_decode_config() -> DecodeConfig:
@@ -37,6 +82,15 @@ def _make_decode_config() -> DecodeConfig:
 
 def _make_render_config() -> RenderConfig:
     return RenderConfig()
+
+
+def _make_groundtruth_render_config() -> RenderConfig:
+    render_config = RenderConfig()
+    # Existing renderer baselines were generated before embedded-font rendering
+    # became the default comparison target.
+    render_config.resolve_fonts = False
+    render_config.use_embedded_fonts = False
+    return render_config
 
 
 def _make_parser(
@@ -411,7 +465,7 @@ def test_render_reference_documents_from_filenames():
     }
 
     test_results: list[tuple[str, str, str, bool, str]] = []
-    first_failure: tuple[BaseException, object] | None = None
+    first_failure: tuple[BaseException, TracebackType | None] | None = None
     doc_keys: dict[str, str] = {}
     key_to_path: dict[str, str] = {}
 
@@ -501,3 +555,70 @@ def test_render_reference_documents_from_filenames():
     assert not failed, f"{len(failed)} page(s) failed: " + ", ".join(
         f"{doc}@{page}[{mode}]" for doc, page, mode, _ in failed
     )
+
+
+@pytest.mark.groundtruth
+def test_rendered_pages_match_groundtruth(update_groundtruth: bool):
+    """Compare Blend2D threaded-render output with renderer groundtruth artifacts."""
+    pdf_docs = sorted(glob.glob(REGRESSION_FOLDER))
+    assert len(pdf_docs) > 0, "len(pdf_docs)==0 -> nothing to test"
+
+    selected_docs = [
+        path for path in pdf_docs if os.path.basename(path) in RENDERER_REGRESSION_PAGES
+    ]
+    assert selected_docs, "no renderer regression PDFs selected"
+
+    parser = _make_parser(
+        threads=4,
+        max_concurrent=32,
+        render_config=_make_groundtruth_render_config(),
+    )
+
+    key_to_path: dict[str, str] = {}
+    for pdf_doc_path in selected_docs:
+        rname = os.path.basename(pdf_doc_path)
+        key = parser.load(pdf_doc_path, page_numbers=RENDERER_REGRESSION_PAGES[rname])
+        key_to_path[key] = pdf_doc_path
+
+    checked_pages = 0
+    first_failure: tuple[BaseException, TracebackType | None] | None = None
+    failures: list[str] = []
+
+    for result in parser.iterate_results():
+        pdf_doc_path = key_to_path[result.doc_key]
+        rname = os.path.basename(pdf_doc_path)
+
+        if not result.success:
+            err = AssertionError(result.error_message)
+            if first_failure is None:
+                first_failure = (err, err.__traceback__)
+            failures.append(f"{rname}@{result.page_number}[render]")
+            continue
+
+        try:
+            if update_groundtruth:
+                write_renderer_groundtruth(rname, result.page_number, result)
+            else:
+                compare_render_instructions(rname, result.page_number, result)
+                compare_bitmap_artifacts(rname, result.page_number, result)
+                compare_images(
+                    rname,
+                    result.page_number,
+                    result.get_image(),
+                    tolerance=RENDERER_IMAGE_TOLERANCE,
+                )
+        except Exception as exc:
+            if first_failure is None:
+                first_failure = (exc, exc.__traceback__)
+            failures.append(f"{rname}@{result.page_number}[groundtruth]")
+        else:
+            checked_pages += 1
+
+    parser.unload_all()
+
+    if first_failure is not None:
+        failure, tb = first_failure
+        raise failure.with_traceback(tb)
+
+    assert not failures, f"{len(failures)} rendered page(s) failed: {failures}"
+    assert checked_pages > 0
