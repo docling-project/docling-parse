@@ -82,9 +82,11 @@ namespace pdflib
     // axis-aligned fast path or a full affine transform for rotated/skewed quads.
     void render_bitmap(bitmap_instruction& instr);
 
-    // Strokes a parsed vector shape/polyline in canvas coordinates using the
-    // instruction's stroking color. Filled paths and close-path semantics are
-    // not currently implemented here.
+    // Paints one parsed vector path (all subpaths of one PDF painting
+    // operator) in canvas coordinates: fills with the instruction's fill
+    // color and fill rule, strokes with its stroking color, width, cap and
+    // join parameters, honoring the paint mode (stroke / fill / both) and
+    // axis-aligned rectangular clips. Curve segments render as true cubics.
     void render_shape(shape_instruction& instr);
 
     // Returns the rendered canvas as RGBA bytes, row-major top-to-bottom.
@@ -415,11 +417,11 @@ namespace pdflib
              b.y < a.y + a.h;
     }
 
-    enum bitmap_clip_result
+    enum clip_apply_result
     {
-      BITMAP_CLIP_NONE,
-      BITMAP_CLIP_APPLIED,
-      BITMAP_CLIP_EMPTY,
+      CLIP_NONE,
+      CLIP_APPLIED,
+      CLIP_EMPTY,
     };
 
     // Converts a parsed rectangular clip path into a canvas-space BLRect when
@@ -478,18 +480,19 @@ namespace pdflib
       return true;
     }
 
-    // Applies the bitmap instruction's clip paths to the Blend2D context. Only
-    // axis-aligned rectangular clips are supported. The return value tells the
-    // caller whether no clip was present, a clip was applied, or the destination
-    // is fully outside the clip and bitmap rendering can be skipped.
-    bitmap_clip_result apply_bitmap_clip_state(
+    // Applies an instruction's clip paths (bitmap or shape) to the Blend2D
+    // context. Only axis-aligned rectangular clips are supported. The return
+    // value tells the caller whether no clip was present, a clip was applied,
+    // or the destination is fully outside the clip and rendering can be
+    // skipped.
+    clip_apply_result apply_clip_state(
       BLContext& ctx,
       const clip_state_instruction& clip_state,
       const BLRect& dst_rect) const
     {
       if(not clip_state.has_clip())
         {
-          return BITMAP_CLIP_NONE;
+          return CLIP_NONE;
         }
 
       bool applied_clip = false;
@@ -500,12 +503,12 @@ namespace pdflib
             {
               if(not rects_intersect(clip_rect, dst_rect))
                 {
-                  LOG_S(INFO) << "render_bitmap: empty image clip"
+                  LOG_S(INFO) << "apply_clip_state: destination fully clipped"
                               << " clip=(" << clip_rect.x << ", " << clip_rect.y
                               << ", " << clip_rect.w << ", " << clip_rect.h << ")"
                               << " dst=(" << dst_rect.x << ", " << dst_rect.y
                               << ", " << dst_rect.w << ", " << dst_rect.h << ")";
-                  return BITMAP_CLIP_EMPTY;
+                  return CLIP_EMPTY;
                 }
 
               ctx.clip_to_rect(clip_rect);
@@ -513,12 +516,53 @@ namespace pdflib
             }
           else
             {
-              LOG_S(WARNING) << "render_bitmap: skipping unsupported non-rectangular clip path";
+              LOG_S(WARNING) << "apply_clip_state: skipping unsupported non-rectangular clip path";
             }
         }
 
-      return applied_clip ? BITMAP_CLIP_APPLIED : BITMAP_CLIP_NONE;
+      return applied_clip ? CLIP_APPLIED : CLIP_NONE;
     }
+
+    // Converts a parsed 0-255 RGB triple into an opaque Blend2D color.
+    static BLRgba32 make_rgba32(const std::array<int, 3>& rgb)
+    {
+      return BLRgba32((0xFFu                          << 24) |
+                      (static_cast<uint32_t>(rgb[0])  << 16) |
+                      (static_cast<uint32_t>(rgb[1])  <<  8) |
+                       static_cast<uint32_t>(rgb[2]));
+    }
+
+    // Maps the PDF line cap value (0 butt, 1 round, 2 projecting square) to
+    // Blend2D. The numeric values differ (Blend2D: square=1, round=2).
+    static BLStrokeCap to_stroke_cap(int line_cap)
+    {
+      switch(line_cap)
+        {
+        case 1:  return BL_STROKE_CAP_ROUND;
+        case 2:  return BL_STROKE_CAP_SQUARE;
+        default: return BL_STROKE_CAP_BUTT;
+        }
+    }
+
+    // Maps the PDF line join value (0 miter, 1 round, 2 bevel) to Blend2D.
+    // PDF miter joins fall back to bevel when the miter limit is exceeded,
+    // which is exactly BL_STROKE_JOIN_MITER_BEVEL.
+    static BLStrokeJoin to_stroke_join(int line_join)
+    {
+      switch(line_join)
+        {
+        case 1:  return BL_STROKE_JOIN_ROUND;
+        case 2:  return BL_STROKE_JOIN_BEVEL;
+        default: return BL_STROKE_JOIN_MITER_BEVEL;
+        }
+    }
+
+    // Builds the Blend2D path for a shape instruction in canvas coordinates,
+    // walking the exact segment ops (true cubics for curves), and returns
+    // the canvas-space bounding rectangle of all touched points. Control
+    // points give a conservative bbox (a Bézier never leaves its control
+    // polygon's hull), which is what the clip skip-test needs.
+    BLPath make_shape_path(const shape_instruction& instr, BLRect& bbox) const;
 
     // Draws a semi-transparent yellow placeholder over the bitmap destination
     // quad. This makes missing or invalid image data visible in debug renders.
@@ -1525,17 +1569,17 @@ namespace pdflib
                     << instr.get_clip_state().get_paths().size()
                     << " clip path(s)";
         ctx.save();
-        const bitmap_clip_result clip_result =
-          apply_bitmap_clip_state(ctx,
-                                  instr.get_clip_state(),
-                                  axis_aligned_rect(q));
-        if(clip_result == BITMAP_CLIP_EMPTY)
+        const clip_apply_result clip_result =
+          apply_clip_state(ctx,
+                           instr.get_clip_state(),
+                           axis_aligned_rect(q));
+        if(clip_result == CLIP_EMPTY)
           {
             ctx.restore();
             return;
           }
 
-        clip_active = clip_result == BITMAP_CLIP_APPLIED;
+        clip_active = clip_result == CLIP_APPLIED;
         if(not clip_active)
           {
             ctx.restore();
@@ -1590,44 +1634,174 @@ namespace pdflib
   }
 
   // ---------------------------------------------------------------------------
+  // make_shape_path
+  // ---------------------------------------------------------------------------
+
+  inline BLPath renderer<BLEND2D>::make_shape_path(const shape_instruction& instr,
+                                                   BLRect& bbox) const
+  {
+    BLPath path;
+
+    double x_min = std::numeric_limits<double>::infinity();
+    double y_min = std::numeric_limits<double>::infinity();
+    double x_max = -std::numeric_limits<double>::infinity();
+    double y_max = -std::numeric_limits<double>::infinity();
+
+    auto accumulate = [&](double cx, double cy)
+    {
+      x_min = std::min(x_min, cx);
+      y_min = std::min(y_min, cy);
+      x_max = std::max(x_max, cx);
+      y_max = std::max(y_max, cy);
+    };
+
+    for (const auto& sp : instr.get_subpaths())
+      {
+        if (sp.empty()) { continue; } // move-to alone draws nothing
+
+        const double sx = canvas_x(sp.get_x0());
+        const double sy = canvas_y(sp.get_y0());
+        path.move_to(sx, sy);
+        accumulate(sx, sy);
+
+        const auto& ops = sp.get_ops();
+        const auto& px  = sp.get_px();
+        const auto& py  = sp.get_py();
+
+        size_t k = 0;
+        for (const auto op : ops)
+          {
+            const size_t needed = (op == SEGMENT_CUBIC_TO) ? 3 : 1;
+            if (k + needed > px.size() or k + needed > py.size())
+              {
+                LOG_S(ERROR) << "render_shape: segment ops and points are"
+                             << " inconsistent, truncating subpath";
+                break;
+              }
+
+            if (op == SEGMENT_LINE_TO)
+              {
+                const double x = canvas_x(px[k]);
+                const double y = canvas_y(py[k]);
+                k += 1;
+
+                path.line_to(x, y);
+                accumulate(x, y);
+              }
+            else // SEGMENT_CUBIC_TO
+              {
+                const double x1 = canvas_x(px[k]);
+                const double y1 = canvas_y(py[k]);
+                const double x2 = canvas_x(px[k + 1]);
+                const double y2 = canvas_y(py[k + 1]);
+                const double x3 = canvas_x(px[k + 2]);
+                const double y3 = canvas_y(py[k + 2]);
+                k += 3;
+
+                path.cubic_to(x1, y1, x2, y2, x3, y3);
+                accumulate(x1, y1);
+                accumulate(x2, y2);
+                accumulate(x3, y3);
+              }
+          }
+
+        if (sp.get_closing_type() == CLOSED)
+          {
+            path.close();
+          }
+      }
+
+    if (x_min <= x_max and y_min <= y_max)
+      {
+        bbox = BLRect(x_min, y_min, x_max - x_min, y_max - y_min);
+      }
+    else
+      {
+        bbox = BLRect(0.0, 0.0, 0.0, 0.0);
+      }
+
+    return path;
+  }
+
+  // ---------------------------------------------------------------------------
   // render_shape
+  //
+  // Fill first, stroke on top (the PDF paint order for B/b operators), with
+  // the fill rule, colors, stroke width and cap/join parameters delivered by
+  // the parse layer. Only axis-aligned rectangular clips are applied; dashed
+  // strokes render solid because the vendored Blend2D stroker does not
+  // implement dashing.
   // ---------------------------------------------------------------------------
 
   inline void renderer<BLEND2D>::render_shape(shape_instruction& instr)
   {
-    // LOG_S(INFO) << __FUNCTION__;
-
     if (shape_[0] == 0 or shape_[1] == 0) { return; }
-    if (instr.size() < 2) { return; }
+    if (not config_.render_shapes) { return; }
 
-    const auto& xs = instr.get_x();
-    const auto& ys = instr.get_y();
-
-    BLPath path;
-    path.move_to(canvas_x(xs[0]), canvas_y(ys[0]));
-    for (size_t i = 1; i < instr.size(); ++i)
-      {
-        path.line_to(canvas_x(xs[i]), canvas_y(ys[i]));
-      }
-
-    /*
-    if (instr.get_closing_type() == CLOSED)
-      {
-        path.close();
-      }
-    */
-
-    const auto& rgb = instr.get_rgb_stroking();
-    const uint32_t stroke_color =
-      (0xFFu                          << 24) |
-      (static_cast<uint32_t>(rgb[0])  << 16) |
-      (static_cast<uint32_t>(rgb[1])  <<  8) |
-       static_cast<uint32_t>(rgb[2]);
+    BLRect bbox;
+    const BLPath path = make_shape_path(instr, bbox);
+    if (path.is_empty()) { return; }
 
     BLContext& ctx = page_context();
-    ctx.set_stroke_style(BLRgba32(stroke_color));
-    ctx.set_stroke_width(1);
-    ctx.stroke_path(path);
+
+    bool clip_active = false;
+    if (instr.has_clip_state())
+      {
+        ctx.save();
+        const clip_apply_result clip_result =
+          apply_clip_state(ctx, instr.get_clip_state(), bbox);
+        if (clip_result == CLIP_EMPTY)
+          {
+            ctx.restore();
+            return;
+          }
+
+        clip_active = clip_result == CLIP_APPLIED;
+        if (not clip_active)
+          {
+            ctx.restore();
+          }
+      }
+
+    const shape_paint_mode mode = instr.get_paint_mode();
+
+    if (mode == SHAPE_PAINT_FILL or mode == SHAPE_PAINT_FILL_STROKE)
+      {
+        ctx.set_fill_rule(instr.get_fill_rule() == SHAPE_FILL_EVEN_ODD
+                            ? BL_FILL_RULE_EVEN_ODD
+                            : BL_FILL_RULE_NON_ZERO);
+        ctx.set_fill_style(make_rgba32(instr.get_rgb_filling()));
+        ctx.fill_path(path);
+      }
+
+    if (mode == SHAPE_PAINT_STROKE or mode == SHAPE_PAINT_FILL_STROKE)
+      {
+        ctx.set_stroke_style(make_rgba32(instr.get_rgb_stroking()));
+
+        // the line width arrives in page space; scale to canvas and keep
+        // sub-pixel strokes visible (PDF `0 w` means hairline)
+        static constexpr double min_visible_width = 0.75;
+        const double width =
+          instr.get_line_width() * 0.5 * (scale_x_ + scale_y_);
+        ctx.set_stroke_width(std::max(width, min_visible_width));
+
+        ctx.set_stroke_caps(to_stroke_cap(instr.get_line_cap()));
+        ctx.set_stroke_join(to_stroke_join(instr.get_line_join()));
+        ctx.set_stroke_miter_limit(instr.get_miter_limit());
+
+        if (not instr.get_dash_array().empty())
+          {
+            LOG_S(INFO) << "render_shape: dash pattern ignored"
+                        << " (not implemented by the Blend2D stroker)";
+          }
+
+        ctx.stroke_path(path);
+      }
+
+    if (clip_active)
+      {
+        ctx.restore();
+      }
   }
 
   // ---------------------------------------------------------------------------

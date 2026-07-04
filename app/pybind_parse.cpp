@@ -153,11 +153,37 @@ namespace
     {
       pybind11::dict row;
       row["type"] = instruction_name(pdflib::SHAPE_RENDER_INSTRUCTION);
-      row["x"] = instr.get_x();
-      row["y"] = instr.get_y();
-      row["closing_type"] = static_cast<int>(instr.get_closing_type());
-      row["shape_type"] = static_cast<int>(instr.get_shape_type());
+
+      pybind11::list subpaths;
+      for(const auto& sp : instr.get_subpaths())
+        {
+          pybind11::dict sub;
+          sub["x0"] = sp.get_x0();
+          sub["y0"] = sp.get_y0();
+
+          pybind11::list ops;
+          for(const auto op : sp.get_ops())
+            {
+              ops.append(static_cast<int>(op));
+            }
+          sub["ops"] = ops;
+          sub["px"] = sp.get_px();
+          sub["py"] = sp.get_py();
+
+          sub["closing_type"] = static_cast<int>(sp.get_closing_type());
+          sub["shape_type"] = static_cast<int>(sp.get_shape_type());
+          subpaths.append(sub);
+        }
+      row["subpaths"] = subpaths;
+
+      row["paint_mode"] = static_cast<int>(instr.get_paint_mode());
+      row["fill_rule"] = static_cast<int>(instr.get_fill_rule());
       row["line_width"] = instr.get_line_width();
+      row["line_cap"] = instr.get_line_cap();
+      row["line_join"] = instr.get_line_join();
+      row["miter_limit"] = instr.get_miter_limit();
+      row["dash_array"] = instr.get_dash_array();
+      row["dash_phase"] = instr.get_dash_phase();
       row["rgb_stroking"] = instr.get_rgb_stroking();
       row["rgb_filling"] = instr.get_rgb_filling();
       instructions.append(row);
