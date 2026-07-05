@@ -52,6 +52,17 @@ namespace pdflib
     bool empty() const { return x.empty() or y.empty(); }
     size_t size() const { return std::min(x.size(), y.size()); }
 
+    // Copy shifted by (dx, dy); used to lift widget appearance-stream
+    // geometry from AP-local into page coordinates.
+    clip_path_instruction translated(double dx, double dy) const
+    {
+      std::vector<double> x_(x), y_(y);
+      for(auto& v : x_) { v += dx; }
+      for(auto& v : y_) { v += dy; }
+      return clip_path_instruction(std::move(x_), std::move(y_),
+                                   closing_type, shape_type);
+    }
+
   private:
     std::vector<double> x;
     std::vector<double> y;
@@ -89,6 +100,17 @@ namespace pdflib
     bool has_clip() const
     {
       return rule != CLIP_RULE_NONE and not paths.empty();
+    }
+
+    clip_state_instruction translated(double dx, double dy) const
+    {
+      std::vector<clip_path_instruction> paths_;
+      paths_.reserve(paths.size());
+      for(const auto& path : paths)
+        {
+          paths_.push_back(path.translated(dx, dy));
+        }
+      return clip_state_instruction(rule, std::move(paths_));
     }
 
   private:
@@ -452,6 +474,16 @@ namespace pdflib
 
     bool empty() const { return ops.empty(); }
 
+    shape_subpath translated(double dx, double dy) const
+    {
+      std::vector<double> px_(px), py_(py);
+      for(auto& v : px_) { v += dx; }
+      for(auto& v : py_) { v += dy; }
+      return shape_subpath(x0 + dx, y0 + dy, ops,
+                           std::move(px_), std::move(py_),
+                           closing_type, shape_type);
+    }
+
   private:
 
     double x0; // subpath start (move-to)
@@ -559,6 +591,22 @@ namespace pdflib
     const clip_state_instruction& get_clip_state() const { return clip_state; }
     bool has_clip_state() const { return clip_state.has_clip(); }
 
+    shape_instruction translated(double dx, double dy) const
+    {
+      std::vector<shape_subpath> subpaths_;
+      subpaths_.reserve(subpaths.size());
+      for(const auto& subpath : subpaths)
+        {
+          subpaths_.push_back(subpath.translated(dx, dy));
+        }
+      return shape_instruction(std::move(subpaths_), paint_mode, fill_rule,
+                               line_width, line_cap, line_join, miter_limit,
+                               dash_array, dash_phase,
+                               rgb_stroking, rgb_filling,
+                               stroke_alpha, fill_alpha,
+                               clip_state.translated(dx, dy));
+    }
+
   private:
 
     const std::vector<shape_subpath> subpaths;
@@ -601,6 +649,13 @@ namespace pdflib
     void add_widget_instruction(text_widget_instruction_type instr);
     void add_bitmap_instruction(bitmap_instruction_type instr);
     void add_shape_instruction(shape_instruction_type instr);
+
+    // Read access for re-emitting instructions of a sub-decode (widget
+    // appearance streams) into the main instruction list.
+    const std::vector<shape_instruction_type>& get_shape_instructions() const
+    {
+      return shape_instructions;
+    }
 
     // render method
     template<typename renderer_type>

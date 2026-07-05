@@ -1237,12 +1237,13 @@ namespace pdflib
           }
       }
 
-    // Temporary containers — only page_cells is of interest.
+    // Temporary containers — the cells and shapes are merged into the page
+    // containers below; the rest is discarded after this call.
     page_item<PAGE_DIMENSION> ap_dimension;
     page_item<PAGE_CELLS>     ap_cells;
     page_item<PAGE_SHAPES>    ap_shapes;
     page_item<PAGE_IMAGES>    ap_images;
-    pdf_render_instructions   ap_instructions; // discarded after this call
+    pdf_render_instructions   ap_instructions;
 
     pdf_decoder<STREAM> stream_decoder(page_config,
                                        ap_dimension,
@@ -1261,10 +1262,28 @@ namespace pdflib
     stream_decoder.interprete(parameters);
 
     // The AP stream uses a local coordinate system whose origin is the
-    // bottom-left corner of the widget /Rect.  Shift every cell by
-    // (bbox[0], bbox[1]) to bring it into page coordinate space.
+    // bottom-left corner of the widget /Rect.  Shift every cell and shape
+    // by (bbox[0], bbox[1]) to bring it into page coordinate space.
     const double ox = bbox[0];
     const double oy = bbox[1];
+
+    // Shapes drawn by the appearance stream (field borders, backgrounds,
+    // check marks drawn as paths, ...): keep them in the parsed output and
+    // re-emit them for the renderer before the text cells, so the field
+    // value stays on top of background fills.
+    const std::array<double, 9> ap_shift = {1.0, 0.0, 0.0,
+                                            0.0, 1.0, 0.0,
+                                            ox,  oy,  1.0};
+    for(auto& shape : ap_shapes)
+      {
+        shape.transform(ap_shift);
+        page_shapes.push_back(shape);
+      }
+
+    for(const auto& shape_instr : ap_instructions.get_shape_instructions())
+      {
+        instructions.add_shape_instruction(shape_instr.translated(ox, oy));
+      }
 
     for(auto& cell : ap_cells)
       {
@@ -1295,7 +1314,8 @@ namespace pdflib
         instructions.add_text_instruction(std::move(tinstr));
       }
 
-    LOG_S(INFO) << "AP stream yielded " << ap_cells.size() << " cell(s) for widget";
+    LOG_S(INFO) << "AP stream yielded " << ap_cells.size() << " cell(s) and "
+                << ap_shapes.size() << " shape(s) for widget";
   }
 
   void pdf_decoder<PAGE>::rotate_contents()
