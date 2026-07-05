@@ -6,9 +6,13 @@ from typing import Any, cast
 
 from PIL import Image, ImageChops, ImageEnhance, ImageStat
 
+from tests.data_utils import (
+    RENDER_GROUNDTRUTH_BITMAPS_DIR,
+    RENDER_GROUNDTRUTH_INSTRUCTIONS_DIR,
+    RENDER_GROUNDTRUTH_PAGES_DIR,
+)
 from tests.test_parse import _round_floats
 
-GROUNDTRUTH_RENDERER_FOLDER = Path("tests/data/groundtruth_renderer")
 RENDER_DELTA_FOLDER = Path("tests/data/render_deltas")
 
 
@@ -31,15 +35,19 @@ def renderer_artifact_prefix(doc_name: str, page_no: int) -> str:
 
 
 def renderer_image_path(doc_name: str, page_no: int) -> Path:
-    return GROUNDTRUTH_RENDERER_FOLDER / (
+    return RENDER_GROUNDTRUTH_PAGES_DIR / (
         renderer_artifact_prefix(doc_name, page_no) + ".full_page.png"
     )
 
 
 def renderer_instructions_path(doc_name: str, page_no: int) -> Path:
-    return GROUNDTRUTH_RENDERER_FOLDER / (
+    return RENDER_GROUNDTRUTH_INSTRUCTIONS_DIR / (
         renderer_artifact_prefix(doc_name, page_no) + ".instructions.json"
     )
+
+
+def renderer_bitmap_path(filename: str) -> Path:
+    return RENDER_GROUNDTRUTH_BITMAPS_DIR / filename
 
 
 def _write_json(path: Path, data: Any) -> None:
@@ -73,7 +81,9 @@ def _bitmap_metadata(
 
 
 def write_renderer_groundtruth(doc_name: str, page_no: int, result) -> None:
-    GROUNDTRUTH_RENDERER_FOLDER.mkdir(parents=True, exist_ok=True)
+    RENDER_GROUNDTRUTH_PAGES_DIR.mkdir(parents=True, exist_ok=True)
+    RENDER_GROUNDTRUTH_INSTRUCTIONS_DIR.mkdir(parents=True, exist_ok=True)
+    RENDER_GROUNDTRUTH_BITMAPS_DIR.mkdir(parents=True, exist_ok=True)
 
     prefix = renderer_artifact_prefix(doc_name, page_no)
     result.get_image().save(renderer_image_path(doc_name, page_no))
@@ -86,10 +96,10 @@ def write_renderer_groundtruth(doc_name: str, page_no: int, result) -> None:
         index = artifact["index"]
         extension = artifact["extension"]
         exported_filename = f"{prefix}.bitmap_{index}{extension}"
-        image_path = GROUNDTRUTH_RENDERER_FOLDER / exported_filename
+        image_path = renderer_bitmap_path(exported_filename)
         image_path.write_bytes(bytes(artifact.get("encoded_data", b"")))
         _write_json(
-            GROUNDTRUTH_RENDERER_FOLDER / f"{prefix}.bitmap_{index}.json",
+            renderer_bitmap_path(f"{prefix}.bitmap_{index}.json"),
             _bitmap_metadata(artifact, exported_filename),
         )
 
@@ -204,8 +214,8 @@ def compare_bitmap_artifacts(doc_name: str, page_no: int, result) -> None:
         index = artifact["index"]
         extension = artifact["extension"]
         exported_filename = f"{prefix}.bitmap_{index}{extension}"
-        image_path = GROUNDTRUTH_RENDERER_FOLDER / exported_filename
-        metadata_path = GROUNDTRUTH_RENDERER_FOLDER / f"{prefix}.bitmap_{index}.json"
+        image_path = renderer_bitmap_path(exported_filename)
+        metadata_path = renderer_bitmap_path(f"{prefix}.bitmap_{index}.json")
 
         assert image_path.exists(), f"missing bitmap image groundtruth: {image_path}"
         assert metadata_path.exists(), (

@@ -31,10 +31,8 @@ Normal test runs are read-only. To intentionally refresh parser and renderer
 groundtruth artifacts, pass `--update-groundtruth`:
 
 ```bash
-uv run pytest \
-  tests/test_parse.py::test_reference_documents_from_filenames \
-  tests/test_threaded_render.py::test_rendered_pages_match_groundtruth \
-  --update-groundtruth -q
+uv run pytest tests/test_parse.py::test_reference_documents_from_filenames --update-groundtruth -q
+uv run pytest tests/test_threaded_render.py::test_rendered_pages_match_groundtruth --update-groundtruth -q
 ```
 
 This flag updates checked regression artifacts under `tests/data`, not source

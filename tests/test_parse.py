@@ -28,6 +28,7 @@ from docling_parse.pdf_parser import (
     DoclingPdfParser,
     PdfDocument,
 )
+from tests.data_utils import PARSER_GROUNDTRUTH_DIR
 
 
 def write_textline_delta(lines: List[str], filename: str, separator: str) -> None:
@@ -52,13 +53,23 @@ def save_as_json_rounded(page: SegmentedPdfPage, filename, indent=2, ndigits=3):
 
     if isinstance(filename, str):
         filename = Path(filename)
+    filename.parent.mkdir(parents=True, exist_ok=True)
     out = _round_floats(page.export_to_dict(), ndigits=ndigits)
     with open(filename, "w", encoding="utf-8") as fw:
         json.dump(out, fw, indent=indent)
 
 
-GROUNDTRUTH_FOLDER = "tests/data/groundtruth/"
+GROUNDTRUTH_FOLDER = os.fspath(PARSER_GROUNDTRUTH_DIR)
 REGRESSION_FOLDER = "tests/data/regression/*.pdf"
+PARSER_PAGE_RESTRICTIONS = {
+    "deep-mediabox-inheritance.pdf": [2],
+    "font_06.pdf": [1],
+    "font_07.pdf": [1],
+    "font_08.pdf": [1],
+    "font_09.pdf": [1],
+    "font_10.pdf": [1],
+    "2508.13113v2.pdf": [2, 9, 17],
+}
 
 
 def _truncate_data_uri(uri, max_chars: int = 64):
@@ -446,18 +457,6 @@ def test_reference_documents_from_filenames(update_groundtruth: bool):
 
     assert len(pdf_docs) > 0, "len(pdf_docs)==0 -> nothing to test"
 
-    # this map restricts for pdf's with multiple pages
-    # which pages will be tested
-    page_restrictions = {
-        "deep-mediabox-inheritance.pdf": [2],
-        "font_06.pdf": [1],
-        "font_07.pdf": [1],
-        "font_08.pdf": [1],
-        "font_09.pdf": [1],
-        "font_10.pdf": [1],
-        "2508.13113v2.pdf": [2, 9, 17],
-    }
-
     config = DecodeConfig(
         keep_glyphs=True, keep_qpdf_warnings=False, do_sanitization=True
     )
@@ -491,7 +490,10 @@ def test_reference_documents_from_filenames(update_groundtruth: bool):
             )
 
             # don't do all pages of big pdf's
-            if rname in page_restrictions and page_no not in page_restrictions[rname]:
+            if (
+                rname in PARSER_PAGE_RESTRICTIONS
+                and page_no not in PARSER_PAGE_RESTRICTIONS[rname]
+            ):
                 continue
 
             SPECIAL_SEPERATOR = "\t<|special_separator|>\n"
@@ -1052,7 +1054,7 @@ def test_annotations_match_groundtruth():
 
     for pdf_file in test_files:
         pdf_path = f"tests/data/regression/{pdf_file}"
-        groundtruth_path = f"tests/data/groundtruth/{pdf_file}.json"
+        groundtruth_path = PARSER_GROUNDTRUTH_DIR / f"{pdf_file}.json"
 
         if not os.path.exists(pdf_path) or not os.path.exists(groundtruth_path):
             continue
