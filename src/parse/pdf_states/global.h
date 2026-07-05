@@ -18,6 +18,7 @@ namespace pdflib
 
 	      std::shared_ptr<pdf_resource<PAGE_FONTS>> page_fonts_,
               std::shared_ptr<pdf_resource<PAGE_GRPHS>> page_grphs_,
+              std::shared_ptr<pdf_resource<PAGE_COLORSPACES>> page_colorspaces_,
 
               pdf_render_instructions& instructions_);
 
@@ -45,6 +46,7 @@ namespace pdflib
 
     std::shared_ptr<pdf_resource<PAGE_FONTS>> page_fonts;
     std::shared_ptr<pdf_resource<PAGE_GRPHS>> page_grphs;
+    std::shared_ptr<pdf_resource<PAGE_COLORSPACES>> page_colorspaces;
 
     pdf_render_instructions& instructions;
 
@@ -64,6 +66,7 @@ namespace pdflib
 
 			       std::shared_ptr<pdf_resource<PAGE_FONTS>> page_fonts_,
 			       std::shared_ptr<pdf_resource<PAGE_GRPHS>> page_grphs_,
+			       std::shared_ptr<pdf_resource<PAGE_COLORSPACES>> page_colorspaces_,
 
                                pdf_render_instructions& instructions_):
 
@@ -76,6 +79,7 @@ namespace pdflib
 
     page_fonts(page_fonts_),
     page_grphs(page_grphs_),
+    page_colorspaces(page_colorspaces_),
 
     instructions(instructions_),
 
@@ -83,7 +87,7 @@ namespace pdflib
         0.0, 1.0, 0.0,
         0.0, 0.0, 1.0}),
 
-    grph_state(trafo_matrix, page_grphs),
+    grph_state(trafo_matrix, page_grphs, page_colorspaces),
     text_state(config, grph_state, trafo_matrix, page_cells, page_fonts, instructions),
     shape_state(config, grph_state, trafo_matrix, page_shapes, instructions),
     bitmap_state(config, grph_state, trafo_matrix, page_images, instructions)
@@ -100,12 +104,13 @@ namespace pdflib
 
     page_fonts(other.page_fonts),
     page_grphs(other.page_grphs),
+    page_colorspaces(other.page_colorspaces),
 
     instructions(other.instructions),
 
     trafo_matrix(other.trafo_matrix),
 
-    grph_state(trafo_matrix, page_grphs),
+    grph_state(trafo_matrix, page_grphs, page_colorspaces),
     text_state(config, grph_state, trafo_matrix, page_cells, page_fonts, instructions),
     shape_state(config, grph_state, trafo_matrix, page_shapes, instructions),
     bitmap_state(config, grph_state, trafo_matrix, page_images, instructions)

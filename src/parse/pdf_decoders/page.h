@@ -85,6 +85,8 @@ namespace pdflib
 
     void decode_fonts();
 
+    void decode_colorspaces();
+
     void decode_xobjects();
 
     // Contents
@@ -104,6 +106,11 @@ namespace pdflib
 
     // Load /AcroForm/DR/Font into acroform_fonts (called once before widget processing).
     void load_acroform_dr_fonts();
+
+    // Resolve /AP/N — a single stream, or a dictionary of appearance
+    // states (checkboxes / radio buttons) selected by /AS — and decode
+    // the selected stream.
+    void decode_annot_appearance(QPDFObjectHandle annot, const std::array<double, 4>& bbox);
 
     // Parse the /AP/N appearance stream, extract cells in AP-local coords,
     // shift by bbox origin to page coords, and append to page_cells.
@@ -129,6 +136,7 @@ namespace pdflib
     QPDFObjectHandle qpdf_resources;
     QPDFObjectHandle qpdf_grphs;
     QPDFObjectHandle qpdf_fonts;
+    QPDFObjectHandle qpdf_colorspaces;
     QPDFObjectHandle qpdf_xobjects;
 
     // Debug-only: populated when config.populate_json_objects is true
@@ -157,6 +165,7 @@ namespace pdflib
 
     std::shared_ptr<pdf_resource<PAGE_GRPHS> > page_grphs;
     std::shared_ptr<pdf_resource<PAGE_FONTS> > page_fonts;
+    std::shared_ptr<pdf_resource<PAGE_COLORSPACES> > page_colorspaces;
     std::shared_ptr<pdf_resource<PAGE_XOBJECTS> > page_xobjects;
 
     decode_config page_config;  // saved at the start of decode_page for use in widget handlers
@@ -179,6 +188,7 @@ namespace pdflib
     curr_page_number(page_num),
     page_grphs(std::make_shared<pdf_resource<PAGE_GRPHS>>()),
     page_fonts(std::make_shared<pdf_resource<PAGE_FONTS>>()),
+    page_colorspaces(std::make_shared<pdf_resource<PAGE_COLORSPACES>>()),
     page_xobjects(std::make_shared<pdf_resource<PAGE_XOBJECTS>>())
   {}
 
@@ -195,6 +205,7 @@ namespace pdflib
     curr_page_number(curr_page_num),
     page_grphs(std::make_shared<pdf_resource<PAGE_GRPHS>>()),
     page_fonts(std::make_shared<pdf_resource<PAGE_FONTS>>()),
+    page_colorspaces(std::make_shared<pdf_resource<PAGE_COLORSPACES>>()),
     page_xobjects(std::make_shared<pdf_resource<PAGE_XOBJECTS>>())
   {
     std::string description = "thread-safe page " + std::to_string(orig_page_num);
@@ -550,6 +561,16 @@ namespace pdflib
         LOG_S(WARNING) << "page does not have any fonts!";
       }
 
+    if(qpdf_resources.hasKey("/ColorSpace"))
+      {
+        qpdf_colorspaces = qpdf_resources.getKey("/ColorSpace");
+        decode_colorspaces();
+      }
+    else
+      {
+        LOG_S(INFO) << "page does not have any color spaces!";
+      }
+
     if(qpdf_resources.hasKey("/XObject"))
       {
         qpdf_xobjects = qpdf_resources.getKey("/XObject");
@@ -575,6 +596,13 @@ namespace pdflib
     page_fonts->set(qpdf_fonts, timings);
   }
 
+  void pdf_decoder<PAGE>::decode_colorspaces()
+  {
+    LOG_S(INFO) << __FUNCTION__;
+
+    page_colorspaces->set(qpdf_colorspaces);
+  }
+
   void pdf_decoder<PAGE>::decode_xobjects()
   {
     LOG_S(INFO) << __FUNCTION__;
@@ -597,6 +625,7 @@ namespace pdflib
                                        page_images,
                                        page_fonts,
                                        page_grphs,
+                                       page_colorspaces,
                                        page_xobjects,
                                        instructions,
                                        timings);
@@ -1013,12 +1042,35 @@ namespace pdflib
 
     // Parse /AP/N (Normal appearance stream) to extract the actual rendered
     // text cells positioned within the widget bounding box.
+    decode_annot_appearance(annot, bbox);
+  }
+
+  void pdf_decoder<PAGE>::decode_annot_appearance(QPDFObjectHandle annot,
+                                                  const std::array<double, 4>& bbox)
+  {
     if(not annot.hasKey("/AP")) { return; }
 
     auto ap = annot.getKey("/AP");
     if(not ap.isDictionary() or not ap.hasKey("/N")) { return; }
 
-    decode_ap_stream(ap.getKey("/N"), bbox);
+    auto normal = ap.getKey("/N");
+    if(normal.isStream())
+      {
+        decode_ap_stream(normal, bbox);
+        return;
+      }
+
+    // Checkboxes and radio buttons carry one appearance stream per state
+    // (e.g. /Off, /1); /AS selects the active one. /Off states typically
+    // have an empty (or missing) appearance, which decodes to nothing.
+    if(normal.isDictionary())
+      {
+        auto [has_state, state] = to_string(annot, "/AS");
+        if(has_state and normal.hasKey(state) and normal.getKey(state).isStream())
+          {
+            decode_ap_stream(normal.getKey(state), bbox);
+          }
+      }
   }
 
   void pdf_decoder<PAGE>::add_button(QPDFObjectHandle annot,
@@ -1058,6 +1110,9 @@ namespace pdflib
       widget.field_type = field_type;
     }
     page_widgets.push_back(widget);
+
+    // Draw the active appearance state (check mark, radio dot, ...).
+    decode_annot_appearance(annot, bbox);
   }
 
   void pdf_decoder<PAGE>::add_choice(QPDFObjectHandle annot,
@@ -1097,6 +1152,8 @@ namespace pdflib
       widget.field_type = field_type;
     }
     page_widgets.push_back(widget);
+
+    decode_annot_appearance(annot, bbox);
   }
 
   void pdf_decoder<PAGE>::add_signature(QPDFObjectHandle annot,
@@ -1136,6 +1193,8 @@ namespace pdflib
       widget.field_type = field_type;
     }
     page_widgets.push_back(widget);
+
+    decode_annot_appearance(annot, bbox);
   }
 
   void pdf_decoder<PAGE>::decode_ap_stream(QPDFObjectHandle ap_stream,
@@ -1154,11 +1213,14 @@ namespace pdflib
     //     → acroform_fonts  (AcroForm /DR/Font, e.g. /Helv)
     //       → page_fonts    (page-level fonts, e.g. /F2)
     //
+    // The color spaces chain the same way: AP /Resources/ColorSpace → page.
+    //
     // No re-parsing: page_fonts and acroform_fonts are already populated.
     //
     // hasKey/getKey operate on the stream *dictionary*, never on the stream
     // handle itself — calling them on the stream silently returns false/null.
     auto ap_fonts = std::make_shared<pdf_resource<PAGE_FONTS>>(acroform_fonts);
+    auto ap_colorspaces = std::make_shared<pdf_resource<PAGE_COLORSPACES>>(page_colorspaces);
     auto ap_dict = ap_stream.getDict();
     if(ap_dict.isDictionary() and ap_dict.hasKey("/Resources"))
       {
@@ -1167,6 +1229,11 @@ namespace pdflib
           {
             auto ap_font_dict = ap_resources.getKey("/Font");
             ap_fonts->set(ap_font_dict, timings);
+          }
+        if(ap_resources.isDictionary() and ap_resources.hasKey("/ColorSpace"))
+          {
+            auto ap_colorspace_dict = ap_resources.getKey("/ColorSpace");
+            ap_colorspaces->set(ap_colorspace_dict);
           }
       }
 
@@ -1184,6 +1251,7 @@ namespace pdflib
                                        ap_images,
                                        ap_fonts,
                                        page_grphs,
+                                       ap_colorspaces,
                                        page_xobjects,
                                        ap_instructions,
                                        timings);
