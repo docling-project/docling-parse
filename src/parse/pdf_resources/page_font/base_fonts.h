@@ -42,6 +42,8 @@ namespace pdflib
 
     std::string read_fontname(std::string filename);
 
+    void register_standard_aliases();
+
   private:
 
     bool initialized;
@@ -236,6 +238,8 @@ namespace pdflib
 	  }
       }
 
+    register_standard_aliases();
+
     initialized = true;
   }
 
@@ -287,6 +291,45 @@ namespace pdflib
       }
 
     return fontname;
+  }
+
+  void base_fonts::register_standard_aliases()
+  {
+    // A PDF may name a Core-14 font by a common family alias (Arial for
+    // Helvetica, Times New Roman for Times, Courier New for Courier) and ship it
+    // without a /Widths table. The resolver only matches when the canonical
+    // PostScript name is contained in the font name, which these aliases are
+    // not, so bind them to the Core-14 metrics that viewers substitute.
+    static const std::vector<std::pair<std::string, std::string> > aliases =
+      {
+        {"arial",                    "helvetica"},
+        {"arial-bold",               "helvetica-bold"},
+        {"arial-italic",             "helvetica-oblique"},
+        {"arial-bolditalic",         "helvetica-boldoblique"},
+        {"couriernew",               "courier"},
+        {"couriernew-bold",          "courier-bold"},
+        {"couriernew-italic",        "courier-oblique"},
+        {"couriernew-bolditalic",    "courier-boldoblique"},
+        {"times",                    "times-roman"},
+        {"timesnewroman",            "times-roman"},
+        {"timesnewroman-bold",       "times-bold"},
+        {"timesnewroman-italic",     "times-italic"},
+        {"timesnewroman-bolditalic", "times-bolditalic"},
+      };
+
+    for(auto& alias : aliases)
+      {
+        if(name_to_basefont.count(alias.first)==1 or
+           name_to_basefont.count(alias.second)==0)
+          {
+            continue;
+          }
+
+        base_font bf = name_to_basefont.at(alias.second);
+        name_to_basefont.emplace(alias.first, bf);
+
+        core_14_fonts.insert(alias.first);
+      }
   }
 
 }
