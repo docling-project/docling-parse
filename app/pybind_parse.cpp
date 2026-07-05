@@ -186,6 +186,8 @@ namespace
       row["dash_phase"] = instr.get_dash_phase();
       row["rgb_stroking"] = instr.get_rgb_stroking();
       row["rgb_filling"] = instr.get_rgb_filling();
+      row["stroke_alpha"] = instr.get_stroke_alpha();
+      row["fill_alpha"] = instr.get_fill_alpha();
       instructions.append(row);
     }
   };

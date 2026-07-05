@@ -428,10 +428,14 @@ namespace pdflib
     // all clip vertices lie on the rectangle edges. Non-rectangular, degenerate,
     // or unsupported clip paths return false so callers can skip them without
     // corrupting the Blend2D clip state.
+    //
+    // The detection is purely geometric (every vertex on the bbox edge):
+    // most rectangular clips are built with m/l/l/l/h rather than `re`, so
+    // gating on shape_type == RECTANGLE would reject them.
     bool get_axis_aligned_clip_rect(const clip_path_instruction& clip,
                                     BLRect& rect) const
     {
-      if(clip.get_shape_type() != RECTANGLE or clip.size() < 4)
+      if(clip.size() < 4)
         {
           return false;
         }
@@ -523,10 +527,14 @@ namespace pdflib
       return applied_clip ? CLIP_APPLIED : CLIP_NONE;
     }
 
-    // Converts a parsed 0-255 RGB triple into an opaque Blend2D color.
-    static BLRgba32 make_rgba32(const std::array<int, 3>& rgb)
+    // Converts a parsed 0-255 RGB triple and a [0, 1] alpha into a Blend2D
+    // color (straight alpha; the context premultiplies while compositing).
+    static BLRgba32 make_rgba32(const std::array<int, 3>& rgb,
+                                double alpha = 1.0)
     {
-      return BLRgba32((0xFFu                          << 24) |
+      const double clamped = std::min(1.0, std::max(0.0, alpha));
+      const uint32_t a = static_cast<uint32_t>(std::lround(255.0 * clamped));
+      return BLRgba32((a                              << 24) |
                       (static_cast<uint32_t>(rgb[0])  << 16) |
                       (static_cast<uint32_t>(rgb[1])  <<  8) |
                        static_cast<uint32_t>(rgb[2]));
@@ -1765,18 +1773,27 @@ namespace pdflib
 
     const shape_paint_mode mode = instr.get_paint_mode();
 
-    if (mode == SHAPE_PAINT_FILL or mode == SHAPE_PAINT_FILL_STROKE)
+    // ExtGState constant alpha: alpha 0 paint is invisible and skipped
+    // entirely (a common idiom for hiding helper geometry).
+    static constexpr double min_visible_alpha = 1.0 / 512.0;
+    const double fill_alpha = instr.get_fill_alpha();
+    const double stroke_alpha = instr.get_stroke_alpha();
+
+    if ((mode == SHAPE_PAINT_FILL or mode == SHAPE_PAINT_FILL_STROKE)
+        and fill_alpha > min_visible_alpha)
       {
         ctx.set_fill_rule(instr.get_fill_rule() == SHAPE_FILL_EVEN_ODD
                             ? BL_FILL_RULE_EVEN_ODD
                             : BL_FILL_RULE_NON_ZERO);
-        ctx.set_fill_style(make_rgba32(instr.get_rgb_filling()));
+        ctx.set_fill_style(make_rgba32(instr.get_rgb_filling(), fill_alpha));
         ctx.fill_path(path);
       }
 
-    if (mode == SHAPE_PAINT_STROKE or mode == SHAPE_PAINT_FILL_STROKE)
+    if ((mode == SHAPE_PAINT_STROKE or mode == SHAPE_PAINT_FILL_STROKE)
+        and stroke_alpha > min_visible_alpha)
       {
-        ctx.set_stroke_style(make_rgba32(instr.get_rgb_stroking()));
+        ctx.set_stroke_style(make_rgba32(instr.get_rgb_stroking(),
+                                         stroke_alpha));
 
         // the line width arrives in page space; scale to canvas and keep
         // sub-pixel strokes visible (PDF `0 w` means hairline)

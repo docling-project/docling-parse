@@ -179,6 +179,10 @@ namespace pdflib
     const std::array<int, 3>& get_rgb_filling_ops() const { return rgb_filling_ops; }
     const std::string& get_curr_grph_key() const { return curr_grph_key; }
 
+    // constant alpha from ExtGState (/CA, /ca); 1.0 = opaque
+    double get_stroke_alpha() const { return stroke_alpha; }
+    double get_fill_alpha() const { return fill_alpha; }
+
   private:
 
     bool verify(std::vector<qpdf_stream_instruction>& instructions,
@@ -218,6 +222,9 @@ namespace pdflib
 
     std::array<int, 3> rgb_stroking_ops;
     std::array<int, 3> rgb_filling_ops;
+
+    double stroke_alpha;
+    double fill_alpha;
   };
 
   pdf_state<GRPH>::pdf_state(std::array<double, 9>&    trafo_matrix_,
@@ -244,7 +251,10 @@ namespace pdflib
     flatness(1.0),
 
     rgb_stroking_ops({0,0,0}),
-    rgb_filling_ops({0,0,0})
+    rgb_filling_ops({0,0,0}),
+
+    stroke_alpha(1.0),
+    fill_alpha(1.0)
   {}
 
   pdf_state<GRPH>::pdf_state(const pdf_state<GRPH>& other):
@@ -274,6 +284,10 @@ namespace pdflib
 
     this->rgb_stroking_ops = other.rgb_stroking_ops;
     this->rgb_filling_ops = other.rgb_filling_ops;
+
+    // alpha is part of the graphics state and must survive q/Q save/restore
+    this->stroke_alpha = other.stroke_alpha;
+    this->fill_alpha = other.fill_alpha;
 
     return *this;
   }
@@ -484,6 +498,20 @@ namespace pdflib
     if(page_grphs->count(key)>0)
       {
 	curr_grph_key = key;
+
+	// a gs operator only changes the parameters present in its
+	// ExtGState dictionary
+	auto& grph = (*page_grphs)[key];
+
+	if(grph.has_stroke_alpha())
+	  {
+	    stroke_alpha = grph.get_stroke_alpha();
+	  }
+
+	if(grph.has_fill_alpha())
+	  {
+	    fill_alpha = grph.get_fill_alpha();
+	  }
       }
     else
       {

@@ -484,10 +484,12 @@ namespace pdflib
           {
             clippings.push_back(shape);
           }
-        else
+        else if(shape.size() >= 2)
           {
             LOG_S(WARNING) << "ignoring a degenerate clip path";
           }
+        // 0/1-point subpaths are the expected continuation left behind by
+        // the `h` operator and are dropped silently
       }
 
     clipping_path_pending = false;
@@ -672,10 +674,12 @@ namespace pdflib
                     << grph_state.get_rgb_filling_ops()[0] << ", "
                     << grph_state.get_rgb_filling_ops()[1] << ", "
                     << grph_state.get_rgb_filling_ops()[2] << ")"
+                    << " alpha: " << grph_state.get_fill_alpha()
                     << ", stroke: ("
                     << grph_state.get_rgb_stroking_ops()[0] << ", "
                     << grph_state.get_rgb_stroking_ops()[1] << ", "
-                    << grph_state.get_rgb_stroking_ops()[2] << ")";
+                    << grph_state.get_rgb_stroking_ops()[2] << ")"
+                    << " alpha: " << grph_state.get_stroke_alpha();
 
         shape_instruction shpinstr(std::move(subpaths),
                                    paint_mode,
@@ -688,6 +692,8 @@ namespace pdflib
                                    dash_phase,
                                    grph_state.get_rgb_stroking_ops(),
                                    grph_state.get_rgb_filling_ops(),
+                                   grph_state.get_stroke_alpha(),
+                                   grph_state.get_fill_alpha(),
                                    get_clip_state());
         instructions.add_shape_instruction(std::move(shpinstr));
       }

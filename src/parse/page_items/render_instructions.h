@@ -510,6 +510,8 @@ namespace pdflib
                       double                  dash_phase,
                       std::array<int, 3>      rgb_stroking,
                       std::array<int, 3>      rgb_filling,
+                      double                  stroke_alpha,
+                      double                  fill_alpha,
                       clip_state_instruction  clip_state = clip_state_instruction()):
       subpaths(std::move(subpaths)),
       paint_mode(paint_mode),
@@ -522,6 +524,8 @@ namespace pdflib
       dash_phase(dash_phase),
       rgb_stroking(rgb_stroking),
       rgb_filling(rgb_filling),
+      stroke_alpha(stroke_alpha),
+      fill_alpha(fill_alpha),
       clip_state(std::move(clip_state)) {}
 
     const std::vector<shape_subpath>& get_subpaths() const { return subpaths; }
@@ -548,6 +552,10 @@ namespace pdflib
     const std::array<int, 3>&   get_rgb_stroking()  const { return rgb_stroking; }
     const std::array<int, 3>&   get_rgb_filling()   const { return rgb_filling; }
 
+    // ExtGState constant alpha (/CA, /ca); 1.0 = opaque, 0.0 = invisible
+    double get_stroke_alpha() const { return stroke_alpha; }
+    double get_fill_alpha()   const { return fill_alpha; }
+
     const clip_state_instruction& get_clip_state() const { return clip_state; }
     bool has_clip_state() const { return clip_state.has_clip(); }
 
@@ -565,6 +573,9 @@ namespace pdflib
     const double                  dash_phase;
     const std::array<int, 3>      rgb_stroking;
     const std::array<int, 3>      rgb_filling;
+
+    const double                  stroke_alpha;
+    const double                  fill_alpha;
 
     const clip_state_instruction  clip_state;
   };
