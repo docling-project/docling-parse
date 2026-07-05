@@ -819,7 +819,7 @@ namespace pdflib
           }
       }
 
-    auto [has_value, text] = to_string(annot, "/V");
+    auto [has_value, text] = to_inherited_string(annot, "/V");
     if(not has_value)
       {
         text = "<unknown>";
@@ -931,7 +931,7 @@ namespace pdflib
           }
       }
 
-    auto [has_value, ft_str] = to_string(annot, "/FT");
+    auto [has_value, ft_str] = to_inherited_string(annot, "/FT");
     if(not has_value)
       {
         ft_str = "";
@@ -965,19 +965,19 @@ namespace pdflib
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    auto [has_value, text] = to_string(annot, "/V");
+    auto [has_value, text] = to_inherited_string(annot, "/V");
     if(not has_value)
       {
         text = "";
       }
 
-    auto [has_field_name, field_name] = to_string(annot, "/T");
+    auto [has_field_name, field_name] = to_inherited_string(annot, "/T");
     if(not has_field_name)
       {
         field_name = "";
       }
 
-    auto [has_field_type, field_type] = to_string(annot, "/FT");
+    auto [has_field_type, field_type] = to_inherited_string(annot, "/FT");
     if(not has_field_type)
       {
         field_type = "";
@@ -1026,19 +1026,19 @@ namespace pdflib
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    auto [has_value, text] = to_string(annot, "/V");
+    auto [has_value, text] = to_inherited_string(annot, "/V");
     if(not has_value)
       {
         text = "";
       }
 
-    auto [has_field_name, field_name] = to_string(annot, "/T");
+    auto [has_field_name, field_name] = to_inherited_string(annot, "/T");
     if(not has_field_name)
       {
         field_name = "";
       }
 
-    auto [has_field_type, field_type] = to_string(annot, "/FT");
+    auto [has_field_type, field_type] = to_inherited_string(annot, "/FT");
     if(not has_field_type)
       {
         field_type = "";
@@ -1065,19 +1065,19 @@ namespace pdflib
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    auto [has_value, text] = to_string(annot, "/V");
+    auto [has_value, text] = to_inherited_string(annot, "/V");
     if(not has_value)
       {
         text = "";
       }
 
-    auto [has_field_name, field_name] = to_string(annot, "/T");
+    auto [has_field_name, field_name] = to_inherited_string(annot, "/T");
     if(not has_field_name)
       {
         field_name = "";
       }
 
-    auto [has_field_type, field_type] = to_string(annot, "/FT");
+    auto [has_field_type, field_type] = to_inherited_string(annot, "/FT");
     if(not has_field_type)
       {
         field_type = "";
@@ -1104,19 +1104,19 @@ namespace pdflib
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    auto [has_value, text] = to_string(annot, "/V");
+    auto [has_value, text] = to_inherited_string(annot, "/V");
     if(not has_value)
       {
         text = "";
       }
 
-    auto [has_field_name, field_name] = to_string(annot, "/T");
+    auto [has_field_name, field_name] = to_inherited_string(annot, "/T");
     if(not has_field_name)
       {
         field_name = "";
       }
 
-    auto [has_field_type, field_type] = to_string(annot, "/FT");
+    auto [has_field_type, field_type] = to_inherited_string(annot, "/FT");
     if(not has_field_type)
       {
         field_type = "";
@@ -1155,10 +1155,14 @@ namespace pdflib
     //       → page_fonts    (page-level fonts, e.g. /F2)
     //
     // No re-parsing: page_fonts and acroform_fonts are already populated.
+    //
+    // hasKey/getKey operate on the stream *dictionary*, never on the stream
+    // handle itself — calling them on the stream silently returns false/null.
     auto ap_fonts = std::make_shared<pdf_resource<PAGE_FONTS>>(acroform_fonts);
-    if(ap_stream.hasKey("/Resources"))
+    auto ap_dict = ap_stream.getDict();
+    if(ap_dict.isDictionary() and ap_dict.hasKey("/Resources"))
       {
-        auto ap_resources = ap_stream.getKey("/Resources");
+        auto ap_resources = ap_dict.getKey("/Resources");
         if(ap_resources.isDictionary() and ap_resources.hasKey("/Font"))
           {
             auto ap_font_dict = ap_resources.getKey("/Font");
