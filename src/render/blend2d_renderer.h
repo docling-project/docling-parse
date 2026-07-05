@@ -240,9 +240,9 @@ namespace pdflib
                               const text_geometry& geom,
                               const BLPath& bbox_path);
 
-    // Last-chance glyph-identity mapping when Unicode shaping against an
-    // embedded (Blend2D-loaded) face produced only .notdef: CID fonts with an
-    // identity CIDToGIDMap use the character code as glyph index directly;
+    // Glyph-identity mapping when Unicode shaping against an embedded
+    // (Blend2D-loaded) face failed or produced only .notdef: CID fonts with
+    // an identity CIDToGIDMap use the character code as glyph index directly;
     // symbolic fonts are retried through the 0xF000 private-use convention.
     // On success gb holds a positioned glyph run ready for fill_glyph_run.
     static bool recover_embedded_glyphs(const BLFont& font,
@@ -1293,50 +1293,36 @@ namespace pdflib
                 return;
               }
 
-            const BLMatrix2D ctm = make_text_transform(geom);
-            // LOG_S(INFO) << "render_text: before ctx.save";
-            ctx.save();
-            // LOG_S(INFO) << "render_text: before apply_transform";
-            const BLResult transform_res = ctx.apply_transform(ctm);
-            // LOG_S(INFO) << "render_text: after apply_transform res=" << transform_res;
-            if (transform_res != BL_SUCCESS)
-              {
-                ctx.restore();
-                LOG_S(WARNING) << "render_text: apply_transform failed"
-                               << " (BLResult=" << transform_res << ")";
-                draw_bbox_fallback();
-                return;
-              }
-            // LOG_S(INFO) << "render_text: before set_fill_style";
-            ctx.set_fill_style(BLRgba32(0xFF000000u)); // opaque black
-            // LOG_S(INFO) << "render_text: before fill_utf8_text";
+            // Shape the text before touching the context, so the recovery
+            // paths below (FreeType outlines, system-face retry) don't have
+            // to unwind a saved context state.
             BLGlyphBuffer gb;
             gb.set_utf8_text(instr.get_text().c_str());
-            const BLResult shape_res = font.shape(gb);
-            // LOG_S(INFO) << "render_text: after shape res=" << shape_res
-            //             << " empty=" << gb.is_empty();
-            if (shape_res != BL_SUCCESS || gb.is_empty())
-              {
-                LOG_S(WARNING) << "render_text: shaping failed or produced no glyphs"
-                               << " (BLResult=" << shape_res << ")"
-                               << " text=`" << instr.get_text() << "`"
-                               << " font_name=`" << instr.get_font_name() << "`"
-                               << " base_font=`" << instr.get_base_font() << "`";
-                ctx.restore();
-                draw_bbox_fallback();
-                return;
-              }
+            BLResult shape_res = font.shape(gb);
+            bool shaped = (shape_res == BL_SUCCESS and not gb.is_empty());
 
-            if (using_embedded_font and glyph_run_all_notdef(gb))
+            if (using_embedded_font and
+                (not shaped or glyph_run_all_notdef(gb)))
               {
-                // Shaping against an embedded subset font "succeeds" with
-                // glyph id 0 when the Unicode cmap simply lacks the
-                // codepoint. Try glyph-identity mapping (CID identity,
-                // symbol cmap) before giving the cell to the system face —
+                // An embedded subset face misses a cell in two ways: shape()
+                // fails outright (BL_ERROR_FONT_NO_CHARACTER_MAPPING when the
+                // subset carries no Unicode cmap at all) or "succeeds" with a
+                // .notdef-only run when the cmap lacks the codepoint. Either
+                // way, try glyph-identity mapping (CID identity, symbol
+                // cmap), then FreeType glyph-name/builtin-encoding
+                // resolution, then re-shape against the system face —
                 // drawing the .notdef run would produce blank/tofu output.
-                if (not recover_embedded_glyphs(font, instr, gb))
+                shaped = recover_embedded_glyphs(font, instr, gb);
+
+                if (not shaped)
                   {
-                    LOG_S(INFO) << "render_text: embedded face has no glyph"
+                    if (render_text_freetype(instr, geom, bbox_path))
+                      {
+                        return;
+                      }
+
+                    LOG_S(INFO) << "render_text: embedded face cannot map"
+                                << " (BLResult=" << shape_res << ")"
                                 << " text=`" << instr.get_text() << "`"
                                 << " font_name=`" << instr.get_font_name() << "`"
                                 << " — falling back to system font";
@@ -1349,23 +1335,49 @@ namespace pdflib
                                                      static_cast<float>(geom.size)) == BL_SUCCESS)
                       {
                         gb.set_utf8_text(instr.get_text().c_str());
-                        if (system_font.shape(gb) == BL_SUCCESS and not gb.is_empty())
+                        shape_res = system_font.shape(gb);
+                        if (shape_res == BL_SUCCESS and not gb.is_empty() and
+                            not glyph_run_all_notdef(gb))
                           {
                             font = system_font;
                             using_embedded_font = false;
+                            shaped = true;
                           }
                       }
                   }
+              }
+
+            if (not shaped)
+              {
+                LOG_S(WARNING) << "render_text: shaping failed or produced no glyphs"
+                               << " (BLResult=" << shape_res << ")"
+                               << " text=`" << instr.get_text() << "`"
+                               << " font_name=`" << instr.get_font_name() << "`"
+                               << " base_font=`" << instr.get_base_font() << "`";
+                draw_bbox_fallback();
+                return;
               }
 
             const auto* placement_data = gb.placement_data();
             if (placement_data == nullptr)
               {
                 LOG_S(WARNING) << "render_text: glyph placement data is null, using fallback";
-                ctx.restore();
                 draw_bbox_fallback();
                 return;
               }
+
+            const BLMatrix2D ctm = make_text_transform(geom);
+            ctx.save();
+            const BLResult transform_res = ctx.apply_transform(ctm);
+            if (transform_res != BL_SUCCESS)
+              {
+                ctx.restore();
+                LOG_S(WARNING) << "render_text: apply_transform failed"
+                               << " (BLResult=" << transform_res << ")";
+                draw_bbox_fallback();
+                return;
+              }
+            ctx.set_fill_style(BLRgba32(0xFF000000u)); // opaque black
             text_draw_adjustment adjustment =
               calculate_glyph_bbox_adjustment(font, gb, instr, geom.size);
 
