@@ -42,7 +42,6 @@ def build_local(num_threads: int):
 
     USE_SYSTEM_DEPS = os.getenv("USE_SYSTEM_DEPS", "OFF")
 
-
     print("python prefix: ", sys.exec_prefix)
     print("python executable: ", sys.executable)
     config_cmd = [
@@ -51,6 +50,21 @@ def build_local(num_threads: int):
         f"-DUSE_SYSTEM_DEPS={USE_SYSTEM_DEPS}",
         f"-DPYTHON_EXECUTABLE={sys.executable}",
     ]
+
+    # Forward CMAKE_GENERATOR so callers (e.g. the CI workflow) can switch the
+    # generator without patching this script (e.g. "Visual Studio 17 2022" for
+    # MSVC on Windows ARM64 vs "MSYS Makefiles" for MinGW on Windows AMD64).
+    cmake_generator = os.getenv("CMAKE_GENERATOR")
+    if cmake_generator:
+        config_cmd.extend(["-G", cmake_generator])
+
+    # Forward extra cmake flags supplied via CMAKE_ARGS (e.g. "-A ARM64
+    # -DZLIB_ROOT=...").  Split on whitespace but respect quoted strings.
+    cmake_args_env = os.getenv("CMAKE_ARGS", "").strip()
+    if cmake_args_env:
+        import shlex
+        config_cmd.extend(shlex.split(cmake_args_env))
+
     config_cmd.extend(get_pybind11_cmake_args())
     success = run(config_cmd, cwd=ROOT_DIR)
     if not success:

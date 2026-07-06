@@ -310,6 +310,9 @@ jobs:
               Add-Content -Path $env:GITHUB_ENV -Value "CMAKE_LIBRARY_PATH=C:/windows-libs/zlib-ng-arm64/lib"
               Add-Content -Path $env:GITHUB_ENV -Value "CMAKE_INCLUDE_PATH=C:/windows-libs/zlib-ng-arm64/include"
               Add-Content -Path $env:GITHUB_ENV -Value "PATH=C:/windows-libs/zlib-ng-arm64/bin;$env:PATH"
+              # MSVC with Visual Studio generator; -A ARM64 targets the ARM64 platform explicitly
+              Add-Content -Path $env:GITHUB_ENV -Value "CMAKE_GENERATOR=Visual Studio 17 2022"
+              Add-Content -Path $env:GITHUB_ENV -Value "CMAKE_ARGS=-A ARM64 -DZLIB_ROOT=C:/windows-libs/zlib-ng-arm64 -DZLIB_LIBRARY=C:/windows-libs/zlib-ng-arm64/lib/zlibstatic.lib -DZLIB_INCLUDE_DIR=C:/windows-libs/zlib-ng-arm64/include"
           }
           Add-Content -Path $env:GITHUB_ENV -Value 'PYTHON_MODULE_EXTENSION=${SETUPTOOLS_EXT_SUFFIX}'
 
@@ -327,7 +330,10 @@ jobs:
           if (Test-Path "C:\Strawberry\") {
               Remove-Item -Recurse -Force "C:\Strawberry\"
           }
-          uv pip install --group build
+          # Install only the build-time deps; avoid resolving the 'perf' group which
+          # pulls in cryptography (needs OpenSSL) and other heavy packages that are
+          # not available pre-built on Windows ARM64.
+          uv pip install --no-default-groups --group build
           if (Test-Path ".\build") {
               Remove-Item -Recurse -Force ".\build"
           }
