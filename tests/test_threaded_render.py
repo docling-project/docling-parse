@@ -40,8 +40,8 @@ LARGE_SAMPLE_PDF = "docs/PDF32000_2008.pdf"
 
 RENDERER_IMAGE_TOLERANCE = ImageTolerance(
     pixel_threshold=12,
-    mean_abs_error=9.0, # cut-off that works on the CI. would be better ~2-3
-    changed_pixels_ratio=0.07, # cut-off that works on the CI, would be better ~0.02
+    mean_abs_error=9.0,  # cut-off that works on the CI. would be better ~2-3
+    changed_pixels_ratio=0.07,  # cut-off that works on the CI, would be better ~0.02
 )
 
 

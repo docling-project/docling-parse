@@ -35,6 +35,13 @@ uv run pytest tests/test_parse.py::test_reference_documents_from_filenames --upd
 uv run pytest tests/test_threaded_render.py::test_rendered_pages_match_groundtruth --update-groundtruth -q
 ```
 
+The test-local wrapper adds `--update-groundtruth` automatically:
+
+```bash
+uv run python tests/update_groundtruth.py
+uv run python tests/update_groundtruth.py tests/test_threaded_render.py::test_rendered_pages_match_groundtruth
+```
+
 This flag updates checked regression artifacts under `tests/data`, not source
 code in the main repository.
 
@@ -145,4 +152,3 @@ the environment, for example `HF_TOKEN` or `HUGGINGFACE_HUB_TOKEN`.
 
 After publishing a new dataset revision, update `HF_DATASET_REVISION` in
 `tests/data_utils.py` so CI and local runs use the intended snapshot.
-
