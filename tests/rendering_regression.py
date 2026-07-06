@@ -25,9 +25,18 @@ class ImageTolerance:
 
 @dataclass(frozen=True)
 class ImageComparison:
+    document: str
+    page: int
+    actual_width: int
+    actual_height: int
+    expected_width: int
+    expected_height: int
+    size_matches: bool
     mean_abs_error: float
     max_abs_error: int
     changed_pixels_ratio: float
+    changed_pixels: int
+    total_pixels: int
 
 
 def renderer_artifact_prefix(doc_name: str, page_no: int) -> str:
@@ -141,12 +150,17 @@ def _write_diff_artifacts(
     actual.save(_diff_artifact_path(doc_name, page_no, "actual.png"))
     expected.save(_diff_artifact_path(doc_name, page_no, "expected.png"))
 
-    diff = ImageChops.difference(actual, expected)
+    width = min(actual.width, expected.width)
+    height = min(actual.height, expected.height)
+    diff = ImageChops.difference(
+        actual.crop((0, 0, width, height)),
+        expected.crop((0, 0, width, height)),
+    )
     amplified = ImageEnhance.Brightness(diff).enhance(8)
     amplified.save(_diff_artifact_path(doc_name, page_no, "diff.png"))
 
 
-def compare_images(
+def measure_image_comparison(
     doc_name: str,
     page_no: int,
     actual: Image.Image,
@@ -156,15 +170,19 @@ def compare_images(
     path = renderer_image_path(doc_name, page_no)
     assert path.exists(), f"missing rendered image groundtruth: {path}"
 
-    actual_rgba = actual.convert("RGBA")
-    expected_rgba = Image.open(path).convert("RGBA")
-    if actual_rgba.size != expected_rgba.size:
-        _write_diff_artifacts(doc_name, page_no, actual_rgba, expected_rgba)
+    actual_full = actual.convert("RGBA")
+    expected_full = Image.open(path).convert("RGBA")
+    size_matches = actual_full.size == expected_full.size
+    width = min(actual_full.width, expected_full.width)
+    height = min(actual_full.height, expected_full.height)
+    if width <= 0 or height <= 0:
         raise AssertionError(
-            f"rendered image size mismatch for {path}: "
-            f"expected {expected_rgba.size}, got {actual_rgba.size}"
+            f"rendered image has empty comparison area for {path}: "
+            f"expected {expected_full.size}, got {actual_full.size}"
         )
 
+    actual_rgba = actual_full.crop((0, 0, width, height))
+    expected_rgba = expected_full.crop((0, 0, width, height))
     diff = ImageChops.difference(actual_rgba, expected_rgba)
     stat = ImageStat.Stat(diff)
     mean_abs_error = sum(stat.mean) / len(stat.mean)
@@ -182,16 +200,97 @@ def compare_images(
     changed_pixels = changed_mask.histogram()[255]
     changed_pixels_ratio = changed_pixels / (actual_rgba.width * actual_rgba.height)
 
-    comparison = ImageComparison(
+    return ImageComparison(
+        document=doc_name,
+        page=page_no,
+        actual_width=actual_full.width,
+        actual_height=actual_full.height,
+        expected_width=expected_full.width,
+        expected_height=expected_full.height,
+        size_matches=size_matches,
         mean_abs_error=mean_abs_error,
         max_abs_error=max_abs_error,
         changed_pixels_ratio=changed_pixels_ratio,
+        changed_pixels=changed_pixels,
+        total_pixels=actual_rgba.width * actual_rgba.height,
     )
 
-    if (
-        comparison.mean_abs_error > tolerance.mean_abs_error
+
+def image_comparison_failed(
+    comparison: ImageComparison,
+    *,
+    tolerance: ImageTolerance = ImageTolerance(),
+) -> bool:
+    return (
+        not comparison.size_matches
+        or comparison.mean_abs_error > tolerance.mean_abs_error
         or comparison.changed_pixels_ratio > tolerance.changed_pixels_ratio
+    )
+
+
+def format_image_comparison_table(comparisons: list[ImageComparison]) -> str:
+    if not comparisons:
+        return "No rendered image comparisons were collected."
+
+    document_width = max(
+        len("document"),
+        *(len(comparison.document) for comparison in comparisons),
+    )
+    lines = [
+        "Per-page image metrics",
+        (
+            f"  {'document':{document_width}}  page  actual_size  expected_size  "
+            "size_match  mean_abs_error  changed_pixels_ratio  max_abs_error  "
+            "changed_pixels"
+        ),
+    ]
+
+    for comparison in sorted(
+        comparisons,
+        key=lambda item: (item.document, item.page),
     ):
+        actual_size = f"{comparison.actual_width}x{comparison.actual_height}"
+        expected_size = f"{comparison.expected_width}x{comparison.expected_height}"
+        lines.append(
+            f"  {comparison.document:{document_width}}  "
+            f"{comparison.page:>4}  "
+            f"{actual_size:11}  "
+            f"{expected_size:13}  "
+            f"{comparison.size_matches!s:10}  "
+            f"{comparison.mean_abs_error:14.4f}  "
+            f"{comparison.changed_pixels_ratio:20.4f}  "
+            f"{comparison.max_abs_error:13d}  "
+            f"{comparison.changed_pixels:14d}"
+        )
+
+    return "\n".join(lines)
+
+
+def compare_images(
+    doc_name: str,
+    page_no: int,
+    actual: Image.Image,
+    *,
+    tolerance: ImageTolerance = ImageTolerance(),
+) -> ImageComparison:
+    comparison = measure_image_comparison(
+        doc_name,
+        page_no,
+        actual,
+        tolerance=tolerance,
+    )
+    path = renderer_image_path(doc_name, page_no)
+    actual_rgba = actual.convert("RGBA")
+    expected_rgba = Image.open(path).convert("RGBA")
+
+    if not comparison.size_matches:
+        _write_diff_artifacts(doc_name, page_no, actual_rgba, expected_rgba)
+        raise AssertionError(
+            f"rendered image size mismatch for {path}: "
+            f"expected {expected_rgba.size}, got {actual_rgba.size}"
+        )
+
+    if image_comparison_failed(comparison, tolerance=tolerance):
         _write_diff_artifacts(doc_name, page_no, actual_rgba, expected_rgba)
         raise AssertionError(
             "rendered image mismatch for "

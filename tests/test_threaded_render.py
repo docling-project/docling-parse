@@ -23,6 +23,9 @@ from tests.rendering_regression import (
     compare_bitmap_artifacts,
     compare_images,
     compare_render_instructions,
+    format_image_comparison_table,
+    image_comparison_failed,
+    measure_image_comparison,
     write_renderer_groundtruth,
 )
 from tests.test_parse import (
@@ -548,6 +551,7 @@ def test_rendered_pages_match_groundtruth(update_groundtruth: bool):
     checked_pages = 0
     first_failure: tuple[BaseException, TracebackType | None] | None = None
     failures: list[str] = []
+    image_comparisons = []
 
     for result in parser.iterate_results():
         pdf_doc_path = key_to_path[result.doc_key]
@@ -566,12 +570,23 @@ def test_rendered_pages_match_groundtruth(update_groundtruth: bool):
             else:
                 compare_render_instructions(rname, result.page_number, result)
                 compare_bitmap_artifacts(rname, result.page_number, result)
-                compare_images(
+                comparison = measure_image_comparison(
                     rname,
                     result.page_number,
                     result.get_image(),
                     tolerance=RENDERER_IMAGE_TOLERANCE,
                 )
+                image_comparisons.append(comparison)
+                if image_comparison_failed(
+                    comparison,
+                    tolerance=RENDERER_IMAGE_TOLERANCE,
+                ):
+                    compare_images(
+                        rname,
+                        result.page_number,
+                        result.get_image(),
+                        tolerance=RENDERER_IMAGE_TOLERANCE,
+                    )
         except Exception as exc:
             if first_failure is None:
                 first_failure = (exc, exc.__traceback__)
@@ -580,6 +595,9 @@ def test_rendered_pages_match_groundtruth(update_groundtruth: bool):
             checked_pages += 1
 
     parser.unload_all()
+
+    if image_comparisons:
+        print(format_image_comparison_table(image_comparisons))
 
     if first_failure is not None:
         failure, tb = first_failure
