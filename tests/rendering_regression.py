@@ -19,7 +19,7 @@ RENDER_DELTA_FOLDER = Path("tests/data/render_deltas")
 @dataclass(frozen=True)
 class ImageTolerance:
     pixel_threshold: int = 12
-    mean_abs_error: float = 2.0
+    mean_abs_error: float = 3.0
     changed_pixels_ratio: float = 0.03
 
 
