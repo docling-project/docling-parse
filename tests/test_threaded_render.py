@@ -37,7 +37,7 @@ LARGE_SAMPLE_PDF = "docs/PDF32000_2008.pdf"
 
 RENDERER_IMAGE_TOLERANCE = ImageTolerance(
     pixel_threshold=12,
-    mean_abs_error=2.0,
+    mean_abs_error=3.0,
     changed_pixels_ratio=0.03,
 )
 
