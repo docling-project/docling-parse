@@ -325,6 +325,11 @@ jobs:
           CIBW_PROJECT_REQUIRES_PYTHON: "~=${{ matrix.python-version }}.0"
           BUILD_THREADS: 4
           ASM_NASM: "C:/nasm/nasm.exe"
+          # Prevent `uv run` from performing an implicit sync, which would honor
+          # `default-groups = "all"` and reinstall the 'perf' group (pdfplumber ->
+          # pdfminer-six -> cryptography). cryptography has no win-arm64 wheel and
+          # fails to build. The build-only venv is synced explicitly below.
+          UV_NO_SYNC: "1"
         shell: pwsh
         run: |
           if (Test-Path "C:\Strawberry\") {
