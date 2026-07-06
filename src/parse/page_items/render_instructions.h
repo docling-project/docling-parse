@@ -249,6 +249,42 @@ namespace pdflib
     void set_glyph_name(std::string glyph_name);
     const std::string& get_glyph_name() const;
 
+    // Fill color of the graphics state at emission time (defaults: opaque
+    // black) and the Tr text rendering mode (3/7 paint no glyphs).
+    void set_fill_color(const std::array<int, 3>& rgb, double alpha);
+    const std::array<int, 3>& get_rgb_filling() const { return rgb_filling_; }
+    double get_fill_alpha() const { return fill_alpha_; }
+
+    void set_rendering_mode(int mode) { rendering_mode_ = mode; }
+    int get_rendering_mode() const { return rendering_mode_; }
+    bool is_invisible() const { return rendering_mode_ == 3 or rendering_mode_ == 7; }
+
+    // Copy shifted by (dx, dy); used to lift widget appearance-stream text
+    // from AP-local into page coordinates. The glyph bbox (g_*) lives in
+    // font units and is copied unshifted.
+    text_instruction translated(double dx, double dy) const
+    {
+      text_instruction copy(text, font_enc, font_key, font_name,
+                            encoding_name, base_font, font_size,
+                            r_x0 + dx, r_y0 + dy,
+                            r_x1 + dx, r_y1 + dy,
+                            r_x2 + dx, r_y2 + dy,
+                            r_x3 + dx, r_y3 + dy,
+                            font_ascent_norm, font_descent_norm,
+                            base_x0 + dx, base_y0 + dy,
+                            has_glyph_bbox_,
+                            g_x0_, g_y0_, g_x1_, g_y1_);
+
+      copy.embedded_font_  = embedded_font_;
+      copy.char_code_      = char_code_;
+      copy.glyph_name_     = glyph_name_;
+      copy.rgb_filling_    = rgb_filling_;
+      copy.fill_alpha_     = fill_alpha_;
+      copy.rendering_mode_ = rendering_mode_;
+
+      return copy;
+    }
+
   private:
 
     const std::string text;
@@ -284,6 +320,10 @@ namespace pdflib
     std::shared_ptr<const embedded_font_blob> embedded_font_;
     int64_t char_code_ = -1;
     std::string glyph_name_;
+
+    std::array<int, 3> rgb_filling_ = {0, 0, 0};
+    double fill_alpha_ = 1.0;
+    int rendering_mode_ = 0;
   };
 
   inline void text_instruction::set_embedded_font(std::shared_ptr<const embedded_font_blob> blob)
@@ -319,6 +359,13 @@ namespace pdflib
   inline const std::string& text_instruction::get_glyph_name() const
   {
     return glyph_name_;
+  }
+
+  inline void text_instruction::set_fill_color(const std::array<int, 3>& rgb,
+                                               double alpha)
+  {
+    rgb_filling_ = rgb;
+    fill_alpha_ = alpha;
   }
 
   class text_widget_instruction
@@ -655,6 +702,11 @@ namespace pdflib
     const std::vector<shape_instruction_type>& get_shape_instructions() const
     {
       return shape_instructions;
+    }
+
+    const std::vector<text_instruction_type>& get_text_instructions() const
+    {
+      return text_instructions;
     }
 
     // render method

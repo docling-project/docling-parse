@@ -5,8 +5,7 @@ from pathlib import Path
 from huggingface_hub import snapshot_download
 
 HF_DATASET_REPO_ID = "docling-project/regression-dataset-for-docling-parse"
-# HF_DATASET_REVISION = "e7870acf502010bba9de54b93f68a5722d8706f5"
-HF_DATASET_REVISION = "cd6513e9d541afb6196a1da168f90f4c8e43354d"
+HF_DATASET_REVISION = "bf29edfd0c37213246b69a4c8eb5e96eddc21d9b"
 TESTS_DIR = Path(__file__).resolve().parent
 TEST_DATA_DIR = TESTS_DIR / "data"
 TEST_DATA_GROUNDTRUTH_DIR = TEST_DATA_DIR / "groundtruth"

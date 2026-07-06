@@ -31,6 +31,7 @@ namespace pdflib
                        embedded_font_format format,
                        bool is_cid_font,
                        bool cid_to_gid_identity,
+                       bool uses_builtin_encoding,
                        std::shared_ptr<const std::vector<uint8_t> > bytes);
 
     // Content-derived identity (FNV-1a over the decoded bytes + size).
@@ -52,6 +53,14 @@ namespace pdflib
     // /CIDToGIDMap is /Identity or absent
     bool get_cid_to_gid_identity() const { return cid_to_gid_identity; }
 
+    // True for a simple font that is symbolic (/FontDescriptor /Flags bit 3)
+    // and has no /Encoding override: its PDF character codes address the
+    // font program's builtin cmap directly (PDF 32000-1, 9.6.6.4). Shaping
+    // Unicode text against such a face mis-hits glyphs whenever a codepoint
+    // collides with the font's code range (e.g. U+0020 landing on subset
+    // code 0x20 of a Cairo/LibreOffice subset).
+    bool get_uses_builtin_encoding() const { return uses_builtin_encoding; }
+
     const std::shared_ptr<const std::vector<uint8_t> >& get_bytes() const { return bytes; }
 
     bool has_bytes() const;
@@ -71,6 +80,7 @@ namespace pdflib
 
     bool is_cid_font;
     bool cid_to_gid_identity;
+    bool uses_builtin_encoding;
 
     std::shared_ptr<const std::vector<uint8_t> > bytes;
   };
@@ -83,6 +93,7 @@ namespace pdflib
     format(embedded_font_format::UNKNOWN),
     is_cid_font(false),
     cid_to_gid_identity(false),
+    uses_builtin_encoding(false),
     bytes(nullptr)
   {}
 
@@ -93,6 +104,7 @@ namespace pdflib
                                                 embedded_font_format format_,
                                                 bool is_cid_font_,
                                                 bool cid_to_gid_identity_,
+                                                bool uses_builtin_encoding_,
                                                 std::shared_ptr<const std::vector<uint8_t> > bytes_):
     cache_key(std::move(cache_key_)),
     font_name(std::move(font_name_)),
@@ -101,6 +113,7 @@ namespace pdflib
     format(format_),
     is_cid_font(is_cid_font_),
     cid_to_gid_identity(cid_to_gid_identity_),
+    uses_builtin_encoding(uses_builtin_encoding_),
     bytes(std::move(bytes_))
   {}
 

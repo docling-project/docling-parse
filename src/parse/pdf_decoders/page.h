@@ -1285,6 +1285,15 @@ namespace pdflib
         instructions.add_shape_instruction(shape_instr.translated(ox, oy));
       }
 
+    // Re-emit the text instructions of the sub-decode in page coordinates
+    // so the renderer draws the glyphs on top of the widget rect; the
+    // translated copies keep the fill color, embedded font program and
+    // char codes that a reconstruction from the cells would lose.
+    for(const auto& text_instr : ap_instructions.get_text_instructions())
+      {
+        instructions.add_text_instruction(text_instr.translated(ox, oy));
+      }
+
     for(auto& cell : ap_cells)
       {
         cell.x0  += ox;  cell.y0  += oy;
@@ -1295,23 +1304,6 @@ namespace pdflib
         cell.r_x3 += ox; cell.r_y3 += oy;
         cell.widget = true;
         page_cells.push_back(cell);
-
-        // Re-emit a text_instruction in page coordinates so the renderer
-        // draws the glyph outlines on top of the light-blue widget rect.
-        text_instruction tinstr(cell.text,
-                                cell.font_enc,
-                                cell.font_key,
-                                cell.font_name,
-                                cell.enc_name,
-                                cell.font_name,   // base_font — best available proxy
-                                cell.font_size,
-                                cell.r_x0, cell.r_y0,
-                                cell.r_x1, cell.r_y1,
-                                cell.r_x2, cell.r_y2,
-                                cell.r_x3, cell.r_y3,
-                                0.0, 0.0,         // font_ascent_norm / font_descent_norm
-                                cell.r_x0, cell.r_y0); // base point
-        instructions.add_text_instruction(std::move(tinstr));
       }
 
     LOG_S(INFO) << "AP stream yielded " << ap_cells.size() << " cell(s) and "

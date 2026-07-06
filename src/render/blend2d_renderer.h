@@ -240,11 +240,15 @@ namespace pdflib
                               const text_geometry& geom,
                               const BLPath& bbox_path);
 
-    // Glyph-identity mapping when Unicode shaping against an embedded
-    // (Blend2D-loaded) face failed or produced only .notdef: CID fonts with
-    // an identity CIDToGIDMap use the character code as glyph index directly;
-    // symbolic fonts are retried through the 0xF000 private-use convention.
-    // On success gb holds a positioned glyph run ready for fill_glyph_run.
+    // Glyph-identity mapping by PDF character code against an embedded
+    // (Blend2D-loaded) face: CID fonts with an identity CIDToGIDMap use the
+    // character code as glyph index directly; simple fonts are tried through
+    // the 0xF000 private-use convention ((3,0) symbol cmaps) and then with
+    // the raw character code ((1,0) / format-0 builtin cmaps, as written by
+    // Cairo/LibreOffice subsetters). Used both as the primary path for
+    // symbolic fonts and as recovery when Unicode shaping failed or
+    // produced only .notdef. On success gb holds a positioned glyph run
+    // ready for fill_glyph_run.
     static bool recover_embedded_glyphs(const BLFont& font,
                                         text_instruction& instr,
                                         BLGlyphBuffer& gb)
@@ -272,14 +276,27 @@ namespace pdflib
 
       if (char_code <= 0xFF)
         {
-          const uint32_t codepoint = 0xF000u + static_cast<uint32_t>(char_code);
-          gb.set_utf32_text(&codepoint, 1);
+          const uint32_t symbol_codepoint = 0xF000u + static_cast<uint32_t>(char_code);
+          gb.set_utf32_text(&symbol_codepoint, 1);
           if (font.shape(gb) == BL_SUCCESS and
               not gb.is_empty() and
               gb.placement_data() != nullptr and
               not glyph_run_all_notdef(gb))
             {
               LOG_S(INFO) << "render_text: recovered glyph via symbol cmap"
+                          << " char_code=" << char_code
+                          << " font_name=`" << instr.get_font_name() << "`";
+              return true;
+            }
+
+          const uint32_t raw_codepoint = static_cast<uint32_t>(char_code);
+          gb.set_utf32_text(&raw_codepoint, 1);
+          if (font.shape(gb) == BL_SUCCESS and
+              not gb.is_empty() and
+              gb.placement_data() != nullptr and
+              not glyph_run_all_notdef(gb))
+            {
+              LOG_S(INFO) << "render_text: recovered glyph via raw char code"
                           << " char_code=" << char_code
                           << " font_name=`" << instr.get_font_name() << "`";
               return true;
@@ -1182,7 +1199,8 @@ namespace pdflib
         return false;
       }
 
-    ctx.set_fill_style(BLRgba32(0xFF000000u)); // opaque black
+    ctx.set_fill_style(make_rgba32(instr.get_rgb_filling(),
+                                   instr.get_fill_alpha()));
     if (not text_path.is_empty())
       {
         ctx.fill_path(text_path);
@@ -1225,6 +1243,19 @@ namespace pdflib
 
     // Build the bounding quad path (for optional bbox outline / fallback).
     const BLPath bbox_path = make_quad_path(geom.bbox);
+
+    // Text render modes 3 and 7 paint no glyphs (invisible / clip-only,
+    // e.g. OCR text layers); keep only the debug drawing.
+    if (instr.is_invisible())
+      {
+        BLContext& ctx = page_context();
+        draw_text_basepoint(ctx, geom);
+        if (config_.draw_text_bbox)
+          {
+            stroke_text_bbox(ctx, bbox_path);
+          }
+        return;
+      }
 
     // LOG_S(INFO) << "text=`" << instr.get_text() << "`"
     //             << " base=(" << bx << "," << by << ")"
@@ -1297,9 +1328,32 @@ namespace pdflib
             // paths below (FreeType outlines, system-face retry) don't have
             // to unwind a saved context state.
             BLGlyphBuffer gb;
-            gb.set_utf8_text(instr.get_text().c_str());
-            BLResult shape_res = font.shape(gb);
-            bool shaped = (shape_res == BL_SUCCESS and not gb.is_empty());
+            BLResult shape_res = BL_SUCCESS;
+            bool shaped = false;
+
+            // A symbolic simple font without /Encoding maps its character
+            // codes through the builtin cmap (9.6.6.4), so Unicode shaping
+            // is meaningless — and dangerously plausible: a codepoint that
+            // collides with the font's code range "succeeds" with the wrong
+            // glyph (e.g. U+0020 hitting subset code 0x20). Resolve by
+            // character code first for such faces.
+            const bool char_code_first =
+              using_embedded_font and
+              instr.has_embedded_font() and
+              not instr.get_embedded_font()->get_is_cid_font() and
+              instr.get_embedded_font()->get_uses_builtin_encoding();
+
+            if (char_code_first)
+              {
+                shaped = recover_embedded_glyphs(font, instr, gb);
+              }
+
+            if (not shaped)
+              {
+                gb.set_utf8_text(instr.get_text().c_str());
+                shape_res = font.shape(gb);
+                shaped = (shape_res == BL_SUCCESS and not gb.is_empty());
+              }
 
             if (using_embedded_font and
                 (not shaped or glyph_run_all_notdef(gb)))
@@ -1308,11 +1362,13 @@ namespace pdflib
                 // fails outright (BL_ERROR_FONT_NO_CHARACTER_MAPPING when the
                 // subset carries no Unicode cmap at all) or "succeeds" with a
                 // .notdef-only run when the cmap lacks the codepoint. Either
-                // way, try glyph-identity mapping (CID identity, symbol
-                // cmap), then FreeType glyph-name/builtin-encoding
-                // resolution, then re-shape against the system face —
-                // drawing the .notdef run would produce blank/tofu output.
-                shaped = recover_embedded_glyphs(font, instr, gb);
+                // way, try glyph-identity mapping (CID identity, symbol cmap,
+                // raw char code — unless already tried above), then FreeType
+                // glyph-name/builtin-encoding resolution, then re-shape
+                // against the system face — drawing the .notdef run would
+                // produce blank/tofu output.
+                shaped = (not char_code_first) and
+                  recover_embedded_glyphs(font, instr, gb);
 
                 if (not shaped)
                   {
@@ -1377,7 +1433,8 @@ namespace pdflib
                 draw_bbox_fallback();
                 return;
               }
-            ctx.set_fill_style(BLRgba32(0xFF000000u)); // opaque black
+            ctx.set_fill_style(make_rgba32(instr.get_rgb_filling(),
+                                           instr.get_fill_alpha()));
             text_draw_adjustment adjustment =
               calculate_glyph_bbox_adjustment(font, gb, instr, geom.size);
 

@@ -1472,6 +1472,30 @@ namespace pdflib
 
     embedded_font_format format = resolve_embedded_font_format();
 
+    // A symbolic simple font without /Encoding maps its character codes
+    // through the font program's builtin cmap (9.6.6.4); the renderer must
+    // then resolve glyphs by character code, not by Unicode text.
+    bool uses_builtin_encoding = false;
+    {
+      const int FLAG_SYMBOLIC = 1 << 2; // /Flags bit 3
+
+      int flags = 0;
+      std::vector<std::string> keys = {"/FontDescriptor", "/Flags"};
+      if(utils::json::has(keys, json_font))
+        {
+          flags = utils::json::get(keys, json_font);
+        }
+      else if(utils::json::has(keys, desc_font))
+        {
+          flags = utils::json::get(keys, desc_font);
+        }
+
+      const bool has_encoding = utils::json::has({"/Encoding"}, json_font);
+
+      uses_builtin_encoding = (subtype != TYPE_0) and
+        ((flags & FLAG_SYMBOLIC) != 0) and (not has_encoding);
+    }
+
     font_blob = std::make_shared<const embedded_font_blob>(
       embedded_font_blob::compute_cache_key(*bytes),
       font_name,
@@ -1480,6 +1504,7 @@ namespace pdflib
       format,
       subtype == TYPE_0,
       resolve_cid_to_gid_identity(),
+      uses_builtin_encoding,
       std::move(bytes));
 
     LOG_S(INFO) << __FUNCTION__
@@ -1490,7 +1515,8 @@ namespace pdflib
                 << " bytes=" << font_blob->byte_size()
                 << " cache-key=" << font_blob->get_cache_key()
                 << " cid=" << font_blob->get_is_cid_font()
-                << " cid-to-gid-identity=" << font_blob->get_cid_to_gid_identity();
+                << " cid-to-gid-identity=" << font_blob->get_cid_to_gid_identity()
+                << " uses-builtin-encoding=" << font_blob->get_uses_builtin_encoding();
   }
 
   void pdf_resource<PAGE_FONT>::init_ascent_and_descent()
