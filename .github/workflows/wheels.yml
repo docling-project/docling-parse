@@ -333,7 +333,7 @@ jobs:
           # Install only the build-time deps; avoid resolving the 'perf' group which
           # pulls in cryptography (needs OpenSSL) and other heavy packages that are
           # not available pre-built on Windows ARM64.
-          uv sync --active --no-default-groups --group build
+          uv sync --active --no-default-groups --no-install-project --group build
           if (Test-Path ".\build") {
               Remove-Item -Recurse -Force ".\build"
           }
