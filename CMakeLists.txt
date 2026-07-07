@@ -86,6 +86,15 @@ if (WIN32)
         # build depending on the non-redistributable debug CRT. The build is
         # invoked with --config Release (see local_build.py).
         set(CMAKE_CONFIGURATION_TYPES "Release" CACHE STRING "MSVC build configurations" FORCE)
+
+        # Source files are UTF-8. Without /utf-8, MSVC reads multi-byte characters
+        # (e.g. the curly quotes and en/em dashes in src/parse/utils/string.h) as
+        # multi-character constants -> error C2015. GCC/Clang assume UTF-8, so this
+        # only bites the MSVC/arm64 build.
+        add_compile_options(/utf-8)
+        # MSVC's <cmath> only exposes M_PI (used in src/parse/utils/values.h) when
+        # _USE_MATH_DEFINES is defined before the include -> without it, C2065.
+        add_compile_definitions(_USE_MATH_DEFINES)
     else()
         # MinGW/GCC toolchain (Windows amd64)
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-sign-compare -O3 ${ENV_ARCHFLAGS}")
