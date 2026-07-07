@@ -94,7 +94,10 @@ if (WIN32)
         add_compile_options(/utf-8)
         # MSVC's <cmath> only exposes M_PI (used in src/parse/utils/values.h) when
         # _USE_MATH_DEFINES is defined before the include -> without it, C2065.
-        add_compile_definitions(_USE_MATH_DEFINES)
+        # NOMINMAX stops <windows.h> from defining min()/max() function-like
+        # macros, which otherwise collide with std::numeric_limits<T>::max() in
+        # qpdf's QIntC.hh (and std::min/std::max in general) -> error C2589.
+        add_compile_definitions(_USE_MATH_DEFINES NOMINMAX)
     else()
         # MinGW/GCC toolchain (Windows amd64)
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-sign-compare -O3 ${ENV_ARCHFLAGS}")
