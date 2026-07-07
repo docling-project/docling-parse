@@ -20,7 +20,14 @@ else()
 
     set(FREETYPE_URL https://github.com/freetype/freetype.git)
     set(FREETYPE_TAG VER-2-13-3)
-    set(FREETYPE_IMPORTED_LIB ${EXTERNALS_PREFIX_PATH}/lib/libfreetype.a)
+    # GCC/MinGW -> libfreetype.a, MSVC -> freetype.lib (Windows arm64 uses MSVC).
+    # DISABLE_FORCE_DEBUG_POSTFIX + Release avoid the "d" postfix, so the name is
+    # stable per-toolchain.
+    if(MSVC)
+        set(FREETYPE_IMPORTED_LIB ${EXTERNALS_PREFIX_PATH}/lib/freetype.lib)
+    else()
+        set(FREETYPE_IMPORTED_LIB ${EXTERNALS_PREFIX_PATH}/lib/libfreetype.a)
+    endif()
 
     # All optional codec/shaping dependencies are disabled: the renderer only
     # needs outline loading for Type 1 / CFF / TrueType font programs, and a
