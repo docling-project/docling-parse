@@ -23,6 +23,57 @@ def get_pybind11_cmake_args():
         print(f"{pybind11_cmake_dir=}")
         return [f"-Dpybind11_DIR={pybind11_cmake_dir}"]
 
+
+def get_cross_python_cmake_args():
+    """Forward the target-Python headers/libs to CMake when cibuildwheel
+    cross-compiles (e.g. win_arm64 built on an amd64 host for CPython < 3.12,
+    which has no native arm64 runner Python).
+
+    In that mode cibuildwheel runs a host (amd64) interpreter and passes the
+    arm64 target's include/library dirs to distutils build_ext through the file
+    named by DIST_EXTRA_CONFIG. This build drives CMake directly and never runs
+    distutils build_ext, so pybind11 would otherwise resolve the host amd64
+    pythonXY.lib and the arm64 extension fails to link (unresolved __imp_Py*
+    symbols). Re-export those dirs to CMake's modern FindPython instead.
+    """
+    dist_extra = os.getenv("DIST_EXTRA_CONFIG")
+    if not dist_extra or not os.path.isfile(dist_extra):
+        return []
+
+    import configparser
+    import glob
+
+    # RawConfigParser: paths contain characters (e.g. '%') that the default
+    # interpolation would choke on.
+    cfg = configparser.RawConfigParser()
+    cfg.read(dist_extra)
+    if not cfg.has_section("build_ext"):
+        return []
+
+    include_dir = cfg.get("build_ext", "include_dirs", fallback="").strip().splitlines()
+    library_dir = cfg.get("build_ext", "library_dirs", fallback="").strip().splitlines()
+
+    args = []
+    # Switch pybind11 to CMake's modern FindPython, which honors the explicit
+    # Python_INCLUDE_DIR / Python_LIBRARY hints below (the legacy
+    # FindPythonLibsNew derives them from the host interpreter's arch).
+    args.append("-DPYBIND11_FINDPYTHON=ON")
+    # FindPython uses the mixed-case name; pin it to the build interpreter so it
+    # does not pick a different Python off PATH.
+    args.append(f"-DPython_EXECUTABLE={sys.executable}")
+    if include_dir:
+        args.append(f"-DPython_INCLUDE_DIR={include_dir[0].strip()}")
+    if library_dir:
+        libs = glob.glob(os.path.join(library_dir[0].strip(), "python*.lib"))
+        # Prefer the versioned python3XY.lib over the stable-ABI python3.lib.
+        versioned = [l for l in libs if not l.lower().endswith("python3.lib")]
+        chosen = (versioned or libs)
+        if chosen:
+            args.append(f"-DPython_LIBRARY={chosen[0]}")
+
+    print(f"cross-compile python cmake args: {args}")
+    return args
+
 def run(cmd: List[str], cwd: str="./"):
 
     print_cmd = " ".join(cmd)
@@ -66,6 +117,7 @@ def build_local(num_threads: int):
         config_cmd.extend(shlex.split(cmake_args_env))
 
     config_cmd.extend(get_pybind11_cmake_args())
+    config_cmd.extend(get_cross_python_cmake_args())
     success = run(config_cmd, cwd=ROOT_DIR)
     if not success:
         raise RuntimeError("Error building.")
