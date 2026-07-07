@@ -74,6 +74,11 @@ def build_local(num_threads: int):
         "cmake",
         "--build", f"{BUILD_DIR}",
         "--target=install",
+        # Authoritative for multi-config generators (e.g. Visual Studio on Windows
+        # ARM64): builds Release so MSVC uses /O2 and the redistributable release
+        # CRT. Ignored by single-config generators (Makefiles/Ninja on Linux,
+        # macOS and MinGW), where the optimization level comes from CMAKE_CXX_FLAGS.
+        "--config", "Release",
     ]
     if num_threads > 1:
         build_cmd.extend(["-j", f"{num_threads}"])

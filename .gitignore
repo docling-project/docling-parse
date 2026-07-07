@@ -8,7 +8,10 @@ perf/results/**
 perf/results_*
 perf/viz*
 tests/data/**
-
+*.pdf
+*.json
+*.png
+*.dclx
 
 # Created by https://www.toptal.com/developers/gitignore/api/python,macos,emacs,cmake,virtualenv
 # Edit at https://www.toptal.com/developers/gitignore?templates=python,macos,emacs,cmake,virtualenv
