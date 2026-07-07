@@ -7,6 +7,8 @@ scratch_*
 perf/results/**
 perf/results_*
 perf/viz*
+perf/*.html
+perf/*.bin
 tests/data/**
 *.pdf
 *.json

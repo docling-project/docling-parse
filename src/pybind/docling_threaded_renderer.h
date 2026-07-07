@@ -31,6 +31,15 @@ namespace docling
 
     // Shared across workers; pages keep only their tiny local alias cache.
     std::shared_ptr<pdflib::blend2d_font_resolver> font_resolver_;
+
+    // Shared across workers so embedded font programs are loaded once per
+    // process instead of once per page. Safe across documents: entries are
+    // keyed by a content hash of the font bytes, not by PDF object ids.
+    std::shared_ptr<pdflib::blend2d_embedded_font_cache> embedded_font_cache_;
+
+    // Same sharing/keying for the Type 1 / bare CFF programs that Blend2D
+    // cannot load; FreeType serializes internally on its own mutex.
+    std::shared_ptr<pdflib::freetype_embedded_font_cache> freetype_font_cache_;
   };
 
   inline docling_threaded_renderer::docling_threaded_renderer(std::string loglevel,
@@ -43,9 +52,15 @@ namespace docling
                                                                          max_concurrent_results,
                                                                          decode_config),
     render_cfg(render_config),
-    font_resolver_(std::make_shared<pdflib::blend2d_font_resolver>())
+    font_resolver_(std::make_shared<pdflib::blend2d_font_resolver>()),
+    embedded_font_cache_(std::make_shared<pdflib::blend2d_embedded_font_cache>()),
+    freetype_font_cache_(std::make_shared<pdflib::freetype_embedded_font_cache>())
   {
     font_resolver_->warm();
+
+    // This pipeline always renders, so embedded font programs must be
+    // extracted during page decoding; parse-only pipelines leave this off.
+    config.extract_font_programs = true;
   }
 
   inline void docling_threaded_renderer::worker_loop()
@@ -117,7 +132,10 @@ namespace docling
                   }
 
                 stage_start = clock_type::now();
-                pdflib::renderer<pdflib::BLEND2D> rnd(render_cfg, font_resolver_);
+                pdflib::renderer<pdflib::BLEND2D> rnd(render_cfg,
+                                                      font_resolver_,
+                                                      embedded_font_cache_,
+                                                      freetype_font_cache_);
                 page_decoder->get_instructions().iterate_over_instructions(rnd);
                 result.timings.render_page_s
                   = std::chrono::duration<double>(clock_type::now() - stage_start).count();

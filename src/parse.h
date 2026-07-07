@@ -92,6 +92,9 @@
 #include <parse/pdf_resources/page_grph.h>
 #include <parse/pdf_resources/page_grphs.h>
 
+#include <parse/pdf_resources/page_colorspace.h>
+#include <parse/pdf_resources/page_colorspaces.h>
+
 #include <parse/pdf_resources/page_xobject_image.h>
 #include <parse/pdf_resources/page_xobject_form.h>
 #include <parse/pdf_resources/page_xobject_postscript.h>

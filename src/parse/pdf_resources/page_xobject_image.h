@@ -953,12 +953,26 @@ namespace pdflib
     pdf_resource<PAGE_XOBJECT_IMAGE> smask;
     smask.set(xobject_key + "/SMask", qpdf_smask);
 
-    if(smask.get_image_width() != image_width or smask.get_image_height() != image_height)
+    const int sm_w = smask.get_image_width();
+    const int sm_h = smask.get_image_height();
+
+    if(sm_w <= 0 or sm_h <= 0 or image_width <= 0 or image_height <= 0)
       {
-        LOG_S(WARNING) << "SMask size mismatch for xobject_key=" << xobject_key
+        LOG_S(WARNING) << "SMask with invalid dimensions for xobject_key=" << xobject_key
                        << " image=" << image_width << "x" << image_height
-                       << " smask=" << smask.get_image_width() << "x" << smask.get_image_height();
+                       << " smask=" << sm_w << "x" << sm_h;
         return;
+      }
+
+    // Per PDF spec the soft mask does not need to match the base image's
+    // dimensions (both map onto the image's unit square); a differing mask
+    // is resampled onto the image grid below.
+    if(sm_w != image_width or sm_h != image_height)
+      {
+        LOG_S(INFO) << "SMask size differs for xobject_key=" << xobject_key
+                    << " image=" << image_width << "x" << image_height
+                    << " smask=" << sm_w << "x" << sm_h
+                    << " -- resampling (nearest neighbor)";
       }
 
     const bool gray_mask =
@@ -987,14 +1001,16 @@ namespace pdflib
       }
 
     auto smask_buf = smask.get_decoded_stream_data();
-    const size_t expected = static_cast<size_t>(image_width) * image_height;
-    if(smask_buf->getSize() < expected)
+    const size_t smask_expected = static_cast<size_t>(sm_w) * sm_h;
+    if(smask_buf->getSize() < smask_expected)
       {
         LOG_S(WARNING) << "SMask decoded stream too small for xobject_key=" << xobject_key
                        << " size=" << smask_buf->getSize()
-                       << " expected>=" << expected;
+                       << " expected>=" << smask_expected;
         return;
       }
+
+    const size_t expected = static_cast<size_t>(image_width) * image_height;
 
     auto out = std::make_shared<std::vector<uint8_t>>();
     out->resize(expected);
@@ -1002,14 +1018,23 @@ namespace pdflib
     auto const* src = reinterpret_cast<uint8_t const*>(smask_buf->getBuffer());
     auto const decode = smask.get_decode_array();
     const bool has_decode = smask.has_decode_array() and decode.size() >= 2;
-    for(size_t i = 0; i < expected; ++i)
+
+    // nearest-neighbor sampling from the mask grid onto the image grid
+    // (identity when the dimensions already match)
+    for(int row = 0; row < image_height; ++row)
       {
-        uint8_t alpha = src[i];
-        if(has_decode)
+        const size_t src_row = (static_cast<size_t>(row) * sm_h) / image_height;
+        for(int col = 0; col < image_width; ++col)
           {
-            alpha = jpeg::apply_decode_component(alpha, decode[0], decode[1]);
+            const size_t src_col = (static_cast<size_t>(col) * sm_w) / image_width;
+
+            uint8_t alpha = src[src_row * sm_w + src_col];
+            if(has_decode)
+              {
+                alpha = jpeg::apply_decode_component(alpha, decode[0], decode[1]);
+              }
+            (*out)[static_cast<size_t>(row) * image_width + col] = alpha;
           }
-        (*out)[i] = alpha;
       }
 
     soft_mask_data = std::move(out);

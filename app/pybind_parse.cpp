@@ -92,6 +92,22 @@ namespace
       row["font_descent_norm"] = instr.get_font_descent_norm();
       row["base_x0"] = instr.get_base_x0();
       row["base_y0"] = instr.get_base_y0();
+      row["char_code"] = instr.get_char_code();
+      row["glyph_name"] = instr.get_glyph_name();
+      // Embedded font metadata only — never the raw font bytes.
+      row["has_embedded_font"] = instr.has_embedded_font();
+      if(instr.has_embedded_font())
+        {
+          const auto& blob = instr.get_embedded_font();
+          pybind11::dict embedded;
+          embedded["source_key"] = blob->get_source_key();
+          embedded["format"] = pdflib::to_string(blob->get_format());
+          embedded["byte_size"] = blob->byte_size();
+          embedded["cache_key"] = blob->get_cache_key();
+          embedded["is_cid_font"] = blob->get_is_cid_font();
+          embedded["cid_to_gid_identity"] = blob->get_cid_to_gid_identity();
+          row["embedded_font"] = embedded;
+        }
       row["quad"] = make_quad_dict(
         instr.get_r_x0(), instr.get_r_y0(),
         instr.get_r_x1(), instr.get_r_y1(),
@@ -137,13 +153,41 @@ namespace
     {
       pybind11::dict row;
       row["type"] = instruction_name(pdflib::SHAPE_RENDER_INSTRUCTION);
-      row["x"] = instr.get_x();
-      row["y"] = instr.get_y();
-      row["closing_type"] = static_cast<int>(instr.get_closing_type());
-      row["shape_type"] = static_cast<int>(instr.get_shape_type());
+
+      pybind11::list subpaths;
+      for(const auto& sp : instr.get_subpaths())
+        {
+          pybind11::dict sub;
+          sub["x0"] = sp.get_x0();
+          sub["y0"] = sp.get_y0();
+
+          pybind11::list ops;
+          for(const auto op : sp.get_ops())
+            {
+              ops.append(static_cast<int>(op));
+            }
+          sub["ops"] = ops;
+          sub["px"] = sp.get_px();
+          sub["py"] = sp.get_py();
+
+          sub["closing_type"] = static_cast<int>(sp.get_closing_type());
+          sub["shape_type"] = static_cast<int>(sp.get_shape_type());
+          subpaths.append(sub);
+        }
+      row["subpaths"] = subpaths;
+
+      row["paint_mode"] = static_cast<int>(instr.get_paint_mode());
+      row["fill_rule"] = static_cast<int>(instr.get_fill_rule());
       row["line_width"] = instr.get_line_width();
+      row["line_cap"] = instr.get_line_cap();
+      row["line_join"] = instr.get_line_join();
+      row["miter_limit"] = instr.get_miter_limit();
+      row["dash_array"] = instr.get_dash_array();
+      row["dash_phase"] = instr.get_dash_phase();
       row["rgb_stroking"] = instr.get_rgb_stroking();
       row["rgb_filling"] = instr.get_rgb_filling();
+      row["stroke_alpha"] = instr.get_stroke_alpha();
+      row["fill_alpha"] = instr.get_fill_alpha();
       instructions.append(row);
     }
   };
@@ -298,6 +342,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
     .def_readwrite("release_native_memory_every_n_pages", &pdflib::decode_config::release_native_memory_every_n_pages)
     .def_readwrite("keep_glyphs", &pdflib::decode_config::keep_glyphs)
     .def_readwrite("keep_qpdf_warnings", &pdflib::decode_config::keep_qpdf_warnings)
+    .def_readwrite("extract_font_programs", &pdflib::decode_config::extract_font_programs)
     .def("__copy__", [](const pdflib::decode_config& self) { return self; })
     .def("__deepcopy__", [](const pdflib::decode_config& self, pybind11::dict) { return self; });
 
@@ -1050,6 +1095,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
         draw_text_basepoint (bool): Draw the text baseline origin as a small red dot [default=false].
         fit_glyph_bbox_to_target (bool): Uniformly rescale measured glyph outlines so the rendered bbox fits inside the target glyph bbox, with either width or height matching exactly [default=false].
         resolve_fonts (bool): Resolve PDF font names to system fonts [default=true].
+        use_embedded_fonts (bool): Prefer embedded font programs (TrueType/OpenType via Blend2D, Type 1/CFF via FreeType outlines) over system font resolution [default=true].
         font_similarity_cutoff (float): Minimum Jaccard similarity for fuzzy font matching; candidates below this threshold fall back to the default font [default=0.25].
         scale (float): Target render scale in multiples of the PDF page size; -1 disables scale-based sizing [default=-1].
         canvas_width (int): Target canvas width in pixels; -1 means use PDF page size [default=-1].
@@ -1061,6 +1107,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
     .def_readwrite("draw_text_basepoint",     &pdflib::render_config::draw_text_basepoint)
     .def_readwrite("fit_glyph_bbox_to_target",&pdflib::render_config::fit_glyph_bbox_to_target)
     .def_readwrite("resolve_fonts",           &pdflib::render_config::resolve_fonts)
+    .def_readwrite("use_embedded_fonts",      &pdflib::render_config::use_embedded_fonts)
     .def_readwrite("font_similarity_cutoff",  &pdflib::render_config::font_similarity_cutoff)
     .def_readwrite("scale",                   &pdflib::render_config::scale)
     .def_readwrite("canvas_width",            &pdflib::render_config::canvas_width)

@@ -1004,7 +1004,7 @@ def main(argv: List[str]) -> int:
     _add_bool_value_arg(
         ap,
         "materialize-line-cells",
-        default=False,
+        default=True,
         help="Materialize line cells into SegmentedPdfPage",
     )
     _add_bool_value_arg(
@@ -1016,7 +1016,7 @@ def main(argv: List[str]) -> int:
     _add_bool_value_arg(
         ap,
         "materialize-bitmaps",
-        default=False,
+        default=True,
         help="Materialize bitmap locations into SegmentedPdfPage",
     )
     _add_bool_value_arg(

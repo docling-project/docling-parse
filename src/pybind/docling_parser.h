@@ -4,6 +4,7 @@
 #define PYBIND_PDF_PARSER_H
 
 #include <atomic>
+#include <list>
 #include <optional>
 #ifdef _WIN32
 #include <locale>
@@ -27,9 +28,7 @@ namespace docling
     
   public:
 
-    docling_parser();
-
-    docling_parser(std::string level);
+    docling_parser(std::string level="fatal", int max_concurrent_results=16);
 
     void set_loglevel_with_label(std::string level="error");
 
@@ -63,41 +62,39 @@ namespace docling
                                                                         int page,
                                                                         const pdflib::decode_config& config);
 
-    //std::shared_ptr<pdflib::pdf_decoder<pdflib::PAGE>> get_page_decoders_in_parallel(const pdflib::decode_config& config);
-    
   private:
+
+    struct page_decoder_cache_entry
+    {
+      std::string key;
+      int page_number;
+      page_decoder_ptr_type page_decoder;
+    };
 
     bool verify_page_boundary(std::string page_boundary);
     void maybe_release_native_memory(const pdflib::decode_config& config);
+    page_decoder_ptr_type find_page_decoder(const std::string& key, int page);
+    void add_page_decoder(const std::string& key, int page, page_decoder_ptr_type page_decoder);
+    void remove_page_decoders(const std::string& key);
+    void remove_page_decoder(const std::string& key, int page);
+    void trim_page_decoders();
 
   private:
 
     std::string pdf_resources_dir;
 
-    std::unordered_map<std::string, doc_decoder_ptr_type> key2doc;
+    std::unordered_map<std::string, doc_decoder_ptr_type> doc_decoders;
+    std::list<page_decoder_cache_entry> page_decoders;
+    int max_concurrent_results;
     std::atomic<int> total_processed_pages{0};
   };
 
-  docling_parser::docling_parser():
+  docling_parser::docling_parser(std::string level, int max_concurrent_results):
     docling_resources(),
     pdf_resources_dir(resource_utils::get_resources_dir(true).string()),
-    key2doc({})
-  {
-    LOG_S(WARNING) << "pdf_resources_dir: " << pdf_resources_dir;
-
-    auto RESOURCE_DIR_KEY = pdflib::pdf_resource<pdflib::PAGE_FONT>::RESOURCE_DIR_KEY;
-
-    nlohmann::json data = nlohmann::json::object({});
-    data[RESOURCE_DIR_KEY] = pdf_resources_dir;
-
-    std::unordered_map<std::string, double> timings = {};
-    pdflib::pdf_resource<pdflib::PAGE_FONT>::initialise(data, timings);
-  }
-
-  docling_parser::docling_parser(std::string level):
-    docling_resources(),
-    pdf_resources_dir(resource_utils::get_resources_dir(true).string()),
-    key2doc({})
+    doc_decoders({}),
+    page_decoders({}),
+    max_concurrent_results(max_concurrent_results)
   {
     set_loglevel_with_label(level);
 
@@ -141,7 +138,7 @@ namespace docling
     std::vector<std::string> keys={};
 
     // Add the key (which is the first element of the pair)
-    for (const auto& pair : key2doc)
+    for (const auto& pair : doc_decoders)
       {
         keys.push_back(pair.first);
       }
@@ -151,7 +148,7 @@ namespace docling
 
   bool docling_parser::is_loaded(std::string key)
   {
-    return (key2doc.count(key)==1);
+    return (doc_decoders.count(key)==1);
   }
 
   bool docling_parser::load_document(std::string key,
@@ -170,10 +167,12 @@ namespace docling
 
     if (std::filesystem::exists(path_filename))
       {
-        key2doc[key] = std::make_shared<doc_decoder_type>();
-        key2doc.at(key)->process_document_from_file(filename,
-                                                    password,
-                                                    keep_qpdf_warnings);
+        remove_page_decoders(key);
+
+        doc_decoders[key] = std::make_shared<doc_decoder_type>();
+        doc_decoders.at(key)->process_document_from_file(filename,
+                                                         password,
+                                                         keep_qpdf_warnings);
 
         return true;
       }
@@ -207,12 +206,14 @@ namespace docling
 
     try
       {
-        key2doc[key] = std::make_shared<doc_decoder_type>();
+        remove_page_decoders(key);
+
+        doc_decoders[key] = std::make_shared<doc_decoder_type>();
         std::string description = "parsing of " + key + " from bytesio";
-        key2doc.at(key)->process_document_from_bytesio(data_buffer,
-                                                       password,
-                                                       description,
-                                                       keep_qpdf_warnings);
+        doc_decoders.at(key)->process_document_from_bytesio(data_buffer,
+                                                            password,
+                                                            description,
+                                                            keep_qpdf_warnings);
 
         return true;
       }
@@ -227,10 +228,11 @@ namespace docling
 
   bool docling_parser::unload_document(std::string key)
   {
-    if(key2doc.count(key)==1)
+    if(doc_decoders.count(key)==1)
       {
-        key2doc.erase(key);
-        if(key2doc.empty())
+        doc_decoders.erase(key);
+        remove_page_decoders(key);
+        if(doc_decoders.empty())
           {
             total_processed_pages.store(0);
           }
@@ -246,12 +248,13 @@ namespace docling
 
   bool docling_parser::unload_document_page(std::string key, int page_num)
   {
-    auto itr = key2doc.find(key);
+    auto itr = doc_decoders.find(key);
 
-    if(itr!=key2doc.end())
+    if(itr!=doc_decoders.end())
       {
         doc_decoder_ptr_type decoder_ptr = itr->second;
         decoder_ptr->unload_page(page_num);
+        remove_page_decoder(key, page_num);
       }
     else
       {
@@ -263,12 +266,13 @@ namespace docling
 
   bool docling_parser::unload_document_pages(std::string key)
   {
-    auto itr = key2doc.find(key);
+    auto itr = doc_decoders.find(key);
 
-    if(itr!=key2doc.end())
+    if(itr!=doc_decoders.end())
       {
         doc_decoder_ptr_type decoder_ptr = itr->second;
         decoder_ptr->unload_pages();
+        remove_page_decoders(key);
       }
     else
       {
@@ -280,7 +284,8 @@ namespace docling
 
   void docling_parser::unload_documents()
   {
-    key2doc.clear();
+    doc_decoders.clear();
+    page_decoders.clear();
     total_processed_pages.store(0);
   }
 
@@ -299,11 +304,58 @@ namespace docling
       }
   }
 
+  docling_parser::page_decoder_ptr_type docling_parser::find_page_decoder(const std::string& key,
+                                                                          int page)
+  {
+    for(auto itr = page_decoders.begin(); itr != page_decoders.end(); ++itr)
+      {
+        if(itr->key == key and itr->page_number == page)
+          {
+            page_decoder_ptr_type page_decoder = itr->page_decoder;
+            page_decoders.splice(page_decoders.end(), page_decoders, itr);
+            return page_decoder;
+          }
+      }
+
+    return nullptr;
+  }
+
+  void docling_parser::add_page_decoder(const std::string& key,
+                                        int page,
+                                        page_decoder_ptr_type page_decoder)
+  {
+    remove_page_decoder(key, page);
+    page_decoders.push_back(page_decoder_cache_entry{key, page, page_decoder});
+    trim_page_decoders();
+  }
+
+  void docling_parser::remove_page_decoders(const std::string& key)
+  {
+    page_decoders.remove_if([&key](const auto& page_decoder) {
+      return page_decoder.key == key;
+    });
+  }
+
+  void docling_parser::remove_page_decoder(const std::string& key, int page)
+  {
+    page_decoders.remove_if([&key, page](const auto& page_decoder) {
+      return page_decoder.key == key and page_decoder.page_number == page;
+    });
+  }
+
+  void docling_parser::trim_page_decoders()
+  {
+    while(static_cast<int>(page_decoders.size()) > max_concurrent_results)
+      {
+        page_decoders.pop_front();
+      }
+  }
+
   int docling_parser::number_of_pages(std::string key)
   {
-    auto itr = key2doc.find(key);
+    auto itr = doc_decoders.find(key);
 
-    if(itr!=key2doc.end())
+    if(itr!=doc_decoders.end())
       {
         return (itr->second)->get_number_of_pages();
       }
@@ -319,9 +371,9 @@ namespace docling
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    auto itr = key2doc.find(key);
+    auto itr = doc_decoders.find(key);
 
-    if(itr==key2doc.end())
+    if(itr==doc_decoders.end())
       {
         LOG_S(ERROR) << "key not found: " << key;
         return nlohmann::json::value_t::null;
@@ -334,9 +386,9 @@ namespace docling
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    auto itr = key2doc.find(key);
+    auto itr = doc_decoders.find(key);
 
-    if(itr==key2doc.end())
+    if(itr==doc_decoders.end())
       {
         LOG_S(ERROR) << "key not found: " << key;
         return nlohmann::json::value_t::null;
@@ -349,9 +401,9 @@ namespace docling
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    auto itr = key2doc.find(key);
+    auto itr = doc_decoders.find(key);
 
-    if(itr==key2doc.end())
+    if(itr==doc_decoders.end())
       {
         LOG_S(ERROR) << "key not found: " << key;
         return nlohmann::json::value_t::null;
@@ -366,15 +418,36 @@ namespace docling
   {
     LOG_S(INFO) << __FUNCTION__ << " for key: " << key << " and page: " << page;
 
-    auto itr = key2doc.find(key);
-    if(itr == key2doc.end())
+    auto itr = doc_decoders.find(key);
+    if(itr == doc_decoders.end())
       {
         LOG_S(ERROR) << "key not found: " << key;
         return nullptr;
       }
 
+    auto cached_page_decoder = find_page_decoder(key, page);
+    if(cached_page_decoder != nullptr)
+      {
+        return cached_page_decoder;
+      }
+
     auto& doc_decoder = itr->second;
-    auto page_decoder = doc_decoder->decode_page(page, config);
+    auto page_decoder = doc_decoder->make_thread_safe_page_decoder(
+      page,
+      config.keep_qpdf_warnings);
+    page_decoder->decode_page(config);
+
+    if(config.create_word_cells)
+      {
+        page_decoder->create_word_cells(config);
+      }
+
+    if(config.create_line_cells)
+      {
+        page_decoder->create_line_cells(config);
+      }
+
+    add_page_decoder(key, page, page_decoder);
     maybe_release_native_memory(config);
     return page_decoder;
   }

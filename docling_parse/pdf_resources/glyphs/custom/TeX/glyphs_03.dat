@@ -44,3 +44,19 @@ hard;044A
 Hard;042A
 iroman;0456
 Iroman;0406
+# --- TeX glyph names with no assignment in lcdf-typetools texglyphlist.txt ---
+# (texglyphlist marks most of these "XXX"; mappings below are the closest
+# Unicode approximations for text extraction)
+# OT1 slot 040: the crossbar overlaid on l/L to build lslash; zero-width
+# space keeps extracted text clean ("suppress"+"l" -> "l")
+# suppress;200B
+# vertical extension module of big double arrows (cmex-style fonts)
+arrowvertexdbl;2016
+# MSBM short vertical bar (negation piece)
+barshort;2223
+# MSBM dashed-arrow pieces: axis-height dash segment and arrowhead pieces
+axisshort;2212
+arrowaxisleft;21E0
+arrowaxisright;21E2
+# MSAM/MSBM small filled square
+squaresmallsolid;25AA

@@ -1,3 +1,28 @@
+## [v7.6.0](https://github.com/docling-project/docling-parse/releases/tag/v7.6.0) - 2026-07-06
+
+### Feature
+
+* Working on refactoring the parse for shapes ([#293](https://github.com/docling-project/docling-parse/issues/293)) ([`cbe73a8`](https://github.com/docling-project/docling-parse/commit/cbe73a8cc4fae6da7c9bf23914d9571c1c5cf011))
+
+## [v7.5.0](https://github.com/docling-project/docling-parse/releases/tag/v7.5.0) - 2026-07-03
+
+### Feature
+
+* Attack embedded fonts ([#291](https://github.com/docling-project/docling-parse/issues/291)) ([`f41aec4`](https://github.com/docling-project/docling-parse/commit/f41aec48e3b42b6d9a4de4afbc110a6f29664925))
+* Improve font resolver ([#290](https://github.com/docling-project/docling-parse/issues/290)) ([`a7f201f`](https://github.com/docling-project/docling-parse/commit/a7f201fdc2b1c6a629c406f38d9b1b67547db1eb))
+
+## [v7.4.0](https://github.com/docling-project/docling-parse/releases/tag/v7.4.0) - 2026-07-01
+
+### Feature
+
+* Reduce total number of results cached ([#287](https://github.com/docling-project/docling-parse/issues/287)) ([`55d8476`](https://github.com/docling-project/docling-parse/commit/55d8476ed224929bbb6269ee5f9cff7ffda0fd19))
+
+## [v7.3.0](https://github.com/docling-project/docling-parse/releases/tag/v7.3.0) - 2026-07-01
+
+### Feature
+
+* Caching objects ([#285](https://github.com/docling-project/docling-parse/issues/285)) ([`2bc547e`](https://github.com/docling-project/docling-parse/commit/2bc547ecdecb1e24ebd9c10b22c2c8aca9e0d8a5))
+
 ## [v7.2.0](https://github.com/docling-project/docling-parse/releases/tag/v7.2.0) - 2026-06-29
 
 ### Feature

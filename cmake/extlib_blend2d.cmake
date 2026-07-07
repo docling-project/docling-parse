@@ -48,8 +48,10 @@ else()
     FetchContent_Declare(
         blend2d
         GIT_REPOSITORY https://github.com/blend2d/blend2d.git
-        GIT_TAG        master
-        GIT_SHALLOW    TRUE
+        # Pinned so the (renamed, snake_case) C++ API cannot drift under us;
+        # bump deliberately. This is the commit the font-rendering code was
+        # validated against.
+        GIT_TAG        6dbc2cefbc996379e07104e34519a440b49b15d7
     )
     FetchContent_MakeAvailable(blend2d)
     # FetchContent creates the target "blend2d" (and alias blend2d::blend2d).

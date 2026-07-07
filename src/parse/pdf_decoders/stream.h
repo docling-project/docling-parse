@@ -19,9 +19,10 @@ namespace pdflib
                 page_item<PAGE_SHAPES>&     page_shapes_,
                 page_item<PAGE_IMAGES>&    page_images_,
 
-                std::shared_ptr<pdf_resource<PAGE_FONTS>>     page_fonts_,
-                std::shared_ptr<pdf_resource<PAGE_GRPHS>>     page_grphs_,
-                std::shared_ptr<pdf_resource<PAGE_XOBJECTS>>  page_xobjects_,
+                std::shared_ptr<pdf_resource<PAGE_FONTS>>       page_fonts_,
+                std::shared_ptr<pdf_resource<PAGE_GRPHS>>       page_grphs_,
+                std::shared_ptr<pdf_resource<PAGE_COLORSPACES>> page_colorspaces_,
+                std::shared_ptr<pdf_resource<PAGE_XOBJECTS>>    page_xobjects_,
 
                 pdf_render_instructions& instructions,
 
@@ -80,9 +81,10 @@ namespace pdflib
     page_item<PAGE_SHAPES>&     page_shapes;
     page_item<PAGE_IMAGES>&    page_images;
 
-    std::shared_ptr<pdf_resource<PAGE_FONTS>>     page_fonts;
-    std::shared_ptr<pdf_resource<PAGE_GRPHS>>     page_grphs;
-    std::shared_ptr<pdf_resource<PAGE_XOBJECTS>>  page_xobjects;
+    std::shared_ptr<pdf_resource<PAGE_FONTS>>       page_fonts;
+    std::shared_ptr<pdf_resource<PAGE_GRPHS>>       page_grphs;
+    std::shared_ptr<pdf_resource<PAGE_COLORSPACES>> page_colorspaces;
+    std::shared_ptr<pdf_resource<PAGE_XOBJECTS>>    page_xobjects;
 
     pdf_render_instructions& instructions;
 
@@ -103,10 +105,11 @@ namespace pdflib
                                    page_item<PAGE_SHAPES>&     page_shapes_,
                                    page_item<PAGE_IMAGES>&    page_images_,
 
-                                   std::shared_ptr<pdf_resource<PAGE_FONTS>>     page_fonts_,
-                                   std::shared_ptr<pdf_resource<PAGE_GRPHS>>     page_grphs_,
+                                   std::shared_ptr<pdf_resource<PAGE_FONTS>>       page_fonts_,
+                                   std::shared_ptr<pdf_resource<PAGE_GRPHS>>       page_grphs_,
+                                   std::shared_ptr<pdf_resource<PAGE_COLORSPACES>> page_colorspaces_,
 
-                                   std::shared_ptr<pdf_resource<PAGE_XOBJECTS>>  page_xobjects_,
+                                   std::shared_ptr<pdf_resource<PAGE_XOBJECTS>>    page_xobjects_,
 
                                    pdf_render_instructions& instructions_,
 
@@ -120,6 +123,7 @@ namespace pdflib
 
     page_fonts(page_fonts_),
     page_grphs(page_grphs_),
+    page_colorspaces(page_colorspaces_),
 
     page_xobjects(page_xobjects_),
 
@@ -187,6 +191,7 @@ namespace pdflib
 				page_images,
 				page_fonts,
 				page_grphs,
+				page_colorspaces,
 				instructions);
 
         stack.push_back(state);
@@ -209,8 +214,9 @@ namespace pdflib
 				page_images,
 				page_fonts,
 				page_grphs,
+				page_colorspaces,
 				instructions);
-	
+
         state = stack.back();
 
         stack.push_back(state);
@@ -322,6 +328,7 @@ namespace pdflib
 				page_images,
 				page_fonts,
 				page_grphs,
+				page_colorspaces,
 				instructions);
 
         stack.push_back(state);
@@ -393,9 +400,10 @@ namespace pdflib
     // please implement
 
     // create child resources with parent link (no deep copy)
-    auto page_fonts_    = std::make_shared<pdf_resource<PAGE_FONTS>>(page_fonts);
-    auto page_grphs_    = std::make_shared<pdf_resource<PAGE_GRPHS>>(page_grphs);
-    auto page_xobjects_ = std::make_shared<pdf_resource<PAGE_XOBJECTS>>(page_xobjects);
+    auto page_fonts_       = std::make_shared<pdf_resource<PAGE_FONTS>>(page_fonts);
+    auto page_grphs_       = std::make_shared<pdf_resource<PAGE_GRPHS>>(page_grphs);
+    auto page_colorspaces_ = std::make_shared<pdf_resource<PAGE_COLORSPACES>>(page_colorspaces);
+    auto page_xobjects_    = std::make_shared<pdf_resource<PAGE_XOBJECTS>>(page_xobjects);
 
     // parse the resources of the xobject into the child resources
     {
@@ -411,6 +419,12 @@ namespace pdflib
         {
           QPDFObjectHandle xobj_grphs = xobj.get_grphs();
           page_grphs_->set(xobj_grphs, timings);
+        }
+
+      if(xobj.has_colorspaces())
+        {
+          QPDFObjectHandle xobj_colorspaces = xobj.get_colorspaces();
+          page_colorspaces_->set(xobj_colorspaces);
         }
 
       if(xobj.has_xobjects())
@@ -445,6 +459,7 @@ namespace pdflib
 
                                        page_fonts_,
                                        page_grphs_,
+                                       page_colorspaces_,
                                        page_xobjects_,
 
                                        instructions,

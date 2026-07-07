@@ -12,7 +12,7 @@ docling-parse plus the rendered page image and assembles a
 The document is then serialized with ``save_as_doclang_archive`` to a ``.dclx``.
 
 Usage:
-    python scripts/export_dclx.py -i input.pdf [-m word] [-o out.dclx]
+    python scripts/export_dclx.py -i input.pdf [-m word] [-p 1] [-o out.dclx]
 
 Modes:
     char  -> one TextItem per character cell
@@ -61,6 +61,8 @@ def parse_args(argv=None):
                     help="Cell granularity exported as TextItems (default: word).")
     ap.add_argument("-o", "--output", type=Path, default=None,
                     help="Output .dclx path (default: <input>.<mode>.dclx).")
+    ap.add_argument("-p", "--page", type=int, default=None,
+                    help="1-indexed page number to export (default: all pages).")
     ap.add_argument("--scale", type=float, default=2.0,
                     help="Page-image raster scale in pixels-per-point (default: 2.0).")
     ap.add_argument("--threads", type=int, default=4,
@@ -120,8 +122,10 @@ def _add_page_to_doc(doc, page_no, page, image, dpi, unit):
     return n_cells, n_pictures
 
 
-def export(input_path: Path, mode: str, scale: float, threads: int) -> DoclingDocument:
+def export(input_path: Path, mode: str, scale: float, threads: int,
+           page: int | None = None) -> DoclingDocument:
     content_config = _content_config_for(mode)
+    page_numbers = [page] if page is not None else None
 
     render_config = RenderConfig()
     render_config.render_text = True
@@ -139,7 +143,7 @@ def export(input_path: Path, mode: str, scale: float, threads: int) -> DoclingDo
     # the DoclingDocument is assembled in natural reading order.
     pages = {}
     try:
-        parser.load(str(input_path))
+        parser.load(str(input_path), page_numbers=page_numbers)
         for result in parser.iterate_results():
             if not result.success:
                 print(f"  warning: page {result.page_number} failed: "
@@ -177,10 +181,20 @@ def main(argv=None):
         print(f"error: input not found: {args.input}", file=sys.stderr)
         return 1
 
-    print(f"Exporting '{args.input}' (mode={args.mode}, scale={args.scale}) ...")
-    doc = export(args.input, args.mode, args.scale, args.threads)
+    if args.page is not None and args.page < 1:
+        print(f"error: --page must be >= 1 (got {args.page})", file=sys.stderr)
+        return 1
 
-    output = args.output or args.input.with_suffix(f".{args.mode}.dclx")
+    page_label = f", page={args.page}" if args.page is not None else ""
+    print(f"Exporting '{args.input}' (mode={args.mode}, scale={args.scale}{page_label}) ...")
+    doc = export(args.input, args.mode, args.scale, args.threads, args.page)
+
+    default_suffix = (
+        f".{args.mode}.p{args.page}.dclx"
+        if args.page is not None
+        else f".{args.mode}.dclx"
+    )
+    output = args.output or args.input.with_suffix(default_suffix)
     doc.save_as_doclang_archive(output)
     print(f"Wrote {output}")
     return 0

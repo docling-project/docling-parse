@@ -239,6 +239,7 @@ int main(int argc, char* argv[])
         ("line-space-factor-with-space", "Space-width factor for line merging with space (default: 0.33)", cxxopts::value<double>())
         ("keep-glyphs",        "Keep unmapped GLYPH<...> tokens (default: false)",          cxxopts::value<bool>()->implicit_value("true"))
         ("keep-qpdf-warnings", "Emit QPDF warnings (default: false)",                       cxxopts::value<bool>()->implicit_value("true"))
+        ("extract-font-programs", "Extract embedded font programs for rendering (default: true)", cxxopts::value<bool>()->implicit_value("true"))
         ("populate-json",      "Populate JSON objects during decode (default: false)",       cxxopts::value<bool>()->implicit_value("true"))
         ("export-bitmaps",     "Export decoded bitmap payloads encountered on each page (default: false)",
                                cxxopts::value<bool>()->default_value("false"))
@@ -306,6 +307,9 @@ int main(int argc, char* argv[])
       if (result.count("line-space-factor-with-space")) { page_config.line_space_width_factor_for_merge_with_space = result["line-space-factor-with-space"].as<double>(); }
       if (result.count("keep-glyphs"))              { page_config.keep_glyphs               = result["keep-glyphs"].as<bool>(); }
       if (result.count("keep-qpdf-warnings"))       { page_config.keep_qpdf_warnings        = result["keep-qpdf-warnings"].as<bool>(); }
+      // This app always renders, so embedded font extraction defaults to on.
+      page_config.extract_font_programs = true;
+      if (result.count("extract-font-programs"))    { page_config.extract_font_programs     = result["extract-font-programs"].as<bool>(); }
       if (result.count("populate-json"))            { page_config.populate_json_objects      = result["populate-json"].as<bool>(); }
       bool export_bitmaps = result["export-bitmaps"].as<bool>();
       bool export_page_pdf_files = result["export-page-pdf"].as<bool>();

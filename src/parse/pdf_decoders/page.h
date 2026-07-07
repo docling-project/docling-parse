@@ -85,6 +85,8 @@ namespace pdflib
 
     void decode_fonts();
 
+    void decode_colorspaces();
+
     void decode_xobjects();
 
     // Contents
@@ -104,6 +106,11 @@ namespace pdflib
 
     // Load /AcroForm/DR/Font into acroform_fonts (called once before widget processing).
     void load_acroform_dr_fonts();
+
+    // Resolve /AP/N — a single stream, or a dictionary of appearance
+    // states (checkboxes / radio buttons) selected by /AS — and decode
+    // the selected stream.
+    void decode_annot_appearance(QPDFObjectHandle annot, const std::array<double, 4>& bbox);
 
     // Parse the /AP/N appearance stream, extract cells in AP-local coords,
     // shift by bbox origin to page coords, and append to page_cells.
@@ -129,6 +136,7 @@ namespace pdflib
     QPDFObjectHandle qpdf_resources;
     QPDFObjectHandle qpdf_grphs;
     QPDFObjectHandle qpdf_fonts;
+    QPDFObjectHandle qpdf_colorspaces;
     QPDFObjectHandle qpdf_xobjects;
 
     // Debug-only: populated when config.populate_json_objects is true
@@ -157,6 +165,7 @@ namespace pdflib
 
     std::shared_ptr<pdf_resource<PAGE_GRPHS> > page_grphs;
     std::shared_ptr<pdf_resource<PAGE_FONTS> > page_fonts;
+    std::shared_ptr<pdf_resource<PAGE_COLORSPACES> > page_colorspaces;
     std::shared_ptr<pdf_resource<PAGE_XOBJECTS> > page_xobjects;
 
     decode_config page_config;  // saved at the start of decode_page for use in widget handlers
@@ -179,6 +188,7 @@ namespace pdflib
     curr_page_number(page_num),
     page_grphs(std::make_shared<pdf_resource<PAGE_GRPHS>>()),
     page_fonts(std::make_shared<pdf_resource<PAGE_FONTS>>()),
+    page_colorspaces(std::make_shared<pdf_resource<PAGE_COLORSPACES>>()),
     page_xobjects(std::make_shared<pdf_resource<PAGE_XOBJECTS>>())
   {}
 
@@ -195,6 +205,7 @@ namespace pdflib
     curr_page_number(curr_page_num),
     page_grphs(std::make_shared<pdf_resource<PAGE_GRPHS>>()),
     page_fonts(std::make_shared<pdf_resource<PAGE_FONTS>>()),
+    page_colorspaces(std::make_shared<pdf_resource<PAGE_COLORSPACES>>()),
     page_xobjects(std::make_shared<pdf_resource<PAGE_XOBJECTS>>())
   {
     std::string description = "thread-safe page " + std::to_string(orig_page_num);
@@ -550,6 +561,16 @@ namespace pdflib
         LOG_S(WARNING) << "page does not have any fonts!";
       }
 
+    if(qpdf_resources.hasKey("/ColorSpace"))
+      {
+        qpdf_colorspaces = qpdf_resources.getKey("/ColorSpace");
+        decode_colorspaces();
+      }
+    else
+      {
+        LOG_S(INFO) << "page does not have any color spaces!";
+      }
+
     if(qpdf_resources.hasKey("/XObject"))
       {
         qpdf_xobjects = qpdf_resources.getKey("/XObject");
@@ -575,6 +596,13 @@ namespace pdflib
     page_fonts->set(qpdf_fonts, timings);
   }
 
+  void pdf_decoder<PAGE>::decode_colorspaces()
+  {
+    LOG_S(INFO) << __FUNCTION__;
+
+    page_colorspaces->set(qpdf_colorspaces);
+  }
+
   void pdf_decoder<PAGE>::decode_xobjects()
   {
     LOG_S(INFO) << __FUNCTION__;
@@ -597,6 +625,7 @@ namespace pdflib
                                        page_images,
                                        page_fonts,
                                        page_grphs,
+                                       page_colorspaces,
                                        page_xobjects,
                                        instructions,
                                        timings);
@@ -819,7 +848,7 @@ namespace pdflib
           }
       }
 
-    auto [has_value, text] = to_string(annot, "/V");
+    auto [has_value, text] = to_inherited_string(annot, "/V");
     if(not has_value)
       {
         text = "<unknown>";
@@ -931,7 +960,7 @@ namespace pdflib
           }
       }
 
-    auto [has_value, ft_str] = to_string(annot, "/FT");
+    auto [has_value, ft_str] = to_inherited_string(annot, "/FT");
     if(not has_value)
       {
         ft_str = "";
@@ -965,19 +994,19 @@ namespace pdflib
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    auto [has_value, text] = to_string(annot, "/V");
+    auto [has_value, text] = to_inherited_string(annot, "/V");
     if(not has_value)
       {
         text = "";
       }
 
-    auto [has_field_name, field_name] = to_string(annot, "/T");
+    auto [has_field_name, field_name] = to_inherited_string(annot, "/T");
     if(not has_field_name)
       {
         field_name = "";
       }
 
-    auto [has_field_type, field_type] = to_string(annot, "/FT");
+    auto [has_field_type, field_type] = to_inherited_string(annot, "/FT");
     if(not has_field_type)
       {
         field_type = "";
@@ -1013,12 +1042,35 @@ namespace pdflib
 
     // Parse /AP/N (Normal appearance stream) to extract the actual rendered
     // text cells positioned within the widget bounding box.
+    decode_annot_appearance(annot, bbox);
+  }
+
+  void pdf_decoder<PAGE>::decode_annot_appearance(QPDFObjectHandle annot,
+                                                  const std::array<double, 4>& bbox)
+  {
     if(not annot.hasKey("/AP")) { return; }
 
     auto ap = annot.getKey("/AP");
     if(not ap.isDictionary() or not ap.hasKey("/N")) { return; }
 
-    decode_ap_stream(ap.getKey("/N"), bbox);
+    auto normal = ap.getKey("/N");
+    if(normal.isStream())
+      {
+        decode_ap_stream(normal, bbox);
+        return;
+      }
+
+    // Checkboxes and radio buttons carry one appearance stream per state
+    // (e.g. /Off, /1); /AS selects the active one. /Off states typically
+    // have an empty (or missing) appearance, which decodes to nothing.
+    if(normal.isDictionary())
+      {
+        auto [has_state, state] = to_string(annot, "/AS");
+        if(has_state and normal.hasKey(state) and normal.getKey(state).isStream())
+          {
+            decode_ap_stream(normal.getKey(state), bbox);
+          }
+      }
   }
 
   void pdf_decoder<PAGE>::add_button(QPDFObjectHandle annot,
@@ -1026,19 +1078,19 @@ namespace pdflib
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    auto [has_value, text] = to_string(annot, "/V");
+    auto [has_value, text] = to_inherited_string(annot, "/V");
     if(not has_value)
       {
         text = "";
       }
 
-    auto [has_field_name, field_name] = to_string(annot, "/T");
+    auto [has_field_name, field_name] = to_inherited_string(annot, "/T");
     if(not has_field_name)
       {
         field_name = "";
       }
 
-    auto [has_field_type, field_type] = to_string(annot, "/FT");
+    auto [has_field_type, field_type] = to_inherited_string(annot, "/FT");
     if(not has_field_type)
       {
         field_type = "";
@@ -1058,6 +1110,9 @@ namespace pdflib
       widget.field_type = field_type;
     }
     page_widgets.push_back(widget);
+
+    // Draw the active appearance state (check mark, radio dot, ...).
+    decode_annot_appearance(annot, bbox);
   }
 
   void pdf_decoder<PAGE>::add_choice(QPDFObjectHandle annot,
@@ -1065,19 +1120,19 @@ namespace pdflib
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    auto [has_value, text] = to_string(annot, "/V");
+    auto [has_value, text] = to_inherited_string(annot, "/V");
     if(not has_value)
       {
         text = "";
       }
 
-    auto [has_field_name, field_name] = to_string(annot, "/T");
+    auto [has_field_name, field_name] = to_inherited_string(annot, "/T");
     if(not has_field_name)
       {
         field_name = "";
       }
 
-    auto [has_field_type, field_type] = to_string(annot, "/FT");
+    auto [has_field_type, field_type] = to_inherited_string(annot, "/FT");
     if(not has_field_type)
       {
         field_type = "";
@@ -1097,6 +1152,8 @@ namespace pdflib
       widget.field_type = field_type;
     }
     page_widgets.push_back(widget);
+
+    decode_annot_appearance(annot, bbox);
   }
 
   void pdf_decoder<PAGE>::add_signature(QPDFObjectHandle annot,
@@ -1104,19 +1161,19 @@ namespace pdflib
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    auto [has_value, text] = to_string(annot, "/V");
+    auto [has_value, text] = to_inherited_string(annot, "/V");
     if(not has_value)
       {
         text = "";
       }
 
-    auto [has_field_name, field_name] = to_string(annot, "/T");
+    auto [has_field_name, field_name] = to_inherited_string(annot, "/T");
     if(not has_field_name)
       {
         field_name = "";
       }
 
-    auto [has_field_type, field_type] = to_string(annot, "/FT");
+    auto [has_field_type, field_type] = to_inherited_string(annot, "/FT");
     if(not has_field_type)
       {
         field_type = "";
@@ -1136,6 +1193,8 @@ namespace pdflib
       widget.field_type = field_type;
     }
     page_widgets.push_back(widget);
+
+    decode_annot_appearance(annot, bbox);
   }
 
   void pdf_decoder<PAGE>::decode_ap_stream(QPDFObjectHandle ap_stream,
@@ -1154,24 +1213,37 @@ namespace pdflib
     //     → acroform_fonts  (AcroForm /DR/Font, e.g. /Helv)
     //       → page_fonts    (page-level fonts, e.g. /F2)
     //
+    // The color spaces chain the same way: AP /Resources/ColorSpace → page.
+    //
     // No re-parsing: page_fonts and acroform_fonts are already populated.
+    //
+    // hasKey/getKey operate on the stream *dictionary*, never on the stream
+    // handle itself — calling them on the stream silently returns false/null.
     auto ap_fonts = std::make_shared<pdf_resource<PAGE_FONTS>>(acroform_fonts);
-    if(ap_stream.hasKey("/Resources"))
+    auto ap_colorspaces = std::make_shared<pdf_resource<PAGE_COLORSPACES>>(page_colorspaces);
+    auto ap_dict = ap_stream.getDict();
+    if(ap_dict.isDictionary() and ap_dict.hasKey("/Resources"))
       {
-        auto ap_resources = ap_stream.getKey("/Resources");
+        auto ap_resources = ap_dict.getKey("/Resources");
         if(ap_resources.isDictionary() and ap_resources.hasKey("/Font"))
           {
             auto ap_font_dict = ap_resources.getKey("/Font");
             ap_fonts->set(ap_font_dict, timings);
           }
+        if(ap_resources.isDictionary() and ap_resources.hasKey("/ColorSpace"))
+          {
+            auto ap_colorspace_dict = ap_resources.getKey("/ColorSpace");
+            ap_colorspaces->set(ap_colorspace_dict);
+          }
       }
 
-    // Temporary containers — only page_cells is of interest.
+    // Temporary containers — the cells and shapes are merged into the page
+    // containers below; the rest is discarded after this call.
     page_item<PAGE_DIMENSION> ap_dimension;
     page_item<PAGE_CELLS>     ap_cells;
     page_item<PAGE_SHAPES>    ap_shapes;
     page_item<PAGE_IMAGES>    ap_images;
-    pdf_render_instructions   ap_instructions; // discarded after this call
+    pdf_render_instructions   ap_instructions;
 
     pdf_decoder<STREAM> stream_decoder(page_config,
                                        ap_dimension,
@@ -1180,6 +1252,7 @@ namespace pdflib
                                        ap_images,
                                        ap_fonts,
                                        page_grphs,
+                                       ap_colorspaces,
                                        page_xobjects,
                                        ap_instructions,
                                        timings);
@@ -1189,10 +1262,37 @@ namespace pdflib
     stream_decoder.interprete(parameters);
 
     // The AP stream uses a local coordinate system whose origin is the
-    // bottom-left corner of the widget /Rect.  Shift every cell by
-    // (bbox[0], bbox[1]) to bring it into page coordinate space.
+    // bottom-left corner of the widget /Rect.  Shift every cell and shape
+    // by (bbox[0], bbox[1]) to bring it into page coordinate space.
     const double ox = bbox[0];
     const double oy = bbox[1];
+
+    // Shapes drawn by the appearance stream (field borders, backgrounds,
+    // check marks drawn as paths, ...): keep them in the parsed output and
+    // re-emit them for the renderer before the text cells, so the field
+    // value stays on top of background fills.
+    const std::array<double, 9> ap_shift = {1.0, 0.0, 0.0,
+                                            0.0, 1.0, 0.0,
+                                            ox,  oy,  1.0};
+    for(auto& shape : ap_shapes)
+      {
+        shape.transform(ap_shift);
+        page_shapes.push_back(shape);
+      }
+
+    for(const auto& shape_instr : ap_instructions.get_shape_instructions())
+      {
+        instructions.add_shape_instruction(shape_instr.translated(ox, oy));
+      }
+
+    // Re-emit the text instructions of the sub-decode in page coordinates
+    // so the renderer draws the glyphs on top of the widget rect; the
+    // translated copies keep the fill color, embedded font program and
+    // char codes that a reconstruction from the cells would lose.
+    for(const auto& text_instr : ap_instructions.get_text_instructions())
+      {
+        instructions.add_text_instruction(text_instr.translated(ox, oy));
+      }
 
     for(auto& cell : ap_cells)
       {
@@ -1204,26 +1304,10 @@ namespace pdflib
         cell.r_x3 += ox; cell.r_y3 += oy;
         cell.widget = true;
         page_cells.push_back(cell);
-
-        // Re-emit a text_instruction in page coordinates so the renderer
-        // draws the glyph outlines on top of the light-blue widget rect.
-        text_instruction tinstr(cell.text,
-                                cell.font_enc,
-                                cell.font_key,
-                                cell.font_name,
-                                cell.enc_name,
-                                cell.font_name,   // base_font — best available proxy
-                                cell.font_size,
-                                cell.r_x0, cell.r_y0,
-                                cell.r_x1, cell.r_y1,
-                                cell.r_x2, cell.r_y2,
-                                cell.r_x3, cell.r_y3,
-                                0.0, 0.0,         // font_ascent_norm / font_descent_norm
-                                cell.r_x0, cell.r_y0); // base point
-        instructions.add_text_instruction(std::move(tinstr));
       }
 
-    LOG_S(INFO) << "AP stream yielded " << ap_cells.size() << " cell(s) for widget";
+    LOG_S(INFO) << "AP stream yielded " << ap_cells.size() << " cell(s) and "
+                << ap_shapes.size() << " shape(s) for widget";
   }
 
   void pdf_decoder<PAGE>::rotate_contents()
