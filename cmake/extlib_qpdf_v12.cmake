@@ -20,8 +20,16 @@ else()
   set(QPDF_URL https://github.com/qpdf/qpdf.git)
   
   set(QPDF_TAG v12.2.0 )
-  set(QPDF_LIB ${EXTERNALS_PREFIX_PATH}/lib/libqpdf.a)
-  set(JPEG_LIB ${EXTERNALS_PREFIX_PATH}/lib/libjpeg.a)
+  # GCC/MinGW and MSVC name the installed static libraries differently
+  # (GCC/MinGW -> libqpdf.a / libjpeg.a, MSVC -> qpdf.lib / jpeg-static.lib).
+  # The Windows arm64 wheel builds with MSVC, so select the names per-toolchain.
+  if(MSVC)
+      set(QPDF_LIB ${EXTERNALS_PREFIX_PATH}/lib/qpdf.lib)
+      set(JPEG_LIB ${EXTERNALS_PREFIX_PATH}/lib/jpeg-static.lib)
+  else()
+      set(QPDF_LIB ${EXTERNALS_PREFIX_PATH}/lib/libqpdf.a)
+      set(JPEG_LIB ${EXTERNALS_PREFIX_PATH}/lib/libjpeg.a)
+  endif()
 
   if(UNIX)
       set(QPDF_EXTRA_CXX_FLAGS "-fPIC ")

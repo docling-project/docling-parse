@@ -57,10 +57,19 @@ else()
         # LOG_BUILD ON
     )
 
+    # GCC/MinGW and MSVC name the installed static library differently:
+    # GCC/MinGW -> libjpeg.a, MSVC -> jpeg-static.lib. The Windows arm64 wheel
+    # builds with MSVC (Visual Studio generator), so pick the name per-toolchain.
+    if(MSVC)
+        set(JPEG_IMPORTED_LIB ${EXTERNALS_PREFIX_PATH}/lib/jpeg-static.lib)
+    else()
+        set(JPEG_IMPORTED_LIB ${EXTERNALS_PREFIX_PATH}/lib/libjpeg.a)
+    endif()
+
     add_library(${ext_name} STATIC IMPORTED)
     add_dependencies(${ext_name} extlib_jpeg)
     set_target_properties(${ext_name} PROPERTIES
-        IMPORTED_LOCATION ${EXTERNALS_PREFIX_PATH}/lib/libjpeg.a
+        IMPORTED_LOCATION ${JPEG_IMPORTED_LIB}
         INTERFACE_INCLUDE_DIRECTORIES ${EXTERNALS_PREFIX_PATH}/include
     )
 

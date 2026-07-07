@@ -35,7 +35,15 @@ else()
     set(LCMS2_URL https://github.com/mm2/Little-CMS.git)
     set(LCMS2_TAG lcms2.17)
 
-    set(LCMS2_IMPORTED_LIB ${EXTERNALS_PREFIX_PATH}/lib/liblcms2.a)
+    # GCC/MinGW -> liblcms2.a, MSVC -> lcms2.lib (Windows arm64 uses MSVC).
+    # NOTE: the autotools ./configure + make build below does not run under MSVC
+    # (no Unix shell on the arm64 runner); a Windows-native build method is still
+    # required there in addition to this name selection.
+    if(MSVC)
+        set(LCMS2_IMPORTED_LIB ${EXTERNALS_PREFIX_PATH}/lib/lcms2.lib)
+    else()
+        set(LCMS2_IMPORTED_LIB ${EXTERNALS_PREFIX_PATH}/lib/liblcms2.a)
+    endif()
 
     ExternalProject_Add(extlib_lcms2
         PREFIX extlib_lcms2
