@@ -16,9 +16,14 @@
 #if defined(__asmjs__) || defined(__wasm__)
 // Optimized safe math instructions are incompatible with asmjs.
 #define BASE_HAS_OPTIMIZED_SAFE_MATH (0)
-#else
+#elif defined(__clang__) || defined(__GNUC__)
+// The optimized routines rely on Clang/GCC __builtin_*_overflow intrinsics.
+// MSVC (e.g. the Windows ARM64 build) lacks these, so it falls through to the
+// portable boilerplate implementations defined below.
 #include "core/fxcrt/numerics/safe_math_clang_gcc_impl.h"  // IWYU pragma: export
 #define BASE_HAS_OPTIMIZED_SAFE_MATH (1)
+#else
+#define BASE_HAS_OPTIMIZED_SAFE_MATH (0)
 #endif
 
 namespace pdfium {

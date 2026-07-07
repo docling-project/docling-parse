@@ -93,7 +93,9 @@
 // Intentionally empty: __builtin_unreachable() is always part of the sequence
 // (see IMMEDIATE_CRASH below) and already emits a ud2 on Win64,
 // https://crbug.com/958373
-#define TRAP_SEQUENCE2_() __asm volatile("")
+// MSVC does not support the __asm keyword on ARM64 (or x64), so leave this
+// empty; __debugbreak() in TRAP_SEQUENCE1_() is a sufficient fatal trap.
+#define TRAP_SEQUENCE2_()
 
 #else
 
