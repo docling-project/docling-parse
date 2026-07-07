@@ -35,38 +35,63 @@ else()
     set(LCMS2_URL https://github.com/mm2/Little-CMS.git)
     set(LCMS2_TAG lcms2.17)
 
-    # GCC/MinGW -> liblcms2.a, MSVC -> lcms2.lib (Windows arm64 uses MSVC).
-    # NOTE: the autotools ./configure + make build below does not run under MSVC
-    # (no Unix shell on the arm64 runner); a Windows-native build method is still
-    # required there in addition to this name selection.
     if(MSVC)
+        # Upstream lcms2 has no CMakeLists and its ./configure cannot run under
+        # MSVC (no Unix shell on the Windows arm64 runner). Inject a vendored
+        # CMakeLists.txt and build with the active MSVC generator. Produces
+        # lcms2.lib.
         set(LCMS2_IMPORTED_LIB ${EXTERNALS_PREFIX_PATH}/lib/lcms2.lib)
+
+        ExternalProject_Add(extlib_lcms2
+            PREFIX extlib_lcms2
+
+            UPDATE_COMMAND ""
+            GIT_REPOSITORY ${LCMS2_URL}
+            GIT_TAG ${LCMS2_TAG}
+
+            BUILD_ALWAYS OFF
+
+            INSTALL_DIR ${EXTERNALS_PREFIX_PATH}
+
+            PATCH_COMMAND ${CMAKE_COMMAND} -E copy
+                ${CMAKE_CURRENT_LIST_DIR}/lcms2_CMakeLists.txt
+                <SOURCE_DIR>/CMakeLists.txt
+
+            CMAKE_ARGS \\
+            -DCMAKE_POSITION_INDEPENDENT_CODE=ON \\
+            -DCMAKE_BUILD_TYPE=Release \\
+            -DCMAKE_INSTALL_PREFIX=${EXTERNALS_PREFIX_PATH}
+
+            LOG_DOWNLOAD ON
+        )
     else()
+        # Unix (macOS/Linux) and MinGW on Windows amd64 build via autotools.
+        # Produces liblcms2.a.
         set(LCMS2_IMPORTED_LIB ${EXTERNALS_PREFIX_PATH}/lib/liblcms2.a)
+
+        ExternalProject_Add(extlib_lcms2
+            PREFIX extlib_lcms2
+
+            UPDATE_COMMAND ""
+            GIT_REPOSITORY ${LCMS2_URL}
+            GIT_TAG ${LCMS2_TAG}
+
+            BUILD_ALWAYS OFF
+
+            INSTALL_DIR ${EXTERNALS_PREFIX_PATH}
+
+            BUILD_IN_SOURCE ON
+            CONFIGURE_COMMAND ./configure
+                --prefix=${EXTERNALS_PREFIX_PATH}
+                --disable-shared
+                --enable-static
+                CFLAGS=-fPIC\ ${ENV_ARCHFLAGS}
+            BUILD_COMMAND make
+            INSTALL_COMMAND make install
+
+            LOG_DOWNLOAD ON
+        )
     endif()
-
-    ExternalProject_Add(extlib_lcms2
-        PREFIX extlib_lcms2
-
-        UPDATE_COMMAND ""
-        GIT_REPOSITORY ${LCMS2_URL}
-        GIT_TAG ${LCMS2_TAG}
-
-        BUILD_ALWAYS OFF
-
-        INSTALL_DIR ${EXTERNALS_PREFIX_PATH}
-
-        BUILD_IN_SOURCE ON
-        CONFIGURE_COMMAND ./configure
-            --prefix=${EXTERNALS_PREFIX_PATH}
-            --disable-shared
-            --enable-static
-            CFLAGS=-fPIC\ ${ENV_ARCHFLAGS}
-        BUILD_COMMAND make
-        INSTALL_COMMAND make install
-
-        LOG_DOWNLOAD ON
-    )
 
     add_library(${ext_name} STATIC IMPORTED)
     add_dependencies(${ext_name} extlib_lcms2)
