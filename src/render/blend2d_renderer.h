@@ -1337,11 +1337,20 @@ namespace pdflib
             // collides with the font's code range "succeeds" with the wrong
             // glyph (e.g. U+0020 hitting subset code 0x20). Resolve by
             // character code first for such faces.
+            //
+            // CID fonts with an identity CIDToGIDMap must also resolve by
+            // character code first: the content-stream CID is the exact glyph
+            // the producer chose (contextual Arabic forms, lam-alef ligatures,
+            // …). Round-tripping through the Unicode cmap instead picks the
+            // nominal (isolated) form — Blend2D applies no GSUB shaping — so
+            // right-to-left scripts come out as disconnected base letters.
+            const auto& embedded_blob = instr.get_embedded_font();
             const bool char_code_first =
               using_embedded_font and
               instr.has_embedded_font() and
-              not instr.get_embedded_font()->get_is_cid_font() and
-              instr.get_embedded_font()->get_uses_builtin_encoding();
+              (embedded_blob->get_is_cid_font()
+                 ? embedded_blob->get_cid_to_gid_identity()
+                 : embedded_blob->get_uses_builtin_encoding());
 
             if (char_code_first)
               {
