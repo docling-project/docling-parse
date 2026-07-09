@@ -67,6 +67,8 @@ def parse_args(argv=None):
                     help="Page-image raster scale in pixels-per-point (default: 2.0).")
     ap.add_argument("--threads", type=int, default=4,
                     help="Worker threads for the parser (default: 4).")
+    ap.add_argument("--log-text", action="store_true",
+                    help="Print a table of each exported text cell and its bounding box.")
     return ap.parse_args(argv)
 
 
@@ -83,7 +85,19 @@ def _content_config_for(mode: str) -> ContentConfig:
     )
 
 
-def _add_page_to_doc(doc, page_no, page, image, dpi, unit):
+def _format_bbox_coord(value: float) -> str:
+    return f"{value:.2f}"
+
+
+def _log_text_cell(page_no: int, text: str, bbox) -> None:
+    print(
+        f"{page_no}\t{text!r}\t{_format_bbox_coord(bbox.l)}\t"
+        f"{_format_bbox_coord(bbox.t)}\t{_format_bbox_coord(bbox.r)}\t"
+        f"{_format_bbox_coord(bbox.b)}"
+    )
+
+
+def _add_page_to_doc(doc, page_no, page, image, dpi, unit, log_text=False):
     """Attach one page (image + text cells + picture bitmaps) to the doc.
 
     Returns (n_text_cells, n_pictures).
@@ -99,9 +113,12 @@ def _add_page_to_doc(doc, page_no, page, image, dpi, unit):
         text = cell.text
         if not text:
             continue
+        bbox = cell.rect.to_bounding_box()
+        if log_text:
+            _log_text_cell(page_no, text, bbox)
         prov = ProvenanceItem(
             page_no=page_no,
-            bbox=cell.rect.to_bounding_box(),
+            bbox=bbox,
             charspan=(0, len(text)),
         )
         doc.add_text(label=DocItemLabel.TEXT, text=text, orig=text, prov=prov)
@@ -123,7 +140,7 @@ def _add_page_to_doc(doc, page_no, page, image, dpi, unit):
 
 
 def export(input_path: Path, mode: str, scale: float, threads: int,
-           page: int | None = None) -> DoclingDocument:
+           page: int | None = None, log_text: bool = False) -> DoclingDocument:
     content_config = _content_config_for(mode)
     page_numbers = [page] if page is not None else None
 
@@ -162,9 +179,13 @@ def export(input_path: Path, mode: str, scale: float, threads: int,
 
     total_cells = 0
     total_pictures = 0
+    if log_text:
+        print("page\ttext\tx0\ty0\tx1\ty1")
+
     for page_no in sorted(pages):
         page, image = pages[page_no]
-        n_cells, n_pics = _add_page_to_doc(doc, page_no, page, image, dpi, unit)
+        n_cells, n_pics = _add_page_to_doc(
+            doc, page_no, page, image, dpi, unit, log_text=log_text)
         total_cells += n_cells
         total_pictures += n_pics
         print(f"  page {page_no}: {n_cells} {mode} cell(s), {n_pics} picture(s)")
@@ -187,7 +208,8 @@ def main(argv=None):
 
     page_label = f", page={args.page}" if args.page is not None else ""
     print(f"Exporting '{args.input}' (mode={args.mode}, scale={args.scale}{page_label}) ...")
-    doc = export(args.input, args.mode, args.scale, args.threads, args.page)
+    doc = export(args.input, args.mode, args.scale, args.threads, args.page,
+                 log_text=args.log_text)
 
     default_suffix = (
         f".{args.mode}.p{args.page}.dclx"

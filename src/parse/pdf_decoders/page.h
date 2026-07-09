@@ -1369,7 +1369,8 @@ namespace pdflib
                               horizontal_cell_tolerance,
                               enforce_same_font,
                               space_width_factor_for_merge,
-                              space_width_factor_for_merge_with_space);
+                              space_width_factor_for_merge_with_space,
+                              false);
 
       //sanitator.sanitize_text(cells);
 
