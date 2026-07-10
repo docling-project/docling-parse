@@ -18,6 +18,7 @@ from docling_parse.pdf_parser import (
     RenderConfig,
     ThreadedPdfParserConfig,
 )
+from tests.constants import PARSER_PAGE_RESTRICTIONS
 from tests.rendering_regression import (
     ImageTolerance,
     compare_bitmap_artifacts,
@@ -28,7 +29,6 @@ from tests.rendering_regression import (
     measure_image_comparison,
     write_renderer_groundtruth,
 )
-from tests.constants import PARSER_PAGE_RESTRICTIONS
 from tests.test_parse import (
     GROUNDTRUTH_FOLDER,
     REGRESSION_FOLDER,
