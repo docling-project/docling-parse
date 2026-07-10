@@ -15,6 +15,7 @@ from docling_parse.pdf_parser import (
     DoclingThreadedPdfParser,
     ThreadedPdfParserConfig,
 )
+from tests.constants import PARSER_PAGE_RESTRICTIONS
 from tests.test_parse import (
     GROUNDTRUTH_FOLDER,
     REGRESSION_FOLDER,
@@ -47,16 +48,6 @@ def test_threaded_reference_documents_from_filenames():
         ),
         decode_config=_make_decode_config(),
     )
-
-    page_restrictions = {
-        "deep-mediabox-inheritance.pdf": [2],
-        "font_06.pdf": [1],
-        "font_07.pdf": [1],
-        "font_08.pdf": [1],
-        "font_09.pdf": [1],
-        "font_10.pdf": [1],
-        "2508.13113v2.pdf": [2, 9, 17],
-    }
 
     # Each entry: (doc_name, page_no_str, mode, success, error_msg)
     test_results: list[tuple[str, str, str, bool, str]] = []
@@ -118,7 +109,10 @@ def test_threaded_reference_documents_from_filenames():
         for page_no, pred_page in sorted(results.get(key, {}).items()):
             print(f" -> Page {page_no} has {len(pred_page.textline_cells)} cells.")
 
-            if rname in page_restrictions and page_no not in page_restrictions[rname]:
+            if (
+                rname in PARSER_PAGE_RESTRICTIONS
+                and page_no not in PARSER_PAGE_RESTRICTIONS[rname]
+            ):
                 continue
 
             fname = os.path.join(

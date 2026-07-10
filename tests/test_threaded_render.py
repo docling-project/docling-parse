@@ -28,9 +28,9 @@ from tests.rendering_regression import (
     measure_image_comparison,
     write_renderer_groundtruth,
 )
+from tests.constants import PARSER_PAGE_RESTRICTIONS
 from tests.test_parse import (
     GROUNDTRUTH_FOLDER,
-    PARSER_PAGE_RESTRICTIONS,
     REGRESSION_FOLDER,
     verify_SegmentedPdfPage,
 )
@@ -424,16 +424,6 @@ def test_render_reference_documents_from_filenames():
 
     parser = _make_parser(threads=4, max_concurrent=32)
 
-    page_restrictions = {
-        "deep-mediabox-inheritance.pdf": [2],
-        "font_06.pdf": [1],
-        "font_07.pdf": [1],
-        "font_08.pdf": [1],
-        "font_09.pdf": [1],
-        "font_10.pdf": [1],
-        "2508.13113v2.pdf": [2, 9, 17],
-    }
-
     test_results: list[tuple[str, str, str, bool, str]] = []
     first_failure: tuple[BaseException, TracebackType | None] | None = None
     doc_keys: dict[str, str] = {}
@@ -491,7 +481,10 @@ def test_render_reference_documents_from_filenames():
         rname = os.path.basename(pdf_doc_path)
 
         for page_no, pred_page in sorted(results[key].items()):
-            if rname in page_restrictions and page_no not in page_restrictions[rname]:
+            if (
+                rname in PARSER_PAGE_RESTRICTIONS
+                and page_no not in PARSER_PAGE_RESTRICTIONS[rname]
+            ):
                 continue
 
             fname = os.path.join(

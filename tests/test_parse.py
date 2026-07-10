@@ -28,6 +28,7 @@ from docling_parse.pdf_parser import (
     DoclingPdfParser,
     PdfDocument,
 )
+from tests.constants import PARSER_PAGE_RESTRICTIONS
 from tests.data_utils import PARSER_GROUNDTRUTH_DIR
 
 
@@ -61,15 +62,6 @@ def save_as_json_rounded(page: SegmentedPdfPage, filename, indent=2, ndigits=3):
 
 GROUNDTRUTH_FOLDER = os.fspath(PARSER_GROUNDTRUTH_DIR)
 REGRESSION_FOLDER = "tests/data/regression/*.pdf"
-PARSER_PAGE_RESTRICTIONS = {
-    "deep-mediabox-inheritance.pdf": [2],
-    "font_06.pdf": [1],
-    "font_07.pdf": [1],
-    "font_08.pdf": [1],
-    "font_09.pdf": [1],
-    "font_10.pdf": [1],
-    "2508.13113v2.pdf": [2, 9, 17],
-}
 
 
 def _truncate_data_uri(uri, max_chars: int = 64):

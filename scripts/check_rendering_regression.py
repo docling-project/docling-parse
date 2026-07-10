@@ -24,7 +24,8 @@ from docling_parse.pdf_parser import (  # noqa: E402
 )
 from tests.data_utils import ensure_test_data_downloaded  # noqa: E402
 from tests.rendering_regression import renderer_image_path  # noqa: E402
-from tests.test_parse import PARSER_PAGE_RESTRICTIONS, REGRESSION_FOLDER  # noqa: E402
+from tests.constants import PARSER_PAGE_RESTRICTIONS  # noqa: E402
+from tests.test_parse import REGRESSION_FOLDER  # noqa: E402
 
 DEFAULT_DELTA_DIR = Path("tests/data/render_deltas")
 DEFAULT_PIXEL_THRESHOLD = 12
