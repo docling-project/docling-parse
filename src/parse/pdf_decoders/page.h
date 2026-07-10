@@ -376,7 +376,9 @@ namespace pdflib
 
       if(not have_point) { return false; }
 
-      const double stroke_pad = std::max(0.0, instr.get_line_width()) * 0.5;
+      const double stroke_pad = shape_instruction_strokes_visible(instr)
+        ? std::max(0.0, instr.get_line_width()) * 0.5
+        : 0.0;
       bbox[0] -= stroke_pad;
       bbox[1] -= stroke_pad;
       bbox[2] += stroke_pad;
@@ -513,7 +515,9 @@ namespace pdflib
               }
 
             if(not have_point) { continue; }
-            const double stroke_pad = std::max(0.0, instr.get_line_width()) * 0.5;
+            const double stroke_pad = shape_instruction_strokes_visible(instr)
+              ? std::max(0.0, instr.get_line_width()) * 0.5
+              : 0.0;
             shape_bbox[0] -= stroke_pad;
             shape_bbox[1] -= stroke_pad;
             shape_bbox[2] += stroke_pad;
