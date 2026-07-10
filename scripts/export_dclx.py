@@ -48,6 +48,9 @@ MODE_TO_UNIT = {
     "text": TextCellUnit.LINE,
 }
 
+LOG_COORD_WIDTH = 8
+LOG_COORD_PRECISION = 2
+
 
 def parse_args(argv=None):
     ap = argparse.ArgumentParser(
@@ -67,6 +70,10 @@ def parse_args(argv=None):
                     help="Page-image raster scale in pixels-per-point (default: 2.0).")
     ap.add_argument("--threads", type=int, default=4,
                     help="Worker threads for the parser (default: 4).")
+    ap.add_argument("-l", "--loglevel",
+                    choices=["fatal", "error", "warn", "warning", "info"],
+                    default="fatal",
+                    help="C++ parser log level (default: fatal).")
     ap.add_argument("--log-text", action="store_true",
                     help="Print a table of each exported text cell and its bounding box.")
     return ap.parse_args(argv)
@@ -86,14 +93,16 @@ def _content_config_for(mode: str) -> ContentConfig:
 
 
 def _format_bbox_coord(value: float) -> str:
-    return f"{value:.2f}"
+    return f"{value:{LOG_COORD_WIDTH}.{LOG_COORD_PRECISION}f}"
 
 
 def _log_text_cell(page_no: int, text: str, bbox) -> None:
     print(
-        f"{page_no}\t{text!r}\t{_format_bbox_coord(bbox.l)}\t"
-        f"{_format_bbox_coord(bbox.t)}\t{_format_bbox_coord(bbox.r)}\t"
-        f"{_format_bbox_coord(bbox.b)}"
+        f"{_format_bbox_coord(bbox.l)} "
+        f"{_format_bbox_coord(bbox.t)} "
+        f"{_format_bbox_coord(bbox.r)} "
+        f"{_format_bbox_coord(bbox.b)} "
+        f"{page_no:>4}  {text!r}"
     )
 
 
@@ -140,7 +149,8 @@ def _add_page_to_doc(doc, page_no, page, image, dpi, unit, log_text=False):
 
 
 def export(input_path: Path, mode: str, scale: float, threads: int,
-           page: int | None = None, log_text: bool = False) -> DoclingDocument:
+           page: int | None = None, log_text: bool = False,
+           loglevel: str = "fatal") -> DoclingDocument:
     content_config = _content_config_for(mode)
     page_numbers = [page] if page is not None else None
 
@@ -151,6 +161,7 @@ def export(input_path: Path, mode: str, scale: float, threads: int,
     parser = DoclingThreadedPdfParser(
         parser_config=ThreadedPdfParserConfig(
             threads=threads,
+            loglevel=loglevel,
             render_config=render_config,
             page_content_config=content_config,
         ),
@@ -180,7 +191,13 @@ def export(input_path: Path, mode: str, scale: float, threads: int,
     total_cells = 0
     total_pictures = 0
     if log_text:
-        print("page\ttext\tx0\ty0\tx1\ty1")
+        print(
+            f"{'x0':>{LOG_COORD_WIDTH}} "
+            f"{'y0':>{LOG_COORD_WIDTH}} "
+            f"{'x1':>{LOG_COORD_WIDTH}} "
+            f"{'y1':>{LOG_COORD_WIDTH}} "
+            f"{'page':>4}  text"
+        )
 
     for page_no in sorted(pages):
         page, image = pages[page_no]
@@ -209,7 +226,7 @@ def main(argv=None):
     page_label = f", page={args.page}" if args.page is not None else ""
     print(f"Exporting '{args.input}' (mode={args.mode}, scale={args.scale}{page_label}) ...")
     doc = export(args.input, args.mode, args.scale, args.threads, args.page,
-                 log_text=args.log_text)
+                 log_text=args.log_text, loglevel=args.loglevel)
 
     default_suffix = (
         f".{args.mode}.p{args.page}.dclx"

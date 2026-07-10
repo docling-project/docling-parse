@@ -542,23 +542,12 @@ namespace pdflib
 
   std::string pdf_resource<PAGE_FONT>::get_correct_character(uint32_t c)
   {
-    // Sometimes, a font has differences-map and a cmap
-    // defined at the same time. So far, it seems that the
-    // differences should take precedent over the cmap. This
-    // is however not really clear (eg p 292). Notice also that
-    // we init the cmap before we init the difference and that the
-    // difference inherits the content of a the cmap. It is a bit
-    // messy and unclear her.
+    // For codes covered by /Encoding/Differences, diff_numb_to_char
+    // already encodes the precedence of PDF 32000-1 section 9.10.2:
+    // init_differences() resolves each code via the /ToUnicode cmap
+    // first and only falls back to glyph-name based methods. For codes
+    // not covered by /Differences, the cmap is consulted directly below.
 
-    /*
-    if(diff_numb_to_char.count(c)>0 and cmap_numb_to_char.count(c)>0)
-      {
-	LOG_S(WARNING) << "there might be some confusion here: "
-		       << "diff["<<c<<"]: " << diff_numb_to_char.at(c) << " "
-		       << "cmap["<<c<<"]: " << cmap_numb_to_char.at(c);
-      }
-    */
-    
     if(diff_initialized and diff_numb_to_char.count(c)>0)
       {
         return diff_numb_to_char.at(c);
@@ -2209,9 +2198,43 @@ namespace pdflib
     // Create a regex object
     std::regex re_01(R"(\/(.+)\.(.+))");
     std::regex re_02(R"((\/)?(uni|UNI)([0-9A-Fa-f]{4}))");
-    std::regex re_03(R"((\/)(g|G)\d+)");
     std::regex re_04(R"((\/)(C)(\d+))");
-    
+
+    // The unicode replacement character U+FFFD in utf8: a /ToUnicode
+    // mapping to this value means 'unknown character' and is treated as
+    // no mapping at all, so the glyph-name based methods can still
+    // recover the code (eg /bullet.003 mapped to U+FFFD by the cmap).
+    const std::string replacement_char = "\xEF\xBF\xBD";
+
+    // PDF 32000-1 (section 9.10.2) defines the /ToUnicode cmap as the
+    // first and most authoritative method to map a character-code to
+    // unicode; the glyph-name based methods only apply when no (valid)
+    // cmap entry exists for the code.
+    auto has_to_unicode = [&](int numb)
+    {
+      return cmap_initialized
+	and cmap_numb_to_char.count(numb)==1
+	and cmap_numb_to_char.at(numb).size()>0
+	and cmap_numb_to_char.at(numb)!=replacement_char;
+    };
+
+    // Last-resort for glyph-names that neither the /ToUnicode cmap nor
+    // any glyph-table could resolve (eg custom ligatures like /Th, /ft
+    // or /tt in a font without cmap): keep the glyph-name itself without
+    // the leading '/' and any '.suffix' as the reading text.
+    auto resolve_unknown_name = [](const std::string& name, const std::string& name_)
+    {
+      std::string result = name_;
+      if(result.empty())
+	{
+	  result = (name.size()>0 and name[0]=='/')? name.substr(1) : name;
+	}
+
+      LOG_S(WARNING) << "unknown glyph-name " << name
+		     << ": falling back to '" << result << "'";
+      return result;
+    };
+
     if(utils::json::has(keys, json_font))
       {
         auto diffs = utils::json::get(keys, json_font);
@@ -2260,28 +2283,13 @@ namespace pdflib
 
 		    LOG_S(INFO) << name << ", in cmap: " << cmap_numb_to_char.count(numb) << ", #-names: " << name_to_descr.size() << ", type: " << subtype;
 		    
-                    if(subtype==TYPE_3 and //name_to_descr.count(name)==1 and // only for TYPE_3 fonts
-                       cmap_numb_to_char.count(numb)==1)
-                      {
-			LOG_S(WARNING) << "overloading difference from cmap";
-                        diff_numb_to_char[numb] = cmap_numb_to_char.at(numb);
-                      }
-
-		    // FIXME: might need to be commented out or fixed
-		    /*
-                    else if(name_to_descr.count(name)==1 and
-                            cmap_numb_to_char.count(numb)==0)
-                      {
-		        //assert(subtype==TYPE_3);
-
-                        LOG_S(WARNING) << "could not resolve the character (name="<<name
-                                       <<", numb="<<numb<<") for TYPE_3 font:" << font_name;
-
-                        diff_numb_to_char[numb] = "glyph["+font_name+"|"+name+"]";
-			//diff_numb_to_char[numb] = "glyph["+font_name+"|"+name+"]";
-		      }
-		    */
-		    else if(glyphs.has(name) and font_subname=="sups")
+                    // Resolution order following PDF 32000-1 section 9.10.2:
+                    // the /ToUnicode cmap first, then glyph-name based methods
+                    // (glyph-tables, ligature-names, uniXXXX, ...). The only
+                    // deviation: '.sups'/'.subs' glyph-names resolve first,
+                    // since they carry super-/sub-script semantics which the
+                    // plain unicode of the /ToUnicode cmap would lose.
+                    if(glyphs.has(name) and font_subname=="sups")
                       {
                         diff_numb_to_char[numb] = "$^{" + glyphs[name] + "}";
                         LOG_S(INFO) << "differences[" << numb << "] -> " << name
@@ -2293,13 +2301,6 @@ namespace pdflib
                         LOG_S(INFO) << "differences[" << numb << "] -> " << name
 				    << " -> " << diff_numb_to_char[numb];
                       }		    
-                    else if(glyphs.has(name))
-                      {
-                        diff_numb_to_char[numb] = glyphs[name];
-                        LOG_S(INFO) << "differences[" << numb << "] -> " << name
-				    << " -> " << diff_numb_to_char[numb];
-                      }
-
 		    else if(glyphs.has(name_) and font_subname=="sups")
                       {
                         diff_numb_to_char[numb] = "$^{" + glyphs[name_] + "}";
@@ -2311,7 +2312,20 @@ namespace pdflib
                         diff_numb_to_char[numb] = "$_{" + glyphs[name_] + "}";
                         LOG_S(INFO) << "differences[" << numb << "] -> " << name_
 				    << " -> " << diff_numb_to_char[numb];
-                      }		    
+                      }
+		    else if(has_to_unicode(numb)) // method 1 of PDF 32000-1 section 9.10.2
+		      {
+			diff_numb_to_char[numb] = cmap_numb_to_char.at(numb);
+			LOG_S(INFO) << "differences[" << numb << "] -> " << name
+				    << " -> " << diff_numb_to_char[numb]
+				    << " (/ToUnicode)";
+		      }
+                    else if(glyphs.has(name)) // method 2: glyph-name -> unicode via the glyph-tables (AGL)
+                      {
+                        diff_numb_to_char[numb] = glyphs[name];
+                        LOG_S(INFO) << "differences[" << numb << "] -> " << name
+				    << " -> " << diff_numb_to_char[numb];
+                      }
 		    else if(glyphs.has(name_))
                       {
                         diff_numb_to_char[numb] = glyphs[name_];
@@ -2360,19 +2374,10 @@ namespace pdflib
 			      }
 			    else
 			      {
-				diff_numb_to_char[numb] = name;
-				LOG_S(WARNING) << "differences[" << numb << "] -> " << name
-					       << " (unresolved ligature)";
+				diff_numb_to_char[numb] = resolve_unknown_name(name, joined);
 			      }
 			  }
 		      }
-		    /*
-                    else if(name_.size()>0)
-                      {
-                        diff_numb_to_char[numb] = name_;
-                        LOG_S(WARNING) << "differences["<<numb<<"] -> " << name_;
-                      }
-		    */
 		    else if(std::regex_search(name, match, re_02))
 		      {
 			std::string unicode_hex = match[3].str();
@@ -2393,13 +2398,6 @@ namespace pdflib
 				       << diff_numb_to_char[numb]
 				       << " (from " << name << ")";
 		      }
-		    else if(std::regex_match(name, match, re_03) and cmap_numb_to_char.count(numb)==1) // if the name is of type /g23 of /G23 and we have a match in the cmap
-		      {
-			LOG_S(WARNING) << "overloading difference from cmap";
-                        diff_numb_to_char[numb] = cmap_numb_to_char.at(numb);
-			//diff_numb_to_char[numb] = name;
-			//LOG_S(ERROR) << "weird differences["<<numb<<"] -> " << name;
-		      }
 		    else if(std::regex_match(name, match, re_04)) // if the name is of type /C<decimal> treat the number as a Unicode code point
 		      {
 			uint32_t codepoint = static_cast<uint32_t>(std::stoul(match[3].str()));
@@ -2411,8 +2409,7 @@ namespace pdflib
 		      }
                     else
                       {
-                        diff_numb_to_char[numb] = name;
-                        LOG_S(WARNING) << "differences["<<numb<<"] -> " << name;
+                        diff_numb_to_char[numb] = resolve_unknown_name(name, name_);
                       }
 
                     LOG_S(INFO) << font_name << ": differences["<<numb<<"] -> " << name << " -> " << diff_numb_to_char[numb];
