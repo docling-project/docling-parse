@@ -569,6 +569,21 @@ PYBIND11_MODULE(pdf_parsers, m) {
 	 "Check if word cells have been created")
     .def("has_line_cells", &pdflib::pdf_decoder<pdflib::PAGE>::has_line_cells,
 	 "Check if line cells have been created")
+    .def("intersects_with", &pdflib::pdf_decoder<pdflib::PAGE>::intersects_with,
+         pybind11::arg("bbox"),
+         pybind11::arg("chars") = false,
+         pybind11::arg("shapes") = true,
+         pybind11::arg("bitmaps") = true,
+         "Check whether visible chars, shapes, or bitmaps intersect [left, bottom, right, top]")
+    .def("get_shape_lines", &pdflib::pdf_decoder<pdflib::PAGE>::get_shape_lines,
+         pybind11::arg("horizontal") = true,
+         pybind11::arg("vertical") = true,
+         pybind11::arg("tolerance") = 1e-3,
+         "Return visible horizontal and/or vertical stroked shape segments as [left, bottom, right, top]")
+    .def("get_connected_shape_bounding_boxes",
+         &pdflib::pdf_decoder<pdflib::PAGE>::get_connected_shape_bounding_boxes,
+         pybind11::arg("tolerance") = 0.0,
+         "Return bboxes of visible shapes connected through overlapping bboxes")
     .def("get_timings", [](pdflib::pdf_decoder<pdflib::PAGE>& self) {
 	   // Return as Dict[str, float] (sums) for backward compatibility
 	   return self.get_timings().to_sum_map();

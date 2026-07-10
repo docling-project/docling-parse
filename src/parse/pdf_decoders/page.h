@@ -54,6 +54,16 @@ namespace pdflib
     bool has_word_cells() const { return word_cells_created; }
     bool has_line_cells() const { return line_cells_created; }
 
+    bool intersects_with(std::array<double, 4> bbox,
+                         bool chars = false,
+                         bool shapes = true,
+                         bool bitmaps = true);
+    std::vector<std::array<double, 4>> get_shape_lines(bool horizontal = true,
+                                                       bool vertical = true,
+                                                       double tolerance = 1e-3);
+    std::vector<std::array<double, 4>>
+    get_connected_shape_bounding_boxes(double tolerance = 0.0);
+
     // Create word/line cells from page_cells
     void create_word_cells(const decode_config& config);
     void create_line_cells(const decode_config& config);
@@ -246,6 +256,434 @@ namespace pdflib
   int pdf_decoder<PAGE>::get_page_number()
   {
     return orig_page_number;
+  }
+
+  namespace
+  {
+    inline bool bbox_intersects(std::array<double, 4> a,
+                                std::array<double, 4> b)
+    {
+      if(a[0] > a[2]) { std::swap(a[0], a[2]); }
+      if(a[1] > a[3]) { std::swap(a[1], a[3]); }
+      if(b[0] > b[2]) { std::swap(b[0], b[2]); }
+      if(b[1] > b[3]) { std::swap(b[1], b[3]); }
+
+      return a[0] < b[2] and a[2] > b[0] and
+             a[1] < b[3] and a[3] > b[1];
+    }
+
+    inline std::array<double, 4> clipped_bbox(std::array<double, 4> bbox,
+                                              const clip_state_instruction& clip_state,
+                                              bool& visible)
+    {
+      visible = true;
+      if(not clip_state.has_clip()) { return bbox; }
+
+      std::array<double, 4> result = bbox;
+      bool applied_clip = false;
+      for(const auto& path : clip_state.get_paths())
+        {
+          if(path.empty()) { continue; }
+
+          const auto& xs = path.get_x();
+          const auto& ys = path.get_y();
+          std::array<double, 4> clip_bbox = {
+            *std::min_element(xs.begin(), xs.end()),
+            *std::min_element(ys.begin(), ys.end()),
+            *std::max_element(xs.begin(), xs.end()),
+            *std::max_element(ys.begin(), ys.end())
+          };
+
+          if(not bbox_intersects(result, clip_bbox))
+            {
+              visible = false;
+              return bbox;
+            }
+          result = {
+            std::max(result[0], clip_bbox[0]),
+            std::max(result[1], clip_bbox[1]),
+            std::min(result[2], clip_bbox[2]),
+            std::min(result[3], clip_bbox[3])
+          };
+          applied_clip = true;
+        }
+
+      if(not applied_clip)
+        {
+          visible = false;
+          return bbox;
+        }
+
+      return result;
+    }
+
+    inline bool shape_instruction_visible(const shape_instruction& instr)
+    {
+      const auto mode = instr.get_paint_mode();
+      const bool paints_fill =
+        mode == SHAPE_PAINT_FILL or mode == SHAPE_PAINT_FILL_STROKE;
+      const bool paints_stroke =
+        mode == SHAPE_PAINT_STROKE or mode == SHAPE_PAINT_FILL_STROKE;
+      return (paints_fill and instr.get_fill_alpha() > 0.0) or
+             (paints_stroke and instr.get_stroke_alpha() > 0.0);
+    }
+
+    inline bool shape_instruction_strokes_visible(const shape_instruction& instr)
+    {
+      const auto mode = instr.get_paint_mode();
+      const bool paints_stroke =
+        mode == SHAPE_PAINT_STROKE or mode == SHAPE_PAINT_FILL_STROKE;
+      return paints_stroke and instr.get_stroke_alpha() > 0.0;
+    }
+
+    inline bool bbox_overlaps_with_tolerance(const std::array<double, 4>& a,
+                                             const std::array<double, 4>& b,
+                                             double tolerance)
+    {
+      return a[0] <= b[2] + tolerance and a[2] + tolerance >= b[0] and
+             a[1] <= b[3] + tolerance and a[3] + tolerance >= b[1];
+    }
+
+    inline bool shape_visible_bbox(const shape_instruction& instr,
+                                   std::array<double, 4>& bbox)
+    {
+      if(not shape_instruction_visible(instr)) { return false; }
+
+      bool have_point = false;
+      auto include_point = [&](double x, double y) {
+        if(not have_point)
+          {
+            bbox = {x, y, x, y};
+            have_point = true;
+            return;
+          }
+        bbox[0] = std::min(bbox[0], x);
+        bbox[1] = std::min(bbox[1], y);
+        bbox[2] = std::max(bbox[2], x);
+        bbox[3] = std::max(bbox[3], y);
+      };
+
+      for(const auto& subpath : instr.get_subpaths())
+        {
+          include_point(subpath.get_x0(), subpath.get_y0());
+          const auto& xs = subpath.get_px();
+          const auto& ys = subpath.get_py();
+          for(size_t i = 0; i < std::min(xs.size(), ys.size()); ++i)
+            {
+              include_point(xs[i], ys[i]);
+            }
+        }
+
+      if(not have_point) { return false; }
+
+      const double stroke_pad = std::max(0.0, instr.get_line_width()) * 0.5;
+      bbox[0] -= stroke_pad;
+      bbox[1] -= stroke_pad;
+      bbox[2] += stroke_pad;
+      bbox[3] += stroke_pad;
+
+      bool visible = true;
+      bbox = clipped_bbox(bbox, instr.get_clip_state(), visible);
+      return visible;
+    }
+
+    inline bool clip_axis_aligned_segment(double x0,
+                                          double y0,
+                                          double x1,
+                                          double y1,
+                                          const clip_state_instruction& clip_state,
+                                          double tolerance,
+                                          std::array<double, 4>& bbox)
+    {
+      bbox = {
+        std::min(x0, x1),
+        std::min(y0, y1),
+        std::max(x0, x1),
+        std::max(y0, y1)
+      };
+
+      if(not clip_state.has_clip()) { return true; }
+
+      bool applied_clip = false;
+      for(const auto& path : clip_state.get_paths())
+        {
+          if(path.empty()) { continue; }
+
+          const auto& xs = path.get_x();
+          const auto& ys = path.get_y();
+          std::array<double, 4> clip_bbox = {
+            *std::min_element(xs.begin(), xs.end()),
+            *std::min_element(ys.begin(), ys.end()),
+            *std::max_element(xs.begin(), xs.end()),
+            *std::max_element(ys.begin(), ys.end())
+          };
+
+          const bool is_horizontal = std::abs(y1 - y0) <= tolerance;
+          const bool is_vertical = std::abs(x1 - x0) <= tolerance;
+
+          if(is_horizontal)
+            {
+              if(y0 < clip_bbox[1] - tolerance or y0 > clip_bbox[3] + tolerance)
+                {
+                  return false;
+                }
+
+              bbox[0] = std::max(bbox[0], clip_bbox[0]);
+              bbox[2] = std::min(bbox[2], clip_bbox[2]);
+              if(bbox[0] > bbox[2] + tolerance) { return false; }
+              applied_clip = true;
+            }
+          else if(is_vertical)
+            {
+              if(x0 < clip_bbox[0] - tolerance or x0 > clip_bbox[2] + tolerance)
+                {
+                  return false;
+                }
+
+              bbox[1] = std::max(bbox[1], clip_bbox[1]);
+              bbox[3] = std::min(bbox[3], clip_bbox[3]);
+              if(bbox[1] > bbox[3] + tolerance) { return false; }
+              applied_clip = true;
+            }
+          else
+            {
+              return false;
+            }
+        }
+
+      return applied_clip;
+    }
+  }
+
+  bool pdf_decoder<PAGE>::intersects_with(std::array<double, 4> bbox,
+                                          bool chars,
+                                          bool shapes,
+                                          bool bitmaps)
+  {
+    if(bbox[0] > bbox[2]) { std::swap(bbox[0], bbox[2]); }
+    if(bbox[1] > bbox[3]) { std::swap(bbox[1], bbox[3]); }
+
+    if(chars)
+      {
+        for(auto& cell : page_cells)
+          {
+            if(not cell.active or cell.text.empty()) { continue; }
+            if(cell.rendering_mode == 3 or cell.rendering_mode == 7) { continue; }
+
+            std::array<double, 4> cell_bbox = {
+              std::min({cell.r_x0, cell.r_x1, cell.r_x2, cell.r_x3}),
+              std::min({cell.r_y0, cell.r_y1, cell.r_y2, cell.r_y3}),
+              std::max({cell.r_x0, cell.r_x1, cell.r_x2, cell.r_x3}),
+              std::max({cell.r_y0, cell.r_y1, cell.r_y2, cell.r_y3})
+            };
+            if(bbox_intersects(bbox, cell_bbox)) { return true; }
+          }
+      }
+
+    if(shapes)
+      {
+        for(const auto& instr : instructions.get_shape_instructions())
+          {
+            if(not shape_instruction_visible(instr)) { continue; }
+
+            bool have_point = false;
+            std::array<double, 4> shape_bbox = {0.0, 0.0, 0.0, 0.0};
+            auto include_point = [&](double x, double y) {
+              if(not have_point)
+                {
+                  shape_bbox = {x, y, x, y};
+                  have_point = true;
+                  return;
+                }
+              shape_bbox[0] = std::min(shape_bbox[0], x);
+              shape_bbox[1] = std::min(shape_bbox[1], y);
+              shape_bbox[2] = std::max(shape_bbox[2], x);
+              shape_bbox[3] = std::max(shape_bbox[3], y);
+            };
+
+            for(const auto& subpath : instr.get_subpaths())
+              {
+                include_point(subpath.get_x0(), subpath.get_y0());
+                const auto& xs = subpath.get_px();
+                const auto& ys = subpath.get_py();
+                for(size_t i = 0; i < std::min(xs.size(), ys.size()); ++i)
+                  {
+                    include_point(xs[i], ys[i]);
+                  }
+              }
+
+            if(not have_point) { continue; }
+            const double stroke_pad = std::max(0.0, instr.get_line_width()) * 0.5;
+            shape_bbox[0] -= stroke_pad;
+            shape_bbox[1] -= stroke_pad;
+            shape_bbox[2] += stroke_pad;
+            shape_bbox[3] += stroke_pad;
+
+            bool shape_visible = true;
+            const std::array<double, 4> visible_shape_bbox =
+              clipped_bbox(shape_bbox, instr.get_clip_state(), shape_visible);
+
+            if(shape_visible and bbox_intersects(bbox, visible_shape_bbox))
+              {
+                return true;
+              }
+          }
+      }
+
+    if(bitmaps)
+      {
+        for(auto& image : page_images)
+          {
+            if(not image.is_visible) { continue; }
+
+            std::array<double, 4> image_bbox = image.has_visible_bbox
+              ? std::array<double, 4>{image.visible_x0, image.visible_y0,
+                                      image.visible_x1, image.visible_y1}
+              : std::array<double, 4>{image.x0, image.y0, image.x1, image.y1};
+            if(bbox_intersects(bbox, image_bbox)) { return true; }
+          }
+      }
+
+    return false;
+  }
+
+  std::vector<std::array<double, 4>>
+  pdf_decoder<PAGE>::get_shape_lines(bool horizontal,
+                                     bool vertical,
+                                     double tolerance)
+  {
+    std::vector<std::array<double, 4>> result;
+    if(not horizontal and not vertical) { return result; }
+
+    const double tol = std::max(0.0, tolerance);
+
+    for(const auto& instr : instructions.get_shape_instructions())
+      {
+        if(not shape_instruction_strokes_visible(instr)) { continue; }
+
+        for(const auto& subpath : instr.get_subpaths())
+          {
+            double curr_x = subpath.get_x0();
+            double curr_y = subpath.get_y0();
+            double last_x = curr_x;
+            double last_y = curr_y;
+
+            const auto& ops = subpath.get_ops();
+            const auto& xs = subpath.get_px();
+            const auto& ys = subpath.get_py();
+            size_t point_index = 0;
+
+            auto maybe_add_line = [&](double x0, double y0,
+                                      double x1, double y1) {
+              const bool is_horizontal = std::abs(y1 - y0) <= tol;
+              const bool is_vertical = std::abs(x1 - x0) <= tol;
+
+              if(is_horizontal and is_vertical) { return; }
+
+              if((is_horizontal and not horizontal) or
+                 (is_vertical and not vertical) or
+                 (not is_horizontal and not is_vertical))
+                {
+                  return;
+                }
+
+              std::array<double, 4> bbox = {0.0, 0.0, 0.0, 0.0};
+              if(clip_axis_aligned_segment(x0, y0, x1, y1,
+                                           instr.get_clip_state(), tol, bbox))
+                {
+                  result.push_back(bbox);
+                }
+            };
+
+            for(const auto op : ops)
+              {
+                if(op == SEGMENT_LINE_TO)
+                  {
+                    if(point_index >= std::min(xs.size(), ys.size())) { break; }
+
+                    const double next_x = xs[point_index];
+                    const double next_y = ys[point_index];
+                    maybe_add_line(curr_x, curr_y, next_x, next_y);
+
+                    curr_x = next_x;
+                    curr_y = next_y;
+                    last_x = curr_x;
+                    last_y = curr_y;
+                    point_index += 1;
+                  }
+                else if(op == SEGMENT_CUBIC_TO)
+                  {
+                    if(point_index + 2 >= std::min(xs.size(), ys.size())) { break; }
+
+                    curr_x = xs[point_index + 2];
+                    curr_y = ys[point_index + 2];
+                    last_x = curr_x;
+                    last_y = curr_y;
+                    point_index += 3;
+                  }
+              }
+
+            if(subpath.get_closing_type() == CLOSED)
+              {
+                maybe_add_line(last_x, last_y, subpath.get_x0(), subpath.get_y0());
+              }
+          }
+      }
+
+    return result;
+  }
+
+  std::vector<std::array<double, 4>>
+  pdf_decoder<PAGE>::get_connected_shape_bounding_boxes(double tolerance)
+  {
+    std::vector<std::array<double, 4>> boxes;
+    const double tol = std::max(0.0, tolerance);
+
+    for(const auto& instr : instructions.get_shape_instructions())
+      {
+        std::array<double, 4> bbox = {0.0, 0.0, 0.0, 0.0};
+        if(shape_visible_bbox(instr, bbox))
+          {
+            boxes.push_back(bbox);
+          }
+      }
+
+    std::vector<bool> consumed(boxes.size(), false);
+    std::vector<std::array<double, 4>> result;
+
+    for(size_t i = 0; i < boxes.size(); ++i)
+      {
+        if(consumed[i]) { continue; }
+
+        consumed[i] = true;
+        std::array<double, 4> component = boxes[i];
+
+        bool changed = true;
+        while(changed)
+          {
+            changed = false;
+            for(size_t j = 0; j < boxes.size(); ++j)
+              {
+                if(consumed[j]) { continue; }
+
+                if(bbox_overlaps_with_tolerance(component, boxes[j], tol))
+                  {
+                    component = {
+                      std::min(component[0], boxes[j][0]),
+                      std::min(component[1], boxes[j][1]),
+                      std::max(component[2], boxes[j][2]),
+                      std::max(component[3], boxes[j][3])
+                    };
+                    consumed[j] = true;
+                    changed = true;
+                  }
+              }
+          }
+
+        result.push_back(component);
+      }
+
+    return result;
   }
 
   void pdf_decoder<PAGE>::save_pdf_page(std::filesystem::path const& out_path) const
