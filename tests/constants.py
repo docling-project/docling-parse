@@ -1,5 +1,5 @@
 HF_DATASET_REPO_ID = "docling-project/regression-dataset-for-docling-parse"
-HF_DATASET_REVISION = "17980e180c394d7941cc6b47860a7d24570fceaf"
+HF_DATASET_REVISION = "1048d569d49064b613f5ef5c886baa10a6bd616c"
 
 PARSER_PAGE_RESTRICTIONS = {
     "deep-mediabox-inheritance.pdf": [2],
