@@ -112,6 +112,9 @@ namespace pdflib
     // Strips leading PDF name slash and six-letter subset prefixes such as
     // ABCDEF+Times-Roman.
     static std::string strip_subset_prefix(const std::string& name);
+    static bool is_pdf_resource_font_key(const std::string& name);
+    static std::string select_font_query(const std::string& font_name,
+                                         const std::string& base_font);
 
     // Normalizes a PDF/system font name into the comparable form used by the
     // resolver index. This strips PDF subset prefixes, replaces punctuation
@@ -205,8 +208,7 @@ namespace pdflib
                                                              bool resolve_fonts,
                                                              float font_similarity_cutoff)
   {
-    const std::string& cache_key = (not font_name.empty() and font_name != "null")
-      ? font_name : base_font;
+    const std::string cache_key = select_font_query(font_name, base_font);
 
     LOG_S(INFO) << "blend2d font resolver: resolve_font_face"
                 << " font_name=`" << font_name << "`"
@@ -285,6 +287,33 @@ namespace pdflib
       }
 
     return s;
+  }
+
+  inline bool blend2d_font_resolver::is_pdf_resource_font_key(const std::string& name)
+  {
+    const std::string s = strip_subset_prefix(name);
+    if (s.size() < 2 or (s[0] != 'F' and s[0] != 'f')) { return false; }
+
+    return std::all_of(s.begin() + 1, s.end(),
+                       [](char c)
+                       {
+                         return std::isdigit(static_cast<unsigned char>(c));
+                       });
+  }
+
+  inline std::string blend2d_font_resolver::select_font_query(
+                                                              const std::string& font_name,
+                                                              const std::string& base_font)
+  {
+    const bool has_base_font = not base_font.empty() and base_font != "null";
+    if (has_base_font and
+        (font_name.empty() or font_name == "null" or is_pdf_resource_font_key(font_name)))
+      {
+        return base_font;
+      }
+
+    if (not font_name.empty() and font_name != "null") { return font_name; }
+    return base_font;
   }
 
   inline std::string blend2d_font_resolver::normalize_font_name(const std::string& name)
@@ -608,10 +637,47 @@ namespace pdflib
   inline bool blend2d_font_resolver::lookup_alias(font_request& request)
   {
     const std::string n = request.normalized_name;
+    std::string compact;
+    for (char c : n)
+      {
+        if (c != ' ') { compact += c; }
+      }
+
     auto set_family = [&request](const std::string& family)
     {
       request.family = normalize_font_name(family);
     };
+    auto set_standard_family = [&request](const std::string& family)
+    {
+      request.normalized_name = normalize_font_name(family);
+      request.family = request.normalized_name;
+      request.standard_14 = true;
+    };
+
+    if (compact == "arial" or compact == "arialbold" or
+        compact == "arialitalic" or compact == "arialbolditalic")
+      {
+        set_standard_family("Helvetica");
+        request.bold = request.bold or compact.find("bold") != std::string::npos;
+        request.italic = request.italic or compact.find("italic") != std::string::npos;
+        return true;
+      }
+    if (compact == "couriernew" or compact == "couriernewbold" or
+        compact == "couriernewitalic" or compact == "couriernewbolditalic")
+      {
+        set_standard_family("Courier");
+        request.bold = request.bold or compact.find("bold") != std::string::npos;
+        request.italic = request.italic or compact.find("italic") != std::string::npos;
+        return true;
+      }
+    if (compact == "timesnewroman" or compact == "timesnewromanbold" or
+        compact == "timesnewromanitalic" or compact == "timesnewromanbolditalic")
+      {
+        set_standard_family("Times");
+        request.bold = request.bold or compact.find("bold") != std::string::npos;
+        request.italic = request.italic or compact.find("italic") != std::string::npos;
+        return true;
+      }
 
     if (n == "times" or n == "times roman")
       {
