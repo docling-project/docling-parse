@@ -72,6 +72,20 @@ namespace pdflib
     void do_postscript(const std::string& xobj_name,
 		       const xobject_subtype_name& xobj_subtype);
 
+    // marked-content (BMC/BDC ... EMC) tracking, used to honor /ActualText
+    // replacement text (PDF 32000-1, section 14.9.4)
+    struct marked_content_entry
+    {
+      bool        has_actual_text = false;
+      std::string actual_text     = ""; // UTF-8
+      std::size_t cells_begin     = 0;  // page_cells.size() at BDC/BMC
+    };
+
+    void begin_marked_content(std::vector<qpdf_stream_instruction>& parameters);
+    void end_marked_content();
+
+    void apply_actual_text(const marked_content_entry& entry);
+
   private:
 
     const decode_config& config;
@@ -96,6 +110,12 @@ namespace pdflib
     std::vector<pdf_state<GLOBAL> > stack;
 
     int stack_count;
+
+    // BDC/EMC pairs must balance within a single content stream (PDF 32000-1,
+    // 14.6), so this stack is per-decoder; cells created by nested form
+    // XObjects still land in the shared page_cells and are covered by the
+    // recorded cells_begin index.
+    std::vector<marked_content_entry> marked_content_stack;
   };
 
   pdf_decoder<STREAM>::pdf_decoder(const decode_config& config_,
@@ -275,6 +295,13 @@ namespace pdflib
           {
             parameters.push_back(inst);
           }
+      }
+
+    if(marked_content_stack.size()>0)
+      {
+        LOG_S(WARNING) << "content stream ended with " << marked_content_stack.size()
+                       << " unbalanced BMC/BDC operator(s): pending /ActualText is not applied";
+        marked_content_stack.clear();
       }
   }
 
@@ -506,6 +533,171 @@ namespace pdflib
                                           const xobject_subtype_name& xobj_subtype)
   {
     LOG_S(WARNING) << "unsupported xobject subtype (PostScript) with name " << xobj_name;
+  }
+
+  // BMC has one operand (tag), BDC has two (tag + properties). The properties
+  // operand of BDC is either an inline dictionary or a name referring to the
+  // /Properties resource dictionary; only inline dictionaries are inspected
+  // for /ActualText here (the named form is rare for /ActualText, which is
+  // content-specific by nature).
+  void pdf_decoder<STREAM>::begin_marked_content(std::vector<qpdf_stream_instruction>& parameters)
+  {
+    marked_content_entry entry;
+    entry.cells_begin = page_cells.size();
+
+    if(config.apply_actual_text and parameters.size()>=2)
+      {
+        qpdf_stream_instruction& props = parameters.back();
+
+        if(props.is_dict())
+          {
+            QPDFObjectHandle dict = props.obj;
+
+            if(dict.hasKey("/ActualText") and dict.getKey("/ActualText").isString())
+              {
+                entry.has_actual_text = true;
+                // getUTF8Value decodes UTF-16BE (BOM) and PDFDoc strings
+                entry.actual_text = dict.getKey("/ActualText").getUTF8Value();
+
+                LOG_S(INFO) << "BDC with /ActualText: '" << entry.actual_text << "'";
+              }
+          }
+        else if(props.obj.isName())
+          {
+            LOG_S(INFO) << "BDC with named properties " << props.obj.getName()
+                        << ": not resolved against /Properties, /ActualText (if any) is ignored";
+          }
+      }
+
+    marked_content_stack.push_back(entry);
+  }
+
+  void pdf_decoder<STREAM>::end_marked_content()
+  {
+    if(marked_content_stack.empty())
+      {
+        LOG_S(WARNING) << "EMC without matching BMC/BDC: ignoring";
+        return;
+      }
+
+    marked_content_entry entry = marked_content_stack.back();
+    marked_content_stack.pop_back();
+
+    if(entry.has_actual_text)
+      {
+        apply_actual_text(entry);
+      }
+  }
+
+  // Substitute the /ActualText replacement string into the text cells created
+  // inside the marked-content span. Substitution requires the span to have
+  // drawn text cells: /ActualText over pure graphics (the alternate-text-like
+  // usage) has no anchor cell and is skipped, and a replacement string that is
+  // implausibly long for the glyph run (descriptive misuse, /Alt semantics in
+  // the wrong key) is rejected.
+  void pdf_decoder<STREAM>::apply_actual_text(const marked_content_entry& entry)
+  {
+    std::size_t begin = entry.cells_begin;
+    std::size_t end   = page_cells.size();
+
+    if(begin>end)
+      {
+        LOG_S(ERROR) << "invalid marked-content cell range [" << begin << ", " << end << ")";
+        return;
+      }
+
+    std::size_t num_cells = end-begin;
+
+    if(num_cells==0)
+      {
+        LOG_S(WARNING) << "skipping /ActualText ('" << entry.actual_text
+                       << "'): no text cells in marked-content span (non-text content)";
+        return;
+      }
+
+    std::vector<std::string> chars = utils::string::split_unicode_characters(entry.actual_text);
+
+    if(chars.size() > std::max<std::size_t>(8, 4*num_cells))
+      {
+        LOG_S(WARNING) << "ignoring /ActualText ('" << entry.actual_text
+                       << "'): " << chars.size() << " character(s) is implausible for a span of "
+                       << num_cells << " cell(s)";
+        return;
+      }
+
+    if(chars.size()==0)
+      {
+        // an empty /ActualText declares the span to be non-textual content
+        // (eg a purely visual line-break hyphen)
+        LOG_S(INFO) << "empty /ActualText: removing " << num_cells << " cell(s)";
+        page_cells.erase(page_cells.begin()+begin, page_cells.begin()+end);
+        return;
+      }
+
+    if(chars.size()==num_cells)
+      {
+        // preserve the per-glyph geometry
+        for(std::size_t i=0; i<num_cells; i++)
+          {
+            page_item<PAGE_CELL>& cell = page_cells[begin+i];
+
+            if(cell.text!=chars.at(i))
+              {
+                LOG_S(INFO) << "/ActualText substitution: '" << cell.text
+                            << "' -> '" << chars.at(i) << "'";
+
+                cell.text = chars.at(i);
+                cell.left_to_right = (not utils::string::is_right_to_left(cell.text));
+              }
+          }
+        return;
+      }
+
+    // glyph count and character count differ (composed accents, ligatures,
+    // hyphenation): the first cell carries the full replacement string and the
+    // union of the span geometry, the remaining cells are removed
+    LOG_S(INFO) << "/ActualText substitution: " << num_cells << " cell(s) -> '"
+                << entry.actual_text << "'";
+
+    page_item<PAGE_CELL>& first = page_cells[begin];
+
+    // baseline direction of the span, taken from the first cell (r_0 -> r_1)
+    const double dir_x = first.r_x1-first.r_x0;
+    const double dir_y = first.r_y1-first.r_y0;
+
+    double max_proj = first.r_x1*dir_x + first.r_y1*dir_y;
+
+    for(std::size_t i=begin+1; i<end; i++)
+      {
+        page_item<PAGE_CELL>& cell = page_cells[i];
+
+        first.x0 = std::min(first.x0, cell.x0);
+        first.y0 = std::min(first.y0, cell.y0);
+        first.x1 = std::max(first.x1, cell.x1);
+        first.y1 = std::max(first.y1, cell.y1);
+
+        // extend the baseline rect along the text flow: keep the leading edge
+        // (r_0/r_3) of the first cell, take the trailing edge (r_1/r_2) of the
+        // cell that reaches furthest along the baseline. Not simply the last
+        // cell: zero-advance overlay glyphs (composed accents) trail *behind*
+        // the base letter. Projection onto the baseline keeps rotated text
+        // oriented correctly.
+        double proj = cell.r_x1*dir_x + cell.r_y1*dir_y;
+        if(proj>max_proj)
+          {
+            max_proj = proj;
+
+            first.r_x1 = cell.r_x1;
+            first.r_y1 = cell.r_y1;
+            first.r_x2 = cell.r_x2;
+            first.r_y2 = cell.r_y2;
+          }
+      }
+
+    first.text = entry.actual_text;
+    first.left_to_right = (not utils::string::is_right_to_left(first.text));
+
+    page_cells.erase(page_cells.begin()+(begin+1), page_cells.begin()+end);
   }
 
   void pdf_decoder<STREAM>::execute_operator(qpdf_stream_instruction              op,
@@ -759,20 +951,17 @@ namespace pdflib
         break;
 
       case pdf_operator::BMC:
-        {
-          LOG_S(INFO) << "executing " << to_string(name);
-        }
-        break;
-
       case pdf_operator::BDC:
         {
           LOG_S(INFO) << "executing " << to_string(name);
+          begin_marked_content(parameters);
         }
         break;
 
       case pdf_operator::EMC:
         {
           LOG_S(INFO) << "executing " << to_string(name);
+          end_marked_content();
         }
         break;
 

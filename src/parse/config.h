@@ -48,6 +48,11 @@ namespace pdflib
     bool do_thread_safe = true; // slight compute/memory overhead in single threaded case
     int release_native_memory_every_n_pages = 0; // 0 disables allocator trimming
 
+    // honor /ActualText marked-content replacement text (PDF 32000-1, 14.9.4):
+    // the producer-declared exact Unicode of a glyph run (ligatures, composed
+    // accents, hyphenation). Only substituted into spans that drew text cells.
+    bool apply_actual_text = true;
+
     // debug: in production, we dont want to have ugly GLYPH<...>
     bool keep_glyphs = false;
     bool keep_qpdf_warnings = false;
@@ -92,6 +97,8 @@ namespace pdflib
     j["extract_font_programs"] = extract_font_programs;
     j["release_native_memory_every_n_pages"] = release_native_memory_every_n_pages;
 
+    j["apply_actual_text"] = apply_actual_text;
+
     j["keep_glyphs"] = keep_glyphs;
     j["keep_qpdf_warnings"] = keep_qpdf_warnings;
 
@@ -126,6 +133,8 @@ namespace pdflib
     if(j.count("populate_json_objects")) { populate_json_objects = j["populate_json_objects"]; }
     if(j.count("extract_font_programs")) { extract_font_programs = j["extract_font_programs"]; }
     if(j.count("release_native_memory_every_n_pages")) { release_native_memory_every_n_pages = j["release_native_memory_every_n_pages"]; }
+
+    if(j.count("apply_actual_text")) { apply_actual_text = j["apply_actual_text"]; }
 
     if(j.count("keep_glyphs")) { keep_glyphs = j["keep_glyphs"]; }
     if(j.count("keep_qpdf_warnings")) { keep_qpdf_warnings = j["keep_qpdf_warnings"]; }
@@ -183,6 +192,7 @@ namespace pdflib
        << std::setw(48) << "populate_json_objects" << (populate_json_objects ? "true" : "false") << "\n"
        << std::setw(48) << "extract_font_programs" << (extract_font_programs ? "true" : "false") << "\n"
        << std::setw(48) << "release_native_memory_every_n_pages" << release_native_memory_every_n_pages << "\n"
+       << std::setw(48) << "apply_actual_text" << (apply_actual_text ? "true" : "false") << "\n"
        << std::setw(48) << "keep_glyphs" << (keep_glyphs ? "true" : "false") << "\n"
        << std::setw(48) << "keep_qpdf_warnings" << (keep_qpdf_warnings ? "true" : "false") << "\n";
 

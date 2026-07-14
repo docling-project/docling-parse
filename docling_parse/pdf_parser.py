@@ -263,6 +263,7 @@ class DecodeConfig(BaseModel):
     min_visible_clip_extent: float = 1e-3
     do_thread_safe: bool = True
     release_native_memory_every_n_pages: int = 0
+    apply_actual_text: bool = True
     keep_glyphs: bool = False
     keep_qpdf_warnings: bool = False
 
@@ -295,6 +296,7 @@ def _compile_decode_config(
     cpp.release_native_memory_every_n_pages = (
         decode_config.release_native_memory_every_n_pages
     )
+    cpp.apply_actual_text = decode_config.apply_actual_text
     cpp.keep_glyphs = decode_config.keep_glyphs
     cpp.keep_qpdf_warnings = decode_config.keep_qpdf_warnings
     cpp.keep_char_cells = (

@@ -60,6 +60,38 @@ namespace utils
       return count;
     }
     
+    std::vector<std::string> split_unicode_characters(const std::string& utf8_string)
+    {
+      std::vector<std::string> chars;
+
+      std::size_t i = 0;
+      while (i < utf8_string.size())
+	{
+	  unsigned char c = static_cast<unsigned char>(utf8_string[i]);
+
+	  std::size_t len = 1;
+	  if      ((c & 0x80) == 0x00) { len = 1; }
+	  else if ((c & 0xE0) == 0xC0) { len = 2; }
+	  else if ((c & 0xF0) == 0xE0) { len = 3; }
+	  else if ((c & 0xF8) == 0xF0) { len = 4; }
+	  else
+	    {
+	      // Invalid UTF-8 lead byte: keep it as a single-byte character
+	      len = 1;
+	    }
+
+	  if (i + len > utf8_string.size())
+	    {
+	      len = utf8_string.size() - i;
+	    }
+
+	  chars.push_back(utf8_string.substr(i, len));
+	  i += len;
+	}
+
+      return chars;
+    }
+
     bool is_integer(const std::string & s)
     {
       return std::regex_match(s, std::regex("(-)?[0-9]+"));
