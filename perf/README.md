@@ -98,6 +98,70 @@ Those flags are compiled into:
 - `DecodeConfig` for compute tuning
 - `ContentConfig` for `ContentLevel.SKIP`, `COMPUTE`, and `COMPUTE_AND_MATERIALIZE`
 
+## Comparison suite (`run_scaling.py --compare`)
+
+`--compare` replaces the scaling tables with the two tables published in
+`docs/performance_benchmarks.md`: a per-page time distribution, and a wall-time
+speedup grid. Without the flag the script behaves exactly as before.
+
+```sh
+# docling-parse vs pypdfium2, the default pairing
+python perf/run_scaling.py --mode both --compare
+
+# every backend, and write the markdown for the docs
+python perf/run_scaling.py --mode both --compare all --threads 1,2,4,8 \
+    --markdown-out docs/_generated/benchmark_tables.md \
+    --pages-csv perf/results/pages.csv
+```
+
+Backends and the API each one is timed on:
+
+| name            | parse                              | parse+render                 |
+| --------------- | ---------------------------------- | ---------------------------- |
+| `docling-parse` | `DoclingThreadedPdfParser`         | + `RenderConfig`             |
+| `pymupdf`       | `page.get_text("rawdict")`         | + `get_pixmap` → `pil_image` |
+| `pypdfium2`     | textpage rects + `get_text_bounded`| + `page.render` → `to_pil`   |
+| `pdfplumber`    | `page.chars`                       | + `page.to_image()`          |
+| `pdfminer.six`  | `extract_pages` + `LTChar` walk    | not supported                |
+| `pypdf`         | `extract_text(visitor_text=...)`   | not supported                |
+
+Each backend uses a *position-bearing* extraction API, so that all rows measure
+the same task. `pymupdf` deliberately uses `rawdict` rather than
+`get_text("text")`, which returns a bare string and would be a cheaper task.
+
+docling-parse is run once per `--threads` value; every other package is run
+single-threaded, because none of them expose a thread-safe multi-page pipeline.
+
+How the numbers are defined:
+
+- `total time` is a wall clock around the whole corpus, including opening
+  documents. This is the number that shows the benefit of threading.
+- the per-page distribution is the cost of a *single* page, so it stays roughly
+  flat as threads increase while `total time` drops. Third-party backends are
+  timed with a wall clock around each page's work (document open/close
+  excluded); docling-parse reports the C++ page timing, because under
+  concurrency no wall-clock interval belongs to one page. The table's
+  `per-page source` column states which of the two a row used.
+
+In render mode the rasterised width and height of every page are recorded too,
+and a *render size check* table compares each backend against docling-parse
+page by page. A timing comparison only means something if all backends produced
+the same canvas, so this reports how many pages agree within 2 px and the worst
+offender. The sizes are also in the `--pages-csv` output as `image_width` and
+`image_height`.
+
+Flags:
+
+- `--compare [list]`: bare flag uses `docling-parse;pypdfium2`; otherwise a
+  semicolon-separated list, or `all`
+- `--markdown-out`: write both tables as markdown
+- `--pages-csv`: one row per (backend, task, threads, doc, page), with the
+  rendered image size
+
+Third-party backends that are not installed are skipped, and the skipped rows
+are restated just before the tables so they are not mistaken for failures.
+Install them all with `uv sync --group perf`.
+
 ## Timing visualization
 
 `run_scaling.py --enable-timing` writes a CSV that
