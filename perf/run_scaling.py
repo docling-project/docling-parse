@@ -33,18 +33,23 @@ Usage:
         --create-word-cells=true --create-line-cells=true \
         --keep-shapes=true --keep-bitmaps=true
     python perf/run_scaling.py --mode both --compare                 # docling-parse vs pypdfium2
-    python perf/run_scaling.py --mode both --compare all --threads 1,2,4,8 \
-        --markdown-out docs/_generated/benchmark_tables.md \
-        --pages-csv perf/results/pages.csv
+    python perf/run_scaling.py --threads 1,4,8,12 --compare all --mode render \
+        --output-dir ./docs/performance_benchmarks/
+
+Every run writes `<output-dir>/<cpu>_<dataset>_<mode>.md` (a self-contained
+report: the exact command, the dataset, the machine, every config table, and
+the result tables) alongside a `.csv` of per-page timings for perf/run_eval.py
+and perf/run_analysis.py.  The output directory defaults to ./scratch.
 """
 
 from __future__ import annotations
 
 import argparse
 import contextlib
-import csv
 import os
 import platform
+import re
+import shlex
 import subprocess
 import sys
 import time
@@ -53,26 +58,24 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Iterable, Iterator, List, Tuple
 
+from _common import (
+    TASK_PARSE,
+    TASK_RENDER,
+    PageRow,
+    find_pdfs,
+    percentile,
+    series_label,
+    write_page_rows,
+)
 from tabulate import tabulate
 from tqdm import tqdm
 
 DEFAULT_HF_REPO_ID = "docling-project/performance-dataset-bo767"
 HF_PDF_SUBDIR = "pdf"
-
-
-def _default_timing_csv_path() -> Path:
-    timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-    return Path(f"timing-{timestamp}.csv")
+DEFAULT_OUTPUT_DIR = Path("scratch")
 
 
 # -------- Input resolution --------
-
-
-def find_pdfs(path: Path, recursive: bool = False) -> List[Path]:
-    if path.is_file():
-        return [path] if path.suffix.lower() == ".pdf" else []
-    pattern = "**/*.pdf" if recursive else "*.pdf"
-    return sorted([p for p in path.glob(pattern) if p.is_file()])
 
 
 def resolve_pdf_inputs(
@@ -293,8 +296,8 @@ def format_dataset_label(dataset_info: Dict[str, object]) -> str:
     return f"{label} ({dataset_info['documents']} docs, {dataset_info['pages']} pages)"
 
 
-def print_system_info(system_info: Dict[str, object]) -> None:
-    rows = [
+def system_rows(system_info: Dict[str, object]) -> List[List[object]]:
+    rows: List[List[object]] = [
         ["cpu", system_info["cpu"]],
         ["physical cores", system_info["physical_cores"]],
         ["logical cores", system_info["logical_cores"]],
@@ -309,28 +312,44 @@ def print_system_info(system_info: Dict[str, object]) -> None:
     packages = system_info["packages"]
     assert isinstance(packages, dict)
     rows.extend([[name, version] for name, version in packages.items()])
-    print("System:")
-    print(tabulate(rows, headers=["parameter", "value"]))
+    return rows
 
 
-# -------- Statistics --------
+def benchmark_rows(
+    dataset_info: Dict[str, object], settings: Dict[str, object]
+) -> List[List[object]]:
+    rows: List[List[object]] = [
+        ["dataset", dataset_info["name"]],
+        ["dataset source", dataset_info["source"]],
+    ]
+    if dataset_info.get("revision"):
+        rows.append(["dataset revision", dataset_info["revision"]])
+    rows.extend(
+        [
+            ["documents", dataset_info["documents"]],
+            ["pages", dataset_info["pages"]],
+        ]
+    )
+    rows.extend([key, value] for key, value in settings.items())
+    return rows
 
 
-def percentile(values: List[float], p: float) -> float:
-    """Linearly interpolated percentile; matches perf/run_perf.py."""
-    if not values:
-        return 0.0
-    if p <= 0:
-        return min(values)
-    if p >= 100:
-        return max(values)
-    vs = sorted(values)
-    k = (len(vs) - 1) * (p / 100.0)
-    f = int(k)
-    c = min(f + 1, len(vs) - 1)
-    if f == c:
-        return vs[f]
-    return vs[f] * (c - k) + vs[c] * (k - f)
+# -------- Output naming --------
+
+
+def _slug(value: str) -> str:
+    """Filesystem-friendly token: lowercase, only [a-z0-9-], others collapsed."""
+    slug = re.sub(r"[^a-z0-9-]+", "_", str(value).lower()).strip("_")
+    return slug or "unknown"
+
+
+def output_basename(
+    system_info: Dict[str, object], dataset_info: Dict[str, object], mode: str
+) -> str:
+    """`<cpu>_<dataset>_<mode>`, so runs never overwrite each other."""
+    dataset = str(dataset_info["name"]).rstrip("/").split("/")[-1]
+    dataset = re.sub(r"\.pdf$", "", dataset, flags=re.IGNORECASE)
+    return f"{_slug(system_info['cpu'])}_{_slug(dataset)}_{_slug(mode)}"
 
 
 # -------- Decode config helper --------
@@ -446,16 +465,20 @@ def _config_rows(values: dict[str, object], fields: List[str]) -> List[List[str]
     return [[field, values[field]] for field in fields]
 
 
-def _print_run_configs(
+def config_tables(
     *,
     render: bool,
     scale: float,
     decode_options: dict[str, bool],
     materialization_options: dict[str, bool],
-) -> None:
+) -> List[Tuple[str, List[List[object]]]]:
+    """(title, parameter/value rows) for each config the run was driven with.
+
+    Returned rather than printed so the terminal output and the markdown report
+    always show the same values.
+    """
     from docling_parse.pdf_parsers import RenderConfig  # type: ignore[import]
 
-    decode_config = _decode_config()
     decode_fields = [
         "do_sanitization",
         "enforce_same_font",
@@ -470,16 +493,6 @@ def _print_run_configs(
         "keep_glyphs",
         "keep_qpdf_warnings",
     ]
-    print("Decode config:")
-    print(
-        tabulate(
-            _config_rows(decode_config.model_dump(), decode_fields),
-            headers=["parameter", "value"],
-        )
-    )
-    print()
-
-    content_config = _content_config(decode_options, materialization_options)
     content_fields = [
         "char_cells_content_level",
         "word_cells_content_level",
@@ -488,33 +501,6 @@ def _print_run_configs(
         "bitmaps_content_level",
         "include_bitmap_bytes",
     ]
-    print("Content config:")
-    print(
-        tabulate(
-            _config_rows(content_config.model_dump(), content_fields),
-            headers=["parameter", "value"],
-        )
-    )
-    print()
-
-    print("Render config:")
-    if not render:
-        print(tabulate([["enabled", False]], headers=["parameter", "value"]))
-        return
-
-    render_config = RenderConfig()
-    render_config.scale = scale
-    render_values = {
-        "render_text": render_config.render_text,
-        "draw_text_bbox": render_config.draw_text_bbox,
-        "draw_text_basepoint": render_config.draw_text_basepoint,
-        "fit_glyph_bbox_to_target": render_config.fit_glyph_bbox_to_target,
-        "resolve_fonts": render_config.resolve_fonts,
-        "font_similarity_cutoff": render_config.font_similarity_cutoff,
-        "scale": render_config.scale,
-        "canvas_width": render_config.canvas_width,
-        "canvas_height": render_config.canvas_height,
-    }
     render_fields = [
         "render_text",
         "draw_text_bbox",
@@ -526,62 +512,55 @@ def _print_run_configs(
         "canvas_width",
         "canvas_height",
     ]
-    print(
-        tabulate(
-            _config_rows(render_values, render_fields),
-            headers=["parameter", "value"],
-        )
-    )
 
-
-def _timing_csv_fieldnames() -> List[str]:
-    return [
-        "mode",
-        "threads",
-        "render",
-        "doc_key",
-        "page_number",
-        "success",
-        "timing_total_s",
-        "timing_make_page_decoder_s",
-        "timing_decode_page_s",
-        "timing_create_word_cells_s",
-        "timing_create_line_cells_s",
-        "timing_render_page_s",
-        "error_message",
+    tables: List[Tuple[str, List[List[object]]]] = [
+        (
+            "Decode config",
+            _config_rows(_decode_config().model_dump(), decode_fields),
+        ),
+        (
+            "Content config",
+            _config_rows(
+                _content_config(decode_options, materialization_options).model_dump(),
+                content_fields,
+            ),
+        ),
     ]
 
+    if not render:
+        tables.append(("Render config", [["enabled", False]]))
+        return tables
 
-def _timing_csv_row(
-    *, mode: str, num_threads: int, render: bool, result
-) -> dict[str, object]:
-    row: dict[str, object] = {
-        "mode": mode,
-        "threads": num_threads,
-        "render": render,
-        "doc_key": result.doc_key,
-        "page_number": result.page_number,
-        "success": result.success,
-        "error_message": result.error_message,
-    }
-    timing_keys = _timing_csv_fieldnames()[7:-1]
-    if result.success:
-        from docling_parse.pdf_parser import PageRenderTimings
+    render_config = RenderConfig()
+    render_config.scale = scale
+    render_values = {field: getattr(render_config, field) for field in render_fields}
+    tables.append(("Render config", _config_rows(render_values, render_fields)))
+    return tables
 
-        timings = result.timings
-        row["timing_total_s"] = timings.total_s
-        row["timing_make_page_decoder_s"] = timings.make_page_decoder_s
-        row["timing_decode_page_s"] = timings.decode_page_s
-        row["timing_create_word_cells_s"] = timings.create_word_cells_s
-        row["timing_create_line_cells_s"] = timings.create_line_cells_s
-        row["timing_render_page_s"] = (
+
+def print_parameter_tables(tables: List[Tuple[str, List[List[object]]]]) -> None:
+    for title, rows in tables:
+        print(f"{title}:")
+        print(tabulate(rows, headers=["parameter", "value"]))
+        print()
+
+
+def _stage_timings(result) -> Dict[str, float]:
+    """C++ per-stage timings for one threaded page result."""
+    from docling_parse.pdf_parser import PageRenderTimings
+
+    if not result.success:
+        return {}
+    timings = result.timings
+    return {
+        "make_page_decoder_s": timings.make_page_decoder_s,
+        "decode_page_s": timings.decode_page_s,
+        "create_word_cells_s": timings.create_word_cells_s,
+        "create_line_cells_s": timings.create_line_cells_s,
+        "render_page_s": (
             timings.render_page_s if isinstance(timings, PageRenderTimings) else 0.0
-        )
-    else:
-        row["timing_total_s"] = 0.0
-        for key in timing_keys:
-            row[key] = 0.0
-    return row
+        ),
+    }
 
 
 # -------- Baselines --------
@@ -878,24 +857,8 @@ def parse_other_arg(arg: str) -> List[str]:
 #   * `parse+render` additionally rasterises the page at `--scale`
 #     (scale 1.0 = 72 dpi) and materialises it as a PIL image.
 
-TASK_PARSE = "parse"
-TASK_RENDER = "parse+render"
-
 PER_PAGE_WALL = "wall clock per page"
 PER_PAGE_INTERNAL = "C++ page timings"
-
-
-@dataclass
-class PageSample:
-    doc_key: str
-    page_number: int
-    elapsed_s: float  # the per-page cost used for the quantiles
-    success: bool
-    wall_gap_s: float = 0.0  # observed arrival gap; == elapsed_s when unthreaded
-    # Rasterised size in pixels, so a render run can be checked for producing
-    # the same canvas across backends. Zero outside the render task.
-    image_width: int = 0
-    image_height: int = 0
 
 
 @dataclass
@@ -912,7 +875,7 @@ class BackendRun:
     threads: int
     wall_s: float
     per_page_source: str
-    samples: List[PageSample] = field(default_factory=list)
+    samples: List[PageRow] = field(default_factory=list)
     doc_errors: int = 0
 
     @property
@@ -951,11 +914,9 @@ class _Collector:
         self.task = task
         self.threads = threads
         self.per_page_source = per_page_source
-        self.samples: List[PageSample] = []
+        self.samples: List[PageRow] = []
         self.doc_errors = 0
-        label = f"{backend} [{task}]"
-        if threads > 1:
-            label += f" x{threads}"
+        label = series_label(backend, task, threads)
         self._pbar = tqdm(
             total=total_pages, desc=f"  {label}", unit="page", leave=False
         )
@@ -969,17 +930,24 @@ class _Collector:
         success: bool,
         wall_gap_s: float | None = None,
         image_size: Tuple[int, int] | None = None,
+        stage_timings: Dict[str, float] | None = None,
+        error_message: str = "",
     ) -> None:
         width, height = image_size if image_size else (0, 0)
         self.samples.append(
-            PageSample(
-                doc_key,
-                page_number,
-                elapsed_s,
-                success,
-                elapsed_s if wall_gap_s is None else wall_gap_s,
-                int(width),
-                int(height),
+            PageRow(
+                backend=self.backend,
+                task=self.task,
+                threads=self.threads,
+                doc_key=doc_key,
+                page_number=page_number,
+                success=success,
+                elapsed_s=elapsed_s,
+                wall_gap_s=elapsed_s if wall_gap_s is None else wall_gap_s,
+                image_width=int(width),
+                image_height=int(height),
+                stage_timings=stage_timings or {},
+                error_message=error_message,
             )
         )
         self._pbar.update(1)
@@ -994,10 +962,12 @@ class _Collector:
         out = _PageOutput()
         t0 = time.perf_counter()
         success = True
+        error = ""
         try:
             yield out
         except Exception as e:
             success = False
+            error = str(e)
             print(f"  {self.backend} page error on {doc_key} p{page_number}: {e}")
         finally:
             self.add(
@@ -1006,6 +976,7 @@ class _Collector:
                 time.perf_counter() - t0,
                 success,
                 image_size=out.image_size,
+                error_message=error,
             )
 
     def document_failed(self, doc_key: str, error: Exception) -> None:
@@ -1043,6 +1014,7 @@ def cmp_docling(
     max_concurrent_results: int,
     decode_options: dict[str, bool],
     materialization_options: dict[str, bool],
+    bytesio: bool = False,
     **_: object,
 ) -> BackendRun:
     """docling-parse via DoclingThreadedPdfParser at `threads` worker threads.
@@ -1052,6 +1024,8 @@ def cmp_docling(
     are inside the wall clock, matching the third-party backends where opening
     a document is also part of the total.
     """
+    from io import BytesIO
+
     from docling_parse.pdf_parsers import RenderConfig  # type: ignore[import]
 
     from docling_parse.pdf_parser import (
@@ -1087,7 +1061,8 @@ def cmp_docling(
     )
     for pdf_path, page_numbers in schedule:
         try:
-            parser.load(str(pdf_path), page_numbers=page_numbers)
+            source = BytesIO(pdf_path.read_bytes()) if bytesio else str(pdf_path)
+            parser.load(source, page_numbers=page_numbers)
         except Exception as e:
             c.document_failed(str(pdf_path), e)
 
@@ -1101,12 +1076,16 @@ def cmp_docling(
                 result.get_page()
         now = time.perf_counter()
         c.add(
-            result.doc_key,
+            # DoclingThreadedPdfParser keys documents as "key=<path>"; strip the
+            # prefix so samples join with the other backends on the plain path.
+            result.doc_key.removeprefix("key="),
             result.page_number,
             result.timings.total_s,
             result.success,
             wall_gap_s=now - previous,
             image_size=image_size,
+            stage_timings=_stage_timings(result),
+            error_message=result.error_message,
         )
         previous = now
     return c.finish()
@@ -1361,6 +1340,15 @@ THREADED_COMPARISON_BACKENDS = {"docling-parse"}
 # docling-parse measured against pypdfium2.
 DEFAULT_COMPARE = "docling-parse;pypdfium2"
 
+# Ground truth for the rendered canvas, most-preferred first. PDFium is the
+# reference because it is the rasteriser three of the six packages ultimately
+# rely on, so its page geometry is the one to agree with.
+RENDER_SIZE_REFERENCE_ORDER = ("pypdfium2", "docling-parse", "pymupdf")
+
+# Row order of the printed and generated tables: registry order, then threads.
+_BACKEND_ORDER = {name: index for index, name in enumerate(COMPARISON_BACKENDS)}
+_TASK_ORDER = {TASK_PARSE: 0, TASK_RENDER: 1}
+
 
 def parse_compare_arg(arg: str) -> List[str]:
     """Parse `--compare`; "" disables the suite, "all" selects every backend."""
@@ -1390,12 +1378,26 @@ def run_comparison(
     max_concurrent_results: int,
     decode_options: dict[str, bool],
     materialization_options: dict[str, bool],
+    bytesio: bool = False,
 ) -> List[BackendRun]:
-    """Run every (backend, task, threads) combination once."""
+    """Run every (backend, task, threads) combination once.
+
+    The render-size reference runs first so its page geometry is established
+    before anything is compared against it; the tables are sorted back into
+    registry order afterwards.
+    """
     runs: List[BackendRun] = []
     skipped: List[str] = []
+    ordered = sorted(
+        backends,
+        key=lambda name: (
+            RENDER_SIZE_REFERENCE_ORDER.index(name)
+            if name in RENDER_SIZE_REFERENCE_ORDER
+            else len(RENDER_SIZE_REFERENCE_ORDER)
+        ),
+    )
     for task in tasks:
-        for name in backends:
+        for name in ordered:
             runner, supported = COMPARISON_BACKENDS[name]
             if task not in supported:
                 reason = f"{name} [{task}]: backend cannot rasterise"
@@ -1421,6 +1423,7 @@ def run_comparison(
                         max_concurrent_results=max_concurrent_results,
                         decode_options=decode_options,
                         materialization_options=materialization_options,
+                        bytesio=bytesio,
                     )
                 except ImportError as e:
                     reason = (
@@ -1443,6 +1446,8 @@ def run_comparison(
         print("\nSkipped runs (absent from the tables below):")
         for reason in skipped:
             print(f"  - {reason}")
+
+    runs.sort(key=lambda r: (_TASK_ORDER[r.task], _BACKEND_ORDER[r.backend], r.threads))
     return runs
 
 
@@ -1560,41 +1565,80 @@ def print_speedup_table(runs: List[BackendRun]) -> None:
 RENDER_SIZE_TOLERANCE_PX = 2
 
 
-def print_render_size_check(runs: List[BackendRun]) -> None:
-    """Compare the rasterised canvas each backend produced, page by page.
-
-    A timing comparison only means something if every backend rendered the same
-    canvas, so each render run is checked against docling-parse on the pages
-    both of them produced.
-    """
-    render_runs = [run for run in runs if run.task == TASK_RENDER]
-    if not render_runs:
-        return
-
-    reference = next(
-        (run for run in render_runs if run.backend == "docling-parse"), None
-    )
-    if reference is None:
-        print("\nRender size check skipped: docling-parse was not part of the run")
-        return
-
-    ref_sizes = {
+def _render_sizes(run: BackendRun) -> Dict[Tuple[str, int], Tuple[int, int]]:
+    return {
         (s.doc_key, s.page_number): (s.image_width, s.image_height)
-        for s in reference.samples
+        for s in run.samples
         if s.success and s.image_width and s.image_height
     }
 
-    rows = []
+
+RENDER_SIZE_HEADERS = [
+    "python package",
+    "pages compared",
+    "within tolerance",
+    "max delta (px)",
+    "worst page",
+    "pages w/o reference",
+]
+
+
+def render_size_check(
+    runs: List[BackendRun],
+) -> Tuple[str | None, List[List[object]], str]:
+    """Compare the rasterised canvas each backend produced, page by page.
+
+    A timing comparison only means something if every backend rendered the same
+    canvas, so each package is checked against the reference (PDFium) on the
+    pages both of them produced.  Thread count cannot change the canvas, so
+    only the first run per package is compared.
+
+    Returns `(reference_name, rows, note)`; `reference_name` is None when the
+    check could not run, and `note` says why.
+    """
+    render_runs = [run for run in runs if run.task == TASK_RENDER]
+    if not render_runs:
+        return None, [], ""
+
+    # One run per package; thread count does not affect the rasterised size.
+    per_backend: Dict[str, BackendRun] = {}
     for run in render_runs:
-        if run is reference:
+        per_backend.setdefault(run.backend, run)
+
+    reference_name = next(
+        (name for name in RENDER_SIZE_REFERENCE_ORDER if name in per_backend), None
+    )
+    if reference_name is None:
+        return (
+            None,
+            [],
+            "Render size check skipped: none of "
+            f"{list(RENDER_SIZE_REFERENCE_ORDER)} was part of the run",
+        )
+
+    ref_sizes = _render_sizes(per_backend[reference_name])
+    if not ref_sizes:
+        return (
+            None,
+            [],
+            f"Render size check skipped: {reference_name} reported no image sizes",
+        )
+
+    rows: List[List[object]] = []
+    for name, run in per_backend.items():
+        if name == reference_name:
             continue
         compared = 0
         within = 0
         worst = 0
         worst_page = ""
+        missing = 0
         for s in run.samples:
+            if not s.success or not s.image_width:
+                continue
             ref = ref_sizes.get((s.doc_key, s.page_number))
-            if ref is None or not s.success or not s.image_width:
+            if ref is None:
+                missing += 1
                 continue
             compared += 1
             delta = max(abs(s.image_width - ref[0]), abs(s.image_height - ref[1]))
@@ -1602,120 +1646,157 @@ def print_render_size_check(runs: List[BackendRun]) -> None:
                 within += 1
             if delta > worst:
                 worst = delta
-                worst_page = f"{Path(s.doc_key).name} p{s.page_number}"
+                worst_page = (
+                    f"{Path(s.doc_key).name} p{s.page_number} "
+                    f"({s.image_width}x{s.image_height} vs {ref[0]}x{ref[1]})"
+                )
         rows.append(
             [
-                run.backend,
+                name,
                 compared,
                 f"{100.0 * within / compared:.1f}%" if compared else "n/a",
                 worst,
                 worst_page or "-",
+                missing,
             ]
         )
 
+    return reference_name, rows, ""
+
+
+def print_render_size_check(runs: List[BackendRun]) -> None:
+    reference_name, rows, note = render_size_check(runs)
+    if reference_name is None:
+        if note:
+            print(f"\n{note}")
+        return
     print()
     print(
-        f"=== RENDER SIZE CHECK vs docling-parse "
+        f"=== RENDER SIZE CHECK vs {reference_name} "
         f"(tolerance {RENDER_SIZE_TOLERANCE_PX} px) ==="
     )
-    print(
-        tabulate(
-            rows,
-            headers=[
-                "python package",
-                "pages compared",
-                "within tolerance",
-                "max delta (px)",
-                "worst page",
-            ],
-        )
-    )
+    print(tabulate(rows, headers=RENDER_SIZE_HEADERS))
 
 
-def write_markdown_table(
+def _md_table(headers: List[str], rows: List[List[object]]) -> str:
+    return tabulate(rows, headers=headers, tablefmt="github")
+
+
+def _parameter_table(rows: List[List[object]]) -> str:
+    return _md_table(["parameter", "value"], rows)
+
+
+def write_markdown_report(
     path: Path,
     runs: List[BackendRun],
+    *,
     system_info: Dict[str, object],
     dataset_info: Dict[str, object],
+    settings: Dict[str, object],
+    parameter_tables: List[Tuple[str, List[List[object]]]],
+    command: str,
 ) -> None:
-    """Emit both tables for docs/performance_benchmarks.md."""
+    """Write a self-contained report: how it was run, on what, and the results.
+
+    The command and every config table are included so a published number can
+    be traced back to an exact invocation without consulting the terminal
+    scrollback it came from.
+    """
     hardware = format_hardware_label(system_info)
     dataset = format_dataset_label(dataset_info)
 
     lines = [
-        "<!-- generated by perf/run_scaling.py --compare -->",
+        "<!-- generated by perf/run_scaling.py -->",
         "",
-        "### Parsing and rendering performance",
+        f"# Benchmark — {dataset_info['name']} on {system_info['cpu']}",
         "",
-        "| System hardware | dataset | Python package | Task | threads | "
-        "total time (s) | average time/page | median time/page | "
-        "95 quantile time/page | 99 quantile time/page |",
-        "| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        f"Generated: {datetime.now().isoformat(timespec='seconds')}",
+        "",
+        "## Command",
+        "",
+        "```sh",
+        command,
+        "```",
+        "",
+        "## Benchmark",
+        "",
+        _parameter_table(benchmark_rows(dataset_info, settings)),
+        "",
+        "## System",
+        "",
+        _parameter_table(system_rows(system_info)),
+        "",
     ]
+
+    for title, rows in parameter_tables:
+        lines.extend([f"## {title}", "", _parameter_table(rows), ""])
+
+    lines.extend(["## Parsing and rendering performance", ""])
+    result_headers = [
+        "System hardware",
+        "dataset",
+        "Python package",
+        "Task",
+        "threads",
+        "total time (s)",
+        "average time/page",
+        "median time/page",
+        "95 quantile time/page",
+        "99 quantile time/page",
+    ]
+    result_rows: List[List[object]] = []
     for run in runs:
         s = run.stats()
-        lines.append(
-            f"| {hardware} | {dataset} | {run.backend} | `{run.task}` | "
-            f"{run.threads} | {_fmt_duration(s['total_s'])} | "
-            f"{_fmt_ms(s['mean_s'])} | {_fmt_ms(s['median_s'])} | "
-            f"{_fmt_ms(s['p95_s'])} | {_fmt_ms(s['p99_s'])} |"
+        result_rows.append(
+            [
+                hardware,
+                dataset,
+                run.backend,
+                f"`{run.task}`",
+                run.threads,
+                _fmt_duration(s["total_s"]),
+                _fmt_ms(s["mean_s"]),
+                _fmt_ms(s["median_s"]),
+                _fmt_ms(s["p95_s"]),
+                _fmt_ms(s["p99_s"]),
+            ]
         )
+    lines.extend([_md_table(result_headers, result_rows), ""])
 
-    lines.extend(["", "### Thread scaling and speedup", ""])
+    lines.extend(["## Thread scaling and speedup", ""])
     for task in (TASK_PARSE, TASK_RENDER):
         task_runs = [run for run in runs if run.task == task]
         if not task_runs:
             continue
         headers, rows = _speedup_rows(task_runs)
-        lines.append(f"Task: `{task}`")
-        lines.append("")
-        lines.append("| " + " | ".join(headers) + " |")
-        lines.append("| " + " | ".join("---:" for _ in headers) + " |")
-        for row in rows:
-            lines.append("| " + " | ".join(row) + " |")
-        lines.append("")
+        lines.extend([f"Task: `{task}`", "", _md_table(headers, list(rows)), ""])
+
+    reference_name, size_rows, note = render_size_check(runs)
+    if reference_name is not None:
+        lines.extend(
+            [
+                "## Render size check",
+                "",
+                f"Rasterised page size versus `{reference_name}`, tolerance "
+                f"{RENDER_SIZE_TOLERANCE_PX} px.",
+                "",
+                _md_table(RENDER_SIZE_HEADERS, size_rows),
+                "",
+            ]
+        )
+    elif note:
+        lines.extend(["## Render size check", "", note, ""])
 
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines), encoding="utf-8")
-    print(f"\nWrote markdown tables to {path}")
+    print(f"\nWrote markdown report to {path}")
 
 
 def write_pages_csv(path: Path, runs: List[BackendRun]) -> None:
-    """One row per (backend, task, threads, document, page) for distributions."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.writer(handle)
-        writer.writerow(
-            [
-                "backend",
-                "task",
-                "threads",
-                "doc_key",
-                "page_number",
-                "success",
-                "elapsed_s",
-                "wall_gap_s",
-                "image_width",
-                "image_height",
-            ]
-        )
-        for run in runs:
-            for s in run.samples:
-                writer.writerow(
-                    [
-                        run.backend,
-                        run.task,
-                        run.threads,
-                        s.doc_key,
-                        s.page_number,
-                        s.success,
-                        f"{s.elapsed_s:.6f}",
-                        f"{s.wall_gap_s:.6f}",
-                        s.image_width,
-                        s.image_height,
-                    ]
-                )
-    print(f"Wrote per-page timings to {path}")
+    """One row per (backend, task, threads, document, page)."""
+    rows = [sample for run in runs for sample in run.samples]
+    write_page_rows(path, rows)
+    print(f"Wrote {len(rows)} per-page timings to {path}")
 
 
 # -------- Threaded run --------
@@ -1731,102 +1812,28 @@ def run_threaded(
     scale: float,
     decode_options: dict[str, bool],
     materialization_options: dict[str, bool],
-    enable_timing: bool,
-    timing_csv: Path,
-) -> float:
-    """Run DoclingThreadedPdfParser; render=True enables rasterisation."""
-    from docling_parse.pdf_parsers import RenderConfig  # type: ignore[import]
+    bytesio: bool = False,
+) -> BackendRun:
+    """Run DoclingThreadedPdfParser; render=True enables rasterisation.
 
-    from docling_parse.pdf_parser import (
-        DoclingThreadedPdfParser,
-        ThreadedPdfParserConfig,
-    )
-
-    decode_config = _decode_config()
-    content_config = _content_config(decode_options, materialization_options)
-    materialize_page = _materializes_page_data(materialization_options)
-
-    render_config = None
-    if render:
-        render_config = RenderConfig()
-        render_config.scale = scale
-
-    parser_config = ThreadedPdfParserConfig(
-        loglevel="fatal",
+    This is `cmp_docling` under a scaling-sweep name: the two used to be
+    separate near-identical loops, which meant the sweep and the comparison
+    could silently drift apart.
+    """
+    run = cmp_docling(
+        pdf_schedule,
+        total_pages,
+        render=render,
+        scale=scale,
         threads=num_threads,
         max_concurrent_results=max_concurrent_results,
-        render_config=render_config,
-        page_content_config=content_config,
+        decode_options=decode_options,
+        materialization_options=materialization_options,
+        bytesio=bytesio,
     )
-
-    parser = DoclingThreadedPdfParser(
-        parser_config=parser_config,
-        decode_config=decode_config,
-    )
-
-    for pdf_path, page_numbers in tqdm(
-        pdf_schedule, desc="  loading", unit="doc", leave=False
-    ):
-        try:
-            parser.load(str(pdf_path), page_numbers=page_numbers)
-        except Exception as e:
-            print(f"  threaded load error on {pdf_path}: {e}")
-
-    desc = "  rendering" if render else "  parsing"
-    mode = "render" if render else "parse"
-    t0 = time.perf_counter()
-    errors = 0
-    timing_handle = None
-    timing_writer = None
-    try:
-        if enable_timing:
-            timing_csv.parent.mkdir(parents=True, exist_ok=True)
-            timing_handle = timing_csv.open("a", newline="", encoding="utf-8")
-            timing_writer = csv.DictWriter(
-                timing_handle,
-                fieldnames=_timing_csv_fieldnames(),
-            )
-            if timing_handle.tell() == 0:
-                timing_writer.writeheader()
-
-        with tqdm(total=total_pages, desc=desc, unit="page") as pbar:
-            for result in parser.iterate_results():
-                if result.success:
-                    if render:
-                        result.get_image()
-                        if materialize_page:
-                            result.get_page()
-
-                        """
-                        assert len(page.shapes)==0, "len(page.shapes)==0"
-                        assert len(page.char_cells)==0, "len(page.char_cells)==0"
-
-                        for br in page.bitmap_resources:
-                            assert br.image==None
-                        """
-                    else:
-                        if materialize_page:
-                            result.get_page()
-                else:
-                    errors += 1
-
-                if timing_writer is not None:
-                    timing_writer.writerow(
-                        _timing_csv_row(
-                            mode=mode,
-                            num_threads=num_threads,
-                            render=render,
-                            result=result,
-                        )
-                    )
-                pbar.update(1)
-    finally:
-        if timing_handle is not None:
-            timing_handle.close()
-    t1 = time.perf_counter()
-    if errors:
-        print(f"  threads={num_threads}: {errors} page errors")
-    return t1 - t0
+    if run.page_errors:
+        print(f"  threads={num_threads}: {run.page_errors} page errors")
+    return run
 
 
 # -------- Reporting --------
@@ -1911,8 +1918,8 @@ def _run_one_mode(
     scale: float,
     decode_options: dict[str, bool],
     materialization_options: dict[str, bool],
-    enable_timing: bool,
-    timing_csv: Path,
+    bytesio: bool,
+    collected_runs: List[BackendRun],
 ) -> Tuple[List[Tuple[str, float]], List[Tuple[int, float]]]:
     baselines: List[Tuple[str, float]] = []
 
@@ -1942,7 +1949,7 @@ def _run_one_mode(
     stage_label = "renderer" if render else "parser"
     for n in thread_counts:
         print(f"Running threaded {stage_label} with {n} threads ...")
-        t = run_threaded(
+        run = run_threaded(
             pdf_schedule,
             num_threads=n,
             max_concurrent_results=max_concurrent_results,
@@ -1951,11 +1958,11 @@ def _run_one_mode(
             scale=scale,
             decode_options=decode_options,
             materialization_options=materialization_options,
-            enable_timing=enable_timing,
-            timing_csv=timing_csv,
+            bytesio=bytesio,
         )
-        threaded_results.append((n, t))
-        print(f"  threads={n}: {t:.3f}s")
+        collected_runs.append(run)
+        threaded_results.append((n, run.wall_s))
+        print(f"  threads={n}: {run.wall_s:.3f}s")
 
     return baselines, threaded_results
 
@@ -2091,16 +2098,9 @@ def main(argv: List[str]) -> int:
         ),
     )
     ap.add_argument(
-        "--enable-timing",
-        action=argparse.BooleanOptionalAction,
-        default=False,
-        help="Write one CSV timing row per page result (default: disabled)",
-    )
-    ap.add_argument(
-        "--timing-csv",
-        type=Path,
-        default=_default_timing_csv_path(),
-        help="CSV path used when --enable-timing is set",
+        "--bytesio",
+        action="store_true",
+        help="(docling-parse only) Read PDFs into memory and load them as BytesIO",
     )
     ap.add_argument(
         "--compare",
@@ -2118,19 +2118,21 @@ def main(argv: List[str]) -> int:
         ),
     )
     ap.add_argument(
-        "--markdown-out",
+        "--output-dir",
         type=Path,
-        default=None,
-        help="Write the comparison rows as a markdown table to this path",
-    )
-    ap.add_argument(
-        "--pages-csv",
-        type=Path,
-        default=None,
-        help="Write one comparison row per page to this CSV (for distributions)",
+        default=DEFAULT_OUTPUT_DIR,
+        help=(
+            "Directory for the markdown report and the per-page CSV; created if "
+            "missing. Both are named <cpu>_<dataset>_<mode>, so runs on "
+            f"different machines never collide. Default: {DEFAULT_OUTPUT_DIR}"
+        ),
     )
 
     args = ap.parse_args(argv)
+
+    # Recorded verbatim in the report so a published number can be traced back
+    # to the invocation that produced it.
+    command = shlex.join(["python", *sys.argv])
 
     # Validate CLI args before doing any I/O (HF download, page counting).
     thread_counts = [int(x.strip()) for x in args.threads.split(",")]
@@ -2154,23 +2156,45 @@ def main(argv: List[str]) -> int:
     dataset_info["documents"] = len(pdf_schedule)
     dataset_info["pages"] = total_pages
 
-    print(f"Benchmark: {len(pdf_schedule)} documents, {total_pages} total pages")
-    print(f"Mode: {args.mode}")
-    print(f"Thread counts to test: {thread_counts}")
-    print(f"Max concurrent results: {args.max_concurrent_results}")
-    print(f"Other backends: {other_backends if other_backends else '(none)'}")
-    print(f"Comparison suite: {compare_backends if compare_backends else '(off)'}")
+    settings: Dict[str, object] = {
+        "mode": args.mode,
+        "thread counts": thread_counts,
+        "max concurrent results": args.max_concurrent_results,
+        "other backends": other_backends or "(none)",
+        "comparison suite": compare_backends or "(off)",
+        "max pages": args.max_pages if args.max_pages else "(all)",
+        "bytesio": args.bytesio,
+    }
     if args.mode in ("render", "both"):
-        print(f"Render scale: {args.scale}")
-    print()
-    print_system_info(system_info)
-    print()
-    _print_run_configs(
+        settings["render scale"] = args.scale
+
+    parameter_tables = config_tables(
         render=args.mode in ("render", "both"),
         scale=args.scale,
         decode_options=decode_options,
         materialization_options=materialization_options,
     )
+
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+    basename = output_basename(system_info, dataset_info, args.mode)
+    markdown_path = args.output_dir / f"{basename}.md"
+    pages_csv_path = args.output_dir / f"{basename}.csv"
+
+    print("Benchmark:")
+    print(
+        tabulate(benchmark_rows(dataset_info, settings), headers=["parameter", "value"])
+    )
+    print()
+    print("System:")
+    print(tabulate(system_rows(system_info), headers=["parameter", "value"]))
+    print()
+    print_parameter_tables(parameter_tables)
+    print(f"Output directory: {args.output_dir}")
+    if compare_backends:
+        # The markdown report is a rendering of the comparison tables, so the
+        # scaling sweep writes the per-page CSV only.
+        print(f"  markdown: {markdown_path}")
+    print(f"  per-page: {pages_csv_path}")
     print()
 
     if compare_backends:
@@ -2191,17 +2215,25 @@ def main(argv: List[str]) -> int:
             max_concurrent_results=args.max_concurrent_results,
             decode_options=decode_options,
             materialization_options=materialization_options,
+            bytesio=args.bytesio,
         )
         print_comparison_table(runs)
         print_speedup_table(runs)
         print_render_size_check(runs)
 
-        if args.markdown_out:
-            write_markdown_table(args.markdown_out, runs, system_info, dataset_info)
-        if args.pages_csv:
-            write_pages_csv(args.pages_csv, runs)
+        write_markdown_report(
+            markdown_path,
+            runs,
+            system_info=system_info,
+            dataset_info=dataset_info,
+            settings=settings,
+            parameter_tables=parameter_tables,
+            command=command,
+        )
+        write_pages_csv(pages_csv_path, runs)
         return 0
 
+    collected_runs: List[BackendRun] = []
     modes_to_run = ["parse", "render"] if args.mode == "both" else [args.mode]
     for m in modes_to_run:
         render = m == "render"
@@ -2217,10 +2249,12 @@ def main(argv: List[str]) -> int:
             scale=args.scale,
             decode_options=decode_options,
             materialization_options=materialization_options,
-            enable_timing=args.enable_timing,
-            timing_csv=args.timing_csv,
+            bytesio=args.bytesio,
+            collected_runs=collected_runs,
         )
         _print_table(title, baselines, threaded_results, total_pages)
+
+    write_pages_csv(pages_csv_path, collected_runs)
 
     return 0
 

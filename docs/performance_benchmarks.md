@@ -61,11 +61,11 @@ pdfminer.six and pypdf have no rendering path at all, so they appear only in the
   - For the third-party packages this is a wall-clock timer around each page's work, with document open/close excluded.
   - For docling-parse it is the page timing reported by the C++ layer, since under concurrency no wall-clock interval belongs to a single page. At `threads = 1` the two definitions agree.
 
-A render comparison is only meaningful if every package rasterised the same canvas, so the benchmark records the pixel width and height of each rendered page and reports how far each package deviates from docling-parse. The numbers below were accepted with all packages agreeing to within 2 px per page.
+A render comparison is only meaningful if every package rasterised the same canvas, so the benchmark records the pixel width and height of each rendered page and reports how far each package deviates from a reference. PDFium is the ground truth — it is the rasteriser that three of the six packages ultimately rely on — and it is run first for that reason. The numbers below were accepted with all packages agreeing to within 2 px per page.
 
 ### Results
 
-<!-- Fill from: perf/run_scaling.py --compare all --markdown-out ... -->
+<!-- Rows come from the per-machine reports in docs/performance_benchmarks/ -->
 
 | System hardware | dataset | Python package | Task | threads | total time (s) | average time/page | median time/page | 95 quantile time/page | 99 quantile time/page |
 |    ---: |           ---: | ---: |       ---: |    ---: |              ---: |             ---: |                  ---: |                  ---: |
@@ -83,31 +83,31 @@ Install the benchmark dependencies (this pulls in every third-party package in t
 uv sync --group perf
 ```
 
-Then run the comparison suite. It downloads the dataset from Hugging Face on first use, runs both tasks, prints both tables, and writes them as markdown:
+Then run the comparison suite. It downloads the dataset from Hugging Face on first use, runs the requested tasks, prints the tables, and writes a full report:
 
 ```sh
 uv run python ./perf/run_scaling.py \
-    docling-project/performance-dataset-bo767 \
-    --mode both \
+    --threads 1,4,8,12 \
     --compare all \
-    --threads 1,2,4,8 \
-    --scale 1.0 \
-    --markdown-out docs/_generated/benchmark_tables.md \
-    --pages-csv perf/results/pages.csv
+    --mode render \
+    --output-dir ./docs/performance_benchmarks/
 ```
+
+You only name a directory. The report and the per-page CSV are named `<cpu>_<dataset>_<mode>` — for example `apple_m3_max_performance-dataset-bo767_render.md` — so results from different machines never overwrite each other. Numbers are only comparable within a single row of the *System hardware* column, so the tables in this file are aggregated from those per-machine reports rather than produced in one run.
+
+Each report is self-contained: it records the exact command it was produced by, the dataset name/revision/size, the machine and the version of every benchmarked package, the decode/content/render configs the run was driven with, and all result tables. That is what makes a number here traceable without the terminal scrollback it came from.
 
 Useful variations:
 
 - `--compare` on its own compares only docling-parse against pypdfium2, which is the cheapest meaningful run.
 - `--max-pages 5000` caps the total page count for a quick check; the cap is applied in input order and the last document is truncated, so the subset is reproducible.
-- `--mode parse` or `--mode render` runs a single task.
-- Omitting `--compare` entirely gives the original thread-scaling tables instead.
-
-The script prints the exact hardware, package versions, and dataset revision it used before it runs; those are the values that populate the *System hardware* and *dataset* columns. Numbers are only comparable within a single row of the *System hardware* column — do not mix results from different machines into one table.
+- `--mode both` runs `parse` and `parse+render` in one go.
+- Omitting `--compare` gives the thread-scaling tables instead; that mode writes the per-page CSV only.
+- The default `--output-dir` is `./scratch`, so an exploratory run does not touch the docs.
 
 For a stable measurement, run on an otherwise idle machine, and note that the first run of a dataset pays for a cold file cache.
 
-`--pages-csv` writes one row per `(backend, task, threads, document, page)`, including the rendered `image_width` and `image_height`. It is the input both for the render size check and for the per-page distribution plots requested below.
+The companion CSV holds one row per `(backend, task, threads, document, page)`, including the rendered `image_width` and `image_height`. It is the input both for the render size check and for the per-page distribution plots requested below, via `perf/run_eval.py`.
 
 ### Overview of Regression and Performance datasets
 

@@ -4,6 +4,7 @@ build
 dist
 extlib_*/
 scratch_*
+scratch/
 perf/results/**
 perf/results_*
 perf/viz*

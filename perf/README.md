@@ -1,65 +1,41 @@
 # Performance tools
 
-`docling-parse` ships two benchmark entry points:
+Three entry points, on a shared `_common.py`:
 
-- `perf/run_perf.py`: one-shot per-page benchmarking with CSV output
-- `perf/run_scaling.py`: threaded scaling and pages/sec sweeps for parse and render
+| Script | Role | Reads | Writes |
+| --- | --- | --- | --- |
+| `run_scaling.py` | **Measure.** Thread-scaling sweeps and cross-package comparison | PDFs (local or a Hugging Face dataset) | terminal tables, per-page CSV, markdown |
+| `run_eval.py` | **Plot.** Histograms, scatters, hexbins, per-document stats | per-page CSV | PNGs + CSV in `perf/viz` |
+| `run_analysis.py` | **Drill down.** Slowest pages, C++ stage timings | per-page CSV | analysis CSV / detailed table |
+
+They are chained by one file format: the per-page CSV that `run_scaling.py
+--pages-csv` writes. Every row carries its own `backend`, `task` and `threads`,
+so one file can hold several packages at several thread counts, and the other
+two scripts split it into series themselves rather than guessing from the
+filename.
+
+`_common.py` owns `PageRow`, that CSV's schema, and the shared helpers
+(`find_pdfs`, `percentile`, ...). It is a library, not an entry point.
 
 ## Install
 
-Core docling runs work with the normal project install. Optional third-party
-baselines need the perf extras:
+Core docling runs work with the normal project install. The third-party
+backends need the perf group:
 
 ```sh
-uv sync --group perf-test
+uv sync --group perf
 ```
 
-or:
-
-```sh
-pip install .[perf-tools]
-```
-
-## `run_perf.py`
-
-Benchmarks a single backend and writes one CSV row per page:
-
-```sh
-python perf/run_perf.py ./dataset -r -p docling
-python perf/run_perf.py ./dataset -r -p docling-threaded --threads 8
-python perf/run_perf.py ./dataset -r -p pypdfium2
-```
-
-Backends:
-
-- `docling`
-- `docling-threaded`
-- `pdfplumber`
-- `pypdfium2` (`pypdfium` alias)
-- `pymupdf`
-
-Useful flags:
-
-- `--recursive/-r`: recurse into directories
-- `--output/-o`: choose CSV path
-- `--limit/-l`: cap number of input documents
-- `--bytesio`: sequential `docling` only
-- `--threads/-t`: threaded docling only
-- `--max-concurrent-results`: threaded docling only
-
-Output:
-
-- main CSV: `perf/results/perf_<parser>_<timestamp>.csv`
-- per-document CSV: `perf/results/perf_<parser>_<timestamp>_per_doc.csv`
-- terminal summary with totals, percentiles, and timing breakdowns for docling runs
-
-Note: for `docling-threaded`, each row's `elapsed_sec` is only the wait time to
-receive that result. Use the printed total wall time for throughput comparisons.
+That installs pymupdf, pypdfium2, pdfplumber, pdfminer.six, pypdf and
+matplotlib. Backends that are missing are skipped with a message rather than
+failing the run.
 
 ## `run_scaling.py`
 
-Runs threaded docling at multiple thread counts and reports pages/sec plus
-speedup versus baselines.
+### Thread-scaling sweep (default)
+
+Runs docling-parse at several thread counts and reports pages/sec plus speedup
+against single-threaded baselines.
 
 ```sh
 python perf/run_scaling.py ./dataset --mode parse
@@ -67,65 +43,61 @@ python perf/run_scaling.py ./dataset --mode render --threads 1,2,4,8,12,16
 python perf/run_scaling.py --mode both --other "pypdfium2;pymupdf"
 ```
 
-Inputs:
+Inputs: a local PDF file, a local directory of PDFs, or a Hugging Face dataset
+repo id whose `pdf/` subdirectory contains PDFs (the default is
+`docling-project/performance-dataset-bo767`).
 
-- local PDF file
-- local directory of PDFs
-- Hugging Face dataset repo id whose `pdf/` subdirectory contains PDFs
-
-Modes:
-
-- `parse`: decode only
-- `render`: decode plus raster render
-- `both`: run both tables
+Modes: `parse` (decode only), `render` (decode plus raster), `both`.
 
 Important flags:
 
 - `--max-pages/-l`: exact total page cap across the input set
 - `--max-concurrent-results`: threaded backpressure limit
-- `--scale`: render scale for render mode
+- `--scale`: render scale (1.0 = 72 dpi)
 - `--other`: semicolon-separated single-threaded reference backends
-- `--enable-timing`: write one timing row per threaded page result
-- `--timing-csv`: output path for the timing CSV
+- `--bytesio`: load PDFs from memory instead of by path (docling-parse only)
+- `--output-dir`: where the outputs land (default `./scratch`)
 
-The scaling script now reflects the v7 config split:
+The v7 config split is exposed as:
 
-- decode-stage booleans: `--keep-char-cells`, `--create-word-cells`, `--create-line-cells`, `--keep-shapes`, `--keep-bitmaps`
-- materialization booleans: `--materialize-char-cells`, `--materialize-word-cells`, `--materialize-line-cells`, `--materialize-shapes`, `--materialize-bitmaps`, `--materialize-bitmap-bytes`
+- decode-stage booleans: `--keep-char-cells`, `--create-word-cells`,
+  `--create-line-cells`, `--keep-shapes`, `--keep-bitmaps`
+- materialization booleans: `--materialize-char-cells`,
+  `--materialize-word-cells`, `--materialize-line-cells`,
+  `--materialize-shapes`, `--materialize-bitmaps`,
+  `--materialize-bitmap-bytes`
 
-Those flags are compiled into:
+compiled into `DecodeConfig` and into `ContentConfig`'s `ContentLevel.SKIP`,
+`COMPUTE` and `COMPUTE_AND_MATERIALIZE`.
 
-- `DecodeConfig` for compute tuning
-- `ContentConfig` for `ContentLevel.SKIP`, `COMPUTE`, and `COMPUTE_AND_MATERIALIZE`
+### Comparison suite (`--compare`)
 
-## Comparison suite (`run_scaling.py --compare`)
-
-`--compare` replaces the scaling tables with the two tables published in
-`docs/performance_benchmarks.md`: a per-page time distribution, and a wall-time
-speedup grid. Without the flag the script behaves exactly as before.
+`--compare` replaces the scaling tables with the ones published in
+`docs/performance_benchmarks.md`: a per-page time distribution, a wall-time
+speedup grid, and a render size check. Without the flag the script behaves as
+it always did.
 
 ```sh
 # docling-parse vs pypdfium2, the default pairing
 python perf/run_scaling.py --mode both --compare
 
-# every backend, and write the markdown for the docs
-python perf/run_scaling.py --mode both --compare all --threads 1,2,4,8 \
-    --markdown-out docs/_generated/benchmark_tables.md \
-    --pages-csv perf/results/pages.csv
+# every backend, writing the report into the docs
+python perf/run_scaling.py --threads 1,4,8,12 --compare all --mode render \
+    --output-dir ./docs/performance_benchmarks/
 ```
 
 Backends and the API each one is timed on:
 
-| name            | parse                              | parse+render                 |
-| --------------- | ---------------------------------- | ---------------------------- |
-| `docling-parse` | `DoclingThreadedPdfParser`         | + `RenderConfig`             |
-| `pymupdf`       | `page.get_text("rawdict")`         | + `get_pixmap` → `pil_image` |
-| `pypdfium2`     | textpage rects + `get_text_bounded`| + `page.render` → `to_pil`   |
-| `pdfplumber`    | `page.chars`                       | + `page.to_image()`          |
-| `pdfminer.six`  | `extract_pages` + `LTChar` walk    | not supported                |
-| `pypdf`         | `extract_text(visitor_text=...)`   | not supported                |
+| name | `parse` | `parse+render` |
+| --- | --- | --- |
+| `docling-parse` | `DoclingThreadedPdfParser` | + `RenderConfig` |
+| `pymupdf` | `page.get_text("rawdict")` | + `get_pixmap` → `pil_image` |
+| `pypdfium2` | textpage rects + `get_text_bounded` | + `page.render` → `to_pil` |
+| `pdfplumber` | `page.chars` | + `page.to_image()` |
+| `pdfminer.six` | `extract_pages` + `LTChar` walk | not supported |
+| `pypdf` | `extract_text(visitor_text=...)` | not supported |
 
-Each backend uses a *position-bearing* extraction API, so that all rows measure
+Each backend uses a *position-bearing* extraction API, so every row measures
 the same task. `pymupdf` deliberately uses `rawdict` rather than
 `get_text("text")`, which returns a bare string and would be a cheaper task.
 
@@ -143,41 +115,102 @@ How the numbers are defined:
   concurrency no wall-clock interval belongs to one page. The table's
   `per-page source` column states which of the two a row used.
 
-In render mode the rasterised width and height of every page are recorded too,
-and a *render size check* table compares each backend against docling-parse
-page by page. A timing comparison only means something if all backends produced
-the same canvas, so this reports how many pages agree within 2 px and the worst
-offender. The sizes are also in the `--pages-csv` output as `image_width` and
-`image_height`.
+In render mode the rasterised width and height of every page are recorded, and
+a *render size check* table compares each backend page by page against
+pypdfium2, which is run first and treated as ground truth (PDFium is the
+rasteriser three of the six packages ultimately rely on; docling-parse and then
+pymupdf are the fallbacks when pypdfium2 is not in the run). A timing
+comparison only means something if all backends produced the same canvas, so
+this reports how many pages agree within 2 px and the worst offender.
 
 Flags:
 
 - `--compare [list]`: bare flag uses `docling-parse;pypdfium2`; otherwise a
   semicolon-separated list, or `all`
-- `--markdown-out`: write both tables as markdown
-- `--pages-csv`: one row per (backend, task, threads, doc, page), with the
-  rendered image size
+- `--output-dir`: where the report and CSV land (default `./scratch`)
 
-Third-party backends that are not installed are skipped, and the skipped rows
-are restated just before the tables so they are not mistaken for failures.
-Install them all with `uv sync --group perf`.
+## Outputs
 
-## Timing visualization
+You only ever name a directory. Both files are named
+`<cpu>_<dataset>_<mode>`, derived from the machine and the run, so results
+from different machines never overwrite each other:
 
-`run_scaling.py --enable-timing` writes a CSV that
-`perf/run_scaling_visualization.py` can plot:
-
-```sh
-python perf/run_scaling_visualization.py timing-2026-06-22-12-00-00.csv
-python perf/run_scaling_visualization.py timing.csv --mode render --bins 80
+```
+docs/performance_benchmarks/
+  apple_m3_max_performance-dataset-bo767_render.md
+  apple_m3_max_performance-dataset-bo767_render.csv
 ```
 
-## Slow-page analysis
+The markdown report is self-contained, so a published number never has to be
+traced through terminal scrollback. It holds:
 
-`perf/run_analysis.py` replays the slowest pages from a `run_perf.py` CSV and
-extracts detailed decode timings:
+- the **exact command** that produced it, and a timestamp
+- a **Benchmark** table: dataset, source, revision, document and page counts,
+  mode, thread counts, backends, render scale
+- a **System** table: cpu, cores, memory, platform, python, and the version of
+  every package that was benchmarked
+- **Decode config**, **Content config** and **Render config** tables, showing
+  the parameters the run was actually driven with
+- the result, speedup and render-size-check tables
+
+The scaling sweep (no `--compare`) writes the per-page CSV only; the markdown
+report is a rendering of the comparison tables.
+
+## Per-page CSV format
+
+One row per timed page:
+
+```
+backend,task,threads,doc_key,page_number,success,elapsed_s,wall_gap_s,
+image_width,image_height,make_page_decoder_s,decode_page_s,
+create_word_cells_s,create_line_cells_s,render_page_s,error_message
+```
+
+- `elapsed_s` — the per-page cost used for all statistics
+- `wall_gap_s` — observed arrival gap; equals `elapsed_s` when unthreaded
+- `image_width` / `image_height` — rasterised size, zero outside `parse+render`
+- the `*_s` stage columns — C++ breakdown, zero for third-party backends
+
+This is the only format the tools read. A CSV without a `backend` column is
+skipped, so scanning a directory of unrelated CSVs is harmless.
+
+## `run_eval.py`
 
 ```sh
-python perf/run_analysis.py perf/results/perf_docling_20260622-120000.csv --top 25
-python perf/run_analysis.py perf/results/perf_docling_20260622-120000.csv --nth 7
+python perf/run_eval.py perf/results/pages.csv
+python perf/run_eval.py perf/results                # scan a directory
+python perf/run_eval.py pages.csv --task parse --threads 1
+python perf/run_eval.py                             # defaults to perf/results
 ```
+
+Produces, in `perf/viz`:
+
+- per-series page-time histograms, plus stacked and overlaid versions
+- a pages-per-document histogram for the corpus
+- per-series scatter of document page-count vs total time, with a linear fit
+- pairwise hexbins of per-page times, linear and log-log
+- a per-document statistics table and `per_document.csv`
+
+Hexbins only pair series of the *same* task, and by default compare each series
+against one reference per task (docling-parse at its lowest thread count).
+`--all-pairs` gives the full grid, which is quadratic in the number of series.
+
+Flags: `--backend`, `--task`, `--threads` to filter, `--bins`, `--viz-dir`,
+`--top-documents`, `--all-pairs`.
+
+## `run_analysis.py`
+
+Replays the slowest pages from a per-page CSV and extracts detailed decode
+timings:
+
+```sh
+python perf/run_analysis.py perf/results/pages.csv --top 25
+python perf/run_analysis.py perf/results/pages.csv --nth 7
+python perf/run_analysis.py pages.csv --top 25 --task parse --threads 1
+```
+
+- `--top N`: per-page CSV of static timings for the N slowest pages, plus an
+  aggregate breakdown of where the time went
+- `--nth N`: full static and dynamic timing table for one page
+- `--backend` / `--task` / `--threads`: narrow a mixed CSV to one series
+- `--min-sec`: ignore pages faster than this
