@@ -52,6 +52,8 @@ code in the main repository.
 - `test_threaded_parse.py`: threaded parser behavior and content materialization.
 - `test_threaded_render.py`: threaded parse-and-render behavior using
   `DoclingThreadedPdfParser`.
+- `test_pypdfium_render.py`: non-failing comparison of the render output against
+  pypdfium2, with three-panel visualizations.
 - `rendering_regression.py`: shared helpers for renderer groundtruth comparison
   and update logic.
 - `test_embedded_fonts.py`: embedded-font and font-resolution renderer behavior.
@@ -82,6 +84,43 @@ tests/data/render_deltas/
 ```
 
 The generated files include actual, expected, and amplified diff PNGs.
+
+## Cross-Renderer Comparison Against pypdfium2
+
+`test_pypdfium_render.py` runs the same comparison as
+`test_rendered_pages_match_groundtruth`, but renders the reference with
+pypdfium2 instead of reading it from the regression dataset:
+
+```bash
+uv run pytest tests/test_pypdfium_render.py -q -s
+```
+
+Both renders use scale 2.0 and are composited onto opaque white before they are
+compared, because the two renderers disagree on what an untouched page pixel is.
+
+This test never fails on pixel differences. pypdfium2 is an independent
+implementation, so the per-page numbers are a report, not a contract: the test
+prints the metric table plus the pages above `PYPDFIUM_IMAGE_TOLERANCE`, and
+only fails if no page could be compared at all. It is skipped when pypdfium2 is
+not installed.
+
+Three-panel PNGs (pypdfium2 | docling-parse | amplified difference) are written
+to:
+
+```text
+tests/data/visualizations/delta_<mean_abs_error>_<pdf-name>.page_no_<n>.png
+```
+
+`--render-visualizations` selects which pages get one:
+
+```bash
+# only pages above tolerance (default)
+uv run pytest tests/test_pypdfium_render.py -q -s --render-visualizations above-tolerance
+# every compared page
+uv run pytest tests/test_pypdfium_render.py -q -s --render-visualizations all
+# none
+uv run pytest tests/test_pypdfium_render.py -q -s --render-visualizations none
+```
 
 ## Regression Data
 
@@ -117,7 +156,12 @@ tests/data/
   cases/                  focused case fixtures
   errors/                 failure and error-handling fixtures
   synthetic/              synthetic PDF fixtures
+  render_deltas/          diff artifacts written on image comparison failure
+  visualizations/         three-panel renderer comparison images
 ```
+
+`render_deltas/` and `visualizations/` are produced by test runs and are not
+part of the downloaded dataset.
 
 Renderer artifact naming follows this pattern:
 
