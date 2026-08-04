@@ -35,7 +35,8 @@ from tests.test_parse import (
     verify_SegmentedPdfPage,
 )
 
-SAMPLE_PDF = "docs/dln-v1.pdf"
+# TODO: move to the HF regression dataset, like the rest of the test corpus.
+SAMPLE_PDF = "docs/legacy/dln-v1.pdf"
 LARGE_SAMPLE_PDF = "docs/PDF32000_2008.pdf"
 
 RENDERER_IMAGE_TOLERANCE = ImageTolerance(

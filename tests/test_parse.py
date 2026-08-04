@@ -1200,7 +1200,8 @@ def test_bitmap_materialization_cache_true_then_false():
 
 # --- ContentConfig redesign ---------------------------------------------
 
-TEXT_PDF = "docs/dln-v1.pdf"
+# TODO: move to the HF regression dataset, like the rest of the test corpus.
+TEXT_PDF = "docs/legacy/dln-v1.pdf"
 
 
 def test_word_cells_materialize_without_char_cells():
