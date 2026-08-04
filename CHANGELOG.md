@@ -1,3 +1,17 @@
+## [v7.9.0](https://github.com/docling-project/docling-parse/releases/tag/v7.9.0) - 2026-08-04
+
+### Feature
+
+* Honor /ActualText replacement text of marked-content spans ([#300](https://github.com/docling-project/docling-parse/issues/300)) ([`b1ddc71`](https://github.com/docling-project/docling-parse/commit/b1ddc716177a6f8367cb606938e4ddb3eff2b931))
+
+### Fix
+
+* Resolve core-14 font aliases to their standard metrics (2) ([#298](https://github.com/docling-project/docling-parse/issues/298)) ([`25b9841`](https://github.com/docling-project/docling-parse/commit/25b984159c8f6b89c2dafa8b75a4910476fcf389))
+
+### Performance
+
+* Comparison with competing packages ([#304](https://github.com/docling-project/docling-parse/issues/304)) ([`481965d`](https://github.com/docling-project/docling-parse/commit/481965d4624218eadbf416fcc8468527c691ac83))
+
 ## [v7.8.1](https://github.com/docling-project/docling-parse/releases/tag/v7.8.1) - 2026-07-20
 
 ### Fix
