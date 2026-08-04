@@ -5,7 +5,7 @@ Three entry points, on a shared `_common.py`:
 | Script | Role | Reads | Writes |
 | --- | --- | --- | --- |
 | `run_scaling.py` | **Measure.** Thread-scaling sweeps and cross-package comparison | PDFs (local or a Hugging Face dataset) | terminal tables, per-page CSV, markdown |
-| `run_eval.py` | **Plot.** Histograms, scatters, hexbins, per-document stats | per-page CSV | PNGs + CSV in `perf/viz` |
+| `run_eval.py` | **Plot.** Histograms, scatters, hexbins, per-document stats | per-page CSV | PNGs + CSV in a directory named after the CSV |
 | `run_analysis.py` | **Drill down.** Slowest pages, C++ stage timings | per-page CSV | analysis CSV / detailed table |
 
 They are chained by one file format: the per-page CSV that `run_scaling.py
@@ -58,7 +58,7 @@ Important flags:
 - `--bytesio`: load PDFs from memory instead of by path (docling-parse only)
 - `--output-dir`: where the outputs land (default `./scratch`)
 
-The v7 config split is exposed as:
+The config split is exposed as:
 
 - decode-stage booleans: `--keep-char-cells`, `--create-word-cells`,
   `--create-line-cells`, `--keep-shapes`, `--keep-bitmaps`
@@ -177,13 +177,18 @@ skipped, so scanning a directory of unrelated CSVs is harmless.
 ## `run_eval.py`
 
 ```sh
-python perf/run_eval.py perf/results/pages.csv
-python perf/run_eval.py perf/results                # scan a directory
+python perf/run_eval.py docs/performance_benchmarks/apple_m3_max_bo767_render.csv
+python perf/run_eval.py docs/performance_benchmarks   # scan a directory
 python perf/run_eval.py pages.csv --task parse --threads 1
-python perf/run_eval.py                             # defaults to perf/results
+python perf/run_eval.py                               # defaults to perf/results
 ```
 
-Produces, in `perf/viz`:
+Without `--viz-dir`, plots go to the input CSV path with `.csv` dropped —
+`apple_m3_max_bo767_render.csv` produces `apple_m3_max_bo767_render/` beside
+it, so the plots inherit the run's name and sit next to the markdown report
+they belong to. Several inputs land in a `viz/` directory next to them.
+
+Produces:
 
 - per-series page-time histograms, plus stacked and overlaid versions
 - a pages-per-document histogram for the corpus

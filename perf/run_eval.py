@@ -8,7 +8,8 @@ or directories to scan.  Each row carries its own `backend`, `task` and
 per (backend, task, threads) --- there is no need for one file per backend, and
 the series are never inferred from the filename.
 
-Outputs, written to perf/viz:
+Outputs go to `--viz-dir`, defaulting to the input CSV path with `.csv` dropped
+so the plots sit beside the report they belong to:
   1) per-series page-time histograms, plus stacked and overlaid versions
   2) pages-per-document histogram for the corpus
   3) per-series scatter: document page-count vs total time, with linear fit
@@ -26,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import math
+import os
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -73,6 +75,23 @@ def find_csvs(inputs: List[str]) -> List[Path]:
             seen.add(p)
             unique.append(p)
     return unique
+
+
+def default_viz_dir(csv_paths: List[Path]) -> Path:
+    """Where plots go when `--viz-dir` is not given.
+
+    For a single CSV this is the CSV path with `.csv` dropped, so the plots sit
+    beside the report they belong to and inherit its
+    `<cpu>_<dataset>_<mode>` name.  For several inputs there is no single run
+    to name after, so they land in a `viz/` directory next to them.
+    """
+    if len(csv_paths) == 1:
+        return csv_paths[0].with_suffix("")
+    parents = {p.parent for p in csv_paths}
+    if len(parents) == 1:
+        return next(iter(parents)) / "viz"
+    common = Path(os.path.commonpath([str(p.parent) for p in csv_paths]))
+    return common / "viz"
 
 
 def load_rows(paths: List[Path]) -> List[PageRow]:
@@ -494,8 +513,13 @@ def main(argv: List[str]) -> int:
     ap.add_argument(
         "--viz-dir",
         type=Path,
-        default=Path("perf") / "viz",
-        help="Output directory for generated visualizations",
+        default=None,
+        help=(
+            "Output directory for generated visualizations. Defaults to the "
+            "input CSV path with `.csv` dropped, so plots sit beside the report "
+            "they belong to; several inputs land in a `viz/` directory next to "
+            "them"
+        ),
     )
     ap.add_argument("--backend", default=None, help="Keep only this backend")
     ap.add_argument("--task", default=None, help="Keep only this task")
@@ -530,8 +554,9 @@ def main(argv: List[str]) -> int:
         print("No page rows matched the requested filters.")
         return 2
 
-    viz_dir = args.viz_dir
+    viz_dir = args.viz_dir or default_viz_dir(csv_paths)
     viz_dir.mkdir(parents=True, exist_ok=True)
+    print(f"\nWriting visualizations to: {viz_dir}")
 
     per_series_rows = group_by_series(rows)
     per_series_times = {s: series_page_times(r) for s, r in per_series_rows.items()}
