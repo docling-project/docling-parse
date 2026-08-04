@@ -185,7 +185,9 @@ def test_render_multiple_documents():
 
     for key in keys:
         assert key in results_by_key, f"No results for {key}"
-        assert len(results_by_key[key]) == parser.page_count(key)
+        len_results = len(results_by_key[key])
+        len_pages = parser.page_count(key)
+        assert len_results == len_pages
 
 
 def test_render_from_bytesio():
@@ -521,7 +523,10 @@ def test_render_reference_documents_from_filenames():
         failure, tb = first_failure
         raise failure.with_traceback(tb)
 
-    assert not failed, f"{len(failed)} page(s) failed: " + ", ".join(
+    # assert on the count: `assert not failed` would inline every error message
+    # of every failing page into the pytest report
+    num_failed = len(failed)
+    assert num_failed == 0, f"{num_failed} page(s) failed: " + ", ".join(
         f"{doc}@{page}[{mode}]" for doc, page, mode, _ in failed
     )
 
@@ -604,5 +609,8 @@ def test_rendered_pages_match_groundtruth(update_groundtruth: bool):
         failure, tb = first_failure
         raise failure.with_traceback(tb)
 
-    assert not failures, f"{len(failures)} rendered page(s) failed: {failures}"
+    num_failures = len(failures)
+    assert num_failures == 0, f"{num_failures} rendered page(s) failed: " + ", ".join(
+        failures
+    )
     assert checked_pages > 0

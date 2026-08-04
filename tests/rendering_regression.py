@@ -152,12 +152,18 @@ def compare_render_instructions(doc_name: str, page_no: int, result) -> None:
     )
     actual_instructions = actual.get("instructions", [])
     expected_instructions = expected.get("instructions", [])
-    assert len(actual_instructions) == len(expected_instructions), (
-        f"render instruction count mismatch: {path}"
+    len_actual_instructions = len(actual_instructions)
+    len_expected_instructions = len(expected_instructions)
+    assert len_actual_instructions == len_expected_instructions, (
+        f"render instruction count mismatch: {len_actual_instructions} != "
+        f"{len_expected_instructions} in {path}"
     )
     actual_types = [instruction.get("type") for instruction in actual_instructions]
     expected_types = [instruction.get("type") for instruction in expected_instructions]
-    assert actual_types == expected_types, f"render instruction type mismatch: {path}"
+    # compare through a local flag: pytest would otherwise inline both full
+    # instruction-type lists into the assertion failure report
+    types_match = actual_types == expected_types
+    assert types_match, f"render instruction type mismatch: {path}"
 
 
 def _diff_artifact_path(doc_name: str, page_no: int, suffix: str) -> Path:

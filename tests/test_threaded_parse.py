@@ -242,7 +242,10 @@ def test_threaded_reference_documents_from_filenames():
         failure, tb = first_failure
         raise failure.with_traceback(tb)
 
-    assert not failed, f"{len(failed)} page(s) failed: " + ", ".join(
+    # the failures are already printed in the table above, so assert on the count:
+    # `assert not failed` would repeat every error message in the pytest report
+    num_failed = len(failed)
+    assert num_failed == 0, f"{num_failed} page(s) failed: " + ", ".join(
         f"{doc}@{page}[{mode}]" for doc, page, mode, _ in failed
     )
 
@@ -326,18 +329,13 @@ def test_threaded_results_match_sequential():
             seq_page = sequential_pages[key][page_no]
             thr_page = threaded_pages[key][page_no]
 
-            assert len(seq_page.char_cells) == len(thr_page.char_cells), (
-                f"char_cells count mismatch for {key} page {page_no}"
-            )
-            assert len(seq_page.word_cells) == len(thr_page.word_cells), (
-                f"word_cells count mismatch for {key} page {page_no}"
-            )
-            assert len(seq_page.textline_cells) == len(thr_page.textline_cells), (
-                f"textline_cells count mismatch for {key} page {page_no}"
-            )
-            assert len(seq_page.shapes) == len(thr_page.shapes), (
-                f"shapes count mismatch for {key} page {page_no}"
-            )
+            for attr in ("char_cells", "word_cells", "textline_cells", "shapes"):
+                len_seq = len(getattr(seq_page, attr))
+                len_thr = len(getattr(thr_page, attr))
+                assert len_seq == len_thr, (
+                    f"{attr} count mismatch for {key} page {page_no} => "
+                    f"{len_seq} != {len_thr}"
+                )
 
 
 def test_threaded_backpressure():
@@ -497,7 +495,9 @@ def test_threaded_bitmap_no_materialization_preserves_geometry():
     page_geo = _get_page1(materialize_geo)
 
     assert len(page_full.bitmap_resources) > 0, "test PDF must contain bitmaps"
-    assert len(page_full.bitmap_resources) == len(page_geo.bitmap_resources)
+    len_full_bitmaps = len(page_full.bitmap_resources)
+    len_geo_bitmaps = len(page_geo.bitmap_resources)
+    assert len_full_bitmaps == len_geo_bitmaps
 
     eps = 1e-3
     for i, (full, geo) in enumerate(

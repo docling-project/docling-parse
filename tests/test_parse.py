@@ -128,9 +128,13 @@ def _verify_bitmap_resources(
     eps: float,
 ) -> bool:
 
-    assert len(true_bitmap_resources) == len(pred_bitmap_resources), (
+    # compare the lengths through local variables: a bare `len(x) == len(y)` makes
+    # pytest inline both collections into the assertion failure report
+    len_true_bitmaps = len(true_bitmap_resources)
+    len_pred_bitmaps = len(pred_bitmap_resources)
+    assert len_true_bitmaps == len_pred_bitmaps, (
         "bitmap resource count mismatch: "
-        f"expected {len(true_bitmap_resources)}, got {len(pred_bitmap_resources)}"
+        f"expected {len_true_bitmaps}, got {len_pred_bitmaps}"
     )
 
     for i, true_bitmap_resource in enumerate(true_bitmap_resources):
@@ -174,7 +178,12 @@ def verify_cells(
     filename: str,
 ) -> bool:
 
-    assert len(true_cells) == len(pred_cells), "len(true_cells)==len(pred_cells)"
+    len_true_cells = len(true_cells)
+    len_pred_cells = len(pred_cells)
+    assert len_true_cells == len_pred_cells, (
+        f"len(true_cells)==len(pred_cells) => {len_true_cells} == {len_pred_cells} "
+        f"for {filename}"
+    )
 
     # print(f"===================== {filename}")
 
@@ -248,7 +257,11 @@ def verify_shapes(
     true_shapes: List[PdfShape], pred_shapes: List[PdfShape], eps: float
 ) -> bool:
 
-    assert len(true_shapes) == len(pred_shapes), "len(true_shapes)==len(pred_shapes)"
+    len_true_shapes = len(true_shapes)
+    len_pred_shapes = len(pred_shapes)
+    assert len_true_shapes == len_pred_shapes, (
+        f"len(true_shapes)==len(pred_shapes) => {len_true_shapes} == {len_pred_shapes}"
+    )
 
     for i, true_shape in enumerate(true_shapes):
         pred_shape = pred_shapes[i]
@@ -264,8 +277,10 @@ def verify_shapes(
         true_points = true_shape.points
         pred_points = pred_shape.points
 
-        assert len(true_points) == len(pred_points), (
-            "len(true_points) == len(pred_points)"
+        len_true_points = len(true_points)
+        len_pred_points = len(pred_points)
+        assert len_true_points == len_pred_points, (
+            f"len(true_points) == len(pred_points) => {len_true_points} == {len_pred_points}"
         )
 
         for point_idx, true_point in enumerate(true_points):
@@ -295,8 +310,11 @@ def verify_shapes(
         assert abs(true_shape.dash_phase - pred_shape.dash_phase) < eps, (
             "abs(true_shape.dash_phase - pred_shape.dash_phase) < eps"
         )
-        assert len(true_shape.dash_array) == len(pred_shape.dash_array), (
-            "len(true_shape.dash_array) == len(pred_shape.dash_array)"
+        len_true_dashes = len(true_shape.dash_array)
+        len_pred_dashes = len(pred_shape.dash_array)
+        assert len_true_dashes == len_pred_dashes, (
+            f"len(true_shape.dash_array) == len(pred_shape.dash_array) => "
+            f"{len_true_dashes} == {len_pred_dashes}"
         )
         for j, true_dash in enumerate(true_shape.dash_array):
             assert abs(true_dash - pred_shape.dash_array[j]) < eps, (
@@ -333,8 +351,10 @@ def verify_widgets(
     true_widgets: List[PdfWidget], pred_widgets: List[PdfWidget], eps: float
 ) -> bool:
 
-    assert len(true_widgets) == len(pred_widgets), (
-        "len(true_widgets)==len(pred_widgets)"
+    len_true_widgets = len(true_widgets)
+    len_pred_widgets = len(pred_widgets)
+    assert len_true_widgets == len_pred_widgets, (
+        f"len(true_widgets)==len(pred_widgets) => {len_true_widgets} == {len_pred_widgets}"
     )
 
     for i, true_widget in enumerate(true_widgets):
@@ -377,8 +397,11 @@ def verify_hyperlinks(
     eps: float,
 ) -> bool:
 
-    assert len(true_hyperlinks) == len(pred_hyperlinks), (
-        "len(true_hyperlinks)==len(pred_hyperlinks)"
+    len_true_hyperlinks = len(true_hyperlinks)
+    len_pred_hyperlinks = len(pred_hyperlinks)
+    assert len_true_hyperlinks == len_pred_hyperlinks, (
+        f"len(true_hyperlinks)==len(pred_hyperlinks) => "
+        f"{len_true_hyperlinks} == {len_pred_hyperlinks}"
     )
 
     for i, true_hyperlink in enumerate(true_hyperlinks):
@@ -548,9 +571,12 @@ def test_reference_documents_from_filenames(update_groundtruth: bool):
                             content = fr.read()
                             lines = content.split(SPECIAL_SEPERATOR) if content else []
 
+                        len_true_lines = len(lines)
+                        len_pred_lines = len(_lines)
+
                         try:
-                            assert len(lines) == len(_lines), (
-                                f"len(lines) == len(_lines) => {len(lines)} == {len(_lines)} in {unit} from {os.path.basename(_fname)} for {os.path.basename(pdf_doc_path)}"
+                            assert len_true_lines == len_pred_lines, (
+                                f"len(true_lines) == len(pred_lines) => {len_true_lines} == {len_pred_lines} in {unit} from {os.path.basename(_fname)} for {os.path.basename(pdf_doc_path)}"
                             )
 
                             # this is a bit dangerous due to rounding errors ...
@@ -638,7 +664,10 @@ def test_reference_documents_from_filenames(update_groundtruth: bool):
     )
 
     failed = [(doc, page, mode, err) for doc, page, mode, ok, err in results if not ok]
-    assert not failed, f"{len(failed)} page(s) failed: " + ", ".join(
+    # the failures are already printed in the table above, so assert on the count:
+    # `assert not failed` would repeat every error message in the pytest report
+    num_failed = len(failed)
+    assert num_failed == 0, f"{num_failed} page(s) failed: " + ", ".join(
         f"{doc}@{page}[{mode}]" for doc, page, mode, _ in failed
     )
 
