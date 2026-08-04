@@ -10,10 +10,12 @@ the series are never inferred from the filename.
 
 Outputs go to `--viz-dir`, defaulting to the input CSV path with `.csv` dropped
 so the plots sit beside the report they belong to:
-  1) per-series page-time histograms, plus stacked and overlaid versions
-  2) pages-per-document histogram for the corpus
-  3) per-series scatter: document page-count vs total time, with linear fit
-  4) pairwise hexbin plots of per-page times (linear and log-log)
+  1) `hist_stacked.png` --- per-page time histograms, one panel per series on a
+     shared log-log axis
+  2) `hist_pages_per_document.png` --- corpus shape
+  3) `scaling_<task>.png` --- docling-parse throughput against thread count
+  4) `hex_loglog_*.png` --- per-page time of docling-parse at one thread
+     against each other package, log-log, one plot per package and task
   5) a per-document statistics table and CSV
 
 Usage examples:
@@ -144,19 +146,6 @@ def series_page_times(rows: List[PageRow]) -> np.ndarray:
     )
 
 
-def per_document_aggregates(rows: List[PageRow]) -> List[Tuple[str, int, float]]:
-    """(document, page_count, total_time_over_successful_pages) per document."""
-    page_counts: Dict[str, int] = defaultdict(int)
-    time_sums: Dict[str, float] = defaultdict(float)
-    for r in rows:
-        if r.page_number > 0:
-            page_counts[r.doc_key] += 1
-        if r.page_number > 0 and r.success and math.isfinite(r.elapsed_s):
-            time_sums[r.doc_key] += r.elapsed_s
-    docs = sorted(set(page_counts) | set(time_sums))
-    return [(d, page_counts.get(d, 0), time_sums.get(d, 0.0)) for d in docs]
-
-
 def pairwise_common_page_times(
     rows_a: List[PageRow], rows_b: List[PageRow]
 ) -> Tuple[np.ndarray, np.ndarray]:
@@ -261,57 +250,34 @@ def _log_bins(values: np.ndarray, count: int) -> np.ndarray | None:
     return np.logspace(np.log10(low), np.log10(high), count)
 
 
-def plot_histograms(
-    per_series: Dict[str, np.ndarray], viz_dir: Path, bins: int
-) -> None:
-    for series, times in per_series.items():
-        edges = _log_bins(times, bins)
-        if edges is None:
-            continue
-        positive = times[times > 0]
-        plt.figure(figsize=(8, 5))
-        plt.hist(positive, bins=edges, color="#1f77b4", alpha=0.8, log=True)
-        plt.xscale("log")
-        plt.title(f"Page time histogram (log-log) — {series} (n={positive.size})")
-        plt.xlabel("Seconds per page (log)")
-        plt.ylabel("Count (log)")
-        plt.grid(True, alpha=0.3, which="both")
-        plt.tight_layout()
-        plt.savefig(viz_dir / f"hist_{safe_name(series)}.png", dpi=150)
-        plt.close()
-
-
-def plot_histograms_overlay(
-    per_series: Dict[str, np.ndarray], viz_dir: Path, bins: int
-) -> None:
-    if len(per_series) < 2:
+def plot_pages_per_document(rows: List[PageRow], viz_dir: Path) -> None:
+    """Corpus shape: how many pages the documents have."""
+    pages_by_doc: Dict[str, int] = defaultdict(int)
+    seen: set = set()
+    for r in rows:
+        key = (r.doc_key, r.page_number)
+        if r.page_number > 0 and key not in seen:
+            seen.add(key)
+            pages_by_doc[r.doc_key] += 1
+    counts = np.array(list(pages_by_doc.values()), dtype=float)
+    if counts.size == 0:
         return
-    everything = np.concatenate([t[t > 0] for t in per_series.values() if t.size])
-    edges = _log_bins(everything, bins + 10)
+
+    plt.figure(figsize=(8, 5))
+    edges = _log_bins(counts, 40)
     if edges is None:
-        return
-
-    plt.figure(figsize=(9, 5))
-    for series, times in per_series.items():
-        positive = times[times > 0]
-        if positive.size == 0:
-            continue
-        plt.hist(
-            positive,
-            bins=edges,
-            density=True,
-            alpha=0.45,
-            label=f"{series} (n={positive.size})",
-            log=True,
-        )
-    plt.xscale("log")
-    plt.title("Page time histograms (log-log) — overlay")
-    plt.xlabel("Seconds per page (log)")
-    plt.ylabel("Density (log)")
-    plt.legend(fontsize=8)
+        plt.hist(counts, bins=40, color="#2ca02c", alpha=0.85)
+    else:
+        plt.hist(counts, bins=edges, color="#2ca02c", alpha=0.85)
+        plt.xscale("log")
+    plt.title(
+        f"Pages per document — {counts.size} documents, {int(counts.sum())} pages"
+    )
+    plt.xlabel("Pages per document")
+    plt.ylabel("Number of documents")
     plt.grid(True, alpha=0.3, which="both")
     plt.tight_layout()
-    plt.savefig(viz_dir / "hist_overlay.png", dpi=150)
+    plt.savefig(viz_dir / "hist_pages_per_document.png", dpi=150)
     plt.close()
 
 
@@ -352,87 +318,18 @@ def plot_histograms_stacked(
     plt.close(fig)
 
 
-def plot_pages_per_document(rows: List[PageRow], viz_dir: Path) -> None:
-    """Corpus shape: how many pages the documents have."""
-    pages_by_doc: Dict[str, int] = defaultdict(int)
-    seen: set = set()
-    for r in rows:
-        key = (r.doc_key, r.page_number)
-        if r.page_number > 0 and key not in seen:
-            seen.add(key)
-            pages_by_doc[r.doc_key] += 1
-    counts = np.array(list(pages_by_doc.values()), dtype=float)
-    if counts.size == 0:
-        return
-
-    plt.figure(figsize=(8, 5))
-    edges = _log_bins(counts, 40)
-    if edges is None:
-        plt.hist(counts, bins=40, color="#2ca02c", alpha=0.85)
-    else:
-        plt.hist(counts, bins=edges, color="#2ca02c", alpha=0.85)
-        plt.xscale("log")
-    plt.title(
-        f"Pages per document — {counts.size} documents, {int(counts.sum())} pages"
-    )
-    plt.xlabel("Pages per document")
-    plt.ylabel("Number of documents")
-    plt.grid(True, alpha=0.3, which="both")
-    plt.tight_layout()
-    plt.savefig(viz_dir / "hist_pages_per_document.png", dpi=150)
-    plt.close()
-
-
-def plot_scatter_per_doc(
-    per_series_docs: Dict[str, List[Tuple[str, int, float]]], viz_dir: Path
-) -> None:
-    for series, docs in per_series_docs.items():
-        if not docs:
-            continue
-        xs = np.array([d[1] for d in docs], dtype=float)  # pages
-        ys = np.array([d[2] for d in docs], dtype=float)  # total seconds
-        if xs.size == 0:
-            continue
-
-        plt.figure(figsize=(8, 5))
-        plt.scatter(xs, ys, s=18, alpha=0.7, label="documents")
-        if xs.size >= 2 and np.isfinite(xs).all() and np.isfinite(ys).all():
-            try:
-                slope, intercept = np.polyfit(xs, ys, deg=1)
-                x_line = np.linspace(xs.min(), xs.max(), 100)
-                y_pred = slope * xs + intercept
-                ss_res = np.sum((ys - y_pred) ** 2)
-                ss_tot = np.sum((ys - np.mean(ys)) ** 2)
-                r2 = 1 - ss_res / ss_tot if ss_tot > 0 else np.nan
-                plt.plot(
-                    x_line,
-                    slope * x_line + intercept,
-                    color="orange",
-                    label=f"fit: y={slope:.4f}x+{intercept:.3f} (R²={r2:.3f})",
-                )
-            except Exception:
-                pass
-
-        plt.title(f"Total time vs pages — {series} (n={xs.size})")
-        plt.xlabel("Pages per document")
-        plt.ylabel("Total seconds per document")
-        plt.grid(True, alpha=0.3)
-        plt.legend()
-        plt.tight_layout()
-        plt.savefig(viz_dir / f"scatter_pages_vs_time_{safe_name(series)}.png", dpi=150)
-        plt.close()
+REFERENCE_BACKEND = "docling-parse"
 
 
 def _hex_pairs_to_plot(
-    per_series_rows: Dict[str, List[PageRow]], all_pairs: bool
+    per_series_rows: Dict[str, List[PageRow]],
 ) -> List[Tuple[str, str]]:
-    """Which series to compare page-by-page.
+    """docling-parse at one thread against every other package, per task.
 
-    Pairs only ever compare series of the same task --- a `parse` time against
-    a `parse+render` time is not a like-for-like page.  By default everything
-    is compared against one reference per task (docling-parse at its lowest
-    thread count), because the full grid is quadratic: seven series per task
-    already means 21 plots per scale.
+    Pairs never cross tasks --- a `parse` time against a `parse+render` time is
+    not a like-for-like page.  Other docling-parse thread counts are excluded
+    too: per-page cost is the same quantity at any thread count, so those plots
+    would just be the diagonal.
     """
     by_task: Dict[str, List[str]] = defaultdict(list)
     for series, rows in per_series_rows.items():
@@ -440,60 +337,125 @@ def _hex_pairs_to_plot(
             by_task[rows[0].task].append(series)
 
     pairs: List[Tuple[str, str]] = []
-    for _, names in sorted(by_task.items()):
-        if len(names) < 2:
-            continue
-        if all_pairs:
-            pairs.extend(
-                (names[i], names[j])
-                for i in range(len(names))
-                for j in range(i + 1, len(names))
-            )
-            continue
-        reference = min(
-            names,
-            key=lambda s: (
-                per_series_rows[s][0].backend != "docling-parse",
-                per_series_rows[s][0].threads,
+    for task, names in sorted(by_task.items()):
+        reference = next(
+            (
+                s
+                for s in names
+                if per_series_rows[s][0].backend == REFERENCE_BACKEND
+                and per_series_rows[s][0].threads == 1
             ),
+            None,
         )
-        pairs.extend((reference, other) for other in names if other != reference)
+        if reference is None:
+            print(f"  no {REFERENCE_BACKEND} (1t) series for task {task}; no hexbins")
+            continue
+        pairs.extend(
+            (reference, other)
+            for other in names
+            if per_series_rows[other][0].backend != REFERENCE_BACKEND
+        )
     return pairs
 
 
-def plot_hex_pairs(
-    per_series_rows: Dict[str, List[PageRow]],
-    viz_dir: Path,
-    *,
-    logscale: bool,
-    all_pairs: bool = False,
+def plot_thread_scaling(
+    per_series_rows: Dict[str, List[PageRow]], viz_dir: Path
 ) -> None:
-    for pa, pb in _hex_pairs_to_plot(per_series_rows, all_pairs):
+    """Throughput of docling-parse against its thread count, one plot per task.
+
+    Total time is reconstructed as the sum of `wall_gap_s`, which tiles the
+    interval from the end of loading to the last result and so is the wall
+    clock of the processing phase.  Summing `elapsed_s` would be wrong here:
+    that is per-page cost, which by design stays flat as threads increase.
+    """
+    by_task: Dict[str, Dict[int, List[PageRow]]] = defaultdict(dict)
+    for rows in per_series_rows.values():
+        if rows and rows[0].backend == REFERENCE_BACKEND:
+            by_task[rows[0].task][rows[0].threads] = rows
+
+    for task, by_threads in sorted(by_task.items()):
+        if len(by_threads) < 2:
+            continue
+
+        threads: List[int] = []
+        sec_per_page: List[float] = []
+        pages_per_sec: List[float] = []
+        for count in sorted(by_threads):
+            ok = [r for r in by_threads[count] if r.success and r.page_number > 0]
+            total = sum(r.wall_gap_s for r in ok)
+            if not ok or total <= 0:
+                continue
+            threads.append(count)
+            sec_per_page.append(total / len(ok))
+            pages_per_sec.append(len(ok) / total)
+        if len(threads) < 2:
+            continue
+
+        fig, ax = plt.subplots(figsize=(8, 5))
+        (line_time,) = ax.plot(
+            threads,
+            sec_per_page,
+            "-o",
+            color="black",
+            label="total time / total pages",
+        )
+        ax.set_yscale("log")
+        ax.set_xlabel("docling-parse threads")
+        ax.set_ylabel("Seconds per page (log)", color="black")
+        ax.tick_params(axis="y", labelcolor="black")
+        ax.set_xticks(threads)
+        ax.set_xticklabels([str(t) for t in threads])
+        ax.grid(True, alpha=0.3, which="both")
+
+        ax_rate = ax.twinx()
+        (line_rate,) = ax_rate.plot(
+            threads,
+            pages_per_sec,
+            "s-",
+            color="red",
+            label="total pages / total time",
+        )
+        ax_rate.set_yscale("log")
+        ax_rate.set_ylabel("Pages per second (log)", color="red")
+        ax_rate.tick_params(axis="y", labelcolor="red")
+
+        ax.set_title(f"Thread scaling — docling-parse, {task}")
+        ax.legend(handles=[line_time, line_rate], loc="center right")
+        fig.tight_layout()
+        fig.savefig(viz_dir / f"scaling_{safe_name(task)}.png", dpi=150)
+        plt.close(fig)
+
+
+def plot_hex_pairs(per_series_rows: Dict[str, List[PageRow]], viz_dir: Path) -> None:
+    """Log-log hexbin of per-page times, docling-parse (1t) vs each package."""
+    for pa, pb in _hex_pairs_to_plot(per_series_rows):
         xa, yb = pairwise_common_page_times(per_series_rows[pa], per_series_rows[pb])
+        mask = (xa > 0) & (yb > 0)
+        xa, yb = xa[mask], yb[mask]
         if xa.size == 0:
             continue
-        if logscale:
-            mask = (xa > 0) & (yb > 0)
-            xa, yb = xa[mask], yb[mask]
-            if xa.size == 0:
-                continue
 
         plt.figure(figsize=(6.5, 6))
-        kwargs = {"xscale": "log", "yscale": "log"} if logscale else {}
-        plt.hexbin(xa, yb, gridsize=50, norm=LogNorm(), cmap="viridis", **kwargs)
+        plt.hexbin(
+            xa,
+            yb,
+            gridsize=50,
+            norm=LogNorm(),
+            cmap="viridis",
+            xscale="log",
+            yscale="log",
+        )
         plt.colorbar(label="count (log)")
         low, high = min(xa.min(), yb.min()), max(xa.max(), yb.max())
         plt.plot([low, high], [low, high], "r-", linewidth=1.5, label="x=y")
         plt.legend(loc="upper left")
-        suffix = " (log)" if logscale else ""
-        plt.xlabel(f"Seconds/page{suffix} — {pa}")
-        plt.ylabel(f"Seconds/page{suffix} — {pb}")
+        plt.xlabel(f"Seconds/page (log) — {pa}")
+        plt.ylabel(f"Seconds/page (log) — {pb}")
         plt.title(f"{pa} vs {pb} (n={xa.size})")
         plt.grid(True, alpha=0.2, which="both")
         plt.tight_layout()
-        prefix = "hex_loglog" if logscale else "hex"
         plt.savefig(
-            viz_dir / f"{prefix}_{safe_name(pa)}_vs_{safe_name(pb)}.png", dpi=150
+            viz_dir / f"hex_loglog_{safe_name(pa)}_vs_{safe_name(pb)}.png", dpi=150
         )
         plt.close()
 
@@ -528,14 +490,6 @@ def main(argv: List[str]) -> int:
     )
     ap.add_argument("--bins", type=int, default=50, help="Histogram bins (default: 50)")
     ap.add_argument(
-        "--all-pairs",
-        action="store_true",
-        help=(
-            "Hexbin every pair of same-task series instead of comparing each "
-            "against one reference (quadratic in the number of series)"
-        ),
-    )
-    ap.add_argument(
         "--top-documents",
         type=int,
         default=20,
@@ -560,21 +514,15 @@ def main(argv: List[str]) -> int:
 
     per_series_rows = group_by_series(rows)
     per_series_times = {s: series_page_times(r) for s, r in per_series_rows.items()}
-    per_series_docs = {
-        s: per_document_aggregates(r) for s, r in per_series_rows.items()
-    }
 
     print(f"\nSeries found: {len(per_series_rows)}")
     for series, times in per_series_times.items():
         print(f"  {series}: {times.size} timed pages")
 
-    plot_histograms(per_series_times, viz_dir, args.bins)
     plot_histograms_stacked(per_series_times, viz_dir, args.bins)
-    plot_histograms_overlay(per_series_times, viz_dir, args.bins)
     plot_pages_per_document(rows, viz_dir)
-    plot_scatter_per_doc(per_series_docs, viz_dir)
-    plot_hex_pairs(per_series_rows, viz_dir, logscale=False, all_pairs=args.all_pairs)
-    plot_hex_pairs(per_series_rows, viz_dir, logscale=True, all_pairs=args.all_pairs)
+    plot_thread_scaling(per_series_rows, viz_dir)
+    plot_hex_pairs(per_series_rows, viz_dir)
 
     for series, series_rows in per_series_rows.items():
         print_per_document_table(series, series_rows, args.top_documents)

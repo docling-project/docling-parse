@@ -190,18 +190,29 @@ they belong to. Several inputs land in a `viz/` directory next to them.
 
 Produces:
 
-- per-series page-time histograms, plus stacked and overlaid versions
-- a pages-per-document histogram for the corpus
-- per-series scatter of document page-count vs total time, with a linear fit
-- pairwise hexbins of per-page times, linear and log-log
+- `hist_stacked.png` — per-page time histograms, one panel per series on a
+  shared log-log x-axis. Filter to a single backend and task and the panels
+  become the thread sweep.
+- `hist_pages_per_document.png` — corpus shape
+- `scaling_<task>.png` — docling-parse against its thread count: seconds/page
+  on the left axis (black `-o`) and pages/second on the right (red `s-`), both
+  log-scaled
+- `hex_loglog_<reference>_vs_<package>.png` — per-page time of docling-parse at
+  one thread against each other package, log-log, with the `x=y` diagonal
 - a per-document statistics table and `per_document.csv`
 
-Hexbins only pair series of the *same* task, and by default compare each series
-against one reference per task (docling-parse at its lowest thread count).
-`--all-pairs` gives the full grid, which is quadratic in the number of series.
+The scaling plot reconstructs total time as the sum of `wall_gap_s`, which
+tiles the interval from the end of loading to the last result. Summing
+`elapsed_s` would be wrong: that is per-page cost, which by design stays flat
+as threads increase.
+
+Hexbins never cross tasks (a `parse` time against a `parse+render` time is not
+a like-for-like page), and other docling-parse thread counts are excluded
+because per-page cost is the same quantity at any thread count — those plots
+would just be the diagonal.
 
 Flags: `--backend`, `--task`, `--threads` to filter, `--bins`, `--viz-dir`,
-`--top-documents`, `--all-pairs`.
+`--top-documents`.
 
 ## `run_analysis.py`
 
