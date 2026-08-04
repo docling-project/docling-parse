@@ -17,16 +17,16 @@ from docling_parse.pdf_parser import (
     DoclingThreadedPdfParser,
     ThreadedPdfParserConfig,
 )
-from tests.constants import PARSER_PAGE_RESTRICTIONS
+from tests.constants import (
+    LARGE_SAMPLE_PDF,
+    PARSER_PAGE_RESTRICTIONS,
+    SAMPLE_PDF,
+)
 from tests.test_parse import (
     GROUNDTRUTH_FOLDER,
     REGRESSION_FOLDER,
     verify_SegmentedPdfPage,
 )
-
-# TODO: move to the HF regression dataset, like the rest of the test corpus.
-SAMPLE_PDF = "docs/legacy/dln-v1.pdf"
-LARGE_SAMPLE_PDF = "docs/PDF32000_2008.pdf"
 
 
 def _write_shape_geometry_pdf(path: Path) -> None:
@@ -133,7 +133,11 @@ def test_threaded_reference_documents_from_filenames():
         print(f"parsing {pdf_doc_path}")
         rname = os.path.basename(pdf_doc_path)
         try:
-            key = parser.load(pdf_doc_path)
+            # page_numbers=None decodes the whole document; restricted documents
+            # never decode the pages that are not verified
+            key = parser.load(
+                pdf_doc_path, page_numbers=PARSER_PAGE_RESTRICTIONS.get(rname)
+            )
         except Exception as exc:
             if first_failure is None:
                 first_failure = (exc, exc.__traceback__)

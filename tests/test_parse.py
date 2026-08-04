@@ -28,7 +28,7 @@ from docling_parse.pdf_parser import (
     DoclingPdfParser,
     PdfDocument,
 )
-from tests.constants import PARSER_PAGE_RESTRICTIONS
+from tests.constants import PARSER_PAGE_RESTRICTIONS, SAMPLE_PDF
 from tests.data_utils import PARSER_GROUNDTRUTH_DIR
 
 
@@ -472,27 +472,41 @@ def test_reference_documents_from_filenames(update_groundtruth: bool):
             results.append((rname, "N/A", "parser", False, str(exc)))
             continue
 
-        # PdfDocument.iterate_pages() will automatically populate pages as they are yielded.
-        # No need to call PdfDocument.load_all_pages() before.
-        for page_no, pred_page in pdf_doc.iterate_pages():
-            print(f" -> Page {page_no} has {len(pred_page.textline_cells)} cells.")
+        # don't do all pages of big pdf's. pdf_doc is lazy, so decoding only the
+        # pages that are actually verified means the rest is never touched.
+        n_pages = pdf_doc.number_of_pages()
+        requested = PARSER_PAGE_RESTRICTIONS.get(rname)
 
+        if requested is None:
+            page_numbers = list(range(1, n_pages + 1))
+        else:
+            page_numbers = sorted(p for p in requested if 1 <= p <= n_pages)
+            for page_no in sorted(set(requested) - set(page_numbers)):
+                results.append(
+                    (
+                        rname,
+                        str(page_no),
+                        "page",
+                        False,
+                        f"restricted page {page_no} does not exist, "
+                        f"the document has {n_pages} page(s)",
+                    )
+                )
+
+        for page_no in page_numbers:
             fname = os.path.join(
                 GROUNDTRUTH_FOLDER, rname + f".page_no_{page_no}.py.json"
             )
-
-            # don't do all pages of big pdf's
-            if (
-                rname in PARSER_PAGE_RESTRICTIONS
-                and page_no not in PARSER_PAGE_RESTRICTIONS[rname]
-            ):
-                continue
 
             SPECIAL_SEPERATOR = "\t<|special_separator|>\n"
 
             page_failed = False
 
             try:
+                # PdfDocument.get_page() populates this page only
+                pred_page = pdf_doc.get_page(page_no)
+                print(f" -> Page {page_no} has {len(pred_page.textline_cells)} cells.")
+
                 if update_groundtruth or (not os.path.exists(fname)):
                     save_as_json_rounded(pred_page, fname)
 
@@ -1201,7 +1215,7 @@ def test_bitmap_materialization_cache_true_then_false():
 # --- ContentConfig redesign ---------------------------------------------
 
 # TODO: move to the HF regression dataset, like the rest of the test corpus.
-TEXT_PDF = "docs/legacy/dln-v1.pdf"
+TEXT_PDF = SAMPLE_PDF
 
 
 def test_word_cells_materialize_without_char_cells():
