@@ -31,6 +31,7 @@ from tests.rendering_regression import (
     format_image_comparison_table,
     image_comparison_failed,
     measure_image_comparison,
+    renderer_groundtruth_exists,
     write_renderer_groundtruth,
 )
 from tests.test_parse import (
@@ -563,7 +564,9 @@ def test_rendered_pages_match_groundtruth(update_groundtruth: bool):
             continue
 
         try:
-            if update_groundtruth:
+            if update_groundtruth or not renderer_groundtruth_exists(
+                rname, result.page_number, result
+            ):
                 write_renderer_groundtruth(rname, result.page_number, result)
             else:
                 compare_render_instructions(rname, result.page_number, result)
