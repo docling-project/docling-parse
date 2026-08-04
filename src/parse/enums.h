@@ -186,6 +186,43 @@ namespace pdflib
     BEZIER,      // cubic Bézier curve (interpolated)
   };
 
+  // How a path-painting operator paints the current path
+  enum shape_paint_mode {
+    SHAPE_PAINT_STROKE,        // S, s
+    SHAPE_PAINT_FILL,          // f, F, f*
+    SHAPE_PAINT_FILL_STROKE,   // B, B*, b, b*
+  };
+
+  enum shape_fill_rule {
+    SHAPE_FILL_NONZERO,        // f, B, b
+    SHAPE_FILL_EVEN_ODD,       // f*, B*, b*
+  };
+
+  // Exact path segment commands (each subpath starts with an implicit
+  // move-to). Kept alongside the flattened polyline so the renderer can
+  // rebuild true curves at device resolution.
+  enum shape_segment_op {
+    SEGMENT_LINE_TO,    // consumes 1 point:  end
+    SEGMENT_CUBIC_TO,   // consumes 3 points: ctrl1, ctrl2, end
+  };
+
+  // Families of PDF colour spaces (8.6) that the SC/SCN/sc/scn operands are
+  // interpreted against once CS/cs has resolved a named /ColorSpace resource.
+  enum color_space_family {
+    COLOR_SPACE_UNKNOWN,
+
+    COLOR_SPACE_GRAY,       // DeviceGray, CalGray, ICCBased /N 1
+    COLOR_SPACE_RGB,        // DeviceRGB, CalRGB, ICCBased /N 3
+    COLOR_SPACE_CMYK,       // DeviceCMYK, ICCBased /N 4
+    COLOR_SPACE_LAB,        // Lab (approximated by its L* component)
+
+    COLOR_SPACE_INDEXED,    // palette lookup into a base space
+    COLOR_SPACE_SEPARATION, // single tint (tint transform not evaluated)
+    COLOR_SPACE_DEVICE_N,   // multiple tints (tint transform not evaluated)
+
+    COLOR_SPACE_PATTERN
+  };
+
 }
 
 #endif

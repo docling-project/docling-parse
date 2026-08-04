@@ -82,9 +82,11 @@ namespace pdflib
     // axis-aligned fast path or a full affine transform for rotated/skewed quads.
     void render_bitmap(bitmap_instruction& instr);
 
-    // Strokes a parsed vector shape/polyline in canvas coordinates using the
-    // instruction's stroking color. Filled paths and close-path semantics are
-    // not currently implemented here.
+    // Paints one parsed vector path (all subpaths of one PDF painting
+    // operator) in canvas coordinates: fills with the instruction's fill
+    // color and fill rule, strokes with its stroking color, width, cap and
+    // join parameters, honoring the paint mode (stroke / fill / both) and
+    // axis-aligned rectangular clips. Curve segments render as true cubics.
     void render_shape(shape_instruction& instr);
 
     // Returns the rendered canvas as RGBA bytes, row-major top-to-bottom.
@@ -238,11 +240,15 @@ namespace pdflib
                               const text_geometry& geom,
                               const BLPath& bbox_path);
 
-    // Last-chance glyph-identity mapping when Unicode shaping against an
-    // embedded (Blend2D-loaded) face produced only .notdef: CID fonts with an
-    // identity CIDToGIDMap use the character code as glyph index directly;
-    // symbolic fonts are retried through the 0xF000 private-use convention.
-    // On success gb holds a positioned glyph run ready for fill_glyph_run.
+    // Glyph-identity mapping by PDF character code against an embedded
+    // (Blend2D-loaded) face: CID fonts with an identity CIDToGIDMap use the
+    // character code as glyph index directly; simple fonts are tried through
+    // the 0xF000 private-use convention ((3,0) symbol cmaps) and then with
+    // the raw character code ((1,0) / format-0 builtin cmaps, as written by
+    // Cairo/LibreOffice subsetters). Used both as the primary path for
+    // symbolic fonts and as recovery when Unicode shaping failed or
+    // produced only .notdef. On success gb holds a positioned glyph run
+    // ready for fill_glyph_run.
     static bool recover_embedded_glyphs(const BLFont& font,
                                         text_instruction& instr,
                                         BLGlyphBuffer& gb)
@@ -270,14 +276,27 @@ namespace pdflib
 
       if (char_code <= 0xFF)
         {
-          const uint32_t codepoint = 0xF000u + static_cast<uint32_t>(char_code);
-          gb.set_utf32_text(&codepoint, 1);
+          const uint32_t symbol_codepoint = 0xF000u + static_cast<uint32_t>(char_code);
+          gb.set_utf32_text(&symbol_codepoint, 1);
           if (font.shape(gb) == BL_SUCCESS and
               not gb.is_empty() and
               gb.placement_data() != nullptr and
               not glyph_run_all_notdef(gb))
             {
               LOG_S(INFO) << "render_text: recovered glyph via symbol cmap"
+                          << " char_code=" << char_code
+                          << " font_name=`" << instr.get_font_name() << "`";
+              return true;
+            }
+
+          const uint32_t raw_codepoint = static_cast<uint32_t>(char_code);
+          gb.set_utf32_text(&raw_codepoint, 1);
+          if (font.shape(gb) == BL_SUCCESS and
+              not gb.is_empty() and
+              gb.placement_data() != nullptr and
+              not glyph_run_all_notdef(gb))
+            {
+              LOG_S(INFO) << "render_text: recovered glyph via raw char code"
                           << " char_code=" << char_code
                           << " font_name=`" << instr.get_font_name() << "`";
               return true;
@@ -415,21 +434,25 @@ namespace pdflib
              b.y < a.y + a.h;
     }
 
-    enum bitmap_clip_result
+    enum clip_apply_result
     {
-      BITMAP_CLIP_NONE,
-      BITMAP_CLIP_APPLIED,
-      BITMAP_CLIP_EMPTY,
+      CLIP_NONE,
+      CLIP_APPLIED,
+      CLIP_EMPTY,
     };
 
     // Converts a parsed rectangular clip path into a canvas-space BLRect when
     // all clip vertices lie on the rectangle edges. Non-rectangular, degenerate,
     // or unsupported clip paths return false so callers can skip them without
     // corrupting the Blend2D clip state.
+    //
+    // The detection is purely geometric (every vertex on the bbox edge):
+    // most rectangular clips are built with m/l/l/l/h rather than `re`, so
+    // gating on shape_type == RECTANGLE would reject them.
     bool get_axis_aligned_clip_rect(const clip_path_instruction& clip,
                                     BLRect& rect) const
     {
-      if(clip.get_shape_type() != RECTANGLE or clip.size() < 4)
+      if(clip.size() < 4)
         {
           return false;
         }
@@ -478,18 +501,19 @@ namespace pdflib
       return true;
     }
 
-    // Applies the bitmap instruction's clip paths to the Blend2D context. Only
-    // axis-aligned rectangular clips are supported. The return value tells the
-    // caller whether no clip was present, a clip was applied, or the destination
-    // is fully outside the clip and bitmap rendering can be skipped.
-    bitmap_clip_result apply_bitmap_clip_state(
+    // Applies an instruction's clip paths (bitmap or shape) to the Blend2D
+    // context. Only axis-aligned rectangular clips are supported. The return
+    // value tells the caller whether no clip was present, a clip was applied,
+    // or the destination is fully outside the clip and rendering can be
+    // skipped.
+    clip_apply_result apply_clip_state(
       BLContext& ctx,
       const clip_state_instruction& clip_state,
       const BLRect& dst_rect) const
     {
       if(not clip_state.has_clip())
         {
-          return BITMAP_CLIP_NONE;
+          return CLIP_NONE;
         }
 
       bool applied_clip = false;
@@ -500,12 +524,12 @@ namespace pdflib
             {
               if(not rects_intersect(clip_rect, dst_rect))
                 {
-                  LOG_S(INFO) << "render_bitmap: empty image clip"
+                  LOG_S(INFO) << "apply_clip_state: destination fully clipped"
                               << " clip=(" << clip_rect.x << ", " << clip_rect.y
                               << ", " << clip_rect.w << ", " << clip_rect.h << ")"
                               << " dst=(" << dst_rect.x << ", " << dst_rect.y
                               << ", " << dst_rect.w << ", " << dst_rect.h << ")";
-                  return BITMAP_CLIP_EMPTY;
+                  return CLIP_EMPTY;
                 }
 
               ctx.clip_to_rect(clip_rect);
@@ -513,12 +537,57 @@ namespace pdflib
             }
           else
             {
-              LOG_S(WARNING) << "render_bitmap: skipping unsupported non-rectangular clip path";
+              LOG_S(WARNING) << "apply_clip_state: skipping unsupported non-rectangular clip path";
             }
         }
 
-      return applied_clip ? BITMAP_CLIP_APPLIED : BITMAP_CLIP_NONE;
+      return applied_clip ? CLIP_APPLIED : CLIP_NONE;
     }
+
+    // Converts a parsed 0-255 RGB triple and a [0, 1] alpha into a Blend2D
+    // color (straight alpha; the context premultiplies while compositing).
+    static BLRgba32 make_rgba32(const std::array<int, 3>& rgb,
+                                double alpha = 1.0)
+    {
+      const double clamped = std::min(1.0, std::max(0.0, alpha));
+      const uint32_t a = static_cast<uint32_t>(std::lround(255.0 * clamped));
+      return BLRgba32((a                              << 24) |
+                      (static_cast<uint32_t>(rgb[0])  << 16) |
+                      (static_cast<uint32_t>(rgb[1])  <<  8) |
+                       static_cast<uint32_t>(rgb[2]));
+    }
+
+    // Maps the PDF line cap value (0 butt, 1 round, 2 projecting square) to
+    // Blend2D. The numeric values differ (Blend2D: square=1, round=2).
+    static BLStrokeCap to_stroke_cap(int line_cap)
+    {
+      switch(line_cap)
+        {
+        case 1:  return BL_STROKE_CAP_ROUND;
+        case 2:  return BL_STROKE_CAP_SQUARE;
+        default: return BL_STROKE_CAP_BUTT;
+        }
+    }
+
+    // Maps the PDF line join value (0 miter, 1 round, 2 bevel) to Blend2D.
+    // PDF miter joins fall back to bevel when the miter limit is exceeded,
+    // which is exactly BL_STROKE_JOIN_MITER_BEVEL.
+    static BLStrokeJoin to_stroke_join(int line_join)
+    {
+      switch(line_join)
+        {
+        case 1:  return BL_STROKE_JOIN_ROUND;
+        case 2:  return BL_STROKE_JOIN_BEVEL;
+        default: return BL_STROKE_JOIN_MITER_BEVEL;
+        }
+    }
+
+    // Builds the Blend2D path for a shape instruction in canvas coordinates,
+    // walking the exact segment ops (true cubics for curves), and returns
+    // the canvas-space bounding rectangle of all touched points. Control
+    // points give a conservative bbox (a Bézier never leaves its control
+    // polygon's hull), which is what the clip skip-test needs.
+    BLPath make_shape_path(const shape_instruction& instr, BLRect& bbox) const;
 
     // Draws a semi-transparent yellow placeholder over the bitmap destination
     // quad. This makes missing or invalid image data visible in debug renders.
@@ -1130,7 +1199,8 @@ namespace pdflib
         return false;
       }
 
-    ctx.set_fill_style(BLRgba32(0xFF000000u)); // opaque black
+    ctx.set_fill_style(make_rgba32(instr.get_rgb_filling(),
+                                   instr.get_fill_alpha()));
     if (not text_path.is_empty())
       {
         ctx.fill_path(text_path);
@@ -1173,6 +1243,19 @@ namespace pdflib
 
     // Build the bounding quad path (for optional bbox outline / fallback).
     const BLPath bbox_path = make_quad_path(geom.bbox);
+
+    // Text render modes 3 and 7 paint no glyphs (invisible / clip-only,
+    // e.g. OCR text layers); keep only the debug drawing.
+    if (instr.is_invisible())
+      {
+        BLContext& ctx = page_context();
+        draw_text_basepoint(ctx, geom);
+        if (config_.draw_text_bbox)
+          {
+            stroke_text_bbox(ctx, bbox_path);
+          }
+        return;
+      }
 
     // LOG_S(INFO) << "text=`" << instr.get_text() << "`"
     //             << " base=(" << bx << "," << by << ")"
@@ -1241,50 +1324,70 @@ namespace pdflib
                 return;
               }
 
-            const BLMatrix2D ctm = make_text_transform(geom);
-            // LOG_S(INFO) << "render_text: before ctx.save";
-            ctx.save();
-            // LOG_S(INFO) << "render_text: before apply_transform";
-            const BLResult transform_res = ctx.apply_transform(ctm);
-            // LOG_S(INFO) << "render_text: after apply_transform res=" << transform_res;
-            if (transform_res != BL_SUCCESS)
-              {
-                ctx.restore();
-                LOG_S(WARNING) << "render_text: apply_transform failed"
-                               << " (BLResult=" << transform_res << ")";
-                draw_bbox_fallback();
-                return;
-              }
-            // LOG_S(INFO) << "render_text: before set_fill_style";
-            ctx.set_fill_style(BLRgba32(0xFF000000u)); // opaque black
-            // LOG_S(INFO) << "render_text: before fill_utf8_text";
+            // Shape the text before touching the context, so the recovery
+            // paths below (FreeType outlines, system-face retry) don't have
+            // to unwind a saved context state.
             BLGlyphBuffer gb;
-            gb.set_utf8_text(instr.get_text().c_str());
-            const BLResult shape_res = font.shape(gb);
-            // LOG_S(INFO) << "render_text: after shape res=" << shape_res
-            //             << " empty=" << gb.is_empty();
-            if (shape_res != BL_SUCCESS || gb.is_empty())
+            BLResult shape_res = BL_SUCCESS;
+            bool shaped = false;
+
+            // A symbolic simple font without /Encoding maps its character
+            // codes through the builtin cmap (9.6.6.4), so Unicode shaping
+            // is meaningless — and dangerously plausible: a codepoint that
+            // collides with the font's code range "succeeds" with the wrong
+            // glyph (e.g. U+0020 hitting subset code 0x20). Resolve by
+            // character code first for such faces.
+            //
+            // CID fonts with an identity CIDToGIDMap must also resolve by
+            // character code first: the content-stream CID is the exact glyph
+            // the producer chose (contextual Arabic forms, lam-alef ligatures,
+            // …). Round-tripping through the Unicode cmap instead picks the
+            // nominal (isolated) form — Blend2D applies no GSUB shaping — so
+            // right-to-left scripts come out as disconnected base letters.
+            const auto& embedded_blob = instr.get_embedded_font();
+            const bool char_code_first =
+              using_embedded_font and
+              instr.has_embedded_font() and
+              (embedded_blob->get_is_cid_font()
+                 ? embedded_blob->get_cid_to_gid_identity()
+                 : embedded_blob->get_uses_builtin_encoding());
+
+            if (char_code_first)
               {
-                LOG_S(WARNING) << "render_text: shaping failed or produced no glyphs"
-                               << " (BLResult=" << shape_res << ")"
-                               << " text=`" << instr.get_text() << "`"
-                               << " font_name=`" << instr.get_font_name() << "`"
-                               << " base_font=`" << instr.get_base_font() << "`";
-                ctx.restore();
-                draw_bbox_fallback();
-                return;
+                shaped = recover_embedded_glyphs(font, instr, gb);
               }
 
-            if (using_embedded_font and glyph_run_all_notdef(gb))
+            if (not shaped)
               {
-                // Shaping against an embedded subset font "succeeds" with
-                // glyph id 0 when the Unicode cmap simply lacks the
-                // codepoint. Try glyph-identity mapping (CID identity,
-                // symbol cmap) before giving the cell to the system face —
-                // drawing the .notdef run would produce blank/tofu output.
-                if (not recover_embedded_glyphs(font, instr, gb))
+                gb.set_utf8_text(instr.get_text().c_str());
+                shape_res = font.shape(gb);
+                shaped = (shape_res == BL_SUCCESS and not gb.is_empty());
+              }
+
+            if (using_embedded_font and
+                (not shaped or glyph_run_all_notdef(gb)))
+              {
+                // An embedded subset face misses a cell in two ways: shape()
+                // fails outright (BL_ERROR_FONT_NO_CHARACTER_MAPPING when the
+                // subset carries no Unicode cmap at all) or "succeeds" with a
+                // .notdef-only run when the cmap lacks the codepoint. Either
+                // way, try glyph-identity mapping (CID identity, symbol cmap,
+                // raw char code — unless already tried above), then FreeType
+                // glyph-name/builtin-encoding resolution, then re-shape
+                // against the system face — drawing the .notdef run would
+                // produce blank/tofu output.
+                shaped = (not char_code_first) and
+                  recover_embedded_glyphs(font, instr, gb);
+
+                if (not shaped)
                   {
-                    LOG_S(INFO) << "render_text: embedded face has no glyph"
+                    if (render_text_freetype(instr, geom, bbox_path))
+                      {
+                        return;
+                      }
+
+                    LOG_S(INFO) << "render_text: embedded face cannot map"
+                                << " (BLResult=" << shape_res << ")"
                                 << " text=`" << instr.get_text() << "`"
                                 << " font_name=`" << instr.get_font_name() << "`"
                                 << " — falling back to system font";
@@ -1297,23 +1400,50 @@ namespace pdflib
                                                      static_cast<float>(geom.size)) == BL_SUCCESS)
                       {
                         gb.set_utf8_text(instr.get_text().c_str());
-                        if (system_font.shape(gb) == BL_SUCCESS and not gb.is_empty())
+                        shape_res = system_font.shape(gb);
+                        if (shape_res == BL_SUCCESS and not gb.is_empty() and
+                            not glyph_run_all_notdef(gb))
                           {
                             font = system_font;
                             using_embedded_font = false;
+                            shaped = true;
                           }
                       }
                   }
+              }
+
+            if (not shaped)
+              {
+                LOG_S(WARNING) << "render_text: shaping failed or produced no glyphs"
+                               << " (BLResult=" << shape_res << ")"
+                               << " text=`" << instr.get_text() << "`"
+                               << " font_name=`" << instr.get_font_name() << "`"
+                               << " base_font=`" << instr.get_base_font() << "`";
+                draw_bbox_fallback();
+                return;
               }
 
             const auto* placement_data = gb.placement_data();
             if (placement_data == nullptr)
               {
                 LOG_S(WARNING) << "render_text: glyph placement data is null, using fallback";
-                ctx.restore();
                 draw_bbox_fallback();
                 return;
               }
+
+            const BLMatrix2D ctm = make_text_transform(geom);
+            ctx.save();
+            const BLResult transform_res = ctx.apply_transform(ctm);
+            if (transform_res != BL_SUCCESS)
+              {
+                ctx.restore();
+                LOG_S(WARNING) << "render_text: apply_transform failed"
+                               << " (BLResult=" << transform_res << ")";
+                draw_bbox_fallback();
+                return;
+              }
+            ctx.set_fill_style(make_rgba32(instr.get_rgb_filling(),
+                                           instr.get_fill_alpha()));
             text_draw_adjustment adjustment =
               calculate_glyph_bbox_adjustment(font, gb, instr, geom.size);
 
@@ -1525,17 +1655,17 @@ namespace pdflib
                     << instr.get_clip_state().get_paths().size()
                     << " clip path(s)";
         ctx.save();
-        const bitmap_clip_result clip_result =
-          apply_bitmap_clip_state(ctx,
-                                  instr.get_clip_state(),
-                                  axis_aligned_rect(q));
-        if(clip_result == BITMAP_CLIP_EMPTY)
+        const clip_apply_result clip_result =
+          apply_clip_state(ctx,
+                           instr.get_clip_state(),
+                           axis_aligned_rect(q));
+        if(clip_result == CLIP_EMPTY)
           {
             ctx.restore();
             return;
           }
 
-        clip_active = clip_result == BITMAP_CLIP_APPLIED;
+        clip_active = clip_result == CLIP_APPLIED;
         if(not clip_active)
           {
             ctx.restore();
@@ -1590,44 +1720,183 @@ namespace pdflib
   }
 
   // ---------------------------------------------------------------------------
+  // make_shape_path
+  // ---------------------------------------------------------------------------
+
+  inline BLPath renderer<BLEND2D>::make_shape_path(const shape_instruction& instr,
+                                                   BLRect& bbox) const
+  {
+    BLPath path;
+
+    double x_min = std::numeric_limits<double>::infinity();
+    double y_min = std::numeric_limits<double>::infinity();
+    double x_max = -std::numeric_limits<double>::infinity();
+    double y_max = -std::numeric_limits<double>::infinity();
+
+    auto accumulate = [&](double cx, double cy)
+    {
+      x_min = std::min(x_min, cx);
+      y_min = std::min(y_min, cy);
+      x_max = std::max(x_max, cx);
+      y_max = std::max(y_max, cy);
+    };
+
+    for (const auto& sp : instr.get_subpaths())
+      {
+        if (sp.empty()) { continue; } // move-to alone draws nothing
+
+        const double sx = canvas_x(sp.get_x0());
+        const double sy = canvas_y(sp.get_y0());
+        path.move_to(sx, sy);
+        accumulate(sx, sy);
+
+        const auto& ops = sp.get_ops();
+        const auto& px  = sp.get_px();
+        const auto& py  = sp.get_py();
+
+        size_t k = 0;
+        for (const auto op : ops)
+          {
+            const size_t needed = (op == SEGMENT_CUBIC_TO) ? 3 : 1;
+            if (k + needed > px.size() or k + needed > py.size())
+              {
+                LOG_S(ERROR) << "render_shape: segment ops and points are"
+                             << " inconsistent, truncating subpath";
+                break;
+              }
+
+            if (op == SEGMENT_LINE_TO)
+              {
+                const double x = canvas_x(px[k]);
+                const double y = canvas_y(py[k]);
+                k += 1;
+
+                path.line_to(x, y);
+                accumulate(x, y);
+              }
+            else // SEGMENT_CUBIC_TO
+              {
+                const double x1 = canvas_x(px[k]);
+                const double y1 = canvas_y(py[k]);
+                const double x2 = canvas_x(px[k + 1]);
+                const double y2 = canvas_y(py[k + 1]);
+                const double x3 = canvas_x(px[k + 2]);
+                const double y3 = canvas_y(py[k + 2]);
+                k += 3;
+
+                path.cubic_to(x1, y1, x2, y2, x3, y3);
+                accumulate(x1, y1);
+                accumulate(x2, y2);
+                accumulate(x3, y3);
+              }
+          }
+
+        if (sp.get_closing_type() == CLOSED)
+          {
+            path.close();
+          }
+      }
+
+    if (x_min <= x_max and y_min <= y_max)
+      {
+        bbox = BLRect(x_min, y_min, x_max - x_min, y_max - y_min);
+      }
+    else
+      {
+        bbox = BLRect(0.0, 0.0, 0.0, 0.0);
+      }
+
+    return path;
+  }
+
+  // ---------------------------------------------------------------------------
   // render_shape
+  //
+  // Fill first, stroke on top (the PDF paint order for B/b operators), with
+  // the fill rule, colors, stroke width and cap/join parameters delivered by
+  // the parse layer. Only axis-aligned rectangular clips are applied; dashed
+  // strokes render solid because the vendored Blend2D stroker does not
+  // implement dashing.
   // ---------------------------------------------------------------------------
 
   inline void renderer<BLEND2D>::render_shape(shape_instruction& instr)
   {
-    // LOG_S(INFO) << __FUNCTION__;
-
     if (shape_[0] == 0 or shape_[1] == 0) { return; }
-    if (instr.size() < 2) { return; }
+    if (not config_.render_shapes) { return; }
 
-    const auto& xs = instr.get_x();
-    const auto& ys = instr.get_y();
-
-    BLPath path;
-    path.move_to(canvas_x(xs[0]), canvas_y(ys[0]));
-    for (size_t i = 1; i < instr.size(); ++i)
-      {
-        path.line_to(canvas_x(xs[i]), canvas_y(ys[i]));
-      }
-
-    /*
-    if (instr.get_closing_type() == CLOSED)
-      {
-        path.close();
-      }
-    */
-
-    const auto& rgb = instr.get_rgb_stroking();
-    const uint32_t stroke_color =
-      (0xFFu                          << 24) |
-      (static_cast<uint32_t>(rgb[0])  << 16) |
-      (static_cast<uint32_t>(rgb[1])  <<  8) |
-       static_cast<uint32_t>(rgb[2]);
+    BLRect bbox;
+    const BLPath path = make_shape_path(instr, bbox);
+    if (path.is_empty()) { return; }
 
     BLContext& ctx = page_context();
-    ctx.set_stroke_style(BLRgba32(stroke_color));
-    ctx.set_stroke_width(1);
-    ctx.stroke_path(path);
+
+    bool clip_active = false;
+    if (instr.has_clip_state())
+      {
+        ctx.save();
+        const clip_apply_result clip_result =
+          apply_clip_state(ctx, instr.get_clip_state(), bbox);
+        if (clip_result == CLIP_EMPTY)
+          {
+            ctx.restore();
+            return;
+          }
+
+        clip_active = clip_result == CLIP_APPLIED;
+        if (not clip_active)
+          {
+            ctx.restore();
+          }
+      }
+
+    const shape_paint_mode mode = instr.get_paint_mode();
+
+    // ExtGState constant alpha: alpha 0 paint is invisible and skipped
+    // entirely (a common idiom for hiding helper geometry).
+    static constexpr double min_visible_alpha = 1.0 / 512.0;
+    const double fill_alpha = instr.get_fill_alpha();
+    const double stroke_alpha = instr.get_stroke_alpha();
+
+    if ((mode == SHAPE_PAINT_FILL or mode == SHAPE_PAINT_FILL_STROKE)
+        and fill_alpha > min_visible_alpha)
+      {
+        ctx.set_fill_rule(instr.get_fill_rule() == SHAPE_FILL_EVEN_ODD
+                            ? BL_FILL_RULE_EVEN_ODD
+                            : BL_FILL_RULE_NON_ZERO);
+        ctx.set_fill_style(make_rgba32(instr.get_rgb_filling(), fill_alpha));
+        ctx.fill_path(path);
+      }
+
+    if ((mode == SHAPE_PAINT_STROKE or mode == SHAPE_PAINT_FILL_STROKE)
+        and stroke_alpha > min_visible_alpha)
+      {
+        ctx.set_stroke_style(make_rgba32(instr.get_rgb_stroking(),
+                                         stroke_alpha));
+
+        // the line width arrives in page space; scale to canvas and keep
+        // sub-pixel strokes visible (PDF `0 w` means hairline)
+        static constexpr double min_visible_width = 0.75;
+        const double width =
+          instr.get_line_width() * 0.5 * (scale_x_ + scale_y_);
+        ctx.set_stroke_width(std::max(width, min_visible_width));
+
+        ctx.set_stroke_caps(to_stroke_cap(instr.get_line_cap()));
+        ctx.set_stroke_join(to_stroke_join(instr.get_line_join()));
+        ctx.set_stroke_miter_limit(instr.get_miter_limit());
+
+        if (not instr.get_dash_array().empty())
+          {
+            LOG_S(INFO) << "render_shape: dash pattern ignored"
+                        << " (not implemented by the Blend2D stroker)";
+          }
+
+        ctx.stroke_path(path);
+      }
+
+    if (clip_active)
+      {
+        ctx.restore();
+      }
   }
 
   // ---------------------------------------------------------------------------

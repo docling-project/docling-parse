@@ -31,7 +31,38 @@ namespace pdflib
 
     return result;
   }
-  
+
+  // Field attributes such as /FT, /V and /T are inheritable through the
+  // /Parent chain of AcroForm field dictionaries (PDF 32000-1, 12.7.3.1):
+  // widget annotations of a radio-button group or of split fields carry
+  // these keys on their parent field, not on the annotation itself.
+  std::pair<bool, std::string> to_inherited_string(QPDFObjectHandle obj,
+						   const std::string& key,
+						   int max_depth=32)
+  {
+    for(int depth=0; depth<max_depth; depth++)
+      {
+	auto result = to_string(obj, key);
+	if(result.first)
+	  {
+	    return result;
+	  }
+
+	if(not obj.hasKey("/Parent"))
+	  {
+	    break;
+	  }
+
+	obj = obj.getKey("/Parent");
+	if(not obj.isDictionary())
+	  {
+	    break;
+	  }
+      }
+
+    return {false, ""};
+  }
+
   // FIXME: add a begin time to cap the max time spent in this routine
   nlohmann::json to_json(QPDFObjectHandle obj,
 			 std::unordered_set<std::string> prev_objs={},

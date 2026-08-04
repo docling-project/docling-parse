@@ -64,6 +64,10 @@ jobs:
             platform: "windows"
             platform_id: "win_amd64"      
 
+          - name: "windows-11-arm"
+            platform: "windows"
+            platform_id: "win_arm64"
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -75,19 +79,24 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Set up custom PATH and set py version to cpXYZ [windows]
-        if: ${{matrix.os.platform_id == 'win_amd64'}}
+        if: ${{ matrix.os.platform == 'windows' }}
         shell: pwsh
         run: |
           echo "C:\msys64\usr\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          echo "C:\msys64\mingw64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           echo "C:\Users\runneradmin\.local\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           echo "C:\nasm" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           $version = "${{ matrix.python-version }}"
           $cp_version = "cp$($version -replace '\.', '')"
           Add-Content -Path $env:GITHUB_ENV -Value "python_cp_version=$cp_version"
 
+      - name: Add amd64-specific PATH entries [windows]
+        if: ${{ matrix.os.platform_id == 'win_amd64' }}
+        shell: pwsh
+        run: |
+          echo "C:\msys64\mingw64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
       - name: Convert python version to cpXYZ
-        if: ${{matrix.os.platform_id != 'win_amd64'}}
+        if: ${{ matrix.os.platform != 'windows' }}
         run: |
           version=${{ matrix.python-version }}
           cp_version="cp${version//.}"
@@ -238,17 +247,17 @@ jobs:
           mkdir -p ./dist
           cp wheelhouse/*.whl ./dist/
 
-      - name: Set up MSYS2 [windows]
-        if: ${{matrix.os.platform_id == 'win_amd64'}}
+      - name: Set up MSYS2 [windows amd64]
+        if: ${{ matrix.os.platform_id == 'win_amd64' }}
         uses: msys2/setup-msys2@v2
         with:
           update: true
           install: >
-            mingw-w64-x86_64-toolchain 
+            mingw-w64-x86_64-toolchain
             mingw-w64-x86_64-gcc-libs
             
-      - name: Set up external-libs [windows]
-        if: ${{matrix.os.platform_id == 'win_amd64'}}
+      - name: Set up external-libs [windows amd64]
+        if: ${{ matrix.os.platform_id == 'win_amd64' }}
         shell: pwsh
         run: |
           Copy-Item -Path "C:/mingw64/bin/libgcc_s_seh-1.dll" -Destination ".\docling_parse"
@@ -259,8 +268,17 @@ jobs:
           Expand-Archive -Path 'C:\windows-libs\qpdf-external-libs-bin.zip' -DestinationPath 'C:\windows-libs' -Force
           Get-ChildItem -Path 'C:\windows-libs' -Recurse
           
+      - name: Install Zlib [windows arm64]
+        if: ${{ matrix.os.platform_id == 'win_arm64' }}
+        shell: pwsh
+        run: |
+          New-Item -Path 'C:\windows-libs\zlib-ng-arm64' -ItemType Directory -Force
+          Invoke-WebRequest -Uri 'https://github.com/zlib-ng/zlib-ng/releases/download/2.3.3/zlib-ng-win-arm64-compat.zip' -OutFile 'C:\windows-libs\zlib-ng-win-arm64-compat.zip'
+          Expand-Archive -Path 'C:\windows-libs\zlib-ng-win-arm64-compat.zip' -DestinationPath 'C:\windows-libs\zlib-ng-arm64' -Force
+          Get-ChildItem -Path 'C:\windows-libs\zlib-ng-arm64' -Recurse
+
       - name: Set up NASM assembler [windows]
-        if: ${{matrix.os.platform_id == 'win_amd64'}}
+        if: ${{ matrix.os.platform == 'windows' }}
         shell: pwsh
         run: |
           New-Item -Path 'C:\nasm' -ItemType Directory -Force
@@ -271,29 +289,56 @@ jobs:
           Remove-Item -Path 'C:\nasm-temp' -Recurse -Force
           nasm -v
 
-      - name: Build wheels
-        if: ${{matrix.os.platform_id == 'win_amd64'}}
+      - name: Set up build env [windows]
+        if: ${{ matrix.os.platform == 'windows' }}
+        shell: pwsh
+        run: |
+          if ("${{ matrix.os.platform_id }}" -eq "win_amd64") {
+              Add-Content -Path $env:GITHUB_ENV -Value "CIBW_ARCHS=AMD64"
+              Add-Content -Path $env:GITHUB_ENV -Value "PKG_CONFIG_PATH=C:/msys64/usr/lib/pkgconfig"
+              Add-Content -Path $env:GITHUB_ENV -Value "PKG_CONFIG_EXECUTABLE=C:/mingw64/bin/pkg-config.exe"
+              Add-Content -Path $env:GITHUB_ENV -Value "CMAKE_PREFIX_PATH=C:/msys64/mingw64;C:/mingw64;C:/windows-libs/external-libs"
+              Add-Content -Path $env:GITHUB_ENV -Value "CMAKE_LIBRARY_PATH=C:/msys64/mingw64/lib;C:/mingw64/lib;C:/windows-libs/external-libs/lib-mingw64"
+              Add-Content -Path $env:GITHUB_ENV -Value "CMAKE_INCLUDE_PATH=C:/msys64/mingw64/include;C:/mingw64/include;C:/windows-libs/external-libs/include"
+              Add-Content -Path $env:GITHUB_ENV -Value "CMAKE_GENERATOR=MSYS Makefiles"
+              Add-Content -Path $env:GITHUB_ENV -Value "CMAKE_ARGS=-DZLIB_LIBRARY=C:/windows-libs/external-libs/lib-mingw64/libz.a -DZLIB_INCLUDE_DIR=C:/windows-libs/external-libs/include -DJPEG_LIBRARY=C:/windows-libs/external-libs/lib-mingw64/libjpeg.a -DJPEG_INCLUDE_DIR=C:/windows-libs/external-libs/include"
+          }
+          else {
+              Add-Content -Path $env:GITHUB_ENV -Value "CIBW_ARCHS=ARM64"
+              Add-Content -Path $env:GITHUB_ENV -Value "ZLIB_ROOT=C:/windows-libs/zlib-ng-arm64"
+              Add-Content -Path $env:GITHUB_ENV -Value "CMAKE_PREFIX_PATH=C:/windows-libs/zlib-ng-arm64;C:/windows-libs/zlib-ng-arm64/lib/cmake/ZLIB"
+              Add-Content -Path $env:GITHUB_ENV -Value "CMAKE_LIBRARY_PATH=C:/windows-libs/zlib-ng-arm64/lib"
+              Add-Content -Path $env:GITHUB_ENV -Value "CMAKE_INCLUDE_PATH=C:/windows-libs/zlib-ng-arm64/include"
+              Add-Content -Path $env:GITHUB_ENV -Value "PATH=C:/windows-libs/zlib-ng-arm64/bin;$env:PATH"
+              # MSVC with Visual Studio generator; -A ARM64 targets the ARM64 platform explicitly
+              Add-Content -Path $env:GITHUB_ENV -Value "CMAKE_GENERATOR=Visual Studio 17 2022"
+              Add-Content -Path $env:GITHUB_ENV -Value "CMAKE_ARGS=-A ARM64 -DZLIB_ROOT=C:/windows-libs/zlib-ng-arm64 -DZLIB_LIBRARY=C:/windows-libs/zlib-ng-arm64/lib/zlibstatic.lib -DZLIB_INCLUDE_DIR=C:/windows-libs/zlib-ng-arm64/include"
+          }
+          Add-Content -Path $env:GITHUB_ENV -Value 'PYTHON_MODULE_EXTENSION=${SETUPTOOLS_EXT_SUFFIX}'
+
+      - name: Build wheels [windows]
+        if: ${{ matrix.os.platform == 'windows' }}
         env:
           CIBW_PLATFORM: windows
           CIBW_BUILD_VERBOSITY: 3
-          CIBW_ARCHS: AMD64
           CIBW_SKIP: "pp*"
           CIBW_PROJECT_REQUIRES_PYTHON: "~=${{ matrix.python-version }}.0"
-          PKG_CONFIG_PATH: "C:/msys64/usr/lib/pkgconfig"
-          PKG_CONFIG_EXECUTABLE: "C:/mingw64/bin/pkg-config.exe"
-          CMAKE_PREFIX_PATH: "C:/msys64/mingw64;C:/mingw64;C:/windows-libs/external-libs"
-          CMAKE_LIBRARY_PATH: "C:/msys64/mingw64/lib;C:/mingw64/lib;C:/windows-libs/external-libs/lib-mingw64"
-          CMAKE_INCLUDE_PATH: "C:/msys64/mingw64/include;C:/mingw64/include;C:/windows-libs/external-libs/include"
-          CMAKE_GENERATOR: "MSYS Makefiles"
           BUILD_THREADS: 4
           ASM_NASM: "C:/nasm/nasm.exe"
+          # Prevent `uv run` from performing an implicit sync, which would honor
+          # `default-groups = "all"` and reinstall the 'perf' group (pdfplumber ->
+          # pdfminer-six -> cryptography). cryptography has no win-arm64 wheel and
+          # fails to build. The build-only venv is synced explicitly below.
+          UV_NO_SYNC: "1"
         shell: pwsh
         run: |
           if (Test-Path "C:\Strawberry\") {
               Remove-Item -Recurse -Force "C:\Strawberry\"
           }
-          $env:CMAKE_ARGS = "-DZLIB_LIBRARY=C:/windows-libs/external-libs/lib-mingw64/libz.a -DZLIB_INCLUDE_DIR=C:/windows-libs/external-libs/include -DJPEG_LIBRARY=C:/windows-libs/external-libs/lib-mingw64/libjpeg.a -DJPEG_INCLUDE_DIR=C:/windows-libs/external-libs/include"
-          uv pip install --group build
+          # Install only the build-time deps; avoid resolving the 'perf' group which
+          # pulls in cryptography (needs OpenSSL) and other heavy packages that are
+          # not available pre-built on Windows ARM64.
+          uv sync --active --no-default-groups --no-install-project --group build
           if (Test-Path ".\build") {
               Remove-Item -Recurse -Force ".\build"
           }

@@ -52,6 +52,17 @@ namespace pdflib
     bool empty() const { return x.empty() or y.empty(); }
     size_t size() const { return std::min(x.size(), y.size()); }
 
+    // Copy shifted by (dx, dy); used to lift widget appearance-stream
+    // geometry from AP-local into page coordinates.
+    clip_path_instruction translated(double dx, double dy) const
+    {
+      std::vector<double> x_(x), y_(y);
+      for(auto& v : x_) { v += dx; }
+      for(auto& v : y_) { v += dy; }
+      return clip_path_instruction(std::move(x_), std::move(y_),
+                                   closing_type, shape_type);
+    }
+
   private:
     std::vector<double> x;
     std::vector<double> y;
@@ -89,6 +100,17 @@ namespace pdflib
     bool has_clip() const
     {
       return rule != CLIP_RULE_NONE and not paths.empty();
+    }
+
+    clip_state_instruction translated(double dx, double dy) const
+    {
+      std::vector<clip_path_instruction> paths_;
+      paths_.reserve(paths.size());
+      for(const auto& path : paths)
+        {
+          paths_.push_back(path.translated(dx, dy));
+        }
+      return clip_state_instruction(rule, std::move(paths_));
     }
 
   private:
@@ -227,6 +249,42 @@ namespace pdflib
     void set_glyph_name(std::string glyph_name);
     const std::string& get_glyph_name() const;
 
+    // Fill color of the graphics state at emission time (defaults: opaque
+    // black) and the Tr text rendering mode (3/7 paint no glyphs).
+    void set_fill_color(const std::array<int, 3>& rgb, double alpha);
+    const std::array<int, 3>& get_rgb_filling() const { return rgb_filling_; }
+    double get_fill_alpha() const { return fill_alpha_; }
+
+    void set_rendering_mode(int mode) { rendering_mode_ = mode; }
+    int get_rendering_mode() const { return rendering_mode_; }
+    bool is_invisible() const { return rendering_mode_ == 3 or rendering_mode_ == 7; }
+
+    // Copy shifted by (dx, dy); used to lift widget appearance-stream text
+    // from AP-local into page coordinates. The glyph bbox (g_*) lives in
+    // font units and is copied unshifted.
+    text_instruction translated(double dx, double dy) const
+    {
+      text_instruction copy(text, font_enc, font_key, font_name,
+                            encoding_name, base_font, font_size,
+                            r_x0 + dx, r_y0 + dy,
+                            r_x1 + dx, r_y1 + dy,
+                            r_x2 + dx, r_y2 + dy,
+                            r_x3 + dx, r_y3 + dy,
+                            font_ascent_norm, font_descent_norm,
+                            base_x0 + dx, base_y0 + dy,
+                            has_glyph_bbox_,
+                            g_x0_, g_y0_, g_x1_, g_y1_);
+
+      copy.embedded_font_  = embedded_font_;
+      copy.char_code_      = char_code_;
+      copy.glyph_name_     = glyph_name_;
+      copy.rgb_filling_    = rgb_filling_;
+      copy.fill_alpha_     = fill_alpha_;
+      copy.rendering_mode_ = rendering_mode_;
+
+      return copy;
+    }
+
   private:
 
     const std::string text;
@@ -262,6 +320,10 @@ namespace pdflib
     std::shared_ptr<const embedded_font_blob> embedded_font_;
     int64_t char_code_ = -1;
     std::string glyph_name_;
+
+    std::array<int, 3> rgb_filling_ = {0, 0, 0};
+    double fill_alpha_ = 1.0;
+    int rendering_mode_ = 0;
   };
 
   inline void text_instruction::set_embedded_font(std::shared_ptr<const embedded_font_blob> blob)
@@ -297,6 +359,13 @@ namespace pdflib
   inline const std::string& text_instruction::get_glyph_name() const
   {
     return glyph_name_;
+  }
+
+  inline void text_instruction::set_fill_color(const std::array<int, 3>& rgb,
+                                               double alpha)
+  {
+    rgb_filling_ = rgb;
+    fill_alpha_ = alpha;
   }
 
   class text_widget_instruction
@@ -424,46 +493,186 @@ namespace pdflib
     const clip_state_instruction clip_state;
   };
 
+  // One subpath of a painted path: an implicit move-to (x0, y0) followed by
+  // a run of segment ops. SEGMENT_LINE_TO consumes one coordinate pair from
+  // px/py, SEGMENT_CUBIC_TO consumes three (ctrl1, ctrl2, end) — mirroring
+  // BLPath's command/vertex-array model, so the renderer can rebuild true
+  // curves instead of flattened polylines.
+  class shape_subpath
+  {
+  public:
+    shape_subpath();
+    shape_subpath(double x0, double y0,
+                  std::vector<shape_segment_op> ops,
+                  std::vector<double> px,
+                  std::vector<double> py,
+                  page_shape_closing_type closing_type,
+                  page_shape_type shape_type);
+
+    double get_x0() const { return x0; }
+    double get_y0() const { return y0; }
+
+    const std::vector<shape_segment_op>& get_ops() const { return ops; }
+    const std::vector<double>& get_px() const { return px; }
+    const std::vector<double>& get_py() const { return py; }
+
+    page_shape_closing_type get_closing_type() const { return closing_type; }
+    page_shape_type         get_shape_type()   const { return shape_type; }
+
+    bool empty() const { return ops.empty(); }
+
+    shape_subpath translated(double dx, double dy) const
+    {
+      std::vector<double> px_(px), py_(py);
+      for(auto& v : px_) { v += dx; }
+      for(auto& v : py_) { v += dy; }
+      return shape_subpath(x0 + dx, y0 + dy, ops,
+                           std::move(px_), std::move(py_),
+                           closing_type, shape_type);
+    }
+
+  private:
+
+    double x0; // subpath start (move-to)
+    double y0;
+
+    std::vector<shape_segment_op> ops;
+    std::vector<double> px; // op-consumed points,
+    std::vector<double> py; // in op order
+
+    page_shape_closing_type closing_type;
+    page_shape_type         shape_type;
+  };
+
+  inline shape_subpath::shape_subpath():
+    x0(0.0),
+    y0(0.0),
+    ops(),
+    px(),
+    py(),
+    closing_type(CLOSING_UNDEFINED),
+    shape_type(SHAPE_UNDEFINED)
+  {}
+
+  inline shape_subpath::shape_subpath(double x0_, double y0_,
+                                      std::vector<shape_segment_op> ops_,
+                                      std::vector<double> px_,
+                                      std::vector<double> py_,
+                                      page_shape_closing_type closing_type_,
+                                      page_shape_type shape_type_):
+    x0(x0_),
+    y0(y0_),
+    ops(std::move(ops_)),
+    px(std::move(px_)),
+    py(std::move(py_)),
+    closing_type(closing_type_),
+    shape_type(shape_type_)
+  {}
+
+  // One path-painting operator (S, s, f, F, f*, B, B*, b, b*): all subpaths
+  // of the painted path plus the graphics-state parameters needed to color
+  // it. Fill rules operate on the whole path, so the subpaths must stay in
+  // one instruction (a rectangle-with-hole is two subpaths of one fill).
   class shape_instruction
   {
   public:
     const static RENDER_INSTRUCTION_NAME instr = SHAPE_RENDER_INSTRUCTION;
 
-    shape_instruction(std::vector<double> x,
-                      std::vector<double> y,
-                      page_shape_closing_type closing_type,
-                      page_shape_type         shape_type,
+    shape_instruction(std::vector<shape_subpath> subpaths,
+                      shape_paint_mode        paint_mode,
+                      shape_fill_rule         fill_rule,
                       double                  line_width,
+                      int                     line_cap,
+                      int                     line_join,
+                      double                  miter_limit,
+                      std::vector<double>     dash_array,
+                      double                  dash_phase,
                       std::array<int, 3>      rgb_stroking,
-                      std::array<int, 3>      rgb_filling):
-      x(std::move(x)),
-      y(std::move(y)),
-      closing_type(closing_type),
-      shape_type(shape_type),
+                      std::array<int, 3>      rgb_filling,
+                      double                  stroke_alpha,
+                      double                  fill_alpha,
+                      clip_state_instruction  clip_state = clip_state_instruction()):
+      subpaths(std::move(subpaths)),
+      paint_mode(paint_mode),
+      fill_rule(fill_rule),
       line_width(line_width),
+      line_cap(line_cap),
+      line_join(line_join),
+      miter_limit(miter_limit),
+      dash_array(std::move(dash_array)),
+      dash_phase(dash_phase),
       rgb_stroking(rgb_stroking),
-      rgb_filling(rgb_filling) {}
+      rgb_filling(rgb_filling),
+      stroke_alpha(stroke_alpha),
+      fill_alpha(fill_alpha),
+      clip_state(std::move(clip_state)) {}
 
-    const std::vector<double>& get_x() const { return x; }
-    const std::vector<double>& get_y() const { return y; }
-    size_t size() const { return x.size(); }
+    const std::vector<shape_subpath>& get_subpaths() const { return subpaths; }
 
-    page_shape_closing_type     get_closing_type()  const { return closing_type; }
-    page_shape_type             get_shape_type()    const { return shape_type; }
+    // total number of points (subpath starts + op-consumed points)
+    size_t size() const
+    {
+      size_t n = 0;
+      for(const auto& sp : subpaths)
+        {
+          n += 1 + sp.get_px().size();
+        }
+      return n;
+    }
+
+    shape_paint_mode            get_paint_mode()    const { return paint_mode; }
+    shape_fill_rule             get_fill_rule()     const { return fill_rule; }
     double                      get_line_width()    const { return line_width; }
+    int                         get_line_cap()      const { return line_cap; }
+    int                         get_line_join()     const { return line_join; }
+    double                      get_miter_limit()   const { return miter_limit; }
+    const std::vector<double>&  get_dash_array()    const { return dash_array; }
+    double                      get_dash_phase()    const { return dash_phase; }
     const std::array<int, 3>&   get_rgb_stroking()  const { return rgb_stroking; }
     const std::array<int, 3>&   get_rgb_filling()   const { return rgb_filling; }
 
+    // ExtGState constant alpha (/CA, /ca); 1.0 = opaque, 0.0 = invisible
+    double get_stroke_alpha() const { return stroke_alpha; }
+    double get_fill_alpha()   const { return fill_alpha; }
+
+    const clip_state_instruction& get_clip_state() const { return clip_state; }
+    bool has_clip_state() const { return clip_state.has_clip(); }
+
+    shape_instruction translated(double dx, double dy) const
+    {
+      std::vector<shape_subpath> subpaths_;
+      subpaths_.reserve(subpaths.size());
+      for(const auto& subpath : subpaths)
+        {
+          subpaths_.push_back(subpath.translated(dx, dy));
+        }
+      return shape_instruction(std::move(subpaths_), paint_mode, fill_rule,
+                               line_width, line_cap, line_join, miter_limit,
+                               dash_array, dash_phase,
+                               rgb_stroking, rgb_filling,
+                               stroke_alpha, fill_alpha,
+                               clip_state.translated(dx, dy));
+    }
+
   private:
 
-    const std::vector<double> x;
-    const std::vector<double> y;
+    const std::vector<shape_subpath> subpaths;
 
-    const page_shape_closing_type closing_type;
-    const page_shape_type         shape_type;
+    const shape_paint_mode        paint_mode;
+    const shape_fill_rule         fill_rule;
     const double                  line_width;
+    const int                     line_cap;
+    const int                     line_join;
+    const double                  miter_limit;
+    const std::vector<double>     dash_array;
+    const double                  dash_phase;
     const std::array<int, 3>      rgb_stroking;
     const std::array<int, 3>      rgb_filling;
+
+    const double                  stroke_alpha;
+    const double                  fill_alpha;
+
+    const clip_state_instruction  clip_state;
   };
 
   class pdf_render_instructions
@@ -487,6 +696,18 @@ namespace pdflib
     void add_widget_instruction(text_widget_instruction_type instr);
     void add_bitmap_instruction(bitmap_instruction_type instr);
     void add_shape_instruction(shape_instruction_type instr);
+
+    // Read access for re-emitting instructions of a sub-decode (widget
+    // appearance streams) into the main instruction list.
+    const std::vector<shape_instruction_type>& get_shape_instructions() const
+    {
+      return shape_instructions;
+    }
+
+    const std::vector<text_instruction_type>& get_text_instructions() const
+    {
+      return text_instructions;
+    }
 
     // render method
     template<typename renderer_type>

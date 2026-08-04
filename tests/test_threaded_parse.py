@@ -3,8 +3,10 @@
 
 import glob
 import os
+from pathlib import Path
 
 import pytest
+from docling_core.types.doc.base import CoordOrigin
 from docling_core.types.doc.page import PdfPageBoundaryType, SegmentedPdfPage
 
 from docling_parse.pdf_parser import (
@@ -17,12 +19,85 @@ from docling_parse.pdf_parser import (
 )
 from tests.constants import (
     LARGE_SAMPLE_PDF,
-    PARSER_GROUNDTRUTH_FOLDER,
     PARSER_PAGE_RESTRICTIONS,
-    REGRESSION_FOLDER,
     SAMPLE_PDF,
 )
-from tests.test_parse import verify_SegmentedPdfPage
+from tests.test_parse import (
+    GROUNDTRUTH_FOLDER,
+    REGRESSION_FOLDER,
+    verify_SegmentedPdfPage,
+)
+
+
+def _write_shape_geometry_pdf(path: Path) -> None:
+    content = b"""
+q
+1 w
+10 10 m 110 10 l S
+20 20 m 20 120 l S
+30 30 m 45 50 55 50 70 30 c S
+q
+0 0 50 50 re W n
+10 60 m 110 60 l S
+Q
+q
+0 0 80 80 re W n
+10 70 m 110 70 l S
+Q
+120 120 30 30 re f
+140 140 30 30 re f
+10 150 10 10 re f
+Q
+"""
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] "
+        b"/CropBox [0 0 200 200] /Contents 4 0 R >>",
+        b"<< /Length %d >>\nstream\n%s\nendstream" % (len(content), content),
+    ]
+
+    data = bytearray(b"%PDF-1.4\n")
+    offsets = [0]
+    for idx, obj in enumerate(objects, start=1):
+        offsets.append(len(data))
+        data.extend(f"{idx} 0 obj\n".encode("ascii"))
+        data.extend(obj)
+        data.extend(b"\nendobj\n")
+
+    xref_offset = len(data)
+    data.extend(f"xref\n0 {len(objects) + 1}\n".encode("ascii"))
+    data.extend(b"0000000000 65535 f \n")
+    for offset in offsets[1:]:
+        data.extend(f"{offset:010d} 00000 n \n".encode("ascii"))
+    data.extend(
+        f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\n"
+        f"startxref\n{xref_offset}\n%%EOF\n".encode("ascii")
+    )
+    path.write_bytes(data)
+
+
+def _shape_geometry_result(tmp_path: Path):
+    pdf_path = tmp_path / "shape_geometry.pdf"
+    _write_shape_geometry_pdf(pdf_path)
+
+    parser = DoclingThreadedPdfParser(
+        parser_config=ThreadedPdfParserConfig(
+            loglevel="fatal",
+            threads=1,
+            max_concurrent_results=2,
+            boundary_type=PdfPageBoundaryType.CROP_BOX,
+        ),
+        decode_config=_make_decode_config(),
+    )
+    parser.load(str(pdf_path), page_numbers=[1])
+    result = next(parser.iterate_results())
+    assert result.success, result.error_message
+    return result
+
+
+def _bbox_tuple(bbox):
+    return (round(bbox.l, 3), round(bbox.b, 3), round(bbox.r, 3), round(bbox.t, 3))
 
 
 def _make_decode_config() -> DecodeConfig:
@@ -48,8 +123,6 @@ def test_threaded_reference_documents_from_filenames():
         decode_config=_make_decode_config(),
     )
 
-    page_restrictions = PARSER_PAGE_RESTRICTIONS
-
     # Each entry: (doc_name, page_no_str, mode, success, error_msg)
     test_results: list[tuple[str, str, str, bool, str]] = []
     first_failure: tuple[BaseException, object] | None = None
@@ -62,7 +135,9 @@ def test_threaded_reference_documents_from_filenames():
         try:
             # page_numbers=None decodes the whole document; restricted documents
             # never decode the pages that are not verified
-            key = parser.load(pdf_doc_path, page_numbers=page_restrictions.get(rname))
+            key = parser.load(
+                pdf_doc_path, page_numbers=PARSER_PAGE_RESTRICTIONS.get(rname)
+            )
         except Exception as exc:
             if first_failure is None:
                 first_failure = (exc, exc.__traceback__)
@@ -112,11 +187,14 @@ def test_threaded_reference_documents_from_filenames():
         for page_no, pred_page in sorted(results.get(key, {}).items()):
             print(f" -> Page {page_no} has {len(pred_page.textline_cells)} cells.")
 
-            if rname in page_restrictions and page_no not in page_restrictions[rname]:
+            if (
+                rname in PARSER_PAGE_RESTRICTIONS
+                and page_no not in PARSER_PAGE_RESTRICTIONS[rname]
+            ):
                 continue
 
             fname = os.path.join(
-                PARSER_GROUNDTRUTH_FOLDER, rname + f".page_no_{page_no}.py.json"
+                GROUNDTRUTH_FOLDER, rname + f".page_no_{page_no}.py.json"
             )
 
             if not os.path.exists(fname):
@@ -507,3 +585,38 @@ def test_threaded_result_rejects_skipped_entity_after_config_mutation():
         result.get_page(
             ContentConfig(word_cells_content_level=ContentLevel.COMPUTE_AND_MATERIALIZE)
         )
+
+
+def test_threaded_result_get_shape_lines_returns_only_visible_straight_lines(
+    tmp_path: Path,
+):
+    result = _shape_geometry_result(tmp_path)
+
+    lines = result.get_shape_lines(horizontal=True, vertical=True)
+    assert all(line.coord_origin == CoordOrigin.BOTTOMLEFT for line in lines)
+
+    line_boxes = {_bbox_tuple(line) for line in lines}
+    assert (10.0, 10.0, 110.0, 10.0) in line_boxes
+    assert (20.0, 20.0, 20.0, 120.0) in line_boxes
+    assert (10.0, 70.0, 80.0, 70.0) in line_boxes
+
+    assert (10.0, 60.0, 110.0, 60.0) not in line_boxes
+    assert not any(box[0] == 30.0 and box[2] == 70.0 for box in line_boxes)
+
+    horizontal = {_bbox_tuple(line) for line in result.get_shape_lines(vertical=False)}
+    vertical = {_bbox_tuple(line) for line in result.get_shape_lines(horizontal=False)}
+    assert (10.0, 10.0, 110.0, 10.0) in horizontal
+    assert (20.0, 20.0, 20.0, 120.0) not in horizontal
+    assert (20.0, 20.0, 20.0, 120.0) in vertical
+    assert (10.0, 10.0, 110.0, 10.0) not in vertical
+
+
+def test_threaded_result_get_connected_shape_bounding_boxes(tmp_path: Path):
+    result = _shape_geometry_result(tmp_path)
+
+    boxes = result.get_connected_shape_bounding_boxes()
+    assert all(box.coord_origin == CoordOrigin.BOTTOMLEFT for box in boxes)
+
+    box_tuples = {_bbox_tuple(box) for box in boxes}
+    assert (120.0, 120.0, 170.0, 170.0) in box_tuples
+    assert (10.0, 150.0, 20.0, 160.0) in box_tuples

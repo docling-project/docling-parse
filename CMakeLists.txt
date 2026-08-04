@@ -75,7 +75,33 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 if (WIN32)
     set(TEST_PATH "\\\"${TOPLEVEL_PREFIX_PATH}\\\"")
     add_definitions(-DROOT_PATH="\\\"${TOPLEVEL_PREFIX_PATH}\\\"")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-sign-compare -O3 ${ENV_ARCHFLAGS}")
+    if(MSVC)
+        # cl rejects GCC/Clang-style flags: -Wall / -Wno-sign-compare / -O3 are
+        # parsed as invalid /W... and /O... arguments (error D8021), and these
+        # flags are inherited by the in-tree subprojects (loguru, blend2d,
+        # pdfium_jbig2). Optimization comes from a Release build instead: MSVC
+        # Release uses /O2 (the -O3 equivalent) and links the redistributable
+        # release CRT (/MD). Restrict the multi-config Visual Studio generator to
+        # Release so a config-less `cmake --build` cannot fall back to a Debug
+        # build depending on the non-redistributable debug CRT. The build is
+        # invoked with --config Release (see local_build.py).
+        set(CMAKE_CONFIGURATION_TYPES "Release" CACHE STRING "MSVC build configurations" FORCE)
+
+        # Source files are UTF-8. Without /utf-8, MSVC reads multi-byte characters
+        # (e.g. the curly quotes and en/em dashes in src/parse/utils/string.h) as
+        # multi-character constants -> error C2015. GCC/Clang assume UTF-8, so this
+        # only bites the MSVC/arm64 build.
+        add_compile_options(/utf-8)
+        # MSVC's <cmath> only exposes M_PI (used in src/parse/utils/values.h) when
+        # _USE_MATH_DEFINES is defined before the include -> without it, C2065.
+        # NOMINMAX stops <windows.h> from defining min()/max() function-like
+        # macros, which otherwise collide with std::numeric_limits<T>::max() in
+        # qpdf's QIntC.hh (and std::min/std::max in general) -> error C2589.
+        add_compile_definitions(_USE_MATH_DEFINES NOMINMAX)
+    else()
+        # MinGW/GCC toolchain (Windows amd64)
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-sign-compare -O3 ${ENV_ARCHFLAGS}")
+    endif()
 else()
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-sign-compare -O3 -DROOT_PATH='\"${TOPLEVEL_PREFIX_PATH}\"' ${ENV_ARCHFLAGS}")
   # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-sign-compare -g3 -O0 -fno-omit-frame-pointer -DROOT_PATH='\"${TOPLEVEL_PREFIX_PATH}\"' ${ENV_ARCHFLAGS}")

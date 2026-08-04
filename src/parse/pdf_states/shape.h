@@ -97,7 +97,18 @@ namespace pdflib
 
     void close_last_path();
 
-    void register_paths();
+    void register_paths(shape_paint_mode paint_mode, shape_fill_rule fill_rule);
+
+    // Consumes a pending W/W* clip by capturing the current path into
+    // `clippings`. Called from n() (shapes still in user space) and from
+    // register_paths() (shapes already transformed to page space) — the
+    // flag prevents double application of the CTM on the `W f`/`W S` path.
+    void capture_pending_clip(bool already_transformed);
+
+    // Average CTM scale factor, used to map the user-space line width into
+    // page space (the path coordinates are transformed; the width must be
+    // too).
+    double trafo_scale() const;
 
     void m(double x, double y);
     void l(double x, double y);
@@ -167,24 +178,11 @@ namespace pdflib
 
   pdf_state<SHAPE>::~pdf_state()
   {
+    // a path that was built but never painted (no S/f/B/.../n) is dropped
     if(curr_shapes.size()>0 and curr_shapes[0].size()>0)
       {
-        //LOG_S(ERROR) << "~pdf_state<SHAPE>: " << curr_shapes.size();
-
-        for(int i=0; i<curr_shapes.size(); i++)
-          {
-            curr_shapes[i].transform(trafo_matrix);
-
-            /*
-              LOG_S(INFO) << "shape-" << i << " --> len: " << curr_shapes[i].size();
-              for(int j=0; j<curr_shapes[i].size(); j++)
-              {
-              LOG_S(INFO) << "\t("
-              << curr_shapes[i][j].first << ", "
-              << curr_shapes[i][j].second << ")";
-              }
-            */
-          }
+        LOG_S(WARNING) << "~pdf_state<SHAPE>: dropping " << curr_shapes.size()
+                       << " unpainted path(s)";
       }
   }
 
@@ -245,6 +243,9 @@ namespace pdflib
     double x3 = instructions[4].to_double();
     double y3 = instructions[5].to_double();
 
+    // exact curve for rendering; flattened samples for the JSON polyline
+    shape.append_cubic_segment(x1,y1, x2,y2, x3,y3);
+
     this->interpolate(shape, x0,y0, x1,y1, x2,y2, x3, y3, 8);
   }
 
@@ -270,6 +271,9 @@ namespace pdflib
     double x3 = instructions[2].to_double();
     double y3 = instructions[3].to_double();
 
+    // exact curve for rendering; flattened samples for the JSON polyline
+    shape.append_cubic_segment(x1,y1, x2,y2, x3,y3);
+
     this->interpolate(shape, x0,y0, x1,y1, x2,y2, x3, y3, 8);
   }
 
@@ -294,6 +298,9 @@ namespace pdflib
 
     double x2 = x3;
     double y2 = y3;
+
+    // exact curve for rendering; flattened samples for the JSON polyline
+    shape.append_cubic_segment(x1,y1, x2,y2, x3,y3);
 
     this->interpolate(shape, x0,y0, x1,y1, x2,y2, x3, y3, 8);
   }
@@ -322,20 +329,24 @@ namespace pdflib
     this->re(x,y, w,h);
   }
 
+  // Path-painting operator table (PDF spec Table 60): each operator selects
+  // paint mode, fill rule and whether the last subpath is closed first.
+  // Only s, f/F/f*, b/b* close; S, B, B* paint the path as-is.
+
   void pdf_state<SHAPE>::s(std::vector<qpdf_stream_instruction>& instructions)
   {
     if(not config.keep_shapes) { return; }
 
     close_last_path();
 
-    register_paths();
+    register_paths(SHAPE_PAINT_STROKE, SHAPE_FILL_NONZERO);
   }
 
   void pdf_state<SHAPE>::S(std::vector<qpdf_stream_instruction>& instructions)
   {
     if(not config.keep_shapes) { return; }
 
-    register_paths();
+    register_paths(SHAPE_PAINT_STROKE, SHAPE_FILL_NONZERO);
   }
 
   void pdf_state<SHAPE>::f(std::vector<qpdf_stream_instruction>& instructions)
@@ -344,7 +355,7 @@ namespace pdflib
 
     close_last_path();
 
-    register_paths();
+    register_paths(SHAPE_PAINT_FILL, SHAPE_FILL_NONZERO);
   }
 
   void pdf_state<SHAPE>::F(std::vector<qpdf_stream_instruction>& instructions)
@@ -360,25 +371,21 @@ namespace pdflib
 
     close_last_path();
 
-    register_paths();
+    register_paths(SHAPE_PAINT_FILL, SHAPE_FILL_EVEN_ODD);
   }
 
   void pdf_state<SHAPE>::B(std::vector<qpdf_stream_instruction>& instructions)
   {
     if(not config.keep_shapes) { return; }
 
-    close_last_path();
-
-    register_paths();
+    register_paths(SHAPE_PAINT_FILL_STROKE, SHAPE_FILL_NONZERO);
   }
 
   void pdf_state<SHAPE>::BStar(std::vector<qpdf_stream_instruction>& instructions)
   {
     if(not config.keep_shapes) { return; }
 
-    close_last_path();
-
-    register_paths();
+    register_paths(SHAPE_PAINT_FILL_STROKE, SHAPE_FILL_EVEN_ODD);
   }
 
   void pdf_state<SHAPE>::b(std::vector<qpdf_stream_instruction>& instructions)
@@ -387,7 +394,7 @@ namespace pdflib
 
     close_last_path();
 
-    register_paths();
+    register_paths(SHAPE_PAINT_FILL_STROKE, SHAPE_FILL_NONZERO);
   }
 
   void pdf_state<SHAPE>::bStar(std::vector<qpdf_stream_instruction>& instructions)
@@ -396,7 +403,7 @@ namespace pdflib
 
     close_last_path();
 
-    register_paths();
+    register_paths(SHAPE_PAINT_FILL_STROKE, SHAPE_FILL_EVEN_ODD);
   }
 
   void pdf_state<SHAPE>::W(std::vector<qpdf_stream_instruction>& instructions)
@@ -449,32 +456,43 @@ namespace pdflib
   {
     if(not config.keep_shapes) { return; }
 
-    if(clipping_path_pending)
-      {
-        clippings.clear();
-
-        for(int l=0; l<curr_shapes.size(); l++)
-          {
-            auto shape = curr_shapes[l];
-
-            if(keep_shape(shape))
-              {
-                shape.transform(trafo_matrix);
-                clippings.push_back(shape);
-              }
-            else
-              {
-                LOG_S(WARNING) << "ignoring a shape of size 0";
-              }
-          }
-
-        clipping_path_pending = false;
-      }
+    capture_pending_clip(false);
 
     curr_shapes.clear();
 
     page_item<PAGE_SHAPE> shape;
     curr_shapes.push_back(shape);
+  }
+
+  void pdf_state<SHAPE>::capture_pending_clip(bool already_transformed)
+  {
+    if(not clipping_path_pending) { return; }
+
+    // Per spec the new clip is the *intersection* of the old and new clip
+    // regions; appending approximates that, since the renderer ANDs the
+    // clip paths it applies.
+    for(int l=0; l<curr_shapes.size(); l++)
+      {
+        auto shape = curr_shapes[l];
+
+        if(not already_transformed)
+          {
+            shape.transform(trafo_matrix);
+          }
+
+        if(keep_shape(shape))
+          {
+            clippings.push_back(shape);
+          }
+        else if(shape.size() >= 2)
+          {
+            LOG_S(WARNING) << "ignoring a degenerate clip path";
+          }
+        // 0/1-point subpaths are the expected continuation left behind by
+        // the `h` operator and are dropped silently
+      }
+
+    clipping_path_pending = false;
   }
 
   /**************************************
@@ -516,6 +534,15 @@ namespace pdflib
     return false;
   }
 
+  double pdf_state<SHAPE>::trafo_scale() const
+  {
+    // sqrt(|det|) of the 2x2 part of the row-major 3x3 CTM
+    double det = trafo_matrix[0]*trafo_matrix[4] - trafo_matrix[1]*trafo_matrix[3];
+    double scale = std::sqrt(std::abs(det));
+
+    return (scale>0.0)? scale : 1.0;
+  }
+
   bool pdf_state<SHAPE>::keep_shape(page_item<PAGE_SHAPE>& shape)
   {
     if(shape.size()<2)
@@ -555,8 +582,17 @@ namespace pdflib
 
     if(shape.size()>0)
       {
-        auto front = shape.back();
-        shape.append(front.first, front.second);
+        // close back to the subpath start; the closing edge is expressed
+        // through closing_type (the renderer emits path.close()), so no
+        // line segment is recorded
+        auto front = shape.front();
+        auto back  = shape.back();
+
+        if(front != back)
+          {
+            shape.append(front.first, front.second);
+          }
+
         shape.set_closing_type(CLOSED);
       }
     else
@@ -565,44 +601,23 @@ namespace pdflib
       }
   }
 
-  void pdf_state<SHAPE>::register_paths()
+  void pdf_state<SHAPE>::register_paths(shape_paint_mode paint_mode,
+                                        shape_fill_rule fill_rule)
   {
-    //LOG_S(INFO) << "--------------------------------------------------";
-    //LOG_S(INFO) << __FUNCTION__ << "\t #-paths: " << curr_shapes.size();
+    // NOTE: the clip paths in `clippings` are already in page space (they
+    // are transformed once when captured); only the current path gets the
+    // CTM applied here.
 
-    for(int i=0; i<clippings.size(); i++)
-      {
-        clippings[i].transform(trafo_matrix);
+    std::vector<shape_subpath> subpaths;
 
-        /*
-          LOG_S(INFO) << "clippings: " << clippings.size();
-          for(int j=0; j<clippings[i].size(); j++)
-          {
-          LOG_S(INFO) << "\t("
-          << clippings[i][j].first << ", "
-          << clippings[i][j].second << ")";
-          }
-        */
-      }
-
-    LOG_S(INFO) << "#-current shapes: " << curr_shapes.size();
     for(int i=0; i<curr_shapes.size(); i++)
       {
         curr_shapes[i].transform(trafo_matrix);
 
-        /*
-          LOG_S(INFO) << "shape-" << i << " --> len: " << curr_shapes[i].size();
-          for(int j=0; j<curr_shapes[i].size(); j++)
-          {
-          LOG_S(INFO) << "\t("
-          << curr_shapes[i][j].first << ", "
-          << curr_shapes[i][j].second << ")";
-          }
-        */
-
         if(keep_shape(curr_shapes[i]))
           {
-            //LOG_S(INFO) << " --> keeping shape";
+            // the per-subpath page item (JSON output) keeps the flattened
+            // polyline and the untransformed graphics-state values
             curr_shapes[i].set_graphics_state(
               grph_state.get_line_width(),
               grph_state.get_miter_limit(),
@@ -614,37 +629,79 @@ namespace pdflib
               grph_state.get_rgb_stroking_ops(),
               grph_state.get_rgb_filling_ops());
 
-	    LOG_S(INFO) << "creating new shape " << page_shapes.size()
-			<< " with len(i): " << curr_shapes[i].get_i().size()
-			<< " with len(x): " << curr_shapes[i].get_x().size()
-			<< " with fill color: ("
-			<< curr_shapes[i].get_rgb_filling_ops()[0] << ", "
-			<< curr_shapes[i].get_rgb_filling_ops()[1] << ", "
-			<< curr_shapes[i].get_rgb_filling_ops()[1] << ")"
-			<< " with stroke color: ("
-			<< curr_shapes[i].get_rgb_stroking_ops()[0] << ", "
-			<< curr_shapes[i].get_rgb_stroking_ops()[1] << ", "
-			<< curr_shapes[i].get_rgb_stroking_ops()[1] << ")";
-	    
             page_shapes.push_back(curr_shapes[i]);
 
-	    {
-	      shape_instruction shpinstr(curr_shapes[i].get_x(),
-					 curr_shapes[i].get_y(),
-					 curr_shapes[i].get_closing_type(),
-					 curr_shapes[i].get_shape_type(),
-					 curr_shapes[i].get_line_width(),
-					 curr_shapes[i].get_rgb_stroking_ops(),
-					 curr_shapes[i].get_rgb_filling_ops());
-	      instructions.add_shape_instruction(std::move(shpinstr));
-	    }
+            auto& shape = curr_shapes[i];
+            subpaths.emplace_back(shape.get_x().front(),
+                                  shape.get_y().front(),
+                                  shape.get_seg_ops(),
+                                  shape.get_seg_x(),
+                                  shape.get_seg_y(),
+                                  shape.get_closing_type(),
+                                  shape.get_shape_type());
           }
         else
           {
-            LOG_S(WARNING) << " --> ignoring shape";
+            LOG_S(WARNING) << "ignoring a degenerate shape";
           }
       }
-    //LOG_S(INFO) << "--------------------------------------------------";
+
+    if(not subpaths.empty())
+      {
+        // line width and dash lengths are user-space quantities; the path
+        // coordinates were just transformed, so these must scale with the
+        // CTM too (a width of 0 means hairline and stays 0)
+        double scale = trafo_scale();
+
+        double line_width = grph_state.get_line_width();
+        if(line_width > 0)
+          {
+            line_width *= scale;
+          }
+
+        std::vector<double> dash_array = grph_state.get_dash_array();
+        for(auto& d : dash_array)
+          {
+            d *= scale;
+          }
+        double dash_phase = grph_state.get_dash_phase()*scale;
+
+        LOG_S(INFO) << "shape instruction: #-subpaths: " << subpaths.size()
+                    << ", paint-mode: " << static_cast<int>(paint_mode)
+                    << ", fill-rule: " << static_cast<int>(fill_rule)
+                    << ", line-width: " << line_width
+                    << ", fill: ("
+                    << grph_state.get_rgb_filling_ops()[0] << ", "
+                    << grph_state.get_rgb_filling_ops()[1] << ", "
+                    << grph_state.get_rgb_filling_ops()[2] << ")"
+                    << " alpha: " << grph_state.get_fill_alpha()
+                    << ", stroke: ("
+                    << grph_state.get_rgb_stroking_ops()[0] << ", "
+                    << grph_state.get_rgb_stroking_ops()[1] << ", "
+                    << grph_state.get_rgb_stroking_ops()[2] << ")"
+                    << " alpha: " << grph_state.get_stroke_alpha();
+
+        shape_instruction shpinstr(std::move(subpaths),
+                                   paint_mode,
+                                   fill_rule,
+                                   line_width,
+                                   grph_state.get_line_cap(),
+                                   grph_state.get_line_join(),
+                                   grph_state.get_miter_limit(),
+                                   std::move(dash_array),
+                                   dash_phase,
+                                   grph_state.get_rgb_stroking_ops(),
+                                   grph_state.get_rgb_filling_ops(),
+                                   grph_state.get_stroke_alpha(),
+                                   grph_state.get_fill_alpha(),
+                                   get_clip_state());
+        instructions.add_shape_instruction(std::move(shpinstr));
+      }
+
+    // a pending W/W* clip takes effect after *any* painting operator (not
+    // only after `n`); it must not affect the instruction emitted above,
+    // hence the capture happens last. The shapes are already in page space.
+    capture_pending_clip(true);
 
     curr_shapes.clear();
   }
@@ -673,7 +730,9 @@ namespace pdflib
 
     auto& shape = curr_shapes.back();
 
-    shape.append(x, y);
+    // records both the flattened polyline point and the exact line segment
+    // (the subpath's first point is stored as the move-to, without an op)
+    shape.append_line_segment(x, y);
   }
 
   void pdf_state<SHAPE>::h()

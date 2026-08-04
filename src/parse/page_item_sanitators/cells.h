@@ -31,7 +31,8 @@ namespace pdflib
 		       double horizontal_cell_tolerance, //=1.0,
 		       bool enforce_same_font, //=true,
 		       double space_width_factor_for_merge, //=1.5,
-		       double space_width_factor_for_merge_with_space); //=0.33);
+		       double space_width_factor_for_merge_with_space, //=0.33,
+		       bool block_spaces); // when true, space cells act as hard merge barriers
 
     void sanitize_text(page_item<PAGE_CELLS>& cells);
 
@@ -41,27 +42,31 @@ namespace pdflib
 
     bool applicable_for_merge(page_item<PAGE_CELL>& cell_i,
 			      page_item<PAGE_CELL>& cell_j,
-			      bool enforce_same_font);
+			      bool enforce_same_font,
+			      bool block_spaces);
 
     void contract_cells_into_lines_right_to_left(page_item<PAGE_CELLS>& cells,
 						 double horizontal_cell_tolerance,
 						 bool enforce_same_font,
 						 double space_width_factor_for_merge,
-						 double space_width_factor_for_merge_with_space);
+						 double space_width_factor_for_merge_with_space,
+						 bool block_spaces);
 
     void contract_cells_into_lines_left_to_right(page_item<PAGE_CELLS>& cells,
 						 double horizontal_cell_tolerance,
 						 bool enforce_same_font,
 						 double space_width_factor_for_merge,
 						 double space_width_factor_for_merge_with_space,
+						 bool block_spaces,
 						 bool allow_reverse);
-    
+
     // linear
     void contract_cells_into_lines_v1(page_item<PAGE_CELLS>& cells,
 				      double horizontal_cell_tolerance=1.0,
 				      bool enforce_same_font=true,
 				      double space_width_factor_for_merge=1.5,
-				      double space_width_factor_for_merge_with_space=0.33);
+				      double space_width_factor_for_merge_with_space=0.33,
+				      bool block_spaces=false);
 
     // quadratic
     void contract_cells_into_lines_v2(page_item<PAGE_CELLS>& cells,
@@ -140,7 +145,23 @@ namespace pdflib
 
     LOG_S(INFO) << "#-char cells: " << word_cells.size();
 
-    // remove all spaces
+    // Keep the space cells in place and let sanitize_bbox treat them as hard
+    // word-boundary barriers (block_spaces=true). An explicit space glyph is a
+    // far more reliable word separator than the geometric-gap heuristic, which
+    // is ambiguous for tightly-set fonts with narrow spaces. The spaces are
+    // erased afterwards, once the words have been contracted.
+
+    // > space_width_factor_for_merge, so nothing gets merged with a space
+    double space_width_factor_for_merge_with_space = 2.0*config.word_space_width_factor_for_merge;
+
+    sanitize_bbox(word_cells,
+		  config.horizontal_cell_tolerance,
+		  config.enforce_same_font,
+		  config.word_space_width_factor_for_merge,
+		  space_width_factor_for_merge_with_space,
+		  true);
+
+    // remove the space cells that acted as word-boundary barriers
     auto itr = word_cells.begin();
     while(itr!=word_cells.end())
       {
@@ -153,17 +174,6 @@ namespace pdflib
 	    itr++;
 	  }
       }
-
-    LOG_S(INFO) << "#-char cells (without spaces): " << word_cells.size();
-
-    // > space_width_factor_for_merge, so nothing gets merged with a space
-    double space_width_factor_for_merge_with_space = 2.0*config.word_space_width_factor_for_merge;
-
-    sanitize_bbox(word_cells,
-		  config.horizontal_cell_tolerance,
-		  config.enforce_same_font,
-		  config.word_space_width_factor_for_merge,
-		  space_width_factor_for_merge_with_space);
 
     LOG_S(INFO) << "#-word cells: " << word_cells.size();
 
@@ -184,12 +194,14 @@ namespace pdflib
 
     LOG_S(INFO) << "# char-cells: " << line_cells.size();
 
+    // lines keep their internal spaces, so spaces are merged normally (block_spaces=false)
     sanitize_bbox(line_cells,
 		  config.horizontal_cell_tolerance,
 		  config.enforce_same_font,
 		  config.line_space_width_factor_for_merge,
-		  config.line_space_width_factor_for_merge_with_space);
-    
+		  config.line_space_width_factor_for_merge_with_space,
+		  false);
+
     LOG_S(INFO) << "# line-cells: " << line_cells.size();
     
     //return to_records(line_cells);
@@ -373,37 +385,40 @@ namespace pdflib
 						double horizontal_cell_tolerance,
 						bool enforce_same_font,
 						double space_width_factor_for_merge,
-						double space_width_factor_for_merge_with_space)
+						double space_width_factor_for_merge_with_space,
+						bool block_spaces)
   {
     contract_cells_into_lines_v1(cells,
 				 horizontal_cell_tolerance,
 				 enforce_same_font,
 				 space_width_factor_for_merge,
-				 space_width_factor_for_merge_with_space);
-
-    /*
-    contract_cells_into_lines_v2(cells,
-				 horizontal_cell_tolerance,
-				 enforce_same_font,
-				 space_width_factor_for_merge,
-				 space_width_factor_for_merge_with_space);
-    */
+				 space_width_factor_for_merge_with_space,
+				 block_spaces);
   }
 
   bool page_item_sanitator<PAGE_CELLS>::applicable_for_merge(page_item<PAGE_CELL>& cell_i,
 						       page_item<PAGE_CELL>& cell_j,
-						       bool enforce_same_font)
+						       bool enforce_same_font,
+						       bool block_spaces)
   {
     if(not cell_i.active)
       {
 	return false;
       }
-    
+
     if(not cell_j.active)
       {
 	return false;
       }
-    
+
+    // An explicit space glyph is a hard word boundary: never merge a space cell
+    // with anything, nor across one. The space cells are removed afterwards.
+    if(block_spaces and
+       (utils::string::is_space(cell_i.text) or utils::string::is_space(cell_j.text)))
+      {
+	return false;
+      }
+
     if(enforce_same_font and cell_i.font_name!=cell_j.font_name)
       {
 	// Exception: ligature glyphs are often encoded in a different font than
@@ -427,13 +442,14 @@ namespace pdflib
 							       double horizontal_cell_tolerance,
 							       bool enforce_same_font,
 							       double space_width_factor_for_merge,
-							       double space_width_factor_for_merge_with_space)
+							       double space_width_factor_for_merge_with_space,
+							       bool block_spaces)
   {
-    contract_cells_into_lines_left_to_right(cells, horizontal_cell_tolerance, enforce_same_font, space_width_factor_for_merge, space_width_factor_for_merge_with_space, false);
-    
-    contract_cells_into_lines_right_to_left(cells, horizontal_cell_tolerance, enforce_same_font, space_width_factor_for_merge, space_width_factor_for_merge_with_space);
-    
-    contract_cells_into_lines_left_to_right(cells, horizontal_cell_tolerance, enforce_same_font, space_width_factor_for_merge, space_width_factor_for_merge_with_space, true);
+    contract_cells_into_lines_left_to_right(cells, horizontal_cell_tolerance, enforce_same_font, space_width_factor_for_merge, space_width_factor_for_merge_with_space, block_spaces, false);
+
+    contract_cells_into_lines_right_to_left(cells, horizontal_cell_tolerance, enforce_same_font, space_width_factor_for_merge, space_width_factor_for_merge_with_space, block_spaces);
+
+    contract_cells_into_lines_left_to_right(cells, horizontal_cell_tolerance, enforce_same_font, space_width_factor_for_merge, space_width_factor_for_merge_with_space, block_spaces, true);
   }
   
   void page_item_sanitator<PAGE_CELLS>::contract_cells_into_lines_left_to_right(page_item<PAGE_CELLS>& cells,
@@ -441,6 +457,7 @@ namespace pdflib
 									  bool enforce_same_font,
 									  double space_width_factor_for_merge,
 									  double space_width_factor_for_merge_with_space,
+									  bool block_spaces,
 									  bool allow_reverse)
   {
     // take care for left to right printing
@@ -454,7 +471,7 @@ namespace pdflib
 
 	for(int j=i+1; j<cells.size(); j++)
 	  {
-	    if(not applicable_for_merge(cells[i], cells[j], enforce_same_font))
+	    if(not applicable_for_merge(cells[i], cells[j], enforce_same_font, block_spaces))
 	      {
 		break;
 	      }
@@ -528,8 +545,9 @@ namespace pdflib
 									  double horizontal_cell_tolerance,
 									  bool enforce_same_font,
 									  double space_width_factor_for_merge,
-									  double space_width_factor_for_merge_with_space)
-  {    
+									  double space_width_factor_for_merge_with_space,
+									  bool block_spaces)
+  {
     // take care for right to left printing
     for(int i=cells.size()-1; i>=0; i--)
       {
@@ -541,7 +559,7 @@ namespace pdflib
 
 	for(int j=i-1; j>=0; j--)
 	  {
-	    if(not applicable_for_merge(cells[i], cells[j], enforce_same_font))
+	    if(not applicable_for_merge(cells[i], cells[j], enforce_same_font, block_spaces))
 	      {
 		break;
 	      }

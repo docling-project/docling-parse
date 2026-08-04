@@ -16,6 +16,7 @@ uv run python ./docling_parse/visualize.py -i <path-to-pdf-file> -c word --inter
 ```
 
 <table>
+
   <tr>
     <th>original</th>
     <th>char</th>
@@ -216,13 +217,15 @@ options:
 
 ## Performance Benchmarks
 
-Current perf tooling lives under [`perf/`](./perf/README.md):
+[`docs/performance_benchmarks.md`](./docs/performance_benchmarks.md) compares `docling-parse` against the other widely used PDF packages on parsing and rendering, with the methodology and the commands to reproduce it.
 
-- [`perf/run_perf.py`](./perf/run_perf.py): per-page CSV benchmarking across `docling`, `docling-threaded`, `pdfplumber`, `pypdfium2`, and `pymupdf`
-- [`perf/run_scaling.py`](./perf/run_scaling.py): pages/sec and scaling sweeps for threaded parse and render workloads
-- [`docs/performance_code.md`](./docs/performance_code.md): usage notes and interpretation
+The tooling behind it lives under [`perf/`](./perf/README.md):
 
-For historical V1 vs V2 benchmarks, see [legacy_performance_benchmarks.md](./docs/legacy_performance_benchmarks.md).
+- [`perf/run_scaling.py`](./perf/run_scaling.py): measure — thread-scaling sweeps and the cross-package comparison
+- [`perf/run_eval.py`](./perf/run_eval.py): plot — per-page distributions, thread scaling, and per-package correlations
+- [`perf/run_analysis.py`](./perf/run_analysis.py): drill down — replay the slowest pages with C++ stage timings
+
+For historical V1 vs V2 benchmarks, see [legacy_performance_benchmarks.md](./docs/legacy/legacy_performance_benchmarks.md).
 
 ## Development
 

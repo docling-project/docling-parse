@@ -24,6 +24,10 @@ namespace pdflib
     // When false and draw_text_bbox is true, only the bounding quad is drawn.
     bool render_text = true;
 
+    // Paint vector shapes (fills and strokes). When false, shape
+    // instructions are skipped entirely.
+    bool render_shapes = true;
+
     // Draw the bounding quad of each text cell as a thin blue outline.
     bool draw_text_bbox = false;
 

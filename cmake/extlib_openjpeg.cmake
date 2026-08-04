@@ -19,7 +19,12 @@ else()
 
     set(OPENJPEG_URL https://github.com/uclouvain/openjpeg.git)
     set(OPENJPEG_TAG v2.5.3)
-    set(OPENJPEG_IMPORTED_LIB ${EXTERNALS_PREFIX_PATH}/lib/libopenjp2.a)
+    # GCC/MinGW -> libopenjp2.a, MSVC -> openjp2.lib (Windows arm64 uses MSVC).
+    if(MSVC)
+        set(OPENJPEG_IMPORTED_LIB ${EXTERNALS_PREFIX_PATH}/lib/openjp2.lib)
+    else()
+        set(OPENJPEG_IMPORTED_LIB ${EXTERNALS_PREFIX_PATH}/lib/libopenjp2.a)
+    endif()
 
     ExternalProject_Add(extlib_openjpeg
 

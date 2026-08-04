@@ -1221,6 +1221,62 @@ class PageParseResult:
         """Return structured timing data for this page parse."""
         return self._timings
 
+    def intersects_with(
+        self,
+        *,
+        bbox: BoundingBox,
+        chars: bool = False,
+        shapes: bool = True,
+        bitmaps: bool = True,
+    ) -> bool:
+        """Return whether visible page content intersects bbox.
+
+        bbox may use top-left or bottom-left coordinates. Native code expects
+        page coordinates with bottom-left origin as [left, bottom, right, top].
+        """
+        bbox_bl = bbox.to_bottom_left_origin(page_height=self.page_height)
+        left = min(bbox_bl.l, bbox_bl.r)
+        right = max(bbox_bl.l, bbox_bl.r)
+        bottom = min(bbox_bl.b, bbox_bl.t)
+        top = max(bbox_bl.b, bbox_bl.t)
+
+        return self._require_page_decoder().intersects_with(
+            [left, bottom, right, top],
+            chars=chars,
+            shapes=shapes,
+            bitmaps=bitmaps,
+        )
+
+    def get_shape_lines(
+        self,
+        *,
+        horizontal: bool = True,
+        vertical: bool = True,
+        tolerance: float = 1e-3,
+    ) -> List[BoundingBox]:
+        """Return visible horizontal and/or vertical stroked shape segments."""
+        return [
+            _to_bounding_box(tuple(bbox))
+            for bbox in self._require_page_decoder().get_shape_lines(
+                horizontal=horizontal,
+                vertical=vertical,
+                tolerance=tolerance,
+            )
+        ]
+
+    def get_connected_shape_bounding_boxes(
+        self,
+        *,
+        tolerance: float = 0.0,
+    ) -> List[BoundingBox]:
+        """Return bboxes of visible shapes connected by overlapping bboxes."""
+        return [
+            _to_bounding_box(tuple(bbox))
+            for bbox in self._require_page_decoder().get_connected_shape_bounding_boxes(
+                tolerance=tolerance,
+            )
+        ]
+
     def _rendering_config(self) -> RenderConfig:
         if self._render_config is None:
             raise RuntimeError(

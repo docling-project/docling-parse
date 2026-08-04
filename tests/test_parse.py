@@ -28,14 +28,8 @@ from docling_parse.pdf_parser import (
     DoclingPdfParser,
     PdfDocument,
 )
-from tests.constants import (
-    PARSER_GROUNDTRUTH_FOLDER,
-    PARSER_PAGE_RESTRICTIONS,
-    REGRESSION_FOLDER,
-    SAMPLE_PDF,
-)
-
-GENERATE = False
+from tests.constants import PARSER_PAGE_RESTRICTIONS, SAMPLE_PDF
+from tests.data_utils import PARSER_GROUNDTRUTH_DIR
 
 
 def write_textline_delta(lines: List[str], filename: str, separator: str) -> None:
@@ -60,9 +54,14 @@ def save_as_json_rounded(page: SegmentedPdfPage, filename, indent=2, ndigits=3):
 
     if isinstance(filename, str):
         filename = Path(filename)
+    filename.parent.mkdir(parents=True, exist_ok=True)
     out = _round_floats(page.export_to_dict(), ndigits=ndigits)
     with open(filename, "w", encoding="utf-8") as fw:
         json.dump(out, fw, indent=indent)
+
+
+GROUNDTRUTH_FOLDER = os.fspath(PARSER_GROUNDTRUTH_DIR)
+REGRESSION_FOLDER = "tests/data/regression/*.pdf"
 
 
 def _truncate_data_uri(uri, max_chars: int = 64):
@@ -441,7 +440,7 @@ def verify_SegmentedPdfPage(
     verify_hyperlinks(true_page.hyperlinks, pred_page.hyperlinks, eps=eps)
 
 
-def test_reference_documents_from_filenames():
+def test_reference_documents_from_filenames(update_groundtruth: bool):
 
     parser = DoclingPdfParser(loglevel="fatal")
     # parser = DoclingPdfParser(loglevel="info")
@@ -449,13 +448,6 @@ def test_reference_documents_from_filenames():
     pdf_docs = sorted(glob.glob(REGRESSION_FOLDER))
 
     assert len(pdf_docs) > 0, "len(pdf_docs)==0 -> nothing to test"
-
-    # groundtruth for pdf's that have none yet is generated into this folder
-    os.makedirs(PARSER_GROUNDTRUTH_FOLDER, exist_ok=True)
-
-    # this map restricts for pdf's with multiple pages
-    # which pages will be tested
-    page_restrictions = PARSER_PAGE_RESTRICTIONS
 
     config = DecodeConfig(
         keep_glyphs=True, keep_qpdf_warnings=False, do_sanitization=True
@@ -483,7 +475,7 @@ def test_reference_documents_from_filenames():
         # don't do all pages of big pdf's. pdf_doc is lazy, so decoding only the
         # pages that are actually verified means the rest is never touched.
         n_pages = pdf_doc.number_of_pages()
-        requested = page_restrictions.get(rname)
+        requested = PARSER_PAGE_RESTRICTIONS.get(rname)
 
         if requested is None:
             page_numbers = list(range(1, n_pages + 1))
@@ -503,7 +495,7 @@ def test_reference_documents_from_filenames():
 
         for page_no in page_numbers:
             fname = os.path.join(
-                PARSER_GROUNDTRUTH_FOLDER, rname + f".page_no_{page_no}.py.json"
+                GROUNDTRUTH_FOLDER, rname + f".page_no_{page_no}.py.json"
             )
 
             SPECIAL_SEPERATOR = "\t<|special_separator|>\n"
@@ -515,7 +507,7 @@ def test_reference_documents_from_filenames():
                 pred_page = pdf_doc.get_page(page_no)
                 print(f" -> Page {page_no} has {len(pred_page.textline_cells)} cells.")
 
-                if GENERATE or (not os.path.exists(fname)):
+                if update_groundtruth or (not os.path.exists(fname)):
                     save_as_json_rounded(pred_page, fname)
 
                     for unit in [
@@ -606,7 +598,7 @@ def test_reference_documents_from_filenames():
             # print(f"unloading page: {page_no}")
             pdf_doc.unload_pages(page_range=(page_no, page_no + 1))
 
-        _toc: PdfTableOfContents = pdf_doc.get_table_of_contents()
+        _toc: PdfTableOfContents | None = pdf_doc.get_table_of_contents()
         """
         if toc is not None:
             data = toc.export_to_dict()
@@ -1068,7 +1060,7 @@ def test_annotations_match_groundtruth():
 
     for pdf_file in test_files:
         pdf_path = f"tests/data/regression/{pdf_file}"
-        groundtruth_path = f"tests/data/groundtruth/{pdf_file}.json"
+        groundtruth_path = PARSER_GROUNDTRUTH_DIR / f"{pdf_file}.json"
 
         if not os.path.exists(pdf_path) or not os.path.exists(groundtruth_path):
             continue
@@ -1222,6 +1214,7 @@ def test_bitmap_materialization_cache_true_then_false():
 
 # --- ContentConfig redesign ---------------------------------------------
 
+# TODO: move to the HF regression dataset, like the rest of the test corpus.
 TEXT_PDF = SAMPLE_PDF
 
 

@@ -1,3 +1,35 @@
+## [v7.8.1](https://github.com/docling-project/docling-parse/releases/tag/v7.8.1) - 2026-07-20
+
+### Fix
+
+* Report document load failures instead of deferring them as -1 page count ([#301](https://github.com/docling-project/docling-parse/issues/301)) ([`77eab80`](https://github.com/docling-project/docling-parse/commit/77eab80a6b37df2231299fc59867abc3158bce97))
+* Resolve core-14 font aliases to their standard metrics ([#294](https://github.com/docling-project/docling-parse/issues/294)) ([`109ce27`](https://github.com/docling-project/docling-parse/commit/109ce278db1def7b835b484453e5a34761314d3e))
+
+## [v7.8.0](https://github.com/docling-project/docling-parse/releases/tag/v7.8.0) - 2026-07-10
+
+### Feature
+
+* Adding new top-level methods for page content geometry queries ([#297](https://github.com/docling-project/docling-parse/issues/297)) ([`ef41562`](https://github.com/docling-project/docling-parse/commit/ef415624593d546806423e72fb2b812d811d8161))
+
+## [v7.7.1](https://github.com/docling-project/docling-parse/releases/tag/v7.7.1) - 2026-07-10
+
+### Fix
+
+* Fixing the word extraction with spaces as blockers ([#296](https://github.com/docling-project/docling-parse/issues/296)) ([`66e4c33`](https://github.com/docling-project/docling-parse/commit/66e4c339578679fb13410d91261ad5160af5220a))
+* Arabic pdf-rendering ([#295](https://github.com/docling-project/docling-parse/issues/295)) ([`ff00fcf`](https://github.com/docling-project/docling-parse/commit/ff00fcfe7e59a5a81c24fb01332a023c75cc8f0f))
+
+## [v7.7.0](https://github.com/docling-project/docling-parse/releases/tag/v7.7.0) - 2026-07-08
+
+### Feature
+
+* Build wheel for windows arm64 ([#288](https://github.com/docling-project/docling-parse/issues/288)) ([`9acdc48`](https://github.com/docling-project/docling-parse/commit/9acdc4838e7976c329d5dda150eef1c656011e04))
+
+## [v7.6.0](https://github.com/docling-project/docling-parse/releases/tag/v7.6.0) - 2026-07-06
+
+### Feature
+
+* Working on refactoring the parse for shapes ([#293](https://github.com/docling-project/docling-parse/issues/293)) ([`cbe73a8`](https://github.com/docling-project/docling-parse/commit/cbe73a8cc4fae6da7c9bf23914d9571c1c5cf011))
+
 ## [v7.5.0](https://github.com/docling-project/docling-parse/releases/tag/v7.5.0) - 2026-07-03
 
 ### Feature

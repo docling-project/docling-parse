@@ -709,6 +709,10 @@ namespace pdflib
             tinstr.set_glyph_name(font.get_glyph_name(static_cast<uint32_t>(glyph_code)));
           }
 
+        tinstr.set_fill_color(grph_state.get_rgb_filling_ops(),
+                              grph_state.get_fill_alpha());
+        tinstr.set_rendering_mode(rendering_mode);
+
         if(config.extract_font_programs)
           {
             auto font_blob = font.get_embedded_font_blob();

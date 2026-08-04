@@ -5,12 +5,12 @@ import glob
 import os
 from io import BytesIO
 from pathlib import Path
+from types import TracebackType
 
 import pytest
 from docling_core.types.doc.base import BoundingBox, CoordOrigin
 from docling_core.types.doc.page import SegmentedPdfPage
 from PIL import Image as PILImage
-from PIL import ImageChops
 
 from docling_parse.pdf_parser import (
     DecodeConfig,
@@ -20,16 +20,30 @@ from docling_parse.pdf_parser import (
 )
 from tests.constants import (
     LARGE_SAMPLE_PDF,
-    PARSER_GROUNDTRUTH_FOLDER,
     PARSER_PAGE_RESTRICTIONS,
-    REGRESSION_FOLDER,
-    RENDER_MAX_CHANNEL_DELTA,
-    RENDER_MAX_FRACTION_DIFFERING,
-    RENDER_PAGES_GROUNDTRUTH_FOLDER,
-    RENDER_SCALE,
     SAMPLE_PDF,
 )
-from tests.test_parse import verify_SegmentedPdfPage
+from tests.rendering_regression import (
+    ImageTolerance,
+    compare_bitmap_artifacts,
+    compare_images,
+    compare_render_instructions,
+    format_image_comparison_table,
+    image_comparison_failed,
+    measure_image_comparison,
+    write_renderer_groundtruth,
+)
+from tests.test_parse import (
+    GROUNDTRUTH_FOLDER,
+    REGRESSION_FOLDER,
+    verify_SegmentedPdfPage,
+)
+
+RENDERER_IMAGE_TOLERANCE = ImageTolerance(
+    pixel_threshold=12,
+    mean_abs_error=9.0,  # cut-off that works on the CI. would be better ~2-3
+    changed_pixels_ratio=0.09,  # cut-off that works on the CI, would be better ~0.02
+)
 
 
 def _make_decode_config() -> DecodeConfig:
@@ -40,61 +54,14 @@ def _make_decode_config() -> DecodeConfig:
     )
 
 
-def _make_render_config(scale: float | None = None) -> RenderConfig:
+def _make_render_config() -> RenderConfig:
+    return RenderConfig()
+
+
+def _make_groundtruth_render_config() -> RenderConfig:
     render_config = RenderConfig()
-    if scale is not None:
-        render_config.scale = scale
+    render_config.scale = 2.0
     return render_config
-
-
-def _max_channel_difference_histogram(
-    pred_image: PILImage.Image, true_image: PILImage.Image
-) -> list[int]:
-    """Histogram of the per-pixel maximum absolute channel difference."""
-    difference = ImageChops.difference(
-        pred_image.convert("RGBA"), true_image.convert("RGBA")
-    )
-
-    bands = difference.split()
-    worst = bands[0]
-    for band in bands[1:]:
-        worst = ImageChops.lighter(worst, band)
-
-    return worst.histogram()
-
-
-def verify_rendered_page_image(
-    pred_image: PILImage.Image,
-    true_image: PILImage.Image,
-    filename: str,
-    max_channel_delta: int = RENDER_MAX_CHANNEL_DELTA,
-    max_fraction_differing: float = RENDER_MAX_FRACTION_DIFFERING,
-) -> None:
-    """Compare a rendered page against its groundtruth png.
-
-    The dimensions have to match exactly. The pixels are allowed to differ by up
-    to `max_channel_delta` per channel, and at most `max_fraction_differing` of
-    them may exceed that, so that anti-aliasing and system-font differences
-    between platforms do not fail the test.
-    """
-    basename = os.path.basename(filename)
-
-    assert pred_image.size == true_image.size, (
-        f"rendered size {pred_image.size} != groundtruth size {true_image.size} "
-        f"for {basename}"
-    )
-
-    histogram = _max_channel_difference_histogram(pred_image, true_image)
-    total = pred_image.width * pred_image.height
-    differing = sum(histogram[max_channel_delta + 1 :])
-    fraction = differing / total
-    max_delta = max((value for value, count in enumerate(histogram) if count), default=0)
-
-    assert fraction <= max_fraction_differing, (
-        f"{100.0 * fraction:.4f}% of the pixels differ by more than "
-        f"{max_channel_delta}/255 (allowed {100.0 * max_fraction_differing:.4f}%, "
-        f"largest difference {max_delta}/255) for {basename}"
-    )
 
 
 def _make_parser(
@@ -456,19 +423,10 @@ def test_render_reference_documents_from_filenames():
     pdf_docs = sorted(glob.glob(REGRESSION_FOLDER))
     assert len(pdf_docs) > 0, "len(pdf_docs)==0 -> nothing to test"
 
-    parser = _make_parser(
-        threads=4,
-        max_concurrent=32,
-        render_config=_make_render_config(scale=RENDER_SCALE),
-    )
-
-    # groundtruth for pages that have none yet is generated into these folders
-    os.makedirs(RENDER_PAGES_GROUNDTRUTH_FOLDER, exist_ok=True)
-
-    page_restrictions = PARSER_PAGE_RESTRICTIONS
+    parser = _make_parser(threads=4, max_concurrent=32)
 
     test_results: list[tuple[str, str, str, bool, str]] = []
-    first_failure: tuple[BaseException, object] | None = None
+    first_failure: tuple[BaseException, TracebackType | None] | None = None
     doc_keys: dict[str, str] = {}
     key_to_path: dict[str, str] = {}
 
@@ -477,7 +435,9 @@ def test_render_reference_documents_from_filenames():
         try:
             # page_numbers=None renders the whole document; restricted documents
             # never render the pages that are not verified
-            key = parser.load(pdf_doc_path, page_numbers=page_restrictions.get(rname))
+            key = parser.load(
+                pdf_doc_path, page_numbers=PARSER_PAGE_RESTRICTIONS.get(rname)
+            )
         except Exception as exc:
             if first_failure is None:
                 first_failure = (exc, exc.__traceback__)
@@ -493,37 +453,7 @@ def test_render_reference_documents_from_filenames():
             results.setdefault(result.doc_key, {})[result.page_number] = (
                 result.get_page()
             )
-
-            rname = os.path.basename(key_to_path.get(result.doc_key, result.doc_key))
-            page_no = result.page_number
-
-            # the image is compared here, while it is in scope, so that the
-            # rendered pages of the whole regression set are never held at once
-            if rname in page_restrictions and page_no not in page_restrictions[rname]:
-                continue
-
-            pred_image = result.get_image()
-            assert pred_image.mode == "RGBA"
-
-            image_fname = os.path.join(
-                RENDER_PAGES_GROUNDTRUTH_FOLDER,
-                rname + f".page_no_{page_no}.full_page.png",
-            )
-
-            try:
-                if not os.path.exists(image_fname):
-                    pred_image.save(image_fname)
-                else:
-                    with PILImage.open(image_fname) as true_image:
-                        verify_rendered_page_image(
-                            pred_image, true_image, filename=image_fname
-                        )
-            except Exception as exc:
-                if first_failure is None:
-                    first_failure = (exc, exc.__traceback__)
-                test_results.append((rname, str(page_no), "image", False, str(exc)))
-            else:
-                test_results.append((rname, str(page_no), "image", True, ""))
+            assert result.get_image().mode == "RGBA"
         else:
             pdf_doc_path = key_to_path.get(result.doc_key, result.doc_key)
             err = AssertionError(result.error_message)
@@ -556,11 +486,14 @@ def test_render_reference_documents_from_filenames():
         rname = os.path.basename(pdf_doc_path)
 
         for page_no, pred_page in sorted(results[key].items()):
-            if rname in page_restrictions and page_no not in page_restrictions[rname]:
+            if (
+                rname in PARSER_PAGE_RESTRICTIONS
+                and page_no not in PARSER_PAGE_RESTRICTIONS[rname]
+            ):
                 continue
 
             fname = os.path.join(
-                PARSER_GROUNDTRUTH_FOLDER, rname + f".page_no_{page_no}.py.json"
+                GROUNDTRUTH_FOLDER, rname + f".page_no_{page_no}.py.json"
             )
 
             if not os.path.exists(fname):
@@ -580,31 +513,6 @@ def test_render_reference_documents_from_filenames():
             else:
                 test_results.append((rname, str(page_no), "all", True, ""))
 
-    # --- results table ---
-    from tabulate import tabulate
-
-    def _trunc(v, n=128):
-        s = str(v)
-        return s if len(s) <= n else s[: n - 3] + "..."
-
-    def _sort_key(row):
-        doc, page, mode = row[0], row[1], row[2]
-        return (doc, int(page) if page.isdigit() else -1, mode)
-
-    table = [
-        (_trunc(doc), page, mode, "PASS" if ok else "FAIL", _trunc(err))
-        for doc, page, mode, ok, err in sorted(test_results, key=_sort_key)
-    ]
-    print(
-        "\n"
-        + tabulate(
-            table,
-            headers=["document", "page", "mode", "status", "error"],
-            tablefmt="grid",
-        )
-        + "\n"
-    )
-
     failed = [
         (doc, page, mode, err) for doc, page, mode, ok, err in test_results if not ok
     ]
@@ -615,3 +523,83 @@ def test_render_reference_documents_from_filenames():
     assert not failed, f"{len(failed)} page(s) failed: " + ", ".join(
         f"{doc}@{page}[{mode}]" for doc, page, mode, _ in failed
     )
+
+
+@pytest.mark.groundtruth
+def test_rendered_pages_match_groundtruth(update_groundtruth: bool):
+    """Compare Blend2D threaded-render output with renderer groundtruth artifacts."""
+    pdf_docs = sorted(glob.glob(REGRESSION_FOLDER))
+    assert len(pdf_docs) > 0, "len(pdf_docs)==0 -> nothing to test"
+
+    parser = _make_parser(
+        threads=4,
+        max_concurrent=32,
+        render_config=_make_groundtruth_render_config(),
+    )
+
+    key_to_path: dict[str, str] = {}
+    for pdf_doc_path in pdf_docs:
+        rname = os.path.basename(pdf_doc_path)
+        key = parser.load(
+            pdf_doc_path,
+            page_numbers=PARSER_PAGE_RESTRICTIONS.get(rname),
+        )
+        key_to_path[key] = pdf_doc_path
+
+    checked_pages = 0
+    first_failure: tuple[BaseException, TracebackType | None] | None = None
+    failures: list[str] = []
+    image_comparisons = []
+
+    for result in parser.iterate_results():
+        pdf_doc_path = key_to_path[result.doc_key]
+        rname = os.path.basename(pdf_doc_path)
+
+        if not result.success:
+            err = AssertionError(result.error_message)
+            if first_failure is None:
+                first_failure = (err, err.__traceback__)
+            failures.append(f"{rname}@{result.page_number}[render]")
+            continue
+
+        try:
+            if update_groundtruth:
+                write_renderer_groundtruth(rname, result.page_number, result)
+            else:
+                compare_render_instructions(rname, result.page_number, result)
+                compare_bitmap_artifacts(rname, result.page_number, result)
+                comparison = measure_image_comparison(
+                    rname,
+                    result.page_number,
+                    result.get_image(),
+                    tolerance=RENDERER_IMAGE_TOLERANCE,
+                )
+                image_comparisons.append(comparison)
+                if image_comparison_failed(
+                    comparison,
+                    tolerance=RENDERER_IMAGE_TOLERANCE,
+                ):
+                    compare_images(
+                        rname,
+                        result.page_number,
+                        result.get_image(),
+                        tolerance=RENDERER_IMAGE_TOLERANCE,
+                    )
+        except Exception as exc:
+            if first_failure is None:
+                first_failure = (exc, exc.__traceback__)
+            failures.append(f"{rname}@{result.page_number}[groundtruth]")
+        else:
+            checked_pages += 1
+
+    parser.unload_all()
+
+    if image_comparisons:
+        print(format_image_comparison_table(image_comparisons))
+
+    if first_failure is not None:
+        failure, tb = first_failure
+        raise failure.with_traceback(tb)
+
+    assert not failures, f"{len(failures)} rendered page(s) failed: {failures}"
+    assert checked_pages > 0

@@ -54,6 +54,16 @@ namespace pdflib
     bool has_word_cells() const { return word_cells_created; }
     bool has_line_cells() const { return line_cells_created; }
 
+    bool intersects_with(std::array<double, 4> bbox,
+                         bool chars = false,
+                         bool shapes = true,
+                         bool bitmaps = true);
+    std::vector<std::array<double, 4>> get_shape_lines(bool horizontal = true,
+                                                       bool vertical = true,
+                                                       double tolerance = 1e-3);
+    std::vector<std::array<double, 4>>
+    get_connected_shape_bounding_boxes(double tolerance = 0.0);
+
     // Create word/line cells from page_cells
     void create_word_cells(const decode_config& config);
     void create_line_cells(const decode_config& config);
@@ -85,6 +95,8 @@ namespace pdflib
 
     void decode_fonts();
 
+    void decode_colorspaces();
+
     void decode_xobjects();
 
     // Contents
@@ -104,6 +116,11 @@ namespace pdflib
 
     // Load /AcroForm/DR/Font into acroform_fonts (called once before widget processing).
     void load_acroform_dr_fonts();
+
+    // Resolve /AP/N — a single stream, or a dictionary of appearance
+    // states (checkboxes / radio buttons) selected by /AS — and decode
+    // the selected stream.
+    void decode_annot_appearance(QPDFObjectHandle annot, const std::array<double, 4>& bbox);
 
     // Parse the /AP/N appearance stream, extract cells in AP-local coords,
     // shift by bbox origin to page coords, and append to page_cells.
@@ -129,6 +146,7 @@ namespace pdflib
     QPDFObjectHandle qpdf_resources;
     QPDFObjectHandle qpdf_grphs;
     QPDFObjectHandle qpdf_fonts;
+    QPDFObjectHandle qpdf_colorspaces;
     QPDFObjectHandle qpdf_xobjects;
 
     // Debug-only: populated when config.populate_json_objects is true
@@ -157,6 +175,7 @@ namespace pdflib
 
     std::shared_ptr<pdf_resource<PAGE_GRPHS> > page_grphs;
     std::shared_ptr<pdf_resource<PAGE_FONTS> > page_fonts;
+    std::shared_ptr<pdf_resource<PAGE_COLORSPACES> > page_colorspaces;
     std::shared_ptr<pdf_resource<PAGE_XOBJECTS> > page_xobjects;
 
     decode_config page_config;  // saved at the start of decode_page for use in widget handlers
@@ -179,6 +198,7 @@ namespace pdflib
     curr_page_number(page_num),
     page_grphs(std::make_shared<pdf_resource<PAGE_GRPHS>>()),
     page_fonts(std::make_shared<pdf_resource<PAGE_FONTS>>()),
+    page_colorspaces(std::make_shared<pdf_resource<PAGE_COLORSPACES>>()),
     page_xobjects(std::make_shared<pdf_resource<PAGE_XOBJECTS>>())
   {}
 
@@ -195,6 +215,7 @@ namespace pdflib
     curr_page_number(curr_page_num),
     page_grphs(std::make_shared<pdf_resource<PAGE_GRPHS>>()),
     page_fonts(std::make_shared<pdf_resource<PAGE_FONTS>>()),
+    page_colorspaces(std::make_shared<pdf_resource<PAGE_COLORSPACES>>()),
     page_xobjects(std::make_shared<pdf_resource<PAGE_XOBJECTS>>())
   {
     std::string description = "thread-safe page " + std::to_string(orig_page_num);
@@ -235,6 +256,438 @@ namespace pdflib
   int pdf_decoder<PAGE>::get_page_number()
   {
     return orig_page_number;
+  }
+
+  namespace
+  {
+    inline bool bbox_intersects(std::array<double, 4> a,
+                                std::array<double, 4> b)
+    {
+      if(a[0] > a[2]) { std::swap(a[0], a[2]); }
+      if(a[1] > a[3]) { std::swap(a[1], a[3]); }
+      if(b[0] > b[2]) { std::swap(b[0], b[2]); }
+      if(b[1] > b[3]) { std::swap(b[1], b[3]); }
+
+      return a[0] < b[2] and a[2] > b[0] and
+             a[1] < b[3] and a[3] > b[1];
+    }
+
+    inline std::array<double, 4> clipped_bbox(std::array<double, 4> bbox,
+                                              const clip_state_instruction& clip_state,
+                                              bool& visible)
+    {
+      visible = true;
+      if(not clip_state.has_clip()) { return bbox; }
+
+      std::array<double, 4> result = bbox;
+      bool applied_clip = false;
+      for(const auto& path : clip_state.get_paths())
+        {
+          if(path.empty()) { continue; }
+
+          const auto& xs = path.get_x();
+          const auto& ys = path.get_y();
+          std::array<double, 4> clip_bbox = {
+            *std::min_element(xs.begin(), xs.end()),
+            *std::min_element(ys.begin(), ys.end()),
+            *std::max_element(xs.begin(), xs.end()),
+            *std::max_element(ys.begin(), ys.end())
+          };
+
+          if(not bbox_intersects(result, clip_bbox))
+            {
+              visible = false;
+              return bbox;
+            }
+          result = {
+            std::max(result[0], clip_bbox[0]),
+            std::max(result[1], clip_bbox[1]),
+            std::min(result[2], clip_bbox[2]),
+            std::min(result[3], clip_bbox[3])
+          };
+          applied_clip = true;
+        }
+
+      if(not applied_clip)
+        {
+          visible = false;
+          return bbox;
+        }
+
+      return result;
+    }
+
+    inline bool shape_instruction_visible(const shape_instruction& instr)
+    {
+      const auto mode = instr.get_paint_mode();
+      const bool paints_fill =
+        mode == SHAPE_PAINT_FILL or mode == SHAPE_PAINT_FILL_STROKE;
+      const bool paints_stroke =
+        mode == SHAPE_PAINT_STROKE or mode == SHAPE_PAINT_FILL_STROKE;
+      return (paints_fill and instr.get_fill_alpha() > 0.0) or
+             (paints_stroke and instr.get_stroke_alpha() > 0.0);
+    }
+
+    inline bool shape_instruction_strokes_visible(const shape_instruction& instr)
+    {
+      const auto mode = instr.get_paint_mode();
+      const bool paints_stroke =
+        mode == SHAPE_PAINT_STROKE or mode == SHAPE_PAINT_FILL_STROKE;
+      return paints_stroke and instr.get_stroke_alpha() > 0.0;
+    }
+
+    inline bool bbox_overlaps_with_tolerance(const std::array<double, 4>& a,
+                                             const std::array<double, 4>& b,
+                                             double tolerance)
+    {
+      return a[0] <= b[2] + tolerance and a[2] + tolerance >= b[0] and
+             a[1] <= b[3] + tolerance and a[3] + tolerance >= b[1];
+    }
+
+    inline bool shape_visible_bbox(const shape_instruction& instr,
+                                   std::array<double, 4>& bbox)
+    {
+      if(not shape_instruction_visible(instr)) { return false; }
+
+      bool have_point = false;
+      auto include_point = [&](double x, double y) {
+        if(not have_point)
+          {
+            bbox = {x, y, x, y};
+            have_point = true;
+            return;
+          }
+        bbox[0] = std::min(bbox[0], x);
+        bbox[1] = std::min(bbox[1], y);
+        bbox[2] = std::max(bbox[2], x);
+        bbox[3] = std::max(bbox[3], y);
+      };
+
+      for(const auto& subpath : instr.get_subpaths())
+        {
+          include_point(subpath.get_x0(), subpath.get_y0());
+          const auto& xs = subpath.get_px();
+          const auto& ys = subpath.get_py();
+          for(size_t i = 0; i < std::min(xs.size(), ys.size()); ++i)
+            {
+              include_point(xs[i], ys[i]);
+            }
+        }
+
+      if(not have_point) { return false; }
+
+      const double stroke_pad = shape_instruction_strokes_visible(instr)
+        ? std::max(0.0, instr.get_line_width()) * 0.5
+        : 0.0;
+      bbox[0] -= stroke_pad;
+      bbox[1] -= stroke_pad;
+      bbox[2] += stroke_pad;
+      bbox[3] += stroke_pad;
+
+      bool visible = true;
+      bbox = clipped_bbox(bbox, instr.get_clip_state(), visible);
+      return visible;
+    }
+
+    inline bool clip_axis_aligned_segment(double x0,
+                                          double y0,
+                                          double x1,
+                                          double y1,
+                                          const clip_state_instruction& clip_state,
+                                          double tolerance,
+                                          std::array<double, 4>& bbox)
+    {
+      bbox = {
+        std::min(x0, x1),
+        std::min(y0, y1),
+        std::max(x0, x1),
+        std::max(y0, y1)
+      };
+
+      if(not clip_state.has_clip()) { return true; }
+
+      bool applied_clip = false;
+      for(const auto& path : clip_state.get_paths())
+        {
+          if(path.empty()) { continue; }
+
+          const auto& xs = path.get_x();
+          const auto& ys = path.get_y();
+          std::array<double, 4> clip_bbox = {
+            *std::min_element(xs.begin(), xs.end()),
+            *std::min_element(ys.begin(), ys.end()),
+            *std::max_element(xs.begin(), xs.end()),
+            *std::max_element(ys.begin(), ys.end())
+          };
+
+          const bool is_horizontal = std::abs(y1 - y0) <= tolerance;
+          const bool is_vertical = std::abs(x1 - x0) <= tolerance;
+
+          if(is_horizontal)
+            {
+              if(y0 < clip_bbox[1] - tolerance or y0 > clip_bbox[3] + tolerance)
+                {
+                  return false;
+                }
+
+              bbox[0] = std::max(bbox[0], clip_bbox[0]);
+              bbox[2] = std::min(bbox[2], clip_bbox[2]);
+              if(bbox[0] > bbox[2] + tolerance) { return false; }
+              applied_clip = true;
+            }
+          else if(is_vertical)
+            {
+              if(x0 < clip_bbox[0] - tolerance or x0 > clip_bbox[2] + tolerance)
+                {
+                  return false;
+                }
+
+              bbox[1] = std::max(bbox[1], clip_bbox[1]);
+              bbox[3] = std::min(bbox[3], clip_bbox[3]);
+              if(bbox[1] > bbox[3] + tolerance) { return false; }
+              applied_clip = true;
+            }
+          else
+            {
+              return false;
+            }
+        }
+
+      return applied_clip;
+    }
+  }
+
+  bool pdf_decoder<PAGE>::intersects_with(std::array<double, 4> bbox,
+                                          bool chars,
+                                          bool shapes,
+                                          bool bitmaps)
+  {
+    if(bbox[0] > bbox[2]) { std::swap(bbox[0], bbox[2]); }
+    if(bbox[1] > bbox[3]) { std::swap(bbox[1], bbox[3]); }
+
+    if(chars)
+      {
+        for(auto& cell : page_cells)
+          {
+            if(not cell.active or cell.text.empty()) { continue; }
+            if(cell.rendering_mode == 3 or cell.rendering_mode == 7) { continue; }
+
+            std::array<double, 4> cell_bbox = {
+              std::min({cell.r_x0, cell.r_x1, cell.r_x2, cell.r_x3}),
+              std::min({cell.r_y0, cell.r_y1, cell.r_y2, cell.r_y3}),
+              std::max({cell.r_x0, cell.r_x1, cell.r_x2, cell.r_x3}),
+              std::max({cell.r_y0, cell.r_y1, cell.r_y2, cell.r_y3})
+            };
+            if(bbox_intersects(bbox, cell_bbox)) { return true; }
+          }
+      }
+
+    if(shapes)
+      {
+        for(const auto& instr : instructions.get_shape_instructions())
+          {
+            if(not shape_instruction_visible(instr)) { continue; }
+
+            bool have_point = false;
+            std::array<double, 4> shape_bbox = {0.0, 0.0, 0.0, 0.0};
+            auto include_point = [&](double x, double y) {
+              if(not have_point)
+                {
+                  shape_bbox = {x, y, x, y};
+                  have_point = true;
+                  return;
+                }
+              shape_bbox[0] = std::min(shape_bbox[0], x);
+              shape_bbox[1] = std::min(shape_bbox[1], y);
+              shape_bbox[2] = std::max(shape_bbox[2], x);
+              shape_bbox[3] = std::max(shape_bbox[3], y);
+            };
+
+            for(const auto& subpath : instr.get_subpaths())
+              {
+                include_point(subpath.get_x0(), subpath.get_y0());
+                const auto& xs = subpath.get_px();
+                const auto& ys = subpath.get_py();
+                for(size_t i = 0; i < std::min(xs.size(), ys.size()); ++i)
+                  {
+                    include_point(xs[i], ys[i]);
+                  }
+              }
+
+            if(not have_point) { continue; }
+            const double stroke_pad = shape_instruction_strokes_visible(instr)
+              ? std::max(0.0, instr.get_line_width()) * 0.5
+              : 0.0;
+            shape_bbox[0] -= stroke_pad;
+            shape_bbox[1] -= stroke_pad;
+            shape_bbox[2] += stroke_pad;
+            shape_bbox[3] += stroke_pad;
+
+            bool shape_visible = true;
+            const std::array<double, 4> visible_shape_bbox =
+              clipped_bbox(shape_bbox, instr.get_clip_state(), shape_visible);
+
+            if(shape_visible and bbox_intersects(bbox, visible_shape_bbox))
+              {
+                return true;
+              }
+          }
+      }
+
+    if(bitmaps)
+      {
+        for(auto& image : page_images)
+          {
+            if(not image.is_visible) { continue; }
+
+            std::array<double, 4> image_bbox = image.has_visible_bbox
+              ? std::array<double, 4>{image.visible_x0, image.visible_y0,
+                                      image.visible_x1, image.visible_y1}
+              : std::array<double, 4>{image.x0, image.y0, image.x1, image.y1};
+            if(bbox_intersects(bbox, image_bbox)) { return true; }
+          }
+      }
+
+    return false;
+  }
+
+  std::vector<std::array<double, 4>>
+  pdf_decoder<PAGE>::get_shape_lines(bool horizontal,
+                                     bool vertical,
+                                     double tolerance)
+  {
+    std::vector<std::array<double, 4>> result;
+    if(not horizontal and not vertical) { return result; }
+
+    const double tol = std::max(0.0, tolerance);
+
+    for(const auto& instr : instructions.get_shape_instructions())
+      {
+        if(not shape_instruction_strokes_visible(instr)) { continue; }
+
+        for(const auto& subpath : instr.get_subpaths())
+          {
+            double curr_x = subpath.get_x0();
+            double curr_y = subpath.get_y0();
+            double last_x = curr_x;
+            double last_y = curr_y;
+
+            const auto& ops = subpath.get_ops();
+            const auto& xs = subpath.get_px();
+            const auto& ys = subpath.get_py();
+            size_t point_index = 0;
+
+            auto maybe_add_line = [&](double x0, double y0,
+                                      double x1, double y1) {
+              const bool is_horizontal = std::abs(y1 - y0) <= tol;
+              const bool is_vertical = std::abs(x1 - x0) <= tol;
+
+              if(is_horizontal and is_vertical) { return; }
+
+              if((is_horizontal and not horizontal) or
+                 (is_vertical and not vertical) or
+                 (not is_horizontal and not is_vertical))
+                {
+                  return;
+                }
+
+              std::array<double, 4> bbox = {0.0, 0.0, 0.0, 0.0};
+              if(clip_axis_aligned_segment(x0, y0, x1, y1,
+                                           instr.get_clip_state(), tol, bbox))
+                {
+                  result.push_back(bbox);
+                }
+            };
+
+            for(const auto op : ops)
+              {
+                if(op == SEGMENT_LINE_TO)
+                  {
+                    if(point_index >= std::min(xs.size(), ys.size())) { break; }
+
+                    const double next_x = xs[point_index];
+                    const double next_y = ys[point_index];
+                    maybe_add_line(curr_x, curr_y, next_x, next_y);
+
+                    curr_x = next_x;
+                    curr_y = next_y;
+                    last_x = curr_x;
+                    last_y = curr_y;
+                    point_index += 1;
+                  }
+                else if(op == SEGMENT_CUBIC_TO)
+                  {
+                    if(point_index + 2 >= std::min(xs.size(), ys.size())) { break; }
+
+                    curr_x = xs[point_index + 2];
+                    curr_y = ys[point_index + 2];
+                    last_x = curr_x;
+                    last_y = curr_y;
+                    point_index += 3;
+                  }
+              }
+
+            if(subpath.get_closing_type() == CLOSED)
+              {
+                maybe_add_line(last_x, last_y, subpath.get_x0(), subpath.get_y0());
+              }
+          }
+      }
+
+    return result;
+  }
+
+  std::vector<std::array<double, 4>>
+  pdf_decoder<PAGE>::get_connected_shape_bounding_boxes(double tolerance)
+  {
+    std::vector<std::array<double, 4>> boxes;
+    const double tol = std::max(0.0, tolerance);
+
+    for(const auto& instr : instructions.get_shape_instructions())
+      {
+        std::array<double, 4> bbox = {0.0, 0.0, 0.0, 0.0};
+        if(shape_visible_bbox(instr, bbox))
+          {
+            boxes.push_back(bbox);
+          }
+      }
+
+    std::vector<bool> consumed(boxes.size(), false);
+    std::vector<std::array<double, 4>> result;
+
+    for(size_t i = 0; i < boxes.size(); ++i)
+      {
+        if(consumed[i]) { continue; }
+
+        consumed[i] = true;
+        std::array<double, 4> component = boxes[i];
+
+        bool changed = true;
+        while(changed)
+          {
+            changed = false;
+            for(size_t j = 0; j < boxes.size(); ++j)
+              {
+                if(consumed[j]) { continue; }
+
+                if(bbox_overlaps_with_tolerance(component, boxes[j], tol))
+                  {
+                    component = {
+                      std::min(component[0], boxes[j][0]),
+                      std::min(component[1], boxes[j][1]),
+                      std::max(component[2], boxes[j][2]),
+                      std::max(component[3], boxes[j][3])
+                    };
+                    consumed[j] = true;
+                    changed = true;
+                  }
+              }
+          }
+
+        result.push_back(component);
+      }
+
+    return result;
   }
 
   void pdf_decoder<PAGE>::save_pdf_page(std::filesystem::path const& out_path) const
@@ -550,6 +1003,16 @@ namespace pdflib
         LOG_S(WARNING) << "page does not have any fonts!";
       }
 
+    if(qpdf_resources.hasKey("/ColorSpace"))
+      {
+        qpdf_colorspaces = qpdf_resources.getKey("/ColorSpace");
+        decode_colorspaces();
+      }
+    else
+      {
+        LOG_S(INFO) << "page does not have any color spaces!";
+      }
+
     if(qpdf_resources.hasKey("/XObject"))
       {
         qpdf_xobjects = qpdf_resources.getKey("/XObject");
@@ -575,6 +1038,13 @@ namespace pdflib
     page_fonts->set(qpdf_fonts, timings);
   }
 
+  void pdf_decoder<PAGE>::decode_colorspaces()
+  {
+    LOG_S(INFO) << __FUNCTION__;
+
+    page_colorspaces->set(qpdf_colorspaces);
+  }
+
   void pdf_decoder<PAGE>::decode_xobjects()
   {
     LOG_S(INFO) << __FUNCTION__;
@@ -597,6 +1067,7 @@ namespace pdflib
                                        page_images,
                                        page_fonts,
                                        page_grphs,
+                                       page_colorspaces,
                                        page_xobjects,
                                        instructions,
                                        timings);
@@ -819,7 +1290,7 @@ namespace pdflib
           }
       }
 
-    auto [has_value, text] = to_string(annot, "/V");
+    auto [has_value, text] = to_inherited_string(annot, "/V");
     if(not has_value)
       {
         text = "<unknown>";
@@ -931,7 +1402,7 @@ namespace pdflib
           }
       }
 
-    auto [has_value, ft_str] = to_string(annot, "/FT");
+    auto [has_value, ft_str] = to_inherited_string(annot, "/FT");
     if(not has_value)
       {
         ft_str = "";
@@ -965,19 +1436,19 @@ namespace pdflib
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    auto [has_value, text] = to_string(annot, "/V");
+    auto [has_value, text] = to_inherited_string(annot, "/V");
     if(not has_value)
       {
         text = "";
       }
 
-    auto [has_field_name, field_name] = to_string(annot, "/T");
+    auto [has_field_name, field_name] = to_inherited_string(annot, "/T");
     if(not has_field_name)
       {
         field_name = "";
       }
 
-    auto [has_field_type, field_type] = to_string(annot, "/FT");
+    auto [has_field_type, field_type] = to_inherited_string(annot, "/FT");
     if(not has_field_type)
       {
         field_type = "";
@@ -1013,12 +1484,35 @@ namespace pdflib
 
     // Parse /AP/N (Normal appearance stream) to extract the actual rendered
     // text cells positioned within the widget bounding box.
+    decode_annot_appearance(annot, bbox);
+  }
+
+  void pdf_decoder<PAGE>::decode_annot_appearance(QPDFObjectHandle annot,
+                                                  const std::array<double, 4>& bbox)
+  {
     if(not annot.hasKey("/AP")) { return; }
 
     auto ap = annot.getKey("/AP");
     if(not ap.isDictionary() or not ap.hasKey("/N")) { return; }
 
-    decode_ap_stream(ap.getKey("/N"), bbox);
+    auto normal = ap.getKey("/N");
+    if(normal.isStream())
+      {
+        decode_ap_stream(normal, bbox);
+        return;
+      }
+
+    // Checkboxes and radio buttons carry one appearance stream per state
+    // (e.g. /Off, /1); /AS selects the active one. /Off states typically
+    // have an empty (or missing) appearance, which decodes to nothing.
+    if(normal.isDictionary())
+      {
+        auto [has_state, state] = to_string(annot, "/AS");
+        if(has_state and normal.hasKey(state) and normal.getKey(state).isStream())
+          {
+            decode_ap_stream(normal.getKey(state), bbox);
+          }
+      }
   }
 
   void pdf_decoder<PAGE>::add_button(QPDFObjectHandle annot,
@@ -1026,19 +1520,19 @@ namespace pdflib
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    auto [has_value, text] = to_string(annot, "/V");
+    auto [has_value, text] = to_inherited_string(annot, "/V");
     if(not has_value)
       {
         text = "";
       }
 
-    auto [has_field_name, field_name] = to_string(annot, "/T");
+    auto [has_field_name, field_name] = to_inherited_string(annot, "/T");
     if(not has_field_name)
       {
         field_name = "";
       }
 
-    auto [has_field_type, field_type] = to_string(annot, "/FT");
+    auto [has_field_type, field_type] = to_inherited_string(annot, "/FT");
     if(not has_field_type)
       {
         field_type = "";
@@ -1058,6 +1552,9 @@ namespace pdflib
       widget.field_type = field_type;
     }
     page_widgets.push_back(widget);
+
+    // Draw the active appearance state (check mark, radio dot, ...).
+    decode_annot_appearance(annot, bbox);
   }
 
   void pdf_decoder<PAGE>::add_choice(QPDFObjectHandle annot,
@@ -1065,19 +1562,19 @@ namespace pdflib
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    auto [has_value, text] = to_string(annot, "/V");
+    auto [has_value, text] = to_inherited_string(annot, "/V");
     if(not has_value)
       {
         text = "";
       }
 
-    auto [has_field_name, field_name] = to_string(annot, "/T");
+    auto [has_field_name, field_name] = to_inherited_string(annot, "/T");
     if(not has_field_name)
       {
         field_name = "";
       }
 
-    auto [has_field_type, field_type] = to_string(annot, "/FT");
+    auto [has_field_type, field_type] = to_inherited_string(annot, "/FT");
     if(not has_field_type)
       {
         field_type = "";
@@ -1097,6 +1594,8 @@ namespace pdflib
       widget.field_type = field_type;
     }
     page_widgets.push_back(widget);
+
+    decode_annot_appearance(annot, bbox);
   }
 
   void pdf_decoder<PAGE>::add_signature(QPDFObjectHandle annot,
@@ -1104,19 +1603,19 @@ namespace pdflib
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    auto [has_value, text] = to_string(annot, "/V");
+    auto [has_value, text] = to_inherited_string(annot, "/V");
     if(not has_value)
       {
         text = "";
       }
 
-    auto [has_field_name, field_name] = to_string(annot, "/T");
+    auto [has_field_name, field_name] = to_inherited_string(annot, "/T");
     if(not has_field_name)
       {
         field_name = "";
       }
 
-    auto [has_field_type, field_type] = to_string(annot, "/FT");
+    auto [has_field_type, field_type] = to_inherited_string(annot, "/FT");
     if(not has_field_type)
       {
         field_type = "";
@@ -1136,6 +1635,8 @@ namespace pdflib
       widget.field_type = field_type;
     }
     page_widgets.push_back(widget);
+
+    decode_annot_appearance(annot, bbox);
   }
 
   void pdf_decoder<PAGE>::decode_ap_stream(QPDFObjectHandle ap_stream,
@@ -1154,24 +1655,37 @@ namespace pdflib
     //     → acroform_fonts  (AcroForm /DR/Font, e.g. /Helv)
     //       → page_fonts    (page-level fonts, e.g. /F2)
     //
+    // The color spaces chain the same way: AP /Resources/ColorSpace → page.
+    //
     // No re-parsing: page_fonts and acroform_fonts are already populated.
+    //
+    // hasKey/getKey operate on the stream *dictionary*, never on the stream
+    // handle itself — calling them on the stream silently returns false/null.
     auto ap_fonts = std::make_shared<pdf_resource<PAGE_FONTS>>(acroform_fonts);
-    if(ap_stream.hasKey("/Resources"))
+    auto ap_colorspaces = std::make_shared<pdf_resource<PAGE_COLORSPACES>>(page_colorspaces);
+    auto ap_dict = ap_stream.getDict();
+    if(ap_dict.isDictionary() and ap_dict.hasKey("/Resources"))
       {
-        auto ap_resources = ap_stream.getKey("/Resources");
+        auto ap_resources = ap_dict.getKey("/Resources");
         if(ap_resources.isDictionary() and ap_resources.hasKey("/Font"))
           {
             auto ap_font_dict = ap_resources.getKey("/Font");
             ap_fonts->set(ap_font_dict, timings);
           }
+        if(ap_resources.isDictionary() and ap_resources.hasKey("/ColorSpace"))
+          {
+            auto ap_colorspace_dict = ap_resources.getKey("/ColorSpace");
+            ap_colorspaces->set(ap_colorspace_dict);
+          }
       }
 
-    // Temporary containers — only page_cells is of interest.
+    // Temporary containers — the cells and shapes are merged into the page
+    // containers below; the rest is discarded after this call.
     page_item<PAGE_DIMENSION> ap_dimension;
     page_item<PAGE_CELLS>     ap_cells;
     page_item<PAGE_SHAPES>    ap_shapes;
     page_item<PAGE_IMAGES>    ap_images;
-    pdf_render_instructions   ap_instructions; // discarded after this call
+    pdf_render_instructions   ap_instructions;
 
     pdf_decoder<STREAM> stream_decoder(page_config,
                                        ap_dimension,
@@ -1180,6 +1694,7 @@ namespace pdflib
                                        ap_images,
                                        ap_fonts,
                                        page_grphs,
+                                       ap_colorspaces,
                                        page_xobjects,
                                        ap_instructions,
                                        timings);
@@ -1189,10 +1704,37 @@ namespace pdflib
     stream_decoder.interprete(parameters);
 
     // The AP stream uses a local coordinate system whose origin is the
-    // bottom-left corner of the widget /Rect.  Shift every cell by
-    // (bbox[0], bbox[1]) to bring it into page coordinate space.
+    // bottom-left corner of the widget /Rect.  Shift every cell and shape
+    // by (bbox[0], bbox[1]) to bring it into page coordinate space.
     const double ox = bbox[0];
     const double oy = bbox[1];
+
+    // Shapes drawn by the appearance stream (field borders, backgrounds,
+    // check marks drawn as paths, ...): keep them in the parsed output and
+    // re-emit them for the renderer before the text cells, so the field
+    // value stays on top of background fills.
+    const std::array<double, 9> ap_shift = {1.0, 0.0, 0.0,
+                                            0.0, 1.0, 0.0,
+                                            ox,  oy,  1.0};
+    for(auto& shape : ap_shapes)
+      {
+        shape.transform(ap_shift);
+        page_shapes.push_back(shape);
+      }
+
+    for(const auto& shape_instr : ap_instructions.get_shape_instructions())
+      {
+        instructions.add_shape_instruction(shape_instr.translated(ox, oy));
+      }
+
+    // Re-emit the text instructions of the sub-decode in page coordinates
+    // so the renderer draws the glyphs on top of the widget rect; the
+    // translated copies keep the fill color, embedded font program and
+    // char codes that a reconstruction from the cells would lose.
+    for(const auto& text_instr : ap_instructions.get_text_instructions())
+      {
+        instructions.add_text_instruction(text_instr.translated(ox, oy));
+      }
 
     for(auto& cell : ap_cells)
       {
@@ -1204,26 +1746,10 @@ namespace pdflib
         cell.r_x3 += ox; cell.r_y3 += oy;
         cell.widget = true;
         page_cells.push_back(cell);
-
-        // Re-emit a text_instruction in page coordinates so the renderer
-        // draws the glyph outlines on top of the light-blue widget rect.
-        text_instruction tinstr(cell.text,
-                                cell.font_enc,
-                                cell.font_key,
-                                cell.font_name,
-                                cell.enc_name,
-                                cell.font_name,   // base_font — best available proxy
-                                cell.font_size,
-                                cell.r_x0, cell.r_y0,
-                                cell.r_x1, cell.r_y1,
-                                cell.r_x2, cell.r_y2,
-                                cell.r_x3, cell.r_y3,
-                                0.0, 0.0,         // font_ascent_norm / font_descent_norm
-                                cell.r_x0, cell.r_y0); // base point
-        instructions.add_text_instruction(std::move(tinstr));
       }
 
-    LOG_S(INFO) << "AP stream yielded " << ap_cells.size() << " cell(s) for widget";
+    LOG_S(INFO) << "AP stream yielded " << ap_cells.size() << " cell(s) and "
+                << ap_shapes.size() << " shape(s) for widget";
   }
 
   void pdf_decoder<PAGE>::rotate_contents()
@@ -1285,7 +1811,8 @@ namespace pdflib
                               horizontal_cell_tolerance,
                               enforce_same_font,
                               space_width_factor_for_merge,
-                              space_width_factor_for_merge_with_space);
+                              space_width_factor_for_merge_with_space,
+                              false);
 
       //sanitator.sanitize_text(cells);
 

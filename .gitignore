@@ -4,11 +4,18 @@ build
 dist
 extlib_*/
 scratch_*
+scratch/
 perf/results/**
 perf/results_*
 perf/viz*
+perf/*.html
+perf/*.bin
 tests/data/**
-
+*.pdf
+*.json
+*.png
+*.dclx
+docs/performance_benchmarks/*.csv
 
 # Created by https://www.toptal.com/developers/gitignore/api/python,macos,emacs,cmake,virtualenv
 # Edit at https://www.toptal.com/developers/gitignore?templates=python,macos,emacs,cmake,virtualenv

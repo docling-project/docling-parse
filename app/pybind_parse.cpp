@@ -153,13 +153,41 @@ namespace
     {
       pybind11::dict row;
       row["type"] = instruction_name(pdflib::SHAPE_RENDER_INSTRUCTION);
-      row["x"] = instr.get_x();
-      row["y"] = instr.get_y();
-      row["closing_type"] = static_cast<int>(instr.get_closing_type());
-      row["shape_type"] = static_cast<int>(instr.get_shape_type());
+
+      pybind11::list subpaths;
+      for(const auto& sp : instr.get_subpaths())
+        {
+          pybind11::dict sub;
+          sub["x0"] = sp.get_x0();
+          sub["y0"] = sp.get_y0();
+
+          pybind11::list ops;
+          for(const auto op : sp.get_ops())
+            {
+              ops.append(static_cast<int>(op));
+            }
+          sub["ops"] = ops;
+          sub["px"] = sp.get_px();
+          sub["py"] = sp.get_py();
+
+          sub["closing_type"] = static_cast<int>(sp.get_closing_type());
+          sub["shape_type"] = static_cast<int>(sp.get_shape_type());
+          subpaths.append(sub);
+        }
+      row["subpaths"] = subpaths;
+
+      row["paint_mode"] = static_cast<int>(instr.get_paint_mode());
+      row["fill_rule"] = static_cast<int>(instr.get_fill_rule());
       row["line_width"] = instr.get_line_width();
+      row["line_cap"] = instr.get_line_cap();
+      row["line_join"] = instr.get_line_join();
+      row["miter_limit"] = instr.get_miter_limit();
+      row["dash_array"] = instr.get_dash_array();
+      row["dash_phase"] = instr.get_dash_phase();
       row["rgb_stroking"] = instr.get_rgb_stroking();
       row["rgb_filling"] = instr.get_rgb_filling();
+      row["stroke_alpha"] = instr.get_stroke_alpha();
+      row["fill_alpha"] = instr.get_fill_alpha();
       instructions.append(row);
     }
   };
@@ -541,6 +569,21 @@ PYBIND11_MODULE(pdf_parsers, m) {
 	 "Check if word cells have been created")
     .def("has_line_cells", &pdflib::pdf_decoder<pdflib::PAGE>::has_line_cells,
 	 "Check if line cells have been created")
+    .def("intersects_with", &pdflib::pdf_decoder<pdflib::PAGE>::intersects_with,
+         pybind11::arg("bbox"),
+         pybind11::arg("chars") = false,
+         pybind11::arg("shapes") = true,
+         pybind11::arg("bitmaps") = true,
+         "Check whether visible chars, shapes, or bitmaps intersect [left, bottom, right, top]")
+    .def("get_shape_lines", &pdflib::pdf_decoder<pdflib::PAGE>::get_shape_lines,
+         pybind11::arg("horizontal") = true,
+         pybind11::arg("vertical") = true,
+         pybind11::arg("tolerance") = 1e-3,
+         "Return visible horizontal and/or vertical stroked shape segments as [left, bottom, right, top]")
+    .def("get_connected_shape_bounding_boxes",
+         &pdflib::pdf_decoder<pdflib::PAGE>::get_connected_shape_bounding_boxes,
+         pybind11::arg("tolerance") = 0.0,
+         "Return bboxes of visible shapes connected through overlapping bboxes")
     .def("get_timings", [](pdflib::pdf_decoder<pdflib::PAGE>& self) {
 	   // Return as Dict[str, float] (sums) for backward compatibility
 	   return self.get_timings().to_sum_map();
