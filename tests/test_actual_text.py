@@ -90,8 +90,7 @@ def test_actual_text_disabled_keeps_raw_glyphs():
 def test_actual_text_one_to_one_substitution():
     # character count matches cell count: per-glyph geometry is preserved
     content = (
-        "BT /F1 24 Tf 40 50 Td "
-        "/Span <</ActualText (ab)>> BDC (xy) Tj EMC (z) Tj ET"
+        "BT /F1 24 Tf 40 50 Td /Span <</ActualText (ab)>> BDC (xy) Tj EMC (z) Tj ET"
     )
     assert _extract_text(content) == "abz"
 
@@ -114,10 +113,7 @@ def test_oversized_actual_text_is_rejected():
     # descriptive misuse (/Alt semantics in the /ActualText key): implausibly
     # long for the glyph run, keep the drawn glyphs
     desc = "A long description that belongs in Alt not here"
-    content = (
-        "BT /F1 24 Tf 40 50 Td "
-        f"/Span <</ActualText ({desc})>> BDC (ab) Tj EMC ET"
-    )
+    content = f"BT /F1 24 Tf 40 50 Td /Span <</ActualText ({desc})>> BDC (ab) Tj EMC ET"
     assert _extract_text(content) == "ab"
 
 
