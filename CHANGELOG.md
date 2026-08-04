@@ -1,3 +1,10 @@
+## [v7.8.1](https://github.com/docling-project/docling-parse/releases/tag/v7.8.1) - 2026-07-20
+
+### Fix
+
+* Report document load failures instead of deferring them as -1 page count ([#301](https://github.com/docling-project/docling-parse/issues/301)) ([`77eab80`](https://github.com/docling-project/docling-parse/commit/77eab80a6b37df2231299fc59867abc3158bce97))
+* Resolve core-14 font aliases to their standard metrics ([#294](https://github.com/docling-project/docling-parse/issues/294)) ([`109ce27`](https://github.com/docling-project/docling-parse/commit/109ce278db1def7b835b484453e5a34761314d3e))
+
 ## [v7.8.0](https://github.com/docling-project/docling-parse/releases/tag/v7.8.0) - 2026-07-10
 
 ### Feature

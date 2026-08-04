@@ -170,9 +170,17 @@ namespace docling
         remove_page_decoders(key);
 
         doc_decoders[key] = std::make_shared<doc_decoder_type>();
-        doc_decoders.at(key)->process_document_from_file(filename,
-                                                         password,
-                                                         keep_qpdf_warnings);
+        bool success = doc_decoders.at(key)->process_document_from_file(filename,
+                                                                        password,
+                                                                        keep_qpdf_warnings);
+        if(not success)
+          {
+            // do not keep a decoder that never parsed the document: it would
+            // report is_loaded()=true and a number_of_pages of -1
+            doc_decoders.erase(key);
+            LOG_S(ERROR) << "could not process document for key=" << key;
+            return false;
+          }
 
         return true;
       }
@@ -210,16 +218,25 @@ namespace docling
 
         doc_decoders[key] = std::make_shared<doc_decoder_type>();
         std::string description = "parsing of " + key + " from bytesio";
-        doc_decoders.at(key)->process_document_from_bytesio(data_buffer,
-                                                            password,
-                                                            description,
-                                                            keep_qpdf_warnings);
+        bool success = doc_decoders.at(key)->process_document_from_bytesio(data_buffer,
+                                                                           password,
+                                                                           description,
+                                                                           keep_qpdf_warnings);
+        if(not success)
+          {
+            // do not keep a decoder that never parsed the document: it would
+            // report is_loaded()=true and a number_of_pages of -1
+            doc_decoders.erase(key);
+            LOG_S(ERROR) << "could not decode bytesio object for key="<<key;
+            return false;
+          }
 
         return true;
       }
     catch(const std::exception& exc)
       {
-        LOG_S(ERROR) << "could not docode bytesio object for key="<<key;
+        doc_decoders.erase(key);
+        LOG_S(ERROR) << "could not decode bytesio object for key="<<key;
         return false;
       }
 

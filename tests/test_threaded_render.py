@@ -18,7 +18,11 @@ from docling_parse.pdf_parser import (
     RenderConfig,
     ThreadedPdfParserConfig,
 )
-from tests.constants import PARSER_PAGE_RESTRICTIONS
+from tests.constants import (
+    LARGE_SAMPLE_PDF,
+    PARSER_PAGE_RESTRICTIONS,
+    SAMPLE_PDF,
+)
 from tests.rendering_regression import (
     ImageTolerance,
     compare_bitmap_artifacts,
@@ -27,6 +31,7 @@ from tests.rendering_regression import (
     format_image_comparison_table,
     image_comparison_failed,
     measure_image_comparison,
+    renderer_groundtruth_exists,
     write_renderer_groundtruth,
 )
 from tests.test_parse import (
@@ -34,9 +39,6 @@ from tests.test_parse import (
     REGRESSION_FOLDER,
     verify_SegmentedPdfPage,
 )
-
-SAMPLE_PDF = "docs/dln-v1.pdf"
-LARGE_SAMPLE_PDF = "docs/PDF32000_2008.pdf"
 
 RENDERER_IMAGE_TOLERANCE = ImageTolerance(
     pixel_threshold=12,
@@ -432,7 +434,11 @@ def test_render_reference_documents_from_filenames():
     for pdf_doc_path in pdf_docs:
         rname = os.path.basename(pdf_doc_path)
         try:
-            key = parser.load(pdf_doc_path)
+            # page_numbers=None renders the whole document; restricted documents
+            # never render the pages that are not verified
+            key = parser.load(
+                pdf_doc_path, page_numbers=PARSER_PAGE_RESTRICTIONS.get(rname)
+            )
         except Exception as exc:
             if first_failure is None:
                 first_failure = (exc, exc.__traceback__)
@@ -558,7 +564,9 @@ def test_rendered_pages_match_groundtruth(update_groundtruth: bool):
             continue
 
         try:
-            if update_groundtruth:
+            if update_groundtruth or not renderer_groundtruth_exists(
+                rname, result.page_number, result
+            ):
                 write_renderer_groundtruth(rname, result.page_number, result)
             else:
                 compare_render_instructions(rname, result.page_number, result)

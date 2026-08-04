@@ -217,9 +217,17 @@ namespace docling
         try
           {
             key2doc[key] = std::make_shared<doc_decoder_type>();
-            key2doc.at(key)->process_document_from_file(filename,
-                                                        password,
-                                                        config.keep_qpdf_warnings);
+            bool success = key2doc.at(key)->process_document_from_file(filename,
+                                                                       password,
+                                                                       config.keep_qpdf_warnings);
+            if(not success)
+              {
+                // do not keep a decoder that never parsed the document: it
+                // would schedule zero pages and report a page count of -1
+                key2doc.erase(key);
+                LOG_S(ERROR) << "could not decode file object for key=" << key;
+                return false;
+              }
           }
         catch(const std::exception& exc)
           {
@@ -277,10 +285,19 @@ namespace docling
       {
         key2doc[key] = std::make_shared<doc_decoder_type>();
         std::string description = "parsing of " + key + " from bytesio";
-        key2doc.at(key)->process_document_from_bytesio(data_buffer,
-                                                       password,
-                                                       description,
-                                                       config.keep_qpdf_warnings);
+        bool success = key2doc.at(key)->process_document_from_bytesio(data_buffer,
+                                                                      password,
+                                                                      description,
+                                                                      config.keep_qpdf_warnings);
+        if(not success)
+          {
+            // do not keep a decoder that never parsed the document: it would
+            // schedule zero pages and report a page count of -1
+            key2doc.erase(key);
+            key2scheduled_pages.erase(key);
+            LOG_S(ERROR) << "could not decode bytesio object for key=" << key;
+            return false;
+          }
       }
     catch(const std::exception& exc)
       {
@@ -361,6 +378,14 @@ namespace docling
       std::optional<std::vector<int>> page_numbers) const
   {
     std::vector<int> scheduled_pages;
+
+    if(num_pages < 0)
+      {
+        // a negative count means the document was never parsed; scheduling
+        // from it would silently produce an empty task list
+        throw std::runtime_error("Invalid page count " + std::to_string(num_pages)
+                                 + " for document key " + key);
+      }
 
     if(not page_numbers.has_value())
       {

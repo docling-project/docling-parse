@@ -113,6 +113,32 @@ def write_renderer_groundtruth(doc_name: str, page_no: int, result) -> None:
         )
 
 
+def renderer_groundtruth_exists(doc_name: str, page_no: int, result) -> bool:
+    """True when every renderer groundtruth artifact of this page is present.
+
+    A page whose groundtruth is incomplete is regenerated as a whole, so that the
+    png, the instructions and the bitmaps always describe the same render.
+    """
+    if not renderer_image_path(doc_name, page_no).exists():
+        return False
+
+    if not renderer_instructions_path(doc_name, page_no).exists():
+        return False
+
+    prefix = renderer_artifact_prefix(doc_name, page_no)
+    for artifact in result._export_bitmap_artifacts():
+        index = artifact["index"]
+        extension = artifact["extension"]
+
+        if not renderer_bitmap_path(f"{prefix}.bitmap_{index}{extension}").exists():
+            return False
+
+        if not renderer_bitmap_path(f"{prefix}.bitmap_{index}.json").exists():
+            return False
+
+    return True
+
+
 def compare_render_instructions(doc_name: str, page_no: int, result) -> None:
     path = renderer_instructions_path(doc_name, page_no)
     assert path.exists(), f"missing render instruction groundtruth: {path}"
