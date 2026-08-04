@@ -319,6 +319,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
         max_num_lines (int): Maximum number of lines to keep (-1 means no cap) [default=-1].
         max_num_bitmaps (int): Maximum number of bitmaps to keep (-1 means no cap) [default=-1].
         min_visible_clip_extent (float): Minimum clip width/height treated as a usable image clip [default=1e-3].
+        apply_actual_text (bool): Honor /ActualText replacement text of marked-content spans during text extraction (PDF 32000-1, 14.9.4) [default=true].
         keep_glyphs (bool): If true, keep GLYPH<...> fallback strings in output; if false, replace them with a space [default=false].
         keep_qpdf_warnings (bool): If true, QPDF warnings are emitted; if false, they are suppressed [default=false].
     )")
@@ -340,6 +341,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
     .def_readwrite("line_space_width_factor_for_merge_with_space", &pdflib::decode_config::line_space_width_factor_for_merge_with_space)
     .def_readwrite("do_thread_safe", &pdflib::decode_config::do_thread_safe)
     .def_readwrite("release_native_memory_every_n_pages", &pdflib::decode_config::release_native_memory_every_n_pages)
+    .def_readwrite("apply_actual_text", &pdflib::decode_config::apply_actual_text)
     .def_readwrite("keep_glyphs", &pdflib::decode_config::keep_glyphs)
     .def_readwrite("keep_qpdf_warnings", &pdflib::decode_config::keep_qpdf_warnings)
     .def_readwrite("extract_font_programs", &pdflib::decode_config::extract_font_programs)
