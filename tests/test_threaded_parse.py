@@ -15,14 +15,14 @@ from docling_parse.pdf_parser import (
     DoclingThreadedPdfParser,
     ThreadedPdfParserConfig,
 )
-from tests.test_parse import (
-    GROUNDTRUTH_FOLDER,
+from tests.constants import (
+    LARGE_SAMPLE_PDF,
+    PARSER_GROUNDTRUTH_FOLDER,
+    PARSER_PAGE_RESTRICTIONS,
     REGRESSION_FOLDER,
-    verify_SegmentedPdfPage,
+    SAMPLE_PDF,
 )
-
-SAMPLE_PDF = "docs/dln-v1.pdf"
-LARGE_SAMPLE_PDF = "docs/PDF32000_2008.pdf"
+from tests.test_parse import verify_SegmentedPdfPage
 
 
 def _make_decode_config() -> DecodeConfig:
@@ -48,15 +48,7 @@ def test_threaded_reference_documents_from_filenames():
         decode_config=_make_decode_config(),
     )
 
-    page_restrictions = {
-        "deep-mediabox-inheritance.pdf": [2],
-        "font_06.pdf": [1],
-        "font_07.pdf": [1],
-        "font_08.pdf": [1],
-        "font_09.pdf": [1],
-        "font_10.pdf": [1],
-        "2508.13113v2.pdf": [2, 9, 17],
-    }
+    page_restrictions = PARSER_PAGE_RESTRICTIONS
 
     # Each entry: (doc_name, page_no_str, mode, success, error_msg)
     test_results: list[tuple[str, str, str, bool, str]] = []
@@ -68,7 +60,9 @@ def test_threaded_reference_documents_from_filenames():
         print(f"parsing {pdf_doc_path}")
         rname = os.path.basename(pdf_doc_path)
         try:
-            key = parser.load(pdf_doc_path)
+            # page_numbers=None decodes the whole document; restricted documents
+            # never decode the pages that are not verified
+            key = parser.load(pdf_doc_path, page_numbers=page_restrictions.get(rname))
         except Exception as exc:
             if first_failure is None:
                 first_failure = (exc, exc.__traceback__)
@@ -122,7 +116,7 @@ def test_threaded_reference_documents_from_filenames():
                 continue
 
             fname = os.path.join(
-                GROUNDTRUTH_FOLDER, rname + f".page_no_{page_no}.py.json"
+                PARSER_GROUNDTRUTH_FOLDER, rname + f".page_no_{page_no}.py.json"
             )
 
             if not os.path.exists(fname):

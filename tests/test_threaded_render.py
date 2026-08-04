@@ -10,6 +10,7 @@ import pytest
 from docling_core.types.doc.base import BoundingBox, CoordOrigin
 from docling_core.types.doc.page import SegmentedPdfPage
 from PIL import Image as PILImage
+from PIL import ImageChops
 
 from docling_parse.pdf_parser import (
     DecodeConfig,
@@ -17,14 +18,18 @@ from docling_parse.pdf_parser import (
     RenderConfig,
     ThreadedPdfParserConfig,
 )
-from tests.test_parse import (
-    GROUNDTRUTH_FOLDER,
+from tests.constants import (
+    LARGE_SAMPLE_PDF,
+    PARSER_GROUNDTRUTH_FOLDER,
+    PARSER_PAGE_RESTRICTIONS,
     REGRESSION_FOLDER,
-    verify_SegmentedPdfPage,
+    RENDER_MAX_CHANNEL_DELTA,
+    RENDER_MAX_FRACTION_DIFFERING,
+    RENDER_PAGES_GROUNDTRUTH_FOLDER,
+    RENDER_SCALE,
+    SAMPLE_PDF,
 )
-
-SAMPLE_PDF = "docs/dln-v1.pdf"
-LARGE_SAMPLE_PDF = "docs/PDF32000_2008.pdf"
+from tests.test_parse import verify_SegmentedPdfPage
 
 
 def _make_decode_config() -> DecodeConfig:
@@ -35,8 +40,61 @@ def _make_decode_config() -> DecodeConfig:
     )
 
 
-def _make_render_config() -> RenderConfig:
-    return RenderConfig()
+def _make_render_config(scale: float | None = None) -> RenderConfig:
+    render_config = RenderConfig()
+    if scale is not None:
+        render_config.scale = scale
+    return render_config
+
+
+def _max_channel_difference_histogram(
+    pred_image: PILImage.Image, true_image: PILImage.Image
+) -> list[int]:
+    """Histogram of the per-pixel maximum absolute channel difference."""
+    difference = ImageChops.difference(
+        pred_image.convert("RGBA"), true_image.convert("RGBA")
+    )
+
+    bands = difference.split()
+    worst = bands[0]
+    for band in bands[1:]:
+        worst = ImageChops.lighter(worst, band)
+
+    return worst.histogram()
+
+
+def verify_rendered_page_image(
+    pred_image: PILImage.Image,
+    true_image: PILImage.Image,
+    filename: str,
+    max_channel_delta: int = RENDER_MAX_CHANNEL_DELTA,
+    max_fraction_differing: float = RENDER_MAX_FRACTION_DIFFERING,
+) -> None:
+    """Compare a rendered page against its groundtruth png.
+
+    The dimensions have to match exactly. The pixels are allowed to differ by up
+    to `max_channel_delta` per channel, and at most `max_fraction_differing` of
+    them may exceed that, so that anti-aliasing and system-font differences
+    between platforms do not fail the test.
+    """
+    basename = os.path.basename(filename)
+
+    assert pred_image.size == true_image.size, (
+        f"rendered size {pred_image.size} != groundtruth size {true_image.size} "
+        f"for {basename}"
+    )
+
+    histogram = _max_channel_difference_histogram(pred_image, true_image)
+    total = pred_image.width * pred_image.height
+    differing = sum(histogram[max_channel_delta + 1 :])
+    fraction = differing / total
+    max_delta = max((value for value, count in enumerate(histogram) if count), default=0)
+
+    assert fraction <= max_fraction_differing, (
+        f"{100.0 * fraction:.4f}% of the pixels differ by more than "
+        f"{max_channel_delta}/255 (allowed {100.0 * max_fraction_differing:.4f}%, "
+        f"largest difference {max_delta}/255) for {basename}"
+    )
 
 
 def _make_parser(
@@ -398,17 +456,16 @@ def test_render_reference_documents_from_filenames():
     pdf_docs = sorted(glob.glob(REGRESSION_FOLDER))
     assert len(pdf_docs) > 0, "len(pdf_docs)==0 -> nothing to test"
 
-    parser = _make_parser(threads=4, max_concurrent=32)
+    parser = _make_parser(
+        threads=4,
+        max_concurrent=32,
+        render_config=_make_render_config(scale=RENDER_SCALE),
+    )
 
-    page_restrictions = {
-        "deep-mediabox-inheritance.pdf": [2],
-        "font_06.pdf": [1],
-        "font_07.pdf": [1],
-        "font_08.pdf": [1],
-        "font_09.pdf": [1],
-        "font_10.pdf": [1],
-        "2508.13113v2.pdf": [2, 9, 17],
-    }
+    # groundtruth for pages that have none yet is generated into these folders
+    os.makedirs(RENDER_PAGES_GROUNDTRUTH_FOLDER, exist_ok=True)
+
+    page_restrictions = PARSER_PAGE_RESTRICTIONS
 
     test_results: list[tuple[str, str, str, bool, str]] = []
     first_failure: tuple[BaseException, object] | None = None
@@ -418,7 +475,9 @@ def test_render_reference_documents_from_filenames():
     for pdf_doc_path in pdf_docs:
         rname = os.path.basename(pdf_doc_path)
         try:
-            key = parser.load(pdf_doc_path)
+            # page_numbers=None renders the whole document; restricted documents
+            # never render the pages that are not verified
+            key = parser.load(pdf_doc_path, page_numbers=page_restrictions.get(rname))
         except Exception as exc:
             if first_failure is None:
                 first_failure = (exc, exc.__traceback__)
@@ -434,7 +493,37 @@ def test_render_reference_documents_from_filenames():
             results.setdefault(result.doc_key, {})[result.page_number] = (
                 result.get_page()
             )
-            assert result.get_image().mode == "RGBA"
+
+            rname = os.path.basename(key_to_path.get(result.doc_key, result.doc_key))
+            page_no = result.page_number
+
+            # the image is compared here, while it is in scope, so that the
+            # rendered pages of the whole regression set are never held at once
+            if rname in page_restrictions and page_no not in page_restrictions[rname]:
+                continue
+
+            pred_image = result.get_image()
+            assert pred_image.mode == "RGBA"
+
+            image_fname = os.path.join(
+                RENDER_PAGES_GROUNDTRUTH_FOLDER,
+                rname + f".page_no_{page_no}.full_page.png",
+            )
+
+            try:
+                if not os.path.exists(image_fname):
+                    pred_image.save(image_fname)
+                else:
+                    with PILImage.open(image_fname) as true_image:
+                        verify_rendered_page_image(
+                            pred_image, true_image, filename=image_fname
+                        )
+            except Exception as exc:
+                if first_failure is None:
+                    first_failure = (exc, exc.__traceback__)
+                test_results.append((rname, str(page_no), "image", False, str(exc)))
+            else:
+                test_results.append((rname, str(page_no), "image", True, ""))
         else:
             pdf_doc_path = key_to_path.get(result.doc_key, result.doc_key)
             err = AssertionError(result.error_message)
@@ -471,7 +560,7 @@ def test_render_reference_documents_from_filenames():
                 continue
 
             fname = os.path.join(
-                GROUNDTRUTH_FOLDER, rname + f".page_no_{page_no}.py.json"
+                PARSER_GROUNDTRUTH_FOLDER, rname + f".page_no_{page_no}.py.json"
             )
 
             if not os.path.exists(fname):
@@ -490,6 +579,31 @@ def test_render_reference_documents_from_filenames():
                 test_results.append((rname, str(page_no), "all", False, str(exc)))
             else:
                 test_results.append((rname, str(page_no), "all", True, ""))
+
+    # --- results table ---
+    from tabulate import tabulate
+
+    def _trunc(v, n=128):
+        s = str(v)
+        return s if len(s) <= n else s[: n - 3] + "..."
+
+    def _sort_key(row):
+        doc, page, mode = row[0], row[1], row[2]
+        return (doc, int(page) if page.isdigit() else -1, mode)
+
+    table = [
+        (_trunc(doc), page, mode, "PASS" if ok else "FAIL", _trunc(err))
+        for doc, page, mode, ok, err in sorted(test_results, key=_sort_key)
+    ]
+    print(
+        "\n"
+        + tabulate(
+            table,
+            headers=["document", "page", "mode", "status", "error"],
+            tablefmt="grid",
+        )
+        + "\n"
+    )
 
     failed = [
         (doc, page, mode, err) for doc, page, mode, ok, err in test_results if not ok

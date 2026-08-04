@@ -28,6 +28,12 @@ from docling_parse.pdf_parser import (
     DoclingPdfParser,
     PdfDocument,
 )
+from tests.constants import (
+    PARSER_GROUNDTRUTH_FOLDER,
+    PARSER_PAGE_RESTRICTIONS,
+    REGRESSION_FOLDER,
+    SAMPLE_PDF,
+)
 
 GENERATE = False
 
@@ -57,10 +63,6 @@ def save_as_json_rounded(page: SegmentedPdfPage, filename, indent=2, ndigits=3):
     out = _round_floats(page.export_to_dict(), ndigits=ndigits)
     with open(filename, "w", encoding="utf-8") as fw:
         json.dump(out, fw, indent=indent)
-
-
-GROUNDTRUTH_FOLDER = "tests/data/groundtruth/"
-REGRESSION_FOLDER = "tests/data/regression/*.pdf"
 
 
 def _truncate_data_uri(uri, max_chars: int = 64):
@@ -448,17 +450,12 @@ def test_reference_documents_from_filenames():
 
     assert len(pdf_docs) > 0, "len(pdf_docs)==0 -> nothing to test"
 
+    # groundtruth for pdf's that have none yet is generated into this folder
+    os.makedirs(PARSER_GROUNDTRUTH_FOLDER, exist_ok=True)
+
     # this map restricts for pdf's with multiple pages
     # which pages will be tested
-    page_restrictions = {
-        "deep-mediabox-inheritance.pdf": [2],
-        "font_06.pdf": [1],
-        "font_07.pdf": [1],
-        "font_08.pdf": [1],
-        "font_09.pdf": [1],
-        "font_10.pdf": [1],
-        "2508.13113v2.pdf": [2, 9, 17],
-    }
+    page_restrictions = PARSER_PAGE_RESTRICTIONS
 
     config = DecodeConfig(
         keep_glyphs=True, keep_qpdf_warnings=False, do_sanitization=True
@@ -483,24 +480,41 @@ def test_reference_documents_from_filenames():
             results.append((rname, "N/A", "parser", False, str(exc)))
             continue
 
-        # PdfDocument.iterate_pages() will automatically populate pages as they are yielded.
-        # No need to call PdfDocument.load_all_pages() before.
-        for page_no, pred_page in pdf_doc.iterate_pages():
-            print(f" -> Page {page_no} has {len(pred_page.textline_cells)} cells.")
+        # don't do all pages of big pdf's. pdf_doc is lazy, so decoding only the
+        # pages that are actually verified means the rest is never touched.
+        n_pages = pdf_doc.number_of_pages()
+        requested = page_restrictions.get(rname)
 
+        if requested is None:
+            page_numbers = list(range(1, n_pages + 1))
+        else:
+            page_numbers = sorted(p for p in requested if 1 <= p <= n_pages)
+            for page_no in sorted(set(requested) - set(page_numbers)):
+                results.append(
+                    (
+                        rname,
+                        str(page_no),
+                        "page",
+                        False,
+                        f"restricted page {page_no} does not exist, "
+                        f"the document has {n_pages} page(s)",
+                    )
+                )
+
+        for page_no in page_numbers:
             fname = os.path.join(
-                GROUNDTRUTH_FOLDER, rname + f".page_no_{page_no}.py.json"
+                PARSER_GROUNDTRUTH_FOLDER, rname + f".page_no_{page_no}.py.json"
             )
-
-            # don't do all pages of big pdf's
-            if rname in page_restrictions and page_no not in page_restrictions[rname]:
-                continue
 
             SPECIAL_SEPERATOR = "\t<|special_separator|>\n"
 
             page_failed = False
 
             try:
+                # PdfDocument.get_page() populates this page only
+                pred_page = pdf_doc.get_page(page_no)
+                print(f" -> Page {page_no} has {len(pred_page.textline_cells)} cells.")
+
                 if GENERATE or (not os.path.exists(fname)):
                     save_as_json_rounded(pred_page, fname)
 
@@ -1208,7 +1222,7 @@ def test_bitmap_materialization_cache_true_then_false():
 
 # --- ContentConfig redesign ---------------------------------------------
 
-TEXT_PDF = "docs/dln-v1.pdf"
+TEXT_PDF = SAMPLE_PDF
 
 
 def test_word_cells_materialize_without_char_cells():
