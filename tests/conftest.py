@@ -12,6 +12,15 @@ def pytest_addoption(parser) -> None:
         default=False,
         help="Rewrite parser and renderer groundtruth fixtures.",
     )
+    parser.addoption(
+        "--render-visualizations",
+        choices=("above-tolerance", "all", "none"),
+        default="above-tolerance",
+        help=(
+            "Which three-panel renderer comparison images to write to "
+            "tests/data/visualizations (above-tolerance)."
+        ),
+    )
 
 
 def pytest_configure(config) -> None:
@@ -19,11 +28,20 @@ def pytest_configure(config) -> None:
         "markers",
         "groundtruth: tests that compare or update checked-in groundtruth fixtures",
     )
+    config.addinivalue_line(
+        "markers",
+        "pypdfium: tests that compare rendering against pypdfium2 without failing",
+    )
 
 
 @pytest.fixture
 def update_groundtruth(request) -> bool:
     return request.config.getoption("--update-groundtruth")
+
+
+@pytest.fixture
+def render_visualizations(request) -> str:
+    return request.config.getoption("--render-visualizations")
 
 
 def pytest_sessionstart(session) -> None:

@@ -74,6 +74,7 @@ namespace
       size["type"] = instruction_name(pdflib::SIZE_INSTRUCTION);
       size["media_bbox"] = instr.media_bbox;
       size["crop_bbox"] = instr.crop_bbox;
+      size["angle"] = instr.angle;
       root["size_instruction"] = size;
     }
 

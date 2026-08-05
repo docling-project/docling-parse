@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
-from PIL import Image, ImageChops, ImageEnhance, ImageStat
+from PIL import Image, ImageChops, ImageDraw, ImageEnhance, ImageFont, ImageStat
 
 from tests.data_utils import (
     RENDER_GROUNDTRUTH_BITMAPS_DIR,
@@ -14,6 +14,11 @@ from tests.data_utils import (
 from tests.test_parse import _round_floats
 
 RENDER_DELTA_FOLDER = Path("tests/data/render_deltas")
+RENDER_VISUALIZATION_FOLDER = Path("tests/data/visualizations")
+
+# amplification of the per-pixel difference in the visualization panel: raw
+# deltas of a few grey levels are invisible on screen
+DIFFERENCE_AMPLIFICATION = 8
 
 
 @dataclass(frozen=True)
@@ -172,6 +177,37 @@ def _diff_artifact_path(doc_name: str, page_no: int, suffix: str) -> Path:
     )
 
 
+def resize_to_match(actual: Image.Image, expected: Image.Image) -> Image.Image:
+    """Scale `actual` onto the size of `expected`, if they differ.
+
+    Both renders cover the same page box, so a page whose size in pixels comes
+    out one or two pixels apart is showing the same content at a marginally
+    different scale. Cropping to the common area would then compare pixels that
+    drift further apart towards the far edge of the page, which reports a large
+    error for renders that are visually identical. Resampling first puts the
+    page content back on top of itself; the size difference itself is reported
+    separately through `size_matches`.
+    """
+    if actual.size == expected.size:
+        return actual
+
+    return actual.resize(expected.size, Image.Resampling.LANCZOS)
+
+
+def amplified_difference(
+    actual: Image.Image,
+    expected: Image.Image,
+    *,
+    amplification: int = DIFFERENCE_AMPLIFICATION,
+) -> Image.Image:
+    """Brightened per-pixel difference of both images, on the size of `expected`."""
+    diff = ImageChops.difference(
+        resize_to_match(actual.convert("RGB"), expected),
+        expected.convert("RGB"),
+    )
+    return ImageEnhance.Brightness(diff).enhance(amplification)
+
+
 def _write_diff_artifacts(
     doc_name: str,
     page_no: int,
@@ -181,41 +217,38 @@ def _write_diff_artifacts(
     RENDER_DELTA_FOLDER.mkdir(parents=True, exist_ok=True)
     actual.save(_diff_artifact_path(doc_name, page_no, "actual.png"))
     expected.save(_diff_artifact_path(doc_name, page_no, "expected.png"))
-
-    width = min(actual.width, expected.width)
-    height = min(actual.height, expected.height)
-    diff = ImageChops.difference(
-        actual.crop((0, 0, width, height)),
-        expected.crop((0, 0, width, height)),
+    amplified_difference(actual, expected).save(
+        _diff_artifact_path(doc_name, page_no, "diff.png")
     )
-    amplified = ImageEnhance.Brightness(diff).enhance(8)
-    amplified.save(_diff_artifact_path(doc_name, page_no, "diff.png"))
 
 
-def measure_image_comparison(
+def measure_image_pair(
     doc_name: str,
     page_no: int,
     actual: Image.Image,
+    expected: Image.Image,
     *,
     tolerance: ImageTolerance = ImageTolerance(),
 ) -> ImageComparison:
-    path = renderer_image_path(doc_name, page_no)
-    assert path.exists(), f"missing rendered image groundtruth: {path}"
+    """Compare two rendered images of the same page, whatever produced them.
 
+    An image of differing size is resampled onto the size of `expected` before
+    the pixels are compared, so the metrics describe the page content rather
+    than the size difference; the size mismatch itself is reported through
+    `size_matches`.
+    """
     actual_full = actual.convert("RGBA")
-    expected_full = Image.open(path).convert("RGBA")
+    expected_full = expected.convert("RGBA")
     size_matches = actual_full.size == expected_full.size
-    width = min(actual_full.width, expected_full.width)
-    height = min(actual_full.height, expected_full.height)
-    if width <= 0 or height <= 0:
+    width, height = expected_full.size
+    if width <= 0 or height <= 0 or actual_full.width <= 0 or actual_full.height <= 0:
         raise AssertionError(
-            f"rendered image has empty comparison area for {path}: "
+            f"rendered image has empty comparison area for {doc_name}@{page_no}: "
             f"expected {expected_full.size}, got {actual_full.size}"
         )
 
-    actual_rgba = actual_full.crop((0, 0, width, height))
-    expected_rgba = expected_full.crop((0, 0, width, height))
-    diff = ImageChops.difference(actual_rgba, expected_rgba)
+    actual_rgba = resize_to_match(actual_full, expected_full)
+    diff = ImageChops.difference(actual_rgba, expected_full)
     stat = ImageStat.Stat(diff)
     mean_abs_error = sum(stat.mean) / len(stat.mean)
     extrema = diff.getextrema()
@@ -245,6 +278,25 @@ def measure_image_comparison(
         changed_pixels_ratio=changed_pixels_ratio,
         changed_pixels=changed_pixels,
         total_pixels=actual_rgba.width * actual_rgba.height,
+    )
+
+
+def measure_image_comparison(
+    doc_name: str,
+    page_no: int,
+    actual: Image.Image,
+    *,
+    tolerance: ImageTolerance = ImageTolerance(),
+) -> ImageComparison:
+    path = renderer_image_path(doc_name, page_no)
+    assert path.exists(), f"missing rendered image groundtruth: {path}"
+
+    return measure_image_pair(
+        doc_name,
+        page_no,
+        actual,
+        Image.open(path),
+        tolerance=tolerance,
     )
 
 
@@ -375,3 +427,154 @@ def compare_bitmap_artifacts(doc_name: str, page_no: int, result) -> None:
         assert bytes(artifact.get("encoded_data", b"")) == image_path.read_bytes(), (
             f"bitmap image mismatch: {image_path}"
         )
+
+
+def render_pypdfium_page(
+    pdf_path: str | Path,
+    page_no: int,
+    *,
+    scale: float,
+) -> Image.Image:
+    """Render one page with pypdfium2, as the cross-renderer reference."""
+    import pypdfium2 as pdfium
+
+    pdf = pdfium.PdfDocument(str(pdf_path))
+    try:
+        page = pdf[page_no - 1]
+        return page.render(scale=scale).to_pil().convert("RGBA")
+    finally:
+        pdf.close()
+
+
+def flatten_on_white(image: Image.Image) -> Image.Image:
+    """Composite an image onto opaque white.
+
+    The two renderers do not agree on what an untouched pixel is: pypdfium2
+    paints an opaque white page, while the Blend2D path can leave the page
+    background transparent. Comparing them only makes sense on a common
+    background.
+    """
+    rgba = image.convert("RGBA")
+    canvas = Image.new("RGBA", rgba.size, (255, 255, 255, 255))
+    canvas.alpha_composite(rgba)
+    return canvas.convert("RGB")
+
+
+def _label_font(size: int):
+    try:
+        return ImageFont.load_default(size=size)
+    except TypeError:
+        # Pillow < 10.1 only offers the fixed-size bitmap default font
+        return ImageFont.load_default()
+
+
+def _labelled_panel(
+    image: Image.Image,
+    label: str,
+    *,
+    size: tuple[int, int],
+    label_height: int,
+    font_size: int,
+    font,
+    background: tuple[int, int, int],
+    foreground: tuple[int, int, int],
+) -> Image.Image:
+    panel = Image.new("RGB", (size[0], size[1] + label_height), background)
+    panel.paste(image.convert("RGB"), (0, label_height))
+    ImageDraw.Draw(panel).text(
+        (label_height // 3, max(0, (label_height - font_size) // 2)),
+        label,
+        fill=foreground,
+        font=font,
+    )
+    return panel
+
+
+def visualization_path(
+    doc_name: str,
+    page_no: int,
+    delta: float,
+    *,
+    folder: Path = RENDER_VISUALIZATION_FOLDER,
+) -> Path:
+    return (
+        folder / f"delta_{delta:.3f}_{renderer_artifact_prefix(doc_name, page_no)}.png"
+    )
+
+
+def write_comparison_visualization(
+    doc_name: str,
+    page_no: int,
+    reference: Image.Image,
+    actual: Image.Image,
+    delta: float,
+    *,
+    reference_label: str = "pypdfium2",
+    actual_label: str = "docling-parse",
+    folder: Path = RENDER_VISUALIZATION_FOLDER,
+    gap: int = 8,
+) -> Path:
+    """Write a three-panel png: reference, actual and their amplified difference."""
+    reference_rgb = flatten_on_white(reference)
+    actual_rgb = flatten_on_white(actual)
+    difference = amplified_difference(actual_rgb, reference_rgb)
+
+    panel_width = max(reference_rgb.width, actual_rgb.width, difference.width)
+    panel_height = max(reference_rgb.height, actual_rgb.height, difference.height)
+    panel_size = (panel_width, panel_height)
+    # the label has to stay readable when the full three-panel image is scaled
+    # down to fit on screen, so it grows with the page
+    font_size = max(12, panel_width // 40)
+    label_height = font_size * 2
+    font = _label_font(font_size)
+    background = (24, 24, 24)
+    foreground = (240, 240, 240)
+
+    panels = [
+        _labelled_panel(
+            reference_rgb,
+            reference_label,
+            size=panel_size,
+            label_height=label_height,
+            font_size=font_size,
+            font=font,
+            background=background,
+            foreground=foreground,
+        ),
+        _labelled_panel(
+            actual_rgb,
+            actual_label,
+            size=panel_size,
+            label_height=label_height,
+            font_size=font_size,
+            font=font,
+            background=background,
+            foreground=foreground,
+        ),
+        _labelled_panel(
+            difference,
+            f"difference (x{DIFFERENCE_AMPLIFICATION}, mean_abs_error={delta:.3f})",
+            size=panel_size,
+            label_height=label_height,
+            font_size=font_size,
+            font=font,
+            background=background,
+            foreground=foreground,
+        ),
+    ]
+
+    canvas = Image.new(
+        "RGB",
+        (
+            len(panels) * panel_width + (len(panels) - 1) * gap,
+            panel_height + label_height,
+        ),
+        background,
+    )
+    for index, panel in enumerate(panels):
+        canvas.paste(panel, (index * (panel_width + gap), 0))
+
+    path = visualization_path(doc_name, page_no, delta, folder=folder)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    canvas.save(path)
+    return path

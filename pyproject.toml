@@ -167,7 +167,8 @@ python_version = "3.10"
 module = [
     "tabulate.*",
     "botocore.*",
-    "boto3.*"
+    "boto3.*",
+    "pypdfium2.*"
 ]
 ignore_missing_imports = true
 

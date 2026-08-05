@@ -156,8 +156,19 @@ namespace pdflib
   public:
     const static RENDER_INSTRUCTION_NAME instr = SIZE_INSTRUCTION;
 
-    std::array<int, 4> media_bbox;
-    std::array<int, 4> crop_bbox;
+    // Page boxes in PDF units (ISO 32000-1, 14.11.2). They are real-valued
+    // rectangles and are kept as written: truncating them to integers both
+    // shifts the page origin and shrinks the page by up to a point, which a
+    // renderer would turn into a misplaced and undersized canvas.
+    std::array<double, 4> media_bbox;
+    std::array<double, 4> crop_bbox;
+
+    // The page's /Rotate value (ISO 32000-1, Table 30): the number of degrees
+    // by which the page shall be rotated clockwise when displayed. The boxes
+    // above are the ones written in the PDF, so they are stated before that
+    // rotation is applied, and so are all following render instructions. A
+    // renderer therefore has to rotate its finished canvas by this angle.
+    int angle = 0;
   };
 
 
@@ -689,7 +700,8 @@ namespace pdflib
     // add instruction methods
 
     void set_size_instruction(std::array<double, 4> media_bbox,
-                              std::array<double, 4> crop_bbox);
+                              std::array<double, 4> crop_bbox,
+                              int angle);
 
     void add_size_instruction(size_instruction& instr);
     void add_text_instruction(text_instruction_type instr);
@@ -727,13 +739,13 @@ namespace pdflib
   };
 
   inline void pdf_render_instructions::set_size_instruction(std::array<double, 4> media_bbox,
-                                                            std::array<double, 4> crop_bbox)
+                                                            std::array<double, 4> crop_bbox,
+                                                            int angle)
   {
-    for(int i = 0; i < 4; i++)
-      {
-        size_instr.media_bbox[i] = static_cast<int>(media_bbox[i]);
-        size_instr.crop_bbox[i] = static_cast<int>(crop_bbox[i]);
-      }
+    size_instr.media_bbox = media_bbox;
+    size_instr.crop_bbox = crop_bbox;
+
+    size_instr.angle = angle;
   }
 
   inline void pdf_render_instructions::add_size_instruction(size_instruction& instr)

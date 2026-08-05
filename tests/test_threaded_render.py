@@ -2,6 +2,7 @@
 """Tests for threaded parse-and-render mode."""
 
 import glob
+import math
 import os
 from io import BytesIO
 from pathlib import Path
@@ -278,8 +279,8 @@ def test_get_image_scale_rerenders_for_canvas_config():
     scaled_image = result.get_image(scale=2.0)
 
     assert scaled_image.size == (
-        round(result.page_width * 2.0),
-        round(result.page_height * 2.0),
+        math.ceil(result.page_width * 2.0),
+        math.ceil(result.page_height * 2.0),
     )
 
 
@@ -296,8 +297,8 @@ def test_get_image_rerenders_non_default_scale():
     scaled_image = result.get_image(scale=2.0)
 
     assert scaled_image.size == (
-        round(result.page_width * 2.0),
-        round(result.page_height * 2.0),
+        math.ceil(result.page_width * 2.0),
+        math.ceil(result.page_height * 2.0),
     )
     assert scaled_image.size != default_image.size
 
@@ -335,12 +336,12 @@ def test_get_image_canvas_size_is_accepted_for_scale_config():
     same_image = result.get_image(canvas_size=default_image.size)
 
     assert default_image.size == (
-        round(result.page_width * 2.0),
-        round(result.page_height * 2.0),
+        math.ceil(result.page_width * 2.0),
+        math.ceil(result.page_height * 2.0),
     )
     assert semantic_image.size == (
-        round(result.page_width),
-        round(result.page_height),
+        math.ceil(result.page_width),
+        math.ceil(result.page_height),
     )
     assert same_image.size == default_image.size
 
