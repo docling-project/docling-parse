@@ -95,6 +95,12 @@ namespace pdflib
     // axis-aligned rectangular clips. Curve segments render as true cubics.
     void render_shape(shape_instruction& instr);
 
+    // Paints one `sh` shading over the current clip region as a Blend2D
+    // gradient. The shading's colour ramp arrives pre-sampled, and its
+    // geometry is transformed from shading space to canvas space through the
+    // gradient's own matrix, so a flipped or skewed CTM stays exact.
+    void render_shading(shading_instruction& instr);
+
     // Returns the rendered canvas as RGBA bytes, row-major top-to-bottom, in
     // display orientation. The associated shape is {height, width, 4}.
     std::shared_ptr<std::vector<uint8_t>> get_canvas() const;
@@ -2090,6 +2096,238 @@ namespace pdflib
 
         ctx.stroke_path(path);
       }
+
+    if (clip_active)
+      {
+        ctx.restore();
+      }
+  }
+
+  // ---------------------------------------------------------------------------
+  // render_shading
+  //
+  // Paints an axial or radial shading (`sh`) over the current clip region.
+  //
+  // The gradient geometry is left in shading space and handed to Blend2D
+  // together with a style transform, so the shading's level sets stay correct
+  // under a flipped or skewed CTM. /Extend controls what happens beyond the
+  // axis: `true` is Blend2D's pad mode, `false` is emulated with a transparent
+  // guard stop, since the pad mode is the only one that keeps the interior
+  // ramp intact.
+  // ---------------------------------------------------------------------------
+
+  inline void renderer<BLEND2D>::render_shading(shading_instruction& instr)
+  {
+    if (not has_canvas()) { return; }
+    if (not config_.render_shapes) { return; }
+
+    const std::vector<shading_stop>& stops = instr.get_stops();
+    const std::vector<double>& coords = instr.get_coords();
+
+    LOG_S(INFO) << __FUNCTION__ << ": key='" << instr.get_key() << "'"
+                << ", geometry: " << static_cast<int>(instr.get_geometry())
+                << ", #-stops: " << stops.size()
+                << ", alpha: " << instr.get_fill_alpha();
+
+    if (stops.size() < 2)
+      {
+        LOG_S(WARNING) << "render_shading: shading " << instr.get_key()
+                       << " has fewer than two colour stops, skipping";
+        return;
+      }
+
+    static constexpr double min_visible_alpha = 1.0 / 512.0;
+    const double fill_alpha =
+      std::min(1.0, std::max(0.0, instr.get_fill_alpha()));
+
+    if (fill_alpha <= min_visible_alpha)
+      {
+        LOG_S(INFO) << "render_shading: fill-alpha " << fill_alpha
+                    << " is invisible, skipping " << instr.get_key();
+        return;
+      }
+
+    // shading space -> canvas space: the PDF matrix [a b c d e f] composed
+    // with the page-to-canvas mapping (which flips y).
+    const std::array<double, 6>& m = instr.get_matrix();
+    const BLMatrix2D transform(
+       scale_x_ * m[0], -scale_y_ * m[1],
+       scale_x_ * m[2], -scale_y_ * m[3],
+       scale_x_ * (m[4] - origin_x_),
+       static_cast<double>(canvas_height_) - scale_y_ * (m[5] - origin_y_));
+
+    // Average canvas-space scale of that transform, used to size the guard
+    // band of a non-extended end in axis units.
+    const double det = transform.m00 * transform.m11 - transform.m01 * transform.m10;
+    const double canvas_scale = std::sqrt(std::abs(det));
+
+    BLGradient gradient;
+
+    bool extend_start = instr.get_extend_start();
+    bool extend_end = instr.get_extend_end();
+    bool reversed = false;
+    double axis_length = 0.0;
+
+    if (instr.get_geometry() == SHADING_GEOMETRY_AXIAL)
+      {
+        if (coords.size() < 4)
+          {
+            LOG_S(WARNING) << "render_shading: axial shading " << instr.get_key()
+                           << " has " << coords.size() << " coordinates, skipping";
+            return;
+          }
+
+        const double dx = coords[2] - coords[0];
+        const double dy = coords[3] - coords[1];
+        axis_length = std::sqrt(dx * dx + dy * dy);
+
+        if (axis_length <= 0.0)
+          {
+            LOG_S(WARNING) << "render_shading: axial shading " << instr.get_key()
+                           << " has a zero-length axis, skipping";
+            return;
+          }
+
+        gradient = BLGradient(BLLinearGradientValues(coords[0], coords[1],
+                                                     coords[2], coords[3]));
+      }
+    else
+      {
+        if (coords.size() < 6)
+          {
+            LOG_S(WARNING) << "render_shading: radial shading " << instr.get_key()
+                           << " has " << coords.size() << " coordinates, skipping";
+            return;
+          }
+
+        // Blend2D's radial gradient runs from a focal circle (offset 0) to a
+        // center circle (offset 1) and expects the focal circle to be the
+        // smaller one, so a PDF shading that shrinks is fed in reverse.
+        reversed = coords[5] < coords[2];
+
+        const std::size_t focal = reversed ? 3 : 0;
+        const std::size_t center = reversed ? 0 : 3;
+
+        axis_length = std::abs(coords[5] - coords[2]);
+
+        if (axis_length <= 0.0)
+          {
+            LOG_S(WARNING) << "render_shading: radial shading " << instr.get_key()
+                           << " has two equal radii, skipping";
+            return;
+          }
+
+        gradient = BLGradient(BLRadialGradientValues(coords[center + 0],
+                                                     coords[center + 1],
+                                                     coords[focal + 0],
+                                                     coords[focal + 1],
+                                                     coords[center + 2],
+                                                     coords[focal + 2]));
+
+        if (reversed)
+          {
+            std::swap(extend_start, extend_end);
+          }
+      }
+
+    gradient.set_extend_mode(BL_EXTEND_MODE_PAD);
+    gradient.set_transform(transform);
+
+    // Guard band for a non-extended end: wide enough to stay sub-pixel on the
+    // canvas, so the transparent-to-colour transition is not visible.
+    const double axis_pixels = std::max(1.0, axis_length * canvas_scale);
+    const double guard = std::min(0.25, 0.5 / axis_pixels);
+
+    // The ramp in gradient-offset order. A reversed radial shading flips both
+    // the offsets and the traversal, so everything below works on offsets that
+    // already ascend.
+    std::vector<std::pair<double, std::array<int, 3>>> ramp;
+    ramp.reserve(stops.size());
+    for (std::size_t i = 0; i < stops.size(); i++)
+      {
+        const shading_stop& stop = reversed ? stops[stops.size() - 1 - i] : stops[i];
+        ramp.emplace_back(reversed ? 1.0 - stop.get_offset() : stop.get_offset(),
+                          stop.get_rgb());
+      }
+
+    // Colour of the ramp at an arbitrary offset, so a guard stop can carry the
+    // colour of the point it replaces.
+    auto color_at = [&ramp](double offset) -> std::array<int, 3>
+      {
+        if (offset <= ramp.front().first) { return ramp.front().second; }
+        if (offset >= ramp.back().first)  { return ramp.back().second; }
+
+        for (std::size_t i = 1; i < ramp.size(); i++)
+          {
+            const double o0 = ramp[i - 1].first;
+            const double o1 = ramp[i].first;
+            if (offset > o1) { continue; }
+
+            const double f = (o1 > o0) ? (offset - o0) / (o1 - o0) : 0.0;
+            const auto& c0 = ramp[i - 1].second;
+            const auto& c1 = ramp[i].second;
+
+            return {static_cast<int>(std::lround(c0[0] + f * (c1[0] - c0[0]))),
+                    static_cast<int>(std::lround(c0[1] + f * (c1[1] - c0[1]))),
+                    static_cast<int>(std::lround(c0[2] + f * (c1[2] - c0[2])))};
+          }
+
+        return ramp.back().second;
+      };
+
+    const double low = extend_start ? 0.0 : guard;
+    const double high = extend_end ? 1.0 : 1.0 - guard;
+
+    if (not extend_start)
+      {
+        // pad replicates this stop backwards, leaving t < 0 unpainted
+        gradient.add_stop(0.0, make_rgba32(color_at(low), 0.0));
+        gradient.add_stop(low, make_rgba32(color_at(low), fill_alpha));
+      }
+
+    for (const auto& entry : ramp)
+      {
+        if (entry.first < low or entry.first > high) { continue; }
+
+        gradient.add_stop(entry.first, make_rgba32(entry.second, fill_alpha));
+      }
+
+    if (not extend_end)
+      {
+        gradient.add_stop(high, make_rgba32(color_at(high), fill_alpha));
+        gradient.add_stop(1.0, make_rgba32(color_at(high), 0.0));
+      }
+
+    // `sh` covers the whole clip region, so the fill is the entire canvas and
+    // the clip is what bounds it. Without an applicable clip an unbounded fill
+    // would flood the page, which is worse than not painting at all.
+    const BLRect canvas_rect(0.0, 0.0,
+                             static_cast<double>(canvas_width_),
+                             static_cast<double>(canvas_height_));
+
+    BLContext& ctx = page_context();
+
+    bool clip_active = false;
+    if (instr.has_clip_state())
+      {
+        ctx.save();
+        const clip_apply_result clip_result =
+          apply_clip_state(ctx, instr.get_clip_state(), canvas_rect);
+
+        if (clip_result != CLIP_APPLIED)
+          {
+            ctx.restore();
+            LOG_S(WARNING) << "render_shading: shading " << instr.get_key()
+                           << " has a clip that could not be applied, skipping"
+                           << " rather than flooding the page";
+            return;
+          }
+
+        clip_active = true;
+      }
+
+    ctx.set_fill_style(gradient);
+    ctx.fill_rect(canvas_rect);
 
     if (clip_active)
       {

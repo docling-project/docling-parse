@@ -26,6 +26,8 @@ namespace pdflib
 
     void render_shape(shape_instruction& instr);
 
+    void render_shading(shading_instruction& instr);
+
   private:
 
     render_config config_;
@@ -93,6 +95,13 @@ namespace pdflib
   {
     LOG_S(INFO) << __FUNCTION__
                 << "  #-points=" << instr.size();
+  }
+
+  inline void renderer<NAIVE>::render_shading(shading_instruction& instr)
+  {
+    LOG_S(INFO) << __FUNCTION__
+                << "  key='" << instr.get_key() << "'"
+                << "  #-stops=" << instr.get_stops().size();
   }
 
 }

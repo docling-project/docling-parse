@@ -112,12 +112,10 @@ namespace pdflib
       Sets nonstroking color space to DeviceCMYK and sets color.  
       Operands: `c m y k`
       
-      ### Shading
-      
-      - `sh` — Paint shading pattern  
-      Paints a shading (e.g., gradient/mesh) defined in the Shading resource dictionary.  
-      Operands: `shadingName`  
-      Notes: the shading defines its own color space and how colors are computed.      
+      Note: `sh` (paint shading) is *not* handled here. A shading takes its
+      colors from its own /Shading resource rather than from the graphics
+      state, and it needs the current clipping path to know what it covers, so
+      it is executed by the stream decoder (pdf_decoder<STREAM>::do_shading).
      */
     
   public:
@@ -163,10 +161,6 @@ namespace pdflib
 
     void K(std::vector<qpdf_stream_instruction>& instructions);
     void k(std::vector<qpdf_stream_instruction>& instructions);
-
-    // shading
-
-    void sh(std::vector<qpdf_stream_instruction>& instructions);
 
     // Public getters for graphics state properties
     double get_line_width() const { return line_width; }

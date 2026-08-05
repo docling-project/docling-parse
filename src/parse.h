@@ -95,6 +95,10 @@
 #include <parse/pdf_resources/page_colorspace.h>
 #include <parse/pdf_resources/page_colorspaces.h>
 
+#include <parse/pdf_resources/pdf_function.h>
+#include <parse/pdf_resources/page_shading.h>
+#include <parse/pdf_resources/page_shadings.h>
+
 #include <parse/pdf_resources/page_xobject_image.h>
 #include <parse/pdf_resources/page_xobject_form.h>
 #include <parse/pdf_resources/page_xobject_postscript.h>

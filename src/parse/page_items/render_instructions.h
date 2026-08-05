@@ -136,6 +136,31 @@ namespace pdflib
     TEXT_WIDGET_RENDER_INSTRUCTION, // render a fillable-field widget (bbox + value text)
     BITMAP_RENDER_INSTRUCTION, // paste bitmap image on the canvas
     SHAPE_RENDER_INSTRUCTION, // draw shapes (lines, shapes, filling, etc)
+    SHADING_RENDER_INSTRUCTION, // paint a shading (`sh`) over the clip region
+  };
+
+  // One sample of a shading's colour ramp: `offset` runs from 0.0 at the
+  // start of the shading axis to 1.0 at its end (the shading's /Domain is
+  // already folded in), `rgb` is the colour there in 0-255 device RGB.
+  class shading_stop
+  {
+  public:
+    shading_stop(): offset_(0.0), rgb_({0, 0, 0}) {}
+    shading_stop(double offset, std::array<int, 3> rgb):
+      offset_(offset), rgb_(rgb) {}
+
+    double get_offset() const { return offset_; }
+    const std::array<int, 3>& get_rgb() const { return rgb_; }
+
+  private:
+    double offset_;
+    std::array<int, 3> rgb_;
+  };
+
+  // Which geometry the coordinates of a shading_instruction describe.
+  enum shading_geometry {
+    SHADING_GEOMETRY_AXIAL,  // coords: [x0, y0, x1, y1]
+    SHADING_GEOMETRY_RADIAL, // coords: [x0, y0, r0, x1, y1, r1]
   };
 
   class instruction
@@ -695,6 +720,88 @@ namespace pdflib
     const clip_state_instruction  clip_state;
   };
 
+  // One `sh` shading-paint operation (8.7.4.5). Unlike a shape, a shading has
+  // no path of its own: it covers the whole clip region, so `clip_state` is
+  // what bounds it (a shading whose /BBox is set contributes an extra clip
+  // path).
+  //
+  // The coordinates stay in the shading's own space and are accompanied by
+  // `matrix`, the CTM in force at the `sh` operator, mapping that space onto
+  // page space. Applying the CTM to the endpoints instead would be wrong: a
+  // shading's colour is constant along the lines perpendicular to its axis in
+  // *shading* space, and a non-conformal CTM does not preserve those angles.
+  class shading_instruction
+  {
+  public:
+    const static RENDER_INSTRUCTION_NAME instr = SHADING_RENDER_INSTRUCTION;
+
+    shading_instruction(std::string             shading_key,
+                        shading_geometry        geometry,
+                        std::vector<double>     coords,
+                        std::array<double, 6>   matrix,
+                        std::vector<shading_stop> stops,
+                        bool                    extend_start,
+                        bool                    extend_end,
+                        double                  fill_alpha,
+                        clip_state_instruction  clip_state = clip_state_instruction()):
+      shading_key(std::move(shading_key)),
+      geometry(geometry),
+      coords(std::move(coords)),
+      matrix(matrix),
+      stops(std::move(stops)),
+      extend_start(extend_start),
+      extend_end(extend_end),
+      fill_alpha(fill_alpha),
+      clip_state(std::move(clip_state)) {}
+
+    const std::string& get_key() const { return shading_key; }
+
+    shading_geometry get_geometry() const { return geometry; }
+
+    const std::vector<double>& get_coords() const { return coords; }
+
+    // Shading space -> page space, in PDF order [a, b, c, d, e, f].
+    const std::array<double, 6>& get_matrix() const { return matrix; }
+
+    const std::vector<shading_stop>& get_stops() const { return stops; }
+
+    // /Extend: whether the shading continues beyond its start / end circle
+    // (Tables 79, 80). Where it does not, nothing is painted.
+    bool get_extend_start() const { return extend_start; }
+    bool get_extend_end() const { return extend_end; }
+
+    // ExtGState constant alpha (/ca) in force at the `sh` operator
+    double get_fill_alpha() const { return fill_alpha; }
+
+    const clip_state_instruction& get_clip_state() const { return clip_state; }
+    bool has_clip_state() const { return clip_state.has_clip(); }
+
+    shading_instruction translated(double dx, double dy) const
+    {
+      // The shading coordinates live in shading space, so a page-space shift
+      // belongs in the translation part of the matrix.
+      std::array<double, 6> matrix_ = matrix;
+      matrix_[4] += dx;
+      matrix_[5] += dy;
+
+      return shading_instruction(shading_key, geometry, coords, matrix_, stops,
+                                 extend_start, extend_end, fill_alpha,
+                                 clip_state.translated(dx, dy));
+    }
+
+  private:
+
+    const std::string               shading_key;
+    const shading_geometry          geometry;
+    const std::vector<double>       coords;
+    const std::array<double, 6>     matrix;
+    const std::vector<shading_stop> stops;
+    const bool                      extend_start;
+    const bool                      extend_end;
+    const double                    fill_alpha;
+    const clip_state_instruction    clip_state;
+  };
+
   class pdf_render_instructions
   {
     typedef instruction instruction_type;
@@ -703,6 +810,7 @@ namespace pdflib
     typedef text_widget_instruction text_widget_instruction_type;
     typedef bitmap_instruction bitmap_instruction_type;
     typedef shape_instruction shape_instruction_type;
+    typedef shading_instruction shading_instruction_type;
 
   public:
 
@@ -717,6 +825,7 @@ namespace pdflib
     void add_widget_instruction(text_widget_instruction_type instr);
     void add_bitmap_instruction(bitmap_instruction_type instr);
     void add_shape_instruction(shape_instruction_type instr);
+    void add_shading_instruction(shading_instruction_type instr);
 
     // Read access for re-emitting instructions of a sub-decode (widget
     // appearance streams) into the main instruction list.
@@ -728,6 +837,11 @@ namespace pdflib
     const std::vector<text_instruction_type>& get_text_instructions() const
     {
       return text_instructions;
+    }
+
+    const std::vector<shading_instruction_type>& get_shading_instructions() const
+    {
+      return shading_instructions;
     }
 
     // render method
@@ -744,6 +858,7 @@ namespace pdflib
     std::vector<text_widget_instruction_type> widget_instructions;
     std::vector<bitmap_instruction_type>      bitmap_instructions;
     std::vector<shape_instruction_type>       shape_instructions;
+    std::vector<shading_instruction_type>     shading_instructions;
 
   };
 
@@ -786,6 +901,12 @@ namespace pdflib
     shape_instructions.push_back(std::move(instr));
   }
 
+  inline void pdf_render_instructions::add_shading_instruction(shading_instruction instr)
+  {
+    instructions.emplace_back(SHADING_RENDER_INSTRUCTION, shading_instructions.size());
+    shading_instructions.push_back(std::move(instr));
+  }
+
   template<typename renderer_type>
   void pdf_render_instructions::iterate_over_instructions(renderer_type& renderer)
   {
@@ -820,6 +941,13 @@ namespace pdflib
 	    {
 	      auto& shape_instr = shape_instructions.at(instr.index);
 	      renderer.render_shape(shape_instr);
+	    }
+	    break;
+
+	  case SHADING_RENDER_INSTRUCTION:
+	    {
+	      auto& shading_instr = shading_instructions.at(instr.index);
+	      renderer.render_shading(shading_instr);
 	    }
 	    break;
 

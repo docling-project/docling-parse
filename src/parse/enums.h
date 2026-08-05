@@ -223,6 +223,52 @@ namespace pdflib
     COLOR_SPACE_PATTERN
   };
 
+  // The /ShadingType of a shading dictionary (Table 78). Only the axial and
+  // radial types are painted; the others are recognised so that an
+  // unsupported shading is reported by name instead of dropped silently.
+  enum shading_type_name {
+    SHADING_UNKNOWN               = 0,
+    SHADING_FUNCTION_BASED        = 1,
+    SHADING_AXIAL                 = 2,
+    SHADING_RADIAL                = 3,
+    SHADING_FREE_FORM_GOURAUD     = 4,
+    SHADING_LATTICE_FORM_GOURAUD  = 5,
+    SHADING_COONS_PATCH           = 6,
+    SHADING_TENSOR_PATCH          = 7,
+  };
+
+  std::string to_string(shading_type_name name)
+  {
+    switch(name)
+      {
+      case SHADING_FUNCTION_BASED:       { return "function-based (1)"; }
+      case SHADING_AXIAL:                { return "axial (2)"; }
+      case SHADING_RADIAL:               { return "radial (3)"; }
+      case SHADING_FREE_FORM_GOURAUD:    { return "free-form Gouraud triangle mesh (4)"; }
+      case SHADING_LATTICE_FORM_GOURAUD: { return "lattice-form Gouraud triangle mesh (5)"; }
+      case SHADING_COONS_PATCH:          { return "Coons patch mesh (6)"; }
+      case SHADING_TENSOR_PATCH:         { return "tensor-product patch mesh (7)"; }
+
+      default: { return "unknown (0)"; }
+      }
+  }
+
+  shading_type_name to_shading_type_name(int type)
+  {
+    switch(type)
+      {
+      case 1: { return SHADING_FUNCTION_BASED; }
+      case 2: { return SHADING_AXIAL; }
+      case 3: { return SHADING_RADIAL; }
+      case 4: { return SHADING_FREE_FORM_GOURAUD; }
+      case 5: { return SHADING_LATTICE_FORM_GOURAUD; }
+      case 6: { return SHADING_COONS_PATCH; }
+      case 7: { return SHADING_TENSOR_PATCH; }
+
+      default: { return SHADING_UNKNOWN; }
+      }
+  }
+
   // Blend modes of an ExtGState /BM entry (11.3.5). Only BLEND_MODE_NORMAL
   // (and its /Compatible synonym) is actually composited; the rest are parsed
   // so that documents relying on them are identifiable instead of silently
