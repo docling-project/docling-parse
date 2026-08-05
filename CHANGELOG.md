@@ -1,3 +1,9 @@
+## [v7.10.0](https://github.com/docling-project/docling-parse/releases/tag/v7.10.0) - 2026-08-05
+
+### Feature
+
+* Added the rendering-regression with pypdfium ([#305](https://github.com/docling-project/docling-parse/issues/305)) ([`2229782`](https://github.com/docling-project/docling-parse/commit/22297826037cff8582edf31d49174063b273f60c))
+
 ## [v7.9.0](https://github.com/docling-project/docling-parse/releases/tag/v7.9.0) - 2026-08-04
 
 ### Feature
