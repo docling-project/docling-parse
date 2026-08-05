@@ -99,15 +99,30 @@ namespace pdflib
       }
   }
 
+  // Number of pixels needed to cover a page extent expressed in canvas units.
+  // The page box is a real-valued rectangle, so a page of 595.2756 points at
+  // scale 2 needs 1191 pixels, not 1190: rounding down would drop the last
+  // fractional column of the page. Rounding up is also what PDFium does
+  // (FPDF_GetPageWidthF times the scale, rounded up), which keeps our canvas
+  // dimensions identical to a pypdfium2 render of the same page.
+  //
+  // The epsilon absorbs the noise of the box subtraction that produced the
+  // extent, so a page that is an exact 612 x 792 does not gain a pixel from a
+  // 612.0000000000001 arithmetic result.
+  inline int pixels_for_extent(double extent)
+  {
+    return static_cast<int>(std::ceil(extent - 1e-6));
+  }
+
   inline std::pair<int, int> resolve_canvas_size(
-      int pdf_width,
-      int pdf_height,
+      double pdf_width,
+      double pdf_height,
       const render_config& config)
   {
     validate_render_config(config);
 
-    int width = pdf_width;
-    int height = pdf_height;
+    int width = pixels_for_extent(pdf_width);
+    int height = pixels_for_extent(pdf_height);
 
     const bool have_width = config.canvas_width > 0;
     const bool have_height = config.canvas_height > 0;
@@ -115,8 +130,8 @@ namespace pdflib
 
     if(have_scale)
       {
-        width = static_cast<int>(std::round(static_cast<double>(pdf_width) * config.scale));
-        height = static_cast<int>(std::round(static_cast<double>(pdf_height) * config.scale));
+        width = pixels_for_extent(pdf_width * config.scale);
+        height = pixels_for_extent(pdf_height * config.scale);
       }
     else if(have_width and have_height)
       {
@@ -126,14 +141,12 @@ namespace pdflib
     else if(have_width)
       {
         width = config.canvas_width;
-        height = static_cast<int>(
-            std::round(static_cast<double>(pdf_height) * width / pdf_width));
+        height = pixels_for_extent(pdf_height * width / pdf_width);
       }
     else if(have_height)
       {
         height = config.canvas_height;
-        width = static_cast<int>(
-            std::round(static_cast<double>(pdf_width) * height / pdf_height));
+        width = pixels_for_extent(pdf_width * height / pdf_height);
       }
 
     if(width <= 0)

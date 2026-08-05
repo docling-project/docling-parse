@@ -87,29 +87,43 @@ The generated files include actual, expected, and amplified diff PNGs.
 
 ## Cross-Renderer Comparison Against pypdfium2
 
-`test_pypdfium_render.py` runs the same comparison as
-`test_rendered_pages_match_groundtruth`, but renders the reference with
-pypdfium2 instead of reading it from the regression dataset:
+`test_pypdfium_render.py::test_rendered_pages_match_pypdfium` is structured like
+`test_rendered_pages_match_groundtruth`: same regression PDF set, same
+`PARSER_PAGE_RESTRICTIONS`, same threaded parser at scale 2.0. The difference is
+where the reference image comes from: pypdfium2 renders it on the spot instead
+of it being read from the Hugging Face dataset.
 
 ```bash
 uv run pytest tests/test_pypdfium_render.py -q -s
 ```
 
-Both renders use scale 2.0 and are composited onto opaque white before they are
-compared, because the two renderers disagree on what an untouched page pixel is.
+Both renders are composited onto opaque white before they are compared, because
+the two renderers disagree on what an untouched page pixel is: pypdfium2 paints
+an opaque page, while the Blend2D path can leave the background transparent.
 
-This test never fails on pixel differences. pypdfium2 is an independent
-implementation, so the per-page numbers are a report, not a contract: the test
-prints the metric table plus the pages above `PYPDFIUM_IMAGE_TOLERANCE`, and
-only fails if no page could be compared at all. It is skipped when pypdfium2 is
-not installed.
+### This test never fails on pixel differences
 
-Three-panel PNGs (pypdfium2 | docling-parse | amplified difference) are written
-to:
+pypdfium2 is an independent implementation, so the per-page numbers are a
+report, not a contract. The test prints the metric table and the list of pages
+above `PYPDFIUM_IMAGE_TOLERANCE` (reported, not enforced), and only fails when
+no page could be compared at all. It is skipped when pypdfium2 is not installed.
+
+Consequently `PYPDFIUM_IMAGE_TOLERANCE` is not a regression limit. It is only
+the cut-off that decides which pages are called out in the report and, by
+default, which ones get a visualization written.
+
+### Three-panel visualizations
+
+Comparison images are written to:
 
 ```text
 tests/data/visualizations/delta_<mean_abs_error>_<pdf-name>.page_no_<n>.png
 ```
+
+Left to right, the panels are pypdfium2, docling-parse, and their difference
+amplified by `DIFFERENCE_AMPLIFICATION`. Each panel carries a label whose font
+scales with the page width, so the image stays readable when the full
+three-panel png is scaled down to fit on screen.
 
 `--render-visualizations` selects which pages get one:
 
@@ -121,6 +135,57 @@ uv run pytest tests/test_pypdfium_render.py -q -s --render-visualizations all
 # none
 uv run pytest tests/test_pypdfium_render.py -q -s --render-visualizations none
 ```
+
+A full run over the regression set writes tens of megabytes of png into
+`tests/data/visualizations`. That directory is not part of the downloaded
+dataset and can be deleted at any time.
+
+### Reading the result
+
+A run after page `/Rotate` was implemented in the Blend2D renderer compared 93
+pages, of which 51 were reported above tolerance. The large deltas are the
+interesting ones, and the visualization usually makes the cause obvious at a
+glance.
+
+Page rotation is applied: `rotated_page_01`, `rotated_image` and
+`jbig2_test_01` render landscape at 1584x1224 like pypdfium2, with mean
+absolute errors of 1.21, 0.22 and 0.22, and the
+`ocr_test_rotated_{000,090,180,270}` set agrees with pypdfium2 on orientation
+as well.
+
+What is left in the report is mostly one of three things:
+
+- A page size that is off by one or two pixels. 33 of the 93 pages report
+  `size_match False`, with the pypdfium2 render one or two pixels wider and/or
+  taller (for example 1190x1682 against 1191x1684). A size mismatch on its own
+  already puts a page above tolerance, and the images are then compared on
+  their common top-left area, so the accumulated sub-pixel scale difference
+  shifts glyph and image edges towards the far side of the page. Such a page
+  can report a large `mean_abs_error` while looking identical side by side:
+  `complex_invisible_fonts_01` at 24.80 is a full-page photograph that differs
+  only by that offset.
+- Content one renderer draws and the other does not. `form_fields` page 3
+  (20.31) and `fillable_form` (16.31) are widget annotation appearances that
+  docling-parse paints and pypdfium2 leaves out, and `right_to_left_02` (45.28)
+  is a tiling pattern that docling-parse paints over the whole page.
+  `device_n_black` (48.37) is the other direction: pypdfium2 draws a
+  gradient-filled banner that docling-parse leaves blank.
+- Anti-aliasing, hinting and glyph rasterization, which differ between the two
+  renderers on nearly every page. The size-matching pages sit around a mean
+  absolute error of 2.6, and those small deltas are not worth chasing.
+
+### Shared helpers
+
+The comparison machinery lives in `rendering_regression.py` and is shared with
+the groundtruth test:
+
+- `measure_image_pair()` computes the pixel metrics for any two images;
+  `measure_image_comparison()` is the wrapper that loads the groundtruth png.
+- `render_pypdfium_page()` renders the reference page.
+- `flatten_on_white()` puts both renders on the same page background.
+- `amplified_difference()` builds the difference panel, and is also used for the
+  `render_deltas` diff artifacts.
+- `write_comparison_visualization()` assembles and writes the three-panel png.
 
 ## Regression Data
 

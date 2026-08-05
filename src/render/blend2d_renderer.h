@@ -61,6 +61,12 @@ namespace pdflib
     // Initializes the page canvas from the PDF crop box and render_config. This
     // computes the PDF-to-canvas scale/origin, creates a PRGB32 Blend2D image,
     // starts the page context, and fills the canvas with opaque white.
+    //
+    // All drawing happens in unrotated page space, which is the space the
+    // render instructions are expressed in. When the page carries a /Rotate,
+    // the canvas is allocated in that space (so width and height are swapped
+    // with respect to the reported shape) and the finished canvas is rotated
+    // into display orientation before it leaves the renderer.
     void set_size(size_instruction& instr);
 
     // Renders one text cell into the page canvas. The method converts the PDF
@@ -89,12 +95,14 @@ namespace pdflib
     // axis-aligned rectangular clips. Curve segments render as true cubics.
     void render_shape(shape_instruction& instr);
 
-    // Returns the rendered canvas as RGBA bytes, row-major top-to-bottom.
-    // The associated shape is {height, width, 4}.
+    // Returns the rendered canvas as RGBA bytes, row-major top-to-bottom, in
+    // display orientation. The associated shape is {height, width, 4}.
     std::shared_ptr<std::vector<uint8_t>> get_canvas() const;
 
-    // Returns the current canvas shape as {height, width, channels}. Before
-    // set_size() this is {0, 0, 4}.
+    // Returns the canvas shape in display orientation as {height, width,
+    // channels}. Before set_size() this is {0, 0, 4}. This is the shape the
+    // canvas has once it is handed out, so for a page rotated by 90 or 270
+    // degrees it is already the transpose of the internal drawing canvas.
     const std::array<int, 3>& get_shape() const { return shape_; }
 
     // Save the canvas to a file.  The format is inferred from the extension
@@ -139,11 +147,21 @@ namespace pdflib
     mutable BLImage    image_;  // internal canvas (PRGB32 format)
     mutable BLContext  context_;
     mutable bool       context_active_ = false;
-    std::array<int, 3> shape_;  // {height, width, 4}
+    std::array<int, 3> shape_;  // {height, width, 4}, display orientation
+    int canvas_width_ = 0;     // internal canvas width (unrotated page space)
+    int canvas_height_ = 0;    // internal canvas height (unrotated page space)
     double scale_x_ = 1.0;     // pdf-to-canvas scale along x
     double scale_y_ = 1.0;     // pdf-to-canvas scale along y
     double origin_x_ = 0.0;    // crop_bbox x origin (pdf units)
     double origin_y_ = 0.0;    // crop_bbox y origin (pdf units, y-up)
+
+    // Quarter turns clockwise that take the internal canvas into display
+    // orientation, derived from the page's /Rotate. In [0, 3].
+    int quarter_turns_ = 0;
+
+    // Guards the one-shot canvas rotation, so that repeated canvas access
+    // (get_canvas() followed by save(), for instance) rotates only once.
+    mutable bool rotation_applied_ = false;
 
     std::shared_ptr<blend2d_font_resolver> font_resolver_;
     std::shared_ptr<blend2d_embedded_font_cache> embedded_font_cache_;
@@ -154,16 +172,33 @@ namespace pdflib
     // necessary. Throws when called before a non-empty canvas has been created.
     BLContext& page_context();
 
-    // Ends the active Blend2D context if one is open. This flushes pending
-    // drawing operations before canvas extraction or file output.
+    // Ends the active Blend2D context if one is open and rotates the finished
+    // canvas into display orientation. This flushes pending drawing operations
+    // before canvas extraction or file output.
     void finish_page_context() const;
 
+    // Rotates the drawing canvas clockwise by quarter_turns_ so that it leaves
+    // the renderer in display orientation. Multiples of 90 degrees permute
+    // pixels exactly, so this neither resamples nor loses precision. Does
+    // nothing for an unrotated page or an already rotated canvas, and must run
+    // only after the Blend2D context has been ended.
+    void apply_page_rotation() const;
+
+    // Number of quarter turns clockwise for a /Rotate angle, normalized to
+    // [0, 3]. Angles that are not a multiple of 90 are not representable in
+    // PDF (ISO 32000-1, Table 30) and are reported and treated as unrotated.
+    static int quarter_turns_from_angle(int angle);
+
+    // True once set_size() has allocated a canvas to draw on.
+    bool has_canvas() const { return canvas_width_ > 0 and canvas_height_ > 0; }
+
     // Convert PDF coordinates (origin at crop_bbox bottom-left, y-up) to
-    // canvas coordinates (origin top-left, y-down), applying scale.
+    // canvas coordinates (origin top-left, y-down), applying scale. These are
+    // coordinates on the internal, unrotated canvas.
     double canvas_x(double pdf_x) const { return (pdf_x - origin_x_) * scale_x_; }
     double canvas_y(double pdf_y) const
     {
-      return static_cast<double>(shape_[0]) - (pdf_y - origin_y_) * scale_y_;
+      return static_cast<double>(canvas_height_) - (pdf_y - origin_y_) * scale_y_;
     }
 
     // Decides whether a text cell should use glyph-bbox fitting when glyph bbox
@@ -711,7 +746,7 @@ namespace pdflib
         return context_;
       }
 
-    if (shape_[0] == 0 or shape_[1] == 0)
+    if (not has_canvas())
       {
         throw std::runtime_error("renderer<BLEND2D>::page_context: canvas is empty");
       }
@@ -730,19 +765,128 @@ namespace pdflib
 
   inline void renderer<BLEND2D>::finish_page_context() const
   {
-    if (not context_active_)
+    if (context_active_)
+      {
+        const BLResult err = context_.end();
+        context_active_ = false;
+        if (err != BL_SUCCESS)
+          {
+            throw std::runtime_error(
+              "renderer<BLEND2D>::finish_page_context: failed to end Blend2D context "
+              "(BLResult=" + std::to_string(err) + ")");
+          }
+      }
+
+    apply_page_rotation();
+  }
+
+  inline int renderer<BLEND2D>::quarter_turns_from_angle(int angle)
+  {
+    int normalised = angle % 360;
+    if (normalised < 0)
+      {
+        normalised += 360;
+      }
+
+    if ((normalised % 90) != 0)
+      {
+        LOG_S(ERROR) << "the /Rotate angle should be a multiple of 90, got: "
+                     << angle << " -> rendering the page unrotated";
+        return 0;
+      }
+
+    return normalised / 90;
+  }
+
+  inline void renderer<BLEND2D>::apply_page_rotation() const
+  {
+    if (rotation_applied_ or quarter_turns_ == 0 or image_.is_empty())
       {
         return;
       }
 
-    const BLResult err = context_.end();
-    context_active_ = false;
-    if (err != BL_SUCCESS)
+    rotation_applied_ = true;
+
+    const int src_w = image_.width();
+    const int src_h = image_.height();
+    if (src_w <= 0 or src_h <= 0)
+      {
+        return;
+      }
+
+    BLImageData src_data;
+    const BLResult src_res = image_.get_data(&src_data);
+    if (src_res != BL_SUCCESS)
       {
         throw std::runtime_error(
-          "renderer<BLEND2D>::finish_page_context: failed to end Blend2D context "
-          "(BLResult=" + std::to_string(err) + ")");
+          "renderer<BLEND2D>::apply_page_rotation: failed to read canvas data "
+          "(BLResult=" + std::to_string(src_res) + ")");
       }
+
+    const bool transposed = (quarter_turns_ % 2) != 0;
+    const int dst_w = transposed ? src_h : src_w;
+    const int dst_h = transposed ? src_w : src_h;
+
+    BLImage rotated;
+    const BLResult create_res = rotated.create(dst_w, dst_h, BL_FORMAT_PRGB32);
+    if (create_res != BL_SUCCESS)
+      {
+        throw std::runtime_error(
+          "renderer<BLEND2D>::apply_page_rotation: failed to create rotated canvas "
+          "(BLResult=" + std::to_string(create_res) + ")");
+      }
+
+    BLImageData dst_data;
+    const BLResult dst_res = rotated.make_mutable(&dst_data);
+    if (dst_res != BL_SUCCESS)
+      {
+        throw std::runtime_error(
+          "renderer<BLEND2D>::apply_page_rotation: failed to lock rotated canvas "
+          "(BLResult=" + std::to_string(dst_res) + ")");
+      }
+
+    const auto* src_base = static_cast<const uint8_t*>(src_data.pixel_data);
+    auto* dst_base = static_cast<uint8_t*>(dst_data.pixel_data);
+
+    for (int y = 0; y < src_h; ++y)
+      {
+        const auto* src_row =
+          reinterpret_cast<const uint32_t*>(src_base + y * src_data.stride);
+
+        for (int x = 0; x < src_w; ++x)
+          {
+            // clockwise: the source top-left corner moves to the top-right for
+            // one quarter turn, to the bottom-right for two, and so on
+            int dst_x = 0;
+            int dst_y = 0;
+            switch (quarter_turns_)
+              {
+              case 1:
+                dst_x = src_h - 1 - y;
+                dst_y = x;
+                break;
+              case 2:
+                dst_x = src_w - 1 - x;
+                dst_y = src_h - 1 - y;
+                break;
+              default:
+                dst_x = y;
+                dst_y = src_w - 1 - x;
+                break;
+              }
+
+            auto* dst_row =
+              reinterpret_cast<uint32_t*>(dst_base + dst_y * dst_data.stride);
+            dst_row[dst_x] = src_row[x];
+          }
+      }
+
+    image_ = rotated;
+
+    LOG_S(INFO) << "apply_page_rotation:"
+                << " quarter_turns=" << quarter_turns_
+                << " canvas=" << src_w << "x" << src_h
+                << " -> " << dst_w << "x" << dst_h;
   }
 
   // ---------------------------------------------------------------------------
@@ -754,24 +898,45 @@ namespace pdflib
     finish_page_context();
 
     const auto& bbox = instr.crop_bbox;
-    const int pdf_w  = bbox[2] - bbox[0];
-    const int pdf_h  = bbox[3] - bbox[1];
+    const double pdf_w = bbox[2] - bbox[0];
+    const double pdf_h = bbox[3] - bbox[1];
 
-    if (pdf_w <= 0 or pdf_h <= 0) { return; }
+    if (pdf_w <= 0.0 or pdf_h <= 0.0) { return; }
 
-    const auto [width, height] = resolve_canvas_size(pdf_w, pdf_h, config_);
+    quarter_turns_ = quarter_turns_from_angle(instr.angle);
+    rotation_applied_ = false;
 
+    // The requested canvas size describes the page as displayed, so it is
+    // resolved against the displayed page size and mapped back onto the
+    // unrotated canvas we actually draw on.
+    const bool transposed = (quarter_turns_ % 2) != 0;
+    const double display_pdf_w = transposed ? pdf_h : pdf_w;
+    const double display_pdf_h = transposed ? pdf_w : pdf_h;
+
+    const auto [display_width, display_height] =
+      resolve_canvas_size(display_pdf_w, display_pdf_h, config_);
+
+    const int width  = transposed ? display_height : display_width;
+    const int height = transposed ? display_width  : display_height;
+
+    // The page box is mapped onto the whole canvas, so the effective scale is
+    // the pixel count over the page extent. Since the canvas covers a
+    // fractional page extent, that is marginally more than the requested scale.
     scale_x_ = static_cast<double>(width)  / pdf_w;
     scale_y_ = static_cast<double>(height) / pdf_h;
-    origin_x_ = static_cast<double>(bbox[0]);
-    origin_y_ = static_cast<double>(bbox[1]);
+    origin_x_ = bbox[0];
+    origin_y_ = bbox[1];
 
-    shape_ = {height, width, 4};
+    canvas_width_ = width;
+    canvas_height_ = height;
+    shape_ = {display_height, display_width, 4};
 
     LOG_S(INFO) << "set_size:"
                 << " crop_bbox=[" << bbox[0] << "," << bbox[1] << "," << bbox[2] << "," << bbox[3] << "]"
                 << " pdf_size=" << pdf_w << "x" << pdf_h
+                << " angle=" << instr.angle
                 << " canvas=" << width << "x" << height
+                << " display=" << display_width << "x" << display_height
                 << " scale=(" << scale_x_ << "," << scale_y_ << ")";
 
     image_.create(width, height, BL_FORMAT_PRGB32);
@@ -1233,7 +1398,7 @@ namespace pdflib
   {
     // LOG_S(INFO) << __FUNCTION__;
 
-    if (shape_[0] == 0 or shape_[1] == 0) { return; }
+    if (not has_canvas()) { return; }
 
     const text_geometry geom = make_text_geometry(instr);
 
@@ -1550,7 +1715,7 @@ namespace pdflib
   {
     LOG_S(INFO) << __FUNCTION__ << " for xobject_key=" << instr.get_key();
 
-    if (shape_[0] == 0 or shape_[1] == 0)
+    if (not has_canvas())
       {
         LOG_S(WARNING) << __FUNCTION__ << ": canvas not initialised, skipping";
         return;
@@ -1702,7 +1867,7 @@ namespace pdflib
   {
     LOG_S(INFO) << __FUNCTION__ << "  text='" << instr.get_text() << "'";
 
-    if (shape_[0] == 0 or shape_[1] == 0) { return; }
+    if (not has_canvas()) { return; }
 
     BLPath path;
     path.move_to(canvas_x(instr.get_r_x0()), canvas_y(instr.get_r_y0()));
@@ -1821,7 +1986,7 @@ namespace pdflib
 
   inline void renderer<BLEND2D>::render_shape(shape_instruction& instr)
   {
-    if (shape_[0] == 0 or shape_[1] == 0) { return; }
+    if (not has_canvas()) { return; }
     if (not config_.render_shapes) { return; }
 
     BLRect bbox;

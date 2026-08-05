@@ -177,18 +177,33 @@ def _diff_artifact_path(doc_name: str, page_no: int, suffix: str) -> Path:
     )
 
 
+def resize_to_match(actual: Image.Image, expected: Image.Image) -> Image.Image:
+    """Scale `actual` onto the size of `expected`, if they differ.
+
+    Both renders cover the same page box, so a page whose size in pixels comes
+    out one or two pixels apart is showing the same content at a marginally
+    different scale. Cropping to the common area would then compare pixels that
+    drift further apart towards the far edge of the page, which reports a large
+    error for renders that are visually identical. Resampling first puts the
+    page content back on top of itself; the size difference itself is reported
+    separately through `size_matches`.
+    """
+    if actual.size == expected.size:
+        return actual
+
+    return actual.resize(expected.size, Image.Resampling.LANCZOS)
+
+
 def amplified_difference(
     actual: Image.Image,
     expected: Image.Image,
     *,
     amplification: int = DIFFERENCE_AMPLIFICATION,
 ) -> Image.Image:
-    """Brightened per-pixel difference of the common area of both images."""
-    width = min(actual.width, expected.width)
-    height = min(actual.height, expected.height)
+    """Brightened per-pixel difference of both images, on the size of `expected`."""
     diff = ImageChops.difference(
-        actual.convert("RGB").crop((0, 0, width, height)),
-        expected.convert("RGB").crop((0, 0, width, height)),
+        resize_to_match(actual.convert("RGB"), expected),
+        expected.convert("RGB"),
     )
     return ImageEnhance.Brightness(diff).enhance(amplification)
 
@@ -217,23 +232,23 @@ def measure_image_pair(
 ) -> ImageComparison:
     """Compare two rendered images of the same page, whatever produced them.
 
-    Images of differing size are compared on their common top-left area; the
-    size mismatch itself is reported through `size_matches`.
+    An image of differing size is resampled onto the size of `expected` before
+    the pixels are compared, so the metrics describe the page content rather
+    than the size difference; the size mismatch itself is reported through
+    `size_matches`.
     """
     actual_full = actual.convert("RGBA")
     expected_full = expected.convert("RGBA")
     size_matches = actual_full.size == expected_full.size
-    width = min(actual_full.width, expected_full.width)
-    height = min(actual_full.height, expected_full.height)
-    if width <= 0 or height <= 0:
+    width, height = expected_full.size
+    if width <= 0 or height <= 0 or actual_full.width <= 0 or actual_full.height <= 0:
         raise AssertionError(
             f"rendered image has empty comparison area for {doc_name}@{page_no}: "
             f"expected {expected_full.size}, got {actual_full.size}"
         )
 
-    actual_rgba = actual_full.crop((0, 0, width, height))
-    expected_rgba = expected_full.crop((0, 0, width, height))
-    diff = ImageChops.difference(actual_rgba, expected_rgba)
+    actual_rgba = resize_to_match(actual_full, expected_full)
+    diff = ImageChops.difference(actual_rgba, expected_full)
     stat = ImageStat.Stat(diff)
     mean_abs_error = sum(stat.mean) / len(stat.mean)
     extrema = diff.getextrema()

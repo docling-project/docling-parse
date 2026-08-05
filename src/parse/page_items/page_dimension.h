@@ -291,6 +291,20 @@ namespace pdflib
 	  }
       }
 
+    // A rectangle may be written with any pair of opposite corners, and shall
+    // be normalised so that the first corner is the lower-left one
+    // (ISO 32000-1, 7.9.5). Without this, a page box written top-down has a
+    // negative extent, which propagates into every page size derived from it.
+    if(result[0] > result[2])
+      {
+	std::swap(result[0], result[2]);
+      }
+
+    if(result[1] > result[3])
+      {
+	std::swap(result[1], result[3]);
+      }
+
     return result;
   }
 

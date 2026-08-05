@@ -914,8 +914,12 @@ namespace pdflib
 
     page_dimension.execute(qpdf_page);
 
+    // The angle is captured here, before rotate_contents() normalizes it away:
+    // the render instructions are emitted in unrotated page space, so the
+    // renderer needs the original /Rotate to orient its canvas.
     instructions.set_size_instruction(page_dimension.get_media_bbox(),
-                                      page_dimension.get_crop_bbox());
+                                      page_dimension.get_crop_bbox(),
+                                      page_dimension.get_angle());
   }
 
   void pdf_decoder<PAGE>::decode_resources(const decode_config& config)
