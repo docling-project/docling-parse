@@ -141,7 +141,7 @@ def test_rendered_pages_match_pypdfium(render_visualizations: str) -> None:
                     result.page_number,
                     expected,
                     actual,
-                    comparison.mean_abs_error,
+                    comparison.normalized_delta,
                 )
             )
 

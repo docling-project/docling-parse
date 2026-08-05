@@ -97,6 +97,8 @@ namespace pdflib
 
     void decode_colorspaces();
 
+    void decode_shadings();
+
     void decode_xobjects();
 
     // Contents
@@ -147,6 +149,7 @@ namespace pdflib
     QPDFObjectHandle qpdf_grphs;
     QPDFObjectHandle qpdf_fonts;
     QPDFObjectHandle qpdf_colorspaces;
+    QPDFObjectHandle qpdf_shadings;
     QPDFObjectHandle qpdf_xobjects;
 
     // Debug-only: populated when config.populate_json_objects is true
@@ -176,6 +179,7 @@ namespace pdflib
     std::shared_ptr<pdf_resource<PAGE_GRPHS> > page_grphs;
     std::shared_ptr<pdf_resource<PAGE_FONTS> > page_fonts;
     std::shared_ptr<pdf_resource<PAGE_COLORSPACES> > page_colorspaces;
+    std::shared_ptr<pdf_resource<PAGE_SHADINGS> > page_shadings;
     std::shared_ptr<pdf_resource<PAGE_XOBJECTS> > page_xobjects;
 
     decode_config page_config;  // saved at the start of decode_page for use in widget handlers
@@ -199,6 +203,7 @@ namespace pdflib
     page_grphs(std::make_shared<pdf_resource<PAGE_GRPHS>>()),
     page_fonts(std::make_shared<pdf_resource<PAGE_FONTS>>()),
     page_colorspaces(std::make_shared<pdf_resource<PAGE_COLORSPACES>>()),
+    page_shadings(std::make_shared<pdf_resource<PAGE_SHADINGS>>()),
     page_xobjects(std::make_shared<pdf_resource<PAGE_XOBJECTS>>())
   {}
 
@@ -216,6 +221,7 @@ namespace pdflib
     page_grphs(std::make_shared<pdf_resource<PAGE_GRPHS>>()),
     page_fonts(std::make_shared<pdf_resource<PAGE_FONTS>>()),
     page_colorspaces(std::make_shared<pdf_resource<PAGE_COLORSPACES>>()),
+    page_shadings(std::make_shared<pdf_resource<PAGE_SHADINGS>>()),
     page_xobjects(std::make_shared<pdf_resource<PAGE_XOBJECTS>>())
   {
     std::string description = "thread-safe page " + std::to_string(orig_page_num);
@@ -1017,6 +1023,16 @@ namespace pdflib
         LOG_S(INFO) << "page does not have any color spaces!";
       }
 
+    if(qpdf_resources.hasKey("/Shading"))
+      {
+        qpdf_shadings = qpdf_resources.getKey("/Shading");
+        decode_shadings();
+      }
+    else
+      {
+        LOG_S(INFO) << "page does not have any shadings!";
+      }
+
     if(qpdf_resources.hasKey("/XObject"))
       {
         qpdf_xobjects = qpdf_resources.getKey("/XObject");
@@ -1049,6 +1065,13 @@ namespace pdflib
     page_colorspaces->set(qpdf_colorspaces);
   }
 
+  void pdf_decoder<PAGE>::decode_shadings()
+  {
+    LOG_S(INFO) << __FUNCTION__;
+
+    page_shadings->set(qpdf_shadings);
+  }
+
   void pdf_decoder<PAGE>::decode_xobjects()
   {
     LOG_S(INFO) << __FUNCTION__;
@@ -1072,6 +1095,7 @@ namespace pdflib
                                        page_fonts,
                                        page_grphs,
                                        page_colorspaces,
+                                       page_shadings,
                                        page_xobjects,
                                        instructions,
                                        timings);
@@ -1659,7 +1683,9 @@ namespace pdflib
     //     → acroform_fonts  (AcroForm /DR/Font, e.g. /Helv)
     //       → page_fonts    (page-level fonts, e.g. /F2)
     //
-    // The color spaces chain the same way: AP /Resources/ColorSpace → page.
+    // The color spaces, graphics states and shadings chain the same way:
+    // AP /Resources/ColorSpace → page, AP /Resources/ExtGState → page,
+    // AP /Resources/Shading → page.
     //
     // No re-parsing: page_fonts and acroform_fonts are already populated.
     //
@@ -1667,6 +1693,8 @@ namespace pdflib
     // handle itself — calling them on the stream silently returns false/null.
     auto ap_fonts = std::make_shared<pdf_resource<PAGE_FONTS>>(acroform_fonts);
     auto ap_colorspaces = std::make_shared<pdf_resource<PAGE_COLORSPACES>>(page_colorspaces);
+    auto ap_grphs = std::make_shared<pdf_resource<PAGE_GRPHS>>(page_grphs);
+    auto ap_shadings = std::make_shared<pdf_resource<PAGE_SHADINGS>>(page_shadings);
     auto ap_dict = ap_stream.getDict();
     if(ap_dict.isDictionary() and ap_dict.hasKey("/Resources"))
       {
@@ -1680,6 +1708,16 @@ namespace pdflib
           {
             auto ap_colorspace_dict = ap_resources.getKey("/ColorSpace");
             ap_colorspaces->set(ap_colorspace_dict);
+          }
+        if(ap_resources.isDictionary() and ap_resources.hasKey("/ExtGState"))
+          {
+            auto ap_grph_dict = ap_resources.getKey("/ExtGState");
+            ap_grphs->set(ap_grph_dict, timings);
+          }
+        if(ap_resources.isDictionary() and ap_resources.hasKey("/Shading"))
+          {
+            auto ap_shading_dict = ap_resources.getKey("/Shading");
+            ap_shadings->set(ap_shading_dict);
           }
       }
 
@@ -1697,8 +1735,9 @@ namespace pdflib
                                        ap_shapes,
                                        ap_images,
                                        ap_fonts,
-                                       page_grphs,
+                                       ap_grphs,
                                        ap_colorspaces,
+                                       ap_shadings,
                                        page_xobjects,
                                        ap_instructions,
                                        timings);
@@ -1729,6 +1768,11 @@ namespace pdflib
     for(const auto& shape_instr : ap_instructions.get_shape_instructions())
       {
         instructions.add_shape_instruction(shape_instr.translated(ox, oy));
+      }
+
+    for(const auto& shading_instr : ap_instructions.get_shading_instructions())
+      {
+        instructions.add_shading_instruction(shading_instr.translated(ox, oy));
       }
 
     // Re-emit the text instructions of the sub-decode in page coordinates

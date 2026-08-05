@@ -37,6 +37,7 @@ namespace
       case pdflib::TEXT_WIDGET_RENDER_INSTRUCTION: return "widget";
       case pdflib::BITMAP_RENDER_INSTRUCTION: return "bitmap";
       case pdflib::SHAPE_RENDER_INSTRUCTION: return "shape";
+      case pdflib::SHADING_RENDER_INSTRUCTION: return "shading";
       default: return "unknown";
       }
   }
@@ -191,6 +192,33 @@ namespace
       row["fill_alpha"] = instr.get_fill_alpha();
       instructions.append(row);
     }
+
+    void render_shading(pdflib::shading_instruction& instr)
+    {
+      pybind11::dict row;
+      row["type"] = instruction_name(pdflib::SHADING_RENDER_INSTRUCTION);
+      row["shading_key"] = instr.get_key();
+      row["geometry"] = static_cast<int>(instr.get_geometry());
+      row["coords"] = instr.get_coords();
+      row["matrix"] = instr.get_matrix();
+      row["extend_start"] = instr.get_extend_start();
+      row["extend_end"] = instr.get_extend_end();
+      row["fill_alpha"] = instr.get_fill_alpha();
+
+      // The colour ramp is a fixed-resolution resampling; only its endpoints
+      // and its length are stable enough to be worth exporting.
+      pybind11::list stops;
+      for(const auto& stop : instr.get_stops())
+        {
+          pybind11::dict entry;
+          entry["offset"] = stop.get_offset();
+          entry["rgb"] = stop.get_rgb();
+          stops.append(entry);
+        }
+      row["stops"] = stops;
+
+      instructions.append(row);
+    }
   };
 
   struct bitmap_artifact_export_visitor
@@ -202,6 +230,7 @@ namespace
     void render_text(pdflib::text_instruction&) {}
     void render_widget(pdflib::text_widget_instruction&) {}
     void render_shape(pdflib::shape_instruction&) {}
+    void render_shading(pdflib::shading_instruction&) {}
 
     void render_bitmap(pdflib::bitmap_instruction& instr)
     {

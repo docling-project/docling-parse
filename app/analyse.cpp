@@ -40,6 +40,7 @@ struct yellow_box_inspector
   void render_text(pdflib::text_instruction&)           {}
   void render_widget(pdflib::text_widget_instruction&)  {}
   void render_shape(pdflib::shape_instruction&)         {}
+  void render_shading(pdflib::shading_instruction&)     {}
 
   void render_bitmap(pdflib::bitmap_instruction& instr)
   {

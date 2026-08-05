@@ -171,6 +171,7 @@ namespace bitmap_export
     void render_text(text_instruction&)          {}
     void render_widget(text_widget_instruction&) {}
     void render_shape(shape_instruction&)        {}
+    void render_shading(shading_instruction&)    {}
 
     void render_bitmap(bitmap_instruction& instr)
     {

@@ -223,6 +223,137 @@ namespace pdflib
     COLOR_SPACE_PATTERN
   };
 
+  // The /ShadingType of a shading dictionary (Table 78). Only the axial and
+  // radial types are painted; the others are recognised so that an
+  // unsupported shading is reported by name instead of dropped silently.
+  enum shading_type_name {
+    SHADING_UNKNOWN               = 0,
+    SHADING_FUNCTION_BASED        = 1,
+    SHADING_AXIAL                 = 2,
+    SHADING_RADIAL                = 3,
+    SHADING_FREE_FORM_GOURAUD     = 4,
+    SHADING_LATTICE_FORM_GOURAUD  = 5,
+    SHADING_COONS_PATCH           = 6,
+    SHADING_TENSOR_PATCH          = 7,
+  };
+
+  std::string to_string(shading_type_name name)
+  {
+    switch(name)
+      {
+      case SHADING_FUNCTION_BASED:       { return "function-based (1)"; }
+      case SHADING_AXIAL:                { return "axial (2)"; }
+      case SHADING_RADIAL:               { return "radial (3)"; }
+      case SHADING_FREE_FORM_GOURAUD:    { return "free-form Gouraud triangle mesh (4)"; }
+      case SHADING_LATTICE_FORM_GOURAUD: { return "lattice-form Gouraud triangle mesh (5)"; }
+      case SHADING_COONS_PATCH:          { return "Coons patch mesh (6)"; }
+      case SHADING_TENSOR_PATCH:         { return "tensor-product patch mesh (7)"; }
+
+      default: { return "unknown (0)"; }
+      }
+  }
+
+  shading_type_name to_shading_type_name(int type)
+  {
+    switch(type)
+      {
+      case 1: { return SHADING_FUNCTION_BASED; }
+      case 2: { return SHADING_AXIAL; }
+      case 3: { return SHADING_RADIAL; }
+      case 4: { return SHADING_FREE_FORM_GOURAUD; }
+      case 5: { return SHADING_LATTICE_FORM_GOURAUD; }
+      case 6: { return SHADING_COONS_PATCH; }
+      case 7: { return SHADING_TENSOR_PATCH; }
+
+      default: { return SHADING_UNKNOWN; }
+      }
+  }
+
+  // Blend modes of an ExtGState /BM entry (11.3.5). Only BLEND_MODE_NORMAL
+  // (and its /Compatible synonym) is actually composited; the rest are parsed
+  // so that documents relying on them are identifiable instead of silently
+  // rendered as Normal.
+  enum blend_mode_name {
+    BLEND_MODE_UNKNOWN,
+
+    // separable blend modes (Table 136)
+    BLEND_MODE_NORMAL,
+    BLEND_MODE_MULTIPLY,
+    BLEND_MODE_SCREEN,
+    BLEND_MODE_OVERLAY,
+    BLEND_MODE_DARKEN,
+    BLEND_MODE_LIGHTEN,
+    BLEND_MODE_COLOR_DODGE,
+    BLEND_MODE_COLOR_BURN,
+    BLEND_MODE_HARD_LIGHT,
+    BLEND_MODE_SOFT_LIGHT,
+    BLEND_MODE_DIFFERENCE,
+    BLEND_MODE_EXCLUSION,
+
+    // non-separable blend modes (Table 137)
+    BLEND_MODE_HUE,
+    BLEND_MODE_SATURATION,
+    BLEND_MODE_COLOR,
+    BLEND_MODE_LUMINOSITY,
+  };
+
+  // State of an ExtGState /SMask entry. A present soft mask is the one
+  // transparency parameter whose omission makes the output wrong rather than
+  // merely approximate, so absent and /None are kept apart.
+  enum soft_mask_state {
+    SOFT_MASK_ABSENT,   // key not in the dictionary: inherit the current mask
+    SOFT_MASK_NONE,     // /None: clear the current soft mask
+    SOFT_MASK_PRESENT,  // a mask dictionary (not applied)
+  };
+
+  std::string to_string(blend_mode_name name)
+  {
+    switch(name)
+      {
+      case BLEND_MODE_NORMAL:      { return "/Normal"; }
+      case BLEND_MODE_MULTIPLY:    { return "/Multiply"; }
+      case BLEND_MODE_SCREEN:      { return "/Screen"; }
+      case BLEND_MODE_OVERLAY:     { return "/Overlay"; }
+      case BLEND_MODE_DARKEN:      { return "/Darken"; }
+      case BLEND_MODE_LIGHTEN:     { return "/Lighten"; }
+      case BLEND_MODE_COLOR_DODGE: { return "/ColorDodge"; }
+      case BLEND_MODE_COLOR_BURN:  { return "/ColorBurn"; }
+      case BLEND_MODE_HARD_LIGHT:  { return "/HardLight"; }
+      case BLEND_MODE_SOFT_LIGHT:  { return "/SoftLight"; }
+      case BLEND_MODE_DIFFERENCE:  { return "/Difference"; }
+      case BLEND_MODE_EXCLUSION:   { return "/Exclusion"; }
+      case BLEND_MODE_HUE:         { return "/Hue"; }
+      case BLEND_MODE_SATURATION:  { return "/Saturation"; }
+      case BLEND_MODE_COLOR:       { return "/Color"; }
+      case BLEND_MODE_LUMINOSITY:  { return "/Luminosity"; }
+
+      default: { return "/Unknown"; }
+      }
+  }
+
+  // /Compatible is a deprecated synonym of /Normal (11.3.5.2)
+  blend_mode_name to_blend_mode_name(const std::string& name)
+  {
+    if(name=="/Normal" or name=="/Compatible") { return BLEND_MODE_NORMAL; }
+    if(name=="/Multiply")                      { return BLEND_MODE_MULTIPLY; }
+    if(name=="/Screen")                        { return BLEND_MODE_SCREEN; }
+    if(name=="/Overlay")                       { return BLEND_MODE_OVERLAY; }
+    if(name=="/Darken")                        { return BLEND_MODE_DARKEN; }
+    if(name=="/Lighten")                       { return BLEND_MODE_LIGHTEN; }
+    if(name=="/ColorDodge")                    { return BLEND_MODE_COLOR_DODGE; }
+    if(name=="/ColorBurn")                     { return BLEND_MODE_COLOR_BURN; }
+    if(name=="/HardLight")                     { return BLEND_MODE_HARD_LIGHT; }
+    if(name=="/SoftLight")                     { return BLEND_MODE_SOFT_LIGHT; }
+    if(name=="/Difference")                    { return BLEND_MODE_DIFFERENCE; }
+    if(name=="/Exclusion")                     { return BLEND_MODE_EXCLUSION; }
+    if(name=="/Hue")                           { return BLEND_MODE_HUE; }
+    if(name=="/Saturation")                    { return BLEND_MODE_SATURATION; }
+    if(name=="/Color")                         { return BLEND_MODE_COLOR; }
+    if(name=="/Luminosity")                    { return BLEND_MODE_LUMINOSITY; }
+
+    return BLEND_MODE_UNKNOWN;
+  }
+
 }
 
 #endif

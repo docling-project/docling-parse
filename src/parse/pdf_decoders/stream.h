@@ -22,6 +22,7 @@ namespace pdflib
                 std::shared_ptr<pdf_resource<PAGE_FONTS>>       page_fonts_,
                 std::shared_ptr<pdf_resource<PAGE_GRPHS>>       page_grphs_,
                 std::shared_ptr<pdf_resource<PAGE_COLORSPACES>> page_colorspaces_,
+                std::shared_ptr<pdf_resource<PAGE_SHADINGS>>    page_shadings_,
                 std::shared_ptr<pdf_resource<PAGE_XOBJECTS>>    page_xobjects_,
 
                 pdf_render_instructions& instructions,
@@ -72,6 +73,10 @@ namespace pdflib
     void do_postscript(const std::string& xobj_name,
 		       const xobject_subtype_name& xobj_subtype);
 
+    // `sh`: resolve the named /Shading resource and emit the paint
+    // instruction that covers the current clip region.
+    void do_shading(const std::string& sh_name);
+
     // marked-content (BMC/BDC ... EMC) tracking, used to honor /ActualText
     // replacement text (PDF 32000-1, section 14.9.4)
     struct marked_content_entry
@@ -98,6 +103,7 @@ namespace pdflib
     std::shared_ptr<pdf_resource<PAGE_FONTS>>       page_fonts;
     std::shared_ptr<pdf_resource<PAGE_GRPHS>>       page_grphs;
     std::shared_ptr<pdf_resource<PAGE_COLORSPACES>> page_colorspaces;
+    std::shared_ptr<pdf_resource<PAGE_SHADINGS>>    page_shadings;
     std::shared_ptr<pdf_resource<PAGE_XOBJECTS>>    page_xobjects;
 
     pdf_render_instructions& instructions;
@@ -128,6 +134,7 @@ namespace pdflib
                                    std::shared_ptr<pdf_resource<PAGE_FONTS>>       page_fonts_,
                                    std::shared_ptr<pdf_resource<PAGE_GRPHS>>       page_grphs_,
                                    std::shared_ptr<pdf_resource<PAGE_COLORSPACES>> page_colorspaces_,
+                                   std::shared_ptr<pdf_resource<PAGE_SHADINGS>>    page_shadings_,
 
                                    std::shared_ptr<pdf_resource<PAGE_XOBJECTS>>    page_xobjects_,
 
@@ -144,6 +151,7 @@ namespace pdflib
     page_fonts(page_fonts_),
     page_grphs(page_grphs_),
     page_colorspaces(page_colorspaces_),
+    page_shadings(page_shadings_),
 
     page_xobjects(page_xobjects_),
 
@@ -220,31 +228,46 @@ namespace pdflib
     interprete_stream(parameters);
   }
 
+  // A form XObject establishes its own resource scope (PDF 32000-1, 8.10.2):
+  // `Tf`, `gs`, `cs`/`CS` and `Do` inside it resolve against the form's
+  // /Resources first and only then against the inherited ones. The child
+  // resources are parent-linked, so a form that merely inherits resolves
+  // identically to its caller.
+  //
+  // The inherited stack still points at the *caller's* resource objects, so a
+  // state built on this decoder's resources is pushed and then value-assigned
+  // from the caller's top state: operator= of pdf_state<GLOBAL/GRPH/TEXT/
+  // SHAPE/BITMAP> copies parameters only and never the resource pointers,
+  // which is what makes this rebase work.
+  //
+  // The rebase is unconditional. Keying it on the /Font resources (as was done
+  // before) missed forms that only carry an /ExtGState or a /ColorSpace: their
+  // `gs` and `cs` lookups then went to the page-level maps and failed.
   bool pdf_decoder<STREAM>::update_stack(std::vector<pdf_state<GLOBAL> >& stack_,
                                          int                              stack_count_)
   {
     stack       = stack_;
     stack_count = stack_count_;
 
-    if(stack.size()>0 and page_fonts->keys()!=current_global_state().page_fonts->keys())
+    if(stack.size()==0)
       {
-        pdf_state<GLOBAL> state(config,
-				page_cells,
-				page_shapes,
-				page_images,
-				page_fonts,
-				page_grphs,
-				page_colorspaces,
-				instructions);
-
-        state = stack.back();
-
-        stack.push_back(state);
-
-        return true;
+        return false;
       }
 
-    return false;
+    pdf_state<GLOBAL> state(config,
+			    page_cells,
+			    page_shapes,
+			    page_images,
+			    page_fonts,
+			    page_grphs,
+			    page_colorspaces,
+			    instructions);
+
+    state = stack.back();
+
+    stack.push_back(state);
+
+    return true;
   }
 
   void pdf_decoder<STREAM>::interprete(std::vector<qpdf_stream_instruction>& stream_,
@@ -398,6 +421,93 @@ namespace pdflib
     timings.note_attributed(do_image_seconds);
   }
 
+  // 8.7.4.5: `sh` paints the named shading over the whole current clip
+  // region, taking its colours from the shading's own colour space and
+  // function rather than from the current fill colour.
+  void pdf_decoder<STREAM>::do_shading(const std::string& sh_name)
+  {
+    // Without shape tracking there is no clip path to bound the shading, and
+    // an unbounded `sh` would flood the page.
+    if(not config.keep_shapes)
+      {
+        LOG_S(INFO) << "sh " << sh_name << ": skipped, shapes are not kept";
+        return;
+      }
+
+    const pdf_resource<PAGE_SHADING>* shading = page_shadings->get(sh_name);
+
+    if(shading == nullptr)
+      {
+        LOG_S(WARNING) << "sh: could not resolve shading resource " << sh_name
+                       << " (known: " << page_shadings->size() << " in this scope)";
+        return;
+      }
+
+    if(not shading->is_paintable())
+      {
+        LOG_S(WARNING) << "sh: not painting shading " << sh_name << ": "
+                       << shading->get_reason();
+        return;
+      }
+
+    const std::array<double, 9>& trafo = current_global_state().trafo_matrix;
+
+    // shading space -> page space, in PDF operand order [a b c d e f]
+    std::array<double, 6> matrix = {trafo[0], trafo[1],
+                                    trafo[3], trafo[4],
+                                    trafo[6], trafo[7]};
+
+    clip_state_instruction clip_state = current_shape_state().get_clip_state();
+
+    // A shading /BBox is expressed in shading space and bounds the paint just
+    // like a clip path does, so it is transformed and appended to the clip
+    // (which the renderer intersects).
+    if(shading->has_bbox())
+      {
+        const std::array<double, 4>& bbox = shading->get_bbox();
+
+        const double xs[4] = {bbox[0], bbox[2], bbox[2], bbox[0]};
+        const double ys[4] = {bbox[1], bbox[1], bbox[3], bbox[3]};
+
+        std::vector<double> px, py;
+        for(int c = 0; c < 4; c++)
+          {
+            px.push_back(matrix[0]*xs[c] + matrix[2]*ys[c] + matrix[4]);
+            py.push_back(matrix[1]*xs[c] + matrix[3]*ys[c] + matrix[5]);
+          }
+
+        std::vector<clip_path_instruction> paths = clip_state.get_paths();
+        paths.emplace_back(std::move(px), std::move(py), CLOSED, RECTANGLE);
+
+        // the /BBox always bounds, so an unclipped shading becomes clipped
+        clip_rule rule = clip_state.has_clip() ? clip_state.get_rule()
+                                               : CLIP_RULE_NONZERO;
+        clip_state = clip_state_instruction(rule, std::move(paths));
+      }
+
+    LOG_S(INFO) << "sh " << sh_name << ": " << to_string(shading->get_shading_type())
+                << ", #-stops: " << shading->get_stops().size()
+                << ", #-clip-paths: " << clip_state.get_paths().size()
+                << ", alpha: " << current_graphic_state().get_fill_alpha()
+                << ", ctm: [" << matrix[0] << ", " << matrix[1] << ", "
+                << matrix[2] << ", " << matrix[3] << ", "
+                << matrix[4] << ", " << matrix[5] << "]";
+
+    shading_instruction shinstr(sh_name,
+                                shading->get_shading_type() == SHADING_AXIAL
+                                  ? SHADING_GEOMETRY_AXIAL
+                                  : SHADING_GEOMETRY_RADIAL,
+                                shading->get_coords(),
+                                matrix,
+                                shading->get_stops(),
+                                shading->get_extend_start(),
+                                shading->get_extend_end(),
+                                current_graphic_state().get_fill_alpha(),
+                                std::move(clip_state));
+
+    instructions.add_shading_instruction(std::move(shinstr));
+  }
+
   void pdf_decoder<STREAM>::do_form(const std::string& xobj_name,
                                     const xobject_subtype_name& xobj_subtype)
   {
@@ -430,6 +540,7 @@ namespace pdflib
     auto page_fonts_       = std::make_shared<pdf_resource<PAGE_FONTS>>(page_fonts);
     auto page_grphs_       = std::make_shared<pdf_resource<PAGE_GRPHS>>(page_grphs);
     auto page_colorspaces_ = std::make_shared<pdf_resource<PAGE_COLORSPACES>>(page_colorspaces);
+    auto page_shadings_    = std::make_shared<pdf_resource<PAGE_SHADINGS>>(page_shadings);
     auto page_xobjects_    = std::make_shared<pdf_resource<PAGE_XOBJECTS>>(page_xobjects);
 
     // parse the resources of the xobject into the child resources
@@ -452,6 +563,12 @@ namespace pdflib
         {
           QPDFObjectHandle xobj_colorspaces = xobj.get_colorspaces();
           page_colorspaces_->set(xobj_colorspaces);
+        }
+
+      if(xobj.has_shadings())
+        {
+          QPDFObjectHandle xobj_shadings = xobj.get_shadings();
+          page_shadings_->set(xobj_shadings);
         }
 
       if(xobj.has_xobjects())
@@ -487,6 +604,7 @@ namespace pdflib
                                        page_fonts_,
                                        page_grphs_,
                                        page_colorspaces_,
+                                       page_shadings_,
                                        page_xobjects_,
 
                                        instructions,
@@ -922,6 +1040,9 @@ namespace pdflib
       case pdf_operator::BT:
         {
           LOG_S(INFO) << "executing " << to_string(name);
+
+          // tripwire: update_stack() rebases the state onto this decoder's
+          // resource scope, so the two must agree
           if(page_fonts->keys()!=current_global_state().page_fonts->keys())
             {
               LOG_S(ERROR) << "page_fonts keys mismatch with current global state";
@@ -1278,7 +1399,15 @@ namespace pdflib
       case pdf_operator::sh:
         {
           LOG_S(INFO) << "executing " << to_string(name);
-          //current_graphic_state().sh(parameters);
+
+          if(parameters.size() != 1)
+            {
+              LOG_S(WARNING) << "sh expects exactly one shading name, got "
+                             << parameters.size() << " operand(s)";
+              break;
+            }
+
+          this->do_shading(parameters[0].to_utf8_string());
         }
         break;
 
