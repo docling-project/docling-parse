@@ -1060,6 +1060,7 @@ namespace pdflib
                               fmt,
                               image.image_mask,
                               image.rgb_filling_ops,
+                              grph_state.get_fill_alpha(),
                               image.r_x0, image.r_y0,
                               image.r_x1, image.r_y1,
                               image.r_x2, image.r_y2,

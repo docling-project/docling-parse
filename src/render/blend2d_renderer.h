@@ -1812,6 +1812,20 @@ namespace pdflib
     const bool can_use_axis_aligned_fast_path =
       axis_aligned and right_angle and quarter_turns == 0;
 
+    // ExtGState constant alpha (/ca) in force at the `Do`. It is applied as a
+    // context-global alpha so that it *multiplies* the per-pixel soft-mask
+    // alpha baked into src_img instead of replacing it.
+    static constexpr double min_visible_alpha = 1.0 / 512.0;
+    const double fill_alpha =
+      std::min(1.0, std::max(0.0, instr.get_fill_alpha()));
+
+    if (fill_alpha <= min_visible_alpha)
+      {
+        LOG_S(INFO) << "render_bitmap: fill-alpha " << fill_alpha
+                    << " is invisible, skipping xobject_key=" << instr.get_key();
+        return;
+      }
+
     const bool has_clip = instr.has_clip_state();
     bool clip_active = false;
     if(has_clip)
@@ -1837,6 +1851,14 @@ namespace pdflib
           }
       }
 
+    const bool alpha_active = fill_alpha < 1.0;
+    if(alpha_active)
+      {
+        LOG_S(INFO) << "render_bitmap: applying constant alpha " << fill_alpha;
+        ctx.save();
+        ctx.set_global_alpha(fill_alpha);
+      }
+
     if (can_use_axis_aligned_fast_path)
       {
         LOG_S(INFO) << "render_bitmap: selecting axis-aligned path";
@@ -1848,6 +1870,12 @@ namespace pdflib
                     << " (right_angle=" << (right_angle ? "true" : "false")
                     << ", quarter_turns=" << quarter_turns << ")";
         render_bitmap_affine(ctx, src_img, q, sw, sh);
+      }
+
+    // the save/restore pairs nest: the alpha is pushed inside the clip
+    if(alpha_active)
+      {
+        ctx.restore();
       }
 
     if(clip_active)
@@ -1989,6 +2017,11 @@ namespace pdflib
     if (not has_canvas()) { return; }
     if (not config_.render_shapes) { return; }
 
+    LOG_S(INFO) << __FUNCTION__ << ": "
+		<< " shape_paint_mode: " << instr.get_paint_mode()
+      		<< ", shape_fill_rule: " << instr.get_fill_rule()
+		<< ", length: " << instr.get_subpaths_length();
+    
     BLRect bbox;
     const BLPath path = make_shape_path(instr, bbox);
     if (path.is_empty()) { return; }

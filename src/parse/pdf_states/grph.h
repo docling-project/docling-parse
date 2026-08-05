@@ -184,6 +184,11 @@ namespace pdflib
     double get_stroke_alpha() const { return stroke_alpha; }
     double get_fill_alpha() const { return fill_alpha; }
 
+    // ExtGState /BM and /SMask; carried on the state (they are part of it and
+    // survive q/Q) but not composited yet
+    blend_mode_name get_blend_mode() const { return blend_mode; }
+    soft_mask_state get_soft_mask() const { return soft_mask; }
+
   private:
 
     bool verify(std::vector<qpdf_stream_instruction>& instructions,
@@ -241,6 +246,9 @@ namespace pdflib
 
     double stroke_alpha;
     double fill_alpha;
+
+    blend_mode_name blend_mode;
+    soft_mask_state soft_mask;
   };
 
   pdf_state<GRPH>::pdf_state(std::array<double, 9>&    trafo_matrix_,
@@ -275,7 +283,10 @@ namespace pdflib
     rgb_filling_ops({0,0,0}),
 
     stroke_alpha(1.0),
-    fill_alpha(1.0)
+    fill_alpha(1.0),
+
+    blend_mode(BLEND_MODE_NORMAL),
+    soft_mask(SOFT_MASK_NONE)
   {}
 
   pdf_state<GRPH>::pdf_state(const pdf_state<GRPH>& other):
@@ -314,6 +325,9 @@ namespace pdflib
     // alpha is part of the graphics state and must survive q/Q save/restore
     this->stroke_alpha = other.stroke_alpha;
     this->fill_alpha = other.fill_alpha;
+
+    this->blend_mode = other.blend_mode;
+    this->soft_mask = other.soft_mask;
 
     return *this;
   }
@@ -531,35 +545,59 @@ namespace pdflib
       }
   }
 
+  // `gs` installs the parameters of a named ExtGState dictionary into the
+  // graphics state (8.4.5). It only changes the parameters *present* in that
+  // dictionary, hence the has_* guards; the /LW, /LC, /LJ, /ML, /D and /FL
+  // entries set exactly what the w, J, j, M, d and i operators set.
+  //
+  // The name is resolved against the currently active resource scope, which
+  // for a form XObject is the form's own /ExtGState with the page's as parent.
   void pdf_state<GRPH>::gs(std::vector<qpdf_stream_instruction>& instructions)
   {
     if(not verify(instructions, 1, __FUNCTION__) ) { return; }
-    
+
     std::string key = instructions[0].to_utf8_string();
 
-    if(page_grphs->count(key)>0)
-      {
-	curr_grph_key = key;
-
-	// a gs operator only changes the parameters present in its
-	// ExtGState dictionary
-	auto& grph = (*page_grphs)[key];
-
-	if(grph.has_stroke_alpha())
-	  {
-	    stroke_alpha = grph.get_stroke_alpha();
-	  }
-
-	if(grph.has_fill_alpha())
-	  {
-	    fill_alpha = grph.get_fill_alpha();
-	  }
-      }
-    else
+    if(page_grphs->count(key)==0)
       {
 	LOG_S(WARNING) << "key (=" << key << ") not found in page_grphs: " << page_grphs->get().dump(2);
 	curr_grph_key = null_grph_key;
+	return;
       }
+
+    curr_grph_key = key;
+
+    auto& grph = (*page_grphs)[key];
+
+    if(grph.has_stroke_alpha()) { stroke_alpha = grph.get_stroke_alpha(); }
+    if(grph.has_fill_alpha())   { fill_alpha   = grph.get_fill_alpha(); }
+
+    if(grph.has_line_width())  { line_width  = grph.get_line_width(); }
+    if(grph.has_line_cap())    { line_cap    = grph.get_line_cap(); }
+    if(grph.has_line_join())   { line_join   = grph.get_line_join(); }
+    if(grph.has_miter_limit()) { miter_limit = grph.get_miter_limit(); }
+    if(grph.has_flatness())    { flatness    = grph.get_flatness(); }
+
+    if(grph.has_dash())
+      {
+	// user-space quantities, scaled by the CTM where the shapes are emitted
+	dash_array = grph.get_dash_array();
+	dash_phase = grph.get_dash_phase();
+      }
+
+    // recorded for downstream reporting; neither is composited yet, the
+    // deviation is reported once per ExtGState in pdf_resource<PAGE_GRPH>
+    if(grph.has_blend_mode()) { blend_mode = grph.get_blend_mode(); }
+
+    if(grph.get_soft_mask()!=SOFT_MASK_ABSENT)
+      {
+	soft_mask = grph.get_soft_mask();
+      }
+
+    LOG_S(INFO) << "gs " << key
+		<< ": fill-alpha " << fill_alpha
+		<< ", stroke-alpha " << stroke_alpha
+		<< ", blend-mode " << to_string(blend_mode);
   }
 
   // Per PDF spec, CS/cs also reset the current color to the color space's

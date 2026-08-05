@@ -436,6 +436,7 @@ namespace pdflib
                        pixel_format fmt,
                        bool image_mask,
                        std::array<int, 3> rgb_filling,
+                       double fill_alpha,
                        double r_x0, double r_y0,
                        double r_x1, double r_y1,
                        double r_x2, double r_y2,
@@ -449,6 +450,7 @@ namespace pdflib
       fmt(fmt),
       image_mask(image_mask),
       rgb_filling(rgb_filling),
+      fill_alpha(fill_alpha),
       r_x0(r_x0), r_y0(r_y0),
       r_x1(r_x1), r_y1(r_y1),
       r_x2(r_x2), r_y2(r_y2),
@@ -464,6 +466,11 @@ namespace pdflib
     pixel_format get_pixel_format() const { return fmt; }
     bool is_image_mask() const { return image_mask; }
     const std::array<int, 3>& get_rgb_filling() const { return rgb_filling; }
+
+    // ExtGState constant alpha (/ca) in force when the image was painted; it
+    // multiplies the per-pixel alpha_data of a soft mask rather than
+    // replacing it. 1.0 = opaque.
+    double get_fill_alpha() const { return fill_alpha; }
 
     bool has_data() const { return (data) and (not data->empty()); }
     bool has_alpha_data() const { return (alpha_data) and (not alpha_data->empty()); }
@@ -491,6 +498,7 @@ namespace pdflib
     const pixel_format fmt;
     const bool image_mask;
     const std::array<int, 3> rgb_filling;
+    const double fill_alpha;
 
     const double r_x0;
     const double r_y0;
@@ -631,6 +639,7 @@ namespace pdflib
       return n;
     }
 
+    std::size_t                 get_subpaths_length() { return subpaths.size(); }
     shape_paint_mode            get_paint_mode()    const { return paint_mode; }
     shape_fill_rule             get_fill_rule()     const { return fill_rule; }
     double                      get_line_width()    const { return line_width; }

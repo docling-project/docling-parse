@@ -220,31 +220,46 @@ namespace pdflib
     interprete_stream(parameters);
   }
 
+  // A form XObject establishes its own resource scope (PDF 32000-1, 8.10.2):
+  // `Tf`, `gs`, `cs`/`CS` and `Do` inside it resolve against the form's
+  // /Resources first and only then against the inherited ones. The child
+  // resources are parent-linked, so a form that merely inherits resolves
+  // identically to its caller.
+  //
+  // The inherited stack still points at the *caller's* resource objects, so a
+  // state built on this decoder's resources is pushed and then value-assigned
+  // from the caller's top state: operator= of pdf_state<GLOBAL/GRPH/TEXT/
+  // SHAPE/BITMAP> copies parameters only and never the resource pointers,
+  // which is what makes this rebase work.
+  //
+  // The rebase is unconditional. Keying it on the /Font resources (as was done
+  // before) missed forms that only carry an /ExtGState or a /ColorSpace: their
+  // `gs` and `cs` lookups then went to the page-level maps and failed.
   bool pdf_decoder<STREAM>::update_stack(std::vector<pdf_state<GLOBAL> >& stack_,
                                          int                              stack_count_)
   {
     stack       = stack_;
     stack_count = stack_count_;
 
-    if(stack.size()>0 and page_fonts->keys()!=current_global_state().page_fonts->keys())
+    if(stack.size()==0)
       {
-        pdf_state<GLOBAL> state(config,
-				page_cells,
-				page_shapes,
-				page_images,
-				page_fonts,
-				page_grphs,
-				page_colorspaces,
-				instructions);
-
-        state = stack.back();
-
-        stack.push_back(state);
-
-        return true;
+        return false;
       }
 
-    return false;
+    pdf_state<GLOBAL> state(config,
+			    page_cells,
+			    page_shapes,
+			    page_images,
+			    page_fonts,
+			    page_grphs,
+			    page_colorspaces,
+			    instructions);
+
+    state = stack.back();
+
+    stack.push_back(state);
+
+    return true;
   }
 
   void pdf_decoder<STREAM>::interprete(std::vector<qpdf_stream_instruction>& stream_,
@@ -922,6 +937,9 @@ namespace pdflib
       case pdf_operator::BT:
         {
           LOG_S(INFO) << "executing " << to_string(name);
+
+          // tripwire: update_stack() rebases the state onto this decoder's
+          // resource scope, so the two must agree
           if(page_fonts->keys()!=current_global_state().page_fonts->keys())
             {
               LOG_S(ERROR) << "page_fonts keys mismatch with current global state";

@@ -1659,7 +1659,8 @@ namespace pdflib
     //     → acroform_fonts  (AcroForm /DR/Font, e.g. /Helv)
     //       → page_fonts    (page-level fonts, e.g. /F2)
     //
-    // The color spaces chain the same way: AP /Resources/ColorSpace → page.
+    // The color spaces and the graphics states chain the same way:
+    // AP /Resources/ColorSpace → page, AP /Resources/ExtGState → page.
     //
     // No re-parsing: page_fonts and acroform_fonts are already populated.
     //
@@ -1667,6 +1668,7 @@ namespace pdflib
     // handle itself — calling them on the stream silently returns false/null.
     auto ap_fonts = std::make_shared<pdf_resource<PAGE_FONTS>>(acroform_fonts);
     auto ap_colorspaces = std::make_shared<pdf_resource<PAGE_COLORSPACES>>(page_colorspaces);
+    auto ap_grphs = std::make_shared<pdf_resource<PAGE_GRPHS>>(page_grphs);
     auto ap_dict = ap_stream.getDict();
     if(ap_dict.isDictionary() and ap_dict.hasKey("/Resources"))
       {
@@ -1680,6 +1682,11 @@ namespace pdflib
           {
             auto ap_colorspace_dict = ap_resources.getKey("/ColorSpace");
             ap_colorspaces->set(ap_colorspace_dict);
+          }
+        if(ap_resources.isDictionary() and ap_resources.hasKey("/ExtGState"))
+          {
+            auto ap_grph_dict = ap_resources.getKey("/ExtGState");
+            ap_grphs->set(ap_grph_dict, timings);
           }
       }
 
@@ -1697,7 +1704,7 @@ namespace pdflib
                                        ap_shapes,
                                        ap_images,
                                        ap_fonts,
-                                       page_grphs,
+                                       ap_grphs,
                                        ap_colorspaces,
                                        page_xobjects,
                                        ap_instructions,
