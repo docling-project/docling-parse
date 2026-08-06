@@ -359,10 +359,7 @@ namespace pdflib
   std::array<int, 3> pdf_resource<PAGE_COLORSPACE>::cmyk_to_rgb(double c, double m,
                                                                 double y, double k)
   {
-    int r = static_cast<int>(std::round(255.0 * (1.0 - clamp_01(c)) * (1.0 - clamp_01(k))));
-    int g = static_cast<int>(std::round(255.0 * (1.0 - clamp_01(m)) * (1.0 - clamp_01(k))));
-    int b = static_cast<int>(std::round(255.0 * (1.0 - clamp_01(y)) * (1.0 - clamp_01(k))));
-    return {r, g, b};
+    return color::cmyk_to_rgb255(c, m, y, k);
   }
 
   std::array<int, 3> pdf_resource<PAGE_COLORSPACE>::approximate_tint(

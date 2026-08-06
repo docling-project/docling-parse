@@ -65,6 +65,11 @@ def _fill(operands: str) -> str:
     return f"/CS0 cs {operands} scn 0 0 {PAGE_WIDTH} {PAGE_HEIGHT} re f\n"
 
 
+def _cmyk_fill(c: float, m: float, y: float, k: float) -> str:
+    """Set a DeviceCMYK colour with `k` and cover the page."""
+    return f"{c} {m} {y} {k} k 0 0 {PAGE_WIDTH} {PAGE_HEIGHT} re f\n"
+
+
 def _render(pdf_bytes: bytes) -> PILImage.Image:
     render_config = RenderConfig()
     render_config.scale = 1.0
@@ -239,3 +244,50 @@ def test_unusable_tint_transform_falls_back_to_darkening(
     image = _render(_build_pdf(_fill("0.25"), colorspace_objects))
 
     _assert_color(_center_pixel(image), (191, 191, 191), description)
+
+
+# ---------------------------------------------------------------------------
+# DeviceCMYK renders like ink, not like a subtractive filter
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "cmyk, expected, subtractive, description",
+    [
+        ((0, 0, 0, 0), (255, 255, 255), (255, 255, 255), "paper"),
+        ((0, 0, 0, 1), (35, 31, 32), (0, 0, 0), "solid black ink"),
+        ((0, 0, 0, 0.5), (147, 149, 152), (128, 128, 128), "half black"),
+        ((1, 0, 0, 0), (0, 173, 240), (0, 255, 255), "solid cyan"),
+        ((0, 1, 0, 0), (240, 0, 142), (255, 0, 255), "solid magenta"),
+        ((0, 0, 1, 0), (255, 238, 20), (255, 255, 0), "solid yellow"),
+        ((1, 1, 0, 0), (56, 42, 144), (0, 0, 255), "cyan over magenta"),
+        ((1, 1, 1, 0), (59, 49, 51), (0, 0, 0), "three-colour black"),
+    ],
+)
+def test_device_cmyk_renders_as_process_ink(cmyk, expected, subtractive, description):
+    """8.6.4.4 leaves DeviceCMYK to the reader; this one renders a press.
+
+    `subtractive` is what the textbook R = (1-C)(1-K) formula would give. It is
+    carried here so the test states what the conversion is *not*: solid cyan is
+    #00AEEF on paper, not the #00FFFF of a perfect filter.
+    """
+    image = _render(_build_pdf(_cmyk_fill(*cmyk), ["<< >>"]))
+    actual = _center_pixel(image)
+
+    _assert_color(actual, expected, description)
+
+    if expected != subtractive:
+        assert actual != subtractive, (
+            f"{description}: rendered the subtractive approximation {subtractive}"
+        )
+
+
+def test_device_cmyk_black_is_monotone():
+    """More black ink is never lighter, all the way down the K ramp."""
+    previous = 256
+    for step in range(9):
+        image = _render(_build_pdf(_cmyk_fill(0, 0, 0, step / 8), ["<< >>"]))
+        value = _center_pixel(image)[0]
+
+        assert value <= previous, f"K = {step}/8 is lighter than the step before"
+        previous = value

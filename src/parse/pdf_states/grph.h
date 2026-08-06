@@ -367,10 +367,7 @@ namespace pdflib
 
   std::array<int, 3> pdf_state<GRPH>::cmyk_to_rgb(double c, double m, double y, double k)
   {
-    int r = static_cast<int>(std::round(255.0 * (1.0 - c) * (1.0 - k)));
-    int g = static_cast<int>(std::round(255.0 * (1.0 - m) * (1.0 - k)));
-    int b = static_cast<int>(std::round(255.0 * (1.0 - y) * (1.0 - k)));
-    return {r, g, b};
+    return color::cmyk_to_rgb255(c, m, y, k);
   }
 
   bool pdf_state<GRPH>::set_color(std::vector<qpdf_stream_instruction>& instructions,

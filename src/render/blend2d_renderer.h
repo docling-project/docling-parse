@@ -5,6 +5,7 @@
 
 #include <render/template_renderer.h>
 #include <render/config.h>
+#include <parse/utils/color/device_cmyk.h>
 #include <render/blend2d_font_resolver.h>
 #include <render/blend2d_embedded_font_cache.h>
 #include <render/freetype_embedded_font_cache.h>
@@ -698,6 +699,25 @@ namespace pdflib
       return result;
     }
 
+    // Converts one CMYK image sample to sRGB. `CMYK_CONVENTION_ADOBE_INVERTED`
+    // is how Adobe writes CMYK into a JPEG: the bytes hold 255 minus the ink
+    // amount, so the only difference from the process convention is how the
+    // four bytes are read.
+    static std::array<int, 3> cmyk_bytes_to_rgb(uint8_t c, uint8_t m,
+                                                uint8_t y, uint8_t k,
+                                                cmyk_convention convention)
+    {
+      const double ink[4] = {c / 255.0, m / 255.0, y / 255.0, k / 255.0};
+
+      if (convention == CMYK_CONVENTION_PROCESS)
+        {
+          return color::cmyk_to_rgb255(ink[0], ink[1], ink[2], ink[3]);
+        }
+
+      return color::cmyk_to_rgb255(1.0 - ink[0], 1.0 - ink[1],
+                                   1.0 - ink[2], 1.0 - ink[3]);
+    }
+
     // Converts a parsed 0-255 RGB triple and a [0, 1] alpha into a Blend2D
     // color (straight alpha; the context premultiplies while compositing).
     static BLRgba32 make_rgba32(const std::array<int, 3>& rgb,
@@ -1361,9 +1381,11 @@ namespace pdflib
         const uint8_t m = (sc >= 2) ? src_data->at(1) : 0;
         const uint8_t y = (sc >= 3) ? src_data->at(2) : 0;
         const uint8_t k = (sc >= 4) ? src_data->at(3) : 0;
-        const uint8_t r = static_cast<uint8_t>(((255u - c) * (255u - k)) / 255u);
-        const uint8_t g = static_cast<uint8_t>(((255u - m) * (255u - k)) / 255u);
-        const uint8_t b = static_cast<uint8_t>(((255u - y) * (255u - k)) / 255u);
+        const std::array<int, 3> sample =
+          cmyk_bytes_to_rgb(c, m, y, k, instr.get_cmyk_convention());
+        const int r = sample[0];
+        const int g = sample[1];
+        const int b = sample[2];
         LOG_S(INFO) << "render_bitmap: cmyk_sample[0]"
                     << " raw=(" << static_cast<int>(c) << ","
                     << static_cast<int>(m) << ","
@@ -1394,23 +1416,17 @@ namespace pdflib
               }
             else if (fmt == PIXEL_FORMAT_CMYK and sc >= 4)
               {
-                const uint8_t c = src_data->at(idx + 0);
-                const uint8_t m = src_data->at(idx + 1);
-                const uint8_t y = src_data->at(idx + 2);
-                const uint8_t k = src_data->at(idx + 3);
+                // The Adobe convention stores the ink amounts inverted, so
+                // both conventions reach the same conversion; only the reading
+                // of the four bytes differs.
+                const std::array<int, 3> rgb =
+                  cmyk_bytes_to_rgb(src_data->at(idx + 0), src_data->at(idx + 1),
+                                    src_data->at(idx + 2), src_data->at(idx + 3),
+                                    instr.get_cmyk_convention());
 
-                if(instr.get_cmyk_convention() == CMYK_CONVENTION_PROCESS)
-                  {
-                    r = static_cast<uint8_t>(((255u - c) * (255u - k)) / 255u);
-                    g = static_cast<uint8_t>(((255u - m) * (255u - k)) / 255u);
-                    b = static_cast<uint8_t>(((255u - y) * (255u - k)) / 255u);
-                  }
-                else
-                  {
-                    r = static_cast<uint8_t>((static_cast<unsigned int>(c) * k) / 255u);
-                    g = static_cast<uint8_t>((static_cast<unsigned int>(m) * k) / 255u);
-                    b = static_cast<uint8_t>((static_cast<unsigned int>(y) * k) / 255u);
-                  }
+                r = static_cast<uint8_t>(rgb[0]);
+                g = static_cast<uint8_t>(rgb[1]);
+                b = static_cast<uint8_t>(rgb[2]);
               }
             else if (fmt == PIXEL_FORMAT_GRAY)
               {

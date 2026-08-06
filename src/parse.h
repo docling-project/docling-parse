@@ -50,6 +50,7 @@
 
 #include <parse/utils.h>
 #include <parse/utils/pdf_timings.h>
+#include <parse/utils/color/device_cmyk.h>
 
 #include <parse/qpdf/to_json.h>
 #include <parse/qpdf/annots.h>
