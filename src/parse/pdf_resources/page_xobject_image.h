@@ -158,6 +158,8 @@ namespace pdflib
     int                      get_icc_components() const;
     int                      get_device_n_components() const;
     std::vector<std::string> get_device_n_names() const;
+    std::shared_ptr<pdf_resource<PAGE_COLORSPACE>> get_tint_colorspace() const;
+    int                      get_tint_components() const;
     int                      get_indexed_hival() const;
     std::string              get_indexed_base_cs() const;
     std::shared_ptr<std::vector<uint8_t>> get_indexed_palette() const;
@@ -205,6 +207,10 @@ namespace pdflib
     void init_stream_data();
     void init_soft_mask_data();
 
+    // Resolves a /Separation or /DeviceN /ColorSpace array into a colour space
+    // resource, keeping it only when its tint transform is usable.
+    void resolve_tint_colorspace(QPDFObjectHandle qpdf_cs);
+
   private:
 
     QPDFObjectHandle qpdf_xobject;
@@ -222,6 +228,12 @@ namespace pdflib
     int              icc_components = 0;  // number of color components from /ICCBased /N entry; 0 if not ICCBased
     int              device_n_components = 0; // number of components from /DeviceN names array; 0 if not DeviceN
     std::vector<std::string> device_n_names; // names from /DeviceN colorant array
+
+    // /Separation and /DeviceN resolved through pdf_resource<PAGE_COLORSPACE>,
+    // so the sample tints can be run through the tint transform. Only set when
+    // that transform and its alternate space both decoded.
+    std::shared_ptr<pdf_resource<PAGE_COLORSPACE>> tint_colorspace;
+    int              tint_components = 0;
     int              indexed_hival  = -1; // hival from /Indexed color space; -1 if not Indexed
     std::string      indexed_base_cs;    // base color space name for /Indexed (e.g. "/DeviceRGB")
     std::shared_ptr<std::vector<uint8_t>> indexed_palette; // raw palette bytes: (hival+1)*ncomps bytes
@@ -411,6 +423,14 @@ namespace pdflib
                       {
                         LOG_S(WARNING) << "DeviceN color space: names array missing";
                       }
+
+                    resolve_tint_colorspace(qpdf_cs);
+                  }
+                else if(name_obj.isName() and name_obj.getName() == "/Separation")
+                  {
+                    // The samples are tints of one colorant; only the tint
+                    // transform says what colour they stand for.
+                    resolve_tint_colorspace(qpdf_cs);
                   }
                 else if(name_obj.isName() and name_obj.getName() == "/Indexed"
                         and qpdf_cs.getArrayNItems() >= 3)
@@ -718,8 +738,25 @@ namespace pdflib
 	      }
 	    decode_present = not decode_array.empty();
 	  }
+        else if(tint_components > 0)
+          {
+            // Table 90: the default for /Separation and /DeviceN is [0 1] per
+            // colorant. The samples are tints and the tint transform reads them
+            // as such, so there is nothing to invert here.
+            LOG_S(INFO) << "no `/Decode` found: using identity for a tint space"
+                        << " with " << tint_components << " colorant(s)";
+            for(int i = 0; i < tint_components; ++i)
+              {
+                decode_array.push_back(0.0);
+                decode_array.push_back(1.0);
+              }
+            decode_present = not decode_array.empty();
+          }
         else if(device_n_components > 0)
           {
+            // No usable tint transform: the tints are shown as if they were
+            // device components, and a lone /Black tint has to be inverted to
+            // come out as ink rather than as light.
             const bool single_black =
               device_n_components == 1
               and device_n_names.size() == 1
@@ -1078,6 +1115,55 @@ namespace pdflib
   std::vector<std::string> pdf_resource<PAGE_XOBJECT_IMAGE>::get_device_n_names() const
   {
     return device_n_names;
+  }
+
+  std::shared_ptr<pdf_resource<PAGE_COLORSPACE>>
+  pdf_resource<PAGE_XOBJECT_IMAGE>::get_tint_colorspace() const
+  {
+    return tint_colorspace;
+  }
+
+  int pdf_resource<PAGE_XOBJECT_IMAGE>::get_tint_components() const
+  {
+    return tint_components;
+  }
+
+  void pdf_resource<PAGE_XOBJECT_IMAGE>::resolve_tint_colorspace(QPDFObjectHandle qpdf_cs)
+  {
+    auto colorspace = std::make_shared<pdf_resource<PAGE_COLORSPACE>>();
+    colorspace->set(xobject_key + "/ColorSpace", qpdf_cs);
+
+    const color_space_family family = colorspace->get_family();
+    if(family != COLOR_SPACE_SEPARATION and family != COLOR_SPACE_DEVICE_N)
+      {
+        return;
+      }
+
+    // Without a usable transform the tints cannot become colour. Reading them
+    // as device components is wrong, but it still shows the artwork, which the
+    // "unsupported colour space" path does not.
+    if(not colorspace->has_tint_transform())
+      {
+        if(family == COLOR_SPACE_SEPARATION and device_n_components == 0)
+          {
+            device_n_components = 1;
+            device_n_names.clear();
+
+            QPDFObjectHandle colorant = qpdf_cs.getArrayItem(1);
+            device_n_names.push_back(colorant.isName() ? colorant.getName() : "");
+          }
+
+        LOG_S(WARNING) << "tint colorspace for xobject_key=" << xobject_key
+                       << " has no usable tint transform, reading the tints as"
+                       << " device components";
+        return;
+      }
+
+    tint_colorspace = colorspace;
+    tint_components = colorspace->get_num_components();
+
+    LOG_S(INFO) << "tint colorspace for xobject_key=" << xobject_key
+                << ": " << tint_components << " colorant(s) through a tint transform";
   }
 
   int pdf_resource<PAGE_XOBJECT_IMAGE>::get_indexed_hival() const

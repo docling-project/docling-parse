@@ -57,6 +57,10 @@
 #include <parse/qpdf/stream_instruction.h>
 #include <parse/qpdf/stream_decoder.h>
 
+// pdf-resource names and the primary template, ahead of the page items: a
+// decoded image carries the /ColorSpace resource it was sampled in
+#include <parse/pdf_resource.h>
+
 // page-item
 #include <parse/page_item.h>
 #include <parse/page_items/page_dimension.h>
@@ -73,7 +77,6 @@
 #include <parse/page_items/render_instructions.h>
 
 // pdf-resource
-#include <parse/pdf_resource.h>
 #include <parse/pdf_resources/page_font/glyphs.h>
 #include <parse/pdf_resources/page_font/font_cid.h>
 #include <parse/pdf_resources/page_font/font_cids.h>

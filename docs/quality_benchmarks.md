@@ -110,8 +110,8 @@ The remaining columns are the raw quantities it is derived from:
 | --- | ---: | ---: |
 | best page | 0.0295 | 0.0002 |
 | median | 2.0736 | 0.0118 |
-| mean | 2.3243 | 0.0130 |
-| 95th percentile | 4.3643 | 0.0237 |
+| mean | 2.3166 | 0.0129 |
+| 95th percentile | 4.3643 | 0.0233 |
 | worst page | 28.5195 | 0.1564 |
 
 | | pages |
@@ -186,6 +186,27 @@ Twenty of the 108 pages moved; all of them improved. The largest were
 `device_n_black.pdf` (`delta` 0.1160 → 0.0067), `cropbox_versus_mediabox_02.pdf`
 page 1 (0.0711 → 0.0201) and `font_10.pdf` (0.0419 → 0.0168).
 
+### Tint colour spaces on images
+
+Evaluating a tint transform for the colour *operators* left the same gap on the
+image side, where the colour space is resolved separately: `/Separation` was not
+recognised at all, so an image in one decoded to nothing and the renderer drew
+its "missing pixels" placeholder over the page, and `/DeviceN` was handled by
+reading the tints as if they were device components — one colorant as grey,
+four as CMYK — which is right only when the colorants happen to be process inks.
+
+`pdf_resource<PAGE_XOBJECT_IMAGE>` now resolves both through the same
+`pdf_resource<PAGE_COLORSPACE>` the operators use, and `pdf_state<BITMAP>` runs
+the samples through the tint transform into RGB once the pixels are decoded. A
+single colorant — every `/Separation`, and most `/DeviceN` images — has 256
+possible tints, so it goes through a lookup table rather than the transform per
+pixel. Where no usable transform exists the previous component-count reading is
+kept, including the inverted default `/Decode` that a lone `/Black` tint needs.
+
+Ten pages moved, all improving. The clearest is a cover page whose artwork is a
+`/Separation /Black` image: `delta` 0.3151 → 0.0089, from a flat olive
+placeholder to the reference render.
+
 ### `form_fields.pdf` and `fillable_form.pdf`
 
 ![form_fields.pdf page 3](./quality_benchmarks/delta_0.2192_form_fields.pdf.page_no_3.png)
@@ -224,7 +245,6 @@ name carries the older `delta`. Re-running the benchmark replaces both.
 | `complex_invisible_fonts_02.pdf` | 1 | 1191x1684 | 4.3643 | [0.0237](./quality_benchmarks/delta_0.0321_complex_invisible_fonts_02.pdf.page_no_1.png) | 0.1089 | 183 | 218,482 |
 | `ccitt_complex_image_scan.pdf` | 1 | 1224x1584 | 4.1427 | [0.0217](./quality_benchmarks/delta_0.0217_ccitt_complex_image_scan.pdf.page_no_1.png) | 0.0786 | 255 | 152,350 |
 | `ligatures_01.pdf` | 3 | 1224x1584 | 3.9536 | [0.0207](./quality_benchmarks/delta_0.0207_ligatures_01.pdf.page_no_3.png) | 0.1139 | 201 | 220,891 |
-| `indexed_device_n.pdf` | 1 | 2382x1684 | 3.9071 | [0.0269](./quality_benchmarks/delta_0.0277_indexed_device_n.pdf.page_no_1.png) | 0.1096 | 202 | 439,711 |
 | `indexed_iccbased.pdf` | 1 | 1224x1512 | 3.6519 | [0.0205](./quality_benchmarks/delta_0.0205_indexed_iccbased.pdf.page_no_1.png) | 0.1234 | 155 | 228,284 |
 | `stream_parameter_misinterpretation_01.pdf` | 1 | 1224x1584 | 3.6163 | [0.0191](./quality_benchmarks/delta_0.0191_stream_parameter_misinterpretation_01.pdf.page_no_1.png) | 0.0999 | 255 | 193,714 |
 | `cropbox_versus_mediabox_01.pdf` | 1 | 1191x1684 | 3.5744 | [0.0190](./quality_benchmarks/delta_0.0447_cropbox_versus_mediabox_01.pdf.page_no_1.png) | 0.0933 | 224 | 187,036 |
@@ -240,6 +260,7 @@ name carries the older `delta`. Re-running the benchmark replaces both.
 | `rotated_text_07.pdf` | 1 | 1190x1684 | 3.2165 | [0.0168](./quality_benchmarks/delta_0.0168_rotated_text_07.pdf.page_no_1.png) | 0.0503 | 255 | 100,819 |
 | `fillable_form.pdf` | 1 | 1224x1584 | 3.1795 | [0.0169](./quality_benchmarks/delta_0.1578_fillable_form.pdf.page_no_1.png) | 0.0440 | 255 | 85,211 |
 | `complex_invisible_fonts_05.pdf` | 1 | 1191x1684 | 3.1688 | [0.0218](./quality_benchmarks/delta_0.0480_complex_invisible_fonts_05.pdf.page_no_1.png) | 0.0821 | 152 | 164,564 |
+| `indexed_device_n.pdf` | 1 | 2382x1684 | 3.0675 | [0.0223](./quality_benchmarks/delta_0.0277_indexed_device_n.pdf.page_no_1.png) | 0.0762 | 202 | 305,850 |
 | `ligatures_01.pdf` | 1 | 1224x1584 | 3.0603 | [0.0163](./quality_benchmarks/delta_0.0358_ligatures_01.pdf.page_no_1.png) | 0.0897 | 255 | 173,951 |
 | `complex_invisible_fonts_04.pdf` | 1 | 1191x1684 | 2.9696 | [0.0203](./quality_benchmarks/delta_0.0472_complex_invisible_fonts_04.pdf.page_no_1.png) | 0.0698 | 152 | 139,930 |
 | `annots_01.pdf` | 1 | 1191x1684 | 2.8965 | [0.0167](./quality_benchmarks/delta_0.0167_annots_01.pdf.page_no_1.png) | 0.0717 | 255 | 143,766 |
@@ -304,7 +325,7 @@ name carries the older `delta`. Re-running the benchmark replaces both.
 | `broken_media_box_v01.pdf` | 1 | 1584x1224 | 0.8929 | [0.0056](./quality_benchmarks/delta_0.0056_broken_media_box_v01.pdf.page_no_1.png) | 0.0313 | 198 | 60,649 |
 | `4865216256588543301.pdf` | 1 | 1191x1684 | 0.8354 | [0.0044](./quality_benchmarks/delta_0.0044_4865216256588543301.pdf.page_no_1.png) | 0.0214 | 200 | 42,955 |
 | `text_as_lines_01.pdf` | 2 | 1190x1684 | 0.8082 | [0.0042](./quality_benchmarks/delta_0.0042_text_as_lines_01.pdf.page_no_2.png) | 0.0250 | 255 | 50,011 |
-| `device_n_black.pdf` | 1 | 1224x1584 | 0.7875 | [0.0067](./quality_benchmarks/delta_0.3618_device_n_black.pdf.page_no_1.png) | 0.0011 | 132 | 2,146 |
+| `device_n_black.pdf` | 1 | 1224x1584 | 0.7875 | [0.0067](./quality_benchmarks/delta_0.3618_device_n_black.pdf.page_no_1.png) | 0.0011 | 132 | 2,148 |
 | `math_latex_formulas.pdf` | 2 | 1224x1584 | 0.7507 | [0.0039](./quality_benchmarks/delta_0.0039_math_latex_formulas.pdf.page_no_2.png) | 0.0181 | 211 | 35,055 |
 | `dln-v1.pdf` | 1 | 1152x1152 | 0.7228 | [0.0042](./quality_benchmarks/delta_0.0042_dln-v1.pdf.page_no_1.png) | 0.0135 | 255 | 17,974 |
 | `4865216256588543301.pdf` | 10 | 1191x1684 | 0.6692 | [0.0035](./quality_benchmarks/delta_0.0035_4865216256588543301.pdf.page_no_10.png) | 0.0158 | 168 | 31,742 |

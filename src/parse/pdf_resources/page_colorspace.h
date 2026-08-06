@@ -24,6 +24,12 @@ namespace pdflib
     color_space_family get_family() const;
     int get_num_components() const;
 
+    // True when this is a /Separation or /DeviceN whose tint transform and
+    // alternate space both resolved, so map_to_rgb() gives the real colour
+    // rather than the darkening approximation. Callers that convert whole
+    // images use it to decide whether going through the transform is worth it.
+    bool has_tint_transform() const;
+
     // Maps the numeric SC/SCN/sc/scn operands to RGB; returns false when
     // the space cannot interpret them (pattern, unknown family, wrong
     // operand count), in which case the caller keeps its own fallback.
@@ -94,6 +100,11 @@ namespace pdflib
   int pdf_resource<PAGE_COLORSPACE>::get_num_components() const
   {
     return num_components_;
+  }
+
+  bool pdf_resource<PAGE_COLORSPACE>::has_tint_transform() const
+  {
+    return tint_transform_ != nullptr and alternate_ != nullptr;
   }
 
   void pdf_resource<PAGE_COLORSPACE>::set(const std::string& key,

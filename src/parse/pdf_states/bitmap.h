@@ -286,6 +286,8 @@ namespace pdflib
       image.icc_components  = xobj.get_icc_components();
       image.device_n_components = xobj.get_device_n_components();
       image.device_n_names = xobj.get_device_n_names();
+      image.tint_colorspace = xobj.get_tint_colorspace();
+      image.tint_components = xobj.get_tint_components();
       image.jbig2_globals_data = xobj.get_jbig2_globals_data();
 
       // propagate /Indexed color space data
@@ -577,6 +579,18 @@ namespace pdflib
             LOG_S(WARNING) << "bitmap: ICCBased with unsupported N=" << image.icc_components
                            << " for xobject_key=" << image.xobject_key;
           }
+      }
+    else if(image.tint_colorspace and image.tint_components > 0)
+      {
+        // /Separation and /DeviceN samples are tints. They are loaded at their
+        // own component count and turned into RGB once the pixels are in hand,
+        // because only the tint transform knows what colour a tint is.
+        LOG_S(INFO) << "bitmap: tint color space with "
+                    << image.tint_components << " colorant(s)"
+                    << " for xobject_key=" << image.xobject_key;
+
+        fmt = PIXEL_FORMAT_RGB;
+        channels = image.tint_components;
       }
     else if(image.color_space.find("/DeviceN") != std::string::npos
             and image.device_n_components > 0)
@@ -1055,6 +1069,70 @@ namespace pdflib
             LOG_S(WARNING) << "bitmap: no usable pixel data "
                            << "for xobject_key=" << image.xobject_key;
           }
+      }
+
+    // Tints become colour here, once the samples exist: one tint tuple per
+    // pixel goes through the tint transform into the alternate space and out
+    // as RGB. A single colorant -- which is what /Separation always is, and
+    // most /DeviceN images in practice -- has only 256 possible tints, so it
+    // goes through a lookup table instead of the transform per pixel.
+    if(image.tint_colorspace and image.tint_components > 0
+       and pixel_data and pixel_shape[2] == image.tint_components)
+      {
+        const int n = image.tint_components;
+        const std::size_t pixels = pixel_data->size() / static_cast<std::size_t>(n);
+
+        auto rgb_data = std::make_shared<std::vector<uint8_t>>(pixels * 3u, 0u);
+
+        std::vector<std::array<int, 3>> lut;
+        if(n == 1)
+          {
+            lut.resize(256);
+            for(int v = 0; v < 256; v++)
+              {
+                if(not image.tint_colorspace->map_to_rgb({v / 255.0}, lut[v]))
+                  {
+                    lut[v] = {0, 0, 0};
+                  }
+              }
+          }
+
+        std::vector<double> tints(static_cast<std::size_t>(n), 0.0);
+        std::array<int, 3> rgb = {0, 0, 0};
+
+        for(std::size_t p = 0; p < pixels; p++)
+          {
+            if(n == 1)
+              {
+                rgb = lut[(*pixel_data)[p]];
+              }
+            else
+              {
+                for(int d = 0; d < n; d++)
+                  {
+                    tints[static_cast<std::size_t>(d)] =
+                      (*pixel_data)[p * static_cast<std::size_t>(n) + d] / 255.0;
+                  }
+
+                if(not image.tint_colorspace->map_to_rgb(tints, rgb))
+                  {
+                    rgb = {0, 0, 0};
+                  }
+              }
+
+            (*rgb_data)[p * 3u + 0u] = static_cast<uint8_t>(rgb[0]);
+            (*rgb_data)[p * 3u + 1u] = static_cast<uint8_t>(rgb[1]);
+            (*rgb_data)[p * 3u + 2u] = static_cast<uint8_t>(rgb[2]);
+          }
+
+        pixel_data = std::move(rgb_data);
+        pixel_shape[2] = 3;
+        channels = 3;
+        fmt = PIXEL_FORMAT_RGB;
+        cmyk_conv = CMYK_CONVENTION_UNKNOWN;
+
+        LOG_S(INFO) << "bitmap: converted " << pixels << " tint sample(s) to RGB"
+                    << " for xobject_key=" << image.xobject_key;
       }
 
     bitmap_instruction binstr(image.xobject_key,

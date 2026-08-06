@@ -86,6 +86,13 @@ namespace pdflib
     int  device_n_components = 0; // number of components from /DeviceN names array; 0 if not DeviceN
     std::vector<std::string> device_n_names;
 
+    // /Separation and /DeviceN (8.6.6.4, 8.6.6.5): the resolved colour space,
+    // so the samples -- which are tints, not colours -- can be put through its
+    // tint transform. Null unless the space is one of those two and both its
+    // transform and its alternate space decoded.
+    std::shared_ptr<pdf_resource<PAGE_COLORSPACE>> tint_colorspace;
+    int tint_components = 0;
+
     // /Indexed color space support
     int              indexed_hival  = -1;
     std::string      indexed_base_cs;
