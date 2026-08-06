@@ -110,14 +110,14 @@ The remaining columns are the raw quantities it is derived from:
 | --- | ---: | ---: |
 | best page | 0.0295 | 0.0002 |
 | median | 2.3897 | 0.0129 |
-| mean | 3.5289 | 0.0231 |
-| 95th percentile | 7.9852 | 0.0569 |
-| worst page | 48.3654 | 0.3618 |
+| mean | 3.1316 | 0.0204 |
+| 95th percentile | 7.5061 | 0.0569 |
+| worst page | 39.7102 | 0.2266 |
 
 | | pages |
 | --- | ---: |
 | `delta` < 0.01 | 42 / 108 (39 %) |
-| `delta` < 0.02 | 83 / 108 (77 %) |
+| `delta` < 0.02 | 85 / 108 (79 %) |
 | `delta` < 0.05 | 102 / 108 (94 %) |
 | `delta` < 0.10 | 104 / 108 (96 %) |
 
@@ -127,16 +127,6 @@ are also the top four by `mean_abs_error`, so both metrics agree on where the
 problems are.
 
 ## The tail
-
-### `device_n_black.pdf` page 1 — `mean_abs_error` 48.37, `delta` 0.3618
-
-![device_n_black.pdf page 1](./quality_benchmarks/delta_0.3618_device_n_black.pdf.page_no_1.png)
-
-The worst page in the corpus, and a known limitation rather than a mystery:
-`pdf_resource<PAGE_COLORSPACE>` does not evaluate the tint transform function of
-`/Separation` and `/DeviceN` colour spaces. It approximates a tint by darkening
-towards black (`src/parse/pdf_resources/page_colorspace.h`), so any document
-whose ink is defined through a tint transform renders in the wrong colour.
 
 ### `complex_invisible_fonts_01.pdf` page 1 — `mean_abs_error` 39.71, `delta` 0.2266
 
@@ -168,29 +158,65 @@ The measurements in the table below predate that switch and were taken with the
 overlay always on; the `form_fields.pdf` and `fillable_form.pdf` rows are
 therefore stale until the table is regenerated.
 
+### `device_n_black.pdf` page 1 — `mean_abs_error` 48.37 → 12.48, `delta` 0.3618 → 0.1160
+
+![device_n_black.pdf page 1](./quality_benchmarks/delta_0.3618_device_n_black.pdf.page_no_1.png)
+
+The panel above shows the page as it rendered before the fix described here:
+blank. It was the worst page in the corpus, and the cause was not the one this
+section used to name. The page is a full-width banner painted by a single `sh`
+operator under a hexagonal clip path, and `renderer<BLEND2D>::render_shading`
+skipped any shading whose clip was not an axis-aligned rectangle, because
+Blend2D clips to rectangles only and an unclipped fill would have flooded the
+page. Everything else on the page is white ink on that banner, so skipping the
+one shading left nothing at all.
+
+A shading fills its clip region and nothing else, which means the clip can be
+the *fill geometry* instead of a clip: `render_shading` now fills the clip
+outline with the gradient, and only falls back to skipping when no clip path
+can be honoured at all.
+
+What is left on this page is colour conversion, not geometry. The banner's
+shading is `/DeviceCMYK`, and `pdf_resource<PAGE_COLORSPACE>` converts CMYK to
+RGB with the naive `(1-c)(1-k)` formula, which is markedly more saturated than
+PDFium's conversion — teal renders as neon green, mauve as blue. That is a
+corpus-wide difference wherever CMYK ink is used, not something specific to
+this page.
+
+The limitation this section previously described was real, and is also fixed:
+`pdf_resource<PAGE_COLORSPACE>` now evaluates the tint transform of
+`/Separation` and `/DeviceN` colour spaces into their alternate space rather
+than approximating a tint by darkening towards black. It only happens not to be
+what made *this* page the worst one. `font_07.pdf` is where it shows: pages 3
+and 4 of that document went from `delta` 0.60 and 0.48 to 0.010 and 0.008.
+
 ## Per-page results
 
 Sorted by `mean_abs_error`, worst first, as the test prints them. The `delta`
 value links to that page's three-panel visualisation.
 
+Five rows carry re-measured numbers from after the shading-clip and tint
+transform fixes — `device_n_black.pdf`, `cropbox_versus_mediabox_01.pdf`,
+`font_07.pdf`, `ligatures_01.pdf` and `duplicate_bold_text_01.pdf`, all page 1.
+Their linked panels are still the pre-fix renders, and the file names carry the
+pre-fix `delta`; re-running the benchmark replaces both.
+
 <!-- Generated from `pytest tests/test_pypdfium_render.py --render-visualizations all`. -->
 
 | document | page | canvas | mean_abs_error | delta | changed_pixels_ratio | max_abs_error | changed_pixels |
 | --- | ---: | :---: | ---: | ---: | ---: | ---: | ---: |
-| `device_n_black.pdf` | 1 | 1224x1584 | 48.3654 | [0.3618](./quality_benchmarks/delta_0.3618_device_n_black.pdf.page_no_1.png) | 0.5442 | 255 | 1,055,109 |
 | `complex_invisible_fonts_01.pdf` | 1 | 1191x1684 | 39.7102 | [0.2266](./quality_benchmarks/delta_0.2266_complex_invisible_fonts_01.pdf.page_no_1.png) | 0.5393 | 249 | 1,081,561 |
 | `form_fields.pdf` | 3 | 1224x1584 | 20.3136 | [0.2192](./quality_benchmarks/delta_0.2192_form_fields.pdf.page_no_3.png) | 0.5278 | 255 | 1,023,351 |
 | `fillable_form.pdf` | 1 | 1224x1584 | 16.3081 | [0.1578](./quality_benchmarks/delta_0.1578_fillable_form.pdf.page_no_1.png) | 0.3969 | 255 | 769,495 |
-| `cropbox_versus_mediabox_01.pdf` | 1 | 1191x1684 | 8.1218 | [0.0447](./quality_benchmarks/delta_0.0447_cropbox_versus_mediabox_01.pdf.page_no_1.png) | 0.2612 | 255 | 523,944 |
+| `device_n_black.pdf` | 1 | 1224x1584 | 12.4805 | [0.1160](./quality_benchmarks/delta_0.3618_device_n_black.pdf.page_no_1.png) | 0.5006 | 158 | 970,538 |
 | `cropbox_versus_mediabox_02.pdf` | 1 | 1088x1266 | 7.9852 | [0.0711](./quality_benchmarks/delta_0.0711_cropbox_versus_mediabox_02.pdf.page_no_1.png) | 0.3142 | 164 | 432,731 |
 | `cropbox_versus_mediabox_02.pdf` | 2 | 1088x1266 | 7.5061 | [0.0569](./quality_benchmarks/delta_0.0569_cropbox_versus_mediabox_02.pdf.page_no_2.png) | 0.2292 | 255 | 315,711 |
-| `ligatures_01.pdf` | 1 | 1224x1584 | 6.7581 | [0.0358](./quality_benchmarks/delta_0.0358_ligatures_01.pdf.page_no_1.png) | 0.1125 | 255 | 218,143 |
+| `cropbox_versus_mediabox_01.pdf` | 1 | 1191x1684 | 7.1165 | [0.0394](./quality_benchmarks/delta_0.0447_cropbox_versus_mediabox_01.pdf.page_no_1.png) | 0.2200 | 255 | 441,318 |
 | `complex_invisible_fonts_05.pdf` | 1 | 1191x1684 | 6.7035 | [0.0480](./quality_benchmarks/delta_0.0480_complex_invisible_fonts_05.pdf.page_no_1.png) | 0.1030 | 161 | 206,519 |
 | `complex_invisible_fonts_04.pdf` | 1 | 1191x1684 | 6.5165 | [0.0472](./quality_benchmarks/delta_0.0472_complex_invisible_fonts_04.pdf.page_no_1.png) | 0.0929 | 172 | 186,413 |
 | `form_fields.pdf` | 5 | 1224x1584 | 6.4116 | [0.0349](./quality_benchmarks/delta_0.0349_form_fields.pdf.page_no_5.png) | 0.1425 | 255 | 276,235 |
 | `font_10.pdf` | 1 | 1224x1584 | 5.6791 | [0.0419](./quality_benchmarks/delta_0.0419_font_10.pdf.page_no_1.png) | 0.2438 | 225 | 472,724 |
 | `complex_invisible_fonts_02.pdf` | 1 | 1191x1684 | 5.6336 | [0.0321](./quality_benchmarks/delta_0.0321_complex_invisible_fonts_02.pdf.page_no_1.png) | 0.1364 | 202 | 273,511 |
-| `font_07.pdf` | 1 | 1191x1571 | 5.5806 | [0.0370](./quality_benchmarks/delta_0.0370_font_07.pdf.page_no_1.png) | 0.1308 | 209 | 244,734 |
 | `form_fields.pdf` | 1 | 1224x1584 | 5.3546 | [0.0443](./quality_benchmarks/delta_0.0443_form_fields.pdf.page_no_1.png) | 0.1247 | 255 | 241,849 |
 | `form_fields.pdf` | 4 | 1224x1584 | 5.2383 | [0.0398](./quality_benchmarks/delta_0.0398_form_fields.pdf.page_no_4.png) | 0.1239 | 255 | 240,266 |
 | `ligatures_01.pdf` | 2 | 1224x1584 | 4.4533 | [0.0233](./quality_benchmarks/delta_0.0233_ligatures_01.pdf.page_no_2.png) | 0.1275 | 175 | 247,143 |
@@ -207,9 +233,11 @@ value links to that page's three-panel visualisation.
 | `device_gray_01.pdf` | 1 | 1224x1584 | 3.3863 | [0.0177](./quality_benchmarks/delta_0.0177_device_gray_01.pdf.page_no_1.png) | 0.0604 | 255 | 117,038 |
 | `form_fields.pdf` | 2 | 1224x1584 | 3.3594 | [0.0286](./quality_benchmarks/delta_0.0286_form_fields.pdf.page_no_2.png) | 0.0790 | 255 | 153,127 |
 | `font_05.pdf` | 1 | 868x1327 | 3.3510 | [0.0175](./quality_benchmarks/delta_0.0175_font_05.pdf.page_no_1.png) | 0.0951 | 163 | 109,555 |
+| `font_07.pdf` | 1 | 1191x1571 | 3.2894 | [0.0181](./quality_benchmarks/delta_0.0370_font_07.pdf.page_no_1.png) | 0.0972 | 210 | 181,944 |
 | `font_09.pdf` | 1 | 1190x1684 | 3.2271 | [0.0169](./quality_benchmarks/delta_0.0169_font_09.pdf.page_no_1.png) | 0.0959 | 166 | 192,190 |
 | `rotated_text_07.pdf` | 1 | 1190x1684 | 3.2165 | [0.0168](./quality_benchmarks/delta_0.0168_rotated_text_07.pdf.page_no_1.png) | 0.0503 | 255 | 100,819 |
 | `cropbox_versus_mediabox_02.pdf` | 3 | 1088x1266 | 3.1041 | [0.0196](./quality_benchmarks/delta_0.0196_cropbox_versus_mediabox_02.pdf.page_no_3.png) | 0.0993 | 161 | 136,788 |
+| `ligatures_01.pdf` | 1 | 1224x1584 | 3.1029 | [0.0167](./quality_benchmarks/delta_0.0358_ligatures_01.pdf.page_no_1.png) | 0.0911 | 255 | 176,562 |
 | `device_cymk_01.pdf` | 1 | 1531x1191 | 3.0553 | [0.0216](./quality_benchmarks/delta_0.0216_device_cymk_01.pdf.page_no_1.png) | 0.1147 | 153 | 209,108 |
 | `annots_01.pdf` | 1 | 1191x1684 | 2.8965 | [0.0167](./quality_benchmarks/delta_0.0167_annots_01.pdf.page_no_1.png) | 0.0717 | 255 | 143,766 |
 | `2508.13113v2.pdf` | 9 | 1224x1584 | 2.7856 | [0.0151](./quality_benchmarks/delta_0.0151_2508.13113v2.pdf.page_no_9.png) | 0.0749 | 255 | 145,191 |
@@ -258,8 +286,8 @@ value links to that page's three-panel visualisation.
 | `rotated_text_05.pdf` | 1 | 737x843 | 1.2137 | [0.0064](./quality_benchmarks/delta_0.0064_rotated_text_05.pdf.page_no_1.png) | 0.0476 | 119 | 29,546 |
 | `rotated_text_02.pdf` | 1 | 737x843 | 1.2128 | [0.0064](./quality_benchmarks/delta_0.0064_rotated_text_02.pdf.page_no_1.png) | 0.0482 | 119 | 29,952 |
 | `rotated_page_01.pdf` | 1 | 1584x1224 | 1.2105 | [0.0076](./quality_benchmarks/delta_0.0076_rotated_page_01.pdf.page_no_1.png) | 0.0425 | 206 | 82,334 |
-| `duplicate_bold_text_01.pdf` | 1 | 1191x1684 | 1.1754 | [0.0063](./quality_benchmarks/delta_0.0063_duplicate_bold_text_01.pdf.page_no_1.png) | 0.0262 | 209 | 52,590 |
 | `right_to_left.pdf` | 1 | 1224x1584 | 1.1304 | [0.0059](./quality_benchmarks/delta_0.0059_right_to_left.pdf.page_no_1.png) | 0.0280 | 255 | 54,249 |
+| `duplicate_bold_text_01.pdf` | 1 | 1191x1684 | 1.1013 | [0.0058](./quality_benchmarks/delta_0.0063_duplicate_bold_text_01.pdf.page_no_1.png) | 0.0208 | 211 | 41,678 |
 | `right_to_left_02.pdf` | 1 | 1191x1684 | 1.0205 | [0.0063](./quality_benchmarks/delta_0.0063_right_to_left_02.pdf.page_no_1.png) | 0.0277 | 154 | 55,465 |
 | `10400964487025769287.pdf` | 1 | 1190x1684 | 1.0034 | [0.0052](./quality_benchmarks/delta_0.0052_10400964487025769287.pdf.page_no_1.png) | 0.0257 | 233 | 51,480 |
 | `text_as_lines_01.pdf` | 3 | 1190x1684 | 0.9971 | [0.0052](./quality_benchmarks/delta_0.0052_text_as_lines_01.pdf.page_no_3.png) | 0.0287 | 247 | 57,506 |

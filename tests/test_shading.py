@@ -186,6 +186,28 @@ def test_axial_shading_is_painted_inside_an_even_odd_clip():
     assert inside != GREEN, "the even-odd clipped shading was not painted"
 
 
+def test_axial_shading_is_painted_inside_a_triangular_clip():
+    """A clip is a path, not a rectangle: `sh` fills whatever shape it has."""
+    content = (
+        _background()
+        + "q\n"
+        + "20 10 m 180 10 l 100 90 l h\nW\nn\n"
+        + "/Sh0 sh\n"
+        + "Q\n"
+    )
+    image = _render(_build_pdf(content, _axial_shading()))
+
+    # inside the triangle the ramp runs red to blue as everywhere else
+    _assert_color(_pixel(image, 30, 12), (216, 0, 39), "left inside the triangle")
+    _assert_color(_pixel(image, 170, 12), (38, 0, 218), "right inside the triangle")
+
+    # the corners of the triangle's bounding box are outside the triangle, so
+    # a clip reduced to that box would show there
+    _assert_color(_pixel(image, 25, 80), GREEN, "above-left of the hypotenuse")
+    _assert_color(_pixel(image, 175, 80), GREEN, "above-right of the hypotenuse")
+    _assert_color(_pixel(image, 100, 5), GREEN, "below the triangle")
+
+
 def test_shading_does_not_leak_outside_the_clip_after_Q():
     """The clip is part of the graphics state: after `Q` the page is untouched."""
     content = (

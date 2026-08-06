@@ -1,0 +1,241 @@
+#!/usr/bin/env python
+"""/Separation and /DeviceN colour spaces (ISO 32000-1, 8.6.6.4 and 8.6.6.5).
+
+Both are subtractive spaces: their operands are *tints*, not colours. What
+gets painted is the alternate colour space the tint transform maps those tints
+onto, so a renderer that does not evaluate the transform paints the wrong
+colour -- not a slightly-off colour, an unrelated one.
+
+These tests build the PDFs in memory and assert on rendered pixels, because
+the tint transform only shows up as colour.
+"""
+
+from io import BytesIO
+from typing import List, Tuple
+
+import pytest
+from PIL import Image as PILImage
+
+from docling_parse.pdf_parser import (
+    DecodeConfig,
+    DoclingThreadedPdfParser,
+    RenderConfig,
+    ThreadedPdfParserConfig,
+)
+
+PAGE_WIDTH = 200
+PAGE_HEIGHT = 100
+
+# Blend2D rounds; the colours below are exact so the margin only has to absorb
+# the 8-bit quantisation of the tint transform's output.
+COLOR_TOLERANCE = 2
+
+
+def _build_pdf(content: str, colorspace_objects: List[str]) -> bytes:
+    """One-page PDF whose /ColorSpace resource /CS0 is object 5."""
+    objects = [
+        "<< /Type /Catalog /Pages 2 0 R >>",
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {PAGE_WIDTH} {PAGE_HEIGHT}] "
+        "/Resources << /ColorSpace << /CS0 5 0 R >> >> /Contents 4 0 R >>",
+        f"<< /Length {len(content)} >>\nstream\n{content}\nendstream",
+    ]
+    objects.extend(colorspace_objects)
+
+    out = b"%PDF-1.4\n"
+    offsets = []
+    for index, obj in enumerate(objects, start=1):
+        offsets.append(len(out))
+        out += f"{index} 0 obj\n{obj}\nendobj\n".encode("latin-1")
+
+    startxref = len(out)
+    out += f"xref\n0 {len(objects) + 1}\n".encode("latin-1")
+    out += b"0000000000 65535 f \n"
+    for offset in offsets:
+        out += f"{offset:010d} 00000 n \n".encode("latin-1")
+    out += (
+        f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\n"
+        f"startxref\n{startxref}\n%%EOF"
+    ).encode("latin-1")
+    return out
+
+
+def _fill(operands: str) -> str:
+    """Select /CS0, set a colour with `scn`, and cover the page."""
+    return f"/CS0 cs {operands} scn 0 0 {PAGE_WIDTH} {PAGE_HEIGHT} re f\n"
+
+
+def _render(pdf_bytes: bytes) -> PILImage.Image:
+    render_config = RenderConfig()
+    render_config.scale = 1.0
+
+    parser = DoclingThreadedPdfParser(
+        parser_config=ThreadedPdfParserConfig(
+            loglevel="fatal",
+            threads=1,
+            max_concurrent_results=1,
+            render_config=render_config,
+        ),
+        decode_config=DecodeConfig(),
+    )
+    key = parser.load(BytesIO(pdf_bytes))
+    try:
+        results = list(parser.iterate_results())
+        assert len(results) == 1
+        return results[0].get_image().convert("RGB")
+    finally:
+        parser.unload(key)
+
+
+def _center_pixel(image: PILImage.Image) -> Tuple[int, int, int]:
+    pixel = image.getpixel((image.width // 2, image.height // 2))
+    assert isinstance(pixel, tuple) and len(pixel) >= 3, (
+        f"expected an RGB pixel, got {pixel!r}"
+    )
+    red, green, blue = pixel[:3]
+    return (red, green, blue)
+
+
+def _assert_color(
+    actual: Tuple[int, int, int],
+    expected: Tuple[int, int, int],
+    where: str,
+) -> None:
+    deltas = [abs(a - e) for a, e in zip(actual, expected)]
+    assert max(deltas) <= COLOR_TOLERANCE, (
+        f"{where}: expected ~{expected}, got {actual} (max delta {max(deltas)})"
+    )
+
+
+# ---------------------------------------------------------------------------
+# the tint transform decides the colour
+# ---------------------------------------------------------------------------
+
+
+def test_separation_tint_goes_through_an_exponential_transform():
+    """A type 2 transform at tint 1 yields /C1, here a mid blue."""
+    image = _render(
+        _build_pdf(
+            _fill("1"),
+            [
+                "[/Separation /Spot /DeviceRGB 6 0 R]",
+                "<< /FunctionType 2 /Domain [0 1] /C0 [1 1 1] "
+                "/C1 [0.2 0.4 0.8] /N 1 >>",
+            ],
+        )
+    )
+
+    _assert_color(_center_pixel(image), (51, 102, 204), "full tint")
+
+
+def test_separation_half_tint_interpolates_along_the_transform():
+    """Half a tint is half way along the type 2 ramp, not half the ink."""
+    image = _render(
+        _build_pdf(
+            _fill("0.5"),
+            [
+                "[/Separation /Spot /DeviceRGB 6 0 R]",
+                "<< /FunctionType 2 /Domain [0 1] /C0 [1 1 1] "
+                "/C1 [0.2 0.4 0.8] /N 1 >>",
+            ],
+        )
+    )
+
+    # halfway between white and (0.2, 0.4, 0.8)
+    _assert_color(_center_pixel(image), (153, 179, 230), "half tint")
+
+
+def test_separation_tint_goes_through_a_sampled_transform():
+    """A type 0 transform interpolates between its two samples."""
+    samples = "\x00\xff"
+    image = _render(
+        _build_pdf(
+            _fill("0.5"),
+            [
+                "[/Separation /Spot /DeviceGray 6 0 R]",
+                "<< /FunctionType 0 /Domain [0 1] /Range [0 1] /Size [2] "
+                f"/BitsPerSample 8 /Length {len(samples)} >>\n"
+                f"stream\n{samples}\nendstream",
+            ],
+        )
+    )
+
+    _assert_color(_center_pixel(image), (128, 128, 128), "midpoint of the table")
+
+
+def test_devicen_passes_every_colorant_to_the_transform():
+    """A /DeviceN transform takes one input per colorant, not just the first.
+
+    The type 4 program pushes a literal 0 onto the stack the two tints already
+    sit on, so the three outputs are (tint_a, tint_b, 0) -- an answer that is
+    only reachable if both tints arrive.
+    """
+    program = "{ 0 }"
+    image = _render(
+        _build_pdf(
+            _fill("1 0.5"),
+            [
+                "[/DeviceN [/A /B] /DeviceRGB 6 0 R]",
+                "<< /FunctionType 4 /Domain [0 1 0 1] /Range [0 1 0 1 0 1] "
+                f"/Length {len(program)} >>\nstream\n{program}\nendstream",
+            ],
+        )
+    )
+
+    _assert_color(_center_pixel(image), (255, 128, 0), "two-colorant tint")
+
+
+# ---------------------------------------------------------------------------
+# colorants that make no marks, and transforms that cannot be used
+# ---------------------------------------------------------------------------
+
+
+def test_separation_none_makes_no_marks():
+    """8.6.6.4: a /None colorant paints nothing, whatever its transform says."""
+    image = _render(
+        _build_pdf(
+            _fill("1"),
+            [
+                "[/Separation /None /DeviceRGB 6 0 R]",
+                "<< /FunctionType 2 /Domain [0 1] /C0 [1 1 1] /C1 [1 0 0] /N 1 >>",
+            ],
+        )
+    )
+
+    _assert_color(_center_pixel(image), (255, 255, 255), "a /None separation")
+
+
+@pytest.mark.parametrize(
+    "colorspace_objects, description",
+    [
+        (
+            [
+                "[/Separation /Spot /DeviceRGB 6 0 R]",
+                "<< /FunctionType 9 /Domain [0 1] >>",
+            ],
+            "unsupported /FunctionType",
+        ),
+        (
+            [
+                "[/Separation /Spot /DeviceRGB 6 0 R]",
+                "<< /FunctionType 2 /Domain [0 1] /C0 [1 1] /C1 [0 0] /N 1 >>",
+            ],
+            "transform output count does not match the alternate space",
+        ),
+        (
+            ["[/Separation /Spot /DeviceRGB]", "<< >>"],
+            "no tint transform at all",
+        ),
+    ],
+)
+def test_unusable_tint_transform_falls_back_to_darkening(
+    colorspace_objects, description
+):
+    """Without a usable transform a tint can only be approximated as ink.
+
+    Tint 0.25 becomes a light grey rather than a colour: wrong, but monotone in
+    the tint and never darker than the ink it stands for.
+    """
+    image = _render(_build_pdf(_fill("0.25"), colorspace_objects))
+
+    _assert_color(_center_pixel(image), (191, 191, 191), description)

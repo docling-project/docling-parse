@@ -168,8 +168,11 @@ What is left in the report is mostly one of three things:
   (20.31) and `fillable_form` (16.31) are widget annotation appearances that
   docling-parse paints and pypdfium2 leaves out, and `right_to_left_02` (45.28)
   is a tiling pattern that docling-parse paints over the whole page.
-  `device_n_black` (48.37) is the other direction: pypdfium2 draws a
-  gradient-filled banner that docling-parse leaves blank.
+  `device_n_black` used to be the other direction — pypdfium2 drew a
+  gradient-filled banner that docling-parse left blank — because the banner's
+  `sh` shading sits under a hexagonal clip and the renderer only honoured
+  rectangular clips. It now fills the clip outline, and the page is down from
+  48.37 to 12.48; what remains there is the naive CMYK-to-RGB conversion.
 - Anti-aliasing, hinting and glyph rasterization, which differ between the two
   renderers on nearly every page. The size-matching pages sit around a mean
   absolute error of 2.6, and those small deltas are not worth chasing.

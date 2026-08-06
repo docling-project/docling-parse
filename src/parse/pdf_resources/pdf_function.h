@@ -7,13 +7,14 @@ namespace pdflib
 {
 
   // A PDF function object (ISO 32000-1, 7.10). Functions map m input values
-  // onto n output values and are what gives a shading its colours, so a
-  // shading can only be painted when its function decodes.
+  // onto n output values. They give a shading its colours -- so a shading can
+  // only be painted when its function decodes -- and carry the tint transform
+  // of /Separation and /DeviceN colour spaces.
   //
-  // Implemented: type 0 (sampled, one input), type 2 (exponential
-  // interpolation), type 3 (stitching) and type 4 (PostScript calculator).
-  // Sampled functions of more than one input are rejected: they only occur in
-  // function-based (type 1) shadings, which are not painted either.
+  // Implemented: type 0 (sampled), type 2 (exponential interpolation), type 3
+  // (stitching) and type 4 (PostScript calculator). Types 2 and 3 are
+  // single-input by definition; types 0 and 4 take as many inputs as their
+  // /Domain declares, which is what a multi-colorant tint transform needs.
   //
   // A function that fails to decode reports is_valid() == false together with
   // a reason, so the caller can say *why* nothing was painted.
@@ -34,11 +35,12 @@ namespace pdflib
     int get_num_inputs() const { return static_cast<int>(domain_.size() / 2); }
     int get_num_outputs() const;
 
-    // Evaluates the function for a single input value. Values are clipped to
-    // /Domain on the way in and to /Range on the way out, as required by
-    // 7.10.1. Returns false when the function is invalid or produced no
-    // outputs.
+    // Evaluates the function. Values are clipped to /Domain on the way in and
+    // to /Range on the way out, as required by 7.10.1. Returns false when the
+    // function is invalid, was handed the wrong number of inputs, or produced
+    // no outputs. The scalar overload is the single-input case.
     bool evaluate(double in, std::vector<double>& out) const;
+    bool evaluate(const std::vector<double>& in, std::vector<double>& out) const;
 
   private:
 
@@ -89,10 +91,10 @@ namespace pdflib
     bool parse_stitching(QPDFObjectHandle obj, int depth);
     bool parse_postscript(QPDFObjectHandle obj);
 
-    bool evaluate_sampled(double x, std::vector<double>& out) const;
+    bool evaluate_sampled(const std::vector<double>& x, std::vector<double>& out) const;
     bool evaluate_exponential(double x, std::vector<double>& out) const;
     bool evaluate_stitching(double x, std::vector<double>& out) const;
-    bool evaluate_postscript(double x, std::vector<double>& out) const;
+    bool evaluate_postscript(const std::vector<double>& x, std::vector<double>& out) const;
 
     void clip_to_range(std::vector<double>& out) const;
 
@@ -116,6 +118,11 @@ namespace pdflib
     // degrees <-> radians: the type 4 trigonometric operators work in
     // degrees (Table 42)
     const static inline double DEG_TO_RAD = 3.14159265358979323846 / 180.0;
+
+    // A type 0 lookup interpolates between the 2^m samples surrounding the
+    // input point, so the input arity has to stay small. Eight is already far
+    // beyond the colorant counts /DeviceN uses in practice.
+    const static inline std::size_t max_sampled_inputs = 8;
 
     static double interpolate(double x,
                               double x_min, double x_max,
@@ -316,7 +323,7 @@ namespace pdflib
   }
 
   // 7.10.2: samples are a packed table of Size[0] x ... x Size[m-1] entries of
-  // n BitsPerSample-wide values each. Only m == 1 is supported.
+  // n BitsPerSample-wide values each, with the first input varying fastest.
   inline bool pdf_function::parse_sampled(QPDFObjectHandle obj)
   {
     if(not obj.isStream())
@@ -326,11 +333,13 @@ namespace pdflib
 
     QPDFObjectHandle dict = obj.getDict();
 
-    if(domain_.size() != 2)
+    const std::size_t m = domain_.size() / 2;
+
+    if(m > max_sampled_inputs)
       {
-        return invalidate("sampled function (type 0) with " +
-                          std::to_string(domain_.size() / 2) +
-                          " inputs is not supported (only 1)");
+        return invalidate("sampled function (type 0) with " + std::to_string(m) +
+                          " inputs is not supported (at most " +
+                          std::to_string(max_sampled_inputs) + ")");
       }
 
     if(range_.size() < 2)
@@ -349,9 +358,33 @@ namespace pdflib
         size_.push_back(static_cast<int>(std::lround(value)));
       }
 
-    if(size_.size() != 1 or size_[0] < 1)
+    if(size_.size() != m)
       {
-        return invalidate("sampled function (type 0) has an invalid /Size");
+        return invalidate("sampled function (type 0) has " +
+                          std::to_string(size_.size()) + " /Size entries for " +
+                          std::to_string(m) + " inputs");
+      }
+
+    // The table is Size[0] x ... x Size[m-1] entries. The product is taken
+    // from an untrusted file, so it is capped rather than allowed to wrap:
+    // 2^26 samples is already two orders of magnitude past anything real.
+    static constexpr std::size_t max_samples = std::size_t(1) << 26;
+
+    std::size_t num_samples = 1;
+    for(int size : size_)
+      {
+        if(size < 1)
+          {
+            return invalidate("sampled function (type 0) has an invalid /Size");
+          }
+
+        if(static_cast<std::size_t>(size) > max_samples / num_samples)
+          {
+            return invalidate("sampled function (type 0) declares more than " +
+                              std::to_string(max_samples) + " samples");
+          }
+
+        num_samples *= static_cast<std::size_t>(size);
       }
 
     if(not dict.hasKey("/BitsPerSample") or
@@ -371,13 +404,24 @@ namespace pdflib
         }
       }
 
-    // defaults per Table 38: Encode = [0 Size-1], Decode = Range
-    encode_ = dict.hasKey("/Encode") ? to_double_vector(dict.getKey("/Encode"))
-                                     : std::vector<double>{0.0, static_cast<double>(size_[0] - 1)};
+    // defaults per Table 38: Encode = [0 Size_0-1 ... 0 Size_(m-1)-1],
+    // Decode = Range
+    if(dict.hasKey("/Encode"))
+      {
+        encode_ = to_double_vector(dict.getKey("/Encode"));
+      }
+    else
+      {
+        for(int size : size_)
+          {
+            encode_.push_back(0.0);
+            encode_.push_back(static_cast<double>(size - 1));
+          }
+      }
     decode_ = dict.hasKey("/Decode") ? to_double_vector(dict.getKey("/Decode"))
                                      : range_;
 
-    if(encode_.size() < 2)
+    if(encode_.size() < 2 * m)
       {
         return invalidate("sampled function (type 0) has an invalid /Encode");
       }
@@ -399,7 +443,8 @@ namespace pdflib
       }
 
     const std::size_t needed_bits =
-      static_cast<std::size_t>(size_[0]) * num_outputs_ * bits_per_sample_;
+      num_samples * static_cast<std::size_t>(num_outputs_) *
+      static_cast<std::size_t>(bits_per_sample_);
     const std::size_t needed_bytes = (needed_bits + 7) / 8;
 
     if(samples_.size() < needed_bytes)
@@ -414,6 +459,13 @@ namespace pdflib
 
   inline bool pdf_function::parse_exponential(QPDFObjectHandle dict)
   {
+    if(domain_.size() != 2)
+      {
+        return invalidate("exponential function (type 2) takes one input, but "
+                          "its /Domain declares " +
+                          std::to_string(domain_.size() / 2));
+      }
+
     c0_ = dict.hasKey("/C0") ? to_double_vector(dict.getKey("/C0"))
                              : std::vector<double>{0.0};
     c1_ = dict.hasKey("/C1") ? to_double_vector(dict.getKey("/C1"))
@@ -437,6 +489,13 @@ namespace pdflib
   inline bool pdf_function::parse_stitching(QPDFObjectHandle obj, int depth)
   {
     QPDFObjectHandle dict = obj.isStream() ? obj.getDict() : obj;
+
+    if(domain_.size() != 2)
+      {
+        return invalidate("stitching function (type 3) takes one input, but "
+                          "its /Domain declares " +
+                          std::to_string(domain_.size() / 2));
+      }
 
     if(not dict.hasKey("/Functions") or not dict.getKey("/Functions").isArray())
       {
@@ -1039,23 +1098,64 @@ namespace pdflib
                        decode_[2 * static_cast<std::size_t>(output) + 1]);
   }
 
-  inline bool pdf_function::evaluate_sampled(double x, std::vector<double>& out) const
+  inline bool pdf_function::evaluate_sampled(const std::vector<double>& x,
+                                             std::vector<double>& out) const
   {
-    // 7.10.2: clip to Domain, encode into sample-index space, clip to the
-    // table, then interpolate linearly between the two nearest samples.
-    double e = interpolate(x, domain_[0], domain_[1], encode_[0], encode_[1]);
-    e = std::min(static_cast<double>(size_[0] - 1), std::max(0.0, e));
+    // 7.10.2: per input, encode into sample-index space and clip to the table,
+    // then interpolate multilinearly between the surrounding samples.
+    const std::size_t m = size_.size();
 
-    const std::size_t i0 = static_cast<std::size_t>(std::floor(e));
-    const std::size_t i1 = std::min(static_cast<std::size_t>(size_[0] - 1), i0 + 1);
-    const double frac = e - static_cast<double>(i0);
+    std::vector<std::size_t> lower(m, 0);
+    std::vector<double>      frac(m, 0.0);
 
-    out.resize(static_cast<std::size_t>(num_outputs_));
-    for(int j = 0; j < num_outputs_; j++)
+    for(std::size_t j = 0; j < m; j++)
       {
-        const double v0 = sample_value(i0, j);
-        const double v1 = sample_value(i1, j);
-        out[static_cast<std::size_t>(j)] = v0 + frac * (v1 - v0);
+        double e = interpolate(x[j], domain_[2 * j + 0], domain_[2 * j + 1],
+                               encode_[2 * j + 0], encode_[2 * j + 1]);
+        e = std::min(static_cast<double>(size_[j] - 1), std::max(0.0, e));
+
+        lower[j] = static_cast<std::size_t>(std::floor(e));
+        frac[j] = e - static_cast<double>(lower[j]);
+      }
+
+    out.assign(static_cast<std::size_t>(num_outputs_), 0.0);
+
+    const std::size_t corners = std::size_t(1) << m;
+    for(std::size_t corner = 0; corner < corners; corner++)
+      {
+        double weight = 1.0;
+        std::size_t index = 0;
+        std::size_t stride = 1;
+
+        for(std::size_t j = 0; j < m; j++)
+          {
+            const bool upper = ((corner >> j) & 1) != 0;
+
+            weight *= upper ? frac[j] : (1.0 - frac[j]);
+            if(weight == 0.0)
+              {
+                break;
+              }
+
+            const std::size_t sample =
+              upper ? std::min(lower[j] + 1,
+                               static_cast<std::size_t>(size_[j] - 1))
+                    : lower[j];
+
+            index += sample * stride;
+            stride *= static_cast<std::size_t>(size_[j]);
+          }
+
+        if(weight == 0.0)
+          {
+            continue;
+          }
+
+        for(int j = 0; j < num_outputs_; j++)
+          {
+            out[static_cast<std::size_t>(j)] +=
+              weight * sample_value(index, j);
+          }
       }
 
     return true;
@@ -1096,12 +1196,19 @@ namespace pdflib
     return functions_[i]->evaluate(encoded, out);
   }
 
-  inline bool pdf_function::evaluate_postscript(double x, std::vector<double>& out) const
+  inline bool pdf_function::evaluate_postscript(const std::vector<double>& x,
+                                                std::vector<double>& out) const
   {
     const std::size_t n = range_.size() / 2;
 
+    // 7.10.5: the m inputs are on the stack when the program starts, the
+    // first one bottom-most
     std::vector<ps_value> stack;
-    stack.push_back(ps_value{x, false});
+    stack.reserve(x.size());
+    for(double value : x)
+      {
+        stack.push_back(ps_value{value, false});
+      }
 
     if(not run_postscript(program_, stack))
       {
@@ -1139,20 +1246,39 @@ namespace pdflib
 
   inline bool pdf_function::evaluate(double in, std::vector<double>& out) const
   {
+    return evaluate(std::vector<double>{in}, out);
+  }
+
+  inline bool pdf_function::evaluate(const std::vector<double>& in,
+                                     std::vector<double>& out) const
+  {
     if(not valid_)
       {
         return false;
       }
 
-    const double x = std::min(domain_[1], std::max(domain_[0], in));
+    const std::size_t m = domain_.size() / 2;
+
+    if(in.size() != m)
+      {
+        return false;
+      }
+
+    std::vector<double> x(m, 0.0);
+    for(std::size_t j = 0; j < m; j++)
+      {
+        x[j] = std::min(domain_[2 * j + 1],
+                        std::max(domain_[2 * j + 0], in[j]));
+      }
 
     bool ok = false;
     switch(type_)
       {
-      case 0: { ok = evaluate_sampled(x, out);     } break;
-      case 2: { ok = evaluate_exponential(x, out); } break;
-      case 3: { ok = evaluate_stitching(x, out);   } break;
-      case 4: { ok = evaluate_postscript(x, out);  } break;
+      // types 2 and 3 are single-input by definition (7.10.3, 7.10.4)
+      case 0: { ok = evaluate_sampled(x, out);        } break;
+      case 2: { ok = evaluate_exponential(x[0], out); } break;
+      case 3: { ok = evaluate_stitching(x[0], out);   } break;
+      case 4: { ok = evaluate_postscript(x, out);     } break;
 
       default: { return false; }
       }

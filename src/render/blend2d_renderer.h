@@ -100,7 +100,9 @@ namespace pdflib
     // Paints one `sh` shading over the current clip region as a Blend2D
     // gradient. The shading's colour ramp arrives pre-sampled, and its
     // geometry is transformed from shading space to canvas space through the
-    // gradient's own matrix, so a flipped or skewed CTM stays exact.
+    // gradient's own matrix, so a flipped or skewed CTM stays exact. The clip
+    // region is the only bound on the paint, so a non-rectangular clip becomes
+    // the filled outline rather than a reason to skip the shading.
     void render_shading(shading_instruction& instr);
 
     // Returns the rendered canvas as RGBA bytes, row-major top-to-bottom, in
@@ -585,6 +587,115 @@ namespace pdflib
         }
 
       return applied_clip ? CLIP_APPLIED : CLIP_NONE;
+    }
+
+    // Builds a closed canvas-space path from a clip path. The parse layer
+    // stores clip geometry as a flattened polyline, so curved clip outlines
+    // arrive already sampled. A fill treats every subpath as closed (8.5.3.2),
+    // hence the unconditional close().
+    BLPath make_clip_path(const clip_path_instruction& clip) const
+    {
+      BLPath path;
+
+      const auto& xs = clip.get_x();
+      const auto& ys = clip.get_y();
+      const size_t n = clip.size();
+
+      if(n < 3)
+        {
+          return path;
+        }
+
+      path.move_to(canvas_x(xs[0]), canvas_y(ys[0]));
+      for(size_t i = 1; i < n; i++)
+        {
+          path.line_to(canvas_x(xs[i]), canvas_y(ys[i]));
+        }
+      path.close();
+
+      return path;
+    }
+
+    // What a shading should paint once its clip state has been applied.
+    struct shading_clip
+    {
+      bool   empty = false;    // the clip leaves no area on the canvas
+      bool   bounded = false;  // at least one clip path could be honored
+      bool   has_path = false; // fill `path` instead of the whole canvas
+      BLPath path;
+    };
+
+    // Restricts `ctx` to a shading's clip region and reports the geometry to
+    // fill. `sh` paints the entire clip region, so the clip is the only thing
+    // bounding the paint. Blend2D clips to rectangles only, so a rectangular
+    // clip path becomes a context clip while a non-rectangular one becomes the
+    // fill geometry itself -- filling its outline covers exactly the region the
+    // operator reaches. Additional non-rectangular paths can only be
+    // approximated, and are applied as their bounding box so the paint stays
+    // bounded.
+    //
+    // The caller must have saved `ctx` beforehand: this leaves clips on it.
+    shading_clip apply_shading_clip(BLContext& ctx,
+                                    const clip_state_instruction& clip_state,
+                                    const BLRect& canvas_rect) const
+    {
+      shading_clip result;
+
+      for(const auto& clip_path : clip_state.get_paths())
+        {
+          BLRect clip_rect;
+          if(get_axis_aligned_clip_rect(clip_path, clip_rect))
+            {
+              if(not rects_intersect(clip_rect, canvas_rect))
+                {
+                  result.empty = true;
+                  return result;
+                }
+
+              ctx.clip_to_rect(clip_rect);
+              result.bounded = true;
+              continue;
+            }
+
+          BLPath path = make_clip_path(clip_path);
+          if(path.is_empty())
+            {
+              LOG_S(WARNING) << "apply_shading_clip: skipping degenerate clip path";
+              continue;
+            }
+
+          if(not result.has_path)
+            {
+              result.path = std::move(path);
+              result.has_path = true;
+              result.bounded = true;
+              continue;
+            }
+
+          // several non-rectangular paths: their intersection is not
+          // expressible, so bound the fill by this one's bounding box
+          BLBox box;
+          if(path.get_bounding_box(&box) == BL_SUCCESS)
+            {
+              const BLRect box_rect(box.x0, box.y0,
+                                    box.x1 - box.x0, box.y1 - box.y0);
+
+              if(not rects_intersect(box_rect, canvas_rect))
+                {
+                  result.empty = true;
+                  return result;
+                }
+
+              ctx.clip_to_rect(box_rect);
+              result.bounded = true;
+            }
+
+          LOG_S(WARNING) << "apply_shading_clip: more than one non-rectangular"
+                         << " clip path, approximating the extra one by its"
+                         << " bounding box";
+        }
+
+      return result;
     }
 
     // Converts a parsed 0-255 RGB triple and a [0, 1] alpha into a Blend2D
@@ -2305,22 +2416,32 @@ namespace pdflib
       }
 
     // `sh` covers the whole clip region, so the fill is the entire canvas and
-    // the clip is what bounds it. Without an applicable clip an unbounded fill
-    // would flood the page, which is worse than not painting at all.
+    // the clip is what bounds it. With no clip at all the region is the page
+    // itself; with a clip that cannot be applied an unbounded fill would flood
+    // the page, which is worse than not painting at all.
     const BLRect canvas_rect(0.0, 0.0,
                              static_cast<double>(canvas_width_),
                              static_cast<double>(canvas_height_));
 
     BLContext& ctx = page_context();
 
-    bool clip_active = false;
-    if (instr.has_clip_state())
+    shading_clip clip;
+    const bool has_clip_state = instr.has_clip_state();
+
+    if (has_clip_state)
       {
         ctx.save();
-        const clip_apply_result clip_result =
-          apply_clip_state(ctx, instr.get_clip_state(), canvas_rect);
+        clip = apply_shading_clip(ctx, instr.get_clip_state(), canvas_rect);
 
-        if (clip_result != CLIP_APPLIED)
+        if (clip.empty)
+          {
+            ctx.restore();
+            LOG_S(INFO) << "render_shading: shading " << instr.get_key()
+                        << " is fully clipped away";
+            return;
+          }
+
+        if (not clip.bounded)
           {
             ctx.restore();
             LOG_S(WARNING) << "render_shading: shading " << instr.get_key()
@@ -2328,14 +2449,23 @@ namespace pdflib
                            << " rather than flooding the page";
             return;
           }
-
-        clip_active = true;
       }
 
     ctx.set_fill_style(gradient);
-    ctx.fill_rect(canvas_rect);
 
-    if (clip_active)
+    if (clip.has_path)
+      {
+        ctx.set_fill_rule(instr.get_clip_state().get_rule() == CLIP_RULE_EVEN_ODD
+                            ? BL_FILL_RULE_EVEN_ODD
+                            : BL_FILL_RULE_NON_ZERO);
+        ctx.fill_path(clip.path);
+      }
+    else
+      {
+        ctx.fill_rect(canvas_rect);
+      }
+
+    if (has_clip_state)
       {
         ctx.restore();
       }

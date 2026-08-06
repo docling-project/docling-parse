@@ -217,8 +217,8 @@ namespace pdflib
     COLOR_SPACE_LAB,        // Lab (approximated by its L* component)
 
     COLOR_SPACE_INDEXED,    // palette lookup into a base space
-    COLOR_SPACE_SEPARATION, // single tint (tint transform not evaluated)
-    COLOR_SPACE_DEVICE_N,   // multiple tints (tint transform not evaluated)
+    COLOR_SPACE_SEPARATION, // single tint, through a tint transform
+    COLOR_SPACE_DEVICE_N,   // multiple tints, through a tint transform
 
     COLOR_SPACE_PATTERN
   };

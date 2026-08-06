@@ -92,10 +92,13 @@
 #include <parse/pdf_resources/page_grph.h>
 #include <parse/pdf_resources/page_grphs.h>
 
+// pdf_function carries both the colour ramp of a shading and the tint
+// transform of a /Separation or /DeviceN colour space, so it comes first
+#include <parse/pdf_resources/pdf_function.h>
+
 #include <parse/pdf_resources/page_colorspace.h>
 #include <parse/pdf_resources/page_colorspaces.h>
 
-#include <parse/pdf_resources/pdf_function.h>
 #include <parse/pdf_resources/page_shading.h>
 #include <parse/pdf_resources/page_shadings.h>
 

@@ -282,6 +282,18 @@ namespace pdflib
             reject("/Function[" + std::to_string(i) + "]: " + function->get_reason());
             return false;
           }
+
+        // An axial or radial shading parameterises its colour by a single
+        // value t (8.7.4.5.3), so anything with more inputs belongs to a
+        // shading type this class does not paint.
+        if(function->get_num_inputs() != 1)
+          {
+            reject("/Function[" + std::to_string(i) + "] takes " +
+                   std::to_string(function->get_num_inputs()) +
+                   " inputs instead of 1");
+            return false;
+          }
+
         functions_.push_back(function);
       }
 
