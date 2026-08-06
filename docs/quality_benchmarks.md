@@ -27,6 +27,15 @@ are that output, copied in.
 | `above-tolerance` | only pages over the reporting cut-off (the default) |
 | `none` | nothing |
 
+Two run-level histograms land in the same folder for every value except
+`none` — `histogram_delta.png` and `histogram_mean_abs_error.png`. Each shows
+the distribution of that metric over the whole corpus on a logarithmic page
+count, with the median, the mean and (for `mean_abs_error`) the reporting
+cut-off marked. They are what to look at after changing a decoder: a per-page
+panel says what is wrong with one page, the histogram says whether the corpus
+as a whole moved. Writing them needs `matplotlib` from the `perf` dependency
+group; without it the run silently skips them and still prints the table.
+
 Both renderers work at `scale = 2.0` (144 dpi). The test never fails on pixel
 differences — it fails only when there is nothing to compare, e.g. when
 `pypdfium2` is not installed.
