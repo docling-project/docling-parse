@@ -151,6 +151,14 @@ and a form-heavy page therefore differs across every field.
 The other four `form_fields.pdf` pages sit between 3.36 and 6.41, which is the
 same effect at a lower field density.
 
+The overlay is now opt-in: `render_config::display_widgets` defaults to `false`,
+so a default render draws only the field content and no longer diverges from
+PDFium here. Setting it to `true` (colour configurable through
+`render_config::color_widgets`) brings the overlay — and these numbers — back.
+The measurements in the table below predate that switch and were taken with the
+overlay always on; the `form_fields.pdf` and `fillable_form.pdf` rows are
+therefore stale until the table is regenerated.
+
 ## Per-page results
 
 Sorted by `mean_abs_error`, worst first, as the test prints them. The `delta`

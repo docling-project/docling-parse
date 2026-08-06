@@ -1140,6 +1140,8 @@ PYBIND11_MODULE(pdf_parsers, m) {
         render_text (bool): Render glyph outlines for text cells [default=true].
         draw_text_bbox (bool): Draw bounding quad for each text cell [default=false].
         draw_text_basepoint (bool): Draw the text baseline origin as a small red dot [default=false].
+        display_widgets (bool): Draw the bounds of each widget (form-field) annotation as a translucent overlay; the field content itself is rendered regardless [default=false].
+        color_widgets (list[int]): RGB triple (0-255) for the widget overlay [default=[0, 153, 255]].
         fit_glyph_bbox_to_target (bool): Uniformly rescale measured glyph outlines so the rendered bbox fits inside the target glyph bbox, with either width or height matching exactly [default=false].
         resolve_fonts (bool): Resolve PDF font names to system fonts [default=true].
         use_embedded_fonts (bool): Prefer embedded font programs (TrueType/OpenType via Blend2D, Type 1/CFF via FreeType outlines) over system font resolution [default=true].
@@ -1152,6 +1154,8 @@ PYBIND11_MODULE(pdf_parsers, m) {
     .def_readwrite("render_text",             &pdflib::render_config::render_text)
     .def_readwrite("draw_text_bbox",          &pdflib::render_config::draw_text_bbox)
     .def_readwrite("draw_text_basepoint",     &pdflib::render_config::draw_text_basepoint)
+    .def_readwrite("display_widgets",         &pdflib::render_config::display_widgets)
+    .def_readwrite("color_widgets",           &pdflib::render_config::color_widgets)
     .def_readwrite("fit_glyph_bbox_to_target",&pdflib::render_config::fit_glyph_bbox_to_target)
     .def_readwrite("resolve_fonts",           &pdflib::render_config::resolve_fonts)
     .def_readwrite("use_embedded_fonts",      &pdflib::render_config::use_embedded_fonts)

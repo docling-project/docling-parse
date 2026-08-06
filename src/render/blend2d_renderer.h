@@ -77,9 +77,11 @@ namespace pdflib
     // text bbox fallback so the cell remains visible.
     void render_text(text_instruction& instr);
 
-    // Draws a text widget annotation as a translucent filled quadrilateral with
-    // a blue outline. This currently visualizes the widget bounds only; it does
-    // not render the widget's text value.
+    // Draws a text widget annotation as a translucent filled quadrilateral
+    // outlined in render_config::color_widgets, and only when
+    // render_config::display_widgets is set. This visualizes the widget bounds
+    // only; the widget's text value arrives as ordinary text instructions from
+    // its appearance stream and is rendered either way.
     void render_widget(text_widget_instruction& instr);
 
     // Renders one bitmap/image XObject. The method validates the image buffers,
@@ -1893,8 +1895,10 @@ namespace pdflib
   // ---------------------------------------------------------------------------
   // render_widget
   //
-  // Draws the widget's rotated bounding quad as a semi-transparent light-blue
-  // filled polygon.  The text value is not rendered.
+  // Draws the widget's rotated bounding quad as a semi-transparent filled
+  // polygon in config_.color_widgets. The text value is not rendered here: the
+  // widget's appearance stream is decoded into ordinary text and shape
+  // instructions, which are drawn regardless of config_.display_widgets.
   // ---------------------------------------------------------------------------
 
   inline void renderer<BLEND2D>::render_widget(text_widget_instruction& instr)
@@ -1902,6 +1906,8 @@ namespace pdflib
     LOG_S(INFO) << __FUNCTION__ << "  text='" << instr.get_text() << "'";
 
     if (not has_canvas()) { return; }
+
+    if (not config_.display_widgets) { return; }
 
     BLPath path;
     path.move_to(canvas_x(instr.get_r_x0()), canvas_y(instr.get_r_y0()));
@@ -1911,9 +1917,9 @@ namespace pdflib
     path.close();
 
     BLContext& ctx = page_context();
-    ctx.set_fill_style(BLRgba32(0x660099FFu));   // A=40%, light blue
+    ctx.set_fill_style(make_rgba32(config_.color_widgets, 0.4));   // translucent body
     ctx.fill_path(path);
-    ctx.set_stroke_style(BLRgba32(0xFF0099FFu));  // A=100%, blue border
+    ctx.set_stroke_style(make_rgba32(config_.color_widgets, 1.0)); // opaque border
     ctx.set_stroke_width(1);
     ctx.stroke_path(path);
   }

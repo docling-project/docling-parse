@@ -3,6 +3,7 @@
 #ifndef PDF_RENDER_CONFIG_H
 #define PDF_RENDER_CONFIG_H
 
+#include <array>
 #include <cmath>
 #include <stdexcept>
 #include <utility>
@@ -33,6 +34,20 @@ namespace pdflib
 
     // Draw the text baseline origin as a small red dot.
     bool draw_text_basepoint = false;
+
+    // Draw the bounds of each widget (form-field) annotation as a translucent
+    // filled quad with a solid border, in color_widgets. This is a debug
+    // visualisation with no counterpart in a viewer's output, so it lowers the
+    // rendering-quality scores of documents with interactive fields (see
+    // docs/quality_benchmarks.md) and is off by default. It is independent of
+    // the field content: the widget's /AP appearance stream is decoded into
+    // regular text and shape instructions, which are drawn either way.
+    bool display_widgets = false;
+
+    // RGB triple (0-255) used for the widget overlay drawn when
+    // display_widgets is true. The fill is the same color at 40% alpha, the
+    // border is fully opaque.
+    std::array<int, 3> color_widgets = {0x00, 0x99, 0xFF};
 
     // Uniformly rescale measured glyph outlines so the rendered bbox fits
     // inside the target glyph bbox while matching either the target width or
@@ -90,6 +105,14 @@ namespace pdflib
     if(config.canvas_height != -1 and config.canvas_height <= 0)
       {
         throw std::runtime_error("render_config.canvas_height must be > 0 or -1");
+      }
+
+    for(int channel : config.color_widgets)
+      {
+        if(channel < 0 or channel > 255)
+          {
+            throw std::runtime_error("render_config.color_widgets channels must be in [0, 255]");
+          }
       }
 
     if(have_scale and (have_width or have_height))

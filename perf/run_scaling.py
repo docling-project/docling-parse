@@ -505,6 +505,7 @@ def config_tables(
         "render_text",
         "draw_text_bbox",
         "draw_text_basepoint",
+        "display_widgets",
         "fit_glyph_bbox_to_target",
         "resolve_fonts",
         "font_similarity_cutoff",

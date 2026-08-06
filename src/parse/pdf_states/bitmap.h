@@ -1014,6 +1014,15 @@ namespace pdflib
 		
                 pixel_data  = std::make_shared<std::vector<uint8_t>>(std::move(decoded));
                 pixel_shape = {h, w, channels};
+
+                // ccitt::decode resolves /BlackIs1 and returns one 8-bit sample
+                // per pixel, i.e. the filter's output bit widened under the
+                // identity /Decode. The image dictionary's own /Decode array
+                // (ISO 32000-1, 8.9.5.2) still has to be applied on top, exactly
+                // as the unpack_subbyte path does for a QPDF-decoded stream.
+                // /CCITTFaxDecode images routinely carry [1 0], which inverts
+                // the image — and for an /ImageMask flips which samples paint.
+                apply_decode_to_u8_samples(pixel_data, channels);
               }
             else
               {
