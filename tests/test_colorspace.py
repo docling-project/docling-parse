@@ -60,6 +60,48 @@ def _build_pdf(content: str, colorspace_objects: List[str]) -> bytes:
     return out
 
 
+def _build_image_pdf(image_objects: List[str]) -> bytes:
+    """One-page PDF whose /XObject /Im0 is object 5, stretched over the page.
+
+    The images below are all two pixels wide and one tall, so the left half of
+    the page carries the first sample and the right half the second.
+    """
+    content = f"q {PAGE_WIDTH} 0 0 {PAGE_HEIGHT} 0 0 cm /Im0 Do Q\n"
+    objects = [
+        "<< /Type /Catalog /Pages 2 0 R >>",
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {PAGE_WIDTH} {PAGE_HEIGHT}] "
+        "/Resources << /XObject << /Im0 5 0 R >> >> /Contents 4 0 R >>",
+        f"<< /Length {len(content)} >>\nstream\n{content}\nendstream",
+    ]
+    objects.extend(image_objects)
+
+    out = b"%PDF-1.4\n"
+    offsets = []
+    for index, obj in enumerate(objects, start=1):
+        offsets.append(len(out))
+        out += f"{index} 0 obj\n{obj}\nendobj\n".encode("latin-1")
+
+    startxref = len(out)
+    out += f"xref\n0 {len(objects) + 1}\n".encode("latin-1")
+    out += b"0000000000 65535 f \n"
+    for offset in offsets:
+        out += f"{offset:010d} 00000 n \n".encode("latin-1")
+    out += (
+        f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\n"
+        f"startxref\n{startxref}\n%%EOF"
+    ).encode("latin-1")
+    return out
+
+
+def _image_xobject(colorspace: str, samples: str) -> str:
+    return (
+        "<< /Type /XObject /Subtype /Image /Width 2 /Height 1 "
+        f"/BitsPerComponent 8 /ColorSpace {colorspace} /Length {len(samples)} >>\n"
+        f"stream\n{samples}\nendstream"
+    )
+
+
 def _fill(operands: str) -> str:
     """Select /CS0, set a colour with `scn`, and cover the page."""
     return f"/CS0 cs {operands} scn 0 0 {PAGE_WIDTH} {PAGE_HEIGHT} re f\n"
@@ -291,3 +333,95 @@ def test_device_cmyk_black_is_monotone():
 
         assert value <= previous, f"K = {step}/8 is lighter than the step before"
         previous = value
+
+
+# ---------------------------------------------------------------------------
+# images are tints too
+# ---------------------------------------------------------------------------
+
+# Scaling a two-pixel image over the page costs a code value or two at the
+# edges of the resampling filter, which the flat-fill tolerance does not allow.
+IMAGE_COLOR_TOLERANCE = 4
+
+
+def _image_halves(image: PILImage.Image) -> Tuple[Tuple[int, int, int], ...]:
+    """The colour of the left and right halves of a two-sample image."""
+    y = image.height // 2
+    return (
+        image.getpixel((image.width // 10, y))[:3],
+        image.getpixel((image.width * 9 // 10, y))[:3],
+    )
+
+
+def _assert_image_color(actual, expected, where: str) -> None:
+    deltas = [abs(a - e) for a, e in zip(actual, expected)]
+    assert max(deltas) <= IMAGE_COLOR_TOLERANCE, (
+        f"{where}: expected ~{expected}, got {actual} (max delta {max(deltas)})"
+    )
+
+
+def test_separation_image_samples_go_through_the_tint_transform():
+    """An image in a /Separation space stores tints, not grey levels.
+
+    Two samples, 0 and 255, are the ends of the tint range: they have to come
+    out as the two ends of the transform, white and /C1.
+    """
+    image = _render(
+        _build_image_pdf(
+            [
+                _image_xobject("[/Separation /Spot /DeviceRGB 6 0 R]", "\x00\xff"),
+                "<< /FunctionType 2 /Domain [0 1] /C0 [1 1 1] "
+                "/C1 [0.2 0.4 0.8] /N 1 >>",
+            ]
+        )
+    )
+
+    left, right = _image_halves(image)
+    _assert_image_color(left, (255, 255, 255), "tint 0")
+    _assert_image_color(right, (51, 102, 204), "tint 1")
+
+
+def test_devicen_image_passes_every_colorant_per_pixel():
+    """A /DeviceN image feeds all of a pixel's tints to the transform.
+
+    The type 4 program turns tints (a, b) into (a, b, 0), so the two pixels --
+    (1, 0) and (0, 1) -- can only come out red and green if both colorants of
+    each pixel reach the transform together.
+    """
+    program = "{ 0 }"
+    image = _render(
+        _build_image_pdf(
+            [
+                _image_xobject(
+                    "[/DeviceN [/A /B] /DeviceRGB 6 0 R]", "\xff\x00\x00\xff"
+                ),
+                "<< /FunctionType 4 /Domain [0 1 0 1] /Range [0 1 0 1 0 1] "
+                f"/Length {len(program)} >>\nstream\n{program}\nendstream",
+            ]
+        )
+    )
+
+    left, right = _image_halves(image)
+    _assert_image_color(left, (255, 0, 0), "tints (1, 0)")
+    _assert_image_color(right, (0, 255, 0), "tints (0, 1)")
+
+
+def test_separation_image_without_a_transform_still_draws():
+    """An unusable transform must not cost the artwork.
+
+    The tints are then read as ink coverage -- 0 is bare paper and 255 is solid
+    -- which is wrong in colour but still shows the image, where refusing the
+    colour space altogether shows nothing.
+    """
+    image = _render(
+        _build_image_pdf(
+            [
+                _image_xobject("[/Separation /Black /DeviceCMYK 6 0 R]", "\x00\xff"),
+                "<< /FunctionType 9 /Domain [0 1] >>",
+            ]
+        )
+    )
+
+    left, right = _image_halves(image)
+    _assert_image_color(left, (255, 255, 255), "no ink")
+    _assert_image_color(right, (0, 0, 0), "full ink")

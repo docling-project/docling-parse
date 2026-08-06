@@ -592,10 +592,14 @@ namespace pdflib
         fmt = PIXEL_FORMAT_RGB;
         channels = image.tint_components;
       }
-    else if(image.color_space.find("/DeviceN") != std::string::npos
-            and image.device_n_components > 0)
+    else if(image.device_n_components > 0)
       {
-        LOG_S(INFO) << "bitmap: DeviceN color space with N=" << image.device_n_components
+        // A tint space with no usable tint transform: the colorant count is
+        // all there is to go on, so the tints are read as device components.
+        // /Separation reaches this too, which is why the colour-space name is
+        // not part of the test.
+        LOG_S(INFO) << "bitmap: tint color space read as N=" << image.device_n_components
+                    << " device component(s)"
                     << " for xobject_key=" << image.xobject_key;
         if(image.device_n_components == 1)
           {
