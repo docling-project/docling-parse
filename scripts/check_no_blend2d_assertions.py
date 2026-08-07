@@ -5,13 +5,18 @@ import zipfile
 from pathlib import Path
 
 
-ASSERTION_MARKER = b"ASSERTION FAILURE"
+BLEND2D_ASSERTION_MARKERS = (
+    b"[Blend2D] ASSERTION FAILURE",
+    b"bl_runtime_assertion_failure",
+)
 NATIVE_SUFFIXES = {".so", ".pyd", ".dll", ".dylib"}
 
 
 def native_files(path: Path) -> list[Path]:
     if path.is_file():
-        return [path]
+        if path.suffix.lower() == ".whl" or path.suffix.lower() in NATIVE_SUFFIXES:
+            return [path]
+        return []
     return [
         item
         for item in path.rglob("*")
@@ -27,7 +32,7 @@ def scan_file(path: Path) -> list[str]:
                 if Path(name).suffix.lower() not in NATIVE_SUFFIXES:
                     continue
                 data = zf.read(name)
-                if ASSERTION_MARKER in data:
+                if has_blend2d_assertion_marker(data):
                     findings.append(f"{path}!{name}")
         return findings
 
@@ -37,7 +42,11 @@ def scan_file(path: Path) -> list[str]:
         print(f"warning: could not read {path}: {exc}", file=sys.stderr)
         return []
 
-    return [str(path)] if ASSERTION_MARKER in data else []
+    return [str(path)] if has_blend2d_assertion_marker(data) else []
+
+
+def has_blend2d_assertion_marker(data: bytes) -> bool:
+    return any(marker in data for marker in BLEND2D_ASSERTION_MARKERS)
 
 
 def main(argv: list[str]) -> int:
