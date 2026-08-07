@@ -91,7 +91,7 @@ if (WIN32)
         # (e.g. the curly quotes and en/em dashes in src/parse/utils/string.h) as
         # multi-character constants -> error C2015. GCC/Clang assume UTF-8, so this
         # only bites the MSVC/arm64 build.
-        add_compile_options(/utf-8)
+        add_compile_options(/utf-8 /bigobj)
         # MSVC's <cmath> only exposes M_PI (used in src/parse/utils/values.h) when
         # _USE_MATH_DEFINES is defined before the include -> without it, C2065.
         # NOMINMAX stops <windows.h> from defining min()/max() function-like
@@ -129,6 +129,7 @@ if(NOT USE_SYSTEM_DEPS)
 endif()
 
 # include dependencies
+include(cmake/extlib_zlib.cmake)
 include(cmake/extlib_cxxopts.cmake)
 include(cmake/extlib_loguru.cmake)
 include(cmake/extlib_json.cmake)
@@ -143,7 +144,7 @@ include(cmake/extlib_freetype.cmake)
 include(cmake/extlib_pdfium_jbig2.cmake)
 
 # aggregate the targets created by the dependencies
-set(DEPENDENCIES qpdf jpeg openjpeg lcms2 utf8 json loguru cxxopts blend2d freetype pdfium_jbig2)
+set(DEPENDENCIES zlib qpdf jpeg openjpeg lcms2 utf8 json loguru cxxopts blend2d freetype pdfium_jbig2)
 
 # ************************
 # *** libraries        ***

@@ -8,7 +8,11 @@ if(WIN32)
    find_package(ZLIB)
 
    set(LIB_LINK)
-   set(OS_DEPENDENCIES ZLIB::ZLIB)
+   if(ZLIB_FOUND)
+       set(OS_DEPENDENCIES ZLIB::ZLIB)
+   else()
+       set(OS_DEPENDENCIES)
+   endif()
 
 elseif(APPLE)
    message(STATUS "compiling on mac-osx")

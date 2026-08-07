@@ -130,17 +130,23 @@ inline std::vector<unsigned char> inflate_pdf_stream(
   if(not data || size == 0) { return {}; }
   if(size > static_cast<std::size_t>(std::numeric_limits<uInt>::max())) { return {}; }
 
-  uLongf dest_size = std::max<uLongf>(size * 4, 4096);
+  uLongf buf_capacity = std::max<uLongf>(static_cast<uLongf>(size) * 4, 4096);
 
   for(int attempt = 0; attempt < 8; ++attempt)
     {
-      std::vector<unsigned char> inflated(dest_size);
-      int rc = ::uncompress(inflated.data(), &dest_size,
+      std::vector<unsigned char> inflated;
+      try {
+        inflated.resize(buf_capacity);
+      } catch (const std::bad_alloc&) {
+        return {};
+      }
+      uLongf actual_size = buf_capacity;
+      int rc = ::uncompress(inflated.data(), &actual_size,
                             reinterpret_cast<Bytef const*>(data),
                             static_cast<uInt>(size));
       if(rc == Z_OK)
         {
-          inflated.resize(dest_size);
+          inflated.resize(actual_size);
           return inflated;
         }
       if(rc != Z_BUF_ERROR)
@@ -149,11 +155,18 @@ inline std::vector<unsigned char> inflate_pdf_stream(
                       << ": zlib inflate failed with rc=" << rc;
           return {};
         }
-      if(dest_size >= static_cast<uLongf>(std::numeric_limits<uInt>::max() / 2))
+      if(actual_size > buf_capacity)
+        {
+          buf_capacity = actual_size;
+        }
+      else if(buf_capacity >= static_cast<uLongf>(std::numeric_limits<uInt>::max() / 2))
         {
           break;
         }
-      dest_size *= 2;
+      else
+        {
+          buf_capacity *= 2;
+        }
     }
 
   LOG_S(INFO) << "inflate_pdf_stream"

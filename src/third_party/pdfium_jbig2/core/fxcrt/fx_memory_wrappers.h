@@ -27,6 +27,13 @@ struct IsFXDataPartitionException : std::false_type {};
   template <>                          \
   struct IsFXDataPartitionException<T> : std::true_type {}
 
+#ifdef _MSC_VER
+namespace std {
+struct _Container_proxy;
+}
+FX_DATA_PARTITION_EXCEPTION(std::_Container_proxy);
+#endif
+
 // Allocators for mapping STL containers onto Partition Alloc.
 // Otherwise, replacing e.g. the FX_AllocUninit/FX_Free pairs with STL may
 // undo some of the nice segregation that we get from PartitionAlloc.

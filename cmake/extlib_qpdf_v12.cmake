@@ -49,7 +49,7 @@ else()
 
       PREFIX extlib_qpdf
 
-      DEPENDS extlib_jpeg
+      DEPENDS extlib_jpeg extlib_zlib
 
       UPDATE_COMMAND ""
 
@@ -68,6 +68,10 @@ else()
       -DREQUIRE_CRYPTO_NATIVE=ON \\ 
       -DCMAKE_CXX_FLAGS=${QPDF_EXTRA_CXX_FLAGS} \\ 
       -DCMAKE_C_FLAGS=${QPDF_EXTRA_C_FLAGS} \\ 
+      -DZLIB_H_PATH=${EXTERNALS_PREFIX_PATH}/include \\ 
+      -DZLIB_LIB_PATH=${ZLIB_LIB} \\ 
+      -DZLIB_LIBRARY=${ZLIB_LIB} \\ 
+      -DZLIB_INCLUDE_DIR=${EXTERNALS_PREFIX_PATH}/include \\ 
       -DLIBJPEG_LIBRARY=${JPEG_LIB} \\ 
       -DLIBJPEG_LIBRARIES=${JPEG_LIB} \\ 
       -DLIBJPEG_LIB_PATH=${JPEG_LIB} \\ 

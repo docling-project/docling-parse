@@ -98,6 +98,7 @@ def build_local(num_threads: int):
     config_cmd = [
         "cmake",
         "-B", f"{BUILD_DIR}",
+        "-DCMAKE_BUILD_TYPE=Release",
         f"-DUSE_SYSTEM_DEPS={USE_SYSTEM_DEPS}",
         f"-DPYTHON_EXECUTABLE={sys.executable}",
     ]
