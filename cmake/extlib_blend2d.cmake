@@ -64,11 +64,9 @@ else()
     )
 
     # Blend2D defines bl_runtime_assertion_failure() unconditionally in
-    # runtime.cpp. When linking the static archive with GNU-like linkers, that
-    # object can be pulled into pdf_parsers even when no release code references
-    # it. Compile with per-symbol sections and let Linux/MinGW linkers discard
-    # the unreferenced assertion helper. MSVC Release already uses /OPT:REF and
-    # macOS arm64 is passing, so keep this scoped to the failing toolchains.
+    # runtime.cpp. BL_BUILD_RELEASE removes assertion call sites, but the helper
+    # can still be retained from the static archive unless the final extension
+    # link can discard unused sections.
     set(BLEND2D_GNU_GC_SECTIONS "$<AND:$<NOT:$<CONFIG:Debug>>,$<OR:$<PLATFORM_ID:Linux>,$<AND:$<PLATFORM_ID:Windows>,$<CXX_COMPILER_ID:GNU>>>>")
     target_compile_options(
         blend2d
@@ -77,6 +75,17 @@ else()
     target_link_options(
         blend2d
         INTERFACE "$<${BLEND2D_GNU_GC_SECTIONS}:-Wl,--gc-sections>"
+    )
+
+    # MinGW auto-exports global symbols from DLL/PYD links. If symbols from the
+    # static Blend2D archive are exported, they become linker roots and section
+    # GC cannot remove bl_runtime_assertion_failure(). Hide static-archive
+    # symbols from the final Windows GNU extension export table while preserving
+    # explicitly exported symbols such as the pybind module initializer.
+    set(BLEND2D_MINGW_EXCLUDE_STATIC_EXPORTS "$<AND:$<NOT:$<CONFIG:Debug>>,$<PLATFORM_ID:Windows>,$<CXX_COMPILER_ID:GNU>>")
+    target_link_options(
+        blend2d
+        INTERFACE "$<${BLEND2D_MINGW_EXCLUDE_STATIC_EXPORTS}:-Wl,--exclude-libs,ALL>"
     )
     # FetchContent creates the target "blend2d" (and alias blend2d::blend2d).
 endif()
