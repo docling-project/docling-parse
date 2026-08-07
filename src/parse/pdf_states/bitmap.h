@@ -34,6 +34,18 @@ namespace pdflib
                   const pdf_resource<PAGE_XOBJECT_IMAGE>& xobj,
                   clip_state_instruction clip_state = clip_state_instruction());
 
+    void Do_inline_image(const std::string& xobject_key,
+                         int image_width,
+                         int image_height,
+                         int bits_per_component,
+                         const std::string& color_space,
+                         const std::vector<std::string>& filters,
+                         bool decode_present,
+                         const std::vector<double>& decode_array,
+                         bool image_mask,
+                         std::shared_ptr<Buffer> stream_data,
+                         clip_state_instruction clip_state = clip_state_instruction());
+
   private:
 
     enum visible_bbox_state
@@ -45,6 +57,9 @@ namespace pdflib
 
     void add_bitmap_instruction(const page_item<PAGE_IMAGE>& image,
                                 clip_state_instruction clip_state);
+
+    void populate_geometry(page_item<PAGE_IMAGE>& image,
+                           const clip_state_instruction& clip_state) const;
 
     bool get_clip_path_bbox(const clip_path_instruction& clip_path,
                             std::array<double, 4>& bbox) const;
@@ -194,67 +209,12 @@ namespace pdflib
     if(not config.keep_bitmaps) { LOG_S(WARNING) << "skipping " << __FUNCTION__; return; }
 
     LOG_S(INFO) << "starting to do " << __FUNCTION__ << " for xobject_key=" << xobject_key;
-    
+
     page_item<PAGE_IMAGE> image;
     image.xobject_key = xobject_key;
 
     // --- Compute quad corners and bounding box via the CTM ---
-    {
-      // FIXME clean up this crap
-      std::array<double, 9> ctm = trafo_matrix;
-
-      std::array<double, 3> u_0 = {{0, 0, 1}};
-      std::array<double, 3> u_1 = {{0, 1, 1}};
-      std::array<double, 3> u_2 = {{1, 1, 1}};
-      std::array<double, 3> u_3 = {{1, 0, 1}};
-
-      std::array<double, 3> d_0 = {{0, 0, 0}};
-      std::array<double, 3> d_1 = {{0, 0, 0}};
-      std::array<double, 3> d_2 = {{0, 0, 0}};
-      std::array<double, 3> d_3 = {{0, 0, 0}};
-
-      // p 120
-      for(int j=0; j<3; j++){
-        for(int i=0; i<3; i++){
-          d_0[j] += u_0[i]*ctm[i*3+j];
-          d_1[j] += u_1[i]*ctm[i*3+j];
-          d_2[j] += u_2[i]*ctm[i*3+j];
-          d_3[j] += u_3[i]*ctm[i*3+j];
-        }
-      }
-
-      std::array<double, 4> img_bbox;
-      img_bbox[0] = std::min(std::min(d_0[0], d_1[0]), std::min(d_2[0], d_3[0]));
-      img_bbox[2] = std::max(std::max(d_0[0], d_1[0]), std::max(d_2[0], d_3[0]));
-      img_bbox[1] = std::min(std::min(d_0[1], d_1[1]), std::min(d_2[1], d_3[1]));
-      img_bbox[3] = std::max(std::max(d_0[1], d_1[1]), std::max(d_2[1], d_3[1]));
-
-      image.x0 = img_bbox[0];
-      image.y0 = img_bbox[1];
-      image.x1 = img_bbox[2];
-      image.y1 = img_bbox[3];
-
-      image.r_x0 = d_0[0]; image.r_y0 = d_0[1];
-      image.r_x1 = d_1[0]; image.r_y1 = d_1[1];
-      image.r_x2 = d_2[0]; image.r_y2 = d_2[1];
-      image.r_x3 = d_3[0]; image.r_y3 = d_3[1];
-
-      std::array<double, 4> visible_bbox = {0.0, 0.0, 0.0, 0.0};
-      const visible_bbox_state bbox_state =
-        compute_visible_bbox(image, clip_state, visible_bbox);
-      if(bbox_state == VISIBLE_BBOX_CLIPPED)
-        {
-          image.has_visible_bbox = true;
-          image.visible_x0 = visible_bbox[0];
-          image.visible_y0 = visible_bbox[1];
-          image.visible_x1 = visible_bbox[2];
-          image.visible_y1 = visible_bbox[3];
-        }
-      else if(bbox_state == VISIBLE_BBOX_EMPTY)
-        {
-          image.is_visible = false;
-        }
-    }
+    populate_geometry(image, clip_state);
 
     // --- Populate image properties from the XObject ---
     {
@@ -286,6 +246,8 @@ namespace pdflib
       image.icc_components  = xobj.get_icc_components();
       image.device_n_components = xobj.get_device_n_components();
       image.device_n_names = xobj.get_device_n_names();
+      image.tint_colorspace = xobj.get_tint_colorspace();
+      image.tint_components = xobj.get_tint_components();
       image.jbig2_globals_data = xobj.get_jbig2_globals_data();
 
       // propagate /Indexed color space data
@@ -305,6 +267,118 @@ namespace pdflib
     page_images.push_back(image);
 
     add_bitmap_instruction(image, std::move(clip_state));
+  }
+
+  void pdf_state<BITMAP>::Do_inline_image(
+      const std::string& xobject_key,
+      int image_width,
+      int image_height,
+      int bits_per_component,
+      const std::string& color_space,
+      const std::vector<std::string>& filters,
+      bool decode_present,
+      const std::vector<double>& decode_array,
+      bool image_mask,
+      std::shared_ptr<Buffer> stream_data,
+      clip_state_instruction clip_state)
+  {
+    if(not config.keep_bitmaps) { LOG_S(WARNING) << "skipping " << __FUNCTION__; return; }
+    if(not stream_data or stream_data->getSize() == 0)
+      {
+        LOG_S(WARNING) << "inline image has no data for xobject_key=" << xobject_key;
+        return;
+      }
+
+    page_item<PAGE_IMAGE> image;
+    image.xobject_key = xobject_key;
+    populate_geometry(image, clip_state);
+
+    image.image_width        = image_width;
+    image.image_height       = image_height;
+    image.bits_per_component = bits_per_component;
+    image.color_space        = color_space;
+    image.filters            = filters;
+    image.raw_stream_data    = stream_data;
+    if(filters.empty())
+      {
+        image.decoded_stream_data = stream_data;
+      }
+    image.decode_present     = decode_present;
+    image.decode_array       = decode_array;
+    image.image_mask         = image_mask;
+
+    if(image.image_mask and not image.decode_present)
+      {
+        image.decode_present = true;
+        image.decode_array = {0.0, 1.0};
+      }
+
+    image.has_graphics_state = true;
+    image.rgb_stroking_ops   = grph_state.get_rgb_stroking_ops();
+    image.rgb_filling_ops    = grph_state.get_rgb_filling_ops();
+
+    page_images.push_back(image);
+    add_bitmap_instruction(image, std::move(clip_state));
+  }
+
+  void pdf_state<BITMAP>::populate_geometry(
+      page_item<PAGE_IMAGE>& image,
+      const clip_state_instruction& clip_state) const
+  {
+    // FIXME clean up this crap
+    std::array<double, 9> ctm = trafo_matrix;
+
+    std::array<double, 3> u_0 = {{0, 0, 1}};
+    std::array<double, 3> u_1 = {{0, 1, 1}};
+    std::array<double, 3> u_2 = {{1, 1, 1}};
+    std::array<double, 3> u_3 = {{1, 0, 1}};
+
+    std::array<double, 3> d_0 = {{0, 0, 0}};
+    std::array<double, 3> d_1 = {{0, 0, 0}};
+    std::array<double, 3> d_2 = {{0, 0, 0}};
+    std::array<double, 3> d_3 = {{0, 0, 0}};
+
+    // p 120
+    for(int j=0; j<3; j++){
+      for(int i=0; i<3; i++){
+        d_0[j] += u_0[i]*ctm[i*3+j];
+        d_1[j] += u_1[i]*ctm[i*3+j];
+        d_2[j] += u_2[i]*ctm[i*3+j];
+        d_3[j] += u_3[i]*ctm[i*3+j];
+      }
+    }
+
+    std::array<double, 4> img_bbox;
+    img_bbox[0] = std::min(std::min(d_0[0], d_1[0]), std::min(d_2[0], d_3[0]));
+    img_bbox[2] = std::max(std::max(d_0[0], d_1[0]), std::max(d_2[0], d_3[0]));
+    img_bbox[1] = std::min(std::min(d_0[1], d_1[1]), std::min(d_2[1], d_3[1]));
+    img_bbox[3] = std::max(std::max(d_0[1], d_1[1]), std::max(d_2[1], d_3[1]));
+
+    image.x0 = img_bbox[0];
+    image.y0 = img_bbox[1];
+    image.x1 = img_bbox[2];
+    image.y1 = img_bbox[3];
+
+    image.r_x0 = d_0[0]; image.r_y0 = d_0[1];
+    image.r_x1 = d_1[0]; image.r_y1 = d_1[1];
+    image.r_x2 = d_2[0]; image.r_y2 = d_2[1];
+    image.r_x3 = d_3[0]; image.r_y3 = d_3[1];
+
+    std::array<double, 4> visible_bbox = {0.0, 0.0, 0.0, 0.0};
+    const visible_bbox_state bbox_state =
+      compute_visible_bbox(image, clip_state, visible_bbox);
+    if(bbox_state == VISIBLE_BBOX_CLIPPED)
+      {
+        image.has_visible_bbox = true;
+        image.visible_x0 = visible_bbox[0];
+        image.visible_y0 = visible_bbox[1];
+        image.visible_x1 = visible_bbox[2];
+        image.visible_y1 = visible_bbox[3];
+      }
+    else if(bbox_state == VISIBLE_BBOX_EMPTY)
+      {
+        image.is_visible = false;
+      }
   }
 
   void pdf_state<BITMAP>::add_bitmap_instruction(const page_item<PAGE_IMAGE>& image,
@@ -578,10 +652,26 @@ namespace pdflib
                            << " for xobject_key=" << image.xobject_key;
           }
       }
-    else if(image.color_space.find("/DeviceN") != std::string::npos
-            and image.device_n_components > 0)
+    else if(image.tint_colorspace and image.tint_components > 0)
       {
-        LOG_S(INFO) << "bitmap: DeviceN color space with N=" << image.device_n_components
+        // /Separation and /DeviceN samples are tints. They are loaded at their
+        // own component count and turned into RGB once the pixels are in hand,
+        // because only the tint transform knows what colour a tint is.
+        LOG_S(INFO) << "bitmap: tint color space with "
+                    << image.tint_components << " colorant(s)"
+                    << " for xobject_key=" << image.xobject_key;
+
+        fmt = PIXEL_FORMAT_RGB;
+        channels = image.tint_components;
+      }
+    else if(image.device_n_components > 0)
+      {
+        // A tint space with no usable tint transform: the colorant count is
+        // all there is to go on, so the tints are read as device components.
+        // /Separation reaches this too, which is why the colour-space name is
+        // not part of the test.
+        LOG_S(INFO) << "bitmap: tint color space read as N=" << image.device_n_components
+                    << " device component(s)"
                     << " for xobject_key=" << image.xobject_key;
         if(image.device_n_components == 1)
           {
@@ -930,39 +1020,35 @@ namespace pdflib
 
             if (not bits.empty())
               {
-                // Expand 1bpp packed bitmap → 8bpp grayscale.
-                // For ordinary JBIG2 images, bit 1 means black and bit 0 means white.
-                // For image masks, honor PDF /Decode semantics:
-                //   [0 1] => 0 paints, 1 leaves unchanged
-                //   [1 0] => reversed
+                // Expand the packed 1bpp filter output to one 8-bit sample per
+                // pixel. jbig2_decode() hands back bits in PDF convention —
+                // 0 = black, 1 = white — because the vendored PDFium decoder
+                // inverts JBIG2's native "1 is black" before returning (see
+                // Decode() in jbig2_decoder.cpp). So the sample value under the
+                // identity /Decode is the bit itself: 0 → 0.0 (black, and for an
+                // /ImageMask the value that paints), 1 → 1.0.
                 const uint32_t pitch = (static_cast<uint32_t>(w) + 7u) / 8u;
                 auto expanded = std::make_shared<std::vector<uint8_t>>();
                 expanded->reserve(static_cast<std::size_t>(w) * h);
-                bool mask_zero_paints = true;
-                if (image.image_mask
-                    and image.decode_present
-                    and image.decode_array.size() >= 2)
-                  {
-                    mask_zero_paints =
-                      std::abs(image.decode_array[0] - 0.0) < 1e-12
-                      and std::abs(image.decode_array[1] - 1.0) < 1e-12;
-                  }
                 for (int row = 0; row < h; ++row)
                   {
                     for (int col = 0; col < w; ++col)
                       {
                         const uint8_t byte = bits[row * pitch + col / 8];
                         const bool    bit = ((byte >> (7 - (col % 8))) & 1u) != 0;
-                        const bool    black = image.image_mask
-                          ? (mask_zero_paints ? !bit : bit)
-                          : bit;
-                        expanded->push_back(black ? 0x00u : 0xFFu);
+                        expanded->push_back(bit ? 0xFFu : 0x00u);
                       }
                   }
 
                 fmt         = PIXEL_FORMAT_GRAY;
                 pixel_data  = std::move(expanded);
                 pixel_shape = {h, w, 1};
+
+                // Apply the image dictionary's /Decode array on top of the
+                // filter output (ISO 32000-1, 8.9.5.2), as every other pixel
+                // path does. For an /ImageMask this is what flips which samples
+                // paint: [0 1] paints on 0, [1 0] paints on 1.
+                apply_decode_to_u8_samples(pixel_data, 1);
 
                 LOG_S(INFO) << "bitmap: /JBIG2Decode decode succeeded"
                             << " for xobject_key=" << image.xobject_key
@@ -999,21 +1085,30 @@ namespace pdflib
                 // --- TEMPORARY DEBUG: save the raw decoded pixels as a PNG ---
 		bool export_to_png_for_debug = false; // should always be false in production!!
 		if(export_to_png_for_debug)
-		  {
-		    // Strip the leading '/' that PDF keys always carry (e.g. "/Im0" → "Im0").
-		    std::string tmp_name = image.xobject_key;
-		    if(not tmp_name.empty() and tmp_name[0] == '/')
-		      {
+  {
+    // Strip the leading '/' that PDF keys always carry (e.g. "/Im0" → "Im0").
+    std::string tmp_name = image.xobject_key;
+    if(not tmp_name.empty() and tmp_name[0] == '/')
+      {
 			tmp_name = tmp_name.substr(1);
-		      }
-		    std::string dbg_path = "./tmp/ccitt_debug_" + tmp_name + ".png";
-		    
-		    LOG_S(WARNING) << "saving PNG image at: " << dbg_path;
-		    ccitt::save_debug_png(decoded, w, h, dbg_path);
-		  }
-		
+      }
+    std::string dbg_path = "./tmp/ccitt_debug_" + tmp_name + ".png";
+
+    LOG_S(WARNING) << "saving PNG image at: " << dbg_path;
+    ccitt::save_debug_png(decoded, w, h, dbg_path);
+  }
+
                 pixel_data  = std::make_shared<std::vector<uint8_t>>(std::move(decoded));
                 pixel_shape = {h, w, channels};
+
+                // ccitt::decode resolves /BlackIs1 and returns one 8-bit sample
+                // per pixel, i.e. the filter's output bit widened under the
+                // identity /Decode. The image dictionary's own /Decode array
+                // (ISO 32000-1, 8.9.5.2) still has to be applied on top, exactly
+                // as the unpack_subbyte path does for a QPDF-decoded stream.
+                // /CCITTFaxDecode images routinely carry [1 0], which inverts
+                // the image — and for an /ImageMask flips which samples paint.
+                apply_decode_to_u8_samples(pixel_data, channels);
               }
             else
               {
@@ -1052,6 +1147,70 @@ namespace pdflib
           }
       }
 
+    // Tints become colour here, once the samples exist: one tint tuple per
+    // pixel goes through the tint transform into the alternate space and out
+    // as RGB. A single colorant -- which is what /Separation always is, and
+    // most /DeviceN images in practice -- has only 256 possible tints, so it
+    // goes through a lookup table instead of the transform per pixel.
+    if(image.tint_colorspace and image.tint_components > 0
+       and pixel_data and pixel_shape[2] == image.tint_components)
+      {
+        const int n = image.tint_components;
+        const std::size_t pixels = pixel_data->size() / static_cast<std::size_t>(n);
+
+        auto rgb_data = std::make_shared<std::vector<uint8_t>>(pixels * 3u, 0u);
+
+        std::vector<std::array<int, 3>> lut;
+        if(n == 1)
+          {
+            lut.resize(256);
+            for(int v = 0; v < 256; v++)
+              {
+                if(not image.tint_colorspace->map_to_rgb({v / 255.0}, lut[v]))
+                  {
+                    lut[v] = {0, 0, 0};
+                  }
+              }
+          }
+
+        std::vector<double> tints(static_cast<std::size_t>(n), 0.0);
+        std::array<int, 3> rgb = {0, 0, 0};
+
+        for(std::size_t p = 0; p < pixels; p++)
+          {
+            if(n == 1)
+              {
+                rgb = lut[(*pixel_data)[p]];
+              }
+            else
+              {
+                for(int d = 0; d < n; d++)
+                  {
+                    tints[static_cast<std::size_t>(d)] =
+                      (*pixel_data)[p * static_cast<std::size_t>(n) + d] / 255.0;
+                  }
+
+                if(not image.tint_colorspace->map_to_rgb(tints, rgb))
+                  {
+                    rgb = {0, 0, 0};
+                  }
+              }
+
+            (*rgb_data)[p * 3u + 0u] = static_cast<uint8_t>(rgb[0]);
+            (*rgb_data)[p * 3u + 1u] = static_cast<uint8_t>(rgb[1]);
+            (*rgb_data)[p * 3u + 2u] = static_cast<uint8_t>(rgb[2]);
+          }
+
+        pixel_data = std::move(rgb_data);
+        pixel_shape[2] = 3;
+        channels = 3;
+        fmt = PIXEL_FORMAT_RGB;
+        cmyk_conv = CMYK_CONVENTION_UNKNOWN;
+
+        LOG_S(INFO) << "bitmap: converted " << pixels << " tint sample(s) to RGB"
+                    << " for xobject_key=" << image.xobject_key;
+      }
+
     bitmap_instruction binstr(image.xobject_key,
                               std::move(pixel_data),
                               image.soft_mask_data,
@@ -1066,6 +1225,8 @@ namespace pdflib
                               image.r_x2, image.r_y2,
                               image.r_x3, image.r_y3,
                               std::move(clip_state));
+    binstr.set_blend_mode(grph_state.get_blend_mode());
+
     instructions.add_bitmap_instruction(std::move(binstr));
   }
 

@@ -164,12 +164,14 @@ What is left in the report is mostly one of three things:
   can report a large `mean_abs_error` while looking identical side by side:
   `complex_invisible_fonts_01` at 24.80 is a full-page photograph that differs
   only by that offset.
-- Content one renderer draws and the other does not. `form_fields` page 3
-  (20.31) and `fillable_form` (16.31) are widget annotation appearances that
-  docling-parse paints and pypdfium2 leaves out, and `right_to_left_02` (45.28)
+- Content one renderer draws and the other does not. `right_to_left_02` (45.28)
   is a tiling pattern that docling-parse paints over the whole page.
-  `device_n_black` (48.37) is the other direction: pypdfium2 draws a
-  gradient-filled banner that docling-parse leaves blank.
+  `device_n_black` used to be the other direction — pypdfium2 drew a
+  gradient-filled banner that docling-parse left blank — because the banner's
+  `sh` shading sits under a hexagonal clip and the renderer only honoured
+  rectangular clips. It now fills the clip outline, and with the DeviceCMYK
+  conversion replaced the page is down from 48.37 to 0.79. `form_fields` and
+  `fillable_form` were the widget-bounds overlay, which is now opt-in.
 - Anti-aliasing, hinting and glyph rasterization, which differ between the two
   renderers on nearly every page. The size-matching pages sit around a mean
   absolute error of 2.6, and those small deltas are not worth chasing.

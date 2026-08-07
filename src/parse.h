@@ -50,11 +50,16 @@
 
 #include <parse/utils.h>
 #include <parse/utils/pdf_timings.h>
+#include <parse/utils/color/device_cmyk.h>
 
 #include <parse/qpdf/to_json.h>
 #include <parse/qpdf/annots.h>
 #include <parse/qpdf/stream_instruction.h>
 #include <parse/qpdf/stream_decoder.h>
+
+// pdf-resource names and the primary template, ahead of the page items: a
+// decoded image carries the /ColorSpace resource it was sampled in
+#include <parse/pdf_resource.h>
 
 // page-item
 #include <parse/page_item.h>
@@ -72,7 +77,6 @@
 #include <parse/page_items/render_instructions.h>
 
 // pdf-resource
-#include <parse/pdf_resource.h>
 #include <parse/pdf_resources/page_font/glyphs.h>
 #include <parse/pdf_resources/page_font/font_cid.h>
 #include <parse/pdf_resources/page_font/font_cids.h>
@@ -92,10 +96,13 @@
 #include <parse/pdf_resources/page_grph.h>
 #include <parse/pdf_resources/page_grphs.h>
 
+// pdf_function carries both the colour ramp of a shading and the tint
+// transform of a /Separation or /DeviceN colour space, so it comes first
+#include <parse/pdf_resources/pdf_function.h>
+
 #include <parse/pdf_resources/page_colorspace.h>
 #include <parse/pdf_resources/page_colorspaces.h>
 
-#include <parse/pdf_resources/pdf_function.h>
 #include <parse/pdf_resources/page_shading.h>
 #include <parse/pdf_resources/page_shadings.h>
 

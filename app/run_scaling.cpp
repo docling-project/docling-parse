@@ -313,8 +313,10 @@ namespace
   {
     pdflib::render_config config;
     config.render_text = true;
+    config.min_stroke_width = 1.0f;
     config.draw_text_bbox = false;
     config.draw_text_basepoint = false;
+    config.display_widgets = false;
     config.fit_glyph_bbox_to_target = false;
     config.resolve_fonts = true;
     config.font_similarity_cutoff = 0.75f;
@@ -760,8 +762,10 @@ namespace
               << std::setw(32) << "parameter" << "value\n"
               << std::string(44, '-') << "\n"
               << std::setw(32) << "render_text" << config.render_text << "\n"
+              << std::setw(32) << "min_stroke_width" << config.min_stroke_width << "\n"
               << std::setw(32) << "draw_text_bbox" << config.draw_text_bbox << "\n"
               << std::setw(32) << "draw_text_basepoint" << config.draw_text_basepoint << "\n"
+              << std::setw(32) << "display_widgets" << config.display_widgets << "\n"
               << std::setw(32) << "fit_glyph_bbox_to_target" << config.fit_glyph_bbox_to_target << "\n"
               << std::setw(32) << "resolve_fonts" << config.resolve_fonts << "\n"
               << std::setw(32) << "font_similarity_cutoff" << config.font_similarity_cutoff << "\n"

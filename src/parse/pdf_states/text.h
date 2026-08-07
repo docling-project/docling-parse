@@ -114,6 +114,13 @@ namespace pdflib
 
     std::string font_name = "NULL";
     double      font_size = 1000;
+
+    // Writing mode of the current font (9.7.4.3). `vertical_displacement` is
+    // per glyph, so it is refreshed for each one; the other two follow the
+    // font and are set at Tf.
+    bool   vertical_mode          = false;
+    double vertical_origin_y      = 0.0;
+    double vertical_displacement  = 0.0;
   };
 
   int pdf_state<TEXT>::block_count = 0;
@@ -180,6 +187,10 @@ namespace pdflib
 
     this->font_name = other.font_name;
     this->font_size = other.font_size;
+
+    this->vertical_mode = other.vertical_mode;
+    this->vertical_origin_y = other.vertical_origin_y;
+    this->vertical_displacement = other.vertical_displacement;
 
     return *this;
   }
@@ -303,6 +314,24 @@ namespace pdflib
 	    font_name = prev_fontname;
 	  }
       }
+
+    vertical_mode = false;
+    vertical_origin_y = 0.0;
+    vertical_displacement = 0.0;
+
+    if(page_fonts->count(font_name))
+      {
+        pdf_resource<PAGE_FONT>& font = (*page_fonts)[font_name];
+
+        vertical_mode = font.is_vertical();
+        if(vertical_mode)
+          {
+            vertical_origin_y = font.get_vertical_origin_y();
+            vertical_displacement = font.get_vertical_displacement(0) * font_size;
+
+            LOG_S(INFO) << "Tf " << font_name << ": vertical writing mode";
+          }
+      }
   }
 
   void pdf_state<TEXT>::Tj(std::vector<qpdf_stream_instruction>& instructions, int stack_size)
@@ -347,8 +376,10 @@ namespace pdflib
           {
             double value = utils::numeric::locale_safe_numeric_value(item);
 
-            double tx = - value / 1000.0 * font_size * h_scaling;
-            double ty = 0;
+            const double adjust = - value / 1000.0 * font_size;
+
+            const double tx = vertical_mode ? 0.0 : adjust * h_scaling;
+            const double ty = vertical_mode ? adjust : 0.0;
 
             move_cursor(tx, ty);
           }
@@ -465,9 +496,22 @@ namespace pdflib
             text  += chars_;
             width += char_width;
 
+            if(vertical_mode)
+              {
+                vertical_displacement =
+                  font.get_vertical_displacement(item.first) * font_size;
+              }
+
             add_cell(font, text, width, static_cast<int>(item.first), stack_size, cells);
 
-            move_cursor(delta_width, 0);
+            if(vertical_mode)
+              {
+                move_cursor(0, -delta_width / h_scaling);
+              }
+            else
+              {
+                move_cursor(delta_width, 0);
+              }
 
             chars  = {};
             widths = {};
@@ -602,10 +646,12 @@ namespace pdflib
 
       // std::array<double, 8> base = compute_rect(0, font_ascent*ratio, width);
 
-      // The true text baseline origin is (0, rise) in text space.
-      // Transform that point through the text matrix and then the CTM.
-      const double g_base_x = 0.0;
-      const double g_base_y = rise;
+      // The renderer draws from the glyph's horizontal origin. In vertical
+      // writing the PDF current point is the vertical origin, so apply the
+      // same position vector used for the glyph rectangle.
+      const double g_base_x = vertical_mode ? -0.5 * width : 0.0;
+      const double g_base_y =
+        rise + (vertical_mode ? -vertical_origin_y * font_size : 0.0);
 
       std::array<double, 9>& T_text = text_matrix;
       const double t_base_x = T_text[0] * g_base_x + T_text[3] * g_base_y + T_text[6];
@@ -712,6 +758,7 @@ namespace pdflib
         tinstr.set_fill_color(grph_state.get_rgb_filling_ops(),
                               grph_state.get_fill_alpha());
         tinstr.set_rendering_mode(rendering_mode);
+        tinstr.set_blend_mode(grph_state.get_blend_mode());
 
         if(config.extract_font_programs)
           {
@@ -732,7 +779,17 @@ namespace pdflib
                        << "with text=" << text;
       }
 
-    move_cursor(width, 0);
+    // 9.4.4: the displacement runs along the writing direction, so a vertical
+    // font advances by w1 (normally negative, i.e. downwards) and not by the
+    // glyph width. The horizontal scaling Th does not apply to it.
+    if(vertical_mode)
+      {
+        move_cursor(0, vertical_displacement);
+      }
+    else
+      {
+        move_cursor(width, 0);
+      }
   }
 
   std::vector<std::pair<uint32_t, std::string> > pdf_state<TEXT>::analyse_string(qpdf_stream_instruction instruction)
@@ -883,17 +940,23 @@ namespace pdflib
     std::array<double, 8> g_rect;
 
     {
-      /*x_0*/ g_rect[0] = 0;
-      /*y_0*/ g_rect[1] = rise + font_descent / 1000.0 * font_size;
+      // In vertical writing the current point is the glyph's *vertical*
+      // origin, and the glyph itself hangs from it displaced by the position
+      // vector v (9.7.4.3): half a glyph width to the left, and v_y below.
+      const double dx = vertical_mode ? -0.5 * width : 0.0;
+      const double dy = vertical_mode ? -vertical_origin_y * font_size : 0.0;
 
-      /*x_1*/ g_rect[2] = width;
-      /*y_1*/ g_rect[3] = rise + font_descent / 1000.0 * font_size;
+      /*x_0*/ g_rect[0] = dx;
+      /*y_0*/ g_rect[1] = dy + rise + font_descent / 1000.0 * font_size;
 
-      /*x_2*/ g_rect[4] = width;
-      /*y_2*/ g_rect[5] = rise + font_ascent / 1000.0 * font_size;
+      /*x_1*/ g_rect[2] = dx + width;
+      /*y_1*/ g_rect[3] = dy + rise + font_descent / 1000.0 * font_size;
 
-      /*x_3*/ g_rect[6] = 0;
-      /*y_3*/ g_rect[7] = rise + font_ascent / 1000.0 * font_size;
+      /*x_2*/ g_rect[4] = dx + width;
+      /*y_2*/ g_rect[5] = dy + rise + font_ascent / 1000.0 * font_size;
+
+      /*x_3*/ g_rect[6] = dx;
+      /*y_3*/ g_rect[7] = dy + rise + font_ascent / 1000.0 * font_size;
 
       //LOG_S(INFO) << "text-bbox: [" << tbox[0] << ", " << tbox[1] << ", " << tbox[2] << ", " << tbox[3] << "]";
     }

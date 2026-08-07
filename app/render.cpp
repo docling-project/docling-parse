@@ -211,8 +211,11 @@ int main(int argc, char* argv[])
 
         // ---- render_config ----
         ("render-text",    "Render glyph outlines for text cells (default: true)",          cxxopts::value<bool>()->implicit_value("true"))
+        ("min-stroke-width", "Minimum stroke width in device pixels for hairlines and sub-pixel vector strokes (default: 1.0)", cxxopts::value<float>())
         ("draw-text-bbox", "Draw bounding quad around each text cell",                      cxxopts::value<bool>()->implicit_value("true"))
         ("draw-text-basepoint", "Draw the text base point as a small red dot",              cxxopts::value<bool>()->implicit_value("true"))
+        ("display-widgets", "Draw the bounds of each widget (form-field) annotation",       cxxopts::value<bool>()->implicit_value("true"))
+        ("color-widgets",  "RGB triple (0-255) for the widget overlay, e.g. 0,153,255",     cxxopts::value<std::vector<int>>())
         ("fit-glyph-bbox-to-target",
          "Uniformly rescale measured glyph outlines so the rendered bbox fits inside the target glyph bbox and matches either its width or height",
          cxxopts::value<bool>()->implicit_value("true"))
@@ -317,8 +320,20 @@ int main(int argc, char* argv[])
       // --- render_config ---
       pdflib::render_config cfg;
       if (result.count("render-text"))    { cfg.render_text    = result["render-text"].as<bool>(); }
+      if (result.count("min-stroke-width")) { cfg.min_stroke_width = result["min-stroke-width"].as<float>(); }
       if (result.count("draw-text-bbox")) { cfg.draw_text_bbox = result["draw-text-bbox"].as<bool>(); }
       if (result.count("draw-text-basepoint")) { cfg.draw_text_basepoint = result["draw-text-basepoint"].as<bool>(); }
+      if (result.count("display-widgets")) { cfg.display_widgets = result["display-widgets"].as<bool>(); }
+      if (result.count("color-widgets"))
+        {
+          auto rgb = result["color-widgets"].as<std::vector<int>>();
+          if (rgb.size() != 3)
+            {
+              LOG_F(ERROR, "--color-widgets expects three comma-separated values (R,G,B).");
+              return 1;
+            }
+          cfg.color_widgets = {rgb[0], rgb[1], rgb[2]};
+        }
       if (result.count("fit-glyph-bbox-to-target")) { cfg.fit_glyph_bbox_to_target = result["fit-glyph-bbox-to-target"].as<bool>(); }
       if (result.count("resolve-fonts"))          { cfg.resolve_fonts          = result["resolve-fonts"].as<bool>(); }
       if (result.count("font-similarity-cutoff")) { cfg.font_similarity_cutoff = result["font-similarity-cutoff"].as<float>(); }

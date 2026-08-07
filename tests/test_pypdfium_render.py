@@ -10,6 +10,9 @@ fails when there is nothing to compare at all.
 Three-panel visualizations (pypdfium2 | docling-parse | amplified difference)
 are written to `tests/data/visualizations`; `--render-visualizations` selects
 whether that happens for every page, only for pages above tolerance, or never.
+The same folder gets `histogram_delta.png` and `histogram_mean_abs_error.png`,
+the corpus-wide distribution of both headline metrics, unless the mode is
+`none`.
 """
 
 import glob
@@ -30,6 +33,7 @@ from tests.rendering_regression import (
     measure_image_pair,
     render_pypdfium_page,
     write_comparison_visualization,
+    write_metric_histogram,
 )
 from tests.test_parse import REGRESSION_FOLDER
 from tests.test_threaded_render import _make_parser
@@ -58,6 +62,27 @@ def _format_visualization_summary(paths: list[Path]) -> str:
     lines = [f"Wrote {len(paths)} comparison visualization(s):"]
     lines.extend(f"  {path}" for path in sorted(paths))
     return "\n".join(lines)
+
+
+def _write_metric_histograms(comparisons: list[ImageComparison]) -> list[Path]:
+    """Write the corpus-level distribution of both headline metrics."""
+    written = [
+        write_metric_histogram(
+            [comparison.normalized_delta for comparison in comparisons],
+            metric="delta",
+            title="normalized_delta vs pypdfium2",
+            xlabel="normalized_delta (0 = identical, 1 = maximally different)",
+        ),
+        write_metric_histogram(
+            [comparison.mean_abs_error for comparison in comparisons],
+            metric="mean_abs_error",
+            title="mean_abs_error vs pypdfium2",
+            xlabel="mean_abs_error (0-255 grey levels)",
+            threshold=PYPDFIUM_IMAGE_TOLERANCE.mean_abs_error,
+            threshold_label="reporting cut-off",
+        ),
+    ]
+    return [path for path in written if path is not None]
 
 
 @pytest.mark.pypdfium
@@ -146,6 +171,12 @@ def test_rendered_pages_match_pypdfium(render_visualizations: str) -> None:
             )
 
     parser.unload_all()
+
+    # The histograms summarise the whole run rather than a single page, so they
+    # are written for every mode except "none" -- including the default, where
+    # only the above-tolerance pages get their own panel.
+    if render_visualizations != "none":
+        visualizations.extend(_write_metric_histograms(comparisons))
 
     print(format_image_comparison_table(comparisons))
     print()

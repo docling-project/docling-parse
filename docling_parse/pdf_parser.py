@@ -1416,6 +1416,7 @@ class PageParseResult:
 def _copy_render_config(src: RenderConfig) -> RenderConfig:
     dst = RenderConfig()
     dst.render_text = src.render_text
+    dst.min_stroke_width = src.min_stroke_width
     dst.draw_text_bbox = src.draw_text_bbox
     dst.resolve_fonts = src.resolve_fonts
     dst.use_embedded_fonts = src.use_embedded_fonts
@@ -1437,6 +1438,8 @@ def _validate_render_config(src: RenderConfig) -> None:
         raise ValueError("render_config.canvas_width must be > 0 or -1")
     if src.canvas_height != -1 and src.canvas_height <= 0:
         raise ValueError("render_config.canvas_height must be > 0 or -1")
+    if src.min_stroke_width < 0:
+        raise ValueError("render_config.min_stroke_width must be >= 0")
     if have_scale and (have_width or have_height):
         raise ValueError(
             "render_config.scale cannot be combined with canvas_width or canvas_height"

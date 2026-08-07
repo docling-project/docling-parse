@@ -217,8 +217,8 @@ namespace pdflib
     COLOR_SPACE_LAB,        // Lab (approximated by its L* component)
 
     COLOR_SPACE_INDEXED,    // palette lookup into a base space
-    COLOR_SPACE_SEPARATION, // single tint (tint transform not evaluated)
-    COLOR_SPACE_DEVICE_N,   // multiple tints (tint transform not evaluated)
+    COLOR_SPACE_SEPARATION, // single tint, through a tint transform
+    COLOR_SPACE_DEVICE_N,   // multiple tints, through a tint transform
 
     COLOR_SPACE_PATTERN
   };
@@ -269,10 +269,10 @@ namespace pdflib
       }
   }
 
-  // Blend modes of an ExtGState /BM entry (11.3.5). Only BLEND_MODE_NORMAL
-  // (and its /Compatible synonym) is actually composited; the rest are parsed
-  // so that documents relying on them are identifiable instead of silently
-  // rendered as Normal.
+  // Blend modes of an ExtGState /BM entry (11.3.5). The separable modes are
+  // composited; the four non-separable ones (Table 137) are parsed so that
+  // documents relying on them are identifiable instead of silently rendered
+  // as Normal.
   enum blend_mode_name {
     BLEND_MODE_UNKNOWN,
 

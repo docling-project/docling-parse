@@ -625,3 +625,119 @@ def write_comparison_visualization(
     path.parent.mkdir(parents=True, exist_ok=True)
     canvas.save(path)
     return path
+
+
+def histogram_path(metric: str, *, folder: Path = RENDER_VISUALIZATION_FOLDER) -> Path:
+    return folder / f"histogram_{metric}.png"
+
+
+def write_metric_histogram(
+    values: list[float],
+    *,
+    metric: str,
+    title: str,
+    xlabel: str,
+    threshold: float | None = None,
+    threshold_label: str = "tolerance",
+    folder: Path = RENDER_VISUALIZATION_FOLDER,
+    bins: int = 40,
+) -> Path | None:
+    """Write the distribution of one per-page metric over a whole comparison run.
+
+    The per-page panels answer "what is wrong with this page"; this answers
+    "how is the corpus doing", which is the number that moves when a decoder
+    changes. Returns the written path, or None when there is nothing to plot or
+    matplotlib is unavailable -- it lives in the `perf` dependency group, so a
+    run without that group still gets the table and the panels.
+    """
+    if not values:
+        return None
+
+    try:
+        import matplotlib
+    except ImportError:
+        return None
+
+    matplotlib.use("Agg")  # headless: never try to open a window in CI
+
+    import matplotlib.pyplot as plt
+
+    # same palette as the three-panel visualizations, so the folder reads as
+    # one set of artifacts
+    background = "#181818"
+    foreground = "#f0f0f0"
+    bar_color = "#4da3ff"
+    median_color = "#ffc14d"
+    threshold_color = "#ff6b6b"
+
+    ordered = sorted(values)
+    count = len(ordered)
+    mean_value = sum(ordered) / count
+    median_value = (
+        ordered[count // 2]
+        if count % 2
+        else 0.5 * (ordered[count // 2 - 1] + ordered[count // 2])
+    )
+    # a degenerate range (every page pixel-identical) has no bin edges to place,
+    # so fall back to a nominal axis rather than plotting a 1e-9-wide one
+    upper = ordered[-1] if ordered[-1] > 0.0 else 1.0
+
+    figure, axes = plt.subplots(figsize=(9.0, 5.0), dpi=160)
+    figure.patch.set_facecolor(background)
+    axes.set_facecolor(background)
+
+    axes.hist(
+        ordered, bins=bins, range=(0.0, upper), color=bar_color, edgecolor=background
+    )
+
+    # Counts are heavily skewed -- most pages sit in the first bin and the tail
+    # that matters is one or two pages deep. On a linear count axis that tail is
+    # invisible, so the y axis is logarithmic and the floor is held below 1 to
+    # keep single-page bins on screen.
+    axes.set_yscale("log")
+    axes.set_ylim(bottom=0.5)
+
+    axes.axvline(
+        median_value,
+        color=median_color,
+        linestyle="--",
+        linewidth=1.4,
+        label=f"median {median_value:.4f}",
+    )
+    axes.axvline(
+        mean_value,
+        color=foreground,
+        linestyle=":",
+        linewidth=1.4,
+        label=f"mean {mean_value:.4f}",
+    )
+    if threshold is not None:
+        above = sum(1 for value in ordered if value > threshold)
+        axes.axvline(
+            threshold,
+            color=threshold_color,
+            linestyle="-",
+            linewidth=1.4,
+            label=f"{threshold_label} {threshold:g} ({above} page(s) above)",
+        )
+
+    axes.set_title(f"{title}  --  {count} page(s)", color=foreground, fontsize=12)
+    axes.set_xlabel(xlabel, color=foreground)
+    axes.set_ylabel("pages (log scale)", color=foreground)
+    axes.tick_params(colors=foreground)
+    for spine in axes.spines.values():
+        spine.set_color("#404040")
+    axes.grid(axis="y", color="#303030", linewidth=0.6)
+    axes.set_axisbelow(True)
+
+    legend = axes.legend(facecolor=background, edgecolor="#404040", fontsize=9)
+    for text in legend.get_texts():
+        text.set_color(foreground)
+
+    figure.tight_layout()
+
+    path = histogram_path(metric, folder=folder)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    figure.savefig(path, facecolor=background)
+    plt.close(figure)
+    return path
