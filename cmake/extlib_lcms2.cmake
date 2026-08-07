@@ -35,12 +35,16 @@ else()
     set(LCMS2_URL https://github.com/mm2/Little-CMS.git)
     set(LCMS2_TAG lcms2.17)
 
-    if(MSVC)
-        # Upstream lcms2 has no CMakeLists and its ./configure cannot run under
-        # MSVC (no Unix shell on the Windows arm64 runner). Inject a vendored
-        # CMakeLists.txt and build with the active MSVC generator. Produces
-        # lcms2.lib.
-        set(LCMS2_IMPORTED_LIB ${EXTERNALS_PREFIX_PATH}/lib/lcms2.lib)
+    if(WIN32)
+        # Windows (MSVC and MinGW): use vendored CMakeLists. Upstream has no
+        # CMakeLists and its ./configure cannot run under MSVC and is fragile
+        # under MinGW/Ninja (requires sh/make). Produces lcms2.lib (MSVC) or
+        # liblcms2.a (MinGW).
+        if(MSVC)
+            set(LCMS2_IMPORTED_LIB ${EXTERNALS_PREFIX_PATH}/lib/lcms2.lib)
+        else()
+            set(LCMS2_IMPORTED_LIB ${EXTERNALS_PREFIX_PATH}/lib/liblcms2.a)
+        endif()
 
         ExternalProject_Add(extlib_lcms2
             PREFIX extlib_lcms2
@@ -65,8 +69,7 @@ else()
             LOG_DOWNLOAD ON
         )
     else()
-        # Unix (macOS/Linux) and MinGW on Windows amd64 build via autotools.
-        # Produces liblcms2.a.
+        # Unix (macOS/Linux) build via autotools. Produces liblcms2.a.
         set(LCMS2_IMPORTED_LIB ${EXTERNALS_PREFIX_PATH}/lib/liblcms2.a)
 
         ExternalProject_Add(extlib_lcms2

@@ -34,6 +34,7 @@ template <class T, void* Alloc(size_t, size_t), void Free(void*)>
 struct FxPartitionAllocAllocator {
  public:
   static_assert(std::is_arithmetic<T>::value || std::is_enum<T>::value ||
+                    std::is_class<T>::value ||
                     IsFXDataPartitionException<T>::value,
                 "Only numeric types allowed in this partition");
 
