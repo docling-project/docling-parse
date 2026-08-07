@@ -54,5 +54,29 @@ else()
         GIT_TAG        6dbc2cefbc996379e07104e34519a440b49b15d7
     )
     FetchContent_MakeAvailable(blend2d)
+    # Release wheels must not contain Blend2D's debug assertion path. Blend2D
+    # normally infers BL_BUILD_RELEASE from NDEBUG, but make that mode explicit
+    # for non-Debug builds so embedded builds do not depend on generator-specific
+    # CMAKE_BUILD_TYPE propagation.
+    target_compile_definitions(
+        blend2d
+        PUBLIC $<$<NOT:$<CONFIG:Debug>>:BL_BUILD_RELEASE>
+    )
+
+    # Blend2D defines bl_runtime_assertion_failure() unconditionally in
+    # runtime.cpp. When linking the static archive with GNU-like linkers, that
+    # object can be pulled into pdf_parsers even when no release code references
+    # it. Compile with per-symbol sections and let Linux/MinGW linkers discard
+    # the unreferenced assertion helper. MSVC Release already uses /OPT:REF and
+    # macOS arm64 is passing, so keep this scoped to the failing toolchains.
+    set(BLEND2D_GNU_GC_SECTIONS "$<AND:$<NOT:$<CONFIG:Debug>>,$<OR:$<PLATFORM_ID:Linux>,$<AND:$<PLATFORM_ID:Windows>,$<CXX_COMPILER_ID:GNU>>>>")
+    target_compile_options(
+        blend2d
+        PRIVATE "$<${BLEND2D_GNU_GC_SECTIONS}:-ffunction-sections;-fdata-sections>"
+    )
+    target_link_options(
+        blend2d
+        INTERFACE "$<${BLEND2D_GNU_GC_SECTIONS}:-Wl,--gc-sections>"
+    )
     # FetchContent creates the target "blend2d" (and alias blend2d::blend2d).
 endif()
