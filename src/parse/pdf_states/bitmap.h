@@ -1153,6 +1153,8 @@ namespace pdflib
                               image.r_x2, image.r_y2,
                               image.r_x3, image.r_y3,
                               std::move(clip_state));
+    binstr.set_blend_mode(grph_state.get_blend_mode());
+
     instructions.add_bitmap_instruction(std::move(binstr));
   }
 

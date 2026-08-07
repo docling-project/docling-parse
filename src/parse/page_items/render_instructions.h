@@ -291,6 +291,12 @@ namespace pdflib
     const std::array<int, 3>& get_rgb_filling() const { return rgb_filling_; }
     double get_fill_alpha() const { return fill_alpha_; }
 
+    // ExtGState /BM in force when this was painted (11.3.5). Set after
+    // construction, like the other late additions here, so the constructor
+    // signature stays put.
+    void set_blend_mode(blend_mode_name mode) { blend_mode_ = mode; }
+    blend_mode_name get_blend_mode() const { return blend_mode_; }
+
     void set_rendering_mode(int mode) { rendering_mode_ = mode; }
     int get_rendering_mode() const { return rendering_mode_; }
     bool is_invisible() const { return rendering_mode_ == 3 or rendering_mode_ == 7; }
@@ -359,6 +365,7 @@ namespace pdflib
 
     std::array<int, 3> rgb_filling_ = {0, 0, 0};
     double fill_alpha_ = 1.0;
+    blend_mode_name blend_mode_ = BLEND_MODE_NORMAL;
     int rendering_mode_ = 0;
   };
 
@@ -512,7 +519,15 @@ namespace pdflib
     const clip_state_instruction& get_clip_state() const { return clip_state; }
     bool has_clip_state() const { return clip_state.has_clip(); }
 
+    // ExtGState /BM in force when this was painted (11.3.5). Set after
+    // construction, like the other late additions here, so the constructor
+    // signature stays put.
+    void set_blend_mode(blend_mode_name mode) { blend_mode_ = mode; }
+    blend_mode_name get_blend_mode() const { return blend_mode_; }
+
   private:
+
+    blend_mode_name blend_mode_ = BLEND_MODE_NORMAL;
 
     const std::string xobject_key;
     
@@ -691,15 +706,25 @@ namespace pdflib
         {
           subpaths_.push_back(subpath.translated(dx, dy));
         }
-      return shape_instruction(std::move(subpaths_), paint_mode, fill_rule,
-                               line_width, line_cap, line_join, miter_limit,
-                               dash_array, dash_phase,
-                               rgb_stroking, rgb_filling,
-                               stroke_alpha, fill_alpha,
-                               clip_state.translated(dx, dy));
+      shape_instruction copy(std::move(subpaths_), paint_mode, fill_rule,
+                             line_width, line_cap, line_join, miter_limit,
+                             dash_array, dash_phase,
+                             rgb_stroking, rgb_filling,
+                             stroke_alpha, fill_alpha,
+                             clip_state.translated(dx, dy));
+      copy.blend_mode_ = blend_mode_;
+      return copy;
     }
 
+    // ExtGState /BM in force when this was painted (11.3.5). Set after
+    // construction, like the other late additions here, so the constructor
+    // signature stays put.
+    void set_blend_mode(blend_mode_name mode) { blend_mode_ = mode; }
+    blend_mode_name get_blend_mode() const { return blend_mode_; }
+
   private:
+
+    blend_mode_name blend_mode_ = BLEND_MODE_NORMAL;
 
     const std::vector<shape_subpath> subpaths;
 
@@ -784,12 +809,22 @@ namespace pdflib
       matrix_[4] += dx;
       matrix_[5] += dy;
 
-      return shading_instruction(shading_key, geometry, coords, matrix_, stops,
-                                 extend_start, extend_end, fill_alpha,
-                                 clip_state.translated(dx, dy));
+      shading_instruction copy(shading_key, geometry, coords, matrix_, stops,
+                               extend_start, extend_end, fill_alpha,
+                               clip_state.translated(dx, dy));
+      copy.blend_mode_ = blend_mode_;
+      return copy;
     }
 
+    // ExtGState /BM in force when this was painted (11.3.5). Set after
+    // construction, like the other late additions here, so the constructor
+    // signature stays put.
+    void set_blend_mode(blend_mode_name mode) { blend_mode_ = mode; }
+    blend_mode_name get_blend_mode() const { return blend_mode_; }
+
   private:
+
+    blend_mode_name blend_mode_ = BLEND_MODE_NORMAL;
 
     const std::string               shading_key;
     const shading_geometry          geometry;

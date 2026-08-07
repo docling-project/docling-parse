@@ -695,6 +695,8 @@ namespace pdflib
                                    grph_state.get_stroke_alpha(),
                                    grph_state.get_fill_alpha(),
                                    get_clip_state());
+        shpinstr.set_blend_mode(grph_state.get_blend_mode());
+
         instructions.add_shape_instruction(std::move(shpinstr));
       }
 

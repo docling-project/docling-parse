@@ -33,6 +33,18 @@ namespace pdflib
     std::string get_base_font();
 
     double      get_width(uint32_t c, bool verbose=true);
+
+    // Vertical writing mode (9.7.4.3): a composite font whose CMap sets
+    // WMode 1 stacks its glyphs downwards instead of advancing to the right.
+    bool        is_vertical() const { return vertical; }
+
+    // Vertical displacement w1 of a CID, in glyph space (/W2, /DW2). It is
+    // normally negative: the next glyph sits below this one.
+    double      get_vertical_displacement(uint32_t c) const;
+
+    // Vertical component of the position vector v, in glyph space. The glyph
+    // is drawn with its horizontal origin this far below the current point.
+    double      get_vertical_origin_y() const { return vertical_origin_y; }
     std::string get_string(uint32_t c);
 
     double get_space_width();
@@ -106,6 +118,8 @@ namespace pdflib
 
     void init_char_widths();
 
+    void init_vertical_metrics();
+
     void init_fchar();
     void init_lchar();
     void init_widths();
@@ -165,6 +179,12 @@ namespace pdflib
 
     bool   has_default_width=false;
     double default_width;
+
+    // vertical writing mode: /DW2 defaults to [880 -1000] (Table 117)
+    bool   vertical = false;
+    double vertical_origin_y = 0.880;
+    double default_vertical_displacement = -1.000;
+    std::unordered_map<uint32_t, double> numb_to_vertical_displacements;
 
     std::unordered_map<uint32_t   , double> numb_to_widths;
     std::unordered_map<std::string, double> name_to_widths;
@@ -712,6 +732,8 @@ namespace pdflib
       init_default_width();
       
       init_char_widths();
+
+      init_vertical_metrics();
 
       double font_time = font_timer.get_time();
       timings.add_timing(pdf_timings::KEY_FONT_INIT_METRICS, font_time);
@@ -1722,6 +1744,111 @@ namespace pdflib
 	default_width = 500;
         LOG_S(WARNING) << "could not find default-width: defaulting to " << default_width;
       }    
+  }
+
+  // 9.7.4.3: the writing mode comes from the CMap. Every predefined vertical
+  // CMap ends in "-V", and /Identity-V is the one that matters in practice; an
+  // embedded CMap stream would say so through its own /WMode, which is not
+  // read here.
+  //
+  // The metrics come from /DW2 and /W2 on the descendant font (Table 117).
+  // /DW2 is [v_y w1] in glyph space units, defaulting to [880 -1000].
+  void pdf_resource<PAGE_FONT>::init_vertical_metrics()
+  {
+    LOG_S(INFO) << __FUNCTION__;
+
+    vertical = encoding_name.size() >= 2 and
+               encoding_name.compare(encoding_name.size() - 2, 2, "-V") == 0;
+
+    if(not vertical)
+      {
+        return;
+      }
+
+    LOG_S(INFO) << "vertical writing mode from encoding " << encoding_name;
+
+    {
+      std::vector<std::string> keys = {"/DW2"};
+
+      nlohmann::json dw2;
+      if(utils::json::has(keys, json_font))      { dw2 = utils::json::get(keys, json_font); }
+      else if(utils::json::has(keys, desc_font)) { dw2 = utils::json::get(keys, desc_font); }
+
+      if(dw2.is_array() and dw2.size() >= 2 and
+         dw2[0].is_number() and dw2[1].is_number())
+        {
+          vertical_origin_y = dw2[0].get<double>() / 1000.0;
+          default_vertical_displacement = dw2[1].get<double>() / 1000.0;
+        }
+
+      LOG_S(INFO) << "vertical metrics: origin-y " << vertical_origin_y
+                  << ", displacement " << default_vertical_displacement;
+    }
+
+    // /W2 entries come as `c [w1 v_x v_y ...]` or `c_first c_last w1 v_x v_y`;
+    // only w1 is read, since the horizontal half of v is taken as w0/2 either
+    // way and its vertical half rarely differs from /DW2.
+    std::vector<std::string> keys = {"/W2"};
+
+    nlohmann::json w2;
+    if(utils::json::has(keys, json_font))      { w2 = utils::json::get(keys, json_font); }
+    else if(utils::json::has(keys, desc_font)) { w2 = utils::json::get(keys, desc_font); }
+
+    if(not w2.is_array())
+      {
+        return;
+      }
+
+    for(std::size_t l = 0; l + 1 < w2.size(); )
+      {
+        if(not w2[l].is_number())
+          {
+            LOG_S(WARNING) << "/W2 entry " << l << " is not a CID";
+            break;
+          }
+
+        const int beg = w2[l].get<int>();
+        l += 1;
+
+        if(w2[l].is_array())
+          {
+            std::vector<double> triples = w2[l].get<std::vector<double>>();
+            l += 1;
+
+            for(std::size_t k = 0; k + 2 < triples.size(); k += 3)
+              {
+                numb_to_vertical_displacements[static_cast<uint32_t>(beg + k / 3)] =
+                  triples[k] / 1000.0;
+              }
+          }
+        else if(l + 3 < w2.size())
+          {
+            const int end = w2[l].get<int>();
+            const double w1 = w2[l + 1].get<double>() / 1000.0;
+            l += 4;  // c_last, w1, v_x, v_y
+
+            for(int id = beg; id <= end; id++)
+              {
+                numb_to_vertical_displacements[static_cast<uint32_t>(id)] = w1;
+              }
+          }
+        else
+          {
+            LOG_S(WARNING) << "/W2 ends in the middle of a range";
+            break;
+          }
+      }
+  }
+
+  double pdf_resource<PAGE_FONT>::get_vertical_displacement(uint32_t c) const
+  {
+    auto itr = numb_to_vertical_displacements.find(c);
+    if(itr != numb_to_vertical_displacements.end())
+      {
+        return itr->second;
+      }
+
+    return default_vertical_displacement;
   }
 
   void pdf_resource<PAGE_FONT>::init_char_widths()

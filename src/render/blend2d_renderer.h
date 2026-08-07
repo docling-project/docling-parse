@@ -718,6 +718,66 @@ namespace pdflib
                                    1.0 - ink[2], 1.0 - ink[3]);
     }
 
+    // Maps an ExtGState /BM to the Blend2D compositing operator (11.3.5,
+    // Table 136). The four non-separable modes of Table 137 -- Hue,
+    // Saturation, Color and Luminosity -- have no Blend2D counterpart and fall
+    // back to Normal, which is what they degrade to anyway when a reader does
+    // not implement them.
+    static BLCompOp to_comp_op(blend_mode_name mode)
+    {
+      switch(mode)
+        {
+        case BLEND_MODE_MULTIPLY:    { return BL_COMP_OP_MULTIPLY; }
+        case BLEND_MODE_SCREEN:      { return BL_COMP_OP_SCREEN; }
+        case BLEND_MODE_OVERLAY:     { return BL_COMP_OP_OVERLAY; }
+        case BLEND_MODE_DARKEN:      { return BL_COMP_OP_DARKEN; }
+        case BLEND_MODE_LIGHTEN:     { return BL_COMP_OP_LIGHTEN; }
+        case BLEND_MODE_COLOR_DODGE: { return BL_COMP_OP_COLOR_DODGE; }
+        case BLEND_MODE_COLOR_BURN:  { return BL_COMP_OP_COLOR_BURN; }
+        case BLEND_MODE_HARD_LIGHT:  { return BL_COMP_OP_HARD_LIGHT; }
+        case BLEND_MODE_SOFT_LIGHT:  { return BL_COMP_OP_SOFT_LIGHT; }
+        case BLEND_MODE_DIFFERENCE:  { return BL_COMP_OP_DIFFERENCE; }
+        case BLEND_MODE_EXCLUSION:   { return BL_COMP_OP_EXCLUSION; }
+
+        default: { return BL_COMP_OP_SRC_OVER; }
+        }
+    }
+
+    // Sets the compositing operator for one painting operation and reports
+    // whether the context has to be restored afterwards. Blend2D holds the
+    // operator on the context, so anything but Normal is bracketed by
+    // save/restore rather than left behind for the next instruction.
+    static bool push_blend_mode(BLContext& ctx, blend_mode_name mode)
+    {
+      const BLCompOp comp_op = to_comp_op(mode);
+      if(comp_op == BL_COMP_OP_SRC_OVER)
+        {
+          return false;
+        }
+
+      ctx.save();
+      ctx.set_comp_op(comp_op);
+      return true;
+    }
+
+    // Scoped form of push_blend_mode(), for painting paths that leave through
+    // more than one exit.
+    class blend_mode_scope
+    {
+    public:
+
+      blend_mode_scope(BLContext& ctx, blend_mode_name mode);
+      ~blend_mode_scope();
+
+      blend_mode_scope(const blend_mode_scope&) = delete;
+      blend_mode_scope& operator=(const blend_mode_scope&) = delete;
+
+    private:
+
+      BLContext& ctx_;
+      bool       active_;
+    };
+
     // Converts a parsed 0-255 RGB triple and a [0, 1] alpha into a Blend2D
     // color (straight alpha; the context premultiplies while compositing).
     static BLRgba32 make_rgba32(const std::array<int, 3>& rgb,
@@ -1529,6 +1589,20 @@ namespace pdflib
   // bbox measurement before text is drawn with fill_utf8_text().
   // ---------------------------------------------------------------------------
 
+  inline renderer<BLEND2D>::blend_mode_scope::blend_mode_scope(BLContext& ctx,
+                                                               blend_mode_name mode):
+    ctx_(ctx),
+    active_(push_blend_mode(ctx, mode))
+  {}
+
+  inline renderer<BLEND2D>::blend_mode_scope::~blend_mode_scope()
+  {
+    if (active_)
+      {
+        ctx_.restore();
+      }
+  }
+
   inline void renderer<BLEND2D>::render_text(text_instruction& instr)
   {
     // LOG_S(INFO) << __FUNCTION__;
@@ -1563,6 +1637,8 @@ namespace pdflib
     //             << " a_norm=" << a_norm << " d_norm=" << d_norm
     //             << " cell_span=" << cell_span
     //             << " em_size=" << em_size << " size=" << size;
+
+    const blend_mode_scope blend(page_context(), instr.get_blend_mode());
 
     // Resolution order: embedded font program — natively in Blend2D (SFNT)
     // or as FreeType outline paths (Type 1, bare CFF) — then the system font
@@ -1961,6 +2037,8 @@ namespace pdflib
         return;
       }
 
+    const bool blend_active = push_blend_mode(ctx, instr.get_blend_mode());
+
     const bool has_clip = instr.has_clip_state();
     bool clip_active = false;
     if(has_clip)
@@ -1976,6 +2054,7 @@ namespace pdflib
         if(clip_result == CLIP_EMPTY)
           {
             ctx.restore();
+            if(blend_active) { ctx.restore(); }
             return;
           }
 
@@ -2007,13 +2086,19 @@ namespace pdflib
         render_bitmap_affine(ctx, src_img, q, sw, sh);
       }
 
-    // the save/restore pairs nest: the alpha is pushed inside the clip
+    // the save/restore pairs nest: the alpha is pushed inside the clip, and
+    // the clip inside the blend mode
     if(alpha_active)
       {
         ctx.restore();
       }
 
     if(clip_active)
+      {
+        ctx.restore();
+      }
+
+    if(blend_active)
       {
         ctx.restore();
       }
@@ -2167,6 +2252,8 @@ namespace pdflib
 
     BLContext& ctx = page_context();
 
+    const bool blend_active = push_blend_mode(ctx, instr.get_blend_mode());
+
     bool clip_active = false;
     if (instr.has_clip_state())
       {
@@ -2176,6 +2263,7 @@ namespace pdflib
         if (clip_result == CLIP_EMPTY)
           {
             ctx.restore();
+            if (blend_active) { ctx.restore(); }
             return;
           }
 
@@ -2231,6 +2319,11 @@ namespace pdflib
       }
 
     if (clip_active)
+      {
+        ctx.restore();
+      }
+
+    if (blend_active)
       {
         ctx.restore();
       }
@@ -2441,6 +2534,8 @@ namespace pdflib
 
     BLContext& ctx = page_context();
 
+    const bool blend_active = push_blend_mode(ctx, instr.get_blend_mode());
+
     shading_clip clip;
     const bool has_clip_state = instr.has_clip_state();
 
@@ -2452,6 +2547,7 @@ namespace pdflib
         if (clip.empty)
           {
             ctx.restore();
+            if (blend_active) { ctx.restore(); }
             LOG_S(INFO) << "render_shading: shading " << instr.get_key()
                         << " is fully clipped away";
             return;
@@ -2460,6 +2556,7 @@ namespace pdflib
         if (not clip.bounded)
           {
             ctx.restore();
+            if (blend_active) { ctx.restore(); }
             LOG_S(WARNING) << "render_shading: shading " << instr.get_key()
                            << " has a clip that could not be applied, skipping"
                            << " rather than flooding the page";
@@ -2482,6 +2579,11 @@ namespace pdflib
       }
 
     if (has_clip_state)
+      {
+        ctx.restore();
+      }
+
+    if (blend_active)
       {
         ctx.restore();
       }

@@ -505,6 +505,8 @@ namespace pdflib
                                 current_graphic_state().get_fill_alpha(),
                                 std::move(clip_state));
 
+    shinstr.set_blend_mode(current_graphic_state().get_blend_mode());
+
     instructions.add_shading_instruction(std::move(shinstr));
   }
 
@@ -583,6 +585,14 @@ namespace pdflib
     {
       // push-back the stack
       this->q();
+
+      // A transparency group is composited as a unit, so what is in force at
+      // the `Do` applies to the group's result rather than to each operator
+      // inside it (11.6.6).
+      if(xobj.has_transparency_group())
+        {
+          current_graphic_state().enter_transparency_group();
+        }
 
       // transform coordinate system
       current_global_state().cm(xobj.get_matrix());

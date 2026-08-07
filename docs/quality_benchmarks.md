@@ -237,7 +237,7 @@ name carries the older `delta`. Re-running the benchmark replaces both.
 
 | document | page | canvas | mean_abs_error | delta | changed_pixels_ratio | max_abs_error | changed_pixels |
 | --- | ---: | :---: | ---: | ---: | ---: | ---: | ---: |
-| `complex_invisible_fonts_01.pdf` | 1 | 1191x1684 | 28.5195 | [0.1564](./quality_benchmarks/delta_0.2266_complex_invisible_fonts_01.pdf.page_no_1.png) | 0.4757 | 230 | 953,996 |
+| `complex_invisible_fonts_01.pdf` | 1 | 1191x1684 | 11.9443 | [0.0660](./quality_benchmarks/delta_0.2266_complex_invisible_fonts_01.pdf.page_no_1.png) | 0.3270 | 151 | 655,777 |
 | `form_fields.pdf` | 5 | 1224x1584 | 6.4116 | [0.0349](./quality_benchmarks/delta_0.0349_form_fields.pdf.page_no_5.png) | 0.1425 | 255 | 276,235 |
 | `cropbox_versus_mediabox_02.pdf` | 2 | 1088x1266 | 4.5794 | [0.0312](./quality_benchmarks/delta_0.0569_cropbox_versus_mediabox_02.pdf.page_no_2.png) | 0.1140 | 255 | 157,059 |
 | `ligatures_01.pdf` | 2 | 1224x1584 | 4.4533 | [0.0233](./quality_benchmarks/delta_0.0233_ligatures_01.pdf.page_no_2.png) | 0.1275 | 175 | 247,143 |
@@ -247,10 +247,9 @@ name carries the older `delta`. Re-running the benchmark replaces both.
 | `ligatures_01.pdf` | 3 | 1224x1584 | 3.9536 | [0.0207](./quality_benchmarks/delta_0.0207_ligatures_01.pdf.page_no_3.png) | 0.1139 | 201 | 220,891 |
 | `indexed_iccbased.pdf` | 1 | 1224x1512 | 3.6519 | [0.0205](./quality_benchmarks/delta_0.0205_indexed_iccbased.pdf.page_no_1.png) | 0.1234 | 155 | 228,284 |
 | `stream_parameter_misinterpretation_01.pdf` | 1 | 1224x1584 | 3.6163 | [0.0191](./quality_benchmarks/delta_0.0191_stream_parameter_misinterpretation_01.pdf.page_no_1.png) | 0.0999 | 255 | 193,714 |
-| `cropbox_versus_mediabox_01.pdf` | 1 | 1191x1684 | 3.5744 | [0.0190](./quality_benchmarks/delta_0.0447_cropbox_versus_mediabox_01.pdf.page_no_1.png) | 0.0933 | 224 | 187,036 |
 | `ligatures_01.pdf` | 4 | 1224x1584 | 3.5698 | [0.0190](./quality_benchmarks/delta_0.0190_ligatures_01.pdf.page_no_4.png) | 0.1012 | 241 | 196,249 |
+| `cropbox_versus_mediabox_01.pdf` | 1 | 1191x1684 | 3.5681 | [0.0190](./quality_benchmarks/delta_0.0447_cropbox_versus_mediabox_01.pdf.page_no_1.png) | 0.0930 | 224 | 186,489 |
 | `6480366468566741514.pdf` | 1 | 1190x1684 | 3.4959 | [0.0206](./quality_benchmarks/delta_0.0206_6480366468566741514.pdf.page_no_1.png) | 0.1038 | 218 | 208,021 |
-| `font_11.pdf` | 2 | 1191x1582 | 3.4476 | [0.0191](./quality_benchmarks/delta_0.0191_font_11.pdf.page_no_2.png) | 0.0997 | 233 | 187,878 |
 | `font_06.pdf` | 1 | 1190x1588 | 3.4216 | [0.0179](./quality_benchmarks/delta_0.0179_font_06.pdf.page_no_1.png) | 0.0952 | 255 | 179,826 |
 | `device_gray_01.pdf` | 1 | 1224x1584 | 3.3863 | [0.0177](./quality_benchmarks/delta_0.0177_device_gray_01.pdf.page_no_1.png) | 0.0604 | 255 | 117,038 |
 | `font_05.pdf` | 1 | 868x1327 | 3.3510 | [0.0175](./quality_benchmarks/delta_0.0175_font_05.pdf.page_no_1.png) | 0.0951 | 163 | 109,555 |
@@ -261,9 +260,10 @@ name carries the older `delta`. Re-running the benchmark replaces both.
 | `fillable_form.pdf` | 1 | 1224x1584 | 3.1795 | [0.0169](./quality_benchmarks/delta_0.1578_fillable_form.pdf.page_no_1.png) | 0.0440 | 255 | 85,211 |
 | `complex_invisible_fonts_05.pdf` | 1 | 1191x1684 | 3.1688 | [0.0218](./quality_benchmarks/delta_0.0480_complex_invisible_fonts_05.pdf.page_no_1.png) | 0.0821 | 152 | 164,564 |
 | `indexed_device_n.pdf` | 1 | 2382x1684 | 3.0675 | [0.0223](./quality_benchmarks/delta_0.0277_indexed_device_n.pdf.page_no_1.png) | 0.0762 | 202 | 305,850 |
-| `ligatures_01.pdf` | 1 | 1224x1584 | 3.0603 | [0.0163](./quality_benchmarks/delta_0.0358_ligatures_01.pdf.page_no_1.png) | 0.0897 | 255 | 173,951 |
-| `complex_invisible_fonts_04.pdf` | 1 | 1191x1684 | 2.9696 | [0.0203](./quality_benchmarks/delta_0.0472_complex_invisible_fonts_04.pdf.page_no_1.png) | 0.0698 | 152 | 139,930 |
+| `ligatures_01.pdf` | 1 | 1224x1584 | 3.0566 | [0.0163](./quality_benchmarks/delta_0.0358_ligatures_01.pdf.page_no_1.png) | 0.0897 | 255 | 173,949 |
+| `complex_invisible_fonts_04.pdf` | 1 | 1191x1684 | 2.9795 | [0.0203](./quality_benchmarks/delta_0.0472_complex_invisible_fonts_04.pdf.page_no_1.png) | 0.0699 | 152 | 140,287 |
 | `annots_01.pdf` | 1 | 1191x1684 | 2.8965 | [0.0167](./quality_benchmarks/delta_0.0167_annots_01.pdf.page_no_1.png) | 0.0717 | 255 | 143,766 |
+| `font_11.pdf` | 2 | 1191x1582 | 2.8894 | [0.0155](./quality_benchmarks/delta_0.0191_font_11.pdf.page_no_2.png) | 0.0897 | 191 | 169,033 |
 | `2508.13113v2.pdf` | 9 | 1224x1584 | 2.7856 | [0.0151](./quality_benchmarks/delta_0.0151_2508.13113v2.pdf.page_no_9.png) | 0.0749 | 255 | 145,191 |
 | `font_11.pdf` | 1 | 1191x1582 | 2.7568 | [0.0146](./quality_benchmarks/delta_0.0146_font_11.pdf.page_no_1.png) | 0.0866 | 196 | 163,259 |
 | `math_latex_formulas.pdf` | 3 | 1224x1584 | 2.7421 | [0.0147](./quality_benchmarks/delta_0.0147_math_latex_formulas.pdf.page_no_3.png) | 0.0537 | 237 | 104,081 |
@@ -300,9 +300,9 @@ name carries the older `delta`. Re-running the benchmark replaces both.
 | `right_to_left_03.pdf` | 1 | 1191x1685 | 1.8608 | [0.0100](./quality_benchmarks/delta_0.0100_right_to_left_03.pdf.page_no_1.png) | 0.0424 | 221 | 85,061 |
 | `complex_jbig2_overlays.pdf` | 1 | 1224x1584 | 1.8587 | [0.0099](./quality_benchmarks/delta_0.0099_complex_jbig2_overlays.pdf.page_no_1.png) | 0.0369 | 255 | 71,470 |
 | `text_as_lines_02.pdf` | 1 | 1190x1684 | 1.8518 | [0.0099](./quality_benchmarks/delta_0.0099_text_as_lines_02.pdf.page_no_1.png) | 0.0429 | 251 | 86,023 |
-| `device_cymk_01.pdf` | 1 | 1531x1191 | 1.8383 | [0.0119](./quality_benchmarks/delta_0.0216_device_cymk_01.pdf.page_no_1.png) | 0.0697 | 146 | 127,131 |
 | `4865216256588543301.pdf` | 2 | 1191x1684 | 1.8088 | [0.0095](./quality_benchmarks/delta_0.0095_4865216256588543301.pdf.page_no_2.png) | 0.0590 | 242 | 118,247 |
 | `rotated_text_03.pdf` | 1 | 737x843 | 1.8023 | [0.0107](./quality_benchmarks/delta_0.0107_rotated_text_03.pdf.page_no_1.png) | 0.0542 | 196 | 33,677 |
+| `device_cymk_01.pdf` | 1 | 1531x1191 | 1.7868 | [0.0114](./quality_benchmarks/delta_0.0216_device_cymk_01.pdf.page_no_1.png) | 0.0670 | 146 | 122,085 |
 | `right_to_left_04.pdf` | 1 | 1191x1684 | 1.7545 | [0.0092](./quality_benchmarks/delta_0.0092_right_to_left_04.pdf.page_no_1.png) | 0.0422 | 252 | 84,719 |
 | `text_as_lines_01.pdf` | 1 | 1190x1684 | 1.7059 | [0.0089](./quality_benchmarks/delta_0.0089_text_as_lines_01.pdf.page_no_1.png) | 0.0482 | 247 | 96,567 |
 | `font_01.pdf` | 1 | 1224x1584 | 1.6493 | [0.0086](./quality_benchmarks/delta_0.0086_font_01.pdf.page_no_1.png) | 0.0450 | 203 | 87,225 |

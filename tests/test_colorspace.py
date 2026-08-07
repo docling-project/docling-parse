@@ -344,16 +344,31 @@ def test_device_cmyk_black_is_monotone():
 IMAGE_COLOR_TOLERANCE = 4
 
 
-def _image_halves(image: PILImage.Image) -> Tuple[Tuple[int, int, int], ...]:
+def _pixel_at(image: PILImage.Image, x: int, y: int) -> Tuple[int, int, int]:
+    pixel = image.getpixel((x, y))
+    assert isinstance(pixel, tuple) and len(pixel) >= 3, (
+        f"expected an RGB pixel at ({x}, {y}), got {pixel!r}"
+    )
+    red, green, blue = pixel[:3]
+    return (red, green, blue)
+
+
+def _image_halves(
+    image: PILImage.Image,
+) -> Tuple[Tuple[int, int, int], Tuple[int, int, int]]:
     """The colour of the left and right halves of a two-sample image."""
     y = image.height // 2
     return (
-        image.getpixel((image.width // 10, y))[:3],
-        image.getpixel((image.width * 9 // 10, y))[:3],
+        _pixel_at(image, image.width // 10, y),
+        _pixel_at(image, image.width * 9 // 10, y),
     )
 
 
-def _assert_image_color(actual, expected, where: str) -> None:
+def _assert_image_color(
+    actual: Tuple[int, int, int],
+    expected: Tuple[int, int, int],
+    where: str,
+) -> None:
     deltas = [abs(a - e) for a, e in zip(actual, expected)]
     assert max(deltas) <= IMAGE_COLOR_TOLERANCE, (
         f"{where}: expected ~{expected}, got {actual} (max delta {max(deltas)})"
