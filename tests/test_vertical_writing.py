@@ -15,7 +15,13 @@ writing mode decides, and it is visible without resolving a single glyph.
 from io import BytesIO
 from typing import List
 
-from docling_parse.pdf_parser import DecodeConfig, DoclingPdfParser
+from docling_parse.pdf_parser import (
+    DecodeConfig,
+    DoclingPdfParser,
+    DoclingThreadedPdfParser,
+    RenderConfig,
+    ThreadedPdfParserConfig,
+)
 
 PAGE_WIDTH = 200
 PAGE_HEIGHT = 200
@@ -93,6 +99,29 @@ def _char_boxes(content: str, encoding: str, dw2: str = DEFAULT_DW2) -> List[tup
     return boxes
 
 
+def _text_render_instructions(
+    content: str, encoding: str, dw2: str = DEFAULT_DW2
+) -> List[dict]:
+    parser = DoclingThreadedPdfParser(
+        parser_config=ThreadedPdfParserConfig(
+            loglevel="fatal",
+            threads=1,
+            max_concurrent_results=1,
+            render_config=RenderConfig(),
+        ),
+        decode_config=DecodeConfig(),
+    )
+    parser.load(BytesIO(_build_pdf(content, encoding, dw2)))
+
+    try:
+        result = next(parser.iterate_results())
+        assert result.success, result.error_message
+        instructions = result._export_render_instructions_json()["instructions"]
+        return [item for item in instructions if item.get("type") == "text"]
+    finally:
+        parser.unload_all()
+
+
 # three CIDs at 20 pt from (100, 150). The size lives in the text matrix and
 # /Tf carries 1, which is how the composite fonts in real documents are set.
 CONTENT = "BT /C0_0 1 Tf 20 0 0 20 100 150 Tm <000100020003> Tj ET"
@@ -155,3 +184,15 @@ def test_vertical_pitch_follows_dw2():
 
     pitch = boxes[0][3] - boxes[1][3]
     assert abs(pitch - 10.0) < 0.5, f"expected a 10 pt pitch from -500, got {pitch}"
+
+
+def test_vertical_render_basepoint_is_horizontal_glyph_origin():
+    """The renderer needs the glyph origin, not the vertical text origin."""
+    instructions = _text_render_instructions(CONTENT, "/Identity-V")
+    assert len(instructions) == 3
+
+    first = instructions[0]
+    quad = first["quad"]
+
+    assert abs(first["base_x0"] - quad["r_x0"]) < 0.5
+    assert abs(first["base_y0"] - 132.4) < 0.5

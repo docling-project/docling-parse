@@ -188,6 +188,10 @@ namespace pdflib
     this->font_name = other.font_name;
     this->font_size = other.font_size;
 
+    this->vertical_mode = other.vertical_mode;
+    this->vertical_origin_y = other.vertical_origin_y;
+    this->vertical_displacement = other.vertical_displacement;
+
     return *this;
   }
 
@@ -642,10 +646,12 @@ namespace pdflib
 
       // std::array<double, 8> base = compute_rect(0, font_ascent*ratio, width);
 
-      // The true text baseline origin is (0, rise) in text space.
-      // Transform that point through the text matrix and then the CTM.
-      const double g_base_x = 0.0;
-      const double g_base_y = rise;
+      // The renderer draws from the glyph's horizontal origin. In vertical
+      // writing the PDF current point is the vertical origin, so apply the
+      // same position vector used for the glyph rectangle.
+      const double g_base_x = vertical_mode ? -0.5 * width : 0.0;
+      const double g_base_y =
+        rise + (vertical_mode ? -vertical_origin_y * font_size : 0.0);
 
       std::array<double, 9>& T_text = text_matrix;
       const double t_base_x = T_text[0] * g_base_x + T_text[3] * g_base_y + T_text[6];
