@@ -1138,6 +1138,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
 
     Attributes:
         render_text (bool): Render glyph outlines for text cells [default=true].
+        min_stroke_width (float): Minimum stroke width in device pixels for hairlines and sub-pixel vector strokes [default=1.0].
         draw_text_bbox (bool): Draw bounding quad for each text cell [default=false].
         draw_text_basepoint (bool): Draw the text baseline origin as a small red dot [default=false].
         display_widgets (bool): Draw the bounds of each widget (form-field) annotation as a translucent overlay; the field content itself is rendered regardless [default=false].
@@ -1152,6 +1153,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
     )")
     .def(pybind11::init<>())
     .def_readwrite("render_text",             &pdflib::render_config::render_text)
+    .def_readwrite("min_stroke_width",        &pdflib::render_config::min_stroke_width)
     .def_readwrite("draw_text_bbox",          &pdflib::render_config::draw_text_bbox)
     .def_readwrite("draw_text_basepoint",     &pdflib::render_config::draw_text_basepoint)
     .def_readwrite("display_widgets",         &pdflib::render_config::display_widgets)

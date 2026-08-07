@@ -313,6 +313,7 @@ namespace
   {
     pdflib::render_config config;
     config.render_text = true;
+    config.min_stroke_width = 1.0f;
     config.draw_text_bbox = false;
     config.draw_text_basepoint = false;
     config.display_widgets = false;
@@ -761,6 +762,7 @@ namespace
               << std::setw(32) << "parameter" << "value\n"
               << std::string(44, '-') << "\n"
               << std::setw(32) << "render_text" << config.render_text << "\n"
+              << std::setw(32) << "min_stroke_width" << config.min_stroke_width << "\n"
               << std::setw(32) << "draw_text_bbox" << config.draw_text_bbox << "\n"
               << std::setw(32) << "draw_text_basepoint" << config.draw_text_basepoint << "\n"
               << std::setw(32) << "display_widgets" << config.display_widgets << "\n"

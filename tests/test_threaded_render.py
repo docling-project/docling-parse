@@ -119,6 +119,41 @@ def _write_variable_page_size_pdf(path: Path) -> None:
     path.write_bytes(b"".join(chunks))
 
 
+def _write_matplotlib_table_repro_pdf(path: Path, linewidth: float = 0.4) -> None:
+    matplotlib = pytest.importorskip("matplotlib")
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(figsize=(8.27, 11.69))
+    ax.axis("off")
+    ax.text(
+        0.5,
+        0.95,
+        "Contacts available for customer meetings",
+        ha="center",
+        fontsize=14,
+    )
+    rows = [
+        ["Area of expertise", "Product Management", "Product Marketing"],
+        ["Document Cloud", "Vamsi Vutukuru", "Nora Yau"],
+        ["Acrobat", "Alex Chen", "Maria Lopez"],
+        ["Sign", "Sam Patel", "Lena Frei"],
+    ]
+    table = ax.table(
+        cellText=rows[1:],
+        colLabels=rows[0],
+        loc="center",
+        cellLoc="center",
+    )
+    table.auto_set_font_size(False)
+    table.set_fontsize(11)
+    table.scale(1, 2.2)
+    for cell in table.get_celld().values():
+        cell.set_linewidth(linewidth)
+    fig.savefig(path)
+    plt.close(fig)
+
+
 def test_render_single_document():
     """Render all pages of one document and verify each result is a valid RGBA image."""
     filename = SAMPLE_PDF
@@ -420,6 +455,89 @@ def test_render_config_exposes_bbox_fit_flag():
 
     render_config.fit_glyph_bbox_to_target = True
     assert render_config.fit_glyph_bbox_to_target is True
+
+
+def test_render_config_exposes_min_stroke_width():
+    """RenderConfig exposes the stroke visibility floor."""
+    render_config = RenderConfig()
+    assert render_config.min_stroke_width == 1.0
+
+    render_config.min_stroke_width = 0.25
+    assert render_config.min_stroke_width == 0.25
+
+
+def test_matplotlib_table_repro_renders_subpixel_ruling_lines(tmp_path: Path):
+    pdf_path = tmp_path / "table_repro.pdf"
+    _write_matplotlib_table_repro_pdf(pdf_path, linewidth=0.4)
+
+    render_config = RenderConfig()
+    render_config.scale = 1.0
+    parser = _make_parser(threads=1, max_concurrent=2, render_config=render_config)
+    parser.load(str(pdf_path), page_numbers=[1])
+
+    result = next(parser.iterate_results())
+    assert result.success, result.error_message
+    assert result.has_image
+
+    page = result.get_page()
+    subpixel_shapes = [
+        shape
+        for shape in page.shapes
+        if 0.0 < shape.line_width < 1.0 and len(shape.points) >= 4
+    ]
+    assert len(subpixel_shapes) >= 12
+
+    image = result.get_image().convert("RGB")
+    dark_pixels = 0
+    for y in range(image.height // 3, image.height * 2 // 3):
+        for x in range(image.width // 8, image.width * 7 // 8):
+            pixel = image.getpixel((x, y))
+            assert isinstance(pixel, tuple)
+            r, g, b = pixel[:3]
+            if max(r, g, b) < 160:
+                dark_pixels += 1
+
+    assert dark_pixels > 500
+
+
+def test_inline_image_mask_renders_dotted_blue_separator():
+    pdf_path = (
+        Path("tests/data/regression")
+        / "dln_5db56eedc88aada588e42fcd8795b61cef1b384b57f66e86a11803530534b02c.pdf"
+    )
+
+    render_config = RenderConfig()
+    render_config.scale = 2.0
+    parser = _make_parser(threads=1, max_concurrent=2, render_config=render_config)
+    parser.load(str(pdf_path), page_numbers=[1])
+
+    result = next(parser.iterate_results())
+    assert result.success, result.error_message
+
+    page = result.get_page()
+    separator_masks = [
+        bitmap
+        for bitmap in page.bitmap_resources
+        if abs(bitmap.rect.r_y0 - 610.5) < 0.01 and abs(bitmap.rect.r_y2 - 611.5) < 0.01
+    ]
+    assert len(separator_masks) == 2
+    assert sorted(mask.image.size.width for mask in separator_masks) == [509, 1992]
+
+    image = result.get_image().convert("RGB")
+    blue_pixels = 0
+    dark_pixels = 0
+    for y in range(360, 363):
+        for x in range(140, 1150):
+            pixel = image.getpixel((x, y))
+            assert isinstance(pixel, tuple)
+            r, g, b = pixel[:3]
+            if b > 120 and r < 100 and g > 40:
+                blue_pixels += 1
+            if (r + g + b) / 3 < 245:
+                dark_pixels += 1
+
+    assert blue_pixels > 300
+    assert dark_pixels > 500
 
 
 def test_render_reference_documents_from_filenames():

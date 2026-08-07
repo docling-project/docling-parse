@@ -29,6 +29,10 @@ namespace pdflib
     // instructions are skipped entirely.
     bool render_shapes = true;
 
+    // Minimum stroke width in device pixels. PDF hairlines (`0 w`) and
+    // sub-pixel strokes are promoted to this width so they remain visible.
+    float min_stroke_width = 1.0f;
+
     // Draw the bounding quad of each text cell as a thin blue outline.
     bool draw_text_bbox = false;
 
@@ -105,6 +109,11 @@ namespace pdflib
     if(config.canvas_height != -1 and config.canvas_height <= 0)
       {
         throw std::runtime_error("render_config.canvas_height must be > 0 or -1");
+      }
+
+    if(config.min_stroke_width < 0.0f)
+      {
+        throw std::runtime_error("render_config.min_stroke_width must be >= 0");
       }
 
     for(int channel : config.color_widgets)

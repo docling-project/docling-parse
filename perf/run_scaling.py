@@ -503,6 +503,7 @@ def config_tables(
     ]
     render_fields = [
         "render_text",
+        "min_stroke_width",
         "draw_text_bbox",
         "draw_text_basepoint",
         "display_widgets",

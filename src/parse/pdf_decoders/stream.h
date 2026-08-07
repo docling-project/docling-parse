@@ -60,18 +60,23 @@ namespace pdflib
 
     void q();
     void Q();
-    
+
     void execute_operator(qpdf_stream_instruction op,
                           std::vector<qpdf_stream_instruction>& parameters);
-    
+
     void do_image(const std::string& xobj_name,
 		  const xobject_subtype_name& xobj_subtype);
-    
+
+    void begin_inline_image();
+    void read_inline_image_header(std::vector<qpdf_stream_instruction>& parameters);
+    void read_inline_image_data(const qpdf_stream_instruction& instruction);
+    void end_inline_image();
+
     void do_form(const std::string& xobj_name,
 		 const xobject_subtype_name& xobj_subtype);
 
     void do_postscript(const std::string& xobj_name,
-		       const xobject_subtype_name& xobj_subtype);
+       const xobject_subtype_name& xobj_subtype);
 
     // `sh`: resolve the named /Shading resource and emit the paint
     // instruction that covers the current clip region.
@@ -90,6 +95,22 @@ namespace pdflib
     void end_marked_content();
 
     void apply_actual_text(const marked_content_entry& entry);
+
+    struct inline_image_entry
+    {
+      bool active = false;
+      bool has_header = false;
+      bool has_data = false;
+      int width = 0;
+      int height = 0;
+      int bits_per_component = 1;
+      std::string color_space = "";
+      std::vector<std::string> filters;
+      bool decode_present = false;
+      std::vector<double> decode_array;
+      bool image_mask = false;
+      std::string data;
+    };
 
   private:
 
@@ -116,6 +137,8 @@ namespace pdflib
     std::vector<pdf_state<GLOBAL> > stack;
 
     int stack_count;
+    int inline_image_count = 0;
+    inline_image_entry inline_image;
 
     // BDC/EMC pairs must balance within a single content stream (PDF 32000-1,
     // 14.6), so this stack is per-decoder; cells created by nested form
@@ -293,7 +316,11 @@ namespace pdflib
       {
         qpdf_stream_instruction& inst = stream[l];
 
-        if(inst.key=="operator")
+        if(inst.obj.isInlineImage())
+          {
+            read_inline_image_data(inst);
+          }
+        else if(inst.key=="operator")
           {
             for(auto itr=parameters.begin(); itr!=parameters.end(); )
               {
@@ -419,6 +446,179 @@ namespace pdflib
     double do_image_seconds = do_image_timer.get_time();
     timings.add_timing(pdf_timings::KEY_DO_IMAGE_TOTAL, do_image_seconds);
     timings.note_attributed(do_image_seconds);
+  }
+
+  void pdf_decoder<STREAM>::begin_inline_image()
+  {
+    inline_image = inline_image_entry();
+    inline_image.active = true;
+  }
+
+  void pdf_decoder<STREAM>::read_inline_image_header(
+      std::vector<qpdf_stream_instruction>& parameters)
+  {
+    if(not inline_image.active)
+      {
+        LOG_S(WARNING) << "ID operator without active inline image";
+        return;
+      }
+
+    auto canonical_name = [](const std::string& name) -> std::string
+      {
+        if(name == "/W") { return "/Width"; }
+        if(name == "/H") { return "/Height"; }
+        if(name == "/BPC") { return "/BitsPerComponent"; }
+        if(name == "/CS") { return "/ColorSpace"; }
+        if(name == "/F") { return "/Filter"; }
+        if(name == "/D") { return "/Decode"; }
+        if(name == "/DP") { return "/DecodeParms"; }
+        if(name == "/IM") { return "/ImageMask"; }
+        if(name == "/I") { return "/Intent"; }
+        return name;
+      };
+
+    auto canonical_color_space = [](const std::string& name) -> std::string
+      {
+        if(name == "/G") { return "/DeviceGray"; }
+        if(name == "/RGB") { return "/DeviceRGB"; }
+        if(name == "/CMYK") { return "/DeviceCMYK"; }
+        if(name == "/I") { return "/Indexed"; }
+        return name;
+      };
+
+    auto canonical_filter = [](const std::string& name) -> std::string
+      {
+        if(name == "/AHx") { return "/ASCIIHexDecode"; }
+        if(name == "/A85") { return "/ASCII85Decode"; }
+        if(name == "/LZW") { return "/LZWDecode"; }
+        if(name == "/Fl") { return "/FlateDecode"; }
+        if(name == "/RL") { return "/RunLengthDecode"; }
+        if(name == "/CCF") { return "/CCITTFaxDecode"; }
+        if(name == "/DCT") { return "/DCTDecode"; }
+        return name;
+      };
+
+    for(size_t i = 0; i + 1 < parameters.size(); i += 2)
+      {
+        const qpdf_stream_instruction& key_instruction = parameters[i];
+        const qpdf_stream_instruction& value_instruction = parameters[i + 1];
+
+        if(not key_instruction.obj.isName())
+          {
+            LOG_S(WARNING) << "inline image dictionary key is not a name: "
+                           << key_instruction.val;
+            continue;
+          }
+
+        const std::string key = canonical_name(key_instruction.obj.getName());
+        const QPDFObjectHandle& value = value_instruction.obj;
+
+        if(key == "/Width" and value.isInteger())
+          {
+            inline_image.width = value.getIntValue();
+          }
+        else if(key == "/Height" and value.isInteger())
+          {
+            inline_image.height = value.getIntValue();
+          }
+        else if(key == "/BitsPerComponent" and value.isInteger())
+          {
+            inline_image.bits_per_component = value.getIntValue();
+          }
+        else if(key == "/ColorSpace" and value.isName())
+          {
+            inline_image.color_space = canonical_color_space(value.getName());
+          }
+        else if(key == "/Filter")
+          {
+            inline_image.filters.clear();
+            if(value.isName())
+              {
+                inline_image.filters.push_back(canonical_filter(value.getName()));
+              }
+            else if(value.isArray())
+              {
+                for(int j = 0; j < value.getArrayNItems(); ++j)
+                  {
+                    QPDFObjectHandle item = value.getArrayItem(j);
+                    if(item.isName())
+                      {
+                        inline_image.filters.push_back(canonical_filter(item.getName()));
+                      }
+                  }
+              }
+          }
+        else if(key == "/Decode" and value.isArray())
+          {
+            inline_image.decode_array.clear();
+            for(int j = 0; j < value.getArrayNItems(); ++j)
+              {
+                QPDFObjectHandle item = value.getArrayItem(j);
+                if(item.isNumber())
+                  {
+                    inline_image.decode_array.push_back(
+                      utils::numeric::locale_safe_numeric_value(item));
+                  }
+              }
+            inline_image.decode_present = not inline_image.decode_array.empty();
+          }
+        else if(key == "/ImageMask" and value.isBool())
+          {
+            inline_image.image_mask = value.getBoolValue();
+          }
+      }
+
+    inline_image.has_header = true;
+  }
+
+  void pdf_decoder<STREAM>::read_inline_image_data(
+      const qpdf_stream_instruction& instruction)
+  {
+    if(not inline_image.active)
+      {
+        LOG_S(WARNING) << "inline image data without active BI/ID";
+        return;
+      }
+
+    inline_image.data = instruction.obj.getInlineImageValue();
+    inline_image.has_data = true;
+  }
+
+  void pdf_decoder<STREAM>::end_inline_image()
+  {
+    if(not inline_image.active)
+      {
+        LOG_S(WARNING) << "EI operator without active inline image";
+        return;
+      }
+    if(not inline_image.has_header or not inline_image.has_data)
+      {
+        LOG_S(WARNING) << "incomplete inline image: header="
+                       << (inline_image.has_header ? "true" : "false")
+                       << " data=" << (inline_image.has_data ? "true" : "false");
+        inline_image = inline_image_entry();
+        return;
+      }
+
+    inline_image_count += 1;
+    std::string xobject_key = "__inline_image_" + std::to_string(inline_image_count);
+    std::shared_ptr<Buffer> stream_data =
+      std::make_shared<Buffer>(std::move(inline_image.data));
+
+    current_bitmap_state().Do_inline_image(
+      xobject_key,
+      inline_image.width,
+      inline_image.height,
+      inline_image.bits_per_component,
+      inline_image.color_space,
+      inline_image.filters,
+      inline_image.decode_present,
+      inline_image.decode_array,
+      inline_image.image_mask,
+      stream_data,
+      current_shape_state().get_clip_state());
+
+    inline_image = inline_image_entry();
   }
 
   // 8.7.4.5: `sh` paints the named shading over the whole current clip
@@ -944,7 +1144,7 @@ namespace pdflib
             case XOBJECT_IMAGE: { this->do_image(xobj_name, xobj_subtype); } break;
 
             case XOBJECT_FORM: { this->do_form(xobj_name, xobj_subtype); } break;
-	      
+
             case XOBJECT_POSTSCRIPT: { this->do_postscript(xobj_name, xobj_subtype); } break;
 
             default:
@@ -1099,21 +1299,24 @@ namespace pdflib
       case pdf_operator::BI:
         {
           LOG_S(INFO) << "executing " << to_string(name);
+          begin_inline_image();
         }
         break;
 
       case pdf_operator::ID:
         {
           LOG_S(INFO) << "executing " << to_string(name);
+          read_inline_image_header(parameters);
         }
         break;
 
       case pdf_operator::EI:
         {
           LOG_S(INFO) << "executing " << to_string(name);
+          end_inline_image();
         }
         break;
-	
+
         /**************************************************
          ***  text-state
          **************************************************/
@@ -1436,7 +1639,7 @@ namespace pdflib
           LOG_S(INFO) << "executing " << to_string(name);
         }
         break;
-	
+
         /**************************************************
          ***  other
          **************************************************/

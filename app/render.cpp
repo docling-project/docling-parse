@@ -211,6 +211,7 @@ int main(int argc, char* argv[])
 
         // ---- render_config ----
         ("render-text",    "Render glyph outlines for text cells (default: true)",          cxxopts::value<bool>()->implicit_value("true"))
+        ("min-stroke-width", "Minimum stroke width in device pixels for hairlines and sub-pixel vector strokes (default: 1.0)", cxxopts::value<float>())
         ("draw-text-bbox", "Draw bounding quad around each text cell",                      cxxopts::value<bool>()->implicit_value("true"))
         ("draw-text-basepoint", "Draw the text base point as a small red dot",              cxxopts::value<bool>()->implicit_value("true"))
         ("display-widgets", "Draw the bounds of each widget (form-field) annotation",       cxxopts::value<bool>()->implicit_value("true"))
@@ -319,6 +320,7 @@ int main(int argc, char* argv[])
       // --- render_config ---
       pdflib::render_config cfg;
       if (result.count("render-text"))    { cfg.render_text    = result["render-text"].as<bool>(); }
+      if (result.count("min-stroke-width")) { cfg.min_stroke_width = result["min-stroke-width"].as<float>(); }
       if (result.count("draw-text-bbox")) { cfg.draw_text_bbox = result["draw-text-bbox"].as<bool>(); }
       if (result.count("draw-text-basepoint")) { cfg.draw_text_basepoint = result["draw-text-basepoint"].as<bool>(); }
       if (result.count("display-widgets")) { cfg.display_widgets = result["display-widgets"].as<bool>(); }

@@ -2300,10 +2300,11 @@ namespace pdflib
 
         // the line width arrives in page space; scale to canvas and keep
         // sub-pixel strokes visible (PDF `0 w` means hairline)
-        static constexpr double min_visible_width = 0.75;
         const double width =
           instr.get_line_width() * 0.5 * (scale_x_ + scale_y_);
-        ctx.set_stroke_width(std::max(width, min_visible_width));
+        ctx.set_stroke_width(std::max(
+          width,
+          static_cast<double>(config_.min_stroke_width)));
 
         ctx.set_stroke_caps(to_stroke_cap(instr.get_line_cap()));
         ctx.set_stroke_join(to_stroke_join(instr.get_line_join()));

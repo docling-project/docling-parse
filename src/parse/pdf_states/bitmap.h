@@ -34,6 +34,18 @@ namespace pdflib
                   const pdf_resource<PAGE_XOBJECT_IMAGE>& xobj,
                   clip_state_instruction clip_state = clip_state_instruction());
 
+    void Do_inline_image(const std::string& xobject_key,
+                         int image_width,
+                         int image_height,
+                         int bits_per_component,
+                         const std::string& color_space,
+                         const std::vector<std::string>& filters,
+                         bool decode_present,
+                         const std::vector<double>& decode_array,
+                         bool image_mask,
+                         std::shared_ptr<Buffer> stream_data,
+                         clip_state_instruction clip_state = clip_state_instruction());
+
   private:
 
     enum visible_bbox_state
@@ -45,6 +57,9 @@ namespace pdflib
 
     void add_bitmap_instruction(const page_item<PAGE_IMAGE>& image,
                                 clip_state_instruction clip_state);
+
+    void populate_geometry(page_item<PAGE_IMAGE>& image,
+                           const clip_state_instruction& clip_state) const;
 
     bool get_clip_path_bbox(const clip_path_instruction& clip_path,
                             std::array<double, 4>& bbox) const;
@@ -194,67 +209,12 @@ namespace pdflib
     if(not config.keep_bitmaps) { LOG_S(WARNING) << "skipping " << __FUNCTION__; return; }
 
     LOG_S(INFO) << "starting to do " << __FUNCTION__ << " for xobject_key=" << xobject_key;
-    
+
     page_item<PAGE_IMAGE> image;
     image.xobject_key = xobject_key;
 
     // --- Compute quad corners and bounding box via the CTM ---
-    {
-      // FIXME clean up this crap
-      std::array<double, 9> ctm = trafo_matrix;
-
-      std::array<double, 3> u_0 = {{0, 0, 1}};
-      std::array<double, 3> u_1 = {{0, 1, 1}};
-      std::array<double, 3> u_2 = {{1, 1, 1}};
-      std::array<double, 3> u_3 = {{1, 0, 1}};
-
-      std::array<double, 3> d_0 = {{0, 0, 0}};
-      std::array<double, 3> d_1 = {{0, 0, 0}};
-      std::array<double, 3> d_2 = {{0, 0, 0}};
-      std::array<double, 3> d_3 = {{0, 0, 0}};
-
-      // p 120
-      for(int j=0; j<3; j++){
-        for(int i=0; i<3; i++){
-          d_0[j] += u_0[i]*ctm[i*3+j];
-          d_1[j] += u_1[i]*ctm[i*3+j];
-          d_2[j] += u_2[i]*ctm[i*3+j];
-          d_3[j] += u_3[i]*ctm[i*3+j];
-        }
-      }
-
-      std::array<double, 4> img_bbox;
-      img_bbox[0] = std::min(std::min(d_0[0], d_1[0]), std::min(d_2[0], d_3[0]));
-      img_bbox[2] = std::max(std::max(d_0[0], d_1[0]), std::max(d_2[0], d_3[0]));
-      img_bbox[1] = std::min(std::min(d_0[1], d_1[1]), std::min(d_2[1], d_3[1]));
-      img_bbox[3] = std::max(std::max(d_0[1], d_1[1]), std::max(d_2[1], d_3[1]));
-
-      image.x0 = img_bbox[0];
-      image.y0 = img_bbox[1];
-      image.x1 = img_bbox[2];
-      image.y1 = img_bbox[3];
-
-      image.r_x0 = d_0[0]; image.r_y0 = d_0[1];
-      image.r_x1 = d_1[0]; image.r_y1 = d_1[1];
-      image.r_x2 = d_2[0]; image.r_y2 = d_2[1];
-      image.r_x3 = d_3[0]; image.r_y3 = d_3[1];
-
-      std::array<double, 4> visible_bbox = {0.0, 0.0, 0.0, 0.0};
-      const visible_bbox_state bbox_state =
-        compute_visible_bbox(image, clip_state, visible_bbox);
-      if(bbox_state == VISIBLE_BBOX_CLIPPED)
-        {
-          image.has_visible_bbox = true;
-          image.visible_x0 = visible_bbox[0];
-          image.visible_y0 = visible_bbox[1];
-          image.visible_x1 = visible_bbox[2];
-          image.visible_y1 = visible_bbox[3];
-        }
-      else if(bbox_state == VISIBLE_BBOX_EMPTY)
-        {
-          image.is_visible = false;
-        }
-    }
+    populate_geometry(image, clip_state);
 
     // --- Populate image properties from the XObject ---
     {
@@ -307,6 +267,118 @@ namespace pdflib
     page_images.push_back(image);
 
     add_bitmap_instruction(image, std::move(clip_state));
+  }
+
+  void pdf_state<BITMAP>::Do_inline_image(
+      const std::string& xobject_key,
+      int image_width,
+      int image_height,
+      int bits_per_component,
+      const std::string& color_space,
+      const std::vector<std::string>& filters,
+      bool decode_present,
+      const std::vector<double>& decode_array,
+      bool image_mask,
+      std::shared_ptr<Buffer> stream_data,
+      clip_state_instruction clip_state)
+  {
+    if(not config.keep_bitmaps) { LOG_S(WARNING) << "skipping " << __FUNCTION__; return; }
+    if(not stream_data or stream_data->getSize() == 0)
+      {
+        LOG_S(WARNING) << "inline image has no data for xobject_key=" << xobject_key;
+        return;
+      }
+
+    page_item<PAGE_IMAGE> image;
+    image.xobject_key = xobject_key;
+    populate_geometry(image, clip_state);
+
+    image.image_width        = image_width;
+    image.image_height       = image_height;
+    image.bits_per_component = bits_per_component;
+    image.color_space        = color_space;
+    image.filters            = filters;
+    image.raw_stream_data    = stream_data;
+    if(filters.empty())
+      {
+        image.decoded_stream_data = stream_data;
+      }
+    image.decode_present     = decode_present;
+    image.decode_array       = decode_array;
+    image.image_mask         = image_mask;
+
+    if(image.image_mask and not image.decode_present)
+      {
+        image.decode_present = true;
+        image.decode_array = {0.0, 1.0};
+      }
+
+    image.has_graphics_state = true;
+    image.rgb_stroking_ops   = grph_state.get_rgb_stroking_ops();
+    image.rgb_filling_ops    = grph_state.get_rgb_filling_ops();
+
+    page_images.push_back(image);
+    add_bitmap_instruction(image, std::move(clip_state));
+  }
+
+  void pdf_state<BITMAP>::populate_geometry(
+      page_item<PAGE_IMAGE>& image,
+      const clip_state_instruction& clip_state) const
+  {
+    // FIXME clean up this crap
+    std::array<double, 9> ctm = trafo_matrix;
+
+    std::array<double, 3> u_0 = {{0, 0, 1}};
+    std::array<double, 3> u_1 = {{0, 1, 1}};
+    std::array<double, 3> u_2 = {{1, 1, 1}};
+    std::array<double, 3> u_3 = {{1, 0, 1}};
+
+    std::array<double, 3> d_0 = {{0, 0, 0}};
+    std::array<double, 3> d_1 = {{0, 0, 0}};
+    std::array<double, 3> d_2 = {{0, 0, 0}};
+    std::array<double, 3> d_3 = {{0, 0, 0}};
+
+    // p 120
+    for(int j=0; j<3; j++){
+      for(int i=0; i<3; i++){
+        d_0[j] += u_0[i]*ctm[i*3+j];
+        d_1[j] += u_1[i]*ctm[i*3+j];
+        d_2[j] += u_2[i]*ctm[i*3+j];
+        d_3[j] += u_3[i]*ctm[i*3+j];
+      }
+    }
+
+    std::array<double, 4> img_bbox;
+    img_bbox[0] = std::min(std::min(d_0[0], d_1[0]), std::min(d_2[0], d_3[0]));
+    img_bbox[2] = std::max(std::max(d_0[0], d_1[0]), std::max(d_2[0], d_3[0]));
+    img_bbox[1] = std::min(std::min(d_0[1], d_1[1]), std::min(d_2[1], d_3[1]));
+    img_bbox[3] = std::max(std::max(d_0[1], d_1[1]), std::max(d_2[1], d_3[1]));
+
+    image.x0 = img_bbox[0];
+    image.y0 = img_bbox[1];
+    image.x1 = img_bbox[2];
+    image.y1 = img_bbox[3];
+
+    image.r_x0 = d_0[0]; image.r_y0 = d_0[1];
+    image.r_x1 = d_1[0]; image.r_y1 = d_1[1];
+    image.r_x2 = d_2[0]; image.r_y2 = d_2[1];
+    image.r_x3 = d_3[0]; image.r_y3 = d_3[1];
+
+    std::array<double, 4> visible_bbox = {0.0, 0.0, 0.0, 0.0};
+    const visible_bbox_state bbox_state =
+      compute_visible_bbox(image, clip_state, visible_bbox);
+    if(bbox_state == VISIBLE_BBOX_CLIPPED)
+      {
+        image.has_visible_bbox = true;
+        image.visible_x0 = visible_bbox[0];
+        image.visible_y0 = visible_bbox[1];
+        image.visible_x1 = visible_bbox[2];
+        image.visible_y1 = visible_bbox[3];
+      }
+    else if(bbox_state == VISIBLE_BBOX_EMPTY)
+      {
+        image.is_visible = false;
+      }
   }
 
   void pdf_state<BITMAP>::add_bitmap_instruction(const page_item<PAGE_IMAGE>& image,
@@ -1013,19 +1085,19 @@ namespace pdflib
                 // --- TEMPORARY DEBUG: save the raw decoded pixels as a PNG ---
 		bool export_to_png_for_debug = false; // should always be false in production!!
 		if(export_to_png_for_debug)
-		  {
-		    // Strip the leading '/' that PDF keys always carry (e.g. "/Im0" → "Im0").
-		    std::string tmp_name = image.xobject_key;
-		    if(not tmp_name.empty() and tmp_name[0] == '/')
-		      {
+  {
+    // Strip the leading '/' that PDF keys always carry (e.g. "/Im0" → "Im0").
+    std::string tmp_name = image.xobject_key;
+    if(not tmp_name.empty() and tmp_name[0] == '/')
+      {
 			tmp_name = tmp_name.substr(1);
-		      }
-		    std::string dbg_path = "./tmp/ccitt_debug_" + tmp_name + ".png";
-		    
-		    LOG_S(WARNING) << "saving PNG image at: " << dbg_path;
-		    ccitt::save_debug_png(decoded, w, h, dbg_path);
-		  }
-		
+      }
+    std::string dbg_path = "./tmp/ccitt_debug_" + tmp_name + ".png";
+
+    LOG_S(WARNING) << "saving PNG image at: " << dbg_path;
+    ccitt::save_debug_png(decoded, w, h, dbg_path);
+  }
+
                 pixel_data  = std::make_shared<std::vector<uint8_t>>(std::move(decoded));
                 pixel_shape = {h, w, channels};
 
