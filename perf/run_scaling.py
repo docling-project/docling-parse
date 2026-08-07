@@ -125,6 +125,43 @@ def resolve_pdf_inputs(
     return find_pdfs(pdf_dir, recursive=True), info
 
 
+def filter_pdf_selection(pdf_paths: List[Path], selection: str) -> List[Path]:
+    """Filter PDFs by comma/semicolon-separated filename, stem, or path tokens."""
+    tokens = [
+        token.strip()
+        for token in re.split(r"[;,]", selection)
+        if token.strip()
+    ]
+    if not tokens:
+        return pdf_paths
+
+    selected: List[Path] = []
+    selected_set = set()
+    unmatched = set(tokens)
+    for pdf_path in pdf_paths:
+        path = str(pdf_path)
+        name = pdf_path.name
+        stem = pdf_path.stem
+        matched = [
+            token
+            for token in tokens
+            if token == name or token == stem or token in path
+        ]
+        if matched and pdf_path not in selected_set:
+            selected.append(pdf_path)
+            selected_set.add(pdf_path)
+        unmatched.difference_update(matched)
+
+    if unmatched:
+        print(
+            "Warning: --pdf-selection did not match: "
+            + ", ".join(sorted(unmatched)),
+            file=sys.stderr,
+        )
+
+    return selected
+
+
 def page_counts(pdf_paths: List[Path]) -> List[Tuple[Path, int]]:
     """Count pages per PDF using DoclingPdfParser."""
     from docling_parse.pdf_parser import DoclingPdfParser
@@ -382,6 +419,11 @@ def _add_bool_value_arg(
         metavar="{true,false}",
         help=f"{help} (default: {str(default).lower()})",
     )
+
+
+def _arg_was_passed(argv: List[str], name: str) -> bool:
+    option = f"--{name}"
+    return any(arg == option or arg.startswith(f"{option}=") for arg in argv)
 
 
 def _decode_options_from_args(args: argparse.Namespace) -> dict[str, bool]:
@@ -2006,6 +2048,15 @@ def main(argv: List[str]) -> int:
         help="Maximum number of pages to process across all input PDFs",
     )
     ap.add_argument(
+        "--pdf-selection",
+        type=str,
+        default="",
+        help=(
+            "Comma/semicolon-separated PDF filename, stem, or path tokens to "
+            "benchmark after input resolution, e.g. '1235350.pdf;1061589.pdf'"
+        ),
+    )
+    ap.add_argument(
         "--max-concurrent-results",
         type=int,
         default=64,
@@ -2131,6 +2182,8 @@ def main(argv: List[str]) -> int:
     )
 
     args = ap.parse_args(argv)
+    if args.mode == "parse" and not _arg_was_passed(argv, "materialize-bitmaps"):
+        args.materialize_bitmaps = False
 
     # Recorded verbatim in the report so a published number can be traced back
     # to the invocation that produced it.
@@ -2146,6 +2199,8 @@ def main(argv: List[str]) -> int:
     system_info = collect_system_info()
 
     pdfs, dataset_info = resolve_pdf_inputs(args.input, recursive=args.recursive)
+    if args.pdf_selection:
+        pdfs = filter_pdf_selection(pdfs, args.pdf_selection)
     if not pdfs:
         print(f"No PDFs found for input: {args.input}", file=sys.stderr)
         return 2
@@ -2165,6 +2220,7 @@ def main(argv: List[str]) -> int:
         "other backends": other_backends or "(none)",
         "comparison suite": compare_backends or "(off)",
         "max pages": args.max_pages if args.max_pages else "(all)",
+        "pdf selection": args.pdf_selection or "(all)",
         "bytesio": args.bytesio,
     }
     if args.mode in ("render", "both"):

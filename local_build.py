@@ -92,12 +92,14 @@ def run(cmd: List[str], cwd: str="./"):
 def build_local(num_threads: int):
 
     USE_SYSTEM_DEPS = os.getenv("USE_SYSTEM_DEPS", "OFF")
+    CMAKE_BUILD_TYPE = os.getenv("CMAKE_BUILD_TYPE", "Release")
 
     print("python prefix: ", sys.exec_prefix)
     print("python executable: ", sys.executable)
     config_cmd = [
         "cmake",
         "-B", f"{BUILD_DIR}",
+        f"-DCMAKE_BUILD_TYPE={CMAKE_BUILD_TYPE}",
         f"-DUSE_SYSTEM_DEPS={USE_SYSTEM_DEPS}",
         f"-DPYTHON_EXECUTABLE={sys.executable}",
     ]

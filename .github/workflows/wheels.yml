@@ -147,6 +147,8 @@ jobs:
             uv run python -m zipfile --list "$file" | grep \\.so
             echo "Checking if the correct python version is contained in the wheel"
             uv run python -m zipfile --list "$file" | grep ${PY_CACHE_TAG}
+            echo "Checking that Blend2D debug assertions are not present"
+            uv run python scripts/check_no_blend2d_assertions.py "$file"
           done
           mkdir -p ./dist
           cp wheelhouse/*.whl ./dist/
@@ -200,6 +202,8 @@ jobs:
             uv run python -m zipfile --list "$file" | grep \\.so
             echo "Checking if the correct python version is contained in the wheel"
             uv run python -m zipfile --list "$file" | grep ${PY_CACHE_TAG}
+            echo "Checking that Blend2D debug assertions are not present"
+            uv run python scripts/check_no_blend2d_assertions.py "$file"
           done
           mkdir -p ./dist
           cp wheelhouse/*.whl ./dist/
@@ -243,6 +247,8 @@ jobs:
             uv run python -m zipfile --list "$file" | grep \\.so
             echo "Checking if the correct python version is contained in the wheel"
             uv run python -m zipfile --list "$file" | grep ${PY_CACHE_TAG}
+            echo "Checking that Blend2D debug assertions are not present"
+            uv run python scripts/check_no_blend2d_assertions.py "$file"
           done
           mkdir -p ./dist
           cp wheelhouse/*.whl ./dist/
@@ -348,6 +354,8 @@ jobs:
               $file = $_.FullName
               Write-Output "Inspecting $file"
               uv run python -m zipfile --list "$file"
+              Write-Output "Checking that Blend2D debug assertions are not present"
+              uv run python scripts/check_no_blend2d_assertions.py "$file"
           }
           if (-not (Test-Path -Path .\dist)) {
               New-Item -Path .\dist -ItemType Directory

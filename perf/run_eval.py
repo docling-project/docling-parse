@@ -324,12 +324,12 @@ REFERENCE_BACKEND = "docling-parse"
 def _hex_pairs_to_plot(
     per_series_rows: Dict[str, List[PageRow]],
 ) -> List[Tuple[str, str]]:
-    """docling-parse at one thread against every other package, per task.
+    """docling-parse against every other package, per task.
 
     Pairs never cross tasks --- a `parse` time against a `parse+render` time is
-    not a like-for-like page.  Other docling-parse thread counts are excluded
-    too: per-page cost is the same quantity at any thread count, so those plots
-    would just be the diagonal.
+    not a like-for-like page.  Prefer docling-parse at one thread when present;
+    otherwise fall back to the lowest available docling-parse thread count for
+    that task.
     """
     by_task: Dict[str, List[str]] = defaultdict(list)
     for series, rows in per_series_rows.items():
@@ -338,18 +338,27 @@ def _hex_pairs_to_plot(
 
     pairs: List[Tuple[str, str]] = []
     for task, names in sorted(by_task.items()):
-        reference = next(
+        references = sorted(
             (
                 s
                 for s in names
                 if per_series_rows[s][0].backend == REFERENCE_BACKEND
-                and per_series_rows[s][0].threads == 1
             ),
-            None,
+            key=lambda s: (
+                per_series_rows[s][0].threads != 1,
+                per_series_rows[s][0].threads,
+                s,
+            ),
         )
+        reference = references[0] if references else None
         if reference is None:
-            print(f"  no {REFERENCE_BACKEND} (1t) series for task {task}; no hexbins")
+            print(f"  no {REFERENCE_BACKEND} series for task {task}; no hexbins")
             continue
+        if per_series_rows[reference][0].threads != 1:
+            print(
+                f"  no {REFERENCE_BACKEND} (1t) series for task {task}; "
+                f"using {reference} for hexbins"
+            )
         pairs.extend(
             (reference, other)
             for other in names

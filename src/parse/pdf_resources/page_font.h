@@ -78,8 +78,7 @@ namespace pdflib
     // only needed for the cmap-resource files
     bool numb_is_in_cmap(uint32_t c); 
     
-    void set(std::string      font_key_,
-             nlohmann::json&  json_font_,
+    void set(std::string font_key_,
              QPDFObjectHandle qpdf_font_);
 
   private:
@@ -96,14 +95,11 @@ namespace pdflib
     void init_font_matrix();
     void init_font_program();
     bool try_init_font_program_from_descriptor(QPDFObjectHandle font_obj,
-                                               nlohmann::json const& font_json,
                                                bool from_descendant_font);
     bool try_init_font_program_direct(QPDFObjectHandle font_obj,
-                                      nlohmann::json const& font_json,
                                       bool from_descendant_font);
     void populate_font_program(QPDFObjectHandle descriptor_obj,
                                QPDFObjectHandle stream_obj,
-                               nlohmann::json const& descriptor_json,
                                std::string const& source_path,
                                embedded_font_file_kind kind,
                                bool from_descendant_font);
@@ -147,10 +143,9 @@ namespace pdflib
     pdf_timings& timings;
     
     nlohmann::json   json_font;
-    nlohmann::json   desc_font; // derived from json_font, only for '/Type-0'
 
     QPDFObjectHandle qpdf_font;
-    //QPDFObjectHandle qpdf_desc_font; // derived from json_font, only for '/Type-0'
+    QPDFObjectHandle qpdf_desc_font; // derived from qpdf_font, only for '/Type-0'
 
     std::string        encoding_name;
     font_encoding_name encoding;
@@ -296,6 +291,11 @@ namespace pdflib
 
   nlohmann::json pdf_resource<PAGE_FONT>::get()
   {
+    if(json_font.is_null() and not qpdf_font.isNull())
+      {
+        json_font = to_json(qpdf_font);
+      }
+
     return json_font;
   }
 
@@ -680,8 +680,7 @@ namespace pdflib
       }
   }
 
-  void pdf_resource<PAGE_FONT>::set(std::string      font_key_,
-                                    nlohmann::json&  json_font_,
+  void pdf_resource<PAGE_FONT>::set(std::string font_key_,
                                     QPDFObjectHandle qpdf_font_)
   {
     LOG_S(INFO) << __FUNCTION__ << " font: " << font_key_;
@@ -693,7 +692,7 @@ namespace pdflib
       
       try
       {
-      LOG_S(INFO) << "font [key='" << font_key_ << "']:\n" << json_font_.dump(2);
+      LOG_S(INFO) << "font [key='" << font_key_ << "']:\n" << qpdf_object::debug(qpdf_font_);
       }
       catch(std::exception e)
       {
@@ -707,8 +706,9 @@ namespace pdflib
       utils::timer font_timer;
 
       font_key  = font_key_;
-      json_font = json_font_;
+      json_font = nullptr;
       qpdf_font = qpdf_font_;
+      qpdf_desc_font = QPDFObjectHandle::newNull();
 
       double font_time = font_timer.get_time();
       timings.add_timing(pdf_timings::KEY_FONT_INIT_COPY, font_time);
@@ -787,26 +787,20 @@ namespace pdflib
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    std::vector<std::string> keys_0 = {"/Encoding", "/BaseEncoding"};
-    std::vector<std::string> keys_1 = {"/Encoding"};
-
     std::string name;
-    if(utils::json::has(keys_0, json_font))
+    if(qpdf_object::get_name_or_string(qpdf_font, {"/Encoding", "/BaseEncoding"}, name))
       {
-        name = utils::json::get(keys_0, json_font);
         encoding = to_encoding_name(name);
         has_explicit_encoding = true;
 
         LOG_S(INFO) << "font-encoding [" << name << "]: " << to_string(encoding);
       }
-    else if(utils::json::has(keys_1, json_font))
+    else if(qpdf_font.isDictionary() and qpdf_font.hasKey("/Encoding"))
       {
-        auto result = utils::json::get(keys_1, json_font);
+        auto result = qpdf_font.getKey("/Encoding");
 
-        if(result.is_string())
+        if(qpdf_object::get_name_or_string(result, encoding_name))
           {
-            encoding_name = result.get<std::string>();
-
 	    if(cids.has(encoding_name))
 	      {
 		encoding = CMAP_RESOURCES;
@@ -849,17 +843,10 @@ namespace pdflib
 
             LOG_S(INFO) << "font-encoding [" << name << "]: " << to_string(encoding);
           }
-        else if(result.is_object() && result.count("/BaseEncoding") == 1 && result["/BaseEncoding"].is_string())
-          {
-            // Extract /BaseEncoding from encoding dictionary
-            std::string base_enc = result["/BaseEncoding"].get<std::string>();
-            encoding = to_encoding_name(base_enc);
-            has_explicit_encoding = true;
-            LOG_S(INFO) << "font-encoding from object /BaseEncoding [" << base_enc << "]: " << to_string(encoding);
-          }
         else
           {
-            LOG_S(WARNING) << " --> font-encoding falling back to STANDARD with font-encoding [object]: " << result.dump();
+            LOG_S(WARNING) << " --> font-encoding falling back to STANDARD with font-encoding [object]: "
+                           << qpdf_object::debug(result);
 
             encoding = STANDARD;
             has_explicit_encoding = false;
@@ -877,26 +864,20 @@ namespace pdflib
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    std::vector<std::string> keys = {"/Subtype"};
-
-    if(utils::json::has(keys, json_font))
+    std::string name;
+    if(qpdf_object::get_name_or_string(qpdf_font, {"/Subtype"}, name))
       {
-        std::string name = utils::json::get(keys, json_font);
         subtype = to_subtype_name(name);
 
         LOG_S(INFO) << "subtype [" << name << "]: " << to_string(subtype);
 
-        std::vector<std::string> keys_0 = {"/DescendantFonts"};
-        if(subtype==TYPE_0 and utils::json::has(keys_0, json_font))
+        QPDFObjectHandle desc_fonts = qpdf_object::get_path(qpdf_font, {"/DescendantFonts"});
+        if(subtype==TYPE_0 and desc_fonts.isArray())
           {
-            auto desc_fonts = utils::json::get(keys_0, json_font);
-
-	    if(desc_fonts.size()==1)
+	    if(desc_fonts.getArrayNItems()==1)
 	      {
 		LOG_S(INFO) << "found the descendant font";// << desc_font.dump(2);
-		desc_font = desc_fonts[0];
-
-		//qpdf_desc_font = qpdf_font.getKey(keys_0.at(0)).getArrayItem(0);		
+		qpdf_desc_font = desc_fonts.getArrayItem(0);
 	      }
 	    else
 	      {
@@ -918,7 +899,7 @@ namespace pdflib
     else
       {
         subtype=NULL_TYPE;
-        LOG_S(ERROR) << "could not find subtype in font: " << json_font.dump(2);
+        LOG_S(ERROR) << "could not find subtype in font: " << qpdf_object::debug(qpdf_font);
       }
   }
 
@@ -926,17 +907,13 @@ namespace pdflib
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    std::vector<std::string> keys = {"/BaseFont"};
-
     base_font = "null";
-    if(utils::json::has(keys, json_font))
+    if(qpdf_object::get_name_or_string(qpdf_font, {"/BaseFont"}, base_font))
       {
-        base_font = utils::json::get(keys, json_font);
         LOG_S(INFO) << "base-font: " << base_font;
       }
-    else if(utils::json::has(keys, desc_font))
+    else if(qpdf_object::get_name_or_string(qpdf_desc_font, {"/BaseFont"}, base_font))
       {
-        base_font = utils::json::get(keys, desc_font);
         LOG_S(INFO) << "base-font: " << base_font;
       }
     else
@@ -949,23 +926,17 @@ namespace pdflib
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    std::vector<std::string> keys_0 = {"/FontDescriptor", "/FontName"};
-    std::vector<std::string> keys_1 = {"/Name"};
-
     font_name = "null";
-    if(utils::json::has(keys_0, json_font))
+    if(qpdf_object::get_name_or_string(qpdf_font, {"/FontDescriptor", "/FontName"}, font_name))
       {
-        font_name = utils::json::get(keys_0, json_font);
         LOG_S(INFO) << "font-name: " << font_name;
       }
-    else if(utils::json::has(keys_0, desc_font))
+    else if(qpdf_object::get_name_or_string(qpdf_desc_font, {"/FontDescriptor", "/FontName"}, font_name))
       {
-        font_name = utils::json::get(keys_0, desc_font);
         LOG_S(INFO) << "font-name: " << font_name;
       }
-    else if(utils::json::has(keys_1, json_font))
+    else if(qpdf_object::get_name_or_string(qpdf_font, {"/Name"}, font_name))
       {
-        font_name = utils::json::get(keys_1, json_font);
         LOG_S(INFO) << "font-name: " << font_name;
       }
     else if(base_font!="null")
@@ -983,29 +954,25 @@ namespace pdflib
   {
     LOG_S(INFO) << __FUNCTION__;// << "\t" << json_font.dump(2);
 
-    std::vector<std::string> keys_0 = {"/FontDescriptor", "/FontBBox"};
-    std::vector<std::string> keys_1 = {"/FontBBox"};
-    nlohmann::json json_bbox;
+    bool found_bbox = false;
     
-    if(utils::json::has(keys_0, json_font))
+    if(qpdf_object::get_number_array(qpdf_font, {"/FontDescriptor", "/FontBBox"}, font_bbox))
       {
-        json_bbox = utils::json::get(keys_0, json_font);
+        found_bbox = true;
       }
-    else if(utils::json::has(keys_0, desc_font))
+    else if(qpdf_object::get_number_array(qpdf_desc_font, {"/FontDescriptor", "/FontBBox"}, font_bbox))
       {
-        json_bbox = utils::json::get(keys_0, desc_font);
+        found_bbox = true;
       }
-    else if(utils::json::has(keys_1, json_font))
+    else if(qpdf_object::get_number_array(qpdf_font, {"/FontBBox"}, font_bbox))
       {
         //assert(subtype==TYPE_3);
-
-        json_bbox = utils::json::get(keys_1, json_font);
+        found_bbox = true;
       }
-    else if(utils::json::has(keys_1, desc_font))
+    else if(qpdf_object::get_number_array(qpdf_desc_font, {"/FontBBox"}, font_bbox))
       {
         //assert(subtype==TYPE_3);
-
-        json_bbox = utils::json::get(keys_1, desc_font);
+        found_bbox = true;
       }
     else if(bfonts.has(base_font)==1)
       {
@@ -1017,18 +984,16 @@ namespace pdflib
         LOG_S(WARNING) << "could not find font-bbox";
       }
 
-    if (json_bbox != nullptr)
+    if (not found_bbox)
       {
-        if (json_bbox.is_array() and json_bbox.size() == 4)
+        QPDFObjectHandle bbox = qpdf_object::get_path(qpdf_font, {"/FontDescriptor", "/FontBBox"});
+        if(bbox.isNull()) { bbox = qpdf_object::get_path(qpdf_desc_font, {"/FontDescriptor", "/FontBBox"}); }
+        if(bbox.isNull()) { bbox = qpdf_object::get_path(qpdf_font, {"/FontBBox"}); }
+        if(bbox.isNull()) { bbox = qpdf_object::get_path(qpdf_desc_font, {"/FontBBox"}); }
+        if(not bbox.isNull())
           {
-            for(int d=0; d<4; d++)
-              {
-                font_bbox[d] = json_bbox[d].get<double>();
-              }
-          }
-        else
-          {
-            LOG_S(ERROR) << "expected 4 elements in font-bbox, got: " << json_bbox;
+            LOG_S(ERROR) << "expected 4 numeric elements in font-bbox, got: "
+                         << qpdf_object::debug(bbox);
           }
       }
 
@@ -1044,26 +1009,11 @@ namespace pdflib
   {
     LOG_S(INFO) << __FUNCTION__;// << "\t" << json_font.dump(2);
 
-    std::vector<std::string> keys_0 = {"/FontMatrix"};
-
-    if(utils::json::has(keys_0, json_font))
+    if(qpdf_object::get_number_array(qpdf_font, {"/FontMatrix"}, font_matrix))
       {
         //assert(subtype==TYPE_3);
-        auto json_matrix = utils::json::get(keys_0, json_font);
-
-        if (json_matrix.is_array() and json_matrix.size() == 6)
-          {
-            for(int d=0; d<6; d++)
-              {
-                font_matrix[d] = json_matrix[d].get<double>();
-              }
-            type3_xscale = font_matrix[0] * 1000.0;
-            type3_yscale = font_matrix[3] * 1000.0;
-          }
-        else
-          {
-            LOG_S(ERROR) << "expected 6 elements in font-matrix, got: " << json_matrix;
-          }
+        type3_xscale = font_matrix[0] * 1000.0;
+        type3_yscale = font_matrix[3] * 1000.0;
       }
     else
       {
@@ -1094,43 +1044,29 @@ namespace pdflib
     bool found = false;
 
     LOG_S(INFO) << __FUNCTION__ << ": probing primary font descriptor";
-    found = try_init_font_program_from_descriptor(qpdf_font, json_font, false);
+    found = try_init_font_program_from_descriptor(qpdf_font, false);
 
-    if(not found and subtype==TYPE_0 and qpdf_font.hasKey("/DescendantFonts"))
+    if(not found and subtype==TYPE_0 and not qpdf_desc_font.isNull())
       {
         LOG_S(INFO) << __FUNCTION__ << ": probing descendant font descriptor";
-        auto desc_fonts = qpdf_font.getKey("/DescendantFonts");
-        if(desc_fonts.isArray() and desc_fonts.getArrayNItems() > 0)
+        found = try_init_font_program_from_descriptor(qpdf_desc_font, true);
+        if(not found)
           {
-            auto qpdf_desc_font = desc_fonts.getArrayItem(0);
-            found = try_init_font_program_from_descriptor(qpdf_desc_font, desc_font, true);
-            if(not found)
-              {
-                LOG_S(INFO) << __FUNCTION__ << ": probing descendant font directly";
-                found = try_init_font_program_direct(qpdf_desc_font, desc_font, true);
-              }
-          }
-        else
-          {
-            LOG_S(INFO) << __FUNCTION__ << ": /DescendantFonts missing or empty at qpdf level";
+            LOG_S(INFO) << __FUNCTION__ << ": probing descendant font directly";
+            found = try_init_font_program_direct(qpdf_desc_font, true);
           }
       }
 
     if(not found)
       {
         LOG_S(INFO) << __FUNCTION__ << ": probing primary font object directly";
-        found = try_init_font_program_direct(qpdf_font, json_font, false);
+        found = try_init_font_program_direct(qpdf_font, false);
       }
 
-    if(not found and subtype==TYPE_0 and qpdf_font.hasKey("/DescendantFonts"))
+    if(not found and subtype==TYPE_0 and not qpdf_desc_font.isNull())
       {
-        auto desc_fonts = qpdf_font.getKey("/DescendantFonts");
-        if(desc_fonts.isArray() and desc_fonts.getArrayNItems() > 0)
-          {
-            LOG_S(INFO) << __FUNCTION__ << ": probing descendant font directly as final fallback";
-            auto qpdf_desc_font = desc_fonts.getArrayItem(0);
-            found = try_init_font_program_direct(qpdf_desc_font, desc_font, true);
-          }
+        LOG_S(INFO) << __FUNCTION__ << ": probing descendant font directly as final fallback";
+        found = try_init_font_program_direct(qpdf_desc_font, true);
       }
 
     if(found)
@@ -1155,7 +1091,6 @@ namespace pdflib
 
   bool pdf_resource<PAGE_FONT>::try_init_font_program_from_descriptor(
     QPDFObjectHandle font_obj,
-    nlohmann::json const& font_json,
     bool from_descendant_font)
   {
     LOG_S(INFO) << __FUNCTION__
@@ -1178,12 +1113,6 @@ namespace pdflib
       {
         LOG_S(INFO) << __FUNCTION__ << ": /FontDescriptor is not a dictionary";
         return false;
-      }
-
-    nlohmann::json descriptor_json = nullptr;
-    if(font_json.is_object() and font_json.count("/FontDescriptor") == 1)
-      {
-        descriptor_json = font_json["/FontDescriptor"];
       }
 
     struct candidate_spec
@@ -1215,7 +1144,6 @@ namespace pdflib
 
         populate_font_program(descriptor_obj,
                               stream_obj,
-                              descriptor_json,
                               std::string("/FontDescriptor") + spec.key,
                               spec.kind,
                               from_descendant_font);
@@ -1228,7 +1156,6 @@ namespace pdflib
 
   bool pdf_resource<PAGE_FONT>::try_init_font_program_direct(
     QPDFObjectHandle font_obj,
-    nlohmann::json const& font_json,
     bool from_descendant_font)
   {
     LOG_S(INFO) << __FUNCTION__
@@ -1269,7 +1196,6 @@ namespace pdflib
 
         populate_font_program(font_obj,
                               stream_obj,
-                              font_json,
                               spec.key,
                               spec.kind,
                               from_descendant_font);
@@ -1283,7 +1209,6 @@ namespace pdflib
   void pdf_resource<PAGE_FONT>::populate_font_program(
     QPDFObjectHandle descriptor_obj,
     QPDFObjectHandle stream_obj,
-    nlohmann::json const& descriptor_json,
     std::string const& source_path,
     embedded_font_file_kind kind,
     bool from_descendant_font)
@@ -1300,7 +1225,7 @@ namespace pdflib
     font_program.base_font = base_font;
     font_program.font_name = font_name;
     font_program.from_descendant_font = from_descendant_font;
-    font_program.descriptor_json = descriptor_json;
+    font_program.descriptor_json = to_json(descriptor_obj, {}, 0, 2);
     font_program.stream_dict_json = to_json(stream_obj, {}, 0, 2);
     // Disabled: dumping the full stream dictionary per font floods the logs.
     // LOG_S(INFO) << __FUNCTION__
@@ -1453,14 +1378,14 @@ namespace pdflib
 
     // PDF spec: /CIDToGIDMap defaults to /Identity when absent. Any stream
     // value means an explicit map that we do not resolve here.
-    std::vector<std::string> keys = {"/CIDToGIDMap"};
-    if(not utils::json::has(keys, desc_font))
+    QPDFObjectHandle value = qpdf_object::get_path(qpdf_desc_font, {"/CIDToGIDMap"});
+    if(value.isNull())
       {
         return true;
       }
 
-    nlohmann::json value = utils::json::get(keys, desc_font);
-    return value.is_string() and value.get<std::string>() == "/Identity";
+    std::string name;
+    return qpdf_object::get_name_or_string(value, name) and name == "/Identity";
   }
 
   void pdf_resource<PAGE_FONT>::build_embedded_font_blob()
@@ -1491,17 +1416,12 @@ namespace pdflib
       const int FLAG_SYMBOLIC = 1 << 2; // /Flags bit 3
 
       int flags = 0;
-      std::vector<std::string> keys = {"/FontDescriptor", "/Flags"};
-      if(utils::json::has(keys, json_font))
+      if(not qpdf_object::get_int(qpdf_font, {"/FontDescriptor", "/Flags"}, flags))
         {
-          flags = utils::json::get(keys, json_font);
-        }
-      else if(utils::json::has(keys, desc_font))
-        {
-          flags = utils::json::get(keys, desc_font);
+          qpdf_object::get_int(qpdf_desc_font, {"/FontDescriptor", "/Flags"}, flags);
         }
 
-      const bool has_encoding = utils::json::has({"/Encoding"}, json_font);
+      const bool has_encoding = qpdf_object::has_path(qpdf_font, {"/Encoding"});
 
       uses_builtin_encoding = (subtype != TYPE_0) and
         ((flags & FLAG_SYMBOLIC) != 0) and (not has_encoding);
@@ -1536,19 +1456,15 @@ namespace pdflib
 
     ascent=0;
     {
-      std::vector<std::string> keys = {"/FontDescriptor", "/Ascent"};
-
       bool ascent_defined=false;
-      if(utils::json::has(keys, json_font))
+      if(qpdf_object::get_number(qpdf_font, {"/FontDescriptor", "/Ascent"}, ascent))
         {
-          ascent = utils::json::get(keys, json_font);
           ascent_defined=true;
 
           LOG_S(INFO) << "ascent: " << ascent;
         }
-      else if(utils::json::has(keys, desc_font))
+      else if(qpdf_object::get_number(qpdf_desc_font, {"/FontDescriptor", "/Ascent"}, ascent))
         {
-          ascent = utils::json::get(keys, desc_font);
           ascent_defined=true;
 
           LOG_S(INFO) << "ascent: " << ascent;
@@ -1581,19 +1497,15 @@ namespace pdflib
 
     descent=0;
     {
-      std::vector<std::string> keys = {"/FontDescriptor", "/Descent"};
-
       bool descent_defined=false;
-      if(utils::json::has(keys, json_font))
+      if(qpdf_object::get_number(qpdf_font, {"/FontDescriptor", "/Descent"}, descent))
         {
-          descent = utils::json::get(keys, json_font);
           descent_defined=true;
 
           LOG_S(INFO) << "descent: " << descent;
         }
-      else if(utils::json::has(keys, desc_font))
+      else if(qpdf_object::get_number(qpdf_desc_font, {"/FontDescriptor", "/Descent"}, descent))
         {
-          descent = utils::json::get(keys, desc_font);
           descent_defined=true;
 
           LOG_S(INFO) << "descent: " << descent;
@@ -1645,19 +1557,15 @@ namespace pdflib
 
     capheight=0;
     {
-      std::vector<std::string> keys = {"/FontDescriptor", "/CapHeight"};
-      
       //bool capheight_defined=false;
-      if(utils::json::has(keys, json_font))
+      if(qpdf_object::get_number(qpdf_font, {"/FontDescriptor", "/CapHeight"}, capheight))
         {
-          capheight = utils::json::get(keys, json_font);
           //capheight_defined=true;
 
           LOG_S(INFO) << "capheight: " << capheight;
         }
-      else if(utils::json::has(keys, desc_font))
+      else if(qpdf_object::get_number(qpdf_desc_font, {"/FontDescriptor", "/CapHeight"}, capheight))
         {
-          capheight = utils::json::get(keys, desc_font);
           //capheight_defined=true;
 
           LOG_S(INFO) << "capheight: " << capheight;
@@ -1680,19 +1588,15 @@ namespace pdflib
 
     xheight=0;
     {
-      std::vector<std::string> keys = {"/FontDescriptor", "/XHeight"};
-      
       //bool xheight_defined=false;
-      if(utils::json::has(keys, json_font))
+      if(qpdf_object::get_number(qpdf_font, {"/FontDescriptor", "/XHeight"}, xheight))
         {
-          xheight = utils::json::get(keys, json_font);
           //xheight_defined=true;
 
           LOG_S(INFO) << "xheight: " << xheight;
         }
-      else if(utils::json::has(keys, desc_font))
+      else if(qpdf_object::get_number(qpdf_desc_font, {"/FontDescriptor", "/XHeight"}, xheight))
         {
-          xheight = utils::json::get(keys, desc_font);
           //xheight_defined=true;
 
           LOG_S(INFO) << "xheight: " << xheight;
@@ -1723,19 +1627,15 @@ namespace pdflib
 
     has_default_width=false;
 
-    std::vector<std::string> f_keys = {"/DW"};
-
-    if(utils::json::has(f_keys, json_font))
+    if(qpdf_object::get_number(qpdf_font, {"/DW"}, default_width))
       {
 	has_default_width = true;
-        default_width     = utils::json::get(f_keys, json_font).get<double>();
 
         LOG_S(INFO) << "default-width: " << default_width;
       }
-    else if(utils::json::has(f_keys, desc_font))
+    else if(qpdf_object::get_number(qpdf_desc_font, {"/DW"}, default_width))
       {
 	has_default_width = true;
-        default_width     = utils::json::get(f_keys, desc_font).get<double>();
 
         LOG_S(INFO) << "default-width: " << default_width;
       }
@@ -1768,17 +1668,21 @@ namespace pdflib
     LOG_S(INFO) << "vertical writing mode from encoding " << encoding_name;
 
     {
-      std::vector<std::string> keys = {"/DW2"};
+      QPDFObjectHandle dw2 = qpdf_object::get_path(qpdf_font, {"/DW2"});
+      if(dw2.isNull()) { dw2 = qpdf_object::get_path(qpdf_desc_font, {"/DW2"}); }
 
-      nlohmann::json dw2;
-      if(utils::json::has(keys, json_font))      { dw2 = utils::json::get(keys, json_font); }
-      else if(utils::json::has(keys, desc_font)) { dw2 = utils::json::get(keys, desc_font); }
-
-      if(dw2.is_array() and dw2.size() >= 2 and
-         dw2[0].is_number() and dw2[1].is_number())
+      if(dw2.isArray() and dw2.getArrayNItems() >= 2)
         {
-          vertical_origin_y = dw2[0].get<double>() / 1000.0;
-          default_vertical_displacement = dw2[1].get<double>() / 1000.0;
+          double origin_y = 0.0;
+          double displacement = 0.0;
+          QPDFObjectHandle origin_obj = dw2.getArrayItem(0);
+          QPDFObjectHandle displacement_obj = dw2.getArrayItem(1);
+          if(qpdf_object::get_number(origin_obj, origin_y) and
+             qpdf_object::get_number(displacement_obj, displacement))
+            {
+              vertical_origin_y = origin_y / 1000.0;
+              default_vertical_displacement = displacement / 1000.0;
+            }
         }
 
       LOG_S(INFO) << "vertical metrics: origin-y " << vertical_origin_y
@@ -1788,31 +1692,30 @@ namespace pdflib
     // /W2 entries come as `c [w1 v_x v_y ...]` or `c_first c_last w1 v_x v_y`;
     // only w1 is read, since the horizontal half of v is taken as w0/2 either
     // way and its vertical half rarely differs from /DW2.
-    std::vector<std::string> keys = {"/W2"};
+    QPDFObjectHandle w2 = qpdf_object::get_path(qpdf_font, {"/W2"});
+    if(w2.isNull()) { w2 = qpdf_object::get_path(qpdf_desc_font, {"/W2"}); }
 
-    nlohmann::json w2;
-    if(utils::json::has(keys, json_font))      { w2 = utils::json::get(keys, json_font); }
-    else if(utils::json::has(keys, desc_font)) { w2 = utils::json::get(keys, desc_font); }
-
-    if(not w2.is_array())
+    if(not w2.isArray())
       {
         return;
       }
 
-    for(std::size_t l = 0; l + 1 < w2.size(); )
+    for(int l = 0; l + 1 < w2.getArrayNItems(); )
       {
-        if(not w2[l].is_number())
+        QPDFObjectHandle beg_obj = w2.getArrayItem(l);
+        if(not beg_obj.isNumber())
           {
             LOG_S(WARNING) << "/W2 entry " << l << " is not a CID";
             break;
           }
 
-        const int beg = w2[l].get<int>();
+        const int beg = static_cast<int>(utils::numeric::locale_safe_numeric_value(beg_obj));
         l += 1;
 
-        if(w2[l].is_array())
+        QPDFObjectHandle value_obj = w2.getArrayItem(l);
+        if(value_obj.isArray())
           {
-            std::vector<double> triples = w2[l].get<std::vector<double>>();
+            std::vector<double> triples = qpdf_object::get_number_array(value_obj);
             l += 1;
 
             for(std::size_t k = 0; k + 2 < triples.size(); k += 3)
@@ -1821,10 +1724,18 @@ namespace pdflib
                   triples[k] / 1000.0;
               }
           }
-        else if(l + 3 < w2.size())
+        else if(l + 3 < w2.getArrayNItems())
           {
-            const int end = w2[l].get<int>();
-            const double w1 = w2[l + 1].get<double>() / 1000.0;
+            QPDFObjectHandle end_obj = w2.getArrayItem(l);
+            QPDFObjectHandle w1_obj = w2.getArrayItem(l + 1);
+            if(not end_obj.isNumber() or not w1_obj.isNumber())
+              {
+                LOG_S(WARNING) << "/W2 range contains non-numeric values";
+                break;
+              }
+
+            const int end = static_cast<int>(utils::numeric::locale_safe_numeric_value(end_obj));
+            const double w1 = utils::numeric::locale_safe_numeric_value(w1_obj) / 1000.0;
             l += 4;  // c_last, w1, v_x, v_y
 
             for(int id = beg; id <= end; id++)
@@ -1868,15 +1779,12 @@ namespace pdflib
 
     fchar=-1;
 
-    std::vector<std::string> f_keys = {"/FirstChar"};
-    if(utils::json::has(f_keys, json_font))
+    if(qpdf_object::get_int(qpdf_font, {"/FirstChar"}, fchar))
       {
-        fchar = utils::json::get(f_keys, json_font).get<int>();
         LOG_S(INFO) << "fchar: " << fchar;
       }
-    else if(utils::json::has(f_keys, desc_font))
+    else if(qpdf_object::get_int(qpdf_desc_font, {"/FirstChar"}, fchar))
       {
-        fchar = utils::json::get(f_keys, desc_font).get<int>();
         LOG_S(INFO) << "fchar: " << fchar;
       }
     else
@@ -1891,15 +1799,12 @@ namespace pdflib
 
     lchar=-1;
 
-    std::vector<std::string> l_keys = {"/LastChar"};
-    if(utils::json::has(l_keys, json_font))
+    if(qpdf_object::get_int(qpdf_font, {"/LastChar"}, lchar))
       {
-        lchar = utils::json::get(l_keys, json_font).get<int>();
         LOG_S(INFO) << "lchar: " << lchar;
       }
-    else if(utils::json::has(l_keys, desc_font))
+    else if(qpdf_object::get_int(qpdf_desc_font, {"/LastChar"}, lchar))
       {
-        lchar = utils::json::get(l_keys, desc_font).get<int>();
         LOG_S(INFO) << "lchar: " << lchar;
       }
     else
@@ -1914,32 +1819,17 @@ namespace pdflib
 
     std::vector<double> values={};
     {
-      std::vector<std::string> keys = {"/Widths"};
-
       bool found_widths = false;
-      if(utils::json::has(keys, json_font) and (not found_widths))
-        {
-          auto result = utils::json::get(keys, json_font);
-          LOG_S(INFO) << "widths: " << result.dump();
+      QPDFObjectHandle widths = qpdf_object::get_path(qpdf_font, {"/Widths"});
+      if(widths.isNull()) { widths = qpdf_object::get_path(qpdf_desc_font, {"/Widths"}); }
 
-	  if(result.is_array())
-	    {
-	      values = result.get<std::vector<double> >();
-	      found_widths = true;
-	    }
-        }
-      else if(utils::json::has(keys, desc_font) and (not found_widths))
+      if(widths.isArray() and (not found_widths))
         {
-          auto result = utils::json::get(keys, desc_font);
-          LOG_S(INFO) << "widths: " << result.dump();
-
-	  if(result.is_array())
-	    {
-	      values = result.get<std::vector<double> >();
-	      found_widths = true;
-	    }
+          LOG_S(INFO) << "widths: " << qpdf_object::debug(widths);
+          values = qpdf_object::get_number_array(widths);
+          found_widths = true;
         }
-      else if(not found_widths)
+      if(not found_widths)
         {
           LOG_S(WARNING) << "could not find widths";
         }
@@ -1975,20 +1865,13 @@ namespace pdflib
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    nlohmann::json ws;
+    QPDFObjectHandle ws;
 
     {
-      std::vector<std::string> keys = {"/W"};
+      ws = qpdf_object::get_path(qpdf_font, {"/W"});
+      if(ws.isNull()) { ws = qpdf_object::get_path(qpdf_desc_font, {"/W"}); }
 
-      if(utils::json::has(keys, json_font))
-        {
-          ws = utils::json::get(keys, json_font);
-        }
-      else if(utils::json::has(keys, desc_font))
-        {
-          ws = utils::json::get(keys, desc_font);
-        }
-      else
+      if(not ws.isArray())
         {
           LOG_S(WARNING) << "could not find '/W'";
           return;
@@ -2000,13 +1883,20 @@ namespace pdflib
     int beg=-1;
     int end=-1;
 
-    for(int l=0; l<ws.size(); )
+    for(int l=0; l<ws.getArrayNItems(); )
       {
-        LOG_S(INFO) << l << "\t" << ws[l].is_number() << "\t beg: " << ws[l].dump();
+        QPDFObjectHandle beg_obj = ws.getArrayItem(l);
+        LOG_S(INFO) << l << "\t" << beg_obj.isNumber() << "\t beg: " << qpdf_object::debug(beg_obj);
 
         //assert(l<ws.size());
 	
-        beg = ws[l].get<int>();
+        if(not beg_obj.isNumber())
+          {
+            LOG_S(WARNING) << "/W entry " << l << " is not a CID";
+            break;
+          }
+
+        beg = static_cast<int>(utils::numeric::locale_safe_numeric_value(beg_obj));
         l += 1;
 
         if(l==0)
@@ -2014,31 +1904,32 @@ namespace pdflib
             fchar=beg;
           }
 
-        if(ws[l].is_number())
+        if(l>=ws.getArrayNItems())
           {
-            //LOG_S(INFO) << l << "\t" << ws[l].is_number() << "\t end: " << ws[l].dump();
+            LOG_S(WARNING) << "index " << l << " is out of bounds " << ws.getArrayNItems();
+            continue;
+          }
 
-            //assert(l<ws.size());
-
-	    if(l>=ws.size())
-	      {
-		LOG_S(WARNING) << "index " << l << " is out of bounds " << ws.size();
-		continue;
-	      }
-	    
-            end = ws[l].get<int>();
+        QPDFObjectHandle value_obj = ws.getArrayItem(l);
+        if(value_obj.isNumber())
+          {
+            end = static_cast<int>(utils::numeric::locale_safe_numeric_value(value_obj));
             l += 1;
 
-            //LOG_S(INFO) << l << "\t" << ws[l].is_number() << "\t w: " << ws[l].dump();
-
-            //assert(l<ws.size());
-	    if(l>=ws.size())
+	    if(l>=ws.getArrayNItems())
 	      {
-		LOG_S(WARNING) << "index " << l << " is out of bounds " << ws.size();
+		LOG_S(WARNING) << "index " << l << " is out of bounds " << ws.getArrayNItems();
 		continue;
 	      }
-	    
-            double w = ws[l].get<double>();
+
+            QPDFObjectHandle width_obj = ws.getArrayItem(l);
+            if(not width_obj.isNumber())
+              {
+                LOG_S(WARNING) << "/W range width is not numeric: " << qpdf_object::debug(width_obj);
+                break;
+              }
+
+            double w = utils::numeric::locale_safe_numeric_value(width_obj);
             l += 1;
 
             for(int id=beg; id<=end; id++)
@@ -2047,18 +1938,9 @@ namespace pdflib
                 numb_to_widths[id] = w * type3_xscale;
               }
           }
-        else if(ws[l].is_array())
+        else if(value_obj.isArray())
           {
-            //LOG_S(INFO) << l << "\t" << ws[l].is_number() << "\t widths: " << ws[l].dump();
-
-            //assert(l<ws.size());
-	    if(l>=ws.size())
-	      {
-		LOG_S(WARNING) << "index " << l << " is out of bounds " << ws.size();
-		continue;
-	      }
-	    
-            std::vector<double> w = ws[l].get<std::vector<double> >();
+            std::vector<double> w = qpdf_object::get_number_array(value_obj);
             l += 1;
 
             for(int k=0; k<w.size(); k++)
@@ -2068,7 +1950,7 @@ namespace pdflib
                 numb_to_widths[beg+k] = w[k] * type3_xscale;
               }
           }
-        else if(ws[l].is_null())
+        else if(value_obj.isNull())
           {
 	    LOG_S(WARNING) << "\t ws[" << l << "] is null ... skipping now";
 	    l += 1;
@@ -2076,7 +1958,7 @@ namespace pdflib
         else
           {
 	    std::stringstream message;
-	    message <<  "unknown type in " << __FUNCTION__ << " for " << ws.dump(2);	    
+	    message <<  "unknown type in " << __FUNCTION__ << " for " << qpdf_object::debug(ws);
 
 	    LOG_S(ERROR) << message.str();
 	    throw std::logic_error(message.str());
@@ -2088,24 +1970,11 @@ namespace pdflib
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    std::vector<std::string> keys = { "/ToUnicode" };
+    QPDFObjectHandle qpdf_obj = qpdf_object::get_path(qpdf_font, {"/ToUnicode"});
 
-    if(utils::json::has(keys, json_font))
+    if(not qpdf_obj.isNull())
       {
         LOG_S(INFO) << "found a /ToUnicode cmap: starting to decode ...";
-
-        if(not qpdf_font.hasKey("/ToUnicode"))
-          {
-            auto tmp = to_json(qpdf_font);
-
-	    std::stringstream ss;
-	    ss << "qpdf-font: " << tmp.dump();
-	    
-            LOG_S(ERROR) << ss.str();
-	    throw std::logic_error(ss.str());
-          }
-
-        auto qpdf_obj = qpdf_font.getKey("/ToUnicode");
 
 	if(qpdf_obj.isStream())
 	  {
@@ -2140,24 +2009,21 @@ namespace pdflib
 	  }
 	else if(qpdf_obj.isString())
 	  {
-	    auto _ = to_json(qpdf_obj);	    
-	    std::string message = "qpdf_obj.isString(): " + _.dump(2);
+	    std::string message = "qpdf_obj.isString(): " + qpdf_object::debug(qpdf_obj);
 
 	    LOG_S(ERROR) << message;
 	    throw std::logic_error(message);
 	  }
 	else if(qpdf_obj.isName())
 	  {
-	    auto _ = to_json(qpdf_obj);	    
-	    std::string message = "qpdf_obj.isName(): " + _.dump(2);
+	    std::string message = "qpdf_obj.isName(): " + qpdf_object::debug(qpdf_obj);
 
 	    LOG_S(ERROR) << message;
 	    //throw std::logic_error(message);	    
 	  }    
 	else
 	  {
-	    auto _ = to_json(qpdf_obj);	    
-	    std::string message = "qpdf_obj is unknown: " + _.dump(2);
+	    std::string message = "qpdf_obj is unknown: " + qpdf_object::debug(qpdf_obj);
 
 	    LOG_S(ERROR) << message;
 	    throw std::logic_error(message);
@@ -2191,12 +2057,12 @@ namespace pdflib
       }
     //else
 
-    if(subtype==TYPE_0 and desc_font!=NULL and 
+    if(subtype==TYPE_0 and not qpdf_desc_font.isNull() and
        cids.has(encoding_name) )
       {
 	try
 	  {
-	    LOG_S(INFO) << "descendant-font: " << desc_font.dump(2);
+	    LOG_S(INFO) << "descendant-font: " << qpdf_object::debug(qpdf_desc_font);
 	  }
 	catch(const std::exception& exc)
 	  {
@@ -2221,11 +2087,11 @@ namespace pdflib
 	    cmap_initialized = false;	    
 	  }
       }
-    else if(subtype==TYPE_0 and desc_font!=NULL)
+    else if(subtype==TYPE_0 and not qpdf_desc_font.isNull())
       {
 	try
 	  {
-	    LOG_S(INFO) << "descendant-font: " << desc_font.dump(2);
+	    LOG_S(INFO) << "descendant-font: " << qpdf_object::debug(qpdf_desc_font);
 	  }
 	catch(const std::exception& exc)
 	  {
@@ -2236,13 +2102,17 @@ namespace pdflib
 	LOG_S(INFO) << "encoding-type: " << to_string(encoding);
 	LOG_S(INFO) << "encoding-name: " << encoding_name;
 
-	std::vector<std::string> key_registry = {"/CIDSystemInfo", "/Registry"};
-	std::vector<std::string> key_ordering = {"/CIDSystemInfo", "/Ordering"};
-	std::vector<std::string> key_supplement = {"/CIDSystemInfo", "/Supplement"};
-
-	std::string registry_   = utils::json::get(key_registry, desc_font).get<std::string>();
-	std::string ordering_   = utils::json::get(key_ordering, desc_font).get<std::string>();
-	int         supplement_ = utils::json::get(key_supplement, desc_font).get<int>();
+	std::string registry_;
+	std::string ordering_;
+	int         supplement_ = 0;
+        if(not qpdf_object::get_name_or_string(qpdf_desc_font, {"/CIDSystemInfo", "/Registry"}, registry_) or
+           not qpdf_object::get_name_or_string(qpdf_desc_font, {"/CIDSystemInfo", "/Ordering"}, ordering_) or
+           not qpdf_object::get_int(qpdf_desc_font, {"/CIDSystemInfo", "/Supplement"}, supplement_))
+          {
+            LOG_S(ERROR) << "incomplete /CIDSystemInfo in descendant font";
+            cmap_initialized = false;
+            return;
+          }
 	
 	LOG_S(INFO) << "found descendant-font without /ToUnicode";
 	LOG_S(INFO) << " --> registry: " << registry_;
@@ -2320,7 +2190,7 @@ namespace pdflib
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    std::vector<std::string> keys = { "/Encoding", "/Differences" };
+    QPDFObjectHandle diffs = qpdf_object::get_path(qpdf_font, {"/Encoding", "/Differences"});
 
     // Create a regex object
     std::regex re_01(R"(\/(.+)\.(.+))");
@@ -2362,26 +2232,24 @@ namespace pdflib
       return result;
     };
 
-    if(utils::json::has(keys, json_font))
+    if(not diffs.isNull())
       {
-        auto diffs = utils::json::get(keys, json_font);
         //LOG_S(INFO) << "diffs: " << diffs.dump(2);
 
-        if(diffs.is_array())
+        if(diffs.isArray())
           {
             int         numb=-1;
             std::string name="null";
 
-            for(int l=0; l<diffs.size(); l++)
+            for(int l=0; l<diffs.getArrayNItems(); l++)
               {
-                if(diffs[l].is_number())
+                QPDFObjectHandle diff = diffs.getArrayItem(l);
+                if(diff.isNumber())
                   {
-                    numb = diffs[l].get<int>();
+                    numb = static_cast<int>(utils::numeric::locale_safe_numeric_value(diff));
                   }
-                else if(diffs[l].is_string())
+                else if(qpdf_object::get_name_or_string(diff, name))
                   {
-                    name = diffs[l].get<std::string>();
-
 		    // Object to hold the match results
 		    std::smatch match;
 		    
@@ -2545,14 +2413,15 @@ namespace pdflib
                   }
                 else
                   {
-                    LOG_S(WARNING) << "item [" << diffs[l].dump(2)
-                                   << "] is not a string nor a number in the difference-vector: " << diffs.dump(2);
+                    LOG_S(WARNING) << "item [" << qpdf_object::debug(diff)
+                                   << "] is not a string nor a number in the difference-vector: "
+                                   << qpdf_object::debug(diffs);
                   }
               }
           }
         else
           {
-            LOG_S(WARNING) << "/Differences is not a vector: " << diffs.dump(2);
+            LOG_S(WARNING) << "/Differences is not a vector: " << qpdf_object::debug(diffs);
           }
 
         diff_initialized = true;
@@ -2568,21 +2437,22 @@ namespace pdflib
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    std::vector<std::string> keys = { "/CharProcs" };
+    QPDFObjectHandle qpdf_char_procs = qpdf_object::get_path(qpdf_font, {"/CharProcs"});
 
-    if(utils::json::has(keys, json_font))
+    if(not qpdf_char_procs.isNull())
       {
         //assert(subtype==TYPE_3);
 
-        QPDFObjectHandle qpdf_char_procs = qpdf_font.getKey(keys.front());
         LOG_S(WARNING) << "found CharProcs: " << qpdf_char_procs.getTypeName();        
-        
-        auto json_char_procs = utils::json::get(keys, json_font);
-       
-        for(auto& pair : json_char_procs.items()) 
-          {
-            std::string key = pair.key();
 
+        if(not qpdf_char_procs.isDictionary())
+          {
+            LOG_S(WARNING) << "/CharProcs is not a dictionary";
+            return;
+          }
+
+        for(auto& key : qpdf_char_procs.getKeys())
+          {
             if(qpdf_char_procs.hasKey(key))
               {
                 QPDFObjectHandle qpdf_char_proc = qpdf_char_procs.getKey(key);
