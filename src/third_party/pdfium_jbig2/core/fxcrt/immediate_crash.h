@@ -99,8 +99,8 @@
 
 #else
 
-#define TRAP_SEQUENCE1_() asm volatile("int3")
-#define TRAP_SEQUENCE2_() asm volatile("ud2")
+#define TRAP_SEQUENCE1_() __debugbreak()
+#define TRAP_SEQUENCE2_()
 
 #endif  // defined(ARCH_CPU_ARM64)
 

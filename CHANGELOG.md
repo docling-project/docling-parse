@@ -1,3 +1,10 @@
+## [v7.11.0](https://github.com/docling-project/docling-parse/releases/tag/v7.11.0) - 2026-08-07
+
+### Feature
+
+* Improve PDF rendering fidelity across color, image, transparency, and writing-mode cases ([#307](https://github.com/docling-project/docling-parse/issues/307)) ([`bc55397`](https://github.com/docling-project/docling-parse/commit/bc55397a19bcf22df50d0a45e0aa147c8b44521f))
+* Render PDF shadings (sh), parse the full ExtGState, and add rendering quality benchmarks ([#306](https://github.com/docling-project/docling-parse/issues/306)) ([`ee2e265`](https://github.com/docling-project/docling-parse/commit/ee2e265c38e1632eaee3319355e766cca5cdceda))
+
 ## [v7.10.0](https://github.com/docling-project/docling-parse/releases/tag/v7.10.0) - 2026-08-05
 
 ### Feature
