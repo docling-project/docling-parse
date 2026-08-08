@@ -882,11 +882,17 @@ namespace pdflib
       page_item_sanitator<PAGE_CELLS> sanitator;
 
       {
+        utils::timer step_timer;
         sanitator.remove_duplicate_cells(page_cells, 0.5, true);
+        timings.add_timing(pdf_timings::KEY_SANITIZE_CELLS_REMOVE_DUPLICATE_CELLS,
+                           step_timer.get_time());
       }
 
       {
+        utils::timer step_timer;
         sanitator.sanitize_text(page_cells);
+        timings.add_timing(pdf_timings::KEY_SANITIZE_CELLS_SANITIZE_TEXT,
+                           step_timer.get_time());
       }
       timings.add_timing(pdf_timings::KEY_SANITIZE_CELLS, local.get_time());
     }
@@ -1847,7 +1853,12 @@ namespace pdflib
       //sanitator.remove_duplicate_chars(page_cells, 0.5);
       //sanitator.sanitize_text(page_cells);
 
-      cells = page_cells;
+      {
+        utils::timer step_timer;
+        cells = page_cells;
+        timings.add_timing(pdf_timings::KEY_SANITISE_CONTENTS_COPY_CELLS,
+                           step_timer.get_time());
+      }
 
       double horizontal_cell_tolerance=1.0;
       bool enforce_same_font=true;
@@ -1855,12 +1866,17 @@ namespace pdflib
       double space_width_factor_for_merge=1.0;
       double space_width_factor_for_merge_with_space=0.33;
 
-      sanitator.sanitize_bbox(cells,
-                              horizontal_cell_tolerance,
-                              enforce_same_font,
-                              space_width_factor_for_merge,
-                              space_width_factor_for_merge_with_space,
-                              false);
+      {
+        utils::timer step_timer;
+        sanitator.sanitize_bbox(cells,
+                                horizontal_cell_tolerance,
+                                enforce_same_font,
+                                space_width_factor_for_merge,
+                                space_width_factor_for_merge_with_space,
+                                false);
+        timings.add_timing(pdf_timings::KEY_SANITISE_CONTENTS_SANITIZE_BBOX,
+                           step_timer.get_time());
+      }
 
       //sanitator.sanitize_text(cells);
 
@@ -1894,10 +1910,36 @@ namespace pdflib
 
     page_item_sanitator<PAGE_CELLS> sanitizer;
 
-    line_cells = sanitizer.create_line_cells(page_cells, config);
+    {
+      utils::timer step_timer;
+      line_cells = page_cells;
+      timings.add_timing(pdf_timings::KEY_CREATE_LINE_CELLS_COPY_CELLS,
+                         step_timer.get_time());
+    }
+
+    LOG_S(INFO) << "# char-cells: " << line_cells.size();
+
+    {
+      utils::timer step_timer;
+      sanitizer.sanitize_bbox(line_cells,
+                              config.horizontal_cell_tolerance,
+                              config.enforce_same_font,
+                              config.line_space_width_factor_for_merge,
+                              config.line_space_width_factor_for_merge_with_space,
+                              false);
+      timings.add_timing(pdf_timings::KEY_CREATE_LINE_CELLS_SANITIZE_BBOX,
+                         step_timer.get_time());
+    }
+
+    LOG_S(INFO) << "# line-cells: " << line_cells.size();
 
     // Remove duplicates (quadratic but necessary)
-    sanitizer.remove_duplicate_cells(line_cells, 0.5, true);
+    {
+      utils::timer step_timer;
+      sanitizer.remove_duplicate_cells(line_cells, 0.5, true);
+      timings.add_timing(pdf_timings::KEY_CREATE_LINE_CELLS_REMOVE_DUPLICATE_CELLS,
+                         step_timer.get_time());
+    }
 
     line_cells_created = true;
 

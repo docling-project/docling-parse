@@ -79,6 +79,19 @@ TIMING_CHILDREN = {
         "create_line_cells",
     ],
     "decode_page": DECODE_PAGE_CHILDREN,
+    "sanitize_cells": [
+        "sanitize_cells.remove_duplicate_cells",
+        "sanitize_cells.sanitize_text",
+    ],
+    "sanitise_contents": [
+        "sanitise_contents.copy_cells",
+        "sanitise_contents.sanitize_bbox",
+    ],
+    "create_line_cells": [
+        "create_line_cells.copy_cells",
+        "create_line_cells.sanitize_bbox",
+        "create_line_cells.remove_duplicate_cells",
+    ],
     "decode_contents": [
         "content_decode_total",
         "interprete_ops_total",
