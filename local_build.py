@@ -100,6 +100,7 @@ def build_local(num_threads: int):
         "-B", f"{BUILD_DIR}",
         f"-DUSE_SYSTEM_DEPS={USE_SYSTEM_DEPS}",
         f"-DPYTHON_EXECUTABLE={sys.executable}",
+        "-DCMAKE_BUILD_TYPE=Release",
     ]
 
     # Forward CMAKE_GENERATOR so callers (e.g. the CI workflow) can switch the

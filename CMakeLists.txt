@@ -91,7 +91,7 @@ if (WIN32)
         # (e.g. the curly quotes and en/em dashes in src/parse/utils/string.h) as
         # multi-character constants -> error C2015. GCC/Clang assume UTF-8, so this
         # only bites the MSVC/arm64 build.
-        add_compile_options(/utf-8)
+        add_compile_options(/utf-8 /bigobj)
         # MSVC's <cmath> only exposes M_PI (used in src/parse/utils/values.h) when
         # _USE_MATH_DEFINES is defined before the include -> without it, C2065.
         # NOMINMAX stops <windows.h> from defining min()/max() function-like
