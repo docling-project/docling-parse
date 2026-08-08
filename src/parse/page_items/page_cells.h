@@ -44,10 +44,10 @@ namespace pdflib
   };
 
   page_item<PAGE_CELLS>::page_item():
-    cells(0) // 0 elements
-  {
-    cells.reserve(1000000); // Reserve space for 1M elements
-  }
+    cells(0) // 0 elements; capacity grows on demand. No up-front reserve:
+             // several of these containers live per decoded page, so a large
+             // fixed reserve multiplies into gigabytes of committed memory.
+  {}
 
   page_item<PAGE_CELLS>::~page_item()
   {}
