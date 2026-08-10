@@ -42,6 +42,10 @@ namespace pdflib
     static const std::string KEY_CREATE_LINE_CELLS;
     static const std::string KEY_SANITISE_CONTENTS_COPY_CELLS;
     static const std::string KEY_SANITISE_CONTENTS_SANITIZE_BBOX;
+    static const std::string KEY_CREATE_WORD_CELLS_COPY_CELLS;
+    static const std::string KEY_CREATE_WORD_CELLS_SANITIZE_BBOX;
+    static const std::string KEY_CREATE_WORD_CELLS_ERASE_SPACES;
+    static const std::string KEY_CREATE_WORD_CELLS_REMOVE_DUPLICATE_CELLS;
     static const std::string KEY_CREATE_LINE_CELLS_COPY_CELLS;
     static const std::string KEY_CREATE_LINE_CELLS_SANITIZE_BBOX;
     static const std::string KEY_CREATE_LINE_CELLS_REMOVE_DUPLICATE_CELLS;
@@ -428,6 +432,10 @@ namespace pdflib
   const std::string pdf_timings::KEY_CREATE_LINE_CELLS = "create_line_cells";
   const std::string pdf_timings::KEY_SANITISE_CONTENTS_COPY_CELLS = "sanitise_contents.copy_cells";
   const std::string pdf_timings::KEY_SANITISE_CONTENTS_SANITIZE_BBOX = "sanitise_contents.sanitize_bbox";
+  const std::string pdf_timings::KEY_CREATE_WORD_CELLS_COPY_CELLS = "create_word_cells.copy_cells";
+  const std::string pdf_timings::KEY_CREATE_WORD_CELLS_SANITIZE_BBOX = "create_word_cells.sanitize_bbox";
+  const std::string pdf_timings::KEY_CREATE_WORD_CELLS_ERASE_SPACES = "create_word_cells.erase_spaces";
+  const std::string pdf_timings::KEY_CREATE_WORD_CELLS_REMOVE_DUPLICATE_CELLS = "create_word_cells.remove_duplicate_cells";
   const std::string pdf_timings::KEY_CREATE_LINE_CELLS_COPY_CELLS = "create_line_cells.copy_cells";
   const std::string pdf_timings::KEY_CREATE_LINE_CELLS_SANITIZE_BBOX = "create_line_cells.sanitize_bbox";
   const std::string pdf_timings::KEY_CREATE_LINE_CELLS_REMOVE_DUPLICATE_CELLS = "create_line_cells.remove_duplicate_cells";
@@ -492,6 +500,10 @@ namespace pdflib
       KEY_CREATE_LINE_CELLS,
       KEY_SANITISE_CONTENTS_COPY_CELLS,
       KEY_SANITISE_CONTENTS_SANITIZE_BBOX,
+      KEY_CREATE_WORD_CELLS_COPY_CELLS,
+      KEY_CREATE_WORD_CELLS_SANITIZE_BBOX,
+      KEY_CREATE_WORD_CELLS_ERASE_SPACES,
+      KEY_CREATE_WORD_CELLS_REMOVE_DUPLICATE_CELLS,
       KEY_CREATE_LINE_CELLS_COPY_CELLS,
       KEY_CREATE_LINE_CELLS_SANITIZE_BBOX,
       KEY_CREATE_LINE_CELLS_REMOVE_DUPLICATE_CELLS,
@@ -603,6 +615,10 @@ namespace pdflib
       {KEY_SANITISE_CONTENTS_SANITIZE_BBOX, KEY_SANITISE_CONTENTS},
       {KEY_CREATE_WORD_CELLS,              KEY_SANITISE_CONTENTS},
       {KEY_CREATE_LINE_CELLS,              KEY_SANITISE_CONTENTS},
+      {KEY_CREATE_WORD_CELLS_COPY_CELLS,   KEY_CREATE_WORD_CELLS},
+      {KEY_CREATE_WORD_CELLS_SANITIZE_BBOX, KEY_CREATE_WORD_CELLS},
+      {KEY_CREATE_WORD_CELLS_ERASE_SPACES, KEY_CREATE_WORD_CELLS},
+      {KEY_CREATE_WORD_CELLS_REMOVE_DUPLICATE_CELLS, KEY_CREATE_WORD_CELLS},
       {KEY_CREATE_LINE_CELLS_COPY_CELLS,   KEY_CREATE_LINE_CELLS},
       {KEY_CREATE_LINE_CELLS_SANITIZE_BBOX, KEY_CREATE_LINE_CELLS},
       {KEY_CREATE_LINE_CELLS_REMOVE_DUPLICATE_CELLS, KEY_CREATE_LINE_CELLS},

@@ -293,6 +293,18 @@ namespace pdflib
 	return result;
       }
     */
+
+    if(number_of_pages == 1)
+      {
+        // Preserve the existing bounds behavior of qpdf_pages.at(page_ind),
+        // but avoid serializing an already standalone one-page PDF.
+        qpdf_pages.at(page_ind);
+
+        result.first = page_ind;
+        result.second = buffer;
+
+        return result;
+      }
     
     // Thread-safe decoding uses standalone one-page PDF buffers.
     // Page extraction and serialization are intentionally serialized, and
