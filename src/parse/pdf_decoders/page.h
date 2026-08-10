@@ -130,6 +130,8 @@ namespace pdflib
 
     void rotate_contents();
 
+    bool can_reuse_sanitised_cells_for_line_cells(const decode_config& config) const;
+
     void sanitise_contents(std::string page_boundary);
 
   private:
@@ -173,6 +175,7 @@ namespace pdflib
     // Computed cell aggregations
     page_item<PAGE_CELLS> word_cells;
     page_item<PAGE_CELLS> line_cells;
+    bool sanitised_cells_created = false;
     bool word_cells_created = false;
     bool line_cells_created = false;
 
@@ -809,6 +812,7 @@ namespace pdflib
   void pdf_decoder<PAGE>::decode_page(const decode_config& config)
   {
     page_config = config;
+    sanitised_cells_created = false;
 
     if(owned_qpdf_document != nullptr)
       {
@@ -1834,6 +1838,19 @@ namespace pdflib
     page_hyperlinks.rotate(angle, delta);
   }
 
+  bool pdf_decoder<PAGE>::can_reuse_sanitised_cells_for_line_cells(const decode_config& config) const
+  {
+    return (sanitised_cells_created and
+            config.do_sanitization and
+            config.enforce_same_font and
+            ((config.horizontal_cell_tolerance -
+              config.DEFAULT_HORIZONTAL_CELL_TOLERANCE) < 1.e-6) and
+            ((config.line_space_width_factor_for_merge -
+              config.DEFAULT_LINE_SPACE_WIDTH_FACTOR_FOR_MERGE) < 1.e-6) and
+            ((config.line_space_width_factor_for_merge_with_space -
+              config.DEFAULT_LINE_SPACE_WIDTH_FACTOR_FOR_MERGE_WITH_SPACE) < 1.e-6));
+  }
+
   void pdf_decoder<PAGE>::sanitise_contents(std::string page_boundary)
   {
     LOG_S(INFO) << __FUNCTION__;
@@ -1860,11 +1877,14 @@ namespace pdflib
                            step_timer.get_time());
       }
 
-      double horizontal_cell_tolerance=1.0;
+      double horizontal_cell_tolerance =
+        decode_config::DEFAULT_HORIZONTAL_CELL_TOLERANCE;
       bool enforce_same_font=true;
       //double space_width_factor_for_merge=1.5;
-      double space_width_factor_for_merge=1.0;
-      double space_width_factor_for_merge_with_space=0.33;
+      double space_width_factor_for_merge =
+        decode_config::DEFAULT_LINE_SPACE_WIDTH_FACTOR_FOR_MERGE;
+      double space_width_factor_for_merge_with_space =
+        decode_config::DEFAULT_LINE_SPACE_WIDTH_FACTOR_FOR_MERGE_WITH_SPACE;
 
       {
         utils::timer step_timer;
@@ -1877,6 +1897,8 @@ namespace pdflib
         timings.add_timing(pdf_timings::KEY_SANITISE_CONTENTS_SANITIZE_BBOX,
                            step_timer.get_time());
       }
+
+      sanitised_cells_created = true;
 
       //sanitator.sanitize_text(cells);
 
@@ -1909,27 +1931,30 @@ namespace pdflib
     utils::timer timer;
 
     page_item_sanitator<PAGE_CELLS> sanitizer;
+    const bool reuse_sanitised_cells =
+      can_reuse_sanitised_cells_for_line_cells(config);
 
     {
       utils::timer step_timer;
-      line_cells = page_cells;
+      line_cells = reuse_sanitised_cells ? cells : page_cells;
       timings.add_timing(pdf_timings::KEY_CREATE_LINE_CELLS_COPY_CELLS,
                          step_timer.get_time());
     }
 
     LOG_S(INFO) << "# char-cells: " << line_cells.size();
 
-    {
-      utils::timer step_timer;
-      sanitizer.sanitize_bbox(line_cells,
-                              config.horizontal_cell_tolerance,
-                              config.enforce_same_font,
-                              config.line_space_width_factor_for_merge,
-                              config.line_space_width_factor_for_merge_with_space,
-                              false);
-      timings.add_timing(pdf_timings::KEY_CREATE_LINE_CELLS_SANITIZE_BBOX,
-                         step_timer.get_time());
-    }
+    if(!reuse_sanitised_cells)
+      {
+        utils::timer step_timer;
+        sanitizer.sanitize_bbox(line_cells,
+                                config.horizontal_cell_tolerance,
+                                config.enforce_same_font,
+                                config.line_space_width_factor_for_merge,
+                                config.line_space_width_factor_for_merge_with_space,
+                                false);
+        timings.add_timing(pdf_timings::KEY_CREATE_LINE_CELLS_SANITIZE_BBOX,
+                           step_timer.get_time());
+      }
 
     LOG_S(INFO) << "# line-cells: " << line_cells.size();
 
