@@ -1,3 +1,14 @@
+## [v7.12.0](https://github.com/docling-project/docling-parse/releases/tag/v7.12.0) - 2026-08-11
+
+### Feature
+
+* Improving performance and robustness ([#310](https://github.com/docling-project/docling-parse/issues/310)) ([`e955929`](https://github.com/docling-project/docling-parse/commit/e9559297947fe7aa3b05cc609d600009f1947b39))
+
+### Fix
+
+* Avoid 1M cells reserve to reduce memory footprint ([#311](https://github.com/docling-project/docling-parse/issues/311)) ([`e892b85`](https://github.com/docling-project/docling-parse/commit/e892b850e719f2883ae05f7258cd885779119e2c))
+* Enable MinGW/GCC build on Windows ([#312](https://github.com/docling-project/docling-parse/issues/312)) ([`83e50c5`](https://github.com/docling-project/docling-parse/commit/83e50c5460fc72f7656740ac6ba43129bf855b39))
+
 ## [v7.11.0](https://github.com/docling-project/docling-parse/releases/tag/v7.11.0) - 2026-08-07
 
 ### Feature
