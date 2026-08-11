@@ -14,6 +14,9 @@ Third-party single-threaded backends (selected via --other) are run as
 additional baselines, in both parse and render modes.  Supported names:
   - pypdfium2  (default)
   - pymupdf
+  - liteparse
+  - pdftext
+  - xberg
 
 Passing --compare switches to the comparison suite, which reports a per-page
 time distribution (mean/median/p95/p99) plus a wall-time speedup table for
@@ -45,6 +48,7 @@ and perf/run_analysis.py.  The output directory defaults to ./scratch.
 from __future__ import annotations
 
 import argparse
+import asyncio
 import contextlib
 import os
 import platform
@@ -230,6 +234,9 @@ REPORTED_PACKAGES = [
     "pdfplumber",
     "pdfminer.six",
     "pypdf",
+    "liteparse",
+    "pdftext",
+    "xberg",
     "pillow",
 ]
 
@@ -850,6 +857,143 @@ def run_pymupdf_render(
     return time.perf_counter() - t0
 
 
+def run_liteparse_parse(
+    pdf_schedule: List[Tuple[Path, List[int] | None]], total_pages: int
+) -> float:
+    """Single-threaded liteparse text extraction."""
+    try:
+        from liteparse import LiteParse  # type: ignore
+    except ImportError as e:
+        print(f"  liteparse not available: {e}", file=sys.stderr)
+        return float("nan")
+
+    t0 = time.perf_counter()
+    errors = 0
+    with tqdm(total=total_pages, desc="  liteparse-parse", unit="page") as pbar:
+        for pdf_path, page_numbers in pdf_schedule:
+            try:
+                kwargs = {
+                    "ocr_enabled": False,
+                    "output_format": "text",
+                    "quiet": True,
+                }
+                if page_numbers is not None:
+                    kwargs["target_pages"] = ",".join(str(n) for n in page_numbers)
+                result = LiteParse(**kwargs).parse(str(pdf_path))
+                _ = getattr(result, "text", "")
+            except Exception as e:
+                print(f"  liteparse error on {pdf_path}: {e}")
+                errors += 1
+            pages_done = len(page_numbers) if page_numbers is not None else None
+            if pages_done is None:
+                try:
+                    from pypdfium2 import PdfDocument  # type: ignore
+
+                    pdf = PdfDocument(str(pdf_path))
+                    pages_done = len(pdf)
+                    pdf.close()
+                except Exception:
+                    pages_done = 0
+            pbar.update(pages_done)
+    if errors:
+        print(f"  liteparse: {errors} errors")
+    return time.perf_counter() - t0
+
+
+def run_pdftext_parse(
+    pdf_schedule: List[Tuple[Path, List[int] | None]], total_pages: int
+) -> float:
+    """Single-threaded pdftext plain text extraction."""
+    try:
+        from pdftext.extraction import plain_text_output  # type: ignore
+    except ImportError as e:
+        print(f"  pdftext not available: {e}", file=sys.stderr)
+        return float("nan")
+
+    t0 = time.perf_counter()
+    errors = 0
+    with tqdm(total=total_pages, desc="  pdftext-parse", unit="page") as pbar:
+        for pdf_path, page_numbers in pdf_schedule:
+            try:
+                page_range = (
+                    None
+                    if page_numbers is None
+                    else [page_number - 1 for page_number in page_numbers]
+                )
+                _ = plain_text_output(
+                    str(pdf_path),
+                    sort=False,
+                    hyphens=False,
+                    page_range=page_range,
+                )
+            except Exception as e:
+                print(f"  pdftext error on {pdf_path}: {e}")
+                errors += 1
+            pages_done = len(page_numbers) if page_numbers is not None else None
+            if pages_done is None:
+                try:
+                    from pypdfium2 import PdfDocument  # type: ignore
+
+                    pdf = PdfDocument(str(pdf_path))
+                    pages_done = len(pdf)
+                    pdf.close()
+                except Exception:
+                    pages_done = 0
+            pbar.update(pages_done)
+    if errors:
+        print(f"  pdftext: {errors} errors")
+    return time.perf_counter() - t0
+
+
+def _make_xberg_config():
+    return {
+        "disable_ocr": True,
+        "output_format": "plain",
+        "pages": {"extract_pages": True},
+    }
+
+
+def run_xberg_parse(
+    pdf_schedule: List[Tuple[Path, List[int] | None]], total_pages: int
+) -> float:
+    """Single-threaded xberg text extraction."""
+    try:
+        import xberg  # type: ignore
+    except ImportError as e:
+        print(f"  xberg not available: {e}", file=sys.stderr)
+        return float("nan")
+
+    t0 = time.perf_counter()
+    errors = 0
+    with tqdm(total=total_pages, desc="  xberg-parse", unit="page") as pbar:
+        for pdf_path, page_numbers in pdf_schedule:
+            try:
+                result = asyncio.run(
+                    xberg.extract(
+                        xberg.ExtractInput(kind="uri", uri=str(pdf_path)),
+                        _make_xberg_config(),
+                    )
+                )
+                _ = result
+            except Exception as e:
+                print(f"  xberg error on {pdf_path}: {e}")
+                errors += 1
+            pages_done = len(page_numbers) if page_numbers is not None else None
+            if pages_done is None:
+                try:
+                    from pypdfium2 import PdfDocument  # type: ignore
+
+                    pdf = PdfDocument(str(pdf_path))
+                    pages_done = len(pdf)
+                    pdf.close()
+                except Exception:
+                    pages_done = 0
+            pbar.update(pages_done)
+    if errors:
+        print(f"  xberg: {errors} errors")
+    return time.perf_counter() - t0
+
+
 # Registry: 3rd-party single-threaded backends.
 # Each entry maps a name to {"parse": fn, "render": fn} where each fn has
 # signature (pdf_paths, total_pages) -> wall_time_seconds.
@@ -861,6 +1005,15 @@ OTHER_BACKENDS = {
     "pymupdf": {
         "parse": run_pymupdf_parse,
         "render": run_pymupdf_render,
+    },
+    "liteparse": {
+        "parse": run_liteparse_parse,
+    },
+    "pdftext": {
+        "parse": run_pdftext_parse,
+    },
+    "xberg": {
+        "parse": run_xberg_parse,
     },
 }
 
@@ -1366,6 +1519,155 @@ def cmp_pypdf(
     return c.finish()
 
 
+def _record_document_level_parse(
+    c: _Collector,
+    doc_key: str,
+    selected_pages: List[int],
+    elapsed_s: float,
+    *,
+    success: bool = True,
+    error_message: str = "",
+) -> None:
+    """Record whole-document extractors as one evenly distributed page sample.
+
+    Some packages expose a document-level parse API but no cheap per-page
+    iterator. Their wall time is still measured around the real API call, and
+    the per-page distribution receives the average cost for selected pages.
+    """
+    page_elapsed_s = elapsed_s / len(selected_pages) if selected_pages else elapsed_s
+    for page_number in selected_pages:
+        c.add(
+            doc_key,
+            page_number,
+            page_elapsed_s,
+            success,
+            wall_gap_s=page_elapsed_s,
+            error_message=error_message,
+        )
+
+
+def cmp_liteparse(
+    schedule: List[Tuple[Path, List[int] | None]],
+    total_pages: int,
+    **_: object,
+) -> BackendRun:
+    """liteparse: document text extraction, recorded per selected page."""
+    from liteparse import LiteParse  # type: ignore
+
+    c = _Collector("liteparse", TASK_PARSE, total_pages)
+    for pdf_path, page_numbers in schedule:
+        try:
+            kwargs = {
+                "ocr_enabled": False,
+                "output_format": "text",
+                "quiet": True,
+            }
+            if page_numbers is not None:
+                kwargs["target_pages"] = ",".join(str(n) for n in page_numbers)
+            parser = LiteParse(**kwargs)
+            t0 = time.perf_counter()
+            result = parser.parse(str(pdf_path))
+            _ = getattr(result, "text", "")
+            elapsed_s = time.perf_counter() - t0
+            selected_pages = (
+                page_numbers
+                if page_numbers is not None
+                else [
+                    getattr(page, "page_num", index + 1)
+                    for index, page in enumerate(getattr(result, "pages", []) or [])
+                ]
+            )
+            _record_document_level_parse(
+                c,
+                str(pdf_path),
+                selected_pages,
+                elapsed_s,
+            )
+        except Exception as e:
+            c.document_failed(str(pdf_path), e)
+    return c.finish()
+
+
+def cmp_pdftext(
+    schedule: List[Tuple[Path, List[int] | None]],
+    total_pages: int,
+    **_: object,
+) -> BackendRun:
+    """pdftext: structured dictionary extraction with blocks and lines."""
+    from pdftext.extraction import dictionary_output  # type: ignore
+
+    c = _Collector("pdftext", TASK_PARSE, total_pages)
+    for pdf_path, page_numbers in schedule:
+        try:
+            page_range = (
+                None
+                if page_numbers is None
+                else [page_number - 1 for page_number in page_numbers]
+            )
+            t0 = time.perf_counter()
+            pages = dictionary_output(
+                str(pdf_path),
+                sort=False,
+                page_range=page_range,
+                keep_chars=False,
+            )
+            elapsed_s = time.perf_counter() - t0
+            selected_pages = (
+                page_numbers
+                if page_numbers is not None
+                else [int(page.get("page", index)) + 1 for index, page in enumerate(pages)]
+            )
+            _record_document_level_parse(
+                c,
+                str(pdf_path),
+                selected_pages,
+                elapsed_s,
+            )
+        except Exception as e:
+            c.document_failed(str(pdf_path), e)
+    return c.finish()
+
+
+def cmp_xberg(
+    schedule: List[Tuple[Path, List[int] | None]],
+    total_pages: int,
+    **_: object,
+) -> BackendRun:
+    """xberg: document extraction with per-page content enabled."""
+    import xberg  # type: ignore
+
+    c = _Collector("xberg", TASK_PARSE, total_pages)
+    for pdf_path, page_numbers in schedule:
+        try:
+            t0 = time.perf_counter()
+            result = asyncio.run(
+                xberg.extract(
+                    xberg.ExtractInput(kind="uri", uri=str(pdf_path)),
+                    _make_xberg_config(),
+                )
+            )
+            elapsed_s = time.perf_counter() - t0
+            documents = getattr(result, "results", None) or [result]
+            pages = getattr(documents[0], "pages", []) if documents else []
+            selected_pages = (
+                page_numbers
+                if page_numbers is not None
+                else [
+                    getattr(page, "page_number", index + 1)
+                    for index, page in enumerate(pages or [])
+                ]
+            )
+            _record_document_level_parse(
+                c,
+                str(pdf_path),
+                selected_pages,
+                elapsed_s,
+            )
+        except Exception as e:
+            c.document_failed(str(pdf_path), e)
+    return c.finish()
+
+
 # Registry for the comparison suite: name -> (runner, supported tasks).
 # Insertion order is the row order of the generated markdown table.
 COMPARISON_BACKENDS: Dict[str, Tuple[object, Tuple[str, ...]]] = {
@@ -1375,6 +1677,9 @@ COMPARISON_BACKENDS: Dict[str, Tuple[object, Tuple[str, ...]]] = {
     "pdfplumber": (cmp_pdfplumber, (TASK_PARSE, TASK_RENDER)),
     "pdfminer.six": (cmp_pdfminer, (TASK_PARSE,)),
     "pypdf": (cmp_pypdf, (TASK_PARSE,)),
+    "liteparse": (cmp_liteparse, (TASK_PARSE,)),
+    "pdftext": (cmp_pdftext, (TASK_PARSE,)),
+    "xberg": (cmp_xberg, (TASK_PARSE,)),
 }
 
 # Only docling-parse has a thread-safe multi-page pipeline; every other backend
@@ -2114,7 +2419,10 @@ def _run_one_mode(
 
     stage = "render" if render else "parse"
     for name in other_backends:
-        fn = OTHER_BACKENDS[name][stage]
+        fn = OTHER_BACKENDS[name].get(stage)
+        if fn is None:
+            print(f"Skipping {name} {stage} reference: backend cannot rasterise")
+            continue
         print(f"Running {name} {stage} reference (1 thread) ...")
         t = fn(pdf_schedule, total_pages)
         print(f"  {name}: {t:.3f}s")
