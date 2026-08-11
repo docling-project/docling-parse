@@ -352,6 +352,11 @@ namespace pdflib
       {
 	std::string& text = cells.at(i).text;
 
+	if(text.empty())
+	  {
+	    continue;
+	  }
+
 	for(const std::pair<std::string, std::string>& pair:text_constants::replacements)
 	  {
 	    utils::string::replace(text, pair.first, pair.second);
@@ -359,11 +364,16 @@ namespace pdflib
       }
 
     {
-      std::regex pattern(R"(^\/([A-Za-z])_([A-Za-z])(_([A-Za-z]))?$)");
+      static const std::regex pattern(R"(^\/([A-Za-z])_([A-Za-z])(_([A-Za-z]))?$)");
 
       for(int i=0; i<cells.size(); i++)
 	{
 	  std::string text = cells.at(i).text;
+
+	  if(text.empty() or text[0] != '/')
+	    {
+	      continue;
+	    }
 	  
 	  std::smatch match;
 	  if(std::regex_match(text, match, pattern))

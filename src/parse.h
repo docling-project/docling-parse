@@ -53,6 +53,7 @@
 #include <parse/utils/color/device_cmyk.h>
 
 #include <parse/qpdf/to_json.h>
+#include <parse/qpdf/object.h>
 #include <parse/qpdf/annots.h>
 #include <parse/qpdf/stream_instruction.h>
 #include <parse/qpdf/stream_decoder.h>

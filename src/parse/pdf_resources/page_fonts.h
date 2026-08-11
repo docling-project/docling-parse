@@ -140,12 +140,9 @@ namespace pdflib
 	utils::timer font_timer;
 
 	QPDFObjectHandle qpdf_font = qpdf_fonts.getKey(key);
-	nlohmann::json json_font = to_json(qpdf_font);
-
-	LOG_S(INFO) << json_font.dump(2);
 	
 	pdf_resource<PAGE_FONT> page_font(timings);
-	page_font.set(key, json_font, qpdf_font);
+	page_font.set(key, qpdf_font);
 
 	if(page_fonts.count(key)==1)
 	  {

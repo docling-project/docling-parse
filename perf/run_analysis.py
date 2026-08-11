@@ -38,6 +38,9 @@ from docling_core.types.doc.page import PdfPageBoundaryType
 from tabulate import tabulate
 
 from docling_parse.pdf_parser import (
+    ContentConfig,
+    ContentLevel,
+    DecodeConfig,
     DoclingPdfParser,
     Timings,
     get_decode_page_timing_keys,
@@ -54,6 +57,74 @@ class PageTimings:
     page_number: int
     elapsed_original: float
     timings: Timings = field(default_factory=lambda: Timings())
+
+
+DECODE_PAGE_CHILDREN = [
+    "to_json_page",
+    "extract_annots_json",
+    "decode_dimensions",
+    "decode_resources",
+    "decode_contents",
+    "decode_annots",
+    "rotate_contents",
+    "sanitize_orientation",
+    "sanitize_cells",
+    "sanitise_contents",
+]
+
+TIMING_CHILDREN = {
+    "pipeline": [
+        "decode_page",
+        "create_word_cells",
+        "create_line_cells",
+    ],
+    "decode_page": DECODE_PAGE_CHILDREN,
+    "sanitize_cells": [
+        "sanitize_cells.remove_duplicate_cells",
+        "sanitize_cells.sanitize_text",
+    ],
+    "sanitise_contents": [
+        "sanitise_contents.copy_cells",
+        "sanitise_contents.sanitize_bbox",
+    ],
+    "create_line_cells": [
+        "create_line_cells.copy_cells",
+        "create_line_cells.sanitize_bbox",
+        "create_line_cells.remove_duplicate_cells",
+    ],
+    "decode_contents": [
+        "content_decode_total",
+        "interprete_ops_total",
+        "decode_xobjects_total",
+        "decode_grphs_total",
+        "decode_fonts_total",
+        "parse_stream_total",
+        "do_form_machinery_total",
+        "do_image_total",
+    ],
+    "decode_fonts_total": [
+        "font: init-copy",
+        "font: init-metrics",
+        "font: font-cmap",
+        "font: font-cmap-stream-decode",
+        "font: font-cmap-resources",
+        "font: font-chars",
+    ],
+    "font: font-cmap": ["cmap-parse-total"],
+    "cmap-parse-total": [
+        "cmap-parse-endbfchar",
+        "cmap-parse-endbfrange",
+        "cmap-parse-endcodespacerange",
+    ],
+}
+
+TOP_LEVEL_TIMING_KEYS = set(TIMING_CHILDREN["pipeline"])
+NESTED_TIMING_KEYS = {
+    child
+    for parent, children in TIMING_CHILDREN.items()
+    if parent != "pipeline"
+    for child in children
+}
 
 
 # -------------- IO helpers --------------
@@ -90,6 +161,115 @@ def timestamped_out_path(prefix: str = "analysis") -> Path:
     return Path("perf") / "results" / f"{prefix}_{ts}.csv"
 
 
+# -------------- Config helpers --------------
+
+
+def _add_bool_value_arg(
+    parser: argparse.ArgumentParser,
+    name: str,
+    *,
+    default: bool,
+    help: str,
+) -> None:
+    parser.add_argument(
+        f"--{name}",
+        choices=["true", "false"],
+        default="true" if default else "false",
+        help=f"{help} (default: {str(default).lower()})",
+    )
+
+
+def _arg_was_passed(argv: List[str], name: str) -> bool:
+    option = f"--{name}"
+    return any(arg == option or arg.startswith(f"{option}=") for arg in argv)
+
+
+def _parse_bool_arg(value: str) -> bool:
+    return value.lower() == "true"
+
+
+def _decode_options_from_args(args: argparse.Namespace) -> dict[str, bool]:
+    return {
+        "keep_char_cells": _parse_bool_arg(args.keep_char_cells),
+        "keep_shapes": _parse_bool_arg(args.keep_shapes),
+        "keep_bitmaps": _parse_bool_arg(args.keep_bitmaps),
+        "create_word_cells": _parse_bool_arg(args.create_word_cells),
+        "create_line_cells": _parse_bool_arg(args.create_line_cells),
+    }
+
+
+def _materialization_options_from_args(args: argparse.Namespace) -> dict[str, bool]:
+    return {
+        "materialize_char_cells": _parse_bool_arg(args.materialize_char_cells),
+        "materialize_word_cells": _parse_bool_arg(args.materialize_word_cells),
+        "materialize_line_cells": _parse_bool_arg(args.materialize_line_cells),
+        "materialize_shapes": _parse_bool_arg(args.materialize_shapes),
+        "materialize_bitmaps": _parse_bool_arg(args.materialize_bitmaps),
+        "materialize_bitmap_bytes": _parse_bool_arg(args.materialize_bitmap_bytes),
+    }
+
+
+def _content_config(
+    decode_options: dict[str, bool], materialization_options: dict[str, bool]
+) -> ContentConfig:
+    def _level(keep: bool, materialize: bool) -> ContentLevel:
+        if materialize:
+            return ContentLevel.COMPUTE_AND_MATERIALIZE
+        if keep:
+            return ContentLevel.COMPUTE
+        return ContentLevel.SKIP
+
+    return ContentConfig(
+        char_cells_content_level=_level(
+            decode_options["keep_char_cells"],
+            materialization_options["materialize_char_cells"],
+        ),
+        word_cells_content_level=_level(
+            decode_options["create_word_cells"],
+            materialization_options["materialize_word_cells"],
+        ),
+        line_cells_content_level=_level(
+            decode_options["create_line_cells"],
+            materialization_options["materialize_line_cells"],
+        ),
+        shapes_content_level=_level(
+            decode_options["keep_shapes"],
+            materialization_options["materialize_shapes"],
+        ),
+        bitmaps_content_level=_level(
+            decode_options["keep_bitmaps"],
+            materialization_options["materialize_bitmaps"],
+        ),
+        include_bitmap_bytes=materialization_options["materialize_bitmap_bytes"],
+    )
+
+
+def _content_level_name(value: object) -> object:
+    if isinstance(value, ContentLevel):
+        return value.name
+    if isinstance(value, bool):
+        return str(value).lower()
+    return value
+
+
+def print_effective_config(
+    decode_config: DecodeConfig,
+    content_config: ContentConfig,
+) -> None:
+    decode_rows = [
+        [key, _content_level_name(value)]
+        for key, value in sorted(decode_config.model_dump().items())
+    ]
+    content_rows = [
+        [key, _content_level_name(value)]
+        for key, value in content_config.model_dump().items()
+    ]
+    print("\nEffective decode config:")
+    print(tabulate(decode_rows, headers=["field", "value"]))
+    print("\nEffective content config:")
+    print(tabulate(content_rows, headers=["field", "value"]))
+
+
 # -------------- Timing extraction --------------
 
 
@@ -108,6 +288,8 @@ def extract_timings_for_page(
 def analyze_pages(
     csv_path: Path,
     top_n: int | None,
+    decode_config: DecodeConfig,
+    content_config: ContentConfig,
     min_sec: float | None = None,
     *,
     nth: int | None = None,
@@ -150,7 +332,11 @@ def analyze_pages(
         pages.sort(key=lambda r: r.elapsed_s, reverse=True)
         try:
             doc = parser.load(
-                filename, lazy=True, boundary_type=PdfPageBoundaryType.CROP_BOX
+                filename,
+                lazy=True,
+                boundary_type=PdfPageBoundaryType.CROP_BOX,
+                decode_config=decode_config,
+                content_config=content_config,
             )
         except Exception:
             # Unable to load document; record empty timings for its pages
@@ -190,21 +376,35 @@ def analyze_pages(
 # -------------- Output: --top mode (CSV with static timings) --------------
 
 
+def ordered_static_timing_keys() -> List[str]:
+    ordered: List[str] = []
+
+    def add_children(parent: str) -> None:
+        for key in TIMING_CHILDREN.get(parent, []):
+            if key not in ordered:
+                ordered.append(key)
+            add_children(key)
+
+    add_children("pipeline")
+    for key in sorted(set(get_static_timing_keys()) - set(ordered)):
+        ordered.append(key)
+    return ordered
+
+
 def write_static_timings_csv(out_path: Path, pages: List[PageTimings]) -> None:
-    """Write CSV with decode_page timing keys only, one row per page."""
+    """Write CSV with static timing keys, one row per page."""
     ensure_parent_dir(out_path)
 
-    # Get decode_page keys in order (excludes the global decode_page timer)
-    decode_page_keys = get_decode_page_timing_keys()
+    timing_keys = ordered_static_timing_keys()
 
-    header = ["filename", "page_number", "elapsed_original_sec", *decode_page_keys]
+    header = ["filename", "page_number", "elapsed_original_sec", *timing_keys]
 
     with out_path.open("w", newline="") as f:
         w = csv.writer(f)
         w.writerow(header)
         for p in pages:
             row = [p.filename, p.page_number, f"{p.elapsed_original:.9f}"]
-            for k in decode_page_keys:
+            for k in timing_keys:
                 v = p.timings.get(k, 0.0)
                 row.append(f"{v:.9f}" if v else "")
             w.writerow(row)
@@ -221,36 +421,93 @@ def print_top_summary(pages: List[PageTimings]) -> None:
 
 
 def print_aggregate_breakdown(pages: List[PageTimings]) -> None:
-    """Average cost and share of each static timing key across the selection.
+    """Average cost and share of each timing bucket across the selection.
 
-    This is the whole-selection view; `--nth` gives the same breakdown for one
-    page.
+    Percentages are branch-local to avoid double-counting nested timers. The
+    `% original` column keeps the link to the per-page cost from run_scaling.py.
     """
     analysed = [p for p in pages if p.timings.data]
     if not analysed:
         return
 
     total_elapsed = sum(p.elapsed_original for p in analysed)
+    totals = {
+        key: sum(p.timings.get(key, 0.0) for p in analysed)
+        for key in get_static_timing_keys()
+    }
+
+    root_total = sum(totals.get(key, 0.0) for key in TIMING_CHILDREN["pipeline"])
     rows = []
-    for key in sorted(get_static_timing_keys()):
-        key_total = sum(p.timings.get(key, 0.0) for p in analysed)
+    seen: set[str] = set()
+
+    def add_scope(parent: str) -> None:
+        children = TIMING_CHILDREN.get(parent, [])
+        sibling_total = sum(totals.get(key, 0.0) for key in children)
+        for key in children:
+            key_total = totals.get(key, 0.0)
+            if key_total <= 0.0:
+                continue
+            seen.add(key)
+            parent_pct = (
+                key_total / sibling_total * 100.0 if sibling_total > 0.0 else 0.0
+            )
+            original_pct = (
+                key_total / total_elapsed * 100.0 if total_elapsed > 0.0 else 0.0
+            )
+            pipeline_pct = key_total / root_total * 100.0 if root_total > 0.0 else 0.0
+            rows.append(
+                [
+                    parent,
+                    key,
+                    f"{key_total:.6f}",
+                    f"{key_total / len(analysed):.6f}",
+                    f"{parent_pct:.2f}%",
+                    f"{pipeline_pct:.2f}%",
+                    f"{original_pct:.2f}%",
+                ]
+            )
+
+    for scope in TIMING_CHILDREN:
+        add_scope(scope)
+
+    for key in sorted(set(get_static_timing_keys()) - seen - NESTED_TIMING_KEYS):
+        key_total = totals.get(key, 0.0)
         if key_total <= 0.0:
             continue
-        share = (key_total / total_elapsed * 100.0) if total_elapsed > 0 else 0.0
+        original_pct = (key_total / total_elapsed * 100.0) if total_elapsed > 0 else 0.0
         rows.append(
             [
+                "(unmapped)",
                 key,
                 f"{key_total:.6f}",
                 f"{key_total / len(analysed):.6f}",
-                f"{share:.2f}%",
+                "",
+                "",
+                f"{original_pct:.2f}%",
             ]
         )
 
     if not rows:
         return
-    rows.sort(key=lambda r: float(r[1]), reverse=True)
     print(f"\nTiming breakdown across {len(analysed)} analysed pages:")
-    print(tabulate(rows, headers=["timing_key", "total_sec", "avg_sec", "avg_%"]))
+    print(
+        tabulate(
+            rows,
+            headers=[
+                "scope",
+                "timing_key",
+                "total_sec",
+                "avg_sec",
+                "% parent",
+                "% pipeline",
+                "% original",
+            ],
+        )
+    )
+    print(
+        "\nPercentages are not meant to sum down the whole table: nested rows are "
+        "shown as a share of their parent branch."
+    )
 
 
 # -------------- Output: --nth mode (table with all timings) --------------
@@ -315,9 +572,15 @@ def print_nth_table(page: PageTimings) -> None:
     print(tabulate(table_data, headers=headers, tablefmt="grid"))
 
     # Print totals
-    print(f"\nTotal static time: {sum(timings.get_static_timings().values()):.6f} sec")
-    print(f"Total dynamic time: {sum(timings.get_dynamic_timings().values()):.6f} sec")
-    print(f"Total all timings: {timings.total():.6f} sec")
+    print(
+        "\nSum of reported static timings "
+        f"(nested; not wall time): {sum(timings.get_static_timings().values()):.6f} sec"
+    )
+    print(
+        "Sum of reported dynamic timings "
+        f"(nested; not wall time): {sum(timings.get_dynamic_timings().values()):.6f} sec"
+    )
+    print(f"decode_page timer: {timings.get('decode_page', 0.0):.6f} sec")
 
 
 # -------------- Main --------------
@@ -363,8 +626,82 @@ def main(argv: List[str]) -> int:
     ap.add_argument(
         "--threads", type=int, default=None, help="Keep only this thread count"
     )
+    _add_bool_value_arg(
+        ap,
+        "keep-char-cells",
+        default=True,
+        help="Populate character cells and emit text render instructions",
+    )
+    _add_bool_value_arg(
+        ap,
+        "create-word-cells",
+        default=False,
+        help="Create word cells during decoding",
+    )
+    _add_bool_value_arg(
+        ap,
+        "create-line-cells",
+        default=False,
+        help="Create line cells during decoding",
+    )
+    _add_bool_value_arg(
+        ap,
+        "keep-shapes",
+        default=False,
+        help="Keep vector shape cells",
+    )
+    _add_bool_value_arg(
+        ap,
+        "keep-bitmaps",
+        default=False,
+        help="Keep bitmap resources/cells",
+    )
+    _add_bool_value_arg(
+        ap,
+        "materialize-char-cells",
+        default=False,
+        help="Materialize character cells into SegmentedPdfPage",
+    )
+    _add_bool_value_arg(
+        ap,
+        "materialize-word-cells",
+        default=False,
+        help="Materialize word cells into SegmentedPdfPage",
+    )
+    _add_bool_value_arg(
+        ap,
+        "materialize-line-cells",
+        default=True,
+        help="Materialize line cells into SegmentedPdfPage",
+    )
+    _add_bool_value_arg(
+        ap,
+        "materialize-shapes",
+        default=False,
+        help="Materialize vector shapes into SegmentedPdfPage",
+    )
+    _add_bool_value_arg(
+        ap,
+        "materialize-bitmaps",
+        default=True,
+        help="Materialize bitmap locations into SegmentedPdfPage",
+    )
+    _add_bool_value_arg(
+        ap,
+        "materialize-bitmap-bytes",
+        default=False,
+        help="Materialize bitmap image bytes when bitmap locations are materialized",
+    )
 
     args = ap.parse_args(argv)
+    if args.task == "parse" and not _arg_was_passed(argv, "materialize-bitmaps"):
+        args.materialize_bitmaps = "false"
+
+    decode_config = DecodeConfig()
+    content_config = _content_config(
+        _decode_options_from_args(args),
+        _materialization_options_from_args(args),
+    )
 
     # Validate arguments
     if args.top is None and args.nth is None:
@@ -384,6 +721,8 @@ def main(argv: List[str]) -> int:
         pages = analyze_pages(
             csv_path,
             top_n=args.top,
+            decode_config=decode_config,
+            content_config=content_config,
             min_sec=args.min_sec,
             nth=args.nth,
             loglevel=args.loglevel,
@@ -402,6 +741,7 @@ def main(argv: List[str]) -> int:
     # Output based on mode
     if args.nth is not None:
         # --nth mode: print detailed table
+        print_effective_config(decode_config, content_config)
         print_nth_table(pages[0])
     else:
         # --top mode: write CSV with static timings
@@ -410,6 +750,7 @@ def main(argv: List[str]) -> int:
         )
         write_static_timings_csv(out_path, pages)
         print_top_summary(pages)
+        print_effective_config(decode_config, content_config)
         print_aggregate_breakdown(pages)
         print(f"\nWrote static timings CSV: {out_path}")
 

@@ -2,12 +2,12 @@
 
 # Benchmark — docling-project/performance-dataset-bo767 on Apple M3 Max
 
-Generated: 2026-08-04T08:04:42
+Generated: 2026-08-10T17:06:40
 
 ## Command
 
 ```sh
-python ./perf/run_scaling.py --threads 1,4,8,12 --compare all --mode render --output-dir ./docs/performance_benchmarks/
+python ./perf/run_scaling.py --threads 1,2,4,8,12 --compare all --mode render --output-dir ./scratch9
 ```
 
 ## Benchmark
@@ -20,11 +20,12 @@ python ./perf/run_scaling.py --threads 1,4,8,12 --compare all --mode render --ou
 | documents              | 753                                                                              |
 | pages                  | 54584                                                                            |
 | mode                   | render                                                                           |
-| thread counts          | [1, 4, 8, 12]                                                                    |
+| thread counts          | [1, 2, 4, 8, 12]                                                                 |
 | max concurrent results | 64                                                                               |
 | other backends         | ['pypdfium2']                                                                    |
 | comparison suite       | ['docling-parse', 'pymupdf', 'pypdfium2', 'pdfplumber', 'pdfminer.six', 'pypdf'] |
 | max pages              | (all)                                                                            |
+| pdf selection          | (all)                                                                            |
 | bytesio                | False                                                                            |
 | render scale           | 1.0                                                                              |
 
@@ -39,7 +40,7 @@ python ./perf/run_scaling.py --threads 1,4,8,12 --compare all --mode render --ou
 | platform       | Darwin 25.2.0 |
 | arch           | arm64         |
 | python         | 3.12.11       |
-| docling-parse  | 7.8.1         |
+| docling-parse  | 7.11.0        |
 | pymupdf        | 1.27.1        |
 | pypdfium2      | 5.4.0         |
 | pdfplumber     | 0.11.9        |
@@ -80,8 +81,10 @@ python ./perf/run_scaling.py --threads 1,4,8,12 --compare all --mode render --ou
 | parameter                |   value |
 |--------------------------|---------|
 | render_text              |    1    |
+| min_stroke_width         |    1    |
 | draw_text_bbox           |    0    |
 | draw_text_basepoint      |    0    |
+| display_widgets          |    0    |
 | fit_glyph_bbox_to_target |    0    |
 | resolve_fonts            |    1    |
 | font_similarity_cutoff   |    0.75 |
@@ -93,13 +96,14 @@ python ./perf/run_scaling.py --threads 1,4,8,12 --compare all --mode render --ou
 
 | System hardware                                  | dataset                                                                   | Python package   | Task           |   threads |   total time (s) | average time/page   | median time/page   | 95 quantile time/page   | 99 quantile time/page   |
 |--------------------------------------------------|---------------------------------------------------------------------------|------------------|----------------|-----------|------------------|---------------------|--------------------|-------------------------|-------------------------|
-| Apple M3 Max, 16 cores, 64 GB RAM, Darwin 25.2.0 | docling-project/performance-dataset-bo767@c684df5 (753 docs, 54584 pages) | docling-parse    | `parse+render` |         1 |          1566.96 | 28.6 ms             | 21.5 ms            | 70.6 ms                 | 143.5 ms                |
-| Apple M3 Max, 16 cores, 64 GB RAM, Darwin 25.2.0 | docling-project/performance-dataset-bo767@c684df5 (753 docs, 54584 pages) | docling-parse    | `parse+render` |         4 |           428.41 | 31.0 ms             | 23.6 ms            | 75.7 ms                 | 151.9 ms                |
-| Apple M3 Max, 16 cores, 64 GB RAM, Darwin 25.2.0 | docling-project/performance-dataset-bo767@c684df5 (753 docs, 54584 pages) | docling-parse    | `parse+render` |         8 |           239.03 | 34.3 ms             | 27.1 ms            | 80.8 ms                 | 157.2 ms                |
-| Apple M3 Max, 16 cores, 64 GB RAM, Darwin 25.2.0 | docling-project/performance-dataset-bo767@c684df5 (753 docs, 54584 pages) | docling-parse    | `parse+render` |        12 |           187.54 | 40.1 ms             | 31.0 ms            | 94.4 ms                 | 168.3 ms                |
-| Apple M3 Max, 16 cores, 64 GB RAM, Darwin 25.2.0 | docling-project/performance-dataset-bo767@c684df5 (753 docs, 54584 pages) | pymupdf          | `parse+render` |         1 |          1786.95 | 32.7 ms             | 11.0 ms            | 125.3 ms                | 235.8 ms                |
-| Apple M3 Max, 16 cores, 64 GB RAM, Darwin 25.2.0 | docling-project/performance-dataset-bo767@c684df5 (753 docs, 54584 pages) | pypdfium2        | `parse+render` |         1 |           761.86 | 13.9 ms             | 7.6 ms             | 41.8 ms                 | 106.2 ms                |
-| Apple M3 Max, 16 cores, 64 GB RAM, Darwin 25.2.0 | docling-project/performance-dataset-bo767@c684df5 (753 docs, 54584 pages) | pdfplumber       | `parse+render` |         1 |          2934.31 | 47.8 ms             | 29.2 ms            | 118.5 ms                | 242.9 ms                |
+| Apple M3 Max, 16 cores, 64 GB RAM, Darwin 25.2.0 | docling-project/performance-dataset-bo767@c684df5 (753 docs, 54584 pages) | docling-parse    | `parse+render` |         1 |          1673.55 | 30.5 ms             | 19.5 ms            | 82.6 ms                 | 180.6 ms                |
+| Apple M3 Max, 16 cores, 64 GB RAM, Darwin 25.2.0 | docling-project/performance-dataset-bo767@c684df5 (753 docs, 54584 pages) | docling-parse    | `parse+render` |         2 |           868.83 | 55.7 ms             | 20.3 ms            | 85.1 ms                 | 186.7 ms                |
+| Apple M3 Max, 16 cores, 64 GB RAM, Darwin 25.2.0 | docling-project/performance-dataset-bo767@c684df5 (753 docs, 54584 pages) | docling-parse    | `parse+render` |         4 |           466.4  | 33.7 ms             | 22.5 ms            | 89.0 ms                 | 193.1 ms                |
+| Apple M3 Max, 16 cores, 64 GB RAM, Darwin 25.2.0 | docling-project/performance-dataset-bo767@c684df5 (753 docs, 54584 pages) | docling-parse    | `parse+render` |         8 |           267    | 38.3 ms             | 27.4 ms            | 92.7 ms                 | 200.2 ms                |
+| Apple M3 Max, 16 cores, 64 GB RAM, Darwin 25.2.0 | docling-project/performance-dataset-bo767@c684df5 (753 docs, 54584 pages) | docling-parse    | `parse+render` |        12 |           215.91 | 46.4 ms             | 34.0 ms            | 110.7 ms                | 215.2 ms                |
+| Apple M3 Max, 16 cores, 64 GB RAM, Darwin 25.2.0 | docling-project/performance-dataset-bo767@c684df5 (753 docs, 54584 pages) | pymupdf          | `parse+render` |         1 |          1838.91 | 33.6 ms             | 11.5 ms            | 128.5 ms                | 241.1 ms                |
+| Apple M3 Max, 16 cores, 64 GB RAM, Darwin 25.2.0 | docling-project/performance-dataset-bo767@c684df5 (753 docs, 54584 pages) | pypdfium2        | `parse+render` |         1 |           763.8  | 13.9 ms             | 7.7 ms             | 42.0 ms                 | 106.9 ms                |
+| Apple M3 Max, 16 cores, 64 GB RAM, Darwin 25.2.0 | docling-project/performance-dataset-bo767@c684df5 (753 docs, 54584 pages) | pdfplumber       | `parse+render` |         1 |          3027.25 | 49.3 ms             | 30.2 ms            | 119.7 ms                | 253.2 ms                |
 
 ## Thread scaling and speedup
 
@@ -107,20 +111,21 @@ Task: `parse+render`
 
 | python package   |   threads |   total time (s) |   pages/sec | vs docling-parse (1t)   | vs pymupdf (1t)   | vs pypdfium2 (1t)   | vs pdfplumber (1t)   |
 |------------------|-----------|------------------|-------------|-------------------------|-------------------|---------------------|----------------------|
-| docling-parse    |         1 |          1566.96 |        34.8 | 1.00x                   | 1.14x             | 0.49x               | 1.87x                |
-| docling-parse    |         4 |           428.41 |       127.4 | 3.66x                   | 4.17x             | 1.78x               | 6.85x                |
-| docling-parse    |         8 |           239.03 |       228.4 | 6.56x                   | 7.48x             | 3.19x               | 12.28x               |
-| docling-parse    |        12 |           187.54 |       291   | 8.36x                   | 9.53x             | 4.06x               | 15.65x               |
-| pymupdf          |         1 |          1786.95 |        30.5 | 0.88x                   | 1.00x             | 0.43x               | 1.64x                |
-| pypdfium2        |         1 |           761.86 |        71.6 | 2.06x                   | 2.35x             | 1.00x               | 3.85x                |
-| pdfplumber       |         1 |          2934.31 |        18.6 | 0.53x                   | 0.61x             | 0.26x               | 1.00x                |
+| docling-parse    |         1 |          1673.55 |        32.6 | 1.00x                   | 1.10x             | 0.46x               | 1.81x                |
+| docling-parse    |         2 |           868.83 |        62.8 | 1.93x                   | 2.12x             | 0.88x               | 3.48x                |
+| docling-parse    |         4 |           466.4  |       117   | 3.59x                   | 3.94x             | 1.64x               | 6.49x                |
+| docling-parse    |         8 |           267    |       204.4 | 6.27x                   | 6.89x             | 2.86x               | 11.34x               |
+| docling-parse    |        12 |           215.91 |       252.8 | 7.75x                   | 8.52x             | 3.54x               | 14.02x               |
+| pymupdf          |         1 |          1838.91 |        29.7 | 0.91x                   | 1.00x             | 0.42x               | 1.65x                |
+| pypdfium2        |         1 |           763.8  |        71.5 | 2.19x                   | 2.41x             | 1.00x               | 3.96x                |
+| pdfplumber       |         1 |          3027.25 |        18   | 0.55x                   | 0.61x             | 0.25x               | 1.00x                |
 
 ## Render size check
 
 Rasterised page size versus `pypdfium2`, tolerance 2 px.
 
-| python package   |   pages compared | within tolerance   |   max delta (px) | worst page                               |   pages w/o reference |
-|------------------|------------------|--------------------|------------------|------------------------------------------|-----------------------|
-| docling-parse    |            54584 | 95.6%              |              864 | 2216123.pdf p56 (2160x3024 vs 3024x2160) |                     0 |
-| pymupdf          |            54584 | 100.0%             |                1 | 1048308.pdf p2 (612x792 vs 613x793)      |                     0 |
-| pdfplumber       |            54584 | 100.0%             |                1 | 1057315.pdf p80 (612x791 vs 612x792)     |                     0 |
+| python package   |   pages compared | within tolerance   |   max delta (px) | worst page                           |   pages w/o reference |
+|------------------|------------------|--------------------|------------------|--------------------------------------|-----------------------|
+| docling-parse    |            54584 | 100.0%             |                1 | 2407280.pdf p2 (612x793 vs 612x792)  |                     0 |
+| pymupdf          |            54584 | 100.0%             |                1 | 1048308.pdf p2 (612x792 vs 613x793)  |                     0 |
+| pdfplumber       |            54584 | 100.0%             |                1 | 1057315.pdf p80 (612x791 vs 612x792) |                     0 |

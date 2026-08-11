@@ -8,6 +8,10 @@ namespace pdflib
 
   struct decode_config
   {
+    static constexpr double DEFAULT_HORIZONTAL_CELL_TOLERANCE = 1.0;
+    static constexpr double DEFAULT_WORD_SPACE_WIDTH_FACTOR_FOR_MERGE = 0.33;
+    static constexpr double DEFAULT_LINE_SPACE_WIDTH_FACTOR_FOR_MERGE = 1.0;
+    static constexpr double DEFAULT_LINE_SPACE_WIDTH_FACTOR_FOR_MERGE_WITH_SPACE = 0.33;
     static constexpr double DEFAULT_MIN_VISIBLE_CLIP_EXTENT = 1e-3;
 
     std::string page_boundary = "crop_box";
@@ -27,14 +31,15 @@ namespace pdflib
     bool enforce_same_font = true;      // word & line cell creation
 
     // word & line cell creation parameters
-    double horizontal_cell_tolerance = 1.0;
+    double horizontal_cell_tolerance = DEFAULT_HORIZONTAL_CELL_TOLERANCE;
 
     // word cell creation
-    double word_space_width_factor_for_merge = 0.33;
+    double word_space_width_factor_for_merge = DEFAULT_WORD_SPACE_WIDTH_FACTOR_FOR_MERGE;
 
     // line cell creation
-    double line_space_width_factor_for_merge = 1.0;
-    double line_space_width_factor_for_merge_with_space = 0.33;
+    double line_space_width_factor_for_merge = DEFAULT_LINE_SPACE_WIDTH_FACTOR_FOR_MERGE;
+    double line_space_width_factor_for_merge_with_space =
+      DEFAULT_LINE_SPACE_WIDTH_FACTOR_FOR_MERGE_WITH_SPACE;
 
     bool populate_json_objects = false;
 

@@ -64,6 +64,7 @@ from _common import (
     PageRow,
     find_pdfs,
     percentile,
+    read_page_rows,
     series_label,
     write_page_rows,
 )
@@ -123,6 +124,43 @@ def resolve_pdf_inputs(
         "revision": Path(local_dir).name,
     }
     return find_pdfs(pdf_dir, recursive=True), info
+
+
+def filter_pdf_selection(pdf_paths: List[Path], selection: str) -> List[Path]:
+    """Filter PDFs by comma/semicolon-separated filename, stem, or path tokens."""
+    tokens = [
+        token.strip()
+        for token in re.split(r"[;,]", selection)
+        if token.strip()
+    ]
+    if not tokens:
+        return pdf_paths
+
+    selected: List[Path] = []
+    selected_set = set()
+    unmatched = set(tokens)
+    for pdf_path in pdf_paths:
+        path = str(pdf_path)
+        name = pdf_path.name
+        stem = pdf_path.stem
+        matched = [
+            token
+            for token in tokens
+            if token == name or token == stem or token in path
+        ]
+        if matched and pdf_path not in selected_set:
+            selected.append(pdf_path)
+            selected_set.add(pdf_path)
+        unmatched.difference_update(matched)
+
+    if unmatched:
+        print(
+            "Warning: --pdf-selection did not match: "
+            + ", ".join(sorted(unmatched)),
+            file=sys.stderr,
+        )
+
+    return selected
 
 
 def page_counts(pdf_paths: List[Path]) -> List[Tuple[Path, int]]:
@@ -382,6 +420,11 @@ def _add_bool_value_arg(
         metavar="{true,false}",
         help=f"{help} (default: {str(default).lower()})",
     )
+
+
+def _arg_was_passed(argv: List[str], name: str) -> bool:
+    option = f"--{name}"
+    return any(arg == option or arg.startswith(f"{option}=") for arg in argv)
 
 
 def _decode_options_from_args(args: argparse.Namespace) -> dict[str, bool]:
@@ -1369,6 +1412,131 @@ def parse_compare_arg(arg: str) -> List[str]:
     return names
 
 
+ComparisonSeriesKey = Tuple[str, str, int]
+
+
+def comparison_series_key(
+    backend: str, task: str, threads: int
+) -> ComparisonSeriesKey:
+    return (backend, task, threads)
+
+
+def comparison_series_sort_key(key: ComparisonSeriesKey) -> Tuple[int, int, int]:
+    backend, task, threads = key
+    return (_TASK_ORDER[task], _BACKEND_ORDER[backend], threads)
+
+
+def expected_comparison_series(
+    backends: List[str],
+    tasks: List[str],
+    thread_counts: List[int],
+) -> List[ComparisonSeriesKey]:
+    series: List[ComparisonSeriesKey] = []
+    for task in tasks:
+        for backend in backends:
+            _, supported = COMPARISON_BACKENDS[backend]
+            if task not in supported:
+                continue
+            threads_for_backend = (
+                thread_counts if backend in THREADED_COMPARISON_BACKENDS else [1]
+            )
+            for threads in threads_for_backend:
+                series.append(comparison_series_key(backend, task, threads))
+    series.sort(key=comparison_series_sort_key)
+    return series
+
+
+def expected_page_keys(
+    schedule: List[Tuple[Path, List[int] | None]],
+) -> set[Tuple[str, int]]:
+    keys: set[Tuple[str, int]] = set()
+    for pdf_path, page_numbers in schedule:
+        if page_numbers is None:
+            continue
+        doc_key = str(pdf_path)
+        for page_number in page_numbers:
+            keys.add((doc_key, page_number))
+    return keys
+
+
+def series_is_complete(
+    rows: List[PageRow],
+    expected_pages: set[Tuple[str, int]],
+    total_pages: int,
+) -> bool:
+    if len(rows) < total_pages:
+        return False
+    if not expected_pages:
+        return True
+    row_pages = {(row.doc_key, row.page_number) for row in rows}
+    return expected_pages.issubset(row_pages)
+
+
+def complete_existing_comparison_rows(
+    csv_path: Path,
+    desired_series: set[ComparisonSeriesKey],
+    expected_pages: set[Tuple[str, int]],
+    total_pages: int,
+) -> Tuple[List[PageRow], set[ComparisonSeriesKey]]:
+    if not csv_path.exists():
+        return [], set()
+
+    rows = read_page_rows(csv_path)
+    grouped: Dict[ComparisonSeriesKey, List[PageRow]] = {}
+    for row in rows:
+        key = comparison_series_key(row.backend, row.task, row.threads)
+        if key in desired_series:
+            grouped.setdefault(key, []).append(row)
+
+    reusable_rows: List[PageRow] = []
+    complete: set[ComparisonSeriesKey] = set()
+    for key, series_rows in grouped.items():
+        if series_is_complete(series_rows, expected_pages, total_pages):
+            complete.add(key)
+            reusable_rows.extend(series_rows)
+
+    return reusable_rows, complete
+
+
+def backend_runs_from_page_rows(rows: List[PageRow]) -> List[BackendRun]:
+    grouped: Dict[ComparisonSeriesKey, List[PageRow]] = {}
+    for row in rows:
+        grouped.setdefault(
+            comparison_series_key(row.backend, row.task, row.threads),
+            [],
+        ).append(row)
+
+    runs: List[BackendRun] = []
+    for key, samples in grouped.items():
+        backend, task, threads = key
+        wall_values = [
+            sample.wall_gap_s for sample in samples if sample.wall_gap_s > 0
+        ]
+        wall_s = sum(wall_values) if wall_values else sum(
+            sample.elapsed_s for sample in samples
+        )
+        per_page_source = (
+            PER_PAGE_INTERNAL
+            if backend in THREADED_COMPARISON_BACKENDS
+            else PER_PAGE_WALL
+        )
+        runs.append(
+            BackendRun(
+                backend=backend,
+                task=task,
+                threads=threads,
+                wall_s=wall_s,
+                per_page_source=per_page_source,
+                samples=samples,
+            )
+        )
+
+    runs.sort(
+        key=lambda r: (_TASK_ORDER[r.task], _BACKEND_ORDER[r.backend], r.threads)
+    )
+    return runs
+
+
 def run_comparison(
     schedule: List[Tuple[Path, List[int] | None]],
     total_pages: int,
@@ -1381,6 +1549,7 @@ def run_comparison(
     decode_options: dict[str, bool],
     materialization_options: dict[str, bool],
     bytesio: bool = False,
+    skip_series: set[ComparisonSeriesKey] | None = None,
 ) -> List[BackendRun]:
     """Run every (backend, task, threads) combination once.
 
@@ -1390,6 +1559,7 @@ def run_comparison(
     """
     runs: List[BackendRun] = []
     skipped: List[str] = []
+    skip_series = skip_series or set()
     ordered = sorted(
         backends,
         key=lambda name: (
@@ -1411,6 +1581,10 @@ def run_comparison(
                 thread_counts if name in THREADED_COMPARISON_BACKENDS else [1]
             )
             for threads in threads_for_backend:
+                key = comparison_series_key(name, task, threads)
+                if key in skip_series:
+                    print(f"Reusing {name} [{task}] with {threads} thread(s) from CSV")
+                    continue
                 label = f"{name} [{task}]"
                 if name in THREADED_COMPARISON_BACKENDS:
                     label += f" with {threads} thread(s)"
@@ -2006,6 +2180,15 @@ def main(argv: List[str]) -> int:
         help="Maximum number of pages to process across all input PDFs",
     )
     ap.add_argument(
+        "--pdf-selection",
+        type=str,
+        default="",
+        help=(
+            "Comma/semicolon-separated PDF filename, stem, or path tokens to "
+            "benchmark after input resolution, e.g. '1235350.pdf;1061589.pdf'"
+        ),
+    )
+    ap.add_argument(
         "--max-concurrent-results",
         type=int,
         default=64,
@@ -2131,6 +2314,8 @@ def main(argv: List[str]) -> int:
     )
 
     args = ap.parse_args(argv)
+    if args.mode == "parse" and not _arg_was_passed(argv, "materialize-bitmaps"):
+        args.materialize_bitmaps = False
 
     # Recorded verbatim in the report so a published number can be traced back
     # to the invocation that produced it.
@@ -2146,6 +2331,8 @@ def main(argv: List[str]) -> int:
     system_info = collect_system_info()
 
     pdfs, dataset_info = resolve_pdf_inputs(args.input, recursive=args.recursive)
+    if args.pdf_selection:
+        pdfs = filter_pdf_selection(pdfs, args.pdf_selection)
     if not pdfs:
         print(f"No PDFs found for input: {args.input}", file=sys.stderr)
         return 2
@@ -2165,6 +2352,7 @@ def main(argv: List[str]) -> int:
         "other backends": other_backends or "(none)",
         "comparison suite": compare_backends or "(off)",
         "max pages": args.max_pages if args.max_pages else "(all)",
+        "pdf selection": args.pdf_selection or "(all)",
         "bytesio": args.bytesio,
     }
     if args.mode in ("render", "both"):
@@ -2206,8 +2394,28 @@ def main(argv: List[str]) -> int:
         if args.mode in ("render", "both"):
             tasks.append(TASK_RENDER)
 
+        desired_series = set(
+            expected_comparison_series(compare_backends, tasks, thread_counts)
+        )
+        reusable_rows, reusable_series = complete_existing_comparison_rows(
+            pages_csv_path,
+            desired_series,
+            expected_page_keys(pdf_schedule),
+            total_pages,
+        )
+        if reusable_series:
+            print(
+                f"Found {len(reusable_series)} complete comparison series in "
+                f"{pages_csv_path}; only missing series will be measured."
+            )
+            for backend, task, threads in sorted(
+                reusable_series,
+                key=comparison_series_sort_key,
+            ):
+                print(f"  - {backend} [{task}] with {threads} thread(s)")
+
         print("\n##### COMPARISON SUITE #####")
-        runs = run_comparison(
+        new_runs = run_comparison(
             pdf_schedule,
             total_pages,
             compare_backends,
@@ -2218,6 +2426,11 @@ def main(argv: List[str]) -> int:
             decode_options=decode_options,
             materialization_options=materialization_options,
             bytesio=args.bytesio,
+            skip_series=reusable_series,
+        )
+        runs = backend_runs_from_page_rows(reusable_rows) + new_runs
+        runs.sort(
+            key=lambda r: (_TASK_ORDER[r.task], _BACKEND_ORDER[r.backend], r.threads)
         )
         print_comparison_table(runs)
         print_speedup_table(runs)

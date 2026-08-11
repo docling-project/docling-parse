@@ -500,8 +500,8 @@ namespace pdflib
 
     for(size_t i = 0; i + 1 < parameters.size(); i += 2)
       {
-        const qpdf_stream_instruction& key_instruction = parameters[i];
-        const qpdf_stream_instruction& value_instruction = parameters[i + 1];
+        qpdf_stream_instruction key_instruction = parameters[i];
+        qpdf_stream_instruction value_instruction = parameters[i + 1];
 
         if(not key_instruction.obj.isName())
           {
@@ -511,7 +511,7 @@ namespace pdflib
           }
 
         const std::string key = canonical_name(key_instruction.obj.getName());
-        const QPDFObjectHandle& value = value_instruction.obj;
+        QPDFObjectHandle value = value_instruction.obj;
 
         if(key == "/Width" and value.isInteger())
           {
@@ -580,7 +580,8 @@ namespace pdflib
         return;
       }
 
-    inline_image.data = instruction.obj.getInlineImageValue();
+    QPDFObjectHandle obj = instruction.obj;
+    inline_image.data = obj.getInlineImageValue();
     inline_image.has_data = true;
   }
 

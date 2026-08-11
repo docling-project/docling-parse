@@ -40,6 +40,15 @@ namespace pdflib
     static const std::string KEY_SANITISE_CONTENTS;
     static const std::string KEY_CREATE_WORD_CELLS;
     static const std::string KEY_CREATE_LINE_CELLS;
+    static const std::string KEY_SANITISE_CONTENTS_COPY_CELLS;
+    static const std::string KEY_SANITISE_CONTENTS_SANITIZE_BBOX;
+    static const std::string KEY_CREATE_WORD_CELLS_COPY_CELLS;
+    static const std::string KEY_CREATE_WORD_CELLS_SANITIZE_BBOX;
+    static const std::string KEY_CREATE_WORD_CELLS_ERASE_SPACES;
+    static const std::string KEY_CREATE_WORD_CELLS_REMOVE_DUPLICATE_CELLS;
+    static const std::string KEY_CREATE_LINE_CELLS_COPY_CELLS;
+    static const std::string KEY_CREATE_LINE_CELLS_SANITIZE_BBOX;
+    static const std::string KEY_CREATE_LINE_CELLS_REMOVE_DUPLICATE_CELLS;
 
     // Additional decode_page step keys
     static const std::string KEY_TO_JSON_PAGE;
@@ -47,6 +56,8 @@ namespace pdflib
     static const std::string KEY_ROTATE_CONTENTS;
     static const std::string KEY_SANITIZE_ORIENTATION;
     static const std::string KEY_SANITIZE_CELLS;
+    static const std::string KEY_SANITIZE_CELLS_REMOVE_DUPLICATE_CELLS;
+    static const std::string KEY_SANITIZE_CELLS_SANITIZE_TEXT;
 
     // Font timing keys
     static const std::string KEY_DECODE_FONTS_TOTAL;
@@ -419,6 +430,15 @@ namespace pdflib
   const std::string pdf_timings::KEY_SANITISE_CONTENTS = "sanitise_contents";
   const std::string pdf_timings::KEY_CREATE_WORD_CELLS = "create_word_cells";
   const std::string pdf_timings::KEY_CREATE_LINE_CELLS = "create_line_cells";
+  const std::string pdf_timings::KEY_SANITISE_CONTENTS_COPY_CELLS = "sanitise_contents.copy_cells";
+  const std::string pdf_timings::KEY_SANITISE_CONTENTS_SANITIZE_BBOX = "sanitise_contents.sanitize_bbox";
+  const std::string pdf_timings::KEY_CREATE_WORD_CELLS_COPY_CELLS = "create_word_cells.copy_cells";
+  const std::string pdf_timings::KEY_CREATE_WORD_CELLS_SANITIZE_BBOX = "create_word_cells.sanitize_bbox";
+  const std::string pdf_timings::KEY_CREATE_WORD_CELLS_ERASE_SPACES = "create_word_cells.erase_spaces";
+  const std::string pdf_timings::KEY_CREATE_WORD_CELLS_REMOVE_DUPLICATE_CELLS = "create_word_cells.remove_duplicate_cells";
+  const std::string pdf_timings::KEY_CREATE_LINE_CELLS_COPY_CELLS = "create_line_cells.copy_cells";
+  const std::string pdf_timings::KEY_CREATE_LINE_CELLS_SANITIZE_BBOX = "create_line_cells.sanitize_bbox";
+  const std::string pdf_timings::KEY_CREATE_LINE_CELLS_REMOVE_DUPLICATE_CELLS = "create_line_cells.remove_duplicate_cells";
 
   const std::string pdf_timings::KEY_DECODE_FONTS_TOTAL = "decode_fonts_total";
   const std::string pdf_timings::KEY_FONT_INIT_COPY = "font: init-copy";
@@ -441,6 +461,8 @@ namespace pdflib
   const std::string pdf_timings::KEY_ROTATE_CONTENTS = "rotate_contents";
   const std::string pdf_timings::KEY_SANITIZE_ORIENTATION = "sanitize_orientation";
   const std::string pdf_timings::KEY_SANITIZE_CELLS = "sanitize_cells";
+  const std::string pdf_timings::KEY_SANITIZE_CELLS_REMOVE_DUPLICATE_CELLS = "sanitize_cells.remove_duplicate_cells";
+  const std::string pdf_timings::KEY_SANITIZE_CELLS_SANITIZE_TEXT = "sanitize_cells.sanitize_text";
 
   const std::string pdf_timings::KEY_PROCESS_DOCUMENT_FROM_FILE = "process_document_from_file";
   const std::string pdf_timings::KEY_PROCESS_DOCUMENT_FROM_BYTESIO = "process_document_from_bytesio";
@@ -476,6 +498,15 @@ namespace pdflib
       KEY_SANITISE_CONTENTS,
       KEY_CREATE_WORD_CELLS,
       KEY_CREATE_LINE_CELLS,
+      KEY_SANITISE_CONTENTS_COPY_CELLS,
+      KEY_SANITISE_CONTENTS_SANITIZE_BBOX,
+      KEY_CREATE_WORD_CELLS_COPY_CELLS,
+      KEY_CREATE_WORD_CELLS_SANITIZE_BBOX,
+      KEY_CREATE_WORD_CELLS_ERASE_SPACES,
+      KEY_CREATE_WORD_CELLS_REMOVE_DUPLICATE_CELLS,
+      KEY_CREATE_LINE_CELLS_COPY_CELLS,
+      KEY_CREATE_LINE_CELLS_SANITIZE_BBOX,
+      KEY_CREATE_LINE_CELLS_REMOVE_DUPLICATE_CELLS,
       KEY_DECODE_FONTS_TOTAL,
       KEY_FONT_INIT_COPY,
       KEY_FONT_INIT_METRICS,
@@ -499,6 +530,8 @@ namespace pdflib
       KEY_ROTATE_CONTENTS,
       KEY_SANITIZE_ORIENTATION,
       KEY_SANITIZE_CELLS,
+      KEY_SANITIZE_CELLS_REMOVE_DUPLICATE_CELLS,
+      KEY_SANITIZE_CELLS_SANITIZE_TEXT,
       KEY_PROCESS_DOCUMENT_FROM_FILE,
       KEY_PROCESS_DOCUMENT_FROM_BYTESIO,
       KEY_QPDF_PROCESS,
@@ -564,6 +597,8 @@ namespace pdflib
       {KEY_SANITIZE_ORIENTATION,           KEY_DECODE_PAGE},
       {KEY_SANITIZE_CELLS,                 KEY_DECODE_PAGE},
       {KEY_SANITISE_CONTENTS,              KEY_DECODE_PAGE},
+      {KEY_SANITIZE_CELLS_REMOVE_DUPLICATE_CELLS, KEY_SANITIZE_CELLS},
+      {KEY_SANITIZE_CELLS_SANITIZE_TEXT,   KEY_SANITIZE_CELLS},
 
       // --- decode_contents sub-timings ---
       {KEY_CONTENT_DECODE_TOTAL,           KEY_DECODE_CONTENTS},
@@ -576,8 +611,17 @@ namespace pdflib
       {KEY_DO_IMAGE_TOTAL,                 KEY_DECODE_CONTENTS},
 
       // --- sanitise_contents sub-timings ---
+      {KEY_SANITISE_CONTENTS_COPY_CELLS,   KEY_SANITISE_CONTENTS},
+      {KEY_SANITISE_CONTENTS_SANITIZE_BBOX, KEY_SANITISE_CONTENTS},
       {KEY_CREATE_WORD_CELLS,              KEY_SANITISE_CONTENTS},
       {KEY_CREATE_LINE_CELLS,              KEY_SANITISE_CONTENTS},
+      {KEY_CREATE_WORD_CELLS_COPY_CELLS,   KEY_CREATE_WORD_CELLS},
+      {KEY_CREATE_WORD_CELLS_SANITIZE_BBOX, KEY_CREATE_WORD_CELLS},
+      {KEY_CREATE_WORD_CELLS_ERASE_SPACES, KEY_CREATE_WORD_CELLS},
+      {KEY_CREATE_WORD_CELLS_REMOVE_DUPLICATE_CELLS, KEY_CREATE_WORD_CELLS},
+      {KEY_CREATE_LINE_CELLS_COPY_CELLS,   KEY_CREATE_LINE_CELLS},
+      {KEY_CREATE_LINE_CELLS_SANITIZE_BBOX, KEY_CREATE_LINE_CELLS},
+      {KEY_CREATE_LINE_CELLS_REMOVE_DUPLICATE_CELLS, KEY_CREATE_LINE_CELLS},
 
       // --- font sub-timings (aggregated across fonts) ---
       {KEY_FONT_INIT_COPY,                 KEY_DECODE_FONTS_TOTAL},
