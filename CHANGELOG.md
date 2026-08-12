@@ -1,3 +1,9 @@
+## [v7.12.1](https://github.com/docling-project/docling-parse/releases/tag/v7.12.1) - 2026-08-12
+
+### Fix
+
+* Make Blend2D font fallback portable across distros ([#315](https://github.com/docling-project/docling-parse/issues/315)) ([`fbb6d9b`](https://github.com/docling-project/docling-parse/commit/fbb6d9b03115ee9f1be32a2e8bde6f59bc1a2b9b))
+
 ## [v7.12.0](https://github.com/docling-project/docling-parse/releases/tag/v7.12.0) - 2026-08-11
 
 ### Feature
