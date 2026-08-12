@@ -19,8 +19,17 @@ RENDER_GROUNDTRUTH_PAGES_DIR = RENDER_GROUNDTRUTH_DIR / "pages"
 def ensure_test_data_downloaded(force: bool = False) -> Path:
     TEST_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
+    # A non-empty data dir is only current if it was synced at the pinned
+    # revision; otherwise a checkout that predates a HF_DATASET_REVISION bump
+    # would keep testing against stale groundtruth.
+    revision_marker = TEST_DATA_DIR / ".hf_revision"
+
     if not force and any(TEST_DATA_DIR.iterdir()):
-        return TEST_DATA_DIR
+        cached_revision = (
+            revision_marker.read_text().strip() if revision_marker.exists() else None
+        )
+        if cached_revision == HF_DATASET_REVISION:
+            return TEST_DATA_DIR
 
     snapshot_download(
         repo_id=HF_DATASET_REPO_ID,
@@ -29,4 +38,5 @@ def ensure_test_data_downloaded(force: bool = False) -> Path:
         local_dir=str(TEST_DATA_DIR),
         force_download=force,
     )
+    revision_marker.write_text(HF_DATASET_REVISION + "\n")
     return TEST_DATA_DIR
