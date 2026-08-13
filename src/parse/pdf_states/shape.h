@@ -681,23 +681,50 @@ namespace pdflib
                     << grph_state.get_rgb_stroking_ops()[2] << ")"
                     << " alpha: " << grph_state.get_stroke_alpha();
 
-        shape_instruction shpinstr(std::move(subpaths),
-                                   paint_mode,
-                                   fill_rule,
-                                   line_width,
-                                   grph_state.get_line_cap(),
-                                   grph_state.get_line_join(),
-                                   grph_state.get_miter_limit(),
-                                   std::move(dash_array),
-                                   dash_phase,
-                                   grph_state.get_rgb_stroking_ops(),
-                                   grph_state.get_rgb_filling_ops(),
-                                   grph_state.get_stroke_alpha(),
-                                   grph_state.get_fill_alpha(),
-                                   get_clip_state());
-        shpinstr.set_blend_mode(grph_state.get_blend_mode());
+        // A fill whose colour is an unresolved /Pattern must not be painted:
+        // the Pattern space has no initial colour, so the graphics state's
+        // black is a placeholder, not a paint. A full-page background pattern
+        // filled black covered the entire page. Stroke-only shapes are
+        // unaffected; a fill+stroke keeps its stroke.
+        shape_paint_mode effective_mode = paint_mode;
+        bool emit_instruction = true;
+        if(grph_state.get_fill_is_unresolved_pattern())
+          {
+            if(paint_mode == SHAPE_PAINT_FILL)
+              {
+                LOG_S(INFO) << "shape: skipping fill with an unresolved /Pattern colour";
+                // Only the painting is skipped. Returning here would also skip
+                // the clip capture and the path reset below, which leaves the
+                // path in place: every later fill then repaints it, and a
+                // tiling pattern redrew its whole fill region once per cell.
+                emit_instruction = false;
+              }
+            else if(paint_mode == SHAPE_PAINT_FILL_STROKE)
+              {
+                effective_mode = SHAPE_PAINT_STROKE;
+              }
+          }
 
-        instructions.add_shape_instruction(std::move(shpinstr));
+        if(emit_instruction)
+          {
+            shape_instruction shpinstr(std::move(subpaths),
+                                       effective_mode,
+                                       fill_rule,
+                                       line_width,
+                                       grph_state.get_line_cap(),
+                                       grph_state.get_line_join(),
+                                       grph_state.get_miter_limit(),
+                                       std::move(dash_array),
+                                       dash_phase,
+                                       grph_state.get_rgb_stroking_ops(),
+                                       grph_state.get_rgb_filling_ops(),
+                                       grph_state.get_stroke_alpha(),
+                                       grph_state.get_fill_alpha(),
+                                       get_clip_state());
+            shpinstr.set_blend_mode(grph_state.get_blend_mode());
+
+            instructions.add_shape_instruction(std::move(shpinstr));
+          }
       }
 
     // a pending W/W* clip takes effect after *any* painting operator (not
