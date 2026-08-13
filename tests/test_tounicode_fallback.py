@@ -74,9 +74,11 @@ def _build_pdf(include_ligature: bool, symbolic: bool) -> bytes:
     return out
 
 
-def _extract_text(include_ligature: bool, symbolic: bool) -> str:
+def _extract_text(
+    include_ligature: bool, symbolic: bool, keep_glyphs: bool = True
+) -> str:
     parser = DoclingPdfParser(loglevel="fatal")
-    config = DecodeConfig(keep_glyphs=True)
+    config = DecodeConfig(keep_glyphs=keep_glyphs)
     doc = parser.load(
         path_or_stream=BytesIO(_build_pdf(include_ligature, symbolic)),
         decode_config=config,
@@ -107,3 +109,13 @@ def test_nonsymbolic_font_keeps_encoding_fallback():
     text = _extract_text(include_ligature=False, symbolic=False)
     assert "#" in text
     assert "GLYPH" not in text
+
+
+def test_default_config_strips_glyph_markers():
+    # Production default (keep_glyphs=False, see config.h): the marker is
+    # stripped to a space in pdf_states/text.h, so neither GLYPH<...> nor
+    # a fabricated '#' ever reaches the output.
+    text = _extract_text(include_ligature=False, symbolic=True, keep_glyphs=False)
+    assert "GLYPH" not in text
+    assert "#" not in text
+    assert "\u0634" in text and "\u0623" in text  # covered codes still resolve
