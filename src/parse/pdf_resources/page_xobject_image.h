@@ -375,6 +375,23 @@ namespace pdflib
             color_space = cs.dump();
 
             auto qpdf_cs = qpdf_xobject_dict.getKey("/ColorSpace");
+
+            // A device space may legally be written as a one-element array:
+            // [/DeviceRGB] means exactly /DeviceRGB. Unwrap it to the bare name,
+            // otherwise every later comparison sees the JSON dump
+            // ("[\"/DeviceRGB\"]"), the space is reported as unsupported, and
+            // the image is dropped in favour of a placeholder rectangle.
+            if(qpdf_cs.isArray() and qpdf_cs.getArrayNItems() == 1)
+              {
+                auto only_obj = qpdf_cs.getArrayItem(0);
+                if(only_obj.isName())
+                  {
+                    color_space = only_obj.getName();
+                    LOG_S(INFO) << "unwrapped single-element /ColorSpace array to "
+                                << color_space;
+                  }
+              }
+
             if(qpdf_cs.isArray() and qpdf_cs.getArrayNItems() >= 2)
               {
                 auto name_obj = qpdf_cs.getArrayItem(0);
@@ -774,8 +791,16 @@ namespace pdflib
 	else if(indexed_hival >= 0)
 	  {
 	    // Indexed: default decode is [0, hival] (one component — the palette index)
-	    LOG_S(INFO) << "no `/Decode` found: using [0, " << indexed_hival << "] for Indexed color space";
-	    decode_array = { 0.0, static_cast<double>(indexed_hival) };
+	    // ISO 32000-1 table 90: the default is [0, 2^bpc - 1], the full range
+	    // representable at this bit depth, NOT [0, hival]. A decode maps a raw
+	    // sample through (Dmax - Dmin) / (2^bpc - 1), so [0, hival] silently
+	    // rescales every index by hival/(2^bpc - 1) and looks up the wrong
+	    // palette entry -- a 4-bit flag lost its red and white to index >> 1.
+	    const int idx_bpc = (bits_per_component > 0 ? bits_per_component : 8);
+	    const double idx_max = static_cast<double>((1u << idx_bpc) - 1u);
+	    LOG_S(INFO) << "no `/Decode` found: using [0, " << idx_max
+	                << "] for Indexed color space (bpc=" << idx_bpc << ")";
+	    decode_array = { 0.0, idx_max };
 	    decode_present = true;
 	  }
 	else
