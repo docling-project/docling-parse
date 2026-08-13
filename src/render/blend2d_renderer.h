@@ -2054,6 +2054,24 @@ namespace pdflib
               ctx.fill_glyph_run(adjustment.draw_origin,
                                  font,
                                  gb.glyph_run());
+
+            // Text render modes with a stroke component (1, 2, 5, 6) are how
+            // producers synthesise bold from a regular face (PDF 32000-1,
+            // 9.3.6). Stroking the same run on top of the fill is what carries
+            // that weight; drawing only the fill silently drops the emphasis
+            // from every heading set this way.
+            {
+              const int mode = instr.get_rendering_mode();
+              if(mode == 1 or mode == 2 or mode == 5 or mode == 6)
+                {
+                  ctx.set_stroke_style(make_rgba32(instr.get_rgb_filling(),
+                                                   instr.get_fill_alpha()));
+                  ctx.set_stroke_width(std::max(0.3, geom.size * 0.03));
+                  ctx.stroke_glyph_run(adjustment.draw_origin,
+                                       font,
+                                       gb.glyph_run());
+                }
+            }
             // LOG_S(INFO) << "render_text: after fill_glyph_run res=" << text_res;
             // LOG_S(INFO) << "render_text: before ctx.restore";
             ctx.restore();
