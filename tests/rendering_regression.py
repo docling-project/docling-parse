@@ -783,7 +783,10 @@ def average_color(image: Image.Image) -> tuple[float, float, float]:
 def center_color(image: Image.Image) -> tuple[int, int, int]:
     """Colour at the middle of `image`, away from any antialiased border."""
     rgb = image.convert("RGB")
-    return rgb.getpixel((rgb.width // 2, rgb.height // 2))
+    pixel = rgb.getpixel((rgb.width // 2, rgb.height // 2))
+    assert isinstance(pixel, tuple), "RGB images yield 3-tuple pixels"
+    red, green, blue = pixel
+    return (red, green, blue)
 
 
 def color_distance(
