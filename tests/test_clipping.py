@@ -85,9 +85,7 @@ def _assert_is_disc(image, *, what: str) -> None:
 def test_circular_clip_shapes_a_fill():
     """A rectangle filled through a circular clip is a disc, not a rectangle."""
     content = (
-        "q\n"
-        + circle_path(CENTER, CENTER, RADIUS)
-        + "W n\n"
+        "q\n" + circle_path(CENTER, CENTER, RADIUS) + "W n\n"
         "1 0 0 rg\n"
         f"{CENTER - RADIUS} {CENTER - RADIUS} {2 * RADIUS} {2 * RADIUS} re f\n"
         "Q\n"
@@ -103,9 +101,7 @@ def test_circular_clip_shapes_an_image():
     bounding-box spill was first noticed on an image.
     """
     content = (
-        "q\n"
-        + circle_path(CENTER, CENTER, RADIUS)
-        + "W n\n"
+        "q\n" + circle_path(CENTER, CENTER, RADIUS) + "W n\n"
         f"{2 * RADIUS} 0 0 {2 * RADIUS} {CENTER - RADIUS} {CENTER - RADIUS} cm\n"
         "/Im0 Do\n"
         "Q\n"

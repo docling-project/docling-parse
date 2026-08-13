@@ -134,7 +134,9 @@ def test_cid_font_without_dw_advances_by_1000():
 def test_explicit_dw_is_honoured():
     """An explicit /DW still wins over the default."""
     page = _page(
-        _identity_h_pdf(text_bytes="00010002", to_unicode=True, default_width=" /DW 500")
+        _identity_h_pdf(
+            text_bytes="00010002", to_unicode=True, default_width=" /DW 500"
+        )
     )
     cells = list(page.textline_cells)
     assert cells, "the run produced no text cell"

@@ -812,7 +812,9 @@ def ink_mask(image: Image.Image, *, threshold: int = BACKGROUND_THRESHOLD):
     return image.convert("L").point(lambda value: 255 if value < threshold else 0)
 
 
-def coverage_ratio(image: Image.Image, *, threshold: int = BACKGROUND_THRESHOLD) -> float:
+def coverage_ratio(
+    image: Image.Image, *, threshold: int = BACKGROUND_THRESHOLD
+) -> float:
     """Fraction of `image` carrying ink.
 
     This is what separates a shape from its bounding box without pinning exact
@@ -872,9 +874,7 @@ def column_ink_profile(
     mask = ink_mask(image, threshold=threshold)
     width, height = mask.size
     data = list(mask.getdata())
-    return [
-        sum(1 for y in range(height) if data[y * width + x]) for x in range(width)
-    ]
+    return [sum(1 for y in range(height) if data[y * width + x]) for x in range(width)]
 
 
 def ink_bounds(

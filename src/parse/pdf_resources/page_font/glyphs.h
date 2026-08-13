@@ -98,6 +98,17 @@ namespace pdflib
     if(name_to_utf8.count(key)==1)
       return name_to_utf8[key];
 
+    // `.notdef` and friends are not unknown glyphs: they are the standard
+    // names for "nothing is drawn here". Subsetted fonts routinely leave every
+    // entry named `.notdef` while carrying a perfectly good /ToUnicode, so a
+    // marker here does not report a lookup failure -- it injects the literal
+    // text "glyph[.notdef]" into the page, once per character, which is then
+    // both extracted and drawn.
+    if(key==".notdef" or key==".null" or key=="nonmarkingreturn")
+      {
+        return "";
+      }
+
     LOG_S(ERROR) << "could not find a glyph with name=" << key;
     unknown_glyphs.insert(key);
 

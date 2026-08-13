@@ -916,6 +916,14 @@ namespace pdflib
                 else if(decoded_channels == 4)
                   {
                     fmt = PIXEL_FORMAT_CMYK;
+
+                    // libjpeg hands back process ink: it already undoes the
+                    // Adobe inversion while decoding, exactly as the primary
+                    // path assumes. Leaving the convention unset means
+                    // "invert", so the samples were inverted a second time and
+                    // a page with almost no ink came out solid black. Only an
+                    // explicit inverting /Decode changes that.
+                    cmyk_conv = CMYK_CONVENTION_PROCESS;
                     if(image.decode_present and has_default_adobe_cmyk_decode(image.decode_array))
                       {
                         cmyk_conv = CMYK_CONVENTION_ADOBE_INVERTED;

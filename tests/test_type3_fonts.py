@@ -49,9 +49,7 @@ def _type3_pdf(charproc: bytes, *, resources: str = "<< >>") -> bytes:
 
 def test_vector_charproc_is_painted():
     """A charproc that fills a path puts ink on the page."""
-    charproc = stream_object(
-        "", b"1000 0 0 0 1000 1000 d1\n0 0 1000 1000 re f\n"
-    )
+    charproc = stream_object("", b"1000 0 0 0 1000 1000 d1\n0 0 1000 1000 re f\n")
     image = region_image(render_page(_type3_pdf(charproc)), GLYPH_BOX)
 
     assert coverage_ratio(image) > 0.8, (
@@ -66,9 +64,7 @@ def test_vector_charproc_is_not_upside_down():
     Glyph space is y-up. Getting the corner order wrong flips the glyph, which
     is invisible on a symmetrical shape and wrong on every real one.
     """
-    charproc = stream_object(
-        "", b"1000 0 0 0 1000 1000 d1\n0 500 1000 500 re f\n"
-    )
+    charproc = stream_object("", b"1000 0 0 0 1000 1000 d1\n0 500 1000 500 re f\n")
     image = region_image(render_page(_type3_pdf(charproc)), GLYPH_BOX)
 
     bounds = ink_bounds(image)

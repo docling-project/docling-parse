@@ -21,16 +21,13 @@ from tests.rendering_regression import coverage_ratio, ink_bounds, region_image
 TEXT_BOX = (10.0, 60.0, 190.0, 120.0)
 HELVETICA = "/Font << /F1 5 0 R >>"
 FONT_OBJECT = (
-    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica "
-    "/Encoding /WinAnsiEncoding >>"
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>"
 )
 
 
 def _text_pdf(setup: str, *, text: str = "HHHHH", size: int = 36) -> bytes:
     content = f"BT\n{setup}\n/F1 {size} Tf\n20 100 Td\n({text}) Tj\nET\n"
-    return simple_page_pdf(
-        content, resources=HELVETICA, extra_objects=[FONT_OBJECT]
-    )
+    return simple_page_pdf(content, resources=HELVETICA, extra_objects=[FONT_OBJECT])
 
 
 def _ink(setup: str, **kwargs) -> float:

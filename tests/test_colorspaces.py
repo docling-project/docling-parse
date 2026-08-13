@@ -44,9 +44,7 @@ def test_separation_tint_transform_is_evaluated():
     Full tint of an ink whose transform ends at CMYK (0, 1, 1, 0) is red. Read
     as a device value instead, the same 1.0 would come out white or grey.
     """
-    tint = (
-        "<< /FunctionType 2 /Domain [0 1] /C0 [0 0 0 0] /C1 [0 1 1 0] /N 1 >>"
-    )
+    tint = "<< /FunctionType 2 /Domain [0 1] /C0 [0 0 0 0] /C1 [0 1 1 0] /N 1 >>"
     pdf = simple_page_pdf(
         f"/CS0 cs 1 sc\n{SWATCH_CONTENT_BOX}\n",
         resources="/ColorSpace << /CS0 [/Separation /Spot /DeviceCMYK 5 0 R] >>",
@@ -61,9 +59,7 @@ def test_separation_tint_transform_is_evaluated():
 
 def test_separation_half_tint_interpolates():
     """Half tint lands between the transform's endpoints."""
-    tint = (
-        "<< /FunctionType 2 /Domain [0 1] /C0 [0 0 0 0] /C1 [0 1 1 0] /N 1 >>"
-    )
+    tint = "<< /FunctionType 2 /Domain [0 1] /C0 [0 0 0 0] /C1 [0 1 1 0] /N 1 >>"
     pdf = simple_page_pdf(
         f"/CS0 cs 0.5 sc\n{SWATCH_CONTENT_BOX}\n",
         resources="/ColorSpace << /CS0 [/Separation /Spot /DeviceCMYK 5 0 R] >>",
@@ -126,8 +122,9 @@ def test_full_black_tint_is_neutral_and_dark():
     a very dark grey -- so what matters is that it stays neutral and dark
     rather than hitting an exact floor.
     """
-    red, green, blue = _swatch_color(pdf := simple_page_pdf(
-        f"0 0 0 1 k\n{SWATCH_CONTENT_BOX}\n"))
+    red, green, blue = _swatch_color(
+        simple_page_pdf(f"0 0 0 1 k\n{SWATCH_CONTENT_BOX}\n")
+    )
     assert max(red, green, blue) < 60, (
         f"solid K rendered as {(red, green, blue)}, which is not black"
     )

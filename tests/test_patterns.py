@@ -54,7 +54,9 @@ def _pattern_filled_page(pattern_object: bytes) -> bytes:
 
 def test_tiling_pattern_is_painted():
     """A fill in a tiling pattern space paints the pattern cell, repeatedly."""
-    image = region_image(render_page(_pattern_filled_page(_tiling_pattern_object())), FILL_BOX)
+    image = region_image(
+        render_page(_pattern_filled_page(_tiling_pattern_object())), FILL_BOX
+    )
 
     coverage = coverage_ratio(image)
     assert coverage > 0.05, (
@@ -73,7 +75,9 @@ def test_tiling_lattice_covers_both_directions():
     Comparing the halves catches a lattice that only advances one way: total
     coverage stays believable while an entire direction is missing.
     """
-    image = region_image(render_page(_pattern_filled_page(_tiling_pattern_object())), FILL_BOX)
+    image = region_image(
+        render_page(_pattern_filled_page(_tiling_pattern_object())), FILL_BOX
+    )
     width, height = image.size
 
     left = coverage_ratio(image.crop((0, 0, width // 2, height)))
@@ -86,8 +90,7 @@ def test_tiling_lattice_covers_both_directions():
         f"right {right:.3f}"
     )
     assert top == pytest.approx(bottom, abs=0.06), (
-        f"the lattice does not repeat vertically: top {top:.3f} vs "
-        f"bottom {bottom:.3f}"
+        f"the lattice does not repeat vertically: top {top:.3f} vs bottom {bottom:.3f}"
     )
 
 

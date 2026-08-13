@@ -57,9 +57,7 @@ def test_axial_shading_is_painted():
     left = center_color(region_image(result, LEFT_BOX))
     right = center_color(region_image(result, RIGHT_BOX))
 
-    assert left[0] > left[2] + 60, (
-        f"the red end of the gradient is not red: {left}"
-    )
+    assert left[0] > left[2] + 60, f"the red end of the gradient is not red: {left}"
     assert right[2] > right[0] + 60, (
         f"the blue end of the gradient is not blue: {right}"
     )
