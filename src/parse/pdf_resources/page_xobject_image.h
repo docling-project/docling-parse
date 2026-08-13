@@ -1024,10 +1024,11 @@ namespace pdflib
         return;
       }
 
-    if(smask.get_bits_per_component() != 8)
+    const int smask_bpc = smask.get_bits_per_component();
+    if(smask_bpc != 8 and smask_bpc != 1 and smask_bpc != 2 and smask_bpc != 4)
       {
         LOG_S(WARNING) << "SMask bits/component unsupported for xobject_key=" << xobject_key
-                       << " smask_bpc=" << smask.get_bits_per_component();
+                       << " smask_bpc=" << smask_bpc;
         return;
       }
 
@@ -1038,8 +1039,54 @@ namespace pdflib
       }
 
     auto smask_buf = smask.get_decoded_stream_data();
+
+    // A stencil-shaped mask is usually written at 1 bit per pixel, packed
+    // several samples to a byte and padded to a byte at the end of each row.
+    // Reading those bytes as if each held one sample takes the mask's first
+    // eight columns to be the whole row, so the transparent part of the image
+    // keeps painting. Expand to one byte per sample first.
+    std::vector<uint8_t> smask_unpacked;
+    if(smask_bpc != 8)
+      {
+        const size_t row_bits = static_cast<size_t>(sm_w) * static_cast<size_t>(smask_bpc);
+        const size_t row_bytes = (row_bits + 7u) / 8u;
+        const size_t needed = row_bytes * static_cast<size_t>(sm_h);
+        if(smask_buf->getSize() < needed)
+          {
+            LOG_S(WARNING) << "SMask packed stream too small for xobject_key=" << xobject_key
+                           << " size=" << smask_buf->getSize()
+                           << " expected>=" << needed
+                           << " smask_bpc=" << smask_bpc;
+            return;
+          }
+
+        const auto* packed = reinterpret_cast<uint8_t const*>(smask_buf->getBuffer());
+        const uint32_t sample_max = (1u << smask_bpc) - 1u;
+        smask_unpacked.resize(static_cast<size_t>(sm_w) * sm_h);
+
+        for(int row = 0; row < sm_h; ++row)
+          {
+            const uint8_t* row_ptr = packed + static_cast<size_t>(row) * row_bytes;
+            size_t bit_offset = 0;
+            for(int col = 0; col < sm_w; ++col)
+              {
+                uint32_t raw = 0u;
+                for(int bit = 0; bit < smask_bpc; ++bit)
+                  {
+                    const size_t abs_bit = bit_offset + static_cast<size_t>(bit);
+                    const int in_byte = 7 - static_cast<int>(abs_bit % 8u);
+                    raw = (raw << 1u)
+                      | static_cast<uint32_t>((row_ptr[abs_bit / 8u] >> in_byte) & 1u);
+                  }
+                bit_offset += static_cast<size_t>(smask_bpc);
+                smask_unpacked[static_cast<size_t>(row) * sm_w + col] =
+                  static_cast<uint8_t>((raw * 255u) / sample_max);
+              }
+          }
+      }
+
     const size_t smask_expected = static_cast<size_t>(sm_w) * sm_h;
-    if(smask_buf->getSize() < smask_expected)
+    if(smask_unpacked.empty() and smask_buf->getSize() < smask_expected)
       {
         LOG_S(WARNING) << "SMask decoded stream too small for xobject_key=" << xobject_key
                        << " size=" << smask_buf->getSize()
@@ -1052,7 +1099,9 @@ namespace pdflib
     auto out = std::make_shared<std::vector<uint8_t>>();
     out->resize(expected);
 
-    auto const* src = reinterpret_cast<uint8_t const*>(smask_buf->getBuffer());
+    auto const* src = smask_unpacked.empty()
+      ? reinterpret_cast<uint8_t const*>(smask_buf->getBuffer())
+      : smask_unpacked.data();
     auto const decode = smask.get_decode_array();
     const bool has_decode = smask.has_decode_array() and decode.size() >= 2;
 

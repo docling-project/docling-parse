@@ -1793,6 +1793,11 @@ namespace pdflib
     // Dividing by quad_h would produce NaN/Inf in the affine matrix.
     if (geom.quad_h < 0.5) { return; }
 
+    // Type3 glyphs are content-stream procedures; their ink arrives as
+    // image-mask bitmaps emitted at parse time. Drawing the cell text through
+    // a font face here could only produce placeholder boxes over that ink.
+    if (instr.is_type3()) { return; }
+
     // Build the bounding quad path (for optional bbox outline / fallback).
     const BLPath bbox_path = make_quad_path(geom.bbox);
 

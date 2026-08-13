@@ -759,6 +759,60 @@ namespace pdflib
                               grph_state.get_fill_alpha());
         tinstr.set_rendering_mode(rendering_mode);
         tinstr.set_blend_mode(grph_state.get_blend_mode());
+        tinstr.set_is_type3(font.is_type3());
+
+        // A Type3 glyph is a content-stream procedure, not a font glyph, so
+        // the renderer cannot draw it from any font face. Emit the glyph's
+        // mask as an image-mask bitmap over its device quad; the pipeline then
+        // places, clips and paints it like any other image.
+        if(font.is_type3() and glyph_code >= 0)
+          {
+            auto g3 = font.get_type3_glyph(static_cast<uint32_t>(glyph_code));
+            if(g3 and g3->valid and g3->mask)
+              {
+                const std::array<double, 6>& fm = font.get_font_matrix();
+                const std::array<double, 6>& gm = g3->cm;
+
+                // unit square -> (cm) -> glyph space -> (/FontMatrix) -> text
+                // space (plus rise) -> text matrix -> CTM -> device
+                auto map_pt = [&](double ux, double uy, double& dx, double& dy)
+                {
+                  const double gx = gm[0]*ux + gm[2]*uy + gm[4];
+                  const double gy = gm[1]*ux + gm[3]*uy + gm[5];
+                  // /FontMatrix output is in text-space em units; the font
+                  // size scales it exactly as compute_rect scales metrics.
+                  const double ex = (fm[0]*gx + fm[2]*gy + fm[4]) * font_size;
+                  const double ey = (fm[1]*gx + fm[3]*gy + fm[5]) * font_size + rise;
+                  const double tx = text_matrix[0]*ex + text_matrix[3]*ey + text_matrix[6];
+                  const double ty = text_matrix[1]*ex + text_matrix[4]*ey + text_matrix[7];
+                  dx = trafo_matrix[0]*tx + trafo_matrix[3]*ty + trafo_matrix[6];
+                  dy = trafo_matrix[1]*tx + trafo_matrix[4]*ty + trafo_matrix[7];
+                };
+
+                // Corner order matches the image path (bitmap.h): unit
+                // square (0,0), (0,1), (1,1), (1,0).
+                double x0, y0, x1, y1, x2, y2, x3, y3;
+                map_pt(0, 0, x0, y0);
+                map_pt(0, 1, x1, y1);
+                map_pt(1, 1, x2, y2);
+                map_pt(1, 0, x3, y3);
+
+                std::array<int, 3> shape = {g3->h, g3->w, 1};
+                bitmap_instruction b3(
+                  "type3:" + cell.font_key + ":" + std::to_string(glyph_code),
+                  g3->mask,
+                  nullptr,
+                  CMYK_CONVENTION_UNKNOWN,
+                  shape,
+                  PIXEL_FORMAT_GRAY,
+                  true,
+                  grph_state.get_rgb_filling_ops(),
+                  grph_state.get_fill_alpha(),
+                  x0, y0, x1, y1, x2, y2, x3, y3);
+
+                instructions.add_bitmap_instruction(std::move(b3));
+              }
+          }
 
         if(config.extract_font_programs)
           {
