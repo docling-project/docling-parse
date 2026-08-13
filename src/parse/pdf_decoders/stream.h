@@ -23,6 +23,7 @@ namespace pdflib
                 std::shared_ptr<pdf_resource<PAGE_GRPHS>>       page_grphs_,
                 std::shared_ptr<pdf_resource<PAGE_COLORSPACES>> page_colorspaces_,
                 std::shared_ptr<pdf_resource<PAGE_SHADINGS>>    page_shadings_,
+                std::shared_ptr<pdf_resource<PAGE_PATTERNS>>   page_patterns_,
                 std::shared_ptr<pdf_resource<PAGE_XOBJECTS>>    page_xobjects_,
 
                 pdf_render_instructions& instructions,
@@ -82,6 +83,10 @@ namespace pdflib
     // instruction that covers the current clip region.
     void do_shading(const std::string& sh_name);
 
+    // `scn` naming a tiling pattern: replay the pattern cell across the page
+    // box. Returns false when the pattern cannot be resolved or painted.
+    bool do_pattern_fill(const std::string& pattern_name);
+
     // marked-content (BMC/BDC ... EMC) tracking, used to honor /ActualText
     // replacement text (PDF 32000-1, section 14.9.4)
     struct marked_content_entry
@@ -125,6 +130,14 @@ namespace pdflib
     std::shared_ptr<pdf_resource<PAGE_GRPHS>>       page_grphs;
     std::shared_ptr<pdf_resource<PAGE_COLORSPACES>> page_colorspaces;
     std::shared_ptr<pdf_resource<PAGE_SHADINGS>>    page_shadings;
+    std::shared_ptr<pdf_resource<PAGE_PATTERNS>>   page_patterns;
+
+    // CTM in force when this stream began. Pattern space is defined against
+    // the default space of the page, not against the CTM at the fill, so a
+    // pattern needs this rather than the current matrix.
+    std::array<double, 9> base_ctm_ = {1, 0, 0, 0, 1, 0, 0, 0, 1};
+    bool base_ctm_valid_ = false;
+
     std::shared_ptr<pdf_resource<PAGE_XOBJECTS>>    page_xobjects;
 
     pdf_render_instructions& instructions;
@@ -158,6 +171,7 @@ namespace pdflib
                                    std::shared_ptr<pdf_resource<PAGE_GRPHS>>       page_grphs_,
                                    std::shared_ptr<pdf_resource<PAGE_COLORSPACES>> page_colorspaces_,
                                    std::shared_ptr<pdf_resource<PAGE_SHADINGS>>    page_shadings_,
+                                   std::shared_ptr<pdf_resource<PAGE_PATTERNS>>   page_patterns_,
 
                                    std::shared_ptr<pdf_resource<PAGE_XOBJECTS>>    page_xobjects_,
 
@@ -175,6 +189,7 @@ namespace pdflib
     page_grphs(page_grphs_),
     page_colorspaces(page_colorspaces_),
     page_shadings(page_shadings_),
+    page_patterns(page_patterns_),
 
     page_xobjects(page_xobjects_),
 
@@ -296,6 +311,11 @@ namespace pdflib
   void pdf_decoder<STREAM>::interprete(std::vector<qpdf_stream_instruction>& stream_,
                                        std::vector<qpdf_stream_instruction>& parameters_)
   {
+    if(not base_ctm_valid_ and stack.size() > 0)
+      {
+        base_ctm_ = current_graphic_state().get_trafo_matrix();
+        base_ctm_valid_ = true;
+      }
     LOG_S(INFO) << __FUNCTION__;
 
     stream = stream_;
@@ -625,6 +645,195 @@ namespace pdflib
   // 8.7.4.5: `sh` paints the named shading over the whole current clip
   // region, taking its colours from the shading's own colour space and
   // function rather than from the current fill colour.
+  bool pdf_decoder<STREAM>::do_pattern_fill(const std::string& pattern_name)
+  {
+    if(not page_patterns or page_patterns->count(pattern_name) == 0)
+      {
+        return false;
+      }
+
+    pdf_resource<PAGE_PATTERN>& pattern = (*page_patterns)[pattern_name];
+    if(not pattern.is_valid() or pattern.get_pattern_type() != 1)
+      {
+        // Shading patterns (type 2) are not painted here yet.
+        return false;
+      }
+
+    std::vector<qpdf_stream_instruction> cell = pattern.parse_stream();
+    if(cell.empty())
+      {
+        return false;
+      }
+
+    const std::array<double, 9>& want = pattern.get_matrix();
+    const std::array<double, 9>& cur  = current_graphic_state().get_trafo_matrix();
+
+    // No base recorded yet (a pattern used before any q): the current matrix
+    // is the best available stand-in and is usually identical to it.
+    if(not base_ctm_valid_)
+      {
+        base_ctm_ = cur;
+        base_ctm_valid_ = true;
+      }
+
+    // inverse of the current (affine) CTM
+    const double a = cur[0], b = cur[1], c = cur[3], d = cur[4];
+    const double e = cur[6], f = cur[7];
+    const double det = a * d - b * c;
+    if(std::abs(det) < 1e-12) { return false; }
+
+    const std::array<double, 9> inv = {
+       d / det, -b / det, 0.0,
+      -c / det,  a / det, 0.0,
+      (c * f - d * e) / det, (b * e - a * f) / det, 1.0
+    };
+
+    auto mul = [](const std::array<double, 9>& m, const std::array<double, 9>& n)
+    {
+      std::array<double, 9> r = {0, 0, 0, 0, 0, 0, 0, 0, 1};
+      r[0] = m[0]*n[0] + m[1]*n[3];
+      r[1] = m[0]*n[1] + m[1]*n[4];
+      r[3] = m[3]*n[0] + m[4]*n[3];
+      r[4] = m[3]*n[1] + m[4]*n[4];
+      r[6] = m[6]*n[0] + m[7]*n[3] + n[6];
+      r[7] = m[6]*n[1] + m[7]*n[4] + n[7];
+      return r;
+    };
+
+    // Pattern space -> device is Matrix x base. cm() post-multiplies by the
+    // CURRENT matrix, so hand it Matrix x base x inverse(current), which
+    // composes back to exactly that. Dropping the base placed the cell in raw
+    // pattern coordinates and put it off the top of the page.
+    const std::array<double, 9> to_pattern = mul(mul(want, base_ctm_), inv);
+
+    // How many cells to lay down: cover the page box in pattern space.
+    const std::array<double, 4> page_box = page_dimension.get_crop_bbox();
+    double xs = pattern.get_x_step();
+    double ys = pattern.get_y_step();
+    if(xs <= 0.0 or ys <= 0.0) { xs = ys = 0.0; }
+
+    // Which cells of the lattice actually touch the page? Take the page box
+    // back through the pattern transform and read off the index range. The
+    // lattice extends in BOTH directions: this pattern's origin sits a full
+    // page above the page box, so the cell that covers it is at index -1 and
+    // a 0..n loop painted nothing but off-page copies.
+    int ix0 = 0, ix1 = 0, iy0 = 0, iy1 = 0;
+    if(xs > 0.0 and ys > 0.0)
+      {
+        const std::array<double, 9> pat = mul(want, base_ctm_);
+        const double pa = pat[0], pb = pat[1], pc = pat[3], pd = pat[4];
+        const double pe = pat[6], pf = pat[7];
+        const double pdet = pa * pd - pb * pc;
+        if(std::abs(pdet) > 1e-12)
+          {
+            auto to_pattern_space = [&](double X, double Y, double& u, double& v)
+            {
+              const double x = X - pe, y = Y - pf;
+              u = ( x * pd - y * pc) / pdet;
+              v = (-x * pb + y * pa) / pdet;
+            };
+
+            const double cx[4] = {page_box[0], page_box[2], page_box[2], page_box[0]};
+            const double cy[4] = {page_box[1], page_box[1], page_box[3], page_box[3]};
+            double umin = 0, umax = 0, vmin = 0, vmax = 0;
+            for(int i = 0; i < 4; i++)
+              {
+                double u, v;
+                to_pattern_space(cx[i], cy[i], u, v);
+                if(i == 0) { umin = umax = u; vmin = vmax = v; }
+                umin = std::min(umin, u); umax = std::max(umax, u);
+                vmin = std::min(vmin, v); vmax = std::max(vmax, v);
+              }
+
+            const double bx = pattern.has_bbox() ? pattern.get_bbox()[0] : 0.0;
+            const double by = pattern.has_bbox() ? pattern.get_bbox()[1] : 0.0;
+            ix0 = static_cast<int>(std::floor((umin - bx) / xs));
+            ix1 = static_cast<int>(std::ceil ((umax - bx) / xs));
+            iy0 = static_cast<int>(std::floor((vmin - by) / ys));
+            iy1 = static_cast<int>(std::ceil ((vmax - by) / ys));
+          }
+      }
+
+    // Bounded: a degenerate step must not spawn a lattice of thousands.
+    constexpr int max_span = 16;
+    if(ix1 - ix0 > max_span) { ix1 = ix0 + max_span; }
+    if(iy1 - iy0 > max_span) { iy1 = iy0 + max_span; }
+
+    LOG_S(INFO) << "painting tiling pattern `" << pattern_name << "` cells x["
+                << ix0 << ", " << ix1 << "] y[" << iy0 << ", " << iy1 << "]";
+
+    auto page_fonts_       = std::make_shared<pdf_resource<PAGE_FONTS>>(page_fonts);
+    auto page_grphs_       = std::make_shared<pdf_resource<PAGE_GRPHS>>(page_grphs);
+    auto page_colorspaces_ = std::make_shared<pdf_resource<PAGE_COLORSPACES>>(page_colorspaces);
+    auto page_shadings_    = std::make_shared<pdf_resource<PAGE_SHADINGS>>(page_shadings);
+    auto page_patterns_    = std::make_shared<pdf_resource<PAGE_PATTERNS>>(page_patterns);
+    auto page_xobjects_    = std::make_shared<pdf_resource<PAGE_XOBJECTS>>(page_xobjects);
+
+    if(pattern.has_resources())
+      {
+        QPDFObjectHandle res = pattern.get_resources();
+        if(res.hasKey("/Font"))      { QPDFObjectHandle o = res.getKey("/Font");      page_fonts_->set(o, timings); }
+        if(res.hasKey("/ExtGState")) { QPDFObjectHandle o = res.getKey("/ExtGState"); page_grphs_->set(o, timings); }
+        if(res.hasKey("/ColorSpace")){ QPDFObjectHandle o = res.getKey("/ColorSpace");page_colorspaces_->set(o); }
+        if(res.hasKey("/Shading"))   { QPDFObjectHandle o = res.getKey("/Shading");   page_shadings_->set(o); }
+        if(res.hasKey("/Pattern"))   { QPDFObjectHandle o = res.getKey("/Pattern");   page_patterns_->set(o); }
+        if(res.hasKey("/XObject"))   { QPDFObjectHandle o = res.getKey("/XObject");   page_xobjects_->set(o, timings); }
+      }
+
+    bool painted = false;
+
+    for(int iy = iy0; iy <= iy1; iy++)
+      {
+        for(int ix = ix0; ix <= ix1; ix++)
+          {
+            std::array<double, 9> step = {1, 0, 0, 0, 1, 0,
+                                          ix * xs, iy * ys, 1};
+            std::array<double, 9> place = mul(step, to_pattern);
+
+            this->q();
+            const std::array<double, 6> place6 = {place[0], place[1],
+                                                  place[3], place[4],
+                                                  place[6], place[7]};
+            current_global_state().cm(place6);
+
+            // The cell replays on a clean path. The state q() pushed still
+            // carries the path currently being filled with this pattern, and
+            // the cell's own painting operator would paint that path too --
+            // the whole fill region came out flooded in the cell's colour,
+            // with the tiles only visible outside it. Q() restores it.
+            std::vector<qpdf_stream_instruction> no_parameters;
+            current_shape_state().n(no_parameters);
+
+            pdf_decoder<STREAM> cell_stream(config,
+                                            page_dimension,
+                                            page_cells,
+                                            page_shapes,
+                                            page_images,
+                                            page_fonts_,
+                                            page_grphs_,
+                                            page_colorspaces_,
+                                            page_shadings_,
+                                            page_patterns_,
+                                            page_xobjects_,
+                                            instructions,
+                                            timings);
+
+            bool updated_stack = cell_stream.update_stack(stack, stack_count);
+
+            std::vector<qpdf_stream_instruction> parameters;
+            std::vector<qpdf_stream_instruction> insts = cell;
+            cell_stream.interprete(insts, parameters);
+
+            if(updated_stack) { cell_stream.Q(); }
+
+            this->Q();
+            painted = true;
+          }
+      }
+
+    return painted;
+  }
+
   void pdf_decoder<STREAM>::do_shading(const std::string& sh_name)
   {
     // Without shape tracking there is no clip path to bound the shading, and
@@ -744,6 +953,7 @@ namespace pdflib
     auto page_grphs_       = std::make_shared<pdf_resource<PAGE_GRPHS>>(page_grphs);
     auto page_colorspaces_ = std::make_shared<pdf_resource<PAGE_COLORSPACES>>(page_colorspaces);
     auto page_shadings_    = std::make_shared<pdf_resource<PAGE_SHADINGS>>(page_shadings);
+    auto page_patterns_    = std::make_shared<pdf_resource<PAGE_PATTERNS>>(page_patterns);
     auto page_xobjects_    = std::make_shared<pdf_resource<PAGE_XOBJECTS>>(page_xobjects);
 
     // parse the resources of the xobject into the child resources
@@ -772,6 +982,12 @@ namespace pdflib
         {
           QPDFObjectHandle xobj_shadings = xobj.get_shadings();
           page_shadings_->set(xobj_shadings);
+        }
+
+      if(xobj.has_patterns())
+        {
+          QPDFObjectHandle xobj_patterns = xobj.get_patterns();
+          page_patterns_->set(xobj_patterns);
         }
 
       if(xobj.has_xobjects())
@@ -816,6 +1032,7 @@ namespace pdflib
                                        page_grphs_,
                                        page_colorspaces_,
                                        page_shadings_,
+                                       page_patterns_,
                                        page_xobjects_,
 
                                        instructions,
@@ -1527,6 +1744,11 @@ namespace pdflib
       case pdf_operator::f:
         {
           LOG_S(INFO) << "executing " << to_string(name);
+          if(current_graphic_state().get_fill_is_unresolved_pattern() and
+             not current_graphic_state().get_fill_pattern_name().empty())
+            {
+              do_pattern_fill(current_graphic_state().get_fill_pattern_name());
+            }
           current_shape_state().f(parameters);
         }
         break;
@@ -1541,6 +1763,11 @@ namespace pdflib
       case pdf_operator::fStar:
         {
           LOG_S(INFO) << "executing " << to_string(name);
+          if(current_graphic_state().get_fill_is_unresolved_pattern() and
+             not current_graphic_state().get_fill_pattern_name().empty())
+            {
+              do_pattern_fill(current_graphic_state().get_fill_pattern_name());
+            }
           current_shape_state().fStar(parameters);
         }
         break;

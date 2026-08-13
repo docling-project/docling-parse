@@ -119,6 +119,9 @@ namespace pdflib
      */
     
   public:
+    // Current transformation matrix. A pattern's /Matrix maps pattern space to
+    // the page's default space, so placing one needs the CTM in force.
+    const std::array<double, 9>& get_trafo_matrix() const { return trafo_matrix; }
 
     pdf_state(std::array<double, 9>&    trafo_matrix_,
               std::shared_ptr<pdf_resource<PAGE_GRPHS>> page_grphs_,
@@ -178,6 +181,16 @@ namespace pdflib
     // of any enclosing transparency group; 1.0 = opaque.
     double get_stroke_alpha() const { return stroke_alpha * group_alpha; }
     double get_fill_alpha() const { return fill_alpha * group_alpha; }
+
+    // True while the non-stroking colour is a /Pattern that has not been
+    // resolved to a paint. A Pattern colour space has no initial colour value
+    // (ISO 32000-1, 8.6.6.2), so the black the state otherwise carries is not
+    // "the colour": filling with it paints a black sheet where the pattern
+    // should be.
+    bool get_fill_is_unresolved_pattern() const { return fill_is_unresolved_pattern; }
+
+    // Name given by the scn that selected a pattern, empty when none.
+    const std::string& get_fill_pattern_name() const { return fill_pattern_name; }
 
     // ExtGState /BM, likewise folded together with the blend mode of an
     // enclosing group: content that does not blend on its own inherits the
@@ -257,6 +270,8 @@ namespace pdflib
 
     double stroke_alpha;
     double fill_alpha;
+    bool fill_is_unresolved_pattern = false;
+    std::string fill_pattern_name;
 
     blend_mode_name blend_mode;
     soft_mask_state soft_mask;
@@ -343,6 +358,8 @@ namespace pdflib
     // alpha is part of the graphics state and must survive q/Q save/restore
     this->stroke_alpha = other.stroke_alpha;
     this->fill_alpha = other.fill_alpha;
+    this->fill_is_unresolved_pattern = other.fill_is_unresolved_pattern;
+    this->fill_pattern_name = other.fill_pattern_name;
 
     this->blend_mode = other.blend_mode;
     this->soft_mask = other.soft_mask;
@@ -656,7 +673,14 @@ namespace pdflib
       }
     else if(cs_name=="Pattern")
       {
-        // pattern paint is unsupported; keep the current color
+        // A Pattern space carries no initial colour; the paint comes from the
+        // pattern named by a later scn. Flagged so a fill made before that
+        // pattern can be resolved paints nothing rather than black.
+        if(&rgb == &rgb_filling_ops)
+          {
+            fill_is_unresolved_pattern = true;
+            fill_pattern_name.clear();
+          }
       }
     else if(page_colorspaces!=nullptr and page_colorspaces->count("/"+cs_name)>0)
       {
@@ -692,12 +716,26 @@ namespace pdflib
 
   void pdf_state<GRPH>::sc(std::vector<qpdf_stream_instruction>& instructions)
   {
-    set_color(instructions, rgb_filling_ops, filling_cs_key, __FUNCTION__);
+    if(set_color(instructions, rgb_filling_ops, filling_cs_key, __FUNCTION__))
+      {
+        fill_is_unresolved_pattern = false;
+      }
   }
 
   void pdf_state<GRPH>::scn(std::vector<qpdf_stream_instruction>& instructions)
   {
-    set_color(instructions, rgb_filling_ops, filling_cs_key, __FUNCTION__);
+    // A pattern-name operand leaves set_color false: the fill stays flagged,
+    // and the name is kept so the decoder can try to paint that pattern.
+    if(set_color(instructions, rgb_filling_ops, filling_cs_key, __FUNCTION__))
+      {
+        fill_is_unresolved_pattern = false;
+        fill_pattern_name.clear();
+      }
+    else if(fill_is_unresolved_pattern and not instructions.empty())
+      {
+        std::string nm = instructions.back().unparse();
+        if(not nm.empty() and nm.front() == '/') { fill_pattern_name = nm; }
+      }
   }
   
   // G/g/RG/rg/K/k also switch the current color space to the device space,
@@ -714,6 +752,7 @@ namespace pdflib
   // `g` is the NON-stroking (fill) gray operator
   void pdf_state<GRPH>::g(std::vector<qpdf_stream_instruction>& instructions)
   {
+    fill_is_unresolved_pattern = false;
     if(not verify(instructions, 1, __FUNCTION__) ) { return; }
 
     filling_cs_key = "";
@@ -734,6 +773,7 @@ namespace pdflib
 
   void pdf_state<GRPH>::rg(std::vector<qpdf_stream_instruction>& instructions)
   {
+    fill_is_unresolved_pattern = false;
     if(not verify(instructions, 3, __FUNCTION__) ) { return; }
 
     int r = static_cast<int>(std::round(255.0*instructions[0].to_double()));
@@ -757,6 +797,7 @@ namespace pdflib
 
   void pdf_state<GRPH>::k(std::vector<qpdf_stream_instruction>& instructions)
   {
+    fill_is_unresolved_pattern = false;
     if(not verify(instructions, 4, __FUNCTION__) ) { return; }
 
     filling_cs_key = "";
