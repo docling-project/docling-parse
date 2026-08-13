@@ -1688,7 +1688,10 @@ namespace pdflib
         // halves every advance of a CID font that omits it, so its cells come
         // out half the width of the glyphs actually drawn.
 	default_width = 1000;
-	has_default_width = true;
+        // /DW belongs to a CID font, and only there does its default stand in
+        // for a missing width. A simple font must keep falling through to its
+        // base-14 metrics, which carry real per-glyph advances.
+	has_default_width = (subtype == TYPE_0);
         LOG_S(WARNING) << "could not find default-width: defaulting to " << default_width;
       }    
   }
