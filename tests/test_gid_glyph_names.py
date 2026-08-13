@@ -57,7 +57,9 @@ def _build_pdf(glyph_names: list, include_tounicode: bool) -> bytes:
         f"<< /Length {len(content)} >>\nstream\n{content}\nendstream",
     ]
     if include_tounicode:
-        objects.append(f"<< /Length {len(_TOUNICODE)} >>\nstream\n{_TOUNICODE}\nendstream")
+        objects.append(
+            f"<< /Length {len(_TOUNICODE)} >>\nstream\n{_TOUNICODE}\nendstream"
+        )
 
     out = b"%PDF-1.4\n"
     offsets = []
@@ -77,9 +79,11 @@ def _build_pdf(glyph_names: list, include_tounicode: bool) -> bytes:
     return out
 
 
-def _extract_text(glyph_names: list, include_tounicode: bool) -> str:
+def _extract_text(
+    glyph_names: list, include_tounicode: bool, keep_glyphs: bool = True
+) -> str:
     parser = DoclingPdfParser(loglevel="fatal")
-    config = DecodeConfig(keep_glyphs=True)
+    config = DecodeConfig(keep_glyphs=keep_glyphs)
     doc = parser.load(
         path_or_stream=BytesIO(_build_pdf(glyph_names, include_tounicode)),
         decode_config=config,
@@ -118,3 +122,17 @@ def test_meaningful_unknown_names_keep_name_fallback():
     text = _extract_text(["Th", "ft", "tt"], include_tounicode=False)
     assert text == "Thfttt"
     assert "GLYPH" not in text
+
+
+def test_default_config_strips_gid_markers():
+    # Production default (keep_glyphs=False, see config.h): the marker is
+    # stripped to a space in pdf_states/text.h, so neither GLYPH<...> nor
+    # the fabricated gid-name text ever reaches the output.
+    text = _extract_text(
+        ["gid00043", "gid00049", "gid00041"],
+        include_tounicode=False,
+        keep_glyphs=False,
+    )
+    assert "GLYPH" not in text
+    assert "gid" not in text
+    assert text.strip() == ""
