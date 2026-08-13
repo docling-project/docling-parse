@@ -10,6 +10,8 @@
 #endif
 #include <loguru.hpp>
 
+#include <resources.h>
+
 #include <algorithm>
 #include <array>
 #include <cctype>
@@ -57,6 +59,17 @@ namespace pdflib
                                  const std::string& base_font,
                                  bool resolve_fonts,
                                  float font_similarity_cutoff);
+
+    // Resolves a face by what the text actually needs rather than by what the
+    // PDF asked for. Name resolution answers "which font was requested"; once
+    // that face has produced a .notdef run the only useful question left is
+    // "which installed face can draw these codepoints" -- a Latin-named font
+    // carrying Arabic or CJK text is common, and answering by name there can
+    // only ever return another face that cannot draw it, leaving tofu.
+    //
+    // Returns an invalid face for Latin-only text (the name-based path is
+    // already correct there) and when nothing installed covers the script.
+    BLFontFace resolve_face_for_text(const std::string& utf8_text);
 
   private:
 
@@ -141,6 +154,26 @@ namespace pdflib
                                 const std::filesystem::path& suffix = {});
     static std::vector<std::filesystem::path> system_font_directories();
     static std::vector<std::filesystem::path> fallback_font_candidates();
+    static bool is_font_file(const std::filesystem::path& p);
+    static void scan_for_fallback_fonts(std::vector<std::filesystem::path>& paths);
+    // Latin fallbacks cannot draw CJK (.notdef / "tofu"); detect CJK requests
+    // so the resolver can prefer a CJK-capable face.
+    static bool is_cjk_font_request(const std::string& name);
+    static std::vector<std::filesystem::path> cjk_fallback_candidates();
+
+    // Names of faces that carry Arabic, across Linux, Windows and macOS.
+    static std::vector<std::filesystem::path> arabic_fallback_candidates();
+
+    // Classifies the text by the first non-Latin script it contains and writes
+    // a stable key ("cjk", "arabic", ...) used to cache the chosen face.
+    // Returns false when the text is Latin/ASCII only.
+    static bool text_script_key(const std::string& utf8_text, std::string& script_key);
+
+    // True when every shaped glyph is id 0, i.e. the face cannot draw the text.
+    static bool shaped_run_all_notdef(const BLGlyphBuffer& gb);
+
+    // True when `face` can shape `utf8_text` into at least one real glyph.
+    static bool face_covers_text(BLFontFace& face, const std::string& utf8_text);
 
     static std::string bl_string_to_std(const BLString& s);
     static std::string font_ref_key(const font_face_ref& ref);
@@ -164,6 +197,7 @@ namespace pdflib
       const std::vector<font_face_ref>& refs,
       const font_request& request) const;
     std::optional<font_face_ref> find_first_existing_fallback() const;
+    std::optional<font_face_ref> find_first_existing_cjk_fallback() const;
     std::optional<font_face_ref> fuzzy_find_font(const font_request& request,
                                                  float font_similarity_cutoff) const;
 
@@ -173,6 +207,13 @@ namespace pdflib
     std::unordered_map<std::string, std::vector<font_face_ref>> name_index_;
     std::unordered_map<std::string, indexed_font_face> face_metadata_;
     std::vector<std::filesystem::path> fallback_candidates_;
+    std::vector<std::filesystem::path> cjk_candidates_;
+    std::vector<std::filesystem::path> arabic_candidates_;
+
+    // One resolved face per script. Coverage is probed by shaping, which is far
+    // too costly to repeat per text cell.
+    mutable std::shared_mutex script_cache_mutex_;
+    std::unordered_map<std::string, BLFontFace> script_face_cache_;
 
     mutable std::shared_mutex match_cache_mutex_;
     std::unordered_map<match_cache_key,
@@ -226,9 +267,32 @@ namespace pdflib
     if (not font_ref.has_value() or font_ref->path.empty())
       {
         warm();
-        LOG_S(WARNING) << "blend2d font resolver: using fallback font"
-                       << " selected_key=`" << cache_key << "`";
-        font_ref = find_first_existing_fallback();
+        // Prefer a CJK-capable face before the Latin fallback (.notdef boxes).
+        if (is_cjk_font_request(cache_key) or is_cjk_font_request(font_name)
+            or is_cjk_font_request(base_font))
+          {
+            font_ref = find_first_existing_cjk_fallback();
+            if (font_ref.has_value() and not font_ref->path.empty())
+              {
+                LOG_S(WARNING) << "blend2d font resolver: using CJK fallback font"
+                               << " selected_key=`" << cache_key << "`"
+                               << " path=`" << font_ref->path << "`";
+              }
+            else
+              {
+                LOG_S(WARNING) << "blend2d font resolver: CJK request but no CJK-capable"
+                               << " font installed; glyphs will render as .notdef boxes."
+                               << " Install e.g. google-noto-sans-cjk-fonts, or set"
+                               << " DOCLING_PARSE_CJK_FALLBACK_FONT."
+                               << " selected_key=`" << cache_key << "`";
+              }
+          }
+        if (not font_ref.has_value() or font_ref->path.empty())
+          {
+            LOG_S(WARNING) << "blend2d font resolver: using fallback font"
+                           << " selected_key=`" << cache_key << "`";
+            font_ref = find_first_existing_fallback();
+          }
       }
 
     if (not font_ref.has_value() or font_ref->path.empty())
@@ -458,6 +522,8 @@ namespace pdflib
 
 #if defined(_WIN32)
     append_env_path(dirs, "WINDIR", "Fonts");
+    // SystemRoot covers stripped environments where WINDIR is unset.
+    append_env_path(dirs, "SystemRoot", "Fonts");
     append_env_path(dirs, "LOCALAPPDATA", std::filesystem::path("Microsoft") / "Windows" / "Fonts");
 #elif defined(__APPLE__)
     dirs.emplace_back("/System/Library/Fonts");
@@ -472,28 +538,482 @@ namespace pdflib
     append_env_path(dirs, "HOME", ".fonts");
 #endif
 
+    // Package-shipped fonts last so a real system font of the same name wins,
+    // while still allowing NAME matching (e.g. Times -> Liberation Serif).
+    {
+      std::error_code ec;
+      const std::filesystem::path bundled =
+        resource_utils::get_resources_dir(false) / "fonts" / "fallback";
+      if (std::filesystem::is_directory(bundled, ec)) { dirs.push_back(bundled); }
+    }
+
     return dirs;
   }
 
   inline std::vector<std::filesystem::path> blend2d_font_resolver::fallback_font_candidates()
   {
-    std::vector<std::filesystem::path> paths;
+    // Portable fallback order: env override, package-shipped fonts, well-known
+    // paths per OS/distro, then a bounded scan of system_font_directories().
+    // Hardcoding only Debian layout left RHEL-family hosts with outline boxes.
+    namespace fs = std::filesystem;
+    std::vector<fs::path> paths;
+
+    if (auto override_path = getenv_string("DOCLING_PARSE_FALLBACK_FONT"))
+      {
+        paths.emplace_back(*override_path);
+      }
+
+    // Bundled fonts: sans before serif before mono (not alphabetical), so a
+    // failed name match does not substitute LiberationMono for proportional text.
+    {
+      std::error_code ec;
+      const fs::path bundled =
+        resource_utils::get_resources_dir(false) / "fonts" / "fallback";
+      if (fs::is_directory(bundled, ec))
+        {
+          std::vector<fs::path> found;
+          for (const auto& entry : fs::directory_iterator(bundled, ec))
+            {
+              if (is_font_file(entry.path())) { found.push_back(entry.path()); }
+            }
+          std::sort(found.begin(), found.end());
+
+          auto rank = [](const fs::path& p)
+          {
+            std::string s = p.stem().string();
+            std::transform(s.begin(), s.end(), s.begin(),
+                           [](unsigned char c) { return std::tolower(c); });
+            if (s.find("mono") != std::string::npos) { return 2; }
+            if (s.find("serif") != std::string::npos) { return 1; }
+            return 0;  // sans / everything else
+          };
+          std::stable_sort(found.begin(), found.end(),
+                           [&rank](const fs::path& a, const fs::path& b)
+                           { return rank(a) < rank(b); });
+          paths.insert(paths.end(), found.begin(), found.end());
+        }
+    }
 
 #if defined(_WIN32)
-    append_env_path(paths, "WINDIR", std::filesystem::path("Fonts") / "arial.ttf");
-    append_env_path(paths, "WINDIR", std::filesystem::path("Fonts") / "times.ttf");
-    append_env_path(paths, "WINDIR", std::filesystem::path("Fonts") / "cour.ttf");
+    for (const char* env : {"WINDIR", "SystemRoot"})
+      {
+        for (const char* name : {"arial.ttf", "segoeui.ttf", "calibri.ttf",
+                                 "tahoma.ttf", "verdana.ttf", "times.ttf", "cour.ttf"})
+          {
+            append_env_path(paths, env, fs::path("Fonts") / name);
+          }
+      }
 #elif defined(__APPLE__)
     paths.emplace_back("/System/Library/Fonts/Helvetica.ttc");
     paths.emplace_back("/System/Library/Fonts/Supplemental/Arial.ttf");
     paths.emplace_back("/Library/Fonts/Arial.ttf");
+    paths.emplace_back("/System/Library/Fonts/SFNS.ttf");
 #else
+    // Debian / Ubuntu
     paths.emplace_back("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf");
     paths.emplace_back("/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf");
+    paths.emplace_back("/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf");
     paths.emplace_back("/usr/share/fonts/truetype/freefont/FreeSans.ttf");
+    paths.emplace_back("/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf");
+    // RHEL / Fedora / CentOS (fonts live under per-package directories)
+    paths.emplace_back("/usr/share/fonts/dejavu-sans-fonts/DejaVuSans.ttf");
+    paths.emplace_back("/usr/share/fonts/dejavu/DejaVuSans.ttf");
+    paths.emplace_back("/usr/share/fonts/liberation-fonts/LiberationSans-Regular.ttf");
+    paths.emplace_back("/usr/share/fonts/liberation-sans/LiberationSans-Regular.ttf");
+    paths.emplace_back("/usr/share/fonts/google-noto/NotoSans-Regular.ttf");
+    // Arch
+    paths.emplace_back("/usr/share/fonts/TTF/DejaVuSans.ttf");
+    paths.emplace_back("/usr/share/fonts/TTF/LiberationSans-Regular.ttf");
+    // openSUSE
+    paths.emplace_back("/usr/share/fonts/truetype/DejaVuSans.ttf");
+    // Alpine
+    paths.emplace_back("/usr/share/fonts/ttf-dejavu/DejaVuSans.ttf");
 #endif
 
+    // Bounded scan for unusual layouts; last resort is any font file found.
+    scan_for_fallback_fonts(paths);
+
     return paths;
+  }
+
+  inline bool blend2d_font_resolver::is_cjk_font_request(const std::string& name)
+  {
+    // Non-ASCII names (e.g. Shift-JIS MS PGothic) or known CJK family tokens.
+    for (unsigned char c : name)
+      {
+        if (c >= 0x80) { return true; }
+      }
+
+    std::string s;
+    s.reserve(name.size());
+    for (char c : name)
+      {
+        if (std::isalnum(static_cast<unsigned char>(c)))
+          {
+            s.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+          }
+      }
+
+    static const std::array<const char*, 24> tokens = {
+      "mincho", "gothic", "meiryo", "yugothic", "yumincho", "hiragino",
+      "simsun", "simhei", "simkai", "nsimsun", "fangsong", "kaiti", "songti",
+      "heiti", "msyahei", "msyh", "msung", "mingliu", "pmingliu", "batang",
+      "gulim", "dotum", "malgun", "nanum",
+    };
+    for (const char* t : tokens)
+      {
+        if (s.find(t) != std::string::npos) { return true; }
+      }
+    return false;
+  }
+
+  inline std::vector<std::filesystem::path> blend2d_font_resolver::cjk_fallback_candidates()
+  {
+    namespace fs = std::filesystem;
+    std::vector<fs::path> paths;
+
+    if (auto override_path = getenv_string("DOCLING_PARSE_CJK_FALLBACK_FONT"))
+      {
+        paths.emplace_back(*override_path);
+      }
+
+    // Filename stems with CJK coverage, best first.
+    // Filename stems of faces that actually carry CJK coverage, best first.
+    // Must span every platform: a Linux-only list silently fails on Windows and
+    // macOS, where the system CJK fonts have entirely different names.
+    static const std::array<const char*, 30> wanted = {
+      // cross-platform / Linux distributions
+      "notosanscjk", "notoserifcjk", "notosanscjkjp", "notosanscjksc",
+      "sourcehansans", "sourcehanserif", "droidsansfallback",
+      "wqy-zenhei", "wqy-microhei", "arphic", "ipagp", "ipag", "unifont",
+      // Windows (%WINDIR%\Fonts)
+      "msgothic",    // MS Gothic / MS PGothic / MS UI Gothic  (ja)
+      "msmincho",    // MS Mincho / MS PMincho                 (ja)
+      "yugoth",      // Yu Gothic                              (ja)
+      "yumin",       // Yu Mincho                              (ja)
+      "meiryo",      // Meiryo                                 (ja)
+      "simsun",      // SimSun / NSimSun                       (zh-Hans)
+      "simhei",      // SimHei                                 (zh-Hans)
+      "msyh",        // Microsoft YaHei                        (zh-Hans)
+      "msjh",        // Microsoft JhengHei                     (zh-Hant)
+      "mingliu",     // MingLiU / PMingLiU                     (zh-Hant)
+      "malgun",      // Malgun Gothic                          (ko)
+      "batang", "gulim",                                    // (ko)
+      // macOS (/System/Library/Fonts, /Library/Fonts)
+      "hiragino",    // Hiragino Sans / Mincho                 (ja)
+      "pingfang",    // PingFang SC/TC                         (zh)
+      "songti",      // Songti SC                              (zh)
+      "applesdgothic",                                      // (ko)
+    };
+
+    constexpr std::size_t max_entries = 20000;
+    std::size_t seen = 0;
+    std::vector<fs::path> ranked(wanted.size());
+
+    for (const auto& dir : system_font_directories())
+      {
+        std::error_code ec;
+        if (not fs::is_directory(dir, ec)) { continue; }
+        fs::recursive_directory_iterator it(
+          dir, fs::directory_options::skip_permission_denied, ec);
+        fs::recursive_directory_iterator end;
+        for (; it != end and seen < max_entries; it.increment(ec))
+          {
+            if (ec) { break; }
+            ++seen;
+            const fs::path& p = it->path();
+            if (not is_font_file(p)) { continue; }
+            std::string stem = p.stem().string();
+            std::transform(stem.begin(), stem.end(), stem.begin(),
+                           [](unsigned char c) { return std::tolower(c); });
+            for (std::size_t i = 0; i < wanted.size(); i++)
+              {
+                if (ranked[i].empty() and stem.find(wanted[i]) != std::string::npos)
+                  {
+                    ranked[i] = p;
+                  }
+              }
+          }
+        if (seen >= max_entries) { break; }
+      }
+
+    for (const auto& p : ranked)
+      {
+        if (not p.empty()) { paths.push_back(p); }
+      }
+    return paths;
+  }
+
+  inline std::vector<std::filesystem::path>
+  blend2d_font_resolver::arabic_fallback_candidates()
+  {
+    namespace fs = std::filesystem;
+    std::vector<fs::path> paths;
+
+    if (auto override_path = getenv_string("DOCLING_PARSE_ARABIC_FALLBACK_FONT"))
+      {
+        paths.emplace_back(*override_path);
+      }
+
+    // Filename stems of faces that carry Arabic, best first. The generic
+    // faces at the end matter more here than in the CJK list: DejaVu and
+    // Arial both cover Arabic, so most hosts can draw it even with no
+    // purpose-built Arabic font installed.
+    static const std::array<const char*, 18> wanted = {
+      // Linux distributions
+      "notonaskharabic", "notosansarabic", "notokufiarabic",
+      "amiri", "scheherazade", "kacst", "droidsansarabic",
+      // Windows (%WINDIR%\Fonts)
+      "arabtype",    // Arabic Typesetting
+      "trado",       // Traditional Arabic
+      "majalla",     // Sakkal Majalla
+      "andlso",      // Andalus
+      "simpo",       // Simplified Arabic
+      // macOS
+      "geezapro", "albayan", "baghdad", "damascus",
+      // broad faces that happen to include Arabic
+      "dejavusans", "arial",
+    };
+
+    constexpr std::size_t max_entries = 20000;
+    std::size_t seen = 0;
+    std::vector<fs::path> ranked(wanted.size());
+
+    for (const auto& dir : system_font_directories())
+      {
+        std::error_code ec;
+        if (not fs::is_directory(dir, ec)) { continue; }
+        fs::recursive_directory_iterator it(
+          dir, fs::directory_options::skip_permission_denied, ec);
+        fs::recursive_directory_iterator end;
+        for (; it != end and seen < max_entries; it.increment(ec))
+          {
+            if (ec) { break; }
+            ++seen;
+            const fs::path& p = it->path();
+            if (not is_font_file(p)) { continue; }
+            std::string stem = p.stem().string();
+            std::transform(stem.begin(), stem.end(), stem.begin(),
+                           [](unsigned char c) { return std::tolower(c); });
+            for (std::size_t i = 0; i < wanted.size(); i++)
+              {
+                if (ranked[i].empty() and stem.find(wanted[i]) != std::string::npos)
+                  {
+                    ranked[i] = p;
+                  }
+              }
+          }
+        if (seen >= max_entries) { break; }
+      }
+
+    for (const auto& p : ranked)
+      {
+        if (not p.empty()) { paths.push_back(p); }
+      }
+    return paths;
+  }
+
+  inline bool blend2d_font_resolver::text_script_key(const std::string& utf8_text,
+                                                     std::string& script_key)
+  {
+    // Minimal UTF-8 decode: only the codepoint ranges matter, and the text is
+    // already known-good UTF-8 by the time it reaches the renderer.
+    const unsigned char* s = reinterpret_cast<const unsigned char*>(utf8_text.data());
+    const std::size_t n = utf8_text.size();
+
+    for (std::size_t i = 0; i < n;)
+      {
+        uint32_t cp = 0;
+        std::size_t len = 1;
+
+        if (s[i] < 0x80)            { cp = s[i]; len = 1; }
+        else if ((s[i] & 0xE0) == 0xC0) { cp = s[i] & 0x1F; len = 2; }
+        else if ((s[i] & 0xF0) == 0xE0) { cp = s[i] & 0x0F; len = 3; }
+        else if ((s[i] & 0xF8) == 0xF0) { cp = s[i] & 0x07; len = 4; }
+        else { i += 1; continue; }
+
+        if (i + len > n) { break; }
+        for (std::size_t k = 1; k < len; ++k)
+          {
+            cp = (cp << 6) | (s[i + k] & 0x3F);
+          }
+        i += len;
+
+        if (cp < 0x0250) { continue; }  // Latin, punctuation, digits
+
+        if ((cp >= 0x0600 and cp <= 0x06FF) or (cp >= 0x0750 and cp <= 0x077F) or
+            (cp >= 0xFB50 and cp <= 0xFDFF) or (cp >= 0xFE70 and cp <= 0xFEFF))
+          { script_key = "arabic"; return true; }
+
+        if ((cp >= 0x2E80 and cp <= 0x9FFF) or (cp >= 0x3040 and cp <= 0x30FF) or
+            (cp >= 0xAC00 and cp <= 0xD7AF) or (cp >= 0xF900 and cp <= 0xFAFF) or
+            (cp >= 0x20000 and cp <= 0x2FA1F))
+          { script_key = "cjk"; return true; }
+
+        if (cp >= 0x0590 and cp <= 0x05FF) { script_key = "hebrew"; return true; }
+        if (cp >= 0x0900 and cp <= 0x097F) { script_key = "devanagari"; return true; }
+        if (cp >= 0x0E00 and cp <= 0x0E7F) { script_key = "thai"; return true; }
+        if (cp >= 0x0400 and cp <= 0x04FF) { script_key = "cyrillic"; return true; }
+        if (cp >= 0x0370 and cp <= 0x03FF) { script_key = "greek"; return true; }
+
+        script_key = "other";
+        return true;
+      }
+
+    return false;
+  }
+
+  inline bool blend2d_font_resolver::shaped_run_all_notdef(const BLGlyphBuffer& gb)
+  {
+    const std::size_t count = gb.size();
+    const uint32_t* ids = gb.glyph_run().glyph_data_as<uint32_t>();
+    if (count == 0 or ids == nullptr) { return true; }
+    for (std::size_t i = 0; i < count; ++i)
+      {
+        if (ids[i] != 0) { return false; }
+      }
+    return true;
+  }
+
+  inline bool blend2d_font_resolver::face_covers_text(BLFontFace& face,
+                                                      const std::string& utf8_text)
+  {
+    if (not face.is_valid()) { return false; }
+
+    BLFont probe;
+    if (probe.create_from_face(face, 16.0f) != BL_SUCCESS) { return false; }
+
+    BLGlyphBuffer gb;
+    gb.set_utf8_text(utf8_text.c_str());
+    if (probe.shape(gb) != BL_SUCCESS or gb.is_empty()) { return false; }
+
+    return not shaped_run_all_notdef(gb);
+  }
+
+  inline BLFontFace blend2d_font_resolver::resolve_face_for_text(const std::string& utf8_text)
+  {
+    std::string script;
+    if (not text_script_key(utf8_text, script))
+      {
+        return BLFontFace();  // Latin-only: the name-based path is correct
+      }
+
+    warm();
+
+    {
+      std::shared_lock<std::shared_mutex> lock(script_cache_mutex_);
+      auto it = script_face_cache_.find(script);
+      if (it != script_face_cache_.end()) { return it->second; }
+    }
+
+    // Script-specific faces first, then every indexed face in discovery order,
+    // so a host with nothing purpose-built still finds a broad face that
+    // happens to cover the script.
+    std::vector<font_face_ref> refs;
+    const std::vector<std::filesystem::path>& preferred =
+      (script == "cjk") ? cjk_candidates_
+                        : (script == "arabic" ? arabic_candidates_ : fallback_candidates_);
+
+    for (const auto& p : preferred)
+      {
+        std::error_code ec;
+        if (std::filesystem::exists(p, ec)) { refs.push_back({p.string(), 0}); }
+      }
+
+    std::vector<const indexed_font_face*> indexed;
+    indexed.reserve(face_metadata_.size());
+    for (const auto& kv : face_metadata_) { indexed.push_back(&kv.second); }
+    std::sort(indexed.begin(), indexed.end(),
+              [](const indexed_font_face* a, const indexed_font_face* b)
+              { return a->discovery_order < b->discovery_order; });
+    for (const auto* meta : indexed) { refs.push_back(meta->ref); }
+
+    // Probing means shaping, so bound the work; the answer is cached per script.
+    constexpr std::size_t max_probes = 80;
+
+    BLFontFace chosen;
+    std::size_t probes = 0;
+    for (const auto& ref : refs)
+      {
+        if (probes++ >= max_probes) { break; }
+        BLFontFace face = load_font_face(ref);
+        if (face_covers_text(face, utf8_text))
+          {
+            chosen = face;
+            LOG_S(INFO) << "blend2d font resolver: script '" << script
+                        << "' resolved to " << ref.path
+                        << " after " << probes << " probe(s)";
+            break;
+          }
+      }
+
+    if (not chosen.is_valid())
+      {
+        LOG_S(WARNING) << "blend2d font resolver: no installed face covers script '"
+                       << script << "'; text will render as .notdef boxes";
+      }
+
+    {
+      std::unique_lock<std::shared_mutex> lock(script_cache_mutex_);
+      script_face_cache_[script] = chosen;
+    }
+    return chosen;
+  }
+
+  inline bool blend2d_font_resolver::is_font_file(const std::filesystem::path& p)
+  {
+    const std::string ext = normalize_font_name(p.extension().string());
+    return ext == "ttf" or ext == "otf" or ext == "ttc";
+  }
+
+  inline void blend2d_font_resolver::scan_for_fallback_fonts(
+                                                             std::vector<std::filesystem::path>& paths)
+  {
+    namespace fs = std::filesystem;
+
+    // Ubiquitous faces, best first; match against lowercased filename stems.
+    static const std::array<const char*, 10> preferred = {
+      "liberationsans-regular", "dejavusans", "notosans-regular",
+      "freesans", "arial", "helvetica", "cantarell-regular",
+      "opensans-regular", "roboto-regular", "ubuntu-r",
+    };
+
+    constexpr std::size_t max_entries = 20000;
+    std::size_t seen = 0;
+
+    std::vector<fs::path> ranked(preferred.size());
+    fs::path any_font;
+
+    for (const auto& dir : system_font_directories())
+      {
+        std::error_code ec;
+        if (not fs::is_directory(dir, ec)) { continue; }
+        fs::recursive_directory_iterator it(
+          dir, fs::directory_options::skip_permission_denied, ec);
+        fs::recursive_directory_iterator end;
+        for (; it != end and seen < max_entries; it.increment(ec))
+          {
+            if (ec) { break; }
+            ++seen;
+            const fs::path& p = it->path();
+            if (not is_font_file(p)) { continue; }
+            if (any_font.empty()) { any_font = p; }
+            std::string stem = p.stem().string();
+            std::transform(stem.begin(), stem.end(), stem.begin(),
+                           [](unsigned char c) { return std::tolower(c); });
+            for (std::size_t i = 0; i < preferred.size(); i++)
+              {
+                if (ranked[i].empty() and stem == preferred[i]) { ranked[i] = p; }
+              }
+          }
+        if (seen >= max_entries) { break; }
+      }
+
+    for (const auto& p : ranked)
+      {
+        if (not p.empty()) { paths.push_back(p); }
+      }
+    if (not any_font.empty()) { paths.push_back(any_font); }
   }
 
   inline std::string blend2d_font_resolver::bl_string_to_std(const BLString& s)
@@ -861,6 +1381,8 @@ namespace pdflib
     namespace fs = std::filesystem;
     const std::vector<fs::path> font_dirs = system_font_directories();
     fallback_candidates_ = fallback_font_candidates();
+    cjk_candidates_ = cjk_fallback_candidates();
+    arabic_candidates_ = arabic_fallback_candidates();
 
     LOG_S(INFO) << "blend2d font resolver: scanning font directories";
     for (const auto& dir : font_dirs)
@@ -892,8 +1414,7 @@ namespace pdflib
               }
 
             const auto p = it->path();
-            const std::string ext = normalize_font_name(p.extension().string());
-            if (ext == "ttf" or ext == "otf" or ext == "ttc")
+            if (is_font_file(p))
               {
                 index_font_file(p, discovery_order);
               }
@@ -1123,6 +1644,30 @@ namespace pdflib
     namespace fs = std::filesystem;
 
     for (const auto& fallback : fallback_candidates_)
+      {
+        if (fs::exists(fallback))
+          {
+            const std::string norm_path = fallback.string();
+            for (const auto& [key, face] : face_metadata_)
+              {
+                if (face.ref.path == norm_path)
+                  {
+                    return face.ref;
+                  }
+              }
+            return font_face_ref{norm_path, 0};
+          }
+      }
+
+    return std::nullopt;
+  }
+
+  inline std::optional<blend2d_font_resolver::font_face_ref>
+  blend2d_font_resolver::find_first_existing_cjk_fallback() const
+  {
+    namespace fs = std::filesystem;
+
+    for (const auto& fallback : cjk_candidates_)
       {
         if (fs::exists(fallback))
           {

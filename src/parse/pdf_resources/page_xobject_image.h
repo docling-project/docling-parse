@@ -162,6 +162,12 @@ namespace pdflib
     std::string              get_indexed_base_cs() const;
     std::shared_ptr<std::vector<uint8_t>> get_indexed_palette() const;
     std::vector<std::string> get_indexed_base_device_n_names() const;
+
+    // Set when the image's own colour space is a tint space (/Separation or
+    // /DeviceN). Its transform turns ink tints into RGB; without it such an
+    // image is simply rejected and drawn as a placeholder.
+    std::shared_ptr<pdf_resource<PAGE_COLORSPACE>> get_tint_colorspace() const
+    { return tint_colorspace; }
     bool                     get_indexed_base_device_n_single_black() const;
     std::string              get_intent() const;
     std::vector<std::string> get_filters() const;
@@ -184,6 +190,12 @@ namespace pdflib
     std::shared_ptr<Buffer>  get_decoded_stream_data() const;
     bool                     has_soft_mask_data() const;
     std::shared_ptr<std::vector<uint8_t>> get_soft_mask_data() const;
+
+    // Grid the soft mask was resolved onto. This is the base image's grid
+    // unless the mask is finer, in which case it is the mask's own grid and
+    // the colour plane has to be upsampled to match it before compositing.
+    int                      get_soft_mask_width() const;
+    int                      get_soft_mask_height() const;
 
     // Determine file extension from filters (e.g. ".jpg", ".jp2", ".jb2", ".bin")
     std::string pick_extension() const;
@@ -228,6 +240,7 @@ namespace pdflib
     std::shared_ptr<std::vector<uint8_t>> indexed_base_icc_profile;
     int              indexed_base_icc_components = 0;
     std::vector<std::string> indexed_base_device_n_names;
+    std::shared_ptr<pdf_resource<PAGE_COLORSPACE>> tint_colorspace;
     bool             indexed_base_device_n_single_black = false;
     std::string      intent;
     std::vector<std::string> image_filters;
@@ -236,6 +249,8 @@ namespace pdflib
     std::shared_ptr<Buffer> raw_stream_data;
     std::shared_ptr<Buffer> decoded_stream_data;
     std::shared_ptr<std::vector<uint8_t>> soft_mask_data;
+    int soft_mask_width = 0;
+    int soft_mask_height = 0;
 
     // PDF image semantics
     std::vector<double> decode_array; // length 2*ncomp when present
@@ -363,6 +378,23 @@ namespace pdflib
             color_space = cs.dump();
 
             auto qpdf_cs = qpdf_xobject_dict.getKey("/ColorSpace");
+
+            // A device space may legally be written as a one-element array:
+            // [/DeviceRGB] means exactly /DeviceRGB. Unwrap it to the bare name,
+            // otherwise every later comparison sees the JSON dump
+            // ("[\"/DeviceRGB\"]"), the space is reported as unsupported, and the
+            // image is dropped in favour of a placeholder.
+            if(qpdf_cs.isArray() and qpdf_cs.getArrayNItems() == 1)
+              {
+                auto only_obj = qpdf_cs.getArrayItem(0);
+                if(only_obj.isName())
+                  {
+                    color_space = only_obj.getName();
+                    LOG_S(INFO) << "unwrapped single-element /ColorSpace array to "
+                                << color_space;
+                  }
+              }
+
             if(qpdf_cs.isArray() and qpdf_cs.getArrayNItems() >= 2)
               {
                 auto name_obj = qpdf_cs.getArrayItem(0);
@@ -410,6 +442,22 @@ namespace pdflib
                     else
                       {
                         LOG_S(WARNING) << "DeviceN color space: names array missing";
+                      }
+                  }
+                else if(name_obj.isName() and
+                        (name_obj.getName() == "/Separation" or
+                         name_obj.getName() == "/DeviceN") and
+                        qpdf_cs.getArrayNItems() >= 4)
+                  {
+                    auto tint = std::make_shared<pdf_resource<PAGE_COLORSPACE>>();
+                    tint->set(xobject_key + "/cs", qpdf_cs);
+                    if(tint->get_num_components() > 0)
+                      {
+                        tint_colorspace = std::move(tint);
+                        LOG_S(INFO) << "tint image colour space for xobject_key="
+                                    << xobject_key << " with "
+                                    << tint_colorspace->get_num_components()
+                                    << " component(s)";
                       }
                   }
                 else if(name_obj.isName() and name_obj.getName() == "/Indexed"
@@ -537,6 +585,26 @@ namespace pdflib
                         LOG_S(WARNING) << "Indexed color space: unsupported base object type";
                       }
 
+                    // A base like [/Separation ...] or [/DeviceN ...] is a
+                    // tint space; PAGE_COLORSPACE can evaluate its transform,
+                    // so the palette of tints becomes a palette of RGB below.
+                    std::shared_ptr<pdf_resource<PAGE_COLORSPACE>> tint_base;
+                    if(base_obj.isArray() and
+                       base_obj.getArrayNItems() >= 1 and
+                       base_obj.getArrayItem(0).isName())
+                      {
+                        const std::string bn = base_obj.getArrayItem(0).getName();
+                        if(bn == "/Separation" or bn == "/DeviceN")
+                          {
+                            tint_base = std::make_shared<pdf_resource<PAGE_COLORSPACE>>();
+                            tint_base->set(xobject_key + "/indexed-base", base_obj);
+                            if(tint_base->get_num_components() <= 0)
+                              {
+                                tint_base = nullptr;
+                              }
+                          }
+                      }
+
                     // hival
                     auto hival_obj = qpdf_cs.getArrayItem(2);
                     if(hival_obj.isInteger())
@@ -623,6 +691,45 @@ namespace pdflib
                             else
                               {
                                 LOG_S(WARNING) << "Indexed ICCBased palette RGB conversion failed";
+                              }
+                          }
+
+                        // Tint-space base: map every palette entry through the
+                        // tint transform into RGB. A QR code whose palette was
+                        // indexed over a spot ink previously decoded to nothing.
+                        if(tint_base and indexed_palette and not indexed_palette->empty())
+                          {
+                            const int tn = tint_base->get_num_components();
+                            const size_t n_entries = indexed_palette->size() / tn;
+                            auto rgb_pal = std::make_shared<std::vector<uint8_t>>();
+                            rgb_pal->reserve(n_entries * 3);
+                            bool ok = n_entries > 0;
+                            for(size_t e = 0; ok and e < n_entries; e++)
+                              {
+                                std::vector<double> comps(tn, 0.0);
+                                for(int c = 0; c < tn; c++)
+                                  {
+                                    comps[c] = (*indexed_palette)[e * tn + c] / 255.0;
+                                  }
+                                std::array<int, 3> rgb = {0, 0, 0};
+                                if(tint_base->map_to_rgb(comps, rgb))
+                                  {
+                                    rgb_pal->push_back(static_cast<uint8_t>(rgb[0]));
+                                    rgb_pal->push_back(static_cast<uint8_t>(rgb[1]));
+                                    rgb_pal->push_back(static_cast<uint8_t>(rgb[2]));
+                                  }
+                                else { ok = false; }
+                              }
+                            if(ok)
+                              {
+                                indexed_palette = std::move(rgb_pal);
+                                indexed_base_cs = "/DeviceRGB";
+                                LOG_S(INFO) << "Indexed tint-space palette converted to RGB: "
+                                            << indexed_palette->size() << " bytes";
+                              }
+                            else
+                              {
+                                LOG_S(WARNING) << "Indexed tint-space palette conversion failed";
                               }
                           }
                       }
@@ -736,9 +843,17 @@ namespace pdflib
           }
 	else if(indexed_hival >= 0)
 	  {
-	    // Indexed: default decode is [0, hival] (one component — the palette index)
-	    LOG_S(INFO) << "no `/Decode` found: using [0, " << indexed_hival << "] for Indexed color space";
-	    decode_array = { 0.0, static_cast<double>(indexed_hival) };
+	    // Indexed: one component, the palette index. ISO 32000-1 table 90 gives
+	    // the default as [0, 2^bpc - 1] -- the full range representable at this
+	    // bit depth, NOT [0, hival]. The distinction matters: the decode maps a
+	    // raw sample through (Dmax - Dmin) / (2^bpc - 1), so [0, hival] silently
+	    // rescales every index by hival/(2^bpc - 1) and looks up the wrong
+	    // palette entry (a 4-bit flag lost its red and white to index >> 1).
+	    const int idx_bpc = (bits_per_component > 0 ? bits_per_component : 8);
+	    const double idx_max = static_cast<double>((1u << idx_bpc) - 1u);
+	    LOG_S(INFO) << "no `/Decode` found: using [0, " << idx_max
+	                << "] for Indexed color space (bpc=" << idx_bpc << ")";
+	    decode_array = { 0.0, idx_max };
 	    decode_present = true;
 	  }
 	else
@@ -987,10 +1102,11 @@ namespace pdflib
         return;
       }
 
-    if(smask.get_bits_per_component() != 8)
+    const int sm_bpc = smask.get_bits_per_component();
+    if(sm_bpc != 1 and sm_bpc != 2 and sm_bpc != 4 and sm_bpc != 8)
       {
         LOG_S(WARNING) << "SMask bits/component unsupported for xobject_key=" << xobject_key
-                       << " smask_bpc=" << smask.get_bits_per_component();
+                       << " smask_bpc=" << sm_bpc;
         return;
       }
 
@@ -1001,46 +1117,105 @@ namespace pdflib
       }
 
     auto smask_buf = smask.get_decoded_stream_data();
-    const size_t smask_expected = static_cast<size_t>(sm_w) * sm_h;
-    if(smask_buf->getSize() < smask_expected)
+
+    // Sub-byte masks arrive bit-packed, one row padded to a byte boundary, so
+    // the buffer is 8/bpc smaller than one byte per sample. Expand it first and
+    // work from a dense 8-bit gray plane below.
+    std::vector<uint8_t> unpacked_mask;
+    uint8_t const* src = nullptr;
+
+    if(sm_bpc == 8)
       {
-        LOG_S(WARNING) << "SMask decoded stream too small for xobject_key=" << xobject_key
-                       << " size=" << smask_buf->getSize()
-                       << " expected>=" << smask_expected;
-        return;
+        const size_t smask_expected = static_cast<size_t>(sm_w) * sm_h;
+        if(smask_buf->getSize() < smask_expected)
+          {
+            LOG_S(WARNING) << "SMask decoded stream too small for xobject_key=" << xobject_key
+                           << " size=" << smask_buf->getSize()
+                           << " expected>=" << smask_expected;
+            return;
+          }
+        src = reinterpret_cast<uint8_t const*>(smask_buf->getBuffer());
+      }
+    else
+      {
+        const size_t row_bits =
+          static_cast<size_t>(sm_w) * static_cast<size_t>(sm_bpc);
+        const size_t row_stride = (row_bits + 7u) / 8u;
+        if(smask_buf->getSize() < row_stride * static_cast<size_t>(sm_h))
+          {
+            LOG_S(WARNING) << "SMask packed stream too small for xobject_key=" << xobject_key
+                           << " size=" << smask_buf->getSize()
+                           << " expected>=" << (row_stride * static_cast<size_t>(sm_h))
+                           << " smask_bpc=" << sm_bpc;
+            return;
+          }
+
+        auto const* packed = reinterpret_cast<uint8_t const*>(smask_buf->getBuffer());
+        const uint32_t sample_max = (1u << sm_bpc) - 1u;
+        unpacked_mask.resize(static_cast<size_t>(sm_w) * sm_h);
+
+        for(int row = 0; row < sm_h; ++row)
+          {
+            uint8_t const* row_ptr = packed + static_cast<size_t>(row) * row_stride;
+            size_t bit_offset = 0;
+            for(int col = 0; col < sm_w; ++col)
+              {
+                uint32_t raw = 0;
+                for(int bit = 0; bit < sm_bpc; ++bit)
+                  {
+                    const size_t abs_bit = bit_offset + static_cast<size_t>(bit);
+                    const uint8_t byte = row_ptr[abs_bit >> 3];
+                    raw = (raw << 1) | ((byte >> (7u - (abs_bit & 7u))) & 1u);
+                  }
+                bit_offset += static_cast<size_t>(sm_bpc);
+                unpacked_mask[static_cast<size_t>(row) * sm_w + col] =
+                  static_cast<uint8_t>((raw * 255u) / sample_max);
+              }
+          }
+        src = unpacked_mask.data();
       }
 
-    const size_t expected = static_cast<size_t>(image_width) * image_height;
+    // Resolve onto the finer of the two grids. Downsampling a mask that is
+    // higher-resolution than its base image would throw away exactly the detail
+    // it exists to carry -- a 2x2 colour swatch stencilled by a 141x100 glyph
+    // mask is a common way to draw text, and collapsing it to 2x2 turns the
+    // text into a solid block.
+    const int dst_w = std::max(image_width, sm_w);
+    const int dst_h = std::max(image_height, sm_h);
 
     auto out = std::make_shared<std::vector<uint8_t>>();
-    out->resize(expected);
+    out->resize(static_cast<size_t>(dst_w) * dst_h);
 
-    auto const* src = reinterpret_cast<uint8_t const*>(smask_buf->getBuffer());
     auto const decode = smask.get_decode_array();
     const bool has_decode = smask.has_decode_array() and decode.size() >= 2;
 
-    // nearest-neighbor sampling from the mask grid onto the image grid
+    // nearest-neighbor sampling from the mask grid onto the target grid
     // (identity when the dimensions already match)
-    for(int row = 0; row < image_height; ++row)
+    for(int row = 0; row < dst_h; ++row)
       {
-        const size_t src_row = (static_cast<size_t>(row) * sm_h) / image_height;
-        for(int col = 0; col < image_width; ++col)
+        const size_t src_row = (static_cast<size_t>(row) * sm_h) / dst_h;
+        for(int col = 0; col < dst_w; ++col)
           {
-            const size_t src_col = (static_cast<size_t>(col) * sm_w) / image_width;
+            const size_t src_col = (static_cast<size_t>(col) * sm_w) / dst_w;
 
             uint8_t alpha = src[src_row * sm_w + src_col];
             if(has_decode)
               {
                 alpha = jpeg::apply_decode_component(alpha, decode[0], decode[1]);
               }
-            (*out)[static_cast<size_t>(row) * image_width + col] = alpha;
+            (*out)[static_cast<size_t>(row) * dst_w + col] = alpha;
           }
       }
 
-    soft_mask_data = std::move(out);
+    soft_mask_data   = std::move(out);
+    soft_mask_width  = dst_w;
+    soft_mask_height = dst_h;
 
     LOG_S(INFO) << "decoded SMask for xobject_key=" << xobject_key
-                << " alpha_size=" << soft_mask_data->size();
+                << " alpha_size=" << soft_mask_data->size()
+                << " smask=" << sm_w << "x" << sm_h << "@" << sm_bpc << "bpc"
+                << " image=" << image_width << "x" << image_height
+                << " -> grid=" << dst_w << "x" << dst_h;
   }
 
   // --- Getters ---
@@ -1178,6 +1353,16 @@ namespace pdflib
   std::shared_ptr<std::vector<uint8_t>> pdf_resource<PAGE_XOBJECT_IMAGE>::get_soft_mask_data() const
   {
     return soft_mask_data;
+  }
+
+  int pdf_resource<PAGE_XOBJECT_IMAGE>::get_soft_mask_width() const
+  {
+    return soft_mask_width;
+  }
+
+  int pdf_resource<PAGE_XOBJECT_IMAGE>::get_soft_mask_height() const
+  {
+    return soft_mask_height;
   }
 
   // --- File I/O ---

@@ -69,7 +69,8 @@ namespace pdflib
                          int64_t char_code,
                          const std::string& glyph_name,
                          double size,
-                         BLPath& path);
+                         BLPath& path,
+                         double* out_advance = nullptr);
 
   private:
 
@@ -156,7 +157,8 @@ namespace pdflib
       int64_t char_code,
       const std::string& glyph_name,
       double size,
-      BLPath& path)
+      BLPath& path,
+      double* out_advance)
   {
     if(library_ == nullptr or blob == nullptr or not blob->has_bytes() or size <= 0.0)
       {
@@ -199,6 +201,13 @@ namespace pdflib
         path.add_path(glyph->path, m);
 
         pen_x += glyph->advance;
+      }
+
+    if(out_advance != nullptr)
+      {
+        const double units_per_em2 =
+          (entry.face->units_per_EM > 0) ? entry.face->units_per_EM : 1000.0;
+        *out_advance = pen_x * (size / units_per_em2);
       }
 
     return true;
@@ -362,7 +371,34 @@ namespace pdflib
             return glyph_index;
           }
 
-        return FT_Get_Char_Index(face, code);
+        const FT_UInt raw_index = FT_Get_Char_Index(face, code);
+        if(raw_index != 0)
+          {
+            return raw_index;
+          }
+      }
+
+    // Last resort: try every charmap the face actually carries, whatever its
+    // platform. Subsetters emit things the named-encoding list above never
+    // matches -- a Wingdings subset with a single Macintosh (1,0) format-6
+    // cmap mapped its smiley there, and both Blend2D (which reads only
+    // Windows/Unicode cmaps) and the loop above walked straight past it.
+    for(FT_Int i = 0; i < face->num_charmaps; i++)
+      {
+        if(FT_Set_Charmap(face, face->charmaps[i]) != 0)
+          {
+            continue;
+          }
+
+        FT_UInt glyph_index = FT_Get_Char_Index(face, code);
+        if(glyph_index == 0 and code <= 0xFF)
+          {
+            glyph_index = FT_Get_Char_Index(face, 0xF000u + code);
+          }
+        if(glyph_index != 0)
+          {
+            return glyph_index;
+          }
       }
 
     return 0;

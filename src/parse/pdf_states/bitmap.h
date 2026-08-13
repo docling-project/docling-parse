@@ -268,6 +268,8 @@ namespace pdflib
       image.raw_stream_data    = xobj.get_raw_stream_data();
       image.decoded_stream_data = xobj.get_decoded_stream_data();
       image.soft_mask_data     = xobj.get_soft_mask_data();
+      image.soft_mask_width    = xobj.get_soft_mask_width();
+      image.soft_mask_height   = xobj.get_soft_mask_height();
 
       LOG_S(INFO) << "image with ("
 		  << image.x0 << ", " << image.y0 << ") x ("
@@ -293,6 +295,7 @@ namespace pdflib
       image.indexed_base_cs = xobj.get_indexed_base_cs();
       image.indexed_palette = xobj.get_indexed_palette();
       image.indexed_base_device_n_names = xobj.get_indexed_base_device_n_names();
+      image.tint_colorspace = xobj.get_tint_colorspace();
       image.indexed_base_device_n_single_black =
         xobj.get_indexed_base_device_n_single_black();
 
@@ -314,6 +317,11 @@ namespace pdflib
     std::array<int, 3> pixel_shape = {0, 0, 0};
     pixel_format fmt = PIXEL_FORMAT_UNKNOWN;
     cmyk_convention cmyk_conv = CMYK_CONVENTION_UNKNOWN;
+
+    // Parsed /Separation or /DeviceN space for this image, if any. Stored
+    // type-erased on the page item (include order), recovered here.
+    auto tint_cs = std::static_pointer_cast<pdf_resource<PAGE_COLORSPACE> >(
+      image.tint_colorspace);
 
     int channels = 0;
     auto has_default_adobe_cmyk_decode = [&](std::vector<double> const& decode_array) -> bool
@@ -416,6 +424,92 @@ namespace pdflib
                         << "for xobject_key=" << image.xobject_key;
           }
         return true;
+      };
+
+    // An /Indexed image stores ONE palette index per pixel, packed at
+    // /BitsPerComponent bits, whatever the channel count of the base space.
+    // The indices must be unpacked to one byte each before the palette lookup:
+    // expanding the packed stream directly treats every byte as a single index,
+    // which both mis-reads the image and leaves the buffer 8/bpc times smaller
+    // than the {h, w, ncomps} shape the palette expansion goes on to declare.
+    //
+    // Unlike unpack_subbyte_samples_to_u8, index values are NOT rescaled to
+    // 0..255: they are positions in the colour table, not colour samples. For
+    // the same reason /Decode maps into the index range rather than [0, 1].
+    auto unpack_subbyte_indices =
+      [&](std::shared_ptr<Buffer> const& src,
+          int w,
+          int h,
+          int bits_per_component,
+          std::vector<double> const& decode_array)
+      -> std::shared_ptr<std::vector<uint8_t> >
+      {
+        if(not src or src->getSize() == 0 or w <= 0 or h <= 0)
+          {
+            return nullptr;
+          }
+        if(bits_per_component <= 0 or bits_per_component >= 8)
+          {
+            return nullptr;
+          }
+
+        const std::size_t row_bits =
+          static_cast<std::size_t>(w) * static_cast<std::size_t>(bits_per_component);
+        const std::size_t row_stride = (row_bits + 7u) / 8u;
+        const std::size_t min_total = row_stride * static_cast<std::size_t>(h);
+
+        if(src->getSize() < min_total)
+          {
+            LOG_S(WARNING) << "bitmap: packed Indexed stream too small ("
+                           << src->getSize() << " < " << min_total
+                           << ") for xobject_key=" << image.xobject_key
+                           << " width=" << w
+                           << " height=" << h
+                           << " bpc=" << bits_per_component;
+            return nullptr;
+          }
+
+        const std::uint32_t sample_max = (1u << bits_per_component) - 1u;
+        const bool has_decode = decode_array.size() >= 2;
+
+        const auto* bytes = reinterpret_cast<const std::uint8_t*>(src->getBuffer());
+        auto indices = std::make_shared<std::vector<uint8_t> >();
+        indices->reserve(static_cast<std::size_t>(w) * static_cast<std::size_t>(h));
+
+        for(int row = 0; row < h; ++row)
+          {
+            // Rows are padded to a byte boundary, so each starts at its own stride.
+            const std::uint8_t* row_ptr =
+              bytes + static_cast<std::size_t>(row) * row_stride;
+            std::size_t bit_offset = 0;
+
+            for(int col = 0; col < w; ++col)
+              {
+                std::uint32_t raw = 0;
+                for(int bit = 0; bit < bits_per_component; ++bit)
+                  {
+                    const std::size_t abs_bit = bit_offset + static_cast<std::size_t>(bit);
+                    const std::uint8_t byte = row_ptr[abs_bit >> 3];
+                    const std::uint32_t value = (byte >> (7u - (abs_bit & 7u))) & 1u;
+                    raw = (raw << 1) | value;
+                  }
+                bit_offset += static_cast<std::size_t>(bits_per_component);
+
+                double idx = static_cast<double>(raw);
+                if(has_decode)
+                  {
+                    const double dmin = decode_array[0];
+                    const double dmax = decode_array[1];
+                    idx = dmin + (static_cast<double>(raw) * (dmax - dmin)
+                                  / static_cast<double>(sample_max));
+                  }
+
+                indices->push_back(
+                  static_cast<std::uint8_t>(std::lround(std::clamp(idx, 0.0, 255.0))));
+              }
+          }
+
+        return indices;
       };
 
     auto unpack_subbyte_samples_to_u8 =
@@ -632,15 +726,51 @@ namespace pdflib
           {
             const int w = image.image_width;
             const int h = image.image_height;
-            const auto* indices = reinterpret_cast<const uint8_t*>(
-              image.decoded_stream_data->getBuffer());
-            const size_t n_indices = image.decoded_stream_data->getSize();
-            if(expand_indexed_samples(ncomps, indices, n_indices, w, h))
+            const std::size_t n_pixels =
+              static_cast<std::size_t>(w) * static_cast<std::size_t>(h);
+
+            // Sub-byte indices have to be unpacked first; at 8 bits the decoded
+            // stream already holds one index per byte (plus possible trailing
+            // bytes, which are not part of the image).
+            std::shared_ptr<std::vector<uint8_t> > unpacked;
+            const uint8_t* indices = nullptr;
+            std::size_t n_indices = 0;
+
+            if(image.bits_per_component > 0 and image.bits_per_component < 8)
+              {
+                unpacked = unpack_subbyte_indices(image.decoded_stream_data,
+                                                  w,
+                                                  h,
+                                                  image.bits_per_component,
+                                                  image.decode_array);
+                if(unpacked)
+                  {
+                    indices   = unpacked->data();
+                    n_indices = unpacked->size();
+                  }
+                else
+                  {
+                    LOG_S(WARNING) << "bitmap: failed to unpack packed Indexed indices "
+                                   << "for xobject_key=" << image.xobject_key
+                                   << " bpc=" << image.bits_per_component;
+                  }
+              }
+            else
+              {
+                indices = reinterpret_cast<const uint8_t*>(
+                  image.decoded_stream_data->getBuffer());
+                n_indices = std::min(
+                  static_cast<std::size_t>(image.decoded_stream_data->getSize()),
+                  n_pixels);
+              }
+
+            if(indices and expand_indexed_samples(ncomps, indices, n_indices, w, h))
               {
                 LOG_S(INFO) << "bitmap: expanded Indexed palette for xobject_key="
                             << image.xobject_key
                             << " (" << n_indices << " indices -> "
-                            << pixel_data->size() << " bytes, ncomps=" << ncomps << ")";
+                            << pixel_data->size() << " bytes, ncomps=" << ncomps
+                            << ", bpc=" << image.bits_per_component << ")";
               }
           }
         else if(ncomps > 0)
@@ -648,6 +778,16 @@ namespace pdflib
             LOG_S(WARNING) << "bitmap: Indexed color space but no decoded_stream_data "
                            << "for xobject_key=" << image.xobject_key;
           }
+      }
+    else if(tint_cs)
+      {
+        // A /Separation or /DeviceN image: samples are ink tints. Decode them
+        // as n-component data and convert through the document's own tint
+        // transform, so the image becomes ordinary RGB from here on.
+        fmt      = PIXEL_FORMAT_RGB;
+        channels = tint_cs->get_num_components();
+        LOG_S(INFO) << "bitmap: tint colour space with " << channels
+                    << " component(s) for xobject_key=" << image.xobject_key;
       }
     else
       {
@@ -764,9 +904,22 @@ namespace pdflib
                 else if(decoded_channels == 4)
                   {
                     fmt = PIXEL_FORMAT_CMYK;
-                    if(image.decode_present and has_default_adobe_cmyk_decode(image.decode_array))
+                    // Measured against PIL on Adobe-marked files (plain CMYK
+                    // and YCCK alike), this decode path emits TRUE process ink
+                    // -- the inversion is already unwound by the time samples
+                    // reach us. The convention must therefore be PROCESS; the
+                    // earlier UNKNOWN default fell through to the inverted
+                    // formula and turned photographs into black rectangles.
+                    // Only an explicit inverted /Decode still asks for the
+                    // Adobe formula.
+                    if(image.decode_present and
+                       has_default_adobe_cmyk_decode(image.decode_array))
                       {
                         cmyk_conv = CMYK_CONVENTION_ADOBE_INVERTED;
+                      }
+                    else
+                      {
+                        cmyk_conv = CMYK_CONVENTION_PROCESS;
                       }
                   }
                 else
@@ -1049,6 +1202,123 @@ namespace pdflib
           {
             LOG_S(WARNING) << "bitmap: no usable pixel data "
                            << "for xobject_key=" << image.xobject_key;
+          }
+      }
+
+    // Tint samples -> RGB. Done here so every decode route above (Flate, DCT,
+    // sub-byte unpacking) is already finished and the buffer is dense 8-bit.
+    if(tint_cs and pixel_data and pixel_shape.size() == 3)
+      {
+        const int tn = tint_cs->get_num_components();
+        const size_t n_px = static_cast<size_t>(pixel_shape[0]) * pixel_shape[1];
+
+        if(tn > 0 and pixel_data->size() >= n_px * tn)
+          {
+            // One component is overwhelmingly the common case (a spot ink), so
+            // a 256-entry lookup replaces a per-pixel function evaluation.
+            std::vector<std::array<int, 3> > lut;
+            if(tn == 1)
+              {
+                lut.resize(256);
+                for(int v = 0; v < 256; v++)
+                  {
+                    std::array<int, 3> rgb = {0, 0, 0};
+                    std::vector<double> comps(1, v / 255.0);
+                    if(not tint_cs->map_to_rgb(comps, rgb))
+                      {
+                        lut.clear();
+                        break;
+                      }
+                    lut[v] = rgb;
+                  }
+              }
+
+            auto rgb_data = std::make_shared<std::vector<uint8_t> >();
+            rgb_data->resize(n_px * 3);
+            bool ok = true;
+
+            for(size_t i = 0; i < n_px and ok; i++)
+              {
+                std::array<int, 3> rgb = {0, 0, 0};
+                if(not lut.empty())
+                  {
+                    rgb = lut[(*pixel_data)[i]];
+                  }
+                else
+                  {
+                    std::vector<double> comps(tn, 0.0);
+                    for(int c = 0; c < tn; c++)
+                      {
+                        comps[c] = (*pixel_data)[i * tn + c] / 255.0;
+                      }
+                    ok = tint_cs->map_to_rgb(comps, rgb);
+                  }
+                (*rgb_data)[i * 3 + 0] = static_cast<uint8_t>(rgb[0]);
+                (*rgb_data)[i * 3 + 1] = static_cast<uint8_t>(rgb[1]);
+                (*rgb_data)[i * 3 + 2] = static_cast<uint8_t>(rgb[2]);
+              }
+
+            if(ok)
+              {
+                pixel_data  = std::move(rgb_data);
+                pixel_shape = {pixel_shape[0], pixel_shape[1], 3};
+                fmt         = PIXEL_FORMAT_RGB;
+                cmyk_conv   = CMYK_CONVENTION_UNKNOWN;
+                LOG_S(INFO) << "bitmap: converted tint image to RGB for xobject_key="
+                            << image.xobject_key;
+              }
+            else
+              {
+                LOG_S(WARNING) << "bitmap: tint conversion failed for xobject_key="
+                               << image.xobject_key;
+              }
+          }
+      }
+
+    // The soft mask may have been resolved onto a finer grid than the colour
+    // plane (see init_soft_mask_data). Compositing needs both on one grid, so
+    // upsample the colour to match; nearest-neighbour mirrors how the mask
+    // itself is resampled, and is exact for the flat swatches this affects.
+    if(pixel_data
+       and pixel_shape.size() == 3
+       and image.soft_mask_data
+       and image.soft_mask_width > pixel_shape[1]
+       and image.soft_mask_height > pixel_shape[0])
+      {
+        const int src_h = pixel_shape[0];
+        const int src_w = pixel_shape[1];
+        const int ncomp = pixel_shape[2];
+        const int dst_w = image.soft_mask_width;
+        const int dst_h = image.soft_mask_height;
+
+        if(src_h > 0 and src_w > 0 and ncomp > 0
+           and pixel_data->size() >= static_cast<size_t>(src_h) * src_w * ncomp)
+          {
+            auto scaled = std::make_shared<std::vector<uint8_t>>();
+            scaled->resize(static_cast<size_t>(dst_w) * dst_h * ncomp);
+
+            for(int row = 0; row < dst_h; ++row)
+              {
+                const size_t src_row = (static_cast<size_t>(row) * src_h) / dst_h;
+                for(int col = 0; col < dst_w; ++col)
+                  {
+                    const size_t src_col = (static_cast<size_t>(col) * src_w) / dst_w;
+                    const size_t s = (src_row * src_w + src_col) * ncomp;
+                    const size_t d = (static_cast<size_t>(row) * dst_w + col) * ncomp;
+                    for(int c = 0; c < ncomp; ++c)
+                      {
+                        (*scaled)[d + c] = (*pixel_data)[s + c];
+                      }
+                  }
+              }
+
+            LOG_S(INFO) << "bitmap: upsampled colour plane to the soft-mask grid "
+                        << "for xobject_key=" << image.xobject_key
+                        << " " << src_w << "x" << src_h
+                        << " -> " << dst_w << "x" << dst_h;
+
+            pixel_data  = std::move(scaled);
+            pixel_shape = {dst_h, dst_w, ncomp};
           }
       }
 

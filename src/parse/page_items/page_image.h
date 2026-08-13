@@ -77,6 +77,12 @@ namespace pdflib
     std::shared_ptr<Buffer>  raw_stream_data;
     std::shared_ptr<Buffer>  decoded_stream_data;
     std::shared_ptr<std::vector<uint8_t>> soft_mask_data;
+    // Parsed /Separation or /DeviceN colour space for this image, type-erased:
+    // page_items are included before the resource templates are declared.
+    // bitmap.h casts it back, where pdf_resource<PAGE_COLORSPACE> is known.
+    std::shared_ptr<void> tint_colorspace;
+    int soft_mask_width = 0;
+    int soft_mask_height = 0;
 
     // PDF image semantics copied from XObject
     bool decode_present = false;

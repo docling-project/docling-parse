@@ -59,6 +59,39 @@ code in the main repository.
 - `test_embedded_fonts.py`: embedded-font and font-resolution renderer behavior.
 - `test_locale_safety.py`: locale-sensitive parsing and rendering behavior.
 
+### Focused Rendering Tests
+
+These build the PDF they are about in memory and assert on the region the
+construct paints, rather than on the whole page. They need no dataset.
+
+- `pdf_builder.py`: assembles small PDFs from a list of objects, with binary
+  stream payloads for image and font fixtures.
+- `test_clipping.py`: clipping to paths that are not axis-aligned rectangles.
+- `test_patterns.py`: tiling patterns and unresolved `/Pattern` fills.
+- `test_shadings.py`: the `sh` operator, shading extents, and the gates that
+  stop a page-wide shading from covering finished content.
+- `test_colorspaces.py`: `/Separation`, `/DeviceN`, `/ICCBased`, CMYK
+  conventions and the sRGB encoding of pure-K greys.
+- `test_indexed_images.py`: sub-byte `/Indexed` images, their default `/Decode`,
+  and sub-byte soft masks.
+- `test_type3_fonts.py`: Type3 charprocs, both vector and image-mask, and their
+  orientation.
+- `test_text_render_modes.py`: `Tr` modes and `Tz` horizontal scaling.
+- `test_cmap_encoding.py`: two-byte codes, `/ToUnicode`, and CID default widths.
+- `test_font_fallback.py`: drawing text whose font is not embedded.
+
+## Why Both Kinds Of Rendering Test
+
+The page-wide comparison below is a coarse instrument by design: its tolerance
+has to survive small rasterization and font differences across machines, so it
+guards whole renders against wholesale drift.
+
+A defect confined to one graphic does not move that number. A clip that
+degraded a curved shape to its bounding box cost its page 0.231 mean absolute
+error, against a tolerance of 9. Adding such a page to the corpus documents the
+defect without protecting against it, which is why each construct also gets a
+focused test that measures the region it paints.
+
 ## Renderer Regression Checks
 
 Renderer regression tests use the Blend2D rendering path exposed through
@@ -208,6 +241,18 @@ Current behavior:
 
 `tests/data` is intentionally not treated as source code in this repository.
 It is populated from the external dataset and ignored by the main repository.
+
+Files are published back with:
+
+```bash
+python scripts/publish_regression_data.py --dry-run tests/data/regression/new-case.pdf
+python scripts/publish_regression_data.py tests/data/regression/new-case.pdf
+```
+
+The script uploads paths under `tests/data`, so the layout in the dataset
+matches what the tests expect, and prints the commit sha to pin. It reads
+credentials from `HF_TOKEN` or `HUGGINGFACE_HUB_TOKEN` and never edits
+`HF_DATASET_REVISION` itself.
 
 ## Data Layout
 

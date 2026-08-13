@@ -22,6 +22,8 @@ namespace pdflib
                 std::shared_ptr<pdf_resource<PAGE_FONTS>>       page_fonts_,
                 std::shared_ptr<pdf_resource<PAGE_GRPHS>>       page_grphs_,
                 std::shared_ptr<pdf_resource<PAGE_COLORSPACES>> page_colorspaces_,
+                std::shared_ptr<pdf_resource<PAGE_SHADINGS>>   page_shadings_,
+                std::shared_ptr<pdf_resource<PAGE_PATTERNS>>   page_patterns_,
                 std::shared_ptr<pdf_resource<PAGE_XOBJECTS>>    page_xobjects_,
 
                 pdf_render_instructions& instructions,
@@ -66,6 +68,12 @@ namespace pdflib
     void do_image(const std::string& xobj_name,
 		  const xobject_subtype_name& xobj_subtype);
     
+    void do_shading(const std::string& shading_name);
+
+    // Paints a fill whose colour is a /Pattern. Returns false when the pattern
+    // cannot be painted, so the caller keeps its own (paint-nothing) fallback.
+    bool do_pattern_fill(const std::string& pattern_name);
+
     void do_form(const std::string& xobj_name,
 		 const xobject_subtype_name& xobj_subtype);
 
@@ -98,6 +106,14 @@ namespace pdflib
     std::shared_ptr<pdf_resource<PAGE_FONTS>>       page_fonts;
     std::shared_ptr<pdf_resource<PAGE_GRPHS>>       page_grphs;
     std::shared_ptr<pdf_resource<PAGE_COLORSPACES>> page_colorspaces;
+    std::shared_ptr<pdf_resource<PAGE_SHADINGS>>   page_shadings;
+    std::shared_ptr<pdf_resource<PAGE_PATTERNS>>   page_patterns;
+
+    // CTM in force when this stream began. Pattern space is defined against
+    // the default space of the page, not against the CTM at the fill, so a
+    // pattern needs this rather than the current matrix.
+    std::array<double, 9> base_ctm_ = {1, 0, 0, 0, 1, 0, 0, 0, 1};
+    bool base_ctm_valid_ = false;
     std::shared_ptr<pdf_resource<PAGE_XOBJECTS>>    page_xobjects;
 
     pdf_render_instructions& instructions;
@@ -128,6 +144,8 @@ namespace pdflib
                                    std::shared_ptr<pdf_resource<PAGE_FONTS>>       page_fonts_,
                                    std::shared_ptr<pdf_resource<PAGE_GRPHS>>       page_grphs_,
                                    std::shared_ptr<pdf_resource<PAGE_COLORSPACES>> page_colorspaces_,
+                                   std::shared_ptr<pdf_resource<PAGE_SHADINGS>>   page_shadings_,
+                                   std::shared_ptr<pdf_resource<PAGE_PATTERNS>>   page_patterns_,
 
                                    std::shared_ptr<pdf_resource<PAGE_XOBJECTS>>    page_xobjects_,
 
@@ -144,6 +162,8 @@ namespace pdflib
     page_fonts(page_fonts_),
     page_grphs(page_grphs_),
     page_colorspaces(page_colorspaces_),
+    page_shadings(page_shadings_),
+    page_patterns(page_patterns_),
 
     page_xobjects(page_xobjects_),
 
@@ -199,6 +219,14 @@ namespace pdflib
   void pdf_decoder<STREAM>::interprete(std::vector<qpdf_stream_instruction>& parameters)
   {
     LOG_S(INFO) << __FUNCTION__;
+
+    // The top-level content stream starts with an empty stack -- the first
+    // `q` creates it -- so the base can only be read once a state exists.
+    if(not base_ctm_valid_ and stack.size() > 0)
+      {
+        base_ctm_ = current_graphic_state().get_trafo_matrix();
+        base_ctm_valid_ = true;
+      }
 
     // initialise the stack
     if(stack.size()==0)
@@ -398,6 +426,530 @@ namespace pdflib
     timings.note_attributed(do_image_seconds);
   }
 
+
+  // Paints a /Shading (the `sh` operator, 8.7.4.5).
+  //
+  // The shading is evaluated into a small RGB raster over its /BBox and handed
+  // to the ordinary bitmap path, so it needs no new instruction type and
+  // inherits image placement, clipping and export for free. Gradients are
+  // smooth by construction, so a modest raster upscales without banding.
+  void pdf_decoder<STREAM>::do_shading(const std::string& shading_name)
+  {
+    if(not page_shadings or page_shadings->count(shading_name) == 0)
+      {
+        LOG_S(WARNING) << "unknown shading with name `" << shading_name << "`";
+        return;
+      }
+
+    pdf_resource<PAGE_SHADING>& shading = (*page_shadings)[shading_name];
+    if(not shading.is_supported())
+      {
+        return;
+      }
+
+    // An active ExtGState /SMask modulates the shading by a rendered form's
+    // luminosity. That is not modelled; painting the shading opaque instead
+    // erased whole pages (a semi-transparent veil became a solid sheet), so
+    // such shadings are skipped -- absence approximates a mostly-transparent
+    // veil far better than opacity does.
+    if(current_graphic_state().get_soft_mask_active())
+      {
+        LOG_S(INFO) << "shading `" << shading_name
+                    << "` is drawn through an ExtGState /SMask; skipping";
+        return;
+      }
+
+    const std::array<double, 9>& ctm_now = current_graphic_state().get_trafo_matrix();
+    clip_state_instruction clip_now = current_shape_state().get_clip_state();
+
+    // `sh` fills the current clip region; /BBox only restricts it further.
+    // With no /BBox the extent IS the clip: take the clip's device-space
+    // bounds back through the inverse CTM into shading space and rasterise
+    // that. The clip itself still rides on the instruction, so non-
+    // rectangular edges are honoured by the bitmap path where supported.
+    double bx0 = 0.0, by0 = 0.0, bx1 = 0.0, by1 = 0.0;
+    if(shading.has_bbox())
+      {
+        const std::array<double, 4>& bbox = shading.get_bbox();
+        bx0 = std::min(bbox[0], bbox[2]);
+        by0 = std::min(bbox[1], bbox[3]);
+        bx1 = std::max(bbox[0], bbox[2]);
+        by1 = std::max(bbox[1], bbox[3]);
+      }
+    else
+      {
+        if(not clip_now.has_clip())
+          {
+            // No /BBox and no clip: the extent would be the whole page.
+            // Painting that on a guess is worse than skipping.
+            LOG_S(INFO) << "shading `" << shading_name
+                        << "` has neither /BBox nor a clip; skipping";
+            return;
+          }
+
+        double dx0 = 0.0, dy0 = 0.0, dx1 = 0.0, dy1 = 0.0;
+        bool first = true;
+        for(const auto& path : clip_now.get_paths())
+          {
+            const std::vector<double>& xs = path.get_x();
+            const std::vector<double>& ys = path.get_y();
+            const size_t n = std::min(xs.size(), ys.size());
+            for(size_t i = 0; i < n; i++)
+              {
+                if(first) { dx0 = dx1 = xs[i]; dy0 = dy1 = ys[i]; first = false; }
+                dx0 = std::min(dx0, xs[i]); dx1 = std::max(dx1, xs[i]);
+                dy0 = std::min(dy0, ys[i]); dy1 = std::max(dy1, ys[i]);
+              }
+          }
+        if(first or dx1 - dx0 <= 0.0 or dy1 - dy0 <= 0.0)
+          {
+            return;
+          }
+
+        // The shape state's clip can be a stale page-wide clip rather than
+        // the local W n the shading was actually drawn under (nested forms).
+        // A clip-derived extent is only trustworthy when the clip is genuinely
+        // local; painting a "clipped" gradient across the whole page turned a
+        // decorative veil into an opaque sheet over the content.
+        {
+          const std::array<double, 4> page_box = page_dimension.get_crop_bbox();
+          const double page_area =
+            std::abs((page_box[2] - page_box[0]) * (page_box[3] - page_box[1]));
+          const double clip_area = (dx1 - dx0) * (dy1 - dy0);
+          // A page-spanning extent is fine when nothing has been painted yet:
+          // that is a background gradient, and skipping it left pages flat.
+          // With content already down, a page-wide "clip" is more likely the
+          // stale outer clip and painting it sheets over the page.
+          const bool at_page_start = instructions.get_total_instruction_count() <= 2;
+          if(page_area > 0.0 and clip_area > 0.5 * page_area and not at_page_start)
+            {
+              LOG_S(INFO) << "shading `" << shading_name
+                          << "`: no /BBox and the clip spans "
+                          << (100.0 * clip_area / page_area)
+                          << "% of the page; skipping as untrustworthy";
+              return;
+            }
+        }
+
+        // Invert the (row-vector) affine CTM to bring the device box into
+        // shading space.
+        const double a = ctm_now[0], b = ctm_now[1];
+        const double c = ctm_now[3], d = ctm_now[4];
+        const double e = ctm_now[6], f = ctm_now[7];
+        const double det = a * d - b * c;
+        if(std::abs(det) < 1e-12) { return; }
+
+        auto inv = [&](double X, double Y, double& sx, double& sy)
+        {
+          const double px = X - e;
+          const double py = Y - f;
+          sx = ( px * d - py * c) / det;
+          sy = (-px * b + py * a) / det;
+        };
+
+        double sx, sy;
+        bool sfirst = true;
+        const double cx[4] = {dx0, dx1, dx1, dx0};
+        const double cy[4] = {dy0, dy0, dy1, dy1};
+        for(int i = 0; i < 4; i++)
+          {
+            inv(cx[i], cy[i], sx, sy);
+            if(sfirst) { bx0 = bx1 = sx; by0 = by1 = sy; sfirst = false; }
+            bx0 = std::min(bx0, sx); bx1 = std::max(bx1, sx);
+            by0 = std::min(by0, sy); by1 = std::max(by1, sy);
+          }
+      }
+
+    const double bw = bx1 - bx0;
+    const double bh = by1 - by0;
+    if(bw <= 0.0 or bh <= 0.0) { return; }
+
+    constexpr int max_dim = 256;
+    int raster_w = max_dim;
+    int raster_h = max_dim;
+    if(bw >= bh) { raster_h = std::max(1, static_cast<int>(std::lround(max_dim * bh / bw))); }
+    else         { raster_w = std::max(1, static_cast<int>(std::lround(max_dim * bw / bh))); }
+
+    const std::vector<double>& c = shading.get_coords();
+    const int type = shading.get_shading_type();
+
+    auto data = std::make_shared<std::vector<uint8_t> >();
+    data->resize(static_cast<size_t>(raster_w) * raster_h * 3);
+
+    // Transparency plane: outside an un-extended gradient, and outside the
+    // clip path, nothing may be painted. The first version painted those
+    // pixels opaque white, which erased everything beneath a large clip.
+    // `sh` paints with the current fill alpha (/ca from the ExtGState). A
+    // page that veils its background with a semi-transparent gradient must
+    // not have that veil painted opaque -- it erases everything beneath.
+    const double fill_ca =
+      std::max(0.0, std::min(1.0, current_graphic_state().get_fill_alpha()));
+    const uint8_t alpha_on =
+      static_cast<uint8_t>(std::lround(255.0 * fill_ca));
+
+    auto alpha = std::make_shared<std::vector<uint8_t> >();
+    alpha->resize(static_cast<size_t>(raster_w) * raster_h, alpha_on);
+
+    // Cache the ramp: sampling the function per pixel would evaluate it tens of
+    // thousands of times for one panel.
+    constexpr int ramp_n = 256;
+    std::vector<std::array<int, 3> > ramp(ramp_n);
+    for(int i = 0; i < ramp_n; i++)
+      {
+        std::array<int, 3> rgb = {0, 0, 0};
+        if(not shading.sample(static_cast<double>(i) / (ramp_n - 1), rgb))
+          {
+            LOG_S(WARNING) << "shading `" << shading_name << "`: function not evaluable";
+            return;
+          }
+        ramp[i] = rgb;
+      }
+
+    for(int row = 0; row < raster_h; row++)
+      {
+        // Raster rows run top-down; PDF y grows upward.
+        const double y = by1 - (row + 0.5) * bh / raster_h;
+
+        for(int col = 0; col < raster_w; col++)
+          {
+            const double x = bx0 + (col + 0.5) * bw / raster_w;
+
+            double t = 0.0;
+            bool inside = true;
+
+            if(type == 2)
+              {
+                const double dx = c[2] - c[0];
+                const double dy = c[3] - c[1];
+                const double len2 = dx * dx + dy * dy;
+                t = (len2 > 0.0) ? (((x - c[0]) * dx + (y - c[1]) * dy) / len2) : 0.0;
+              }
+            else
+              {
+                // Radial: parameterise by distance between the two circles.
+                const double r0 = c[2];
+                const double r1 = c[5];
+                const double d  = std::hypot(x - c[3], y - c[4]);
+                t = (std::abs(r1 - r0) > 1e-9) ? ((d - r0) / (r1 - r0)) : 0.0;
+              }
+
+            if(t < 0.0)
+              {
+                if(shading.extend_start()) { t = 0.0; } else { inside = false; }
+              }
+            if(t > 1.0)
+              {
+                if(shading.extend_end()) { t = 1.0; } else { inside = false; }
+              }
+
+            const size_t o = (static_cast<size_t>(row) * raster_w + col) * 3;
+            if(not inside)
+              {
+                (*data)[o + 0] = 255;
+                (*data)[o + 1] = 255;
+                (*data)[o + 2] = 255;
+                (*alpha)[static_cast<size_t>(row) * raster_w + col] = 0;
+                continue;
+              }
+
+            const int idx = std::max(0, std::min(ramp_n - 1,
+                              static_cast<int>(std::lround(t * (ramp_n - 1)))));
+            (*data)[o + 0] = static_cast<uint8_t>(ramp[idx][0]);
+            (*data)[o + 1] = static_cast<uint8_t>(ramp[idx][1]);
+            (*data)[o + 2] = static_cast<uint8_t>(ramp[idx][2]);
+          }
+      }
+
+    // Map the extent corners through the CTM, in the same corner order the
+    // image path uses (top-left, bottom-left, bottom-right, top-right).
+    const std::array<double, 9>& ctm = ctm_now;
+
+    auto to_device = [&ctm](double x, double y, double& dx, double& dy)
+    {
+      dx = x * ctm[0] + y * ctm[3] + ctm[6];
+      dy = x * ctm[1] + y * ctm[4] + ctm[7];
+    };
+
+    double x0, y0, x1, y1, x2, y2, x3, y3;
+    to_device(bx0, by1, x0, y0);
+    to_device(bx0, by0, x1, y1);
+    to_device(bx1, by0, x2, y2);
+    to_device(bx1, by1, x3, y3);
+
+    // Respect the actual clip path, not just its bounds: the renderer only
+    // applies rectangular clips, so a shading whose clip is a rounded box or
+    // a glyph outline would otherwise paint its full bounding box. The raster
+    // is an affine image of shading space, so each pixel's device point is a
+    // bilinear blend of the mapped corners; test it against the clip polygons
+    // with the clip's own fill rule.
+    if(clip_now.has_clip())
+      {
+        const bool even_odd = (clip_now.get_rule() == CLIP_RULE_EVEN_ODD);
+
+        auto inside_clip = [&](double px, double py) -> bool
+        {
+          int winding = 0;
+          int crossings = 0;
+          for(const auto& path : clip_now.get_paths())
+            {
+              const std::vector<double>& xs = path.get_x();
+              const std::vector<double>& ys = path.get_y();
+              const size_t n = std::min(xs.size(), ys.size());
+              if(n < 3) { continue; }
+              for(size_t i = 0, j = n - 1; i < n; j = i++)
+                {
+                  const bool cross = ((ys[i] > py) != (ys[j] > py));
+                  if(not cross) { continue; }
+                  const double x_at =
+                    xs[j] + (py - ys[j]) * (xs[i] - xs[j]) / (ys[i] - ys[j]);
+                  if(px < x_at)
+                    {
+                      crossings++;
+                      winding += (ys[i] > ys[j]) ? 1 : -1;
+                    }
+                }
+            }
+          return even_odd ? ((crossings % 2) == 1) : (winding != 0);
+        };
+
+        for(int row = 0; row < raster_h; row++)
+          {
+            const double v = (row + 0.5) / raster_h;
+            for(int col = 0; col < raster_w; col++)
+              {
+                const size_t idx = static_cast<size_t>(row) * raster_w + col;
+                if((*alpha)[idx] == 0) { continue; }
+                const double u = (col + 0.5) / raster_w;
+                const double px = x0 + u * (x3 - x0) + v * (x1 - x0);
+                const double py = y0 + u * (y3 - y0) + v * (y1 - y0);
+                if(not inside_clip(px, py)) { (*alpha)[idx] = 0; }
+              }
+          }
+      }
+
+    std::array<int, 3> shape = {raster_h, raster_w, 3};
+    std::array<int, 3> filling = {0, 0, 0};
+
+    bitmap_instruction binstr("shading:" + shading_name,
+                              std::move(data),
+                              std::move(alpha),
+                              CMYK_CONVENTION_UNKNOWN,
+                              shape,
+                              PIXEL_FORMAT_RGB,
+                              false,
+                              filling,
+                              x0, y0,
+                              x1, y1,
+                              x2, y2,
+                              x3, y3,
+                              std::move(clip_now));
+
+    instructions.add_bitmap_instruction(std::move(binstr));
+
+    LOG_S(INFO) << "painted shading `" << shading_name << "` type " << type
+                << " as a " << raster_w << "x" << raster_h << " raster";
+  }
+
+
+  // Paints a fill whose non-stroking colour is a /Pattern (8.7.3).
+  //
+  // A tiling pattern is a content stream replayed on a lattice. Pattern space
+  // is defined by the pattern's own /Matrix against the DEFAULT space of the
+  // page, not against the CTM in force at the fill -- so the matrix handed to
+  // the nested decoder is Matrix x base x inverse(current), which composes
+  // back to exactly Matrix x base.
+  //
+  // Returns false when nothing could be painted, leaving the caller's
+  // paint-nothing fallback in charge.
+  bool pdf_decoder<STREAM>::do_pattern_fill(const std::string& pattern_name)
+  {
+    if(not page_patterns or page_patterns->count(pattern_name) == 0)
+      {
+        return false;
+      }
+
+    pdf_resource<PAGE_PATTERN>& pattern = (*page_patterns)[pattern_name];
+    if(not pattern.is_valid() or pattern.get_pattern_type() != 1)
+      {
+        // Shading patterns (type 2) are not painted here yet.
+        return false;
+      }
+
+    std::vector<qpdf_stream_instruction> cell = pattern.parse_stream();
+    if(cell.empty())
+      {
+        return false;
+      }
+
+    const std::array<double, 9>& want = pattern.get_matrix();
+    const std::array<double, 9>& cur  = current_graphic_state().get_trafo_matrix();
+
+    // No base recorded yet (a pattern used before any q): the current matrix
+    // is the best available stand-in and is usually identical to it.
+    if(not base_ctm_valid_)
+      {
+        base_ctm_ = cur;
+        base_ctm_valid_ = true;
+      }
+
+    // inverse of the current (affine) CTM
+    const double a = cur[0], b = cur[1], c = cur[3], d = cur[4];
+    const double e = cur[6], f = cur[7];
+    const double det = a * d - b * c;
+    if(std::abs(det) < 1e-12) { return false; }
+
+    const std::array<double, 9> inv = {
+       d / det, -b / det, 0.0,
+      -c / det,  a / det, 0.0,
+      (c * f - d * e) / det, (b * e - a * f) / det, 1.0
+    };
+
+    auto mul = [](const std::array<double, 9>& m, const std::array<double, 9>& n)
+    {
+      std::array<double, 9> r = {0, 0, 0, 0, 0, 0, 0, 0, 1};
+      r[0] = m[0]*n[0] + m[1]*n[3];
+      r[1] = m[0]*n[1] + m[1]*n[4];
+      r[3] = m[3]*n[0] + m[4]*n[3];
+      r[4] = m[3]*n[1] + m[4]*n[4];
+      r[6] = m[6]*n[0] + m[7]*n[3] + n[6];
+      r[7] = m[6]*n[1] + m[7]*n[4] + n[7];
+      return r;
+    };
+
+    // Pattern space -> device is Matrix x base. cm() post-multiplies by the
+    // CURRENT matrix, so hand it Matrix x base x inverse(current), which
+    // composes back to exactly that. Dropping the base placed the cell in raw
+    // pattern coordinates and put it off the top of the page.
+    const std::array<double, 9> to_pattern = mul(mul(want, base_ctm_), inv);
+
+    // How many cells to lay down: cover the page box in pattern space.
+    const std::array<double, 4> page_box = page_dimension.get_crop_bbox();
+    double xs = pattern.get_x_step();
+    double ys = pattern.get_y_step();
+    if(xs <= 0.0 or ys <= 0.0) { xs = ys = 0.0; }
+
+    // Which cells of the lattice actually touch the page? Take the page box
+    // back through the pattern transform and read off the index range. The
+    // lattice extends in BOTH directions: this pattern's origin sits a full
+    // page above the page box, so the cell that covers it is at index -1 and
+    // a 0..n loop painted nothing but off-page copies.
+    int ix0 = 0, ix1 = 0, iy0 = 0, iy1 = 0;
+    if(xs > 0.0 and ys > 0.0)
+      {
+        const std::array<double, 9> pat = mul(want, base_ctm_);
+        const double pa = pat[0], pb = pat[1], pc = pat[3], pd = pat[4];
+        const double pe = pat[6], pf = pat[7];
+        const double pdet = pa * pd - pb * pc;
+        if(std::abs(pdet) > 1e-12)
+          {
+            auto to_pattern_space = [&](double X, double Y, double& u, double& v)
+            {
+              const double x = X - pe, y = Y - pf;
+              u = ( x * pd - y * pc) / pdet;
+              v = (-x * pb + y * pa) / pdet;
+            };
+
+            const double cx[4] = {page_box[0], page_box[2], page_box[2], page_box[0]};
+            const double cy[4] = {page_box[1], page_box[1], page_box[3], page_box[3]};
+            double umin = 0, umax = 0, vmin = 0, vmax = 0;
+            for(int i = 0; i < 4; i++)
+              {
+                double u, v;
+                to_pattern_space(cx[i], cy[i], u, v);
+                if(i == 0) { umin = umax = u; vmin = vmax = v; }
+                umin = std::min(umin, u); umax = std::max(umax, u);
+                vmin = std::min(vmin, v); vmax = std::max(vmax, v);
+              }
+
+            const double bx = pattern.has_bbox() ? pattern.get_bbox()[0] : 0.0;
+            const double by = pattern.has_bbox() ? pattern.get_bbox()[1] : 0.0;
+            ix0 = static_cast<int>(std::floor((umin - bx) / xs));
+            ix1 = static_cast<int>(std::ceil ((umax - bx) / xs));
+            iy0 = static_cast<int>(std::floor((vmin - by) / ys));
+            iy1 = static_cast<int>(std::ceil ((vmax - by) / ys));
+          }
+      }
+
+    // Bounded: a degenerate step must not spawn a lattice of thousands.
+    constexpr int max_span = 16;
+    if(ix1 - ix0 > max_span) { ix1 = ix0 + max_span; }
+    if(iy1 - iy0 > max_span) { iy1 = iy0 + max_span; }
+
+    LOG_S(INFO) << "painting tiling pattern `" << pattern_name << "` cells x["
+                << ix0 << ", " << ix1 << "] y[" << iy0 << ", " << iy1 << "]";
+
+    auto page_fonts_       = std::make_shared<pdf_resource<PAGE_FONTS>>(page_fonts);
+    auto page_grphs_       = std::make_shared<pdf_resource<PAGE_GRPHS>>(page_grphs);
+    auto page_colorspaces_ = std::make_shared<pdf_resource<PAGE_COLORSPACES>>(page_colorspaces);
+    auto page_shadings_    = std::make_shared<pdf_resource<PAGE_SHADINGS>>(page_shadings);
+    auto page_patterns_    = std::make_shared<pdf_resource<PAGE_PATTERNS>>(page_patterns);
+    auto page_xobjects_    = std::make_shared<pdf_resource<PAGE_XOBJECTS>>(page_xobjects);
+
+    if(pattern.has_resources())
+      {
+        QPDFObjectHandle res = pattern.get_resources();
+        if(res.hasKey("/Font"))      { QPDFObjectHandle o = res.getKey("/Font");      page_fonts_->set(o, timings); }
+        if(res.hasKey("/ExtGState")) { QPDFObjectHandle o = res.getKey("/ExtGState"); page_grphs_->set(o, timings); }
+        if(res.hasKey("/ColorSpace")){ QPDFObjectHandle o = res.getKey("/ColorSpace");page_colorspaces_->set(o); }
+        if(res.hasKey("/Shading"))   { QPDFObjectHandle o = res.getKey("/Shading");   page_shadings_->set(o); }
+        if(res.hasKey("/Pattern"))   { QPDFObjectHandle o = res.getKey("/Pattern");   page_patterns_->set(o); }
+        if(res.hasKey("/XObject"))   { QPDFObjectHandle o = res.getKey("/XObject");   page_xobjects_->set(o, timings); }
+      }
+
+    bool painted = false;
+
+    for(int iy = iy0; iy <= iy1; iy++)
+      {
+        for(int ix = ix0; ix <= ix1; ix++)
+          {
+            std::array<double, 9> step = {1, 0, 0, 0, 1, 0,
+                                          ix * xs, iy * ys, 1};
+            std::array<double, 9> place = mul(step, to_pattern);
+
+            this->q();
+            const std::array<double, 6> place6 = {place[0], place[1],
+                                                  place[3], place[4],
+                                                  place[6], place[7]};
+            current_global_state().cm(place6);
+
+            // The cell replays on a clean path. The state q() pushed still
+            // carries the path currently being filled with this pattern, and
+            // the cell's own painting operator would paint that path too --
+            // the whole fill region came out flooded in the cell's colour,
+            // with the tiles only visible outside it. Q() restores it.
+            std::vector<qpdf_stream_instruction> no_parameters;
+            current_shape_state().n(no_parameters);
+
+            pdf_decoder<STREAM> cell_stream(config,
+                                            page_dimension,
+                                            page_cells,
+                                            page_shapes,
+                                            page_images,
+                                            page_fonts_,
+                                            page_grphs_,
+                                            page_colorspaces_,
+                                            page_shadings_,
+                                            page_patterns_,
+                                            page_xobjects_,
+                                            instructions,
+                                            timings);
+
+            bool updated_stack = cell_stream.update_stack(stack, stack_count);
+
+            std::vector<qpdf_stream_instruction> parameters;
+            std::vector<qpdf_stream_instruction> insts = cell;
+            cell_stream.interprete(insts, parameters);
+
+            if(updated_stack) { cell_stream.Q(); }
+
+            this->Q();
+            painted = true;
+          }
+      }
+
+    return painted;
+  }
+
   void pdf_decoder<STREAM>::do_form(const std::string& xobj_name,
                                     const xobject_subtype_name& xobj_subtype)
   {
@@ -430,6 +982,8 @@ namespace pdflib
     auto page_fonts_       = std::make_shared<pdf_resource<PAGE_FONTS>>(page_fonts);
     auto page_grphs_       = std::make_shared<pdf_resource<PAGE_GRPHS>>(page_grphs);
     auto page_colorspaces_ = std::make_shared<pdf_resource<PAGE_COLORSPACES>>(page_colorspaces);
+    auto page_shadings_    = std::make_shared<pdf_resource<PAGE_SHADINGS>>(page_shadings);
+    auto page_patterns_    = std::make_shared<pdf_resource<PAGE_PATTERNS>>(page_patterns);
     auto page_xobjects_    = std::make_shared<pdf_resource<PAGE_XOBJECTS>>(page_xobjects);
 
     // parse the resources of the xobject into the child resources
@@ -452,6 +1006,18 @@ namespace pdflib
         {
           QPDFObjectHandle xobj_colorspaces = xobj.get_colorspaces();
           page_colorspaces_->set(xobj_colorspaces);
+        }
+
+      if(xobj.has_shadings())
+        {
+          QPDFObjectHandle xobj_shadings = xobj.get_shadings();
+          page_shadings_->set(xobj_shadings);
+        }
+
+      if(xobj.has_patterns())
+        {
+          QPDFObjectHandle xobj_patterns = xobj.get_patterns();
+          page_patterns_->set(xobj_patterns);
         }
 
       if(xobj.has_xobjects())
@@ -487,6 +1053,8 @@ namespace pdflib
                                        page_fonts_,
                                        page_grphs_,
                                        page_colorspaces_,
+                                       page_shadings_,
+                                       page_patterns_,
                                        page_xobjects_,
 
                                        instructions,
@@ -1192,6 +1760,11 @@ namespace pdflib
       case pdf_operator::f:
         {
           LOG_S(INFO) << "executing " << to_string(name);
+          if(current_graphic_state().get_fill_is_unresolved_pattern() and
+             not current_graphic_state().get_fill_pattern_name().empty())
+            {
+              do_pattern_fill(current_graphic_state().get_fill_pattern_name());
+            }
           current_shape_state().f(parameters);
         }
         break;
@@ -1206,6 +1779,11 @@ namespace pdflib
       case pdf_operator::fStar:
         {
           LOG_S(INFO) << "executing " << to_string(name);
+          if(current_graphic_state().get_fill_is_unresolved_pattern() and
+             not current_graphic_state().get_fill_pattern_name().empty())
+            {
+              do_pattern_fill(current_graphic_state().get_fill_pattern_name());
+            }
           current_shape_state().fStar(parameters);
         }
         break;
@@ -1278,7 +1856,11 @@ namespace pdflib
       case pdf_operator::sh:
         {
           LOG_S(INFO) << "executing " << to_string(name);
-          //current_graphic_state().sh(parameters);
+
+          if(not parameters.empty())
+            {
+              this->do_shading(parameters[0].to_utf8_string());
+            }
         }
         break;
 

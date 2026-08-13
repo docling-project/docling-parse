@@ -244,6 +244,11 @@ namespace pdflib
     // Optional embedded font program shared by all text instructions of one
     // PDF font resource. Set after construction to keep the (already long)
     // constructor signature stable; may be null.
+    // /Subtype /Type3: glyphs are content-stream procedures, so no system face
+    // can stand in for this font.
+    void set_is_type3(bool v) { is_type3_ = v; }
+    bool is_type3() const { return is_type3_; }
+
     void set_embedded_font(std::shared_ptr<const embedded_font_blob> blob);
     const std::shared_ptr<const embedded_font_blob>& get_embedded_font() const;
     bool has_embedded_font() const;
@@ -328,6 +333,7 @@ namespace pdflib
     const double g_x1_;
     const double g_y1_;
 
+    bool is_type3_ = false;
     std::shared_ptr<const embedded_font_blob> embedded_font_;
     int64_t char_code_ = -1;
     std::string glyph_name_;
@@ -730,6 +736,18 @@ namespace pdflib
     size_instruction size_instr;
 
     std::vector<instruction_type> instructions;
+
+  public:
+
+    // How many drawing instructions exist so far; lets a caller distinguish
+    // "start of the page" from "content already painted".
+    size_t get_total_instruction_count() const
+    {
+      return text_instructions.size() + widget_instructions.size() +
+             bitmap_instructions.size() + shape_instructions.size();
+    }
+
+  private:
 
     std::vector<text_instruction_type>        text_instructions;
     std::vector<text_widget_instruction_type> widget_instructions;

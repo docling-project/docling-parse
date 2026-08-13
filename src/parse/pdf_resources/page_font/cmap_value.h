@@ -21,6 +21,11 @@ namespace pdflib
 
     bool is_identity() const;
 
+    // Adds entries from `other` for codes this map does not already define.
+    // Own entries always win. Used to let a subset sibling of the same base
+    // font decode codes this font's own /ToUnicode leaves out.
+    void merge_missing(const cmap_value& other);
+
     std::string at(uint32_t key) const;
 
     size_t count(uint32_t key) const;
@@ -53,6 +58,27 @@ namespace pdflib
     _identity_range({0, 0}),
     _map(std::move(map))
   {}
+
+  inline void cmap_value::merge_missing(const cmap_value& other)
+  {
+    if(other._is_identity or other._map.empty())
+      {
+        return;
+      }
+
+    // An identity map answers every code, so merging into it would never be
+    // consulted; drop identity mode and keep the donated entries instead.
+    if(_is_identity)
+      {
+        _is_identity = false;
+        _identity_range = {0, 0};
+      }
+
+    for(const auto& kv : other._map)
+      {
+        _map.emplace(kv.first, kv.second);
+      }
+  }
 
   cmap_value::cmap_value(bool is_identity,
                          std::pair<uint32_t, uint32_t> range,

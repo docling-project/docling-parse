@@ -28,11 +28,18 @@ namespace pdflib
     double get_stroke_alpha() const { return stroke_alpha_; }
     double get_fill_alpha()   const { return fill_alpha_; }
 
+    // /SMask: a `gs` whose dictionary carries the key either installs a soft
+    // mask (a form rendered to alpha -- not modelled) or clears one (/None).
+    bool has_soft_mask_entry() const { return has_soft_mask_entry_; }
+    bool soft_mask_active()    const { return soft_mask_active_; }
+
   private:
 
     std::string    key;
     nlohmann::json val;
 
+    bool   has_soft_mask_entry_ = false;
+    bool   soft_mask_active_    = false;
     bool   has_stroke_alpha_ = false;
     bool   has_fill_alpha_   = false;
     double stroke_alpha_     = 1.0;
@@ -67,6 +74,13 @@ namespace pdflib
 
 	    has_stroke_alpha_ = true;
 	    stroke_alpha_ = utils::numeric::locale_safe_numeric_value(CA);
+	  }
+
+	if(qpdf_grph.hasKey("/SMask"))
+	  {
+	    has_soft_mask_entry_ = true;
+	    QPDFObjectHandle sm = qpdf_grph.getKey("/SMask");
+	    soft_mask_active_ = not (sm.isName() and sm.getName() == "/None");
 	  }
 
 	if(qpdf_grph.hasKey("/ca") and qpdf_grph.getKey("/ca").isNumber())

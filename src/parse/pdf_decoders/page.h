@@ -96,6 +96,8 @@ namespace pdflib
     void decode_fonts();
 
     void decode_colorspaces();
+    void decode_shadings();
+    void decode_patterns();
 
     void decode_xobjects();
 
@@ -147,6 +149,8 @@ namespace pdflib
     QPDFObjectHandle qpdf_grphs;
     QPDFObjectHandle qpdf_fonts;
     QPDFObjectHandle qpdf_colorspaces;
+    QPDFObjectHandle qpdf_shadings;
+    QPDFObjectHandle qpdf_patterns;
     QPDFObjectHandle qpdf_xobjects;
 
     // Debug-only: populated when config.populate_json_objects is true
@@ -176,6 +180,8 @@ namespace pdflib
     std::shared_ptr<pdf_resource<PAGE_GRPHS> > page_grphs;
     std::shared_ptr<pdf_resource<PAGE_FONTS> > page_fonts;
     std::shared_ptr<pdf_resource<PAGE_COLORSPACES> > page_colorspaces;
+    std::shared_ptr<pdf_resource<PAGE_SHADINGS> > page_shadings;
+    std::shared_ptr<pdf_resource<PAGE_PATTERNS> > page_patterns;
     std::shared_ptr<pdf_resource<PAGE_XOBJECTS> > page_xobjects;
 
     decode_config page_config;  // saved at the start of decode_page for use in widget handlers
@@ -199,6 +205,8 @@ namespace pdflib
     page_grphs(std::make_shared<pdf_resource<PAGE_GRPHS>>()),
     page_fonts(std::make_shared<pdf_resource<PAGE_FONTS>>()),
     page_colorspaces(std::make_shared<pdf_resource<PAGE_COLORSPACES>>()),
+    page_shadings(std::make_shared<pdf_resource<PAGE_SHADINGS>>()),
+    page_patterns(std::make_shared<pdf_resource<PAGE_PATTERNS>>()),
     page_xobjects(std::make_shared<pdf_resource<PAGE_XOBJECTS>>())
   {}
 
@@ -216,6 +224,8 @@ namespace pdflib
     page_grphs(std::make_shared<pdf_resource<PAGE_GRPHS>>()),
     page_fonts(std::make_shared<pdf_resource<PAGE_FONTS>>()),
     page_colorspaces(std::make_shared<pdf_resource<PAGE_COLORSPACES>>()),
+    page_shadings(std::make_shared<pdf_resource<PAGE_SHADINGS>>()),
+    page_patterns(std::make_shared<pdf_resource<PAGE_PATTERNS>>()),
     page_xobjects(std::make_shared<pdf_resource<PAGE_XOBJECTS>>())
   {
     std::string description = "thread-safe page " + std::to_string(orig_page_num);
@@ -997,6 +1007,11 @@ namespace pdflib
         LOG_S(WARNING) << "page does not have any graphics state!";
       }
 
+    // Collect every /ToUnicode on the page -- including those inside form
+    // XObjects -- before any font is decoded, so a font with a poor table can
+    // adopt a sibling's regardless of decode order.
+    page_fonts->harvest_to_unicode(qpdf_resources, timings);
+
     if(qpdf_resources.hasKey("/Font"))
       {
         qpdf_fonts = qpdf_resources.getKey("/Font");
@@ -1011,6 +1026,18 @@ namespace pdflib
       {
         qpdf_colorspaces = qpdf_resources.getKey("/ColorSpace");
         decode_colorspaces();
+      }
+
+    if(qpdf_resources.hasKey("/Shading"))
+      {
+        qpdf_shadings = qpdf_resources.getKey("/Shading");
+        decode_shadings();
+      }
+
+    if(qpdf_resources.hasKey("/Pattern"))
+      {
+        qpdf_patterns = qpdf_resources.getKey("/Pattern");
+        decode_patterns();
       }
     else
       {
@@ -1049,6 +1076,20 @@ namespace pdflib
     page_colorspaces->set(qpdf_colorspaces);
   }
 
+  void pdf_decoder<PAGE>::decode_shadings()
+  {
+    LOG_S(INFO) << __FUNCTION__;
+
+    page_shadings->set(qpdf_shadings);
+  }
+
+  void pdf_decoder<PAGE>::decode_patterns()
+  {
+    LOG_S(INFO) << __FUNCTION__;
+
+    page_patterns->set(qpdf_patterns);
+  }
+
   void pdf_decoder<PAGE>::decode_xobjects()
   {
     LOG_S(INFO) << __FUNCTION__;
@@ -1072,6 +1113,8 @@ namespace pdflib
                                        page_fonts,
                                        page_grphs,
                                        page_colorspaces,
+                                       page_shadings,
+                                       page_patterns,
                                        page_xobjects,
                                        instructions,
                                        timings);
@@ -1699,6 +1742,8 @@ namespace pdflib
                                        ap_fonts,
                                        page_grphs,
                                        ap_colorspaces,
+                                       page_shadings,
+                                       page_patterns,
                                        page_xobjects,
                                        ap_instructions,
                                        timings);

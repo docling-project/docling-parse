@@ -3,6 +3,8 @@
 #ifndef PDF_PAGE_COLORSPACE_RESOURCE_H
 #define PDF_PAGE_COLORSPACE_RESOURCE_H
 
+#include <parse/utils/color/icc_utils.h>
+
 namespace pdflib
 {
 
@@ -37,6 +39,10 @@ namespace pdflib
     void parse_lookup(QPDFObjectHandle obj);
 
     static double clamp_01(double val);
+
+    // [/Separation name alt tint] and [/DeviceN names alt tint ...] both put
+    // the alternate space at index 2 and the tint transform at index 3.
+    void parse_tint_transform(QPDFObjectHandle obj);
     static std::array<int, 3> gray_to_rgb(double gray);
     static std::array<int, 3> cmyk_to_rgb(double c, double m, double y, double k);
 
@@ -51,6 +57,20 @@ namespace pdflib
     std::shared_ptr<pdf_resource<PAGE_COLORSPACE>> base_;
     int hival_;
     std::vector<uint8_t> lookup_;
+
+    // Separation / DeviceN only: the alternate space and the tint transform
+    // that maps ink tints into it. Without these, tints degrade to the grey
+    // heuristic below -- a spot-colour page renders monochrome.
+    std::shared_ptr<pdf_resource<PAGE_COLORSPACE>> tint_alt_;
+    std::shared_ptr<pdf_function> tint_fn_;
+
+    // ICCBased only: the embedded profile and its cached transform to sRGB.
+    // Without these an ICCBased space collapses to its device equivalent and
+    // the textbook conversion is used, which visibly misses: an ICC CMYK
+    // (0, 0.4, 0.9, 0) is (246,172,27) through the profile and (255,153,25)
+    // through the formula.
+    std::vector<uint8_t> icc_profile_;
+    std::shared_ptr<void> icc_transform_;
   };
 
   pdf_resource<PAGE_COLORSPACE>::pdf_resource():
@@ -143,6 +163,32 @@ namespace pdflib
             return;
           }
         num_components_ = n;
+
+        // Keep the profile and build the transform once. The device family
+        // above stays as the fallback for when the profile cannot be read.
+        if(icc.isStream())
+          {
+            try
+              {
+                auto buffer = icc.getStreamData();
+                if(buffer and buffer->getSize() > 0)
+                  {
+                    const uint8_t* raw =
+                      reinterpret_cast<const uint8_t*>(buffer->getBuffer());
+                    icc_profile_.assign(raw, raw + buffer->getSize());
+                    icc_transform_ = icc::make_transform_to_srgb(icc_profile_, n);
+
+                    LOG_S(INFO) << "colorspace " << key_ << ": ICCBased /N " << n
+                                << ", profile " << icc_profile_.size() << " bytes, "
+                                << (icc_transform_ ? "colour-managed" : "falling back to formula");
+                  }
+              }
+            catch(const std::exception& e)
+              {
+                LOG_S(WARNING) << "colorspace " << key_
+                               << ": could not read ICC profile stream: " << e.what();
+              }
+          }
       }
     else if(name == "/CalGray")
       {
@@ -177,12 +223,14 @@ namespace pdflib
       {
         family_ = COLOR_SPACE_SEPARATION;
         num_components_ = 1;
+        parse_tint_transform(obj);
       }
     else if(name == "/DeviceN" and obj.getArrayNItems() >= 2 and
             obj.getArrayItem(1).isArray())
       {
         family_ = COLOR_SPACE_DEVICE_N;
         num_components_ = obj.getArrayItem(1).getArrayNItems();
+        parse_tint_transform(obj);
       }
     else if(name == "/Pattern")
       {
@@ -254,18 +302,96 @@ namespace pdflib
     return {v, v, v};
   }
 
+
+  // Encodes a linear 0..1 value to 8-bit sRGB. pypdfium2 (and Acrobat) map
+  // device CMYK through a perceptual table; treating the naive (1-c)(1-k)
+  // product as LINEAR light and encoding it approximates that far better
+  // than writing it out raw -- a 94% black fill is a readable dark grey
+  // (#42), not near-black (#0F).
+  inline int linear_to_srgb_255(double v)
+  {
+    v = v < 0.0 ? 0.0 : (v > 1.0 ? 1.0 : v);
+    const double s = (v <= 0.0031308) ? 12.92 * v
+                                      : 1.055 * std::pow(v, 1.0 / 2.4) - 0.055;
+    return static_cast<int>(std::round(255.0 * s));
+  }
+
   std::array<int, 3> pdf_resource<PAGE_COLORSPACE>::cmyk_to_rgb(double c, double m,
                                                                 double y, double k)
   {
+    // Pure-K greys go through sRGB encoding: viewers render a 94% black fill
+    // as a readable dark grey, and the naive product lands at near-black.
+    // Coloured tints keep the naive mapping -- the corpus A/B showed the
+    // encoded version drifting AWAY from the reference on coloured pages
+    // while helping the grey ones.
+    if(c <= 0.001 and m <= 0.001 and y <= 0.001)
+      {
+        const int g = linear_to_srgb_255(1.0 - clamp_01(k));
+        return {g, g, g};
+      }
     int r = static_cast<int>(std::round(255.0 * (1.0 - clamp_01(c)) * (1.0 - clamp_01(k))));
     int g = static_cast<int>(std::round(255.0 * (1.0 - clamp_01(m)) * (1.0 - clamp_01(k))));
     int b = static_cast<int>(std::round(255.0 * (1.0 - clamp_01(y)) * (1.0 - clamp_01(k))));
     return {r, g, b};
   }
 
+  void pdf_resource<PAGE_COLORSPACE>::parse_tint_transform(QPDFObjectHandle obj)
+  {
+    if(not obj.isArray() or obj.getArrayNItems() < 4) { return; }
+
+    try
+      {
+        auto alt = std::make_shared<pdf_resource<PAGE_COLORSPACE>>();
+        alt->key_ = key_ + "/alt";
+        alt->parse(obj.getArrayItem(2), 0);
+
+        auto fn = std::make_shared<pdf_function>();
+        if(alt->get_num_components() > 0 and fn->parse(obj.getArrayItem(3)))
+          {
+            tint_alt_ = std::move(alt);
+            tint_fn_  = std::move(fn);
+            LOG_S(INFO) << "colorspace " << key_
+                        << ": tint transform into alternate space parsed";
+          }
+        else
+          {
+            LOG_S(WARNING) << "colorspace " << key_
+                           << ": tint transform not interpretable; using the grey heuristic";
+          }
+      }
+    catch(const std::exception& e)
+      {
+        LOG_S(WARNING) << "colorspace " << key_
+                       << ": tint transform parse failed: " << e.what();
+      }
+  }
+
   bool pdf_resource<PAGE_COLORSPACE>::map_to_rgb(const std::vector<double>& comps,
                                                  std::array<int, 3>& rgb) const
   {
+    // Separation / DeviceN: the document supplies the authoritative mapping
+    // from ink tints to a real colour space -- use it before any heuristic.
+    if((family_ == COLOR_SPACE_SEPARATION or family_ == COLOR_SPACE_DEVICE_N) and
+       tint_fn_ and tint_alt_ and
+       static_cast<int>(comps.size()) == num_components_)
+      {
+        std::vector<double> alt_comps;
+        if(tint_fn_->eval(comps, alt_comps) and
+           tint_alt_->map_to_rgb(alt_comps, rgb))
+          {
+            return true;
+          }
+      }
+
+    // An embedded profile is the document's own statement about what these
+    // numbers mean, so it wins over the device formulas below whenever the
+    // operand count matches what the profile expects.
+    if(icc_transform_ and static_cast<int>(comps.size()) == num_components_ and
+       icc::transform_color_to_rgb(icc_transform_, comps, rgb))
+      {
+        return true;
+      }
+
     switch(family_)
       {
       case COLOR_SPACE_GRAY:

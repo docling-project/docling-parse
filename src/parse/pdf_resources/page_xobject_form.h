@@ -13,6 +13,8 @@ namespace pdflib
     const static inline std::string FONTS_KEY = "/Font";
     const static inline std::string GRPHS_KEY = "/ExtGState";
     const static inline std::string COLORSPACES_KEY = "/ColorSpace";
+    const static inline std::string SHADINGS_KEY = "/Shading";
+    const static inline std::string PATTERNS_KEY = "/Pattern";
     const static inline std::string XOBJS_KEY = "/XObject";
     
   public:
@@ -35,11 +37,15 @@ namespace pdflib
     bool has_fonts() const;
     bool has_grphs() const;
     bool has_colorspaces() const;
+    bool has_shadings() const;
+    bool has_patterns() const;
     bool has_xobjects() const;
 
     QPDFObjectHandle get_fonts() const;
     QPDFObjectHandle get_grphs() const;
     QPDFObjectHandle get_colorspaces() const;
+    QPDFObjectHandle get_shadings() const;
+    QPDFObjectHandle get_patterns() const;
     QPDFObjectHandle get_xobjects() const;
 
     std::vector<qpdf_stream_instruction> parse_stream() const;
@@ -174,6 +180,42 @@ namespace pdflib
       {
         QPDFObjectHandle qpdf_xobject_dict_ = qpdf_xobject_dict;
 	return qpdf_xobject_dict_.getKey(RESOURCES_KEY).getKey(COLORSPACES_KEY);
+      }
+
+    return QPDFObjectHandle::newNull();
+  }
+
+  bool pdf_resource<PAGE_XOBJECT_FORM>::has_shadings() const
+  {
+    QPDFObjectHandle qpdf_xobject_dict_ = qpdf_xobject_dict;
+    return qpdf_xobject_dict_.hasKey(RESOURCES_KEY) and
+           qpdf_xobject_dict_.getKey(RESOURCES_KEY).hasKey(SHADINGS_KEY);
+  }
+
+  QPDFObjectHandle pdf_resource<PAGE_XOBJECT_FORM>::get_shadings() const
+  {
+    if(has_shadings())
+      {
+        QPDFObjectHandle qpdf_xobject_dict_ = qpdf_xobject_dict;
+        return qpdf_xobject_dict_.getKey(RESOURCES_KEY).getKey(SHADINGS_KEY);
+      }
+
+    return QPDFObjectHandle::newNull();
+  }
+
+  bool pdf_resource<PAGE_XOBJECT_FORM>::has_patterns() const
+  {
+    QPDFObjectHandle qpdf_xobject_dict_ = qpdf_xobject_dict;
+    return qpdf_xobject_dict_.hasKey(RESOURCES_KEY) and
+           qpdf_xobject_dict_.getKey(RESOURCES_KEY).hasKey(PATTERNS_KEY);
+  }
+
+  QPDFObjectHandle pdf_resource<PAGE_XOBJECT_FORM>::get_patterns() const
+  {
+    if(has_patterns())
+      {
+        QPDFObjectHandle qpdf_xobject_dict_ = qpdf_xobject_dict;
+        return qpdf_xobject_dict_.getKey(RESOURCES_KEY).getKey(PATTERNS_KEY);
       }
 
     return QPDFObjectHandle::newNull();

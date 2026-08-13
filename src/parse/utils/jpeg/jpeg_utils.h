@@ -73,6 +73,8 @@ public:
   int height = 0;
   int components = 0;
   ColorSpace color_space = ColorSpace::Unknown;
+  // Adobe APP14 marker seen: CMYK samples are stored INVERTED.
+  bool adobe_marker = false;
 
   bool empty() const { return pixels.empty(); }
 };
@@ -914,6 +916,7 @@ inline decoded_jpeg_result decode_jpeg_to_raw_pixels(
     result.width      = static_cast<int>(dinfo.output_width);
     result.height     = static_cast<int>(dinfo.output_height);
     result.components = dinfo.output_components;
+    result.adobe_marker = (dinfo.saw_Adobe_marker != 0);
     result.color_space = (result.components == 1) ? ColorSpace::Gray
                        : (result.components == 3) ? ColorSpace::RGB
                        : (result.components == 4) ? ColorSpace::CMYK
