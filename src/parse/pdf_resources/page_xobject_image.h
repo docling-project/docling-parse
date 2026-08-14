@@ -241,6 +241,7 @@ namespace pdflib
     int              indexed_hival  = -1; // hival from /Indexed color space; -1 if not Indexed
     std::string      indexed_base_cs;    // base color space name for /Indexed (e.g. "/DeviceRGB")
     std::shared_ptr<std::vector<uint8_t>> indexed_palette; // raw palette bytes: (hival+1)*ncomps bytes
+    std::shared_ptr<pdf_resource<PAGE_COLORSPACE> > indexed_tint_space;
     std::shared_ptr<std::vector<uint8_t>> indexed_base_icc_profile;
     int              indexed_base_icc_components = 0;
     std::vector<std::string> indexed_base_device_n_names;
@@ -574,6 +575,29 @@ namespace pdflib
                             indexed_base_cs = base_name.getName();
                             LOG_S(INFO) << "Indexed array base color space: " << indexed_base_cs;
                           }
+
+                        // A /Separation (or unhandled /DeviceN) base: the
+                        // palette entries are TINT values, one sample per
+                        // colorant, meaningless until run through the tint
+                        // transform. Parse the space now; the palette is
+                        // converted to RGB right after it is loaded.
+                        if(base_name.isName() and
+                           (base_name.getName() == "/Separation" or
+                            (base_name.getName() == "/DeviceN" and
+                             indexed_base_cs != "/DeviceCMYK" and
+                             indexed_base_cs != "/DeviceGray")))
+                          {
+                            indexed_tint_space =
+                              std::make_shared<pdf_resource<PAGE_COLORSPACE> >();
+                            indexed_tint_space->set(xobject_key + "/IndexedBase",
+                                                    base_obj);
+                            if(not indexed_tint_space->has_tint_transform())
+                              {
+                                LOG_S(WARNING) << "Indexed tint base did not resolve "
+                                               << "for xobject_key=" << xobject_key;
+                                indexed_tint_space.reset();
+                              }
+                          }
                       }
                     else
                       {
@@ -621,6 +645,48 @@ namespace pdflib
                         else
                           {
                             LOG_S(WARNING) << "Indexed color space: unrecognized lookup table type";
+                          }
+
+                        // Tint-space base: run every palette entry through
+                        // the tint transform and keep an RGB palette. Without
+                        // this the image has no usable base space at all and
+                        // is dropped for a placeholder.
+                        if(indexed_tint_space and indexed_palette
+                           and not indexed_palette->empty())
+                          {
+                            const int ncomp = std::max<int>(
+                              1, indexed_tint_space->tint_component_count());
+                            const size_t entries = indexed_palette->size() / ncomp;
+                            auto rgb_pal = std::make_shared<std::vector<uint8_t>>();
+                            rgb_pal->reserve(entries * 3);
+                            std::vector<double> comps(ncomp, 0.0);
+                            bool ok = entries > 0;
+                            for(size_t e = 0; ok and e < entries; ++e)
+                              {
+                                for(int c = 0; c < ncomp; ++c)
+                                  {
+                                    comps[c] = (*indexed_palette)[e * ncomp + c] / 255.0;
+                                  }
+                                std::array<int, 3> rgb = {0, 0, 0};
+                                if(indexed_tint_space->map_to_rgb(comps, rgb))
+                                  {
+                                    rgb_pal->push_back(static_cast<uint8_t>(rgb[0]));
+                                    rgb_pal->push_back(static_cast<uint8_t>(rgb[1]));
+                                    rgb_pal->push_back(static_cast<uint8_t>(rgb[2]));
+                                  }
+                                else { ok = false; }
+                              }
+                            if(ok)
+                              {
+                                indexed_palette = std::move(rgb_pal);
+                                indexed_base_cs = "/DeviceRGB";
+                                LOG_S(INFO) << "Indexed tint-base palette converted to RGB: "
+                                            << indexed_palette->size() << " bytes";
+                              }
+                            else
+                              {
+                                LOG_S(WARNING) << "Indexed tint-base palette conversion failed";
+                              }
                           }
 
                         if(indexed_base_cs == "/DeviceCMYK"
