@@ -2265,16 +2265,33 @@ namespace pdflib
 	and cmap_numb_to_char.at(numb)!=replacement_char;
     };
 
+    // Subset generators (FontForge, fontTools, mPDF, ...) name glyphs by
+    // bare index: /gid00043, /g43, /glyph43, /cid43, /index43. Such a name
+    // identifies the glyph inside the embedded font program but carries no
+    // reading text, so keeping it fabricates plausible-looking garbage
+    // ('gid00043gid00049...') that downstream quality gates cannot detect
+    // (docling-project/docling-parse#238).
+    std::regex re_gid(R"((gid|glyph|g|cid|index)\d+)", std::regex::icase);
+
     // Last-resort for glyph-names that neither the /ToUnicode cmap nor
     // any glyph-table could resolve (eg custom ligatures like /Th, /ft
     // or /tt in a font without cmap): keep the glyph-name itself without
-    // the leading '/' and any '.suffix' as the reading text.
-    auto resolve_unknown_name = [](const std::string& name, const std::string& name_)
+    // the leading '/' and any '.suffix' as the reading text — unless the
+    // name is a pure glyph-index, which becomes a GLYPH marker so the
+    // unresolved glyph stays detectable.
+    auto resolve_unknown_name = [&re_gid](const std::string& name, const std::string& name_)
     {
       std::string result = name_;
       if(result.empty())
 	{
 	  result = (name.size()>0 and name[0]=='/')? name.substr(1) : name;
+	}
+
+      if(std::regex_match(result, re_gid))
+	{
+	  LOG_S(WARNING) << "glyph-index name " << name
+			 << ": emitting marker 'GLYPH<name:" << result << ">'";
+	  return "GLYPH<name:"+result+">";
 	}
 
       LOG_S(WARNING) << "unknown glyph-name " << name
