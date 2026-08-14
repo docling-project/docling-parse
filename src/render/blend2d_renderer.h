@@ -973,13 +973,17 @@ namespace pdflib
     {
       const double ink[4] = {c / 255.0, m / 255.0, y / 255.0, k / 255.0};
 
-      if (convention == CMYK_CONVENTION_PROCESS)
+      // CMYK samples are ink values unless something positively established
+      // the Adobe-inverted convention. Treating "unknown" as inverted made
+      // the default a silent negation, which every decode path then had to
+      // cancel by luck.
+      if (convention == CMYK_CONVENTION_ADOBE_INVERTED)
         {
-          return color::cmyk_to_rgb255(ink[0], ink[1], ink[2], ink[3]);
+          return color::cmyk_to_rgb255(1.0 - ink[0], 1.0 - ink[1],
+                                       1.0 - ink[2], 1.0 - ink[3]);
         }
 
-      return color::cmyk_to_rgb255(1.0 - ink[0], 1.0 - ink[1],
-                                   1.0 - ink[2], 1.0 - ink[3]);
+      return color::cmyk_to_rgb255(ink[0], ink[1], ink[2], ink[3]);
     }
 
     // Maps an ExtGState /BM to the Blend2D compositing operator (11.3.5,

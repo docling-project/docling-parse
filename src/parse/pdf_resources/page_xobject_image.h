@@ -809,10 +809,15 @@ namespace pdflib
 	  }
 	else if(color_space=="/DeviceCMYK")
 	  {
+	    // ISO 32000-1 table 89: the default is the identity, [0 1] per
+	    // component. Synthesising the inverted array here flipped every CMYK
+	    // sample once; paths whose convention flag inverted a second time
+	    // cancelled it by accident, and the one that did not (JPX) rendered
+	    // photographic negatives.
 	    LOG_S(WARNING) << "no `/Decode` found: falling back on default for " << color_space;
 	    decode_array = {
-	      1, 0, 1, 0,
-	      1, 0, 1, 0
+	      0, 1, 0, 1,
+	      0, 1, 0, 1
 	    };
 	    decode_present = !decode_array.empty();
 	  }
