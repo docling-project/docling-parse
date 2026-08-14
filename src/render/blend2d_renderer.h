@@ -2022,7 +2022,12 @@ namespace pdflib
 
             if (char_code_first)
               {
-                shaped = recover_embedded_glyphs(font, instr, gb);
+                // A recovery that resolves every code to glyph 0 has not
+                // recovered anything: accepting it draws a row of .notdef
+                // boxes where the page has an unmapped glyph and every other
+                // renderer draws nothing.
+                shaped = recover_embedded_glyphs(font, instr, gb)
+                         and not glyph_run_all_notdef(gb);
               }
 
             if (not shaped)
@@ -2044,8 +2049,9 @@ namespace pdflib
                 // glyph-name/builtin-encoding resolution, then re-shape
                 // against the system face — drawing the .notdef run would
                 // produce blank/tofu output.
-                shaped = (not char_code_first) and
-                  recover_embedded_glyphs(font, instr, gb);
+                shaped = (not char_code_first)
+                         and recover_embedded_glyphs(font, instr, gb)
+                         and not glyph_run_all_notdef(gb);
 
                 if (not shaped)
                   {

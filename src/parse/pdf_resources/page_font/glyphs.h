@@ -8,6 +8,8 @@
 #include <unordered_set>
 #include <unordered_map>
 
+#include <map>
+
 namespace pdflib
 {
 
@@ -187,6 +189,32 @@ namespace pdflib
             name_to_code[key] = val;
 
             std::string val_ = preprocess(val);
+
+            // The Adobe Glyph List places the Symbol font's bracket, brace and
+            // parenthesis PIECES -- the parts a typesetter stacks to build a
+            // tall delimiter around a matrix -- in the private-use area, where
+            // they were assigned before Unicode had them. Nothing but the
+            // original Symbol font maps that range, so a fallback face draws
+            // .notdef boxes down the sides of every matrix. Unicode has had
+            // these since 3.2 (Miscellaneous Technical, U+239B..U+23AD), and
+            // ordinary text faces carry them; rewrite the legacy codes to the
+            // real ones, which fixes both the render and the extracted text.
+            {
+              static const std::map<std::string, std::string> legacy_pua = {
+                {"F8EB", "239B"}, {"F8EC", "239C"}, {"F8ED", "239D"},  // ( pieces
+                {"F8F6", "239E"}, {"F8F7", "239F"}, {"F8F8", "23A0"},  // ) pieces
+                {"F8EE", "23A1"}, {"F8EF", "23A2"}, {"F8F0", "23A3"},  // [ pieces
+                {"F8F9", "23A4"}, {"F8FA", "23A5"}, {"F8FB", "23A6"},  // ] pieces
+                {"F8F1", "23A7"}, {"F8F2", "23A8"}, {"F8F3", "23A9"},  // { pieces
+                {"F8F4", "23AA"},                                       // brace ext
+                {"F8FC", "23AB"}, {"F8FD", "23AC"}, {"F8FE", "23AD"},  // } pieces
+                {"F8F5", "23AE"},                                       // integral ext
+                {"F8E7", "23AF"},                                       // horizontal ext
+                {"F8E6", "23D0"},                                       // vertical ext
+              };
+              auto it = legacy_pua.find(val_);
+              if(it != legacy_pua.end()) { val_ = it->second; }
+            }
 
             if(val_.size()%4==0 and name_to_utf8.count(key)==0)
               {

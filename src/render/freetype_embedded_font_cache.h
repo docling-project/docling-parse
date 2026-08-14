@@ -185,6 +185,18 @@ namespace pdflib
 
     path.clear();
 
+    // A run that resolves to nothing but .notdef has not been resolved. Many
+    // subset fonts draw .notdef as a hollow box, so emitting those outlines
+    // stamps boxes across the page exactly where a glyph could not be mapped
+    // -- down the middle of a matrix, through the gaps of a table -- while
+    // every other renderer leaves the spot empty.
+    bool any_real_glyph = false;
+    for(FT_UInt glyph_index : glyph_indices)
+      {
+        if(glyph_index != 0) { any_real_glyph = true; break; }
+      }
+    if(not any_real_glyph) { return false; }
+
     double pen_x = 0.0;
     for(FT_UInt glyph_index : glyph_indices)
       {
@@ -192,6 +204,14 @@ namespace pdflib
         if(glyph == nullptr)
           {
             return false;
+          }
+
+        // Keep the advance of a .notdef so the rest of the run stays in place,
+        // but do not draw its box.
+        if(glyph_index == 0)
+          {
+            pen_x += glyph->advance;
+            continue;
           }
 
         // Font units (y-up) -> Blend2D text space (y-down, pixels).
