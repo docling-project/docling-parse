@@ -115,6 +115,7 @@ namespace pdflib
   private:
 
     std::string get_correct_character(uint32_t c);
+    std::string resolve_unmapped_character(uint32_t c);
     std::string get_character_from_encoding(uint32_t c);
 
     std::shared_ptr<type3_glyph> parse_type3_charproc(const std::string& src);
@@ -161,6 +162,8 @@ namespace pdflib
     void init_cmap(pdf_timings& timings);
     void init_cmap_resource();
 
+    void init_font_flags();
+
     void init_differences();
 
     void init_charprocs();
@@ -193,6 +196,7 @@ namespace pdflib
     std::string        encoding_name;
     font_encoding_name encoding;
     bool               has_explicit_encoding; // true if encoding was found in PDF, false if defaulted
+    bool               is_symbolic = false;   // /FontDescriptor /Flags bit 3 (PDF 32000-1 table 123)
 
     font_subtype_name  subtype;
 
@@ -618,7 +622,7 @@ namespace pdflib
     else if(cmap_initialized and cmap_numb_to_char.count(c)>0)
       {
         return cmap_numb_to_char.at(c);
-      }         
+      }
     else if(bfonts.has_corresponding_font(font_name))
       {
         // check if the font-name is registered as a 'special' font, eg
@@ -634,7 +638,7 @@ namespace pdflib
         if(has_explicit_encoding &&
            (encoding == MACROMAN || encoding == MACEXPERT || encoding == WINANSI || encoding == STANDARD))
           {
-            return get_character_from_encoding(c);
+            return resolve_unmapped_character(c);
           }
         else if(fm.has(c))
           {
@@ -648,7 +652,7 @@ namespace pdflib
 	      << "; Encoding: " << to_string(_encoding)
 	      << "; font-name: " << font_name;
 	    */
-	    return get_character_from_encoding(c);
+	    return resolve_unmapped_character(c);
 	  }
 	else
 	  {
@@ -670,14 +674,55 @@ namespace pdflib
 			   << "; font-name: " << font_name
 			   << " (corresponding font: " << fontname << ")";
 
-	    return get_character_from_encoding(c);
+	    return resolve_unmapped_character(c);
 	  }
       }
     else
       {
 	//LOG_S(WARNING) << "no known font: " << font_name;
-        return get_character_from_encoding(c);
+        return resolve_unmapped_character(c);
       }
+  }
+
+  void pdf_resource<PAGE_FONT>::init_font_flags()
+  {
+    const int FLAG_SYMBOLIC = 1 << 2; // /Flags bit 3 (PDF 32000-1 table 123)
+
+    int flags = 0;
+    if(not qpdf_object::get_int(qpdf_font, {"/FontDescriptor", "/Flags"}, flags))
+      {
+        qpdf_object::get_int(qpdf_desc_font, {"/FontDescriptor", "/Flags"}, flags);
+      }
+
+    is_symbolic = ((flags & FLAG_SYMBOLIC) != 0);
+
+    LOG_S(INFO) << __FUNCTION__ << ": flags=" << flags
+                << ", is_symbolic=" << is_symbolic;
+  }
+
+  std::string pdf_resource<PAGE_FONT>::resolve_unmapped_character(uint32_t c)
+  {
+    // Fallback for codes that none of the authoritative sources resolved
+    // (/Encoding/Differences, the /ToUnicode or predefined CID cmap, or a
+    // known base-font table). When an explicit cmap exists but does not
+    // cover this code, and the code bears no relation to the standard
+    // Latin encodings (symbolic font, or composite font whose codes are
+    // CIDs), the encoding tables would fabricate unrelated text — e.g. an
+    // Arabic ligature glyph subsetted at code 0x23 coming out as '#'
+    // (docling#3802). Emit a glyph marker instead, so downstream consumers
+    // can detect the unresolved glyph.
+    if(cmap_initialized and (is_symbolic or subtype==TYPE_0))
+      {
+        unknown_numbs[c] += 1;
+
+        LOG_S(WARNING) << "Symbol not in the cmap of a symbolic or composite font: "
+                       << int(c) << "; font-name: " << font_name
+                       << "; emitting glyph marker instead of encoding fallback";
+
+        return "GLYPH<" + std::to_string(c) + ">";
+      }
+
+    return get_character_from_encoding(c);
   }
 
   std::string pdf_resource<PAGE_FONT>::get_character_from_encoding(uint32_t c)
@@ -762,7 +807,9 @@ namespace pdflib
       
       init_encoding();
       init_subtype();
-      
+
+      init_font_flags();
+
       init_base_font();
       
       init_font_name();
@@ -1456,18 +1503,10 @@ namespace pdflib
     // then resolve glyphs by character code, not by Unicode text.
     bool uses_builtin_encoding = false;
     {
-      const int FLAG_SYMBOLIC = 1 << 2; // /Flags bit 3
-
-      int flags = 0;
-      if(not qpdf_object::get_int(qpdf_font, {"/FontDescriptor", "/Flags"}, flags))
-        {
-          qpdf_object::get_int(qpdf_desc_font, {"/FontDescriptor", "/Flags"}, flags);
-        }
-
       const bool has_encoding = qpdf_object::has_path(qpdf_font, {"/Encoding"});
 
       uses_builtin_encoding = (subtype != TYPE_0) and
-        ((flags & FLAG_SYMBOLIC) != 0) and (not has_encoding);
+        is_symbolic and (not has_encoding);
     }
 
     font_blob = std::make_shared<const embedded_font_blob>(
