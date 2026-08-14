@@ -3,6 +3,8 @@
 #ifndef PDF_PAGE_XOBJECT_IMAGE_RESOURCE_H
 #define PDF_PAGE_XOBJECT_IMAGE_RESOURCE_H
 
+#include <parse/utils/ccitt/ccitt_utils.h>
+
 #include <cstdint>
 #include <cstring>
 
@@ -1004,12 +1006,29 @@ namespace pdflib
   {
     soft_mask_data.reset();
 
-    if(not qpdf_xobject_dict.hasKey("/SMask"))
+    // /SMask carries alpha directly. /Mask (as a stream) is a stencil: a
+    // 1-bit image mask whose 1-samples knock the corresponding image pixels
+    // OUT (ISO 32000-1, 8.9.6.4). Ignoring it painted the image's own
+    // background pixels over whatever the mask was meant to reveal -- a logo
+    // shipped as an opaque rectangle plus a stencil rendered as the
+    // rectangle.
+    bool stencil = false;
+    QPDFObjectHandle qpdf_smask;
+    if(qpdf_xobject_dict.hasKey("/SMask"))
+      {
+        qpdf_smask = qpdf_xobject_dict.getKey("/SMask");
+      }
+    else if(qpdf_xobject_dict.hasKey("/Mask") and
+            qpdf_xobject_dict.getKey("/Mask").isStream())
+      {
+        qpdf_smask = qpdf_xobject_dict.getKey("/Mask");
+        stencil = true;
+      }
+    else
       {
         return;
       }
 
-    auto qpdf_smask = qpdf_xobject_dict.getKey("/SMask");
     if(not qpdf_smask.isStream())
       {
         LOG_S(WARNING) << "SMask present but is not a stream for xobject_key=" << xobject_key;
@@ -1045,7 +1064,7 @@ namespace pdflib
       smask.get_color_space() == "/DeviceGray"
       or (smask.get_color_space().find("/ICCBased") != std::string::npos
           and smask.get_icc_components() == 1);
-    if(not gray_mask)
+    if(not gray_mask and not stencil)
       {
         LOG_S(WARNING) << "SMask color space unsupported for xobject_key=" << xobject_key
                        << " smask_cs=" << smask.get_color_space()
@@ -1053,7 +1072,8 @@ namespace pdflib
         return;
       }
 
-    const int smask_bpc = smask.get_bits_per_component();
+    int smask_bpc = smask.get_bits_per_component();
+    if(stencil and smask_bpc <= 0) { smask_bpc = 1; }
     if(smask_bpc != 8 and smask_bpc != 1 and smask_bpc != 2 and smask_bpc != 4)
       {
         LOG_S(WARNING) << "SMask bits/component unsupported for xobject_key=" << xobject_key
@@ -1061,13 +1081,51 @@ namespace pdflib
         return;
       }
 
+    // A stencil mask is very often CCITTFax-compressed, which qpdf cannot
+    // defilter; decode it here. `ccitt::decode` yields one byte per pixel
+    // with 0 = dark.
+    std::vector<uint8_t> ccitt_samples;
     if(not smask.has_decoded_stream_data())
       {
-        LOG_S(WARNING) << "SMask has no decoded stream data for xobject_key=" << xobject_key;
-        return;
+        QPDFObjectHandle mdict = qpdf_smask.getDict();
+        const std::string filter =
+          mdict.hasKey("/Filter") ? mdict.getKey("/Filter").unparse() : "";
+        if(filter.find("CCITTFaxDecode") != std::string::npos and
+           smask.has_raw_stream_data())
+          {
+            int K = 0;
+            bool black_is_1 = false;
+            QPDFObjectHandle dp = mdict.getKey("/DecodeParms");
+            if(dp.isArray() and dp.getArrayNItems() > 0) { dp = dp.getArrayItem(0); }
+            if(dp.isDictionary())
+              {
+                if(dp.hasKey("/K") and dp.getKey("/K").isInteger())
+                  { K = static_cast<int>(dp.getKey("/K").getIntValue()); }
+                if(dp.hasKey("/BlackIs1") and dp.getKey("/BlackIs1").isBool())
+                  { black_is_1 = dp.getKey("/BlackIs1").getBoolValue(); }
+              }
+
+            auto raw = smask.get_raw_stream_data();
+            ccitt_samples = ccitt::decode(
+              reinterpret_cast<const uint8_t*>(raw->getBuffer()),
+              raw->getSize(), sm_w, sm_h, K, black_is_1);
+            if(ccitt_samples.size() < static_cast<size_t>(sm_w) * sm_h)
+              {
+                LOG_S(WARNING) << "mask CCITT decode too small for xobject_key="
+                               << xobject_key;
+                return;
+              }
+            smask_bpc = 8;
+          }
+        else
+          {
+            LOG_S(WARNING) << "SMask has no decoded stream data for xobject_key=" << xobject_key;
+            return;
+          }
       }
 
-    auto smask_buf = smask.get_decoded_stream_data();
+    auto smask_buf = smask.has_decoded_stream_data()
+      ? smask.get_decoded_stream_data() : nullptr;
 
     // A stencil-shaped mask is usually written at 1 bit per pixel, packed
     // several samples to a byte and padded to a byte at the end of each row.
@@ -1075,7 +1133,7 @@ namespace pdflib
     // eight columns to be the whole row, so the transparent part of the image
     // keeps painting. Expand to one byte per sample first.
     std::vector<uint8_t> smask_unpacked;
-    if(smask_bpc != 8)
+    if(smask_bpc != 8 and ccitt_samples.empty())
       {
         const size_t row_bits = static_cast<size_t>(sm_w) * static_cast<size_t>(smask_bpc);
         const size_t row_bytes = (row_bits + 7u) / 8u;
@@ -1115,7 +1173,8 @@ namespace pdflib
       }
 
     const size_t smask_expected = static_cast<size_t>(sm_w) * sm_h;
-    if(smask_unpacked.empty() and smask_buf->getSize() < smask_expected)
+    if(smask_unpacked.empty() and ccitt_samples.empty()
+       and smask_buf->getSize() < smask_expected)
       {
         LOG_S(WARNING) << "SMask decoded stream too small for xobject_key=" << xobject_key
                        << " size=" << smask_buf->getSize()
@@ -1134,9 +1193,10 @@ namespace pdflib
     auto out = std::make_shared<std::vector<uint8_t>>();
     out->resize(static_cast<size_t>(dst_w) * dst_h);
 
-    auto const* src = smask_unpacked.empty()
-      ? reinterpret_cast<uint8_t const*>(smask_buf->getBuffer())
-      : smask_unpacked.data();
+    auto const* src =
+      not ccitt_samples.empty() ? ccitt_samples.data()
+      : not smask_unpacked.empty() ? smask_unpacked.data()
+      : reinterpret_cast<uint8_t const*>(smask_buf->getBuffer());
     auto const decode = smask.get_decode_array();
     const bool has_decode = smask.has_decode_array() and decode.size() >= 2;
 
@@ -1154,7 +1214,11 @@ namespace pdflib
               {
                 alpha = jpeg::apply_decode_component(alpha, decode[0], decode[1]);
               }
-            (*out)[static_cast<size_t>(row) * dst_w + col] = alpha;
+            // Stencil (/Mask): a 1-sample masks the pixel OUT, the inverse
+            // of /SMask's alpha reading. ccitt::decode returns 0 = dark =
+            // sample 0 = painted, so the same inversion applies there.
+            (*out)[static_cast<size_t>(row) * dst_w + col] =
+              stencil ? static_cast<uint8_t>(255 - alpha) : alpha;
           }
       }
 
