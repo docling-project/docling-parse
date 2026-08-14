@@ -741,3 +741,147 @@ def write_metric_histogram(
     figure.savefig(path, facecolor=background)
     plt.close(figure)
     return path
+
+
+# ---------------------------------------------------------------------------
+# Region probes
+#
+# The page-wide comparison above is a coarse instrument on purpose: it guards
+# whole renders against wholesale drift, with a tolerance loose enough to
+# survive CI font differences. A defect confined to one graphic moves that
+# number by a few hundredths and passes untouched -- a clip that degraded a
+# crescent to its bounding box cost its page 0.231 mean_abs_error.
+#
+# So the focused tests measure the region they are about, and assert on what
+# the fix was: the colour that came out of a tint transform, whether a filled
+# region is a disc or the square around it, whether a pattern repeats.
+# ---------------------------------------------------------------------------
+
+BACKGROUND_THRESHOLD = 250
+
+
+def region_image(result, box: tuple[float, float, float, float], *, scale: float = 2.0):
+    """Render one page-coordinate box of an already-parsed page.
+
+    `box` is (left, top, right, bottom) in PDF points from the top-left of the
+    page, matching how the renderer's crop is specified.
+    """
+    from docling_core.types.doc.base import BoundingBox, CoordOrigin
+
+    left, top, right, bottom = box
+    cropbox = BoundingBox(
+        l=left, t=top, r=right, b=bottom, coord_origin=CoordOrigin.TOPLEFT
+    )
+    return flatten_on_white(result.get_image(scale=scale, cropbox=cropbox))
+
+
+def average_color(image: Image.Image) -> tuple[float, float, float]:
+    stat = ImageStat.Stat(image.convert("RGB"))
+    return (stat.mean[0], stat.mean[1], stat.mean[2])
+
+
+def center_color(image: Image.Image) -> tuple[int, int, int]:
+    """Colour at the middle of `image`, away from any antialiased border."""
+    rgb = image.convert("RGB")
+    pixel = rgb.getpixel((rgb.width // 2, rgb.height // 2))
+    assert isinstance(pixel, tuple), "RGB images yield 3-tuple pixels"
+    red, green, blue = pixel
+    return (red, green, blue)
+
+
+def color_distance(
+    actual: tuple[float, float, float], expected: tuple[float, float, float]
+) -> float:
+    return max(abs(a - b) for a, b in zip(actual, expected))
+
+
+def assert_color_near(
+    actual: tuple[float, float, float],
+    expected: tuple[float, float, float],
+    *,
+    tolerance: float,
+    what: str,
+) -> None:
+    distance = color_distance(actual, expected)
+    assert distance <= tolerance, (
+        f"{what}: expected rgb≈{tuple(round(v) for v in expected)}, "
+        f"got {tuple(round(v) for v in actual)} "
+        f"(max channel distance {distance:.1f} > {tolerance})"
+    )
+
+
+def ink_mask(image: Image.Image, *, threshold: int = BACKGROUND_THRESHOLD):
+    """Boolean-ish mask of pixels darker than the page background."""
+    return image.convert("L").point(lambda value: 255 if value < threshold else 0)
+
+
+def coverage_ratio(
+    image: Image.Image, *, threshold: int = BACKGROUND_THRESHOLD
+) -> float:
+    """Fraction of `image` carrying ink.
+
+    This is what separates a shape from its bounding box without pinning exact
+    pixels: a disc inscribed in its box covers pi/4 of it, a square covers all
+    of it.
+    """
+    mask = ink_mask(image, threshold=threshold)
+    return mask.histogram()[255] / (image.width * image.height)
+
+
+def quadrant_coverage(
+    image: Image.Image, *, threshold: int = BACKGROUND_THRESHOLD
+) -> dict[str, float]:
+    """Ink coverage of the four corners and the centre of `image`.
+
+    A round shape leaves its corners empty while filling its centre; the
+    bounding box that replaces it when clipping fails fills both.
+    """
+    width, height = image.size
+    corner_w = max(1, width // 6)
+    corner_h = max(1, height // 6)
+    boxes = {
+        "top_left": (0, 0, corner_w, corner_h),
+        "top_right": (width - corner_w, 0, width, corner_h),
+        "bottom_left": (0, height - corner_h, corner_w, height),
+        "bottom_right": (width - corner_w, height - corner_h, width, height),
+        "center": (
+            width // 2 - corner_w // 2,
+            height // 2 - corner_h // 2,
+            width // 2 + corner_w // 2 + 1,
+            height // 2 + corner_h // 2 + 1,
+        ),
+    }
+    return {
+        name: coverage_ratio(image.crop(box), threshold=threshold)
+        for name, box in boxes.items()
+    }
+
+
+def row_ink_profile(
+    image: Image.Image, *, threshold: int = BACKGROUND_THRESHOLD
+) -> list[int]:
+    """Per-row ink pixel counts, top to bottom."""
+    mask = ink_mask(image, threshold=threshold)
+    width = mask.width
+    data = list(mask.getdata())
+    return [
+        sum(1 for value in data[y * width : (y + 1) * width] if value)
+        for y in range(mask.height)
+    ]
+
+
+def column_ink_profile(
+    image: Image.Image, *, threshold: int = BACKGROUND_THRESHOLD
+) -> list[int]:
+    """Per-column ink pixel counts, left to right."""
+    mask = ink_mask(image, threshold=threshold)
+    width, height = mask.size
+    data = list(mask.getdata())
+    return [sum(1 for y in range(height) if data[y * width + x]) for x in range(width)]
+
+
+def ink_bounds(
+    image: Image.Image, *, threshold: int = BACKGROUND_THRESHOLD
+) -> tuple[int, int, int, int] | None:
+    """Bounding box of the ink in `image`, or None when the region is blank."""
+    return ink_mask(image, threshold=threshold).getbbox()

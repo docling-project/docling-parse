@@ -546,9 +546,40 @@ namespace pdflib
         const std::size_t row_stride = min_row_bytes;
 
         const std::uint32_t sample_max = (1u << bits_per_component) - 1u;
+
+        // An /Indexed sample is a palette index, not a colour value: it is
+        // looked up, never scaled. Stretching it to 0..255 the way a
+        // continuous-tone sample is stretched sends every pixel to the wrong
+        // palette slot -- at 4 bpc, index 1 becomes 17 -- so a flag or a logo
+        // keeps its shape and loses all of its colours.
+        const bool indexed_samples =
+          image.indexed_palette and not image.indexed_palette->empty();
+
+        // The default /Decode of an /Indexed image spans the bit depth,
+        // [0, 2^bpc - 1] (ISO 32000-1, table 89), which is the identity on
+        // indices; a decode array equal to it carries no information and is
+        // ignored so the indices pass through untouched.
+        const bool decode_is_index_identity =
+          decode_array.size() == 2 and
+          std::abs(decode_array[0]) < 1e-9 and
+          std::abs(decode_array[1] - static_cast<double>(sample_max)) < 1e-9;
+
         auto decode_sample =
           [&](int component_index, std::uint32_t raw_sample) -> std::uint8_t
           {
+            if(indexed_samples)
+              {
+                // /Decode on an /Indexed image remaps index range, not colour,
+                // and its default [0, 2^bpc - 1] is the identity. Anything
+                // else here is a decode array synthesised for continuous tone,
+                // and applying it scales index 1 of a 4-bit image to 17, which
+                // the palette lookup then clamps to the last entry: the whole
+                // picture collapses onto one or two colours.
+                (void)decode_is_index_identity;
+                return static_cast<std::uint8_t>(
+                  raw_sample > 255u ? 255u : raw_sample);
+              }
+
             const int pair_count = static_cast<int>(decode_array.size() / 2);
             if(component_index < pair_count)
               {
@@ -722,11 +753,34 @@ namespace pdflib
           {
             const int w = image.image_width;
             const int h = image.image_height;
-            const auto* indices = reinterpret_cast<const uint8_t*>(
-              image.decoded_stream_data->getBuffer());
-            const size_t n_indices = image.decoded_stream_data->getSize();
+
+            // Below 8 bits per component the samples are packed several to a
+            // byte, and an /Indexed sample is one palette index. They have to
+            // be unpacked to one index per pixel before the palette is
+            // applied: reading the packed bytes as indices yields a fraction
+            // of the pixels, and the short buffer is then dropped for a
+            // placeholder rather than drawn.
+            std::shared_ptr<std::vector<uint8_t> > unpacked_indices;
+            if(image.bits_per_component > 0 and image.bits_per_component < 8 and
+               unpack_subbyte_samples_to_u8(image.decoded_stream_data,
+                                            w, h, 1,
+                                            image.bits_per_component,
+                                            image.decode_array))
+              {
+                unpacked_indices = pixel_data;
+              }
+
+            const auto* indices =
+              unpacked_indices ? unpacked_indices->data()
+                               : reinterpret_cast<const uint8_t*>(
+                                   image.decoded_stream_data->getBuffer());
+            const size_t n_indices =
+              unpacked_indices ? unpacked_indices->size()
+                               : image.decoded_stream_data->getSize();
+
             if(expand_indexed_samples(ncomps, indices, n_indices, w, h))
               {
+                channels = ncomps;
                 LOG_S(INFO) << "bitmap: expanded Indexed palette for xobject_key="
                             << image.xobject_key
                             << " (" << n_indices << " indices -> "
@@ -772,10 +826,18 @@ namespace pdflib
 
             if(image.bits_per_component > 0 and image.bits_per_component < 8)
               {
+                // An /Indexed pixel is a single palette index whatever the
+                // base space is; unpacking it with the base space's component
+                // count reads several indices per pixel and runs off the end
+                // of the row, leaving a buffer too small to draw.
+                const int unpack_components =
+                  (image.indexed_palette and not image.indexed_palette->empty())
+                    ? 1 : channels;
+
                 if(not unpack_subbyte_samples_to_u8(src,
                                                     w,
                                                     h,
-                                                    channels,
+                                                    unpack_components,
                                                     image.bits_per_component,
                                                     image.decode_array))
                   {
@@ -854,6 +916,14 @@ namespace pdflib
                 else if(decoded_channels == 4)
                   {
                     fmt = PIXEL_FORMAT_CMYK;
+
+                    // libjpeg hands back process ink: it already undoes the
+                    // Adobe inversion while decoding, exactly as the primary
+                    // path assumes. Leaving the convention unset means
+                    // "invert", so the samples were inverted a second time and
+                    // a page with almost no ink came out solid black. Only an
+                    // explicit inverting /Decode changes that.
+                    cmyk_conv = CMYK_CONVENTION_PROCESS;
                     if(image.decode_present and has_default_adobe_cmyk_decode(image.decode_array))
                       {
                         cmyk_conv = CMYK_CONVENTION_ADOBE_INVERTED;

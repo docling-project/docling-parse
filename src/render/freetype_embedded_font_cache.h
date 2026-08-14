@@ -362,7 +362,35 @@ namespace pdflib
             return glyph_index;
           }
 
-        return FT_Get_Char_Index(face, code);
+        const FT_UInt raw_index = FT_Get_Char_Index(face, code);
+        if(raw_index != 0)
+          {
+            return raw_index;
+          }
+      }
+
+    // Last resort: try every charmap the face actually carries, whatever its
+    // platform. Subsetters emit tables the named-encoding lookups above never
+    // match -- a Wingdings subset with a single Macintosh (1, 0) format-6 cmap
+    // mapped its smiley there, and both Blend2D (which reads only
+    // Windows/Unicode cmaps) and the selections above walked straight past it,
+    // so the glyph came out as an empty box.
+    for(FT_Int i = 0; i < face->num_charmaps; i++)
+      {
+        if(FT_Set_Charmap(face, face->charmaps[i]) != 0)
+          {
+            continue;
+          }
+
+        FT_UInt glyph_index = FT_Get_Char_Index(face, code);
+        if(glyph_index == 0 and code <= 0xFF)
+          {
+            glyph_index = FT_Get_Char_Index(face, 0xF000u + code);
+          }
+        if(glyph_index != 0)
+          {
+            return glyph_index;
+          }
       }
 
     return 0;

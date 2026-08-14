@@ -3,6 +3,8 @@
 #ifndef PDF_PAGE_FONT_RESOURCE_H
 #define PDF_PAGE_FONT_RESOURCE_H
 
+#include <parse/utils/ccitt/ccitt_utils.h>
+
 #include <parse/qpdf/qpdf_compat.h>
 
 namespace pdflib
@@ -12,6 +14,35 @@ namespace pdflib
   class pdf_resource<PAGE_FONT>
   {
   public:
+
+    bool is_type3() const { return subtype == TYPE_3; }
+
+    // One Type3 glyph, extracted from its /CharProcs procedure. The dominant
+    // Type3 pattern (TeX / dvipdfm output) draws each glyph as a single inline
+    // 1-bit image mask placed by a `cm`; this captures exactly that shape.
+    // Glyphs whose procedure does not match stay invalid and draw nothing --
+    // preferable to the black placeholder boxes they used to produce.
+    struct type3_glyph
+    {
+      bool valid = false;
+      int w = 0;
+      int h = 0;
+      // 8-bit mask in the renderer's image-mask convention: 0 paints the fill
+      // colour, 255 leaves the page.
+      std::shared_ptr<std::vector<uint8_t> > mask;
+      // Maps the image's unit square into glyph space (the charproc's cm).
+      std::array<double, 6> cm = {1, 0, 0, 1, 0, 0};
+    };
+
+    // /FontMatrix: glyph space -> text space (Type3 only; identity-scaled
+    // 0.001 default matches the spec default for simple fonts).
+    const std::array<double, 6>& get_font_matrix();
+
+    // Lazily extracts and caches the glyph for a character code; nullptr when
+    // the code has no procedure or the procedure is not the inline-mask form.
+    std::shared_ptr<type3_glyph> get_type3_glyph(uint32_t code);
+
+
 
     const static inline std::string RESOURCE_DIR_KEY = "pdf_resource_directory";
     
@@ -86,6 +117,12 @@ namespace pdflib
     std::string get_correct_character(uint32_t c);
     std::string get_character_from_encoding(uint32_t c);
 
+    std::shared_ptr<type3_glyph> parse_type3_charproc(const std::string& src);
+
+    // Charprocs with no inline image: filled paths (re / m l c h f). The
+    // paths are flattened and scanline-rasterised into the mask.
+    std::shared_ptr<type3_glyph> rasterize_type3_vector_charproc(const std::string& src);
+
     void init_encoding();
     void init_subtype();
 
@@ -141,7 +178,13 @@ namespace pdflib
   private:
 
     pdf_timings& timings;
-    
+
+    // /FontMatrix and the Type3 glyphs extracted from /CharProcs, cached per
+    // character code: a charproc is a content stream, so it is parsed once.
+    std::array<double, 6> font_matrix_ = {0.001, 0, 0, 0.001, 0, 0};
+    bool font_matrix_read_ = false;
+    std::unordered_map<uint32_t, std::shared_ptr<type3_glyph> > type3_cache_;
+
     nlohmann::json   json_font;
 
     QPDFObjectHandle qpdf_font;
@@ -1641,7 +1684,14 @@ namespace pdflib
       }
     else
       {
-	default_width = 500;
+        // ISO 32000-1 table 115: /DW defaults to 1000, one full em. Using 500
+        // halves every advance of a CID font that omits it, so its cells come
+        // out half the width of the glyphs actually drawn.
+	default_width = 1000;
+        // /DW belongs to a CID font, and only there does its default stand in
+        // for a missing width. A simple font must keep falling through to its
+        // base-14 metrics, which carry real per-glyph advances.
+	has_default_width = (subtype == TYPE_0);
         LOG_S(WARNING) << "could not find default-width: defaulting to " << default_width;
       }    
   }
@@ -2431,6 +2481,413 @@ namespace pdflib
         diff_initialized = false;
         LOG_S(WARNING) << "could not find differences in /Encoding/Differences";
       }
+  }
+
+  inline const std::array<double, 6>& pdf_resource<PAGE_FONT>::get_font_matrix()
+  {
+    if(not font_matrix_read_)
+      {
+        font_matrix_read_ = true;
+        try
+          {
+            if(qpdf_font.isDictionary() and qpdf_font.hasKey("/FontMatrix") and
+               qpdf_font.getKey("/FontMatrix").isArray() and
+               qpdf_font.getKey("/FontMatrix").getArrayNItems() >= 6)
+              {
+                QPDFObjectHandle fm = qpdf_font.getKey("/FontMatrix");
+                for(int i = 0; i < 6; i++)
+                  {
+                    QPDFObjectHandle v = fm.getArrayItem(i);
+                    if(v.isNumber()) { font_matrix_[i] = v.getNumericValue(); }
+                  }
+              }
+          }
+        catch(const std::exception& e)
+          {
+            LOG_S(WARNING) << "type3: could not read /FontMatrix: " << e.what();
+          }
+      }
+    return font_matrix_;
+  }
+
+  inline std::shared_ptr<pdf_resource<PAGE_FONT>::type3_glyph>
+  pdf_resource<PAGE_FONT>::get_type3_glyph(uint32_t code)
+  {
+    auto cached = type3_cache_.find(code);
+    if(cached != type3_cache_.end()) { return cached->second; }
+
+    std::shared_ptr<type3_glyph> result = nullptr;
+
+    try
+      {
+        const std::string name = get_glyph_name(code);
+        if(not name.empty() and
+           qpdf_font.isDictionary() and qpdf_font.hasKey("/CharProcs") and
+           qpdf_font.getKey("/CharProcs").isDictionary())
+          {
+            QPDFObjectHandle procs = qpdf_font.getKey("/CharProcs");
+            const std::string key = "/" + name;
+            if(procs.hasKey(key) and procs.getKey(key).isStream())
+              {
+                auto buffer = procs.getKey(key).getStreamData();
+                if(buffer and buffer->getSize() > 0)
+                  {
+                    const char* raw = reinterpret_cast<const char*>(buffer->getBuffer());
+                    result = parse_type3_charproc(std::string(raw, buffer->getSize()));
+                  }
+              }
+          }
+      }
+    catch(const std::exception& e)
+      {
+        LOG_S(WARNING) << "type3: charproc extraction failed for code " << code
+                       << ": " << e.what();
+        result = nullptr;
+      }
+
+    type3_cache_.emplace(code, result);
+    return result;
+  }
+
+  inline std::shared_ptr<pdf_resource<PAGE_FONT>::type3_glyph>
+  pdf_resource<PAGE_FONT>::parse_type3_charproc(const std::string& src)
+  {
+    const size_t pos_bi = src.find("BI");
+    if(pos_bi == std::string::npos)
+      {
+        return rasterize_type3_vector_charproc(src);
+      }
+
+    auto glyph = std::make_shared<type3_glyph>();
+
+    // The last `cm` before BI places the image's unit square in glyph space.
+    {
+      std::istringstream is(src.substr(0, pos_bi));
+      std::vector<std::string> toks;
+      std::string t;
+      while(is >> t) { toks.push_back(t); }
+
+      bool found = false;
+      for(size_t i = toks.size(); i-- > 0;)
+        {
+          if(toks[i] == "cm" and i >= 6)
+            {
+              try
+                {
+                  for(int j = 0; j < 6; j++)
+                    {
+                      glyph->cm[j] = utils::numeric::locale_safe_stod(toks[i - 6 + j]);
+                    }
+                  found = true;
+                }
+              catch(const std::exception&) {}
+              break;
+            }
+        }
+      if(not found) { return nullptr; }
+    }
+
+    const size_t pos_id = src.find("ID", pos_bi);
+    if(pos_id == std::string::npos) { return nullptr; }
+
+    // Inline image dictionary between BI and ID. Brackets and dict markers
+    // become spaces and every '/' gets one in front, so "/D[1 0]" and
+    // "/DP<</K -1/Columns 68>>" tokenize cleanly.
+    int W = 0, H = 0, bpc = 1, K = 0;
+    bool is_mask = false, black_is_1 = false, ccitt = false, raw_bits = true;
+    std::vector<double> decode_arr;
+    {
+      std::string dict = src.substr(pos_bi + 2, pos_id - pos_bi - 2);
+      std::string clean;
+      clean.reserve(dict.size() * 2);
+      for(const char c : dict)
+        {
+          if(c == '[' or c == ']' or c == '<' or c == '>') { clean += ' '; continue; }
+          if(c == '/') { clean += ' '; }
+          clean += c;
+        }
+      std::istringstream is(clean);
+      std::vector<std::string> toks;
+      std::string t;
+      while(is >> t) { toks.push_back(t); }
+
+      auto num_after = [&](size_t i, double fallback) -> double
+      {
+        if(i + 1 < toks.size())
+          {
+            try { return utils::numeric::locale_safe_stod(toks[i + 1]); }
+            catch(const std::exception&) {}
+          }
+        return fallback;
+      };
+
+      for(size_t i = 0; i < toks.size(); i++)
+        {
+          const std::string& tok = toks[i];
+          if(tok == "/W" or tok == "/Width")            { W = static_cast<int>(num_after(i, 0)); }
+          else if(tok == "/H" or tok == "/Height")      { H = static_cast<int>(num_after(i, 0)); }
+          else if(tok == "/BPC" or tok == "/BitsPerComponent") { bpc = static_cast<int>(num_after(i, 1)); }
+          else if(tok == "/IM" or tok == "/ImageMask")  { is_mask = (i + 1 < toks.size() and toks[i + 1] == "true"); }
+          else if(tok == "/K")                          { K = static_cast<int>(num_after(i, 0)); }
+          else if(tok == "/BlackIs1")                   { black_is_1 = (i + 1 < toks.size() and toks[i + 1] == "true"); }
+          else if(tok == "/D" or tok == "/Decode")
+            {
+              decode_arr.clear();
+              for(size_t j = i + 1; j < toks.size() and decode_arr.size() < 2; j++)
+                {
+                  try { decode_arr.push_back(utils::numeric::locale_safe_stod(toks[j])); }
+                  catch(const std::exception&) { break; }
+                }
+            }
+          else if(tok == "/F" or tok == "/Filter")
+            {
+              raw_bits = false;
+              if(i + 1 < toks.size() and
+                 (toks[i + 1] == "/CCF" or toks[i + 1] == "/CCITTFaxDecode"))
+                {
+                  ccitt = true;
+                }
+            }
+        }
+    }
+
+    if(W <= 0 or H <= 0 or not is_mask or bpc != 1) { return nullptr; }
+    if(not raw_bits and not ccitt) { return nullptr; }  // other filters: not handled
+
+    // Raw data: one delimiter byte after ID, then bytes up to the final EI.
+    size_t data_start = pos_id + 2;
+    if(data_start < src.size() and
+       (src[data_start] == ' ' or src[data_start] == '\n' or src[data_start] == '\r'))
+      {
+        data_start += 1;
+      }
+    size_t data_end = src.rfind("EI");
+    if(data_end == std::string::npos or data_end <= data_start) { return nullptr; }
+    while(data_end > data_start and
+          (src[data_end - 1] == '\n' or src[data_end - 1] == '\r' or src[data_end - 1] == ' '))
+      {
+        data_end -= 1;
+      }
+
+    const uint8_t* data = reinterpret_cast<const uint8_t*>(src.data()) + data_start;
+    const size_t data_size = data_end - data_start;
+
+    // -> 8-bit samples, one byte per pixel, 0 = dark.
+    std::vector<uint8_t> samples;
+    if(ccitt)
+      {
+        samples = ccitt::decode(data, data_size, W, H, K, black_is_1);
+        if(samples.size() < static_cast<size_t>(W) * H) { return nullptr; }
+      }
+    else
+      {
+        const size_t stride = (static_cast<size_t>(W) + 7u) / 8u;
+        if(data_size < stride * static_cast<size_t>(H)) { return nullptr; }
+        samples.resize(static_cast<size_t>(W) * H);
+        for(int row = 0; row < H; row++)
+          {
+            for(int col = 0; col < W; col++)
+              {
+                const uint8_t byte = data[row * stride + (col >> 3)];
+                const int bit = (byte >> (7 - (col & 7))) & 1;
+                samples[static_cast<size_t>(row) * W + col] =
+                  static_cast<uint8_t>(bit ? 255 : 0);
+              }
+          }
+      }
+
+    // Renderer convention: sample 0 paints. /Decode [1 0] flips which bit
+    // means ink relative to the default [0 1].
+    const bool inverted = (decode_arr.size() >= 2 and decode_arr[0] > decode_arr[1]);
+    if(inverted)
+      {
+        for(auto& v : samples) { v = static_cast<uint8_t>(255 - v); }
+      }
+
+    glyph->w = W;
+    glyph->h = H;
+    glyph->mask = std::make_shared<std::vector<uint8_t> >(std::move(samples));
+    glyph->valid = true;
+    return glyph;
+  }
+
+
+  inline std::shared_ptr<pdf_resource<PAGE_FONT>::type3_glyph>
+  pdf_resource<PAGE_FONT>::rasterize_type3_vector_charproc(const std::string& src)
+  {
+    std::istringstream is(src);
+    std::vector<std::string> toks;
+    std::string t;
+    while(is >> t) { toks.push_back(t); }
+
+    auto num = [&](size_t i) -> double
+    {
+      try { return utils::numeric::locale_safe_stod(toks[i]); }
+      catch(const std::exception&) { return 0.0; }
+    };
+
+    // Collect closed subpaths of the fill in glyph space. The charproc's own
+    // graphics state matters: producers wrap each glyph in `q <translate> cm`
+    // and draw RELATIVE paths, so ignoring cm scattered every glyph by its
+    // missing offset -- letters off their line, i-dots detached.
+    std::vector<std::vector<std::array<double, 2> > > polys;
+    std::vector<std::array<double, 2> > cur;
+    double cx = 0.0, cy = 0.0;   // current point, LOCAL coords
+    bool any_fill = false;
+
+    // Row-vector affine [a b c d e f], composed like the PDF cm operator.
+    std::array<double, 6> ctm = {1, 0, 0, 1, 0, 0};
+    std::vector<std::array<double, 6> > ctm_stack;
+
+    auto apply = [&](double x, double y) -> std::array<double, 2>
+    {
+      return { ctm[0]*x + ctm[2]*y + ctm[4],
+               ctm[1]*x + ctm[3]*y + ctm[5] };
+    };
+
+    auto close_cur = [&]()
+    {
+      if(cur.size() >= 3) { polys.push_back(cur); }
+      cur.clear();
+    };
+
+    for(size_t i = 0; i < toks.size(); i++)
+      {
+        const std::string& op = toks[i];
+        if(op == "q")  { ctm_stack.push_back(ctm); }
+        else if(op == "Q")
+          {
+            if(not ctm_stack.empty()) { ctm = ctm_stack.back(); ctm_stack.pop_back(); }
+          }
+        else if(op == "cm" and i >= 6)
+          {
+            const std::array<double, 6> m = {num(i-6), num(i-5), num(i-4),
+                                             num(i-3), num(i-2), num(i-1)};
+            // CTM' = m x CTM (row-vector convention)
+            ctm = { m[0]*ctm[0] + m[1]*ctm[2],
+                    m[0]*ctm[1] + m[1]*ctm[3],
+                    m[2]*ctm[0] + m[3]*ctm[2],
+                    m[2]*ctm[1] + m[3]*ctm[3],
+                    m[4]*ctm[0] + m[5]*ctm[2] + ctm[4],
+                    m[4]*ctm[1] + m[5]*ctm[3] + ctm[5] };
+          }
+        else if(op == "re" and i >= 4)
+          {
+            const double x = num(i - 4), y = num(i - 3);
+            const double w = num(i - 2), h = num(i - 1);
+            close_cur();
+            polys.push_back({{ apply(x, y), apply(x + w, y),
+                               apply(x + w, y + h), apply(x, y + h) }});
+          }
+        else if(op == "m" and i >= 2)
+          {
+            close_cur();
+            cx = num(i - 2); cy = num(i - 1);
+            cur.push_back(apply(cx, cy));
+          }
+        else if(op == "l" and i >= 2)
+          {
+            cx = num(i - 2); cy = num(i - 1);
+            cur.push_back(apply(cx, cy));
+          }
+        else if((op == "c" and i >= 6) or (op == "v" and i >= 4) or (op == "y" and i >= 4))
+          {
+            double x1, y1, x2, y2, x3, y3;
+            if(op == "c")
+              {
+                x1 = num(i-6); y1 = num(i-5); x2 = num(i-4); y2 = num(i-3);
+                x3 = num(i-2); y3 = num(i-1);
+              }
+            else if(op == "v")
+              {
+                x1 = cx; y1 = cy; x2 = num(i-4); y2 = num(i-3);
+                x3 = num(i-2); y3 = num(i-1);
+              }
+            else
+              {
+                x1 = num(i-4); y1 = num(i-3); x3 = num(i-2); y3 = num(i-1);
+                x2 = x3; y2 = y3;
+              }
+            for(int k = 1; k <= 8; k++)
+              {
+                const double u = k / 8.0, v = 1.0 - u;
+                cur.push_back(apply(v*v*v*cx + 3*v*v*u*x1 + 3*v*u*u*x2 + u*u*u*x3,
+                                    v*v*v*cy + 3*v*v*u*y1 + 3*v*u*u*y2 + u*u*u*y3));
+              }
+            cx = x3; cy = y3;
+          }
+        else if(op == "h") { if(not cur.empty()) { cur.push_back(cur.front()); } }
+        else if(op == "f" or op == "f*" or op == "F" or op == "b" or op == "b*" or op == "B" or op == "B*")
+          {
+            close_cur();
+            any_fill = true;
+          }
+      }
+    close_cur();
+
+    if(not any_fill or polys.empty()) { return nullptr; }
+
+    double bx0 = polys[0][0][0], by0 = polys[0][0][1];
+    double bx1 = bx0, by1 = by0;
+    for(const auto& poly : polys)
+      {
+        for(const auto& pt : poly)
+          {
+            bx0 = std::min(bx0, pt[0]); bx1 = std::max(bx1, pt[0]);
+            by0 = std::min(by0, pt[1]); by1 = std::max(by1, pt[1]);
+          }
+      }
+    const double bw = bx1 - bx0, bh = by1 - by0;
+    if(bw <= 0.0 or bh <= 0.0) { return nullptr; }
+
+    constexpr int max_dim = 128;
+    int W = max_dim, H = max_dim;
+    if(bw >= bh) { H = std::max(1, static_cast<int>(std::lround(max_dim * bh / bw))); }
+    else         { W = std::max(1, static_cast<int>(std::lround(max_dim * bw / bh))); }
+
+    auto glyph = std::make_shared<type3_glyph>();
+    glyph->w = W;
+    glyph->h = H;
+    // Renderer convention: 0 paints. Start transparent (255), carve ink.
+    glyph->mask = std::make_shared<std::vector<uint8_t> >(
+      static_cast<size_t>(W) * H, 255);
+
+    // Even-odd scanline fill. Raster row 0 is the TOP of the image (matches
+    // the inline-image convention the mask path expects).
+    for(int row = 0; row < H; row++)
+      {
+        const double y = by1 - (row + 0.5) * bh / H;
+        std::vector<double> xs;
+        for(const auto& poly : polys)
+          {
+            const size_t n = poly.size();
+            for(size_t i2 = 0, j2 = n - 1; i2 < n; j2 = i2++)
+              {
+                const double yi = poly[i2][1], yj = poly[j2][1];
+                if((yi > y) != (yj > y))
+                  {
+                    xs.push_back(poly[j2][0] +
+                                 (y - yj) * (poly[i2][0] - poly[j2][0]) / (yi - yj));
+                  }
+              }
+          }
+        std::sort(xs.begin(), xs.end());
+        for(size_t k = 0; k + 1 < xs.size(); k += 2)
+          {
+            int c0 = static_cast<int>(std::ceil ((xs[k]     - bx0) / bw * W - 0.5));
+            int c1 = static_cast<int>(std::floor((xs[k + 1] - bx0) / bw * W - 0.5));
+            c0 = std::max(0, c0); c1 = std::min(W - 1, c1);
+            for(int c = c0; c <= c1; c++)
+              {
+                (*glyph->mask)[static_cast<size_t>(row) * W + c] = 0;
+              }
+          }
+      }
+
+    // cm maps the image unit square onto the paths' bounds in glyph space.
+    glyph->cm = {bw, 0.0, 0.0, bh, bx0, by0};
+    glyph->valid = true;
+    return glyph;
   }
 
   void pdf_resource<PAGE_FONT>::init_charprocs()

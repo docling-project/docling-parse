@@ -98,6 +98,7 @@ namespace pdflib
     void decode_colorspaces();
 
     void decode_shadings();
+    void decode_patterns();
 
     void decode_xobjects();
 
@@ -152,6 +153,7 @@ namespace pdflib
     QPDFObjectHandle qpdf_fonts;
     QPDFObjectHandle qpdf_colorspaces;
     QPDFObjectHandle qpdf_shadings;
+    QPDFObjectHandle qpdf_patterns;
     QPDFObjectHandle qpdf_xobjects;
 
     // Debug-only: populated when config.populate_json_objects is true
@@ -183,6 +185,7 @@ namespace pdflib
     std::shared_ptr<pdf_resource<PAGE_FONTS> > page_fonts;
     std::shared_ptr<pdf_resource<PAGE_COLORSPACES> > page_colorspaces;
     std::shared_ptr<pdf_resource<PAGE_SHADINGS> > page_shadings;
+    std::shared_ptr<pdf_resource<PAGE_PATTERNS> > page_patterns;
     std::shared_ptr<pdf_resource<PAGE_XOBJECTS> > page_xobjects;
 
     decode_config page_config;  // saved at the start of decode_page for use in widget handlers
@@ -207,6 +210,7 @@ namespace pdflib
     page_fonts(std::make_shared<pdf_resource<PAGE_FONTS>>()),
     page_colorspaces(std::make_shared<pdf_resource<PAGE_COLORSPACES>>()),
     page_shadings(std::make_shared<pdf_resource<PAGE_SHADINGS>>()),
+    page_patterns(std::make_shared<pdf_resource<PAGE_PATTERNS>>()),
     page_xobjects(std::make_shared<pdf_resource<PAGE_XOBJECTS>>())
   {}
 
@@ -225,6 +229,7 @@ namespace pdflib
     page_fonts(std::make_shared<pdf_resource<PAGE_FONTS>>()),
     page_colorspaces(std::make_shared<pdf_resource<PAGE_COLORSPACES>>()),
     page_shadings(std::make_shared<pdf_resource<PAGE_SHADINGS>>()),
+    page_patterns(std::make_shared<pdf_resource<PAGE_PATTERNS>>()),
     page_xobjects(std::make_shared<pdf_resource<PAGE_XOBJECTS>>())
   {
     std::string description = "thread-safe page " + std::to_string(orig_page_num);
@@ -1038,6 +1043,12 @@ namespace pdflib
         qpdf_shadings = qpdf_resources.getKey("/Shading");
         decode_shadings();
       }
+
+    if(qpdf_resources.hasKey("/Pattern"))
+      {
+        qpdf_patterns = qpdf_resources.getKey("/Pattern");
+        decode_patterns();
+      }
     else
       {
         LOG_S(INFO) << "page does not have any shadings!";
@@ -1082,6 +1093,13 @@ namespace pdflib
     page_shadings->set(qpdf_shadings);
   }
 
+  void pdf_decoder<PAGE>::decode_patterns()
+  {
+    LOG_S(INFO) << __FUNCTION__;
+
+    page_patterns->set(qpdf_patterns);
+  }
+
   void pdf_decoder<PAGE>::decode_xobjects()
   {
     LOG_S(INFO) << __FUNCTION__;
@@ -1106,6 +1124,7 @@ namespace pdflib
                                        page_grphs,
                                        page_colorspaces,
                                        page_shadings,
+                                       page_patterns,
                                        page_xobjects,
                                        instructions,
                                        timings);
@@ -1705,6 +1724,7 @@ namespace pdflib
     auto ap_colorspaces = std::make_shared<pdf_resource<PAGE_COLORSPACES>>(page_colorspaces);
     auto ap_grphs = std::make_shared<pdf_resource<PAGE_GRPHS>>(page_grphs);
     auto ap_shadings = std::make_shared<pdf_resource<PAGE_SHADINGS>>(page_shadings);
+    auto ap_patterns = std::make_shared<pdf_resource<PAGE_PATTERNS>>(page_patterns);
     auto ap_dict = ap_stream.getDict();
     if(ap_dict.isDictionary() and ap_dict.hasKey("/Resources"))
       {
@@ -1728,6 +1748,12 @@ namespace pdflib
           {
             auto ap_shading_dict = ap_resources.getKey("/Shading");
             ap_shadings->set(ap_shading_dict);
+
+            if(ap_resources.hasKey("/Pattern"))
+              {
+                auto ap_pattern_dict = ap_resources.getKey("/Pattern");
+                ap_patterns->set(ap_pattern_dict);
+              }
           }
       }
 
@@ -1748,6 +1774,7 @@ namespace pdflib
                                        ap_grphs,
                                        ap_colorspaces,
                                        ap_shadings,
+                                       ap_patterns,
                                        page_xobjects,
                                        ap_instructions,
                                        timings);

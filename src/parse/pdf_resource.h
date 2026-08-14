@@ -18,6 +18,8 @@ namespace pdflib
 
     PAGE_SHADING,
     PAGE_SHADINGS,
+    PAGE_PATTERN,
+    PAGE_PATTERNS,
 
     PAGE_XOBJECT_IMAGE,
     PAGE_XOBJECT_FORM,
