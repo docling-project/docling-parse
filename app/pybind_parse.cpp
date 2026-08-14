@@ -1,6 +1,7 @@
 //-*-C++-*-
 
 #include <optional>
+#include <sstream>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <pybind11/buffer_info.h>
@@ -14,9 +15,180 @@
 
 // Include parse headers for typed bindings
 #include <parse.h>
+#include <qpdf/QPDFAcroFormDocumentHelper.hh>
+#include <qpdf/QPDFPageDocumentHelper.hh>
+#include <qpdf/QPDFPageObjectHelper.hh>
 
 namespace
 {
+  class native_pdf_writer
+  {
+  public:
+    native_pdf_writer()
+    {
+      out_pdf.emptyPDF();
+    }
+
+    int page_count()
+    {
+      QPDFPageDocumentHelper pages(out_pdf);
+      return static_cast<int>(pages.getAllPages().size());
+    }
+
+    void add_metadata(std::map<std::string, std::string> const& metadata)
+    {
+      QPDFObjectHandle trailer = out_pdf.getTrailer();
+      QPDFObjectHandle info = trailer.getKey("/Info");
+
+      if(!info.isDictionary())
+        {
+          info = trailer.replaceKeyAndGetNew(
+            "/Info", out_pdf.makeIndirectObject(QPDFObjectHandle::newDictionary()));
+        }
+
+      for(auto const& item : metadata)
+        {
+          std::string key = item.first;
+          if(key.empty())
+            {
+              continue;
+            }
+          if(key.front() != '/')
+            {
+              key = "/" + key;
+            }
+          info.replaceKey(key, QPDFObjectHandle::newUnicodeString(item.second));
+        }
+    }
+
+    void add_pages_from_file(std::string const& filename,
+                             std::optional<std::string> password,
+                             std::vector<int> pages,
+                             int position)
+    {
+      auto src = std::make_unique<QPDF>();
+      src->processFile(filename.c_str(),
+                       password.has_value() ? password.value().c_str() : nullptr);
+      add_pages_from_source(std::move(src), pages, position);
+    }
+
+    void add_pages_from_bytes(std::string const& data,
+                              std::optional<std::string> password,
+                              std::string description,
+                              std::vector<int> pages,
+                              int position)
+    {
+      auto buffer = std::make_shared<std::string>(data);
+      auto src = std::make_unique<QPDF>();
+      src->processMemoryFile(description.c_str(),
+                             buffer->c_str(),
+                             buffer->size(),
+                             password.has_value() ? password.value().c_str() : nullptr);
+      source_buffers.push_back(buffer);
+      add_pages_from_source(std::move(src), pages, position);
+    }
+
+    void write_file(std::string const& filename)
+    {
+      QPDFWriter writer(out_pdf, filename.c_str());
+      writer.setObjectStreamMode(qpdf_o_preserve);
+      writer.setStreamDataMode(qpdf_s_preserve);
+      writer.write();
+    }
+
+    std::string write_bytes()
+    {
+      QPDFWriter writer(out_pdf);
+      writer.setOutputMemory();
+      writer.setObjectStreamMode(qpdf_o_preserve);
+      writer.setStreamDataMode(qpdf_s_preserve);
+      writer.write();
+
+      auto out = writer.getBufferSharedPointer();
+      return std::string(reinterpret_cast<char const*>(out->getBuffer()),
+                         out->getSize());
+    }
+
+  private:
+    void add_pages_from_source(std::unique_ptr<QPDF> src,
+                               std::vector<int> pages,
+                               int position)
+    {
+      QPDFPageDocumentHelper src_pages_helper(*src);
+      QPDFAcroFormDocumentHelper src_afdh(*src);
+      std::vector<QPDFPageObjectHelper> src_pages = src_pages_helper.getAllPages();
+
+      if(pages.empty())
+        {
+          pages.reserve(src_pages.size());
+          for(int i = 0; i < static_cast<int>(src_pages.size()); ++i)
+            {
+              pages.push_back(i);
+            }
+        }
+
+      int insertion = position;
+      for(int page_index : pages)
+        {
+          if(page_index < 0 || page_index >= static_cast<int>(src_pages.size()))
+            {
+              std::ostringstream msg;
+              msg << "page index " << page_index << " out of range for source with "
+                  << src_pages.size() << " page(s)";
+              throw std::out_of_range(msg.str());
+            }
+
+          int inserted_at = insert_page_object(src_pages.at(page_index), insertion);
+
+          QPDFPageDocumentHelper out_pages_helper(out_pdf);
+          QPDFAcroFormDocumentHelper out_afdh(out_pdf);
+          std::vector<QPDFPageObjectHelper> out_pages = out_pages_helper.getAllPages();
+          out_afdh.fixCopiedAnnotations(out_pages.at(inserted_at).getObjectHandle(),
+                                        src_pages.at(page_index).getObjectHandle(),
+                                        src_afdh);
+
+          if(insertion >= 0)
+            {
+              ++insertion;
+            }
+        }
+
+      sources.push_back(std::move(src));
+    }
+
+    int insert_page_object(QPDFPageObjectHelper source_page, int position)
+    {
+      QPDFPageDocumentHelper out_pages_helper(out_pdf);
+      std::vector<QPDFPageObjectHelper> current_pages = out_pages_helper.getAllPages();
+      int count = static_cast<int>(current_pages.size());
+
+      if(count == 0)
+        {
+          out_pages_helper.addPage(source_page, false);
+          return 0;
+        }
+
+      if(position < 0 || position >= count)
+        {
+          out_pages_helper.addPage(source_page, false);
+          return count;
+        }
+
+      if(position == 0)
+        {
+          out_pages_helper.addPage(source_page, true);
+          return 0;
+        }
+
+      out_pages_helper.addPageAt(source_page, true, current_pages.at(position));
+      return position;
+    }
+
+    QPDF out_pdf;
+    std::vector<std::unique_ptr<QPDF>> sources;
+    std::vector<std::shared_ptr<std::string>> source_buffers;
+  };
+
   const char* pixel_format_name(pdflib::pixel_format fmt)
   {
     switch(fmt)
@@ -720,6 +892,32 @@ PYBIND11_MODULE(pdf_parsers, m) {
 	"Check if a timing key is static (constant)");
   m.def("get_decode_page_timing_keys", &pdflib::pdf_timings::get_decode_page_keys,
 	"Get timing keys used in decode_page method (in order, excluding global timer) as List[str]");
+
+  // ============= Native PDF Writer =============
+
+  pybind11::class_<native_pdf_writer>(m, "_PdfWriter")
+    .def(pybind11::init<>())
+    .def("page_count", &native_pdf_writer::page_count)
+    .def("add_metadata", &native_pdf_writer::add_metadata,
+         pybind11::arg("metadata"))
+    .def("add_pages_from_file", &native_pdf_writer::add_pages_from_file,
+         pybind11::arg("filename"),
+         pybind11::arg("password") = pybind11::none(),
+         pybind11::arg("pages") = std::vector<int>{},
+         pybind11::arg("position") = -1)
+    .def("add_pages_from_bytes", &native_pdf_writer::add_pages_from_bytes,
+         pybind11::arg("data"),
+         pybind11::arg("password") = pybind11::none(),
+         pybind11::arg("description") = "memory PDF",
+         pybind11::arg("pages") = std::vector<int>{},
+         pybind11::arg("position") = -1)
+    .def("write_file", &native_pdf_writer::write_file,
+         pybind11::arg("filename"))
+    .def("write_bytes",
+         [](native_pdf_writer& self) {
+           std::string data = self.write_bytes();
+           return pybind11::bytes(data);
+         });
 
   // ============= PDF Parser =============
 

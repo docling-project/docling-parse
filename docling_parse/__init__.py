@@ -40,3 +40,5 @@ def _ensure_safe_numeric_locale() -> None:
 
 
 _ensure_safe_numeric_locale()
+
+from docling_parse._pypdf_compat import PdfReader, PdfWriter
