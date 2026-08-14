@@ -1,3 +1,13 @@
+## [v7.13.0](https://github.com/docling-project/docling-parse/releases/tag/v7.13.0) - 2026-08-14
+
+### Feature
+
+* **render:** Add tiling patterns, clipping, Type3 glyphs and CID text ([#320](https://github.com/docling-project/docling-parse/issues/320)) ([`b425c64`](https://github.com/docling-project/docling-parse/commit/b425c64b0967203fc7508330bacb3e5200109f3c))
+
+### Fix
+
+* Re-sync test data when the pinned dataset revision changes ([#314](https://github.com/docling-project/docling-parse/issues/314)) ([`a06c455`](https://github.com/docling-project/docling-parse/commit/a06c455621287cf3869493a39067df5b7139c7cb))
+
 ## [v7.12.1](https://github.com/docling-project/docling-parse/releases/tag/v7.12.1) - 2026-08-12
 
 ### Fix
