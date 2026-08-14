@@ -143,6 +143,12 @@ namespace pdflib
       double hy = 0.0;
       double quad_h = 0.0;
       double size = 0.0;
+      // Horizontal condensation: the ratio of the cell's width edge to the
+      // natural advance of the shaped run. PDF text may be anisotropically
+      // scaled (Tz, or a text matrix with sx != sy); a transform built from
+      // the up-vector alone draws every glyph at full width, and a condensed
+      // newspaper headline turns into overlapping strokes.
+      double h_scale = 1.0;
     };
 
     struct text_draw_adjustment
@@ -355,6 +361,31 @@ namespace pdflib
     // Computes the canvas-space baseline, bounding quad, text cell height
     // vector, and Blend2D font size for one text instruction.
     text_geometry make_text_geometry(text_instruction& instr) const;
+
+    // Sets geom.h_scale from the cell's width edge and the natural advance of
+    // the given run; identity when either is degenerate or nearly equal.
+    static void apply_condensation(text_geometry& geom,
+                                   const BLFont& font,
+                                   BLGlyphBuffer& gb)
+    {
+      const double wx = geom.bbox.x1 - geom.bbox.x0;
+      const double wy = geom.bbox.y1 - geom.bbox.y0;
+      const double cell_w = std::hypot(wx, wy);
+      if (cell_w <= 0.5) { return; }
+
+      BLTextMetrics tm;
+      if (font.get_text_metrics(gb, tm) != BL_SUCCESS) { return; }
+      const double natural = tm.advance.x;
+      if (natural <= 0.5) { return; }
+
+      const double h = cell_w / natural;
+      // Only meaningful, bounded deviations: runaway ratios mean the metrics
+      // and the cell disagree for other reasons (fallback face substitution).
+      if (h >= 0.30 and h <= 3.0 and std::abs(h - 1.0) > 0.03)
+        {
+          geom.h_scale = h;
+        }
+    }
 
     // Builds the affine transform that maps Blend2D text coordinates into the
     // target PDF text cell in canvas space.
@@ -631,8 +662,19 @@ namespace pdflib
     {
       if(not clip_state.has_clip()) { return false; }
 
+      std::unordered_map<int, int> group_sizes;
       for(const auto& clip_path : clip_state.get_paths())
         {
+          group_sizes[clip_path.get_clip_group()]++;
+        }
+
+      for(const auto& clip_path : clip_state.get_paths())
+        {
+          // Subpaths of one W/W* operation only mean anything together (one
+          // path under the clip's fill rule), which clip_to_rect cannot
+          // express even when each subpath happens to be rectangular.
+          if(group_sizes[clip_path.get_clip_group()] > 1) { return true; }
+
           BLRect unused;
           if(not get_axis_aligned_clip_rect(clip_path, unused)) { return true; }
         }
@@ -676,18 +718,53 @@ namespace pdflib
       mctx.set_comp_op(BL_COMP_OP_SRC_COPY);
       mctx.fill_all(BLRgba32(0x00000000u));
 
-      bool first = true;
-      std::vector<BLImage> pending_planes;
+      // One W/W* capture = one clip path, whatever its subpath count; the
+      // subpaths compose under the clip's fill rule (a stencil of outline
+      // art, a text-shaped clip). Only DIFFERENT captures intersect.
+      // Intersecting the subpaths individually made any such stencil empty,
+      // and everything filled through it vanished.
+      std::vector<std::pair<int, BLPath> > group_paths;
       for(const auto& clip_path : clip_state.get_paths())
         {
           BLRect unused;
-          if(get_axis_aligned_clip_rect(clip_path, unused)) { continue; }
+          const bool is_rect = get_axis_aligned_clip_rect(clip_path, unused);
 
-          BLPath path = make_clip_path(clip_path, this);
-          if(path.is_empty()) { continue; }
+          // rect paths that are alone in their group were already applied
+          // through the context clip
+          bool grouped = false;
+          for(const auto& other : clip_state.get_paths())
+            {
+              if(&other != &clip_path and
+                 other.get_clip_group() == clip_path.get_clip_group())
+                {
+                  grouped = true;
+                  break;
+                }
+            }
+          if(is_rect and not grouped) { continue; }
 
+          BLPath sub = make_clip_path(clip_path, this);
+          if(sub.is_empty()) { continue; }
+
+          BLPath* dst = nullptr;
+          for(auto& gp : group_paths)
+            {
+              if(gp.first == clip_path.get_clip_group()) { dst = &gp.second; break; }
+            }
+          if(dst == nullptr)
+            {
+              group_paths.emplace_back(clip_path.get_clip_group(), BLPath());
+              dst = &group_paths.back().second;
+            }
+          dst->add_path(sub);
+        }
+
+      bool first = true;
+      std::vector<BLImage> pending_planes;
+      for(auto& gp : group_paths)
+        {
           BLPath shifted;
-          shifted.add_path(path, BLMatrix2D::make_translation(-area.x, -area.y));
+          shifted.add_path(gp.second, BLMatrix2D::make_translation(-area.x, -area.y));
 
           if(first)
             {
@@ -698,7 +775,7 @@ namespace pdflib
               continue;
             }
 
-          // Rasterise this path on its own, then fold it in by multiplying.
+          // Rasterise this capture on its own, then fold it in by multiplying.
           BLImage plane;
           if(plane.create(area.w, area.h, BL_FORMAT_A8) != BL_SUCCESS) { continue; }
           {
@@ -710,7 +787,6 @@ namespace pdflib
             pctx.fill_path(shifted, BLRgba32(0xFFFFFFFFu));
             pctx.end();
           }
-
           pending_planes.push_back(std::move(plane));
         }
 
@@ -739,9 +815,19 @@ namespace pdflib
           return CLIP_NONE;
         }
 
+      std::unordered_map<int, int> group_sizes;
+      for(const auto& clip_path : clip_state.get_paths())
+        {
+          group_sizes[clip_path.get_clip_group()]++;
+        }
+
       bool applied_clip = false;
       for(const auto& clip_path : clip_state.get_paths())
         {
+          // A subpath that shares its W/W* capture with others is not a clip
+          // on its own; the whole group is handled through the coverage mask.
+          if(group_sizes[clip_path.get_clip_group()] > 1) { continue; }
+
           BLRect clip_rect;
           if(get_axis_aligned_clip_rect(clip_path, clip_rect))
             {
@@ -1422,7 +1508,7 @@ namespace pdflib
     const double dn_x  = -up_x;
     const double dn_y  = -up_y;
 
-    return BLMatrix2D(adv_x,  adv_y,
+    return BLMatrix2D(adv_x * geom.h_scale, adv_y * geom.h_scale,
                       dn_x,   dn_y,
                       geom.bx, geom.by);
   }
@@ -1715,20 +1801,39 @@ namespace pdflib
     if (geom.size <= 0.5) { return false; }
 
     BLPath text_path;
+    double natural_advance = 0.0;
     if (not freetype_font_cache_->build_text_path(instr.get_embedded_font(),
                                                   instr.get_text(),
                                                   instr.get_char_code(),
                                                   instr.get_glyph_name(),
                                                   geom.size,
-                                                  text_path))
+                                                  text_path,
+                                                  &natural_advance))
       {
         return false;
       }
 
+    // Same condensation handling as the Blend2D path: fit the run to the
+    // cell's width edge when the text matrix is anisotropic.
+    text_geometry draw_geom = geom;
+    {
+      const double wx = geom.bbox.x1 - geom.bbox.x0;
+      const double wy = geom.bbox.y1 - geom.bbox.y0;
+      const double cell_w = std::hypot(wx, wy);
+      if (cell_w > 0.5 and natural_advance > 0.5)
+        {
+          const double h = cell_w / natural_advance;
+          if (h >= 0.30 and h <= 3.0 and std::abs(h - 1.0) > 0.03)
+            {
+              draw_geom.h_scale = h;
+            }
+        }
+    }
+
     BLContext& ctx = page_context();
 
     ctx.save();
-    const BLResult transform_res = ctx.apply_transform(make_text_transform(geom));
+    const BLResult transform_res = ctx.apply_transform(make_text_transform(draw_geom));
     if (transform_res != BL_SUCCESS)
       {
         ctx.restore();
@@ -2018,7 +2123,9 @@ namespace pdflib
                 return;
               }
 
-            const BLMatrix2D ctm = make_text_transform(geom);
+            text_geometry draw_geom = geom;
+            apply_condensation(draw_geom, font, gb);
+            const BLMatrix2D ctm = make_text_transform(draw_geom);
             ctx.save();
             const BLResult transform_res = ctx.apply_transform(ctm);
             if (transform_res != BL_SUCCESS)

@@ -137,6 +137,9 @@ namespace pdflib
     
     page_item<PAGE_SHAPES> curr_shapes;
     page_item<PAGE_SHAPES> clippings;
+    // group id of each entry in `clippings`: one W/W* capture = one group
+    std::vector<int> clipping_groups;
+    int next_clip_group = 0;
 
     clipping_path_mode_type clipping_path_mode;
     bool clipping_path_pending;
@@ -190,6 +193,8 @@ namespace pdflib
   {
     this->curr_shapes = other.curr_shapes;
     this->clippings  = other.clippings;
+    this->clipping_groups = other.clipping_groups;
+    this->next_clip_group = other.next_clip_group;
     this->clipping_path_mode = other.clipping_path_mode;
     this->clipping_path_pending = other.clipping_path_pending;
 
@@ -446,7 +451,9 @@ namespace pdflib
         paths.emplace_back(shape.get_x(),
                            shape.get_y(),
                            shape.get_closing_type(),
-                           shape.get_shape_type());
+                           shape.get_shape_type(),
+                           l < static_cast<int>(clipping_groups.size())
+                             ? clipping_groups[l] : 0);
       }
 
     return clip_state_instruction(rule, std::move(paths));
@@ -468,6 +475,9 @@ namespace pdflib
   {
     if(not clipping_path_pending) { return; }
 
+    // Every subpath of this capture belongs to one clip operation.
+    const int group_id = next_clip_group++;
+
     // Per spec the new clip is the *intersection* of the old and new clip
     // regions; appending approximates that, since the renderer ANDs the
     // clip paths it applies.
@@ -483,6 +493,7 @@ namespace pdflib
         if(keep_shape(shape))
           {
             clippings.push_back(shape);
+            clipping_groups.push_back(group_id);
           }
         else if(shape.size() >= 2)
           {

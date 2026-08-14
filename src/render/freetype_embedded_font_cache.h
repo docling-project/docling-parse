@@ -69,7 +69,8 @@ namespace pdflib
                          int64_t char_code,
                          const std::string& glyph_name,
                          double size,
-                         BLPath& path);
+                         BLPath& path,
+                         double* out_advance = nullptr);
 
   private:
 
@@ -156,7 +157,8 @@ namespace pdflib
       int64_t char_code,
       const std::string& glyph_name,
       double size,
-      BLPath& path)
+      BLPath& path,
+      double* out_advance)
   {
     if(library_ == nullptr or blob == nullptr or not blob->has_bytes() or size <= 0.0)
       {
@@ -199,6 +201,13 @@ namespace pdflib
         path.add_path(glyph->path, m);
 
         pen_x += glyph->advance;
+      }
+
+    if(out_advance != nullptr)
+      {
+        const double units_per_em2 =
+          (entry.face->units_per_EM > 0) ? entry.face->units_per_EM : 1000.0;
+        *out_advance = pen_x * (size / units_per_em2);
       }
 
     return true;
