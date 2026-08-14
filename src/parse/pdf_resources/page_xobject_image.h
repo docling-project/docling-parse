@@ -186,6 +186,8 @@ namespace pdflib
     std::shared_ptr<Buffer>  get_decoded_stream_data() const;
     bool                     has_soft_mask_data() const;
     std::shared_ptr<std::vector<uint8_t>> get_soft_mask_data() const;
+    int get_soft_mask_width() const { return soft_mask_width; }
+    int get_soft_mask_height() const { return soft_mask_height; }
 
     // Determine file extension from filters (e.g. ".jpg", ".jp2", ".jb2", ".bin")
     std::string pick_extension() const;
@@ -248,6 +250,8 @@ namespace pdflib
     std::shared_ptr<Buffer> raw_stream_data;
     std::shared_ptr<Buffer> decoded_stream_data;
     std::shared_ptr<std::vector<uint8_t>> soft_mask_data;
+    int soft_mask_width = 0;
+    int soft_mask_height = 0;
 
     // PDF image semantics
     std::vector<double> decode_array; // length 2*ncomp when present
@@ -1119,10 +1123,16 @@ namespace pdflib
         return;
       }
 
-    const size_t expected = static_cast<size_t>(image_width) * image_height;
+    // Resolve onto the finer of the two grids. Downsampling a mask that is
+    // higher-resolution than its base image would throw away exactly the
+    // detail it exists to carry -- a 2x2 colour swatch stencilled by a 141x100
+    // glyph mask is a common way to draw text, and collapsing it to 2x2 turns
+    // the text into a gradient smear across the whole line.
+    const int dst_w = std::max(image_width, sm_w);
+    const int dst_h = std::max(image_height, sm_h);
 
     auto out = std::make_shared<std::vector<uint8_t>>();
-    out->resize(expected);
+    out->resize(static_cast<size_t>(dst_w) * dst_h);
 
     auto const* src = smask_unpacked.empty()
       ? reinterpret_cast<uint8_t const*>(smask_buf->getBuffer())
@@ -1130,25 +1140,27 @@ namespace pdflib
     auto const decode = smask.get_decode_array();
     const bool has_decode = smask.has_decode_array() and decode.size() >= 2;
 
-    // nearest-neighbor sampling from the mask grid onto the image grid
+    // nearest-neighbor sampling from the mask grid onto the target grid
     // (identity when the dimensions already match)
-    for(int row = 0; row < image_height; ++row)
+    for(int row = 0; row < dst_h; ++row)
       {
-        const size_t src_row = (static_cast<size_t>(row) * sm_h) / image_height;
-        for(int col = 0; col < image_width; ++col)
+        const size_t src_row = (static_cast<size_t>(row) * sm_h) / dst_h;
+        for(int col = 0; col < dst_w; ++col)
           {
-            const size_t src_col = (static_cast<size_t>(col) * sm_w) / image_width;
+            const size_t src_col = (static_cast<size_t>(col) * sm_w) / dst_w;
 
             uint8_t alpha = src[src_row * sm_w + src_col];
             if(has_decode)
               {
                 alpha = jpeg::apply_decode_component(alpha, decode[0], decode[1]);
               }
-            (*out)[static_cast<size_t>(row) * image_width + col] = alpha;
+            (*out)[static_cast<size_t>(row) * dst_w + col] = alpha;
           }
       }
 
-    soft_mask_data = std::move(out);
+    soft_mask_data   = std::move(out);
+    soft_mask_width  = dst_w;
+    soft_mask_height = dst_h;
 
     LOG_S(INFO) << "decoded SMask for xobject_key=" << xobject_key
                 << " alpha_size=" << soft_mask_data->size();

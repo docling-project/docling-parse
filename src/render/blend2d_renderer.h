@@ -1971,6 +1971,34 @@ namespace pdflib
                   }
               }
 
+            // Last resort before giving up on the run: choose a face by the
+            // SCRIPT of the text. Name-based resolution hands Arabic or CJK
+            // runs a Latin face, which shapes every glyph to .notdef -- the
+            // page fills with boxes. Type3 stays out: its ink arrives as
+            // parse-time bitmaps, and shaping its cell text against a system
+            // face would smear placeholder boxes over that ink.
+            if (font_resolver_ and not instr.is_type3() and
+                (not shaped or glyph_run_all_notdef(gb)))
+              {
+                BLFontFace script_face =
+                  font_resolver_->resolve_face_for_text(instr.get_text());
+                BLFont script_font;
+                if (script_face.is_valid() and
+                    script_font.create_from_face(
+                      script_face, static_cast<float>(geom.size)) == BL_SUCCESS)
+                  {
+                    gb.set_utf8_text(instr.get_text().c_str());
+                    shape_res = script_font.shape(gb);
+                    if (shape_res == BL_SUCCESS and not gb.is_empty() and
+                        not glyph_run_all_notdef(gb))
+                      {
+                        font = script_font;
+                        using_embedded_font = false;
+                        shaped = true;
+                      }
+                  }
+              }
+
             if (not shaped)
               {
                 LOG_S(WARNING) << "render_text: shaping failed or produced no glyphs"
