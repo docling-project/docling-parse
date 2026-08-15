@@ -183,6 +183,12 @@ namespace pdflib
     std::shared_ptr<blend2d_font_resolver> font_resolver_;
     std::shared_ptr<blend2d_embedded_font_cache> embedded_font_cache_;
     std::shared_ptr<freetype_embedded_font_cache> freetype_font_cache_;
+
+    // Embedded faces (by blob cache key) whose outlines Blend2D decoded
+    // implausibly; every later cell in them is drawn through FreeType so one
+    // run is not rasterised by two engines. Scoped to this renderer, which
+    // draws one page.
+    mutable std::unordered_set<std::string> distrusted_embedded_faces_;
     std::unordered_map<std::string, BLFontFace> local_font_cache_;
 
     // Returns the active Blend2D context for the page, starting it lazily if
@@ -281,6 +287,56 @@ namespace pdflib
         }
 
       return true;
+    }
+
+    // Blend2D loads some SFNT faces and then decodes part of them into
+    // outlines that are orders of magnitude too large: a valid CJK subset
+    // (PMingLiU, 1024 units/em, every glyph simple and well formed) rendered
+    // eight of its eleven glyphs as page-sized wedges and bars, while
+    // FreeType read all eleven correctly at the same size. The face loads,
+    // shaping succeeds and the glyph ids are right, so nothing upstream of
+    // the outline reports a problem.
+    //
+    // A glyph cannot be many times its own em, so an outline that overshoots
+    // by that much is a failed decode rather than a document asking for
+    // something enormous, and the cell is better drawn through FreeType.
+    static bool glyph_outlines_are_implausible(const BLFont& font,
+                                               const BLGlyphBuffer& gb,
+                                               double size)
+    {
+      const size_t count = gb.size();
+      const uint32_t* glyph_ids = gb.glyph_run().glyph_data_as<uint32_t>();
+      if (size <= 0.0 or count == 0 or glyph_ids == nullptr) { return false; }
+
+      // Loose on purpose. A stretched delimiter or a swash is a few em; the
+      // misdecodes seen here overshoot by one to two orders of magnitude.
+      constexpr double max_em_multiple = 8.0;
+      const double limit = max_em_multiple * size;
+
+      const BLMatrix2D identity(1.0, 0.0,
+                                0.0, 1.0,
+                                0.0, 0.0);
+
+      for (size_t l = 0; l < count; ++l)
+        {
+          BLPath path;
+          if (font.get_glyph_outlines(glyph_ids[l], identity, path) != BL_SUCCESS)
+            {
+              continue;
+            }
+
+          if (path.is_empty()) { continue; }
+
+          BLBox box;
+          if (path.get_bounding_box(&box) != BL_SUCCESS) { continue; }
+
+          if ((box.x1 - box.x0) > limit or (box.y1 - box.y0) > limit)
+            {
+              return true;
+            }
+        }
+
+      return false;
     }
 
     // Draws a text cell whose embedded font program Blend2D cannot load
@@ -1851,6 +1907,21 @@ namespace pdflib
     if (not text_path.is_empty())
       {
         ctx.fill_path(text_path);
+
+        // Text render modes with a stroke component (1, 2, 5, 6) are how
+        // producers synthesise bold from a regular face (PDF 32000-1, 9.3.6),
+        // and the Blend2D path strokes the run for exactly that reason. This
+        // path has to do the same or a heading routed here comes out lighter
+        // than the rest of the page -- which is how it looks when only some
+        // of a face's glyphs land here.
+        const int mode = instr.get_rendering_mode();
+        if (mode == 1 or mode == 2 or mode == 5 or mode == 6)
+          {
+            ctx.set_stroke_style(make_rgba32(instr.get_rgb_filling(),
+                                             instr.get_fill_alpha()));
+            ctx.set_stroke_width(std::max(0.3, geom.size * 0.03));
+            ctx.stroke_path(text_path);
+          }
       }
     ctx.restore();
 
@@ -2123,6 +2194,41 @@ namespace pdflib
                                << " base_font=`" << instr.get_base_font() << "`";
                 draw_bbox_fallback();
                 return;
+              }
+
+            // The face loaded and shaped, but its outlines can still come back
+            // mangled; FreeType reads the same glyphs correctly, so hand the
+            // cell to it rather than stamping a page-sized wedge on the page.
+            //
+            // The whole face goes with it, not just the glyphs caught. The
+            // misdecode hits some glyphs of a face and not others, and the two
+            // rasterisers differ slightly in weight, so drawing one word from
+            // both leaves it visibly patchy. One bad outline condemns the face
+            // for the rest of the page.
+            if (using_embedded_font)
+              {
+                const std::string& face_key =
+                  instr.get_embedded_font()->get_cache_key();
+                const bool distrusted =
+                  distrusted_embedded_faces_.count(face_key) > 0;
+
+                if (distrusted or glyph_outlines_are_implausible(font, gb, geom.size))
+                  {
+                    if (not distrusted)
+                      {
+                        LOG_S(WARNING) << "render_text: embedded face decoded an"
+                                       << " outline far larger than its em"
+                                       << " text=`" << instr.get_text() << "`"
+                                       << " font_name=`" << instr.get_font_name() << "`"
+                                       << " — drawing this face through FreeType";
+                        distrusted_embedded_faces_.insert(face_key);
+                      }
+
+                    if (render_text_freetype(instr, geom, bbox_path))
+                      {
+                        return;
+                      }
+                  }
               }
 
             const auto* placement_data = gb.placement_data();
