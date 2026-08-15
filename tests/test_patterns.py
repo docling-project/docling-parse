@@ -142,7 +142,8 @@ def test_pattern_is_bounded_by_the_filled_path():
     """
     content = "/Pattern cs /P0 scn\n80 80 40 40 re f\n"
     pdf = simple_page_pdf(
-        content, resources="/Pattern << /P0 5 0 R >>",
+        content,
+        resources="/Pattern << /P0 5 0 R >>",
         extra_objects=[_solid_pattern_object()],
     )
     page = render_page(pdf)

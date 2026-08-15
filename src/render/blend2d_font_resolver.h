@@ -48,8 +48,10 @@ namespace pdflib
     // directory scan runs at most once per resolver instance.
     void warm();
 
-    // Resolves the PDF font identifiers to a Blend2D font face. font_name is
-    // preferred unless it is empty or "null", otherwise base_font is used.
+    // Resolves the PDF font identifiers to a Blend2D font face. base_font is
+    // preferred, being the PostScript name of the typeface; font_name carries
+    // the font dictionary's /Name, a resource label, and is used only when
+    // there is no base font.
     // When resolve_fonts is true the selected name is matched against indexed
     // system fonts using deterministic aliases, exact metadata matches, style
     // selection, and finally fuzzy matching. If lookup fails, or resolving is
@@ -123,7 +125,6 @@ namespace pdflib
     // Strips leading PDF name slash and six-letter subset prefixes such as
     // ABCDEF+Times-Roman.
     static std::string strip_subset_prefix(const std::string& name);
-    static bool is_pdf_resource_font_key(const std::string& name);
     static std::string select_font_query(const std::string& font_name,
                                          const std::string& base_font);
 
@@ -344,28 +345,23 @@ namespace pdflib
     return s;
   }
 
-  inline bool blend2d_font_resolver::is_pdf_resource_font_key(const std::string& name)
-  {
-    const std::string s = strip_subset_prefix(name);
-    if (s.size() < 2 or (s[0] != 'F' and s[0] != 'f')) { return false; }
-
-    return std::all_of(s.begin() + 1, s.end(),
-                       [](char c)
-                       {
-                         return std::isdigit(static_cast<unsigned char>(c));
-                       });
-  }
-
   inline std::string blend2d_font_resolver::select_font_query(
                                                               const std::string& font_name,
                                                               const std::string& base_font)
   {
+    // /BaseFont is the PostScript name of the typeface. The other name is
+    // whatever the font dictionary's /Name says, which is the label the
+    // resource dictionary references the font by and is deprecated as of PDF
+    // 1.7 (32000-1, Table 111) -- producers put arbitrary strings there.
+    // Preferring it loses the typeface: an arXiv stamp declared
+    // `/BaseFont /Times-Roman /Name /arXivStAmP` matched nothing under its
+    // label and fell through to the generic sans fallback, so the stamp came
+    // out in the wrong face while every other renderer set it in a serif.
+    //
+    // Only `F<digits>` used to be recognised as a label, which is the common
+    // shape but not a rule any producer follows.
     const bool has_base_font = not base_font.empty() and base_font != "null";
-    if (has_base_font and
-        (font_name.empty() or font_name == "null" or is_pdf_resource_font_key(font_name)))
-      {
-        return base_font;
-      }
+    if (has_base_font) { return base_font; }
 
     if (not font_name.empty() and font_name != "null") { return font_name; }
     return base_font;
@@ -418,17 +414,40 @@ namespace pdflib
           }
       }
 
-    for (const auto& suf : {" psmt", " ps", " mt"})
-      {
-        const std::string sfx(suf);
-        if (expanded.size() >= sfx.size() and
-            expanded.compare(expanded.size() - sfx.size(),
-                             sfx.size(), sfx) == 0)
-          {
-            expanded.resize(expanded.size() - sfx.size());
-            break;
-          }
-      }
+    // "PS" and "MT" are Monotype's PostScript vendor tags, and they sit around
+    // the style rather than only after it: TimesNewRomanPSMT normalises to
+    // "times new roman", but TimesNewRomanPS-BoldMT put a "ps" in the middle
+    // and only the trailing "mt" was ever removed. The leftover
+    // "times new roman ps bold" matched no alias, so the regular weight of a
+    // Times document resolved to a serif while its bold and italic fell
+    // through to the generic sans -- one paragraph set in three faces.
+    //
+    // Dropping the tags as whole tokens wherever they appear keeps the family
+    // and the style together. They are only ever vendor tags, never a family
+    // of their own, and a name that is nothing else is left alone.
+    {
+      std::vector<std::string> kept;
+      std::istringstream stream(expanded);
+      std::string token;
+      while (stream >> token)
+        {
+          if (token != "ps" and token != "mt" and token != "psmt")
+            {
+              kept.push_back(token);
+            }
+        }
+
+      if (not kept.empty())
+        {
+          std::ostringstream rebuilt;
+          for (size_t l = 0; l < kept.size(); l++)
+            {
+              if (l > 0) { rebuilt << ' '; }
+              rebuilt << kept[l];
+            }
+          expanded = rebuilt.str();
+        }
+    }
 
     std::string collapsed;
     bool pending_space = false;
