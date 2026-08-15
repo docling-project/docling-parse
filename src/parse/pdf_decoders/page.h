@@ -1802,8 +1802,64 @@ namespace pdflib
         page_shapes.push_back(shape);
       }
 
+    // The frame a field draws around itself is form chrome rather than page
+    // content, and painting it is what puts empty squares on a page: a
+    // producer that cannot embed a glyph is free to leave a bordered
+    // placeholder button in its place, and every one of those came out as a
+    // box no other renderer draws -- pdfium paints none of this even with the
+    // form environment initialised and form drawing asked for.
+    //
+    // What a field draws *inside* itself is content and is kept, a checkbox
+    // tick being the case that matters. The two are told apart by geometry:
+    // in appearance-stream coordinates the widget occupies (0, 0)-(w, h), so
+    // a subpath whose extent is that rectangle is the frame. The tolerance is
+    // the line width because a stroked border is inset by half of it, and it
+    // never reaches half the field, so a tick cannot be mistaken for a frame.
+    //
+    // Only the painting is dropped. The shape stays in the parsed output
+    // above, where it describes the field for anything reading geometry.
+    const double widget_w = bbox[2] - bbox[0];
+    const double widget_h = bbox[3] - bbox[1];
+
+    auto traces_the_widget_rect = [&](const shape_instruction& shape_instr)
+    {
+      if(widget_w <= 0.0 or widget_h <= 0.0) { return false; }
+
+      bool seen = false;
+      double x0 = 0.0, y0 = 0.0, x1 = 0.0, y1 = 0.0;
+
+      for(const auto& subpath : shape_instr.get_subpaths())
+        {
+          std::vector<double> xs = subpath.get_px();
+          std::vector<double> ys = subpath.get_py();
+          xs.push_back(subpath.get_x0());
+          ys.push_back(subpath.get_y0());
+
+          for(std::size_t l = 0; l < xs.size(); l++)
+            {
+              if(not seen) { x0 = x1 = xs[l]; y0 = y1 = ys[l]; seen = true; }
+              x0 = std::min(x0, xs[l]); x1 = std::max(x1, xs[l]);
+              y0 = std::min(y0, ys[l]); y1 = std::max(y1, ys[l]);
+            }
+        }
+
+      if(not seen) { return false; }
+
+      const double tol = std::max(1.0, shape_instr.get_line_width());
+      return (std::abs(x0 - 0.0)      <= tol and
+              std::abs(y0 - 0.0)      <= tol and
+              std::abs(x1 - widget_w) <= tol and
+              std::abs(y1 - widget_h) <= tol);
+    };
+
     for(const auto& shape_instr : ap_instructions.get_shape_instructions())
       {
+        if(traces_the_widget_rect(shape_instr))
+          {
+            LOG_S(INFO) << "skipping the frame of a widget appearance stream";
+            continue;
+          }
+
         instructions.add_shape_instruction(shape_instr.translated(ox, oy));
       }
 
