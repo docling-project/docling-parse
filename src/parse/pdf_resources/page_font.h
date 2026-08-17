@@ -711,12 +711,20 @@ namespace pdflib
     // Emit a glyph marker instead, so downstream consumers can detect the
     // unresolved glyph.
     //
-    // This covers both a cmap that misses the code AND a symbolic/composite
-    // font with no usable cmap at all — a /ToUnicode that failed to parse
-    // ("could not find cmap in '/ToUnicode'"), or none present — where
-    // cmap_initialized is false but fabricating from the standard tables is
-    // still wrong (docling-parse#299 follow-up).
-    if(is_symbolic or subtype==TYPE_0)
+    // Beyond the parsed-cmap-misses-the-code case (#299), this also covers a
+    // symbolic font with no usable cmap at all — a /ToUnicode that failed to
+    // parse ("could not find cmap in '/ToUnicode'"), or none present — but
+    // ONLY when the font also declares no simple encoding. Many producers set
+    // the symbolic flag on fonts that nonetheless declare /WinAnsiEncoding or
+    // an /Encoding dict with /Differences; for those, codes outside
+    // /Differences legitimately resolve through the declared base encoding
+    // (PDF 32000-1 9.6.6), so falling through is not fabrication
+    // (docling-parse#299 follow-up; #322 regression fix).
+    const bool has_declared_simple_encoding =
+      (has_explicit_encoding and encoding != CMAP_RESOURCES) or diff_initialized;
+
+    if(subtype==TYPE_0 or
+       (is_symbolic and (cmap_initialized or not has_declared_simple_encoding)))
       {
         unknown_numbs[c] += 1;
 

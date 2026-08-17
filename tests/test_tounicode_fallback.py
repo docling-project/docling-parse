@@ -19,7 +19,11 @@ from docling_parse.pdf_parser import DecodeConfig, DoclingPdfParser
 
 
 def _build_pdf(
-    include_ligature: bool, symbolic: bool, with_tounicode: bool = True
+    include_ligature: bool,
+    symbolic: bool,
+    with_tounicode: bool = True,
+    with_encoding: bool = True,
+    basefont: str = "/Arial",
 ) -> bytes:
     bfchars = ["<21> <0634>", "<22> <0623>"]  # ش , أ
     if include_ligature:
@@ -48,14 +52,15 @@ def _build_pdf(
         "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
         "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
         "/Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
-        "<< /Type /Font /Subtype /TrueType /BaseFont /Arial "
+        f"<< /Type /Font /Subtype /TrueType /BaseFont {basefont} "
         "/FirstChar 33 /LastChar 35 /Widths [500 500 500] "
-        "/Encoding /WinAnsiEncoding /FontDescriptor 7 0 R "
+        + ("/Encoding /WinAnsiEncoding " if with_encoding else "")
+        + "/FontDescriptor 7 0 R "
         + ("/ToUnicode 6 0 R " if with_tounicode else "")
         + ">>",
         f"<< /Length {len(content)} >>\nstream\n{content}\nendstream",
         f"<< /Length {len(cmap)} >>\nstream\n{cmap}\nendstream",
-        f"<< /Type /FontDescriptor /FontName /Arial /Flags {flags} "
+        f"<< /Type /FontDescriptor /FontName {basefont} /Flags {flags} "
         "/FontBBox [0 -200 1000 900] /ItalicAngle 0 /Ascent 900 /Descent -200 "
         "/CapHeight 700 /StemV 80 >>",
     ]
@@ -83,11 +88,17 @@ def _extract_text(
     symbolic: bool,
     keep_glyphs: bool = True,
     with_tounicode: bool = True,
+    with_encoding: bool = True,
+    basefont: str = "/Arial",
 ) -> str:
     parser = DoclingPdfParser(loglevel="fatal")
     config = DecodeConfig(keep_glyphs=keep_glyphs)
     doc = parser.load(
-        path_or_stream=BytesIO(_build_pdf(include_ligature, symbolic, with_tounicode)),
+        path_or_stream=BytesIO(
+            _build_pdf(
+                include_ligature, symbolic, with_tounicode, with_encoding, basefont
+            )
+        ),
         decode_config=config,
     )
     _, page = next(doc.iterate_pages())
@@ -121,12 +132,34 @@ def test_nonsymbolic_font_keeps_encoding_fallback():
 def test_symbolic_font_without_usable_cmap_yields_glyph_marker():
     # docling-parse#299 follow-up: the guard must also fire when a symbolic
     # font has NO usable cmap (cmap_initialized == false) — a /ToUnicode that
-    # failed to parse, or none at all — not only when a cmap exists and misses
-    # the code. Otherwise every code falls through to the Standard/WinAnsi
-    # tables and fabricates ('!"#').
-    text = _extract_text(include_ligature=False, symbolic=True, with_tounicode=False)
+    # failed to parse, or none at all — AND declares no simple encoding
+    # either. With neither source of intent, falling through to the standard
+    # tables fabricates ('!"#'). A subset-style BaseFont name keeps the core-14
+    # alias table out of the picture (real-world shape: an Arabic subset font,
+    # not an /Arial alias).
+    text = _extract_text(
+        include_ligature=False,
+        symbolic=True,
+        with_tounicode=False,
+        with_encoding=False,
+        basefont="/QWERTY+SymTest",
+    )
     assert "#" not in text
     assert "GLYPH<33>" in text and "GLYPH<34>" in text and "GLYPH<35>" in text
+
+
+def test_symbolic_font_with_declared_encoding_keeps_encoding():
+    # Guard must NOT fire when the symbolic flag is set but the font
+    # explicitly declares /WinAnsiEncoding and no cmap parsed at all: many
+    # producers set the symbolic flag spuriously (e.g. font_01.pdf,
+    # deep-mediabox-inheritance.pdf, the DocLayNet dln_* regression docs), and
+    # the declared encoding is the producer's authoritative statement that
+    # unlisted codes follow it (PDF 32000-1 9.6.6).
+    text = _extract_text(
+        include_ligature=False, symbolic=True, with_tounicode=False, with_encoding=True
+    )
+    assert text.strip() == '!"#'
+    assert "GLYPH" not in text
 
 
 def test_nonsymbolic_font_without_tounicode_keeps_encoding():
