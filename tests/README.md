@@ -71,6 +71,13 @@ For each selected rendered page, the test can compare:
 - bitmap artifact metadata and exported bitmap image bytes from
   `_export_bitmap_artifacts()`.
 
+Each bitmap artifact reports a `source`: `xobject` (an image XObject painted by
+`Do`), `inline` (a `BI ... ID ... EI` image) or `type3_glyph` (one rasterised
+Type3 glyph). Type3 glyphs reach the renderer as image masks, and one is emitted
+per painted character, so their groundtruth is written to
+`tests/data/groundtruth/render/glyphs/` with its own numbering, leaving
+`tests/data/groundtruth/render/bitmaps/` for the images a PDF actually embeds.
+
 Full-page image comparison is intentionally tolerant rather than exact. The
 comparison requires identical dimensions, then checks mean absolute error and
 changed-pixel ratio after applying a per-pixel threshold. This avoids making CI

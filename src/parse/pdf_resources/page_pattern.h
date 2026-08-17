@@ -38,7 +38,15 @@ namespace pdflib
 
     // Tiling only: the pattern cell's own resources and content stream.
     QPDFObjectHandle get_resources() const { return resources_; }
-    bool has_resources() const { return resources_.isDictionary(); }
+    // QPDFObjectHandle's accessors are non-const in the qpdf releases we
+    // build against, so go through a copy (the handle is a shared reference,
+    // copying it costs nothing) -- the same way page_xobject_form does.
+    bool has_resources() const
+    {
+      QPDFObjectHandle resources = resources_;
+      return resources.isDictionary();
+    }
+
     std::vector<qpdf_stream_instruction> parse_stream() const;
 
     // Shading pattern only.
@@ -136,14 +144,15 @@ namespace pdflib
   std::vector<qpdf_stream_instruction> pdf_resource<PAGE_PATTERN>::parse_stream() const
   {
     std::vector<qpdf_stream_instruction> insts;
-    if(not qpdf_pattern_.isStream())
+
+    QPDFObjectHandle stream = qpdf_pattern_;
+    if(not stream.isStream())
       {
         return insts;
       }
 
     try
       {
-        QPDFObjectHandle stream = qpdf_pattern_;
         qpdf_stream_decoder decoder(insts);
         decoder.decode(stream);
       }

@@ -12,6 +12,10 @@ TEST_DATA_GROUNDTRUTH_DIR = TEST_DATA_DIR / "groundtruth"
 PARSER_GROUNDTRUTH_DIR = TEST_DATA_GROUNDTRUTH_DIR / "parser"
 RENDER_GROUNDTRUTH_DIR = TEST_DATA_GROUNDTRUTH_DIR / "render"
 RENDER_GROUNDTRUTH_BITMAPS_DIR = RENDER_GROUNDTRUTH_DIR / "bitmaps"
+# Rasterised Type3 glyphs come out of the same instruction stream as images,
+# but there is one per painted character: a single page of Type3 text yields
+# hundreds. They are kept apart so `bitmaps/` stays a directory of pictures.
+RENDER_GROUNDTRUTH_GLYPHS_DIR = RENDER_GROUNDTRUTH_DIR / "glyphs"
 RENDER_GROUNDTRUTH_INSTRUCTIONS_DIR = RENDER_GROUNDTRUTH_DIR / "instructions"
 RENDER_GROUNDTRUTH_PAGES_DIR = RENDER_GROUNDTRUTH_DIR / "pages"
 

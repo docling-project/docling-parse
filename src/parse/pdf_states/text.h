@@ -808,7 +808,8 @@ namespace pdflib
                   true,
                   grph_state.get_rgb_filling_ops(),
                   grph_state.get_fill_alpha(),
-                  x0, y0, x1, y1, x2, y2, x3, y3);
+                  x0, y0, x1, y1, x2, y2, x3, y3,
+                  BITMAP_SOURCE_TYPE3_GLYPH);
 
                 instructions.add_bitmap_instruction(std::move(b3));
               }

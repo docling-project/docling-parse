@@ -491,6 +491,7 @@ namespace pdflib
                        double r_x1, double r_y1,
                        double r_x2, double r_y2,
                        double r_x3, double r_y3,
+                       bitmap_source source = BITMAP_SOURCE_XOBJECT,
                        clip_state_instruction clip_state = clip_state_instruction()):
       xobject_key(xobject_key),
       data(std::move(data)),
@@ -505,9 +506,16 @@ namespace pdflib
       r_x1(r_x1), r_y1(r_y1),
       r_x2(r_x2), r_y2(r_y2),
       r_x3(r_x3), r_y3(r_y3),
+      source(source),
       clip_state(std::move(clip_state)) {}
 
     const std::string& get_key() const { return xobject_key; }
+
+    // Whether this bitmap is page artwork or a rasterised Type3 glyph. The
+    // key spells it out too (`type3:...`, `__inline_image_...`), but that is
+    // a naming convention; this is the fact itself.
+    bitmap_source get_source() const { return source; }
+    bool is_glyph() const { return source == BITMAP_SOURCE_TYPE3_GLYPH; }
 
     const std::shared_ptr<std::vector<uint8_t> >& get_data() const { return data; }
     const std::shared_ptr<std::vector<uint8_t> >& get_alpha_data() const { return alpha_data; }
@@ -567,6 +575,7 @@ namespace pdflib
     const double r_x3;
     const double r_y3;
 
+    const bitmap_source source;
     const clip_state_instruction clip_state;
   };
 

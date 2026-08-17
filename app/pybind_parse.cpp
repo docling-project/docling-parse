@@ -138,6 +138,7 @@ namespace
       pybind11::dict row;
       row["type"] = instruction_name(pdflib::BITMAP_RENDER_INSTRUCTION);
       row["xobject_key"] = instr.get_key();
+      row["source"] = pdflib::to_string(instr.get_source());
       row["shape"] = instr.get_shape();
       row["pixel_format"] = pixel_format_name(instr.get_pixel_format());
       row["image_mask"] = instr.is_image_mask();
@@ -239,6 +240,7 @@ namespace
       pybind11::dict row;
       row["index"] = bitmap_index;
       row["xobject_key"] = instr.get_key();
+      row["source"] = pdflib::to_string(instr.get_source());
       row["shape"] = instr.get_shape();
       row["pixel_format"] = pixel_format_name(instr.get_pixel_format());
       row["image_mask"] = instr.is_image_mask();

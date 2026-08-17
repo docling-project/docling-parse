@@ -56,7 +56,8 @@ namespace pdflib
     };
 
     void add_bitmap_instruction(const page_item<PAGE_IMAGE>& image,
-                                clip_state_instruction clip_state);
+                                clip_state_instruction clip_state,
+                                bitmap_source source);
 
     void populate_geometry(page_item<PAGE_IMAGE>& image,
                            const clip_state_instruction& clip_state) const;
@@ -268,7 +269,7 @@ namespace pdflib
 
     page_images.push_back(image);
 
-    add_bitmap_instruction(image, std::move(clip_state));
+    add_bitmap_instruction(image, std::move(clip_state), BITMAP_SOURCE_XOBJECT);
   }
 
   void pdf_state<BITMAP>::Do_inline_image(
@@ -320,7 +321,7 @@ namespace pdflib
     image.rgb_filling_ops    = grph_state.get_rgb_filling_ops();
 
     page_images.push_back(image);
-    add_bitmap_instruction(image, std::move(clip_state));
+    add_bitmap_instruction(image, std::move(clip_state), BITMAP_SOURCE_INLINE);
   }
 
   void pdf_state<BITMAP>::populate_geometry(
@@ -384,7 +385,8 @@ namespace pdflib
   }
 
   void pdf_state<BITMAP>::add_bitmap_instruction(const page_item<PAGE_IMAGE>& image,
-                                                 clip_state_instruction clip_state)
+                                                 clip_state_instruction clip_state,
+                                                 bitmap_source source)
   {
     std::shared_ptr<std::vector<uint8_t>> pixel_data;
     std::array<int, 3> pixel_shape = {0, 0, 0};
@@ -1343,6 +1345,7 @@ namespace pdflib
                               image.r_x1, image.r_y1,
                               image.r_x2, image.r_y2,
                               image.r_x3, image.r_y3,
+                              source,
                               std::move(clip_state));
     binstr.set_blend_mode(grph_state.get_blend_mode());
 
