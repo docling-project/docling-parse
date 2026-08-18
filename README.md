@@ -219,11 +219,12 @@ options:
 
 [`docs/performance_benchmarks.md`](./docs/performance_benchmarks.md) compares `docling-parse` against the other widely used PDF packages on parsing and rendering, with the methodology and the commands to reproduce it.
 
-The tooling behind it lives under [`perf/`](./perf/README.md):
+The tooling behind it lives under [`scripts/benchmarking/`](./scripts/benchmarking/README.md):
 
-- [`perf/run_scaling.py`](./perf/run_scaling.py): measure — thread-scaling sweeps and the cross-package comparison
-- [`perf/run_eval.py`](./perf/run_eval.py): plot — per-page distributions, thread scaling, and per-package correlations
-- [`perf/run_analysis.py`](./perf/run_analysis.py): drill down — replay the slowest pages with C++ stage timings
+- [`scripts/benchmarking/run_performance_benchmarking.py`](./scripts/benchmarking/run_performance_benchmarking.py): measure — thread-scaling sweeps and the cross-package comparison
+- [`scripts/benchmarking/run_performance_eval.py`](./scripts/benchmarking/run_performance_eval.py): plot — per-page distributions, thread scaling, and per-package correlations
+- [`scripts/benchmarking/run_performance_analysis.py`](./scripts/benchmarking/run_performance_analysis.py): drill down — replay the slowest pages with C++ stage timings
+- [`scripts/benchmarking/run_quality_benchmarking.py`](./scripts/benchmarking/run_quality_benchmarking.py): compare quality — textual output and rendered pixels across PDF engines
 
 For historical V1 vs V2 benchmarks, see [legacy_performance_benchmarks.md](./docs/legacy/legacy_performance_benchmarks.md).
 

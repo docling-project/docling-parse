@@ -29,6 +29,14 @@ namespace pdflib
     // instructions are skipped entirely.
     bool render_shapes = true;
 
+    // Paint shading instructions. Kept separate from render_shapes so crashes
+    // or fidelity issues in gradients can be isolated from vector paths.
+    bool render_shadings = true;
+
+    // Apply non-rectangular clip paths through raster masks. When false, only
+    // simple rectangular clips are applied; non-rectangular clips are ignored.
+    bool render_non_rect_clip_masks = true;
+
     // Minimum stroke width in device pixels. PDF hairlines (`0 w`) and
     // sub-pixel strokes are promoted to this width so they remain visible.
     float min_stroke_width = 1.0f;

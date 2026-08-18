@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Shared helpers for the perf scripts.
+"""Shared helpers for the benchmarking scripts.
 
 The important thing here is `PageRow`: one timed page, tagged with the backend,
 task and thread count that produced it.  It is the single interchange format
-between the three perf entry points --- `run_scaling.py` writes it,
-`run_eval.py` plots it, `run_analysis.py` drills into it --- so that adding a
-column benefits all three instead of forking another CSV dialect.
+between the three performance entry points ---
+`run_performance_benchmarking.py` writes it, `run_performance_eval.py` plots it,
+`run_performance_analysis.py` drills into it --- so that adding a column
+benefits all three instead of forking another CSV dialect.
 """
 
 from __future__ import annotations
@@ -183,7 +184,7 @@ def _row_from_canonical(record: Dict[str, str]) -> PageRow:
 
 
 def read_page_rows(path: Path) -> List[PageRow]:
-    """Read a per-page CSV written by `run_scaling.py --pages-csv`."""
+    """Read a per-page CSV written by `run_performance_benchmarking.py --pages-csv`."""
     rows: List[PageRow] = []
     with path.open("r", newline="", encoding="utf-8") as handle:
         reader = csv.DictReader(handle)

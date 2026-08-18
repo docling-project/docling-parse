@@ -404,7 +404,14 @@ int main(int argc, char* argv[])
                                         export_page_pdf_files,
                                         std::filesystem::path(page_pdf_dir),
                                         ifile)) { return 1; }
-              rnd.show();
+              if (result.count("output"))
+                {
+                  rnd.save(ofile);
+                }
+              else
+                {
+                  rnd.show();
+                }
             }
           else
             {

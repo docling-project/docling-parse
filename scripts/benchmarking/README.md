@@ -1,20 +1,21 @@
-# Performance tools
+# Benchmarking tools
 
-Three entry points, on a shared `_common.py`:
+Four entry points:
 
 | Script | Role | Reads | Writes |
 | --- | --- | --- | --- |
-| `run_scaling.py` | **Measure.** Thread-scaling sweeps and cross-package comparison | PDFs (local or a Hugging Face dataset) | terminal tables, per-page CSV, markdown |
-| `run_eval.py` | **Plot.** Histograms, scatters, hexbins, per-document stats | per-page CSV | PNGs + CSV in a directory named after the CSV |
-| `run_analysis.py` | **Drill down.** Slowest pages, C++ stage timings | per-page CSV | analysis CSV / detailed table |
+| `run_performance_benchmarking.py` | **Measure.** Thread-scaling sweeps and cross-package comparison | PDFs (local or a Hugging Face dataset) | terminal tables, per-page CSV, markdown |
+| `run_performance_eval.py` | **Plot.** Histograms, scatters, hexbins, per-document stats | per-page CSV | PNGs + CSV in a directory named after the CSV |
+| `run_performance_analysis.py` | **Drill down.** Slowest pages, C++ stage timings | per-page CSV | analysis CSV / detailed table |
+| `run_quality_benchmarking.py` | **Compare quality.** Text and render agreement across PDF engines | PDFs (local or a Hugging Face dataset) | quality CSVs, render visualizations, histograms |
 
-They are chained by one file format: the per-page CSV that `run_scaling.py
+They are chained by one file format: the per-page CSV that `run_performance_benchmarking.py
 --pages-csv` writes. Every row carries its own `backend`, `task` and `threads`,
 so one file can hold several packages at several thread counts, and the other
 two scripts split it into series themselves rather than guessing from the
 filename.
 
-`_common.py` owns `PageRow`, that CSV's schema, and the shared helpers
+`_common.py` owns `PageRow`, the performance CSV schema, and shared helpers
 (`find_pdfs`, `percentile`, ...). It is a library, not an entry point.
 
 ## Install
@@ -30,7 +31,7 @@ That installs pymupdf, pypdfium2, pdfplumber, pdfminer.six, pypdf and
 matplotlib. Backends that are missing are skipped with a message rather than
 failing the run.
 
-## `run_scaling.py`
+## `run_performance_benchmarking.py`
 
 ### Thread-scaling sweep (default)
 
@@ -38,9 +39,9 @@ Runs docling-parse at several thread counts and reports pages/sec plus speedup
 against single-threaded baselines.
 
 ```sh
-python perf/run_scaling.py ./dataset --mode parse
-python perf/run_scaling.py ./dataset --mode render --threads 1,2,4,8,12,16
-python perf/run_scaling.py --mode both --other "pypdfium2;pymupdf"
+python scripts/benchmarking/run_performance_benchmarking.py ./dataset --mode parse
+python scripts/benchmarking/run_performance_benchmarking.py ./dataset --mode render --threads 1,2,4,8,12,16
+python scripts/benchmarking/run_performance_benchmarking.py --mode both --other "pypdfium2;pymupdf"
 ```
 
 Inputs: a local PDF file, a local directory of PDFs, or a Hugging Face dataset
@@ -79,10 +80,10 @@ it always did.
 
 ```sh
 # docling-parse vs pypdfium2, the default pairing
-python perf/run_scaling.py --mode both --compare
+python scripts/benchmarking/run_performance_benchmarking.py --mode both --compare
 
 # every backend, writing the report into the docs
-python perf/run_scaling.py --threads 1,4,8,12 --compare all --mode render \
+python scripts/benchmarking/run_performance_benchmarking.py --threads 1,4,8,12 --compare all --mode render \
     --output-dir ./docs/performance_benchmarks/
 ```
 
@@ -174,13 +175,13 @@ create_word_cells_s,create_line_cells_s,render_page_s,error_message
 This is the only format the tools read. A CSV without a `backend` column is
 skipped, so scanning a directory of unrelated CSVs is harmless.
 
-## `run_eval.py`
+## `run_performance_eval.py`
 
 ```sh
-python perf/run_eval.py docs/performance_benchmarks/apple_m3_max_bo767_render.csv
-python perf/run_eval.py docs/performance_benchmarks   # scan a directory
-python perf/run_eval.py pages.csv --task parse --threads 1
-python perf/run_eval.py                               # defaults to perf/results
+python scripts/benchmarking/run_performance_eval.py docs/performance_benchmarks/apple_m3_max_bo767_render.csv
+python scripts/benchmarking/run_performance_eval.py docs/performance_benchmarks   # scan a directory
+python scripts/benchmarking/run_performance_eval.py pages.csv --task parse --threads 1
+python scripts/benchmarking/run_performance_eval.py                               # defaults to scripts/benchmarking/results
 ```
 
 Without `--viz-dir`, plots go to the input CSV path with `.csv` dropped —
@@ -214,15 +215,64 @@ would just be the diagonal.
 Flags: `--backend`, `--task`, `--threads` to filter, `--bins`, `--viz-dir`,
 `--top-documents`.
 
-## `run_analysis.py`
+## `run_quality_benchmarking.py`
+
+Compares output quality rather than speed. Render comparison reuses the same
+image metrics and three-panel visualizations as
+`tests/test_pypdfium_render.py`; text comparison reports per-page string
+similarity and edit counts after optional whitespace normalization.
+
+```sh
+python scripts/benchmarking/run_quality_benchmarking.py ./dataset
+python scripts/benchmarking/run_quality_benchmarking.py ./dataset --compare render
+python scripts/benchmarking/run_quality_benchmarking.py ./dataset \
+    --reference-renderer pypdfium2 --renderers docling-parse,pymupdf
+python scripts/benchmarking/run_quality_benchmarking.py ./dataset \
+    --reference-parser pypdfium2 --parsers docling-parse,pymupdf,pypdf
+```
+
+Inputs: a local PDF file, a local directory of PDFs, or a Hugging Face dataset
+repo id whose `pdf/` subdirectory contains PDFs. The default is
+`docling-project/regression-dataset-for-docling-parse`, using the pinned
+regression snapshot from `tests.constants` and its `regression/` subdirectory.
+
+Supported renderers: `docling-parse`, `pypdfium2`, `pymupdf`.
+
+Supported text parsers: `docling-parse`, `pypdfium2`, `pymupdf`,
+`pdfplumber`, `pdfminer.six`, `pypdf`.
+
+Outputs under `--output-dir` (default
+`./scratch-quality-benchmarks-YYYY-MM-DD-MM`, computed from the current
+datetime):
+
+- `render_quality.csv`: one row per page and renderer pair, with dimensions,
+  `normalized_delta`, `mean_abs_error`, changed-pixel ratio and tolerance flag
+- `text_quality.csv`: one row per page and parser pair, with similarity ratio,
+  character counts and insertion/deletion/replacement counts
+- `current_page.jsonl`: flushed breadcrumbs for the page being processed, useful
+  when native code aborts before Python can write normal CSV output
+- `visualizations/`: three-panel render comparisons and corpus histograms,
+  controlled by `--render-visualizations=all|above-tolerance|none`; default is
+  `all`
+
+Important flags:
+
+- `--compare`: `parse`, `render`, or `both` (default)
+- `--max-pages/-l`: exact total page cap across the input set
+- `--recursive`: search local input directories recursively
+- `--scale`: render scale (1.0 = 72 dpi)
+- `--text-normalization`: `whitespace` or `none`
+- `--progress-log`: override the JSONL breadcrumb path
+
+## `run_performance_analysis.py`
 
 Replays the slowest pages from a per-page CSV and extracts detailed decode
 timings:
 
 ```sh
-python perf/run_analysis.py perf/results/pages.csv --top 25
-python perf/run_analysis.py perf/results/pages.csv --nth 7
-python perf/run_analysis.py pages.csv --top 25 --task parse --threads 1
+python scripts/benchmarking/run_performance_analysis.py scripts/benchmarking/results/pages.csv --top 25
+python scripts/benchmarking/run_performance_analysis.py scripts/benchmarking/results/pages.csv --nth 7
+python scripts/benchmarking/run_performance_analysis.py pages.csv --top 25 --task parse --threads 1
 ```
 
 - `--top N`: per-page CSV of static timings for the N slowest pages, plus an

@@ -666,7 +666,10 @@ namespace pdflib
         {
           return false;
         }
+      if(d.format != BL_FORMAT_A8 or s.format != BL_FORMAT_A8) { return false; }
       if(d.size.w != s.size.w or d.size.h != s.size.h) { return false; }
+      if(d.size.w <= 0 or d.size.h <= 0) { return false; }
+      if(d.stride < d.size.w or s.stride < s.size.w) { return false; }
 
       for(int y = 0; y < d.size.h; y++)
         {
@@ -690,7 +693,14 @@ namespace pdflib
         {
           return false;
         }
+      if(d.format != BL_FORMAT_PRGB32 or s.format != BL_FORMAT_A8) { return false; }
       if(d.size.w != s.size.w or d.size.h != s.size.h) { return false; }
+      if(d.size.w <= 0 or d.size.h <= 0) { return false; }
+      if(d.stride < static_cast<intptr_t>(d.size.w) * 4 or
+         s.stride < s.size.w)
+        {
+          return false;
+        }
 
       for(int y = 0; y < d.size.h; y++)
         {
@@ -708,6 +718,108 @@ namespace pdflib
                 }
             }
         }
+      return true;
+    }
+
+    static bool fill_a8(BLImage& image, uint8_t value)
+    {
+      BLImageData d;
+      if(image.make_mutable(&d) != BL_SUCCESS) { return false; }
+      if(d.format != BL_FORMAT_A8) { return false; }
+      if(d.size.w <= 0 or d.size.h <= 0) { return false; }
+      if(d.stride < d.size.w) { return false; }
+
+      for(int y = 0; y < d.size.h; y++)
+        {
+          uint8_t* row = static_cast<uint8_t*>(d.pixel_data) + y * d.stride;
+          std::fill_n(row, d.size.w, value);
+        }
+      return true;
+    }
+
+    static bool copy_prgb32_alpha_to_a8(BLImage& dst, const BLImage& src)
+    {
+      BLImageData d, s;
+      if(dst.make_mutable(&d) != BL_SUCCESS or src.get_data(&s) != BL_SUCCESS)
+        {
+          return false;
+        }
+      if(d.format != BL_FORMAT_A8 or s.format != BL_FORMAT_PRGB32) { return false; }
+      if(d.size.w != s.size.w or d.size.h != s.size.h) { return false; }
+      if(d.size.w <= 0 or d.size.h <= 0) { return false; }
+      if(d.stride < d.size.w or
+         s.stride < static_cast<intptr_t>(s.size.w) * 4)
+        {
+          return false;
+        }
+
+      for(int y = 0; y < d.size.h; y++)
+        {
+          uint8_t* drow = static_cast<uint8_t*>(d.pixel_data) + y * d.stride;
+          const uint8_t* srow =
+            static_cast<const uint8_t*>(s.pixel_data) + y * s.stride;
+          for(int x = 0; x < d.size.w; x++)
+            {
+              drow[x] = srow[4 * x + 3];
+            }
+        }
+      return true;
+    }
+
+    static bool rasterize_path_to_a8(BLImage& dst,
+                                     const BLPath& path,
+                                     BLFillRule fill_rule)
+    {
+      BLImageData d;
+      if(dst.get_data(&d) != BL_SUCCESS) { return false; }
+      if(d.format != BL_FORMAT_A8) { return false; }
+      if(d.size.w <= 0 or d.size.h <= 0) { return false; }
+
+      BLImage plane;
+      if(plane.create(d.size.w, d.size.h, BL_FORMAT_PRGB32) != BL_SUCCESS)
+        {
+          return false;
+        }
+
+      {
+        BLContext pctx(plane);
+        pctx.set_comp_op(BL_COMP_OP_SRC_COPY);
+        pctx.fill_all(BLRgba32(0x00000000u));
+        pctx.set_comp_op(BL_COMP_OP_SRC_OVER);
+        pctx.set_fill_rule(fill_rule);
+        pctx.fill_path(path, BLRgba32(0xFFFFFFFFu));
+        pctx.end();
+      }
+
+      return copy_prgb32_alpha_to_a8(dst, plane);
+    }
+
+    bool clip_path_canvas_bbox(const clip_path_instruction& clip,
+                               BLRect& rect) const
+    {
+      const auto& xs = clip.get_x();
+      const auto& ys = clip.get_y();
+      const size_t n = clip.size();
+      if(n < 3) { return false; }
+
+      double x_min = std::numeric_limits<double>::infinity();
+      double y_min = std::numeric_limits<double>::infinity();
+      double x_max = -std::numeric_limits<double>::infinity();
+      double y_max = -std::numeric_limits<double>::infinity();
+
+      for(size_t i = 0; i < n; i++)
+        {
+          const double x = canvas_x(xs[i]);
+          const double y = canvas_y(ys[i]);
+          if(not std::isfinite(x) or not std::isfinite(y)) { return false; }
+          x_min = std::min(x_min, x);
+          y_min = std::min(y_min, y);
+          x_max = std::max(x_max, x);
+          y_max = std::max(y_max, y);
+        }
+
+      if(x_max <= x_min or y_max <= y_min) { return false; }
+      rect = BLRect(x_min, y_min, x_max - x_min, y_max - y_min);
       return true;
     }
 
@@ -758,10 +870,26 @@ namespace pdflib
                             const BLRectI& area) const
     {
       BLImage mask;
-      if(area.w <= 0 or area.h <= 0) { return mask; }
-      if(area.w > 8192 or area.h > 8192) { return mask; }
+      // LOG_S(INFO) << "build_clip_mask: begin"
+      //             << " area=(" << area.x << ", " << area.y
+      //             << ", " << area.w << ", " << area.h << ")"
+      //             << " paths=" << clip_state.get_paths().size()
+      //             << " rule=" << static_cast<int>(clip_state.get_rule());
+      if(area.w <= 0 or area.h <= 0)
+        {
+          // LOG_S(INFO) << "build_clip_mask: empty area";
+          return mask;
+        }
+      if(area.w > 8192 or area.h > 8192)
+        {
+          LOG_S(WARNING) << "build_clip_mask: area too large, skipping";
+          return mask;
+        }
 
-      if(mask.create(area.w, area.h, BL_FORMAT_A8) != BL_SUCCESS)
+      // LOG_S(INFO) << "build_clip_mask: creating A8 mask";
+      const BLResult mask_create = mask.create(area.w, area.h, BL_FORMAT_A8);
+      // LOG_S(INFO) << "build_clip_mask: mask.create result=" << mask_create;
+      if(mask_create != BL_SUCCESS)
         {
           return BLImage();
         }
@@ -770,9 +898,14 @@ namespace pdflib
         clip_state.get_rule() == CLIP_RULE_EVEN_ODD ? BL_FILL_RULE_EVEN_ODD
                                                     : BL_FILL_RULE_NON_ZERO;
 
-      BLContext mctx(mask);
-      mctx.set_comp_op(BL_COMP_OP_SRC_COPY);
-      mctx.fill_all(BLRgba32(0x00000000u));
+      // LOG_S(INFO) << "build_clip_mask: creating mask context";
+      // LOG_S(INFO) << "build_clip_mask: clearing mask";
+      if(not fill_a8(mask, 0))
+        {
+          LOG_S(WARNING) << "build_clip_mask: could not clear A8 mask";
+          return BLImage();
+        }
+      // LOG_S(INFO) << "build_clip_mask: mask cleared";
 
       // One W/W* capture = one clip path, whatever its subpath count; the
       // subpaths compose under the clip's fill rule (a stencil of outline
@@ -780,10 +913,15 @@ namespace pdflib
       // Intersecting the subpaths individually made any such stencil empty,
       // and everything filled through it vanished.
       std::vector<std::pair<int, BLPath> > group_paths;
+      [[maybe_unused]] size_t clip_index = 0;
       for(const auto& clip_path : clip_state.get_paths())
         {
           BLRect unused;
           const bool is_rect = get_axis_aligned_clip_rect(clip_path, unused);
+          // LOG_S(INFO) << "build_clip_mask: path " << clip_index
+          //             << " group=" << clip_path.get_clip_group()
+          //             << " points=" << clip_path.size()
+          //             << " is_rect=" << (is_rect ? "true" : "false");
 
           // rect paths that are alone in their group were already applied
           // through the context clip
@@ -797,10 +935,43 @@ namespace pdflib
                   break;
                 }
             }
-          if(is_rect and not grouped) { continue; }
+          if(is_rect and not grouped)
+            {
+              // LOG_S(INFO) << "build_clip_mask: path " << clip_index
+              //             << " skipped, rectangle already clipped by context";
+              clip_index++;
+              continue;
+            }
 
+          BLRect clip_bbox;
+          if(not clip_path_canvas_bbox(clip_path, clip_bbox))
+            {
+              LOG_S(WARNING) << "build_clip_mask: skipping invalid clip path";
+              clip_index++;
+              continue;
+            }
+          // LOG_S(INFO) << "build_clip_mask: path " << clip_index
+          //             << " bbox=(" << clip_bbox.x << ", " << clip_bbox.y
+          //             << ", " << clip_bbox.w << ", " << clip_bbox.h << ")";
+          if(not rects_intersect(clip_bbox, BLRect(area.x, area.y, area.w, area.h)))
+            {
+              // LOG_S(INFO) << "build_clip_mask: path " << clip_index
+              //             << " outside mask area";
+              clip_index++;
+              continue;
+            }
+
+          // LOG_S(INFO) << "build_clip_mask: path " << clip_index
+          //             << " make_clip_path begin";
           BLPath sub = make_clip_path(clip_path, this);
-          if(sub.is_empty()) { continue; }
+          // LOG_S(INFO) << "build_clip_mask: path " << clip_index
+          //             << " make_clip_path done empty="
+          //             << (sub.is_empty() ? "true" : "false");
+          if(sub.is_empty())
+            {
+              clip_index++;
+              continue;
+            }
 
           BLPath* dst = nullptr;
           for(auto& gp : group_paths)
@@ -813,46 +984,91 @@ namespace pdflib
               dst = &group_paths.back().second;
             }
           dst->add_path(sub);
+          // LOG_S(INFO) << "build_clip_mask: path " << clip_index
+          //             << " added to group";
+          clip_index++;
         }
 
       bool first = true;
       std::vector<BLImage> pending_planes;
+      [[maybe_unused]] size_t group_index = 0;
       for(auto& gp : group_paths)
         {
+          // LOG_S(INFO) << "build_clip_mask: raster group " << group_index
+          //             << " group_id=" << gp.first;
           BLPath shifted;
+          // LOG_S(INFO) << "build_clip_mask: group " << group_index
+          //             << " shifting path";
           shifted.add_path(gp.second, BLMatrix2D::make_translation(-area.x, -area.y));
+          // LOG_S(INFO) << "build_clip_mask: group " << group_index
+          //             << " shifted";
 
           if(first)
             {
-              mctx.set_comp_op(BL_COMP_OP_SRC_COPY);
-              mctx.set_fill_rule(clip_fill_rule);
-              mctx.fill_path(shifted, BLRgba32(0xFFFFFFFFu));
+              // LOG_S(INFO) << "build_clip_mask: group " << group_index
+              //             << " filling base mask";
+              if(not rasterize_path_to_a8(mask, shifted, clip_fill_rule))
+                {
+                  LOG_S(WARNING) << "build_clip_mask: could not rasterize base mask";
+                  group_index++;
+                  continue;
+                }
+              // LOG_S(INFO) << "build_clip_mask: group " << group_index
+              //             << " base mask filled";
               first = false;
+              group_index++;
               continue;
             }
 
           // Rasterise this capture on its own, then fold it in by multiplying.
           BLImage plane;
-          if(plane.create(area.w, area.h, BL_FORMAT_A8) != BL_SUCCESS) { continue; }
+          // LOG_S(INFO) << "build_clip_mask: group " << group_index
+          //             << " creating intersection plane";
+          const BLResult plane_create = plane.create(area.w, area.h, BL_FORMAT_A8);
+          // LOG_S(INFO) << "build_clip_mask: group " << group_index
+          //             << " plane.create result=" << plane_create;
+          if(plane_create != BL_SUCCESS)
+            {
+              group_index++;
+              continue;
+            }
           {
-            BLContext pctx(plane);
-            pctx.set_comp_op(BL_COMP_OP_SRC_COPY);
-            pctx.fill_all(BLRgba32(0x00000000u));
-            pctx.set_comp_op(BL_COMP_OP_SRC_OVER);
-            pctx.set_fill_rule(clip_fill_rule);
-            pctx.fill_path(shifted, BLRgba32(0xFFFFFFFFu));
-            pctx.end();
+            // LOG_S(INFO) << "build_clip_mask: group " << group_index
+            //             << " filling plane";
+            if(not rasterize_path_to_a8(plane, shifted, clip_fill_rule))
+              {
+                LOG_S(WARNING) << "build_clip_mask: could not rasterize plane";
+                group_index++;
+                continue;
+              }
+            // LOG_S(INFO) << "build_clip_mask: group " << group_index
+            //             << " plane filled";
           }
           pending_planes.push_back(std::move(plane));
+          group_index++;
         }
 
-      mctx.end();
-
-      for(const BLImage& plane : pending_planes) { multiply_a8(mask, plane); }
+      [[maybe_unused]] size_t plane_index = 0;
+      for(const BLImage& plane : pending_planes)
+        {
+          // LOG_S(INFO) << "build_clip_mask: multiplying plane " << plane_index;
+          if(not multiply_a8(mask, plane))
+            {
+              LOG_S(WARNING) << "build_clip_mask: could not multiply plane";
+            }
+          // LOG_S(INFO) << "build_clip_mask: plane " << plane_index
+          //             << " multiply result=" << (ok ? "true" : "false");
+          plane_index++;
+        }
 
       // No usable non-rectangular geometry: let the caller draw normally.
-      if(first) { return BLImage(); }
+      if(first)
+        {
+          // LOG_S(INFO) << "build_clip_mask: no usable geometry";
+          return BLImage();
+        }
 
+      // LOG_S(INFO) << "build_clip_mask: done";
       return mask;
     }
 
@@ -2525,8 +2741,15 @@ namespace pdflib
     BLImage clip_mask;
     if(has_clip and clip_state_has_non_rect(instr.get_clip_state()))
       {
-        mask_area = canvas_clamped_rect(axis_aligned_rect(q));
-        clip_mask = build_clip_mask(instr.get_clip_state(), mask_area);
+        if(config_.render_non_rect_clip_masks)
+          {
+            mask_area = canvas_clamped_rect(axis_aligned_rect(q));
+            clip_mask = build_clip_mask(instr.get_clip_state(), mask_area);
+          }
+        else
+          {
+            LOG_S(INFO) << "render_bitmap: non-rectangular clip mask disabled";
+          }
       }
 
     const bool alpha_active = fill_alpha < 1.0;
@@ -2782,8 +3005,22 @@ namespace pdflib
     BLRectI mask_area(0, 0, 0, 0);
     if (instr.has_clip_state() and clip_state_has_non_rect(instr.get_clip_state()))
       {
-        mask_area = canvas_clamped_rect(bbox);
-        clip_mask = build_clip_mask(instr.get_clip_state(), mask_area);
+        if(config_.render_non_rect_clip_masks)
+          {
+            mask_area = canvas_clamped_rect(bbox);
+            // LOG_S(INFO) << "render_shape: building clip mask"
+            //             << " bbox=(" << bbox.x << ", " << bbox.y
+            //             << ", " << bbox.w << ", " << bbox.h << ")"
+            //             << " mask_area=(" << mask_area.x << ", " << mask_area.y
+            //             << ", " << mask_area.w << ", " << mask_area.h << ")";
+            clip_mask = build_clip_mask(instr.get_clip_state(), mask_area);
+            // LOG_S(INFO) << "render_shape: build_clip_mask returned empty="
+            //             << (clip_mask.is_empty() ? "true" : "false");
+          }
+        else
+          {
+            // LOG_S(INFO) << "render_shape: non-rectangular clip mask disabled";
+          }
       }
 
     const shape_paint_mode mode = instr.get_paint_mode();
@@ -2804,13 +3041,20 @@ namespace pdflib
 
         if (not clip_mask.is_empty())
           {
+            // LOG_S(INFO) << "render_shape: clipped fill layer begin"
+            //             << " area=(" << mask_area.x << ", " << mask_area.y
+            //             << ", " << mask_area.w << ", " << mask_area.h << ")";
             // Paint the fill into an offscreen window, knock it back with the
             // clip coverage, then composite. Blend2D cannot clip to a path, so
             // this is what keeps a crescent from filling its bounding box.
             BLImage layer;
-            if (layer.create(mask_area.w, mask_area.h, BL_FORMAT_PRGB32) == BL_SUCCESS)
+            const BLResult layer_create =
+              layer.create(mask_area.w, mask_area.h, BL_FORMAT_PRGB32);
+            // LOG_S(INFO) << "render_shape: layer.create result=" << layer_create;
+            if (layer_create == BL_SUCCESS)
               {
                 {
+                  // LOG_S(INFO) << "render_shape: filling clipped layer";
                   BLContext lctx(layer);
                   lctx.set_comp_op(BL_COMP_OP_SRC_COPY);
                   lctx.fill_all(BLRgba32(0x00000000u));
@@ -2825,17 +3069,24 @@ namespace pdflib
                   lctx.fill_path(shifted,
                                  make_rgba32(instr.get_rgb_filling(), fill_alpha));
                   lctx.end();
+                  // LOG_S(INFO) << "render_shape: clipped layer filled";
                 }
 
+                // LOG_S(INFO) << "render_shape: applying clip mask to layer";
                 if (not multiply_prgb32_by_a8(layer, clip_mask))
                   {
                     LOG_S(WARNING) << "render_shape: could not apply clip mask";
                   }
+                // LOG_S(INFO) << "render_shape: clip mask applied";
 
+                // LOG_S(INFO) << "render_shape: blitting clipped layer";
                 ctx.blit_image(BLPointI(mask_area.x, mask_area.y), layer);
+                // LOG_S(INFO) << "render_shape: clipped layer blitted";
               }
             else
               {
+                LOG_S(WARNING) << "render_shape: layer allocation failed,"
+                               << " filling path without mask";
                 ctx.fill_path(path);
               }
           }
@@ -2899,7 +3150,7 @@ namespace pdflib
   inline void renderer<BLEND2D>::render_shading(shading_instruction& instr)
   {
     if (not has_canvas()) { return; }
-    if (not config_.render_shapes) { return; }
+    if (not config_.render_shadings) { return; }
 
     const std::vector<shading_stop>& stops = instr.get_stops();
     const std::vector<double>& coords = instr.get_coords();

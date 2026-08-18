@@ -1416,6 +1416,12 @@ class PageParseResult:
 def _copy_render_config(src: RenderConfig) -> RenderConfig:
     dst = RenderConfig()
     dst.render_text = src.render_text
+    if hasattr(src, "render_shapes"):
+        dst.render_shapes = src.render_shapes
+    if hasattr(src, "render_shadings"):
+        dst.render_shadings = src.render_shadings
+    if hasattr(src, "render_non_rect_clip_masks"):
+        dst.render_non_rect_clip_masks = src.render_non_rect_clip_masks
     dst.min_stroke_width = src.min_stroke_width
     dst.draw_text_bbox = src.draw_text_bbox
     dst.resolve_fonts = src.resolve_fonts
