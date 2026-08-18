@@ -87,6 +87,9 @@ namespace pdflib
     // box, clipped to the path being filled. `even_odd` is that path's fill
     // rule. Returns false when the pattern cannot be resolved or painted.
     bool do_pattern_fill(const std::string& pattern_name, bool even_odd);
+    bool do_coons_patch_pattern_fill(const std::string& pattern_name,
+                                     pdf_resource<PAGE_PATTERN>& pattern,
+                                     bool even_odd);
 
     // marked-content (BMC/BDC ... EMC) tracking, used to honor /ActualText
     // replacement text (PDF 32000-1, section 14.9.4)
@@ -643,6 +646,424 @@ namespace pdflib
     inline_image = inline_image_entry();
   }
 
+  namespace
+  {
+    struct coons_mesh_point
+    {
+      double x = 0.0;
+      double y = 0.0;
+    };
+
+    struct coons_mesh_patch
+    {
+      std::array<coons_mesh_point, 12> points;
+      std::array<std::array<int, 3>, 4> colors;
+    };
+
+    class coons_mesh_bit_reader
+    {
+    public:
+      coons_mesh_bit_reader(const unsigned char* data, std::size_t size):
+        data_(data), bit_size_(size * 8), bit_pos_(0) {}
+
+      bool read(std::size_t nbits, std::uint32_t& value)
+      {
+        if(nbits > 31 or bit_pos_ + nbits > bit_size_) { return false; }
+
+        value = 0;
+        for(std::size_t i = 0; i < nbits; i++)
+          {
+            const std::size_t byte_pos = (bit_pos_ + i) / 8;
+            const std::size_t bit_in_byte = 7 - ((bit_pos_ + i) % 8);
+            value = (value << 1) |
+                    ((data_[byte_pos] >> bit_in_byte) & 0x01u);
+          }
+        bit_pos_ += nbits;
+        return true;
+      }
+
+      std::size_t remaining_bits() const { return bit_size_ - bit_pos_; }
+
+    private:
+      const unsigned char* data_;
+      std::size_t bit_size_;
+      std::size_t bit_pos_;
+    };
+
+    double coons_decode_sample(std::uint32_t raw,
+                               std::size_t nbits,
+                               double d0,
+                               double d1)
+    {
+      const double max_raw =
+        static_cast<double>((std::uint64_t{1} << nbits) - 1u);
+      if(max_raw <= 0.0) { return d0; }
+      return d0 + (static_cast<double>(raw) / max_raw) * (d1 - d0);
+    }
+
+    coons_mesh_point coons_lerp(const coons_mesh_point& p0,
+                                const coons_mesh_point& p1,
+                                double t)
+    {
+      return {p0.x + t * (p1.x - p0.x),
+              p0.y + t * (p1.y - p0.y)};
+    }
+
+    coons_mesh_point coons_bezier(const coons_mesh_point& p0,
+                                  const coons_mesh_point& p1,
+                                  const coons_mesh_point& p2,
+                                  const coons_mesh_point& p3,
+                                  double t)
+    {
+      const coons_mesh_point a = coons_lerp(p0, p1, t);
+      const coons_mesh_point b = coons_lerp(p1, p2, t);
+      const coons_mesh_point c = coons_lerp(p2, p3, t);
+      const coons_mesh_point d = coons_lerp(a, b, t);
+      const coons_mesh_point e = coons_lerp(b, c, t);
+      return coons_lerp(d, e, t);
+    }
+
+    coons_mesh_point coons_eval(const coons_mesh_patch& patch,
+                                double u,
+                                double v)
+    {
+      const auto& p = patch.points;
+
+      const coons_mesh_point bottom = coons_bezier(p[0], p[1], p[2], p[3], u);
+      const coons_mesh_point right  = coons_bezier(p[3], p[4], p[5], p[6], v);
+      const coons_mesh_point top    = coons_bezier(p[9], p[8], p[7], p[6], u);
+      const coons_mesh_point left   = coons_bezier(p[0], p[11], p[10], p[9], v);
+
+      const double x_bilinear =
+        (1.0 - u) * (1.0 - v) * p[0].x +
+        u * (1.0 - v) * p[3].x +
+        u * v * p[6].x +
+        (1.0 - u) * v * p[9].x;
+      const double y_bilinear =
+        (1.0 - u) * (1.0 - v) * p[0].y +
+        u * (1.0 - v) * p[3].y +
+        u * v * p[6].y +
+        (1.0 - u) * v * p[9].y;
+
+      return {
+        (1.0 - v) * bottom.x + v * top.x +
+          (1.0 - u) * left.x + u * right.x - x_bilinear,
+        (1.0 - v) * bottom.y + v * top.y +
+          (1.0 - u) * left.y + u * right.y - y_bilinear
+      };
+    }
+
+    std::array<int, 3> coons_color(const coons_mesh_patch& patch,
+                                   double u,
+                                   double v)
+    {
+      std::array<int, 3> rgb = {0, 0, 0};
+      for(std::size_t c = 0; c < 3; c++)
+        {
+          const double val =
+            (1.0 - u) * (1.0 - v) * patch.colors[0][c] +
+            u * (1.0 - v) * patch.colors[1][c] +
+            u * v * patch.colors[2][c] +
+            (1.0 - u) * v * patch.colors[3][c];
+          rgb[c] = static_cast<int>(std::round(std::min(255.0,
+                                                        std::max(0.0, val))));
+        }
+      return rgb;
+    }
+
+    coons_mesh_point coons_transform(const std::array<double, 9>& matrix,
+                                     const coons_mesh_point& p)
+    {
+      return {matrix[0] * p.x + matrix[3] * p.y + matrix[6],
+              matrix[1] * p.x + matrix[4] * p.y + matrix[7]};
+    }
+
+    shape_instruction coons_triangle_instruction(
+      const coons_mesh_point& a,
+      const coons_mesh_point& b,
+      const coons_mesh_point& c,
+      const std::array<int, 3>& rgb,
+      const pdf_state<GRPH>& grph_state,
+      const clip_state_instruction& clip_state)
+    {
+      std::vector<shape_segment_op> ops = {SEGMENT_LINE_TO, SEGMENT_LINE_TO};
+      std::vector<double> px = {b.x, c.x};
+      std::vector<double> py = {b.y, c.y};
+      std::vector<shape_subpath> subpaths;
+      subpaths.emplace_back(a.x, a.y, std::move(ops), std::move(px),
+                            std::move(py), CLOSED, LINE);
+
+      shape_instruction instr(std::move(subpaths),
+                              SHAPE_PAINT_FILL,
+                              SHAPE_FILL_NONZERO,
+                              0.0,
+                              grph_state.get_line_cap(),
+                              grph_state.get_line_join(),
+                              grph_state.get_miter_limit(),
+                              std::vector<double>(),
+                              0.0,
+                              grph_state.get_rgb_stroking_ops(),
+                              rgb,
+                              grph_state.get_stroke_alpha(),
+                              grph_state.get_fill_alpha(),
+                              clip_state);
+      instr.set_blend_mode(grph_state.get_blend_mode());
+      return instr;
+    }
+  }
+
+  bool pdf_decoder<STREAM>::do_coons_patch_pattern_fill(
+    const std::string& pattern_name,
+    pdf_resource<PAGE_PATTERN>& pattern,
+    bool even_odd)
+  {
+    QPDFObjectHandle shading = pattern.get_shading();
+    if(not shading.isStream()) { return false; }
+
+    QPDFObjectHandle dict = shading.getDict();
+    if(not dict.isDictionary() or
+       not dict.hasKey("/ShadingType") or
+       not dict.getKey("/ShadingType").isInteger() or
+       dict.getKey("/ShadingType").getIntValue() != 6)
+      {
+        return false;
+      }
+
+    if(dict.hasKey("/Function"))
+      {
+        LOG_S(WARNING) << "pattern " << pattern_name
+                       << ": Type 6 shading with /Function is not supported";
+        return false;
+      }
+
+    if(not dict.hasKey("/ColorSpace"))
+      {
+        LOG_S(WARNING) << "pattern " << pattern_name
+                       << ": Type 6 shading has no /ColorSpace";
+        return false;
+      }
+
+    pdf_resource<PAGE_COLORSPACE> colorspace;
+    colorspace.set(pattern_name + "/ColorSpace", dict.getKey("/ColorSpace"));
+    const int ncomps = colorspace.get_num_components();
+    if(ncomps <= 0)
+      {
+        LOG_S(WARNING) << "pattern " << pattern_name
+                       << ": Type 6 shading has unsupported /ColorSpace";
+        return false;
+      }
+
+    if(not dict.hasKey("/BitsPerCoordinate") or
+       not dict.hasKey("/BitsPerComponent") or
+       not dict.hasKey("/BitsPerFlag") or
+       not dict.hasKey("/Decode") or
+       not dict.getKey("/BitsPerCoordinate").isInteger() or
+       not dict.getKey("/BitsPerComponent").isInteger() or
+       not dict.getKey("/BitsPerFlag").isInteger())
+      {
+        LOG_S(WARNING) << "pattern " << pattern_name
+                       << ": Type 6 shading is missing required sampling keys";
+        return false;
+      }
+
+    const std::size_t bits_per_coord =
+      static_cast<std::size_t>(dict.getKey("/BitsPerCoordinate").getIntValue());
+    const std::size_t bits_per_component =
+      static_cast<std::size_t>(dict.getKey("/BitsPerComponent").getIntValue());
+    const std::size_t bits_per_flag =
+      static_cast<std::size_t>(dict.getKey("/BitsPerFlag").getIntValue());
+
+    if(bits_per_coord == 0 or bits_per_coord > 31 or
+       bits_per_component == 0 or bits_per_component > 31 or
+       bits_per_flag == 0 or bits_per_flag > 31)
+      {
+        LOG_S(WARNING) << "pattern " << pattern_name
+                       << ": Type 6 shading has unsupported sample bit widths";
+        return false;
+      }
+
+    QPDFObjectHandle decode_obj = dict.getKey("/Decode");
+    if(not decode_obj.isArray() or
+       decode_obj.getArrayNItems() < 4 + 2 * ncomps)
+      {
+        LOG_S(WARNING) << "pattern " << pattern_name
+                       << ": Type 6 shading has invalid /Decode";
+        return false;
+      }
+
+    std::vector<double> decode;
+    for(int i = 0; i < decode_obj.getArrayNItems(); i++)
+      {
+        decode.push_back(decode_obj.getArrayItem(i).getNumericValue());
+      }
+
+    std::shared_ptr<Buffer> buffer;
+    try
+      {
+        buffer = to_shared_ptr(shading.getStreamData(qpdf_dl_all));
+      }
+    catch(const std::exception& e)
+      {
+        LOG_S(WARNING) << "pattern " << pattern_name
+                       << ": failed to decode Type 6 stream: " << e.what();
+        return false;
+      }
+
+    if(buffer == nullptr or buffer->getSize() == 0)
+      {
+        LOG_S(WARNING) << "pattern " << pattern_name
+                       << ": Type 6 stream is empty";
+        return false;
+      }
+
+    coons_mesh_bit_reader reader(buffer->getBuffer(), buffer->getSize());
+    std::vector<coons_mesh_patch> patches;
+
+    const std::size_t bits_per_patch =
+      bits_per_flag + 24 * bits_per_coord +
+      static_cast<std::size_t>(4 * ncomps) * bits_per_component;
+
+    while(reader.remaining_bits() >= bits_per_patch)
+      {
+        std::uint32_t flag = 0;
+        if(not reader.read(bits_per_flag, flag)) { break; }
+
+        if(flag != 0)
+          {
+            LOG_S(WARNING) << "pattern " << pattern_name
+                           << ": Type 6 continuation patch flag " << flag
+                           << " is not supported yet";
+            return false;
+          }
+
+        coons_mesh_patch patch;
+        bool patch_ok = true;
+        for(std::size_t i = 0; i < patch.points.size(); i++)
+          {
+            std::uint32_t raw_x = 0;
+            std::uint32_t raw_y = 0;
+            if(not reader.read(bits_per_coord, raw_x) or
+               not reader.read(bits_per_coord, raw_y))
+              {
+                patch_ok = false;
+                break;
+              }
+
+            patch.points[i].x =
+              coons_decode_sample(raw_x, bits_per_coord, decode[0], decode[1]);
+            patch.points[i].y =
+              coons_decode_sample(raw_y, bits_per_coord, decode[2], decode[3]);
+          }
+        if(not patch_ok)
+          {
+            break;
+          }
+
+        for(std::size_t corner = 0; corner < patch.colors.size(); corner++)
+          {
+            std::vector<double> comps;
+            comps.reserve(static_cast<std::size_t>(ncomps));
+            for(int c = 0; c < ncomps; c++)
+              {
+                std::uint32_t raw = 0;
+                if(not reader.read(bits_per_component, raw))
+                  {
+                    patch_ok = false;
+                    break;
+                  }
+                const std::size_t d = static_cast<std::size_t>(4 + 2 * c);
+                comps.push_back(coons_decode_sample(raw,
+                                                    bits_per_component,
+                                                    decode[d],
+                                                    decode[d + 1]));
+              }
+            if(comps.size() != static_cast<std::size_t>(ncomps))
+              {
+                patch_ok = false;
+                break;
+              }
+            if(not colorspace.map_to_rgb(comps, patch.colors[corner]))
+              {
+                LOG_S(WARNING) << "pattern " << pattern_name
+                               << ": Type 6 corner color could not be mapped";
+                return false;
+              }
+          }
+        if(not patch_ok)
+          {
+            break;
+          }
+
+        patches.push_back(std::move(patch));
+      }
+
+    if(patches.empty())
+      {
+        LOG_S(WARNING) << "pattern " << pattern_name
+                       << ": no supported Type 6 patches decoded";
+        return false;
+      }
+
+    this->q();
+    {
+      std::vector<qpdf_stream_instruction> no_parameters;
+      if(even_odd) { current_shape_state().WStar(no_parameters); }
+      else         { current_shape_state().W(no_parameters);     }
+      current_shape_state().n(no_parameters);
+    }
+
+    const clip_state_instruction clip_state =
+      current_shape_state().get_clip_state();
+    const std::array<double, 9>& matrix = pattern.get_matrix();
+    const auto& grph_state = current_graphic_state();
+    constexpr int mesh_steps = 48;
+    std::size_t triangle_count = 0;
+
+    for(const auto& patch : patches)
+      {
+        for(int iy = 0; iy < mesh_steps; iy++)
+          {
+            const double v0 = static_cast<double>(iy) / mesh_steps;
+            const double v1 = static_cast<double>(iy + 1) / mesh_steps;
+            for(int ix = 0; ix < mesh_steps; ix++)
+              {
+                const double u0 = static_cast<double>(ix) / mesh_steps;
+                const double u1 = static_cast<double>(ix + 1) / mesh_steps;
+                const coons_mesh_point p00 =
+                  coons_transform(matrix, coons_eval(patch, u0, v0));
+                const coons_mesh_point p10 =
+                  coons_transform(matrix, coons_eval(patch, u1, v0));
+                const coons_mesh_point p11 =
+                  coons_transform(matrix, coons_eval(patch, u1, v1));
+                const coons_mesh_point p01 =
+                  coons_transform(matrix, coons_eval(patch, u0, v1));
+
+                const std::array<int, 3> rgb_a =
+                  coons_color(patch, (u0 + u1 + u1) / 3.0,
+                              (v0 + v0 + v1) / 3.0);
+                const std::array<int, 3> rgb_b =
+                  coons_color(patch, (u0 + u1 + u0) / 3.0,
+                              (v0 + v1 + v1) / 3.0);
+
+                instructions.add_shape_instruction(
+                  coons_triangle_instruction(p00, p10, p11, rgb_a,
+                                             grph_state, clip_state));
+                instructions.add_shape_instruction(
+                  coons_triangle_instruction(p00, p11, p01, rgb_b,
+                                             grph_state, clip_state));
+                triangle_count += 2;
+              }
+          }
+      }
+
+    this->Q();
+
+    LOG_S(INFO) << "pattern " << pattern_name
+                << ": rendered Type 6 Coons mesh as " << triangle_count
+                << " filled triangles";
+    return true;
+  }
+
   // 8.7.4.5: `sh` paints the named shading over the whole current clip
   // region, taking its colours from the shading's own colour space and
   // function rather than from the current fill colour.
@@ -655,9 +1076,66 @@ namespace pdflib
       }
 
     pdf_resource<PAGE_PATTERN>& pattern = (*page_patterns)[pattern_name];
-    if(not pattern.is_valid() or pattern.get_pattern_type() != 1)
+    if(not pattern.is_valid())
       {
-        // Shading patterns (type 2) are not painted here yet.
+        return false;
+      }
+
+    if(pattern.get_pattern_type() == 2)
+      {
+        if(not config.keep_shapes)
+          {
+            return false;
+          }
+
+        if(do_coons_patch_pattern_fill(pattern_name, pattern, even_odd))
+          {
+            return true;
+          }
+
+        pdf_resource<PAGE_SHADING> shading;
+        shading.set(pattern_name, pattern.get_shading());
+        if(not shading.is_paintable())
+          {
+            LOG_S(WARNING) << "pattern " << pattern_name
+                           << ": shading is not paintable: "
+                           << shading.get_reason();
+            return false;
+          }
+
+        this->q();
+        {
+          std::vector<qpdf_stream_instruction> no_parameters;
+          if(even_odd) { current_shape_state().WStar(no_parameters); }
+          else         { current_shape_state().W(no_parameters);     }
+          current_shape_state().n(no_parameters);
+        }
+
+        const std::array<double, 9>& m = pattern.get_matrix();
+        std::array<double, 6> matrix = {m[0], m[1], m[3], m[4], m[6], m[7]};
+        clip_state_instruction clip_state = current_shape_state().get_clip_state();
+
+        shading_instruction shinstr(
+          pattern_name,
+          shading.get_shading_type() == SHADING_AXIAL
+            ? SHADING_GEOMETRY_AXIAL
+            : SHADING_GEOMETRY_RADIAL,
+          shading.get_coords(),
+          matrix,
+          shading.get_stops(),
+          shading.get_extend_start(),
+          shading.get_extend_end(),
+          current_graphic_state().get_fill_alpha(),
+          std::move(clip_state));
+        shinstr.set_blend_mode(current_graphic_state().get_blend_mode());
+        instructions.add_shading_instruction(std::move(shinstr));
+
+        this->Q();
+        return true;
+      }
+
+    if(pattern.get_pattern_type() != 1)
+      {
         return false;
       }
 
