@@ -1,3 +1,14 @@
+## [v7.14.0](https://github.com/docling-project/docling-parse/releases/tag/v7.14.0) - 2026-08-18
+
+### Feature
+
+* **render:** Clip paths, masks, CMYK/Indexed images, font fallback, Symbol brackets ([#321](https://github.com/docling-project/docling-parse/issues/321)) ([`366c913`](https://github.com/docling-project/docling-parse/commit/366c9138019ad1ed2f844ace75fc15839af2c1a0))
+
+### Fix
+
+* Emit glyph marker instead of fabricated encoding text for symbolic-font cmap misses ([#299](https://github.com/docling-project/docling-parse/issues/299)) ([`13e2ee3`](https://github.com/docling-project/docling-parse/commit/13e2ee331eab71bd39d171a5680e88b8a1680e25))
+* Emit glyph marker for glyph-index names instead of leaking them as text ([#302](https://github.com/docling-project/docling-parse/issues/302)) ([`54ad7cc`](https://github.com/docling-project/docling-parse/commit/54ad7ccac66198ed9ecc5d8be866852f440931f6))
+
 ## [v7.13.0](https://github.com/docling-project/docling-parse/releases/tag/v7.13.0) - 2026-08-14
 
 ### Feature
