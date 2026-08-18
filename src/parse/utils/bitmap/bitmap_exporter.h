@@ -70,10 +70,20 @@ namespace bitmap_export
     std::string safe_pdf_stem = sanitize_path_component(
       std::filesystem::path(pdf_path).stem().string());
     std::string safe_key = sanitize_path_component(instr.get_key());
+
+    // A rasterised Type3 glyph is a character, not page artwork, and there is
+    // one per painted character: left in the same directory they bury the
+    // handful of real images. They go to their own `glyphs/` subdirectory.
+    if(instr.is_glyph())
+      {
+        out_dir = out_dir / "glyphs";
+        std::filesystem::create_directories(out_dir);
+      }
+
     std::string stem =
       safe_pdf_stem + "_p" + std::to_string(page_number + 1) +
       "_xobj_" + safe_key +
-      "_bitmap_" + std::to_string(bitmap_index);
+      (instr.is_glyph() ? "_glyph_" : "_bitmap_") + std::to_string(bitmap_index);
 
     if(instr.get_pixel_format() == PIXEL_FORMAT_GRAY)
       {

@@ -122,6 +122,89 @@ def test_pattern_matrix_is_relative_to_the_page():
     ), "a CTM in force when the pattern is used moved the lattice"
 
 
+def _solid_pattern_object() -> bytes:
+    """A cell that paints its whole step, so any leak outside the fill shows."""
+    return stream_object(
+        "/Type /Pattern /PatternType 1 /PaintType 1 /TilingType 1 "
+        f"/BBox [0 0 {CELL} {CELL}] /XStep {CELL} /YStep {CELL} "
+        "/Resources << >> /Matrix [1 0 0 1 0 0]",
+        f"1 0 0 rg\n0 0 {CELL} {CELL} re f\n".encode("latin-1"),
+    )
+
+
+def test_pattern_is_bounded_by_the_filled_path():
+    """The lattice paints only inside the path being filled (8.7.3.1).
+
+    The cells are laid out to cover the page box, so without the filled path
+    bounding them the pattern tiles the entire page: a document whose pattern
+    fill was one small shape came out with a block of cells in the corner that
+    no other renderer draws.
+    """
+    content = "/Pattern cs /P0 scn\n80 80 40 40 re f\n"
+    pdf = simple_page_pdf(
+        content,
+        resources="/Pattern << /P0 5 0 R >>",
+        extra_objects=[_solid_pattern_object()],
+    )
+    page = render_page(pdf)
+
+    inside = coverage_ratio(region_image(page, (85.0, 85.0, 115.0, 115.0)))
+    assert inside > 0.9, (
+        f"the pattern did not paint inside the filled path ({inside:.3f} coverage)"
+    )
+
+    for name, box in (
+        ("top-left", (0.0, 0.0, 60.0, 60.0)),
+        ("top-right", (140.0, 0.0, 200.0, 60.0)),
+        ("bottom-left", (0.0, 140.0, 60.0, 200.0)),
+        ("bottom-right", (140.0, 140.0, 200.0, 200.0)),
+    ):
+        outside = coverage_ratio(region_image(page, box))
+        assert outside < 0.02, (
+            f"the pattern painted outside the filled path: the {name} corner "
+            f"has {outside:.3f} coverage and the fill never reached it"
+        )
+
+
+def test_pattern_bound_honours_the_even_odd_rule():
+    """`f*` bounds the pattern by the even-odd rule, so a hole stays a hole.
+
+    Two nested rectangles wound the same way: under even-odd the inner one is a
+    hole, under nonzero it is filled. Bounding the pattern with the wrong rule
+    fills the hole with cells.
+    """
+    rects = "40 40 120 120 re\n70 70 60 60 re\n"
+    hole = (90.0, 90.0, 110.0, 110.0)
+    ring = (50.0, 50.0, 65.0, 65.0)
+
+    even_odd = render_page(
+        simple_page_pdf(
+            f"/Pattern cs /P0 scn\n{rects}f*\n",
+            resources="/Pattern << /P0 5 0 R >>",
+            extra_objects=[_solid_pattern_object()],
+        )
+    )
+    nonzero = render_page(
+        simple_page_pdf(
+            f"/Pattern cs /P0 scn\n{rects}f\n",
+            resources="/Pattern << /P0 5 0 R >>",
+            extra_objects=[_solid_pattern_object()],
+        )
+    )
+
+    assert coverage_ratio(region_image(even_odd, ring)) > 0.9, (
+        "the pattern did not paint the ring between the two rectangles"
+    )
+    assert coverage_ratio(region_image(even_odd, hole)) < 0.02, (
+        "f* left the inner rectangle filled; the pattern was bounded by the "
+        "nonzero rule instead of even-odd"
+    )
+    assert coverage_ratio(region_image(nonzero, hole)) > 0.9, (
+        "f left the inner rectangle empty; the same-wound subpath is not a hole "
+        "under the nonzero rule"
+    )
+
+
 def test_unresolved_pattern_paints_nothing():
     """A fill naming a pattern that cannot be resolved is skipped, not blackened.
 

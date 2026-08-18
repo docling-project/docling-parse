@@ -84,8 +84,9 @@ namespace pdflib
     void do_shading(const std::string& sh_name);
 
     // `scn` naming a tiling pattern: replay the pattern cell across the page
-    // box. Returns false when the pattern cannot be resolved or painted.
-    bool do_pattern_fill(const std::string& pattern_name);
+    // box, clipped to the path being filled. `even_odd` is that path's fill
+    // rule. Returns false when the pattern cannot be resolved or painted.
+    bool do_pattern_fill(const std::string& pattern_name, bool even_odd);
 
     // marked-content (BMC/BDC ... EMC) tracking, used to honor /ActualText
     // replacement text (PDF 32000-1, section 14.9.4)
@@ -645,7 +646,8 @@ namespace pdflib
   // 8.7.4.5: `sh` paints the named shading over the whole current clip
   // region, taking its colours from the shading's own colour space and
   // function rather than from the current fill colour.
-  bool pdf_decoder<STREAM>::do_pattern_fill(const std::string& pattern_name)
+  bool pdf_decoder<STREAM>::do_pattern_fill(const std::string& pattern_name,
+                                            bool even_odd)
   {
     if(not page_patterns or page_patterns->count(pattern_name) == 0)
       {
@@ -780,6 +782,23 @@ namespace pdflib
         if(res.hasKey("/XObject"))   { QPDFObjectHandle o = res.getKey("/XObject");   page_xobjects_->set(o, timings); }
       }
 
+    // The path being filled bounds the pattern (PDF 32000-1, 8.7.3.1): the
+    // cells paint only inside it. Without this the lattice covered the whole
+    // page box, so a page whose pattern fill was one small shape came out with
+    // a block of cells in the corner that no other renderer draws.
+    //
+    // The capture has to happen before the cell placement matrix goes on:
+    // clips are transformed by the matrix current when they are captured, and
+    // after the `cm` below that is pattern space, not the space the path was
+    // built in.
+    this->q();
+    {
+      std::vector<qpdf_stream_instruction> no_parameters;
+      if(even_odd) { current_shape_state().WStar(no_parameters); }
+      else         { current_shape_state().W(no_parameters);     }
+      current_shape_state().n(no_parameters);
+    }
+
     bool painted = false;
 
     for(int iy = iy0; iy <= iy1; iy++)
@@ -830,6 +849,8 @@ namespace pdflib
             painted = true;
           }
       }
+
+    this->Q();
 
     return painted;
   }
@@ -1747,7 +1768,7 @@ namespace pdflib
           if(current_graphic_state().get_fill_is_unresolved_pattern() and
              not current_graphic_state().get_fill_pattern_name().empty())
             {
-              do_pattern_fill(current_graphic_state().get_fill_pattern_name());
+              do_pattern_fill(current_graphic_state().get_fill_pattern_name(), false);
             }
           current_shape_state().f(parameters);
         }
@@ -1766,7 +1787,7 @@ namespace pdflib
           if(current_graphic_state().get_fill_is_unresolved_pattern() and
              not current_graphic_state().get_fill_pattern_name().empty())
             {
-              do_pattern_fill(current_graphic_state().get_fill_pattern_name());
+              do_pattern_fill(current_graphic_state().get_fill_pattern_name(), true);
             }
           current_shape_state().fStar(parameters);
         }

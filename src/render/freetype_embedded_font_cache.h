@@ -69,7 +69,8 @@ namespace pdflib
                          int64_t char_code,
                          const std::string& glyph_name,
                          double size,
-                         BLPath& path);
+                         BLPath& path,
+                         double* out_advance = nullptr);
 
   private:
 
@@ -156,7 +157,8 @@ namespace pdflib
       int64_t char_code,
       const std::string& glyph_name,
       double size,
-      BLPath& path)
+      BLPath& path,
+      double* out_advance)
   {
     if(library_ == nullptr or blob == nullptr or not blob->has_bytes() or size <= 0.0)
       {
@@ -183,6 +185,18 @@ namespace pdflib
 
     path.clear();
 
+    // A run that resolves to nothing but .notdef has not been resolved. Many
+    // subset fonts draw .notdef as a hollow box, so emitting those outlines
+    // stamps boxes across the page exactly where a glyph could not be mapped
+    // -- down the middle of a matrix, through the gaps of a table -- while
+    // every other renderer leaves the spot empty.
+    bool any_real_glyph = false;
+    for(FT_UInt glyph_index : glyph_indices)
+      {
+        if(glyph_index != 0) { any_real_glyph = true; break; }
+      }
+    if(not any_real_glyph) { return false; }
+
     double pen_x = 0.0;
     for(FT_UInt glyph_index : glyph_indices)
       {
@@ -192,6 +206,14 @@ namespace pdflib
             return false;
           }
 
+        // Keep the advance of a .notdef so the rest of the run stays in place,
+        // but do not draw its box.
+        if(glyph_index == 0)
+          {
+            pen_x += glyph->advance;
+            continue;
+          }
+
         // Font units (y-up) -> Blend2D text space (y-down, pixels).
         const BLMatrix2D m(scale, 0.0,
                            0.0, -scale,
@@ -199,6 +221,13 @@ namespace pdflib
         path.add_path(glyph->path, m);
 
         pen_x += glyph->advance;
+      }
+
+    if(out_advance != nullptr)
+      {
+        const double units_per_em2 =
+          (entry.face->units_per_EM > 0) ? entry.face->units_per_EM : 1000.0;
+        *out_advance = pen_x * (size / units_per_em2);
       }
 
     return true;

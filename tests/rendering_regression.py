@@ -8,6 +8,7 @@ from PIL import Image, ImageChops, ImageDraw, ImageFont, ImageStat
 
 from tests.data_utils import (
     RENDER_GROUNDTRUTH_BITMAPS_DIR,
+    RENDER_GROUNDTRUTH_GLYPHS_DIR,
     RENDER_GROUNDTRUTH_INSTRUCTIONS_DIR,
     RENDER_GROUNDTRUTH_PAGES_DIR,
 )
@@ -59,8 +60,30 @@ def renderer_instructions_path(doc_name: str, page_no: int) -> Path:
     )
 
 
-def renderer_bitmap_path(filename: str) -> Path:
-    return RENDER_GROUNDTRUTH_BITMAPS_DIR / filename
+def bitmap_artifact_targets(prefix: str, result) -> list[tuple[dict[str, Any], Path]]:
+    """Pair every bitmap artifact with the path stem it is stored under.
+
+    A rasterised Type3 glyph is a character rather than page artwork, and one
+    is emitted per painted character, so a single page of Type3 text buries
+    the handful of real images under hundreds of glyph masks. The decoder
+    labels each bitmap with its `source`; glyphs go to their own directory and
+    carry their own numbering, so adding an image to a page does not renumber
+    every glyph on it.
+    """
+    targets: list[tuple[dict[str, Any], Path]] = []
+    counters = {"bitmap": 0, "glyph": 0}
+
+    for artifact in result._export_bitmap_artifacts():
+        kind = "glyph" if artifact.get("source") == "type3_glyph" else "bitmap"
+        counters[kind] += 1
+        directory = (
+            RENDER_GROUNDTRUTH_GLYPHS_DIR
+            if kind == "glyph"
+            else RENDER_GROUNDTRUTH_BITMAPS_DIR
+        )
+        targets.append((artifact, directory / f"{prefix}.{kind}_{counters[kind]}"))
+
+    return targets
 
 
 def _write_json(path: Path, data: Any) -> None:
@@ -97,6 +120,7 @@ def write_renderer_groundtruth(doc_name: str, page_no: int, result) -> None:
     RENDER_GROUNDTRUTH_PAGES_DIR.mkdir(parents=True, exist_ok=True)
     RENDER_GROUNDTRUTH_INSTRUCTIONS_DIR.mkdir(parents=True, exist_ok=True)
     RENDER_GROUNDTRUTH_BITMAPS_DIR.mkdir(parents=True, exist_ok=True)
+    RENDER_GROUNDTRUTH_GLYPHS_DIR.mkdir(parents=True, exist_ok=True)
 
     prefix = renderer_artifact_prefix(doc_name, page_no)
     result.get_image().save(renderer_image_path(doc_name, page_no))
@@ -105,15 +129,12 @@ def write_renderer_groundtruth(doc_name: str, page_no: int, result) -> None:
         normalized_render_instructions(result),
     )
 
-    for artifact in result._export_bitmap_artifacts():
-        index = artifact["index"]
-        extension = artifact["extension"]
-        exported_filename = f"{prefix}.bitmap_{index}{extension}"
-        image_path = renderer_bitmap_path(exported_filename)
+    for artifact, stem in bitmap_artifact_targets(prefix, result):
+        image_path = stem.with_name(stem.name + artifact["extension"])
         image_path.write_bytes(bytes(artifact.get("encoded_data", b"")))
         _write_json(
-            renderer_bitmap_path(f"{prefix}.bitmap_{index}.json"),
-            _bitmap_metadata(artifact, exported_filename),
+            stem.with_name(stem.name + ".json"),
+            _bitmap_metadata(artifact, image_path.name),
         )
 
 
@@ -130,14 +151,11 @@ def renderer_groundtruth_exists(doc_name: str, page_no: int, result) -> bool:
         return False
 
     prefix = renderer_artifact_prefix(doc_name, page_no)
-    for artifact in result._export_bitmap_artifacts():
-        index = artifact["index"]
-        extension = artifact["extension"]
-
-        if not renderer_bitmap_path(f"{prefix}.bitmap_{index}{extension}").exists():
+    for artifact, stem in bitmap_artifact_targets(prefix, result):
+        if not stem.with_name(stem.name + artifact["extension"]).exists():
             return False
 
-        if not renderer_bitmap_path(f"{prefix}.bitmap_{index}.json").exists():
+        if not stem.with_name(stem.name + ".json").exists():
             return False
 
     return True
@@ -434,14 +452,10 @@ def compare_images(
 
 def compare_bitmap_artifacts(doc_name: str, page_no: int, result) -> None:
     prefix = renderer_artifact_prefix(doc_name, page_no)
-    artifacts = result._export_bitmap_artifacts()
 
-    for artifact in artifacts:
-        index = artifact["index"]
-        extension = artifact["extension"]
-        exported_filename = f"{prefix}.bitmap_{index}{extension}"
-        image_path = renderer_bitmap_path(exported_filename)
-        metadata_path = renderer_bitmap_path(f"{prefix}.bitmap_{index}.json")
+    for artifact, stem in bitmap_artifact_targets(prefix, result):
+        image_path = stem.with_name(stem.name + artifact["extension"])
+        metadata_path = stem.with_name(stem.name + ".json")
 
         assert image_path.exists(), f"missing bitmap image groundtruth: {image_path}"
         assert metadata_path.exists(), (
@@ -449,10 +463,11 @@ def compare_bitmap_artifacts(doc_name: str, page_no: int, result) -> None:
         )
 
         expected_metadata = _load_json(metadata_path)
-        actual_metadata = _bitmap_metadata(artifact, exported_filename)
+        actual_metadata = _bitmap_metadata(artifact, image_path.name)
         stable_keys = [
             "index",
             "xobject_key",
+            "source",
             "shape",
             "pixel_format",
             "image_mask",

@@ -48,13 +48,24 @@ namespace pdflib
     // directory scan runs at most once per resolver instance.
     void warm();
 
-    // Resolves the PDF font identifiers to a Blend2D font face. font_name is
-    // preferred unless it is empty or "null", otherwise base_font is used.
+    // Resolves the PDF font identifiers to a Blend2D font face. base_font is
+    // preferred, being the PostScript name of the typeface; font_name carries
+    // the font dictionary's /Name, a resource label, and is used only when
+    // there is no base font.
     // When resolve_fonts is true the selected name is matched against indexed
     // system fonts using deterministic aliases, exact metadata matches, style
     // selection, and finally fuzzy matching. If lookup fails, or resolving is
     // disabled, the method falls back to a known system font.
     // Returns an invalid BLFontFace when no fallback font can be loaded.
+
+    // Chooses a face by the SCRIPT of the text, for runs the name-based
+    // resolution cannot draw: an Arabic or CJK run through a Latin fallback
+    // shapes to .notdef boxes. Returns an invalid face for Latin-only text.
+    BLFontFace resolve_face_for_text(const std::string& utf8_text);
+
+    // True when every glyph of a shaped run is .notdef.
+    static bool shaped_run_all_notdef(const BLGlyphBuffer& gb);
+
     BLFontFace resolve_font_face(const std::string& font_name,
                                  const std::string& base_font,
                                  bool resolve_fonts,
@@ -114,7 +125,6 @@ namespace pdflib
     // Strips leading PDF name slash and six-letter subset prefixes such as
     // ABCDEF+Times-Roman.
     static std::string strip_subset_prefix(const std::string& name);
-    static bool is_pdf_resource_font_key(const std::string& name);
     static std::string select_font_query(const std::string& font_name,
                                          const std::string& base_font);
 
@@ -150,6 +160,16 @@ namespace pdflib
     static bool is_cjk_font_request(const std::string& name);
     static std::vector<std::filesystem::path> cjk_fallback_candidates();
 
+    static std::vector<std::filesystem::path> arabic_fallback_candidates();
+
+    // Maps text to a coarse script bucket ("arabic", "cjk", "hebrew", ...);
+    // false for Latin-only text.
+    static bool text_script_key(const std::string& utf8_text, std::string& script_key);
+
+    // Whether `face` shapes `utf8_text` to something other than all-.notdef.
+    static bool face_covers_text(BLFontFace& face, const std::string& utf8_text);
+
+
     static std::string bl_string_to_std(const BLString& s);
     static std::string font_ref_key(const font_face_ref& ref);
 
@@ -183,6 +203,9 @@ namespace pdflib
     std::unordered_map<std::string, indexed_font_face> face_metadata_;
     std::vector<std::filesystem::path> fallback_candidates_;
     std::vector<std::filesystem::path> cjk_candidates_;
+    std::vector<std::filesystem::path> arabic_candidates_;
+    mutable std::shared_mutex script_cache_mutex_;
+    std::unordered_map<std::string, BLFontFace> script_face_cache_;
 
     mutable std::shared_mutex match_cache_mutex_;
     std::unordered_map<match_cache_key,
@@ -322,28 +345,23 @@ namespace pdflib
     return s;
   }
 
-  inline bool blend2d_font_resolver::is_pdf_resource_font_key(const std::string& name)
-  {
-    const std::string s = strip_subset_prefix(name);
-    if (s.size() < 2 or (s[0] != 'F' and s[0] != 'f')) { return false; }
-
-    return std::all_of(s.begin() + 1, s.end(),
-                       [](char c)
-                       {
-                         return std::isdigit(static_cast<unsigned char>(c));
-                       });
-  }
-
   inline std::string blend2d_font_resolver::select_font_query(
                                                               const std::string& font_name,
                                                               const std::string& base_font)
   {
+    // /BaseFont is the PostScript name of the typeface. The other name is
+    // whatever the font dictionary's /Name says, which is the label the
+    // resource dictionary references the font by and is deprecated as of PDF
+    // 1.7 (32000-1, Table 111) -- producers put arbitrary strings there.
+    // Preferring it loses the typeface: an arXiv stamp declared
+    // `/BaseFont /Times-Roman /Name /arXivStAmP` matched nothing under its
+    // label and fell through to the generic sans fallback, so the stamp came
+    // out in the wrong face while every other renderer set it in a serif.
+    //
+    // Only `F<digits>` used to be recognised as a label, which is the common
+    // shape but not a rule any producer follows.
     const bool has_base_font = not base_font.empty() and base_font != "null";
-    if (has_base_font and
-        (font_name.empty() or font_name == "null" or is_pdf_resource_font_key(font_name)))
-      {
-        return base_font;
-      }
+    if (has_base_font) { return base_font; }
 
     if (not font_name.empty() and font_name != "null") { return font_name; }
     return base_font;
@@ -396,17 +414,40 @@ namespace pdflib
           }
       }
 
-    for (const auto& suf : {" psmt", " ps", " mt"})
-      {
-        const std::string sfx(suf);
-        if (expanded.size() >= sfx.size() and
-            expanded.compare(expanded.size() - sfx.size(),
-                             sfx.size(), sfx) == 0)
-          {
-            expanded.resize(expanded.size() - sfx.size());
-            break;
-          }
-      }
+    // "PS" and "MT" are Monotype's PostScript vendor tags, and they sit around
+    // the style rather than only after it: TimesNewRomanPSMT normalises to
+    // "times new roman", but TimesNewRomanPS-BoldMT put a "ps" in the middle
+    // and only the trailing "mt" was ever removed. The leftover
+    // "times new roman ps bold" matched no alias, so the regular weight of a
+    // Times document resolved to a serif while its bold and italic fell
+    // through to the generic sans -- one paragraph set in three faces.
+    //
+    // Dropping the tags as whole tokens wherever they appear keeps the family
+    // and the style together. They are only ever vendor tags, never a family
+    // of their own, and a name that is nothing else is left alone.
+    {
+      std::vector<std::string> kept;
+      std::istringstream stream(expanded);
+      std::string token;
+      while (stream >> token)
+        {
+          if (token != "ps" and token != "mt" and token != "psmt")
+            {
+              kept.push_back(token);
+            }
+        }
+
+      if (not kept.empty())
+        {
+          std::ostringstream rebuilt;
+          for (size_t l = 0; l < kept.size(); l++)
+            {
+              if (l > 0) { rebuilt << ' '; }
+              rebuilt << kept[l];
+            }
+          expanded = rebuilt.str();
+        }
+    }
 
     std::string collapsed;
     bool pending_space = false;
@@ -634,6 +675,227 @@ namespace pdflib
         if (s.find(t) != std::string::npos) { return true; }
       }
     return false;
+  }
+
+
+  inline std::vector<std::filesystem::path>
+  blend2d_font_resolver::arabic_fallback_candidates()
+  {
+    namespace fs = std::filesystem;
+    std::vector<fs::path> paths;
+
+    if (auto override_path = getenv_string("DOCLING_PARSE_ARABIC_FALLBACK_FONT"))
+      {
+        paths.emplace_back(*override_path);
+      }
+
+    // Filename stems of faces that carry Arabic, best first. The generic
+    // faces at the end matter more here than in the CJK list: DejaVu and
+    // Arial both cover Arabic, so most hosts can draw it even with no
+    // purpose-built Arabic font installed.
+    static const std::array<const char*, 18> wanted = {
+      // Linux distributions
+      "notonaskharabic", "notosansarabic", "notokufiarabic",
+      "amiri", "scheherazade", "kacst", "droidsansarabic",
+      // Windows (%WINDIR%\Fonts)
+      "arabtype",    // Arabic Typesetting
+      "trado",       // Traditional Arabic
+      "majalla",     // Sakkal Majalla
+      "andlso",      // Andalus
+      "simpo",       // Simplified Arabic
+      // macOS
+      "geezapro", "albayan", "baghdad", "damascus",
+      // broad faces that happen to include Arabic
+      "dejavusans", "arial",
+    };
+
+    constexpr std::size_t max_entries = 20000;
+    std::size_t seen = 0;
+    std::vector<fs::path> ranked(wanted.size());
+
+    for (const auto& dir : system_font_directories())
+      {
+        std::error_code ec;
+        if (not fs::is_directory(dir, ec)) { continue; }
+        fs::recursive_directory_iterator it(
+          dir, fs::directory_options::skip_permission_denied, ec);
+        fs::recursive_directory_iterator end;
+        for (; it != end and seen < max_entries; it.increment(ec))
+          {
+            if (ec) { break; }
+            ++seen;
+            const fs::path& p = it->path();
+            if (not is_font_file(p)) { continue; }
+            std::string stem = p.stem().string();
+            std::transform(stem.begin(), stem.end(), stem.begin(),
+                           [](unsigned char c) { return std::tolower(c); });
+            for (std::size_t i = 0; i < wanted.size(); i++)
+              {
+                if (ranked[i].empty() and stem.find(wanted[i]) != std::string::npos)
+                  {
+                    ranked[i] = p;
+                  }
+              }
+          }
+        if (seen >= max_entries) { break; }
+      }
+
+    for (const auto& p : ranked)
+      {
+        if (not p.empty()) { paths.push_back(p); }
+      }
+    return paths;
+  }
+
+
+  inline bool blend2d_font_resolver::text_script_key(const std::string& utf8_text,
+                                                     std::string& script_key)
+  {
+    // Minimal UTF-8 decode: only the codepoint ranges matter, and the text is
+    // already known-good UTF-8 by the time it reaches the renderer.
+    const unsigned char* s = reinterpret_cast<const unsigned char*>(utf8_text.data());
+    const std::size_t n = utf8_text.size();
+
+    for (std::size_t i = 0; i < n;)
+      {
+        uint32_t cp = 0;
+        std::size_t len = 1;
+
+        if (s[i] < 0x80)            { cp = s[i]; len = 1; }
+        else if ((s[i] & 0xE0) == 0xC0) { cp = s[i] & 0x1F; len = 2; }
+        else if ((s[i] & 0xF0) == 0xE0) { cp = s[i] & 0x0F; len = 3; }
+        else if ((s[i] & 0xF8) == 0xF0) { cp = s[i] & 0x07; len = 4; }
+        else { i += 1; continue; }
+
+        if (i + len > n) { break; }
+        for (std::size_t k = 1; k < len; ++k)
+          {
+            cp = (cp << 6) | (s[i + k] & 0x3F);
+          }
+        i += len;
+
+        if (cp < 0x0250) { continue; }  // Latin, punctuation, digits
+
+        if ((cp >= 0x0600 and cp <= 0x06FF) or (cp >= 0x0750 and cp <= 0x077F) or
+            (cp >= 0xFB50 and cp <= 0xFDFF) or (cp >= 0xFE70 and cp <= 0xFEFF))
+          { script_key = "arabic"; return true; }
+
+        if ((cp >= 0x2E80 and cp <= 0x9FFF) or (cp >= 0x3040 and cp <= 0x30FF) or
+            (cp >= 0xAC00 and cp <= 0xD7AF) or (cp >= 0xF900 and cp <= 0xFAFF) or
+            (cp >= 0x20000 and cp <= 0x2FA1F))
+          { script_key = "cjk"; return true; }
+
+        if (cp >= 0x0590 and cp <= 0x05FF) { script_key = "hebrew"; return true; }
+        if (cp >= 0x0900 and cp <= 0x097F) { script_key = "devanagari"; return true; }
+        if (cp >= 0x0E00 and cp <= 0x0E7F) { script_key = "thai"; return true; }
+        if (cp >= 0x0400 and cp <= 0x04FF) { script_key = "cyrillic"; return true; }
+        if (cp >= 0x0370 and cp <= 0x03FF) { script_key = "greek"; return true; }
+
+        script_key = "other";
+        return true;
+      }
+
+    return false;
+  }
+
+
+  inline bool blend2d_font_resolver::shaped_run_all_notdef(const BLGlyphBuffer& gb)
+  {
+    const std::size_t count = gb.size();
+    const uint32_t* ids = gb.glyph_run().glyph_data_as<uint32_t>();
+    if (count == 0 or ids == nullptr) { return true; }
+    for (std::size_t i = 0; i < count; ++i)
+      {
+        if (ids[i] != 0) { return false; }
+      }
+    return true;
+  }
+
+
+  inline bool blend2d_font_resolver::face_covers_text(BLFontFace& face,
+                                                      const std::string& utf8_text)
+  {
+    if (not face.is_valid()) { return false; }
+
+    BLFont probe;
+    if (probe.create_from_face(face, 16.0f) != BL_SUCCESS) { return false; }
+
+    BLGlyphBuffer gb;
+    gb.set_utf8_text(utf8_text.c_str());
+    if (probe.shape(gb) != BL_SUCCESS or gb.is_empty()) { return false; }
+
+    return not shaped_run_all_notdef(gb);
+  }
+
+
+  inline BLFontFace blend2d_font_resolver::resolve_face_for_text(const std::string& utf8_text)
+  {
+    std::string script;
+    if (not text_script_key(utf8_text, script))
+      {
+        return BLFontFace();  // Latin-only: the name-based path is correct
+      }
+
+    warm();
+
+    {
+      std::shared_lock<std::shared_mutex> lock(script_cache_mutex_);
+      auto it = script_face_cache_.find(script);
+      if (it != script_face_cache_.end()) { return it->second; }
+    }
+
+    // Script-specific faces first, then every indexed face in discovery order,
+    // so a host with nothing purpose-built still finds a broad face that
+    // happens to cover the script.
+    std::vector<font_face_ref> refs;
+    const std::vector<std::filesystem::path>& preferred =
+      (script == "cjk") ? cjk_candidates_
+                        : (script == "arabic" ? arabic_candidates_ : fallback_candidates_);
+
+    for (const auto& p : preferred)
+      {
+        std::error_code ec;
+        if (std::filesystem::exists(p, ec)) { refs.push_back({p.string(), 0}); }
+      }
+
+    std::vector<const indexed_font_face*> indexed;
+    indexed.reserve(face_metadata_.size());
+    for (const auto& kv : face_metadata_) { indexed.push_back(&kv.second); }
+    std::sort(indexed.begin(), indexed.end(),
+              [](const indexed_font_face* a, const indexed_font_face* b)
+              { return a->discovery_order < b->discovery_order; });
+    for (const auto* meta : indexed) { refs.push_back(meta->ref); }
+
+    // Probing means shaping, so bound the work; the answer is cached per script.
+    constexpr std::size_t max_probes = 80;
+
+    BLFontFace chosen;
+    std::size_t probes = 0;
+    for (const auto& ref : refs)
+      {
+        if (probes++ >= max_probes) { break; }
+        BLFontFace face = load_font_face(ref);
+        if (face_covers_text(face, utf8_text))
+          {
+            chosen = face;
+            LOG_S(INFO) << "blend2d font resolver: script '" << script
+                        << "' resolved to " << ref.path
+                        << " after " << probes << " probe(s)";
+            break;
+          }
+      }
+
+    if (not chosen.is_valid())
+      {
+        LOG_S(WARNING) << "blend2d font resolver: no installed face covers script '"
+                       << script << "'; text will render as .notdef boxes";
+      }
+
+    {
+      std::unique_lock<std::shared_mutex> lock(script_cache_mutex_);
+      script_face_cache_[script] = chosen;
+    }
+    return chosen;
   }
 
   inline std::vector<std::filesystem::path> blend2d_font_resolver::cjk_fallback_candidates()
@@ -1113,6 +1375,7 @@ namespace pdflib
     const std::vector<fs::path> font_dirs = system_font_directories();
     fallback_candidates_ = fallback_font_candidates();
     cjk_candidates_ = cjk_fallback_candidates();
+    arabic_candidates_ = arabic_fallback_candidates();
 
     LOG_S(INFO) << "blend2d font resolver: scanning font directories";
     for (const auto& dir : font_dirs)

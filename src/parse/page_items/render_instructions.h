@@ -42,7 +42,16 @@ namespace pdflib
     clip_path_instruction(std::vector<double> x,
                           std::vector<double> y,
                           page_shape_closing_type closing_type,
-                          page_shape_type shape_type);
+                          page_shape_type shape_type,
+                          int clip_group = 0);
+
+    // Subpaths captured by ONE W/W* operation share a group: together they
+    // form a single clip path under the clip's fill rule. Only paths of
+    // DIFFERENT groups intersect. Treating each subpath as its own clip and
+    // intersecting turned any multi-subpath clip (an outline-art stencil, a
+    // text-shaped clip) into an empty region, and the fill through it
+    // disappeared.
+    int get_clip_group() const { return clip_group; }
 
     const std::vector<double>& get_x() const { return x; }
     const std::vector<double>& get_y() const { return y; }
@@ -60,7 +69,7 @@ namespace pdflib
       for(auto& v : x_) { v += dx; }
       for(auto& v : y_) { v += dy; }
       return clip_path_instruction(std::move(x_), std::move(y_),
-                                   closing_type, shape_type);
+                                   closing_type, shape_type, clip_group);
     }
 
   private:
@@ -68,6 +77,7 @@ namespace pdflib
     std::vector<double> y;
     page_shape_closing_type closing_type;
     page_shape_type shape_type;
+    int clip_group = 0;
   };
 
   inline clip_path_instruction::clip_path_instruction():
@@ -80,11 +90,13 @@ namespace pdflib
   inline clip_path_instruction::clip_path_instruction(std::vector<double> x_,
                                                       std::vector<double> y_,
                                                       page_shape_closing_type closing_type_,
-                                                      page_shape_type shape_type_):
+                                                      page_shape_type shape_type_,
+                                                      int clip_group_):
     x(std::move(x_)),
     y(std::move(y_)),
     closing_type(closing_type_),
-    shape_type(shape_type_)
+    shape_type(shape_type_),
+    clip_group(clip_group_)
   {}
 
   class clip_state_instruction
@@ -479,6 +491,7 @@ namespace pdflib
                        double r_x1, double r_y1,
                        double r_x2, double r_y2,
                        double r_x3, double r_y3,
+                       bitmap_source source = BITMAP_SOURCE_XOBJECT,
                        clip_state_instruction clip_state = clip_state_instruction()):
       xobject_key(xobject_key),
       data(std::move(data)),
@@ -493,9 +506,16 @@ namespace pdflib
       r_x1(r_x1), r_y1(r_y1),
       r_x2(r_x2), r_y2(r_y2),
       r_x3(r_x3), r_y3(r_y3),
+      source(source),
       clip_state(std::move(clip_state)) {}
 
     const std::string& get_key() const { return xobject_key; }
+
+    // Whether this bitmap is page artwork or a rasterised Type3 glyph. The
+    // key spells it out too (`type3:...`, `__inline_image_...`), but that is
+    // a naming convention; this is the fact itself.
+    bitmap_source get_source() const { return source; }
+    bool is_glyph() const { return source == BITMAP_SOURCE_TYPE3_GLYPH; }
 
     const std::shared_ptr<std::vector<uint8_t> >& get_data() const { return data; }
     const std::shared_ptr<std::vector<uint8_t> >& get_alpha_data() const { return alpha_data; }
@@ -555,6 +575,7 @@ namespace pdflib
     const double r_x3;
     const double r_y3;
 
+    const bitmap_source source;
     const clip_state_instruction clip_state;
   };
 

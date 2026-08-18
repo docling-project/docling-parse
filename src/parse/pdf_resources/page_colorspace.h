@@ -30,6 +30,13 @@ namespace pdflib
     // images use it to decide whether going through the transform is worth it.
     bool has_tint_transform() const;
 
+    // Number of tint components a Separation/DeviceN colour takes: one per
+    // colorant.
+    int tint_component_count() const
+    {
+      return static_cast<int>(colorant_names_.size());
+    }
+
     // Maps the numeric SC/SCN/sc/scn operands to RGB; returns false when
     // the space cannot interpret them (pattern, unknown family, wrong
     // operand count), in which case the caller keeps its own fallback.

@@ -56,7 +56,8 @@ namespace pdflib
     };
 
     void add_bitmap_instruction(const page_item<PAGE_IMAGE>& image,
-                                clip_state_instruction clip_state);
+                                clip_state_instruction clip_state,
+                                bitmap_source source);
 
     void populate_geometry(page_item<PAGE_IMAGE>& image,
                            const clip_state_instruction& clip_state) const;
@@ -228,6 +229,8 @@ namespace pdflib
       image.raw_stream_data    = xobj.get_raw_stream_data();
       image.decoded_stream_data = xobj.get_decoded_stream_data();
       image.soft_mask_data     = xobj.get_soft_mask_data();
+      image.soft_mask_width    = xobj.get_soft_mask_width();
+      image.soft_mask_height   = xobj.get_soft_mask_height();
 
       LOG_S(INFO) << "image with ("
 		  << image.x0 << ", " << image.y0 << ") x ("
@@ -266,7 +269,7 @@ namespace pdflib
 
     page_images.push_back(image);
 
-    add_bitmap_instruction(image, std::move(clip_state));
+    add_bitmap_instruction(image, std::move(clip_state), BITMAP_SOURCE_XOBJECT);
   }
 
   void pdf_state<BITMAP>::Do_inline_image(
@@ -318,7 +321,7 @@ namespace pdflib
     image.rgb_filling_ops    = grph_state.get_rgb_filling_ops();
 
     page_images.push_back(image);
-    add_bitmap_instruction(image, std::move(clip_state));
+    add_bitmap_instruction(image, std::move(clip_state), BITMAP_SOURCE_INLINE);
   }
 
   void pdf_state<BITMAP>::populate_geometry(
@@ -382,7 +385,8 @@ namespace pdflib
   }
 
   void pdf_state<BITMAP>::add_bitmap_instruction(const page_item<PAGE_IMAGE>& image,
-                                                 clip_state_instruction clip_state)
+                                                 clip_state_instruction clip_state,
+                                                 bitmap_source source)
   {
     std::shared_ptr<std::vector<uint8_t>> pixel_data;
     std::array<int, 3> pixel_shape = {0, 0, 0};
@@ -1281,6 +1285,53 @@ namespace pdflib
                     << " for xobject_key=" << image.xobject_key;
       }
 
+    // The soft mask may have been resolved onto a finer grid than the colour
+    // plane (see init_soft_mask_data). Compositing needs both on one grid, so
+    // upsample the colour to match; nearest-neighbour mirrors how the mask
+    // itself is resampled, and is exact for the flat swatches this affects.
+    if(pixel_data
+       and pixel_shape.size() == 3
+       and image.soft_mask_data
+       and image.soft_mask_width > pixel_shape[1]
+       and image.soft_mask_height > pixel_shape[0])
+      {
+        const int src_h = pixel_shape[0];
+        const int src_w = pixel_shape[1];
+        const int ncomp = pixel_shape[2];
+        const int dst_w = image.soft_mask_width;
+        const int dst_h = image.soft_mask_height;
+
+        if(src_h > 0 and src_w > 0 and ncomp > 0
+           and pixel_data->size() >= static_cast<size_t>(src_h) * src_w * ncomp)
+          {
+            auto scaled = std::make_shared<std::vector<uint8_t>>();
+            scaled->resize(static_cast<size_t>(dst_w) * dst_h * ncomp);
+
+            for(int row = 0; row < dst_h; ++row)
+              {
+                const size_t src_row = (static_cast<size_t>(row) * src_h) / dst_h;
+                for(int col = 0; col < dst_w; ++col)
+                  {
+                    const size_t src_col = (static_cast<size_t>(col) * src_w) / dst_w;
+                    const size_t si = (src_row * src_w + src_col) * ncomp;
+                    const size_t di = (static_cast<size_t>(row) * dst_w + col) * ncomp;
+                    for(int c = 0; c < ncomp; ++c)
+                      {
+                        (*scaled)[di + c] = (*pixel_data)[si + c];
+                      }
+                  }
+              }
+
+            LOG_S(INFO) << "bitmap: upsampled colour plane to the soft-mask grid "
+                        << "for xobject_key=" << image.xobject_key
+                        << " " << src_w << "x" << src_h
+                        << " -> " << dst_w << "x" << dst_h;
+
+            pixel_data  = std::move(scaled);
+            pixel_shape = {dst_h, dst_w, ncomp};
+          }
+      }
+
     bitmap_instruction binstr(image.xobject_key,
                               std::move(pixel_data),
                               image.soft_mask_data,
@@ -1294,6 +1345,7 @@ namespace pdflib
                               image.r_x1, image.r_y1,
                               image.r_x2, image.r_y2,
                               image.r_x3, image.r_y3,
+                              source,
                               std::move(clip_state));
     binstr.set_blend_mode(grph_state.get_blend_mode());
 

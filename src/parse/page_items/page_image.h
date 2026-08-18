@@ -77,6 +77,8 @@ namespace pdflib
     std::shared_ptr<Buffer>  raw_stream_data;
     std::shared_ptr<Buffer>  decoded_stream_data;
     std::shared_ptr<std::vector<uint8_t>> soft_mask_data;
+    int soft_mask_width = 0;
+    int soft_mask_height = 0;
 
     // PDF image semantics copied from XObject
     bool decode_present = false;

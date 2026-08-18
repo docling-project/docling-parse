@@ -3,6 +3,8 @@
 #ifndef PDF_PAGE_XOBJECT_IMAGE_RESOURCE_H
 #define PDF_PAGE_XOBJECT_IMAGE_RESOURCE_H
 
+#include <parse/utils/ccitt/ccitt_utils.h>
+
 #include <cstdint>
 #include <cstring>
 
@@ -186,6 +188,8 @@ namespace pdflib
     std::shared_ptr<Buffer>  get_decoded_stream_data() const;
     bool                     has_soft_mask_data() const;
     std::shared_ptr<std::vector<uint8_t>> get_soft_mask_data() const;
+    int get_soft_mask_width() const { return soft_mask_width; }
+    int get_soft_mask_height() const { return soft_mask_height; }
 
     // Determine file extension from filters (e.g. ".jpg", ".jp2", ".jb2", ".bin")
     std::string pick_extension() const;
@@ -237,6 +241,7 @@ namespace pdflib
     int              indexed_hival  = -1; // hival from /Indexed color space; -1 if not Indexed
     std::string      indexed_base_cs;    // base color space name for /Indexed (e.g. "/DeviceRGB")
     std::shared_ptr<std::vector<uint8_t>> indexed_palette; // raw palette bytes: (hival+1)*ncomps bytes
+    std::shared_ptr<pdf_resource<PAGE_COLORSPACE> > indexed_tint_space;
     std::shared_ptr<std::vector<uint8_t>> indexed_base_icc_profile;
     int              indexed_base_icc_components = 0;
     std::vector<std::string> indexed_base_device_n_names;
@@ -248,6 +253,8 @@ namespace pdflib
     std::shared_ptr<Buffer> raw_stream_data;
     std::shared_ptr<Buffer> decoded_stream_data;
     std::shared_ptr<std::vector<uint8_t>> soft_mask_data;
+    int soft_mask_width = 0;
+    int soft_mask_height = 0;
 
     // PDF image semantics
     std::vector<double> decode_array; // length 2*ncomp when present
@@ -568,6 +575,29 @@ namespace pdflib
                             indexed_base_cs = base_name.getName();
                             LOG_S(INFO) << "Indexed array base color space: " << indexed_base_cs;
                           }
+
+                        // A /Separation (or unhandled /DeviceN) base: the
+                        // palette entries are TINT values, one sample per
+                        // colorant, meaningless until run through the tint
+                        // transform. Parse the space now; the palette is
+                        // converted to RGB right after it is loaded.
+                        if(base_name.isName() and
+                           (base_name.getName() == "/Separation" or
+                            (base_name.getName() == "/DeviceN" and
+                             indexed_base_cs != "/DeviceCMYK" and
+                             indexed_base_cs != "/DeviceGray")))
+                          {
+                            indexed_tint_space =
+                              std::make_shared<pdf_resource<PAGE_COLORSPACE> >();
+                            indexed_tint_space->set(xobject_key + "/IndexedBase",
+                                                    base_obj);
+                            if(not indexed_tint_space->has_tint_transform())
+                              {
+                                LOG_S(WARNING) << "Indexed tint base did not resolve "
+                                               << "for xobject_key=" << xobject_key;
+                                indexed_tint_space.reset();
+                              }
+                          }
                       }
                     else
                       {
@@ -615,6 +645,48 @@ namespace pdflib
                         else
                           {
                             LOG_S(WARNING) << "Indexed color space: unrecognized lookup table type";
+                          }
+
+                        // Tint-space base: run every palette entry through
+                        // the tint transform and keep an RGB palette. Without
+                        // this the image has no usable base space at all and
+                        // is dropped for a placeholder.
+                        if(indexed_tint_space and indexed_palette
+                           and not indexed_palette->empty())
+                          {
+                            const int ncomp = std::max<int>(
+                              1, indexed_tint_space->tint_component_count());
+                            const size_t entries = indexed_palette->size() / ncomp;
+                            auto rgb_pal = std::make_shared<std::vector<uint8_t>>();
+                            rgb_pal->reserve(entries * 3);
+                            std::vector<double> comps(ncomp, 0.0);
+                            bool ok = entries > 0;
+                            for(size_t e = 0; ok and e < entries; ++e)
+                              {
+                                for(int c = 0; c < ncomp; ++c)
+                                  {
+                                    comps[c] = (*indexed_palette)[e * ncomp + c] / 255.0;
+                                  }
+                                std::array<int, 3> rgb = {0, 0, 0};
+                                if(indexed_tint_space->map_to_rgb(comps, rgb))
+                                  {
+                                    rgb_pal->push_back(static_cast<uint8_t>(rgb[0]));
+                                    rgb_pal->push_back(static_cast<uint8_t>(rgb[1]));
+                                    rgb_pal->push_back(static_cast<uint8_t>(rgb[2]));
+                                  }
+                                else { ok = false; }
+                              }
+                            if(ok)
+                              {
+                                indexed_palette = std::move(rgb_pal);
+                                indexed_base_cs = "/DeviceRGB";
+                                LOG_S(INFO) << "Indexed tint-base palette converted to RGB: "
+                                            << indexed_palette->size() << " bytes";
+                              }
+                            else
+                              {
+                                LOG_S(WARNING) << "Indexed tint-base palette conversion failed";
+                              }
                           }
 
                         if(indexed_base_cs == "/DeviceCMYK"
@@ -737,10 +809,15 @@ namespace pdflib
 	  }
 	else if(color_space=="/DeviceCMYK")
 	  {
+	    // ISO 32000-1 table 89: the default is the identity, [0 1] per
+	    // component. Synthesising the inverted array here flipped every CMYK
+	    // sample once; paths whose convention flag inverted a second time
+	    // cancelled it by accident, and the one that did not (JPX) rendered
+	    // photographic negatives.
 	    LOG_S(WARNING) << "no `/Decode` found: falling back on default for " << color_space;
 	    decode_array = {
-	      1, 0, 1, 0,
-	      1, 0, 1, 0
+	      0, 1, 0, 1,
+	      0, 1, 0, 1
 	    };
 	    decode_present = !decode_array.empty();
 	  }
@@ -1000,12 +1077,29 @@ namespace pdflib
   {
     soft_mask_data.reset();
 
-    if(not qpdf_xobject_dict.hasKey("/SMask"))
+    // /SMask carries alpha directly. /Mask (as a stream) is a stencil: a
+    // 1-bit image mask whose 1-samples knock the corresponding image pixels
+    // OUT (ISO 32000-1, 8.9.6.4). Ignoring it painted the image's own
+    // background pixels over whatever the mask was meant to reveal -- a logo
+    // shipped as an opaque rectangle plus a stencil rendered as the
+    // rectangle.
+    bool stencil = false;
+    QPDFObjectHandle qpdf_smask;
+    if(qpdf_xobject_dict.hasKey("/SMask"))
+      {
+        qpdf_smask = qpdf_xobject_dict.getKey("/SMask");
+      }
+    else if(qpdf_xobject_dict.hasKey("/Mask") and
+            qpdf_xobject_dict.getKey("/Mask").isStream())
+      {
+        qpdf_smask = qpdf_xobject_dict.getKey("/Mask");
+        stencil = true;
+      }
+    else
       {
         return;
       }
 
-    auto qpdf_smask = qpdf_xobject_dict.getKey("/SMask");
     if(not qpdf_smask.isStream())
       {
         LOG_S(WARNING) << "SMask present but is not a stream for xobject_key=" << xobject_key;
@@ -1041,7 +1135,7 @@ namespace pdflib
       smask.get_color_space() == "/DeviceGray"
       or (smask.get_color_space().find("/ICCBased") != std::string::npos
           and smask.get_icc_components() == 1);
-    if(not gray_mask)
+    if(not gray_mask and not stencil)
       {
         LOG_S(WARNING) << "SMask color space unsupported for xobject_key=" << xobject_key
                        << " smask_cs=" << smask.get_color_space()
@@ -1049,7 +1143,8 @@ namespace pdflib
         return;
       }
 
-    const int smask_bpc = smask.get_bits_per_component();
+    int smask_bpc = smask.get_bits_per_component();
+    if(stencil and smask_bpc <= 0) { smask_bpc = 1; }
     if(smask_bpc != 8 and smask_bpc != 1 and smask_bpc != 2 and smask_bpc != 4)
       {
         LOG_S(WARNING) << "SMask bits/component unsupported for xobject_key=" << xobject_key
@@ -1057,13 +1152,51 @@ namespace pdflib
         return;
       }
 
+    // A stencil mask is very often CCITTFax-compressed, which qpdf cannot
+    // defilter; decode it here. `ccitt::decode` yields one byte per pixel
+    // with 0 = dark.
+    std::vector<uint8_t> ccitt_samples;
     if(not smask.has_decoded_stream_data())
       {
-        LOG_S(WARNING) << "SMask has no decoded stream data for xobject_key=" << xobject_key;
-        return;
+        QPDFObjectHandle mdict = qpdf_smask.getDict();
+        const std::string filter =
+          mdict.hasKey("/Filter") ? mdict.getKey("/Filter").unparse() : "";
+        if(filter.find("CCITTFaxDecode") != std::string::npos and
+           smask.has_raw_stream_data())
+          {
+            int K = 0;
+            bool black_is_1 = false;
+            QPDFObjectHandle dp = mdict.getKey("/DecodeParms");
+            if(dp.isArray() and dp.getArrayNItems() > 0) { dp = dp.getArrayItem(0); }
+            if(dp.isDictionary())
+              {
+                if(dp.hasKey("/K") and dp.getKey("/K").isInteger())
+                  { K = static_cast<int>(dp.getKey("/K").getIntValue()); }
+                if(dp.hasKey("/BlackIs1") and dp.getKey("/BlackIs1").isBool())
+                  { black_is_1 = dp.getKey("/BlackIs1").getBoolValue(); }
+              }
+
+            auto raw = smask.get_raw_stream_data();
+            ccitt_samples = ccitt::decode(
+              reinterpret_cast<const uint8_t*>(raw->getBuffer()),
+              raw->getSize(), sm_w, sm_h, K, black_is_1);
+            if(ccitt_samples.size() < static_cast<size_t>(sm_w) * sm_h)
+              {
+                LOG_S(WARNING) << "mask CCITT decode too small for xobject_key="
+                               << xobject_key;
+                return;
+              }
+            smask_bpc = 8;
+          }
+        else
+          {
+            LOG_S(WARNING) << "SMask has no decoded stream data for xobject_key=" << xobject_key;
+            return;
+          }
       }
 
-    auto smask_buf = smask.get_decoded_stream_data();
+    auto smask_buf = smask.has_decoded_stream_data()
+      ? smask.get_decoded_stream_data() : nullptr;
 
     // A stencil-shaped mask is usually written at 1 bit per pixel, packed
     // several samples to a byte and padded to a byte at the end of each row.
@@ -1071,7 +1204,7 @@ namespace pdflib
     // eight columns to be the whole row, so the transparent part of the image
     // keeps painting. Expand to one byte per sample first.
     std::vector<uint8_t> smask_unpacked;
-    if(smask_bpc != 8)
+    if(smask_bpc != 8 and ccitt_samples.empty())
       {
         const size_t row_bits = static_cast<size_t>(sm_w) * static_cast<size_t>(smask_bpc);
         const size_t row_bytes = (row_bits + 7u) / 8u;
@@ -1111,7 +1244,8 @@ namespace pdflib
       }
 
     const size_t smask_expected = static_cast<size_t>(sm_w) * sm_h;
-    if(smask_unpacked.empty() and smask_buf->getSize() < smask_expected)
+    if(smask_unpacked.empty() and ccitt_samples.empty()
+       and smask_buf->getSize() < smask_expected)
       {
         LOG_S(WARNING) << "SMask decoded stream too small for xobject_key=" << xobject_key
                        << " size=" << smask_buf->getSize()
@@ -1119,36 +1253,49 @@ namespace pdflib
         return;
       }
 
-    const size_t expected = static_cast<size_t>(image_width) * image_height;
+    // Resolve onto the finer of the two grids. Downsampling a mask that is
+    // higher-resolution than its base image would throw away exactly the
+    // detail it exists to carry -- a 2x2 colour swatch stencilled by a 141x100
+    // glyph mask is a common way to draw text, and collapsing it to 2x2 turns
+    // the text into a gradient smear across the whole line.
+    const int dst_w = std::max(image_width, sm_w);
+    const int dst_h = std::max(image_height, sm_h);
 
     auto out = std::make_shared<std::vector<uint8_t>>();
-    out->resize(expected);
+    out->resize(static_cast<size_t>(dst_w) * dst_h);
 
-    auto const* src = smask_unpacked.empty()
-      ? reinterpret_cast<uint8_t const*>(smask_buf->getBuffer())
-      : smask_unpacked.data();
+    auto const* src =
+      not ccitt_samples.empty() ? ccitt_samples.data()
+      : not smask_unpacked.empty() ? smask_unpacked.data()
+      : reinterpret_cast<uint8_t const*>(smask_buf->getBuffer());
     auto const decode = smask.get_decode_array();
     const bool has_decode = smask.has_decode_array() and decode.size() >= 2;
 
-    // nearest-neighbor sampling from the mask grid onto the image grid
+    // nearest-neighbor sampling from the mask grid onto the target grid
     // (identity when the dimensions already match)
-    for(int row = 0; row < image_height; ++row)
+    for(int row = 0; row < dst_h; ++row)
       {
-        const size_t src_row = (static_cast<size_t>(row) * sm_h) / image_height;
-        for(int col = 0; col < image_width; ++col)
+        const size_t src_row = (static_cast<size_t>(row) * sm_h) / dst_h;
+        for(int col = 0; col < dst_w; ++col)
           {
-            const size_t src_col = (static_cast<size_t>(col) * sm_w) / image_width;
+            const size_t src_col = (static_cast<size_t>(col) * sm_w) / dst_w;
 
             uint8_t alpha = src[src_row * sm_w + src_col];
             if(has_decode)
               {
                 alpha = jpeg::apply_decode_component(alpha, decode[0], decode[1]);
               }
-            (*out)[static_cast<size_t>(row) * image_width + col] = alpha;
+            // Stencil (/Mask): a 1-sample masks the pixel OUT, the inverse
+            // of /SMask's alpha reading. ccitt::decode returns 0 = dark =
+            // sample 0 = painted, so the same inversion applies there.
+            (*out)[static_cast<size_t>(row) * dst_w + col] =
+              stencil ? static_cast<uint8_t>(255 - alpha) : alpha;
           }
       }
 
-    soft_mask_data = std::move(out);
+    soft_mask_data   = std::move(out);
+    soft_mask_width  = dst_w;
+    soft_mask_height = dst_h;
 
     LOG_S(INFO) << "decoded SMask for xobject_key=" << xobject_key
                 << " alpha_size=" << soft_mask_data->size();

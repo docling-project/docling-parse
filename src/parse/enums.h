@@ -297,6 +297,29 @@ namespace pdflib
     BLEND_MODE_LUMINOSITY,
   };
 
+  // What a bitmap instruction is a picture OF. A Type3 glyph procedure is
+  // rasterised into an image mask and painted through the very same bitmap
+  // path as page artwork (see pdf_state<TEXT>), so without this the two are
+  // indistinguishable downstream: one page of Type3 text yields a bitmap per
+  // painted character, drowning the handful of real images among them.
+  enum bitmap_source {
+    BITMAP_SOURCE_XOBJECT,      // an image XObject painted by `Do`
+    BITMAP_SOURCE_INLINE,       // an inline image (BI ... ID ... EI)
+    BITMAP_SOURCE_TYPE3_GLYPH,  // the mask of one Type3 glyph procedure
+  };
+
+  inline std::string to_string(bitmap_source source)
+  {
+    switch(source)
+      {
+      case BITMAP_SOURCE_XOBJECT:     return "xobject";
+      case BITMAP_SOURCE_INLINE:      return "inline";
+      case BITMAP_SOURCE_TYPE3_GLYPH: return "type3_glyph";
+      }
+
+    return "unknown";
+  }
+
   // State of an ExtGState /SMask entry. A present soft mask is the one
   // transparency parameter whose omission makes the output wrong rather than
   // merely approximate, so absent and /None are kept apart.
