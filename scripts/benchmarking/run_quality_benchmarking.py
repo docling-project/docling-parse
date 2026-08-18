@@ -66,7 +66,7 @@ DEFAULT_SCALE = 2.0
 DEFAULT_HF_REPO_ID = HF_DATASET_REPO_ID
 DEFAULT_HF_PDF_SUBDIR = Path(REGRESSION_DIR).name
 DEFAULT_OUTPUT_DIR = Path(
-    f"scratch-quality-benchmarks-{datetime.now().strftime('%Y-%m-%d-%M')}"
+    f"scratch-quality-benchmarks-{datetime.now().strftime('%Y-%m-%d-%H-%M')}"
 )
 
 DEFAULT_IMAGE_TOLERANCE = ImageTolerance(
