@@ -760,6 +760,25 @@ namespace pdflib
             tinstr.set_glyph_name(font.get_glyph_name(static_cast<uint32_t>(glyph_code)));
           }
 
+        // 9.4.4: the horizontal scaling Th scales the glyph itself, not only
+        // its displacement, and the text matrix and CTM can scale x and y by
+        // different amounts. The cell quad carries both, but the renderer
+        // draws at a single size taken from the cell's height edge, so the
+        // horizontal factor has to travel with the instruction.
+        {
+          const double m0 = text_matrix[0]*trafo_matrix[0] + text_matrix[1]*trafo_matrix[3];
+          const double m1 = text_matrix[0]*trafo_matrix[1] + text_matrix[1]*trafo_matrix[4];
+          const double m3 = text_matrix[3]*trafo_matrix[0] + text_matrix[4]*trafo_matrix[3];
+          const double m4 = text_matrix[3]*trafo_matrix[1] + text_matrix[4]*trafo_matrix[4];
+
+          const double sx = std::hypot(m0, m1);
+          const double sy = std::hypot(m3, m4);
+
+          const double anisotropy = (sy > 1e-9) ? (sx / sy) : 1.0;
+
+          tinstr.set_horizontal_scale(h_scaling * anisotropy);
+        }
+
         tinstr.set_fill_color(grph_state.get_rgb_filling_ops(),
                               grph_state.get_fill_alpha());
         tinstr.set_clip_state(shape_state.get_clip_state());

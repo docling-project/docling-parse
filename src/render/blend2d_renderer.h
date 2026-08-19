@@ -2180,34 +2180,24 @@ namespace pdflib
     if (geom.size <= 0.5) { return false; }
 
     BLPath text_path;
-    double natural_advance = 0.0;
+
     if (not freetype_font_cache_->build_text_path(instr.get_embedded_font(),
                                                   instr.get_text(),
                                                   instr.get_char_code(),
                                                   instr.get_glyph_name(),
                                                   geom.size,
-                                                  text_path,
-                                                  &natural_advance))
+                                                  text_path))
       {
         return false;
       }
 
-    // Same condensation handling as the Blend2D path: fit the run to the
-    // cell's width edge when the text matrix is anisotropic.
+    // This path draws the embedded program itself, so the glyphs keep the
+    // proportions the font designed: the only horizontal scaling is the one
+    // 9.4.4 defines (Th, plus an anisotropic text matrix or CTM), which the
+    // parser computed. Deriving it from the face's advances instead stretched
+    // every glyph of a font whose advances disagree with the PDF's /Widths.
     text_geometry draw_geom = geom;
-    {
-      const double wx = geom.bbox.x1 - geom.bbox.x0;
-      const double wy = geom.bbox.y1 - geom.bbox.y0;
-      const double cell_w = std::hypot(wx, wy);
-      if (cell_w > 0.5 and natural_advance > 0.5)
-        {
-          const double h = cell_w / natural_advance;
-          if (h >= 0.30 and h <= 3.0 and std::abs(h - 1.0) > 0.03)
-            {
-              draw_geom.h_scale = h;
-            }
-        }
-    }
+    draw_geom.h_scale = instr.get_horizontal_scale();
 
     BLContext& ctx = page_context();
 
@@ -2716,7 +2706,25 @@ namespace pdflib
               }
 
             text_geometry draw_geom = geom;
-            apply_condensation(draw_geom, font, gb);
+
+            // The font program's own advances are not the widths the PDF lays
+            // the page out by: a /W of 1000 over a face whose glyphs advance
+            // 504 is a normal, conforming file. Fitting the run to the cell
+            // therefore stretched those glyphs to twice their width. The glyph
+            // is drawn as the program designed it, scaled only by what 9.4.4
+            // says scales it -- which the parser worked out and sent along.
+            //
+            // A substituted face has no such claim: its advances are unrelated
+            // to the PDF's, and fitting the run to the cell is what keeps a
+            // page's layout intact.
+            if (using_embedded_font)
+              {
+                draw_geom.h_scale = instr.get_horizontal_scale();
+              }
+            else
+              {
+                apply_condensation(draw_geom, font, gb);
+              }
             const BLMatrix2D ctm = make_text_transform(draw_geom);
             text_draw_adjustment adjustment =
               calculate_glyph_bbox_adjustment(font, gb, instr, geom.size);

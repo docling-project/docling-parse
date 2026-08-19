@@ -286,6 +286,15 @@ namespace pdflib
     void set_is_type3(bool v) { is_type3_ = v; }
     bool is_type3() const { return is_type3_; }
 
+    // How much wider than tall this cell's glyphs are drawn: the horizontal
+    // scaling Th of 9.4.4 (the `Tz` operator), times any anisotropy of the
+    // text matrix and CTM. The renderer draws at one size, taken from the
+    // cell's height edge, so it cannot see this from the geometry alone; and
+    // it must not be inferred from the face's advances, which are the font
+    // program's own and need not agree with the /Widths the PDF lays out by.
+    void set_horizontal_scale(double v) { horizontal_scale_ = v; }
+    double get_horizontal_scale() const { return horizontal_scale_; }
+
     void set_embedded_font(std::shared_ptr<const embedded_font_blob> blob);
     const std::shared_ptr<const embedded_font_blob>& get_embedded_font() const;
     bool has_embedded_font() const;
@@ -383,6 +392,7 @@ namespace pdflib
     const double g_y1_;
 
     bool is_type3_ = false;
+    double horizontal_scale_ = 1.0;
     std::shared_ptr<const embedded_font_blob> embedded_font_;
     int64_t char_code_ = -1;
     std::string glyph_name_;
