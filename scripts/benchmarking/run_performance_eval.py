@@ -268,7 +268,7 @@ def plot_pages_per_document(rows: List[PageRow], viz_dir: Path) -> None:
     if edges is None:
         plt.hist(counts, bins=40, color="#2ca02c", alpha=0.85)
     else:
-        plt.hist(counts, bins=edges, color="#2ca02c", alpha=0.85)
+        plt.hist(counts, bins=edges.tolist(), color="#2ca02c", alpha=0.85)
         plt.xscale("log")
     plt.title(
         f"Pages per document — {counts.size} documents, {int(counts.sum())} pages"
@@ -313,7 +313,7 @@ def plot_histograms_stacked(
 
     axes[-1, 0].set_xlabel("Seconds per page (log)")
     fig.suptitle("Page time histograms — stacked (common x-axis, log-log)", y=0.99)
-    fig.tight_layout(rect=[0, 0, 1, 0.97])
+    fig.tight_layout(rect=(0, 0, 1, 0.97))
     fig.savefig(viz_dir / "hist_stacked.png", dpi=150)
     plt.close(fig)
 

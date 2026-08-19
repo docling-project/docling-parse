@@ -368,7 +368,7 @@ def benchmark_rows(
 # -------- Output naming --------
 
 
-def _slug(value: str) -> str:
+def _slug(value: object) -> str:
     """Filesystem-friendly token: lowercase, only [a-z0-9-], others collapsed."""
     slug = re.sub(r"[^a-z0-9-]+", "_", str(value).lower()).strip("_")
     return slug or "unknown"
@@ -497,7 +497,7 @@ def _content_config(
     )
 
 
-def _config_rows(values: dict[str, object], fields: List[str]) -> List[List[str]]:
+def _config_rows(values: dict[str, object], fields: List[str]) -> List[List[object]]:
     return [[field, values[field]] for field in fields]
 
 
@@ -1236,7 +1236,7 @@ def cmp_pdfplumber(
             for i in _page_indices(page_numbers, len(pdf.pages)):
                 page = pdf.pages[i]
                 with c.page(str(pdf_path), i + 1) as out:
-                    _ = page.chars
+                    _chars = page.chars
                     if render:
                         out.image_size = page.to_image(
                             resolution=72.0 * scale
@@ -1355,7 +1355,7 @@ def cmp_pypdf(
 
                     page.extract_text(visitor_text=visitor)
                 else:
-                    _ = page.extract_text()
+                    _text = page.extract_text()
     return c.finish()
 
 
@@ -1689,16 +1689,16 @@ def _speedup_baselines(runs: List[BackendRun]) -> List[BackendRun]:
     return baselines
 
 
-def _speedup_rows(runs: List[BackendRun]) -> Tuple[List[str], List[List[str]]]:
+def _speedup_rows(runs: List[BackendRun]) -> Tuple[List[str], List[List[object]]]:
     """Speedup grid for one task: `baseline_total / row_total` per cell."""
     baselines = _speedup_baselines(runs)
     headers = ["python package", "threads", "total time (s)", "pages/sec"]
     headers.extend(f"vs {_run_label(b)}" for b in baselines)
 
-    rows: List[List[str]] = []
+    rows: List[List[object]] = []
     for run in runs:
         s = run.stats()
-        cells = [
+        cells: List[object] = [
             run.backend,
             str(run.threads),
             _fmt_duration(s["total_s"]),
@@ -1933,8 +1933,10 @@ def write_markdown_report(
         task_runs = [run for run in runs if run.task == task]
         if not task_runs:
             continue
-        headers, rows = _speedup_rows(task_runs)
-        lines.extend([f"Task: `{task}`", "", _md_table(headers, list(rows)), ""])
+        speedup_headers, speedup_rows = _speedup_rows(task_runs)
+        lines.extend(
+            [f"Task: `{task}`", "", _md_table(speedup_headers, speedup_rows), ""]
+        )
 
     reference_name, size_rows, note = render_size_check(runs)
     if reference_name is not None:

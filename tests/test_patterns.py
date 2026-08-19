@@ -218,11 +218,7 @@ def test_uncolored_tiling_pattern_uses_scn_color_operands():
         "/Resources << >> /Matrix [1 0 0 1 0 0]",
         f"0 0 {CELL} {CELL} re f\n".encode("latin-1"),
     )
-    content = (
-        "1 1 0 rg\n"
-        "/CS1 cs 1 0 0 /P0 scn\n"
-        "40 40 80 80 re f\n"
-    )
+    content = "1 1 0 rg\n/CS1 cs 1 0 0 /P0 scn\n40 40 80 80 re f\n"
     pdf = simple_page_pdf(
         content,
         resources="/ColorSpace << /CS1 [/Pattern /DeviceRGB] >> "
@@ -247,12 +243,7 @@ def test_pattern_fill_stroke_operator_uses_pattern_for_fill_only():
         "/Resources << >> /Matrix [1 0 0 1 0 0]",
         f"0 0 {INK} {INK} re f\n".encode("latin-1"),
     )
-    content = (
-        "0 0 1 RG\n"
-        "2 w\n"
-        "/CS1 cs 1 0 0 /P0 scn\n"
-        "40 40 80 80 re B\n"
-    )
+    content = "0 0 1 RG\n2 w\n/CS1 cs 1 0 0 /P0 scn\n40 40 80 80 re B\n"
     pdf = simple_page_pdf(
         content,
         resources="/ColorSpace << /CS1 [/Pattern /DeviceRGB] >> "

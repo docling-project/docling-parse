@@ -34,24 +34,40 @@ from docling_parse.pdf_parser import (
 )
 
 # Box / label styling.
-PDFIUM_BOX_COLOR = (220, 30, 30)        # red boxes on the pdfium panel
-DOCLING_BOX_COLOR = (220, 30, 30)       # red boxes on the docling-parse panel
+PDFIUM_BOX_COLOR = (220, 30, 30)  # red boxes on the pdfium panel
+DOCLING_BOX_COLOR = (220, 30, 30)  # red boxes on the docling-parse panel
 HEADER_HEIGHT = 34
-GAP = 16                                # gap between the two panels
+GAP = 16  # gap between the two panels
 MARGIN = 12
 
 
 def parse_args(argv=None):
-    ap = argparse.ArgumentParser(description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("-i", "--input", required=True, type=Path,
-                    help="Path to the input PDF.")
-    ap.add_argument("-p", "--page", type=int, default=1,
-                    help="1-indexed page number to inspect (default: 1).")
-    ap.add_argument("-o", "--output", type=Path, default=None,
-                    help="Output PNG path (default: <input>.render-inspect.p<page>.png).")
-    ap.add_argument("--scale", type=float, default=2.0,
-                    help="Raster scale in pixels-per-point for both panels (default: 2.0).")
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    ap.add_argument(
+        "-i", "--input", required=True, type=Path, help="Path to the input PDF."
+    )
+    ap.add_argument(
+        "-p",
+        "--page",
+        type=int,
+        default=1,
+        help="1-indexed page number to inspect (default: 1).",
+    )
+    ap.add_argument(
+        "-o",
+        "--output",
+        type=Path,
+        default=None,
+        help="Output PNG path (default: <input>.render-inspect.p<page>.png).",
+    )
+    ap.add_argument(
+        "--scale",
+        type=float,
+        default=2.0,
+        help="Raster scale in pixels-per-point for both panels (default: 2.0).",
+    )
     return ap.parse_args(argv)
 
 
@@ -72,7 +88,7 @@ def render_with_docling(input_path: Path, page: int, scale: float):
         ),
     )
     try:
-        doc_key = parser.load(str(input_path), page_numbers=[page])
+        parser.load(str(input_path), page_numbers=[page])
         result = None
         for res in parser.iterate_results():
             if res.page_number == page:
@@ -91,8 +107,7 @@ def render_with_docling(input_path: Path, page: int, scale: float):
         parser.unload_all()
 
     text_instructions = [
-        instr for instr in render_info["instructions"]
-        if instr.get("type") == "text"
+        instr for instr in render_info["instructions"] if instr.get("type") == "text"
     ]
     crop_bbox = render_info["size_instruction"]["crop_bbox"]
     return image, text_instructions, crop_bbox
@@ -197,13 +212,13 @@ def main(argv=None):
     right = overlay_boxes(docling_img, text_instructions, crop_bbox, DOCLING_BOX_COLOR)
 
     canvas = compose_panels(
-        left, "pdfium + text_instruction boxes",
-        right, "docling-parse + text_instruction boxes",
+        left,
+        "pdfium + text_instruction boxes",
+        right,
+        "docling-parse + text_instruction boxes",
     )
 
-    output = args.output or args.input.with_suffix(
-        f".render-inspect.p{args.page}.png"
-    )
+    output = args.output or args.input.with_suffix(f".render-inspect.p{args.page}.png")
     canvas.save(output)
     print(f"Wrote {output}")
     return 0

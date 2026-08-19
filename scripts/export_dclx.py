@@ -57,25 +57,54 @@ def parse_args(argv=None):
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    ap.add_argument("-i", "--input", required=True, type=Path,
-                    help="Path to the input PDF.")
-    ap.add_argument("-m", "--mode", choices=sorted(MODE_TO_UNIT),
-                    default="word",
-                    help="Cell granularity exported as TextItems (default: word).")
-    ap.add_argument("-o", "--output", type=Path, default=None,
-                    help="Output .dclx path (default: <input>.<mode>.dclx).")
-    ap.add_argument("-p", "--page", type=int, default=None,
-                    help="1-indexed page number to export (default: all pages).")
-    ap.add_argument("--scale", type=float, default=2.0,
-                    help="Page-image raster scale in pixels-per-point (default: 2.0).")
-    ap.add_argument("--threads", type=int, default=4,
-                    help="Worker threads for the parser (default: 4).")
-    ap.add_argument("-l", "--loglevel",
-                    choices=["fatal", "error", "warn", "warning", "info"],
-                    default="fatal",
-                    help="C++ parser log level (default: fatal).")
-    ap.add_argument("--log-text", action="store_true",
-                    help="Print a table of each exported text cell and its bounding box.")
+    ap.add_argument(
+        "-i", "--input", required=True, type=Path, help="Path to the input PDF."
+    )
+    ap.add_argument(
+        "-m",
+        "--mode",
+        choices=sorted(MODE_TO_UNIT),
+        default="word",
+        help="Cell granularity exported as TextItems (default: word).",
+    )
+    ap.add_argument(
+        "-o",
+        "--output",
+        type=Path,
+        default=None,
+        help="Output .dclx path (default: <input>.<mode>.dclx).",
+    )
+    ap.add_argument(
+        "-p",
+        "--page",
+        type=int,
+        default=None,
+        help="1-indexed page number to export (default: all pages).",
+    )
+    ap.add_argument(
+        "--scale",
+        type=float,
+        default=2.0,
+        help="Page-image raster scale in pixels-per-point (default: 2.0).",
+    )
+    ap.add_argument(
+        "--threads",
+        type=int,
+        default=4,
+        help="Worker threads for the parser (default: 4).",
+    )
+    ap.add_argument(
+        "-l",
+        "--loglevel",
+        choices=["fatal", "error", "warn", "warning", "info"],
+        default="fatal",
+        help="C++ parser log level (default: fatal).",
+    )
+    ap.add_argument(
+        "--log-text",
+        action="store_true",
+        help="Print a table of each exported text cell and its bounding box.",
+    )
     return ap.parse_args(argv)
 
 
@@ -148,9 +177,15 @@ def _add_page_to_doc(doc, page_no, page, image, dpi, unit, log_text=False):
     return n_cells, n_pictures
 
 
-def export(input_path: Path, mode: str, scale: float, threads: int,
-           page: int | None = None, log_text: bool = False,
-           loglevel: str = "fatal") -> DoclingDocument:
+def export(
+    input_path: Path,
+    mode: str,
+    scale: float,
+    threads: int,
+    page: int | None = None,
+    log_text: bool = False,
+    loglevel: str = "fatal",
+) -> DoclingDocument:
     content_config = _content_config_for(mode)
     page_numbers = [page] if page is not None else None
 
@@ -174,8 +209,11 @@ def export(input_path: Path, mode: str, scale: float, threads: int,
         parser.load(str(input_path), page_numbers=page_numbers)
         for result in parser.iterate_results():
             if not result.success:
-                print(f"  warning: page {result.page_number} failed: "
-                      f"{result.error_message}", file=sys.stderr)
+                print(
+                    f"  warning: page {result.page_number} failed: "
+                    f"{result.error_message}",
+                    file=sys.stderr,
+                )
                 continue
             pages[result.page_number] = (
                 result.get_page(content_config),
@@ -186,7 +224,7 @@ def export(input_path: Path, mode: str, scale: float, threads: int,
 
     doc = DoclingDocument(name=input_path.stem)
     unit = MODE_TO_UNIT[mode]
-    dpi = int(round(72 * scale))
+    dpi = round(72 * scale)
 
     total_cells = 0
     total_pictures = 0
@@ -200,15 +238,18 @@ def export(input_path: Path, mode: str, scale: float, threads: int,
         )
 
     for page_no in sorted(pages):
-        page, image = pages[page_no]
+        segmented_page, image = pages[page_no]
         n_cells, n_pics = _add_page_to_doc(
-            doc, page_no, page, image, dpi, unit, log_text=log_text)
+            doc, page_no, segmented_page, image, dpi, unit, log_text=log_text
+        )
         total_cells += n_cells
         total_pictures += n_pics
         print(f"  page {page_no}: {n_cells} {mode} cell(s), {n_pics} picture(s)")
 
-    print(f"Assembled DoclingDocument: {len(pages)} page(s), "
-          f"{total_cells} TextItem(s), {total_pictures} PictureItem(s)")
+    print(
+        f"Assembled DoclingDocument: {len(pages)} page(s), "
+        f"{total_cells} TextItem(s), {total_pictures} PictureItem(s)"
+    )
     return doc
 
 
@@ -224,9 +265,18 @@ def main(argv=None):
         return 1
 
     page_label = f", page={args.page}" if args.page is not None else ""
-    print(f"Exporting '{args.input}' (mode={args.mode}, scale={args.scale}{page_label}) ...")
-    doc = export(args.input, args.mode, args.scale, args.threads, args.page,
-                 log_text=args.log_text, loglevel=args.loglevel)
+    print(
+        f"Exporting '{args.input}' (mode={args.mode}, scale={args.scale}{page_label}) ..."
+    )
+    doc = export(
+        args.input,
+        args.mode,
+        args.scale,
+        args.threads,
+        args.page,
+        log_text=args.log_text,
+        loglevel=args.loglevel,
+    )
 
     default_suffix = (
         f".{args.mode}.p{args.page}.dclx"

@@ -866,9 +866,16 @@ namespace pdflib
     // Blend2D clips only to rectangles, so a curved clip previously degraded
     // to its bounding box: a crescent came out as the box around it. A mask
     // plus fill_mask expresses the real shape.
-    BLImage build_clip_mask(const clip_state_instruction& clip_state,
-                            const BLRectI& area) const
+    struct clip_mask_result
     {
+      BLImage image;
+      bool empty_clip = false;
+    };
+
+    clip_mask_result build_clip_mask(const clip_state_instruction& clip_state,
+                                     const BLRectI& area) const
+    {
+      clip_mask_result result;
       BLImage mask;
       // LOG_S(INFO) << "build_clip_mask: begin"
       //             << " area=(" << area.x << ", " << area.y
@@ -878,12 +885,13 @@ namespace pdflib
       if(area.w <= 0 or area.h <= 0)
         {
           // LOG_S(INFO) << "build_clip_mask: empty area";
-          return mask;
+          result.empty_clip = true;
+          return result;
         }
       if(area.w > 8192 or area.h > 8192)
         {
           LOG_S(WARNING) << "build_clip_mask: area too large, skipping";
-          return mask;
+          return result;
         }
 
       // LOG_S(INFO) << "build_clip_mask: creating A8 mask";
@@ -891,7 +899,7 @@ namespace pdflib
       // LOG_S(INFO) << "build_clip_mask: mask.create result=" << mask_create;
       if(mask_create != BL_SUCCESS)
         {
-          return BLImage();
+          return result;
         }
 
       const BLFillRule clip_fill_rule =
@@ -903,7 +911,7 @@ namespace pdflib
       if(not fill_a8(mask, 0))
         {
           LOG_S(WARNING) << "build_clip_mask: could not clear A8 mask";
-          return BLImage();
+          return result;
         }
       // LOG_S(INFO) << "build_clip_mask: mask cleared";
 
@@ -912,6 +920,46 @@ namespace pdflib
       // art, a text-shaped clip). Only DIFFERENT captures intersect.
       // Intersecting the subpaths individually made any such stencil empty,
       // and everything filled through it vanished.
+      std::unordered_map<int, BLRect> group_bboxes;
+      std::unordered_map<int, bool> group_needs_mask;
+      for(const auto& clip_path : clip_state.get_paths())
+        {
+          BLRect rect;
+          const bool is_rect = get_axis_aligned_clip_rect(clip_path, rect);
+          const int group = clip_path.get_clip_group();
+          if(not is_rect) { group_needs_mask[group] = true; }
+
+          BLRect bbox;
+          if(clip_path_canvas_bbox(clip_path, bbox))
+            {
+              auto it = group_bboxes.find(group);
+              if(it == group_bboxes.end())
+                { group_bboxes.emplace(group, bbox); }
+              else
+                {
+                  const double x0 = std::min(it->second.x, bbox.x);
+                  const double y0 = std::min(it->second.y, bbox.y);
+                  const double x1 =
+                    std::max(it->second.x + it->second.w, bbox.x + bbox.w);
+                  const double y1 =
+                    std::max(it->second.y + it->second.h, bbox.y + bbox.h);
+                  it->second = BLRect(x0, y0, x1 - x0, y1 - y0);
+                }
+            }
+        }
+
+      const BLRect area_rect(area.x, area.y, area.w, area.h);
+      for(const auto& entry : group_needs_mask)
+        {
+          const auto bbox_it = group_bboxes.find(entry.first);
+          if(bbox_it == group_bboxes.end() or
+             not rects_intersect(bbox_it->second, area_rect))
+            {
+              result.empty_clip = true;
+              return result;
+            }
+        }
+
       std::vector<std::pair<int, BLPath> > group_paths;
       [[maybe_unused]] size_t clip_index = 0;
       for(const auto& clip_path : clip_state.get_paths())
@@ -1065,11 +1113,12 @@ namespace pdflib
       if(first)
         {
           // LOG_S(INFO) << "build_clip_mask: no usable geometry";
-          return BLImage();
+          return result;
         }
 
       // LOG_S(INFO) << "build_clip_mask: done";
-      return mask;
+      result.image = std::move(mask);
+      return result;
     }
 
     // Applies an instruction's clip paths (bitmap or shape) to the Blend2D
@@ -2181,7 +2230,14 @@ namespace pdflib
           {
             needs_clip_mask = true;
             mask_area = canvas_clamped_rect(axis_aligned_rect(geom.bbox));
-            clip_mask = build_clip_mask(instr.get_clip_state(), mask_area);
+            const clip_mask_result clip =
+              build_clip_mask(instr.get_clip_state(), mask_area);
+            if(clip.empty_clip)
+              {
+                if(clip_active) { ctx.restore(); }
+                return true;
+              }
+            clip_mask = std::move(clip.image);
           }
       }
 
@@ -2676,7 +2732,14 @@ namespace pdflib
                     needs_clip_mask = true;
                     mask_area =
                       canvas_clamped_rect(axis_aligned_rect(geom.bbox));
-                    clip_mask = build_clip_mask(instr.get_clip_state(), mask_area);
+                    const clip_mask_result clip =
+                      build_clip_mask(instr.get_clip_state(), mask_area);
+                    if(clip.empty_clip)
+                      {
+                        if(clip_active) { ctx.restore(); }
+                        return;
+                      }
+                    clip_mask = std::move(clip.image);
                   }
               }
 
@@ -2926,7 +2989,14 @@ namespace pdflib
         if(config_.render_non_rect_clip_masks)
           {
             mask_area = canvas_clamped_rect(axis_aligned_rect(q));
-            clip_mask = build_clip_mask(instr.get_clip_state(), mask_area);
+            const clip_mask_result clip =
+              build_clip_mask(instr.get_clip_state(), mask_area);
+            if(clip.empty_clip)
+              {
+                if(clip_active) { ctx.restore(); }
+                return;
+              }
+            clip_mask = std::move(clip.image);
           }
         else
           {
@@ -3195,7 +3265,13 @@ namespace pdflib
             //             << ", " << bbox.w << ", " << bbox.h << ")"
             //             << " mask_area=(" << mask_area.x << ", " << mask_area.y
             //             << ", " << mask_area.w << ", " << mask_area.h << ")";
-            clip_mask = build_clip_mask(instr.get_clip_state(), mask_area);
+            const clip_mask_result clip =
+              build_clip_mask(instr.get_clip_state(), mask_area);
+            if(clip.empty_clip)
+              {
+                return;
+              }
+            clip_mask = std::move(clip.image);
             // LOG_S(INFO) << "render_shape: build_clip_mask returned empty="
             //             << (clip_mask.is_empty() ? "true" : "false");
           }

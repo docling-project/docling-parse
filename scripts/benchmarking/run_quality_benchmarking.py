@@ -33,7 +33,7 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Callable, Iterable, List
+from typing import Callable, Iterable, List, Mapping
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
@@ -130,7 +130,7 @@ def _parse_list(value: str) -> list[str]:
 
 
 def _validate_names(
-    kind: str, names: Iterable[str], registry: dict[str, object]
+    kind: str, names: Iterable[str], registry: Mapping[str, object]
 ) -> None:
     unknown = sorted(set(names) - set(registry))
     if unknown:
@@ -189,7 +189,7 @@ def resolve_quality_pdf_inputs(
             f"HF dataset {input_str!r} has no {DEFAULT_HF_PDF_SUBDIR}/ "
             f"subfolder at {pdf_dir}"
         )
-    info = {
+    info: dict[str, object] = {
         "source": "huggingface",
         "name": input_str,
         "path": str(pdf_dir),
@@ -714,9 +714,7 @@ def main(argv: List[str]) -> int:
     parser.add_argument(
         "--no-docling-render-non-rect-clip-masks",
         action="store_true",
-        help=(
-            "Disable non-rectangular clip masks in docling-parse render comparisons"
-        ),
+        help=("Disable non-rectangular clip masks in docling-parse render comparisons"),
     )
     parser.add_argument(
         "--output-dir",

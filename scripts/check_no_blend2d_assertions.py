@@ -4,7 +4,6 @@ import sys
 import zipfile
 from pathlib import Path
 
-
 # Guards that release wheels do not ship Blend2D's debug assertion path, i.e.
 # that Blend2D was compiled with BL_BUILD_RELEASE (see cmake/extlib_blend2d.cmake).
 #
