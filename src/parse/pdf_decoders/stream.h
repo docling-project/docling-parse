@@ -60,6 +60,10 @@ namespace pdflib
     pdf_state<BITMAP>&  current_bitmap_state(); // get current bitmap state
 
     void q();
+
+    // Records the CTM this content stream started in, which is what the
+    // pattern /Matrix maps into (8.7.3.1).
+    void capture_base_ctm();
     void Q();
 
     void execute_operator(qpdf_stream_instruction op,
@@ -316,11 +320,6 @@ namespace pdflib
   void pdf_decoder<STREAM>::interprete(std::vector<qpdf_stream_instruction>& stream_,
                                        std::vector<qpdf_stream_instruction>& parameters_)
   {
-    if(not base_ctm_valid_ and stack.size() > 0)
-      {
-        base_ctm_ = current_graphic_state().get_trafo_matrix();
-        base_ctm_valid_ = true;
-      }
     LOG_S(INFO) << __FUNCTION__;
 
     stream = stream_;
@@ -336,6 +335,15 @@ namespace pdflib
   void pdf_decoder<STREAM>::interprete_stream(std::vector<qpdf_stream_instruction>& parameters)
   {
     LOG_S(INFO) << __FUNCTION__;
+
+    // Pattern space is anchored to the space in effect at the START of this
+    // content stream, not to whatever the CTM happens to be when a pattern is
+    // painted (ISO 32000-1, 8.7.3.1): for a page that is the default user
+    // space, for a form XObject the space the form was invoked in. Every entry
+    // point lands here, so this is where it gets recorded -- capturing it in
+    // one of the interprete() overloads only left the other one, the one pages
+    // go through, with nothing to anchor to.
+    capture_base_ctm();
 
     for(int l=0; l<stream.size(); l++)
       {
@@ -442,6 +450,25 @@ namespace pdflib
       }
 
     stack_count += 1;
+  }
+
+  void pdf_decoder<STREAM>::capture_base_ctm()
+  {
+    // Only the first content stream handed to this decoder establishes the
+    // space; a page split over several streams is one stream as far as the
+    // graphics state is concerned (7.8.2).
+    if(base_ctm_valid_ or stack.size() == 0)
+      {
+        return;
+      }
+
+    base_ctm_ = current_graphic_state().get_trafo_matrix();
+    base_ctm_valid_ = true;
+
+    LOG_S(INFO) << "base CTM for pattern space: ["
+                << base_ctm_[0] << ", " << base_ctm_[1] << ", "
+                << base_ctm_[3] << ", " << base_ctm_[4] << ", "
+                << base_ctm_[6] << ", " << base_ctm_[7] << "]";
   }
 
   void pdf_decoder<STREAM>::Q()
@@ -1194,12 +1221,17 @@ namespace pdflib
     const std::array<double, 9>& want = pattern.get_matrix();
     const std::array<double, 9>& cur  = current_graphic_state().get_trafo_matrix();
 
-    // No base recorded yet (a pattern used before any q): the current matrix
-    // is the best available stand-in and is usually identical to it.
+    // The base CTM is recorded when the content stream starts interpreting.
+    // Standing in with the current matrix instead -- which is what happened
+    // while pages never recorded one -- anchors the lattice to the painting
+    // operation rather than to the page, so every cell lands displaced by the
+    // fill's own translation and the tiling is out of phase with the artwork
+    // it fills.
     if(not base_ctm_valid_)
       {
-        base_ctm_ = cur;
-        base_ctm_valid_ = true;
+        LOG_S(WARNING) << "pattern " << pattern_name
+                       << ": no base CTM recorded for this content stream;"
+                       << " anchoring pattern space to the default user space";
       }
 
     // inverse of the current (affine) CTM
