@@ -289,6 +289,29 @@ namespace pdflib
       return true;
     }
 
+    // How many glyphs of a shaped run came back as .notdef. A run with any of
+    // them has characters the face cannot draw, each of which lands on the
+    // page as a box.
+    static size_t glyph_run_notdef_count(const BLGlyphBuffer& gb)
+    {
+      const size_t count = gb.size();
+      const uint32_t* glyph_ids = gb.glyph_run().glyph_data_as<uint32_t>();
+      if (count == 0 or glyph_ids == nullptr) { return 0; }
+
+      size_t notdef = 0;
+      for (size_t i = 0; i < count; ++i)
+        {
+          if (glyph_ids[i] == 0) { ++notdef; }
+        }
+
+      return notdef;
+    }
+
+    static bool glyph_run_has_notdef(const BLGlyphBuffer& gb)
+    {
+      return glyph_run_notdef_count(gb) > 0;
+    }
+
     // Blend2D loads some SFNT faces and then decodes part of them into
     // outlines that are orders of magnitude too large: a valid CJK subset
     // (PMingLiU, 1024 units/em, every glyph simple and well formed) rendered
@@ -2582,8 +2605,28 @@ namespace pdflib
             // page fills with boxes. Type3 stays out: its ink arrives as
             // parse-time bitmaps, and shaping its cell text against a system
             // face would smear placeholder boxes over that ink.
-            if (font_resolver_ and not instr.is_type3() and
-                (not shaped or glyph_run_all_notdef(gb)))
+            //
+            // A run that shaped with *some* glyphs missing needs this too. The
+            // name-resolved face for a CJK font is often one that carries part
+            // of the repertoire; keeping it because it drew most of the run
+            // leaves a box at every character it lacks, scattered through the
+            // page. Only a run with nothing missing is settled.
+            const size_t notdef_before =
+              shaped ? glyph_run_notdef_count(gb)
+                     : std::numeric_limits<size_t>::max();
+
+            // An embedded face is authoritative for the glyphs it does map:
+            // swapping the whole run for a system face because one character
+            // is missing would redraw the rest in another typeface, so only a
+            // run it cannot draw at all is given up. A substituted face has no
+            // such claim -- every character it lacks is a box, and a face that
+            // has them all is strictly better.
+            const bool needs_better_face =
+              not shaped or
+              (using_embedded_font ? glyph_run_all_notdef(gb)
+                                   : glyph_run_has_notdef(gb));
+
+            if (font_resolver_ and not instr.is_type3() and needs_better_face)
               {
                 BLFontFace script_face =
                   font_resolver_->resolve_face_for_text(instr.get_text());
@@ -2594,12 +2637,26 @@ namespace pdflib
                   {
                     gb.set_utf8_text(instr.get_text().c_str());
                     shape_res = script_font.shape(gb);
-                    if (shape_res == BL_SUCCESS and not gb.is_empty() and
-                        not glyph_run_all_notdef(gb))
+
+                    const bool script_shaped =
+                      (shape_res == BL_SUCCESS and not gb.is_empty());
+                    const size_t notdef_after =
+                      script_shaped ? glyph_run_notdef_count(gb)
+                                    : std::numeric_limits<size_t>::max();
+
+                    if (script_shaped and notdef_after < notdef_before)
                       {
                         font = script_font;
                         using_embedded_font = false;
                         shaped = true;
+                      }
+                    else if (shaped)
+                      {
+                        // The script face is no better; put the run that was
+                        // already shaped back into the buffer.
+                        gb.set_utf8_text(instr.get_text().c_str());
+                        shape_res = font.shape(gb);
+                        shaped = (shape_res == BL_SUCCESS and not gb.is_empty());
                       }
                   }
               }

@@ -32,6 +32,12 @@ namespace pdflib
 
     std::vector<std::string> split(std::string line, char delim='\t');
 
+    // Of several code points listed for one CID, the first that is not a
+    // radical from the Kangxi (U+2F00..U+2FDF) or CJK Radicals Supplement
+    // (U+2E80..U+2EFF) blocks; those are compatibility forms that look like
+    // the ideograph and do not read as it.
+    static const std::string& prefer_character(const std::vector<std::string>& hex_values);
+
     void read_cmap2cid(std::string filename);
 
     void read_cid2code(std::string              filename,
@@ -77,6 +83,33 @@ namespace pdflib
       }
 
     return parts;
+  }
+
+  const std::string& font_cid::prefer_character(const std::vector<std::string>& hex_values)
+  {
+    for(const std::string& hex : hex_values)
+      {
+        uint32_t codepoint = 0;
+        try
+          {
+            codepoint = static_cast<uint32_t>(std::stoul(hex, NULL, 16));
+          }
+        catch(const std::exception& exc)
+          {
+            continue;
+          }
+
+        const bool is_radical =
+          (0x2E80 <= codepoint and codepoint <= 0x2EFF) or
+          (0x2F00 <= codepoint and codepoint <= 0x2FDF);
+
+        if(not is_radical)
+          {
+            return hex;
+          }
+      }
+
+    return hex_values.front();
   }
 
   void font_cid::read_cmap2cid(std::string filename)
@@ -224,20 +257,18 @@ namespace pdflib
                   {
                     std::vector<std::string> vec = split(name, ',');
 
-                    /*
-                      std::string utf8="";
-                      for(auto item:vec)
-                      {
-                      utf8 += utils::string::hex_to_utf8(item, 4);
-                      }
-
-                      cid2utf8[cid] = utf8;
-                    */
-
                     if(vec.size()>0)
                       {
-                        std::string utf8 = utils::string::hex_to_utf8(vec.front(), 4);
-                        cid2utf8[cid] = utf8;
+                        // A CID that maps to several code points lists the
+                        // compatibility form first for a number of characters:
+                        // CID 3821 is `2f46,65e0`, and U+2F46 is KANGXI RADICAL
+                        // WITHOUT, not the ideograph 无 (U+65E0). They draw
+                        // alike, so taking the first went unnoticed on the
+                        // page while the extracted text carried a radical that
+                        // no search matches. Prefer a real character.
+                        const std::string& pick = prefer_character(vec);
+
+                        cid2utf8[cid] = utils::string::hex_to_utf8(pick, 4);
                       }
                     else
                       {

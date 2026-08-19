@@ -166,7 +166,18 @@ namespace pdflib
     // false for Latin-only text.
     static bool text_script_key(const std::string& utf8_text, std::string& script_key);
 
-    // Whether `face` shapes `utf8_text` to something other than all-.notdef.
+    // A "last resort" face carries a glyph for every code point, all of them
+    // placeholder boxes. It answers any coverage probe perfectly and draws
+    // nothing legible, so it must never win one.
+    static bool is_last_resort_face(const std::string& name);
+
+    // How many glyphs of `utf8_text` the face actually has, and how many the
+    // text shapes to. Zero when the face cannot shape the text at all.
+    static std::size_t face_coverage(BLFontFace& face,
+                                     const std::string& utf8_text,
+                                     std::size_t& total);
+
+    // Whether `face` has a glyph for every character of `utf8_text`.
     static bool face_covers_text(BLFontFace& face, const std::string& utf8_text);
 
 
@@ -205,7 +216,16 @@ namespace pdflib
     std::vector<std::filesystem::path> cjk_candidates_;
     std::vector<std::filesystem::path> arabic_candidates_;
     mutable std::shared_mutex script_cache_mutex_;
-    std::unordered_map<std::string, BLFontFace> script_face_cache_;
+    // Per script, the faces already found to cover text of that script, keyed
+    // by path so the same one is not kept twice. One face per script is not
+    // enough: whether a face covers a run is a property of the run, not of the
+    // script.
+    std::unordered_map<std::string,
+                       std::vector<std::pair<std::string, BLFontFace>>> script_face_cache_;
+    // Probe rounds that ended without a fully covering face, per script. The
+    // probe is bounded work, but a host with nothing for the script would pay
+    // it again on every run.
+    std::unordered_map<std::string, std::size_t> script_probe_rounds_;
 
     mutable std::shared_mutex match_cache_mutex_;
     std::unordered_map<match_cache_key,
@@ -812,19 +832,55 @@ namespace pdflib
   }
 
 
-  inline bool blend2d_font_resolver::face_covers_text(BLFontFace& face,
-                                                      const std::string& utf8_text)
+  inline bool blend2d_font_resolver::is_last_resort_face(const std::string& name)
   {
-    if (not face.is_valid()) { return false; }
+    std::string normalized = normalize_font_name(name);
+    normalized.erase(std::remove(normalized.begin(), normalized.end(), ' '),
+                     normalized.end());
+
+    return normalized.find("lastresort") != std::string::npos;
+  }
+
+  inline std::size_t blend2d_font_resolver::face_coverage(BLFontFace& face,
+                                                          const std::string& utf8_text,
+                                                          std::size_t& total)
+  {
+    total = 0;
+    if (not face.is_valid()) { return 0; }
 
     BLFont probe;
-    if (probe.create_from_face(face, 16.0f) != BL_SUCCESS) { return false; }
+    if (probe.create_from_face(face, 16.0f) != BL_SUCCESS) { return 0; }
 
     BLGlyphBuffer gb;
     gb.set_utf8_text(utf8_text.c_str());
-    if (probe.shape(gb) != BL_SUCCESS or gb.is_empty()) { return false; }
+    if (probe.shape(gb) != BL_SUCCESS or gb.is_empty()) { return 0; }
 
-    return not shaped_run_all_notdef(gb);
+    const std::size_t count = gb.size();
+    const uint32_t* ids = gb.glyph_run().glyph_data_as<uint32_t>();
+    if (ids == nullptr) { return 0; }
+
+    total = count;
+
+    std::size_t covered = 0;
+    for (std::size_t i = 0; i < count; ++i)
+      {
+        if (ids[i] != 0) { ++covered; }
+      }
+
+    return covered;
+  }
+
+  inline bool blend2d_font_resolver::face_covers_text(BLFontFace& face,
+                                                      const std::string& utf8_text)
+  {
+    // Covering *some* of the text is not covering it. A face holding a
+    // fraction of a script's repertoire shapes the common characters and
+    // leaves .notdef for the rest, and accepting it on that basis put boxes
+    // through a page of simplified Chinese wherever the face fell short.
+    std::size_t total = 0;
+    const std::size_t covered = face_coverage(face, utf8_text, total);
+
+    return total > 0 and covered == total;
   }
 
 
@@ -838,10 +894,34 @@ namespace pdflib
 
     warm();
 
+    // How many fruitless probe rounds are worth spending on one script before
+    // settling for the best face found so far.
+    constexpr std::size_t max_fruitless_rounds = 8;
+
+    BLFontFace first_known;
     {
       std::shared_lock<std::shared_mutex> lock(script_cache_mutex_);
+
       auto it = script_face_cache_.find(script);
-      if (it != script_face_cache_.end()) { return it->second; }
+      if (it != script_face_cache_.end() and not it->second.empty())
+        {
+          first_known = it->second.front().second;
+
+          for (auto& entry : it->second)
+            {
+              BLFontFace face = entry.second;
+              if (face_covers_text(face, utf8_text)) { return face; }
+            }
+        }
+
+      auto rounds = script_probe_rounds_.find(script);
+      if (rounds != script_probe_rounds_.end() and
+          rounds->second >= max_fruitless_rounds)
+        {
+          // Nothing installed covers this script fully; stop looking and draw
+          // what the host can.
+          return first_known;
+        }
     }
 
     // Script-specific faces first, then every indexed face in discovery order,
@@ -855,7 +935,10 @@ namespace pdflib
     for (const auto& p : preferred)
       {
         std::error_code ec;
-        if (std::filesystem::exists(p, ec)) { refs.push_back({p.string(), 0}); }
+        if (std::filesystem::exists(p, ec) and not is_last_resort_face(p.stem().string()))
+          {
+            refs.push_back({p.string(), 0});
+          }
       }
 
     std::vector<const indexed_font_face*> indexed;
@@ -864,37 +947,94 @@ namespace pdflib
     std::sort(indexed.begin(), indexed.end(),
               [](const indexed_font_face* a, const indexed_font_face* b)
               { return a->discovery_order < b->discovery_order; });
-    for (const auto* meta : indexed) { refs.push_back(meta->ref); }
+    for (const auto* meta : indexed)
+      {
+        if (is_last_resort_face(meta->family_name) or
+            is_last_resort_face(std::filesystem::path(meta->ref.path).stem().string()))
+          {
+            continue;
+          }
+
+        refs.push_back(meta->ref);
+      }
 
     // Probing means shaping, so bound the work; the answer is cached per script.
     constexpr std::size_t max_probes = 80;
 
     BLFontFace chosen;
+    std::string chosen_path;
+    BLFontFace best_partial;
+    std::string best_partial_path;
+    std::size_t best_covered = 0;
     std::size_t probes = 0;
     for (const auto& ref : refs)
       {
         if (probes++ >= max_probes) { break; }
+
         BLFontFace face = load_font_face(ref);
-        if (face_covers_text(face, utf8_text))
+
+        std::size_t total = 0;
+        const std::size_t covered = face_coverage(face, utf8_text, total);
+
+        if (total > 0 and covered == total)
           {
             chosen = face;
+            chosen_path = ref.path;
             LOG_S(INFO) << "blend2d font resolver: script '" << script
                         << "' resolved to " << ref.path
                         << " after " << probes << " probe(s)";
             break;
           }
+
+        // Remember the closest miss: half a run of glyphs beats a full run of
+        // boxes when the host has nothing better.
+        if (covered > best_covered)
+          {
+            best_covered = covered;
+            best_partial = face;
+            best_partial_path = ref.path;
+          }
       }
 
-    if (not chosen.is_valid())
+    const bool full_cover = chosen.is_valid();
+    if (not full_cover)
       {
-        LOG_S(WARNING) << "blend2d font resolver: no installed face covers script '"
-                       << script << "'; text will render as .notdef boxes";
+        chosen = best_partial.is_valid() ? best_partial : first_known;
+        chosen_path = best_partial.is_valid() ? best_partial_path : std::string();
+
+        LOG_S(WARNING) << "blend2d font resolver: no installed face covers all of"
+                       << " `" << utf8_text << "` (script '" << script << "');"
+                       << " the characters it lacks will render as .notdef boxes";
       }
 
     {
+      // Keep the faces that actually cover something; a near miss is only
+      // worth keeping when there is nothing else to fall back on.
+      constexpr std::size_t max_cached_faces = 8;
+
       std::unique_lock<std::shared_mutex> lock(script_cache_mutex_);
-      script_face_cache_[script] = chosen;
+
+      auto& faces = script_face_cache_[script];
+      const bool worth_caching =
+        chosen.is_valid() and not chosen_path.empty() and
+        (full_cover or faces.empty()) and faces.size() < max_cached_faces;
+
+      if (worth_caching)
+        {
+          const bool known =
+            std::any_of(faces.begin(), faces.end(),
+                        [&](const std::pair<std::string, BLFontFace>& entry)
+                        { return entry.first == chosen_path; });
+
+          if (not known) { faces.emplace_back(chosen_path, chosen); }
+        }
+
+      if (not full_cover)
+        {
+          script_probe_rounds_[script] += 1;
+        }
     }
+
     return chosen;
   }
 
