@@ -1367,6 +1367,37 @@ namespace pdflib
       bool       active_;
     };
 
+    // Scoped ctx.save()/ctx.restore().
+    //
+    // A clip is pushed onto the context with a save and has to come off again
+    // on EVERY exit. One early return that forgot its restore does not just
+    // lose that instruction: the save stays on the context, every later
+    // restore pops somebody else's state, and the clip that should have been
+    // undone keeps narrowing what the rest of the page is allowed to paint.
+    // A page of pattern cells, whose lattice deliberately steps past the
+    // filled path, leaks one save per off-target cell and ends up painting
+    // almost nothing. Tying the save to a scope makes the balance structural.
+    class context_state_scope
+    {
+    public:
+
+      // `active` false constructs a scope that saves nothing.
+      explicit context_state_scope(BLContext& ctx, bool active = true);
+      ~context_state_scope();
+
+      // Restores now rather than at the end of the scope; the destructor then
+      // does nothing. Calling it twice is harmless.
+      void restore();
+
+      context_state_scope(const context_state_scope&) = delete;
+      context_state_scope& operator=(const context_state_scope&) = delete;
+
+    private:
+
+      BLContext& ctx_;
+      bool       active_;
+    };
+
     // Converts a parsed 0-255 RGB triple and a [0, 1] alpha into a Blend2D
     // color (straight alpha; the context premultiplies while compositing).
     static BLRgba32 make_rgba32(const std::array<int, 3>& rgb,
@@ -2324,6 +2355,31 @@ namespace pdflib
       }
   }
 
+  inline renderer<BLEND2D>::context_state_scope::context_state_scope(BLContext& ctx,
+                                                                     bool active):
+    ctx_(ctx),
+    active_(active)
+  {
+    if (active_)
+      {
+        ctx_.save();
+      }
+  }
+
+  inline renderer<BLEND2D>::context_state_scope::~context_state_scope()
+  {
+    restore();
+  }
+
+  inline void renderer<BLEND2D>::context_state_scope::restore()
+  {
+    if (active_)
+      {
+        ctx_.restore();
+        active_ = false;
+      }
+  }
+
   inline void renderer<BLEND2D>::render_text(text_instruction& instr)
   {
     // LOG_S(INFO) << __FUNCTION__;
@@ -2950,31 +3006,30 @@ namespace pdflib
         return;
       }
 
-    const bool blend_active = push_blend_mode(ctx, instr.get_blend_mode());
+    // The save/restore pairs nest: the alpha is pushed inside the clip, and
+    // the clip inside the blend mode. Each is a scope, so every exit below
+    // unwinds them in that order without a restore to remember.
+    const blend_mode_scope blend(ctx, instr.get_blend_mode());
 
     const bool has_clip = instr.has_clip_state();
-    bool clip_active = false;
+    context_state_scope clip_scope(ctx, has_clip);
     if(has_clip)
       {
         LOG_S(INFO) << "render_bitmap: applying "
                     << instr.get_clip_state().get_paths().size()
                     << " clip path(s)";
-        ctx.save();
         const clip_apply_result clip_result =
           apply_clip_state(ctx,
                            instr.get_clip_state(),
                            axis_aligned_rect(q));
         if(clip_result == CLIP_EMPTY)
           {
-            ctx.restore();
-            if(blend_active) { ctx.restore(); }
             return;
           }
 
-        clip_active = clip_result == CLIP_APPLIED;
-        if(not clip_active)
+        if(clip_result != CLIP_APPLIED)
           {
-            ctx.restore();
+            clip_scope.restore();
           }
       }
 
@@ -2993,7 +3048,6 @@ namespace pdflib
               build_clip_mask(instr.get_clip_state(), mask_area);
             if(clip.empty_clip)
               {
-                if(clip_active) { ctx.restore(); }
                 return;
               }
             clip_mask = std::move(clip.image);
@@ -3005,10 +3059,10 @@ namespace pdflib
       }
 
     const bool alpha_active = fill_alpha < 1.0;
+    context_state_scope alpha_scope(ctx, alpha_active);
     if(alpha_active)
       {
         LOG_S(INFO) << "render_bitmap: applying constant alpha " << fill_alpha;
-        ctx.save();
         ctx.set_global_alpha(fill_alpha);
       }
 
@@ -3062,22 +3116,6 @@ namespace pdflib
         render_bitmap_affine(ctx, src_img, q, sw, sh);
       }
 
-    // the save/restore pairs nest: the alpha is pushed inside the clip, and
-    // the clip inside the blend mode
-    if(alpha_active)
-      {
-        ctx.restore();
-      }
-
-    if(clip_active)
-      {
-        ctx.restore();
-      }
-
-    if(blend_active)
-      {
-        ctx.restore();
-      }
   }
 
   // ---------------------------------------------------------------------------
@@ -3228,25 +3266,24 @@ namespace pdflib
 
     BLContext& ctx = page_context();
 
-    const bool blend_active = push_blend_mode(ctx, instr.get_blend_mode());
+    // Both scopes unwind on every exit below, in reverse order of their
+    // construction: the clip was saved inside the blend mode, so it comes off
+    // first.
+    const blend_mode_scope blend(ctx, instr.get_blend_mode());
+    context_state_scope    clip_scope(ctx, instr.has_clip_state());
 
-    bool clip_active = false;
     if (instr.has_clip_state())
       {
-        ctx.save();
         const clip_apply_result clip_result =
           apply_clip_state(ctx, instr.get_clip_state(), bbox);
         if (clip_result == CLIP_EMPTY)
           {
-            ctx.restore();
-            if (blend_active) { ctx.restore(); }
             return;
           }
 
-        clip_active = clip_result == CLIP_APPLIED;
-        if (not clip_active)
+        if (clip_result != CLIP_APPLIED)
           {
-            ctx.restore();
+            clip_scope.restore();
           }
       }
 
@@ -3269,6 +3306,9 @@ namespace pdflib
               build_clip_mask(instr.get_clip_state(), mask_area);
             if(clip.empty_clip)
               {
+                // The clip leaves this shape nothing to paint. Leaving through
+                // here used to skip the restores below and strand the clip on
+                // the context.
                 return;
               }
             clip_mask = std::move(clip.image);
@@ -3379,16 +3419,6 @@ namespace pdflib
           }
 
         ctx.stroke_path(path);
-      }
-
-    if (clip_active)
-      {
-        ctx.restore();
-      }
-
-    if (blend_active)
-      {
-        ctx.restore();
       }
   }
 
