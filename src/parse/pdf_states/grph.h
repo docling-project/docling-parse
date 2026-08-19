@@ -191,6 +191,7 @@ namespace pdflib
 
     // Name given by the scn that selected a pattern, empty when none.
     const std::string& get_fill_pattern_name() const { return fill_pattern_name; }
+    void materialize_pattern_fill_color();
 
     // ExtGState /BM, likewise folded together with the blend mode of an
     // enclosing group: content that does not blend on its own inherits the
@@ -214,6 +215,11 @@ namespace pdflib
     void enter_transparency_group();
 
   private:
+    struct color_set_result
+    {
+      bool color_set = false;
+      std::string pattern_name;
+    };
 
     bool verify(std::vector<qpdf_stream_instruction>& instructions,
 		std::size_t num_instr, std::string name);
@@ -221,12 +227,14 @@ namespace pdflib
     // Color mapping for SC/sc/SCN/scn: when CS/cs resolved the current
     // color space from the /ColorSpace resources, map the operands through
     // it; otherwise interpret the numeric operands by their count
-    // (1 -> gray, 3 -> RGB, 4 -> CMYK). Returns false and leaves rgb
-    // untouched for pattern-name operands or unsupported counts.
-    bool set_color(std::vector<qpdf_stream_instruction>& instructions,
-                   std::array<int, 3>& rgb,
-                   const std::string& cs_key,
-                   std::string name);
+    // (1 -> gray, 3 -> RGB, 4 -> CMYK). A trailing name operand is reported
+    // as a pattern selection; malformed operands or unsupported counts leave
+    // rgb untouched.
+    color_set_result set_color(std::vector<qpdf_stream_instruction>& instructions,
+                               std::array<int, 3>& rgb,
+                               const std::string& cs_key,
+                               std::string name,
+                               bool allow_pattern_name = false);
 
     // Shared CS/cs implementation: resolves the operand against the device
     // spaces and the /ColorSpace resources; cs_key receives the resource
@@ -427,24 +435,46 @@ namespace pdflib
     return color::cmyk_to_rgb255(c, m, y, k);
   }
 
-  bool pdf_state<GRPH>::set_color(std::vector<qpdf_stream_instruction>& instructions,
-                                  std::array<int, 3>& rgb,
-                                  const std::string& cs_key,
-                                  std::string name)
+  pdf_state<GRPH>::color_set_result pdf_state<GRPH>::set_color(
+    std::vector<qpdf_stream_instruction>& instructions,
+    std::array<int, 3>& rgb,
+    const std::string& cs_key,
+    std::string name,
+    bool allow_pattern_name)
   {
+    color_set_result result;
     std::vector<double> comps;
-    for(auto& instr : instructions)
+    for(std::size_t i = 0; i < instructions.size(); i++)
       {
+        auto& instr = instructions[i];
         if(instr.is_number())
           {
             comps.push_back(instr.to_double());
           }
-        else // pattern name operand (SCN/scn) or unexpected type
+        else if(allow_pattern_name and i + 1 == instructions.size())
+          {
+            std::string nm = instr.unparse();
+            if(not nm.empty() and nm.front() == '/')
+              {
+                result.pattern_name = nm;
+                continue;
+              }
+
+            LOG_S(WARNING) << name << ": invalid pattern name operand "
+                           << instr.unparse() << ", keeping current color";
+            return result;
+          }
+        else // unexpected type
           {
             LOG_S(WARNING) << name << ": non-numeric operand "
                            << instr.unparse() << ", keeping current color";
-            return false;
+            return result;
           }
+      }
+
+    if(not result.pattern_name.empty() and comps.empty())
+      {
+        return result;
       }
 
     // resolved /ColorSpace resource from CS/cs (ICCBased, Indexed, ...)
@@ -454,7 +484,8 @@ namespace pdflib
       {
         if((*page_colorspaces)[cs_key].map_to_rgb(comps, rgb))
           {
-            return true;
+            result.color_set = true;
+            return result;
           }
 
         LOG_S(WARNING) << name << ": color space " << cs_key
@@ -467,25 +498,28 @@ namespace pdflib
       case 1:
         {
           rgb = gray_to_rgb(comps[0]);
-          return true;
+          result.color_set = true;
+          return result;
         }
       case 3:
         {
           rgb = {static_cast<int>(std::round(255.0*comps[0])),
                  static_cast<int>(std::round(255.0*comps[1])),
                  static_cast<int>(std::round(255.0*comps[2]))};
-          return true;
+          result.color_set = true;
+          return result;
         }
       case 4:
         {
           rgb = cmyk_to_rgb(comps[0], comps[1], comps[2], comps[3]);
-          return true;
+          result.color_set = true;
+          return result;
         }
       default:
         {
           LOG_S(WARNING) << name << ": unsupported number of color components ("
                          << comps.size() << "), keeping current color";
-          return false;
+          return result;
         }
       }
   }
@@ -685,7 +719,19 @@ namespace pdflib
     else if(page_colorspaces!=nullptr and page_colorspaces->count("/"+cs_name)>0)
       {
         cs_key = "/"+cs_name;
-        rgb = {0, 0, 0};
+        auto& colorspace = (*page_colorspaces)[cs_key];
+        if(colorspace.get_family() == COLOR_SPACE_PATTERN)
+          {
+            if(&rgb == &rgb_filling_ops)
+              {
+                fill_is_unresolved_pattern = true;
+                fill_pattern_name.clear();
+              }
+          }
+        else
+          {
+            rgb = {0, 0, 0};
+          }
       }
     else
       {
@@ -711,12 +757,12 @@ namespace pdflib
 
   void pdf_state<GRPH>::SCN(std::vector<qpdf_stream_instruction>& instructions)
   {
-    set_color(instructions, rgb_stroking_ops, stroking_cs_key, __FUNCTION__);
+    set_color(instructions, rgb_stroking_ops, stroking_cs_key, __FUNCTION__, true);
   }
 
   void pdf_state<GRPH>::sc(std::vector<qpdf_stream_instruction>& instructions)
   {
-    if(set_color(instructions, rgb_filling_ops, filling_cs_key, __FUNCTION__))
+    if(set_color(instructions, rgb_filling_ops, filling_cs_key, __FUNCTION__).color_set)
       {
         fill_is_unresolved_pattern = false;
       }
@@ -724,18 +770,26 @@ namespace pdflib
 
   void pdf_state<GRPH>::scn(std::vector<qpdf_stream_instruction>& instructions)
   {
-    // A pattern-name operand leaves set_color false: the fill stays flagged,
-    // and the name is kept so the decoder can try to paint that pattern.
-    if(set_color(instructions, rgb_filling_ops, filling_cs_key, __FUNCTION__))
+    color_set_result result =
+      set_color(instructions, rgb_filling_ops, filling_cs_key, __FUNCTION__, true);
+
+    if(not result.pattern_name.empty())
+      {
+        fill_is_unresolved_pattern = true;
+        fill_pattern_name = result.pattern_name;
+      }
+    else if(result.color_set)
       {
         fill_is_unresolved_pattern = false;
         fill_pattern_name.clear();
       }
-    else if(fill_is_unresolved_pattern and not instructions.empty())
-      {
-        std::string nm = instructions.back().unparse();
-        if(not nm.empty() and nm.front() == '/') { fill_pattern_name = nm; }
-      }
+  }
+
+  void pdf_state<GRPH>::materialize_pattern_fill_color()
+  {
+    fill_is_unresolved_pattern = false;
+    fill_pattern_name.clear();
+    filling_cs_key.clear();
   }
   
   // G/g/RG/rg/K/k also switch the current color space to the device space,

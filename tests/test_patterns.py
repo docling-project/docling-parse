@@ -18,7 +18,12 @@ from __future__ import annotations
 import pytest
 
 from tests.pdf_builder import render_page, simple_page_pdf, stream_object
-from tests.rendering_regression import coverage_ratio, region_image
+from tests.rendering_regression import (
+    assert_color_near,
+    center_color,
+    coverage_ratio,
+    region_image,
+)
 
 CELL = 20.0
 INK = 10.0
@@ -202,6 +207,63 @@ def test_pattern_bound_honours_the_even_odd_rule():
     assert coverage_ratio(region_image(nonzero, hole)) > 0.9, (
         "f left the inner rectangle empty; the same-wound subpath is not a hole "
         "under the nonzero rule"
+    )
+
+
+def test_uncolored_tiling_pattern_uses_scn_color_operands():
+    """PaintType 2 cells inherit the colour operands from the selecting scn."""
+    pattern = stream_object(
+        "/Type /Pattern /PatternType 1 /PaintType 2 /TilingType 1 "
+        f"/BBox [0 0 {CELL} {CELL}] /XStep {CELL} /YStep {CELL} "
+        "/Resources << >> /Matrix [1 0 0 1 0 0]",
+        f"0 0 {CELL} {CELL} re f\n".encode("latin-1"),
+    )
+    content = (
+        "1 1 0 rg\n"
+        "/CS1 cs 1 0 0 /P0 scn\n"
+        "40 40 80 80 re f\n"
+    )
+    pdf = simple_page_pdf(
+        content,
+        resources="/ColorSpace << /CS1 [/Pattern /DeviceRGB] >> "
+        "/Pattern << /P0 5 0 R >>",
+        extra_objects=[pattern],
+    )
+
+    image = region_image(render_page(pdf), (60.0, 60.0, 100.0, 100.0))
+    assert_color_near(
+        center_color(image),
+        (255, 0, 0),
+        tolerance=8,
+        what="uncolored pattern selected colour",
+    )
+
+
+def test_pattern_fill_stroke_operator_uses_pattern_for_fill_only():
+    """`B` paints the selected pattern fill, then strokes the original path."""
+    pattern = stream_object(
+        "/Type /Pattern /PatternType 1 /PaintType 2 /TilingType 1 "
+        f"/BBox [0 0 {CELL} {CELL}] /XStep {CELL} /YStep {CELL} "
+        "/Resources << >> /Matrix [1 0 0 1 0 0]",
+        f"0 0 {INK} {INK} re f\n".encode("latin-1"),
+    )
+    content = (
+        "0 0 1 RG\n"
+        "2 w\n"
+        "/CS1 cs 1 0 0 /P0 scn\n"
+        "40 40 80 80 re B\n"
+    )
+    pdf = simple_page_pdf(
+        content,
+        resources="/ColorSpace << /CS1 [/Pattern /DeviceRGB] >> "
+        "/Pattern << /P0 5 0 R >>",
+        extra_objects=[pattern],
+    )
+
+    image = region_image(render_page(pdf), (45.0, 45.0, 115.0, 115.0))
+    coverage = coverage_ratio(image)
+    assert 0.1 < coverage < 0.45, (
+        f"`B` used a solid fill instead of the pattern stencil: {coverage:.3f}"
     )
 
 

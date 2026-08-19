@@ -308,6 +308,10 @@ namespace pdflib
     const std::array<int, 3>& get_rgb_filling() const { return rgb_filling_; }
     double get_fill_alpha() const { return fill_alpha_; }
 
+    void set_clip_state(clip_state_instruction clip_state);
+    const clip_state_instruction& get_clip_state() const { return clip_state_; }
+    bool has_clip_state() const { return clip_state_.has_clip(); }
+
     // ExtGState /BM in force when this was painted (11.3.5). Set after
     // construction, like the other late additions here, so the constructor
     // signature stays put.
@@ -339,6 +343,8 @@ namespace pdflib
       copy.glyph_name_     = glyph_name_;
       copy.rgb_filling_    = rgb_filling_;
       copy.fill_alpha_     = fill_alpha_;
+      copy.clip_state_     = clip_state_.translated(dx, dy);
+      copy.blend_mode_     = blend_mode_;
       copy.rendering_mode_ = rendering_mode_;
 
       return copy;
@@ -383,6 +389,7 @@ namespace pdflib
 
     std::array<int, 3> rgb_filling_ = {0, 0, 0};
     double fill_alpha_ = 1.0;
+    clip_state_instruction clip_state_;
     blend_mode_name blend_mode_ = BLEND_MODE_NORMAL;
     int rendering_mode_ = 0;
   };
@@ -427,6 +434,11 @@ namespace pdflib
   {
     rgb_filling_ = rgb;
     fill_alpha_ = alpha;
+  }
+
+  inline void text_instruction::set_clip_state(clip_state_instruction clip_state)
+  {
+    clip_state_ = std::move(clip_state);
   }
 
   class text_widget_instruction

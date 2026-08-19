@@ -1186,8 +1186,12 @@ namespace pdflib
     // pattern coordinates and put it off the top of the page.
     const std::array<double, 9> to_pattern = mul(mul(want, base_ctm_), inv);
 
-    // How many cells to lay down: cover the page box in pattern space.
-    const std::array<double, 4> page_box = page_dimension.get_crop_bbox();
+    // How many cells to lay down: cover the filled path in pattern space.
+    // Falling back to the page box keeps patterns usable when the path cannot
+    // produce a finite bbox, but the path bbox is the normal case and avoids
+    // picking a clamped off-page tile range for small figures.
+    std::array<double, 4> paint_box = page_dimension.get_crop_bbox();
+    current_shape_state().get_current_path_bbox(paint_box);
     double xs = pattern.get_x_step();
     double ys = pattern.get_y_step();
     if(xs <= 0.0 or ys <= 0.0) { xs = ys = 0.0; }
@@ -1213,8 +1217,8 @@ namespace pdflib
               v = (-x * pb + y * pa) / pdet;
             };
 
-            const double cx[4] = {page_box[0], page_box[2], page_box[2], page_box[0]};
-            const double cy[4] = {page_box[1], page_box[1], page_box[3], page_box[3]};
+            const double cx[4] = {paint_box[0], paint_box[2], paint_box[2], paint_box[0]};
+            const double cy[4] = {paint_box[1], paint_box[1], paint_box[3], paint_box[3]};
             double umin = 0, umax = 0, vmin = 0, vmax = 0;
             for(int i = 0; i < 4; i++)
               {
@@ -1316,6 +1320,7 @@ namespace pdflib
                                             timings);
 
             bool updated_stack = cell_stream.update_stack(stack, stack_count);
+            cell_stream.current_graphic_state().materialize_pattern_fill_color();
 
             std::vector<qpdf_stream_instruction> parameters;
             std::vector<qpdf_stream_instruction> insts = cell;
@@ -2255,6 +2260,11 @@ namespace pdflib
       case pdf_operator::F:
         {
           LOG_S(INFO) << "executing " << to_string(name);
+          if(current_graphic_state().get_fill_is_unresolved_pattern() and
+             not current_graphic_state().get_fill_pattern_name().empty())
+            {
+              do_pattern_fill(current_graphic_state().get_fill_pattern_name(), false);
+            }
           current_shape_state().F(parameters);
         }
         break;
@@ -2274,6 +2284,11 @@ namespace pdflib
       case pdf_operator::B:
         {
           LOG_S(INFO) << "executing " << to_string(name);
+          if(current_graphic_state().get_fill_is_unresolved_pattern() and
+             not current_graphic_state().get_fill_pattern_name().empty())
+            {
+              do_pattern_fill(current_graphic_state().get_fill_pattern_name(), false);
+            }
           current_shape_state().B(parameters);
         }
         break;
@@ -2281,6 +2296,11 @@ namespace pdflib
       case pdf_operator::BStar:
         {
           LOG_S(INFO) << "executing " << to_string(name);
+          if(current_graphic_state().get_fill_is_unresolved_pattern() and
+             not current_graphic_state().get_fill_pattern_name().empty())
+            {
+              do_pattern_fill(current_graphic_state().get_fill_pattern_name(), true);
+            }
           current_shape_state().BStar(parameters);
         }
         break;
@@ -2288,14 +2308,34 @@ namespace pdflib
       case pdf_operator::b:
         {
           LOG_S(INFO) << "executing " << to_string(name);
-          current_shape_state().b(parameters);
+          if(current_graphic_state().get_fill_is_unresolved_pattern() and
+             not current_graphic_state().get_fill_pattern_name().empty())
+            {
+              current_shape_state().h(parameters);
+              do_pattern_fill(current_graphic_state().get_fill_pattern_name(), false);
+              current_shape_state().B(parameters);
+            }
+          else
+            {
+              current_shape_state().b(parameters);
+            }
         }
         break;
 
       case pdf_operator::bStar:
         {
           LOG_S(INFO) << "executing " << to_string(name);
-          current_shape_state().bStar(parameters);
+          if(current_graphic_state().get_fill_is_unresolved_pattern() and
+             not current_graphic_state().get_fill_pattern_name().empty())
+            {
+              current_shape_state().h(parameters);
+              do_pattern_fill(current_graphic_state().get_fill_pattern_name(), true);
+              current_shape_state().BStar(parameters);
+            }
+          else
+            {
+              current_shape_state().bStar(parameters);
+            }
         }
         break;
 

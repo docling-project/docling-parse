@@ -408,10 +408,14 @@ PYBIND11_MODULE(pdf_parsers, m) {
 
   // PdfShape - graphic shape with coordinates
   pybind11::class_<pdflib::page_item<pdflib::PAGE_SHAPE>>(m, "PdfShape")
-    .def("get_x", &pdflib::page_item<pdflib::PAGE_SHAPE>::get_x,
+    .def("get_x",
+         static_cast<std::vector<double>& (pdflib::page_item<pdflib::PAGE_SHAPE>::*)()>(
+           &pdflib::page_item<pdflib::PAGE_SHAPE>::get_x),
 	 pybind11::return_value_policy::reference_internal,
 	 "Get x coordinates of shape points")
-    .def("get_y", &pdflib::page_item<pdflib::PAGE_SHAPE>::get_y,
+    .def("get_y",
+         static_cast<std::vector<double>& (pdflib::page_item<pdflib::PAGE_SHAPE>::*)()>(
+           &pdflib::page_item<pdflib::PAGE_SHAPE>::get_y),
 	 pybind11::return_value_policy::reference_internal,
 	 "Get y coordinates of shape points")
     .def("get_i", &pdflib::page_item<pdflib::PAGE_SHAPE>::get_i,
@@ -514,7 +518,9 @@ PYBIND11_MODULE(pdf_parsers, m) {
 
   // PdfShapes - iterable container of PdfShape objects
   pybind11::class_<pdflib::page_item<pdflib::PAGE_SHAPES>>(m, "PdfShapes")
-    .def("__len__", &pdflib::page_item<pdflib::PAGE_SHAPES>::size)
+    .def("__len__",
+         static_cast<size_t (pdflib::page_item<pdflib::PAGE_SHAPES>::*)()>(
+           &pdflib::page_item<pdflib::PAGE_SHAPES>::size))
     .def("__getitem__", [](pdflib::page_item<pdflib::PAGE_SHAPES>& self, size_t i)
 	 -> pdflib::page_item<pdflib::PAGE_SHAPE>& {
 	   if (i >= self.size()) {

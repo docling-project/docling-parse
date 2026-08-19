@@ -25,6 +25,8 @@ namespace pdflib
 
     std::vector<double>& get_x() { return x; }
     std::vector<double>& get_y() { return y; }
+    const std::vector<double>& get_x() const { return x; }
+    const std::vector<double>& get_y() const { return y; }
 
     void set_graphics_state(double line_width_, double miter_limit_,
                             int line_cap_, int line_join_,

@@ -86,7 +86,8 @@ namespace pdflib
 
     void n(std::vector<qpdf_stream_instruction>& instructions);
 
-    clip_state_instruction get_clip_state();
+    clip_state_instruction get_clip_state() const;
+    bool get_current_path_bbox(std::array<double, 4>& bbox) const;
 
   private:
 
@@ -427,7 +428,7 @@ namespace pdflib
     clipping_path_pending = true;
   }
 
-  clip_state_instruction pdf_state<SHAPE>::get_clip_state()
+  clip_state_instruction pdf_state<SHAPE>::get_clip_state() const
   {
     if(clipping_path_mode == NO_CLIPPING_PATH_RULE or clippings.size() == 0)
       {
@@ -447,7 +448,7 @@ namespace pdflib
     std::vector<clip_path_instruction> paths;
     for(int l = 0; l < clippings.size(); l++)
       {
-        auto& shape = clippings[l];
+        const auto& shape = clippings[l];
         paths.emplace_back(shape.get_x(),
                            shape.get_y(),
                            shape.get_closing_type(),
@@ -457,6 +458,51 @@ namespace pdflib
       }
 
     return clip_state_instruction(rule, std::move(paths));
+  }
+
+  bool pdf_state<SHAPE>::get_current_path_bbox(std::array<double, 4>& bbox) const
+  {
+    bool has_point = false;
+    double x_min = 0.0, y_min = 0.0, x_max = 0.0, y_max = 0.0;
+
+    for(std::size_t i = 0; i < curr_shapes.size(); i++)
+      {
+        const auto& shape = curr_shapes[i];
+        const auto& xs = shape.get_x();
+        const auto& ys = shape.get_y();
+        const std::size_t n = std::min(xs.size(), ys.size());
+
+        for(std::size_t j = 0; j < n; j++)
+          {
+            const double x =
+              trafo_matrix[0] * xs[j] + trafo_matrix[3] * ys[j] + trafo_matrix[6];
+            const double y =
+              trafo_matrix[1] * xs[j] + trafo_matrix[4] * ys[j] + trafo_matrix[7];
+            if(not std::isfinite(x) or not std::isfinite(y)) { continue; }
+
+            if(not has_point)
+              {
+                x_min = x_max = x;
+                y_min = y_max = y;
+                has_point = true;
+              }
+            else
+              {
+                x_min = std::min(x_min, x);
+                y_min = std::min(y_min, y);
+                x_max = std::max(x_max, x);
+                y_max = std::max(y_max, y);
+              }
+          }
+      }
+
+    if(not has_point or x_max <= x_min or y_max <= y_min)
+      {
+        return false;
+      }
+
+    bbox = {x_min, y_min, x_max, y_max};
+    return true;
   }
 
   void pdf_state<SHAPE>::n(std::vector<qpdf_stream_instruction>& instructions)

@@ -13,6 +13,7 @@ namespace pdflib
 
     pdf_state(const decode_config& config,
               const pdf_state<GRPH>& grph_state_,
+              const pdf_state<SHAPE>& shape_state_,
               std::array<double, 9>& trafo_matrix_,
               page_item<PAGE_CELLS>& page_cells_,
 	      std::shared_ptr<pdf_resource<PAGE_FONTS>> page_fonts_,
@@ -90,6 +91,7 @@ namespace pdflib
 
     const decode_config& config;
     const pdf_state<GRPH>& grph_state;
+    const pdf_state<SHAPE>& shape_state;
 
     std::array<double, 9>& trafo_matrix;
 
@@ -128,12 +130,14 @@ namespace pdflib
 
   pdf_state<TEXT>::pdf_state(const decode_config& config_,
                              const pdf_state<GRPH>& grph_state_,
+                             const pdf_state<SHAPE>& shape_state_,
                              std::array<double, 9>& trafo_matrix_,
                              page_item<PAGE_CELLS>& page_cells_,
 			     std::shared_ptr<pdf_resource<PAGE_FONTS>> page_fonts_,
                              pdf_render_instructions& instructions_):
     config(config_),
     grph_state(grph_state_),
+    shape_state(shape_state_),
 
     trafo_matrix(trafo_matrix_),
 
@@ -154,6 +158,7 @@ namespace pdflib
   pdf_state<TEXT>::pdf_state(const pdf_state<TEXT>& other):
     config(other.config),
     grph_state(other.grph_state),
+    shape_state(other.shape_state),
 
     trafo_matrix(other.trafo_matrix),
 
@@ -757,6 +762,7 @@ namespace pdflib
 
         tinstr.set_fill_color(grph_state.get_rgb_filling_ops(),
                               grph_state.get_fill_alpha());
+        tinstr.set_clip_state(shape_state.get_clip_state());
         tinstr.set_rendering_mode(rendering_mode);
         tinstr.set_blend_mode(grph_state.get_blend_mode());
         tinstr.set_is_type3(font.is_type3());
@@ -809,7 +815,8 @@ namespace pdflib
                   grph_state.get_rgb_filling_ops(),
                   grph_state.get_fill_alpha(),
                   x0, y0, x1, y1, x2, y2, x3, y3,
-                  BITMAP_SOURCE_TYPE3_GLYPH);
+                  BITMAP_SOURCE_TYPE3_GLYPH,
+                  shape_state.get_clip_state());
 
                 instructions.add_bitmap_instruction(std::move(b3));
               }

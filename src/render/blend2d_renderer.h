@@ -2108,38 +2108,129 @@ namespace pdflib
 
     BLContext& ctx = page_context();
 
-    ctx.save();
-    const BLResult transform_res = ctx.apply_transform(make_text_transform(draw_geom));
-    if (transform_res != BL_SUCCESS)
+    auto draw_path = [&](BLContext& draw_ctx,
+                         const BLRectI* layer_area) -> bool
       {
-        ctx.restore();
-        LOG_S(WARNING) << "render_text_freetype: apply_transform failed"
-                       << " (BLResult=" << transform_res << ")";
-        return false;
-      }
-
-    ctx.set_fill_style(make_rgba32(instr.get_rgb_filling(),
-                                   instr.get_fill_alpha()));
-    if (not text_path.is_empty())
-      {
-        ctx.fill_path(text_path);
-
-        // Text render modes with a stroke component (1, 2, 5, 6) are how
-        // producers synthesise bold from a regular face (PDF 32000-1, 9.3.6),
-        // and the Blend2D path strokes the run for exactly that reason. This
-        // path has to do the same or a heading routed here comes out lighter
-        // than the rest of the page -- which is how it looks when only some
-        // of a face's glyphs land here.
-        const int mode = instr.get_rendering_mode();
-        if (mode == 1 or mode == 2 or mode == 5 or mode == 6)
+        draw_ctx.save();
+        if(layer_area != nullptr)
           {
-            ctx.set_stroke_style(make_rgba32(instr.get_rgb_filling(),
-                                             instr.get_fill_alpha()));
-            ctx.set_stroke_width(std::max(0.3, geom.size * 0.03));
-            ctx.stroke_path(text_path);
+            draw_ctx.translate(-layer_area->x, -layer_area->y);
+          }
+
+        const BLResult transform_res =
+          draw_ctx.apply_transform(make_text_transform(draw_geom));
+        if (transform_res != BL_SUCCESS)
+          {
+            draw_ctx.restore();
+            LOG_S(WARNING) << "render_text_freetype: apply_transform failed"
+                           << " (BLResult=" << transform_res << ")";
+            return false;
+          }
+
+        draw_ctx.set_fill_style(make_rgba32(instr.get_rgb_filling(),
+                                            instr.get_fill_alpha()));
+        if (not text_path.is_empty())
+          {
+            draw_ctx.fill_path(text_path);
+
+            // Text render modes with a stroke component (1, 2, 5, 6) are how
+            // producers synthesise bold from a regular face (PDF 32000-1, 9.3.6),
+            // and the Blend2D path strokes the run for exactly that reason. This
+            // path has to do the same or a heading routed here comes out lighter
+            // than the rest of the page -- which is how it looks when only some
+            // of a face's glyphs land here.
+            const int mode = instr.get_rendering_mode();
+            if (mode == 1 or mode == 2 or mode == 5 or mode == 6)
+              {
+                draw_ctx.set_stroke_style(make_rgba32(instr.get_rgb_filling(),
+                                                      instr.get_fill_alpha()));
+                draw_ctx.set_stroke_width(std::max(0.3, geom.size * 0.03));
+                draw_ctx.stroke_path(text_path);
+              }
+          }
+        draw_ctx.restore();
+        return true;
+      };
+
+    bool clip_active = false;
+    if(instr.has_clip_state())
+      {
+        ctx.save();
+        const clip_apply_result clip_result =
+          apply_clip_state(ctx, instr.get_clip_state(),
+                           axis_aligned_rect(geom.bbox));
+        if(clip_result == CLIP_EMPTY)
+          {
+            ctx.restore();
+            return true;
+          }
+
+        clip_active = clip_result == CLIP_APPLIED;
+        if(not clip_active)
+          {
+            ctx.restore();
           }
       }
-    ctx.restore();
+
+    BLImage clip_mask;
+    BLRectI mask_area(0, 0, 0, 0);
+    bool needs_clip_mask = false;
+    if(instr.has_clip_state() and clip_state_has_non_rect(instr.get_clip_state()))
+      {
+        if(config_.render_non_rect_clip_masks)
+          {
+            needs_clip_mask = true;
+            mask_area = canvas_clamped_rect(axis_aligned_rect(geom.bbox));
+            clip_mask = build_clip_mask(instr.get_clip_state(), mask_area);
+          }
+      }
+
+    bool ok = true;
+    if(needs_clip_mask and clip_mask.is_empty())
+      {
+        if(clip_active) { ctx.restore(); }
+        return true;
+      }
+    else if(not clip_mask.is_empty())
+      {
+        BLImage layer;
+        if(layer.create(mask_area.w, mask_area.h, BL_FORMAT_PRGB32) == BL_SUCCESS)
+          {
+            {
+              BLContext lctx(layer);
+              lctx.set_comp_op(BL_COMP_OP_SRC_COPY);
+              lctx.fill_all(BLRgba32(0x00000000u));
+              lctx.set_comp_op(BL_COMP_OP_SRC_OVER);
+              ok = draw_path(lctx, &mask_area);
+              lctx.end();
+            }
+
+            if(not multiply_prgb32_by_a8(layer, clip_mask))
+              {
+                LOG_S(WARNING) << "render_text_freetype: could not apply clip mask";
+              }
+
+            ctx.blit_image(BLPointI(mask_area.x, mask_area.y), layer);
+          }
+        else
+          {
+            LOG_S(WARNING) << "render_text_freetype: could not allocate clip layer "
+                           << mask_area.w << "x" << mask_area.h
+                           << ", falling back to context clip";
+            ok = draw_path(ctx, nullptr);
+          }
+      }
+    else
+      {
+        ok = draw_path(ctx, nullptr);
+      }
+
+    if(clip_active)
+      {
+        ctx.restore();
+      }
+
+    if(not ok) { return false; }
 
     draw_text_basepoint(ctx, geom);
     if (config_.draw_text_bbox)
@@ -2458,18 +2549,6 @@ namespace pdflib
             text_geometry draw_geom = geom;
             apply_condensation(draw_geom, font, gb);
             const BLMatrix2D ctm = make_text_transform(draw_geom);
-            ctx.save();
-            const BLResult transform_res = ctx.apply_transform(ctm);
-            if (transform_res != BL_SUCCESS)
-              {
-                ctx.restore();
-                LOG_S(WARNING) << "render_text: apply_transform failed"
-                               << " (BLResult=" << transform_res << ")";
-                draw_bbox_fallback();
-                return;
-              }
-            ctx.set_fill_style(make_rgba32(instr.get_rgb_filling(),
-                                           instr.get_fill_alpha()));
             text_draw_adjustment adjustment =
               calculate_glyph_bbox_adjustment(font, gb, instr, geom.size);
 
@@ -2490,58 +2569,161 @@ namespace pdflib
                   adjustment.bbox_fit_scale * adjustment.render_bbox.y1;
               }
 
-            if (adjustment.bbox_fit_scale != 1.0)
+            auto draw_run = [&](BLContext& draw_ctx,
+                                const BLRectI* layer_area) -> BLResult
               {
-                const BLResult translate_res =
-                  ctx.translate(adjustment.draw_origin.x,
-                                adjustment.draw_origin.y);
-                if (translate_res != BL_SUCCESS)
+                text_draw_adjustment draw_adjustment = adjustment;
+                draw_ctx.save();
+                if(layer_area != nullptr)
                   {
-                    LOG_S(WARNING) << "render_text: translate failed"
-                                   << " (BLResult=" << translate_res << ")";
-                    ctx.restore();
-                    draw_bbox_fallback();
-                    return;
+                    draw_ctx.translate(-layer_area->x, -layer_area->y);
                   }
-                const BLResult scale_res = ctx.scale(adjustment.bbox_fit_scale);
-                if (scale_res != BL_SUCCESS)
-                  {
-                    LOG_S(WARNING) << "render_text: scale failed"
-                                   << " (BLResult=" << scale_res << ")";
-                    ctx.restore();
-                    draw_bbox_fallback();
-                    return;
-                  }
-                adjustment.draw_origin.reset(0.0, 0.0);
-              }
-            // Draw the glyph run that was already shaped (or recovered by
-            // glyph identity) above; fill_utf8_text would re-shape the text
-            // and lose any glyph-identity recovery.
-            const BLResult text_res =
-              ctx.fill_glyph_run(adjustment.draw_origin,
-                                 font,
-                                 gb.glyph_run());
 
-            // Text render modes with a stroke component (1, 2, 5, 6) are how
-            // producers synthesise bold from a regular face (PDF 32000-1,
-            // 9.3.6). Stroking the same run on top of the fill is what carries
-            // that weight; drawing only the fill silently drops the emphasis
-            // from every heading set this way.
-            {
-              const int mode = instr.get_rendering_mode();
-              if(mode == 1 or mode == 2 or mode == 5 or mode == 6)
+                const BLResult transform_res = draw_ctx.apply_transform(ctm);
+                if (transform_res != BL_SUCCESS)
+                  {
+                    draw_ctx.restore();
+                    LOG_S(WARNING) << "render_text: apply_transform failed"
+                                   << " (BLResult=" << transform_res << ")";
+                    return transform_res;
+                  }
+
+                draw_ctx.set_fill_style(make_rgba32(instr.get_rgb_filling(),
+                                                    instr.get_fill_alpha()));
+
+                if (draw_adjustment.bbox_fit_scale != 1.0)
+                  {
+                    const BLResult translate_res =
+                      draw_ctx.translate(draw_adjustment.draw_origin.x,
+                                         draw_adjustment.draw_origin.y);
+                    if (translate_res != BL_SUCCESS)
+                      {
+                        LOG_S(WARNING) << "render_text: translate failed"
+                                       << " (BLResult=" << translate_res << ")";
+                        draw_ctx.restore();
+                        return translate_res;
+                      }
+                    const BLResult scale_res =
+                      draw_ctx.scale(draw_adjustment.bbox_fit_scale);
+                    if (scale_res != BL_SUCCESS)
+                      {
+                        LOG_S(WARNING) << "render_text: scale failed"
+                                       << " (BLResult=" << scale_res << ")";
+                        draw_ctx.restore();
+                        return scale_res;
+                      }
+                    draw_adjustment.draw_origin.reset(0.0, 0.0);
+                  }
+                // Draw the glyph run that was already shaped (or recovered by
+                // glyph identity) above; fill_utf8_text would re-shape the text
+                // and lose any glyph-identity recovery.
+                const BLResult text_res =
+                  draw_ctx.fill_glyph_run(draw_adjustment.draw_origin,
+                                          font,
+                                          gb.glyph_run());
+
+                // Text render modes with a stroke component (1, 2, 5, 6) are how
+                // producers synthesise bold from a regular face (PDF 32000-1,
+                // 9.3.6). Stroking the same run on top of the fill is what carries
+                // that weight; drawing only the fill silently drops the emphasis
+                // from every heading set this way.
                 {
-                  ctx.set_stroke_style(make_rgba32(instr.get_rgb_filling(),
-                                                   instr.get_fill_alpha()));
-                  ctx.set_stroke_width(std::max(0.3, geom.size * 0.03));
-                  ctx.stroke_glyph_run(adjustment.draw_origin,
-                                       font,
-                                       gb.glyph_run());
+                  const int mode = instr.get_rendering_mode();
+                  if(mode == 1 or mode == 2 or mode == 5 or mode == 6)
+                    {
+                      draw_ctx.set_stroke_style(make_rgba32(instr.get_rgb_filling(),
+                                                            instr.get_fill_alpha()));
+                      draw_ctx.set_stroke_width(std::max(0.3, geom.size * 0.03));
+                      draw_ctx.stroke_glyph_run(draw_adjustment.draw_origin,
+                                                font,
+                                                gb.glyph_run());
+                    }
                 }
-            }
-            // LOG_S(INFO) << "render_text: after fill_glyph_run res=" << text_res;
-            // LOG_S(INFO) << "render_text: before ctx.restore";
-            ctx.restore();
+                // LOG_S(INFO) << "render_text: after fill_glyph_run res=" << text_res;
+                // LOG_S(INFO) << "render_text: before ctx.restore";
+                draw_ctx.restore();
+                return text_res;
+              };
+
+            bool clip_active = false;
+            if(instr.has_clip_state())
+              {
+                ctx.save();
+                const clip_apply_result clip_result =
+                  apply_clip_state(ctx, instr.get_clip_state(),
+                                   axis_aligned_rect(geom.bbox));
+                if(clip_result == CLIP_EMPTY)
+                  {
+                    ctx.restore();
+                    return;
+                  }
+
+                clip_active = clip_result == CLIP_APPLIED;
+                if(not clip_active)
+                  {
+                    ctx.restore();
+                  }
+              }
+
+            BLImage clip_mask;
+            BLRectI mask_area(0, 0, 0, 0);
+            bool needs_clip_mask = false;
+            if(instr.has_clip_state() and
+               clip_state_has_non_rect(instr.get_clip_state()))
+              {
+                if(config_.render_non_rect_clip_masks)
+                  {
+                    needs_clip_mask = true;
+                    mask_area =
+                      canvas_clamped_rect(axis_aligned_rect(geom.bbox));
+                    clip_mask = build_clip_mask(instr.get_clip_state(), mask_area);
+                  }
+              }
+
+            BLResult text_res = BL_SUCCESS;
+            if(needs_clip_mask and clip_mask.is_empty())
+              {
+                if(clip_active) { ctx.restore(); }
+                return;
+              }
+            else if(not clip_mask.is_empty())
+              {
+                BLImage layer;
+                if(layer.create(mask_area.w, mask_area.h, BL_FORMAT_PRGB32) == BL_SUCCESS)
+                  {
+                    {
+                      BLContext lctx(layer);
+                      lctx.set_comp_op(BL_COMP_OP_SRC_COPY);
+                      lctx.fill_all(BLRgba32(0x00000000u));
+                      lctx.set_comp_op(BL_COMP_OP_SRC_OVER);
+                      text_res = draw_run(lctx, &mask_area);
+                      lctx.end();
+                    }
+
+                    if(not multiply_prgb32_by_a8(layer, clip_mask))
+                      {
+                        LOG_S(WARNING) << "render_text: could not apply clip mask";
+                      }
+
+                    ctx.blit_image(BLPointI(mask_area.x, mask_area.y), layer);
+                  }
+                else
+                  {
+                    LOG_S(WARNING) << "render_text: could not allocate clip layer "
+                                   << mask_area.w << "x" << mask_area.h
+                                   << ", falling back to context clip";
+                    text_res = draw_run(ctx, nullptr);
+                  }
+              }
+            else
+              {
+                text_res = draw_run(ctx, nullptr);
+              }
+
+            if(clip_active)
+              {
+                ctx.restore();
+              }
 
             if (text_res != BL_SUCCESS)
               {
