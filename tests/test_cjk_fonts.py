@@ -53,9 +53,7 @@ def _gbk_page(text: str) -> bytes:
     # content as latin-1, so they survive byte for byte.
     codes = text.encode("gbk").decode("latin-1")
 
-    content = (
-        f"BT /F1 {FONT_SIZE} Tf {ORIGIN_X} {BASELINE} Td ({codes}) Tj ET\n"
-    )
+    content = f"BT /F1 {FONT_SIZE} Tf {ORIGIN_X} {BASELINE} Td ({codes}) Tj ET\n"
 
     type0 = (
         "<< /Type /Font /Subtype /Type0 /BaseFont /SimSun "
@@ -133,9 +131,7 @@ def test_every_character_of_a_cjk_run_gets_a_real_glyph():
     cells = [region_image(result, _char_box(i)) for i in range(len(SAMPLE))]
 
     for index, cell in enumerate(cells):
-        assert coverage_ratio(cell) > 0.01, (
-            f"{SAMPLE[index]} drew nothing at all"
-        )
+        assert coverage_ratio(cell) > 0.01, f"{SAMPLE[index]} drew nothing at all"
 
     # Tolerance: two renderings of the same glyph differ only by antialiasing.
     distinct = [

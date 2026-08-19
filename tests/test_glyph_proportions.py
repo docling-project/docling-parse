@@ -44,13 +44,10 @@ MEASURE_SCALE = 4.0
 
 def _rectangle_font(advance: int) -> bytes:
     """A one-glyph TrueType whose 'A' is a rectangle advancing `advance`."""
-    fontTools = pytest.importorskip(
-        "fontTools", reason="building the test font needs fontTools"
-    )
+    pytest.importorskip("fontTools", reason="building the test font needs fontTools")
+
     from fontTools.fontBuilder import FontBuilder
     from fontTools.pens.ttGlyphPen import TTGlyphPen
-
-    del fontTools
 
     builder = FontBuilder(EM, isTTF=True)
     builder.setupGlyphOrder([".notdef", "A"])
@@ -64,9 +61,7 @@ def _rectangle_font(advance: int) -> bytes:
     pen.closePath()
 
     builder.setupGlyf({".notdef": TTGlyphPen(None).glyph(), "A": pen.glyph()})
-    builder.setupHorizontalMetrics(
-        {".notdef": (advance, 0), "A": (advance, INK_LEFT)}
-    )
+    builder.setupHorizontalMetrics({".notdef": (advance, 0), "A": (advance, INK_LEFT)})
     builder.setupHorizontalHeader(ascent=800, descent=-200)
     builder.setupNameTable(
         {
@@ -92,9 +87,7 @@ def _page(*, declared_width: int, font_advance: int, tz: int | None = None) -> b
     program = _rectangle_font(font_advance)
 
     scaling = f"{tz} Tz " if tz is not None else ""
-    content = (
-        f"BT /F1 {FONT_SIZE} Tf {scaling}{TEXT_X} {TEXT_Y} Td (A) Tj ET\n"
-    )
+    content = f"BT /F1 {FONT_SIZE} Tf {scaling}{TEXT_X} {TEXT_Y} Td (A) Tj ET\n"
 
     font = (
         "<< /Type /Font /Subtype /TrueType /BaseFont /DoclingRectangle "

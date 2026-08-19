@@ -26,7 +26,7 @@ from base64 import a85encode
 from collections.abc import Sequence
 
 import pytest
-from PIL import Image
+from PIL import Image, TiffImagePlugin
 
 from tests.pdf_builder import render_page, simple_page_pdf, stream_object
 from tests.rendering_regression import assert_color_near, center_color, region_image
@@ -76,6 +76,9 @@ def g4_codes(
     image.save(buffer, format="TIFF", compression="group4")
 
     tiff = Image.open(io.BytesIO(buffer.getvalue()))
+    # Only a TIFF carries the strip tags this reads back out.
+    assert isinstance(tiff, TiffImagePlugin.TiffImageFile)
+
     offsets, counts = tiff.tag_v2[273], tiff.tag_v2[279]
     assert len(offsets) == 1, "the fixture wants one strip, i.e. one codestream"
 
@@ -107,9 +110,7 @@ class BitWriter:
 
     def to_bytes(self) -> bytes:
         padded = self.bits + "0" * (-len(self.bits) % 8)
-        return bytes(
-            int(padded[i : i + 8], 2) for i in range(0, len(padded), 8)
-        )
+        return bytes(int(padded[i : i + 8], 2) for i in range(0, len(padded), 8))
 
 
 def g4_rectangle_by_hand(

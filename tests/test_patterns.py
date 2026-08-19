@@ -112,8 +112,13 @@ def _sample(result, x: float, y: float, *, half: float = 2.0):
     )
 
 
-def _assert_lattice(result, ink: list[tuple[float, float]],
-                    gaps: list[tuple[float, float]], *, what: str) -> None:
+def _assert_lattice(
+    result,
+    ink: list[tuple[float, float]],
+    gaps: list[tuple[float, float]],
+    *,
+    what: str,
+) -> None:
     """Every `ink` point carries a cell, every `gaps` point falls between them.
 
     Coverage alone cannot say this: a lattice translated by any amount covers
@@ -122,12 +127,16 @@ def _assert_lattice(result, ink: list[tuple[float, float]],
     """
     for x, y in ink:
         assert_color_near(
-            _sample(result, x, y), RED, tolerance=40,
+            _sample(result, x, y),
+            RED,
+            tolerance=40,
             what=f"{what}: ({x}, {y}) should be inside a cell's ink",
         )
     for x, y in gaps:
         assert_color_near(
-            _sample(result, x, y), WHITE, tolerance=40,
+            _sample(result, x, y),
+            WHITE,
+            tolerance=40,
             what=f"{what}: ({x}, {y}) should fall between cells",
         )
 
