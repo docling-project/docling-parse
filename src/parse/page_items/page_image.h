@@ -6,6 +6,9 @@
 // JPEG correction helpers
 #include <parse/utils/jpeg/jpeg_utils.h>
 
+// /CCITTFaxDecode parameters carried with the image
+#include <parse/utils/ccitt/ccitt_utils.h>
+
 namespace pdflib
 {
 
@@ -35,6 +38,11 @@ namespace pdflib
 
     // Get PIL-compatible mode string: "L", "RGB", "CMYK", or "1"
     std::string get_pil_mode() const;
+
+    // The bytes the image codec was handed at encode time; falls back to the
+    // raw stream when no transport filter had to be undone in front of it.
+    std::shared_ptr<Buffer> get_codec_stream_data() const
+    { return codec_stream_data ? codec_stream_data : raw_stream_data; }
 
     // Get image bytes suitable for constructing a PIL Image.
     // For JPEG: returns corrected JPEG bytes (applying /Decode if needed).
@@ -75,6 +83,13 @@ namespace pdflib
     std::string              intent;
     std::vector<std::string> filters;
     std::shared_ptr<Buffer>  raw_stream_data;
+
+    // The raw stream with the transport filters that precede the image codec
+    // undone -- the bytes /DCTDecode, /JPXDecode, /CCITTFaxDecode or
+    // /JBIG2Decode was handed at encode time. Aliases raw_stream_data when the
+    // codec is the first filter in the chain.
+    std::shared_ptr<Buffer>  codec_stream_data;
+
     std::shared_ptr<Buffer>  decoded_stream_data;
     std::shared_ptr<std::vector<uint8_t>> soft_mask_data;
     int soft_mask_width = 0;
@@ -102,9 +117,9 @@ namespace pdflib
     std::vector<std::string> indexed_base_device_n_names;
     bool             indexed_base_device_n_single_black = false;
 
-    // /CCITTFaxDecode parameters (from /DecodeParms)
-    int  ccitt_k          = 0;     // /K default per PDF spec: 0=Group3-1D, <0=Group4, >0=Group3-mixed
-    bool ccitt_black_is_1 = false; // /BlackIs1 flag from DecodeParms
+    // /CCITTFaxDecode parameters (from /DecodeParms), carrying the spec
+    // defaults (Table 11) until the stream says otherwise.
+    ccitt::decode_parameters ccitt_params;
     std::shared_ptr<Buffer> jbig2_globals_data;
 
     // graphics state properties
@@ -130,6 +145,7 @@ namespace pdflib
     intent(),
     filters(),
     raw_stream_data(nullptr),
+    codec_stream_data(nullptr),
     decoded_stream_data(nullptr)
   {}
 
@@ -253,9 +269,13 @@ namespace pdflib
 
   void page_item<PAGE_IMAGE>::save_to_file(std::filesystem::path const& path) const
   {
-    if(not raw_stream_data or raw_stream_data->getSize() == 0)
+    // The file holds the image as its codec encoded it, so what gets written
+    // is what the codec was handed: the raw stream with any transport filters
+    // in front of it (e.g. /ASCII85Decode) undone.
+    auto const encoded = get_codec_stream_data();
+    if(not encoded or encoded->getSize() == 0)
       {
-        LOG_S(WARNING) << "no raw stream data to save";
+        LOG_S(WARNING) << "no stream data to save";
         return;
       }
 
@@ -305,8 +325,8 @@ namespace pdflib
         params.image_mask = image_mask;
 
         bool ok = jpeg::write_corrected_jpeg_from_memory(
-            reinterpret_cast<unsigned char const*>(raw_stream_data->getBuffer()),
-            static_cast<std::size_t>(raw_stream_data->getSize()),
+            reinterpret_cast<unsigned char const*>(encoded->getBuffer()),
+            static_cast<std::size_t>(encoded->getSize()),
             params, path);
         if(ok)
           {
@@ -323,10 +343,10 @@ namespace pdflib
         throw std::runtime_error("unable to open output file: " + path.string());
       }
 
-    out.write(reinterpret_cast<char const*>(raw_stream_data->getBuffer()),
-              static_cast<std::streamsize>(raw_stream_data->getSize()));
+    out.write(reinterpret_cast<char const*>(encoded->getBuffer()),
+              static_cast<std::streamsize>(encoded->getSize()));
 
-    LOG_S(INFO) << "saved " << raw_stream_data->getSize()
+    LOG_S(INFO) << "saved " << encoded->getSize()
                 << " bytes to " << path.string();
   }
 
@@ -418,6 +438,11 @@ namespace pdflib
   {
     std::string fmt = get_image_format();
 
+    // /DCTDecode and /JPXDecode bytes are handed on as-is, so they have to be
+    // the bytes the codec was given: the raw stream with any transport filters
+    // in front of the codec undone.
+    auto const encoded = get_codec_stream_data();
+
     if(fmt == "jpeg")
       {
         // Check whether the raw stream is actually JPEG-encoded (/DCTDecode)
@@ -455,7 +480,7 @@ namespace pdflib
             return {};
           }
 
-        if(not raw_stream_data or raw_stream_data->getSize() == 0)
+        if(not encoded or encoded->getSize() == 0)
           {
             LOG_S(WARNING) << "no raw stream data for JPEG image"
                            << " xobject_key=" << xobject_key;
@@ -513,8 +538,8 @@ namespace pdflib
 
             auto result = jpeg::write_corrected_jpeg_to_memory(
                 reinterpret_cast<unsigned char const*>(
-                    raw_stream_data->getBuffer()),
-                static_cast<std::size_t>(raw_stream_data->getSize()),
+                    encoded->getBuffer()),
+                static_cast<std::size_t>(encoded->getSize()),
                 params);
 
             if(not result.empty())
@@ -534,23 +559,23 @@ namespace pdflib
 	
         // Safe passthrough: return raw JPEG bytes
         auto* buf = reinterpret_cast<unsigned char const*>(
-            raw_stream_data->getBuffer());
+            encoded->getBuffer());
         return std::vector<unsigned char>(
-            buf, buf + raw_stream_data->getSize());
+            buf, buf + encoded->getSize());
       }
 
     if(fmt == "jp2")
       {
-        if(not raw_stream_data or raw_stream_data->getSize() == 0)
+        if(not encoded or encoded->getSize() == 0)
           {
             LOG_S(WARNING) << "no raw stream data for JP2 image"
                            << " xobject_key=" << xobject_key;
             return {};
           }
         auto* buf = reinterpret_cast<unsigned char const*>(
-            raw_stream_data->getBuffer());
+            encoded->getBuffer());
         return std::vector<unsigned char>(
-            buf, buf + raw_stream_data->getSize());
+            buf, buf + encoded->getSize());
       }
 
     // Raw pixels (JBIG2, uncompressed, etc): use decoded_stream_data
@@ -562,16 +587,16 @@ namespace pdflib
             buf, buf + decoded_stream_data->getSize());
       }
 
-    // Fallback: try raw_stream_data
-    if(raw_stream_data and raw_stream_data->getSize() > 0)
+    // Fallback: try the codec's own bytes
+    if(encoded and encoded->getSize() > 0)
       {
         LOG_S(WARNING) << "no decoded stream data for " << fmt << " image"
                        << " xobject_key=" << xobject_key
                        << ", falling back to raw stream data";
         auto* buf = reinterpret_cast<unsigned char const*>(
-            raw_stream_data->getBuffer());
+            encoded->getBuffer());
         return std::vector<unsigned char>(
-            buf, buf + raw_stream_data->getSize());
+            buf, buf + encoded->getSize());
       }
 
     LOG_S(WARNING) << "no image data available for xobject_key="

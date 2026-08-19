@@ -2649,8 +2649,9 @@ namespace pdflib
     // Inline image dictionary between BI and ID. Brackets and dict markers
     // become spaces and every '/' gets one in front, so "/D[1 0]" and
     // "/DP<</K -1/Columns 68>>" tokenize cleanly.
-    int W = 0, H = 0, bpc = 1, K = 0;
-    bool is_mask = false, black_is_1 = false, ccitt = false, raw_bits = true;
+    int W = 0, H = 0, bpc = 1;
+    bool is_mask = false, ccitt = false, raw_bits = true;
+    ccitt::decode_parameters ccitt_parms;
     std::vector<double> decode_arr;
     {
       std::string dict = src.substr(pos_bi + 2, pos_id - pos_bi - 2);
@@ -2684,8 +2685,12 @@ namespace pdflib
           else if(tok == "/H" or tok == "/Height")      { H = static_cast<int>(num_after(i, 0)); }
           else if(tok == "/BPC" or tok == "/BitsPerComponent") { bpc = static_cast<int>(num_after(i, 1)); }
           else if(tok == "/IM" or tok == "/ImageMask")  { is_mask = (i + 1 < toks.size() and toks[i + 1] == "true"); }
-          else if(tok == "/K")                          { K = static_cast<int>(num_after(i, 0)); }
-          else if(tok == "/BlackIs1")                   { black_is_1 = (i + 1 < toks.size() and toks[i + 1] == "true"); }
+          else if(tok == "/K")                          { ccitt_parms.k = static_cast<int>(num_after(i, 0)); }
+          else if(tok == "/BlackIs1")                   { ccitt_parms.black_is_1 = (i + 1 < toks.size() and toks[i + 1] == "true"); }
+          // /Columns is the width the row codes were written against, and it
+          // defaults to 1728 rather than to the glyph's own width (Table 11).
+          else if(tok == "/Columns")                    { ccitt_parms.columns = static_cast<int>(num_after(i, 1728)); }
+          else if(tok == "/EncodedByteAlign")           { ccitt_parms.encoded_byte_align = (i + 1 < toks.size() and toks[i + 1] == "true"); }
           else if(tok == "/D" or tok == "/Decode")
             {
               decode_arr.clear();
@@ -2732,7 +2737,7 @@ namespace pdflib
     std::vector<uint8_t> samples;
     if(ccitt)
       {
-        samples = ccitt::decode(data, data_size, W, H, K, black_is_1);
+        samples = ccitt::decode(data, data_size, W, H, ccitt_parms);
         if(samples.size() < static_cast<size_t>(W) * H) { return nullptr; }
       }
     else

@@ -11,6 +11,7 @@
 #include <parse/utils/color/icc_utils.h>
 #include <parse/utils/jpeg/jpeg_utils.h>
 #include <parse/qpdf/qpdf_compat.h>
+#include <parse/qpdf/stream_filters.h>
 
 namespace pdflib
 {
@@ -176,13 +177,15 @@ namespace pdflib
     bool                     is_image_mask() const;
 
     // /CCITTFaxDecode parameters (from /DecodeParms)
-    int                      get_ccitt_k() const;
-    bool                     get_ccitt_black_is_1() const;
+    ccitt::decode_parameters get_ccitt_parameters() const;
     bool                     has_jbig2_globals_data() const;
     std::shared_ptr<Buffer>  get_jbig2_globals_data() const;
 
     bool                     has_raw_stream_data() const;
     std::shared_ptr<Buffer>  get_raw_stream_data() const;
+
+    bool                     has_codec_stream_data() const;
+    std::shared_ptr<Buffer>  get_codec_stream_data() const;
 
     bool                     has_decoded_stream_data() const;
     std::shared_ptr<Buffer>  get_decoded_stream_data() const;
@@ -209,6 +212,7 @@ namespace pdflib
     void init_filters();
 
     void init_stream_data();
+    void init_codec_stream_data();
     void init_soft_mask_data();
 
     // Resolves a /Separation or /DeviceN /ColorSpace array into a colour space
@@ -251,6 +255,12 @@ namespace pdflib
 
     // Stream data
     std::shared_ptr<Buffer> raw_stream_data;
+
+    // The raw stream with the transport filters that precede the image codec
+    // undone -- the bytes the codec was handed at encode time. Aliases
+    // raw_stream_data when the codec is the first filter in the chain.
+    std::shared_ptr<Buffer> codec_stream_data;
+
     std::shared_ptr<Buffer> decoded_stream_data;
     std::shared_ptr<std::vector<uint8_t>> soft_mask_data;
     int soft_mask_width = 0;
@@ -261,9 +271,9 @@ namespace pdflib
     bool decode_present = false;
     bool image_mask = false;
 
-    // /CCITTFaxDecode parameters from /DecodeParms
-    int  ccitt_k          = 0;     // /K default per PDF spec: 0=Group3-1D, <0=Group4, >0=Group3-mixed
-    bool ccitt_black_is_1 = false; // /BlackIs1: true means 1-bit=black
+    // /CCITTFaxDecode parameters from /DecodeParms, carrying the spec defaults
+    // (Table 11) until the stream says otherwise.
+    ccitt::decode_parameters ccitt_params;
     std::shared_ptr<Buffer> jbig2_globals_data;
   };
 
@@ -275,6 +285,7 @@ namespace pdflib
     intent(),
     image_filters(),
     raw_stream_data(nullptr),
+    codec_stream_data(nullptr),
     decoded_stream_data(nullptr),
     soft_mask_data(nullptr),
     jbig2_globals_data(nullptr)
@@ -928,11 +939,24 @@ namespace pdflib
                         << ": " << parms.dump();
             if(parms.count("/K") and parms["/K"].is_number())
               {
-                ccitt_k = parms["/K"].get<int>();
+                ccitt_params.k = parms["/K"].get<int>();
               }
             if(parms.count("/BlackIs1") and parms["/BlackIs1"].is_boolean())
               {
-                ccitt_black_is_1 = parms["/BlackIs1"].get<bool>();
+                ccitt_params.black_is_1 = parms["/BlackIs1"].get<bool>();
+              }
+
+            // /Columns is the width the row codes were written against; it
+            // defaults to 1728 (Table 11), not to /Width. Decoding at the
+            // image's width when the encoder used another count loses sync on
+            // the first row and leaves the image blank.
+            if(parms.count("/Columns") and parms["/Columns"].is_number())
+              {
+                ccitt_params.columns = parms["/Columns"].get<int>();
+              }
+            if(parms.count("/EncodedByteAlign") and parms["/EncodedByteAlign"].is_boolean())
+              {
+                ccitt_params.encoded_byte_align = parms["/EncodedByteAlign"].get<bool>();
               }
 
             auto qpdf_dp = qpdf_xobject_dict.getKey("/DecodeParms");
@@ -1071,6 +1095,55 @@ namespace pdflib
         LOG_S(WARNING) << "failed to get decoded stream data: " << e.what();
         decoded_stream_data = nullptr;
       }
+
+    init_codec_stream_data();
+  }
+
+  void pdf_resource<PAGE_XOBJECT_IMAGE>::init_codec_stream_data()
+  {
+    // QPDF declares a whole /Filter chain unfilterable as soon as one of its
+    // filters is an image codec it will not invert, so `decoded_stream_data`
+    // is empty for /CCITTFaxDecode, /JBIG2Decode and /JPXDecode images and the
+    // codec decoders fall back to the stream data here. That fallback is only
+    // correct once the transport filters in front of the codec are undone: a
+    // `/Filter [/ASCII85Decode /CCITTFaxDecode]` image hands a CCITT decoder
+    // ASCII85 text otherwise, which decodes into noise.
+    codec_stream_data = raw_stream_data;
+
+    if(not raw_stream_data)
+      {
+        return;
+      }
+
+    const std::size_t codec_index = stream_filters::image_codec_index(image_filters);
+    if(codec_index == 0 or codec_index >= image_filters.size())
+      {
+        return;
+      }
+
+    QPDFObjectHandle decode_parms = qpdf_xobject_dict.isDictionary()
+      ? qpdf_xobject_dict.getKey("/DecodeParms")
+      : QPDFObjectHandle::newNull();
+
+    auto pre_decoded = stream_filters::apply_filters(raw_stream_data,
+                                                     image_filters,
+                                                     codec_index,
+                                                     decode_parms);
+
+    if(pre_decoded)
+      {
+        codec_stream_data = pre_decoded;
+        LOG_S(INFO) << "undid " << codec_index << " transport filter(s) in front of "
+                    << image_filters[codec_index] << " for xobject_key=" << xobject_key
+                    << ": " << raw_stream_data->getSize() << " -> "
+                    << codec_stream_data->getSize() << " bytes";
+      }
+    else
+      {
+        LOG_S(WARNING) << "failed to undo the transport filters in front of "
+                       << image_filters[codec_index] << " for xobject_key=" << xobject_key
+                       << " -- the codec will see encoded bytes";
+      }
   }
 
   void pdf_resource<PAGE_XOBJECT_IMAGE>::init_soft_mask_data()
@@ -1162,24 +1235,27 @@ namespace pdflib
         const std::string filter =
           mdict.hasKey("/Filter") ? mdict.getKey("/Filter").unparse() : "";
         if(filter.find("CCITTFaxDecode") != std::string::npos and
-           smask.has_raw_stream_data())
+           smask.has_codec_stream_data())
           {
-            int K = 0;
-            bool black_is_1 = false;
+            ccitt::decode_parameters ccitt_parms;
             QPDFObjectHandle dp = mdict.getKey("/DecodeParms");
             if(dp.isArray() and dp.getArrayNItems() > 0) { dp = dp.getArrayItem(0); }
             if(dp.isDictionary())
               {
                 if(dp.hasKey("/K") and dp.getKey("/K").isInteger())
-                  { K = static_cast<int>(dp.getKey("/K").getIntValue()); }
+                  { ccitt_parms.k = static_cast<int>(dp.getKey("/K").getIntValue()); }
                 if(dp.hasKey("/BlackIs1") and dp.getKey("/BlackIs1").isBool())
-                  { black_is_1 = dp.getKey("/BlackIs1").getBoolValue(); }
+                  { ccitt_parms.black_is_1 = dp.getKey("/BlackIs1").getBoolValue(); }
+                if(dp.hasKey("/Columns") and dp.getKey("/Columns").isInteger())
+                  { ccitt_parms.columns = static_cast<int>(dp.getKey("/Columns").getIntValue()); }
+                if(dp.hasKey("/EncodedByteAlign") and dp.getKey("/EncodedByteAlign").isBool())
+                  { ccitt_parms.encoded_byte_align = dp.getKey("/EncodedByteAlign").getBoolValue(); }
               }
 
-            auto raw = smask.get_raw_stream_data();
+            auto encoded = smask.get_codec_stream_data();
             ccitt_samples = ccitt::decode(
-              reinterpret_cast<const uint8_t*>(raw->getBuffer()),
-              raw->getSize(), sm_w, sm_h, K, black_is_1);
+              reinterpret_cast<const uint8_t*>(encoded->getBuffer()),
+              encoded->getSize(), sm_w, sm_h, ccitt_parms);
             if(ccitt_samples.size() < static_cast<size_t>(sm_w) * sm_h)
               {
                 LOG_S(WARNING) << "mask CCITT decode too small for xobject_key="
@@ -1437,14 +1513,9 @@ namespace pdflib
     return image_mask;
   }
 
-  int pdf_resource<PAGE_XOBJECT_IMAGE>::get_ccitt_k() const
+  ccitt::decode_parameters pdf_resource<PAGE_XOBJECT_IMAGE>::get_ccitt_parameters() const
   {
-    return ccitt_k;
-  }
-
-  bool pdf_resource<PAGE_XOBJECT_IMAGE>::get_ccitt_black_is_1() const
-  {
-    return ccitt_black_is_1;
+    return ccitt_params;
   }
 
   bool pdf_resource<PAGE_XOBJECT_IMAGE>::has_jbig2_globals_data() const
@@ -1465,6 +1536,16 @@ namespace pdflib
   std::shared_ptr<Buffer> pdf_resource<PAGE_XOBJECT_IMAGE>::get_raw_stream_data() const
   {
     return raw_stream_data;
+  }
+
+  bool pdf_resource<PAGE_XOBJECT_IMAGE>::has_codec_stream_data() const
+  {
+    return (codec_stream_data != nullptr && codec_stream_data->getSize() > 0);
+  }
+
+  std::shared_ptr<Buffer> pdf_resource<PAGE_XOBJECT_IMAGE>::get_codec_stream_data() const
+  {
+    return codec_stream_data;
   }
 
   bool pdf_resource<PAGE_XOBJECT_IMAGE>::has_decoded_stream_data() const
@@ -1533,9 +1614,12 @@ namespace pdflib
 
   void pdf_resource<PAGE_XOBJECT_IMAGE>::save_to_file(std::filesystem::path const& path) const
   {
-    if(not has_raw_stream_data())
+    // What gets written is the image as its codec encoded it, so the bytes to
+    // save are the ones the codec was handed -- the raw stream with any
+    // transport filters in front of the codec (e.g. /ASCII85Decode) undone.
+    if(not has_codec_stream_data())
       {
-        LOG_S(WARNING) << "no raw stream data to save";
+        LOG_S(WARNING) << "no stream data to save";
         return;
       }
 
@@ -1593,8 +1677,8 @@ namespace pdflib
         params.image_mask = image_mask;
 
         bool ok = jpeg::write_corrected_jpeg_from_memory(
-                                                         reinterpret_cast<unsigned char const*>(raw_stream_data->getBuffer()),
-                                                         static_cast<std::size_t>(raw_stream_data->getSize()),
+                                                         reinterpret_cast<unsigned char const*>(codec_stream_data->getBuffer()),
+                                                         static_cast<std::size_t>(codec_stream_data->getSize()),
                                                          params, path);
         if(ok)
           {
@@ -1637,10 +1721,10 @@ namespace pdflib
         throw std::runtime_error("unable to open output file: " + path.string());
       }
 
-    out.write(reinterpret_cast<char const*>(raw_stream_data->getBuffer()),
-              static_cast<std::streamsize>(raw_stream_data->getSize()));
+    out.write(reinterpret_cast<char const*>(codec_stream_data->getBuffer()),
+              static_cast<std::streamsize>(codec_stream_data->getSize()));
 
-    LOG_S(INFO) << "saved " << raw_stream_data->getSize()
+    LOG_S(INFO) << "saved " << codec_stream_data->getSize()
                 << " bytes to " << path.string();
   }
 

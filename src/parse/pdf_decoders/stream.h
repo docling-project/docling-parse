@@ -118,6 +118,7 @@ namespace pdflib
       bool decode_present = false;
       std::vector<double> decode_array;
       bool image_mask = false;
+      ccitt::decode_parameters ccitt_params;
       std::string data;
     };
 
@@ -590,6 +591,50 @@ namespace pdflib
           {
             inline_image.image_mask = value.getBoolValue();
           }
+        else if(key == "/DecodeParms")
+          {
+            // Only /CCITTFaxDecode carries parameters we act on here. Written
+            // as an array they line up with the filters; the first dictionary
+            // is the one that can hold them, since every filter that may
+            // precede the codec takes none.
+            QPDFObjectHandle parms = value;
+            if(parms.isArray())
+              {
+                for(int j = 0; j < parms.getArrayNItems(); ++j)
+                  {
+                    if(parms.getArrayItem(j).isDictionary())
+                      {
+                        parms = parms.getArrayItem(j);
+                        break;
+                      }
+                  }
+              }
+
+            if(parms.isDictionary())
+              {
+                if(parms.hasKey("/K") and parms.getKey("/K").isInteger())
+                  {
+                    inline_image.ccitt_params.k =
+                      static_cast<int>(parms.getKey("/K").getIntValue());
+                  }
+                if(parms.hasKey("/Columns") and parms.getKey("/Columns").isInteger())
+                  {
+                    inline_image.ccitt_params.columns =
+                      static_cast<int>(parms.getKey("/Columns").getIntValue());
+                  }
+                if(parms.hasKey("/BlackIs1") and parms.getKey("/BlackIs1").isBool())
+                  {
+                    inline_image.ccitt_params.black_is_1 =
+                      parms.getKey("/BlackIs1").getBoolValue();
+                  }
+                if(parms.hasKey("/EncodedByteAlign")
+                   and parms.getKey("/EncodedByteAlign").isBool())
+                  {
+                    inline_image.ccitt_params.encoded_byte_align =
+                      parms.getKey("/EncodedByteAlign").getBoolValue();
+                  }
+              }
+          }
       }
 
     inline_image.has_header = true;
@@ -640,6 +685,7 @@ namespace pdflib
       inline_image.decode_present,
       inline_image.decode_array,
       inline_image.image_mask,
+      inline_image.ccitt_params,
       stream_data,
       current_shape_state().get_clip_state());
 

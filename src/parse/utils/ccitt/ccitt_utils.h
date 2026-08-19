@@ -43,6 +43,10 @@ public:
 
   // Returns the next bit (0 or 1), or -1 when the buffer is exhausted.
   int    read_bit();
+
+  // Skips to the start of the next byte, unless already on a boundary.
+  void   align_to_byte();
+
   bool   at_end() const;
   size_t bits_read() const;
 
@@ -153,25 +157,43 @@ void fill_binary_span(std::vector<uint8_t>& row,
                       int                   color);
 
 // ============================================================
+// The /DecodeParms of a /CCITTFaxDecode filter (ISO 32000-1, Table 11).
+// The defaults here are the ones the table gives for an absent entry.
+//
+// /Columns is the width of the *encoded* data and is what the row codes were
+// written against; /Width is the width of the image. They are normally equal,
+// but nothing requires it, and decoding at the image's width when the encoder
+// used another count desynchronises the very first row.
+// ============================================================
+
+struct decode_parameters
+{
+  int  k                  = 0;      // /K: 0=G3 1-D, <0=G4, >0=G3 mixed
+  int  columns            = 1728;   // /Columns
+  bool black_is_1         = false;  // /BlackIs1
+  bool encoded_byte_align = false;  // /EncodedByteAlign
+};
+
+// ============================================================
 // Main decode entry point
 //
 // raw_data / raw_size : compressed CCITT bytes
-// width, height       : image dimensions in pixels
-// k                   : /K parameter from /DecodeParms (-1 for Group 4)
-// black_is_1          : /BlackIs1 from /DecodeParms (default false)
+// width, height       : image dimensions in pixels (/Width, /Height)
+// params              : the filter's /DecodeParms
 //
-// Returns width*height bytes (8-bit, top-to-bottom, left-to-right).
+// Rows are decoded at params.columns pixels and then fitted to `width`:
+// surplus columns are dropped, missing ones are filled with white, so the
+// result is always width*height bytes (8-bit, top-to-bottom, left-to-right).
 // With black_is_1=false (PDF default): 0=black, 255=white.
 // With black_is_1=true : 255=black,   0=white (CCITT natural, inverted output).
 // Returns an empty vector on failure.
 // ============================================================
 
-std::vector<uint8_t> decode(const uint8_t* raw_data,
-                             size_t         raw_size,
-                             int            width,
-                             int            height,
-                             int            k          = -1,
-                             bool           black_is_1 = false);
+std::vector<uint8_t> decode(const uint8_t*           raw_data,
+                            size_t                   raw_size,
+                            int                      width,
+                            int                      height,
+                            decode_parameters const& params = decode_parameters());
 
 // ============================================================
 // PNG debug-save utility
@@ -209,6 +231,16 @@ inline int BitReader::read_bit()
       ++byte_;
     }
   return b;
+}
+
+inline void BitReader::align_to_byte()
+{
+  if(bit_ != 0)
+    {
+      bits_read_ += static_cast<size_t>(8 - bit_);
+      bit_ = 0;
+      ++byte_;
+    }
 }
 
 inline bool BitReader::at_end() const
@@ -814,12 +846,11 @@ inline bool decode_g4_row(BitReader&                   br,
 
 // --- decode ---
 
-inline std::vector<uint8_t> decode(const uint8_t* raw_data,
-                                    size_t         raw_size,
-                                    int            width,
-                                    int            height,
-                                    int            k,
-                                    bool           black_is_1)
+inline std::vector<uint8_t> decode(const uint8_t*           raw_data,
+                                   size_t                   raw_size,
+                                   int                      width,
+                                   int                      height,
+                                   decode_parameters const& params)
 {
   if(not raw_data or raw_size == 0 or width <= 0 or height <= 0)
     {
@@ -827,17 +858,72 @@ inline std::vector<uint8_t> decode(const uint8_t* raw_data,
       return {};
     }
 
+  const int  k          = params.k;
+  const bool black_is_1 = params.black_is_1;
+
+  // The codes describe rows of /Columns pixels, so that -- not /Width -- is
+  // the width to decode at. A /Columns of zero or less is not a width at all;
+  // fall back to the image's own so a broken parameter cannot stop the decode.
+  const int columns = params.columns > 0 ? params.columns : width;
+
+  if(columns != width)
+    {
+      LOG_S(WARNING) << "ccitt::decode: /Columns " << columns
+                     << " differs from /Width " << width
+                     << " -- decoding at /Columns and fitting each row to /Width";
+    }
+
   LOG_S(INFO) << "ccitt::decode: " << width << "x" << height
               << " k=" << k << " black_is_1=" << black_is_1
+              << " columns=" << columns
+              << " encoded_byte_align=" << params.encoded_byte_align
               << " raw=" << raw_size << " bytes";
 
   BitReader br(raw_data, raw_size);
 
-  std::vector<uint8_t> ref(width, 0);  // previous row; all-white initially
-  std::vector<uint8_t> cur(width, 0);  // current row being decoded
+  std::vector<uint8_t> ref(columns, 0);  // previous row; all-white initially
+  std::vector<uint8_t> cur(columns, 0);  // current row being decoded
 
   std::vector<uint8_t> output;
   output.reserve(static_cast<size_t>(width) * static_cast<size_t>(height));
+
+  // Map the internal representation (0=white, 1=black) to 8-bit grayscale, and
+  // fit the decoded row -- which is `columns` wide -- to the image's `width`.
+  //
+  // /BlackIs1=false (PDF default): normal convention — 0=black, 1=white.
+  //   CCITT "white" (our 0) → sample 1 → DeviceGray 1.0 = white → 255.
+  //   CCITT "black" (our 1) → sample 0 → DeviceGray 0.0 = black →   0.
+  //   Output: cur[x] ? 0u : 255u
+  //
+  // /BlackIs1=true: CCITT natural convention — 1=black, 0=white.
+  //   Output is inverted w.r.t. the default.
+  //   CCITT "white" (our 0) → 0 →   0 (renders as black in DeviceGray).
+  //   CCITT "black" (our 1) → 1 → 255 (renders as white in DeviceGray).
+  //   Output: cur[x] ? 255u : 0u
+  const uint8_t white_byte = black_is_1 ? 0u : 255u;
+
+  auto emit_row = [&](std::vector<uint8_t> const& row)
+    {
+      const int shared = std::min(width, columns);
+      for(int x = 0; x < shared; ++x)
+        {
+          if(black_is_1)
+            {
+              output.push_back(row[x] ? 255u : 0u);
+            }
+          else
+            {
+              output.push_back(row[x] ? 0u : 255u);
+            }
+        }
+
+      // /Columns short of /Width leaves pixels the encoder never coded; a row
+      // is implicitly white beyond its coded part.
+      for(int x = shared; x < width; ++x)
+        {
+          output.push_back(white_byte);
+        }
+    };
 
   int rows_decoded = 0;
 
@@ -845,13 +931,21 @@ inline std::vector<uint8_t> decode(const uint8_t* raw_data,
     {
       std::fill(cur.begin(), cur.end(), 0u);
 
+      // /EncodedByteAlign: the encoder padded each row out so the next one
+      // starts on a byte boundary. Reading straight on takes that padding for
+      // code bits and loses sync on the second row.
+      if(params.encoded_byte_align)
+        {
+          br.align_to_byte();
+        }
+
       bool ok       = false;
       bool hit_eofb = false;
 
       if(k < 0)
         {
           // Group 4: all rows use 2-D coding
-          ok = decode_g4_row(br, ref, cur, width, row, hit_eofb);
+          ok = decode_g4_row(br, ref, cur, columns, row, hit_eofb);
         }
       else
         {
@@ -874,7 +968,7 @@ inline std::vector<uint8_t> decode(const uint8_t* raw_data,
                   zeros = 0;
                 }
             }
-          ok = decode_1d_row(br, cur, width);
+          ok = decode_1d_row(br, cur, columns);
         }
 
       if(not ok)
@@ -892,47 +986,13 @@ inline std::vector<uint8_t> decode(const uint8_t* raw_data,
 
       ++rows_decoded;
 
+      emit_row(cur);
+
       // Stop as soon as genuine EOFB was signalled — everything after is padding/garbage.
       if(hit_eofb)
         {
           LOG_S(INFO) << "ccitt::decode: stopping after EOFB at row " << row;
-          // Emit the just-decoded row before breaking.
-          for(int x = 0; x < width; ++x)
-            {
-              if(black_is_1)
-                {
-                  output.push_back(cur[x] ? 255u : 0u);
-                }
-              else
-                {
-                  output.push_back(cur[x] ? 0u : 255u);
-                }
-            }
           break;
-        }
-
-      // Map internal representation (0=white, 1=black) to 8-bit grayscale.
-      //
-      // /BlackIs1=false (PDF default): normal convention — 0=black, 1=white.
-      //   CCITT "white" (our 0) → sample 1 → DeviceGray 1.0 = white → 255.
-      //   CCITT "black" (our 1) → sample 0 → DeviceGray 0.0 = black →   0.
-      //   Output: cur[x] ? 0u : 255u
-      //
-      // /BlackIs1=true: CCITT natural convention — 1=black, 0=white.
-      //   Output is inverted w.r.t. the default.
-      //   CCITT "white" (our 0) → 0 →   0 (renders as black in DeviceGray).
-      //   CCITT "black" (our 1) → 1 → 255 (renders as white in DeviceGray).
-      //   Output: cur[x] ? 255u : 0u
-      for(int x = 0; x < width; ++x)
-        {
-          if(black_is_1)
-            {
-              output.push_back(cur[x] ? 255u : 0u);
-            }
-          else
-            {
-              output.push_back(cur[x] ? 0u : 255u);
-            }
         }
 
       std::swap(ref, cur);
@@ -944,8 +1004,7 @@ inline std::vector<uint8_t> decode(const uint8_t* raw_data,
   const size_t expected = static_cast<size_t>(width) * static_cast<size_t>(height);
   if(output.size() < expected)
     {
-      const uint8_t white_byte = black_is_1 ? 0u : 255u;
-      const size_t  missing    = expected - output.size();
+      const size_t missing = expected - output.size();
       LOG_S(INFO) << "ccitt::decode: padding " << (missing / width)
                   << " missing rows with white";
       output.resize(expected, white_byte);
