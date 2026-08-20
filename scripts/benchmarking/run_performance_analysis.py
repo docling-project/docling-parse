@@ -3,7 +3,7 @@
 Analyze slowest pages from a per-page CSV and extract detailed timings
 from docling-parse to help identify bottlenecks.
 
-Input is a per-page CSV written by `perf/run_scaling.py --pages-csv`.  Rows
+Input is a per-page CSV written by `scripts/benchmarking/run_performance_benchmarking.py --pages-csv`.  Rows
 carry `backend`, `task` and `threads`, so `--backend`/`--task`/`--threads`
 narrow a mixed file down to the series worth drilling into.
 
@@ -16,9 +16,9 @@ What this script does:
      --nth: Table with all timings (static + dynamic) showing sum, avg, std, count
 
 Usage examples:
-  python perf/run_analysis.py perf/results/pages.csv --top 25 --loglevel fatal
-  python perf/run_analysis.py perf/results/pages.csv --nth 7
-  python perf/run_analysis.py pages.csv --top 25 --task parse --threads 1
+  python scripts/benchmarking/run_performance_analysis.py scripts/benchmarking/results/pages.csv --top 25 --loglevel fatal
+  python scripts/benchmarking/run_performance_analysis.py scripts/benchmarking/results/pages.csv --nth 7
+  python scripts/benchmarking/run_performance_analysis.py pages.csv --top 25 --task parse --threads 1
 """
 
 from __future__ import annotations
@@ -158,7 +158,7 @@ def get_sorted_candidates(
 
 def timestamped_out_path(prefix: str = "analysis") -> Path:
     ts = time.strftime("%Y%m%d-%H%M%S")
-    return Path("perf") / "results" / f"{prefix}_{ts}.csv"
+    return Path("scripts") / "benchmarking" / "results" / f"{prefix}_{ts}.csv"
 
 
 # -------------- Config helpers --------------
@@ -424,7 +424,8 @@ def print_aggregate_breakdown(pages: List[PageTimings]) -> None:
     """Average cost and share of each timing bucket across the selection.
 
     Percentages are branch-local to avoid double-counting nested timers. The
-    `% original` column keeps the link to the per-page cost from run_scaling.py.
+    `% original` column keeps the link to the per-page cost from
+    run_performance_benchmarking.py.
     """
     analysed = [p for p in pages if p.timings.data]
     if not analysed:
@@ -590,7 +591,10 @@ def main(argv: List[str]) -> int:
     ap = argparse.ArgumentParser(
         description="Analyze slowest pages and extract detailed parser timings"
     )
-    ap.add_argument("csv", help="Per-page CSV (from perf/run_scaling.py --pages-csv)")
+    ap.add_argument(
+        "csv",
+        help="Per-page CSV (from scripts/benchmarking/run_performance_benchmarking.py --pages-csv)",
+    )
     ap.add_argument(
         "--top",
         type=int,
@@ -619,7 +623,10 @@ def main(argv: List[str]) -> int:
         "--out",
         type=str,
         default=None,
-        help="Output CSV path for --top mode (defaults under perf/results)",
+        help=(
+            "Output CSV path for --top mode (defaults under "
+            "scripts/benchmarking/results)"
+        ),
     )
     ap.add_argument("--backend", default=None, help="Keep only this backend")
     ap.add_argument("--task", default=None, help="Keep only this task")

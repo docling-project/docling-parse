@@ -22,9 +22,11 @@ namespace pdflib
     void rotate(int angle, std::pair<double, double> delta);
     
     page_item<PAGE_SHAPE>& operator[](size_t i);
+    const page_item<PAGE_SHAPE>& operator[](size_t i) const;
 
     void clear();
     size_t size();
+    size_t size() const;
 
     page_item<PAGE_SHAPE>& back();
     void push_back(page_item<PAGE_SHAPE>& shape);
@@ -104,12 +106,22 @@ namespace pdflib
     return shapes.at(i);
   }
 
+  const page_item<PAGE_SHAPE>& page_item<PAGE_SHAPES>::operator[](size_t i) const
+  {
+    return shapes.at(i);
+  }
+
   void page_item<PAGE_SHAPES>::clear()
   {
     shapes.clear();
   }
 
   size_t page_item<PAGE_SHAPES>::size()
+  {
+    return shapes.size();
+  }
+
+  size_t page_item<PAGE_SHAPES>::size() const
   {
     return shapes.size();
   }

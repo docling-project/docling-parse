@@ -26,20 +26,20 @@ repo-id whose `pdf/` subfolder contains the PDFs.  When omitted, defaults to
 the HF repo `docling-project/performance-dataset-bo767`.
 
 Usage:
-    python perf/run_scaling.py                                   # HF default, render mode, pypdfium2
-    python perf/run_scaling.py ./pdfs --mode parse
-    python perf/run_scaling.py --mode both --other "pypdfium2;pymupdf"
-    python perf/run_scaling.py ./pdfs --mode render --keep-char-cells=true \
+    python scripts/benchmarking/run_performance_benchmarking.py                                   # HF default, render mode, pypdfium2
+    python scripts/benchmarking/run_performance_benchmarking.py ./pdfs --mode parse
+    python scripts/benchmarking/run_performance_benchmarking.py --mode both --other "pypdfium2;pymupdf"
+    python scripts/benchmarking/run_performance_benchmarking.py ./pdfs --mode render --keep-char-cells=true \
         --create-word-cells=true --create-line-cells=true \
         --keep-shapes=true --keep-bitmaps=true
-    python perf/run_scaling.py --mode both --compare                 # docling-parse vs pypdfium2
-    python perf/run_scaling.py --threads 1,4,8,12 --compare all --mode render \
+    python scripts/benchmarking/run_performance_benchmarking.py --mode both --compare                 # docling-parse vs pypdfium2
+    python scripts/benchmarking/run_performance_benchmarking.py --threads 1,4,8,12 --compare all --mode render \
         --output-dir ./docs/performance_benchmarks/
 
 Every run writes `<output-dir>/<cpu>_<dataset>_<mode>.md` (a self-contained
 report: the exact command, the dataset, the machine, every config table, and
-the result tables) alongside a `.csv` of per-page timings for perf/run_eval.py
-and perf/run_analysis.py.  The output directory defaults to ./scratch.
+the result tables) alongside a `.csv` of per-page timings for scripts/benchmarking/run_performance_eval.py
+and scripts/benchmarking/run_performance_analysis.py.  The output directory defaults to ./scratch.
 """
 
 from __future__ import annotations
@@ -128,11 +128,7 @@ def resolve_pdf_inputs(
 
 def filter_pdf_selection(pdf_paths: List[Path], selection: str) -> List[Path]:
     """Filter PDFs by comma/semicolon-separated filename, stem, or path tokens."""
-    tokens = [
-        token.strip()
-        for token in re.split(r"[;,]", selection)
-        if token.strip()
-    ]
+    tokens = [token.strip() for token in re.split(r"[;,]", selection) if token.strip()]
     if not tokens:
         return pdf_paths
 
@@ -144,9 +140,7 @@ def filter_pdf_selection(pdf_paths: List[Path], selection: str) -> List[Path]:
         name = pdf_path.name
         stem = pdf_path.stem
         matched = [
-            token
-            for token in tokens
-            if token == name or token == stem or token in path
+            token for token in tokens if token == name or token == stem or token in path
         ]
         if matched and pdf_path not in selected_set:
             selected.append(pdf_path)
@@ -155,8 +149,7 @@ def filter_pdf_selection(pdf_paths: List[Path], selection: str) -> List[Path]:
 
     if unmatched:
         print(
-            "Warning: --pdf-selection did not match: "
-            + ", ".join(sorted(unmatched)),
+            "Warning: --pdf-selection did not match: " + ", ".join(sorted(unmatched)),
             file=sys.stderr,
         )
 
@@ -375,7 +368,7 @@ def benchmark_rows(
 # -------- Output naming --------
 
 
-def _slug(value: str) -> str:
+def _slug(value: object) -> str:
     """Filesystem-friendly token: lowercase, only [a-z0-9-], others collapsed."""
     slug = re.sub(r"[^a-z0-9-]+", "_", str(value).lower()).strip("_")
     return slug or "unknown"
@@ -504,7 +497,7 @@ def _content_config(
     )
 
 
-def _config_rows(values: dict[str, object], fields: List[str]) -> List[List[str]]:
+def _config_rows(values: dict[str, object], fields: List[str]) -> List[List[object]]:
     return [[field, values[field]] for field in fields]
 
 
@@ -1243,7 +1236,7 @@ def cmp_pdfplumber(
             for i in _page_indices(page_numbers, len(pdf.pages)):
                 page = pdf.pages[i]
                 with c.page(str(pdf_path), i + 1) as out:
-                    _ = page.chars
+                    _chars = page.chars
                     if render:
                         out.image_size = page.to_image(
                             resolution=72.0 * scale
@@ -1362,7 +1355,7 @@ def cmp_pypdf(
 
                     page.extract_text(visitor_text=visitor)
                 else:
-                    _ = page.extract_text()
+                    _text = page.extract_text()
     return c.finish()
 
 
@@ -1415,9 +1408,7 @@ def parse_compare_arg(arg: str) -> List[str]:
 ComparisonSeriesKey = Tuple[str, str, int]
 
 
-def comparison_series_key(
-    backend: str, task: str, threads: int
-) -> ComparisonSeriesKey:
+def comparison_series_key(backend: str, task: str, threads: int) -> ComparisonSeriesKey:
     return (backend, task, threads)
 
 
@@ -1509,11 +1500,11 @@ def backend_runs_from_page_rows(rows: List[PageRow]) -> List[BackendRun]:
     runs: List[BackendRun] = []
     for key, samples in grouped.items():
         backend, task, threads = key
-        wall_values = [
-            sample.wall_gap_s for sample in samples if sample.wall_gap_s > 0
-        ]
-        wall_s = sum(wall_values) if wall_values else sum(
-            sample.elapsed_s for sample in samples
+        wall_values = [sample.wall_gap_s for sample in samples if sample.wall_gap_s > 0]
+        wall_s = (
+            sum(wall_values)
+            if wall_values
+            else sum(sample.elapsed_s for sample in samples)
         )
         per_page_source = (
             PER_PAGE_INTERNAL
@@ -1531,9 +1522,7 @@ def backend_runs_from_page_rows(rows: List[PageRow]) -> List[BackendRun]:
             )
         )
 
-    runs.sort(
-        key=lambda r: (_TASK_ORDER[r.task], _BACKEND_ORDER[r.backend], r.threads)
-    )
+    runs.sort(key=lambda r: (_TASK_ORDER[r.task], _BACKEND_ORDER[r.backend], r.threads))
     return runs
 
 
@@ -1700,16 +1689,16 @@ def _speedup_baselines(runs: List[BackendRun]) -> List[BackendRun]:
     return baselines
 
 
-def _speedup_rows(runs: List[BackendRun]) -> Tuple[List[str], List[List[str]]]:
+def _speedup_rows(runs: List[BackendRun]) -> Tuple[List[str], List[List[object]]]:
     """Speedup grid for one task: `baseline_total / row_total` per cell."""
     baselines = _speedup_baselines(runs)
     headers = ["python package", "threads", "total time (s)", "pages/sec"]
     headers.extend(f"vs {_run_label(b)}" for b in baselines)
 
-    rows: List[List[str]] = []
+    rows: List[List[object]] = []
     for run in runs:
         s = run.stats()
-        cells = [
+        cells: List[object] = [
             run.backend,
             str(run.threads),
             _fmt_duration(s["total_s"]),
@@ -1882,7 +1871,7 @@ def write_markdown_report(
     dataset = format_dataset_label(dataset_info)
 
     lines = [
-        "<!-- generated by perf/run_scaling.py -->",
+        "<!-- generated by scripts/benchmarking/run_performance_benchmarking.py -->",
         "",
         f"# Benchmark — {dataset_info['name']} on {system_info['cpu']}",
         "",
@@ -1944,8 +1933,10 @@ def write_markdown_report(
         task_runs = [run for run in runs if run.task == task]
         if not task_runs:
             continue
-        headers, rows = _speedup_rows(task_runs)
-        lines.extend([f"Task: `{task}`", "", _md_table(headers, list(rows)), ""])
+        speedup_headers, speedup_rows = _speedup_rows(task_runs)
+        lines.extend(
+            [f"Task: `{task}`", "", _md_table(speedup_headers, speedup_rows), ""]
+        )
 
     reference_name, size_rows, note = render_size_check(runs)
     if reference_name is not None:

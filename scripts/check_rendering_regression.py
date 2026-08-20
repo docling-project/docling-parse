@@ -10,6 +10,7 @@ import sys
 from collections.abc import Iterable, Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import cast
 
 from PIL import Image, ImageChops, ImageStat
 
@@ -22,9 +23,9 @@ from docling_parse.pdf_parser import (  # noqa: E402
     RenderConfig,
     ThreadedPdfParserConfig,
 )
+from tests.constants import PARSER_PAGE_RESTRICTIONS  # noqa: E402
 from tests.data_utils import ensure_test_data_downloaded  # noqa: E402
 from tests.rendering_regression import renderer_image_path  # noqa: E402
-from tests.constants import PARSER_PAGE_RESTRICTIONS  # noqa: E402
 from tests.test_parse import REGRESSION_FOLDER  # noqa: E402
 
 DEFAULT_DELTA_DIR = Path("tests/data/render_deltas")
@@ -248,7 +249,8 @@ def _compare_images(
     diff = ImageChops.difference(actual_rgba, expected_rgba)
     stat = ImageStat.Stat(diff)
     mean_abs_error = sum(stat.mean) / len(stat.mean)
-    extrema = diff.getextrema()
+    # `diff` is RGBA, so getextrema() yields one (low, high) pair per band.
+    extrema = cast("tuple[tuple[int, int], ...]", diff.getextrema())
     max_abs_error = max(high for _, high in extrema)
 
     changed_mask = diff.convert("L").point(

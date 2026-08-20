@@ -187,3 +187,81 @@ def test_clip_outside_the_shape_paints_nothing():
     assert coverage_ratio(image) < 0.01, (
         "a fill whose clip lies elsewhere still reached the page"
     )
+
+
+# The corner the leaking instructions are confined to, well clear of MIDDLE.
+CORNER_CLIP = (10.0, 160.0, 30.0, 30.0)  # PDF x y w h
+CORNER_CIRCLE = (20.0, 175.0, 6.0)  # centre and radius, inside CORNER_CLIP
+MISSING_TARGET = (30.0, 162.0, 8.0, 8.0)  # inside the clip, clear of the circle
+MIDDLE = (50.0, 50.0, 150.0, 150.0)  # top-left coordinates, the page's middle
+
+
+def _corner_then_middle(leaking_body: str, resources: str = "", extra=None) -> bytes:
+    """A page that paints something clipped to nothing, then something plain.
+
+    `leaking_body` is painted under two clips at once: a rectangle, which the
+    renderer applies to the context, and a circle, which it can only apply as
+    a coverage mask. The two share no area with what is painted, so the mask
+    comes out empty and the instruction is abandoned -- the exact path that
+    used to return while the rectangle's `save()` was still on the context.
+    Everything after it in the page then inherited a clip nobody asked for.
+    """
+    x, y, w, h = CORNER_CLIP
+    cx, cy, r = CORNER_CIRCLE
+
+    content = (
+        "q\n"
+        f"{x} {y} {w} {h} re W n\n"
+        "q\n" + circle_path(cx, cy, r) + "W n\n"
+        f"{leaking_body}"
+        "Q\n"
+        "Q\n"
+        "0 0 1 rg\n"
+        "50 50 100 100 re f\n"
+    )
+
+    return simple_page_pdf(content, resources=resources, extra_objects=extra)
+
+
+def test_a_shape_whose_clip_is_empty_does_not_clip_the_rest_of_the_page():
+    """Abandoning one fill must not leave its clip behind.
+
+    The clip is pushed onto the renderer's context with a save, so the return
+    that gives up on an empty clip has to undo it. Leaving it stranded costs
+    far more than the one fill: every later restore pops the wrong state, the
+    clip keeps narrowing, and the rest of the page paints into nothing. Page
+    752 of the PDF specification lost an entire figure that way -- a tiling
+    pattern whose cell lattice steps past the filled path leaks one save per
+    off-target cell, and there are hundreds.
+    """
+    mx, my, mw, mh = MISSING_TARGET
+    pdf = _corner_then_middle(f"1 0 0 rg\n{mx} {my} {mw} {mh} re f\n")
+
+    image = region_image(render_page(pdf), MIDDLE)
+
+    coverage = coverage_ratio(image)
+    assert coverage > 0.95, (
+        f"the fill painted after an abandoned one covered {coverage:.3f} of its "
+        "own box; a clip left on the context is cutting it"
+    )
+    assert center_color(image)[2] > 200, (
+        "the fill painted after an abandoned one lost its colour"
+    )
+
+
+def test_an_image_whose_clip_is_empty_does_not_clip_the_rest_of_the_page():
+    """The same, for images: they take their own route through the renderer."""
+    mx, my, mw, mh = MISSING_TARGET
+    pdf = _corner_then_middle(
+        f"q\n{mw} 0 0 {mh} {mx} {my} cm\n/Im0 Do\nQ\n",
+        resources="/XObject << /Im0 5 0 R >>",
+        extra=[_red_image_object()],
+    )
+
+    image = region_image(render_page(pdf), MIDDLE)
+
+    coverage = coverage_ratio(image)
+    assert coverage > 0.95, (
+        f"the fill painted after an abandoned image covered {coverage:.3f} of "
+        "its own box; a clip left on the context is cutting it"
+    )

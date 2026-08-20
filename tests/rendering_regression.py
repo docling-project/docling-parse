@@ -643,7 +643,7 @@ def write_comparison_visualization(
 
 
 def histogram_path(metric: str, *, folder: Path = RENDER_VISUALIZATION_FOLDER) -> Path:
-    return folder / f"histogram_{metric}.png"
+    return folder / f"../histogram_{metric}.png"
 
 
 def write_metric_histogram(

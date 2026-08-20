@@ -74,8 +74,26 @@ public:
   int components = 0;
   ColorSpace color_space = ColorSpace::Unknown;
 
+  // The JPEG carried an Adobe APP14 marker. For four-component data that is
+  // the one thing which says how to read the samples: Adobe's encoder feeds
+  // libjpeg CMYK that already holds 255 minus the ink, and libjpeg's YCCK and
+  // CMYK paths are transparent to that convention, so what comes back out is
+  // inverted ink. Nothing in the JPEG itself distinguishes the two readings.
+  bool adobe_marker = false;
+
   bool empty() const { return pixels.empty(); }
 };
+
+// Whether libjpeg can deliver `cs` from a JPEG of `num_components`. It
+// converts freely among grayscale, RGB and YCbCr, but nothing bridges those
+// and the four-component spaces: asking for RGB out of a YCCK JPEG is an
+// "Unsupported color conversion request" that aborts the whole decode.
+inline bool can_request_color_space(ColorSpace cs, int num_components)
+{
+  if(cs == ColorSpace::Unknown) { return false; }
+
+  return (cs == ColorSpace::CMYK) == (num_components == 4);
+}
 
 // ---------------------------------------------------------------------------
 // Custom libjpeg error handler that longjmp's instead of calling exit()
@@ -284,12 +302,26 @@ inline bool write_corrected_jpeg_from_memory(
               << " image_width=" << dinfo.image_width
               << " image_height=" << dinfo.image_height;
 
-  switch(params.color_space)
+  // Only ask libjpeg for the dictionary's colour space when the data can
+  // actually produce it (ISO 32000-1, 8.9.5.1 requires them to agree; when
+  // they do not, the data wins). Asking for RGB out of a four-component Adobe
+  // JPEG is an "Unsupported color conversion request" and fails the decode.
+  if(can_request_color_space(params.color_space, dinfo.num_components))
   {
-    case ColorSpace::Gray: dinfo.out_color_space = JCS_GRAYSCALE; break;
-    case ColorSpace::RGB:  dinfo.out_color_space = JCS_RGB;       break;
-    case ColorSpace::CMYK: dinfo.out_color_space = JCS_CMYK;      break;
-    default: break;
+    switch(params.color_space)
+    {
+      case ColorSpace::Gray: dinfo.out_color_space = JCS_GRAYSCALE; break;
+      case ColorSpace::RGB:  dinfo.out_color_space = JCS_RGB;       break;
+      case ColorSpace::CMYK: dinfo.out_color_space = JCS_CMYK;      break;
+      default: break;
+    }
+  }
+  else
+  {
+    LOG_S(WARNING) << __FUNCTION__
+                   << ": /ColorSpace " << color_space_name(params.color_space)
+                   << " does not match the JPEG's " << dinfo.num_components
+                   << " components -- decoding in the JPEG's own colour space";
   }
 
   LOG_S(INFO) << __FUNCTION__
@@ -495,12 +527,24 @@ inline std::vector<unsigned char> write_corrected_jpeg_to_memory(
     return {};
   }
 
-  switch(params.color_space)
+  // As above: a dictionary colour space the data cannot produce is dropped
+  // rather than asked of libjpeg, which would refuse the conversion outright.
+  if(can_request_color_space(params.color_space, dinfo.num_components))
   {
-    case ColorSpace::Gray: { dinfo.out_color_space = JCS_GRAYSCALE; break; }
-    case ColorSpace::RGB:  { dinfo.out_color_space = JCS_RGB;       break; }
-    case ColorSpace::CMYK: { dinfo.out_color_space = JCS_CMYK;      break; }
-    default: { break; }
+    switch(params.color_space)
+    {
+      case ColorSpace::Gray: { dinfo.out_color_space = JCS_GRAYSCALE; break; }
+      case ColorSpace::RGB:  { dinfo.out_color_space = JCS_RGB;       break; }
+      case ColorSpace::CMYK: { dinfo.out_color_space = JCS_CMYK;      break; }
+      default: { break; }
+    }
+  }
+  else
+  {
+    LOG_S(WARNING) << __FUNCTION__
+                   << ": /ColorSpace " << color_space_name(params.color_space)
+                   << " does not match the JPEG's " << dinfo.num_components
+                   << " components -- decoding in the JPEG's own colour space";
   }
 
   jpeg_start_decompress(&dinfo);
@@ -897,7 +941,23 @@ inline decoded_jpeg_result decode_jpeg_to_raw_pixels(
                 << " num_components=" << dinfo.num_components
                 << " image_width=" << dinfo.image_width
                 << " image_height=" << dinfo.image_height
+                << " saw_Adobe_marker=" << (dinfo.saw_Adobe_marker ? "true" : "false")
                 << " requested_pdf_cs=" << color_space_name(params.color_space);
+
+    // The image dictionary's colour space is supposed to agree with the data
+    // (ISO 32000-1, 8.9.5.1). When it does not -- a /DeviceRGB dictionary over
+    // a four-component Adobe JPEG, say -- the data is what there is to decode,
+    // so the dictionary's request is dropped rather than asked of libjpeg,
+    // which would refuse the conversion and fail the whole attempt.
+    if(force_output_cs
+       and not can_request_color_space(params.color_space, dinfo.num_components))
+      {
+        LOG_S(WARNING) << "decode_jpeg_to_raw_pixels"
+                       << ": /ColorSpace " << color_space_name(params.color_space)
+                       << " does not match the JPEG's " << dinfo.num_components
+                       << " components -- decoding in the JPEG's own colour space";
+        force_output_cs = false;
+      }
 
     if(force_output_cs)
       {
@@ -911,9 +971,10 @@ inline decoded_jpeg_result decode_jpeg_to_raw_pixels(
     jpeg_start_decompress(&dinfo);
 
     decoded_jpeg_result result;
-    result.width      = static_cast<int>(dinfo.output_width);
-    result.height     = static_cast<int>(dinfo.output_height);
-    result.components = dinfo.output_components;
+    result.width        = static_cast<int>(dinfo.output_width);
+    result.height       = static_cast<int>(dinfo.output_height);
+    result.components   = dinfo.output_components;
+    result.adobe_marker = (dinfo.saw_Adobe_marker != 0);
     result.color_space = (result.components == 1) ? ColorSpace::Gray
                        : (result.components == 3) ? ColorSpace::RGB
                        : (result.components == 4) ? ColorSpace::CMYK

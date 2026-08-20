@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include <parse/qpdf/stream_filters.h>
 #include <parse/utils/ccitt/ccitt_utils.h>
 #include <parse/utils/jpx/jpx_utils.h>
 #include <third_party/pdfium_jbig2.h>
@@ -43,6 +44,7 @@ namespace pdflib
                          bool decode_present,
                          const std::vector<double>& decode_array,
                          bool image_mask,
+                         const ccitt::decode_parameters& ccitt_params,
                          std::shared_ptr<Buffer> stream_data,
                          clip_state_instruction clip_state = clip_state_instruction());
 
@@ -227,6 +229,7 @@ namespace pdflib
       image.intent             = xobj.get_intent();
       image.filters            = xobj.get_filters();
       image.raw_stream_data    = xobj.get_raw_stream_data();
+      image.codec_stream_data  = xobj.get_codec_stream_data();
       image.decoded_stream_data = xobj.get_decoded_stream_data();
       image.soft_mask_data     = xobj.get_soft_mask_data();
       image.soft_mask_width    = xobj.get_soft_mask_width();
@@ -244,8 +247,7 @@ namespace pdflib
       image.image_mask      = xobj.is_image_mask();
 
       // propagate /CCITTFaxDecode parameters
-      image.ccitt_k          = xobj.get_ccitt_k();
-      image.ccitt_black_is_1 = xobj.get_ccitt_black_is_1();
+      image.ccitt_params     = xobj.get_ccitt_parameters();
       image.icc_components  = xobj.get_icc_components();
       image.device_n_components = xobj.get_device_n_components();
       image.device_n_names = xobj.get_device_n_names();
@@ -282,6 +284,7 @@ namespace pdflib
       bool decode_present,
       const std::vector<double>& decode_array,
       bool image_mask,
+      const ccitt::decode_parameters& ccitt_params,
       std::shared_ptr<Buffer> stream_data,
       clip_state_instruction clip_state)
   {
@@ -302,13 +305,36 @@ namespace pdflib
     image.color_space        = color_space;
     image.filters            = filters;
     image.raw_stream_data    = stream_data;
-    if(filters.empty())
-      {
-        image.decoded_stream_data = stream_data;
-      }
+
+    // An inline image carries its own /Filter chain (ISO 32000-1, 8.9.7) and
+    // nothing has defiltered it yet. Undo the transport filters in front of
+    // the image codec so the codec decoders below get the bytes they expect;
+    // when the chain is nothing but transport filters, undoing all of them
+    // leaves the samples themselves.
+    {
+      const std::size_t codec_index = stream_filters::image_codec_index(filters);
+
+      auto encoded = stream_filters::apply_filters(stream_data,
+                                                   filters,
+                                                   codec_index,
+                                                   QPDFObjectHandle::newNull());
+      if(not encoded)
+        {
+          LOG_S(WARNING) << "failed to undo the transport filters of inline image "
+                         << xobject_key << " -- using its encoded bytes";
+          encoded = stream_data;
+        }
+
+      image.codec_stream_data = encoded;
+      if(codec_index == filters.size())
+        {
+          image.decoded_stream_data = encoded;
+        }
+    }
     image.decode_present     = decode_present;
     image.decode_array       = decode_array;
     image.image_mask         = image_mask;
+    image.ccitt_params       = ccitt_params;
 
     if(image.image_mask and not image.decode_present)
       {
@@ -810,9 +836,10 @@ namespace pdflib
         // Priority:
         //   1. decoded_stream_data — QPDF has already fully decoded the stream
         //      (available for /FlateDecode and some /DCTDecode cases).
-        //   2. /DCTDecode via libjpeg — when QPDF could not decode the stream
-        //      in thread-safe mode, raw_stream_data IS the original JPEG bytes;
-        //      we decompress with libjpeg to get raw pixels directly.
+        //   2. an image codec — /DCTDecode, /JPXDecode, /CCITTFaxDecode or
+        //      /JBIG2Decode — decoded here from codec_stream_data, which holds
+        //      the codec's own bytes with anything wrapped around them (e.g.
+        //      /ASCII85Decode) already undone.
         //   3. raw_stream_data with no filter — the stream is already raw pixels.
 
         const bool has_dct = std::find(image.filters.begin(), image.filters.end(),
@@ -821,6 +848,8 @@ namespace pdflib
                                          "/FlateDecode") != image.filters.end();
         const bool has_jpx = std::find(image.filters.begin(), image.filters.end(),
                                        "/JPXDecode") != image.filters.end();
+
+        const auto codec_data = image.get_codec_stream_data();
 
         if (image.decoded_stream_data and image.decoded_stream_data->getSize() > 0)
           {
@@ -867,7 +896,7 @@ namespace pdflib
                   }
               }
           }
-        else if (has_dct and image.raw_stream_data and image.raw_stream_data->getSize() > 0)
+        else if (has_dct and codec_data and codec_data->getSize() > 0)
           {
             LOG_S(INFO) << "bitmap: decoded_stream_data unavailable for /DCTDecode image, "
                         << "decoding JPEG via libjpeg "
@@ -895,8 +924,8 @@ namespace pdflib
                         << " decode_len=" << params.decode.size();
 
             auto decoded = jpeg::decode_pdf_jpeg_stream_to_raw_pixels(
-                reinterpret_cast<unsigned char const*>(image.raw_stream_data->getBuffer()),
-                static_cast<std::size_t>(image.raw_stream_data->getSize()),
+                reinterpret_cast<unsigned char const*>(codec_data->getBuffer()),
+                static_cast<std::size_t>(codec_data->getSize()),
                 has_flate,
                 params);
 
@@ -921,17 +950,50 @@ namespace pdflib
                   {
                     fmt = PIXEL_FORMAT_CMYK;
 
-                    // libjpeg hands back process ink: it already undoes the
-                    // Adobe inversion while decoding, exactly as the primary
-                    // path assumes. Leaving the convention unset means
-                    // "invert", so the samples were inverted a second time and
-                    // a page with almost no ink came out solid black. Only an
-                    // explicit inverting /Decode changes that.
-                    cmyk_conv = CMYK_CONVENTION_PROCESS;
-                    if(image.decode_present and has_default_adobe_cmyk_decode(image.decode_array))
-                      {
-                        cmyk_conv = CMYK_CONVENTION_ADOBE_INVERTED;
-                      }
+                    // Which way to read the four bytes is not in the JPEG:
+                    // libjpeg's CMYK and YCCK paths both return whatever
+                    // convention the encoder put in, and the corpus has Adobe
+                    // APP14 files with transform 2 in both polarities, so the
+                    // marker cannot decide it either.
+                    //
+                    // What decides it is the image dictionary. A /DeviceCMYK
+                    // image is fully specified: its samples are ink amounts
+                    // mapped by /Decode, which defaults to [0 1 0 1 0 1 0 1]
+                    // (ISO 32000-1, 8.9.5.2), and a conforming file that stored
+                    // Adobe's inverted ink says so with [1 0 1 0 1 0 1 0].
+                    // Reading those files as inverted turned a page with almost
+                    // no ink solid black.
+                    //
+                    // Only when the dictionary contradicts its own data -- a
+                    // three-component /ColorSpace over a four-component JPEG,
+                    // which 8.9.5.1 does not allow -- is there nothing left to
+                    // trust. Then the APP14 marker is the only statement about
+                    // the samples on offer, and Adobe's convention is that they
+                    // hold 255 minus the ink. This is a deliberate deviation:
+                    // the standard has nothing to say about a file that already
+                    // broke it.
+                    const bool dictionary_says_cmyk = (cs == jpeg::ColorSpace::CMYK);
+                    const bool stored_inverted =
+                      decoded.adobe_marker and not dictionary_says_cmyk;
+
+                    // An inverting /Decode has already been applied to these
+                    // samples by the JPEG decoder, so it flips the reading
+                    // rather than setting it.
+                    const bool decode_inverts =
+                      image.decode_present
+                      and has_default_adobe_cmyk_decode(image.decode_array);
+
+                    cmyk_conv = (stored_inverted != decode_inverts)
+                      ? CMYK_CONVENTION_ADOBE_INVERTED
+                      : CMYK_CONVENTION_PROCESS;
+
+                    LOG_S(INFO) << "bitmap: CMYK JPEG convention"
+                                << " for xobject_key=" << image.xobject_key
+                                << " declared_cs=" << image.color_space
+                                << " adobe_marker=" << (decoded.adobe_marker ? "true" : "false")
+                                << " decode_inverts=" << (decode_inverts ? "true" : "false")
+                                << " -> " << (cmyk_conv == CMYK_CONVENTION_ADOBE_INVERTED
+                                              ? "adobe-inverted" : "process");
                   }
                 else
                   {
@@ -949,15 +1011,15 @@ namespace pdflib
                                << "for xobject_key=" << image.xobject_key;
               }
           }
-        else if (has_jpx and image.raw_stream_data and image.raw_stream_data->getSize() > 0)
+        else if (has_jpx and codec_data and codec_data->getSize() > 0)
           {
             LOG_S(INFO) << "bitmap: decoded_stream_data unavailable for /JPXDecode image, "
                         << "decoding JPEG2000 via OpenJPEG "
                         << "for xobject_key=" << image.xobject_key;
 
             auto decoded = jpx::decode_jpx_to_raw_pixels(
-                reinterpret_cast<uint8_t const*>(image.raw_stream_data->getBuffer()),
-                static_cast<std::size_t>(image.raw_stream_data->getSize()));
+                reinterpret_cast<uint8_t const*>(codec_data->getBuffer()),
+                static_cast<std::size_t>(codec_data->getSize()));
 
             if(not decoded.empty())
               {
@@ -1043,7 +1105,7 @@ namespace pdflib
           }
         else if (std::find(image.filters.begin(), image.filters.end(),
                            "/JBIG2Decode") != image.filters.end()
-                 and ((image.raw_stream_data and image.raw_stream_data->getSize() > 0)
+                 and ((codec_data and codec_data->getSize() > 0)
                       or (image.decoded_stream_data and image.decoded_stream_data->getSize() > 0)))
           {
             const int w = image.image_width;
@@ -1056,10 +1118,10 @@ namespace pdflib
                 page_stream_data   = image.decoded_stream_data;
                 page_stream_source = "decoded";
               }
-            else if (image.raw_stream_data and image.raw_stream_data->getSize() > 0)
+            else if (codec_data and codec_data->getSize() > 0)
               {
-                page_stream_data   = image.raw_stream_data;
-                page_stream_source = "raw";
+                page_stream_data   = codec_data;
+                page_stream_source = "encoded";
               }
 
             const auto* page_buf =
@@ -1137,8 +1199,8 @@ namespace pdflib
           }
         else if (std::find(image.filters.begin(), image.filters.end(),
                            "/CCITTFaxDecode") != image.filters.end()
-                 and image.raw_stream_data
-                 and image.raw_stream_data->getSize() > 0)
+                 and codec_data
+                 and codec_data->getSize() > 0)
           {
             LOG_S(INFO) << "bitmap: decoded_stream_data unavailable for /CCITTFaxDecode image, "
                         << "decoding via built-in CCITT decoder "
@@ -1148,11 +1210,10 @@ namespace pdflib
             const int h = image.image_height;
 
             auto decoded = ccitt::decode(
-                reinterpret_cast<const uint8_t*>(image.raw_stream_data->getBuffer()),
-                static_cast<size_t>(image.raw_stream_data->getSize()),
+                reinterpret_cast<const uint8_t*>(codec_data->getBuffer()),
+                static_cast<size_t>(codec_data->getSize()),
                 w, h,
-                image.ccitt_k,
-                image.ccitt_black_is_1);
+                image.ccitt_params);
 
             if(not decoded.empty())
               {
@@ -1172,17 +1233,45 @@ namespace pdflib
     ccitt::save_debug_png(decoded, w, h, dbg_path);
   }
 
-                pixel_data  = std::make_shared<std::vector<uint8_t>>(std::move(decoded));
-                pixel_shape = {h, w, channels};
+                if(image.indexed_palette and not image.indexed_palette->empty())
+                  {
+                    // ccitt::decode() returns display-oriented 8-bit bilevel
+                    // grayscale samples. For an /Indexed image those bytes are
+                    // not RGB pixels; they need to become palette indices first.
+                    auto indices = std::make_shared<std::vector<uint8_t>>();
+                    indices->reserve(decoded.size());
+                    for(auto sample : decoded)
+                      {
+                        indices->push_back(sample < 128u ? 0u : 1u);
+                      }
 
-                // ccitt::decode resolves /BlackIs1 and returns one 8-bit sample
-                // per pixel, i.e. the filter's output bit widened under the
-                // identity /Decode. The image dictionary's own /Decode array
-                // (ISO 32000-1, 8.9.5.2) still has to be applied on top, exactly
-                // as the unpack_subbyte path does for a QPDF-decoded stream.
-                // /CCITTFaxDecode images routinely carry [1 0], which inverts
-                // the image — and for an /ImageMask flips which samples paint.
-                apply_decode_to_u8_samples(pixel_data, channels);
+                    if(expand_indexed_samples(channels,
+                                              indices->data(),
+                                              indices->size(),
+                                              w,
+                                              h))
+                      {
+                        LOG_S(INFO) << "bitmap: expanded CCITT Indexed palette "
+                                    << "for xobject_key=" << image.xobject_key
+                                    << " (" << indices->size() << " indices -> "
+                                    << pixel_data->size() << " bytes, ncomps="
+                                    << channels << ")";
+                      }
+                  }
+                else
+                  {
+                    pixel_data  = std::make_shared<std::vector<uint8_t>>(std::move(decoded));
+                    pixel_shape = {h, w, channels};
+
+                    // ccitt::decode resolves /BlackIs1 and returns one 8-bit sample
+                    // per pixel, i.e. the filter's output bit widened under the
+                    // identity /Decode. The image dictionary's own /Decode array
+                    // (ISO 32000-1, 8.9.5.2) still has to be applied on top, exactly
+                    // as the unpack_subbyte path does for a QPDF-decoded stream.
+                    // /CCITTFaxDecode images routinely carry [1 0], which inverts
+                    // the image -- and for an /ImageMask flips which samples paint.
+                    apply_decode_to_u8_samples(pixel_data, channels);
+                  }
               }
             else
               {

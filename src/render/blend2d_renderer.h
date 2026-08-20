@@ -289,6 +289,29 @@ namespace pdflib
       return true;
     }
 
+    // How many glyphs of a shaped run came back as .notdef. A run with any of
+    // them has characters the face cannot draw, each of which lands on the
+    // page as a box.
+    static size_t glyph_run_notdef_count(const BLGlyphBuffer& gb)
+    {
+      const size_t count = gb.size();
+      const uint32_t* glyph_ids = gb.glyph_run().glyph_data_as<uint32_t>();
+      if (count == 0 or glyph_ids == nullptr) { return 0; }
+
+      size_t notdef = 0;
+      for (size_t i = 0; i < count; ++i)
+        {
+          if (glyph_ids[i] == 0) { ++notdef; }
+        }
+
+      return notdef;
+    }
+
+    static bool glyph_run_has_notdef(const BLGlyphBuffer& gb)
+    {
+      return glyph_run_notdef_count(gb) > 0;
+    }
+
     // Blend2D loads some SFNT faces and then decodes part of them into
     // outlines that are orders of magnitude too large: a valid CJK subset
     // (PMingLiU, 1024 units/em, every glyph simple and well formed) rendered
@@ -666,7 +689,10 @@ namespace pdflib
         {
           return false;
         }
+      if(d.format != BL_FORMAT_A8 or s.format != BL_FORMAT_A8) { return false; }
       if(d.size.w != s.size.w or d.size.h != s.size.h) { return false; }
+      if(d.size.w <= 0 or d.size.h <= 0) { return false; }
+      if(d.stride < d.size.w or s.stride < s.size.w) { return false; }
 
       for(int y = 0; y < d.size.h; y++)
         {
@@ -690,7 +716,14 @@ namespace pdflib
         {
           return false;
         }
+      if(d.format != BL_FORMAT_PRGB32 or s.format != BL_FORMAT_A8) { return false; }
       if(d.size.w != s.size.w or d.size.h != s.size.h) { return false; }
+      if(d.size.w <= 0 or d.size.h <= 0) { return false; }
+      if(d.stride < static_cast<intptr_t>(d.size.w) * 4 or
+         s.stride < s.size.w)
+        {
+          return false;
+        }
 
       for(int y = 0; y < d.size.h; y++)
         {
@@ -708,6 +741,108 @@ namespace pdflib
                 }
             }
         }
+      return true;
+    }
+
+    static bool fill_a8(BLImage& image, uint8_t value)
+    {
+      BLImageData d;
+      if(image.make_mutable(&d) != BL_SUCCESS) { return false; }
+      if(d.format != BL_FORMAT_A8) { return false; }
+      if(d.size.w <= 0 or d.size.h <= 0) { return false; }
+      if(d.stride < d.size.w) { return false; }
+
+      for(int y = 0; y < d.size.h; y++)
+        {
+          uint8_t* row = static_cast<uint8_t*>(d.pixel_data) + y * d.stride;
+          std::fill_n(row, d.size.w, value);
+        }
+      return true;
+    }
+
+    static bool copy_prgb32_alpha_to_a8(BLImage& dst, const BLImage& src)
+    {
+      BLImageData d, s;
+      if(dst.make_mutable(&d) != BL_SUCCESS or src.get_data(&s) != BL_SUCCESS)
+        {
+          return false;
+        }
+      if(d.format != BL_FORMAT_A8 or s.format != BL_FORMAT_PRGB32) { return false; }
+      if(d.size.w != s.size.w or d.size.h != s.size.h) { return false; }
+      if(d.size.w <= 0 or d.size.h <= 0) { return false; }
+      if(d.stride < d.size.w or
+         s.stride < static_cast<intptr_t>(s.size.w) * 4)
+        {
+          return false;
+        }
+
+      for(int y = 0; y < d.size.h; y++)
+        {
+          uint8_t* drow = static_cast<uint8_t*>(d.pixel_data) + y * d.stride;
+          const uint8_t* srow =
+            static_cast<const uint8_t*>(s.pixel_data) + y * s.stride;
+          for(int x = 0; x < d.size.w; x++)
+            {
+              drow[x] = srow[4 * x + 3];
+            }
+        }
+      return true;
+    }
+
+    static bool rasterize_path_to_a8(BLImage& dst,
+                                     const BLPath& path,
+                                     BLFillRule fill_rule)
+    {
+      BLImageData d;
+      if(dst.get_data(&d) != BL_SUCCESS) { return false; }
+      if(d.format != BL_FORMAT_A8) { return false; }
+      if(d.size.w <= 0 or d.size.h <= 0) { return false; }
+
+      BLImage plane;
+      if(plane.create(d.size.w, d.size.h, BL_FORMAT_PRGB32) != BL_SUCCESS)
+        {
+          return false;
+        }
+
+      {
+        BLContext pctx(plane);
+        pctx.set_comp_op(BL_COMP_OP_SRC_COPY);
+        pctx.fill_all(BLRgba32(0x00000000u));
+        pctx.set_comp_op(BL_COMP_OP_SRC_OVER);
+        pctx.set_fill_rule(fill_rule);
+        pctx.fill_path(path, BLRgba32(0xFFFFFFFFu));
+        pctx.end();
+      }
+
+      return copy_prgb32_alpha_to_a8(dst, plane);
+    }
+
+    bool clip_path_canvas_bbox(const clip_path_instruction& clip,
+                               BLRect& rect) const
+    {
+      const auto& xs = clip.get_x();
+      const auto& ys = clip.get_y();
+      const size_t n = clip.size();
+      if(n < 3) { return false; }
+
+      double x_min = std::numeric_limits<double>::infinity();
+      double y_min = std::numeric_limits<double>::infinity();
+      double x_max = -std::numeric_limits<double>::infinity();
+      double y_max = -std::numeric_limits<double>::infinity();
+
+      for(size_t i = 0; i < n; i++)
+        {
+          const double x = canvas_x(xs[i]);
+          const double y = canvas_y(ys[i]);
+          if(not std::isfinite(x) or not std::isfinite(y)) { return false; }
+          x_min = std::min(x_min, x);
+          y_min = std::min(y_min, y);
+          x_max = std::max(x_max, x);
+          y_max = std::max(y_max, y);
+        }
+
+      if(x_max <= x_min or y_max <= y_min) { return false; }
+      rect = BLRect(x_min, y_min, x_max - x_min, y_max - y_min);
       return true;
     }
 
@@ -754,36 +889,110 @@ namespace pdflib
     // Blend2D clips only to rectangles, so a curved clip previously degraded
     // to its bounding box: a crescent came out as the box around it. A mask
     // plus fill_mask expresses the real shape.
-    BLImage build_clip_mask(const clip_state_instruction& clip_state,
-                            const BLRectI& area) const
+    struct clip_mask_result
     {
-      BLImage mask;
-      if(area.w <= 0 or area.h <= 0) { return mask; }
-      if(area.w > 8192 or area.h > 8192) { return mask; }
+      BLImage image;
+      bool empty_clip = false;
+    };
 
-      if(mask.create(area.w, area.h, BL_FORMAT_A8) != BL_SUCCESS)
+    clip_mask_result build_clip_mask(const clip_state_instruction& clip_state,
+                                     const BLRectI& area) const
+    {
+      clip_mask_result result;
+      BLImage mask;
+      // LOG_S(INFO) << "build_clip_mask: begin"
+      //             << " area=(" << area.x << ", " << area.y
+      //             << ", " << area.w << ", " << area.h << ")"
+      //             << " paths=" << clip_state.get_paths().size()
+      //             << " rule=" << static_cast<int>(clip_state.get_rule());
+      if(area.w <= 0 or area.h <= 0)
         {
-          return BLImage();
+          // LOG_S(INFO) << "build_clip_mask: empty area";
+          result.empty_clip = true;
+          return result;
+        }
+      if(area.w > 8192 or area.h > 8192)
+        {
+          LOG_S(WARNING) << "build_clip_mask: area too large, skipping";
+          return result;
+        }
+
+      // LOG_S(INFO) << "build_clip_mask: creating A8 mask";
+      const BLResult mask_create = mask.create(area.w, area.h, BL_FORMAT_A8);
+      // LOG_S(INFO) << "build_clip_mask: mask.create result=" << mask_create;
+      if(mask_create != BL_SUCCESS)
+        {
+          return result;
         }
 
       const BLFillRule clip_fill_rule =
         clip_state.get_rule() == CLIP_RULE_EVEN_ODD ? BL_FILL_RULE_EVEN_ODD
                                                     : BL_FILL_RULE_NON_ZERO;
 
-      BLContext mctx(mask);
-      mctx.set_comp_op(BL_COMP_OP_SRC_COPY);
-      mctx.fill_all(BLRgba32(0x00000000u));
+      // LOG_S(INFO) << "build_clip_mask: creating mask context";
+      // LOG_S(INFO) << "build_clip_mask: clearing mask";
+      if(not fill_a8(mask, 0))
+        {
+          LOG_S(WARNING) << "build_clip_mask: could not clear A8 mask";
+          return result;
+        }
+      // LOG_S(INFO) << "build_clip_mask: mask cleared";
 
       // One W/W* capture = one clip path, whatever its subpath count; the
       // subpaths compose under the clip's fill rule (a stencil of outline
       // art, a text-shaped clip). Only DIFFERENT captures intersect.
       // Intersecting the subpaths individually made any such stencil empty,
       // and everything filled through it vanished.
+      std::unordered_map<int, BLRect> group_bboxes;
+      std::unordered_map<int, bool> group_needs_mask;
+      for(const auto& clip_path : clip_state.get_paths())
+        {
+          BLRect rect;
+          const bool is_rect = get_axis_aligned_clip_rect(clip_path, rect);
+          const int group = clip_path.get_clip_group();
+          if(not is_rect) { group_needs_mask[group] = true; }
+
+          BLRect bbox;
+          if(clip_path_canvas_bbox(clip_path, bbox))
+            {
+              auto it = group_bboxes.find(group);
+              if(it == group_bboxes.end())
+                { group_bboxes.emplace(group, bbox); }
+              else
+                {
+                  const double x0 = std::min(it->second.x, bbox.x);
+                  const double y0 = std::min(it->second.y, bbox.y);
+                  const double x1 =
+                    std::max(it->second.x + it->second.w, bbox.x + bbox.w);
+                  const double y1 =
+                    std::max(it->second.y + it->second.h, bbox.y + bbox.h);
+                  it->second = BLRect(x0, y0, x1 - x0, y1 - y0);
+                }
+            }
+        }
+
+      const BLRect area_rect(area.x, area.y, area.w, area.h);
+      for(const auto& entry : group_needs_mask)
+        {
+          const auto bbox_it = group_bboxes.find(entry.first);
+          if(bbox_it == group_bboxes.end() or
+             not rects_intersect(bbox_it->second, area_rect))
+            {
+              result.empty_clip = true;
+              return result;
+            }
+        }
+
       std::vector<std::pair<int, BLPath> > group_paths;
+      [[maybe_unused]] size_t clip_index = 0;
       for(const auto& clip_path : clip_state.get_paths())
         {
           BLRect unused;
           const bool is_rect = get_axis_aligned_clip_rect(clip_path, unused);
+          // LOG_S(INFO) << "build_clip_mask: path " << clip_index
+          //             << " group=" << clip_path.get_clip_group()
+          //             << " points=" << clip_path.size()
+          //             << " is_rect=" << (is_rect ? "true" : "false");
 
           // rect paths that are alone in their group were already applied
           // through the context clip
@@ -797,10 +1006,43 @@ namespace pdflib
                   break;
                 }
             }
-          if(is_rect and not grouped) { continue; }
+          if(is_rect and not grouped)
+            {
+              // LOG_S(INFO) << "build_clip_mask: path " << clip_index
+              //             << " skipped, rectangle already clipped by context";
+              clip_index++;
+              continue;
+            }
 
+          BLRect clip_bbox;
+          if(not clip_path_canvas_bbox(clip_path, clip_bbox))
+            {
+              LOG_S(WARNING) << "build_clip_mask: skipping invalid clip path";
+              clip_index++;
+              continue;
+            }
+          // LOG_S(INFO) << "build_clip_mask: path " << clip_index
+          //             << " bbox=(" << clip_bbox.x << ", " << clip_bbox.y
+          //             << ", " << clip_bbox.w << ", " << clip_bbox.h << ")";
+          if(not rects_intersect(clip_bbox, BLRect(area.x, area.y, area.w, area.h)))
+            {
+              // LOG_S(INFO) << "build_clip_mask: path " << clip_index
+              //             << " outside mask area";
+              clip_index++;
+              continue;
+            }
+
+          // LOG_S(INFO) << "build_clip_mask: path " << clip_index
+          //             << " make_clip_path begin";
           BLPath sub = make_clip_path(clip_path, this);
-          if(sub.is_empty()) { continue; }
+          // LOG_S(INFO) << "build_clip_mask: path " << clip_index
+          //             << " make_clip_path done empty="
+          //             << (sub.is_empty() ? "true" : "false");
+          if(sub.is_empty())
+            {
+              clip_index++;
+              continue;
+            }
 
           BLPath* dst = nullptr;
           for(auto& gp : group_paths)
@@ -813,47 +1055,93 @@ namespace pdflib
               dst = &group_paths.back().second;
             }
           dst->add_path(sub);
+          // LOG_S(INFO) << "build_clip_mask: path " << clip_index
+          //             << " added to group";
+          clip_index++;
         }
 
       bool first = true;
       std::vector<BLImage> pending_planes;
+      [[maybe_unused]] size_t group_index = 0;
       for(auto& gp : group_paths)
         {
+          // LOG_S(INFO) << "build_clip_mask: raster group " << group_index
+          //             << " group_id=" << gp.first;
           BLPath shifted;
+          // LOG_S(INFO) << "build_clip_mask: group " << group_index
+          //             << " shifting path";
           shifted.add_path(gp.second, BLMatrix2D::make_translation(-area.x, -area.y));
+          // LOG_S(INFO) << "build_clip_mask: group " << group_index
+          //             << " shifted";
 
           if(first)
             {
-              mctx.set_comp_op(BL_COMP_OP_SRC_COPY);
-              mctx.set_fill_rule(clip_fill_rule);
-              mctx.fill_path(shifted, BLRgba32(0xFFFFFFFFu));
+              // LOG_S(INFO) << "build_clip_mask: group " << group_index
+              //             << " filling base mask";
+              if(not rasterize_path_to_a8(mask, shifted, clip_fill_rule))
+                {
+                  LOG_S(WARNING) << "build_clip_mask: could not rasterize base mask";
+                  group_index++;
+                  continue;
+                }
+              // LOG_S(INFO) << "build_clip_mask: group " << group_index
+              //             << " base mask filled";
               first = false;
+              group_index++;
               continue;
             }
 
           // Rasterise this capture on its own, then fold it in by multiplying.
           BLImage plane;
-          if(plane.create(area.w, area.h, BL_FORMAT_A8) != BL_SUCCESS) { continue; }
+          // LOG_S(INFO) << "build_clip_mask: group " << group_index
+          //             << " creating intersection plane";
+          const BLResult plane_create = plane.create(area.w, area.h, BL_FORMAT_A8);
+          // LOG_S(INFO) << "build_clip_mask: group " << group_index
+          //             << " plane.create result=" << plane_create;
+          if(plane_create != BL_SUCCESS)
+            {
+              group_index++;
+              continue;
+            }
           {
-            BLContext pctx(plane);
-            pctx.set_comp_op(BL_COMP_OP_SRC_COPY);
-            pctx.fill_all(BLRgba32(0x00000000u));
-            pctx.set_comp_op(BL_COMP_OP_SRC_OVER);
-            pctx.set_fill_rule(clip_fill_rule);
-            pctx.fill_path(shifted, BLRgba32(0xFFFFFFFFu));
-            pctx.end();
+            // LOG_S(INFO) << "build_clip_mask: group " << group_index
+            //             << " filling plane";
+            if(not rasterize_path_to_a8(plane, shifted, clip_fill_rule))
+              {
+                LOG_S(WARNING) << "build_clip_mask: could not rasterize plane";
+                group_index++;
+                continue;
+              }
+            // LOG_S(INFO) << "build_clip_mask: group " << group_index
+            //             << " plane filled";
           }
           pending_planes.push_back(std::move(plane));
+          group_index++;
         }
 
-      mctx.end();
-
-      for(const BLImage& plane : pending_planes) { multiply_a8(mask, plane); }
+      [[maybe_unused]] size_t plane_index = 0;
+      for(const BLImage& plane : pending_planes)
+        {
+          // LOG_S(INFO) << "build_clip_mask: multiplying plane " << plane_index;
+          if(not multiply_a8(mask, plane))
+            {
+              LOG_S(WARNING) << "build_clip_mask: could not multiply plane";
+            }
+          // LOG_S(INFO) << "build_clip_mask: plane " << plane_index
+          //             << " multiply result=" << (ok ? "true" : "false");
+          plane_index++;
+        }
 
       // No usable non-rectangular geometry: let the caller draw normally.
-      if(first) { return BLImage(); }
+      if(first)
+        {
+          // LOG_S(INFO) << "build_clip_mask: no usable geometry";
+          return result;
+        }
 
-      return mask;
+      // LOG_S(INFO) << "build_clip_mask: done";
+      result.image = std::move(mask);
+      return result;
     }
 
     // Applies an instruction's clip paths (bitmap or shape) to the Blend2D
@@ -1095,6 +1383,37 @@ namespace pdflib
 
       blend_mode_scope(const blend_mode_scope&) = delete;
       blend_mode_scope& operator=(const blend_mode_scope&) = delete;
+
+    private:
+
+      BLContext& ctx_;
+      bool       active_;
+    };
+
+    // Scoped ctx.save()/ctx.restore().
+    //
+    // A clip is pushed onto the context with a save and has to come off again
+    // on EVERY exit. One early return that forgot its restore does not just
+    // lose that instruction: the save stays on the context, every later
+    // restore pops somebody else's state, and the clip that should have been
+    // undone keeps narrowing what the rest of the page is allowed to paint.
+    // A page of pattern cells, whose lattice deliberately steps past the
+    // filled path, leaks one save per off-target cell and ends up painting
+    // almost nothing. Tying the save to a scope makes the balance structural.
+    class context_state_scope
+    {
+    public:
+
+      // `active` false constructs a scope that saves nothing.
+      explicit context_state_scope(BLContext& ctx, bool active = true);
+      ~context_state_scope();
+
+      // Restores now rather than at the end of the scope; the destructor then
+      // does nothing. Calling it twice is harmless.
+      void restore();
+
+      context_state_scope(const context_state_scope&) = delete;
+      context_state_scope& operator=(const context_state_scope&) = delete;
 
     private:
 
@@ -1861,69 +2180,157 @@ namespace pdflib
     if (geom.size <= 0.5) { return false; }
 
     BLPath text_path;
-    double natural_advance = 0.0;
+
     if (not freetype_font_cache_->build_text_path(instr.get_embedded_font(),
                                                   instr.get_text(),
                                                   instr.get_char_code(),
                                                   instr.get_glyph_name(),
                                                   geom.size,
-                                                  text_path,
-                                                  &natural_advance))
+                                                  text_path))
       {
         return false;
       }
 
-    // Same condensation handling as the Blend2D path: fit the run to the
-    // cell's width edge when the text matrix is anisotropic.
+    // This path draws the embedded program itself, so the glyphs keep the
+    // proportions the font designed: the only horizontal scaling is the one
+    // 9.4.4 defines (Th, plus an anisotropic text matrix or CTM), which the
+    // parser computed. Deriving it from the face's advances instead stretched
+    // every glyph of a font whose advances disagree with the PDF's /Widths.
     text_geometry draw_geom = geom;
-    {
-      const double wx = geom.bbox.x1 - geom.bbox.x0;
-      const double wy = geom.bbox.y1 - geom.bbox.y0;
-      const double cell_w = std::hypot(wx, wy);
-      if (cell_w > 0.5 and natural_advance > 0.5)
-        {
-          const double h = cell_w / natural_advance;
-          if (h >= 0.30 and h <= 3.0 and std::abs(h - 1.0) > 0.03)
-            {
-              draw_geom.h_scale = h;
-            }
-        }
-    }
+    draw_geom.h_scale = instr.get_horizontal_scale();
 
     BLContext& ctx = page_context();
 
-    ctx.save();
-    const BLResult transform_res = ctx.apply_transform(make_text_transform(draw_geom));
-    if (transform_res != BL_SUCCESS)
+    auto draw_path = [&](BLContext& draw_ctx,
+                         const BLRectI* layer_area) -> bool
       {
-        ctx.restore();
-        LOG_S(WARNING) << "render_text_freetype: apply_transform failed"
-                       << " (BLResult=" << transform_res << ")";
-        return false;
-      }
-
-    ctx.set_fill_style(make_rgba32(instr.get_rgb_filling(),
-                                   instr.get_fill_alpha()));
-    if (not text_path.is_empty())
-      {
-        ctx.fill_path(text_path);
-
-        // Text render modes with a stroke component (1, 2, 5, 6) are how
-        // producers synthesise bold from a regular face (PDF 32000-1, 9.3.6),
-        // and the Blend2D path strokes the run for exactly that reason. This
-        // path has to do the same or a heading routed here comes out lighter
-        // than the rest of the page -- which is how it looks when only some
-        // of a face's glyphs land here.
-        const int mode = instr.get_rendering_mode();
-        if (mode == 1 or mode == 2 or mode == 5 or mode == 6)
+        draw_ctx.save();
+        if(layer_area != nullptr)
           {
-            ctx.set_stroke_style(make_rgba32(instr.get_rgb_filling(),
-                                             instr.get_fill_alpha()));
-            ctx.set_stroke_width(std::max(0.3, geom.size * 0.03));
-            ctx.stroke_path(text_path);
+            draw_ctx.translate(-layer_area->x, -layer_area->y);
+          }
+
+        const BLResult transform_res =
+          draw_ctx.apply_transform(make_text_transform(draw_geom));
+        if (transform_res != BL_SUCCESS)
+          {
+            draw_ctx.restore();
+            LOG_S(WARNING) << "render_text_freetype: apply_transform failed"
+                           << " (BLResult=" << transform_res << ")";
+            return false;
+          }
+
+        draw_ctx.set_fill_style(make_rgba32(instr.get_rgb_filling(),
+                                            instr.get_fill_alpha()));
+        if (not text_path.is_empty())
+          {
+            draw_ctx.fill_path(text_path);
+
+            // Text render modes with a stroke component (1, 2, 5, 6) are how
+            // producers synthesise bold from a regular face (PDF 32000-1, 9.3.6),
+            // and the Blend2D path strokes the run for exactly that reason. This
+            // path has to do the same or a heading routed here comes out lighter
+            // than the rest of the page -- which is how it looks when only some
+            // of a face's glyphs land here.
+            const int mode = instr.get_rendering_mode();
+            if (mode == 1 or mode == 2 or mode == 5 or mode == 6)
+              {
+                draw_ctx.set_stroke_style(make_rgba32(instr.get_rgb_filling(),
+                                                      instr.get_fill_alpha()));
+                draw_ctx.set_stroke_width(std::max(0.3, geom.size * 0.03));
+                draw_ctx.stroke_path(text_path);
+              }
+          }
+        draw_ctx.restore();
+        return true;
+      };
+
+    bool clip_active = false;
+    if(instr.has_clip_state())
+      {
+        ctx.save();
+        const clip_apply_result clip_result =
+          apply_clip_state(ctx, instr.get_clip_state(),
+                           axis_aligned_rect(geom.bbox));
+        if(clip_result == CLIP_EMPTY)
+          {
+            ctx.restore();
+            return true;
+          }
+
+        clip_active = clip_result == CLIP_APPLIED;
+        if(not clip_active)
+          {
+            ctx.restore();
           }
       }
-    ctx.restore();
+
+    BLImage clip_mask;
+    BLRectI mask_area(0, 0, 0, 0);
+    bool needs_clip_mask = false;
+    if(instr.has_clip_state() and clip_state_has_non_rect(instr.get_clip_state()))
+      {
+        if(config_.render_non_rect_clip_masks)
+          {
+            needs_clip_mask = true;
+            mask_area = canvas_clamped_rect(axis_aligned_rect(geom.bbox));
+            const clip_mask_result clip =
+              build_clip_mask(instr.get_clip_state(), mask_area);
+            if(clip.empty_clip)
+              {
+                if(clip_active) { ctx.restore(); }
+                return true;
+              }
+            clip_mask = std::move(clip.image);
+          }
+      }
+
+    bool ok = true;
+    if(needs_clip_mask and clip_mask.is_empty())
+      {
+        if(clip_active) { ctx.restore(); }
+        return true;
+      }
+    else if(not clip_mask.is_empty())
+      {
+        BLImage layer;
+        if(layer.create(mask_area.w, mask_area.h, BL_FORMAT_PRGB32) == BL_SUCCESS)
+          {
+            {
+              BLContext lctx(layer);
+              lctx.set_comp_op(BL_COMP_OP_SRC_COPY);
+              lctx.fill_all(BLRgba32(0x00000000u));
+              lctx.set_comp_op(BL_COMP_OP_SRC_OVER);
+              ok = draw_path(lctx, &mask_area);
+              lctx.end();
+            }
+
+            if(not multiply_prgb32_by_a8(layer, clip_mask))
+              {
+                LOG_S(WARNING) << "render_text_freetype: could not apply clip mask";
+              }
+
+            ctx.blit_image(BLPointI(mask_area.x, mask_area.y), layer);
+          }
+        else
+          {
+            LOG_S(WARNING) << "render_text_freetype: could not allocate clip layer "
+                           << mask_area.w << "x" << mask_area.h
+                           << ", falling back to context clip";
+            ok = draw_path(ctx, nullptr);
+          }
+      }
+    else
+      {
+        ok = draw_path(ctx, nullptr);
+      }
+
+    if(clip_active)
+      {
+        ctx.restore();
+      }
+
+    if(not ok) { return false; }
 
     draw_text_basepoint(ctx, geom);
     if (config_.draw_text_bbox)
@@ -1958,6 +2365,31 @@ namespace pdflib
     if (active_)
       {
         ctx_.restore();
+      }
+  }
+
+  inline renderer<BLEND2D>::context_state_scope::context_state_scope(BLContext& ctx,
+                                                                     bool active):
+    ctx_(ctx),
+    active_(active)
+  {
+    if (active_)
+      {
+        ctx_.save();
+      }
+  }
+
+  inline renderer<BLEND2D>::context_state_scope::~context_state_scope()
+  {
+    restore();
+  }
+
+  inline void renderer<BLEND2D>::context_state_scope::restore()
+  {
+    if (active_)
+      {
+        ctx_.restore();
+        active_ = false;
       }
   }
 
@@ -2163,8 +2595,28 @@ namespace pdflib
             // page fills with boxes. Type3 stays out: its ink arrives as
             // parse-time bitmaps, and shaping its cell text against a system
             // face would smear placeholder boxes over that ink.
-            if (font_resolver_ and not instr.is_type3() and
-                (not shaped or glyph_run_all_notdef(gb)))
+            //
+            // A run that shaped with *some* glyphs missing needs this too. The
+            // name-resolved face for a CJK font is often one that carries part
+            // of the repertoire; keeping it because it drew most of the run
+            // leaves a box at every character it lacks, scattered through the
+            // page. Only a run with nothing missing is settled.
+            const size_t notdef_before =
+              shaped ? glyph_run_notdef_count(gb)
+                     : std::numeric_limits<size_t>::max();
+
+            // An embedded face is authoritative for the glyphs it does map:
+            // swapping the whole run for a system face because one character
+            // is missing would redraw the rest in another typeface, so only a
+            // run it cannot draw at all is given up. A substituted face has no
+            // such claim -- every character it lacks is a box, and a face that
+            // has them all is strictly better.
+            const bool needs_better_face =
+              not shaped or
+              (using_embedded_font ? glyph_run_all_notdef(gb)
+                                   : glyph_run_has_notdef(gb));
+
+            if (font_resolver_ and not instr.is_type3() and needs_better_face)
               {
                 BLFontFace script_face =
                   font_resolver_->resolve_face_for_text(instr.get_text());
@@ -2175,12 +2627,26 @@ namespace pdflib
                   {
                     gb.set_utf8_text(instr.get_text().c_str());
                     shape_res = script_font.shape(gb);
-                    if (shape_res == BL_SUCCESS and not gb.is_empty() and
-                        not glyph_run_all_notdef(gb))
+
+                    const bool script_shaped =
+                      (shape_res == BL_SUCCESS and not gb.is_empty());
+                    const size_t notdef_after =
+                      script_shaped ? glyph_run_notdef_count(gb)
+                                    : std::numeric_limits<size_t>::max();
+
+                    if (script_shaped and notdef_after < notdef_before)
                       {
                         font = script_font;
                         using_embedded_font = false;
                         shaped = true;
+                      }
+                    else if (shaped)
+                      {
+                        // The script face is no better; put the run that was
+                        // already shaped back into the buffer.
+                        gb.set_utf8_text(instr.get_text().c_str());
+                        shape_res = font.shape(gb);
+                        shaped = (shape_res == BL_SUCCESS and not gb.is_empty());
                       }
                   }
               }
@@ -2240,20 +2706,26 @@ namespace pdflib
               }
 
             text_geometry draw_geom = geom;
-            apply_condensation(draw_geom, font, gb);
-            const BLMatrix2D ctm = make_text_transform(draw_geom);
-            ctx.save();
-            const BLResult transform_res = ctx.apply_transform(ctm);
-            if (transform_res != BL_SUCCESS)
+
+            // The font program's own advances are not the widths the PDF lays
+            // the page out by: a /W of 1000 over a face whose glyphs advance
+            // 504 is a normal, conforming file. Fitting the run to the cell
+            // therefore stretched those glyphs to twice their width. The glyph
+            // is drawn as the program designed it, scaled only by what 9.4.4
+            // says scales it -- which the parser worked out and sent along.
+            //
+            // A substituted face has no such claim: its advances are unrelated
+            // to the PDF's, and fitting the run to the cell is what keeps a
+            // page's layout intact.
+            if (using_embedded_font)
               {
-                ctx.restore();
-                LOG_S(WARNING) << "render_text: apply_transform failed"
-                               << " (BLResult=" << transform_res << ")";
-                draw_bbox_fallback();
-                return;
+                draw_geom.h_scale = instr.get_horizontal_scale();
               }
-            ctx.set_fill_style(make_rgba32(instr.get_rgb_filling(),
-                                           instr.get_fill_alpha()));
+            else
+              {
+                apply_condensation(draw_geom, font, gb);
+              }
+            const BLMatrix2D ctm = make_text_transform(draw_geom);
             text_draw_adjustment adjustment =
               calculate_glyph_bbox_adjustment(font, gb, instr, geom.size);
 
@@ -2274,58 +2746,168 @@ namespace pdflib
                   adjustment.bbox_fit_scale * adjustment.render_bbox.y1;
               }
 
-            if (adjustment.bbox_fit_scale != 1.0)
+            auto draw_run = [&](BLContext& draw_ctx,
+                                const BLRectI* layer_area) -> BLResult
               {
-                const BLResult translate_res =
-                  ctx.translate(adjustment.draw_origin.x,
-                                adjustment.draw_origin.y);
-                if (translate_res != BL_SUCCESS)
+                text_draw_adjustment draw_adjustment = adjustment;
+                draw_ctx.save();
+                if(layer_area != nullptr)
                   {
-                    LOG_S(WARNING) << "render_text: translate failed"
-                                   << " (BLResult=" << translate_res << ")";
-                    ctx.restore();
-                    draw_bbox_fallback();
-                    return;
+                    draw_ctx.translate(-layer_area->x, -layer_area->y);
                   }
-                const BLResult scale_res = ctx.scale(adjustment.bbox_fit_scale);
-                if (scale_res != BL_SUCCESS)
-                  {
-                    LOG_S(WARNING) << "render_text: scale failed"
-                                   << " (BLResult=" << scale_res << ")";
-                    ctx.restore();
-                    draw_bbox_fallback();
-                    return;
-                  }
-                adjustment.draw_origin.reset(0.0, 0.0);
-              }
-            // Draw the glyph run that was already shaped (or recovered by
-            // glyph identity) above; fill_utf8_text would re-shape the text
-            // and lose any glyph-identity recovery.
-            const BLResult text_res =
-              ctx.fill_glyph_run(adjustment.draw_origin,
-                                 font,
-                                 gb.glyph_run());
 
-            // Text render modes with a stroke component (1, 2, 5, 6) are how
-            // producers synthesise bold from a regular face (PDF 32000-1,
-            // 9.3.6). Stroking the same run on top of the fill is what carries
-            // that weight; drawing only the fill silently drops the emphasis
-            // from every heading set this way.
-            {
-              const int mode = instr.get_rendering_mode();
-              if(mode == 1 or mode == 2 or mode == 5 or mode == 6)
+                const BLResult transform_res = draw_ctx.apply_transform(ctm);
+                if (transform_res != BL_SUCCESS)
+                  {
+                    draw_ctx.restore();
+                    LOG_S(WARNING) << "render_text: apply_transform failed"
+                                   << " (BLResult=" << transform_res << ")";
+                    return transform_res;
+                  }
+
+                draw_ctx.set_fill_style(make_rgba32(instr.get_rgb_filling(),
+                                                    instr.get_fill_alpha()));
+
+                if (draw_adjustment.bbox_fit_scale != 1.0)
+                  {
+                    const BLResult translate_res =
+                      draw_ctx.translate(draw_adjustment.draw_origin.x,
+                                         draw_adjustment.draw_origin.y);
+                    if (translate_res != BL_SUCCESS)
+                      {
+                        LOG_S(WARNING) << "render_text: translate failed"
+                                       << " (BLResult=" << translate_res << ")";
+                        draw_ctx.restore();
+                        return translate_res;
+                      }
+                    const BLResult scale_res =
+                      draw_ctx.scale(draw_adjustment.bbox_fit_scale);
+                    if (scale_res != BL_SUCCESS)
+                      {
+                        LOG_S(WARNING) << "render_text: scale failed"
+                                       << " (BLResult=" << scale_res << ")";
+                        draw_ctx.restore();
+                        return scale_res;
+                      }
+                    draw_adjustment.draw_origin.reset(0.0, 0.0);
+                  }
+                // Draw the glyph run that was already shaped (or recovered by
+                // glyph identity) above; fill_utf8_text would re-shape the text
+                // and lose any glyph-identity recovery.
+                const BLResult text_res =
+                  draw_ctx.fill_glyph_run(draw_adjustment.draw_origin,
+                                          font,
+                                          gb.glyph_run());
+
+                // Text render modes with a stroke component (1, 2, 5, 6) are how
+                // producers synthesise bold from a regular face (PDF 32000-1,
+                // 9.3.6). Stroking the same run on top of the fill is what carries
+                // that weight; drawing only the fill silently drops the emphasis
+                // from every heading set this way.
                 {
-                  ctx.set_stroke_style(make_rgba32(instr.get_rgb_filling(),
-                                                   instr.get_fill_alpha()));
-                  ctx.set_stroke_width(std::max(0.3, geom.size * 0.03));
-                  ctx.stroke_glyph_run(adjustment.draw_origin,
-                                       font,
-                                       gb.glyph_run());
+                  const int mode = instr.get_rendering_mode();
+                  if(mode == 1 or mode == 2 or mode == 5 or mode == 6)
+                    {
+                      draw_ctx.set_stroke_style(make_rgba32(instr.get_rgb_filling(),
+                                                            instr.get_fill_alpha()));
+                      draw_ctx.set_stroke_width(std::max(0.3, geom.size * 0.03));
+                      draw_ctx.stroke_glyph_run(draw_adjustment.draw_origin,
+                                                font,
+                                                gb.glyph_run());
+                    }
                 }
-            }
-            // LOG_S(INFO) << "render_text: after fill_glyph_run res=" << text_res;
-            // LOG_S(INFO) << "render_text: before ctx.restore";
-            ctx.restore();
+                // LOG_S(INFO) << "render_text: after fill_glyph_run res=" << text_res;
+                // LOG_S(INFO) << "render_text: before ctx.restore";
+                draw_ctx.restore();
+                return text_res;
+              };
+
+            bool clip_active = false;
+            if(instr.has_clip_state())
+              {
+                ctx.save();
+                const clip_apply_result clip_result =
+                  apply_clip_state(ctx, instr.get_clip_state(),
+                                   axis_aligned_rect(geom.bbox));
+                if(clip_result == CLIP_EMPTY)
+                  {
+                    ctx.restore();
+                    return;
+                  }
+
+                clip_active = clip_result == CLIP_APPLIED;
+                if(not clip_active)
+                  {
+                    ctx.restore();
+                  }
+              }
+
+            BLImage clip_mask;
+            BLRectI mask_area(0, 0, 0, 0);
+            bool needs_clip_mask = false;
+            if(instr.has_clip_state() and
+               clip_state_has_non_rect(instr.get_clip_state()))
+              {
+                if(config_.render_non_rect_clip_masks)
+                  {
+                    needs_clip_mask = true;
+                    mask_area =
+                      canvas_clamped_rect(axis_aligned_rect(geom.bbox));
+                    const clip_mask_result clip =
+                      build_clip_mask(instr.get_clip_state(), mask_area);
+                    if(clip.empty_clip)
+                      {
+                        if(clip_active) { ctx.restore(); }
+                        return;
+                      }
+                    clip_mask = std::move(clip.image);
+                  }
+              }
+
+            BLResult text_res = BL_SUCCESS;
+            if(needs_clip_mask and clip_mask.is_empty())
+              {
+                if(clip_active) { ctx.restore(); }
+                return;
+              }
+            else if(not clip_mask.is_empty())
+              {
+                BLImage layer;
+                if(layer.create(mask_area.w, mask_area.h, BL_FORMAT_PRGB32) == BL_SUCCESS)
+                  {
+                    {
+                      BLContext lctx(layer);
+                      lctx.set_comp_op(BL_COMP_OP_SRC_COPY);
+                      lctx.fill_all(BLRgba32(0x00000000u));
+                      lctx.set_comp_op(BL_COMP_OP_SRC_OVER);
+                      text_res = draw_run(lctx, &mask_area);
+                      lctx.end();
+                    }
+
+                    if(not multiply_prgb32_by_a8(layer, clip_mask))
+                      {
+                        LOG_S(WARNING) << "render_text: could not apply clip mask";
+                      }
+
+                    ctx.blit_image(BLPointI(mask_area.x, mask_area.y), layer);
+                  }
+                else
+                  {
+                    LOG_S(WARNING) << "render_text: could not allocate clip layer "
+                                   << mask_area.w << "x" << mask_area.h
+                                   << ", falling back to context clip";
+                    text_res = draw_run(ctx, nullptr);
+                  }
+              }
+            else
+              {
+                text_res = draw_run(ctx, nullptr);
+              }
+
+            if(clip_active)
+              {
+                ctx.restore();
+              }
 
             if (text_res != BL_SUCCESS)
               {
@@ -2489,31 +3071,30 @@ namespace pdflib
         return;
       }
 
-    const bool blend_active = push_blend_mode(ctx, instr.get_blend_mode());
+    // The save/restore pairs nest: the alpha is pushed inside the clip, and
+    // the clip inside the blend mode. Each is a scope, so every exit below
+    // unwinds them in that order without a restore to remember.
+    const blend_mode_scope blend(ctx, instr.get_blend_mode());
 
     const bool has_clip = instr.has_clip_state();
-    bool clip_active = false;
+    context_state_scope clip_scope(ctx, has_clip);
     if(has_clip)
       {
         LOG_S(INFO) << "render_bitmap: applying "
                     << instr.get_clip_state().get_paths().size()
                     << " clip path(s)";
-        ctx.save();
         const clip_apply_result clip_result =
           apply_clip_state(ctx,
                            instr.get_clip_state(),
                            axis_aligned_rect(q));
         if(clip_result == CLIP_EMPTY)
           {
-            ctx.restore();
-            if(blend_active) { ctx.restore(); }
             return;
           }
 
-        clip_active = clip_result == CLIP_APPLIED;
-        if(not clip_active)
+        if(clip_result != CLIP_APPLIED)
           {
-            ctx.restore();
+            clip_scope.restore();
           }
       }
 
@@ -2525,15 +3106,28 @@ namespace pdflib
     BLImage clip_mask;
     if(has_clip and clip_state_has_non_rect(instr.get_clip_state()))
       {
-        mask_area = canvas_clamped_rect(axis_aligned_rect(q));
-        clip_mask = build_clip_mask(instr.get_clip_state(), mask_area);
+        if(config_.render_non_rect_clip_masks)
+          {
+            mask_area = canvas_clamped_rect(axis_aligned_rect(q));
+            const clip_mask_result clip =
+              build_clip_mask(instr.get_clip_state(), mask_area);
+            if(clip.empty_clip)
+              {
+                return;
+              }
+            clip_mask = std::move(clip.image);
+          }
+        else
+          {
+            LOG_S(INFO) << "render_bitmap: non-rectangular clip mask disabled";
+          }
       }
 
     const bool alpha_active = fill_alpha < 1.0;
+    context_state_scope alpha_scope(ctx, alpha_active);
     if(alpha_active)
       {
         LOG_S(INFO) << "render_bitmap: applying constant alpha " << fill_alpha;
-        ctx.save();
         ctx.set_global_alpha(fill_alpha);
       }
 
@@ -2587,22 +3181,6 @@ namespace pdflib
         render_bitmap_affine(ctx, src_img, q, sw, sh);
       }
 
-    // the save/restore pairs nest: the alpha is pushed inside the clip, and
-    // the clip inside the blend mode
-    if(alpha_active)
-      {
-        ctx.restore();
-      }
-
-    if(clip_active)
-      {
-        ctx.restore();
-      }
-
-    if(blend_active)
-      {
-        ctx.restore();
-      }
   }
 
   // ---------------------------------------------------------------------------
@@ -2753,25 +3331,24 @@ namespace pdflib
 
     BLContext& ctx = page_context();
 
-    const bool blend_active = push_blend_mode(ctx, instr.get_blend_mode());
+    // Both scopes unwind on every exit below, in reverse order of their
+    // construction: the clip was saved inside the blend mode, so it comes off
+    // first.
+    const blend_mode_scope blend(ctx, instr.get_blend_mode());
+    context_state_scope    clip_scope(ctx, instr.has_clip_state());
 
-    bool clip_active = false;
     if (instr.has_clip_state())
       {
-        ctx.save();
         const clip_apply_result clip_result =
           apply_clip_state(ctx, instr.get_clip_state(), bbox);
         if (clip_result == CLIP_EMPTY)
           {
-            ctx.restore();
-            if (blend_active) { ctx.restore(); }
             return;
           }
 
-        clip_active = clip_result == CLIP_APPLIED;
-        if (not clip_active)
+        if (clip_result != CLIP_APPLIED)
           {
-            ctx.restore();
+            clip_scope.restore();
           }
       }
 
@@ -2782,8 +3359,31 @@ namespace pdflib
     BLRectI mask_area(0, 0, 0, 0);
     if (instr.has_clip_state() and clip_state_has_non_rect(instr.get_clip_state()))
       {
-        mask_area = canvas_clamped_rect(bbox);
-        clip_mask = build_clip_mask(instr.get_clip_state(), mask_area);
+        if(config_.render_non_rect_clip_masks)
+          {
+            mask_area = canvas_clamped_rect(bbox);
+            // LOG_S(INFO) << "render_shape: building clip mask"
+            //             << " bbox=(" << bbox.x << ", " << bbox.y
+            //             << ", " << bbox.w << ", " << bbox.h << ")"
+            //             << " mask_area=(" << mask_area.x << ", " << mask_area.y
+            //             << ", " << mask_area.w << ", " << mask_area.h << ")";
+            const clip_mask_result clip =
+              build_clip_mask(instr.get_clip_state(), mask_area);
+            if(clip.empty_clip)
+              {
+                // The clip leaves this shape nothing to paint. Leaving through
+                // here used to skip the restores below and strand the clip on
+                // the context.
+                return;
+              }
+            clip_mask = std::move(clip.image);
+            // LOG_S(INFO) << "render_shape: build_clip_mask returned empty="
+            //             << (clip_mask.is_empty() ? "true" : "false");
+          }
+        else
+          {
+            // LOG_S(INFO) << "render_shape: non-rectangular clip mask disabled";
+          }
       }
 
     const shape_paint_mode mode = instr.get_paint_mode();
@@ -2804,13 +3404,20 @@ namespace pdflib
 
         if (not clip_mask.is_empty())
           {
+            // LOG_S(INFO) << "render_shape: clipped fill layer begin"
+            //             << " area=(" << mask_area.x << ", " << mask_area.y
+            //             << ", " << mask_area.w << ", " << mask_area.h << ")";
             // Paint the fill into an offscreen window, knock it back with the
             // clip coverage, then composite. Blend2D cannot clip to a path, so
             // this is what keeps a crescent from filling its bounding box.
             BLImage layer;
-            if (layer.create(mask_area.w, mask_area.h, BL_FORMAT_PRGB32) == BL_SUCCESS)
+            const BLResult layer_create =
+              layer.create(mask_area.w, mask_area.h, BL_FORMAT_PRGB32);
+            // LOG_S(INFO) << "render_shape: layer.create result=" << layer_create;
+            if (layer_create == BL_SUCCESS)
               {
                 {
+                  // LOG_S(INFO) << "render_shape: filling clipped layer";
                   BLContext lctx(layer);
                   lctx.set_comp_op(BL_COMP_OP_SRC_COPY);
                   lctx.fill_all(BLRgba32(0x00000000u));
@@ -2825,17 +3432,24 @@ namespace pdflib
                   lctx.fill_path(shifted,
                                  make_rgba32(instr.get_rgb_filling(), fill_alpha));
                   lctx.end();
+                  // LOG_S(INFO) << "render_shape: clipped layer filled";
                 }
 
+                // LOG_S(INFO) << "render_shape: applying clip mask to layer";
                 if (not multiply_prgb32_by_a8(layer, clip_mask))
                   {
                     LOG_S(WARNING) << "render_shape: could not apply clip mask";
                   }
+                // LOG_S(INFO) << "render_shape: clip mask applied";
 
+                // LOG_S(INFO) << "render_shape: blitting clipped layer";
                 ctx.blit_image(BLPointI(mask_area.x, mask_area.y), layer);
+                // LOG_S(INFO) << "render_shape: clipped layer blitted";
               }
             else
               {
+                LOG_S(WARNING) << "render_shape: layer allocation failed,"
+                               << " filling path without mask";
                 ctx.fill_path(path);
               }
           }
@@ -2871,16 +3485,6 @@ namespace pdflib
 
         ctx.stroke_path(path);
       }
-
-    if (clip_active)
-      {
-        ctx.restore();
-      }
-
-    if (blend_active)
-      {
-        ctx.restore();
-      }
   }
 
   // ---------------------------------------------------------------------------
@@ -2899,7 +3503,7 @@ namespace pdflib
   inline void renderer<BLEND2D>::render_shading(shading_instruction& instr)
   {
     if (not has_canvas()) { return; }
-    if (not config_.render_shapes) { return; }
+    if (not config_.render_shadings) { return; }
 
     const std::vector<shading_stop>& stops = instr.get_stops();
     const std::vector<double>& coords = instr.get_coords();

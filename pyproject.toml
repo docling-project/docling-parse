@@ -67,8 +67,6 @@ dev = [
     "pre-commit>=3.7.1,<4.0.0",
     "mypy>=1.13.0,<2.0.0",
     "tqdm>=4.67.0,<5.0.0",
-    "boto>=2.49.0,<3.0.0",
-    "boto3>=1.35.67,<2.0.0",
     "huggingface-hub>=1.11.0",
     "tabulate>=0.9.0,<1.0.0",    
 ]
@@ -166,9 +164,10 @@ python_version = "3.10"
 [[tool.mypy.overrides]]
 module = [
     "tabulate.*",
-    "botocore.*",
-    "boto3.*",
-    "pypdfium2.*"
+    "pypdfium2.*",
+    "tqdm.*",
+    "fitz.*",
+    "fontTools.*"
 ]
 ignore_missing_imports = true
 

@@ -286,6 +286,15 @@ namespace pdflib
     void set_is_type3(bool v) { is_type3_ = v; }
     bool is_type3() const { return is_type3_; }
 
+    // How much wider than tall this cell's glyphs are drawn: the horizontal
+    // scaling Th of 9.4.4 (the `Tz` operator), times any anisotropy of the
+    // text matrix and CTM. The renderer draws at one size, taken from the
+    // cell's height edge, so it cannot see this from the geometry alone; and
+    // it must not be inferred from the face's advances, which are the font
+    // program's own and need not agree with the /Widths the PDF lays out by.
+    void set_horizontal_scale(double v) { horizontal_scale_ = v; }
+    double get_horizontal_scale() const { return horizontal_scale_; }
+
     void set_embedded_font(std::shared_ptr<const embedded_font_blob> blob);
     const std::shared_ptr<const embedded_font_blob>& get_embedded_font() const;
     bool has_embedded_font() const;
@@ -307,6 +316,10 @@ namespace pdflib
     void set_fill_color(const std::array<int, 3>& rgb, double alpha);
     const std::array<int, 3>& get_rgb_filling() const { return rgb_filling_; }
     double get_fill_alpha() const { return fill_alpha_; }
+
+    void set_clip_state(clip_state_instruction clip_state);
+    const clip_state_instruction& get_clip_state() const { return clip_state_; }
+    bool has_clip_state() const { return clip_state_.has_clip(); }
 
     // ExtGState /BM in force when this was painted (11.3.5). Set after
     // construction, like the other late additions here, so the constructor
@@ -339,6 +352,8 @@ namespace pdflib
       copy.glyph_name_     = glyph_name_;
       copy.rgb_filling_    = rgb_filling_;
       copy.fill_alpha_     = fill_alpha_;
+      copy.clip_state_     = clip_state_.translated(dx, dy);
+      copy.blend_mode_     = blend_mode_;
       copy.rendering_mode_ = rendering_mode_;
 
       return copy;
@@ -377,12 +392,14 @@ namespace pdflib
     const double g_y1_;
 
     bool is_type3_ = false;
+    double horizontal_scale_ = 1.0;
     std::shared_ptr<const embedded_font_blob> embedded_font_;
     int64_t char_code_ = -1;
     std::string glyph_name_;
 
     std::array<int, 3> rgb_filling_ = {0, 0, 0};
     double fill_alpha_ = 1.0;
+    clip_state_instruction clip_state_;
     blend_mode_name blend_mode_ = BLEND_MODE_NORMAL;
     int rendering_mode_ = 0;
   };
@@ -427,6 +444,11 @@ namespace pdflib
   {
     rgb_filling_ = rgb;
     fill_alpha_ = alpha;
+  }
+
+  inline void text_instruction::set_clip_state(clip_state_instruction clip_state)
+  {
+    clip_state_ = std::move(clip_state);
   }
 
   class text_widget_instruction

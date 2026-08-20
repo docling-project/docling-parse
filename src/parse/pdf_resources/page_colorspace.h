@@ -251,6 +251,13 @@ namespace pdflib
     else if(name == "/Pattern")
       {
         family_ = COLOR_SPACE_PATTERN;
+        if(obj.getArrayNItems() >= 2)
+          {
+            base_ = std::make_shared<pdf_resource<PAGE_COLORSPACE>>();
+            base_->key_ = key_ + "/base";
+            base_->parse(obj.getArrayItem(1), depth + 1);
+            num_components_ = base_->get_num_components();
+          }
       }
     else
       {
@@ -462,6 +469,11 @@ namespace pdflib
             }
 
           return base_->map_to_rgb(base_comps, rgb);
+        }
+      case COLOR_SPACE_PATTERN:
+        {
+          if(base_ == nullptr) { return false; }
+          return base_->map_to_rgb(comps, rgb);
         }
       case COLOR_SPACE_SEPARATION:
       case COLOR_SPACE_DEVICE_N:

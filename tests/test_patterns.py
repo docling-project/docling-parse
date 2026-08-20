@@ -18,7 +18,12 @@ from __future__ import annotations
 import pytest
 
 from tests.pdf_builder import render_page, simple_page_pdf, stream_object
-from tests.rendering_regression import coverage_ratio, region_image
+from tests.rendering_regression import (
+    assert_color_near,
+    center_color,
+    coverage_ratio,
+    region_image,
+)
 
 CELL = 20.0
 INK = 10.0
@@ -94,12 +99,55 @@ def test_tiling_lattice_covers_both_directions():
     )
 
 
+PAGE = 200.0
+
+RED = (255, 0, 0)
+WHITE = (255, 255, 255)
+
+
+def _sample(result, x: float, y: float, *, half: float = 2.0):
+    """The colour at one point of the page, given in PDF coordinates."""
+    return center_color(
+        region_image(result, (x - half, PAGE - y - half, x + half, PAGE - y + half))
+    )
+
+
+def _assert_lattice(
+    result,
+    ink: list[tuple[float, float]],
+    gaps: list[tuple[float, float]],
+    *,
+    what: str,
+) -> None:
+    """Every `ink` point carries a cell, every `gaps` point falls between them.
+
+    Coverage alone cannot say this: a lattice translated by any amount covers
+    exactly as much of the page as one in the right place, which is why a
+    displaced lattice went unnoticed.
+    """
+    for x, y in ink:
+        assert_color_near(
+            _sample(result, x, y),
+            RED,
+            tolerance=40,
+            what=f"{what}: ({x}, {y}) should be inside a cell's ink",
+        )
+    for x, y in gaps:
+        assert_color_near(
+            _sample(result, x, y),
+            WHITE,
+            tolerance=40,
+            what=f"{what}: ({x}, {y}) should fall between cells",
+        )
+
+
 def test_pattern_matrix_is_relative_to_the_page():
     """/Matrix maps pattern space to the page's default space, not the CTM.
 
     The pattern is anchored to the page, so a `cm` in force when the pattern is
     used must not move the lattice. Painting the same pattern through a
-    translated CTM has to leave the same tiles in the same places.
+    translated CTM has to leave the same tiles in the same places -- the same
+    places, not merely the same number of them.
     """
     plain = _pattern_filled_page(_tiling_pattern_object())
     shifted_content = (
@@ -114,12 +162,69 @@ def test_pattern_matrix_is_relative_to_the_page():
         extra_objects=[_tiling_pattern_object()],
     )
 
-    plain_image = region_image(render_page(plain), FILL_BOX)
-    shifted_image = region_image(render_page(shifted), FILL_BOX)
+    plain_result = render_page(plain)
+    shifted_result = render_page(shifted)
+
+    # /Matrix is the identity here, so a cell's ink covers [20k, 20k + 10] in
+    # both directions and the rest of each step is bare page.
+    ink = [(25.0, 25.0), (65.0, 45.0)]
+    gaps = [(35.0, 35.0), (75.0, 55.0)]
+    _assert_lattice(plain_result, ink, gaps, what="pattern filled without a CTM")
+    _assert_lattice(shifted_result, ink, gaps, what="pattern filled through a CTM")
+
+    plain_image = region_image(plain_result, FILL_BOX)
+    shifted_image = region_image(shifted_result, FILL_BOX)
 
     assert coverage_ratio(plain_image) == pytest.approx(
         coverage_ratio(shifted_image), abs=0.05
     ), "a CTM in force when the pattern is used moved the lattice"
+
+
+def test_lattice_is_anchored_where_the_pattern_matrix_puts_it():
+    """The cells land where /Matrix says, whatever the CTM at the fill.
+
+    Pattern space is anchored to the space the content stream started in
+    (8.7.3.1). Anchoring it to the CTM at the painting operation instead moves
+    every cell by that operation's own translation, reduced modulo the step:
+    the tiling stays the right size and covers the right area, and is out of
+    phase with the artwork it fills. Figure L.8 on page 745 of the PDF
+    specification is a page of card suits sitting in the wrong places.
+    """
+    origin_x, origin_y = 5.0, 7.0
+    fill_dx, fill_dy = 13.0, 3.0  # not a multiple of the step, so a wrong
+    #                               anchor cannot coincide with the right one
+
+    pattern = stream_object(
+        "/Type /Pattern /PatternType 1 /PaintType 1 /TilingType 1 "
+        f"/BBox [0 0 {CELL} {CELL}] /XStep {CELL} /YStep {CELL} "
+        f"/Resources << >> /Matrix [1 0 0 1 {origin_x} {origin_y}]",
+        f"1 0 0 rg\n0 0 {INK} {INK} re f\n".encode("latin-1"),
+    )
+
+    content = (
+        "q\n"
+        f"1 0 0 1 {fill_dx} {fill_dy} cm\n"
+        "/Pattern cs /P0 scn\n"
+        f"{-fill_dx} {-fill_dy} {PAGE} {PAGE} re f\n"
+        "Q\n"
+    )
+    result = render_page(
+        simple_page_pdf(
+            content,
+            resources="/Pattern << /P0 5 0 R >>",
+            extra_objects=[pattern],
+        )
+    )
+
+    # ink covers [5 + 20k, 15 + 20k] across and [7 + 20k, 17 + 20k] down.
+    # Anchoring to the fill's CTM instead would put it at [18 + 20k] across and
+    # [10 + 20k] down, which is what these points are chosen to separate.
+    _assert_lattice(
+        result,
+        ink=[(50.0, 52.0), (110.0, 112.0)],
+        gaps=[(60.0, 55.0), (120.0, 115.0)],
+        what="a pattern painted through a translated CTM",
+    )
 
 
 def _solid_pattern_object() -> bytes:
@@ -202,6 +307,54 @@ def test_pattern_bound_honours_the_even_odd_rule():
     assert coverage_ratio(region_image(nonzero, hole)) > 0.9, (
         "f left the inner rectangle empty; the same-wound subpath is not a hole "
         "under the nonzero rule"
+    )
+
+
+def test_uncolored_tiling_pattern_uses_scn_color_operands():
+    """PaintType 2 cells inherit the colour operands from the selecting scn."""
+    pattern = stream_object(
+        "/Type /Pattern /PatternType 1 /PaintType 2 /TilingType 1 "
+        f"/BBox [0 0 {CELL} {CELL}] /XStep {CELL} /YStep {CELL} "
+        "/Resources << >> /Matrix [1 0 0 1 0 0]",
+        f"0 0 {CELL} {CELL} re f\n".encode("latin-1"),
+    )
+    content = "1 1 0 rg\n/CS1 cs 1 0 0 /P0 scn\n40 40 80 80 re f\n"
+    pdf = simple_page_pdf(
+        content,
+        resources="/ColorSpace << /CS1 [/Pattern /DeviceRGB] >> "
+        "/Pattern << /P0 5 0 R >>",
+        extra_objects=[pattern],
+    )
+
+    image = region_image(render_page(pdf), (60.0, 60.0, 100.0, 100.0))
+    assert_color_near(
+        center_color(image),
+        (255, 0, 0),
+        tolerance=8,
+        what="uncolored pattern selected colour",
+    )
+
+
+def test_pattern_fill_stroke_operator_uses_pattern_for_fill_only():
+    """`B` paints the selected pattern fill, then strokes the original path."""
+    pattern = stream_object(
+        "/Type /Pattern /PatternType 1 /PaintType 2 /TilingType 1 "
+        f"/BBox [0 0 {CELL} {CELL}] /XStep {CELL} /YStep {CELL} "
+        "/Resources << >> /Matrix [1 0 0 1 0 0]",
+        f"0 0 {INK} {INK} re f\n".encode("latin-1"),
+    )
+    content = "0 0 1 RG\n2 w\n/CS1 cs 1 0 0 /P0 scn\n40 40 80 80 re B\n"
+    pdf = simple_page_pdf(
+        content,
+        resources="/ColorSpace << /CS1 [/Pattern /DeviceRGB] >> "
+        "/Pattern << /P0 5 0 R >>",
+        extra_objects=[pattern],
+    )
+
+    image = region_image(render_page(pdf), (45.0, 45.0, 115.0, 115.0))
+    coverage = coverage_ratio(image)
+    assert 0.1 < coverage < 0.45, (
+        f"`B` used a solid fill instead of the pattern stencil: {coverage:.3f}"
     )
 
 

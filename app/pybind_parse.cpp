@@ -408,10 +408,14 @@ PYBIND11_MODULE(pdf_parsers, m) {
 
   // PdfShape - graphic shape with coordinates
   pybind11::class_<pdflib::page_item<pdflib::PAGE_SHAPE>>(m, "PdfShape")
-    .def("get_x", &pdflib::page_item<pdflib::PAGE_SHAPE>::get_x,
+    .def("get_x",
+         static_cast<std::vector<double>& (pdflib::page_item<pdflib::PAGE_SHAPE>::*)()>(
+           &pdflib::page_item<pdflib::PAGE_SHAPE>::get_x),
 	 pybind11::return_value_policy::reference_internal,
 	 "Get x coordinates of shape points")
-    .def("get_y", &pdflib::page_item<pdflib::PAGE_SHAPE>::get_y,
+    .def("get_y",
+         static_cast<std::vector<double>& (pdflib::page_item<pdflib::PAGE_SHAPE>::*)()>(
+           &pdflib::page_item<pdflib::PAGE_SHAPE>::get_y),
 	 pybind11::return_value_policy::reference_internal,
 	 "Get y coordinates of shape points")
     .def("get_i", &pdflib::page_item<pdflib::PAGE_SHAPE>::get_i,
@@ -514,7 +518,9 @@ PYBIND11_MODULE(pdf_parsers, m) {
 
   // PdfShapes - iterable container of PdfShape objects
   pybind11::class_<pdflib::page_item<pdflib::PAGE_SHAPES>>(m, "PdfShapes")
-    .def("__len__", &pdflib::page_item<pdflib::PAGE_SHAPES>::size)
+    .def("__len__",
+         static_cast<size_t (pdflib::page_item<pdflib::PAGE_SHAPES>::*)()>(
+           &pdflib::page_item<pdflib::PAGE_SHAPES>::size))
     .def("__getitem__", [](pdflib::page_item<pdflib::PAGE_SHAPES>& self, size_t i)
 	 -> pdflib::page_item<pdflib::PAGE_SHAPE>& {
 	   if (i >= self.size()) {
@@ -1140,6 +1146,9 @@ PYBIND11_MODULE(pdf_parsers, m) {
 
     Attributes:
         render_text (bool): Render glyph outlines for text cells [default=true].
+        render_shapes (bool): Paint vector shape instructions [default=true].
+        render_shadings (bool): Paint shading instructions [default=true].
+        render_non_rect_clip_masks (bool): Apply non-rectangular clip masks [default=true].
         min_stroke_width (float): Minimum stroke width in device pixels for hairlines and sub-pixel vector strokes [default=1.0].
         draw_text_bbox (bool): Draw bounding quad for each text cell [default=false].
         draw_text_basepoint (bool): Draw the text baseline origin as a small red dot [default=false].
@@ -1155,6 +1164,9 @@ PYBIND11_MODULE(pdf_parsers, m) {
     )")
     .def(pybind11::init<>())
     .def_readwrite("render_text",             &pdflib::render_config::render_text)
+    .def_readwrite("render_shapes",           &pdflib::render_config::render_shapes)
+    .def_readwrite("render_shadings",         &pdflib::render_config::render_shadings)
+    .def_readwrite("render_non_rect_clip_masks", &pdflib::render_config::render_non_rect_clip_masks)
     .def_readwrite("min_stroke_width",        &pdflib::render_config::min_stroke_width)
     .def_readwrite("draw_text_bbox",          &pdflib::render_config::draw_text_bbox)
     .def_readwrite("draw_text_basepoint",     &pdflib::render_config::draw_text_basepoint)

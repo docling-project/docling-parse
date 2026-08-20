@@ -2,7 +2,7 @@
 """
 Plot and cross-compare per-page timing CSVs.
 
-Input is one or more per-page CSVs written by `perf/run_scaling.py --pages-csv`,
+Input is one or more per-page CSVs written by `scripts/benchmarking/run_performance_benchmarking.py --pages-csv`,
 or directories to scan.  Each row carries its own `backend`, `task` and
 `threads`, so a single file holding several backends is split into one series
 per (backend, task, threads) --- there is no need for one file per backend, and
@@ -19,10 +19,10 @@ so the plots sit beside the report they belong to:
   5) a per-document statistics table and CSV
 
 Usage examples:
-  python perf/run_eval.py perf/results/pages.csv
-  python perf/run_eval.py perf/results
-  python perf/run_eval.py pages.csv --task parse --threads 1
-  python perf/run_eval.py  # defaults to scanning perf/results
+  python scripts/benchmarking/run_performance_eval.py scripts/benchmarking/results/pages.csv
+  python scripts/benchmarking/run_performance_eval.py scripts/benchmarking/results
+  python scripts/benchmarking/run_performance_eval.py pages.csv --task parse --threads 1
+  python scripts/benchmarking/run_performance_eval.py  # defaults to scanning scripts/benchmarking/results
 """
 
 from __future__ import annotations
@@ -59,7 +59,7 @@ from tabulate import tabulate
 
 def find_csvs(inputs: List[str]) -> List[Path]:
     if not inputs:
-        base = Path("perf") / "results"
+        base = Path("scripts") / "benchmarking" / "results"
         return sorted(base.rglob("*.csv")) if base.is_dir() else []
 
     paths: List[Path] = []
@@ -268,7 +268,7 @@ def plot_pages_per_document(rows: List[PageRow], viz_dir: Path) -> None:
     if edges is None:
         plt.hist(counts, bins=40, color="#2ca02c", alpha=0.85)
     else:
-        plt.hist(counts, bins=edges, color="#2ca02c", alpha=0.85)
+        plt.hist(counts, bins=edges.tolist(), color="#2ca02c", alpha=0.85)
         plt.xscale("log")
     plt.title(
         f"Pages per document — {counts.size} documents, {int(counts.sum())} pages"
@@ -313,7 +313,7 @@ def plot_histograms_stacked(
 
     axes[-1, 0].set_xlabel("Seconds per page (log)")
     fig.suptitle("Page time histograms — stacked (common x-axis, log-log)", y=0.99)
-    fig.tight_layout(rect=[0, 0, 1, 0.97])
+    fig.tight_layout(rect=(0, 0, 1, 0.97))
     fig.savefig(viz_dir / "hist_stacked.png", dpi=150)
     plt.close(fig)
 
@@ -339,11 +339,7 @@ def _hex_pairs_to_plot(
     pairs: List[Tuple[str, str]] = []
     for task, names in sorted(by_task.items()):
         references = sorted(
-            (
-                s
-                for s in names
-                if per_series_rows[s][0].backend == REFERENCE_BACKEND
-            ),
+            (s for s in names if per_series_rows[s][0].backend == REFERENCE_BACKEND),
             key=lambda s: (
                 per_series_rows[s][0].threads != 1,
                 per_series_rows[s][0].threads,
@@ -474,12 +470,15 @@ def plot_hex_pairs(per_series_rows: Dict[str, List[PageRow]], viz_dir: Path) -> 
 
 def main(argv: List[str]) -> int:
     ap = argparse.ArgumentParser(
-        description="Plot per-page timing CSVs from perf/run_scaling.py"
+        description="Plot per-page timing CSVs from scripts/benchmarking/run_performance_benchmarking.py"
     )
     ap.add_argument(
         "inputs",
         nargs="*",
-        help="CSV files and/or directories to scan. If omitted, scans perf/results",
+        help=(
+            "CSV files and/or directories to scan. If omitted, scans "
+            "scripts/benchmarking/results"
+        ),
     )
     ap.add_argument(
         "--viz-dir",
@@ -508,7 +507,10 @@ def main(argv: List[str]) -> int:
 
     csv_paths = find_csvs(args.inputs)
     if not csv_paths:
-        print("No CSV files found. Provide paths or ensure perf/results has CSVs.")
+        print(
+            "No CSV files found. Provide paths or ensure "
+            "scripts/benchmarking/results has CSVs."
+        )
         return 2
 
     rows = load_rows(csv_paths)
