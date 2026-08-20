@@ -7,8 +7,8 @@ from typing import Any, cast
 from PIL import Image, ImageChops, ImageDraw, ImageFont, ImageStat
 
 from tests.data_utils import (
+    RENDER_GROUNDTRUTH_BITMAP_DATA_DIR,
     RENDER_GROUNDTRUTH_BITMAPS_DIR,
-    RENDER_GROUNDTRUTH_GLYPHS_DIR,
     RENDER_GROUNDTRUTH_INSTRUCTIONS_DIR,
     RENDER_GROUNDTRUTH_PAGES_DIR,
 )
@@ -60,30 +60,70 @@ def renderer_instructions_path(doc_name: str, page_no: int) -> Path:
     )
 
 
-def bitmap_artifact_targets(prefix: str, result) -> list[tuple[dict[str, Any], Path]]:
-    """Pair every bitmap artifact with the path stem it is stored under.
+def renderer_bitmaps_path(doc_name: str, page_no: int) -> Path:
+    return RENDER_GROUNDTRUTH_BITMAPS_DIR / (
+        renderer_artifact_prefix(doc_name, page_no) + ".bitmaps.json"
+    )
 
-    A rasterised Type3 glyph is a character rather than page artwork, and one
-    is emitted per painted character, so a single page of Type3 text buries
-    the handful of real images under hundreds of glyph masks. The decoder
-    labels each bitmap with its `source`; glyphs go to their own directory and
-    carry their own numbering, so adding an image to a page does not renumber
-    every glyph on it.
+
+def page_bitmap_artifacts(result) -> tuple[list[dict[str, Any]], int]:
+    """Split the exported artifacts into page bitmaps and a Type3 glyph count.
+
+    A rasterised Type3 glyph is a character, not page artwork, and one is
+    emitted per painted character: a single page of Type3 text yields hundreds
+    of near-identical masks that say nothing a full-page image comparison does
+    not already say. They are counted, so a page that stops emitting them (or
+    suddenly doubles) is still noticed, but not stored.
     """
-    targets: list[tuple[dict[str, Any], Path]] = []
-    counters = {"bitmap": 0, "glyph": 0}
+    bitmaps = []
+    glyphs = 0
 
     for artifact in result._export_bitmap_artifacts():
-        kind = "glyph" if artifact.get("source") == "type3_glyph" else "bitmap"
-        counters[kind] += 1
-        directory = (
-            RENDER_GROUNDTRUTH_GLYPHS_DIR
-            if kind == "glyph"
-            else RENDER_GROUNDTRUTH_BITMAPS_DIR
-        )
-        targets.append((artifact, directory / f"{prefix}.{kind}_{counters[kind]}"))
+        if artifact.get("source") == "type3_glyph":
+            glyphs += 1
+        else:
+            bitmaps.append(artifact)
 
-    return targets
+    return bitmaps, glyphs
+
+
+def bitmap_signature(artifact: dict[str, Any]) -> tuple:
+    """The decode path an artifact came out of.
+
+    Those four fields pick the decoder, the colour handling and the container
+    the bytes end up in, so two artifacts sharing a signature were produced by
+    the same code and one of them is a sufficient byte-level sample.
+    """
+    return (
+        artifact.get("source"),
+        artifact.get("pixel_format"),
+        artifact.get("image_mask"),
+        artifact.get("extension"),
+    )
+
+
+def select_retained_bitmaps(bitmaps: list[dict[str, Any]]) -> set[int]:
+    """Positions of the artifacts whose bytes are written to disk.
+
+    The corpus paints tens of thousands of bitmaps but only a handful of
+    distinct signatures, and one page can carry thousands of tiles on its own.
+    Keeping the first artifact of each signature *per page* leaves a byte-level
+    example of every decode path on every page that exercises it, at roughly
+    one file per page instead of one per tile. Nothing is lost from the
+    regression itself: the metadata of every artifact carries `raw_sha256` and
+    `encoded_sha256`, which are compared for all of them.
+    """
+    retained: set[int] = set()
+    seen: set[tuple] = set()
+
+    for position, artifact in enumerate(bitmaps):
+        signature = bitmap_signature(artifact)
+        if signature in seen:
+            continue
+        seen.add(signature)
+        retained.add(position)
+
+    return retained
 
 
 def _write_json(path: Path, data: Any) -> None:
@@ -103,46 +143,91 @@ def normalized_render_instructions(result) -> dict[str, Any]:
 
 
 def _bitmap_metadata(
-    artifact: dict[str, Any], exported_filename: str
+    artifact: dict[str, Any], retained_filename: str | None
 ) -> dict[str, Any]:
-    raw_data = bytes(artifact.get("raw_data", b""))
+    """Everything about one bitmap except its bytes.
+
+    Both payloads are hashed, so an artifact whose bytes are not retained is
+    still compared exactly: `raw_sha256` covers the decoded samples and
+    `encoded_sha256` the container the exporter writes.
+    """
     metadata = {
         key: _round_floats(value, ndigits=3)
         for key, value in artifact.items()
-        if key not in {"raw_data", "encoded_data", "extension"}
+        if key not in {"raw_data", "encoded_data"}
     }
-    metadata["exported_filename"] = exported_filename
-    metadata["raw_sha256"] = hashlib.sha256(raw_data).hexdigest()
+    metadata["raw_sha256"] = hashlib.sha256(
+        bytes(artifact.get("raw_data", b""))
+    ).hexdigest()
+    metadata["encoded_sha256"] = hashlib.sha256(
+        bytes(artifact.get("encoded_data", b""))
+    ).hexdigest()
+    metadata["retained_filename"] = retained_filename
     return metadata
+
+
+def page_bitmap_groundtruth(
+    doc_name: str,
+    page_no: int,
+    bitmaps: list[dict[str, Any]],
+    glyph_count: int,
+) -> dict[str, Any]:
+    """The stored description of every bitmap this page painted."""
+    retained = select_retained_bitmaps(bitmaps)
+    prefix = renderer_artifact_prefix(doc_name, page_no)
+
+    entries = []
+    for position, artifact in enumerate(bitmaps):
+        filename = (
+            f"{prefix}.bitmap_{position + 1}{artifact.get('extension', '')}"
+            if position in retained
+            else None
+        )
+        entries.append(_bitmap_metadata(artifact, filename))
+
+    return {
+        "n_bitmaps": len(bitmaps),
+        "n_type3_glyphs": glyph_count,
+        "bitmaps": entries,
+    }
+
+
+def retained_bitmap_path(filename: str) -> Path:
+    return RENDER_GROUNDTRUTH_BITMAP_DATA_DIR / filename
 
 
 def write_renderer_groundtruth(doc_name: str, page_no: int, result) -> None:
     RENDER_GROUNDTRUTH_PAGES_DIR.mkdir(parents=True, exist_ok=True)
     RENDER_GROUNDTRUTH_INSTRUCTIONS_DIR.mkdir(parents=True, exist_ok=True)
     RENDER_GROUNDTRUTH_BITMAPS_DIR.mkdir(parents=True, exist_ok=True)
-    RENDER_GROUNDTRUTH_GLYPHS_DIR.mkdir(parents=True, exist_ok=True)
+    RENDER_GROUNDTRUTH_BITMAP_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-    prefix = renderer_artifact_prefix(doc_name, page_no)
     result.get_image().save(renderer_image_path(doc_name, page_no))
     _write_json(
         renderer_instructions_path(doc_name, page_no),
         normalized_render_instructions(result),
     )
 
-    for artifact, stem in bitmap_artifact_targets(prefix, result):
-        image_path = stem.with_name(stem.name + artifact["extension"])
-        image_path.write_bytes(bytes(artifact.get("encoded_data", b"")))
-        _write_json(
-            stem.with_name(stem.name + ".json"),
-            _bitmap_metadata(artifact, image_path.name),
+    bitmaps, glyph_count = page_bitmap_artifacts(result)
+    page_groundtruth = page_bitmap_groundtruth(doc_name, page_no, bitmaps, glyph_count)
+    _write_json(renderer_bitmaps_path(doc_name, page_no), page_groundtruth)
+
+    for position, entry in enumerate(page_groundtruth["bitmaps"]):
+        filename = entry["retained_filename"]
+        if filename is None:
+            continue
+        retained_bitmap_path(filename).write_bytes(
+            bytes(bitmaps[position].get("encoded_data", b""))
         )
 
 
-def renderer_groundtruth_exists(doc_name: str, page_no: int, result) -> bool:
+def renderer_groundtruth_exists(doc_name: str, page_no: int) -> bool:
     """True when every renderer groundtruth artifact of this page is present.
 
-    A page whose groundtruth is incomplete is regenerated as a whole, so that the
-    png, the instructions and the bitmaps always describe the same render.
+    A page whose groundtruth is incomplete is regenerated as a whole, so that
+    the png, the instructions and the bitmaps always describe the same render.
+    The stored metadata names the retained bitmaps, so this answers without
+    re-exporting the artifacts.
     """
     if not renderer_image_path(doc_name, page_no).exists():
         return False
@@ -150,12 +235,13 @@ def renderer_groundtruth_exists(doc_name: str, page_no: int, result) -> bool:
     if not renderer_instructions_path(doc_name, page_no).exists():
         return False
 
-    prefix = renderer_artifact_prefix(doc_name, page_no)
-    for artifact, stem in bitmap_artifact_targets(prefix, result):
-        if not stem.with_name(stem.name + artifact["extension"]).exists():
-            return False
+    bitmaps_path = renderer_bitmaps_path(doc_name, page_no)
+    if not bitmaps_path.exists():
+        return False
 
-        if not stem.with_name(stem.name + ".json").exists():
+    for entry in _load_json(bitmaps_path).get("bitmaps", []):
+        filename = entry.get("retained_filename")
+        if filename is not None and not retained_bitmap_path(filename).exists():
             return False
 
     return True
@@ -450,39 +536,66 @@ def compare_images(
     return comparison
 
 
+# The fields that identify a bitmap and the bytes it decoded to. Anything not
+# listed here (rgb_filling, has_soft_mask, ...) is recorded but not asserted on.
+BITMAP_STABLE_KEYS = [
+    "index",
+    "xobject_key",
+    "source",
+    "shape",
+    "pixel_format",
+    "image_mask",
+    "extension",
+    "quad",
+    "retained_filename",
+    "raw_sha256",
+    "encoded_sha256",
+]
+
+
 def compare_bitmap_artifacts(doc_name: str, page_no: int, result) -> None:
-    prefix = renderer_artifact_prefix(doc_name, page_no)
+    bitmaps_path = renderer_bitmaps_path(doc_name, page_no)
+    assert bitmaps_path.exists(), f"missing bitmap groundtruth: {bitmaps_path}"
 
-    for artifact, stem in bitmap_artifact_targets(prefix, result):
-        image_path = stem.with_name(stem.name + artifact["extension"])
-        metadata_path = stem.with_name(stem.name + ".json")
+    expected = _load_json(bitmaps_path)
+    bitmaps, glyph_count = page_bitmap_artifacts(result)
+    actual = page_bitmap_groundtruth(doc_name, page_no, bitmaps, glyph_count)
 
-        assert image_path.exists(), f"missing bitmap image groundtruth: {image_path}"
-        assert metadata_path.exists(), (
-            f"missing bitmap metadata groundtruth: {metadata_path}"
-        )
+    expected_n_bitmaps = expected.get("n_bitmaps")
+    actual_n_bitmaps = actual["n_bitmaps"]
+    assert expected_n_bitmaps == actual_n_bitmaps, (
+        f"bitmap count mismatch: expected {expected_n_bitmaps}, "
+        f"got {actual_n_bitmaps} in {bitmaps_path}"
+    )
 
-        expected_metadata = _load_json(metadata_path)
-        actual_metadata = _bitmap_metadata(artifact, image_path.name)
-        stable_keys = [
-            "index",
-            "xobject_key",
-            "source",
-            "shape",
-            "pixel_format",
-            "image_mask",
-            "quad",
-            "exported_filename",
-            "raw_sha256",
-        ]
-        for key in stable_keys:
-            if key not in expected_metadata:
+    expected_n_glyphs = expected.get("n_type3_glyphs")
+    actual_n_glyphs = actual["n_type3_glyphs"]
+    assert expected_n_glyphs == actual_n_glyphs, (
+        f"Type3 glyph count mismatch: expected {expected_n_glyphs}, "
+        f"got {actual_n_glyphs} in {bitmaps_path}"
+    )
+
+    for position, actual_entry in enumerate(actual["bitmaps"]):
+        expected_entry = expected["bitmaps"][position]
+
+        for key in BITMAP_STABLE_KEYS:
+            if key not in expected_entry:
                 continue
-            value = expected_metadata[key]
-            assert actual_metadata.get(key) == value, (
-                f"bitmap metadata mismatch for {key}: {metadata_path}"
+            assert actual_entry.get(key) == expected_entry[key], (
+                f"bitmap[{position}] metadata mismatch for {key}: {bitmaps_path}"
             )
-        assert bytes(artifact.get("encoded_data", b"")) == image_path.read_bytes(), (
+
+        # Retained artifacts are additionally compared byte for byte, so a
+        # mismatch can be inspected rather than only reported as a hash.
+        filename = expected_entry.get("retained_filename")
+        if filename is None:
+            continue
+
+        image_path = retained_bitmap_path(filename)
+        assert image_path.exists(), f"missing bitmap image groundtruth: {image_path}"
+
+        encoded = bytes(bitmaps[position].get("encoded_data", b""))
+        assert encoded == image_path.read_bytes(), (
             f"bitmap image mismatch: {image_path}"
         )
 

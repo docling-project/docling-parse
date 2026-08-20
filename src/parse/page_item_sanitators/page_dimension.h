@@ -303,13 +303,17 @@ namespace pdflib
 	double x1 = std::min(page_bbox[2], image_bbox[2]); // Min of top-right x
 	double y1 = std::min(page_bbox[3], image_bbox[3]); // Min of top-right y
 	
-	// Validate the intersection
-	if (x0 > x1 || y0 > y1)
+	// Validate the intersection. An empty one means the image is off-page,
+	// and a degenerate one (zero width or height) means the image matrix
+	// maps the unit square of ISO 32000-1, 8.9.5.2 onto a line or a point,
+	// so the image covers no area and paints nothing. Either way there is
+	// nothing to report as a page image.
+	if (x0 >= x1 || y0 >= y1)
 	  {
 	    LOG_S(INFO) << "deleting image: ("
 			<< itr->x0 << ", " << itr->y0 << ", " << itr->x1 << ", " << itr->y1 << ")";
 	    
-	    // No intersection, remove
+	    // No visible area, remove
 	    itr = images.erase(itr);
 	  }
 	else

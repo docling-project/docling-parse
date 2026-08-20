@@ -540,7 +540,11 @@ namespace pdflib
             {
               result += cmap_numb_to_char.at(c);
             }
-	  else if(32<=c)
+	  // Without a /ToUnicode or a predefined CID cmap the code is only a
+	  // CID; interpreting it as a scalar value is already a last resort,
+	  // and it is not even possible for the values that Unicode reserves
+	  // for surrogates or places beyond U+10FFFF.
+	  else if(32<=c and utf8::internal::is_code_point_valid(c))
             {
               utf8::append(c, std::back_inserter(result));
             }
@@ -577,7 +581,7 @@ namespace pdflib
 	    {
 	      return cmap_numb_to_char.at(c);
 	    }
-	  else if(32<=c)
+	  else if(32<=c and utf8::internal::is_code_point_valid(c))
             {
               std::string tmp;
               utf8::append(c, std::back_inserter(tmp));

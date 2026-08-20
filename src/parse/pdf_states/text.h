@@ -455,20 +455,30 @@ namespace pdflib
         double      width_ = font.get_width(item.first);
         //std::string chars_ = font.get_string(item.first);
 
-	std::string chars_ = item.second;
+	// item.second holds the raw bytes of the code as they appear in the
+	// content stream. Those bytes select a glyph, they are not text: for a
+	// composite font they are the CID, for a simple font an index into an
+	// encoding. When no authoritative source of ISO 32000-1, 9.10.2 can
+	// resolve the code, there is no Unicode to emit, so fall back to the
+	// same glyph marker the font resolver uses rather than leaking the
+	// code bytes into the cell text (they are not even valid UTF-8 for,
+	// e.g., CID 0xDCC2 of an Identity-H font).
+	std::string chars_;
 	try
 	  {
 	    chars_ = font.get_string(item.first);
-	    if((not config.keep_glyphs) and chars_.rfind("GLYPH<", 0) == 0)
-	      {
-	        chars_ = " ";
-	      }
 	  }
 	catch(const std::exception& e)
 	  {
+	    chars_ = "GLYPH<c="+std::to_string(item.first)+",font="+font.get_name()+">";
+
 	    LOG_S(WARNING) << "could not decode character (value=" << item.first
-			   << "): " << e.what() << "; falling back to '" << item.second << "'";
-	    chars_ = item.second;
+			   << "): " << e.what() << "; emitting '" << chars_ << "'";
+	  }
+
+	if((not config.keep_glyphs) and chars_.rfind("GLYPH<", 0) == 0)
+	  {
+	    chars_ = " ";
 	  }
 	
 	//LOG_S(INFO) << item.first << " --> "

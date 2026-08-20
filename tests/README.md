@@ -25,6 +25,29 @@ To force a fresh download of the pinned Hugging Face snapshot:
 DOCLING_PARSE_TEST_DATA_FORCE_DOWNLOAD=1 uv run pytest
 ```
 
+## Page Selection
+
+The regression corpus grows by whole documents, but consecutive pages of one
+document mostly repeat each other's code paths, so the suite decodes and
+verifies only a sample of each document. The sample lives in
+`tests/regression_page_selection.py` and is exposed as
+`PARSER_PAGE_RESTRICTIONS` in `tests/constants.py`; every parser and renderer
+regression test honours it.
+
+Regenerate it after adding documents to `tests/data/regression`:
+
+```bash
+uv run python tests/tools/select_regression_pages.py
+uv run python tests/tools/select_regression_pages.py --check   # CI-style verification
+```
+
+At most five pages per document are kept, drawn from a generator seeded with
+the document name, so the sample is reproducible and adding one document never
+reshuffles another. Two sets of pages override the sample: `PINNED_PAGES`, for
+documents that are in the corpus for one specific page or are too large to
+sample blindly, and `ALWAYS_KEEP_PAGES`, the pages that once exposed a parser
+defect. A document may therefore end up with more than five pages.
+
 ## Updating Groundtruth
 
 Normal test runs are read-only. To intentionally refresh parser and renderer
@@ -58,6 +81,10 @@ code in the main repository.
   and update logic.
 - `test_embedded_fonts.py`: embedded-font and font-resolution renderer behavior.
 - `test_locale_safety.py`: locale-sensitive parsing and rendering behavior.
+- `tools/`: maintenance entry points for the test data itself, not tests. They
+  are plain scripts (pytest never collects them, as their names do not match
+  `test_*.py`) and are the only place outside the suite allowed to import from
+  `tests`.
 
 ## Renderer Regression Checks
 
@@ -71,12 +98,35 @@ For each selected rendered page, the test can compare:
 - bitmap artifact metadata and exported bitmap image bytes from
   `_export_bitmap_artifacts()`.
 
+### Bitmap artifacts
+
 Each bitmap artifact reports a `source`: `xobject` (an image XObject painted by
 `Do`), `inline` (a `BI ... ID ... EI` image) or `type3_glyph` (one rasterised
-Type3 glyph). Type3 glyphs reach the renderer as image masks, and one is emitted
-per painted character, so their groundtruth is written to
-`tests/data/groundtruth/render/glyphs/` with its own numbering, leaving
-`tests/data/groundtruth/render/bitmaps/` for the images a PDF actually embeds.
+Type3 glyph).
+
+Type3 glyphs are **not stored**. One is emitted per painted character, so a
+single page of Type3 text yields hundreds of near-identical masks that add
+nothing the full-page image comparison does not already cover. Only their count
+is recorded, so a page that stops emitting them, or suddenly emits twice as
+many, is still noticed.
+
+The remaining bitmaps are described in one file per page,
+`bitmaps/<pdf-name>.page_no_<n>.bitmaps.json`, holding the metadata of every
+bitmap the page painted together with a `raw_sha256` of its decoded samples and
+an `encoded_sha256` of the exported container. Every artifact is therefore
+compared exactly, whether or not its bytes are kept.
+
+The bytes are kept only for a subset, written to `bitmap_data/`.
+`select_retained_bitmaps()` keeps the first artifact of each distinct
+`(source, pixel_format, image_mask, extension)` signature on the page: those
+four fields pick the decode path, so one sample per signature per page leaves a
+byte-level example of every path that page exercises. Across the corpus this is
+around 600 files instead of roughly 47000, and the retained ones are compared
+byte for byte so a mismatch can be looked at rather than only reported as a
+hash.
+
+Both limits matter because the dataset lives in Git LFS, which does not cope
+with more than about 10k entries in one directory.
 
 Full-page image comparison is intentionally tolerant rather than exact. The
 comparison requires identical dimensions, then checks mean absolute error and
@@ -225,8 +275,9 @@ The downloaded dataset is organized as follows:
 ```text
 tests/data/
   regression/             source PDFs used by parser and renderer regressions
-  groundtruth/            parser JSON and text-line groundtruth
-  groundtruth_renderer/   renderer PNGs, instruction JSON, and bitmap artifacts
+  groundtruth/parser/     parser JSON and text-line groundtruth
+  groundtruth/render/     renderer PNGs, instruction JSON, and bitmap metadata
+  groundtruth-legacy/     groundtruth of documents that left the corpus
   cases/                  focused case fixtures
   errors/                 failure and error-handling fixtures
   synthetic/              synthetic PDF fixtures
@@ -237,17 +288,28 @@ tests/data/
 `render_deltas/` and `visualizations/` are produced by test runs and are not
 part of the downloaded dataset.
 
+Groundtruth files are named after the document they came from, so they linger
+after a document leaves `tests/data/regression`. `prune_groundtruth.py` moves
+those orphans into `groundtruth-legacy/`, mirroring the directory layout, so
+they are archived rather than deleted:
+
+```bash
+uv run python tests/tools/prune_groundtruth.py --dry-run
+uv run python tests/tools/prune_groundtruth.py
+uv run python tests/tools/prune_groundtruth.py --pages   # also drop unselected pages
+```
+
 Renderer artifact naming follows this pattern:
 
 ```text
-<pdf-name>.page_no_<n>.full_page.png
-<pdf-name>.page_no_<n>.instructions.json
-<pdf-name>.page_no_<n>.bitmap_<i>.json
-<pdf-name>.page_no_<n>.bitmap_<i>.<png|jpg|bin>
+pages/<pdf-name>.page_no_<n>.full_page.png
+instructions/<pdf-name>.page_no_<n>.instructions.json
+bitmaps/<pdf-name>.page_no_<n>.bitmaps.json
+bitmap_data/<pdf-name>.page_no_<n>.bitmap_<i>.<png|jpg|bin>
 ```
 
-Bitmap JSON stores metadata and hashes. Raw bitmap bytes are stored separately
-as image or binary artifact files.
+The per-page bitmap JSON stores metadata and hashes for every bitmap; the
+`bitmap_data/` files hold the bytes of the retained subset only.
 
 ## Working With Dataset Changes
 
@@ -258,7 +320,7 @@ files in `tests/data` before publishing a new dataset revision.
 Recommended review flow:
 
 ```bash
-find tests/data/groundtruth tests/data/groundtruth_renderer -type f -newer <marker>
+find tests/data/groundtruth -type f -newer <marker>
 ```
 
 or use a managed local checkout of the Hugging Face dataset when doing larger

@@ -689,7 +689,7 @@ def test_rendered_pages_match_groundtruth(update_groundtruth: bool):
 
         try:
             if update_groundtruth or not renderer_groundtruth_exists(
-                rname, result.page_number, result
+                rname, result.page_number
             ):
                 write_renderer_groundtruth(rname, result.page_number, result)
             else:
