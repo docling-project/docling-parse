@@ -1,3 +1,9 @@
+## [v7.15.0](https://github.com/docling-project/docling-parse/releases/tag/v7.15.0) - 2026-08-20
+
+### Feature
+
+* **render:** Clip masks, shading patterns and Coons meshes; CCITT, CMYK-JPEG, tiling-pattern and CJK text fixes ([#323](https://github.com/docling-project/docling-parse/issues/323)) ([`850c3c3`](https://github.com/docling-project/docling-parse/commit/850c3c3c6e01591e9c6b19b32f2923258122d6ba))
+
 ## [v7.14.0](https://github.com/docling-project/docling-parse/releases/tag/v7.14.0) - 2026-08-18
 
 ### Feature
