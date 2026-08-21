@@ -938,10 +938,72 @@ namespace pdflib
             result.push_back(item);
           }
       }
+    else if(encoding == CMAP_RESOURCES and
+            not font.get_cmap_codespaces().empty())
+      {
+        // The codespace ranges of the CMap decide how many bytes the next
+        // code takes (ISO 32000-1, 9.7.6.2). Guessing instead -- "two bytes
+        // when the pair happens to be a mapped code, one otherwise" -- puts
+        // the reader one byte out of step for the whole rest of the string
+        // the first time a code is missing from the cmap, which is how a
+        // /UniJIS-UCS2 string turned into Latin noise.
+        const std::vector<cmap_codespace_range>& codespaces =
+          font.get_cmap_codespaces();
+
+        int shortest_code = 4;
+        for(const auto& range : codespaces)
+          {
+            shortest_code = std::min(shortest_code, range.n_bytes);
+          }
+
+        std::size_t l=0;
+
+        while(l<values.size())
+          {
+            const unsigned char* bytes =
+              reinterpret_cast<const unsigned char*>(values.data()+l);
+
+            const std::size_t remaining = values.size()-l;
+
+            int n_bytes = 0;
+            for(int n=1; n<=4 and static_cast<std::size_t>(n)<=remaining; n++)
+              {
+                for(const auto& range : codespaces)
+                  {
+                    if(range.n_bytes==n and range.contains(bytes))
+                      {
+                        n_bytes = n;
+                        break;
+                      }
+                  }
+
+                if(n_bytes>0) { break; }
+              }
+
+            if(n_bytes==0)
+              {
+                // A byte string that matches no range is undefined; the spec
+                // has the reader consume the shortest declared code length so
+                // the codes that follow stay aligned.
+                n_bytes = std::min(static_cast<std::size_t>(shortest_code), remaining);
+              }
+
+            uint32_t c = 0;
+            for(int k=0; k<n_bytes; k++)
+              {
+                c = (c<<8) | bytes[k];
+              }
+
+            std::pair<uint32_t, std::string> item(c, values.substr(l, n_bytes));
+            result.push_back(item);
+
+            l += n_bytes;
+          }
+      }
     else if(encoding == CMAP_RESOURCES)
       {
-        // LOG_S(INFO) << "detected encoding: " << to_string(encoding);
-
+        // No codespace could be read from the cmap-resource: fall back on
+        // recognising two-byte codes by their presence in the cmap.
         int l=0;
 
         while(l<values.size())

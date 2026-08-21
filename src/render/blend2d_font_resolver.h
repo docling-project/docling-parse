@@ -158,7 +158,10 @@ namespace pdflib
     // Latin fallbacks cannot draw CJK (.notdef / "tofu"); detect CJK requests
     // so the resolver can prefer a CJK-capable face.
     static bool is_cjk_font_request(const std::string& name);
-    static std::vector<std::filesystem::path> cjk_fallback_candidates();
+    // Reads the built index, so it must run after build_font_index() has
+    // filled it: on macOS the CJK faces are only recognisable by the family
+    // name their `name` table carries, never by their filename.
+    std::vector<std::filesystem::path> cjk_fallback_candidates() const;
 
     static std::vector<std::filesystem::path> arabic_fallback_candidates();
 
@@ -1038,7 +1041,8 @@ namespace pdflib
     return chosen;
   }
 
-  inline std::vector<std::filesystem::path> blend2d_font_resolver::cjk_fallback_candidates()
+  inline std::vector<std::filesystem::path>
+  blend2d_font_resolver::cjk_fallback_candidates() const
   {
     namespace fs = std::filesystem;
     std::vector<fs::path> paths;
@@ -1048,42 +1052,61 @@ namespace pdflib
         paths.emplace_back(*override_path);
       }
 
-    // Filename stems with CJK coverage, best first.
-    static const std::array<const char*, 12> wanted = {
+    // Faces with CJK coverage, best first. Each entry is matched against both
+    // the lowercased filename stem and the lowercased family name from the
+    // font's `name` table: matching filenames alone reported "no CJK font
+    // installed" on macOS, which carries a dozen of them but names the files
+    // in Japanese -- and in NFD at that, so even the Japanese spelling of the
+    // name does not compare equal to the one written here.
+    static const std::array<const char*, 25> wanted = {
       "notosanscjk", "notoserifcjk", "notosanscjkjp", "notosanscjksc",
-      "sourcehansans", "sourcehanserif", "droidsansfallback", "wqy-zenhei",
-      "wqy-microhei", "arphic", "ipagp", "ipag",
+      "sourcehansans", "sourcehanserif",
+      // macOS
+      "hiraginosans", "hiraginokakugothic", "hiraginomincho",
+      "hiraginomarugothic", "pingfang", "applesdgothicneo", "stheiti",
+      "songti", "applegothic",
+      // Windows
+      "yugoth", "msgothic", "msmincho", "meiryo", "microsoftyahei", "malgun",
+      // Linux distributions
+      "droidsansfallback", "wqy-zenhei", "wqy-microhei", "arphic",
     };
 
-    constexpr std::size_t max_entries = 20000;
-    std::size_t seen = 0;
     std::vector<fs::path> ranked(wanted.size());
 
-    for (const auto& dir : system_font_directories())
+    auto rank = [&](const std::string& text, const fs::path& p)
+    {
+      // The family names carry spaces the entries above do not; comparing the
+      // compacted forms lets one entry cover "Hiragino Sans" and a
+      // "HiraginoSans" filename alike.
+      std::string key;
+      for (unsigned char c : text)
+        {
+          if (std::isspace(c) or c == '-' or c == '_') { continue; }
+          key += static_cast<char>(std::tolower(c));
+        }
+
+      for (std::size_t i = 0; i < wanted.size(); i++)
+        {
+          std::string needle;
+          for (const char* q = wanted[i]; *q != '\0'; q++)
+            {
+              if (*q == '-') { continue; }
+              needle += *q;
+            }
+
+          if (ranked[i].empty() and key.find(needle) != std::string::npos)
+            {
+              ranked[i] = p;
+            }
+        }
+    };
+
+    for (const auto& kv : face_metadata_)
       {
-        std::error_code ec;
-        if (not fs::is_directory(dir, ec)) { continue; }
-        fs::recursive_directory_iterator it(
-          dir, fs::directory_options::skip_permission_denied, ec);
-        fs::recursive_directory_iterator end;
-        for (; it != end and seen < max_entries; it.increment(ec))
-          {
-            if (ec) { break; }
-            ++seen;
-            const fs::path& p = it->path();
-            if (not is_font_file(p)) { continue; }
-            std::string stem = p.stem().string();
-            std::transform(stem.begin(), stem.end(), stem.begin(),
-                           [](unsigned char c) { return std::tolower(c); });
-            for (std::size_t i = 0; i < wanted.size(); i++)
-              {
-                if (ranked[i].empty() and stem.find(wanted[i]) != std::string::npos)
-                  {
-                    ranked[i] = p;
-                  }
-              }
-          }
-        if (seen >= max_entries) { break; }
+        const fs::path p(kv.second.ref.path);
+
+        rank(p.stem().string(), p);
+        rank(kv.second.family_name, p);
       }
 
     for (const auto& p : ranked)
@@ -1514,7 +1537,6 @@ namespace pdflib
     namespace fs = std::filesystem;
     const std::vector<fs::path> font_dirs = system_font_directories();
     fallback_candidates_ = fallback_font_candidates();
-    cjk_candidates_ = cjk_fallback_candidates();
     arabic_candidates_ = arabic_fallback_candidates();
 
     LOG_S(INFO) << "blend2d font resolver: scanning font directories";
@@ -1555,6 +1577,9 @@ namespace pdflib
             it.increment(ec);
           }
       }
+
+    // Needs the finished index: the CJK faces are picked by family name.
+    cjk_candidates_ = cjk_fallback_candidates();
 
     LOG_S(INFO) << "blend2d font resolver: indexed "
                 << face_metadata_.size() << " font faces and "

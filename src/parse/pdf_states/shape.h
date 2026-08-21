@@ -536,14 +536,16 @@ namespace pdflib
             shape.transform(trafo_matrix);
           }
 
-        if(keep_shape(shape))
+        // A clip subpath only ever *bounds* what later operators may paint
+        // (ISO 32000-1, 8.5.4), so dropping one widens the clip -- the unsafe
+        // direction. `sh` paints its entire clip region (8.7.4.3), so an `sh`
+        // that loses its only clip path floods the whole page. Every subpath
+        // that has a segment is therefore kept, however small: a zero-area
+        // clip path legitimately clips everything away.
+        if(shape.size() >= 2)
           {
             clippings.push_back(shape);
             clipping_groups.push_back(group_id);
-          }
-        else if(shape.size() >= 2)
-          {
-            LOG_S(WARNING) << "ignoring a degenerate clip path";
           }
         // 0/1-point subpaths are the expected continuation left behind by
         // the `h` operator and are dropped silently
@@ -607,19 +609,29 @@ namespace pdflib
         return false;
       }
 
-    double d=0;
-    for(int l=0; l<shape.size()-1; l++)
+    // Degeneracy is a property of the subpath as a whole, not of its
+    // individual edges: `interpolate` flattens every curve into N straight
+    // edges, so a small but perfectly real curve is made of edges N times
+    // shorter than the extent it spans. Measuring the longest edge therefore
+    // discarded geometry that covers area, which is why the diagonal of the
+    // bounding box is the quantity compared here.
+    double x_min = shape[0].first,  x_max = shape[0].first;
+    double y_min = shape[0].second, y_max = shape[0].second;
+
+    for(int l=1; l<shape.size(); l++)
       {
-        auto p0 = shape[l+0];
-        auto p1 = shape[l+1];
+        auto p = shape[l];
 
-        double dx = p0.first-p1.first;
-        double dy = p0.second-p1.second;
-
-        d = std::max(d, dx*dx+dy*dy);
+        x_min = std::min(x_min, p.first);
+        x_max = std::max(x_max, p.first);
+        y_min = std::min(y_min, p.second);
+        y_max = std::max(y_max, p.second);
       }
 
-    if(d<1.e-3)
+    double dx = x_max-x_min;
+    double dy = y_max-y_min;
+
+    if(dx*dx+dy*dy<1.e-3)
       {
         return false;
       }

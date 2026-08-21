@@ -107,7 +107,12 @@ namespace pdflib
     std::string get_utf8_string(std::string line, bool is_hex_str);
 
     // only needed for the cmap-resource files
-    bool numb_is_in_cmap(uint32_t c); 
+    bool numb_is_in_cmap(uint32_t c);
+
+    // Codespace ranges of the predefined CMap named by /Encoding. They decide
+    // how many bytes each code in a show-string occupies; empty for a font
+    // that is not driven by a cmap-resource.
+    const std::vector<cmap_codespace_range>& get_cmap_codespaces() const;
     
     void set(std::string font_key_,
              QPDFObjectHandle qpdf_font_);
@@ -238,6 +243,7 @@ namespace pdflib
 
     //std::unordered_map<uint32_t, std::string> cmap_numb_to_char;
     cmap_value cmap_numb_to_char;
+    std::vector<cmap_codespace_range> cmap_codespaces;
     std::unordered_map<uint32_t, std::string> diff_numb_to_char;
     std::unordered_map<uint32_t, std::string> diff_numb_to_name;
 
@@ -375,6 +381,12 @@ namespace pdflib
   {
     //LOG_S(INFO) << "# cmap: " << cmap_numb_to_char.size();
     return (cmap_numb_to_char.count(v)==1);
+  }
+
+  const std::vector<cmap_codespace_range>&
+  pdf_resource<PAGE_FONT>::get_cmap_codespaces() const
+  {
+    return cmap_codespaces;
   }
 
   double pdf_resource<PAGE_FONT>::get_width(uint32_t c, bool verbose)
@@ -2171,6 +2183,8 @@ namespace pdflib
 	
 	    cmap_numb_to_char = cid.get();	
 
+	    cmap_codespaces   = cid.get_codespaces();
+
 	    cid.decode_widths(numb_to_widths);	
 
 	    cmap_initialized = true;	    
@@ -2238,8 +2252,8 @@ namespace pdflib
 	    cids.decode_cmap_resource(name, cid);	
 	    
 	    cmap_numb_to_char = cid.get();
-	    
-	    cmap_initialized = true;	    
+
+	    cmap_initialized = true;
 	  }
 	*/
 	if(cids.decode_cmap_resource(encoding_name))
@@ -2247,6 +2261,8 @@ namespace pdflib
 	    font_cid& cid = cids.get(encoding_name);
 	
 	    cmap_numb_to_char = cid.get();	
+
+	    cmap_codespaces   = cid.get_codespaces();
 
 	    cid.decode_widths(numb_to_widths);	
 

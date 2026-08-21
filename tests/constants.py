@@ -1,7 +1,7 @@
 from tests.regression_page_selection import REGRESSION_PAGE_SELECTION
 
 HF_DATASET_REPO_ID = "docling-project/regression-dataset-for-docling-parse"
-HF_DATASET_REVISION = "b91b0106a7711425b11854618cda54d7651d8fac"
+HF_DATASET_REVISION = "4a0fbe3cdce4619a0a30db814d5d9636b81ed36c"
 
 REGRESSION_DIR = "tests/data/regression"
 
