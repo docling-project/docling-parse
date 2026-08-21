@@ -65,6 +65,14 @@ namespace pdflib
 
     double      get_width(uint32_t c, bool verbose=true);
 
+    // A declared width of 0 for a glyph that maps to visible text is treated
+    // as missing rather than trusted: generators that position every glyph
+    // explicitly (one Tj + Td per character) may ship /Widths arrays of
+    // zeros, which renderers never consult but which would collapse every
+    // text-cell bbox here and defeat word/line merging (docling#4018).
+    bool        expects_zero_advance(uint32_t c);
+    double      nonzero_fallback_width(uint32_t c, bool verbose);
+
     // Vertical writing mode (9.7.4.3): a composite font whose CMap sets
     // WMode 1 stacks its glyphs downwards instead of advancing to the right.
     bool        is_vertical() const { return vertical; }
@@ -381,7 +389,17 @@ namespace pdflib
   {
     if(numb_to_widths.count(c)==1)
       {
-        return numb_to_widths[c];
+        double declared_width = numb_to_widths[c];
+        if(declared_width==0 and not expects_zero_advance(c))
+          {
+            // Zero declared width for a visible glyph: the generator
+            // positioned every glyph explicitly and never needed honest
+            // widths. Trusting the 0 collapses this glyph's cell bbox,
+            // which zeroes average_char_width() downstream and blocks all
+            // word/line merging ("T i t l e" output, docling#4018).
+            return nonzero_fallback_width(c, verbose);
+          }
+        return declared_width;
       }
     else if(has_default_width)
       {
@@ -429,6 +447,97 @@ namespace pdflib
 		       << " --> falling back on default width in " << __FUNCTION__;
       }
     
+    return 500.0;
+  }
+
+  bool pdf_resource<PAGE_FONT>::expects_zero_advance(uint32_t c)
+  {
+    std::string text = get_string(c);
+
+    if(text.empty() or (not utf8::is_valid(text.begin(), text.end())))
+      {
+        return true; // unmapped or undecodable: don't second-guess the width
+      }
+
+    std::vector<uint32_t> utf32_chars={};
+    utf8::utf8to32(text.begin(), text.end(), std::back_inserter(utf32_chars));
+
+    if(utf32_chars.size()!=1)
+      {
+        return false; // multi-codepoint mappings (incl. GLYPH<..> markers) are visible text
+      }
+
+    uint32_t cp = utf32_chars.at(0);
+
+    if(utils::string::is_space(cp))
+      {
+        return true; // zero-width space glyphs are boundary markers, not lies
+      }
+
+    // Combining marks and format characters legitimately carry no advance.
+    // Advisory list of the common blocks, not an exhaustive Unicode table.
+    static const std::vector<std::pair<uint32_t, uint32_t>> zero_advance_ranges = {
+      {0x0300, 0x036F}, // combining diacritical marks
+      {0x0483, 0x0489}, // Cyrillic combining
+      {0x0591, 0x05C7}, // Hebrew points
+      {0x0610, 0x061A}, {0x064B, 0x065F}, {0x0670, 0x0670},
+      {0x06D6, 0x06ED}, // Arabic marks
+      {0x0E31, 0x0E31}, {0x0E34, 0x0E3A}, {0x0E47, 0x0E4E}, // Thai marks
+      {0x1AB0, 0x1AFF}, {0x1DC0, 0x1DFF}, // combining extensions
+      {0x200B, 0x200F}, // zero-width and directional format chars
+      {0x2060, 0x2064}, // word joiner and invisible operators
+      {0x20D0, 0x20FF}, // combining marks for symbols
+      {0xFE20, 0xFE2F}, // combining half marks
+      {0xFEFF, 0xFEFF}, // BOM / zero-width no-break space
+    };
+
+    for(auto& range:zero_advance_ranges)
+      {
+        if(range.first<=cp and cp<=range.second)
+          {
+            return true;
+          }
+      }
+
+    return false;
+  }
+
+  double pdf_resource<PAGE_FONT>::nonzero_fallback_width(uint32_t c, bool verbose)
+  {
+    // Recovery order differs from the missing-width chain in get_width: a
+    // font that lies in /Widths usually lies in /MissingWidth (or /DW) too,
+    // so real base-font metrics are preferred over the declared default.
+    if(bfonts.has_corresponding_font(font_name) or
+       bfonts.has_corresponding_font(base_font))
+      {
+        std::string fontname = bfonts.has_corresponding_font(font_name)
+          ? bfonts.get_corresponding_font(font_name)
+          : bfonts.get_corresponding_font(base_font);
+
+        auto& bfont = bfonts.get(fontname);
+
+        if(bfont.has(c) and bfont.get_width(c)>0)
+          {
+            return bfont.get_width(c);
+          }
+        else if(bfont.has(get_string(c)) and bfont.get_width(get_string(c))>0)
+          {
+            return bfont.get_width(get_string(c));
+          }
+      }
+
+    if(has_default_width and default_width>0)
+      {
+        return default_width;
+      }
+
+    if(verbose)
+      {
+        LOG_S(WARNING) << "declared zero width for visible glyph " << c
+		       << " [base-font=" << base_font << ", font-name=" << font_name
+		       << "] and no usable metrics --> falling back on default width";
+      }
+
     return 500.0;
   }
 
