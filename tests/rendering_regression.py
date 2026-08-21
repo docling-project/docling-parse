@@ -12,7 +12,7 @@ from tests.data_utils import (
     RENDER_GROUNDTRUTH_INSTRUCTIONS_DIR,
     RENDER_GROUNDTRUTH_PAGES_DIR,
 )
-from tests.test_parse import _round_floats
+from tests.test_regression_parse import _round_floats
 
 RENDER_DELTA_FOLDER = Path("tests/data/render_deltas")
 RENDER_VISUALIZATION_FOLDER = Path("tests/data/visualizations")

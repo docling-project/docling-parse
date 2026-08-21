@@ -380,9 +380,7 @@ def render_pdfium(pdf_path: Path, page_number: int, scale: float) -> Image.Image
 
 
 def text_docling_parse(pdf_path: Path, page_number: int) -> str:
-    return DoclingPageDecode(
-        pdf_path, page_number, DoclingRenderOptions()
-    ).text()
+    return DoclingPageDecode(pdf_path, page_number, DoclingRenderOptions()).text()
 
 
 def text_pypdfium2(pdf_path: Path, page_number: int) -> str:

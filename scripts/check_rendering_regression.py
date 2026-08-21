@@ -2,7 +2,7 @@
 """Report image-comparison metrics for pairs of rendered pages.
 
 This is a triage and calibration tool, not a regression check: the regression
-itself is `tests/test_threaded_render.py`, which renders the corpus and asserts
+itself is `tests/test_regression_threaded_render.py`, which renders the corpus and asserts
 against the stored groundtruth. What this adds is the analysis that a pass/fail
 assertion cannot give you --- a per-page table, the distribution of the error,
 and, with `--json`, the `observed_limits` you would use to set `ImageTolerance`.

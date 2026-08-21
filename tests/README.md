@@ -1,7 +1,24 @@
 # Test Suite
 
 This directory contains the parser, renderer, threading, font, locale, and
-bitmap regression tests for `docling-parse`.
+bitmap tests for `docling-parse`.
+
+## Naming Convention
+
+Every test file declares in its name what it needs to run:
+
+- `test_unit_*.py` — self-contained. The document under test is built in the
+  file (see `pdf_builder.py`) or in memory, and the assertions are about the
+  parser's own output. These need nothing but the extension module, so they
+  run on a bare checkout in seconds.
+- `test_regression_*.py` — driven by the regression corpus under
+  `tests/data/regression`, and mostly compared against the stored groundtruth
+  in `tests/data/groundtruth`. These need the Hugging Face snapshot, which the
+  suite downloads at session start.
+
+A new test belongs in the first group unless it genuinely needs the corpus: a
+failure there names the operator that broke, while a corpus failure only names
+a page.
 
 ## Running Tests
 
@@ -11,11 +28,17 @@ Run the full test suite:
 uv run pytest
 ```
 
+Run only the self-contained tests (no corpus download, a few seconds):
+
+```bash
+uv run pytest tests/test_unit_*.py -q
+```
+
 Run focused parser and renderer regression tests:
 
 ```bash
-uv run pytest tests/test_parse.py::test_reference_documents_from_filenames -q
-uv run pytest tests/test_threaded_render.py::test_rendered_pages_match_groundtruth -q
+uv run pytest tests/test_regression_parse.py::test_reference_documents_from_filenames -q
+uv run pytest tests/test_regression_threaded_render.py::test_rendered_pages_match_groundtruth -q
 ```
 
 The test suite downloads regression data automatically at pytest session start.
@@ -54,15 +77,15 @@ Normal test runs are read-only. To intentionally refresh parser and renderer
 groundtruth artifacts, pass `--update-groundtruth`:
 
 ```bash
-uv run pytest tests/test_parse.py::test_reference_documents_from_filenames --update-groundtruth -q
-uv run pytest tests/test_threaded_render.py::test_rendered_pages_match_groundtruth --update-groundtruth -q
+uv run pytest tests/test_regression_parse.py::test_reference_documents_from_filenames --update-groundtruth -q
+uv run pytest tests/test_regression_threaded_render.py::test_rendered_pages_match_groundtruth --update-groundtruth -q
 ```
 
 The test-local wrapper adds `--update-groundtruth` automatically:
 
 ```bash
 uv run python tests/update_groundtruth.py
-uv run python tests/update_groundtruth.py tests/test_threaded_render.py::test_rendered_pages_match_groundtruth
+uv run python tests/update_groundtruth.py tests/test_regression_threaded_render.py::test_rendered_pages_match_groundtruth
 ```
 
 This flag updates checked regression artifacts under `tests/data`, not source
@@ -70,17 +93,41 @@ code in the main repository.
 
 ## Main Test Areas
 
-- `test_parse.py`: single-threaded parser regression tests. These compare parsed
+### Corpus-driven (`test_regression_*.py`)
+
+- `test_regression_parse.py`: single-threaded parser. Compares parsed
   `SegmentedPdfPage` JSON and text-line exports against `tests/data/groundtruth`.
-- `test_threaded_parse.py`: threaded parser behavior and content materialization.
-- `test_threaded_render.py`: threaded parse-and-render behavior using
-  `DoclingThreadedPdfParser`.
-- `test_pypdfium_render.py`: non-failing comparison of the render output against
-  pypdfium2, with three-panel visualizations.
-- `rendering_regression.py`: shared helpers for renderer groundtruth comparison
-  and update logic.
-- `test_embedded_fonts.py`: embedded-font and font-resolution renderer behavior.
-- `test_locale_safety.py`: locale-sensitive parsing and rendering behavior.
+- `test_regression_threaded_parse.py`: threaded parser behavior and content
+  materialization, against the same groundtruth.
+- `test_regression_threaded_render.py`: threaded parse-and-render through
+  `DoclingThreadedPdfParser`, against the renderer groundtruth.
+- `test_regression_pypdfium_render.py`: non-failing comparison of the render
+  output against pypdfium2, with three-panel visualizations.
+- `test_regression_embedded_fonts.py`: embedded-font and font-resolution
+  behavior, on a corpus document that carries both kinds of font program.
+- `test_regression_locale_safety.py`: locale-sensitive parsing and rendering,
+  swept over the whole corpus.
+
+### Self-contained (`test_unit_*.py`)
+
+Each builds the document it is about and asserts on the result:
+
+- colour and images: `colorspace`, `colorspaces`, `indexed_images`,
+  `jpeg_images`, `ccitt_images`, `transparency`
+- vector painting: `shading`, `shadings`, `patterns`, `clipping`
+- text and fonts: `actual_text`, `cjk_fonts`, `cmap_encoding`,
+  `font_fallback`, `font_name_resolution`, `gid_glyph_names`,
+  `glyph_proportions`, `standard_font_widths`, `text_render_modes`,
+  `tounicode_fallback`, `type3_fonts`, `vertical_writing`
+- documents and annotations: `load_failure`, `widget_appearances`
+
+### Support modules (not collected)
+
+- `pdf_builder.py`: writes the small PDFs the self-contained tests are about.
+- `rendering_regression.py`: shared helpers for image comparison, renderer
+  groundtruth and update logic. The self-contained tests use its measurement
+  helpers (`region_image`, `coverage_ratio`, `center_color`) without touching
+  groundtruth.
 - `tools/`: maintenance entry points for the test data itself, not tests. They
   are plain scripts (pytest never collects them, as their names do not match
   `test_*.py`) and are the only place outside the suite allowed to import from
@@ -144,14 +191,14 @@ The generated files include actual, expected, and amplified diff PNGs.
 
 ## Cross-Renderer Comparison Against pypdfium2
 
-`test_pypdfium_render.py::test_rendered_pages_match_pypdfium` is structured like
+`test_regression_pypdfium_render.py::test_rendered_pages_match_pypdfium` is structured like
 `test_rendered_pages_match_groundtruth`: same regression PDF set, same
 `PARSER_PAGE_RESTRICTIONS`, same threaded parser at scale 2.0. The difference is
 where the reference image comes from: pypdfium2 renders it on the spot instead
 of it being read from the Hugging Face dataset.
 
 ```bash
-uv run pytest tests/test_pypdfium_render.py -q -s
+uv run pytest tests/test_regression_pypdfium_render.py -q -s
 ```
 
 Both renders are composited onto opaque white before they are compared, because
@@ -186,11 +233,11 @@ three-panel png is scaled down to fit on screen.
 
 ```bash
 # only pages above tolerance (default)
-uv run pytest tests/test_pypdfium_render.py -q -s --render-visualizations above-tolerance
+uv run pytest tests/test_regression_pypdfium_render.py -q -s --render-visualizations above-tolerance
 # every compared page
-uv run pytest tests/test_pypdfium_render.py -q -s --render-visualizations all
+uv run pytest tests/test_regression_pypdfium_render.py -q -s --render-visualizations all
 # none
-uv run pytest tests/test_pypdfium_render.py -q -s --render-visualizations none
+uv run pytest tests/test_regression_pypdfium_render.py -q -s --render-visualizations none
 ```
 
 A full run over the regression set writes tens of megabytes of png into

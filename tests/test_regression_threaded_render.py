@@ -35,7 +35,7 @@ from tests.rendering_regression import (
     renderer_groundtruth_exists,
     write_renderer_groundtruth,
 )
-from tests.test_parse import (
+from tests.test_regression_parse import (
     GROUNDTRUTH_FOLDER,
     REGRESSION_FOLDER,
     verify_SegmentedPdfPage,

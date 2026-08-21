@@ -8,7 +8,7 @@ request"), and once the data is decoded in its own colour space there is
 nothing left in the dictionary to say which way its four bytes read.
 
 For a /DeviceCMYK image there is no such doubt -- the samples are ink amounts
-mapped by /Decode, and `test_colorspaces.py::test_cmyk_jpeg_keeps_its_ink`
+mapped by /Decode, and `test_unit_colorspaces.py::test_cmyk_jpeg_keeps_its_ink`
 holds that line, since the corpus has Adobe APP14 JPEGs with transform 2 in
 both polarities and the marker settles nothing. It is only here, where the file
 has already contradicted itself, that the APP14 marker becomes the one

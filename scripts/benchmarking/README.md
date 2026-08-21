@@ -219,7 +219,7 @@ Flags: `--backend`, `--task`, `--threads` to filter, `--bins`, `--viz-dir`,
 
 Compares output quality rather than speed. Render comparison reuses the same
 image metrics and three-panel visualizations as
-`tests/test_pypdfium_render.py`; text comparison reports per-page string
+`tests/test_regression_pypdfium_render.py`; text comparison reports per-page string
 similarity and edit counts after optional whitespace normalization.
 
 ```sh
