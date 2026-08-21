@@ -1489,6 +1489,15 @@ namespace pdflib
                                int sc,
                                bool use_soft_mask_alpha) const;
 
+    // Averages the source down by an integer factor.
+    //
+    // Blend2D samples a pattern once per destination pixel, so an image drawn
+    // much smaller than its own resolution is point-sampled: a 16x16 hatch
+    // tile drawn four pixels wide keeps one source row in four, and the grid
+    // it draws comes out as a field of dots. Averaging first is what the other
+    // renderers do here, and an /Interpolate image asks for it outright.
+    static BLImage box_downsample(const BLImage& src, int fx, int fy);
+
     // Blits an unrotated, axis-aligned source image into the destination
     // rectangle. This is the simple fast path used when the quad has no rotation
     // or skew relative to the canvas.
@@ -2055,6 +2064,70 @@ namespace pdflib
       }
 
     return adjustment;
+  }
+
+  inline BLImage renderer<BLEND2D>::box_downsample(const BLImage& src, int fx, int fy)
+  {
+    if(fx < 2 and fy < 2) { return src; }
+
+    BLImageData s;
+    if(src.get_data(&s) != BL_SUCCESS or s.format != BL_FORMAT_PRGB32)
+      {
+        return src;
+      }
+
+    const int dw = std::max(1, s.size.w / std::max(1, fx));
+    const int dh = std::max(1, s.size.h / std::max(1, fy));
+    if(dw >= s.size.w and dh >= s.size.h) { return src; }
+
+    BLImage dst;
+    BLImageData d;
+    if(dst.create(dw, dh, BL_FORMAT_PRGB32) != BL_SUCCESS or
+       dst.make_mutable(&d) != BL_SUCCESS)
+      {
+        return src;
+      }
+
+    // The samples are premultiplied, so every channel -- alpha included --
+    // averages linearly and the result stays premultiplied.
+    for(int y = 0; y < dh; y++)
+      {
+        auto* drow = reinterpret_cast<uint32_t*>(
+          static_cast<uint8_t*>(d.pixel_data) + static_cast<intptr_t>(y) * d.stride);
+
+        const int sy0 = (y * s.size.h) / dh;
+        const int sy1 = std::max(sy0 + 1, ((y + 1) * s.size.h) / dh);
+
+        for(int x = 0; x < dw; x++)
+          {
+            const int sx0 = (x * s.size.w) / dw;
+            const int sx1 = std::max(sx0 + 1, ((x + 1) * s.size.w) / dw);
+
+            uint32_t a = 0, r = 0, g = 0, b = 0, n = 0;
+            for(int sy = sy0; sy < sy1 and sy < s.size.h; sy++)
+              {
+                const auto* srow = reinterpret_cast<const uint32_t*>(
+                  static_cast<const uint8_t*>(s.pixel_data)
+                  + static_cast<intptr_t>(sy) * s.stride);
+
+                for(int sx = sx0; sx < sx1 and sx < s.size.w; sx++)
+                  {
+                    const uint32_t p = srow[sx];
+                    a += (p >> 24) & 0xFFu;
+                    r += (p >> 16) & 0xFFu;
+                    g += (p >>  8) & 0xFFu;
+                    b += (p      ) & 0xFFu;
+                    n += 1;
+                  }
+              }
+
+            drow[x] = (n == 0) ? 0u
+                               : (((a / n) << 24) | ((r / n) << 16) |
+                                  ((g / n) <<  8) |  (b / n));
+          }
+      }
+
+    return dst;
   }
 
   inline BLImage renderer<BLEND2D>::build_bitmap_image(
@@ -3051,8 +3124,31 @@ namespace pdflib
                        << ", ignoring SMask";
       }
 
-    const BLImage src_img =
-      build_bitmap_image(instr, sw, sh, sc, use_soft_mask_alpha);
+    BLImage src_img = build_bitmap_image(instr, sw, sh, sc, use_soft_mask_alpha);
+
+    // How many source pixels land on one destination pixel. The quad's two
+    // edges give the drawn extent, which is what the blit resamples onto.
+    int blit_w = sw;
+    int blit_h = sh;
+    {
+      const double dst_w = std::hypot(q.x2 - q.x1, q.y2 - q.y1);
+      const double dst_h = std::hypot(q.x0 - q.x1, q.y0 - q.y1);
+
+      const int fx = (dst_w > 0.5) ? static_cast<int>(sw / dst_w) : 1;
+      const int fy = (dst_h > 0.5) ? static_cast<int>(sh / dst_h) : 1;
+
+      if(fx >= 2 or fy >= 2)
+        {
+          src_img = box_downsample(src_img, fx, fy);
+          blit_w = src_img.width();
+          blit_h = src_img.height();
+
+          LOG_S(INFO) << "render_bitmap: averaged " << sw << "x" << sh
+                      << " down to " << blit_w << "x" << blit_h
+                      << " for a " << dst_w << "x" << dst_h << " draw"
+                      << " (xobject_key=" << instr.get_key() << ")";
+        }
+    }
 
     const bool can_use_axis_aligned_fast_path =
       axis_aligned and right_angle and quarter_turns == 0;
@@ -3147,9 +3243,9 @@ namespace pdflib
               lctx.translate(-mask_area.x, -mask_area.y);
 
               if(can_use_axis_aligned_fast_path)
-                { render_bitmap_axis_aligned(lctx, src_img, q, sw, sh); }
+                { render_bitmap_axis_aligned(lctx, src_img, q, blit_w, blit_h); }
               else
-                { render_bitmap_affine(lctx, src_img, q, sw, sh); }
+                { render_bitmap_affine(lctx, src_img, q, blit_w, blit_h); }
               lctx.end();
             }
 
@@ -3165,20 +3261,20 @@ namespace pdflib
             LOG_S(WARNING) << "render_bitmap: could not allocate clip layer "
                            << mask_area.w << "x" << mask_area.h
                            << ", falling back to an unclipped draw";
-            render_bitmap_affine(ctx, src_img, q, sw, sh);
+            render_bitmap_affine(ctx, src_img, q, blit_w, blit_h);
           }
       }
     else if (can_use_axis_aligned_fast_path)
       {
         LOG_S(INFO) << "render_bitmap: selecting axis-aligned path";
-        render_bitmap_axis_aligned(ctx, src_img, q, sw, sh);
+        render_bitmap_axis_aligned(ctx, src_img, q, blit_w, blit_h);
       }
     else
       {
         LOG_S(INFO) << "render_bitmap: selecting affine path"
                     << " (right_angle=" << (right_angle ? "true" : "false")
                     << ", quarter_turns=" << quarter_turns << ")";
-        render_bitmap_affine(ctx, src_img, q, sw, sh);
+        render_bitmap_affine(ctx, src_img, q, blit_w, blit_h);
       }
 
   }

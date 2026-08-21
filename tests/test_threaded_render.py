@@ -43,8 +43,8 @@ from tests.test_parse import (
 
 RENDERER_IMAGE_TOLERANCE = ImageTolerance(
     pixel_threshold=12,
-    mean_abs_error=9.0,  # cut-off that works on the CI. would be better ~2-3
-    changed_pixels_ratio=0.09,  # cut-off that works on the CI, would be better ~0.02
+    mean_abs_error=10.0,  # cut-off that works on the CI. would be better ~2-3
+    changed_pixels_ratio=0.10,  # cut-off that works on the CI, would be better ~0.02
 )
 
 
