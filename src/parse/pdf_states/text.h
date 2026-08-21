@@ -494,8 +494,16 @@ namespace pdflib
           << ", h_scaling: " << h_scaling;
         */
 
+        // Word spacing applies to the single-byte character *code* 32, not to
+        // a code that happens to decode to a space (ISO 32000-1, 9.3.3). The
+        // difference is not academic: a symbolic font whose codes this decoder
+        // cannot resolve yields " " for every glyph, and charging each of them
+        // Tw stretched a Cyrillic line by a whole character width, pushing it
+        // over the absolutely-positioned text beside it.
+        const bool is_word_space = (item.first==32 and item.second.size()==1);
+
         double delta_width=0;
-        if(chars_==" ")
+        if(is_word_space)
           {
             delta_width += (char_spacing+word_spacing)*h_scaling;
           }
@@ -938,8 +946,7 @@ namespace pdflib
             result.push_back(item);
           }
       }
-    else if(encoding == CMAP_RESOURCES and
-            not font.get_cmap_codespaces().empty())
+    else if(not font.get_cmap_codespaces().empty())
       {
         // The codespace ranges of the CMap decide how many bytes the next
         // code takes (ISO 32000-1, 9.7.6.2). Guessing instead -- "two bytes

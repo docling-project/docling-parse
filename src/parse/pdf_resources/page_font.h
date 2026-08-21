@@ -130,6 +130,10 @@ namespace pdflib
     std::shared_ptr<type3_glyph> rasterize_type3_vector_charproc(const std::string& src);
 
     void init_encoding();
+
+    // Reads the CMap program a Type0 font carries in /Encoding, keeping its
+    // codespace ranges so that show-strings can be split into codes.
+    void init_embedded_cmap(QPDFObjectHandle qpdf_encoding);
     void init_subtype();
 
     void init_base_font();
@@ -588,6 +592,7 @@ namespace pdflib
         break;
 
       case CMAP_RESOURCES:
+      case CMAP_STREAM:
 	{
           if(cmap_numb_to_char.count(c))
 	    {
@@ -905,41 +910,26 @@ namespace pdflib
       {
         auto result = qpdf_font.getKey("/Encoding");
 
-        if(qpdf_object::get_name_or_string(result, encoding_name))
+        if(result.isStream())
+          {
+	    // /Encoding is a CMap program carried by the file itself (ISO
+	    // 32000-1, 9.7.5.2). Its codespace is what says how many bytes each
+	    // code takes; reading such a string one byte at a time split every
+	    // two-byte code into a phantom glyph plus the real one, which shifted
+	    // the whole run to the right of the background it was drawn on.
+	    encoding = CMAP_STREAM;
+	    has_explicit_encoding = true;
+
+	    init_embedded_cmap(result);
+
+            LOG_S(INFO) << "font-encoding [embedded cmap]: " << to_string(encoding);
+          }
+        else if(qpdf_object::get_name_or_string(result, encoding_name))
           {
 	    if(cids.has(encoding_name))
 	      {
 		encoding = CMAP_RESOURCES;
 		has_explicit_encoding = true;
-	      }
-	    else if(encoding_name.find("stream") != std::string::npos)
-	      {
-		LOG_S(WARNING) << "font-encoding [" << name << "] contains stream, "
-			       << "falling back to STANDARD encoding";
-
-		/*
-		encoding = to_encoding_name(encoding_name);
-		auto qpdf_obj = qpdf_font.getKey("/Encoding");
-
-		if(qpdf_obj.isStream())
-		  {
-		    std::vector<qpdf_stream_instruction> stream;
-
-		    // decode the stream
-		    {
-		      qpdf_stream_decoder decoder(stream);
-		      decoder.decode(qpdf_obj);
-
-		      decoder.print();
-		    }
-		  }
-		else
-		  {
-		    LOG_S(WARNING) << "could not init stream ...";
-		  }
-		*/
-		encoding = STANDARD;
-		has_explicit_encoding = false;
 	      }
 	    else
 	      {
@@ -964,6 +954,63 @@ namespace pdflib
         encoding = STANDARD;
         has_explicit_encoding = false;
       }
+  }
+
+  void pdf_resource<PAGE_FONT>::init_embedded_cmap(QPDFObjectHandle qpdf_encoding)
+  {
+    LOG_S(INFO) << __FUNCTION__;
+
+    if(not qpdf_encoding.isStream())
+      {
+        LOG_S(WARNING) << "/Encoding is not a stream: no embedded cmap to read";
+        return;
+      }
+
+    std::string program;
+    try
+      {
+        auto buffer = qpdf_encoding.getStreamData(qpdf_dl_all);
+        if(buffer)
+          {
+            program.assign(reinterpret_cast<const char*>(buffer->getBuffer()),
+                           buffer->getSize());
+          }
+      }
+    catch(const std::exception& e)
+      {
+        LOG_S(ERROR) << "could not decode the embedded cmap: " << e.what();
+        return;
+      }
+
+    cmap_tables tables;
+
+    // An embedded CMap may inherit from a predefined one. Only its name is
+    // available here, so the inherited codespace is reported rather than
+    // silently assumed.
+    auto report_usecmap = [](const std::string& parent)
+    {
+      LOG_S(WARNING) << "embedded cmap inherits from " << parent
+                     << ": the inherited entries are not applied";
+    };
+
+    std::istringstream in(program);
+    scan_cmap_program(in, tables, report_usecmap);
+
+    cmap_codespaces = tables.codespaces;
+
+    if(cmap_codespaces.empty())
+      {
+        // Every conforming CMap declares a codespace; when one does not, two
+        // bytes per code is what a Type0 font almost always means, and it is
+        // the assumption that keeps the reader in step with the string.
+        LOG_S(WARNING) << "embedded cmap declares no codespace: "
+                       << "assuming two-byte codes";
+
+        cmap_codespaces.push_back(cmap_codespace_range{0x0000, 0xFFFF, 2});
+      }
+
+    LOG_S(INFO) << "embedded cmap: " << cmap_codespaces.size() << " codespace-range(s), "
+                << tables.code_to_cid.size() << " code-to-cid entries";
   }
 
   void pdf_resource<PAGE_FONT>::init_subtype()
@@ -1435,6 +1482,29 @@ namespace pdflib
     if(itr != diff_numb_to_name.end())
       {
         return itr->second;
+      }
+
+    // The effective encoding of a simple font is the base encoding the font
+    // dictionary declares, with /Differences applied on top (ISO 32000-1,
+    // 9.6.6.2) -- and it takes precedence over whatever encoding the font
+    // program carries. Returning a name only for the codes /Differences
+    // mentions left every other code to be looked up through the program's
+    // builtin encoding instead, so a /WinAnsiEncoding code 0xE1 drew the
+    // Standard-encoding glyph at that slot: `Æ` where the page says `á`.
+    //
+    // A font dictionary that declares no base encoding is the one case where
+    // the program's own encoding governs, so nothing is claimed for it here.
+    if(has_explicit_encoding and
+       (encoding==STANDARD  or encoding==MACROMAN or
+        encoding==MACEXPERT or encoding==WINANSI))
+      {
+        auto& numb_to_name = encodings.get(encoding).get_numb_to_name();
+
+        auto base = numb_to_name.find(code);
+        if(base != numb_to_name.end())
+          {
+            return base->second;
+          }
       }
 
     return "";

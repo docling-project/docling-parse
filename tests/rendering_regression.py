@@ -625,6 +625,12 @@ def flatten_on_white(image: Image.Image) -> Image.Image:
     background transparent. Comparing them only makes sense on a common
     background.
     """
+    # An RGB image has no alpha left to composite, so it is already the answer.
+    # Callers that flatten before comparing and then hand the same images to
+    # the visualization writer would otherwise pay for the composite twice.
+    if image.mode == "RGB":
+        return image
+
     rgba = image.convert("RGBA")
     canvas = Image.new("RGBA", rgba.size, (255, 255, 255, 255))
     canvas.alpha_composite(rgba)

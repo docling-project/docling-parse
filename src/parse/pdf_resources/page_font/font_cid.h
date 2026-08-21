@@ -5,7 +5,9 @@
 
 #include <fstream>
 
+#include <functional>
 #include <limits>
+#include <sstream>
 #include <set>
 #include <map>
 #include <unordered_map>
@@ -43,6 +45,259 @@ namespace pdflib
       return true;
     }
   };
+
+  // What a CMap program says about how to read codes: which byte strings are
+  // codes, and which CID each one selects.
+  struct cmap_tables
+  {
+    std::vector<cmap_codespace_range>      codespaces;
+    std::unordered_map<uint32_t, uint32_t> code_to_cid;
+  };
+
+  // Reads the next token of a CMap program. Comments and literal strings are
+  // returned as nothing and as one token respectively, so that the arbitrary
+  // text they carry -- an Adobe CMap opens with a page of `%%Copyright` -- can
+  // never be mistaken for an operator.
+  inline bool next_cmap_token(std::istream& in, std::string& token)
+  {
+    token.clear();
+
+    char c = 0;
+    while(in.get(c))
+      {
+        if(c=='%')
+          {
+            while(in.get(c) and c!='\n' and c!='\r') {}
+            continue;
+          }
+
+        if(not std::isspace(static_cast<unsigned char>(c))) { break; }
+      }
+
+    if(not in) { return false; }
+
+    if(c=='<')
+      {
+        token += c;
+
+        if(in.peek()=='<')
+          {
+            in.get(c);
+            token += c;
+            return true;
+          }
+
+        while(in.get(c))
+          {
+            token += c;
+            if(c=='>') { break; }
+          }
+
+        return true;
+      }
+
+    if(c=='(')
+      {
+        int depth = 1;
+        token += c;
+
+        while(depth>0 and in.get(c))
+          {
+            if(c=='\\')
+              {
+                char escaped = 0;
+                if(in.get(escaped)) { token += c; token += escaped; }
+                continue;
+              }
+
+            if(c=='(') { depth += 1; }
+            if(c==')') { depth -= 1; }
+
+            token += c;
+          }
+
+        return true;
+      }
+
+    token += c;
+    while(in.get(c))
+      {
+        if(std::isspace(static_cast<unsigned char>(c)) or
+           c=='<' or c=='(' or c=='%' or c=='[' or c==']')
+          {
+            in.unget();
+            break;
+          }
+
+        token += c;
+      }
+
+    return true;
+  }
+
+  // `<00a5>` -> value 0x00a5 over 2 bytes. False for a token that is not a
+  // hex string of whole bytes.
+  inline bool parse_cmap_hex(const std::string& token,
+                             uint32_t&          value,
+                             int&               n_bytes)
+  {
+    if(token.size()<3 or token.front()!='<' or token.back()!='>')
+      {
+        return false;
+      }
+
+    const std::string hex = token.substr(1, token.size()-2);
+
+    // A code is a whole number of bytes, and at most the four this decoder
+    // (and every CMap Adobe ships) works with.
+    if(hex.size()==0 or (hex.size()%2)!=0 or hex.size()>8)
+      {
+        return false;
+      }
+
+    if(hex.find_first_not_of("0123456789abcdefABCDEF")!=std::string::npos)
+      {
+        return false;
+      }
+
+    value   = static_cast<uint32_t>(std::stoul(hex, NULL, 16));
+    n_bytes = static_cast<int>(hex.size()/2);
+
+    return true;
+  }
+
+  // A CID operand: a plain non-negative decimal integer.
+  inline bool parse_cmap_uint(const std::string& token, uint32_t& value)
+  {
+    if(token.empty() or
+       token.find_first_not_of("0123456789")!=std::string::npos or
+       token.size()>10)
+      {
+        return false;
+      }
+
+    value = static_cast<uint32_t>(std::stoul(token, NULL, 10));
+    return true;
+  }
+
+  // Scans one CMap program, adding what it declares to `tables`. Written
+  // against tokens rather than lines because both spellings occur in the
+  // wild: Adobe's resource files put one entry per line, while a CMap
+  // embedded in a PDF routinely writes a whole block -- `1 begincidchar
+  // <0020> 1 endcidchar` -- on a single line.
+  //
+  // `use_cmap` is handed the name operand of a `usecmap` operator. The
+  // referenced CMap supplies the codespace and every mapping this program
+  // does not restate (ISO 32000-1, 9.7.5.2), so a caller that can reach it
+  // should scan it into the same tables before returning.
+  inline void scan_cmap_program(std::istream& in,
+                                cmap_tables&  tables,
+                                const std::function<void(const std::string&)>& use_cmap)
+  {
+    // `notdefrange` is deliberately absent: it maps unmapped codes onto a
+    // substitute glyph, which is a rendering decision and never a code.
+    enum cmap_block { NO_BLOCK, CODESPACE_BLOCK, CIDRANGE_BLOCK, CIDCHAR_BLOCK, SKIPPED_BLOCK };
+
+    // Ranges are expanded code by code, so a corrupt bound cannot turn into a
+    // multi-gigabyte allocation.
+    constexpr uint32_t max_range_length = 65536;
+
+    cmap_block               block = NO_BLOCK;
+    std::vector<std::string> operands;
+    std::string              previous;
+    std::string              token;
+
+    while(next_cmap_token(in, token))
+      {
+        if(token=="begincodespacerange") { block = CODESPACE_BLOCK; operands.clear(); continue; }
+        if(token=="begincidrange")       { block = CIDRANGE_BLOCK;  operands.clear(); continue; }
+        if(token=="begincidchar")        { block = CIDCHAR_BLOCK;   operands.clear(); continue; }
+
+        if(token.rfind("begin", 0)==0)   { block = SKIPPED_BLOCK;   operands.clear(); continue; }
+        if(token.rfind("end", 0)==0)     { block = NO_BLOCK;        operands.clear(); continue; }
+
+        if(token=="usecmap")
+          {
+            if(not previous.empty()) { use_cmap(previous); }
+            previous.clear();
+            continue;
+          }
+
+        if(block==NO_BLOCK or block==SKIPPED_BLOCK)
+          {
+            previous = token;
+            continue;
+          }
+
+        operands.push_back(token);
+
+        if(block==CODESPACE_BLOCK and operands.size()==2)
+          {
+            cmap_codespace_range range;
+            int n_bytes_high = 0;
+
+            if(parse_cmap_hex(operands[0], range.low , range.n_bytes) and
+               parse_cmap_hex(operands[1], range.high, n_bytes_high)  and
+               range.n_bytes==n_bytes_high)
+              {
+                tables.codespaces.push_back(range);
+              }
+            else
+              {
+                LOG_S(ERROR) << "ignoring malformed codespace-range: "
+                             << operands[0] << " " << operands[1];
+              }
+
+            operands.clear();
+            continue;
+          }
+
+        if(block==CIDRANGE_BLOCK and operands.size()==3)
+          {
+            uint32_t beg = 0, end = 0, cid = 0;
+            int      n_beg = 0, n_end = 0;
+
+            if(parse_cmap_hex(operands[0], beg, n_beg) and
+               parse_cmap_hex(operands[1], end, n_end) and
+               parse_cmap_uint(operands[2], cid)  and
+               beg<=end and (end-beg)<max_range_length)
+              {
+                for(uint32_t code=beg; code<=end; code++)
+                  {
+                    tables.code_to_cid[code] = cid++;
+                  }
+              }
+            else
+              {
+                LOG_S(ERROR) << "ignoring malformed cid-range: "
+                             << operands[0] << " " << operands[1] << " " << operands[2];
+              }
+
+            operands.clear();
+            continue;
+          }
+
+        if(block==CIDCHAR_BLOCK and operands.size()==2)
+          {
+            uint32_t code = 0, cid = 0;
+            int      n_code = 0;
+
+            if(parse_cmap_hex(operands[0], code, n_code) and
+               parse_cmap_uint(operands[1], cid))
+              {
+                tables.code_to_cid[code] = cid;
+              }
+            else
+              {
+                LOG_S(ERROR) << "ignoring malformed cid-char: "
+                             << operands[0] << " " << operands[1];
+              }
+
+            operands.clear();
+            continue;
+          }
+      }
+  }
 
   class font_cid
   {
@@ -87,12 +342,6 @@ namespace pdflib
     // directory.
     static std::string sibling_cmap_path(const std::string& filename,
                                          const std::string& cmap_name);
-
-    // `<00a5>` -> value 0x00a5 over 2 bytes. Returns false for a token that is
-    // not a hex string.
-    static bool parse_hex_token(const std::string& token,
-                                uint32_t&          value,
-                                int&               n_bytes);
 
     void read_cid2code(std::string              filename,
                        std::vector<std::string> columns);
@@ -190,37 +439,6 @@ namespace pdflib
     return dirname+"/"+name;
   }
 
-  bool font_cid::parse_hex_token(const std::string& token,
-                                 uint32_t&          value,
-                                 int&               n_bytes)
-  {
-    if(token.size()<3 or token.front()!='<' or token.back()!='>')
-      {
-        return false;
-      }
-
-    std::string hex = token.substr(1, token.size()-2);
-
-    // A code is a whole number of bytes, and at most the four this decoder
-    // (and every CMap Adobe ships) works with.
-    if(hex.size()==0 or (hex.size()%2)!=0 or hex.size()>8)
-      {
-        return false;
-      }
-
-    try
-      {
-        value = static_cast<uint32_t>(std::stoul(hex, NULL, 16));
-      }
-    catch(const std::exception& exc)
-      {
-        return false;
-      }
-
-    n_bytes = static_cast<int>(hex.size()/2);
-    return true;
-  }
-
   void font_cid::read_cmap2cid(std::string filename)
   {
     std::set<std::string> visited;
@@ -256,138 +474,27 @@ namespace pdflib
 	throw std::logic_error(ss.str());
       }
 
-    // The blocks this decoder reads. `notdefrange` is deliberately absent: it
-    // maps unmapped codes onto a substitute glyph, which is a rendering
-    // decision and never text.
-    enum cmap_block { NO_BLOCK, CODESPACE_BLOCK, CIDRANGE_BLOCK, CIDCHAR_BLOCK };
+    // The parent is read first, so that the entries below it -- scanned into
+    // the same tables -- overwrite what it supplied. That is exactly the
+    // precedence `usecmap` defines.
+    auto resolve = [&](const std::string& parent)
+    {
+      read_cmap2cid(sibling_cmap_path(filename, parent), visited, false);
+    };
 
-    cmap_block  block = NO_BLOCK;
-    std::string line;
-    while(std::getline(file, line))
+    // `resolve` runs while the scan is under way -- `usecmap` always precedes
+    // the blocks -- so by the time the scan returns, the members already hold
+    // everything the parent declared. Appending this file's own entries on top
+    // is what gives it the last word.
+    cmap_tables tables;
+    scan_cmap_program(file, tables, resolve);
+
+    codespaces.insert(codespaces.end(),
+                      tables.codespaces.begin(), tables.codespaces.end());
+
+    for(const auto& entry : tables.code_to_cid)
       {
-        if(line.find("begincodespacerange")!=std::string::npos)
-          {
-            block = CODESPACE_BLOCK;
-            continue;
-          }
-        else if(line.find("begincidrange")!=std::string::npos)
-          {
-            block = CIDRANGE_BLOCK;
-            continue;
-          }
-        else if(line.find("begincidchar")!=std::string::npos)
-          {
-            block = CIDCHAR_BLOCK;
-            continue;
-          }
-        else if(line.find("endcodespacerange")!=std::string::npos or
-                line.find("endcidrange")     !=std::string::npos or
-                line.find("endcidchar")      !=std::string::npos)
-          {
-            block = NO_BLOCK;
-            continue;
-          }
-
-        std::vector<std::string> items = split(line, ' ');
-
-        auto itr = std::remove(items.begin(), items.end(), "");
-        items.erase(itr, items.end());
-
-        if(block==NO_BLOCK)
-          {
-            // `/Parent usecmap` makes this CMap an override of another one
-            // (ISO 32000-1, 9.7.5.2): the parent supplies the codespace and
-            // every mapping this file does not restate. Reading the parent
-            // here -- the operator always precedes the blocks -- gives the
-            // entries below the last word, which is exactly the precedence
-            // the operator defines.
-            if(items.size()==2 and items[1]=="usecmap")
-              {
-                read_cmap2cid(sibling_cmap_path(filename, items[0]),
-                              visited, false);
-              }
-
-            continue;
-          }
-
-        if(block==CODESPACE_BLOCK)
-          {
-            cmap_codespace_range range;
-            int n_bytes_high = 0;
-
-            if(items.size()==2 and
-               parse_hex_token(items[0], range.low , range.n_bytes) and
-               parse_hex_token(items[1], range.high, n_bytes_high)  and
-               range.n_bytes==n_bytes_high)
-              {
-                codespaces.push_back(range);
-              }
-            else
-              {
-                LOG_S(ERROR) << "ignoring malformed codespace-range: " << line;
-              }
-
-            continue;
-          }
-
-        if(block==CIDRANGE_BLOCK)
-          {
-            uint32_t beg = 0, end = 0;
-            int      n_beg = 0, n_end = 0;
-
-            if(items.size()==3 and
-               parse_hex_token(items[0], beg, n_beg) and
-               parse_hex_token(items[1], end, n_end))
-              {
-                uint32_t ind = 0;
-                try
-                  {
-                    ind = static_cast<uint32_t>(std::stoul(items[2], NULL, 10));
-                  }
-                catch(const std::exception& exc)
-                  {
-                    LOG_S(ERROR) << "ignoring malformed cid-range: " << line;
-                    continue;
-                  }
-
-                for(uint32_t i=beg; i<=end; i++)
-                  {
-                    cmap2cid[i] = ind;
-                    ind += 1;
-
-                    if(i==std::numeric_limits<uint32_t>::max()) { break; }
-                  }
-              }
-            else
-              {
-                LOG_S(ERROR) << "ignoring malformed cid-range: " << line;
-              }
-
-            continue;
-          }
-
-        // CIDCHAR_BLOCK: `<code> cid`, the single-code form of a cid-range
-        if(items.size()==2)
-          {
-            uint32_t code = 0;
-            int      n_code = 0;
-
-            if(parse_hex_token(items[0], code, n_code))
-              {
-                try
-                  {
-                    cmap2cid[code] = static_cast<uint32_t>(std::stoul(items[1], NULL, 10));
-                  }
-                catch(const std::exception& exc)
-                  {
-                    LOG_S(ERROR) << "ignoring malformed cid-char: " << line;
-                  }
-
-                continue;
-              }
-          }
-
-        LOG_S(ERROR) << "ignoring malformed cid-char: " << line;
+        cmap2cid[entry.first] = entry.second;
       }
   }
 

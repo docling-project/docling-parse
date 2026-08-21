@@ -28,8 +28,10 @@ import contextlib
 import csv
 import difflib
 import json
+import os
 import re
 import sys
+from concurrent.futures import BrokenExecutor, ProcessPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -63,6 +65,8 @@ from tests.rendering_regression import (
 )
 
 DEFAULT_SCALE = 2.0
+# Capped so a many-core CI box does not hold dozens of page images at once.
+DEFAULT_WORKERS = min(os.cpu_count() or 1, 16)
 DEFAULT_HF_REPO_ID = HF_DATASET_REPO_ID
 DEFAULT_HF_PDF_SUBDIR = Path(REGRESSION_DIR).name
 DEFAULT_OUTPUT_DIR = Path(
@@ -198,6 +202,141 @@ def resolve_quality_pdf_inputs(
     return find_pdfs(pdf_dir, recursive=True), info
 
 
+@dataclass(frozen=True)
+class DoclingRenderOptions:
+    """The docling-parse render switches, as one picklable bundle."""
+
+    scale: float = DEFAULT_SCALE
+    threads: int = 1
+    render_text: bool = True
+    render_shapes: bool = True
+    render_shadings: bool = True
+    render_non_rect_clip_masks: bool = True
+
+
+class DoclingPageDecode:
+    """One decode of one page, shared by the render and the text comparison.
+
+    The C++ side decodes a page once and can hand out both the rendered image
+    and the char cells from that same result. Asking for them through separate
+    entry points -- which is what a render pass followed by a text pass does --
+    decodes the page twice for no gain.
+
+    Not thread-safe, and does not need to be: one instance serves one page of
+    one job.
+    """
+
+    def __init__(self, pdf_path: Path, page_number: int, options: DoclingRenderOptions):
+        self._pdf_path = pdf_path
+        self._page_number = page_number
+        self._options = options
+        self._want_image = False
+        self._want_text = False
+        self._image: Image.Image | None = None
+        self._text: str | None = None
+        self._decoded = False
+
+    def expect(self, *, image: bool = False, text: bool = False) -> None:
+        """Declares up front what the page will be asked for.
+
+        Called before the first `image()`/`text()` so the single decode
+        produces everything the job needs.
+        """
+        self._want_image = self._want_image or image
+        self._want_text = self._want_text or text
+
+    def image(self) -> Image.Image:
+        self.expect(image=True)
+        self._decode()
+        if self._image is None:
+            raise RuntimeError("docling-parse produced no render result")
+        return self._image
+
+    def text(self) -> str:
+        self.expect(text=True)
+        self._decode()
+        if self._text is None:
+            raise RuntimeError("docling-parse produced no page content")
+        return self._text
+
+    def _decode(self) -> None:
+        if self._decoded:
+            return
+
+        from docling_parse.pdf_parser import (
+            ContentConfig,
+            ContentLevel,
+            DoclingThreadedPdfParser,
+            ThreadedPdfParserConfig,
+        )
+
+        render_config = None
+        if self._want_image:
+            render_config = build_docling_render_config(self._options)
+
+        content_config = None
+        if self._want_text:
+            content_config = ContentConfig(
+                char_cells_content_level=ContentLevel.COMPUTE_AND_MATERIALIZE
+            )
+
+        parser = DoclingThreadedPdfParser(
+            parser_config=ThreadedPdfParserConfig(
+                loglevel="fatal",
+                threads=self._options.threads,
+                max_concurrent_results=1,
+                render_config=render_config,
+                page_content_config=content_config,
+            )
+        )
+        parser.load(str(self._pdf_path), page_numbers=[self._page_number])
+        try:
+            for result in parser.iterate_results():
+                if not result.success:
+                    raise RuntimeError(result.error_message)
+                if self._want_image:
+                    self._image = result.get_image().convert("RGBA")
+                if self._want_text and content_config is not None:
+                    page = result.get_page(content_config=content_config)
+                    self._text = "".join(cell.text for cell in page.char_cells)
+                break
+        finally:
+            self._decoded = True
+            with contextlib.suppress(Exception):
+                parser.unload_all()
+
+
+def build_docling_render_config(options: DoclingRenderOptions):
+    from docling_parse.pdf_parser import RenderConfig
+
+    render_config = RenderConfig()
+    render_config.scale = options.scale
+    render_config.render_text = options.render_text
+    if hasattr(render_config, "render_shapes"):
+        render_config.render_shapes = options.render_shapes
+    elif not options.render_shapes:
+        raise RuntimeError(
+            "This docling_parse build does not expose RenderConfig.render_shapes; "
+            "rebuild the extension before using --no-docling-render-shapes."
+        )
+    if hasattr(render_config, "render_shadings"):
+        render_config.render_shadings = options.render_shadings
+    elif not options.render_shadings:
+        raise RuntimeError(
+            "This docling_parse build does not expose RenderConfig.render_shadings; "
+            "rebuild the extension before using --no-docling-render-shadings."
+        )
+    if hasattr(render_config, "render_non_rect_clip_masks"):
+        render_config.render_non_rect_clip_masks = options.render_non_rect_clip_masks
+    elif not options.render_non_rect_clip_masks:
+        raise RuntimeError(
+            "This docling_parse build does not expose "
+            "RenderConfig.render_non_rect_clip_masks; rebuild the extension before "
+            "using --no-docling-render-non-rect-clip-masks."
+        )
+    return render_config
+
+
 def render_docling_parse(
     pdf_path: Path,
     page_number: int,
@@ -209,55 +348,15 @@ def render_docling_parse(
     render_shadings: bool = True,
     render_non_rect_clip_masks: bool = True,
 ) -> Image.Image:
-    from docling_parse.pdf_parser import (
-        DoclingThreadedPdfParser,
-        RenderConfig,
-        ThreadedPdfParserConfig,
+    options = DoclingRenderOptions(
+        scale=scale,
+        threads=threads,
+        render_text=render_text,
+        render_shapes=render_shapes,
+        render_shadings=render_shadings,
+        render_non_rect_clip_masks=render_non_rect_clip_masks,
     )
-
-    render_config = RenderConfig()
-    render_config.scale = scale
-    render_config.render_text = render_text
-    if hasattr(render_config, "render_shapes"):
-        render_config.render_shapes = render_shapes
-    elif not render_shapes:
-        raise RuntimeError(
-            "This docling_parse build does not expose RenderConfig.render_shapes; "
-            "rebuild the extension before using --no-docling-render-shapes."
-        )
-    if hasattr(render_config, "render_shadings"):
-        render_config.render_shadings = render_shadings
-    elif not render_shadings:
-        raise RuntimeError(
-            "This docling_parse build does not expose RenderConfig.render_shadings; "
-            "rebuild the extension before using --no-docling-render-shadings."
-        )
-    if hasattr(render_config, "render_non_rect_clip_masks"):
-        render_config.render_non_rect_clip_masks = render_non_rect_clip_masks
-    elif not render_non_rect_clip_masks:
-        raise RuntimeError(
-            "This docling_parse build does not expose "
-            "RenderConfig.render_non_rect_clip_masks; rebuild the extension before "
-            "using --no-docling-render-non-rect-clip-masks."
-        )
-    parser = DoclingThreadedPdfParser(
-        parser_config=ThreadedPdfParserConfig(
-            loglevel="fatal",
-            threads=threads,
-            max_concurrent_results=1,
-            render_config=render_config,
-        )
-    )
-    parser.load(str(pdf_path), page_numbers=[page_number])
-    try:
-        for result in parser.iterate_results():
-            if not result.success:
-                raise RuntimeError(result.error_message)
-            return result.get_image().convert("RGBA")
-    finally:
-        with contextlib.suppress(Exception):
-            parser.unload_all()
-    raise RuntimeError("docling-parse produced no render result")
+    return DoclingPageDecode(pdf_path, page_number, options).image()
 
 
 def render_pymupdf(pdf_path: Path, page_number: int, scale: float) -> Image.Image:
@@ -281,19 +380,9 @@ def render_pdfium(pdf_path: Path, page_number: int, scale: float) -> Image.Image
 
 
 def text_docling_parse(pdf_path: Path, page_number: int) -> str:
-    from docling_parse.pdf_parser import ContentConfig, ContentLevel, DoclingPdfParser
-
-    content_config = ContentConfig(
-        char_cells_content_level=ContentLevel.COMPUTE_AND_MATERIALIZE
-    )
-    parser = DoclingPdfParser(loglevel="fatal")
-    doc = parser.load(str(pdf_path), lazy=True, content_config=content_config)
-    try:
-        page = doc.get_page(page_number, content_config=content_config)
-        return "".join(cell.text for cell in page.char_cells)
-    finally:
-        with contextlib.suppress(Exception):
-            doc.unload()
+    return DoclingPageDecode(
+        pdf_path, page_number, DoclingRenderOptions()
+    ).text()
 
 
 def text_pypdfium2(pdf_path: Path, page_number: int) -> str:
@@ -392,16 +481,16 @@ def compare_text(
     page: ScheduledPage,
     *,
     normalization: str,
+    docling_decode: DoclingPageDecode | None = None,
 ) -> TextQualityRow:
+    def text_with(name: str) -> str:
+        if name == "docling-parse" and docling_decode is not None:
+            return docling_decode.text()
+        return TEXT_PARSERS[name](page.pdf_path, page.page_number)
+
     try:
-        actual = normalize_text(
-            TEXT_PARSERS[actual_parser](page.pdf_path, page.page_number),
-            normalization,
-        )
-        expected = normalize_text(
-            TEXT_PARSERS[reference_parser](page.pdf_path, page.page_number),
-            normalization,
-        )
+        actual = normalize_text(text_with(actual_parser), normalization)
+        expected = normalize_text(text_with(reference_parser), normalization)
         matcher = difflib.SequenceMatcher(None, expected, actual, autojunk=False)
         inserted = deleted = replaced = equal = 0
         for tag, i1, i2, j1, j2 in matcher.get_opcodes():
@@ -450,12 +539,15 @@ def compare_render(
     docling_render_shapes: bool,
     docling_render_shadings: bool,
     docling_render_non_rect_clip_masks: bool,
+    docling_decode: DoclingPageDecode | None = None,
 ) -> tuple[
     RenderQualityRow, ImageComparison | None, Image.Image | None, Image.Image | None
 ]:
-    try:
-        if actual_renderer == "docling-parse":
-            actual_image = render_docling_parse(
+    def render_with(name: str) -> Image.Image:
+        if name == "docling-parse":
+            if docling_decode is not None:
+                return docling_decode.image()
+            return render_docling_parse(
                 page.pdf_path,
                 page.page_number,
                 scale,
@@ -465,26 +557,11 @@ def compare_render(
                 render_shadings=docling_render_shadings,
                 render_non_rect_clip_masks=docling_render_non_rect_clip_masks,
             )
-        else:
-            actual_image = RENDERERS[actual_renderer](
-                page.pdf_path, page.page_number, scale
-            )
+        return RENDERERS[name](page.pdf_path, page.page_number, scale)
 
-        if reference_renderer == "docling-parse":
-            expected_image = render_docling_parse(
-                page.pdf_path,
-                page.page_number,
-                scale,
-                threads=docling_render_threads,
-                render_text=docling_render_text,
-                render_shapes=docling_render_shapes,
-                render_shadings=docling_render_shadings,
-                render_non_rect_clip_masks=docling_render_non_rect_clip_masks,
-            )
-        else:
-            expected_image = RENDERERS[reference_renderer](
-                page.pdf_path, page.page_number, scale
-            )
+    try:
+        actual_image = render_with(actual_renderer)
+        expected_image = render_with(reference_renderer)
 
         actual = flatten_on_white(actual_image)
         expected = flatten_on_white(expected_image)
@@ -537,6 +614,137 @@ def compare_render(
             None,
             None,
         )
+
+
+@dataclass(frozen=True)
+class PageJob:
+    """Every comparison one page needs, in a form that survives pickling.
+
+    Render and text comparisons for a page travel together so that the
+    docling-parse decode behind them happens once instead of once per pass.
+    """
+
+    pdf_path: Path
+    page_number: int
+    renderers: tuple[str, ...]
+    reference_renderer: str
+    parsers: tuple[str, ...]
+    reference_parser: str
+    docling_options: DoclingRenderOptions
+    visualizations: str
+    viz_dir: Path
+    text_normalization: str
+
+
+@dataclass(frozen=True)
+class RenderResult:
+    row: RenderQualityRow
+    comparison: ImageComparison | None
+    visualization: Path | None
+
+
+@dataclass(frozen=True)
+class PageResult:
+    renders: tuple[RenderResult, ...]
+    texts: tuple[TextQualityRow, ...]
+
+
+def run_page_job(job: PageJob) -> PageResult:
+    """Runs one page's comparisons and draws its visualizations.
+
+    The visualizations are written here rather than by the caller so that the
+    page images never leave the worker: shipping a pair of scale-2 RGBA pages
+    back through a pipe costs more than rendering them.
+    """
+    page = ScheduledPage(job.pdf_path, job.page_number)
+    options = job.docling_options
+
+    # One decode serves whichever of the two comparisons name docling-parse.
+    wants_render = "docling-parse" in (*job.renderers, job.reference_renderer)
+    wants_text = "docling-parse" in (*job.parsers, job.reference_parser)
+
+    decode: DoclingPageDecode | None = None
+    if wants_render or wants_text:
+        decode = DoclingPageDecode(job.pdf_path, job.page_number, options)
+        decode.expect(image=wants_render, text=wants_text)
+
+    renders: list[RenderResult] = []
+    for actual_renderer in job.renderers:
+        row, comparison, actual, expected = compare_render(
+            actual_renderer,
+            job.reference_renderer,
+            page,
+            scale=options.scale,
+            tolerance=DEFAULT_IMAGE_TOLERANCE,
+            docling_render_threads=options.threads,
+            docling_render_text=options.render_text,
+            docling_render_shapes=options.render_shapes,
+            docling_render_shadings=options.render_shadings,
+            docling_render_non_rect_clip_masks=options.render_non_rect_clip_masks,
+            docling_decode=decode,
+        )
+
+        visualization: Path | None = None
+        if comparison is not None and actual is not None and expected is not None:
+            wanted = job.visualizations == "all" or (
+                job.visualizations == "above-tolerance" and row.above_tolerance
+            )
+            if wanted:
+                visualization = write_comparison_visualization(
+                    safe_name(comparison.document),
+                    job.page_number,
+                    expected,
+                    actual,
+                    comparison.normalized_delta,
+                    reference_label=job.reference_renderer,
+                    actual_label=actual_renderer,
+                    folder=job.viz_dir,
+                )
+
+        renders.append(RenderResult(row, comparison, visualization))
+
+    texts = tuple(
+        compare_text(
+            actual_parser,
+            job.reference_parser,
+            page,
+            normalization=job.text_normalization,
+            docling_decode=decode,
+        )
+        for actual_parser in job.parsers
+    )
+
+    return PageResult(tuple(renders), texts)
+
+
+def imap_jobs(fn, jobs: list, workers: int):
+    """Runs `fn` over `jobs`, yielding results in job order.
+
+    Processes, not threads: pdfium -- the default reference renderer -- is not
+    thread-safe and aborts the interpreter when several threads render at once.
+    A worker per process gives each its own pdfium, so the results are the ones
+    a serial run produces, only sooner.
+
+    `chunksize=1` keeps the progress log meaningful: a result is logged as it
+    arrives, so a run that dies leaves a breadcrumb next to the page that
+    killed it rather than a chunk boundary away from it.
+    """
+    if workers <= 1 or len(jobs) <= 1:
+        for job in jobs:
+            yield fn(job)
+        return
+
+    try:
+        with ProcessPoolExecutor(max_workers=workers) as executor:
+            yield from executor.map(fn, jobs, chunksize=1)
+    except BrokenExecutor as exc:
+        # A worker died outright -- a segfault in a renderer, not an exception
+        # the comparison could catch. The breadcrumb log names the last page
+        # that finished, and the culprit is within `workers` pages of it.
+        raise SystemExit(
+            f"A comparison worker died ({exc}). Re-run the last pages of the "
+            f"progress log with --workers 1 to see which page is responsible."
+        ) from exc
 
 
 def write_render_csv(path: Path, rows: list[RenderQualityRow]) -> None:
@@ -691,6 +899,17 @@ def main(argv: List[str]) -> int:
         help="Render scale, where 1.0 is 72 dpi (default: 2.0)",
     )
     parser.add_argument(
+        "--workers",
+        "-j",
+        type=int,
+        default=DEFAULT_WORKERS,
+        help=(
+            f"Worker processes for the page comparisons (default: {DEFAULT_WORKERS}). "
+            "Processes rather than threads: pdfium is not thread-safe. "
+            "Use 1 to run in-process, which is what a debugger wants."
+        ),
+    )
+    parser.add_argument(
         "--docling-render-threads",
         type=int,
         default=1,
@@ -734,8 +953,13 @@ def main(argv: List[str]) -> int:
     parser.add_argument(
         "--render-visualizations",
         choices=["all", "above-tolerance", "none"],
-        default="all",
-        help="Write three-panel render visualizations (default: all)",
+        default="above-tolerance",
+        help=(
+            "Write three-panel render visualizations "
+            "(default: above-tolerance). Drawing one per page costs about a "
+            "third of the run and gigabytes of output, nearly all of it "
+            "panels of pages that already match."
+        ),
     )
     parser.add_argument(
         "--text-normalization",
@@ -749,6 +973,8 @@ def main(argv: List[str]) -> int:
     actual_parsers = _parse_list(args.parsers)
     if args.docling_render_threads < 1:
         raise SystemExit("--docling-render-threads must be >= 1")
+    if args.workers < 1:
+        raise SystemExit("--workers must be >= 1")
     _validate_names(
         "renderer",
         [args.reference_renderer, *actual_renderers],
@@ -774,73 +1000,68 @@ def main(argv: List[str]) -> int:
     progress_log_path = args.progress_log or (args.output_dir / "current_page.jsonl")
     print(f"Writing current-page breadcrumbs to: {progress_log_path}")
 
+    do_render = args.compare in {"render", "both"}
+    do_parse = args.compare in {"parse", "both"}
+
+    viz_dir = args.output_dir / "visualizations"
+    page_jobs = [
+        PageJob(
+            pdf_path=page.pdf_path,
+            page_number=page.page_number,
+            renderers=tuple(actual_renderers) if do_render else (),
+            reference_renderer=args.reference_renderer,
+            parsers=tuple(actual_parsers) if do_parse else (),
+            reference_parser=args.reference_parser,
+            docling_options=DoclingRenderOptions(
+                scale=args.scale,
+                threads=args.docling_render_threads,
+                render_text=not args.no_docling_render_text,
+                render_shapes=not args.no_docling_render_shapes,
+                render_shadings=not args.no_docling_render_shadings,
+                render_non_rect_clip_masks=not args.no_docling_render_non_rect_clip_masks,
+            ),
+            visualizations=args.render_visualizations,
+            viz_dir=viz_dir,
+            text_normalization=args.text_normalization,
+        )
+        for page in pages
+    ]
+
     render_rows: list[RenderQualityRow] = []
     image_comparisons: list[ImageComparison] = []
     visualizations: list[Path] = []
-    if args.compare in {"render", "both"}:
-        viz_dir = args.output_dir / "visualizations"
-        render_total = len(actual_renderers) * len(pages)
-        render_index = 0
-        ensure_parent_dir(progress_log_path)
-        with (
-            tqdm(
-                total=render_total,
-                desc="render quality",
-                unit="page",
-            ) as progress,
-            progress_log_path.open("a", encoding="utf-8") as log_handle,
+    text_rows: list[TextQualityRow] = []
+
+    ensure_parent_dir(progress_log_path)
+    with (
+        tqdm(total=len(page_jobs), desc="quality", unit="page") as progress,
+        progress_log_path.open("a", encoding="utf-8") as log_handle,
+    ):
+        for index, (job, result) in enumerate(
+            zip(page_jobs, imap_jobs(run_page_job, page_jobs, args.workers)), start=1
         ):
-            for actual_renderer in actual_renderers:
-                for page in pages:
-                    render_index += 1
-                    progress.set_postfix_str(
-                        f"{page.pdf_path.name}@{page.page_number}", refresh=False
-                    )
-                    write_progress_log(
-                        log_handle,
-                        phase="render",
-                        actual_engine=actual_renderer,
-                        reference_engine=args.reference_renderer,
-                        page=page,
-                        index=render_index,
-                        total=render_total,
-                    )
-                    row, comparison, actual, expected = compare_render(
-                        actual_renderer,
-                        args.reference_renderer,
-                        page,
-                        scale=args.scale,
-                        tolerance=DEFAULT_IMAGE_TOLERANCE,
-                        docling_render_threads=args.docling_render_threads,
-                        docling_render_text=not args.no_docling_render_text,
-                        docling_render_shapes=not args.no_docling_render_shapes,
-                        docling_render_shadings=not args.no_docling_render_shadings,
-                        docling_render_non_rect_clip_masks=not args.no_docling_render_non_rect_clip_masks,
-                    )
-                    render_rows.append(row)
-                    if (
-                        comparison is not None
-                        and actual is not None
-                        and expected is not None
-                    ):
-                        image_comparisons.append(comparison)
-                        if args.render_visualizations == "all" or (
-                            args.render_visualizations == "above-tolerance"
-                            and row.above_tolerance
-                        ):
-                            visualizations.append(
-                                write_comparison_visualization(
-                                    safe_name(comparison.document),
-                                    page.page_number,
-                                    expected,
-                                    actual,
-                                    comparison.normalized_delta,
-                                    reference_label=args.reference_renderer,
-                                    actual_label=actual_renderer,
-                                    folder=viz_dir,
-                                )
-                            )
-                    progress.update(1)
+            progress.set_postfix_str(
+                f"{job.pdf_path.name}@{job.page_number}", refresh=False
+            )
+            write_progress_log(
+                log_handle,
+                phase=args.compare,
+                actual_engine=",".join((*job.renderers, *job.parsers)),
+                reference_engine=args.reference_renderer,
+                page=ScheduledPage(job.pdf_path, job.page_number),
+                index=index,
+                total=len(page_jobs),
+            )
+            for render in result.renders:
+                render_rows.append(render.row)
+                if render.comparison is not None:
+                    image_comparisons.append(render.comparison)
+                if render.visualization is not None:
+                    visualizations.append(render.visualization)
+            text_rows.extend(result.texts)
+            progress.update(1)
+
+    if do_render:
         if args.render_visualizations != "none":
             written = [
                 write_metric_histogram(
@@ -867,43 +1088,7 @@ def main(argv: List[str]) -> int:
         if visualizations:
             print(f"\nWrote {len(visualizations)} render visualization(s) to {viz_dir}")
 
-    text_rows: list[TextQualityRow] = []
-    if args.compare in {"parse", "both"}:
-        text_total = len(actual_parsers) * len(pages)
-        text_index = 0
-        ensure_parent_dir(progress_log_path)
-        with (
-            tqdm(
-                total=text_total,
-                desc="text quality",
-                unit="page",
-            ) as progress,
-            progress_log_path.open("a", encoding="utf-8") as log_handle,
-        ):
-            for actual_parser in actual_parsers:
-                for page in pages:
-                    text_index += 1
-                    progress.set_postfix_str(
-                        f"{page.pdf_path.name}@{page.page_number}", refresh=False
-                    )
-                    write_progress_log(
-                        log_handle,
-                        phase="parse",
-                        actual_engine=actual_parser,
-                        reference_engine=args.reference_parser,
-                        page=page,
-                        index=text_index,
-                        total=text_total,
-                    )
-                    text_rows.append(
-                        compare_text(
-                            actual_parser,
-                            args.reference_parser,
-                            page,
-                            normalization=args.text_normalization,
-                        )
-                    )
-                    progress.update(1)
+    if do_parse:
         write_text_csv(args.output_dir / "text_quality.csv", text_rows)
         print()
         print(format_text_table(text_rows))

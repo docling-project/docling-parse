@@ -303,8 +303,10 @@ namespace pdflib
         return false;
       }
 
-    // /Encoding /Differences overrides the builtin encoding, so its glyph
-    // name is the most authoritative identity when present.
+    // The font dictionary's encoding -- its base encoding with /Differences
+    // applied -- overrides the one the program carries (ISO 32000-1, 9.6.6.2),
+    // so the glyph name it assigns to the code is the most authoritative
+    // identity when there is one.
     if(not glyph_name.empty() and FT_HAS_GLYPH_NAMES(entry.face))
       {
         const FT_UInt glyph_index =
