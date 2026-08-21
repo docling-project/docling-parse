@@ -241,8 +241,9 @@ namespace pdflib
     // all of them with a substring test per entry, and the call sites below ask
     // per glyph. font_name and base_font are both fixed once init_font_name()
     // has run, so each resolution is computed at most once per font resource.
-    // matched_base_font_ backs the call sites that fall back to /BaseFont;
-    // matched_font_name_ backs get_character_from_encoding(), which must not.
+    // matched_base_font_ backs the call sites that fall back to /BaseFont,
+    // get_character_from_encoding() among them; matched_font_name_ backs the
+    // ones that must match the font name alone.
     bool            matched_font_name_resolved_ = false;
     base_font_match matched_font_name_;
     bool            matched_base_font_resolved_ = false;
@@ -850,15 +851,17 @@ namespace pdflib
       {
         return cmap_numb_to_char.at(c);
       }
-    else if(matched_font_name().font)
+    else if(matched_base_font().font)
       {
         // check if the font-name is registered as a 'special' font, eg
-        // the TeX mathematical fonts. Note this deliberately does not fall back
-        // to /BaseFont the way the metrics lookups do.
+        // the TeX mathematical fonts. The font-name alone is not enough:
+        // a font dict carrying the (obsolete) /Name entry reports it as
+        // font_name (eg '/F5'), so the base-font must be consulted too,
+        // as the width/bbox lookups above already do.
 
-        const std::string& fontname = matched_font_name().name;
+        const std::string& fontname = matched_base_font().name;
 
-        auto& fm = *(matched_font_name().font);
+        auto& fm = *(matched_base_font().font);
 
         // A known legacy symbol font may falsely declare WinAnsi while using
         // font-specific character codes. Its curated map is authoritative
