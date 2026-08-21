@@ -623,12 +623,18 @@ namespace pdflib
       {
         return cmap_numb_to_char.at(c);
       }
-    else if(bfonts.has_corresponding_font(font_name))
+    else if(bfonts.has_corresponding_font(font_name) or
+	    bfonts.has_corresponding_font(base_font))
       {
         // check if the font-name is registered as a 'special' font, eg
-        // the TeX mathematical fonts
+        // the TeX mathematical fonts. The font-name alone is not enough:
+        // a font dict carrying the (obsolete) /Name entry reports it as
+        // font_name (eg '/F5'), so the base-font must be consulted too,
+        // as the width/bbox lookups above already do.
 
-        std::string fontname = bfonts.get_corresponding_font(font_name);
+        std::string fontname = bfonts.has_corresponding_font(font_name)
+	  ? bfonts.get_corresponding_font(font_name)
+	  : bfonts.get_corresponding_font(base_font);
 	//LOG_S(WARNING) << "detected a known font: " << font_name << " -> " << fontname;
 
         auto& fm = bfonts.get(fontname);
