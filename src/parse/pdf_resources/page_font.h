@@ -704,19 +704,32 @@ namespace pdflib
   {
     // Fallback for codes that none of the authoritative sources resolved
     // (/Encoding/Differences, the /ToUnicode or predefined CID cmap, or a
-    // known base-font table). When an explicit cmap exists but does not
-    // cover this code, and the code bears no relation to the standard
-    // Latin encodings (symbolic font, or composite font whose codes are
-    // CIDs), the encoding tables would fabricate unrelated text — e.g. an
-    // Arabic ligature glyph subsetted at code 0x23 coming out as '#'
-    // (docling#3802). Emit a glyph marker instead, so downstream consumers
-    // can detect the unresolved glyph.
-    if(cmap_initialized and (is_symbolic or subtype==TYPE_0))
+    // known base-font table). For a symbolic font, or a composite (Type0/CID)
+    // font, the standard Latin encoding tables bear no relation to the font's
+    // codes, so applying them here fabricates unrelated text — e.g. an Arabic
+    // ligature glyph subsetted at code 0x23 coming out as '#' (docling#3802).
+    // Emit a glyph marker instead, so downstream consumers can detect the
+    // unresolved glyph.
+    //
+    // Beyond the parsed-cmap-misses-the-code case (#299), this also covers a
+    // symbolic font with no usable cmap at all — a /ToUnicode that failed to
+    // parse ("could not find cmap in '/ToUnicode'"), or none present — but
+    // ONLY when the font also declares no simple encoding. Many producers set
+    // the symbolic flag on fonts that nonetheless declare /WinAnsiEncoding or
+    // an /Encoding dict with /Differences; for those, codes outside
+    // /Differences legitimately resolve through the declared base encoding
+    // (PDF 32000-1 9.6.6), so falling through is not fabrication
+    // (docling-parse#299 follow-up; #322 regression fix).
+    const bool has_declared_simple_encoding =
+      (has_explicit_encoding and encoding != CMAP_RESOURCES) or diff_initialized;
+
+    if(subtype==TYPE_0 or
+       (is_symbolic and (cmap_initialized or not has_declared_simple_encoding)))
       {
         unknown_numbs[c] += 1;
 
-        LOG_S(WARNING) << "Symbol not in the cmap of a symbolic or composite font: "
-                       << int(c) << "; font-name: " << font_name
+        LOG_S(WARNING) << "No authoritative mapping for code in a symbolic or "
+                       << "composite font: " << int(c) << "; font-name: " << font_name
                        << "; emitting glyph marker instead of encoding fallback";
 
         return "GLYPH<" + std::to_string(c) + ">";
