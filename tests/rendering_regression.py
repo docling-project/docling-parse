@@ -1,5 +1,4 @@
 import hashlib
-import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
@@ -11,6 +10,12 @@ from tests.data_utils import (
     RENDER_GROUNDTRUTH_BITMAPS_DIR,
     RENDER_GROUNDTRUTH_INSTRUCTIONS_DIR,
     RENDER_GROUNDTRUTH_PAGES_DIR,
+)
+from tests.groundtruth_io import (
+    dump_groundtruth_json,
+    groundtruth_exists,
+    load_groundtruth_json,
+    resolve_groundtruth_path,
 )
 from tests.test_regression_parse import _round_floats
 
@@ -127,15 +132,12 @@ def select_retained_bitmaps(bitmaps: list[dict[str, Any]]) -> set[int]:
 
 
 def _write_json(path: Path, data: Any) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w", encoding="utf-8") as fw:
-        json.dump(data, fw, indent=2)
-        fw.write("\n")
+    # the legacy render artifacts ended with a newline; keep that under "plain"
+    dump_groundtruth_json(path, data, trailing_newline=True)
 
 
 def _load_json(path: Path) -> Any:
-    with open(path, encoding="utf-8") as fr:
-        return json.load(fr)
+    return load_groundtruth_json(path)
 
 
 def normalized_render_instructions(result) -> dict[str, Any]:
@@ -232,11 +234,11 @@ def renderer_groundtruth_exists(doc_name: str, page_no: int) -> bool:
     if not renderer_image_path(doc_name, page_no).exists():
         return False
 
-    if not renderer_instructions_path(doc_name, page_no).exists():
+    if not groundtruth_exists(renderer_instructions_path(doc_name, page_no)):
         return False
 
     bitmaps_path = renderer_bitmaps_path(doc_name, page_no)
-    if not bitmaps_path.exists():
+    if not groundtruth_exists(bitmaps_path):
         return False
 
     for entry in _load_json(bitmaps_path).get("bitmaps", []):
@@ -249,7 +251,9 @@ def renderer_groundtruth_exists(doc_name: str, page_no: int) -> bool:
 
 def compare_render_instructions(doc_name: str, page_no: int, result) -> None:
     path = renderer_instructions_path(doc_name, page_no)
-    assert path.exists(), f"missing render instruction groundtruth: {path}"
+    assert groundtruth_exists(path), f"missing render instruction groundtruth: {path}"
+    # report the encoding actually on disk, so a failure names a real file
+    path = resolve_groundtruth_path(path)
     expected = _load_json(path)
     actual = normalized_render_instructions(result)
     if actual == expected:
@@ -555,7 +559,10 @@ BITMAP_STABLE_KEYS = [
 
 def compare_bitmap_artifacts(doc_name: str, page_no: int, result) -> None:
     bitmaps_path = renderer_bitmaps_path(doc_name, page_no)
-    assert bitmaps_path.exists(), f"missing bitmap groundtruth: {bitmaps_path}"
+    assert groundtruth_exists(bitmaps_path), (
+        f"missing bitmap groundtruth: {bitmaps_path}"
+    )
+    bitmaps_path = resolve_groundtruth_path(bitmaps_path)
 
     expected = _load_json(bitmaps_path)
     bitmaps, glyph_count = page_bitmap_artifacts(result)

@@ -24,6 +24,7 @@ from tests.constants import (
     PARSER_PAGE_RESTRICTIONS,
     SAMPLE_PDF,
 )
+from tests.groundtruth_io import groundtruth_exists, load_segmented_page
 from tests.rendering_regression import (
     ImageTolerance,
     compare_bitmap_artifacts,
@@ -618,7 +619,7 @@ def test_render_reference_documents_from_filenames():
                 GROUNDTRUTH_FOLDER, rname + f".page_no_{page_no}.py.json"
             )
 
-            if not os.path.exists(fname):
+            if not groundtruth_exists(fname):
                 err = AssertionError(f"missing groundtruth file: {fname}")
                 if first_failure is None:
                     first_failure = (err, err.__traceback__)
@@ -626,7 +627,7 @@ def test_render_reference_documents_from_filenames():
                 continue
 
             try:
-                true_page = SegmentedPdfPage.load_from_json(fname)
+                true_page = load_segmented_page(fname)
                 verify_SegmentedPdfPage(true_page, pred_page, filename=fname)
             except Exception as exc:
                 if first_failure is None:

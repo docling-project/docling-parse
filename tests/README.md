@@ -91,6 +91,126 @@ uv run python tests/update_groundtruth.py tests/test_regression_threaded_render.
 This flag updates checked regression artifacts under `tests/data`, not source
 code in the main repository.
 
+### Artifact encoding
+
+Groundtruth JSON and text-line artifacts are written compact and gzipped
+(`<name>.json.gz`, `<name>.txt.gz`). Reads accept either encoding and prefer the
+gzipped one when both are present, so a dataset revision can be migrated one
+artifact family at a time and an old checkout keeps working.
+
+`DOCLING_PARSE_GT_FORMAT` steers writes only:
+
+| value | writes |
+|---|---|
+| `gz` (default) | compact JSON, gzipped |
+| `plain` | the legacy `indent=2`, uncompressed form, byte for byte |
+
+Compression is worth it: on this corpus the parser pages shrink 4.6x and the
+render instructions 16.6x, taking the tree from ~6.0 GB to ~1.7 GB. Reading gets
+slightly *faster* rather than slower, because gunzip plus parse beats parsing
+2.5x more indented text.
+
+Two families are deliberately left uncompressed:
+
+- **`*.char.txt`, `*.word.txt`, `*.line.txt`** -- the textline exports, so a
+  refresh is reviewable as a text diff rather than an opaque pointer swap. They
+  are line-oriented, so they diff cell by cell. This costs ~223 MB (264 MB plain
+  against 40 MB gzipped) and only pays off alongside the `.gitattributes` change
+  described below.
+- **`*.delta.txt`** -- not groundtruth; written next to a failing artifact for a
+  human to read and deleted once the page passes.
+
+`render/pages` and `render/bitmap_data` are never touched either: PNG and JPEG
+payloads are already compressed.
+
+The list lives in `NEVER_COMPRESS_SUFFIXES` in `tests/groundtruth_io.py`;
+`compresses(path)` answers it for a single artifact.
+
+`tests/groundtruth_io.py` is the single place that knows about this. Use its
+helpers rather than `open()` when touching groundtruth:
+
+```python
+from tests.groundtruth_io import (
+    groundtruth_exists,      # true for either encoding
+    load_groundtruth_json,   # read, auto-detecting encoding
+    dump_groundtruth_json,   # write, following DOCLING_PARSE_GT_FORMAT
+    load_segmented_page,     # SegmentedPdfPage from either encoding
+    read_groundtruth_text,
+    write_groundtruth_text,
+    resolve_groundtruth_path,  # the path actually on disk, for error messages
+)
+```
+
+`SegmentedPdfPage.load_from_json()` opens the path itself and so cannot read a
+gzipped artifact; `load_segmented_page()` is the drop-in replacement.
+
+### Re-encoding without re-parsing
+
+Converting between the two encodings is a pure format change, so it does not
+need a parser run:
+
+```bash
+uv run python tests/tools/recompress_groundtruth.py --to gz --dry-run
+uv run python tests/tools/recompress_groundtruth.py --to gz
+uv run python tests/tools/recompress_groundtruth.py --to plain   # undo
+```
+
+Keep a re-encoding revision separate from a content revision. If both land at
+once, every file changes and a real regression becomes indistinguishable from a
+re-serialization:
+
+```bash
+# 1. content only -- same encoding, so the diff is genuine content
+DOCLING_PARSE_GT_FORMAT=plain uv run python tests/update_groundtruth.py
+#    review, publish, bump HF_DATASET_REVISION
+
+# 2. re-encode as its own revision
+uv run python tests/tools/recompress_groundtruth.py --to gz
+#    publish, bump HF_DATASET_REVISION again
+```
+
+Gzip output is written with `mtime=0`. Without that, gzip stamps the current
+time into the header and unchanged content would produce different bytes on
+every run, defeating Git LFS deduplication in the dataset repo.
+
+### Reviewing a refresh in the dataset repo
+
+Keeping the textline exports uncompressed only helps if the dataset's
+`.gitattributes` also stops routing them through Git LFS. As published it ends
+with
+
+```gitattributes
+*.txt filter=lfs diff=lfs merge=lfs -text
+```
+
+and since the last matching line wins, every `.txt` is an LFS pointer. `git
+diff` then shows only an oid and a size changing -- no more informative than the
+gzipped form:
+
+```diff
+-oid sha256:e9024f1a07d29d52ad3aa5e1a18e94db1f3a9fd32b89e39d47c472cd99071e13
+-size 18
++oid sha256:832ba8615786d74d17e69c3efe65fa35ea5404f7a2c1e260824633446e76abe1
++size 26
+```
+
+To get real text diffs, append a line that takes the textline exports back out
+of LFS (after the catch-all, so it wins):
+
+```gitattributes
+groundtruth/parser/*.py.json.char.txt !filter !diff !merge text
+groundtruth/parser/*.py.json.word.txt !filter !diff !merge text
+groundtruth/parser/*.py.json.line.txt !filter !diff !merge text
+```
+
+The largest such file is 3.5 MB, comfortably inside what the Hub accepts outside
+LFS. Storing them as ordinary Git blobs also grows the repo more slowly than LFS
+does across revisions: Git delta-compresses successive versions of a text file,
+whereas LFS stores a full copy of every version.
+
+Note that this rewrites how those paths are stored, so it takes effect for
+commits made after the change.
+
 ## Main Test Areas
 
 ### Corpus-driven (`test_regression_*.py`)
@@ -124,6 +244,9 @@ Each builds the document it is about and asserts on the result:
 ### Support modules (not collected)
 
 - `pdf_builder.py`: writes the small PDFs the self-contained tests are about.
+- `groundtruth_io.py`: the only module that knows how groundtruth artifacts are
+  encoded on disk. Stdlib-only, so `tools/` can import it too. See
+  [Artifact encoding](#artifact-encoding).
 - `rendering_regression.py`: shared helpers for image comparison, renderer
   groundtruth and update logic. The self-contained tests use its measurement
   helpers (`region_image`, `coverage_ratio`, `center_color`) without touching
@@ -301,9 +424,10 @@ The test data lives in a Hugging Face dataset repository:
 docling-project/regression-dataset-for-docling-parse
 ```
 
-The pinned revision is defined in `tests/data_utils.py` as
-`HF_DATASET_REVISION`. Pytest calls `ensure_test_data_downloaded()` from
-`tests/conftest.py` before tests start.
+The pinned revision is defined in `tests/constants.py` as
+`HF_DATASET_REVISION`, and consumed by `ensure_test_data_downloaded()` in
+`tests/data_utils.py`, which pytest calls from `tests/conftest.py` before tests
+start.
 
 Current behavior:
 
@@ -322,8 +446,8 @@ The downloaded dataset is organized as follows:
 ```text
 tests/data/
   regression/             source PDFs used by parser and renderer regressions
-  groundtruth/parser/     parser JSON and text-line groundtruth
-  groundtruth/render/     renderer PNGs, instruction JSON, and bitmap metadata
+  groundtruth/parser/     parser JSON (gzipped) and text-line exports (plain)
+  groundtruth/render/     renderer PNGs, instruction JSON (gzipped), bitmap metadata
   groundtruth-legacy/     groundtruth of documents that left the corpus
   cases/                  focused case fixtures
   errors/                 failure and error-handling fixtures
@@ -350,10 +474,15 @@ Renderer artifact naming follows this pattern:
 
 ```text
 pages/<pdf-name>.page_no_<n>.full_page.png
-instructions/<pdf-name>.page_no_<n>.instructions.json
-bitmaps/<pdf-name>.page_no_<n>.bitmaps.json
+instructions/<pdf-name>.page_no_<n>.instructions.json.gz
+bitmaps/<pdf-name>.page_no_<n>.bitmaps.json.gz
 bitmap_data/<pdf-name>.page_no_<n>.bitmap_<i>.<png|jpg|bin>
 ```
+
+The `.gz` suffix is present under the default `DOCLING_PARSE_GT_FORMAT=gz`; the
+`.png`, `.jpg` and `.bin` payloads and the parser textline exports are never
+gzipped. `prune_groundtruth.py` matches on the `<pdf-name>.page_no_<n>` prefix,
+so it handles either encoding without special-casing.
 
 The per-page bitmap JSON stores metadata and hashes for every bitmap; the
 `bitmap_data/` files hold the bytes of the retained subset only.
@@ -361,21 +490,50 @@ The per-page bitmap JSON stores metadata and hashes for every bitmap; the
 ## Working With Dataset Changes
 
 Because `tests/data` is a downloaded snapshot, it is not a nested Git checkout
-by default. After running tests with `--update-groundtruth`, inspect changed
-files in `tests/data` before publishing a new dataset revision.
+by default -- it is gitignored and has no `.git` of its own, so `git status` and
+`git diff` cannot tell you what a refresh changed. Inspect it explicitly before
+publishing a new dataset revision.
 
-Recommended review flow:
+Do **not** review by modification time. `--update-groundtruth` rewrites every
+artifact it covers whether or not the content changed, so `find -newer` reports
+all of them and tells you nothing about the blast radius.
+
+Compare content hashes instead:
 
 ```bash
-find tests/data/groundtruth -type f -newer <marker>
+S=/tmp/gt-review; mkdir -p $S
+
+# before
+find tests/data/groundtruth/parser -type f | sort | xargs shasum -a 1 > $S/before.sha1
+
+uv run python tests/update_groundtruth.py
+
+# after
+find tests/data/groundtruth/parser -type f | sort | xargs shasum -a 1 > $S/after.sha1
+
+# what genuinely changed (CHG), and what is new (NEW)
+join -j 2 -a 2 -e MISSING -o 0,1.1,2.1 \
+     <(sort -k2 $S/before.sha1) <(sort -k2 $S/after.sha1) \
+  | awk '$2!=$3 {print ($2=="MISSING"?"NEW  ":"CHG  ") $1}'
 ```
 
-or use a managed local checkout of the Hugging Face dataset when doing larger
-dataset updates.
+The `-e MISSING` matters: without it `awk` collapses the empty field and
+misreports new files as changed. Run the same over
+`tests/data/groundtruth/render` when refreshing renderer groundtruth.
+
+A run that changes far more files than the fix you made would explain is the
+signal to stop and look, not to publish.
+
+There is no local undo -- the manifest says what changed but restores nothing.
+Recovery is a re-download of the still-pinned revision
+(`DOCLING_PARSE_TEST_DATA_FORCE_DOWNLOAD=1`), which is cheaper than keeping a
+copy of a multi-gigabyte tree. Alternatively, use a managed local checkout of
+the Hugging Face dataset when doing larger dataset updates.
 
 Do not commit Hugging Face credentials, authenticated remotes, or tokens into
 this repository. Publishing dataset changes should use local credentials from
 the environment, for example `HF_TOKEN` or `HUGGINGFACE_HUB_TOKEN`.
 
 After publishing a new dataset revision, update `HF_DATASET_REVISION` in
-`tests/data_utils.py` so CI and local runs use the intended snapshot.
+`tests/constants.py` so CI and local runs use the intended snapshot.
+`tests/data_utils.py` imports it from there and does the download.

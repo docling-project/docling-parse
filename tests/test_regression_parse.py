@@ -31,6 +31,15 @@ from docling_parse.pdf_parser import (
 )
 from tests.constants import PARSER_PAGE_RESTRICTIONS, SAMPLE_PDF
 from tests.data_utils import PARSER_GROUNDTRUTH_DIR
+from tests.groundtruth_io import (
+    dump_groundtruth_json,
+    groundtruth_exists,
+    load_groundtruth_json,
+    load_segmented_page,
+    read_groundtruth_text,
+    resolve_groundtruth_path,
+    write_groundtruth_text,
+)
 
 
 def write_textline_delta(lines: List[str], filename: str, separator: str) -> None:
@@ -49,16 +58,10 @@ def _round_floats(obj, ndigits=3):
     return obj
 
 
-def save_as_json_rounded(page: SegmentedPdfPage, filename, indent=2, ndigits=3):
+def save_as_json_rounded(page: SegmentedPdfPage, filename, ndigits=3):
     """Save SegmentedPdfPage as JSON with floats rounded to ndigits."""
-    from pathlib import Path
-
-    if isinstance(filename, str):
-        filename = Path(filename)
-    filename.parent.mkdir(parents=True, exist_ok=True)
     out = _round_floats(page.export_to_dict(), ndigits=ndigits)
-    with open(filename, "w", encoding="utf-8") as fw:
-        json.dump(out, fw, indent=indent)
+    dump_groundtruth_json(filename, out)
 
 
 GROUNDTRUTH_FOLDER = os.fspath(PARSER_GROUNDTRUTH_DIR)
@@ -630,7 +633,7 @@ def test_reference_documents_from_filenames(update_groundtruth: bool):
                 pred_page = pdf_doc.get_page(page_no)
                 print(f" -> Page {page_no} has {len(pred_page.textline_cells)} cells.")
 
-                if update_groundtruth or (not os.path.exists(fname)):
+                if update_groundtruth or (not groundtruth_exists(fname)):
                     save_as_json_rounded(pred_page, fname)
 
                     for unit in [
@@ -646,8 +649,7 @@ def test_reference_documents_from_filenames(update_groundtruth: bool):
                             add_text_direction=False,
                         )
                         _fname = fname + f".{unit}.txt"
-                        with open(_fname, "w") as fw:
-                            fw.write(SPECIAL_SEPERATOR.join(lines))
+                        write_groundtruth_text(_fname, SPECIAL_SEPERATOR.join(lines))
                 else:
                     # print(f"loading from {fname}")
 
@@ -667,9 +669,8 @@ def test_reference_documents_from_filenames(update_groundtruth: bool):
                         _fname = fname + f".{unit}.txt"
                         delta_fname = fname + f".{unit}.delta.txt"
 
-                        with open(_fname) as fr:
-                            content = fr.read()
-                            lines = content.split(SPECIAL_SEPERATOR) if content else []
+                        content = read_groundtruth_text(_fname)
+                        lines = content.split(SPECIAL_SEPERATOR) if content else []
 
                         len_true_lines = len(lines)
                         len_pred_lines = len(_lines)
@@ -696,7 +697,7 @@ def test_reference_documents_from_filenames(update_groundtruth: bool):
                             if os.path.exists(delta_fname):
                                 os.remove(delta_fname)
 
-                    true_page = SegmentedPdfPage.load_from_json(fname)
+                    true_page = load_segmented_page(fname)
                     for unit in [
                         TextCellUnit.CHAR,
                         TextCellUnit.WORD,
@@ -1189,7 +1190,7 @@ def test_annotations_match_groundtruth():
         pdf_path = f"tests/data/regression/{pdf_file}"
         groundtruth_path = PARSER_GROUNDTRUTH_DIR / f"{pdf_file}.json"
 
-        if not os.path.exists(pdf_path) or not os.path.exists(groundtruth_path):
+        if not os.path.exists(pdf_path) or not groundtruth_exists(groundtruth_path):
             continue
 
         # Load document
@@ -1197,9 +1198,8 @@ def test_annotations_match_groundtruth():
         pred_annotations = pdf_doc.get_annotations()
 
         # Load groundtruth
-        with open(groundtruth_path) as fr:
-            true_doc = json.load(fr)
-            true_annotations = true_doc["annotations"]
+        true_doc = load_groundtruth_json(groundtruth_path)
+        true_annotations = true_doc["annotations"]
 
         # Convert PdfAnnotations to dict for comparison
         pred_dict = {
