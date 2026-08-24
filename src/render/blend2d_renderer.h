@@ -2802,7 +2802,7 @@ namespace pdflib
             text_draw_adjustment adjustment =
               calculate_glyph_bbox_adjustment(font, gb, instr, geom.size);
 
-            BLBox adjusted_render_box;
+            BLBox adjusted_render_box{};
             if (adjustment.has_render_bbox)
               {
                 adjusted_render_box.x0 =

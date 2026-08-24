@@ -1302,8 +1302,14 @@ namespace pdflib
         // auto annot_json = to_json(annot);
         // LOG_S(INFO) << "annot " << l << ": " << annot_json.dump(2);
 
+        // /Type is optional in an annotation dictionary (ISO 32000-1,
+        // 12.5.2, Table 164): membership in the page /Annots array plus a
+        // /Subtype is what makes it an annotation. Requiring /Type == /Annot
+        // dropped legal annotations that omit it -- e.g. a /FreeText stamp
+        // whose /Type the producer never wrote -- so only reject a /Type that
+        // is present and says something other than /Annot.
         auto [has_type, type] = to_string(annot, "/Type");
-        if((not has_type) or (type!="/Annot"))
+        if(has_type and type!="/Annot")
           {
             continue;
           }

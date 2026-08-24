@@ -298,7 +298,7 @@ namespace pdflib
       {
         // Preserve the existing bounds behavior of qpdf_pages.at(page_ind),
         // but avoid serializing an already standalone one-page PDF.
-        qpdf_pages.at(page_ind);
+        (void)qpdf_pages.at(page_ind);
 
         result.first = page_ind;
         result.second = buffer;
