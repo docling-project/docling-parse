@@ -55,7 +55,7 @@ def _human(n: int) -> str:
     for unit in ("B", "KB", "MB", "GB"):
         if abs(n) < 1024 or unit == "GB":
             return f"{n:,.1f} {unit}" if unit != "B" else f"{n:,} B"
-        n /= 1024.0
+        n = int(float(n) / 1024.0)
     return f"{n:.1f} GB"
 
 
