@@ -42,6 +42,12 @@ namespace pdflib
     // methods used to interprete the stream
     void interprete(std::vector<qpdf_stream_instruction>& parameters);
 
+    // Establishes the matrix this stream is interpreted under, so that a
+    // stream living in its own space -- an annotation appearance -- emits
+    // instructions already in page coordinates. Must be called before
+    // interprete().
+    void set_base_matrix(const std::array<double, 6>& matrix);
+
   private:
 
     bool update_stack(std::vector<pdf_state<GLOBAL> >& stack_,
@@ -75,6 +81,13 @@ namespace pdflib
     void begin_inline_image();
     void read_inline_image_header(std::vector<qpdf_stream_instruction>& parameters);
     void read_inline_image_data(const qpdf_stream_instruction& instruction);
+
+    // Pushes the initial graphics state when nothing has yet.
+    void ensure_stack();
+
+    // Resolves a /CS name that is not a device space against the page's
+    // /ColorSpace resources (ISO 32000-1, 8.9.7, Table 93).
+    void resolve_inline_color_space(const std::string& name);
     void end_inline_image();
 
     void do_form(const std::string& xobj_name,
@@ -124,6 +137,11 @@ namespace pdflib
       bool image_mask = false;
       ccitt::decode_parameters ccitt_params;
       std::string data;
+
+      // Set when /CS named an /Indexed resource: the palette flattened to RGB,
+      // so the decoder can treat it as a /DeviceRGB lookup.
+      std::shared_ptr<std::vector<uint8_t>> indexed_rgb_palette;
+      int indexed_hival = -1;
     };
 
   private:
@@ -251,26 +269,39 @@ namespace pdflib
     decoder.decode(qpdf_content);
   }
 
+  void pdf_decoder<STREAM>::ensure_stack()
+  {
+    if(stack.size()!=0) { return; }
+
+    pdf_state<GLOBAL> state(config,
+			    page_cells,
+			    page_shapes,
+			    page_images,
+			    page_fonts,
+			    page_grphs,
+			    page_colorspaces,
+			    instructions);
+
+    stack.push_back(state);
+  }
+
+  void pdf_decoder<STREAM>::set_base_matrix(const std::array<double, 6>& matrix)
+  {
+    ensure_stack();
+
+    current_global_state().cm(matrix);
+
+    // Pattern space is anchored to the space this stream starts in, which is
+    // now the one the matrix establishes.
+    base_ctm_ = current_global_state().trafo_matrix;
+    base_ctm_valid_ = true;
+  }
+
   void pdf_decoder<STREAM>::interprete(std::vector<qpdf_stream_instruction>& parameters)
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    // initialise the stack
-    if(stack.size()==0)
-      {
-        //stack.clear();
-
-        pdf_state<GLOBAL> state(config,
-				page_cells,
-				page_shapes,
-				page_images,
-				page_fonts,
-				page_grphs,
-				page_colorspaces,
-				instructions);
-
-        stack.push_back(state);
-      }
+    ensure_stack();
 
     interprete_stream(parameters);
   }
@@ -580,6 +611,7 @@ namespace pdflib
         else if(key == "/ColorSpace" and value.isName())
           {
             inline_image.color_space = canonical_color_space(value.getName());
+            resolve_inline_color_space(value.getName());
           }
         else if(key == "/Filter")
           {
@@ -681,6 +713,66 @@ namespace pdflib
     inline_image.has_data = true;
   }
 
+  void pdf_decoder<STREAM>::resolve_inline_color_space(const std::string& name)
+  {
+    // An inline image may name a colour space from the page's /ColorSpace
+    // resources instead of spelling out a device space (ISO 32000-1, 8.9.7,
+    // Table 93). Leaving the bare name in place made the decoder report an
+    // unsupported colour space and drop the image: a figure drawn as hundreds
+    // of small /Indexed inline images came out as the flat background it was
+    // painted on.
+    if(name == "/G" or name == "/RGB" or name == "/CMYK" or name == "/I" or
+       name == "/DeviceGray" or name == "/DeviceRGB" or name == "/DeviceCMYK")
+      {
+        return;
+      }
+
+    if(not page_colorspaces or page_colorspaces->count(name) != 1)
+      {
+        LOG_S(WARNING) << "inline image names colour space " << name
+                       << ", which is not in the /ColorSpace resources";
+        return;
+      }
+
+    auto& colorspace = (*page_colorspaces)[name];
+
+    std::vector<uint8_t> palette;
+    if(colorspace.build_indexed_rgb_palette(palette))
+      {
+        // The palette arrives already converted, whatever the base space was,
+        // so the image is an /Indexed image over /DeviceRGB from here on.
+        inline_image.color_space = "/Indexed";
+        inline_image.indexed_hival =
+          static_cast<int>(palette.size() / 3) - 1;
+        inline_image.indexed_rgb_palette =
+          std::make_shared<std::vector<uint8_t>>(std::move(palette));
+
+        LOG_S(INFO) << "inline image colour space " << name
+                    << ": /Indexed with " << (inline_image.indexed_hival + 1)
+                    << " entries";
+        return;
+      }
+
+    // Not indexed: the component count is enough to pick a device space, which
+    // is what every non-indexed family reduces to for sample decoding.
+    switch(colorspace.get_num_components())
+      {
+      case 1: { inline_image.color_space = "/DeviceGray"; break; }
+      case 3: { inline_image.color_space = "/DeviceRGB";  break; }
+      case 4: { inline_image.color_space = "/DeviceCMYK"; break; }
+      default:
+        {
+          LOG_S(WARNING) << "inline image colour space " << name
+                         << " has " << colorspace.get_num_components()
+                         << " components; leaving it unresolved";
+          return;
+        }
+      }
+
+    LOG_S(INFO) << "inline image colour space " << name << " -> "
+                << inline_image.color_space;
+  }
+
   void pdf_decoder<STREAM>::end_inline_image()
   {
     if(not inline_image.active)
@@ -714,6 +806,8 @@ namespace pdflib
       inline_image.image_mask,
       inline_image.ccitt_params,
       stream_data,
+      inline_image.indexed_hival,
+      inline_image.indexed_rgb_palette,
       current_shape_state().get_clip_state());
 
     inline_image = inline_image_entry();

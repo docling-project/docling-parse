@@ -43,6 +43,16 @@ namespace pdflib
     bool map_to_rgb(const std::vector<double>& comps,
                     std::array<int, 3>& rgb) const;
 
+    // Flattens an /Indexed palette into (hival + 1) RGB triples.
+    //
+    // Every index goes through map_to_rgb(), so a base space of any family --
+    // ICCBased, Lab, a Separation with a tint transform -- comes out already
+    // converted. An image decoder handed this can treat the result as a plain
+    // /DeviceRGB palette instead of reimplementing the base space.
+    //
+    // False when this is not an /Indexed space or its palette is unusable.
+    bool build_indexed_rgb_palette(std::vector<uint8_t>& palette) const;
+
   private:
 
     void parse(QPDFObjectHandle obj, int depth);
@@ -405,6 +415,35 @@ namespace pdflib
       }
 
     return gray_to_rgb(1.0 - tint);
+  }
+
+  bool pdf_resource<PAGE_COLORSPACE>::build_indexed_rgb_palette(
+      std::vector<uint8_t>& palette) const
+  {
+    palette.clear();
+
+    if(family_ != COLOR_SPACE_INDEXED or base_ == nullptr or hival_ < 0)
+      {
+        return false;
+      }
+
+    palette.reserve(static_cast<std::size_t>(hival_ + 1) * 3);
+
+    for(int index = 0; index <= hival_; index++)
+      {
+        std::array<int, 3> rgb = {0, 0, 0};
+        if(not map_to_rgb({static_cast<double>(index)}, rgb))
+          {
+            palette.clear();
+            return false;
+          }
+
+        palette.push_back(static_cast<uint8_t>(rgb[0]));
+        palette.push_back(static_cast<uint8_t>(rgb[1]));
+        palette.push_back(static_cast<uint8_t>(rgb[2]));
+      }
+
+    return true;
   }
 
   bool pdf_resource<PAGE_COLORSPACE>::map_to_rgb(const std::vector<double>& comps,

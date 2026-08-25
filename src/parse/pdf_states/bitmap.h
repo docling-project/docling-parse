@@ -46,6 +46,8 @@ namespace pdflib
                          bool image_mask,
                          const ccitt::decode_parameters& ccitt_params,
                          std::shared_ptr<Buffer> stream_data,
+                         int indexed_hival,
+                         std::shared_ptr<std::vector<uint8_t>> indexed_rgb_palette,
                          clip_state_instruction clip_state = clip_state_instruction());
 
   private:
@@ -286,6 +288,8 @@ namespace pdflib
       bool image_mask,
       const ccitt::decode_parameters& ccitt_params,
       std::shared_ptr<Buffer> stream_data,
+      int indexed_hival,
+      std::shared_ptr<std::vector<uint8_t>> indexed_rgb_palette,
       clip_state_instruction clip_state)
   {
     if(not config.keep_bitmaps) { LOG_S(WARNING) << "skipping " << __FUNCTION__; return; }
@@ -305,6 +309,15 @@ namespace pdflib
     image.color_space        = color_space;
     image.filters            = filters;
     image.raw_stream_data    = stream_data;
+
+    // A /CS that named an /Indexed resource arrives with its palette already
+    // flattened to RGB, so the expansion below is the ordinary /DeviceRGB one.
+    if(indexed_rgb_palette and not indexed_rgb_palette->empty())
+      {
+        image.indexed_hival   = indexed_hival;
+        image.indexed_base_cs = "/DeviceRGB";
+        image.indexed_palette = indexed_rgb_palette;
+      }
 
     // An inline image carries its own /Filter chain (ISO 32000-1, 8.9.7) and
     // nothing has defiltered it yet. Undo the transport filters in front of
@@ -1437,6 +1450,7 @@ namespace pdflib
                               source,
                               std::move(clip_state));
     binstr.set_blend_mode(grph_state.get_blend_mode());
+    binstr.set_filters(image.filters);
 
     instructions.add_bitmap_instruction(std::move(binstr));
   }

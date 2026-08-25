@@ -19,6 +19,11 @@ namespace pdflib
 
     std::unordered_map<uint32_t, std::string>& get_numb_to_utf8();
 
+    // Code -> glyph name of this base encoding. The renderer needs the name
+    // to find the glyph in an embedded font program whose own encoding
+    // disagrees with the one the font dictionary declares.
+    std::unordered_map<uint32_t, std::string>& get_numb_to_name();
+
     template<typename glyphs_type>
     void initialise(font_encoding_name name_, 
                     std::string file_name,
@@ -42,6 +47,11 @@ namespace pdflib
   std::unordered_map<uint32_t, std::string>& font_encoding::get_numb_to_utf8()
   {
     return numb_to_utf8;
+  }
+
+  std::unordered_map<uint32_t, std::string>& font_encoding::get_numb_to_name()
+  {
+    return numb_to_name;
   }
 
   template<typename glyphs_type>

@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 import pytest
 
@@ -44,7 +45,28 @@ def render_visualizations(request) -> str:
     return request.config.getoption("--render-visualizations")
 
 
+def _selection_needs_corpus(config) -> bool:
+    """Whether the selected tests can reach the regression corpus.
+
+    Only a selection naming `test_unit_*` files exclusively is known not to:
+    those build the document they are about. Everything else -- a bare
+    `pytest`, a directory, a `-k` expression -- is assumed to need the corpus,
+    so the cheap case has to prove itself and a mistake here costs a download
+    rather than a confusing failure.
+    """
+    paths = [arg for arg in config.args if not arg.startswith("-")]
+    if not paths:
+        return True
+
+    return not all(
+        Path(path.split("::")[0]).name.startswith("test_unit_") for path in paths
+    )
+
+
 def pytest_sessionstart(session) -> None:
+    if not _selection_needs_corpus(session.config):
+        return
+
     force = os.getenv("DOCLING_PARSE_TEST_DATA_FORCE_DOWNLOAD", "").lower() in {
         "1",
         "true",
