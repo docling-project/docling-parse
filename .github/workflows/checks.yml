@@ -76,6 +76,6 @@ jobs:
           # change. Documented in tests/README.md.
           DOCLING_PARSE_CJK_FALLBACK_FONT: /usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc
         run: |
-          uv run pytest -v tests
+          uv run pytest -v tests --ignore-glob='tests/test_regression_*.py'
       - name: Build with uv
         run: uv build

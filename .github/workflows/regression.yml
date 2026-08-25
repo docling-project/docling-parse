@@ -1,0 +1,54 @@
+on:
+  workflow_call:
+
+concurrency:
+  group: regression-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.run_id }}
+  cancel-in-progress: true
+
+env:
+  CMAKE_BUILD_TYPE: Debug
+
+jobs:
+  run-regression:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system fonts
+        # See checks.yml for why these packages are pinned.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            fonts-dejavu-core \
+            fonts-liberation2 \
+            fonts-freefont-ttf \
+            fonts-urw-base35 \
+            fonts-noto-core \
+            fonts-noto-cjk
+          fc-cache -f
+          fc-list :lang=ko file
+          if [ ! -f /usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc ]; then
+            echo "NotoSansCJK-Regular.ttc is not where DOCLING_PARSE_CJK_FALLBACK_FONT expects it:"
+            dpkg -L fonts-noto-cjk | grep -E '\.(ttc|otf|ttf)$' || true
+            exit 1
+          fi
+          test -n "$(fc-list :lang=ko file)"
+      - name: Install uv and set the python version
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: '3.13'
+      - name: Cache HF regression corpus
+        # HF_DATASET_REVISION in tests/constants.py is a pinned commit hash, so
+        # hashing that file gives us automatic invalidation on bumps.
+        uses: actions/cache@v4
+        with:
+          path: tests/data
+          key: hf-regression-${{ hashFiles('tests/constants.py') }}
+      - name: Sync and install with uv
+        run: |
+          uv sync --frozen --all-extras
+          ls docling_parse/pdf_parsers*.so
+      - name: Regression tests
+        env:
+          DOCLING_PARSE_CJK_FALLBACK_FONT: /usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc
+        run: |
+          uv run pytest -v tests/test_regression_*.py

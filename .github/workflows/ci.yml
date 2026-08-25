@@ -24,6 +24,9 @@ jobs:
   code-checks:
     if: ${{ github.event_name == 'push' || (github.event.pull_request.head.repo.full_name != 'docling-project/docling-parse' && github.event.pull_request.head.repo.full_name != 'docling-project/docling-parse') }}
     uses: ./.github/workflows/checks.yml
+  regression-tests:
+    if: ${{ github.event_name == 'push' || (github.event.pull_request.head.repo.full_name != 'docling-project/docling-parse' && github.event.pull_request.head.repo.full_name != 'docling-project/docling-parse') }}
+    uses: ./.github/workflows/regression.yml
   build-wheels:
     if: ${{ github.event_name == 'push' || (github.event.pull_request.head.repo.full_name != 'docling-project/docling-parse' && github.event.pull_request.head.repo.full_name != 'docling-project/docling-parse') }}
     uses: ./.github/workflows/wheels.yml
