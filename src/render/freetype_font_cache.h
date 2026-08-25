@@ -1,7 +1,7 @@
 //-*-C++-*-
 
-#ifndef PDF_FREETYPE_EMBEDDED_FONT_CACHE_H
-#define PDF_FREETYPE_EMBEDDED_FONT_CACHE_H
+#ifndef PDF_FREETYPE_FONT_CACHE_H
+#define PDF_FREETYPE_FONT_CACHE_H
 
 #include <blend2d/blend2d.h>
 
@@ -25,10 +25,19 @@
 
 namespace pdflib
 {
-  // Loads the embedded font program formats that Blend2D rejects — Type 1
-  // (/FontFile) and bare CFF (/FontFile3 /Type1C, /CIDFontType0C) — through
-  // FreeType, and converts glyph outlines into BLPath objects so that Blend2D
-  // still performs all rasterization.
+  // Loads the font programs that Blend2D rejects through FreeType, and
+  // converts glyph outlines into BLPath objects so that Blend2D still
+  // performs all rasterization. Two sources feed it:
+  //
+  //   * embedded programs — Type 1 (/FontFile) and bare CFF (/FontFile3
+  //     /Type1C, /CIDFontType0C) — via build_text_path();
+  //   * system font FILES via build_text_path_from_file(), for the faces the
+  //     resolver picked but Blend2D could not open. Our pinned Blend2D
+  //     rejects CFF2 (OpenType variable fonts with CFF outlines) with
+  //     BL_ERROR_FONT_CFF_INVALID_DATA, and distributions that ship Noto CJK
+  //     only as the VF build therefore have no CJK face the resolver can
+  //     load at all: every Hangul syllable draws as .notdef. FreeType reads
+  //     those files, so they are drawn from here instead.
   //
   // Glyph identity is resolved in decreasing order of authority:
   //   1. CID with identity CIDToGIDMap — the CID is the glyph index;
@@ -44,15 +53,22 @@ namespace pdflib
   // FreeType is not thread-safe, so every entry point serializes on one
   // mutex; decomposed glyph paths are cached per face (in font units) to keep
   // the critical section short after warm-up.
-  class freetype_embedded_font_cache
+  class freetype_font_cache
   {
   public:
 
-    freetype_embedded_font_cache();
-    ~freetype_embedded_font_cache();
+    freetype_font_cache();
+    ~freetype_font_cache();
 
-    freetype_embedded_font_cache(const freetype_embedded_font_cache&) = delete;
-    freetype_embedded_font_cache& operator=(const freetype_embedded_font_cache&) = delete;
+    freetype_font_cache(const freetype_font_cache&) = delete;
+    freetype_font_cache& operator=(const freetype_font_cache&) = delete;
+
+    // The process-wide cache used for SYSTEM font files. System faces are
+    // shared by every page, and a CJK collection is tens of megabytes, so
+    // opening one per renderer would be paid on every page; the per-glyph
+    // path cache is shared along with it. Embedded programs stay on the
+    // per-renderer instance: they are per-document and short-lived.
+    static std::shared_ptr<freetype_font_cache> default_cache();
 
     // False when FT_Init_FreeType failed; every build_text_path call then
     // returns false.
@@ -71,6 +87,30 @@ namespace pdflib
                          double size,
                          BLPath& path,
                          double* out_advance = nullptr);
+
+    // Same, for a face read from a system font FILE. Glyph identity here is
+    // the Unicode cmap and nothing else: the file is a substituted face, so
+    // the PDF's character codes and glyph names say nothing about it, and the
+    // text of the cell is the only thing that maps.
+    bool build_text_path_from_file(const std::string& file_path,
+                                   uint32_t face_index,
+                                   const std::string& utf8_text,
+                                   double size,
+                                   BLPath& path,
+                                   double* out_advance = nullptr);
+
+    // How many codepoints of `utf8_text` the file's face has a glyph for, and
+    // how many there are. This replaces the resolver's Blend2D shaping probe
+    // for candidates Blend2D cannot open, so such a file can still be ranked
+    // instead of silently dropping out of the running.
+    std::size_t file_face_coverage(const std::string& file_path,
+                                   uint32_t face_index,
+                                   const std::string& utf8_text,
+                                   std::size_t& total);
+
+    // Whether the file can be opened at all. Used to reject a fallback
+    // candidate neither backend can draw before the caller commits to it.
+    bool can_open_file(const std::string& file_path, uint32_t face_index);
 
   private:
 
@@ -95,6 +135,24 @@ namespace pdflib
 
     face_entry& get_face_entry(const std::shared_ptr<const embedded_font_blob>& blob);
 
+    // Face for a system font file, keyed "file:<path>#<index>". Returns
+    // nullptr when the file cannot be opened or the cache is full.
+    face_entry* get_file_face_entry(const std::string& file_path, uint32_t face_index);
+
+    // Unicode-cmap glyph indices for `utf8_text`; false when the face has no
+    // Unicode cmap or lacks a glyph for any codepoint.
+    bool resolve_unicode_glyph_indices(face_entry& entry,
+                                       const std::string& utf8_text,
+                                       std::vector<FT_UInt>& glyph_indices);
+
+    // Emits the run of `glyph_indices` into `path`, scaled from font units
+    // into Blend2D text space at em size `size`.
+    bool emit_glyph_run(face_entry& entry,
+                        const std::vector<FT_UInt>& glyph_indices,
+                        double size,
+                        BLPath& path,
+                        double* out_advance);
+
     // Resolves the glyph indices of the cell; returns false when any
     // character cannot be mapped.
     bool resolve_glyph_indices(face_entry& entry,
@@ -114,12 +172,27 @@ namespace pdflib
 
     static std::vector<uint32_t> decode_utf8(const std::string& text);
 
+    // A CJK collection costs tens of megabytes of mapped file per open face,
+    // so the number of system files kept open is bounded. Past the bound new
+    // files are refused rather than evicted: callers already handle "FreeType
+    // cannot draw this" by falling back, whereas evicting a face would
+    // invalidate the FT_Face pointers held in `faces_`.
+    static constexpr std::size_t max_file_faces = 24;
+
     FT_Library library_ = nullptr;
     std::mutex mutex_;
     std::unordered_map<std::string, face_entry> faces_;
+    std::size_t file_face_count_ = 0;
   };
 
-  inline freetype_embedded_font_cache::freetype_embedded_font_cache()
+  inline std::shared_ptr<freetype_font_cache> freetype_font_cache::default_cache()
+  {
+    static std::shared_ptr<freetype_font_cache> cache =
+      std::make_shared<freetype_font_cache>();
+    return cache;
+  }
+
+  inline freetype_font_cache::freetype_font_cache()
   {
     const FT_Error error = FT_Init_FreeType(&library_);
     if(error != 0)
@@ -129,7 +202,7 @@ namespace pdflib
       }
   }
 
-  inline freetype_embedded_font_cache::~freetype_embedded_font_cache()
+  inline freetype_font_cache::~freetype_font_cache()
   {
     for(auto& itr : faces_)
       {
@@ -146,12 +219,12 @@ namespace pdflib
       }
   }
 
-  inline bool freetype_embedded_font_cache::available() const
+  inline bool freetype_font_cache::available() const
   {
     return library_ != nullptr;
   }
 
-  inline bool freetype_embedded_font_cache::build_text_path(
+  inline bool freetype_font_cache::build_text_path(
       const std::shared_ptr<const embedded_font_blob>& blob,
       const std::string& utf8_text,
       int64_t char_code,
@@ -179,6 +252,95 @@ namespace pdflib
         return false;
       }
 
+    return emit_glyph_run(entry, glyph_indices, size, path, out_advance);
+  }
+
+  inline bool freetype_font_cache::build_text_path_from_file(
+      const std::string& file_path,
+      uint32_t face_index,
+      const std::string& utf8_text,
+      double size,
+      BLPath& path,
+      double* out_advance)
+  {
+    if(library_ == nullptr or file_path.empty() or size <= 0.0)
+      {
+        return false;
+      }
+
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    face_entry* entry = get_file_face_entry(file_path, face_index);
+    if(entry == nullptr)
+      {
+        return false;
+      }
+
+    std::vector<FT_UInt> glyph_indices;
+    if(not resolve_unicode_glyph_indices(*entry, utf8_text, glyph_indices))
+      {
+        return false;
+      }
+
+    return emit_glyph_run(*entry, glyph_indices, size, path, out_advance);
+  }
+
+  inline std::size_t freetype_font_cache::file_face_coverage(
+      const std::string& file_path,
+      uint32_t face_index,
+      const std::string& utf8_text,
+      std::size_t& total)
+  {
+    total = 0;
+    if(library_ == nullptr or file_path.empty())
+      {
+        return 0;
+      }
+
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    face_entry* entry = get_file_face_entry(file_path, face_index);
+    if(entry == nullptr)
+      {
+        return 0;
+      }
+
+    if(FT_Select_Charmap(entry->face, FT_ENCODING_UNICODE) != 0)
+      {
+        return 0;
+      }
+
+    const std::vector<uint32_t> codepoints = decode_utf8(utf8_text);
+    total = codepoints.size();
+
+    std::size_t covered = 0;
+    for(uint32_t codepoint : codepoints)
+      {
+        if(FT_Get_Char_Index(entry->face, codepoint) != 0) { covered++; }
+      }
+
+    return covered;
+  }
+
+  inline bool freetype_font_cache::can_open_file(const std::string& file_path,
+                                                 uint32_t face_index)
+  {
+    if(library_ == nullptr or file_path.empty())
+      {
+        return false;
+      }
+
+    std::lock_guard<std::mutex> lock(mutex_);
+    return get_file_face_entry(file_path, face_index) != nullptr;
+  }
+
+  inline bool freetype_font_cache::emit_glyph_run(
+      face_entry& entry,
+      const std::vector<FT_UInt>& glyph_indices,
+      double size,
+      BLPath& path,
+      double* out_advance)
+  {
     const double units_per_em =
       (entry.face->units_per_EM > 0) ? entry.face->units_per_EM : 1000.0;
     const double scale = size / units_per_em;
@@ -225,16 +387,14 @@ namespace pdflib
 
     if(out_advance != nullptr)
       {
-        const double units_per_em2 =
-          (entry.face->units_per_EM > 0) ? entry.face->units_per_EM : 1000.0;
-        *out_advance = pen_x * (size / units_per_em2);
+        *out_advance = pen_x * scale;
       }
 
     return true;
   }
 
-  inline freetype_embedded_font_cache::face_entry&
-  freetype_embedded_font_cache::get_face_entry(
+  inline freetype_font_cache::face_entry&
+  freetype_font_cache::get_face_entry(
       const std::shared_ptr<const embedded_font_blob>& blob)
   {
     auto itr = faces_.find(blob->get_cache_key());
@@ -281,7 +441,90 @@ namespace pdflib
     return inserted_itr->second;
   }
 
-  inline bool freetype_embedded_font_cache::resolve_glyph_indices(
+  inline freetype_font_cache::face_entry*
+  freetype_font_cache::get_file_face_entry(const std::string& file_path,
+                                           uint32_t face_index)
+  {
+    const std::string key =
+      "file:" + file_path + "#" + std::to_string(face_index);
+
+    auto itr = faces_.find(key);
+    if(itr != faces_.end())
+      {
+        return (itr->second.failed or itr->second.face == nullptr)
+                 ? nullptr : &itr->second;
+      }
+
+    if(file_face_count_ >= max_file_faces)
+      {
+        LOG_S(WARNING) << "freetype font cache: system face limit reached"
+                       << " (" << max_file_faces << "), not opening"
+                       << " path=`" << file_path << "`";
+        return nullptr;
+      }
+
+    face_entry entry;
+    const FT_Error error = FT_New_Face(library_,
+                                       file_path.c_str(),
+                                       static_cast<FT_Long>(face_index),
+                                       &entry.face);
+    entry.failed = (error != 0 or entry.face == nullptr);
+
+    if(entry.failed)
+      {
+        entry.face = nullptr;
+        LOG_S(WARNING) << "freetype font cache: could not open system font file"
+                       << " path=`" << file_path << "`"
+                       << " face_index=" << face_index
+                       << " ft_error=" << error;
+      }
+    else
+      {
+        file_face_count_++;
+        LOG_S(INFO) << "freetype font cache: opened system font file"
+                    << " path=`" << file_path << "`"
+                    << " face_index=" << face_index
+                    << " family=`" << (entry.face->family_name ? entry.face->family_name : "?") << "`"
+                    << " glyphs=" << entry.face->num_glyphs
+                    << " units_per_em=" << entry.face->units_per_EM;
+      }
+
+    auto [inserted_itr, inserted] = faces_.emplace(key, std::move(entry));
+    return inserted_itr->second.failed ? nullptr : &inserted_itr->second;
+  }
+
+  inline bool freetype_font_cache::resolve_unicode_glyph_indices(
+      face_entry& entry,
+      const std::string& utf8_text,
+      std::vector<FT_UInt>& glyph_indices)
+  {
+    glyph_indices.clear();
+
+    if(FT_Select_Charmap(entry.face, FT_ENCODING_UNICODE) != 0)
+      {
+        return false;
+      }
+
+    const std::vector<uint32_t> codepoints = decode_utf8(utf8_text);
+    if(codepoints.empty())
+      {
+        return false;
+      }
+
+    for(uint32_t codepoint : codepoints)
+      {
+        const FT_UInt glyph_index = FT_Get_Char_Index(entry.face, codepoint);
+        if(glyph_index == 0)
+          {
+            return false;
+          }
+        glyph_indices.push_back(glyph_index);
+      }
+
+    return true;
+  }
+
+  inline bool freetype_font_cache::resolve_glyph_indices(
       face_entry& entry,
       const std::shared_ptr<const embedded_font_blob>& blob,
       const std::string& utf8_text,
@@ -332,31 +575,10 @@ namespace pdflib
       }
 
     // Fallback (and multi-character cells): Unicode codepoints of the text.
-    if(FT_Select_Charmap(entry.face, FT_ENCODING_UNICODE) != 0)
-      {
-        return false;
-      }
-
-    const std::vector<uint32_t> codepoints = decode_utf8(utf8_text);
-    if(codepoints.empty())
-      {
-        return false;
-      }
-
-    for(uint32_t codepoint : codepoints)
-      {
-        const FT_UInt glyph_index = FT_Get_Char_Index(entry.face, codepoint);
-        if(glyph_index == 0)
-          {
-            return false;
-          }
-        glyph_indices.push_back(glyph_index);
-      }
-
-    return true;
+    return resolve_unicode_glyph_indices(entry, utf8_text, glyph_indices);
   }
 
-  inline FT_UInt freetype_embedded_font_cache::char_code_to_glyph_index(
+  inline FT_UInt freetype_font_cache::char_code_to_glyph_index(
       FT_Face face,
       FT_ULong code)
   {
@@ -427,8 +649,8 @@ namespace pdflib
     return 0;
   }
 
-  inline const freetype_embedded_font_cache::glyph_entry*
-  freetype_embedded_font_cache::get_glyph_entry(face_entry& entry,
+  inline const freetype_font_cache::glyph_entry*
+  freetype_font_cache::get_glyph_entry(face_entry& entry,
                                                 FT_UInt glyph_index)
   {
     auto itr = entry.glyphs.find(glyph_index);
@@ -464,7 +686,7 @@ namespace pdflib
     return inserted_itr->second.failed ? nullptr : &inserted_itr->second;
   }
 
-  inline bool freetype_embedded_font_cache::decompose_outline(FT_Outline& outline,
+  inline bool freetype_font_cache::decompose_outline(FT_Outline& outline,
                                                               BLPath& path)
   {
     struct decompose_state
@@ -531,7 +753,7 @@ namespace pdflib
     return true;
   }
 
-  inline std::vector<uint32_t> freetype_embedded_font_cache::decode_utf8(
+  inline std::vector<uint32_t> freetype_font_cache::decode_utf8(
       const std::string& text)
   {
     std::vector<uint32_t> codepoints;

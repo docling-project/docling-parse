@@ -8,7 +8,7 @@
 #include <parse/utils/color/device_cmyk.h>
 #include <render/blend2d_font_resolver.h>
 #include <render/blend2d_embedded_font_cache.h>
-#include <render/freetype_embedded_font_cache.h>
+#include <render/freetype_font_cache.h>
 
 #include <blend2d/blend2d.h>
 
@@ -57,7 +57,7 @@ namespace pdflib
     explicit renderer(render_config config,
                       std::shared_ptr<blend2d_font_resolver> font_resolver,
                       std::shared_ptr<blend2d_embedded_font_cache> embedded_font_cache,
-                      std::shared_ptr<freetype_embedded_font_cache> freetype_font_cache = nullptr);
+                      std::shared_ptr<freetype_font_cache> embedded_freetype_cache = nullptr);
 
     // Initializes the page canvas from the PDF crop box and render_config. This
     // computes the PDF-to-canvas scale/origin, creates a PRGB32 Blend2D image,
@@ -182,14 +182,22 @@ namespace pdflib
 
     std::shared_ptr<blend2d_font_resolver> font_resolver_;
     std::shared_ptr<blend2d_embedded_font_cache> embedded_font_cache_;
-    std::shared_ptr<freetype_embedded_font_cache> freetype_font_cache_;
+    std::shared_ptr<freetype_font_cache> freetype_font_cache_;
+
+    // Draws SYSTEM font files Blend2D cannot open. Process-wide, unlike
+    // freetype_font_cache_: the same handful of system faces serves every
+    // page, and re-opening a 30 MB CJK collection per renderer -- and
+    // re-decomposing its glyphs -- would be paid on each one.
+    std::shared_ptr<freetype_font_cache> system_font_cache_ =
+      freetype_font_cache::default_cache();
 
     // Embedded faces (by blob cache key) whose outlines Blend2D decoded
     // implausibly; every later cell in them is drawn through FreeType so one
     // run is not rasterised by two engines. Scoped to this renderer, which
     // draws one page.
     mutable std::unordered_set<std::string> distrusted_embedded_faces_;
-    std::unordered_map<std::string, BLFontFace> local_font_cache_;
+    std::unordered_map<std::string, blend2d_font_resolver::resolved_face>
+      local_font_cache_;
 
     // Returns the active Blend2D context for the page, starting it lazily if
     // necessary. Throws when called before a non-empty canvas has been created.
@@ -263,10 +271,13 @@ namespace pdflib
       return false;
     }
 
-    // Return a BLFontFace for the given PDF font names, falling back to a
-    // system font if none can be resolved.  Results are cached.
-    BLFontFace resolve_font_face(const std::string& font_name,
-                                 const std::string& base_font);
+    // Return the face for the given PDF font names, falling back to a system
+    // font if none can be resolved. Results are cached. The face inside can
+    // be invalid while the path is set: that is a file only FreeType can
+    // read, drawn through render_text_freetype_file().
+    blend2d_font_resolver::resolved_face resolve_font_face(
+      const std::string& font_name,
+      const std::string& base_font);
 
     // Returns true when every glyph in the shaped buffer is glyph id 0
     // (.notdef). Shaping against an embedded subset font succeeds even when
@@ -370,6 +381,25 @@ namespace pdflib
     bool render_text_freetype(text_instruction& instr,
                               const text_geometry& geom,
                               const BLPath& bbox_path);
+
+    // Same, for a SYSTEM font file the resolver selected but Blend2D cannot
+    // open -- CFF2 (variable) outlines, which is how Noto CJK looks to it on
+    // a distribution that ships only the VF build. Without this the cell has
+    // no face at all and the page comes out as .notdef boxes.
+    bool render_text_freetype_file(text_instruction& instr,
+                                   const text_geometry& geom,
+                                   const BLPath& bbox_path,
+                                   const std::string& font_path,
+                                   uint32_t face_index);
+
+    // The drawing half shared by both: fills (and, for the stroking text
+    // render modes, strokes) an already-built glyph path under the cell's
+    // text transform, clip state and layer handling.
+    bool draw_text_outline_path(text_instruction& instr,
+                                const text_geometry& geom,
+                                const BLPath& bbox_path,
+                                const BLPath& text_path,
+                                double h_scale);
 
     // Glyph-identity mapping by PDF character code against an embedded
     // (Blend2D-loaded) face: CID fonts with an identity CIDToGIDMap use the
@@ -1553,7 +1583,7 @@ namespace pdflib
     : shape_({0, 0, 4}),
       font_resolver_(blend2d_font_resolver::default_resolver()),
       embedded_font_cache_(std::make_shared<blend2d_embedded_font_cache>()),
-      freetype_font_cache_(std::make_shared<freetype_embedded_font_cache>())
+      freetype_font_cache_(std::make_shared<freetype_font_cache>())
   {}
 
   inline renderer<BLEND2D>::renderer(render_config config)
@@ -1561,7 +1591,7 @@ namespace pdflib
       shape_({0, 0, 4}),
       font_resolver_(blend2d_font_resolver::default_resolver()),
       embedded_font_cache_(std::make_shared<blend2d_embedded_font_cache>()),
-      freetype_font_cache_(std::make_shared<freetype_embedded_font_cache>())
+      freetype_font_cache_(std::make_shared<freetype_font_cache>())
   {}
 
   inline renderer<BLEND2D>::renderer(render_config config,
@@ -1571,13 +1601,13 @@ namespace pdflib
       font_resolver_(font_resolver ? std::move(font_resolver)
                                    : blend2d_font_resolver::default_resolver()),
       embedded_font_cache_(std::make_shared<blend2d_embedded_font_cache>()),
-      freetype_font_cache_(std::make_shared<freetype_embedded_font_cache>())
+      freetype_font_cache_(std::make_shared<freetype_font_cache>())
   {}
 
   inline renderer<BLEND2D>::renderer(render_config config,
                                      std::shared_ptr<blend2d_font_resolver> font_resolver,
                                      std::shared_ptr<blend2d_embedded_font_cache> embedded_font_cache,
-                                     std::shared_ptr<freetype_embedded_font_cache> freetype_font_cache)
+                                     std::shared_ptr<freetype_font_cache> embedded_freetype_cache)
     : config_(config),
       shape_({0, 0, 4}),
       font_resolver_(font_resolver ? std::move(font_resolver)
@@ -1585,9 +1615,9 @@ namespace pdflib
       embedded_font_cache_(embedded_font_cache
                              ? std::move(embedded_font_cache)
                              : std::make_shared<blend2d_embedded_font_cache>()),
-      freetype_font_cache_(freetype_font_cache
-                             ? std::move(freetype_font_cache)
-                             : std::make_shared<freetype_embedded_font_cache>())
+      freetype_font_cache_(embedded_freetype_cache
+                             ? std::move(embedded_freetype_cache)
+                             : std::make_shared<freetype_font_cache>())
   {}
 
   inline BLContext& renderer<BLEND2D>::page_context()
@@ -1815,7 +1845,7 @@ namespace pdflib
   // per-page alias cache in the renderer hot path.
   // ---------------------------------------------------------------------------
 
-  inline BLFontFace renderer<BLEND2D>::resolve_font_face(
+  inline blend2d_font_resolver::resolved_face renderer<BLEND2D>::resolve_font_face(
       const std::string& font_name,
       const std::string& base_font)
   {
@@ -1837,11 +1867,12 @@ namespace pdflib
                 << " font_name=`" << font_name << "`"
                 << " base_font=`" << base_font << "`"
                 << " cache_key=`" << cache_key << "`";
-    BLFontFace face = font_resolver_->resolve_font_face(cache_key,
-                                                        base_font,
-                                                        config_.resolve_fonts,
-                                                        config_.font_similarity_cutoff);
-    auto [inserted_itr, inserted] = local_font_cache_.emplace(cache_key, face);
+    blend2d_font_resolver::resolved_face resolved =
+      font_resolver_->resolve_font(cache_key,
+                                   base_font,
+                                   config_.resolve_fonts,
+                                   config_.font_similarity_cutoff);
+    auto [inserted_itr, inserted] = local_font_cache_.emplace(cache_key, resolved);
     LOG_S(INFO) << "render_text: resolved font face"
                 << " font_name=`" << font_name << "`"
                 << " base_font=`" << base_font << "`"
@@ -2269,8 +2300,85 @@ namespace pdflib
     // 9.4.4 defines (Th, plus an anisotropic text matrix or CTM), which the
     // parser computed. Deriving it from the face's advances instead stretched
     // every glyph of a font whose advances disagree with the PDF's /Widths.
+    return draw_text_outline_path(instr, geom, bbox_path, text_path,
+                                  instr.get_horizontal_scale());
+  }
+
+  // ---------------------------------------------------------------------------
+  // render_text_freetype_file
+  //
+  // The same route for a system font FILE: the resolver chose it, Blend2D
+  // could not open it (CFF2 outlines), FreeType can. Only the Unicode cmap is
+  // consulted -- a substituted face knows nothing of the PDF's character
+  // codes -- and there is no shaping, which for CJK costs nothing: the cmap
+  // is 1:1 and the PDF positions every cell itself.
+  // ---------------------------------------------------------------------------
+
+  inline bool renderer<BLEND2D>::render_text_freetype_file(text_instruction& instr,
+                                                           const text_geometry& geom,
+                                                           const BLPath& bbox_path,
+                                                           const std::string& font_path,
+                                                           uint32_t face_index)
+  {
+    if (system_font_cache_ == nullptr or not system_font_cache_->available())
+      {
+        return false;
+      }
+
+    if (not config_.render_text) { return false; }
+
+    if (geom.size <= 0.5 or font_path.empty()) { return false; }
+
+    BLPath text_path;
+    double run_width = 0.0;
+    if (not system_font_cache_->build_text_path_from_file(font_path,
+                                                          face_index,
+                                                          instr.get_text(),
+                                                          geom.size,
+                                                          text_path,
+                                                          &run_width))
+      {
+        return false;
+      }
+
+    // A substituted face has no claim on the PDF's widths: its advances are
+    // unrelated to them, and fitting the run to the cell is what keeps the
+    // page's layout intact. Same rule, and same bounds, as the condensation
+    // the Blend2D substitution path applies.
+    double h_scale = instr.get_horizontal_scale();
+    {
+      const double wx = geom.bbox.x1 - geom.bbox.x0;
+      const double wy = geom.bbox.y1 - geom.bbox.y0;
+      const double cell_w = std::hypot(wx, wy);
+      if (cell_w > 0.5 and run_width > 0.5)
+        {
+          const double h = cell_w / run_width;
+          if (h >= 0.30 and h <= 3.0 and std::abs(h - 1.0) > 0.03)
+            {
+              h_scale = h;
+            }
+        }
+    }
+
+    return draw_text_outline_path(instr, geom, bbox_path, text_path, h_scale);
+  }
+
+  // ---------------------------------------------------------------------------
+  // draw_text_outline_path
+  //
+  // Fills the built glyph path under the cell's text transform, honouring the
+  // clip state, the non-rect clip mask layer and the stroking text render
+  // modes. Shared by the embedded-program and system-file FreeType routes.
+  // ---------------------------------------------------------------------------
+
+  inline bool renderer<BLEND2D>::draw_text_outline_path(text_instruction& instr,
+                                                        const text_geometry& geom,
+                                                        const BLPath& bbox_path,
+                                                        const BLPath& text_path,
+                                                        double h_scale)
+  {
     text_geometry draw_geom = geom;
-    draw_geom.h_scale = instr.get_horizontal_scale();
+    draw_geom.h_scale = h_scale;
 
     BLContext& ctx = page_context();
 
@@ -2288,7 +2396,7 @@ namespace pdflib
         if (transform_res != BL_SUCCESS)
           {
             draw_ctx.restore();
-            LOG_S(WARNING) << "render_text_freetype: apply_transform failed"
+            LOG_S(WARNING) << "draw_text_outline_path: apply_transform failed"
                            << " (BLResult=" << transform_res << ")";
             return false;
           }
@@ -2380,14 +2488,14 @@ namespace pdflib
 
             if(not multiply_prgb32_by_a8(layer, clip_mask))
               {
-                LOG_S(WARNING) << "render_text_freetype: could not apply clip mask";
+                LOG_S(WARNING) << "draw_text_outline_path: could not apply clip mask";
               }
 
             ctx.blit_image(BLPointI(mask_area.x, mask_area.y), layer);
           }
         else
           {
-            LOG_S(WARNING) << "render_text_freetype: could not allocate clip layer "
+            LOG_S(WARNING) << "draw_text_outline_path: could not allocate clip layer "
                            << mask_area.w << "x" << mask_area.h
                            << ", falling back to context clip";
             ok = draw_path(ctx, nullptr);
@@ -2531,10 +2639,46 @@ namespace pdflib
           }
       }
 
+    blend2d_font_resolver::resolved_face resolved;
     if (not using_embedded_font)
       {
-        face = resolve_font_face(instr.get_font_name(),
-                                 instr.get_base_font());
+        resolved = resolve_font_face(instr.get_font_name(),
+                                     instr.get_base_font());
+        face = resolved.face;
+
+        // The resolver found a file Blend2D cannot open -- CFF2 outlines,
+        // which on a host that ships Noto CJK only as the variable build is
+        // every CJK face it has. FreeType reads it; drawing the cell from
+        // there is the difference between the text and a row of boxes.
+        if (not face.is_valid() and not resolved.path.empty())
+          {
+            if (render_text_freetype_file(instr, geom, bbox_path,
+                                          resolved.path, resolved.face_index))
+              {
+                return;
+              }
+          }
+
+        // Neither backend can draw the cell with the name-resolved face. The
+        // only thing left between this run and a bare rectangle is a face
+        // chosen by the SCRIPT of the text, so ask for one before giving up.
+        if (not face.is_valid() and font_resolver_ and not instr.is_type3())
+          {
+            const blend2d_font_resolver::resolved_face script_resolved =
+              font_resolver_->resolve_font_for_text(instr.get_text());
+
+            if (script_resolved.face.is_valid())
+              {
+                face = script_resolved.face;
+              }
+            else if (not script_resolved.path.empty() and
+                     render_text_freetype_file(instr, geom, bbox_path,
+                                               script_resolved.path,
+                                               script_resolved.face_index))
+              {
+                return;
+              }
+          }
       }
     // LOG_S(INFO) << "face valid=" << face.is_valid()
     //             << " font_name=`" << instr.get_font_name() << "`"
@@ -2642,8 +2786,20 @@ namespace pdflib
                                 << " font_name=`" << instr.get_font_name() << "`"
                                 << " — falling back to system font";
 
-                    BLFontFace system_face = resolve_font_face(instr.get_font_name(),
-                                                               instr.get_base_font());
+                    const blend2d_font_resolver::resolved_face system_resolved =
+                      resolve_font_face(instr.get_font_name(),
+                                        instr.get_base_font());
+                    BLFontFace system_face = system_resolved.face;
+
+                    if (not system_face.is_valid() and
+                        not system_resolved.path.empty() and
+                        render_text_freetype_file(instr, geom, bbox_path,
+                                                  system_resolved.path,
+                                                  system_resolved.face_index))
+                      {
+                        return;
+                      }
+
                     BLFont system_font;
                     if (system_face.is_valid() and
                         system_font.create_from_face(system_face,
@@ -2691,8 +2847,23 @@ namespace pdflib
 
             if (font_resolver_ and not instr.is_type3() and needs_better_face)
               {
-                BLFontFace script_face =
-                  font_resolver_->resolve_face_for_text(instr.get_text());
+                const blend2d_font_resolver::resolved_face script_resolved =
+                  font_resolver_->resolve_font_for_text(instr.get_text());
+                BLFontFace script_face = script_resolved.face;
+
+                // The only face that covers this script is one Blend2D
+                // cannot open. Nothing has been drawn yet -- shaping happens
+                // before the context is touched -- so the cell can go to
+                // FreeType whole.
+                if (not script_face.is_valid() and
+                    not script_resolved.path.empty() and
+                    render_text_freetype_file(instr, geom, bbox_path,
+                                              script_resolved.path,
+                                              script_resolved.face_index))
+                  {
+                    return;
+                  }
+
                 BLFont script_font;
                 if (script_face.is_valid() and
                     script_font.create_from_face(

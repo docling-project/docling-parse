@@ -144,6 +144,82 @@ def normalized_render_instructions(result) -> dict[str, Any]:
     return _round_floats(result._export_render_instructions_json(), ndigits=3)
 
 
+# The /Filter entries whose decoder inverse-transforms in floating point, so
+# the samples it returns are not a byte-exact function of the codestream.
+#
+# JPEG 2000's irreversible 9/7 wavelet is the only one here. OpenJPEG runs it in
+# single precision, and single precision rounds to the machine: the CMYK logo on
+# page 1 of `17068186561688296387-1.pdf` decodes to samples that differ by a
+# level here and there between an arm64 macOS build and an x86-64 Linux one --
+# most likely the inverse DWT's multiply-adds contracting into FMAs on the one
+# and not on the other, since two independent x86-64 openjpeg builds (2.5.3 and
+# 2.5.4) agree byte for byte. The deviation is well under what the exported JPEG
+# quantises away -- for that logo the re-encoded container is identical byte for
+# byte on both -- but it does change a sha256, so a byte-exact groundtruth for
+# such an image only ever holds on the machine that wrote it. It is also not
+# something the build can pin down for good: USE_SYSTEM_DEPS=ON decodes with
+# whatever openjpeg the distribution ships. Those artifacts are compared through
+# `raw_profile` instead.
+#
+# Nothing else on the decode side is float: libjpeg's islow IDCT, CCITT, JBIG2
+# and Flate are integer and reproduce exactly, and they stay byte-compared.
+FLOAT_CODEC_FILTERS = {"/JPXDecode"}
+
+# Block resolution and tolerance of `raw_profile`. Eight blocks a side is coarse
+# enough that the scattered one-level differences above average away inside a
+# block -- they move its mean by a fraction of a level -- and fine enough that a
+# decode which actually changed (channels swapped, ink inverted, rows shifted,
+# garbage) moves whole blocks by tens of levels. The tolerance is 1 because the
+# means are stored as bytes, and a true mean sitting on a .5 boundary can round
+# either way.
+RAW_PROFILE_GRID = 8
+RAW_PROFILE_TOLERANCE = 1
+
+# The PIL mode of a decoded sample plane, by channel count.
+RAW_PROFILE_MODES = {1: "L", 3: "RGB", 4: "CMYK"}
+
+
+def has_float_decoded_samples(artifact: dict[str, Any]) -> bool:
+    """Whether this bitmap came through a floating-point codec.
+
+    Reads the `filters` the exporter records, so it answers the same way for a
+    freshly parsed artifact and for a stored groundtruth entry.
+    """
+    return any(f in FLOAT_CODEC_FILTERS for f in artifact.get("filters", []))
+
+
+def raw_sample_profile(artifact: dict[str, Any]) -> dict[str, Any] | None:
+    """The decoded samples averaged down to an 8x8 grid, per channel.
+
+    What is left of a bitmap when the last bit of every sample is untrustworthy.
+    None when the payload cannot be read as a sample plane (an unexpected channel
+    count, or a length that disagrees with the shape), which leaves the artifact
+    with nothing but its metadata -- the same position it was in before.
+    """
+    shape = artifact.get("shape") or []
+    if len(shape) != 3:
+        return None
+
+    height, width, channels = (int(value) for value in shape)
+    mode = RAW_PROFILE_MODES.get(channels)
+    if mode is None or height <= 0 or width <= 0:
+        return None
+
+    raw = bytes(artifact.get("raw_data", b""))
+    if len(raw) != height * width * channels:
+        return None
+
+    rows = min(RAW_PROFILE_GRID, height)
+    cols = min(RAW_PROFILE_GRID, width)
+    # BOX is the area average of the pixels a block covers, which is exactly the
+    # block mean, and it handles a grid that does not divide the image evenly.
+    blocks = Image.frombytes(mode, (width, height), raw).resize(
+        (cols, rows), Image.Resampling.BOX
+    )
+
+    return {"grid": [rows, cols, channels], "means": list(blocks.tobytes())}
+
+
 def _bitmap_metadata(
     artifact: dict[str, Any], retained_filename: str | None
 ) -> dict[str, Any]:
@@ -151,7 +227,9 @@ def _bitmap_metadata(
 
     Both payloads are hashed, so an artifact whose bytes are not retained is
     still compared exactly: `raw_sha256` covers the decoded samples and
-    `encoded_sha256` the container the exporter writes.
+    `encoded_sha256` the container the exporter writes. A bitmap a
+    floating-point codec decoded carries a `raw_profile` on top, because for
+    those two the hashes are only worth as much as the machine that wrote them.
     """
     metadata = {
         key: _round_floats(value, ndigits=3)
@@ -164,6 +242,8 @@ def _bitmap_metadata(
     metadata["encoded_sha256"] = hashlib.sha256(
         bytes(artifact.get("encoded_data", b""))
     ).hexdigest()
+    if has_float_decoded_samples(artifact):
+        metadata["raw_profile"] = raw_sample_profile(artifact)
     metadata["retained_filename"] = retained_filename
     return metadata
 
@@ -546,6 +626,7 @@ BITMAP_STABLE_KEYS = [
     "index",
     "xobject_key",
     "source",
+    "filters",
     "shape",
     "pixel_format",
     "image_mask",
@@ -555,6 +636,50 @@ BITMAP_STABLE_KEYS = [
     "raw_sha256",
     "encoded_sha256",
 ]
+
+# The byte-level fields, which a bitmap decoded by a floating-point codec is
+# excused from; see FLOAT_CODEC_FILTERS.
+BITMAP_BYTE_KEYS = {"raw_sha256", "encoded_sha256"}
+
+
+def compare_raw_profile(
+    position: int,
+    expected_entry: dict[str, Any],
+    actual_entry: dict[str, Any],
+    bitmaps_path: Path,
+) -> None:
+    """Compare what a float-decoded bitmap still says exactly: its block means.
+
+    Silent when the groundtruth carries no profile. `raw_profile` arrived with
+    `filters`, so a dataset revision written before them has neither, and those
+    pages keep the coverage they had (shape, colour space, quad, and the page
+    image itself) until they are regenerated.
+    """
+    expected_profile = expected_entry.get("raw_profile")
+    if not expected_profile:
+        return
+
+    actual_profile = actual_entry.get("raw_profile")
+    assert actual_profile, (
+        f"bitmap[{position}] has no sample profile to compare: {bitmaps_path}"
+    )
+    assert actual_profile["grid"] == expected_profile["grid"], (
+        f"bitmap[{position}] profile grid mismatch: {bitmaps_path}"
+    )
+
+    expected_means = expected_profile["means"]
+    actual_means = actual_profile["means"]
+    assert len(actual_means) == len(expected_means), (
+        f"bitmap[{position}] profile length mismatch: {bitmaps_path}"
+    )
+
+    deviation = max(
+        (abs(a - e) for a, e in zip(actual_means, expected_means)), default=0
+    )
+    assert deviation <= RAW_PROFILE_TOLERANCE, (
+        f"bitmap[{position}] sample profile mismatch: block mean off by "
+        f"{deviation} (limit {RAW_PROFILE_TOLERANCE}) in {bitmaps_path}"
+    )
 
 
 def compare_bitmap_artifacts(doc_name: str, page_no: int, result) -> None:
@@ -585,12 +710,22 @@ def compare_bitmap_artifacts(doc_name: str, page_no: int, result) -> None:
     for position, actual_entry in enumerate(actual["bitmaps"]):
         expected_entry = expected["bitmaps"][position]
 
+        # Which comparison this bitmap is held to. The freshly decoded entry
+        # decides, not the stored one, so groundtruth written before `filters`
+        # was exported still lands on the right side of it.
+        float_decoded = has_float_decoded_samples(actual_entry)
+
         for key in BITMAP_STABLE_KEYS:
             if key not in expected_entry:
+                continue
+            if float_decoded and key in BITMAP_BYTE_KEYS:
                 continue
             assert actual_entry.get(key) == expected_entry[key], (
                 f"bitmap[{position}] metadata mismatch for {key}: {bitmaps_path}"
             )
+
+        if float_decoded:
+            compare_raw_profile(position, expected_entry, actual_entry, bitmaps_path)
 
         # Retained artifacts are additionally compared byte for byte, so a
         # mismatch can be inspected rather than only reported as a hash.
@@ -600,6 +735,11 @@ def compare_bitmap_artifacts(doc_name: str, page_no: int, result) -> None:
 
         image_path = retained_bitmap_path(filename)
         assert image_path.exists(), f"missing bitmap image groundtruth: {image_path}"
+
+        # Those bytes are a re-encode of samples that are only reproducible to
+        # within a level, so they are kept to be looked at, not to be equalled.
+        if float_decoded:
+            continue
 
         encoded = bytes(bitmaps[position].get("encoded_data", b""))
         assert encoded == image_path.read_bytes(), (

@@ -215,6 +215,41 @@ options:
   -p PDF, --pdf PDF  Path to the PDF file
 ```
 
+## System fonts
+
+A PDF may name a font without embedding it. There is then nothing in the file
+to draw with, and the renderer substitutes a face installed on the host --
+which is why the same document renders differently on two machines, and why a
+container with no fonts in it renders text as `.notdef` boxes ("tofu").
+
+Install the usual desktop font packages for text, plus a CJK face for Chinese,
+Japanese and Korean documents:
+
+| | |
+|---|---|
+| Debian / Ubuntu | `fonts-dejavu-core fonts-liberation2 fonts-freefont-ttf fonts-urw-base35 fonts-noto-core fonts-noto-cjk` |
+| Fedora / RHEL | `dejavu-sans-fonts liberation-sans-fonts urw-base35-fonts google-noto-sans-fonts google-noto-sans-cjk-fonts` |
+
+On Fedora and RHEL take the packages **without** `-vf-` in the name. The
+variable-font builds carry CFF2 outlines, which the pinned Blend2D cannot read;
+such a file is still drawn, through FreeType and without shaping, but the
+static build is the better path.
+
+Three environment variables override what gets substituted. Each names a font
+**file** (`.ttf`, `.otf`, `.ttc`), and each is tried before the built-in
+candidate list -- a path that does not exist, or that neither Blend2D nor
+FreeType can open, is skipped rather than fatal:
+
+| Variable | Used for |
+|---|---|
+| `DOCLING_PARSE_FALLBACK_FONT` | the general fallback, when a font name resolves to nothing |
+| `DOCLING_PARSE_CJK_FALLBACK_FONT` | requests for a CJK family (`/Batang`, `/SimSun`, `/MS Gothic`, ...) |
+| `DOCLING_PARSE_ARABIC_FALLBACK_FONT` | runs of Arabic script |
+
+Setting them is also how a render is made reproducible across machines: pin the
+same file everywhere and the substituted typeface stops being a property of the
+host. Run with `loglevel="info"` to see which file was chosen for each font.
+
 ## Performance Benchmarks
 
 [`docs/performance_benchmarks.md`](./docs/performance_benchmarks.md) compares `docling-parse` against the other widely used PDF packages on parsing and rendering, with the methodology and the commands to reproduce it.

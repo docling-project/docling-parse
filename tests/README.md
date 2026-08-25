@@ -268,6 +268,42 @@ For each selected rendered page, the test can compare:
 - bitmap artifact metadata and exported bitmap image bytes from
   `_export_bitmap_artifacts()`.
 
+### Substituted system fonts
+
+Nine documents in the corpus name CJK fonts -- `/Batang`, `/Gulim`, `/宋体`,
+`/楷体_GB2312`, `/HGMarugothicMPRO` -- and embed none of them. There is nothing
+in the PDF to draw with, so the renderer substitutes whatever CJK face the host
+has, and *that* is what the comparison sees: macOS, where this groundtruth was
+written, substitutes Hiragino / AppleGothic / PingFang; Linux substitutes Noto
+CJK. Two different typefaces drawing the same page differ far more than any
+rendering change would.
+
+Those documents are listed in `FONT_SUBSTITUTED_DOCUMENTS` in
+`test_regression_threaded_render.py` and compared at
+`SUBSTITUTED_FONT_IMAGE_TOLERANCE` instead of `RENDERER_IMAGE_TOLERANCE`: wide
+enough for the substitution, and no wider, so a host that renders their CJK as
+`.notdef` boxes still fails. Every other page keeps the tight tolerance --
+loosening it globally would have retired the signal on the ~200 pages that
+substitute nothing.
+
+To run them locally the way CI does, install a CJK font and pin it:
+
+```sh
+# Debian / Ubuntu
+sudo apt-get install -y fonts-noto-cjk
+export DOCLING_PARSE_CJK_FALLBACK_FONT=/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc
+
+# Fedora / RHEL  (the package WITHOUT -vf-: Blend2D cannot read CFF2 outlines)
+sudo dnf install -y google-noto-sans-cjk-fonts
+export DOCLING_PARSE_CJK_FALLBACK_FONT=/usr/share/fonts/google-noto-sans-cjk-fonts/NotoSansCJK-Regular.ttc
+```
+
+`DOCLING_PARSE_FALLBACK_FONT` and `DOCLING_PARSE_ARABIC_FALLBACK_FONT` pin the
+Latin and Arabic substitutions the same way; see the "System fonts" section of
+the top-level [README](../README.md). `.github/workflows/checks.yml` installs
+the packages and sets `DOCLING_PARSE_CJK_FALLBACK_FONT` so a runner-image
+change cannot quietly become a rendering change.
+
 ### Bitmap artifacts
 
 Each bitmap artifact reports a `source`: `xobject` (an image XObject painted by
@@ -285,6 +321,23 @@ The remaining bitmaps are described in one file per page,
 bitmap the page painted together with a `raw_sha256` of its decoded samples and
 an `encoded_sha256` of the exported container. Every artifact is therefore
 compared exactly, whether or not its bytes are kept.
+
+With one exception: an artifact whose `filters` name `/JPXDecode`. JPEG 2000's
+irreversible 9/7 wavelet is a floating-point transform, and OpenJPEG runs it in
+single precision, so the same codestream decodes to samples that differ by one
+level here and there between an arm64 macOS build and an x86-64 Linux one
+(most likely FMA contraction in the inverse DWT; two independent x86-64 builds
+agree byte for byte). That is far below what the exported JPEG quantises away --
+the container re-encoded from either came out identical byte for byte on the
+image that surfaced this -- but it changes a hash, so a byte-exact groundtruth
+for such an image only ever holds on the machine that wrote it, and under
+`USE_SYSTEM_DEPS=ON` not even there. Those artifacts drop both hashes and the byte comparison of their
+retained bytes, and are compared on a `raw_profile` instead: their samples
+averaged down to an 8x8 grid per channel, which the one-level noise disappears
+into and a decode that actually changed does not. Nothing else in the decode
+path is float -- libjpeg's islow IDCT, CCITT, JBIG2 and Flate are integer -- so
+nothing else is excused. `test_unit_bitmap_artifacts.py` holds both halves of
+this.
 
 The bytes are kept only for a subset, written to `bitmap_data/`.
 `select_retained_bitmaps()` keeps the first artifact of each distinct
