@@ -12,6 +12,8 @@
 
 #include <resources.h>
 
+#include <render/freetype_font_cache.h>
+
 #include <algorithm>
 #include <array>
 #include <cctype>
@@ -58,10 +60,33 @@ namespace pdflib
     // disabled, the method falls back to a known system font.
     // Returns an invalid BLFontFace when no fallback font can be loaded.
 
+    // A face the resolver selected, together with the file it came from.
+    //
+    // `face` being invalid is not a dead end. Our pinned Blend2D cannot open
+    // CFF2 outlines -- it answers BL_ERROR_FONT_CFF_INVALID_DATA -- which is
+    // what every Noto CJK face looks like to it on a distribution that ships
+    // only the variable-font build, leaving such a host with no CJK-capable
+    // face at all and Hangul drawn as .notdef boxes. FreeType reads those
+    // files, so `path` is still filled in and the renderer draws the cell
+    // through freetype_font_cache instead.
+    struct resolved_face
+    {
+      BLFontFace face;
+      std::string path;
+      uint32_t face_index = 0;
+
+      // Blend2D can draw this face itself (shaping included).
+      bool is_valid() const { return face.is_valid(); }
+
+      // Some backend can draw it: Blend2D, or FreeType from the file.
+      bool is_drawable() const { return face.is_valid() or not path.empty(); }
+    };
+
     // Chooses a face by the SCRIPT of the text, for runs the name-based
     // resolution cannot draw: an Arabic or CJK run through a Latin fallback
     // shapes to .notdef boxes. Returns an invalid face for Latin-only text.
     BLFontFace resolve_face_for_text(const std::string& utf8_text);
+    resolved_face resolve_font_for_text(const std::string& utf8_text);
 
     // True when every glyph of a shaped run is .notdef.
     static bool shaped_run_all_notdef(const BLGlyphBuffer& gb);
@@ -70,6 +95,11 @@ namespace pdflib
                                  const std::string& base_font,
                                  bool resolve_fonts,
                                  float font_similarity_cutoff);
+
+    resolved_face resolve_font(const std::string& font_name,
+                               const std::string& base_font,
+                               bool resolve_fonts,
+                               float font_similarity_cutoff);
 
   private:
 
@@ -147,6 +177,12 @@ namespace pdflib
 
     static int quantized_cutoff(float cutoff);
 
+    // Numeric weight (100..900) and slant a font FILENAME advertises, for
+    // ranking files the Blend2D index does not hold -- the ones it refused to
+    // open. Returns 400 when the stem says nothing.
+    static int stem_weight(const std::string& stem);
+    static bool stem_is_italic(const std::string& stem);
+
     static std::optional<std::string> getenv_string(const char* name);
     static void append_env_path(std::vector<std::filesystem::path>& paths,
                                 const char* env_name,
@@ -158,7 +194,10 @@ namespace pdflib
     // Latin fallbacks cannot draw CJK (.notdef / "tofu"); detect CJK requests
     // so the resolver can prefer a CJK-capable face.
     static bool is_cjk_font_request(const std::string& name);
-    static std::vector<std::filesystem::path> cjk_fallback_candidates();
+    // Reads the built index, so it must run after build_font_index() has
+    // filled it: on macOS the CJK faces are only recognisable by the family
+    // name their `name` table carries, never by their filename.
+    std::vector<std::filesystem::path> cjk_fallback_candidates() const;
 
     static std::vector<std::filesystem::path> arabic_fallback_candidates();
 
@@ -176,6 +215,15 @@ namespace pdflib
     static std::size_t face_coverage(BLFontFace& face,
                                      const std::string& utf8_text,
                                      std::size_t& total);
+
+    // Same question for a candidate the resolver has not committed to yet.
+    // Falls back to FreeType's cmap when Blend2D could not open the file, so
+    // a face it refuses is still ranked instead of dropping out of the
+    // running unseen -- which is how a CFF2-only host ends up reporting that
+    // nothing covers the script.
+    std::size_t candidate_coverage(const resolved_face& candidate,
+                                   const std::string& utf8_text,
+                                   std::size_t& total);
 
     // Whether `face` has a glyph for every character of `utf8_text`.
     static bool face_covers_text(BLFontFace& face, const std::string& utf8_text);
@@ -202,12 +250,27 @@ namespace pdflib
     std::optional<font_face_ref> find_by_family_candidates(
       const std::vector<font_face_ref>& refs,
       const font_request& request) const;
-    std::optional<font_face_ref> find_first_existing_fallback() const;
-    std::optional<font_face_ref> find_first_existing_cjk_fallback() const;
+    // Walks `candidates` and returns the first one some backend can actually
+    // draw. Testing fs::exists() alone was not enough: when the file it
+    // returned failed to load, the caller handed the page an invalid face and
+    // never looked at the next candidate, so one unloadable font took the
+    // whole page down to bbox outlines.
+    resolved_face find_first_loadable_fallback(
+      const std::vector<std::filesystem::path>& candidates,
+      const char* kind);
+
+    // The indexed ref for a font file (lowest face index, so the choice is
+    // deterministic), or face 0 when the file is not in the index.
+    font_face_ref indexed_ref_for_path(const std::string& path) const;
     std::optional<font_face_ref> fuzzy_find_font(const font_request& request,
                                                  float font_similarity_cutoff) const;
 
     BLFontFace load_font_face(const font_face_ref& ref);
+
+    // load_font_face() plus the file it came from. When Blend2D refuses the
+    // file the path survives only if FreeType can open it; otherwise the
+    // result is not drawable and the caller moves on.
+    resolved_face load_resolved_face(const font_face_ref& ref);
 
     std::once_flag index_once_;
     std::unordered_map<std::string, std::vector<font_face_ref>> name_index_;
@@ -220,8 +283,7 @@ namespace pdflib
     // by path so the same one is not kept twice. One face per script is not
     // enough: whether a face covers a run is a property of the run, not of the
     // script.
-    std::unordered_map<std::string,
-                       std::vector<std::pair<std::string, BLFontFace>>> script_face_cache_;
+    std::unordered_map<std::string, std::vector<resolved_face>> script_face_cache_;
     // Probe rounds that ended without a fully covering face, per script. The
     // probe is bounded work, but a host with nothing for the script would pay
     // it again on every run.
@@ -234,6 +296,11 @@ namespace pdflib
 
     mutable std::shared_mutex face_cache_mutex_;
     std::unordered_map<font_face_ref, BLFontFace, font_face_ref_hash> face_cache_;
+
+    // Draws (and probes) the system font files Blend2D cannot open. Shared
+    // process-wide: system faces are the same for every page.
+    std::shared_ptr<freetype_font_cache> freetype_cache_ =
+      freetype_font_cache::default_cache();
   };
 
   inline blend2d_font_resolver::blend2d_font_resolver() = default;
@@ -261,64 +328,86 @@ namespace pdflib
                                                              bool resolve_fonts,
                                                              float font_similarity_cutoff)
   {
+    return resolve_font(font_name, base_font, resolve_fonts,
+                        font_similarity_cutoff).face;
+  }
+
+  inline blend2d_font_resolver::resolved_face blend2d_font_resolver::resolve_font(
+                                                             const std::string& font_name,
+                                                             const std::string& base_font,
+                                                             bool resolve_fonts,
+                                                             float font_similarity_cutoff)
+  {
     const std::string cache_key = select_font_query(font_name, base_font);
 
-    LOG_S(INFO) << "blend2d font resolver: resolve_font_face"
+    LOG_S(INFO) << "blend2d font resolver: resolve_font"
                 << " font_name=`" << font_name << "`"
                 << " base_font=`" << base_font << "`"
                 << " selected_key=`" << cache_key << "`"
                 << " resolve_fonts=" << (resolve_fonts ? "true" : "false")
                 << " similarity_cutoff=" << font_similarity_cutoff;
 
-    std::optional<font_face_ref> font_ref;
     if (resolve_fonts)
       {
-        font_ref = resolve_font_ref(cache_key, font_similarity_cutoff);
-      }
+        const std::optional<font_face_ref> font_ref =
+          resolve_font_ref(cache_key, font_similarity_cutoff);
 
-    if (not font_ref.has_value() or font_ref->path.empty())
-      {
-        warm();
-        // Prefer a CJK-capable face before the Latin fallback (.notdef boxes).
-        if (is_cjk_font_request(cache_key) or is_cjk_font_request(font_name)
-            or is_cjk_font_request(base_font))
+        if (font_ref.has_value() and not font_ref->path.empty())
           {
-            font_ref = find_first_existing_cjk_fallback();
-            if (font_ref.has_value() and not font_ref->path.empty())
+            resolved_face resolved = load_resolved_face(*font_ref);
+            if (resolved.is_drawable())
               {
-                LOG_S(WARNING) << "blend2d font resolver: using CJK fallback font"
-                               << " selected_key=`" << cache_key << "`"
-                               << " path=`" << font_ref->path << "`";
+                LOG_S(INFO) << "blend2d font resolver: loading resolved font"
+                            << " selected_key=`" << cache_key << "`"
+                            << " path=`" << resolved.path << "`"
+                            << " face_index=" << resolved.face_index
+                            << " blend2d=" << (resolved.is_valid() ? "true" : "false");
+                return resolved;
               }
-            else
-              {
-                LOG_S(WARNING) << "blend2d font resolver: CJK request but no CJK-capable"
-                               << " font installed; glyphs will render as .notdef boxes."
-                               << " Install e.g. google-noto-sans-cjk-fonts, or set"
-                               << " DOCLING_PARSE_CJK_FALLBACK_FONT."
-                               << " selected_key=`" << cache_key << "`";
-              }
-          }
-        if (not font_ref.has_value() or font_ref->path.empty())
-          {
-            LOG_S(WARNING) << "blend2d font resolver: using fallback font"
-                           << " selected_key=`" << cache_key << "`";
-            font_ref = find_first_existing_fallback();
+
+            // The name matched a file no backend can open. Falling through to
+            // the fallbacks beats handing the page an invalid face.
+            LOG_S(WARNING) << "blend2d font resolver: name-matched font is unusable"
+                           << " selected_key=`" << cache_key << "`"
+                           << " path=`" << font_ref->path << "`";
           }
       }
 
-    if (not font_ref.has_value() or font_ref->path.empty())
+    warm();
+
+    // Prefer a CJK-capable face before the Latin fallback (.notdef boxes).
+    if (is_cjk_font_request(cache_key) or is_cjk_font_request(font_name)
+        or is_cjk_font_request(base_font))
       {
-        LOG_S(INFO) << "blend2d font resolver: no font path available"
-                    << " selected_key=`" << cache_key << "`";
-        return {};
+        resolved_face resolved = find_first_loadable_fallback(cjk_candidates_, "CJK");
+        if (resolved.is_drawable())
+          {
+            LOG_S(INFO) << "blend2d font resolver: using CJK fallback font"
+                        << " selected_key=`" << cache_key << "`"
+                        << " path=`" << resolved.path << "`"
+                        << " blend2d=" << (resolved.is_valid() ? "true" : "false");
+            return resolved;
+          }
+
+        LOG_S(WARNING) << "blend2d font resolver: CJK request but no CJK-capable"
+                       << " font installed; glyphs will render as .notdef boxes."
+                       << " Install e.g. fonts-noto-cjk (Debian/Ubuntu) or"
+                       << " google-noto-sans-cjk-fonts (Fedora/RHEL), or point"
+                       << " DOCLING_PARSE_CJK_FALLBACK_FONT at a CJK font file."
+                       << " selected_key=`" << cache_key << "`";
       }
 
-    LOG_S(WARNING) << "blend2d font resolver: loading resolved font"
-                   << " selected_key=`" << cache_key << "`"
-                   << " path=`" << font_ref->path << "`"
-                   << " face_index=" << font_ref->face_index;
-    return load_font_face(*font_ref);
+    LOG_S(INFO) << "blend2d font resolver: using fallback font"
+                << " selected_key=`" << cache_key << "`";
+
+    resolved_face resolved = find_first_loadable_fallback(fallback_candidates_, "Latin");
+    if (not resolved.is_drawable())
+      {
+        LOG_S(WARNING) << "blend2d font resolver: no usable font on this host"
+                       << " selected_key=`" << cache_key << "`";
+      }
+
+    return resolved;
   }
 
   inline bool blend2d_font_resolver::font_face_ref::operator==(
@@ -886,10 +975,16 @@ namespace pdflib
 
   inline BLFontFace blend2d_font_resolver::resolve_face_for_text(const std::string& utf8_text)
   {
+    return resolve_font_for_text(utf8_text).face;
+  }
+
+  inline blend2d_font_resolver::resolved_face
+  blend2d_font_resolver::resolve_font_for_text(const std::string& utf8_text)
+  {
     std::string script;
     if (not text_script_key(utf8_text, script))
       {
-        return BLFontFace();  // Latin-only: the name-based path is correct
+        return {};  // Latin-only: the name-based path is correct
       }
 
     warm();
@@ -898,30 +993,47 @@ namespace pdflib
     // settling for the best face found so far.
     constexpr std::size_t max_fruitless_rounds = 8;
 
-    BLFontFace first_known;
+    resolved_face first_known;
+    bool have_first_known = false;
     {
-      std::shared_lock<std::shared_mutex> lock(script_cache_mutex_);
+      std::vector<resolved_face> known;
+      {
+        std::shared_lock<std::shared_mutex> lock(script_cache_mutex_);
 
-      auto it = script_face_cache_.find(script);
-      if (it != script_face_cache_.end() and not it->second.empty())
+        auto it = script_face_cache_.find(script);
+        if (it != script_face_cache_.end()) { known = it->second; }
+
+        auto rounds = script_probe_rounds_.find(script);
+        if (not known.empty()) { first_known = known.front(); have_first_known = true; }
+
+        if (known.empty() and rounds != script_probe_rounds_.end() and
+            rounds->second >= max_fruitless_rounds)
+          {
+            return {};
+          }
+      }
+
+      // Probing calls into FreeType, which takes its own lock; doing it while
+      // holding the script cache lock invites a lock-order problem for no
+      // gain, so the candidates are copied out first.
+      for (const auto& entry : known)
         {
-          first_known = it->second.front().second;
-
-          for (auto& entry : it->second)
-            {
-              BLFontFace face = entry.second;
-              if (face_covers_text(face, utf8_text)) { return face; }
-            }
+          std::size_t total = 0;
+          const std::size_t covered = candidate_coverage(entry, utf8_text, total);
+          if (total > 0 and covered == total) { return entry; }
         }
 
-      auto rounds = script_probe_rounds_.find(script);
-      if (rounds != script_probe_rounds_.end() and
-          rounds->second >= max_fruitless_rounds)
-        {
-          // Nothing installed covers this script fully; stop looking and draw
-          // what the host can.
-          return first_known;
-        }
+      {
+        std::shared_lock<std::shared_mutex> lock(script_cache_mutex_);
+        auto rounds = script_probe_rounds_.find(script);
+        if (rounds != script_probe_rounds_.end() and
+            rounds->second >= max_fruitless_rounds)
+          {
+            // Nothing installed covers this script fully; stop looking and
+            // draw what the host can.
+            return have_first_known ? first_known : resolved_face{};
+          }
+      }
     }
 
     // Script-specific faces first, then every indexed face in discovery order,
@@ -937,7 +1049,7 @@ namespace pdflib
         std::error_code ec;
         if (std::filesystem::exists(p, ec) and not is_last_resort_face(p.stem().string()))
           {
-            refs.push_back({p.string(), 0});
+            refs.push_back(indexed_ref_for_path(p.string()));
           }
       }
 
@@ -961,27 +1073,28 @@ namespace pdflib
     // Probing means shaping, so bound the work; the answer is cached per script.
     constexpr std::size_t max_probes = 80;
 
-    BLFontFace chosen;
-    std::string chosen_path;
-    BLFontFace best_partial;
-    std::string best_partial_path;
+    resolved_face chosen;
+    bool full_cover = false;
+    resolved_face best_partial;
     std::size_t best_covered = 0;
     std::size_t probes = 0;
     for (const auto& ref : refs)
       {
         if (probes++ >= max_probes) { break; }
 
-        BLFontFace face = load_font_face(ref);
+        resolved_face candidate = load_resolved_face(ref);
+        if (not candidate.is_drawable()) { continue; }
 
         std::size_t total = 0;
-        const std::size_t covered = face_coverage(face, utf8_text, total);
+        const std::size_t covered = candidate_coverage(candidate, utf8_text, total);
 
         if (total > 0 and covered == total)
           {
-            chosen = face;
-            chosen_path = ref.path;
+            chosen = candidate;
+            full_cover = true;
             LOG_S(INFO) << "blend2d font resolver: script '" << script
                         << "' resolved to " << ref.path
+                        << " (blend2d=" << (candidate.is_valid() ? "true" : "false") << ")"
                         << " after " << probes << " probe(s)";
             break;
           }
@@ -991,16 +1104,14 @@ namespace pdflib
         if (covered > best_covered)
           {
             best_covered = covered;
-            best_partial = face;
-            best_partial_path = ref.path;
+            best_partial = candidate;
           }
       }
 
-    const bool full_cover = chosen.is_valid();
     if (not full_cover)
       {
-        chosen = best_partial.is_valid() ? best_partial : first_known;
-        chosen_path = best_partial.is_valid() ? best_partial_path : std::string();
+        chosen = best_partial.is_drawable() ? best_partial
+               : (have_first_known ? first_known : resolved_face{});
 
         LOG_S(WARNING) << "blend2d font resolver: no installed face covers all of"
                        << " `" << utf8_text << "` (script '" << script << "');"
@@ -1016,17 +1127,18 @@ namespace pdflib
 
       auto& faces = script_face_cache_[script];
       const bool worth_caching =
-        chosen.is_valid() and not chosen_path.empty() and
+        chosen.is_drawable() and
         (full_cover or faces.empty()) and faces.size() < max_cached_faces;
 
       if (worth_caching)
         {
           const bool known =
             std::any_of(faces.begin(), faces.end(),
-                        [&](const std::pair<std::string, BLFontFace>& entry)
-                        { return entry.first == chosen_path; });
+                        [&](const resolved_face& entry)
+                        { return entry.path == chosen.path and
+                                 entry.face_index == chosen.face_index; });
 
-          if (not known) { faces.emplace_back(chosen_path, chosen); }
+          if (not known) { faces.push_back(chosen); }
         }
 
       if (not full_cover)
@@ -1038,7 +1150,8 @@ namespace pdflib
     return chosen;
   }
 
-  inline std::vector<std::filesystem::path> blend2d_font_resolver::cjk_fallback_candidates()
+  inline std::vector<std::filesystem::path>
+  blend2d_font_resolver::cjk_fallback_candidates() const
   {
     namespace fs = std::filesystem;
     std::vector<fs::path> paths;
@@ -1048,16 +1161,100 @@ namespace pdflib
         paths.emplace_back(*override_path);
       }
 
-    // Filename stems with CJK coverage, best first.
-    static const std::array<const char*, 12> wanted = {
+    // Faces with CJK coverage, best first. Each entry is matched against both
+    // the lowercased filename stem and the lowercased family name from the
+    // font's `name` table: matching filenames alone reported "no CJK font
+    // installed" on macOS, which carries a dozen of them but names the files
+    // in Japanese -- and in NFD at that, so even the Japanese spelling of the
+    // name does not compare equal to the one written here.
+    static const std::array<const char*, 25> wanted = {
       "notosanscjk", "notoserifcjk", "notosanscjkjp", "notosanscjksc",
-      "sourcehansans", "sourcehanserif", "droidsansfallback", "wqy-zenhei",
-      "wqy-microhei", "arphic", "ipagp", "ipag",
+      "sourcehansans", "sourcehanserif",
+      // macOS
+      "hiraginosans", "hiraginokakugothic", "hiraginomincho",
+      "hiraginomarugothic", "pingfang", "applesdgothicneo", "stheiti",
+      "songti", "applegothic",
+      // Windows
+      "yugoth", "msgothic", "msmincho", "meiryo", "microsoftyahei", "malgun",
+      // Linux distributions
+      "droidsansfallback", "wqy-zenhei", "wqy-microhei", "arphic",
     };
 
+    std::vector<fs::path> ranked(wanted.size());
+    std::vector<int> ranked_penalty(wanted.size(), INT_MAX);
+
+    // Ranking is not "first file the scan reached", which on a host with the
+    // static Noto packages installed meant NotoSansCJK-Thin.ttc -- body text
+    // drawn in Thin, measurably further from the groundtruth than Regular.
+    // Lower is better: distance from regular weight, then upright before
+    // italic, and last a large penalty for a file Blend2D could not open, so
+    // a face it can shape always wins over one only FreeType can draw.
+    constexpr int slanted_penalty = 1000;
+    constexpr int unloadable_penalty = 5000;
+
+    auto consider = [&](const std::string& text, const fs::path& p, int penalty)
+    {
+      // The family names carry spaces the entries above do not; comparing the
+      // compacted forms lets one entry cover "Hiragino Sans" and a
+      // "HiraginoSans" filename alike.
+      std::string key;
+      for (unsigned char c : text)
+        {
+          if (std::isspace(c) or c == '-' or c == '_') { continue; }
+          key += static_cast<char>(std::tolower(c));
+        }
+
+      for (std::size_t i = 0; i < wanted.size(); i++)
+        {
+          std::string needle;
+          for (const char* q = wanted[i]; *q != '\0'; q++)
+            {
+              if (*q == '-') { continue; }
+              needle += *q;
+            }
+
+          if (key.find(needle) != std::string::npos and penalty < ranked_penalty[i])
+            {
+              ranked[i] = p;
+              ranked_penalty[i] = penalty;
+            }
+        }
+    };
+
+    // Files Blend2D could open: it read their weight and style out of the
+    // font, and on macOS the family name from the `name` table is the only
+    // thing that identifies a CJK face at all -- the filenames are Japanese,
+    // in NFD, so even the Japanese spelling does not compare equal.
+    std::unordered_map<std::string, int> indexed_penalty;
+    for (const auto& kv : face_metadata_)
+      {
+        const indexed_font_face& meta = kv.second;
+        const bool slanted = meta.style == BL_FONT_STYLE_ITALIC or
+                             meta.style == BL_FONT_STYLE_OBLIQUE;
+        const int penalty =
+          std::abs(static_cast<int>(meta.weight) -
+                   static_cast<int>(BL_FONT_WEIGHT_NORMAL)) +
+          (slanted ? slanted_penalty : 0);
+
+        auto [itr, inserted] = indexed_penalty.emplace(meta.ref.path, penalty);
+        if (not inserted) { itr->second = std::min(itr->second, penalty); }
+      }
+
+    for (const auto& kv : face_metadata_)
+      {
+        const fs::path p(kv.second.ref.path);
+        const int penalty = indexed_penalty[kv.second.ref.path];
+
+        consider(p.stem().string(), p, penalty);
+        consider(kv.second.family_name, p, penalty);
+      }
+
+    // Files Blend2D refused, found by scanning the font directories the way
+    // the Arabic and Latin lists already do. Ranking only what the Blend2D
+    // index holds is what made a CFF2-only host report that no CJK font is
+    // installed: the faces are there, they just never reached the list.
     constexpr std::size_t max_entries = 20000;
     std::size_t seen = 0;
-    std::vector<fs::path> ranked(wanted.size());
 
     for (const auto& dir : system_font_directories())
       {
@@ -1072,16 +1269,15 @@ namespace pdflib
             ++seen;
             const fs::path& p = it->path();
             if (not is_font_file(p)) { continue; }
-            std::string stem = p.stem().string();
-            std::transform(stem.begin(), stem.end(), stem.begin(),
-                           [](unsigned char c) { return std::tolower(c); });
-            for (std::size_t i = 0; i < wanted.size(); i++)
-              {
-                if (ranked[i].empty() and stem.find(wanted[i]) != std::string::npos)
-                  {
-                    ranked[i] = p;
-                  }
-              }
+            if (indexed_penalty.count(p.string()) > 0) { continue; }
+
+            const std::string stem = p.stem().string();
+            const int penalty =
+              std::abs(stem_weight(stem) - 400) +
+              (stem_is_italic(stem) ? slanted_penalty : 0) +
+              unloadable_penalty;
+
+            consider(stem, p, penalty);
           }
         if (seen >= max_entries) { break; }
       }
@@ -1091,6 +1287,48 @@ namespace pdflib
         if (not p.empty()) { paths.push_back(p); }
       }
     return paths;
+  }
+
+  inline int blend2d_font_resolver::stem_weight(const std::string& stem)
+  {
+    std::string key;
+    for (unsigned char c : stem)
+      {
+        if (std::isalnum(c)) { key += static_cast<char>(std::tolower(c)); }
+      }
+
+    // Longest spellings first: "extralight" also contains "light", and
+    // "semibold"/"extrabold" also contain "bold".
+    static const std::array<std::pair<const char*, int>, 16> weights = {{
+      {"extralight", 200}, {"ultralight", 200}, {"semilight", 300},
+      {"demilight", 350}, {"extrabold", 800}, {"ultrabold", 800},
+      {"semibold", 600}, {"demibold", 600}, {"thin", 100}, {"light", 300},
+      {"regular", 400}, {"normal", 400}, {"book", 400}, {"medium", 500},
+      {"bold", 700}, {"black", 900},
+    }};
+
+    for (const auto& [name, weight] : weights)
+      {
+        if (key.find(name) != std::string::npos) { return weight; }
+      }
+
+    // "heavy" last: it is also a family name ("Heavy Data"), so it only wins
+    // when nothing more specific matched.
+    if (key.find("heavy") != std::string::npos) { return 900; }
+
+    return 400;
+  }
+
+  inline bool blend2d_font_resolver::stem_is_italic(const std::string& stem)
+  {
+    std::string key;
+    for (unsigned char c : stem)
+      {
+        if (std::isalnum(c)) { key += static_cast<char>(std::tolower(c)); }
+      }
+
+    return key.find("italic") != std::string::npos or
+           key.find("oblique") != std::string::npos;
   }
 
   inline bool blend2d_font_resolver::is_font_file(const std::filesystem::path& p)
@@ -1514,7 +1752,6 @@ namespace pdflib
     namespace fs = std::filesystem;
     const std::vector<fs::path> font_dirs = system_font_directories();
     fallback_candidates_ = fallback_font_candidates();
-    cjk_candidates_ = cjk_fallback_candidates();
     arabic_candidates_ = arabic_fallback_candidates();
 
     LOG_S(INFO) << "blend2d font resolver: scanning font directories";
@@ -1556,6 +1793,9 @@ namespace pdflib
           }
       }
 
+    // Needs the finished index: the CJK faces are picked by family name.
+    cjk_candidates_ = cjk_fallback_candidates();
+
     LOG_S(INFO) << "blend2d font resolver: indexed "
                 << face_metadata_.size() << " font faces and "
                 << name_index_.size() << " names";
@@ -1578,12 +1818,34 @@ namespace pdflib
       }
 
     const uint32_t face_count = data.face_count();
+    bool reported_rejection = false;
     for (uint32_t face_index = 0; face_index < face_count; ++face_index)
       {
         BLFontFace face;
         const BLResult face_res = face.create_from_data(data, face_index);
         if (face_res != BL_SUCCESS or not face.is_valid())
           {
+            // Once per file, not once per face: a CJK collection holds five
+            // and they all fail together. This used to be INFO, so the only
+            // thing a user saw was "no installed face covers ..." -- which
+            // points at the host's font set rather than at our loader, and
+            // sent the investigation the wrong way for a day.
+            if (not reported_rejection)
+              {
+                reported_rejection = true;
+                LOG_S(WARNING) << "blend2d font resolver: Blend2D cannot read this font"
+                               << " file; it will only be usable through FreeType"
+                               << " (no shaping)."
+                               << " path=`" << path.string() << "`"
+                               << " face_res=" << face_res
+                               << (face_res == BL_ERROR_FONT_CFF_INVALID_DATA
+                                     ? " (CFF2/variable outlines -- install the"
+                                       " static build of this font, e.g."
+                                       " fonts-noto-cjk or"
+                                       " google-noto-sans-cjk-fonts, or point"
+                                       " DOCLING_PARSE_CJK_FALLBACK_FONT at one)"
+                                     : "");
+              }
             LOG_S(INFO) << "blend2d font resolver: failed to inspect font face"
                         << " path=`" << path.string() << "`"
                         << " face_index=" << face_index
@@ -1771,52 +2033,52 @@ namespace pdflib
     return best;
   }
 
-  inline std::optional<blend2d_font_resolver::font_face_ref>
-  blend2d_font_resolver::find_first_existing_fallback() const
+  inline blend2d_font_resolver::font_face_ref
+  blend2d_font_resolver::indexed_ref_for_path(const std::string& path) const
   {
-    namespace fs = std::filesystem;
+    // The lowest indexed face, not the first one the hash map happens to
+    // reach: a collection carries one face per region (Noto CJK is JP, KR,
+    // SC, TC, HK) and picking a different one per process is a rendering
+    // difference nobody asked for.
+    font_face_ref ref{path, 0};
+    bool found = false;
 
-    for (const auto& fallback : fallback_candidates_)
+    for (const auto& [key, face] : face_metadata_)
       {
-        if (fs::exists(fallback))
+        if (face.ref.path != path) { continue; }
+        if (not found or face.ref.face_index < ref.face_index)
           {
-            const std::string norm_path = fallback.string();
-            for (const auto& [key, face] : face_metadata_)
-              {
-                if (face.ref.path == norm_path)
-                  {
-                    return face.ref;
-                  }
-              }
-            return font_face_ref{norm_path, 0};
+            ref = face.ref;
+            found = true;
           }
       }
 
-    return std::nullopt;
+    return ref;
   }
 
-  inline std::optional<blend2d_font_resolver::font_face_ref>
-  blend2d_font_resolver::find_first_existing_cjk_fallback() const
+  inline blend2d_font_resolver::resolved_face
+  blend2d_font_resolver::find_first_loadable_fallback(
+    const std::vector<std::filesystem::path>& candidates,
+    const char* kind)
   {
     namespace fs = std::filesystem;
 
-    for (const auto& fallback : cjk_candidates_)
+    for (const auto& fallback : candidates)
       {
-        if (fs::exists(fallback))
-          {
-            const std::string norm_path = fallback.string();
-            for (const auto& [key, face] : face_metadata_)
-              {
-                if (face.ref.path == norm_path)
-                  {
-                    return face.ref;
-                  }
-              }
-            return font_face_ref{norm_path, 0};
-          }
+        std::error_code ec;
+        if (not fs::exists(fallback, ec)) { continue; }
+
+        resolved_face resolved =
+          load_resolved_face(indexed_ref_for_path(fallback.string()));
+        if (resolved.is_drawable()) { return resolved; }
+
+        LOG_S(INFO) << "blend2d font resolver: " << kind
+                    << " fallback candidate cannot be opened by any backend,"
+                    << " trying the next one"
+                    << " path=`" << fallback.string() << "`";
       }
 
-    return std::nullopt;
+    return {};
   }
 
   inline std::optional<blend2d_font_resolver::font_face_ref>
@@ -1915,6 +2177,48 @@ namespace pdflib
       auto [itr, inserted] = face_cache_.emplace(ref, face);
       return itr->second;
     }
+  }
+
+  inline blend2d_font_resolver::resolved_face
+  blend2d_font_resolver::load_resolved_face(const font_face_ref& ref)
+  {
+    resolved_face resolved;
+    resolved.path = ref.path;
+    resolved.face_index = ref.face_index;
+    resolved.face = load_font_face(ref);
+
+    if (not resolved.face.is_valid())
+      {
+        // Blend2D refused the file. Keep it only if the other backend can
+        // read it; an unreadable path is worse than none, because the caller
+        // would stop looking at the candidates behind it.
+        if (freetype_cache_ == nullptr or
+            not freetype_cache_->can_open_file(ref.path, ref.face_index))
+          {
+            resolved.path.clear();
+          }
+      }
+
+    return resolved;
+  }
+
+  inline std::size_t blend2d_font_resolver::candidate_coverage(
+    const resolved_face& candidate,
+    const std::string& utf8_text,
+    std::size_t& total)
+  {
+    if (candidate.face.is_valid())
+      {
+        BLFontFace face = candidate.face;
+        return face_coverage(face, utf8_text, total);
+      }
+
+    total = 0;
+    if (candidate.path.empty() or freetype_cache_ == nullptr) { return 0; }
+
+    return freetype_cache_->file_face_coverage(candidate.path,
+                                               candidate.face_index,
+                                               utf8_text, total);
   }
 }
 

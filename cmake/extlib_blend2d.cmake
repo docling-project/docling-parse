@@ -14,11 +14,18 @@ else()
     # --- AsmJit (embedded by blend2d for JIT pipeline generation) ---
     # Use the inline form of FetchContent_Populate (not deprecated) to download
     # the source only. blend2d will add it via add_subdirectory using ASMJIT_DIR.
+    #
+    # Pinned alongside the blend2d commit below: asmjit generates blend2d's
+    # rasterization pipelines, so tracking master let an unrelated asmjit change
+    # shift rendered pixels between builds -- the renderer groundtruth is
+    # compared against stored PNGs, so that surfaces as a spurious regression.
+    # asmjit publishes no tags at all, so the pin has to be a commit SHA, and
+    # GIT_SHALLOW cannot stay: a depth-1 clone only contains the tip, so it
+    # cannot check out an arbitrary commit when this is next bumped.
     FetchContent_Populate(
         asmjit
         GIT_REPOSITORY https://github.com/asmjit/asmjit.git
-        GIT_TAG        master
-        GIT_SHALLOW    TRUE
+        GIT_TAG        0bd5787b54b575ed94bf32ac452153b34385c514
     )
     # Point blend2d to the downloaded asmjit source.
     set(ASMJIT_DIR "${asmjit_SOURCE_DIR}" CACHE PATH "Path to AsmJit source" FORCE)

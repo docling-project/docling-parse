@@ -241,6 +241,11 @@ namespace
       row["index"] = bitmap_index;
       row["xobject_key"] = instr.get_key();
       row["source"] = pdflib::to_string(instr.get_source());
+      // The decode path the samples came out of, as the PDF spells it. It is
+      // what says whether these bytes are reproducible: only /JPXDecode is
+      // inverse-transformed in floating point, and only it can round a sample
+      // differently on a different machine.
+      row["filters"] = instr.get_filters();
       row["shape"] = instr.get_shape();
       row["pixel_format"] = pixel_format_name(instr.get_pixel_format());
       row["image_mask"] = instr.is_image_mask();

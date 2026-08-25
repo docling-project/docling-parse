@@ -16,6 +16,41 @@ jobs:
         python-version: ['3.10', '3.11', '3.12', '3.13', '3.14']
     steps:
       - uses: actions/checkout@v4
+      - name: Install system fonts
+        # The renderer substitutes a SYSTEM face for every font a PDF names but
+        # does not embed, and the ubuntu-24.04 image ships essentially none
+        # (fonts-noto-color-emoji and whatever a dependency dragged in). The
+        # regression corpus holds Korean, Chinese and Japanese documents that
+        # embed nothing, so without a CJK face every one of their glyphs draws
+        # as a .notdef box -- an image diff that reads as a rendering bug and
+        # is really a missing package.
+        #
+        # fonts-noto-cjk is the STATIC (CFF) build. The variable-font build
+        # carries CFF2 outlines, which our pinned Blend2D refuses with
+        # BL_ERROR_FONT_CFF_INVALID_DATA; the renderer now falls back to
+        # FreeType for those files, but the static build is what the
+        # groundtruth numbers were measured against. See
+        # .plans/cjk_system_font_fallback_freetype.md.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            fonts-dejavu-core \
+            fonts-liberation2 \
+            fonts-freefont-ttf \
+            fonts-urw-base35 \
+            fonts-noto-core \
+            fonts-noto-cjk
+          fc-cache -f
+          # Fail here, with the reason, rather than as an unexplained image
+          # diff if a future runner image drops or repackages these. The
+          # listing is what tells the next person where the files went.
+          fc-list :lang=ko file
+          if [ ! -f /usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc ]; then
+            echo "NotoSansCJK-Regular.ttc is not where DOCLING_PARSE_CJK_FALLBACK_FONT expects it:"
+            dpkg -L fonts-noto-cjk | grep -E '\.(ttc|otf|ttf)$' || true
+            exit 1
+          fi
+          test -n "$(fc-list :lang=ko file)"
       - name: Install uv and set the python version
         uses: astral-sh/setup-uv@v5
         with:
@@ -33,6 +68,13 @@ jobs:
         run: |
           uv run pre-commit run --all-files
       - name: Testing
+        env:
+          # Pin the substituted CJK face. Which file the resolver would pick on
+          # its own depends on what the runner image happens to carry, and the
+          # renderer groundtruth is compared against this typeface at this
+          # weight; a package change should not quietly become a rendering
+          # change. Documented in tests/README.md.
+          DOCLING_PARSE_CJK_FALLBACK_FONT: /usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc
         run: |
           uv run pytest -v tests
       - name: Build with uv

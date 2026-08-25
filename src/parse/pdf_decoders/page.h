@@ -123,11 +123,27 @@ namespace pdflib
     // Resolve /AP/N — a single stream, or a dictionary of appearance
     // states (checkboxes / radio buttons) selected by /AS — and decode
     // the selected stream.
-    void decode_annot_appearance(QPDFObjectHandle annot, const std::array<double, 4>& bbox);
+    void decode_annot_appearance(QPDFObjectHandle annot,
+                                 const std::array<double, 4>& bbox,
+                                 bool is_widget);
+
+    // Whether an annotation without special handling is drawn on the page:
+    // it needs a rectangle and a normal appearance, must not be hidden, and
+    // must not be one of the subtypes a viewer never paints in place.
+    static bool annot_is_rendered(QPDFObjectHandle annot, const std::string& subtype);
 
     // Parse the /AP/N appearance stream, extract cells in AP-local coords,
     // shift by bbox origin to page coords, and append to page_cells.
-    void decode_ap_stream(QPDFObjectHandle ap_stream, const std::array<double, 4>& bbox);
+    void decode_ap_stream(QPDFObjectHandle ap_stream,
+                          const std::array<double, 4>& bbox,
+                          bool is_widget);
+
+    // The matrix that carries an appearance stream from its own space onto
+    // the page: its /Matrix, followed by the fit of the transformed /BBox
+    // onto the annotation /Rect (ISO 32000-1, 12.5.5, "Algorithm: appearance
+    // streams").
+    static std::array<double, 6> appearance_matrix(QPDFObjectHandle ap_stream,
+                                                   const std::array<double, 4>& rect);
 
     void rotate_contents();
 
@@ -1286,8 +1302,14 @@ namespace pdflib
         // auto annot_json = to_json(annot);
         // LOG_S(INFO) << "annot " << l << ": " << annot_json.dump(2);
 
+        // /Type is optional in an annotation dictionary (ISO 32000-1,
+        // 12.5.2, Table 164): membership in the page /Annots array plus a
+        // /Subtype is what makes it an annotation. Requiring /Type == /Annot
+        // dropped legal annotations that omit it -- e.g. a /FreeText stamp
+        // whose /Type the producer never wrote -- so only reject a /Type that
+        // is present and says something other than /Annot.
         auto [has_type, type] = to_string(annot, "/Type");
-        if((not has_type) or (type!="/Annot"))
+        if(has_type and type!="/Annot")
           {
             continue;
           }
@@ -1325,6 +1347,27 @@ namespace pdflib
                 )
           {
             add_page_widget_from_annot(annot);
+          }
+        else if(annot_is_rendered(annot, subtype))
+          {
+            // Every other markup annotation is presented through its normal
+            // appearance stream (ISO 32000-1, 12.5.5). Skipping them dropped
+            // page content outright: a /FreeText box carrying a footnote is
+            // as much a part of the printed page as the content stream is,
+            // and every other renderer draws it.
+            std::array<double, 4> bbox = {0., 0., 0., 0.};
+            auto rect = annot.getKey("/Rect");
+            for(int d=0; d<rect.getArrayNItems() and d<bbox.size(); d++)
+              {
+                QPDFObjectHandle num = rect.getArrayItem(d);
+                if(num.isNumber())
+                  {
+                    bbox[d] = utils::numeric::locale_safe_numeric_value(num);
+                  }
+              }
+
+            LOG_S(INFO) << "decoding the appearance of a " << subtype << " annotation";
+            decode_annot_appearance(annot, bbox, false);
           }
         else
           {
@@ -1541,11 +1584,40 @@ namespace pdflib
 
     // Parse /AP/N (Normal appearance stream) to extract the actual rendered
     // text cells positioned within the widget bounding box.
-    decode_annot_appearance(annot, bbox);
+    decode_annot_appearance(annot, bbox, true);
+  }
+
+  bool pdf_decoder<PAGE>::annot_is_rendered(QPDFObjectHandle annot,
+                                            const std::string& subtype)
+  {
+    // A /Popup is the note window a viewer opens on demand, never page
+    // content; a /Link is geometry, and its appearance (if any) is chrome.
+    if(subtype=="/Popup" or subtype=="/Link") { return false; }
+
+    if(not annot.hasKey("/Rect") or not annot.getKey("/Rect").isArray())
+      {
+        return false;
+      }
+
+    if(not annot.hasKey("/AP")) { return false; }
+
+    auto ap = annot.getKey("/AP");
+    if(not ap.isDictionary() or not ap.hasKey("/N")) { return false; }
+
+    // /F bit 2 (Hidden) and bit 6 (NoView) both say "do not paint this"
+    // (ISO 32000-1, 12.5.3, Table 165).
+    if(annot.hasKey("/F") and annot.getKey("/F").isInteger())
+      {
+        const long long flags = annot.getKey("/F").getIntValue();
+        if((flags & 2) != 0 or (flags & 32) != 0) { return false; }
+      }
+
+    return true;
   }
 
   void pdf_decoder<PAGE>::decode_annot_appearance(QPDFObjectHandle annot,
-                                                  const std::array<double, 4>& bbox)
+                                                  const std::array<double, 4>& bbox,
+                                                  bool is_widget)
   {
     if(not annot.hasKey("/AP")) { return; }
 
@@ -1555,7 +1627,7 @@ namespace pdflib
     auto normal = ap.getKey("/N");
     if(normal.isStream())
       {
-        decode_ap_stream(normal, bbox);
+        decode_ap_stream(normal, bbox, is_widget);
         return;
       }
 
@@ -1567,7 +1639,7 @@ namespace pdflib
         auto [has_state, state] = to_string(annot, "/AS");
         if(has_state and normal.hasKey(state) and normal.getKey(state).isStream())
           {
-            decode_ap_stream(normal.getKey(state), bbox);
+            decode_ap_stream(normal.getKey(state), bbox, is_widget);
           }
       }
   }
@@ -1611,7 +1683,7 @@ namespace pdflib
     page_widgets.push_back(widget);
 
     // Draw the active appearance state (check mark, radio dot, ...).
-    decode_annot_appearance(annot, bbox);
+    decode_annot_appearance(annot, bbox, true);
   }
 
   void pdf_decoder<PAGE>::add_choice(QPDFObjectHandle annot,
@@ -1652,7 +1724,7 @@ namespace pdflib
     }
     page_widgets.push_back(widget);
 
-    decode_annot_appearance(annot, bbox);
+    decode_annot_appearance(annot, bbox, true);
   }
 
   void pdf_decoder<PAGE>::add_signature(QPDFObjectHandle annot,
@@ -1693,11 +1765,99 @@ namespace pdflib
     }
     page_widgets.push_back(widget);
 
-    decode_annot_appearance(annot, bbox);
+    decode_annot_appearance(annot, bbox, true);
+  }
+
+  std::array<double, 6> pdf_decoder<PAGE>::appearance_matrix(
+      QPDFObjectHandle ap_stream,
+      const std::array<double, 4>& rect)
+  {
+    std::array<double, 6> matrix = {1., 0., 0., 1., 0., 0.};
+    std::array<double, 4> form_bbox = {0., 0., 0., 0.};
+    bool has_bbox = false;
+
+    QPDFObjectHandle dict = ap_stream.getDict();
+    if(dict.isDictionary())
+      {
+        auto qpdf_matrix = dict.getKey("/Matrix");
+        if(qpdf_matrix.isArray() and qpdf_matrix.getArrayNItems() == 6)
+          {
+            for(int d = 0; d < 6; d++)
+              {
+                QPDFObjectHandle num = qpdf_matrix.getArrayItem(d);
+                if(num.isNumber())
+                  {
+                    matrix[d] = utils::numeric::locale_safe_numeric_value(num);
+                  }
+              }
+          }
+
+        auto qpdf_bbox = dict.getKey("/BBox");
+        if(qpdf_bbox.isArray() and qpdf_bbox.getArrayNItems() == 4)
+          {
+            has_bbox = true;
+            for(int d = 0; d < 4; d++)
+              {
+                QPDFObjectHandle num = qpdf_bbox.getArrayItem(d);
+                if(num.isNumber())
+                  {
+                    form_bbox[d] = utils::numeric::locale_safe_numeric_value(num);
+                  }
+                else
+                  {
+                    has_bbox = false;
+                  }
+              }
+          }
+      }
+
+    // Without a /BBox there is nothing to fit, so the /Rect origin is the
+    // best available anchor -- which is what this did for every annotation
+    // before the fit existed.
+    if(not has_bbox)
+      {
+        return {matrix[0], matrix[1], matrix[2], matrix[3],
+                matrix[4] + rect[0], matrix[5] + rect[1]};
+      }
+
+    // Corners of /BBox through /Matrix, then the bounding box of the result.
+    const double cx[4] = {form_bbox[0], form_bbox[2], form_bbox[2], form_bbox[0]};
+    const double cy[4] = {form_bbox[1], form_bbox[1], form_bbox[3], form_bbox[3]};
+
+    double x0 = 0., y0 = 0., x1 = 0., y1 = 0.;
+    for(int c = 0; c < 4; c++)
+      {
+        const double x = matrix[0]*cx[c] + matrix[2]*cy[c] + matrix[4];
+        const double y = matrix[1]*cx[c] + matrix[3]*cy[c] + matrix[5];
+
+        if(c == 0) { x0 = x1 = x; y0 = y1 = y; }
+        x0 = std::min(x0, x); x1 = std::max(x1, x);
+        y0 = std::min(y0, y); y1 = std::max(y1, y);
+      }
+
+    const double rx0 = std::min(rect[0], rect[2]);
+    const double rx1 = std::max(rect[0], rect[2]);
+    const double ry0 = std::min(rect[1], rect[3]);
+    const double ry1 = std::max(rect[1], rect[3]);
+
+    // A degenerate transformed box has no scale to derive; anchoring it at
+    // the /Rect origin at least puts the content in the right place.
+    const double sx = (x1 - x0 > 1e-9) ? (rx1 - rx0) / (x1 - x0) : 1.0;
+    const double sy = (y1 - y0 > 1e-9) ? (ry1 - ry0) / (y1 - y0) : 1.0;
+
+    // fit = scale(sx, sy) then translate so the box lands on /Rect;
+    // composed with /Matrix, which is applied first.
+    return {matrix[0] * sx,
+            matrix[1] * sy,
+            matrix[2] * sx,
+            matrix[3] * sy,
+            (matrix[4] - x0) * sx + rx0,
+            (matrix[5] - y0) * sy + ry0};
   }
 
   void pdf_decoder<PAGE>::decode_ap_stream(QPDFObjectHandle ap_stream,
-                                           const std::array<double, 4>& bbox)
+                                           const std::array<double, 4>& bbox,
+                                           bool is_widget)
   {
     LOG_S(INFO) << __FUNCTION__;
 
@@ -1779,26 +1939,32 @@ namespace pdflib
                                        ap_instructions,
                                        timings);
 
+    // An appearance stream is a form XObject in its own space. What maps it
+    // onto the page is /Matrix followed by the matrix that fits the
+    // /Matrix-transformed /BBox onto the annotation /Rect (ISO 32000-1,
+    // 12.5.5). Shifting by the /Rect origin instead happens to be right only
+    // when /Matrix is the identity and /BBox starts at the origin, which is
+    // what a form field usually looks like and what a /FreeText box usually
+    // does not: its /Matrix translates the /BBox back to the origin, so the
+    // shift was applied twice and the text landed a /Rect-width to the right.
+    //
+    // Seeding the sub-decode with the composed matrix means every instruction
+    // it emits is already in page space, transformed the same way the content
+    // stream's own operators are -- no per-instruction fix-up afterwards, and
+    // rotation and scaling come out right rather than being approximated.
+    const std::array<double, 6> ap_matrix = appearance_matrix(ap_stream, bbox);
+
     std::vector<qpdf_stream_instruction> parameters;
     stream_decoder.decode(ap_stream);
+    stream_decoder.set_base_matrix(ap_matrix);
     stream_decoder.interprete(parameters);
-
-    // The AP stream uses a local coordinate system whose origin is the
-    // bottom-left corner of the widget /Rect.  Shift every cell and shape
-    // by (bbox[0], bbox[1]) to bring it into page coordinate space.
-    const double ox = bbox[0];
-    const double oy = bbox[1];
 
     // Shapes drawn by the appearance stream (field borders, backgrounds,
     // check marks drawn as paths, ...): keep them in the parsed output and
     // re-emit them for the renderer before the text cells, so the field
     // value stays on top of background fills.
-    const std::array<double, 9> ap_shift = {1.0, 0.0, 0.0,
-                                            0.0, 1.0, 0.0,
-                                            ox,  oy,  1.0};
     for(auto& shape : ap_shapes)
       {
-        shape.transform(ap_shift);
         page_shapes.push_back(shape);
       }
 
@@ -1823,6 +1989,11 @@ namespace pdflib
 
     auto traces_the_widget_rect = [&](const shape_instruction& shape_instr)
     {
+      // Only a form field draws chrome. What a markup annotation puts inside
+      // its rectangle -- the box a /FreeText note is written in, the outline
+      // of a /Square -- is the annotation, and dropping it would erase it.
+      if(not is_widget) { return false; }
+
       if(widget_w <= 0.0 or widget_h <= 0.0) { return false; }
 
       bool seen = false;
@@ -1845,11 +2016,13 @@ namespace pdflib
 
       if(not seen) { return false; }
 
+      // The subpaths arrive in page space now, so the frame is the one that
+      // traces /Rect rather than (0, 0)-(w, h).
       const double tol = std::max(1.0, shape_instr.get_line_width());
-      return (std::abs(x0 - 0.0)      <= tol and
-              std::abs(y0 - 0.0)      <= tol and
-              std::abs(x1 - widget_w) <= tol and
-              std::abs(y1 - widget_h) <= tol);
+      return (std::abs(x0 - bbox[0]) <= tol and
+              std::abs(y0 - bbox[1]) <= tol and
+              std::abs(x1 - bbox[2]) <= tol and
+              std::abs(y1 - bbox[3]) <= tol);
     };
 
     for(const auto& shape_instr : ap_instructions.get_shape_instructions())
@@ -1860,12 +2033,12 @@ namespace pdflib
             continue;
           }
 
-        instructions.add_shape_instruction(shape_instr.translated(ox, oy));
+        instructions.add_shape_instruction(shape_instr);
       }
 
     for(const auto& shading_instr : ap_instructions.get_shading_instructions())
       {
-        instructions.add_shading_instruction(shading_instr.translated(ox, oy));
+        instructions.add_shading_instruction(shading_instr);
       }
 
     // Re-emit the text instructions of the sub-decode in page coordinates
@@ -1874,23 +2047,17 @@ namespace pdflib
     // char codes that a reconstruction from the cells would lose.
     for(const auto& text_instr : ap_instructions.get_text_instructions())
       {
-        instructions.add_text_instruction(text_instr.translated(ox, oy));
+        instructions.add_text_instruction(text_instr);
       }
 
     for(auto& cell : ap_cells)
       {
-        cell.x0  += ox;  cell.y0  += oy;
-        cell.x1  += ox;  cell.y1  += oy;
-        cell.r_x0 += ox; cell.r_y0 += oy;
-        cell.r_x1 += ox; cell.r_y1 += oy;
-        cell.r_x2 += ox; cell.r_y2 += oy;
-        cell.r_x3 += ox; cell.r_y3 += oy;
-        cell.widget = true;
+        cell.widget = is_widget;
         page_cells.push_back(cell);
       }
 
     LOG_S(INFO) << "AP stream yielded " << ap_cells.size() << " cell(s) and "
-                << ap_shapes.size() << " shape(s) for widget";
+                << ap_shapes.size() << " shape(s)";
   }
 
   void pdf_decoder<PAGE>::rotate_contents()

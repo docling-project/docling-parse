@@ -4,6 +4,7 @@ import glob
 import json
 import os
 import re
+from collections import Counter
 from io import BytesIO
 from typing import Dict, List, Union
 
@@ -30,6 +31,15 @@ from docling_parse.pdf_parser import (
 )
 from tests.constants import PARSER_PAGE_RESTRICTIONS, SAMPLE_PDF
 from tests.data_utils import PARSER_GROUNDTRUTH_DIR
+from tests.groundtruth_io import (
+    dump_groundtruth_json,
+    groundtruth_exists,
+    load_groundtruth_json,
+    load_segmented_page,
+    read_groundtruth_text,
+    resolve_groundtruth_path,
+    write_groundtruth_text,
+)
 
 
 def write_textline_delta(lines: List[str], filename: str, separator: str) -> None:
@@ -48,16 +58,10 @@ def _round_floats(obj, ndigits=3):
     return obj
 
 
-def save_as_json_rounded(page: SegmentedPdfPage, filename, indent=2, ndigits=3):
+def save_as_json_rounded(page: SegmentedPdfPage, filename, ndigits=3):
     """Save SegmentedPdfPage as JSON with floats rounded to ndigits."""
-    from pathlib import Path
-
-    if isinstance(filename, str):
-        filename = Path(filename)
-    filename.parent.mkdir(parents=True, exist_ok=True)
     out = _round_floats(page.export_to_dict(), ndigits=ndigits)
-    with open(filename, "w", encoding="utf-8") as fw:
-        json.dump(out, fw, indent=indent)
+    dump_groundtruth_json(filename, out)
 
 
 GROUNDTRUTH_FOLDER = os.fspath(PARSER_GROUNDTRUTH_DIR)
@@ -105,6 +109,43 @@ def _sanitize_bitmap_resources(
             )
 
     return sanitized
+
+
+def _rounds_to_zero_pixels(bitmap_resource: BitmapResource, page_height: float) -> bool:
+    """Whether docling-core would resize this bitmap to a zero-sized image."""
+    bbox = bitmap_resource.rect.to_top_left_origin(
+        page_height=page_height
+    ).to_bounding_box()
+
+    return round(bbox.r) - round(bbox.l) <= 0 or round(bbox.b) - round(bbox.t) <= 0
+
+
+def render_page_smoke(page: SegmentedPdfPage) -> None:
+    """Render the page for every cell unit, purely to smoke-test the page model.
+
+    docling-core's SegmentedPdfPage.render_as_image() pastes each embedded
+    bitmap at its rounded on-page pixel size, so any image whose placement is
+    thinner than a pixel -- perfectly legal, e.g. `.24 0 0 .48 x y cm /Im Do`
+    -- makes PIL raise "height and width must be > 0". That is a limitation of
+    the visualizer in the dependency, not a parser regression, so it is
+    tolerated here, but only for pages that really do carry such a bitmap; any
+    other render failure still fails the test.
+    """
+    page_height = page.dimension.crop_bbox.height
+
+    for cell_unit in [TextCellUnit.CHAR, TextCellUnit.WORD, TextCellUnit.LINE]:
+        try:
+            page.render_as_image(cell_unit=cell_unit)
+        except ValueError as exc:
+            if "height and width must be > 0" not in str(exc):
+                raise
+            if not any(
+                bitmap_resource.image is not None
+                and _rounds_to_zero_pixels(bitmap_resource, page_height)
+                for bitmap_resource in page.bitmap_resources
+            ):
+                raise
+            return
 
 
 def verify_bitmap_resources(
@@ -171,6 +212,66 @@ def normalize_text(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
+def _describe_cell_count_mismatch(
+    true_cells: List[Union[PdfTextCell, TextCell]],
+    pred_cells: List[Union[PdfTextCell, TextCell]],
+    filename: str,
+) -> str:
+    """Dump a cell-count mismatch and return a one-line summary for the assert.
+
+    A count mismatch says nothing about *which* cells appeared or vanished, and
+    the interesting cases so far have been intermittent, so the run that hits
+    one is the only chance to see it. Write the full comparison next to the
+    groundtruth and keep the assertion message short.
+    """
+    delta_path = filename + ".cells.delta.txt"
+
+    def key(cell) -> tuple:
+        rect = cell.rect
+        return (round(rect.r_x0, 2), round(rect.r_y0, 2), cell.text)
+
+    true_keys = Counter(key(cell) for cell in true_cells)
+    pred_keys = Counter(key(cell) for cell in pred_cells)
+
+    only_pred = pred_keys - true_keys
+    only_true = true_keys - pred_keys
+
+    def fonts(cells) -> Counter:
+        return Counter(getattr(cell, "font_key", "?") for cell in cells)
+
+    lines = [
+        f"file      : {filename}",
+        f"true cells: {len(true_cells)}",
+        f"pred cells: {len(pred_cells)}",
+        "",
+        f"fonts (true): {dict(fonts(true_cells))}",
+        f"fonts (pred): {dict(fonts(pred_cells))}",
+        "",
+        f"only in pred ({sum(only_pred.values())} cells, by (x0, y0, text)):",
+    ]
+    lines += [f"  {count} x {item!r}" for item, count in only_pred.most_common(200)]
+    lines += ["", f"only in true ({sum(only_true.values())} cells):"]
+    lines += [f"  {count} x {item!r}" for item, count in only_true.most_common(200)]
+
+    first_divergence = next(
+        (i for i, (a, b) in enumerate(zip(true_cells, pred_cells)) if key(a) != key(b)),
+        min(len(true_cells), len(pred_cells)),
+    )
+    lines += ["", f"first index where the sequences differ: {first_divergence}"]
+
+    with open(delta_path, "w", encoding="utf-8") as fw:
+        fw.write("\n".join(lines) + "\n")
+
+    duplicated = sum(count for item, count in only_pred.items() if item in true_keys)
+
+    return (
+        f"{sum(only_pred.values())} cell(s) only in pred "
+        f"({duplicated} of them duplicates of an existing cell), "
+        f"{sum(only_true.values())} only in true, "
+        f"first divergence at index {first_divergence}; see {delta_path}"
+    )
+
+
 def verify_cells(
     true_cells: List[Union[PdfTextCell, TextCell]],
     pred_cells: List[Union[PdfTextCell, TextCell]],
@@ -180,10 +281,12 @@ def verify_cells(
 
     len_true_cells = len(true_cells)
     len_pred_cells = len(pred_cells)
-    assert len_true_cells == len_pred_cells, (
-        f"len(true_cells)==len(pred_cells) => {len_true_cells} == {len_pred_cells} "
-        f"for {filename}"
-    )
+    if len_true_cells != len_pred_cells:
+        summary = _describe_cell_count_mismatch(true_cells, pred_cells, filename)
+        raise AssertionError(
+            f"len(true_cells)==len(pred_cells) => {len_true_cells} == "
+            f"{len_pred_cells} for {filename}: {summary}"
+        )
 
     # print(f"===================== {filename}")
 
@@ -530,7 +633,7 @@ def test_reference_documents_from_filenames(update_groundtruth: bool):
                 pred_page = pdf_doc.get_page(page_no)
                 print(f" -> Page {page_no} has {len(pred_page.textline_cells)} cells.")
 
-                if update_groundtruth or (not os.path.exists(fname)):
+                if update_groundtruth or (not groundtruth_exists(fname)):
                     save_as_json_rounded(pred_page, fname)
 
                     for unit in [
@@ -546,8 +649,7 @@ def test_reference_documents_from_filenames(update_groundtruth: bool):
                             add_text_direction=False,
                         )
                         _fname = fname + f".{unit}.txt"
-                        with open(_fname, "w") as fw:
-                            fw.write(SPECIAL_SEPERATOR.join(lines))
+                        write_groundtruth_text(_fname, SPECIAL_SEPERATOR.join(lines))
                 else:
                     # print(f"loading from {fname}")
 
@@ -567,9 +669,8 @@ def test_reference_documents_from_filenames(update_groundtruth: bool):
                         _fname = fname + f".{unit}.txt"
                         delta_fname = fname + f".{unit}.delta.txt"
 
-                        with open(_fname) as fr:
-                            content = fr.read()
-                            lines = content.split(SPECIAL_SEPERATOR) if content else []
+                        content = read_groundtruth_text(_fname)
+                        lines = content.split(SPECIAL_SEPERATOR) if content else []
 
                         len_true_lines = len(lines)
                         len_pred_lines = len(_lines)
@@ -596,7 +697,7 @@ def test_reference_documents_from_filenames(update_groundtruth: bool):
                             if os.path.exists(delta_fname):
                                 os.remove(delta_fname)
 
-                    true_page = SegmentedPdfPage.load_from_json(fname)
+                    true_page = load_segmented_page(fname)
                     for unit in [
                         TextCellUnit.CHAR,
                         TextCellUnit.WORD,
@@ -612,9 +713,7 @@ def test_reference_documents_from_filenames(update_groundtruth: bool):
                             )
                             page_failed = True
 
-                pred_page.render_as_image(cell_unit=TextCellUnit.CHAR)
-                pred_page.render_as_image(cell_unit=TextCellUnit.WORD)
-                pred_page.render_as_image(cell_unit=TextCellUnit.LINE)
+                render_page_smoke(pred_page)
 
                 if not page_failed:
                     results.append((rname, str(page_no), "all", True, ""))
@@ -1091,7 +1190,7 @@ def test_annotations_match_groundtruth():
         pdf_path = f"tests/data/regression/{pdf_file}"
         groundtruth_path = PARSER_GROUNDTRUTH_DIR / f"{pdf_file}.json"
 
-        if not os.path.exists(pdf_path) or not os.path.exists(groundtruth_path):
+        if not os.path.exists(pdf_path) or not groundtruth_exists(groundtruth_path):
             continue
 
         # Load document
@@ -1099,9 +1198,8 @@ def test_annotations_match_groundtruth():
         pred_annotations = pdf_doc.get_annotations()
 
         # Load groundtruth
-        with open(groundtruth_path) as fr:
-            true_doc = json.load(fr)
-            true_annotations = true_doc["annotations"]
+        true_doc = load_groundtruth_json(groundtruth_path)
+        true_annotations = true_doc["annotations"]
 
         # Convert PdfAnnotations to dict for comparison
         pred_dict = {

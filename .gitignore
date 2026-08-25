@@ -15,6 +15,7 @@ tests/data/**
 *.json
 *.png
 *.dclx
+scratch*
 docs/performance_benchmarks/*.csv
 
 # Created by https://www.toptal.com/developers/gitignore/api/python,macos,emacs,cmake,virtualenv
