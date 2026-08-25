@@ -1,13 +1,3 @@
-## [v7.16.0](https://github.com/docling-project/docling-parse/releases/tag/v7.16.0) - 2026-08-25
-
-### Feature
-
-* Regression-test overhaul, and the parser/renderer fixes it uncovered ([#325](https://github.com/docling-project/docling-parse/issues/325)) ([`0ff4bea`](https://github.com/docling-project/docling-parse/commit/0ff4beafb45e800f9bd7d1399c281416d2a16ab6))
-
-### Fix
-
-* Open input PDFs with UTF-8 path semantics on Windows ([#326](https://github.com/docling-project/docling-parse/issues/326)) ([`a006162`](https://github.com/docling-project/docling-parse/commit/a0061628a57b8a8089f596744cbe74e6b709fd3f))
-
 ## [v7.15.0](https://github.com/docling-project/docling-parse/releases/tag/v7.15.0) - 2026-08-20
 
 ### Feature
