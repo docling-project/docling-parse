@@ -10,11 +10,31 @@ env:
 
 jobs:
   run-regression:
-    runs-on: ubuntu-24.04
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux runs the full regression suite, including the pixel-level
+          # renderer groundtruth comparison in test_regression_threaded_render.
+          - os: ubuntu-24.04
+            test-glob: "tests/test_regression_*.py"
+          # Windows runs only the platform-independent parse/locale/embedded-font
+          # tests. The renderer groundtruth is a Linux contract: an unembedded
+          # named font (e.g. Arial) substitutes Liberation Sans on Linux but the
+          # real Arial from C:\Windows\Fonts here, and those outlines differ
+          # enough to blow the tight image tolerance. The kept tests compare
+          # extracted geometry/text (font-system-independent) and only smoke-test
+          # rendering for no-crash, so they need no font packs -- Windows ships
+          # its own CJK faces for the smoke renders.
+          - os: windows-2025
+            test-glob: "tests/test_regression_parse.py tests/test_regression_threaded_parse.py tests/test_regression_embedded_fonts.py tests/test_regression_locale_safety.py"
     steps:
       - uses: actions/checkout@v4
       - name: Install system fonts
-        # See checks.yml for why these packages are pinned.
+        # Linux ships essentially no fonts, so the renderer groundtruth needs
+        # these installed. See checks.yml for why the packages are pinned.
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
@@ -44,11 +64,23 @@ jobs:
           path: tests/data
           key: hf-regression-${{ hashFiles('tests/constants.py') }}
       - name: Sync and install with uv
+        # bash so the build-artifact check runs identically on both runners
+        # (git-bash is present on the Windows image).
+        shell: bash
         run: |
           uv sync --frozen --all-extras
-          ls docling_parse/pdf_parsers*.so
+          # setuptools' editable_wheel demotes native build failures to a
+          # warning, leaving an importable package without the extension
+          # (.so on Linux, .pyd on Windows); fail loudly here instead of at
+          # pytest collection.
+          uv run python -c "import glob, sys; sys.exit(0 if glob.glob('docling_parse/pdf_parsers*.so') or glob.glob('docling_parse/pdf_parsers*.pyd') else 1)"
       - name: Regression tests
+        shell: bash
         env:
-          DOCLING_PARSE_CJK_FALLBACK_FONT: /usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc
+          # Pin the substituted CJK face on Linux so a package change does not
+          # quietly become a rendering change (documented in tests/README.md).
+          # Empty on Windows -- the resolver treats that as unset and picks a
+          # host CJK face for the no-crash smoke renders.
+          DOCLING_PARSE_CJK_FALLBACK_FONT: ${{ runner.os == 'Linux' && '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc' || '' }}
         run: |
-          uv run pytest -v tests/test_regression_*.py
+          uv run pytest -v ${{ matrix.test-glob }}
