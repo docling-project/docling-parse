@@ -16,6 +16,9 @@ concurrency:
 jobs:
   run-regression-windows:
     runs-on: windows-2025
+    # Safety cap: a Windows-specific deadlock (e.g. in the threaded parser)
+    # should fail the job, not sit on a runner for the full 6h limit.
+    timeout-minutes: 30
     env:
       # uv run would otherwise implicitly re-sync and try to build the project
       # from source (no toolchain here); keep it pinned to the wheel we install.
@@ -54,11 +57,23 @@ jobs:
           # Fail loudly here if the wheel's extension cannot be imported,
           # rather than as an opaque error at pytest collection.
           uv run python -c "import docling_parse.pdf_parsers"
-      - name: Regression tests
+      # faulthandler_timeout is pytest's built-in (stdlib) hang detector: if a
+      # test runs longer than the timeout it dumps every thread's stack to the
+      # log, so a deadlock shows exactly where it is instead of an opaque hang.
+      - name: Regression tests (non-threaded)
         shell: bash
         run: |
-          uv run pytest -v \
+          uv run pytest -v -o faulthandler_timeout=120 \
             tests/test_regression_parse.py \
-            tests/test_regression_threaded_parse.py \
             tests/test_regression_embedded_fonts.py \
             tests/test_regression_locale_safety.py
+      - name: Regression tests (threaded)
+        shell: bash
+        # Isolated and separately bounded: the threaded parser is the most
+        # likely place a Windows-only join deadlock would surface. Split out so
+        # the tests above still report, and so a hang here fails in ~10min with
+        # a thread dump rather than eating the whole job budget.
+        timeout-minutes: 10
+        run: |
+          uv run pytest -v -o faulthandler_timeout=120 \
+            tests/test_regression_threaded_parse.py
