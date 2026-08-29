@@ -155,6 +155,11 @@ namespace pdflib
     bool resolve_cid_to_gid_identity() const;
     void build_embedded_font_blob();
     
+    // Resolution of this font onto one of the built-in base fonts. See the
+    // matched_*_ members for why these are cached.
+    const base_font_match& matched_font_name();
+    const base_font_match& matched_base_font();
+
     void init_ascent_and_descent();
 
     void init_default_width();
@@ -196,6 +201,17 @@ namespace pdflib
     std::array<double, 6> font_matrix_ = {0.001, 0, 0, 0.001, 0, 0};
     bool font_matrix_read_ = false;
     std::unordered_map<uint32_t, std::shared_ptr<type3_glyph> > type3_cache_;
+
+    // Matching a PDF font name onto one of the ~190 built-in base fonts scans
+    // all of them with a substring test per entry, and the call sites below ask
+    // per glyph. font_name and base_font are both fixed once init_font_name()
+    // has run, so each resolution is computed at most once per font resource.
+    // matched_base_font_ backs the call sites that fall back to /BaseFont;
+    // matched_font_name_ backs get_character_from_encoding(), which must not.
+    bool            matched_font_name_resolved_ = false;
+    base_font_match matched_font_name_;
+    bool            matched_base_font_resolved_ = false;
+    base_font_match matched_base_font_;
 
     nlohmann::json   json_font;
 
@@ -393,6 +409,36 @@ namespace pdflib
     return cmap_codespaces;
   }
 
+  const base_font_match& pdf_resource<PAGE_FONT>::matched_font_name()
+  {
+    if(not matched_font_name_resolved_)
+      {
+        matched_font_name_ = bfonts.find_corresponding_font(font_name);
+        matched_font_name_resolved_ = true;
+      }
+
+    return matched_font_name_;
+  }
+
+  const base_font_match& pdf_resource<PAGE_FONT>::matched_base_font()
+  {
+    if(not matched_base_font_resolved_)
+      {
+        // /FontDescriptor /FontName takes precedence: /BaseFont is consulted
+        // only when the font name matches no built-in font at all.
+        matched_base_font_ = matched_font_name();
+
+        if(not matched_base_font_.font)
+          {
+            matched_base_font_ = bfonts.find_corresponding_font(base_font);
+          }
+
+        matched_base_font_resolved_ = true;
+      }
+
+    return matched_base_font_;
+  }
+
   double pdf_resource<PAGE_FONT>::get_width(uint32_t c, bool verbose)
   {
     if(numb_to_widths.count(c)==1)
@@ -403,14 +449,11 @@ namespace pdflib
       {
 	return default_width;
       }    
-    else if(bfonts.has_corresponding_font(font_name) or
-	    bfonts.has_corresponding_font(base_font))
+    else if(matched_base_font().font)
       {
-	std::string fontname = bfonts.has_corresponding_font(font_name)
-	  ? bfonts.get_corresponding_font(font_name)
-	  : bfonts.get_corresponding_font(base_font);
-	
-        auto& bfont = bfonts.get(fontname);
+	const std::string& fontname = matched_base_font().name;
+
+        auto& bfont = *(matched_base_font().font);
 
         if(bfont.has(c))
           {
@@ -491,15 +534,9 @@ namespace pdflib
 
   bool pdf_resource<PAGE_FONT>::has_char_bbox(const uint32_t& c)
   {
-    if(bfonts.has_corresponding_font(font_name) or
-       bfonts.has_corresponding_font(base_font))
+    if(matched_base_font().font)
       {
-        std::string fontname = bfonts.has_corresponding_font(font_name)
-          ? bfonts.get_corresponding_font(font_name)
-          : bfonts.get_corresponding_font(base_font);
-
-        auto& bfont = bfonts.get(fontname);
-        return bfont.has_char_bbox(c);
+        return matched_base_font().font->has_char_bbox(c);
       }
 
     return false;
@@ -507,25 +544,21 @@ namespace pdflib
 
   std::array<double, 4> pdf_resource<PAGE_FONT>::get_char_bbox(const uint32_t& c)
   {
-    std::string fontname = bfonts.has_corresponding_font(font_name)
-      ? bfonts.get_corresponding_font(font_name)
-      : bfonts.get_corresponding_font(base_font);
+    // Every caller guards with has_char_bbox(). When nothing matched, keep the
+    // previous behaviour of resolving the "Unknown" sentinel, which throws.
+    if(not matched_base_font().font)
+      {
+        return bfonts.get("Unknown")->get_char_bbox(c);
+      }
 
-    auto& bfont = bfonts.get(fontname);
-    return bfont.get_char_bbox(c);
+    return matched_base_font().font->get_char_bbox(c);
   }
 
   bool pdf_resource<PAGE_FONT>::has_char_bbox(const std::string& c)
   {
-    if(bfonts.has_corresponding_font(font_name) or
-       bfonts.has_corresponding_font(base_font))
+    if(matched_base_font().font)
       {
-        std::string fontname = bfonts.has_corresponding_font(font_name)
-          ? bfonts.get_corresponding_font(font_name)
-          : bfonts.get_corresponding_font(base_font);
-
-        auto& bfont = bfonts.get(fontname);
-        return bfont.has_char_bbox(c);
+        return matched_base_font().font->has_char_bbox(c);
       }
 
     return false;
@@ -533,12 +566,14 @@ namespace pdflib
 
   std::array<double, 4> pdf_resource<PAGE_FONT>::get_char_bbox(const std::string& c)
   {
-    std::string fontname = bfonts.has_corresponding_font(font_name)
-      ? bfonts.get_corresponding_font(font_name)
-      : bfonts.get_corresponding_font(base_font);
+    // Every caller guards with has_char_bbox(). When nothing matched, keep the
+    // previous behaviour of resolving the "Unknown" sentinel, which throws.
+    if(not matched_base_font().font)
+      {
+        return bfonts.get("Unknown")->get_char_bbox(c);
+      }
 
-    auto& bfont = bfonts.get(fontname);
-    return bfont.get_char_bbox(c);
+    return matched_base_font().font->get_char_bbox(c);
   }
   
   std::string pdf_resource<PAGE_FONT>::get_string(uint32_t c)
@@ -644,15 +679,15 @@ namespace pdflib
       {
         return cmap_numb_to_char.at(c);
       }
-    else if(bfonts.has_corresponding_font(font_name))
+    else if(matched_font_name().font)
       {
         // check if the font-name is registered as a 'special' font, eg
-        // the TeX mathematical fonts
+        // the TeX mathematical fonts. Note this deliberately does not fall back
+        // to /BaseFont the way the metrics lookups do.
 
-        std::string fontname = bfonts.get_corresponding_font(font_name);
-	//LOG_S(WARNING) << "detected a known font: " << font_name << " -> " << fontname;
+        const std::string& fontname = matched_font_name().name;
 
-        auto& fm = bfonts.get(fontname);
+        auto& fm = *(matched_font_name().font);
 
         // If font declares a specific encoding (MacRoman, WinAnsi, etc.) AND it was
         // explicitly specified in the PDF, use that encoding instead of base font's built-in mapping
@@ -1130,7 +1165,7 @@ namespace pdflib
     else if(bfonts.has(base_font)==1)
       {
         LOG_S(WARNING) << "font-bbox retrieved from base-font";
-        font_bbox = bfonts[base_font].get_font_bbox();
+        font_bbox = bfonts[base_font]->get_font_bbox();
       }
     else
       {
@@ -1646,7 +1681,7 @@ namespace pdflib
         {
           if(bfonts.has(base_font))
             {
-              ascent = bfonts[base_font].get_ascend();
+              ascent = bfonts[base_font]->get_ascend();
               LOG_S(WARNING) << " -> ascend (=" << ascent << ") retrieved from base-font (=" << base_font << ")";
             }
           else if(std::abs(font_bbox[3])>1.e-3)
@@ -1687,7 +1722,7 @@ namespace pdflib
         {
           if(bfonts.has(base_font))
             {
-              descent = bfonts[base_font].get_descend();
+              descent = bfonts[base_font]->get_descend();
               LOG_S(WARNING) << " -> descend (=" << descent << ") retrieved from base-font (=" << base_font << ")";
             }
           else if(std::abs(font_bbox[1])>1.e-3)
@@ -1743,7 +1778,7 @@ namespace pdflib
           LOG_S(WARNING) << "'capheight' was not explicitely defined ...";
 	  if(bfonts.has(base_font))
 	    {
-	      capheight = bfonts[base_font].get_capheight();
+	      capheight = bfonts[base_font]->get_capheight();
 	      LOG_S(WARNING) << " -> capheight (=" << capheight << ") retrieved from base-font (=" << base_font << ")";
 	    }
 	  else
@@ -1774,7 +1809,7 @@ namespace pdflib
           LOG_S(WARNING) << "'xheight' was not explicitely defined ...";
 	  if(bfonts.has(base_font))
 	    {
-	      xheight = bfonts[base_font].get_xheight();
+	      xheight = bfonts[base_font]->get_xheight();
 	      if(std::abs(xheight) > 1.e-3)
 		{
 		  LOG_S(WARNING) << " -> xheight (=" << xheight << ") retrieved from base-font (=" << base_font << ")";

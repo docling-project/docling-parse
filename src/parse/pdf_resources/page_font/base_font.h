@@ -3,6 +3,8 @@
 #ifndef PDF_PAGE_FONT_BASE_FONT_H
 #define PDF_PAGE_FONT_BASE_FONT_H
 
+#include <atomic>
+#include <mutex>
 #include <unordered_map>
 
 namespace pdflib
@@ -52,7 +54,11 @@ namespace pdflib
     std::string filename;
     font_glyphs& glyphs;
 
-    bool initialised;
+    // Set only once every table below is fully populated. The base fonts live
+    // in one process-wide static shared by every decoding thread and are
+    // parsed on first use, so this flag is what publishes the tables to the
+    // threads that did not do the parsing. See initialise().
+    std::atomic<bool> initialised;
 
     nlohmann::json properties;
     
@@ -87,7 +93,7 @@ namespace pdflib
     this->filename = other.filename;
     this->glyphs = other.glyphs;
 
-    initialised = false;
+    initialised.store(false);
 
     return *this;
   }
@@ -287,11 +293,26 @@ namespace pdflib
 
   void base_font::initialise()
   {
-    if(initialised)
+    // Fast path: acquire pairs with the release store at the very end of this
+    // function, so a thread that observes the flag also observes every table
+    // the initialising thread filled in.
+    if(initialised.load(std::memory_order_acquire))
       {
 	return;
       }
-    initialised = true;
+
+    // One mutex for every base font. The parse below runs at most once per
+    // font per process, so there is nothing to gain from a per-instance lock,
+    // and a plain member mutex would make base_font non-copyable.
+    static std::mutex initialise_mutex;
+    std::lock_guard<std::mutex> guard(initialise_mutex);
+
+    // Another thread may have finished this font between the load above and
+    // the lock being taken.
+    if(initialised.load(std::memory_order_relaxed))
+      {
+	return;
+      }
 
     LOG_S(WARNING) << "initialising base-font: " << filename;
     
@@ -426,6 +447,11 @@ namespace pdflib
 		      << numb_to_width[itr->first];
         }
     }
+
+    // Publishes every table written above. This has to stay the last statement
+    // of the function: setting it up front is what used to let a second thread
+    // take the fast path and read half-populated tables.
+    initialised.store(true, std::memory_order_release);
   }
 
 }

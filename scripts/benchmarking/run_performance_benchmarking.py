@@ -33,13 +33,16 @@ Usage:
         --create-word-cells=true --create-line-cells=true \
         --keep-shapes=true --keep-bitmaps=true
     python scripts/benchmarking/run_performance_benchmarking.py --mode both --compare                 # docling-parse vs pypdfium2
+    python scripts/benchmarking/run_performance_benchmarking.py --mode parse --threads 1,12 --only-threaded  # before/after, no reference backends
     python scripts/benchmarking/run_performance_benchmarking.py --threads 1,4,8,12 --compare all --mode render \
         --output-dir ./docs/performance_benchmarks/
 
 Every run writes `<output-dir>/<cpu>_<dataset>_<mode>.md` (a self-contained
 report: the exact command, the dataset, the machine, every config table, and
 the result tables) alongside a `.csv` of per-page timings for scripts/benchmarking/run_performance_eval.py
-and scripts/benchmarking/run_performance_analysis.py.  The output directory defaults to ./scratch.
+and scripts/benchmarking/run_performance_analysis.py.  The output directory defaults to
+./scratch-performance-benchmarks-<YYYY-MM-DD-HH-MM>, so consecutive runs (e.g. before
+and after a change) never overwrite each other.
 """
 
 from __future__ import annotations
@@ -73,7 +76,9 @@ from tqdm import tqdm
 
 DEFAULT_HF_REPO_ID = "docling-project/performance-dataset-bo767"
 HF_PDF_SUBDIR = "pdf"
-DEFAULT_OUTPUT_DIR = Path("scratch")
+DEFAULT_OUTPUT_DIR = Path(
+    f"scratch-performance-benchmarks-{datetime.now().strftime('%Y-%m-%d-%H-%M')}"
+)
 
 
 # -------- Input resolution --------
@@ -2086,13 +2091,14 @@ def _run_one_mode(
     decode_options: dict[str, bool],
     materialization_options: dict[str, bool],
     bytesio: bool,
+    sequential: bool,
     collected_runs: List[BackendRun],
 ) -> Tuple[List[Tuple[str, float]], List[Tuple[int, float]]]:
     baselines: List[Tuple[str, float]] = []
 
     # Sequential docling baseline is only meaningful for parse mode
     # (DoclingPdfParser has no rendering path).
-    if not render:
+    if sequential and not render:
         print("Running sequential (DoclingPdfParser) ...")
         t = run_sequential_parse(
             pdf_schedule,
@@ -2274,6 +2280,17 @@ def main(argv: List[str]) -> int:
         ),
     )
     ap.add_argument(
+        "--only-threaded",
+        action="store_true",
+        help=(
+            "Run nothing but DoclingThreadedPdfParser at each --threads value: "
+            "skips the single-threaded DoclingPdfParser baseline and every "
+            "3rd-party backend (overriding --other). With --compare, narrows "
+            "the suite to docling-parse. Use this for before/after runs where "
+            "the reference backends would only cost wall time."
+        ),
+    )
+    ap.add_argument(
         "--bytesio",
         action="store_true",
         help="(docling-parse only) Read PDFs into memory and load them as BytesIO",
@@ -2316,6 +2333,11 @@ def main(argv: List[str]) -> int:
     thread_counts = [int(x.strip()) for x in args.threads.split(",")]
     other_backends = parse_other_arg(args.other)
     compare_backends = parse_compare_arg(args.compare)
+    if args.only_threaded:
+        other_backends = []
+        compare_backends = [
+            name for name in compare_backends if name in THREADED_COMPARISON_BACKENDS
+        ]
     decode_options = _decode_options_from_args(args)
     materialization_options = _materialization_options_from_args(args)
 
@@ -2456,6 +2478,7 @@ def main(argv: List[str]) -> int:
             decode_options=decode_options,
             materialization_options=materialization_options,
             bytesio=args.bytesio,
+            sequential=not args.only_threaded,
             collected_runs=collected_runs,
         )
         _print_table(title, baselines, threaded_results, total_pages)
