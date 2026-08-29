@@ -495,7 +495,9 @@ PYBIND11_MODULE(pdf_parsers, m) {
     .def_readonly("text", &pdflib::page_item<pdflib::PAGE_WIDGET>::text)
     .def_readonly("description", &pdflib::page_item<pdflib::PAGE_WIDGET>::description)
     .def_readonly("field_name", &pdflib::page_item<pdflib::PAGE_WIDGET>::field_name)
-    .def_readonly("field_type", &pdflib::page_item<pdflib::PAGE_WIDGET>::field_type);
+    .def_readonly("field_type", &pdflib::page_item<pdflib::PAGE_WIDGET>::field_type)
+    .def_readonly("field_flags", &pdflib::page_item<pdflib::PAGE_WIDGET>::field_flags)
+    .def_readonly("appearance_state", &pdflib::page_item<pdflib::PAGE_WIDGET>::appearance_state);
 
   // PdfHyperlink - hyperlink annotation with bounding box and URI
   pybind11::class_<pdflib::page_item<pdflib::PAGE_HYPERLINK>>(m, "PdfHyperlink")

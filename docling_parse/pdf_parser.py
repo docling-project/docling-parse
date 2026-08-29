@@ -486,6 +486,8 @@ def _to_widgets_from_decoder(widgets_container) -> List[PdfWidget]:
                 widget_description=widget.description or None,
                 widget_field_name=widget.field_name or None,
                 widget_field_type=widget.field_type or None,
+                widget_field_flags=widget.field_flags,
+                widget_appearance_state=widget.appearance_state or None,
             )
         )
 
