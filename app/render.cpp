@@ -312,6 +312,7 @@ int main(int argc, char* argv[])
       if (result.count("keep-qpdf-warnings"))       { page_config.keep_qpdf_warnings        = result["keep-qpdf-warnings"].as<bool>(); }
       // This app always renders, so embedded font extraction defaults to on.
       page_config.extract_font_programs = true;
+      page_config.extract_bitmap_pixels = true;
       if (result.count("extract-font-programs"))    { page_config.extract_font_programs     = result["extract-font-programs"].as<bool>(); }
       if (result.count("populate-json"))            { page_config.populate_json_objects      = result["populate-json"].as<bool>(); }
       bool export_bitmaps = result["export-bitmaps"].as<bool>();

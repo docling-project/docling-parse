@@ -2032,14 +2032,23 @@ def _print_table(
     `threaded_results` is a list of (num_threads, wall_time) for the docling
     threaded scaling sweep.
 
-    Columns: backend, threads, wall_time, vs threaded(1), one `vs <baseline>`
-    column per baseline (sequential docling and each selected `--other`),
-    then pages/sec and ms/page.  All `vs X` values are `X_time / row_time`,
-    so higher means the row is faster than X.
+    Columns: backend, threads, wall_time, vs threaded(1), efficiency, one
+    `vs <baseline>` column per baseline (sequential docling and each selected
+    `--other`), then pages/sec and ms/page.  All `vs X` values are
+    `X_time / row_time`, so higher means the row is faster than X.
+
+    `efficiency` is `vs threaded(1) / threads`: the fraction of a perfect
+    linear speedup this thread count achieves.  It is only meaningful for the
+    threaded rows, so the single-threaded reference backends leave it blank,
+    and it is left blank entirely when the sweep does not include a 1-thread
+    run to measure against.
     """
     threaded_1 = threaded_results[0][1] if threaded_results else float("nan")
+    # without a threads=1 row there is no baseline, and `vs threaded(1)` is
+    # measured against whatever the lowest thread count happened to be
+    has_baseline = bool(threaded_results) and threaded_results[0][0] == 1
 
-    headers = ["backend", "threads", "wall_time (s)", "vs threaded(1)"]
+    headers = ["backend", "threads", "wall_time (s)", "vs threaded(1)", "efficiency"]
     for label, _ in baselines:
         headers.append(f"vs {label}")
     headers.extend(["pages/sec", "ms/page"])
@@ -2049,13 +2058,22 @@ def _print_table(
     def _row(name: str, threads, t: float) -> List[str]:
         if _isnan(t):
             return (
-                [name, str(threads), "n/a", "n/a"]
+                [name, str(threads), "n/a", "n/a", "n/a"]
                 + ["n/a"] * n_vs_baseline
                 + ["n/a", "n/a"]
             )
         cells: List[str] = [name, str(threads), f"{t:.3f}"]
         vs_t1 = threaded_1 / t if t > 0 and not _isnan(threaded_1) else float("nan")
         cells.append(_fmt_speedup(vs_t1))
+        # parallel efficiency, only defined for the threaded sweep
+        cells.append(
+            f"{100.0 * vs_t1 / threads:.0f}%"
+            if has_baseline
+            and isinstance(threads, int)
+            and threads > 0
+            and not _isnan(vs_t1)
+            else ""
+        )
         for _, bt in baselines:
             vs_b = bt / t if t > 0 and not _isnan(bt) else float("nan")
             cells.append(_fmt_speedup(vs_b))

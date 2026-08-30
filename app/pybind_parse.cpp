@@ -382,6 +382,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
     .def_readwrite("keep_glyphs", &pdflib::decode_config::keep_glyphs)
     .def_readwrite("keep_qpdf_warnings", &pdflib::decode_config::keep_qpdf_warnings)
     .def_readwrite("extract_font_programs", &pdflib::decode_config::extract_font_programs)
+    .def_readwrite("extract_bitmap_pixels", &pdflib::decode_config::extract_bitmap_pixels)
     .def("__copy__", [](const pdflib::decode_config& self) { return self; })
     .def("__deepcopy__", [](const pdflib::decode_config& self, pybind11::dict) { return self; });
 

@@ -139,6 +139,11 @@ Flags:
 
 ## Outputs
 
+The threaded rows also carry an `efficiency` column: `vs threaded(1)` divided
+by the thread count, i.e. the fraction of a perfect linear speedup that thread
+count reaches. It is blank for the single-threaded reference backends, where it
+has no meaning.
+
 You only ever name a directory. Both files are named
 `<cpu>_<dataset>_<mode>`, derived from the machine and the run, so results
 from different machines never overwrite each other:

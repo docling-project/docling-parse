@@ -49,6 +49,15 @@ namespace pdflib
     // decoding; the render pipeline turns it on.
     bool extract_font_programs = false;
 
+    // Defilter the pixel payload of image XObjects, and decode and resample
+    // the /SMask (or /Mask stencil) alpha plane that goes with it. When off,
+    // bitmaps are still found and measured -- bounding box, visibility,
+    // dimensions, colour space, filters and decode parameters all come from
+    // the XObject dictionary -- but no sample data is touched. Callers that
+    // want the image bytes, and the render pipeline, must turn this on.
+    // Only meaningful together with keep_bitmaps.
+    bool extract_bitmap_pixels = true;
+
     // threading
     bool do_thread_safe = true; // slight compute/memory overhead in single threaded case
     int release_native_memory_every_n_pages = 0; // 0 disables allocator trimming
@@ -100,6 +109,7 @@ namespace pdflib
 
     j["populate_json_objects"] = populate_json_objects;
     j["extract_font_programs"] = extract_font_programs;
+    j["extract_bitmap_pixels"] = extract_bitmap_pixels;
     j["release_native_memory_every_n_pages"] = release_native_memory_every_n_pages;
 
     j["apply_actual_text"] = apply_actual_text;
@@ -137,6 +147,7 @@ namespace pdflib
 
     if(j.count("populate_json_objects")) { populate_json_objects = j["populate_json_objects"]; }
     if(j.count("extract_font_programs")) { extract_font_programs = j["extract_font_programs"]; }
+    if(j.count("extract_bitmap_pixels")) { extract_bitmap_pixels = j["extract_bitmap_pixels"]; }
     if(j.count("release_native_memory_every_n_pages")) { release_native_memory_every_n_pages = j["release_native_memory_every_n_pages"]; }
 
     if(j.count("apply_actual_text")) { apply_actual_text = j["apply_actual_text"]; }
@@ -184,6 +195,7 @@ namespace pdflib
        << std::setw(48) << "keep_char_cells" << (keep_char_cells ? "true" : "false") << "\n"
        << std::setw(48) << "keep_shapes" << (keep_shapes ? "true" : "false") << "\n"
        << std::setw(48) << "keep_bitmaps" << (keep_bitmaps ? "true" : "false") << "\n"
+       << std::setw(48) << "extract_bitmap_pixels" << (extract_bitmap_pixels ? "true" : "false") << "\n"
        << std::setw(48) << "max_num_lines" << max_num_lines << "\n"
        << std::setw(48) << "max_num_bitmaps" << max_num_bitmaps << "\n"
        << std::setw(48) << "min_visible_clip_extent" << min_visible_clip_extent << "\n"

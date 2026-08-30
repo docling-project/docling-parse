@@ -150,8 +150,12 @@ namespace pdflib
     std::string              get_key() const;
     xobject_subtype_name     get_subtype() const;
 
+    // extract_pixels=false records everything the XObject dictionary knows --
+    // dimensions, colour space, filters, decode array -- but skips defiltering
+    // the samples and decoding the soft mask. See decode_config.
     void set(std::string      xobject_key_,
-             QPDFObjectHandle qpdf_xobject_);
+             QPDFObjectHandle qpdf_xobject_,
+             bool             extract_pixels = true);
 
     // Image property getters
     int                      get_image_width() const;
@@ -263,6 +267,9 @@ namespace pdflib
 
     std::shared_ptr<Buffer> decoded_stream_data;
     std::shared_ptr<std::vector<uint8_t>> soft_mask_data;
+
+    // set() argument, kept so parse() can consult it
+    bool extract_pixels_ = true;
     int soft_mask_width = 0;
     int soft_mask_height = 0;
 
@@ -310,12 +317,14 @@ namespace pdflib
   }
 
   void pdf_resource<PAGE_XOBJECT_IMAGE>::set(std::string      xobject_key_,
-					     QPDFObjectHandle qpdf_xobject_)
+					     QPDFObjectHandle qpdf_xobject_,
+					     bool             extract_pixels)
   {
     LOG_S(INFO) << __FUNCTION__ << ": " << xobject_key_;
 
     xobject_key  = xobject_key_;
     qpdf_xobject = qpdf_xobject_;
+    extract_pixels_ = extract_pixels;
 
     parse();
 
@@ -339,8 +348,15 @@ namespace pdflib
 
     init_filters();
     init_image_properties();
-    init_stream_data();
-    init_soft_mask_data();
+
+    // Defiltering the samples and building the alpha plane is the whole cost
+    // of an image XObject; everything above comes from the dictionary. A
+    // caller that only wants to know where the bitmaps are skips both.
+    if(extract_pixels_)
+      {
+        init_stream_data();
+        init_soft_mask_data();
+      }
   }
 
   void pdf_resource<PAGE_XOBJECT_IMAGE>::init_image_properties()
@@ -1180,7 +1196,7 @@ namespace pdflib
       }
 
     pdf_resource<PAGE_XOBJECT_IMAGE> smask;
-    smask.set(xobject_key + "/SMask", qpdf_smask);
+    smask.set(xobject_key + "/SMask", qpdf_smask, true);
 
     const int sm_w = smask.get_image_width();
     const int sm_h = smask.get_image_height();

@@ -58,9 +58,11 @@ namespace docling
   {
     font_resolver_->warm();
 
-    // This pipeline always renders, so embedded font programs must be
-    // extracted during page decoding; parse-only pipelines leave this off.
+    // This pipeline always renders, so embedded font programs and image
+    // samples must be extracted during page decoding, whatever the caller
+    // asked for; parse-only pipelines leave both off.
     config.extract_font_programs = true;
+    config.extract_bitmap_pixels = true;
   }
 
   inline void docling_threaded_renderer::worker_loop()

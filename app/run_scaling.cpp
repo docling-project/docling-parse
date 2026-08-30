@@ -564,8 +564,20 @@ namespace
     {
       if(render_config_.has_value())
         {
+          // Rendering needs the image samples and the embedded font programs,
+          // whatever the CLI asked for. Without the latter this benchmark
+          // silently rasterised with substituted system fonts, which is both
+          // cheaper and not what the library does.
+          decode_config_.extract_bitmap_pixels = true;
+          decode_config_.extract_font_programs = true;
+
           font_resolver_ = std::make_shared<pdflib::blend2d_font_resolver>();
           font_resolver_->warm();
+
+          // shared across pages, exactly as docling_threaded_renderer does;
+          // a per-page cache would reload every embedded font program
+          embedded_font_cache_ = std::make_shared<pdflib::blend2d_embedded_font_cache>();
+          freetype_font_cache_ = std::make_shared<pdflib::freetype_font_cache>();
         }
     }
 
@@ -668,7 +680,10 @@ namespace
               if(render_config_.has_value())
                 {
                   stage_start = clock_type::now();
-                  pdflib::renderer<pdflib::BLEND2D> rnd(*render_config_, font_resolver_);
+                  pdflib::renderer<pdflib::BLEND2D> rnd(*render_config_,
+                                                        font_resolver_,
+                                                        embedded_font_cache_,
+                                                        freetype_font_cache_);
                   page_decoder->get_instructions().iterate_over_instructions(rnd);
                   result.timings.render_page_s =
                     std::chrono::duration<double>(clock_type::now() - stage_start).count();
@@ -736,6 +751,8 @@ namespace
     pdflib::decode_config decode_config_;
     std::optional<pdflib::render_config> render_config_;
     std::shared_ptr<pdflib::blend2d_font_resolver> font_resolver_;
+    std::shared_ptr<pdflib::blend2d_embedded_font_cache> embedded_font_cache_;
+    std::shared_ptr<pdflib::freetype_font_cache> freetype_font_cache_;
 
     std::vector<page_task> tasks_;
     std::atomic<std::size_t> next_task_{0};
