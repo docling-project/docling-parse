@@ -57,6 +57,9 @@ namespace docling
 
     nlohmann::json get_meta_xml(std::string key);
     nlohmann::json get_table_of_contents(std::string key);
+    nlohmann::json get_attachments(std::string key);
+    pybind11::bytes get_attachment_data(std::string key, int index, long long max_size);
+    void write_attachment_data(std::string key, int index, long long max_size, std::string path);
 
     std::shared_ptr<pdflib::pdf_decoder<pdflib::PAGE>> get_page_decoder(std::string key,
                                                                         int page,
@@ -427,6 +430,35 @@ namespace docling
       }
 
     return (itr->second)->get_table_of_contents();
+  }
+
+  nlohmann::json docling_parser::get_attachments(std::string key)
+  {
+    LOG_S(INFO) << __FUNCTION__;
+
+    auto itr = doc_decoders.find(key);
+    if(itr==doc_decoders.end())
+      throw std::runtime_error("key not found: " + key);
+
+    return (itr->second)->get_attachments();
+  }
+
+  pybind11::bytes docling_parser::get_attachment_data(std::string key, int index, long long max_size)
+  {
+    auto itr = doc_decoders.find(key);
+    if(itr==doc_decoders.end())
+      throw std::runtime_error("key not found: " + key);
+
+    auto buf = (itr->second)->get_attachment_data(index, max_size);
+    return pybind11::bytes(reinterpret_cast<const char*>(buf->getBuffer()), buf->getSize());
+  }
+
+  void docling_parser::write_attachment_data(std::string key, int index, long long max_size, std::string path)
+  {
+    auto itr = doc_decoders.find(key);
+    if(itr==doc_decoders.end())
+      throw std::runtime_error("key not found: " + key);
+    (itr->second)->write_attachment_data(index, max_size, path);
   }
 
   std::shared_ptr<pdflib::pdf_decoder<pdflib::PAGE>> docling_parser::get_page_decoder(std::string key,
