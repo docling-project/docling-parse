@@ -63,6 +63,20 @@ namespace docling
     // asked for; parse-only pipelines leave both off.
     config.extract_font_programs = true;
     config.extract_bitmap_pixels = true;
+
+    // Tell the decode side what resolution these samples end up being drawn
+    // at, so an oversampled scan is decoded down instead of decoded in full
+    // and then minified by the rasteriser.
+    //
+    // Only the scale form states a resolution that holds for every page.
+    // canvas_width/canvas_height fix a pixel count instead, so what that means
+    // per PDF unit depends on each page's own size, which is not known here;
+    // those leave the hint at its "unknown" default and every image decodes at
+    // full resolution, exactly as before.
+    if(render_cfg.scale > 0.0f)
+      {
+        config.bitmap_target_pixels_per_unit = render_cfg.scale;
+      }
   }
 
   inline void docling_threaded_renderer::worker_loop()
@@ -134,20 +148,37 @@ namespace docling
                   }
 
                 stage_start = clock_type::now();
-                pdflib::renderer<pdflib::BLEND2D> rnd(render_cfg,
-                                                      font_resolver_,
-                                                      embedded_font_cache_,
-                                                      freetype_font_cache_);
-                page_decoder->get_instructions().iterate_over_instructions(rnd);
-                result.timings.render_page_s
-                  = std::chrono::duration<double>(clock_type::now() - stage_start).count();
+                {
+                  pdflib::renderer<pdflib::BLEND2D> rnd(render_cfg,
+                                                        font_resolver_,
+                                                        embedded_font_cache_,
+                                                        freetype_font_cache_);
+                  page_decoder->get_instructions().iterate_over_instructions(rnd);
+                  result.timings.render_page_s
+                    = std::chrono::duration<double>(clock_type::now() - stage_start).count();
+
+                  result.success = true;
+                  result.page_decoder = page_decoder;
+                  result.image_data   = rnd.get_canvas();
+                  result.image_shape  = rnd.get_shape();
+
+                  // Fold the rasterisation timings into the page's own, so that
+                  // get_timings() reports rendering next to decoding and
+                  // run_performance_analysis.py can break the render stage down
+                  // the way it already breaks decode_page down. get_canvas()
+                  // is timed too, hence the merge after it.
+                  page_decoder->get_timings().merge(rnd.get_timings());
+                }
+
+                // The parent of the render_page.* children, so the analysis
+                // has a denominator. Covers canvas extraction as well, which
+                // render_page_s (the reported stage) deliberately does not.
+                page_decoder->get_timings().add_timing(
+                  pdflib::pdf_timings::KEY_RENDER_PAGE,
+                  std::chrono::duration<double>(clock_type::now() - stage_start).count());
 
                 result.timings.total_s
                   = std::chrono::duration<double>(clock_type::now() - total_start).count();
-                result.success = true;
-                result.page_decoder = page_decoder;
-                result.image_data   = rnd.get_canvas();
-                result.image_shape  = rnd.get_shape();
               }
           }
         catch(const std::exception& exc)

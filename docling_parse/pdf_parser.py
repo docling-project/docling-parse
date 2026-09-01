@@ -1258,6 +1258,19 @@ class PageParseResult:
         """Return structured timing data for this page parse."""
         return self._timings
 
+    def get_decoder_timings(self) -> Timings:
+        """Return the native per-phase timings for this page.
+
+        These are the decoder's own `pdf_timings` -- `decode_page` and its
+        children -- and, when the batch renders, the renderer's `render_page`
+        breakdown merged into the same map. `get_timings()` reports the four
+        coarse pipeline stages instead; this is what
+        scripts/benchmarking/run_performance_analysis.py needs to attribute
+        time inside a stage.
+        """
+        _, data = self._raw.get()
+        return Timings(data=dict(data))
+
     def intersects_with(
         self,
         *,

@@ -342,6 +342,14 @@ int main(int argc, char* argv[])
       if (result.count("canvas-width"))           { cfg.canvas_width           = result["canvas-width"].as<int>(); }
       if (result.count("canvas-height"))          { cfg.canvas_height          = result["canvas-height"].as<int>(); }
 
+      // Let the decode side know what resolution the samples are drawn at, so
+      // oversampled scans decode down rather than in full. Only the scale form
+      // states a per-page-independent resolution; see docling_threaded_renderer.
+      if (cfg.scale > 0.0f)
+        {
+          page_config.bitmap_target_pixels_per_unit = cfg.scale;
+        }
+
       utils::timer timer;
 
       // --- single-file mode (-i) ---

@@ -15,7 +15,9 @@ import csv
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List
+from typing import Any, Dict, List
+
+from tqdm import tqdm
 
 TASK_PARSE = "parse"
 TASK_RENDER = "parse+render"
@@ -93,6 +95,69 @@ def ensure_parent_dir(path: Path) -> None:
 def safe_name(value: str) -> str:
     """Filesystem-safe version of a series label."""
     return re.sub(r"[^A-Za-z0-9_.=-]+", "-", value)
+
+
+# -------- Progress bars --------
+
+PROGRESS_BAR_FORMAT = (
+    "{desc}: [{bar:20}] {n_fmt}/{total_fmt} {percentage:5.1f}% "
+    "{rate_text} elapsed: {elapsed_text} [sec] total: {projected_total} [sec]"
+)
+
+
+def format_duration(seconds: float) -> str:
+    """Format a duration like the C++ scaling benchmark."""
+    total_seconds = int(seconds)
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, secs = divmod(remainder, 60)
+    if hours:
+        return f"{hours}:{minutes:02d}:{secs:02d}"
+    return f"{minutes}:{secs:02d}"
+
+
+def _average_rate(values: Dict[str, Any]) -> float | None:
+    """Items per second, mirroring the fallback `tqdm.format_meter` applies.
+
+    With `smoothing=0` tqdm leaves `rate` unset in `format_dict` and works the
+    average out only while formatting, so the custom output must derive the
+    same rate for its `page/s` field.
+    """
+    rate = values.get("rate")
+    if rate:
+        return float(rate)
+    elapsed = values.get("elapsed") or 0.0
+    if elapsed <= 0:
+        return None
+    done = values.get("n", 0) - (values.get("initial") or 0)
+    return done / elapsed if done > 0 else None
+
+
+class ProgressBar(tqdm):
+    """C++-style benchmark bar with average rate and projected total duration."""
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        kwargs.setdefault("bar_format", PROGRESS_BAR_FORMAT)
+        kwargs.setdefault("smoothing", 0.0)
+        kwargs.setdefault("ascii", "-#")
+        super().__init__(*args, **kwargs)
+
+    @property
+    def format_dict(self) -> Dict[str, Any]:
+        values = dict(super().format_dict)
+        rate = _average_rate(values)
+        total = values.get("total")
+        current = values.get("n", 0)
+        elapsed = values.get("elapsed") or 0.0
+        projected_total = (
+            elapsed * total / current if total and current else 0.0
+        )
+        unit = values.get("unit") or "it"
+        values["rate_text"] = (
+            f"{rate:.1f}{unit}/s" if rate is not None else f"0.0{unit}/s"
+        )
+        values["elapsed_text"] = format_duration(elapsed)
+        values["projected_total"] = format_duration(projected_total)
+        return values
 
 
 # -------- Statistics --------

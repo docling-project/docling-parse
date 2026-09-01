@@ -58,6 +58,26 @@ namespace pdflib
     // Only meaningful together with keep_bitmaps.
     bool extract_bitmap_pixels = true;
 
+    // Device resolution the decoded image samples will end up being drawn at,
+    // in pixels per PDF unit (72 ppi baseline, so 2.0 is a scale-2 render).
+    // When a stored image carries many more samples than that -- a 600 dpi
+    // scan drawn onto a 2x canvas is 8x oversampled in each direction -- the
+    // codecs that can decode at a reduced resolution are asked to, which is
+    // cheaper than decoding every sample and letting the rasteriser throw the
+    // excess away.
+    //
+    // 0 means "unknown": every image is decoded at its full stored resolution.
+    // That is the parse-only behaviour and the default, because parse callers
+    // hand the samples out and no rendering resolution is implied. The render
+    // pipeline sets it from render_config::scale.
+    //
+    // Only ever reduces to a power of two that still leaves at least one
+    // stored sample per device pixel, so the rasteriser is never asked to
+    // magnify what it used to minify. Rendered output does change: the
+    // discarded resolution levels are ones the rasteriser would have
+    // resampled away, but not with the same filter the codec uses.
+    double bitmap_target_pixels_per_unit = 0.0;
+
     // threading
     bool do_thread_safe = true; // slight compute/memory overhead in single threaded case
     int release_native_memory_every_n_pages = 0; // 0 disables allocator trimming
@@ -110,6 +130,7 @@ namespace pdflib
     j["populate_json_objects"] = populate_json_objects;
     j["extract_font_programs"] = extract_font_programs;
     j["extract_bitmap_pixels"] = extract_bitmap_pixels;
+    j["bitmap_target_pixels_per_unit"] = bitmap_target_pixels_per_unit;
     j["release_native_memory_every_n_pages"] = release_native_memory_every_n_pages;
 
     j["apply_actual_text"] = apply_actual_text;
@@ -148,6 +169,7 @@ namespace pdflib
     if(j.count("populate_json_objects")) { populate_json_objects = j["populate_json_objects"]; }
     if(j.count("extract_font_programs")) { extract_font_programs = j["extract_font_programs"]; }
     if(j.count("extract_bitmap_pixels")) { extract_bitmap_pixels = j["extract_bitmap_pixels"]; }
+    if(j.count("bitmap_target_pixels_per_unit")) { bitmap_target_pixels_per_unit = j["bitmap_target_pixels_per_unit"]; }
     if(j.count("release_native_memory_every_n_pages")) { release_native_memory_every_n_pages = j["release_native_memory_every_n_pages"]; }
 
     if(j.count("apply_actual_text")) { apply_actual_text = j["apply_actual_text"]; }
@@ -196,6 +218,7 @@ namespace pdflib
        << std::setw(48) << "keep_shapes" << (keep_shapes ? "true" : "false") << "\n"
        << std::setw(48) << "keep_bitmaps" << (keep_bitmaps ? "true" : "false") << "\n"
        << std::setw(48) << "extract_bitmap_pixels" << (extract_bitmap_pixels ? "true" : "false") << "\n"
+       << std::setw(48) << "bitmap_target_pixels_per_unit" << bitmap_target_pixels_per_unit << "\n"
        << std::setw(48) << "max_num_lines" << max_num_lines << "\n"
        << std::setw(48) << "max_num_bitmaps" << max_num_bitmaps << "\n"
        << std::setw(48) << "min_visible_clip_extent" << min_visible_clip_extent << "\n"

@@ -3,12 +3,17 @@
 Thread-scaling benchmark for docling-parse.
 
 Runs DoclingThreadedPdfParser at increasing thread counts and prints a
-scaling table.  Three modes are supported:
+scaling table.  Four modes are supported:
 
-  parse   — decode-only (render_config=None); always includes a
-            single-threaded DoclingPdfParser baseline.
-  render  — decode + rasterise (RenderConfig.scale=...).
-  both    — runs both of the above and prints two tables.
+  parse-without-bitmap  — decode-only (render_config=None); always includes a
+                          single-threaded DoclingPdfParser baseline and sets
+                          include_bitmap_bytes=False.
+  parse-with-bitmap     — decode-only (render_config=None); always includes a
+                          single-threaded DoclingPdfParser baseline and sets
+                          include_bitmap_bytes=True.
+  render                — decode + rasterise (RenderConfig.scale=...).
+  both                  — runs both parse variants plus render and prints
+                          separate tables.
 
 Third-party single-threaded backends (selected via --other) are run as
 additional baselines, in both parse and render modes.  Supported names:
@@ -27,13 +32,13 @@ the HF repo `docling-project/performance-dataset-bo767`.
 
 Usage:
     python scripts/benchmarking/run_performance_benchmarking.py                                   # HF default, render mode, pypdfium2
-    python scripts/benchmarking/run_performance_benchmarking.py ./pdfs --mode parse
+    python scripts/benchmarking/run_performance_benchmarking.py ./pdfs --mode parse-without-bitmap
     python scripts/benchmarking/run_performance_benchmarking.py --mode both --other "pypdfium2;pymupdf"
     python scripts/benchmarking/run_performance_benchmarking.py ./pdfs --mode render --keep-char-cells=true \
         --create-word-cells=true --create-line-cells=true \
         --keep-shapes=true --keep-bitmaps=true
     python scripts/benchmarking/run_performance_benchmarking.py --mode both --compare                 # docling-parse vs pypdfium2
-    python scripts/benchmarking/run_performance_benchmarking.py --mode parse --threads 1,12 --only-threaded  # before/after, no reference backends
+    python scripts/benchmarking/run_performance_benchmarking.py --mode parse-with-bitmap --threads 1,12 --only-threaded  # before/after, no reference backends
     python scripts/benchmarking/run_performance_benchmarking.py --threads 1,4,8,12 --compare all --mode render \
         --output-dir ./docs/performance_benchmarks/
 
@@ -65,6 +70,7 @@ from _common import (
     TASK_PARSE,
     TASK_RENDER,
     PageRow,
+    ProgressBar,
     find_pdfs,
     percentile,
     read_page_rows,
@@ -72,7 +78,6 @@ from _common import (
     write_page_rows,
 )
 from tabulate import tabulate
-from tqdm import tqdm
 
 DEFAULT_HF_REPO_ID = "docling-project/performance-dataset-bo767"
 HF_PDF_SUBDIR = "pdf"
@@ -167,7 +172,7 @@ def page_counts(pdf_paths: List[Path]) -> List[Tuple[Path, int]]:
 
     parser = DoclingPdfParser(loglevel="fatal")
     counts: List[Tuple[Path, int]] = []
-    for pdf_path in tqdm(pdf_paths, desc="counting pages", unit="doc"):
+    for pdf_path in ProgressBar(pdf_paths, desc="counting pages", unit="doc"):
         try:
             d = parser.load(str(pdf_path), lazy=True)
             counts.append((pdf_path, d.number_of_pages()))
@@ -624,7 +629,7 @@ def run_sequential_parse(
     parser = DoclingPdfParser(loglevel="fatal")
 
     t0 = time.perf_counter()
-    for pdf_path, page_numbers in tqdm(
+    for pdf_path, page_numbers in ProgressBar(
         pdf_schedule, desc="  sequential parse", unit="doc", leave=False
     ):
         try:
@@ -658,7 +663,7 @@ def run_pypdfium_parse(
 
     t0 = time.perf_counter()
     errors = 0
-    with tqdm(total=total_pages, desc="  pypdfium2-parse", unit="page") as pbar:
+    with ProgressBar(total=total_pages, desc="  pypdfium2-parse", unit="page") as pbar:
         for pdf_path, page_numbers in pdf_schedule:
             try:
                 doc = pdfium.PdfDocument(str(pdf_path))
@@ -707,7 +712,7 @@ def run_pypdfium_render(
 
     t0 = time.perf_counter()
     errors = 0
-    with tqdm(total=total_pages, desc="  pypdfium2-render", unit="page") as pbar:
+    with ProgressBar(total=total_pages, desc="  pypdfium2-render", unit="page") as pbar:
         for pdf_path, page_numbers in pdf_schedule:
             try:
                 doc = pdfium.PdfDocument(str(pdf_path))
@@ -766,7 +771,7 @@ def run_pymupdf_parse(
 
     t0 = time.perf_counter()
     errors = 0
-    with tqdm(total=total_pages, desc="  pymupdf-parse", unit="page") as pbar:
+    with ProgressBar(total=total_pages, desc="  pymupdf-parse", unit="page") as pbar:
         for pdf_path, page_numbers in pdf_schedule:
             try:
                 doc = fitz.open(str(pdf_path))
@@ -815,7 +820,7 @@ def run_pymupdf_render(
     matrix = fitz.Matrix(2, 2)
     t0 = time.perf_counter()
     errors = 0
-    with tqdm(total=total_pages, desc="  pymupdf-render", unit="page") as pbar:
+    with ProgressBar(total=total_pages, desc="  pymupdf-render", unit="page") as pbar:
         for pdf_path, page_numbers in pdf_schedule:
             try:
                 doc = fitz.open(str(pdf_path))
@@ -960,7 +965,7 @@ class _Collector:
         self.samples: List[PageRow] = []
         self.doc_errors = 0
         label = series_label(backend, task, threads)
-        self._pbar = tqdm(
+        self._pbar = ProgressBar(
             total=total_pages, desc=f"  {label}", unit="page", leave=False
         )
         self._t0 = time.perf_counter()
@@ -2177,9 +2182,12 @@ def main(argv: List[str]) -> int:
     )
     ap.add_argument(
         "--mode",
-        choices=["parse", "render", "both"],
+        choices=["parse-without-bitmap", "parse-with-bitmap", "render", "both"],
         default="render",
-        help="Benchmark stage: parse (decode-only), render (decode+raster), or both (default: render)",
+        help=(
+            "Benchmark stage: parse-without-bitmap, parse-with-bitmap, "
+            "render (decode+raster), or both (default: render)"
+        ),
     )
     ap.add_argument(
         "--recursive",
@@ -2218,8 +2226,8 @@ def main(argv: List[str]) -> int:
     ap.add_argument(
         "--scale",
         type=float,
-        default=1.0,
-        help="Render scale for rendering (default: 1.0; render/both modes only)",
+        default=2.0,
+        help="Render scale for rendering (default: 2.0; render/both modes only)",
     )
     _add_bool_value_arg(
         ap,
@@ -2340,8 +2348,14 @@ def main(argv: List[str]) -> int:
     )
 
     args = ap.parse_args(argv)
-    if args.mode == "parse" and not _arg_was_passed(argv, "materialize-bitmaps"):
+    if args.mode in ("parse-without-bitmap", "parse-with-bitmap") and not _arg_was_passed(
+        argv, "materialize-bitmaps"
+    ):
         args.materialize_bitmaps = False
+    if args.mode == "parse-without-bitmap":
+        args.materialize_bitmap_bytes = False
+    elif args.mode == "parse-with-bitmap":
+        args.materialize_bitmap_bytes = True
 
     # Recorded verbatim in the report so a published number can be traced back
     # to the invocation that produced it.
@@ -2420,7 +2434,7 @@ def main(argv: List[str]) -> int:
 
     if compare_backends:
         tasks = []
-        if args.mode in ("parse", "both"):
+        if args.mode in ("parse-without-bitmap", "parse-with-bitmap", "both"):
             tasks.append(TASK_PARSE)
         if args.mode in ("render", "both"):
             tasks.append(TASK_RENDER)
@@ -2480,10 +2494,25 @@ def main(argv: List[str]) -> int:
         return 0
 
     collected_runs: List[BackendRun] = []
-    modes_to_run = ["parse", "render"] if args.mode == "both" else [args.mode]
+    modes_to_run = (
+        ["parse-without-bitmap", "parse-with-bitmap", "render"]
+        if args.mode == "both"
+        else [args.mode]
+    )
     for m in modes_to_run:
+        mode_materialization_options = materialization_options.copy()
+        if m == "parse-without-bitmap":
+            mode_materialization_options["materialize_bitmap_bytes"] = False
+        elif m == "parse-with-bitmap":
+            mode_materialization_options["materialize_bitmap_bytes"] = True
+
         render = m == "render"
-        title = "RENDER (decode + rasterise)" if render else "PARSE (decode only)"
+        if m == "parse-without-bitmap":
+            title = "PARSE WITHOUT BITMAP BYTES (decode only)"
+        elif m == "parse-with-bitmap":
+            title = "PARSE WITH BITMAP BYTES (decode only)"
+        else:
+            title = "RENDER (decode + rasterise)"
         print(f"\n##### {title} #####")
         baselines, threaded_results = _run_one_mode(
             pdf_schedule,
@@ -2494,7 +2523,7 @@ def main(argv: List[str]) -> int:
             render=render,
             scale=args.scale,
             decode_options=decode_options,
-            materialization_options=materialization_options,
+            materialization_options=mode_materialization_options,
             bytesio=args.bytesio,
             sequential=not args.only_threaded,
             collected_runs=collected_runs,
