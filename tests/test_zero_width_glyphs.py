@@ -119,6 +119,59 @@ def test_zero_width_space_glyph_still_separates_words():
     assert words == ["Title", "Case", "Workers"]
 
 
+def test_symbol_font_pua_space_keeps_declared_zero_width():
+    """A symbol-encoded space (U+F020, the 0xF000 offset convention) is a
+    space in disguise: its declared zero advance must be kept, not replaced
+    by a fallback width.
+
+    Regression guard for corpus document 10572911635253446040-13.pdf page 10,
+    where a TimesNewRomanPSMT subset paints a zero-width U+F020 spacer whose
+    neighbours start at the very same x.
+    """
+    tounicode = (
+        "/CIDInit /ProcSet findresource begin 12 dict begin begincmap\n"
+        "/CMapName /Custom def /CMapType 2 def\n"
+        "1 begincodespacerange <20> <7E> endcodespacerange\n"
+        "1 beginbfchar <20> <F020> endbfchar\n"
+        "endcmap CMapName currentdict /CMap defineresource pop end end"
+    )
+    widths_array = " ".join(str(w) for w in ZERO_WIDTHS)
+    font = (
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Name /F1"
+        f" /FirstChar 32 /LastChar 126 /Widths [ {widths_array} ]"
+        " /Encoding /WinAnsiEncoding /ToUnicode 6 0 R >>"
+    )
+    content = _per_glyph_content("Title Case Workers", draw_spaces=True)
+    pdf = build_pdf(
+        [
+            "<< /Type /Catalog /Pages 2 0 R >>",
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
+            "/Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+            font,
+            f"<< /Length {len(content)} >>\nstream\n{content}\nendstream",
+            f"<< /Length {len(tounicode)} >>\nstream\n{tounicode}\nendstream",
+        ]
+    )
+
+    parser = DoclingPdfParser(loglevel="fatal")
+    doc = parser.load(path_or_stream=BytesIO(pdf))
+    _, page = next(doc.iterate_pages())
+
+    spacers = [c for c in page.char_cells if c.text == "\uf020"]
+    assert len(spacers) == 2, [c.text for c in page.char_cells]
+    for cell in spacers:
+        poly = cell.rect.to_polygon()
+        assert abs(poly[1][0] - poly[0][0]) < 1e-6, poly  # declared 0 kept
+
+    # The zero-width spacer may surface as its own cell or attach to a
+    # neighbouring word; either way the real words must neither split into
+    # characters nor merge across the spacer.
+    words = [cell.text for cell in page.word_cells]
+    letter_words = [w.replace("\uf020", "") for w in words]
+    assert [w for w in letter_words if w] == ["Title", "Case", "Workers"], words
+
+
 def test_honest_nonzero_widths_keep_precedence():
     """Non-zero declared widths are still trusted verbatim, not second-guessed.
 

@@ -71,6 +71,7 @@ namespace pdflib
     // zeros, which renderers never consult but which would collapse every
     // text-cell bbox here and defeat word/line merging (docling#4018).
     bool        expects_zero_advance(uint32_t c);
+    bool        declared_widths_all_zero();
     double      nonzero_fallback_width(uint32_t c, bool verbose);
 
     // Vertical writing mode (9.7.4.3): a composite font whose CMap sets
@@ -246,6 +247,10 @@ namespace pdflib
     std::unordered_map<uint32_t, double> numb_to_vertical_displacements;
 
     std::unordered_map<uint32_t   , double> numb_to_widths;
+
+    // Lazy cache for declared_widths_all_zero(): 0 = not yet computed,
+    // 1 = every declared width is zero, -1 = at least one is non-zero.
+    int widths_all_zero_state = 0;
     std::unordered_map<std::string, double> name_to_widths;
 
     std::unordered_map<std::string, char_description> name_to_descr;
@@ -406,13 +411,19 @@ namespace pdflib
     if(numb_to_widths.count(c)==1)
       {
         double declared_width = numb_to_widths[c];
-        if(declared_width==0 and not expects_zero_advance(c))
+        if(declared_width==0 and declared_widths_all_zero() and
+           not expects_zero_advance(c))
           {
-            // Zero declared width for a visible glyph: the generator
-            // positioned every glyph explicitly and never needed honest
-            // widths. Trusting the 0 collapses this glyph's cell bbox,
-            // which zeroes average_char_width() downstream and blocks all
-            // word/line merging ("T i t l e" output, docling#4018).
+            // Every declared width is zero: the generator positioned each
+            // glyph explicitly and never needed honest widths. Trusting the
+            // 0 collapses this glyph's cell bbox, which zeroes
+            // average_char_width() downstream and blocks all word/line
+            // merging ("T i t l e" output, docling#4018).
+            //
+            // A font that declares honest widths elsewhere keeps its zeros:
+            // they are deliberate, and inside a show-string they position
+            // the glyphs that follow, so substituting a fallback would
+            // shift the rest of the line away from its rendered place.
             return nonzero_fallback_width(c, verbose);
           }
         return declared_width;
@@ -466,6 +477,23 @@ namespace pdflib
     return 500.0;
   }
 
+  bool pdf_resource<PAGE_FONT>::declared_widths_all_zero()
+  {
+    if(widths_all_zero_state==0)
+      {
+        widths_all_zero_state = 1;
+        for(auto& pair : numb_to_widths)
+          {
+            if(pair.second!=0)
+              {
+                widths_all_zero_state = -1;
+                break;
+              }
+          }
+      }
+    return widths_all_zero_state==1;
+  }
+
   bool pdf_resource<PAGE_FONT>::expects_zero_advance(uint32_t c)
   {
     std::string text = get_string(c);
@@ -488,6 +516,14 @@ namespace pdflib
     if(utils::string::is_space(cp))
       {
         return true; // zero-width space glyphs are boundary markers, not lies
+      }
+
+    // Symbol-encoded fonts surface their codes in the U+F000 offset block of
+    // the Private Use Area (code 0x20 arrives as U+F020), so a symbol-font
+    // space glyph must be recognized by its folded-back code.
+    if(0xF000<=cp and cp<=0xF0FF and utils::string::is_space(cp-0xF000))
+      {
+        return true;
       }
 
     // Combining marks and format characters legitimately carry no advance.
