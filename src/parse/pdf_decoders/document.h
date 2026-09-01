@@ -3,6 +3,7 @@
 #ifndef PDF_DOCUMENT_DECODER_H
 #define PDF_DOCUMENT_DECODER_H
 
+#include <filesystem>
 #include <fstream>
 #include <mutex>
 #include <optional>
@@ -189,8 +190,21 @@ namespace pdflib
 
     utils::timer timer;
 
-    // Read the file into a buffer
-    std::ifstream ifs(filename, std::ios::binary | std::ios::ate);
+    // Read the file into a buffer.
+    //
+    // The filename arrives UTF-8 encoded from the Python layer. On Windows a
+    // narrow ifstream hands it to the ANSI codepage (GBK, cp1252, ...), so any
+    // non-ASCII path fails to open (docling-parse#324; regression from #274,
+    // which replaced qpdf's UTF-8-aware processFile with this read). Build a
+    // std::filesystem::path from the bytes as UTF-8 so MSVC opens via the
+    // wide-char API; POSIX keeps byte-passthrough semantics either way.
+#ifdef _WIN32
+    std::filesystem::path fs_path(
+      std::u8string(filename.begin(), filename.end()));
+#else
+    std::filesystem::path fs_path(filename);
+#endif
+    std::ifstream ifs(fs_path, std::ios::binary | std::ios::ate);
     if(!ifs.is_open())
       {
         LOG_S(ERROR) << "could not open file: " << filename;
@@ -298,7 +312,7 @@ namespace pdflib
       {
         // Preserve the existing bounds behavior of qpdf_pages.at(page_ind),
         // but avoid serializing an already standalone one-page PDF.
-        qpdf_pages.at(page_ind);
+        (void)qpdf_pages.at(page_ind);
 
         result.first = page_ind;
         result.second = buffer;

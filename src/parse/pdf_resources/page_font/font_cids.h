@@ -5,6 +5,7 @@
 
 #include <fstream>
 
+#include <mutex>
 #include <unordered_map>
 
 namespace pdflib
@@ -35,6 +36,13 @@ namespace pdflib
     bool initialized;
     std::string directory;
 
+    // `cids` is filled lazily, on first use of a cmap, while the threaded
+    // parser decodes pages on several workers at once. Guard every access to
+    // it: unsynchronised inserts are a data race, and a second thread must not
+    // observe a half-built font_cid -- it would resolve only part of the
+    // codes and silently produce different text for the same page.
+    std::mutex cids_mutex;
+
     std::unordered_map<std::string, int>                       ro_2_sup;
     std::unordered_map<std::string, std::vector<std::string> > ros_2_cols;
 
@@ -62,6 +70,10 @@ namespace pdflib
 
   font_cid& font_cids::get(std::string encoding_name)
   {
+    std::lock_guard<std::mutex> guard(cids_mutex);
+
+    // Safe to hand out past the lock: unordered_map keeps references to its
+    // elements valid across rehashing, and a decoded font_cid is read-only.
     return cids[encoding_name];
   }
 
@@ -140,6 +152,10 @@ namespace pdflib
   bool font_cids::decode_cmap_resource(std::string cmap_name)
   {
     LOG_S(INFO) << __FUNCTION__;    
+
+    // Held across the whole decode, so a concurrent caller either waits and
+    // then sees the finished entry, or does not see the entry at all.
+    std::lock_guard<std::mutex> guard(cids_mutex);
 
     // fetch pre-cached cid-fonts
     if(cids.count(cmap_name)==1)

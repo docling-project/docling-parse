@@ -455,20 +455,30 @@ namespace pdflib
         double      width_ = font.get_width(item.first);
         //std::string chars_ = font.get_string(item.first);
 
-	std::string chars_ = item.second;
+	// item.second holds the raw bytes of the code as they appear in the
+	// content stream. Those bytes select a glyph, they are not text: for a
+	// composite font they are the CID, for a simple font an index into an
+	// encoding. When no authoritative source of ISO 32000-1, 9.10.2 can
+	// resolve the code, there is no Unicode to emit, so fall back to the
+	// same glyph marker the font resolver uses rather than leaking the
+	// code bytes into the cell text (they are not even valid UTF-8 for,
+	// e.g., CID 0xDCC2 of an Identity-H font).
+	std::string chars_;
 	try
 	  {
 	    chars_ = font.get_string(item.first);
-	    if((not config.keep_glyphs) and chars_.rfind("GLYPH<", 0) == 0)
-	      {
-	        chars_ = " ";
-	      }
 	  }
 	catch(const std::exception& e)
 	  {
+	    chars_ = "GLYPH<c="+std::to_string(item.first)+",font="+font.get_name()+">";
+
 	    LOG_S(WARNING) << "could not decode character (value=" << item.first
-			   << "): " << e.what() << "; falling back to '" << item.second << "'";
-	    chars_ = item.second;
+			   << "): " << e.what() << "; emitting '" << chars_ << "'";
+	  }
+
+	if((not config.keep_glyphs) and chars_.rfind("GLYPH<", 0) == 0)
+	  {
+	    chars_ = " ";
 	  }
 	
 	//LOG_S(INFO) << item.first << " --> "
@@ -484,8 +494,16 @@ namespace pdflib
           << ", h_scaling: " << h_scaling;
         */
 
+        // Word spacing applies to the single-byte character *code* 32, not to
+        // a code that happens to decode to a space (ISO 32000-1, 9.3.3). The
+        // difference is not academic: a symbolic font whose codes this decoder
+        // cannot resolve yields " " for every glyph, and charging each of them
+        // Tw stretched a Cyrillic line by a whole character width, pushing it
+        // over the absolutely-positioned text beside it.
+        const bool is_word_space = (item.first==32 and item.second.size()==1);
+
         double delta_width=0;
-        if(chars_==" ")
+        if(is_word_space)
           {
             delta_width += (char_spacing+word_spacing)*h_scaling;
           }
@@ -928,10 +946,71 @@ namespace pdflib
             result.push_back(item);
           }
       }
+    else if(not font.get_cmap_codespaces().empty())
+      {
+        // The codespace ranges of the CMap decide how many bytes the next
+        // code takes (ISO 32000-1, 9.7.6.2). Guessing instead -- "two bytes
+        // when the pair happens to be a mapped code, one otherwise" -- puts
+        // the reader one byte out of step for the whole rest of the string
+        // the first time a code is missing from the cmap, which is how a
+        // /UniJIS-UCS2 string turned into Latin noise.
+        const std::vector<cmap_codespace_range>& codespaces =
+          font.get_cmap_codespaces();
+
+        int shortest_code = 4;
+        for(const auto& range : codespaces)
+          {
+            shortest_code = std::min(shortest_code, range.n_bytes);
+          }
+
+        std::size_t l=0;
+
+        while(l<values.size())
+          {
+            const unsigned char* bytes =
+              reinterpret_cast<const unsigned char*>(values.data()+l);
+
+            const std::size_t remaining = values.size()-l;
+
+            int n_bytes = 0;
+            for(int n=1; n<=4 and static_cast<std::size_t>(n)<=remaining; n++)
+              {
+                for(const auto& range : codespaces)
+                  {
+                    if(range.n_bytes==n and range.contains(bytes))
+                      {
+                        n_bytes = n;
+                        break;
+                      }
+                  }
+
+                if(n_bytes>0) { break; }
+              }
+
+            if(n_bytes==0)
+              {
+                // A byte string that matches no range is undefined; the spec
+                // has the reader consume the shortest declared code length so
+                // the codes that follow stay aligned.
+                n_bytes = std::min(static_cast<std::size_t>(shortest_code), remaining);
+              }
+
+            uint32_t c = 0;
+            for(int k=0; k<n_bytes; k++)
+              {
+                c = (c<<8) | bytes[k];
+              }
+
+            std::pair<uint32_t, std::string> item(c, values.substr(l, n_bytes));
+            result.push_back(item);
+
+            l += n_bytes;
+          }
+      }
     else if(encoding == CMAP_RESOURCES)
       {
-        // LOG_S(INFO) << "detected encoding: " << to_string(encoding);
-
+        // No codespace could be read from the cmap-resource: fall back on
+        // recognising two-byte codes by their presence in the cmap.
         int l=0;
 
         while(l<values.size())

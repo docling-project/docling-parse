@@ -76,7 +76,11 @@ namespace pdflib
     IDENTITY_H,
     IDENTITY_V,
 
-    CMAP_RESOURCES
+    // /Encoding names one of Adobe's predefined CMaps
+    CMAP_RESOURCES,
+
+    // /Encoding is a CMap program embedded in the file
+    CMAP_STREAM
   };
 
   font_encoding_name to_encoding_name(std::string name)
@@ -88,6 +92,7 @@ namespace pdflib
     else if(name=="IDENTITY_H" or name=="/Identity-H"       ) { return IDENTITY_H; }
     else if(name=="IDENTITY_V" or name=="/Identity-V"       ) { return IDENTITY_V; }
     else if(name=="CMAP_RESOURCES"                          ) { return CMAP_RESOURCES; }
+    else if(name=="CMAP_STREAM"                             ) { return CMAP_STREAM; }
     else 
       {
         LOG_S(ERROR) << __FILE__ << ":" << __LINE__ << " --> unknown encoding " << name;
@@ -106,6 +111,7 @@ namespace pdflib
       case IDENTITY_H: { return "IDENTITY_H"; } break;
       case IDENTITY_V: { return "IDENTITY_V"; } break;
       case CMAP_RESOURCES: { return "CMAP_RESOURCES"; } break;
+      case CMAP_STREAM:    { return "CMAP_STREAM"; } break;
 
       default:
         {

@@ -11,11 +11,15 @@ TEST_DATA_DIR = TESTS_DIR / "data"
 TEST_DATA_GROUNDTRUTH_DIR = TEST_DATA_DIR / "groundtruth"
 PARSER_GROUNDTRUTH_DIR = TEST_DATA_GROUNDTRUTH_DIR / "parser"
 RENDER_GROUNDTRUTH_DIR = TEST_DATA_GROUNDTRUTH_DIR / "render"
+# One metadata file per page, describing every bitmap the page painted. The
+# per-artifact files it replaces ran to tens of thousands, and the dataset is
+# stored in Git LFS, which does not cope with more than ~10k entries per
+# directory.
 RENDER_GROUNDTRUTH_BITMAPS_DIR = RENDER_GROUNDTRUTH_DIR / "bitmaps"
-# Rasterised Type3 glyphs come out of the same instruction stream as images,
-# but there is one per painted character: a single page of Type3 text yields
-# hundreds. They are kept apart so `bitmaps/` stays a directory of pictures.
-RENDER_GROUNDTRUTH_GLYPHS_DIR = RENDER_GROUNDTRUTH_DIR / "glyphs"
+# The bitmap bytes themselves, for the subset that `select_retained_bitmaps()`
+# keeps. Every artifact is still verified by hash through the metadata above;
+# these files exist so a mismatch can be looked at.
+RENDER_GROUNDTRUTH_BITMAP_DATA_DIR = RENDER_GROUNDTRUTH_DIR / "bitmap_data"
 RENDER_GROUNDTRUTH_INSTRUCTIONS_DIR = RENDER_GROUNDTRUTH_DIR / "instructions"
 RENDER_GROUNDTRUTH_PAGES_DIR = RENDER_GROUNDTRUTH_DIR / "pages"
 

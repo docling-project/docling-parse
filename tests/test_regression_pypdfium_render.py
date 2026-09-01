@@ -35,8 +35,8 @@ from tests.rendering_regression import (
     write_comparison_visualization,
     write_metric_histogram,
 )
-from tests.test_parse import REGRESSION_FOLDER
-from tests.test_threaded_render import _make_parser
+from tests.test_regression_parse import REGRESSION_FOLDER
+from tests.test_regression_threaded_render import _make_parser
 
 PYPDFIUM_RENDER_SCALE = 2.0
 

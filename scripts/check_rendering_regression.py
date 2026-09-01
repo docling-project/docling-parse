@@ -1,12 +1,27 @@
 #!/usr/bin/env python
+"""Report image-comparison metrics for pairs of rendered pages.
+
+This is a triage and calibration tool, not a regression check: the regression
+itself is `tests/test_regression_threaded_render.py`, which renders the corpus and asserts
+against the stored groundtruth. What this adds is the analysis that a pass/fail
+assertion cannot give you --- a per-page table, the distribution of the error,
+and, with `--json`, the `observed_limits` you would use to set `ImageTolerance`.
+
+It therefore works on images that already exist rather than rendering anything,
+which is also why it needs nothing from the test-suite:
+
+    # re-read the artifacts a failing render regression left behind
+    python scripts/check_rendering_regression.py --from-deltas tests/data/render_deltas
+
+    # compare two arbitrary images
+    python scripts/check_rendering_regression.py --actual a.png --expected b.png --json
+"""
+
 from __future__ import annotations
 
 import argparse
-import glob
 import json
 import math
-import os
-import sys
 from collections.abc import Iterable, Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -14,23 +29,8 @@ from typing import cast
 
 from PIL import Image, ImageChops, ImageStat
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO_ROOT))
-
-from docling_parse.pdf_parser import (  # noqa: E402
-    DecodeConfig,
-    DoclingThreadedPdfParser,
-    RenderConfig,
-    ThreadedPdfParserConfig,
-)
-from tests.constants import PARSER_PAGE_RESTRICTIONS  # noqa: E402
-from tests.data_utils import ensure_test_data_downloaded  # noqa: E402
-from tests.rendering_regression import renderer_image_path  # noqa: E402
-from tests.test_parse import REGRESSION_FOLDER  # noqa: E402
-
 DEFAULT_DELTA_DIR = Path("tests/data/render_deltas")
 DEFAULT_PIXEL_THRESHOLD = 12
-DEFAULT_RENDER_SCALE = 2.0
 
 
 @dataclass(frozen=True)
@@ -68,41 +68,16 @@ class CheckedImage:
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Render the regression dataset with docling-parse and summarize image "
-            "comparison metrics. By default this compares against "
-            "tests/data/groundtruth/render/pages."
+            "Summarize image-comparison metrics for pairs of rendered pages. "
+            "Reads existing images; use --from-deltas or --actual/--expected."
         )
-    )
-    parser.add_argument(
-        "--expected-source",
-        choices=("groundtruth", "pypdfium"),
-        default="groundtruth",
-        help="Renderer/reference to compare docling-parse output against (groundtruth).",
-    )
-    parser.add_argument(
-        "--scale",
-        type=float,
-        default=DEFAULT_RENDER_SCALE,
-        help=f"Render scale for generated comparisons ({DEFAULT_RENDER_SCALE}).",
-    )
-    parser.add_argument(
-        "--threads",
-        type=int,
-        default=4,
-        help="Docling threaded renderer worker count (4).",
-    )
-    parser.add_argument(
-        "--max-concurrent",
-        type=int,
-        default=32,
-        help="Docling max_concurrent_results setting (32).",
     )
     parser.add_argument(
         "--from-deltas",
         type=Path,
         help=(
-            "Analyze an existing directory of *.actual.png/*.expected.png pairs "
-            "instead of rendering the regression dataset."
+            "Directory of *.actual.png/*.expected.png pairs, as written by a "
+            "failing render regression (tests/data/render_deltas)."
         ),
     )
     parser.add_argument(
@@ -130,32 +105,6 @@ def _parse_args() -> argparse.Namespace:
         help="Emit machine-readable JSON instead of text.",
     )
     return parser.parse_args()
-
-
-def _make_decode_config() -> DecodeConfig:
-    return DecodeConfig(
-        do_sanitization=True,
-        keep_glyphs=True,
-        keep_qpdf_warnings=False,
-    )
-
-
-def _make_render_config(scale: float) -> RenderConfig:
-    render_config = RenderConfig()
-    render_config.scale = scale
-    return render_config
-
-
-def _make_parser(args: argparse.Namespace) -> DoclingThreadedPdfParser:
-    return DoclingThreadedPdfParser(
-        parser_config=ThreadedPdfParserConfig(
-            loglevel="fatal",
-            threads=args.threads,
-            max_concurrent_results=args.max_concurrent,
-            render_config=_make_render_config(args.scale),
-        ),
-        decode_config=_make_decode_config(),
-    )
 
 
 def _discover_delta_pairs(delta_dir: Path) -> list[ImagePair]:
@@ -299,100 +248,6 @@ def _compare_pair(pair: ImagePair, pixel_threshold: int) -> CheckedImage:
         actual_source=str(pair.actual),
         expected_source=str(pair.expected),
         pixel_threshold=pixel_threshold,
-    )
-
-
-def _render_pypdfium_page(
-    pdf_path: Path, page_number: int, scale: float
-) -> Image.Image:
-    try:
-        import pypdfium2 as pdfium
-    except ImportError as exc:
-        raise SystemExit(
-            "pypdfium2 is required for --expected-source pypdfium. "
-            "Install the perf dependency group or add pypdfium2 to the environment."
-        ) from exc
-
-    pdf = pdfium.PdfDocument(str(pdf_path))
-    page = pdf[page_number - 1]
-    return page.render(scale=scale).to_pil()
-
-
-def _load_expected_image(
-    *,
-    expected_source: str,
-    pdf_path: Path,
-    doc_name: str,
-    page_number: int,
-    scale: float,
-) -> Image.Image:
-    if expected_source == "groundtruth":
-        path = renderer_image_path(doc_name, page_number)
-        if not path.exists():
-            raise FileNotFoundError(f"missing renderer groundtruth: {path}")
-        return Image.open(path)
-    if expected_source == "pypdfium":
-        return _render_pypdfium_page(pdf_path, page_number, scale)
-    raise ValueError(f"unsupported expected source: {expected_source}")
-
-
-def _run_regression_dataset(args: argparse.Namespace) -> list[CheckedImage]:
-    ensure_test_data_downloaded()
-    pdf_docs = sorted(glob.glob(REGRESSION_FOLDER))
-    if not pdf_docs:
-        raise SystemExit(f"no regression PDFs matched {REGRESSION_FOLDER}")
-
-    parser = _make_parser(args)
-    key_to_path: dict[str, Path] = {}
-
-    for pdf_doc_path in pdf_docs:
-        path = Path(pdf_doc_path)
-        doc_name = path.name
-        key = parser.load(
-            pdf_doc_path,
-            page_numbers=PARSER_PAGE_RESTRICTIONS.get(doc_name),
-        )
-        key_to_path[key] = path
-
-    checked_images: list[CheckedImage] = []
-    try:
-        for result in parser.iterate_results():
-            pdf_path = key_to_path[result.doc_key]
-            doc_name = pdf_path.name
-            if not result.success:
-                raise RuntimeError(
-                    f"render failed for {doc_name}@{result.page_number}: "
-                    f"{result.error_message}"
-                )
-
-            expected = _load_expected_image(
-                expected_source=args.expected_source,
-                pdf_path=pdf_path,
-                doc_name=doc_name,
-                page_number=result.page_number,
-                scale=args.scale,
-            )
-            checked_images.append(
-                _compare_images(
-                    document=doc_name,
-                    page=result.page_number,
-                    name=f"{doc_name}.page_no_{result.page_number}",
-                    actual=result.get_image(),
-                    expected=expected,
-                    actual_source="docling-parse",
-                    expected_source=args.expected_source,
-                    pixel_threshold=args.pixel_threshold,
-                )
-            )
-    finally:
-        parser.unload_all()
-
-    return sorted(
-        checked_images,
-        key=lambda checked: (
-            checked.metrics.document,
-            checked.metrics.page if checked.metrics.page is not None else -1,
-        ),
     )
 
 
@@ -561,8 +416,11 @@ def _emit_json(checked_images: Sequence[CheckedImage]) -> None:
 def main() -> int:
     args = _parse_args()
     checked_images = _load_existing_pairs(args)
+
     if checked_images is None:
-        checked_images = _run_regression_dataset(args)
+        raise SystemExit(
+            "nothing to check: pass --from-deltas DIR, or --actual and --expected"
+        )
 
     if not checked_images:
         raise SystemExit("no images checked")
@@ -576,12 +434,7 @@ def main() -> int:
         checked.abs_error_histogram for checked in checked_images
     )
 
-    input_label = (
-        "input pairs"
-        if args.actual or args.expected or args.from_deltas is not None
-        else os.fspath(REGRESSION_FOLDER)
-    )
-    print(f"Checked {len(metrics)} image(s) from {input_label}")
+    print(f"Checked {len(metrics)} image(s)")
     _print_page_table(metrics)
     _print_summary(metrics, abs_error_histogram)
     _print_mean_histogram(metrics)

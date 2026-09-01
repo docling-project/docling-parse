@@ -573,9 +573,22 @@ namespace pdflib
     void set_blend_mode(blend_mode_name mode) { blend_mode_ = mode; }
     blend_mode_name get_blend_mode() const { return blend_mode_; }
 
+    // The /Filter chain of the stream these samples came out of, in the order
+    // the PDF lists it (e.g. {"/FlateDecode", "/JPXDecode"}); empty for an
+    // uncompressed image and for a rasterised Type3 glyph, which has no stream
+    // of its own. It names the decoder that produced the pixels, which is what
+    // tells a consumer how far the samples can be trusted to be reproducible:
+    // an inverse transform done in floating point (JPEG 2000's irreversible
+    // 9/7 wavelet) rounds a sample to a different level on a different
+    // machine, where an integer one (libjpeg's islow IDCT, CCITT, JBIG2,
+    // Flate) reproduces exactly.
+    void set_filters(std::vector<std::string> filters) { filters_ = std::move(filters); }
+    const std::vector<std::string>& get_filters() const { return filters_; }
+
   private:
 
     blend_mode_name blend_mode_ = BLEND_MODE_NORMAL;
+    std::vector<std::string> filters_;
 
     const std::string xobject_key;
     

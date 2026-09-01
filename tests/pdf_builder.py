@@ -6,7 +6,7 @@ The focused tests build the document they are about: a page carrying a single
 that would be a binary fixture nobody can review; written out as objects it is
 the test's own input, and a reader can see what the renderer was handed.
 
-`test_actual_text.py` and `test_standard_font_widths.py` each grew their own
+`test_unit_actual_text.py` and `test_unit_standard_font_widths.py` each grew their own
 `_build_pdf`; both are text-only, and half of what the render fixes touch is
 image data. This builder takes `bytes` for stream payloads, so a fixture can
 carry a real JPEG or a packed sub-byte raster.

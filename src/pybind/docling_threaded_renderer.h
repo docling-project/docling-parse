@@ -39,7 +39,7 @@ namespace docling
 
     // Same sharing/keying for the Type 1 / bare CFF programs that Blend2D
     // cannot load; FreeType serializes internally on its own mutex.
-    std::shared_ptr<pdflib::freetype_embedded_font_cache> freetype_font_cache_;
+    std::shared_ptr<pdflib::freetype_font_cache> freetype_font_cache_;
   };
 
   inline docling_threaded_renderer::docling_threaded_renderer(std::string loglevel,
@@ -54,7 +54,7 @@ namespace docling
     render_cfg(render_config),
     font_resolver_(std::make_shared<pdflib::blend2d_font_resolver>()),
     embedded_font_cache_(std::make_shared<pdflib::blend2d_embedded_font_cache>()),
-    freetype_font_cache_(std::make_shared<pdflib::freetype_embedded_font_cache>())
+    freetype_font_cache_(std::make_shared<pdflib::freetype_font_cache>())
   {
     font_resolver_->warm();
 
