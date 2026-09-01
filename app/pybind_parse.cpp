@@ -1165,6 +1165,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
         resolve_fonts (bool): Resolve PDF font names to system fonts [default=true].
         use_embedded_fonts (bool): Prefer embedded font programs (TrueType/OpenType via Blend2D, Type 1/CFF via FreeType outlines) over system font resolution [default=true].
         font_similarity_cutoff (float): Minimum Jaccard similarity for fuzzy font matching; candidates below this threshold fall back to the default font [default=0.25].
+        glyph_bbox_cache_capacity (int): Maximum cached embedded-font glyph bounding boxes per render worker; zero disables caching [default=65536].
         scale (float): Target render scale in multiples of the PDF page size; -1 disables scale-based sizing [default=-1].
         canvas_width (int): Target canvas width in pixels; -1 means use PDF page size [default=-1].
         canvas_height (int): Target canvas height in pixels; -1 means use PDF page size [default=-1].
@@ -1183,6 +1184,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
     .def_readwrite("resolve_fonts",           &pdflib::render_config::resolve_fonts)
     .def_readwrite("use_embedded_fonts",      &pdflib::render_config::use_embedded_fonts)
     .def_readwrite("font_similarity_cutoff",  &pdflib::render_config::font_similarity_cutoff)
+    .def_readwrite("glyph_bbox_cache_capacity", &pdflib::render_config::glyph_bbox_cache_capacity)
     .def_readwrite("scale",                   &pdflib::render_config::scale)
     .def_readwrite("canvas_width",            &pdflib::render_config::canvas_width)
     .def_readwrite("canvas_height",           &pdflib::render_config::canvas_height);

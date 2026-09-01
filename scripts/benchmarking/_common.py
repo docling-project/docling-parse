@@ -148,9 +148,7 @@ class ProgressBar(tqdm):
         total = values.get("total")
         current = values.get("n", 0)
         elapsed = values.get("elapsed") or 0.0
-        projected_total = (
-            elapsed * total / current if total and current else 0.0
-        )
+        projected_total = elapsed * total / current if total and current else 0.0
         unit = values.get("unit") or "it"
         values["rate_text"] = (
             f"{rate:.1f}{unit}/s" if rate is not None else f"0.0{unit}/s"

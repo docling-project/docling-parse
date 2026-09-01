@@ -37,9 +37,6 @@ namespace docling
     // keyed by a content hash of the font bytes, not by PDF object ids.
     std::shared_ptr<pdflib::blend2d_embedded_font_cache> embedded_font_cache_;
 
-    // Same sharing/keying for the Type 1 / bare CFF programs that Blend2D
-    // cannot load; FreeType serializes internally on its own mutex.
-    std::shared_ptr<pdflib::freetype_font_cache> freetype_font_cache_;
   };
 
   inline docling_threaded_renderer::docling_threaded_renderer(std::string loglevel,
@@ -53,8 +50,7 @@ namespace docling
                                                                          decode_config),
     render_cfg(render_config),
     font_resolver_(std::make_shared<pdflib::blend2d_font_resolver>()),
-    embedded_font_cache_(std::make_shared<pdflib::blend2d_embedded_font_cache>()),
-    freetype_font_cache_(std::make_shared<pdflib::freetype_font_cache>())
+    embedded_font_cache_(std::make_shared<pdflib::blend2d_embedded_font_cache>())
   {
     font_resolver_->warm();
 
@@ -82,6 +78,12 @@ namespace docling
   inline void docling_threaded_renderer::worker_loop()
   {
     using clock_type = std::chrono::steady_clock;
+    // FT_Face objects mutate their selected size and charmap while building an
+    // outline. Keep one cache per worker so those operations do not serialize
+    // all render threads; it is still reused across this worker's pages.
+    auto freetype_font_cache = std::make_shared<pdflib::freetype_font_cache>();
+    auto glyph_bbox_cache = std::make_shared<pdflib::glyph_bbox_cache>(
+      render_cfg.glyph_bbox_cache_capacity);
 
     while(true)
       {
@@ -152,7 +154,8 @@ namespace docling
                   pdflib::renderer<pdflib::BLEND2D> rnd(render_cfg,
                                                         font_resolver_,
                                                         embedded_font_cache_,
-                                                        freetype_font_cache_);
+                                                        freetype_font_cache,
+                                                        glyph_bbox_cache);
                   page_decoder->get_instructions().iterate_over_instructions(rnd);
                   result.timings.render_page_s
                     = std::chrono::duration<double>(clock_type::now() - stage_start).count();

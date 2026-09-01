@@ -8,6 +8,7 @@
 #include <cctype>
 #include <chrono>
 #include <condition_variable>
+#include <cstddef>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -90,6 +91,7 @@ namespace
     int max_concurrent_results = 64;
     std::vector<int> threads{1, 2, 4, 8, 12, 16};
     float scale = 2.0f;
+    std::size_t glyph_bbox_cache_capacity = 65536;
     bool enable_timing = false;
     std::filesystem::path timing_csv = "timing-cpp.csv";
     std::optional<std::filesystem::path> output_dir = std::nullopt;
@@ -599,7 +601,6 @@ namespace
           // shared across pages, exactly as docling_threaded_renderer does;
           // a per-page cache would reload every embedded font program
           embedded_font_cache_ = std::make_shared<pdflib::blend2d_embedded_font_cache>();
-          freetype_font_cache_ = std::make_shared<pdflib::freetype_font_cache>();
         }
     }
 
@@ -654,6 +655,18 @@ namespace
   private:
     void worker_loop()
     {
+      std::shared_ptr<pdflib::freetype_font_cache> freetype_font_cache;
+      std::shared_ptr<pdflib::glyph_bbox_cache> glyph_bbox_cache;
+      if(render_config_.has_value())
+        {
+          // FT_Face objects mutate their selected size and charmap while
+          // building an outline. This cache is reused across the worker's
+          // pages, but never shared with another render worker.
+          freetype_font_cache = std::make_shared<pdflib::freetype_font_cache>();
+          glyph_bbox_cache = std::make_shared<pdflib::glyph_bbox_cache>(
+            render_config_->glyph_bbox_cache_capacity);
+        }
+
       while(true)
         {
           const std::size_t task_index = next_task_.fetch_add(1);
@@ -705,7 +718,8 @@ namespace
                   pdflib::renderer<pdflib::BLEND2D> rnd(*render_config_,
                                                         font_resolver_,
                                                         embedded_font_cache_,
-                                                        freetype_font_cache_);
+                                                        freetype_font_cache,
+                                                        glyph_bbox_cache);
                   page_decoder->get_instructions().iterate_over_instructions(rnd);
                   result.timings.render_page_s =
                     std::chrono::duration<double>(clock_type::now() - stage_start).count();
@@ -785,7 +799,6 @@ namespace
     std::optional<std::filesystem::path> output_dir_;
     std::shared_ptr<pdflib::blend2d_font_resolver> font_resolver_;
     std::shared_ptr<pdflib::blend2d_embedded_font_cache> embedded_font_cache_;
-    std::shared_ptr<pdflib::freetype_font_cache> freetype_font_cache_;
 
     std::vector<page_task> tasks_;
     std::atomic<std::size_t> next_task_{0};
@@ -819,6 +832,7 @@ namespace
               << std::setw(32) << "fit_glyph_bbox_to_target" << config.fit_glyph_bbox_to_target << "\n"
               << std::setw(32) << "resolve_fonts" << config.resolve_fonts << "\n"
               << std::setw(32) << "font_similarity_cutoff" << config.font_similarity_cutoff << "\n"
+              << std::setw(32) << "glyph_bbox_cache_capacity" << config.glyph_bbox_cache_capacity << "\n"
               << std::setw(32) << "scale" << config.scale << "\n"
               << std::setw(32) << "canvas_width" << config.canvas_width << "\n"
               << std::setw(32) << "canvas_height" << config.canvas_height << "\n";
@@ -905,6 +919,7 @@ namespace
       ("max-concurrent-results", "Max buffered results for threaded processing", cxxopts::value<int>()->default_value("64"))
       ("threads", "Comma-separated thread counts", cxxopts::value<std::string>()->default_value("1,2,4,8,12,16"))
       ("scale", "Render scale for render mode", cxxopts::value<float>()->default_value("2.0"))
+      ("glyph-bbox-cache-capacity", "Maximum cached glyph bounding boxes per render worker; 0 disables caching", cxxopts::value<std::size_t>()->default_value("65536"))
       ("output-dir", "Write rendered PNGs under this directory", cxxopts::value<std::string>())
       ("enable-timing", "Write one CSV timing row per page result", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
       ("timing-csv", "CSV path used when --enable-timing is set", cxxopts::value<std::string>()->default_value("timing-cpp.csv"))
@@ -947,6 +962,8 @@ namespace
       }
     cli.threads = parse_thread_counts(result["threads"].as<std::string>());
     cli.scale = result["scale"].as<float>();
+    cli.glyph_bbox_cache_capacity =
+      result["glyph-bbox-cache-capacity"].as<std::size_t>();
     cli.enable_timing = result["enable-timing"].as<bool>();
     cli.timing_csv = result["timing-csv"].as<std::string>();
     cli.loglevel = result["loglevel"].as<std::string>();
@@ -1064,6 +1081,7 @@ int main(int argc, char* argv[])
 
       print_decode_config(decode_config);
       auto render_config = default_render_config(cli.scale);
+      render_config.glyph_bbox_cache_capacity = cli.glyph_bbox_cache_capacity;
       if(cli.mode == run_mode::render
          or cli.mode == run_mode::default_mode
          or cli.mode == run_mode::all)

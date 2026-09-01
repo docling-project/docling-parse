@@ -355,11 +355,12 @@ def analyze_pages_render(
     use it with a single worker: the per-page timings are per-page either way,
     and one thread keeps them free of contention.
     """
+    from docling_parse.pdf_parsers import RenderConfig  # type: ignore[import]
+
     from docling_parse.pdf_parser import (
         DoclingThreadedPdfParser,
         ThreadedPdfParserConfig,
     )
-    from docling_parse.pdf_parsers import RenderConfig  # type: ignore[import]
 
     render_config = RenderConfig()
     render_config.scale = scale

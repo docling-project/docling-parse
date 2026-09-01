@@ -9,6 +9,7 @@
 #include <render/blend2d_font_resolver.h>
 #include <render/blend2d_embedded_font_cache.h>
 #include <render/freetype_font_cache.h>
+#include <render/glyph_bbox_cache.h>
 
 #include <blend2d/blend2d.h>
 
@@ -57,7 +58,8 @@ namespace pdflib
     explicit renderer(render_config config,
                       std::shared_ptr<blend2d_font_resolver> font_resolver,
                       std::shared_ptr<blend2d_embedded_font_cache> embedded_font_cache,
-                      std::shared_ptr<freetype_font_cache> embedded_freetype_cache = nullptr);
+                      std::shared_ptr<freetype_font_cache> embedded_freetype_cache = nullptr,
+                      std::shared_ptr<glyph_bbox_cache> glyph_bbox_cache = nullptr);
 
     // Returns the page canvas to the per-thread pool. See set_size().
     ~renderer();
@@ -196,6 +198,7 @@ namespace pdflib
     std::shared_ptr<blend2d_font_resolver> font_resolver_;
     std::shared_ptr<blend2d_embedded_font_cache> embedded_font_cache_;
     std::shared_ptr<freetype_font_cache> freetype_font_cache_;
+    std::shared_ptr<glyph_bbox_cache> glyph_bbox_cache_;
 
     // Draws SYSTEM font files Blend2D cannot open. Process-wide, unlike
     // freetype_font_cache_: the same handful of system faces serves every
@@ -356,9 +359,10 @@ namespace pdflib
     // A glyph cannot be many times its own em, so an outline that overshoots
     // by that much is a failed decode rather than a document asking for
     // something enormous, and the cell is better drawn through FreeType.
-    static bool glyph_outlines_are_implausible(const BLFont& font,
-                                               const BLGlyphBuffer& gb,
-                                               double size)
+    bool glyph_outlines_are_implausible(const BLFont& font,
+                                        const BLGlyphBuffer& gb,
+                                        double size,
+                                        const std::string& face_key)
     {
       const size_t count = gb.size();
       const uint32_t* glyph_ids = gb.glyph_run().glyph_data_as<uint32_t>();
@@ -375,16 +379,18 @@ namespace pdflib
 
       for (size_t l = 0; l < count; ++l)
         {
-          BLPath path;
-          if (font.get_glyph_outlines(glyph_ids[l], identity, path) != BL_SUCCESS)
-            {
-              continue;
-            }
-
-          if (path.is_empty()) { continue; }
-
           BLBox box;
-          if (path.get_bounding_box(&box) != BL_SUCCESS) { continue; }
+          if (not glyph_bbox_cache_->find(face_key, glyph_ids[l], size, box))
+            {
+              BLPath path;
+              if (font.get_glyph_outlines(glyph_ids[l], identity, path) != BL_SUCCESS ||
+                  path.is_empty() ||
+                  path.get_bounding_box(&box) != BL_SUCCESS)
+                {
+                  continue;
+                }
+              glyph_bbox_cache_->insert(face_key, glyph_ids[l], size, box);
+            }
 
           if ((box.x1 - box.x0) > limit or (box.y1 - box.y0) > limit)
             {
@@ -551,7 +557,8 @@ namespace pdflib
       BLFont& font,
       BLGlyphBuffer& gb,
       text_instruction& instr,
-      double size) const;
+      double size,
+      const std::string* face_key);
 
     // Compares floating-point canvas coordinates with a small tolerance. Used
     // by geometry classification helpers to avoid treating tiny conversion
@@ -1598,16 +1605,9 @@ namespace pdflib
                                int sw,
                                int sh,
                                int sc,
-                               bool use_soft_mask_alpha) const;
-
-    // Averages the source down by an integer factor.
-    //
-    // Blend2D samples a pattern once per destination pixel, so an image drawn
-    // much smaller than its own resolution is point-sampled: a 16x16 hatch
-    // tile drawn four pixels wide keeps one source row in four, and the grid
-    // it draws comes out as a field of dots. Averaging first is what the other
-    // renderers do here, and an /Interpolate image asks for it outright.
-    static BLImage box_downsample(const BLImage& src, int fx, int fy);
+                               bool use_soft_mask_alpha,
+                               int out_w,
+                               int out_h) const;
 
     // Blits an unrotated, axis-aligned source image into the destination
     // rectangle. This is the simple fast path used when the quad has no rotation
@@ -1664,7 +1664,8 @@ namespace pdflib
     : shape_({0, 0, 4}),
       font_resolver_(blend2d_font_resolver::default_resolver()),
       embedded_font_cache_(std::make_shared<blend2d_embedded_font_cache>()),
-      freetype_font_cache_(std::make_shared<freetype_font_cache>())
+      freetype_font_cache_(std::make_shared<freetype_font_cache>()),
+      glyph_bbox_cache_(std::make_shared<glyph_bbox_cache>(config_.glyph_bbox_cache_capacity))
   {}
 
   inline renderer<BLEND2D>::renderer(render_config config)
@@ -1672,7 +1673,8 @@ namespace pdflib
       shape_({0, 0, 4}),
       font_resolver_(blend2d_font_resolver::default_resolver()),
       embedded_font_cache_(std::make_shared<blend2d_embedded_font_cache>()),
-      freetype_font_cache_(std::make_shared<freetype_font_cache>())
+      freetype_font_cache_(std::make_shared<freetype_font_cache>()),
+      glyph_bbox_cache_(std::make_shared<glyph_bbox_cache>(config_.glyph_bbox_cache_capacity))
   {}
 
   inline renderer<BLEND2D>::renderer(render_config config,
@@ -1682,13 +1684,15 @@ namespace pdflib
       font_resolver_(font_resolver ? std::move(font_resolver)
                                    : blend2d_font_resolver::default_resolver()),
       embedded_font_cache_(std::make_shared<blend2d_embedded_font_cache>()),
-      freetype_font_cache_(std::make_shared<freetype_font_cache>())
+      freetype_font_cache_(std::make_shared<freetype_font_cache>()),
+      glyph_bbox_cache_(std::make_shared<glyph_bbox_cache>(config_.glyph_bbox_cache_capacity))
   {}
 
   inline renderer<BLEND2D>::renderer(render_config config,
                                      std::shared_ptr<blend2d_font_resolver> font_resolver,
                                      std::shared_ptr<blend2d_embedded_font_cache> embedded_font_cache,
-                                     std::shared_ptr<freetype_font_cache> embedded_freetype_cache)
+                                     std::shared_ptr<freetype_font_cache> embedded_freetype_cache,
+                                     std::shared_ptr<glyph_bbox_cache> glyph_bbox_cache)
     : config_(config),
       shape_({0, 0, 4}),
       font_resolver_(font_resolver ? std::move(font_resolver)
@@ -1698,7 +1702,11 @@ namespace pdflib
                              : std::make_shared<blend2d_embedded_font_cache>()),
       freetype_font_cache_(embedded_freetype_cache
                              ? std::move(embedded_freetype_cache)
-                             : std::make_shared<freetype_font_cache>())
+                             : std::make_shared<freetype_font_cache>()),
+      glyph_bbox_cache_(glyph_bbox_cache
+                          ? std::move(glyph_bbox_cache)
+                          : std::make_shared<pdflib::glyph_bbox_cache>(
+                              config_.glyph_bbox_cache_capacity))
   {}
 
   inline renderer<BLEND2D>::~renderer()
@@ -2122,33 +2130,39 @@ namespace pdflib
       BLFont& font,
       BLGlyphBuffer& gb,
       text_instruction& instr,
-      double size) const
+      double size,
+      const std::string* face_key)
   {
     text_draw_adjustment adjustment;
 
     const BLGlyphId glyph_id = gb.glyph_run().glyph_data_as<uint32_t>()[0];
-    BLPath glyph_path;
     const BLMatrix2D identity(1.0, 0.0,
                               0.0, 1.0,
                               0.0, 0.0);
-    const BLResult outline_res =
-      font.get_glyph_outlines(glyph_id, identity, glyph_path);
-    //LOG_S(INFO) << "render_text: glyph outline res=" << outline_res
-    //<< " glyph_path empty=" << glyph_path.is_empty();
-    if (outline_res != BL_SUCCESS || glyph_path.is_empty())
-      {
-        return adjustment;
-      }
-
     BLBox rendered_box;
-    const BLResult bbox_res = glyph_path.get_bounding_box(&rendered_box);
-    //LOG_S(INFO) << "render_text: glyph outline bbox res=" << bbox_res;
-
-    if (bbox_res != BL_SUCCESS)
+    if (face_key == nullptr ||
+        not glyph_bbox_cache_->find(*face_key, glyph_id, size, rendered_box))
       {
-        LOG_S(WARNING) << "render_text: glyph outline bbox failed"
-                       << " (BLResult=" << bbox_res << ")";
-        return adjustment;
+        BLPath glyph_path;
+        const BLResult outline_res =
+          font.get_glyph_outlines(glyph_id, identity, glyph_path);
+        if (outline_res != BL_SUCCESS || glyph_path.is_empty())
+          {
+            return adjustment;
+          }
+
+        const BLResult bbox_res = glyph_path.get_bounding_box(&rendered_box);
+        if (bbox_res != BL_SUCCESS)
+          {
+            LOG_S(WARNING) << "render_text: glyph outline bbox failed"
+                           << " (BLResult=" << bbox_res << ")";
+            return adjustment;
+          }
+
+        if (face_key != nullptr)
+          {
+            glyph_bbox_cache_->insert(*face_key, glyph_id, size, rendered_box);
+          }
       }
 
     const double target_x0 = instr.get_g_x0() / 1000.0 * size;
@@ -2221,85 +2235,25 @@ namespace pdflib
     return adjustment;
   }
 
-  inline BLImage renderer<BLEND2D>::box_downsample(const BLImage& src, int fx, int fy)
-  {
-    if(fx < 2 and fy < 2) { return src; }
-
-    BLImageData s;
-    if(src.get_data(&s) != BL_SUCCESS or s.format != BL_FORMAT_PRGB32)
-      {
-        return src;
-      }
-
-    const int dw = std::max(1, s.size.w / std::max(1, fx));
-    const int dh = std::max(1, s.size.h / std::max(1, fy));
-    if(dw >= s.size.w and dh >= s.size.h) { return src; }
-
-    BLImage dst;
-    BLImageData d;
-    if(dst.create(dw, dh, BL_FORMAT_PRGB32) != BL_SUCCESS or
-       dst.make_mutable(&d) != BL_SUCCESS)
-      {
-        return src;
-      }
-
-    // The samples are premultiplied, so every channel -- alpha included --
-    // averages linearly and the result stays premultiplied.
-    for(int y = 0; y < dh; y++)
-      {
-        auto* drow = reinterpret_cast<uint32_t*>(
-          static_cast<uint8_t*>(d.pixel_data) + static_cast<intptr_t>(y) * d.stride);
-
-        const int sy0 = (y * s.size.h) / dh;
-        const int sy1 = std::max(sy0 + 1, ((y + 1) * s.size.h) / dh);
-
-        for(int x = 0; x < dw; x++)
-          {
-            const int sx0 = (x * s.size.w) / dw;
-            const int sx1 = std::max(sx0 + 1, ((x + 1) * s.size.w) / dw);
-
-            uint32_t a = 0, r = 0, g = 0, b = 0, n = 0;
-            for(int sy = sy0; sy < sy1 and sy < s.size.h; sy++)
-              {
-                const auto* srow = reinterpret_cast<const uint32_t*>(
-                  static_cast<const uint8_t*>(s.pixel_data)
-                  + static_cast<intptr_t>(sy) * s.stride);
-
-                for(int sx = sx0; sx < sx1 and sx < s.size.w; sx++)
-                  {
-                    const uint32_t p = srow[sx];
-                    a += (p >> 24) & 0xFFu;
-                    r += (p >> 16) & 0xFFu;
-                    g += (p >>  8) & 0xFFu;
-                    b += (p      ) & 0xFFu;
-                    n += 1;
-                  }
-              }
-
-            drow[x] = (n == 0) ? 0u
-                               : (((a / n) << 24) | ((r / n) << 16) |
-                                  ((g / n) <<  8) |  (b / n));
-          }
-      }
-
-    return dst;
-  }
-
   inline BLImage renderer<BLEND2D>::build_bitmap_image(
       bitmap_instruction& instr,
       int sw,
       int sh,
       int sc,
-      bool use_soft_mask_alpha) const
+      bool use_soft_mask_alpha,
+      int out_w,
+      int out_h) const
   {
     const auto& src_data = instr.get_data();
     const auto& alpha_data = instr.get_alpha_data();
     const bool image_mask = instr.is_image_mask();
     const auto fmt = instr.get_pixel_format();
     const auto fill_rgb = instr.get_rgb_filling();
+    const int dw = std::max(1, out_w);
+    const int dh = std::max(1, out_h);
 
     BLImage src_img;
-    src_img.create(sw, sh, BL_FORMAT_PRGB32);
+    src_img.create(dw, dh, BL_FORMAT_PRGB32);
 
     BLImageData img_data;
     src_img.make_mutable(&img_data);
@@ -2327,56 +2281,93 @@ namespace pdflib
                     << static_cast<int>(b) << ")";
       }
 
-    for (int row = 0; row < sh; ++row)
+    // Convert one source sample to the exact PRGB32 value the old full-size
+    // intermediate used. The downsample path below averages these values
+    // directly, so it is pixel-equivalent while avoiding that intermediate.
+    const auto source_to_prgb32 = [&](int row, int col) -> uint32_t
       {
-        auto* row_ptr = reinterpret_cast<uint32_t*>(base + row * stride);
-        for (int col = 0; col < sw; ++col)
+        const int idx = (row * sw + col) * sc;
+        uint8_t r = src_data->at(idx);
+        uint8_t g = (sc >= 2) ? src_data->at(idx + 1) : r;
+        uint8_t b = (sc >= 3) ? src_data->at(idx + 2) : r;
+        uint8_t a = 0xFFu;
+
+        if (image_mask)
           {
-            const int idx = (row * sw + col) * sc;
-            uint8_t r = src_data->at(idx);
-            uint8_t g = (sc >= 2) ? src_data->at(idx + 1) : r;
-            uint8_t b = (sc >= 3) ? src_data->at(idx + 2) : r;
-            uint8_t a = 0xFFu;
+            a = static_cast<uint8_t>(0xFFu - src_data->at(idx));
+            r = static_cast<uint8_t>(fill_rgb[0]);
+            g = static_cast<uint8_t>(fill_rgb[1]);
+            b = static_cast<uint8_t>(fill_rgb[2]);
+          }
+        else if (fmt == PIXEL_FORMAT_CMYK and sc >= 4)
+          {
+            // The Adobe convention stores the ink amounts inverted, so both
+            // conventions reach the same conversion; only the byte reading
+            // differs.
+            const std::array<int, 3> rgb =
+              cmyk_bytes_to_rgb(src_data->at(idx + 0), src_data->at(idx + 1),
+                                src_data->at(idx + 2), src_data->at(idx + 3),
+                                instr.get_cmyk_convention());
+            r = static_cast<uint8_t>(rgb[0]);
+            g = static_cast<uint8_t>(rgb[1]);
+            b = static_cast<uint8_t>(rgb[2]);
+          }
+        else if (fmt == PIXEL_FORMAT_GRAY)
+          {
+            g = r;
+            b = r;
+          }
+        if (use_soft_mask_alpha and not image_mask)
+          {
+            a = alpha_data->at(static_cast<size_t>(row) * sw + col);
+          }
 
-            if (image_mask)
-              {
-                a = static_cast<uint8_t>(0xFFu - src_data->at(idx));
-                r = static_cast<uint8_t>(fill_rgb[0]);
-                g = static_cast<uint8_t>(fill_rgb[1]);
-                b = static_cast<uint8_t>(fill_rgb[2]);
-              }
-            else if (fmt == PIXEL_FORMAT_CMYK and sc >= 4)
-              {
-                // The Adobe convention stores the ink amounts inverted, so
-                // both conventions reach the same conversion; only the reading
-                // of the four bytes differs.
-                const std::array<int, 3> rgb =
-                  cmyk_bytes_to_rgb(src_data->at(idx + 0), src_data->at(idx + 1),
-                                    src_data->at(idx + 2), src_data->at(idx + 3),
-                                    instr.get_cmyk_convention());
+        const uint32_t pm_r = static_cast<uint32_t>(r) * a / 255u;
+        const uint32_t pm_g = static_cast<uint32_t>(g) * a / 255u;
+        const uint32_t pm_b = static_cast<uint32_t>(b) * a / 255u;
+        return (static_cast<uint32_t>(a) << 24)
+          | (pm_r                     << 16)
+          | (pm_g                     <<  8)
+          |  pm_b;
+      };
 
-                r = static_cast<uint8_t>(rgb[0]);
-                g = static_cast<uint8_t>(rgb[1]);
-                b = static_cast<uint8_t>(rgb[2]);
-              }
-            else if (fmt == PIXEL_FORMAT_GRAY)
+    for (int y = 0; y < dh; ++y)
+      {
+        auto* drow = reinterpret_cast<uint32_t*>(base + y * stride);
+        const int sy0 = (y * sh) / dh;
+        const int sy1 = std::max(sy0 + 1, ((y + 1) * sh) / dh);
+
+        for (int x = 0; x < dw; ++x)
+          {
+            const int sx0 = (x * sw) / dw;
+            const int sx1 = std::max(sx0 + 1, ((x + 1) * sw) / dw);
+
+            // The no-downsample path is kept as a direct conversion. When
+            // downsampling, this is exactly the old premultiply-then-average
+            // operation, performed before the full-size PRGB32 image exists.
+            if (dw == sw and dh == sh)
               {
-                g = r;
-                b = r;
-              }
-            if (use_soft_mask_alpha and not image_mask)
-              {
-                a = alpha_data->at(static_cast<size_t>(row) * sw + col);
+                drow[x] = source_to_prgb32(y, x);
+                continue;
               }
 
-            // Store as premultiplied ARGB (required by BL_FORMAT_PRGB32).
-            const uint32_t pm_r = static_cast<uint32_t>(r) * a / 255u;
-            const uint32_t pm_g = static_cast<uint32_t>(g) * a / 255u;
-            const uint32_t pm_b = static_cast<uint32_t>(b) * a / 255u;
-            row_ptr[col] = (static_cast<uint32_t>(a) << 24)
-              | (pm_r                     << 16)
-              | (pm_g                     <<  8)
-              |  pm_b;
+            uint32_t a = 0, r = 0, g = 0, b = 0, n = 0;
+            for (int sy = sy0; sy < sy1 and sy < sh; ++sy)
+              {
+                for (int sx = sx0; sx < sx1 and sx < sw; ++sx)
+                  {
+                    const uint32_t p = source_to_prgb32(sy, sx);
+                    a += (p >> 24) & 0xFFu;
+                    r += (p >> 16) & 0xFFu;
+                    g += (p >>  8) & 0xFFu;
+                    b += (p      ) & 0xFFu;
+                    n += 1;
+                  }
+              }
+
+            drow[x] = (n == 0) ? 0u
+                               : (((a / n) << 24) | ((r / n) << 16) |
+                                  ((g / n) <<  8) |  (b / n));
           }
       }
 
@@ -3043,10 +3034,12 @@ namespace pdflib
             // rasterisers differ slightly in weight, so drawing one word from
             // both leaves it visibly patchy. One bad outline condemns the face
             // for the rest of the page.
+            const std::string* glyph_bbox_face_key = nullptr;
             if (using_embedded_font)
               {
                 const std::string& face_key =
                   instr.get_embedded_font()->get_cache_key();
+                glyph_bbox_face_key = &face_key;
                 const bool distrusted =
                   distrusted_embedded_faces_.count(face_key) > 0;
 
@@ -3059,7 +3052,7 @@ namespace pdflib
                     utils::scoped_timer glyph_timer(
                       timings_, pdf_timings::KEY_RENDER_TEXT_GLYPH_METRICS);
                     implausible =
-                      glyph_outlines_are_implausible(font, gb, geom.size);
+                      glyph_outlines_are_implausible(font, gb, geom.size, face_key);
                   }
 
                 if (distrusted or implausible)
@@ -3115,7 +3108,8 @@ namespace pdflib
               utils::scoped_timer glyph_timer(
                 timings_, pdf_timings::KEY_RENDER_TEXT_GLYPH_METRICS);
               adjustment =
-                calculate_glyph_bbox_adjustment(font, gb, instr, geom.size);
+                calculate_glyph_bbox_adjustment(font, gb, instr, geom.size,
+                                                glyph_bbox_face_key);
             }
 
             BLBox adjusted_render_box{};
@@ -3442,8 +3436,6 @@ namespace pdflib
                        << ", ignoring SMask";
       }
 
-    BLImage src_img = build_bitmap_image(instr, sw, sh, sc, use_soft_mask_alpha);
-
     // How many source pixels land on one destination pixel. The quad's two
     // edges give the drawn extent, which is what the blit resamples onto.
     int blit_w = sw;
@@ -3457,9 +3449,8 @@ namespace pdflib
 
       if(fx >= 2 or fy >= 2)
         {
-          src_img = box_downsample(src_img, fx, fy);
-          blit_w = src_img.width();
-          blit_h = src_img.height();
+          blit_w = std::max(1, sw / std::max(1, fx));
+          blit_h = std::max(1, sh / std::max(1, fy));
 
           LOG_S(INFO) << "render_bitmap: averaged " << sw << "x" << sh
                       << " down to " << blit_w << "x" << blit_h
@@ -3467,6 +3458,9 @@ namespace pdflib
                       << " (xobject_key=" << instr.get_key() << ")";
         }
     }
+
+    BLImage src_img = build_bitmap_image(instr, sw, sh, sc, use_soft_mask_alpha,
+                                         blit_w, blit_h);
 
     const bool can_use_axis_aligned_fast_path =
       axis_aligned and right_angle and quarter_turns == 0;
