@@ -754,6 +754,11 @@ class PdfDocument:
                 needed.bitmaps_content_level >= ContentLevel.COMPUTE
                 and have.bitmaps_content_level < ContentLevel.COMPUTE
             )
+            or (
+                needed.bitmaps_content_level >= ContentLevel.COMPUTE
+                and needed.include_bitmap_bytes
+                and not have.include_bitmap_bytes
+            )
         ):
             needed.char_cells_content_level = max(
                 needed.char_cells_content_level, have.char_cells_content_level
@@ -769,6 +774,9 @@ class PdfDocument:
             )
             needed.bitmaps_content_level = max(
                 needed.bitmaps_content_level, have.bitmaps_content_level
+            )
+            needed.include_bitmap_bytes = (
+                needed.include_bitmap_bytes or have.include_bitmap_bytes
             )
             self._parser.unload_document_page(key=self._key, page=page)
             have = None
