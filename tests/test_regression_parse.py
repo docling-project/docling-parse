@@ -490,6 +490,12 @@ def verify_widgets(
         assert true_widget.widget_field_type == pred_widget.widget_field_type, (
             "true_widget.widget_field_type == pred_widget.widget_field_type"
         )
+        assert true_widget.widget_field_flags == pred_widget.widget_field_flags, (
+            "true_widget.widget_field_flags == pred_widget.widget_field_flags"
+        )
+        assert (
+            true_widget.widget_appearance_state == pred_widget.widget_appearance_state
+        ), "true_widget.widget_appearance_state == pred_widget.widget_appearance_state"
 
     return True
 
@@ -769,6 +775,18 @@ def test_reference_documents_from_filenames(update_groundtruth: bool):
     assert num_failed == 0, f"{num_failed} page(s) failed: " + ", ".join(
         f"{doc}@{page}[{mode}]" for doc, page, mode, _ in failed
     )
+
+
+def test_fillable_form_widget_field_identity():
+    page = (
+        DoclingPdfParser(loglevel="fatal")
+        .load("tests/data/regression/fillable_form.pdf")
+        .get_page(1)
+    )
+    widgets = {widget.widget_field_name: widget for widget in page.widgets}
+
+    assert widgets["Invoice date.0"].widget_field_flags == 8388608
+    assert widgets["Ult Consignee Type"].widget_field_flags == 131072
 
 
 def test_load_lazy_or_eager():

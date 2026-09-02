@@ -89,9 +89,9 @@ name = "build"
 version = "1.4.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "colorama", marker = "os_name == 'nt'" },
-    { name = "packaging" },
-    { name = "pyproject-hooks" },
+    { name = "colorama", marker = "python_full_version >= '3.11' and os_name == 'nt'" },
+    { name = "packaging", marker = "python_full_version >= '3.11'" },
+    { name = "pyproject-hooks", marker = "python_full_version >= '3.11'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/42/18/94eaffda7b329535d91f00fe605ab1f1e5cd68b2074d03f255c7d250687d/build-1.4.0.tar.gz", hash = "sha256:f1b91b925aa322be454f8330c6fb48b465da993d1e7e7e6fa35027ec49f3c936", size = 50054, upload-time = "2026-01-08T16:41:47.696Z" }
 wheels = [
@@ -295,15 +295,15 @@ resolution-markers = [
     "python_full_version < '3.11'",
 ]
 dependencies = [
-    { name = "bashlex" },
-    { name = "bracex" },
-    { name = "certifi" },
-    { name = "dependency-groups" },
-    { name = "filelock" },
-    { name = "packaging" },
-    { name = "platformdirs" },
-    { name = "tomli" },
-    { name = "typing-extensions" },
+    { name = "bashlex", marker = "python_full_version < '3.11'" },
+    { name = "bracex", marker = "python_full_version < '3.11'" },
+    { name = "certifi", marker = "python_full_version < '3.11'" },
+    { name = "dependency-groups", marker = "python_full_version < '3.11'" },
+    { name = "filelock", marker = "python_full_version < '3.11'" },
+    { name = "packaging", marker = "python_full_version < '3.11'" },
+    { name = "platformdirs", marker = "python_full_version < '3.11'" },
+    { name = "tomli", marker = "python_full_version < '3.11'" },
+    { name = "typing-extensions", marker = "python_full_version < '3.11'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/50/f5/2c06c8229e291e121cb26ed2efa1ba5d89053a93631d8f1d795f2dacabb8/cibuildwheel-2.23.3.tar.gz", hash = "sha256:d85dd15b7eb81711900d8129e67efb32b12f99cc00fc271ab060fa6270c38397", size = 295383, upload-time = "2025-04-26T10:41:28.258Z" }
 wheels = [
@@ -319,18 +319,18 @@ resolution-markers = [
     "python_full_version == '3.11.*'",
 ]
 dependencies = [
-    { name = "bashlex" },
-    { name = "bracex" },
-    { name = "build" },
-    { name = "certifi" },
-    { name = "dependency-groups" },
-    { name = "filelock" },
-    { name = "humanize" },
-    { name = "packaging" },
-    { name = "patchelf", marker = "(platform_machine == 'aarch64' and sys_platform == 'darwin') or (platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'arm64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
-    { name = "platformdirs" },
-    { name = "pyelftools" },
-    { name = "wheel" },
+    { name = "bashlex", marker = "python_full_version >= '3.11'" },
+    { name = "bracex", marker = "python_full_version >= '3.11'" },
+    { name = "build", marker = "python_full_version >= '3.11'" },
+    { name = "certifi", marker = "python_full_version >= '3.11'" },
+    { name = "dependency-groups", marker = "python_full_version >= '3.11'" },
+    { name = "filelock", marker = "python_full_version >= '3.11'" },
+    { name = "humanize", marker = "python_full_version >= '3.11'" },
+    { name = "packaging", marker = "python_full_version >= '3.11'" },
+    { name = "patchelf", marker = "(python_full_version >= '3.11' and platform_machine == 'aarch64' and sys_platform == 'darwin') or (python_full_version >= '3.11' and platform_machine == 'arm64' and sys_platform == 'darwin') or (python_full_version >= '3.11' and platform_machine == 'x86_64' and sys_platform == 'darwin') or (python_full_version >= '3.11' and platform_machine == 'aarch64' and sys_platform == 'linux') or (python_full_version >= '3.11' and platform_machine == 'arm64' and sys_platform == 'linux') or (python_full_version >= '3.11' and platform_machine == 'x86_64' and sys_platform == 'linux')" },
+    { name = "platformdirs", marker = "python_full_version >= '3.11'" },
+    { name = "pyelftools", marker = "python_full_version >= '3.11'" },
+    { name = "wheel", marker = "python_full_version >= '3.11'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/cb/8c/61b0cca8be7eef6af32b0c0e62f78dc8c91572ea8870bc6c4d061f259832/cibuildwheel-3.3.1.tar.gz", hash = "sha256:ae6eafe6f7ed3bab38919e08bf3eb92085f6387c5f7a746b40cc4775a8462f9a", size = 358374, upload-time = "2026-01-05T19:58:17.606Z" }
 wheels = [
@@ -404,7 +404,7 @@ resolution-markers = [
     "python_full_version < '3.11'",
 ]
 dependencies = [
-    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" } },
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/66/54/eb9bfc647b19f2009dd5c7f5ec51c4e6ca831725f1aea7a993034f483147/contourpy-1.3.2.tar.gz", hash = "sha256:b6945942715a034c671b7fc54f9588126b0b8bf23db2696e3ca8328f3ff0ab54", size = 13466130, upload-time = "2025-04-15T17:47:53.79Z" }
 wheels = [
@@ -475,7 +475,7 @@ resolution-markers = [
     "python_full_version == '3.11.*'",
 ]
 dependencies = [
-    { name = "numpy", version = "2.4.2", source = { registry = "https://pypi.org/simple" } },
+    { name = "numpy", version = "2.4.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/58/01/1253e6698a07380cd31a736d248a3f2a50a7c88779a1813da27503cadc2a/contourpy-1.3.3.tar.gz", hash = "sha256:083e12155b210502d0bca491432bb04d56dc3432f95a979b429f2848c3dbe880", size = 13466174, upload-time = "2025-07-26T12:03:12.549Z" }
 wheels = [
@@ -678,8 +678,8 @@ wheels = [
 
 [[package]]
 name = "docling-core"
-version = "2.85.0"
-source = { registry = "https://pypi.org/simple" }
+version = "2.92.0"
+source = { git = "https://github.com/docling-project/docling-core.git?branch=feat%2Facroform-widget-extraction#8942fa3b1c809278860830e23f9b99969dc76884" }
 dependencies = [
     { name = "defusedxml" },
     { name = "doclang" },
@@ -694,10 +694,6 @@ dependencies = [
     { name = "tabulate" },
     { name = "typer" },
     { name = "typing-extensions" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/f1/02/f1cd4003d06240aa229acb5074b1dc5bec227580fd82a2dbe40b1cbefc80/docling_core-2.85.0.tar.gz", hash = "sha256:c4f49148ad8ac7cbe58d85cce90d2b3b0741d2b73cbfabb332e2df9e9583b3b4", size = 323268, upload-time = "2026-06-25T16:16:32.726Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/8e/c9/fe3bca4d1b431a32a7cbbe7afebfa5dae5a8bd0eb6ca4e132473f64239a1/docling_core-2.85.0-py3-none-any.whl", hash = "sha256:7c9e7e77966b91a61bffebb74f043fbecebe6e6e38bcf3790f05bddd5a4e306f", size = 260749, upload-time = "2026-06-25T16:16:30.988Z" },
 ]
 
 [[package]]
@@ -744,7 +740,7 @@ perf = [
 
 [package.metadata]
 requires-dist = [
-    { name = "docling-core", specifier = ">=2.85.0,<3.0.0" },
+    { name = "docling-core", git = "https://github.com/docling-project/docling-core.git?branch=feat%2Facroform-widget-extraction" },
     { name = "pillow", specifier = ">=10.0.0,<13.0.0" },
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "pywin32", marker = "sys_platform == 'win32'", specifier = ">=305" },
@@ -804,7 +800,7 @@ name = "exceptiongroup"
 version = "1.3.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "typing-extensions" },
+    { name = "typing-extensions", marker = "python_full_version < '3.11'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/50/79/66800aadf48771f6b62f7eb014e352e5d06856655206165d775e675a02c9/exceptiongroup-1.3.1.tar.gz", hash = "sha256:8b412432c6055b0b7d14c310000ae93352ed6754f70fa8f7c34141f91c4e3219", size = 30371, upload-time = "2025-11-21T23:01:54.787Z" }
 wheels = [

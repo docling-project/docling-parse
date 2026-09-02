@@ -1,3 +1,13 @@
+## Unreleased
+
+### Feature
+
+* Expose AcroForm widget field flags and appearance state, and use fully qualified field names
+
+### Breaking
+
+* Return fully qualified AcroForm widget field names instead of partial names
+
 ## [v7.16.0](https://github.com/docling-project/docling-parse/releases/tag/v7.16.0) - 2026-08-25
 
 ### Feature

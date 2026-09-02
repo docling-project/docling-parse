@@ -5,6 +5,7 @@
 
 #include <optional>
 #include <qpdf/QPDF.hh>
+#include <qpdf/QPDFFormFieldObjectHelper.hh>
 #include <qpdf/QPDFPageDocumentHelper.hh>
 #include <qpdf/QPDFPageObjectHelper.hh>
 #include <qpdf/QPDFWriter.hh>
@@ -111,11 +112,6 @@ namespace pdflib
     void add_page_cell_from_annot(QPDFObjectHandle annot);
     void add_page_hyperlink_from_annot(QPDFObjectHandle annot);
     void add_page_widget_from_annot(QPDFObjectHandle annot);
-
-    void add_textfield(QPDFObjectHandle annot, const std::array<double, 4>& bbox);
-    void add_button   (QPDFObjectHandle annot, const std::array<double, 4>& bbox);
-    void add_choice   (QPDFObjectHandle annot, const std::array<double, 4>& bbox);
-    void add_signature(QPDFObjectHandle annot, const std::array<double, 4>& bbox);
 
     // Load /AcroForm/DR/Font into acroform_fonts (called once before widget processing).
     void load_acroform_dr_fonts();
@@ -1507,88 +1503,65 @@ namespace pdflib
           }
       }
 
-    auto [has_value, ft_str] = to_inherited_string(annot, "/FT");
-    if(not has_value)
-      {
-        ft_str = "";
-      }
-
-    if(ft_str=="/Tx")
-      {
-        add_textfield(annot, bbox);
-      }
-    else if(ft_str=="/Btn")
-      {
-        add_button(annot, bbox);
-      }
-    else if(ft_str=="/Ch")
-      {
-        add_choice(annot, bbox);
-      }
-    else if(ft_str=="/Sig")
-      {
-        add_signature(annot, bbox);
-      }
+    QPDFFormFieldObjectHelper field(annot);
+    std::string field_type = field.getFieldType();
+    std::string field_name = field.getFullyQualifiedName();
+    std::string description = field.getInheritableFieldValueAsString("/TU");
+    std::uint32_t field_flags = static_cast<std::uint32_t>(field.getFlags());
+    widget_name name = UNDEFINED;
+    if(field_type=="/Tx") { name = TEXT_FIELD; }
+    else if(field_type=="/Btn") { name = BUTTON; }
+    else if(field_type=="/Ch") { name = CHOICE; }
+    else if(field_type=="/Sig") { name = SIGNATURE; }
     else
       {
-        LOG_S(WARNING) << "undefined ft: " << ft_str;
+        LOG_S(WARNING) << "undefined ft: " << field_type;
+        return;
       }
 
-  }
+    std::string text = "";
+    QPDFObjectHandle value = field.getValue();
+    if(value.isString()) { text = value.getUTF8Value(); }
+    else if(value.isName()) { text = value.getName(); }
 
-  void pdf_decoder<PAGE>::add_textfield(QPDFObjectHandle annot,
-                                        const std::array<double, 4>& bbox)
-  {
-    LOG_S(INFO) << __FUNCTION__;
-
-    auto [has_value, text] = to_inherited_string(annot, "/V");
-    if(not has_value)
-      {
-        text = "";
-      }
-
-    auto [has_field_name, field_name] = to_inherited_string(annot, "/T");
-    if(not has_field_name)
-      {
-        field_name = "";
-      }
-
-    auto [has_field_type, field_type] = to_inherited_string(annot, "/FT");
-    if(not has_field_type)
-      {
-        field_type = "";
-      }
+    std::string appearance_state = "";
+    QPDFObjectHandle appearance = annot.getKey("/AS");
+    if(appearance.isName()) { appearance_state = appearance.getName(); }
 
     page_item<PAGE_WIDGET> widget;
     {
-      widget.name = TEXT_FIELD;
+      widget.name = name;
 
       widget.x0 = bbox[0];
       widget.y0 = bbox[1];
       widget.x1 = bbox[2];
       widget.y1 = bbox[3];
 
-      widget.text       = text;
-      widget.field_name = field_name;
-      widget.field_type = field_type;
+      widget.text             = text;
+      widget.description      = description;
+      widget.field_name       = field_name;
+      widget.field_type       = field_type;
+      widget.field_flags      = field_flags;
+      widget.appearance_state = appearance_state;
     }
     page_widgets.push_back(widget);
 
-    // Emit a render instruction so the renderer draws a light-blue rectangle
-    // over the widget area.
+    if(name==TEXT_FIELD)
     {
-      text_widget_instruction winstr(text,
-                                     bbox[0], bbox[1],
-                                     bbox[2], bbox[3],
-                                     bbox[0], bbox[1],
-                                     bbox[2], bbox[1],
-                                     bbox[2], bbox[3],
-                                     bbox[0], bbox[3]);
-      instructions.add_widget_instruction(std::move(winstr));
+      // Emit a render instruction so the renderer draws a light-blue rectangle
+      // over the widget area.
+      {
+        text_widget_instruction winstr(text,
+                                       bbox[0], bbox[1],
+                                       bbox[2], bbox[3],
+                                       bbox[0], bbox[1],
+                                       bbox[2], bbox[1],
+                                       bbox[2], bbox[3],
+                                       bbox[0], bbox[3]);
+        instructions.add_widget_instruction(std::move(winstr));
+      }
     }
 
-    // Parse /AP/N (Normal appearance stream) to extract the actual rendered
-    // text cells positioned within the widget bounding box.
     decode_annot_appearance(annot, bbox, true);
   }
 
@@ -1647,130 +1620,6 @@ namespace pdflib
             decode_ap_stream(normal.getKey(state), bbox, is_widget);
           }
       }
-  }
-
-  void pdf_decoder<PAGE>::add_button(QPDFObjectHandle annot,
-                                     const std::array<double, 4>& bbox)
-  {
-    LOG_S(INFO) << __FUNCTION__;
-
-    auto [has_value, text] = to_inherited_string(annot, "/V");
-    if(not has_value)
-      {
-        text = "";
-      }
-
-    auto [has_field_name, field_name] = to_inherited_string(annot, "/T");
-    if(not has_field_name)
-      {
-        field_name = "";
-      }
-
-    auto [has_field_type, field_type] = to_inherited_string(annot, "/FT");
-    if(not has_field_type)
-      {
-        field_type = "";
-      }
-
-    page_item<PAGE_WIDGET> widget;
-    {
-      widget.name = BUTTON;
-
-      widget.x0 = bbox[0];
-      widget.y0 = bbox[1];
-      widget.x1 = bbox[2];
-      widget.y1 = bbox[3];
-
-      widget.text       = text;
-      widget.field_name = field_name;
-      widget.field_type = field_type;
-    }
-    page_widgets.push_back(widget);
-
-    // Draw the active appearance state (check mark, radio dot, ...).
-    decode_annot_appearance(annot, bbox, true);
-  }
-
-  void pdf_decoder<PAGE>::add_choice(QPDFObjectHandle annot,
-                                     const std::array<double, 4>& bbox)
-  {
-    LOG_S(INFO) << __FUNCTION__;
-
-    auto [has_value, text] = to_inherited_string(annot, "/V");
-    if(not has_value)
-      {
-        text = "";
-      }
-
-    auto [has_field_name, field_name] = to_inherited_string(annot, "/T");
-    if(not has_field_name)
-      {
-        field_name = "";
-      }
-
-    auto [has_field_type, field_type] = to_inherited_string(annot, "/FT");
-    if(not has_field_type)
-      {
-        field_type = "";
-      }
-
-    page_item<PAGE_WIDGET> widget;
-    {
-      widget.name = CHOICE;
-
-      widget.x0 = bbox[0];
-      widget.y0 = bbox[1];
-      widget.x1 = bbox[2];
-      widget.y1 = bbox[3];
-
-      widget.text       = text;
-      widget.field_name = field_name;
-      widget.field_type = field_type;
-    }
-    page_widgets.push_back(widget);
-
-    decode_annot_appearance(annot, bbox, true);
-  }
-
-  void pdf_decoder<PAGE>::add_signature(QPDFObjectHandle annot,
-                                        const std::array<double, 4>& bbox)
-  {
-    LOG_S(INFO) << __FUNCTION__;
-
-    auto [has_value, text] = to_inherited_string(annot, "/V");
-    if(not has_value)
-      {
-        text = "";
-      }
-
-    auto [has_field_name, field_name] = to_inherited_string(annot, "/T");
-    if(not has_field_name)
-      {
-        field_name = "";
-      }
-
-    auto [has_field_type, field_type] = to_inherited_string(annot, "/FT");
-    if(not has_field_type)
-      {
-        field_type = "";
-      }
-
-    page_item<PAGE_WIDGET> widget;
-    {
-      widget.name = SIGNATURE;
-
-      widget.x0 = bbox[0];
-      widget.y0 = bbox[1];
-      widget.x1 = bbox[2];
-      widget.y1 = bbox[3];
-
-      widget.text       = text;
-      widget.field_name = field_name;
-      widget.field_type = field_type;
-    }
-    page_widgets.push_back(widget);
-
-    decode_annot_appearance(annot, bbox, true);
   }
 
   std::array<double, 6> pdf_decoder<PAGE>::appearance_matrix(

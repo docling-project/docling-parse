@@ -86,6 +86,9 @@ perf = [
 package = true
 default-groups = "all"
 
+[tool.uv.sources]
+docling-core = { git = "git+https://github.com/docling-project/docling-core.git", branch = "feat/acroform-widget-extraction" }
+
 [tool.setuptools]
 include-package-data = true
 
