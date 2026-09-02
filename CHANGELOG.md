@@ -1,3 +1,9 @@
+## [v7.17.0](https://github.com/docling-project/docling-parse/releases/tag/v7.17.0) - 2026-09-02
+
+### Feature
+
+* Optimization of the parse/render with up to 3.84× speedup ([#333](https://github.com/docling-project/docling-parse/issues/333)) ([`0d9cac5`](https://github.com/docling-project/docling-parse/commit/0d9cac5807ee69683eead658273cfb1fdca8dc3b))
+
 ## [v7.16.0](https://github.com/docling-project/docling-parse/releases/tag/v7.16.0) - 2026-08-25
 
 ### Feature
