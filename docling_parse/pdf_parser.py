@@ -225,10 +225,14 @@ class PdfMarkedContentTag(BaseModel):
     """Tagged-PDF linkage of one text cell, aligned by `index` with the page's char cells.
 
     Only cells that sit inside a marked-content sequence with an /MCID, or inside an
-    /Artifact sequence, are listed.
+    /Artifact sequence, are listed. The cell's text and rectangle (bottom-left origin,
+    like every other page item) are carried along so a consumer that did not
+    materialize char cells can still place the structure element on the page.
     """
 
     index: int
+    text: str = ""
+    rect: BoundingRectangle | None = None
     mcid: int = -1
     artifact_type: str | None = None
     artifact_subtype: str | None = None
@@ -802,6 +806,36 @@ def segmented_page_from_decoder(
     return segmented_page
 
 
+def _marked_content_from_decoder(decoder: PdfPageDecoder) -> List[PdfMarkedContentTag]:
+    """Tagged-PDF linkage of the decoder's char cells (see PdfMarkedContentTag)."""
+    tags: List[PdfMarkedContentTag] = []
+    for index, cell in enumerate(decoder.get_char_cells()):
+        mcid = int(cell.mcid)
+        artifact_type = cell.artifact_type or None
+        if mcid < 0 and artifact_type is None:
+            continue
+        tags.append(
+            PdfMarkedContentTag(
+                index=index,
+                text=cell.text,
+                rect=BoundingRectangle(
+                    r_x0=cell.r_x0,
+                    r_y0=cell.r_y0,
+                    r_x1=cell.r_x1,
+                    r_y1=cell.r_y1,
+                    r_x2=cell.r_x2,
+                    r_y2=cell.r_y2,
+                    r_x3=cell.r_x3,
+                    r_y3=cell.r_y3,
+                ),
+                mcid=mcid,
+                artifact_type=artifact_type,
+                artifact_subtype=cell.artifact_subtype or None,
+            )
+        )
+    return tags
+
+
 def _timings_from_decoder(page_decoder: PdfPageDecoder) -> Timings:
     return Timings(
         data=dict(page_decoder.get_timings()),
@@ -1009,22 +1043,7 @@ class PdfDocument:
         """Marked-content tags (/MCID, /Artifact) of the page's char cells, by cell index."""
         cc = content_config or self._content_config
         decoder = self._ensure_page_decoder(page_no, cc)
-
-        tags: List[PdfMarkedContentTag] = []
-        for index, cell in enumerate(decoder.get_char_cells()):
-            mcid = int(cell.mcid)
-            artifact_type = cell.artifact_type or None
-            if mcid < 0 and artifact_type is None:
-                continue
-            tags.append(
-                PdfMarkedContentTag(
-                    index=index,
-                    mcid=mcid,
-                    artifact_type=artifact_type,
-                    artifact_subtype=cell.artifact_subtype or None,
-                )
-            )
-        return tags
+        return _marked_content_from_decoder(decoder)
 
     def iterate_pages(
         self,
@@ -1349,6 +1368,10 @@ class PageParseResult:
         if self.success:
             return ""
         return self._raw.error()
+
+    def get_marked_content(self) -> List[PdfMarkedContentTag]:
+        """Marked-content tags (/MCID, /Artifact) of this page's char cells, by cell index."""
+        return _marked_content_from_decoder(self._require_page_decoder())
 
     def _require_page_decoder(self) -> PdfPageDecoder:
         if not self.success:
