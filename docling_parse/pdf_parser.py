@@ -6,7 +6,18 @@ import math
 from enum import IntEnum
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple, Union
+from typing import (
+    Annotated,
+    Any,
+    Dict,
+    Iterator,
+    List,
+    Literal,
+    Optional,
+    Sequence,
+    Tuple,
+    Union,
+)
 
 from docling_core.types.doc.base import BoundingBox, CoordOrigin, ImageRefMode
 from docling_core.types.doc.document import ImageRef
@@ -28,7 +39,7 @@ from docling_core.types.doc.page import (
     TextDirection,
 )
 from PIL import Image as PILImage
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from docling_parse.pdf_parsers import (  # type: ignore[import]
     TIMING_KEY_CREATE_LINE_CELLS,
@@ -111,6 +122,124 @@ class PdfAnnotations(BaseModel):
     language: str | None = None
     meta_xml: str | None = None
     table_of_contents: List[PdfTocEntry] | None = None
+    structure: "PdfStructure | None" = None
+
+
+class PdfMarkedContentRef(BaseModel):
+    """A structure element kid that points at a marked-content sequence."""
+
+    kind: Literal["mcid"] = "mcid"
+    page: int  # 0-based page index, -1 when the /Pg entry could not be resolved
+    mcid: int
+
+
+class PdfObjectRef(BaseModel):
+    """A structure element kid that points at an annotation or XObject (/OBJR)."""
+
+    kind: Literal["objref"] = "objref"
+    page: int
+    obj: str  # "<num> <gen>" identity of the referenced object
+    subtype: str | None = None  # annotation /Subtype when the target is an annotation
+
+
+class PdfStructureElement(BaseModel):
+    """One structure element of the tagged-PDF logical structure tree (ISO 32000-2, 14.7).
+
+    Attributes:
+        id: "<num> <gen>" identity of the element object; empty for direct objects.
+        order: depth-first position in the tree, the logical content order (14.8.2.5).
+        type: raw structure type (/S) before role mapping; apply PdfStructure.role_map to resolve.
+        namespace: PDF 2.0 namespace URI (/NS) when present.
+        title, lang, alt, actual_text, expansion: the /T, /Lang, /Alt, /ActualText and /E entries.
+        element_id: the /ID entry.
+        page: 0-based index of the element's /Pg page, when present.
+        attributes: attribute objects keyed by owner (/O), e.g. {"/Layout": {"/Placement": "/Block"}}.
+        ref: ids of elements referenced through /Ref.
+        kids: children in order: marked-content refs, object refs, or nested elements.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    kind: Literal["element"] = "element"
+    id: str = ""
+    order: int = 0
+    type: str = ""
+    namespace: str | None = None
+    title: str | None = None
+    lang: str | None = None
+    alt: str | None = None
+    actual_text: str | None = None
+    expansion: str | None = None
+    element_id: str | None = None
+    page: int | None = None
+    attributes: Dict[str, Dict[str, Any]] = {}
+    ref: List[str] = []
+    kids: List[
+        Annotated[
+            Union["PdfStructureElement", PdfMarkedContentRef, PdfObjectRef],
+            Field(discriminator="kind"),
+        ]
+    ] = []
+
+    def resolved_type(self, role_map: Dict[str, str]) -> str:
+        """Structure type after following /RoleMap (bounded, cycles tolerated)."""
+        seen = set()
+        current = self.type
+        while current in role_map and current not in seen:
+            seen.add(current)
+            current = role_map[current]
+        return current
+
+
+class PdfStructure(BaseModel):
+    """The logical structure tree of a tagged PDF.
+
+    Attributes:
+        marked: the /MarkInfo /Marked flag (the file declares itself tagged).
+        role_map: /RoleMap of the structure tree root, custom type -> standard type.
+        namespaces: URIs of the /Namespaces array (PDF 2.0).
+        elements: the root-level structure elements, in order.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    marked: bool = False
+    role_map: Dict[str, str] = {}
+    namespaces: List[str] = []
+    elements: List[PdfStructureElement] = []
+
+    def iter_elements(self) -> Iterator[PdfStructureElement]:
+        """Depth-first traversal of every element."""
+        stack = list(reversed(self.elements))
+        while stack:
+            element = stack.pop()
+            yield element
+            stack.extend(
+                kid
+                for kid in reversed(element.kids)
+                if isinstance(kid, PdfStructureElement)
+            )
+
+
+class PdfMarkedContentTag(BaseModel):
+    """Tagged-PDF linkage of one text cell, aligned by `index` with the page's char cells.
+
+    Only cells that sit inside a marked-content sequence with an /MCID, or inside an
+    /Artifact sequence, are listed. The cell's text and rectangle (bottom-left origin,
+    like every other page item) are carried along so a consumer that did not
+    materialize char cells can still place the structure element on the page.
+    """
+
+    index: int
+    text: str = ""
+    rect: BoundingRectangle | None = None
+    mcid: int = -1
+    artifact_type: str | None = None
+    artifact_subtype: str | None = None
+
+
+PdfStructureElement.model_rebuild()
+PdfAnnotations.model_rebuild()
 
 
 class Timings(BaseModel):
@@ -677,6 +806,36 @@ def segmented_page_from_decoder(
     return segmented_page
 
 
+def _marked_content_from_decoder(decoder: PdfPageDecoder) -> List[PdfMarkedContentTag]:
+    """Tagged-PDF linkage of the decoder's char cells (see PdfMarkedContentTag)."""
+    tags: List[PdfMarkedContentTag] = []
+    for index, cell in enumerate(decoder.get_char_cells()):
+        mcid = int(cell.mcid)
+        artifact_type = cell.artifact_type or None
+        if mcid < 0 and artifact_type is None:
+            continue
+        tags.append(
+            PdfMarkedContentTag(
+                index=index,
+                text=cell.text,
+                rect=BoundingRectangle(
+                    r_x0=cell.r_x0,
+                    r_y0=cell.r_y0,
+                    r_x1=cell.r_x1,
+                    r_y1=cell.r_y1,
+                    r_x2=cell.r_x2,
+                    r_y2=cell.r_y2,
+                    r_x3=cell.r_x3,
+                    r_y3=cell.r_y3,
+                ),
+                mcid=mcid,
+                artifact_type=artifact_type,
+                artifact_subtype=cell.artifact_subtype or None,
+            )
+        )
+    return tags
+
+
 def _timings_from_decoder(page_decoder: PdfPageDecoder) -> Timings:
     return Timings(
         data=dict(page_decoder.get_timings()),
@@ -862,6 +1021,29 @@ class PdfDocument:
             return self._toc
         else:
             raise RuntimeError("This document is not loaded.")
+
+    def get_structure(self) -> PdfStructure | None:
+        """Get the tagged-PDF logical structure tree, or None when the file has none."""
+        if not self.is_loaded():
+            raise RuntimeError("This document is not loaded.")
+
+        raw = self._parser.get_annotations(key=self._key)
+        if not isinstance(raw, dict):
+            return None
+
+        structure = raw.get("structure")
+        if not isinstance(structure, dict):
+            return None
+
+        return PdfStructure.model_validate(structure)
+
+    def get_page_marked_content(
+        self, page_no: int, *, content_config: ContentConfig | None = None
+    ) -> List[PdfMarkedContentTag]:
+        """Marked-content tags (/MCID, /Artifact) of the page's char cells, by cell index."""
+        cc = content_config or self._content_config
+        decoder = self._ensure_page_decoder(page_no, cc)
+        return _marked_content_from_decoder(decoder)
 
     def iterate_pages(
         self,
@@ -1186,6 +1368,10 @@ class PageParseResult:
         if self.success:
             return ""
         return self._raw.error()
+
+    def get_marked_content(self) -> List[PdfMarkedContentTag]:
+        """Marked-content tags (/MCID, /Artifact) of this page's char cells, by cell index."""
+        return _marked_content_from_decoder(self._require_page_decoder())
 
     def _require_page_decoder(self) -> PdfPageDecoder:
         if not self.success:

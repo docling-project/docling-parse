@@ -92,6 +92,13 @@ namespace pdflib
     bool widget;
     bool last_merged_cell_was_ligature = false;
 
+    // tagged-PDF linkage (PDF 32000-2, 14.7.5): the /MCID of the innermost
+    // marked-content sequence the glyph was drawn in (-1 when untagged), and
+    // the artifact /Type when the glyph sits inside an /Artifact sequence.
+    int         mcid = -1;
+    std::string artifact_type = "";
+    std::string artifact_subtype = "";
+
     // graphics state properties
     bool                has_graphics_state = false;
     double              line_width = -1;
@@ -154,7 +161,11 @@ namespace pdflib
     "has-graphics-state",
     "line-width",
     "rgb-stroking",
-    "rgb-filling"
+    "rgb-filling",
+
+    "mcid",
+    "artifact-type",
+    "artifact-subtype"
   };
 
   void page_item<PAGE_CELL>::rotate(int angle, std::pair<double, double> delta)
@@ -216,6 +227,10 @@ namespace pdflib
       cell.push_back(utils::values::round(line_width)); // 22
       cell.push_back(rgb_stroking_ops); // 23
       cell.push_back(rgb_filling_ops);  // 24
+
+      cell.push_back(mcid);          // 25
+      cell.push_back(artifact_type); // 26
+      cell.push_back(artifact_subtype); // 27
     }
     assert(cell.size()==header.size());
 
@@ -260,6 +275,10 @@ namespace pdflib
 	if(data.size()>22) { line_width         = data.at(22).get<double>(); }
 	if(data.size()>23) { rgb_stroking_ops   = data.at(23).get<std::array<int, 3> >(); }
 	if(data.size()>24) { rgb_filling_ops    = data.at(24).get<std::array<int, 3> >(); }
+
+	if(data.size()>25) { mcid          = data.at(25).get<int>(); }
+	if(data.size()>26) { artifact_type = data.at(26).get<std::string>(); }
+	if(data.size()>27) { artifact_subtype = data.at(27).get<std::string>(); }
 
         return true;
       }

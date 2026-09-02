@@ -411,7 +411,10 @@ PYBIND11_MODULE(pdf_parsers, m) {
     .def_readonly("font_key", &pdflib::page_item<pdflib::PAGE_CELL>::font_key)
     .def_readonly("font_name", &pdflib::page_item<pdflib::PAGE_CELL>::font_name)
     .def_readonly("widget", &pdflib::page_item<pdflib::PAGE_CELL>::widget)
-    .def_readonly("left_to_right", &pdflib::page_item<pdflib::PAGE_CELL>::left_to_right);
+    .def_readonly("left_to_right", &pdflib::page_item<pdflib::PAGE_CELL>::left_to_right)
+    .def_readonly("mcid", &pdflib::page_item<pdflib::PAGE_CELL>::mcid)
+    .def_readonly("artifact_type", &pdflib::page_item<pdflib::PAGE_CELL>::artifact_type)
+    .def_readonly("artifact_subtype", &pdflib::page_item<pdflib::PAGE_CELL>::artifact_subtype);
 
   // PdfShape - graphic shape with coordinates
   pybind11::class_<pdflib::page_item<pdflib::PAGE_SHAPE>>(m, "PdfShape")

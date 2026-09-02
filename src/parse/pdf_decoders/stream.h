@@ -115,12 +115,19 @@ namespace pdflib
       bool        has_actual_text = false;
       std::string actual_text     = ""; // UTF-8
       std::size_t cells_begin     = 0;  // page_cells.size() at BDC/BMC
+
+      // tagged-PDF linkage (PDF 32000-2, 14.7.5 and 14.8.2.2.2)
+      int         mcid          = -1; // /MCID of the sequence, -1 when absent
+      bool        is_artifact   = false;
+      std::string artifact_type = ""; // /Type of an /Artifact property list
+      std::string artifact_subtype = ""; // /Subtype (Header, Footer, Watermark, ...)
     };
 
     void begin_marked_content(std::vector<qpdf_stream_instruction>& parameters);
     void end_marked_content();
 
     void apply_actual_text(const marked_content_entry& entry);
+    void apply_marked_content_tags(const marked_content_entry& entry);
 
     struct inline_image_entry
     {
@@ -1789,6 +1796,33 @@ namespace pdflib
     marked_content_entry entry;
     entry.cells_begin = page_cells.size();
 
+    // BDC tag (first operand) and inline property list: /MCID links the
+    // sequence to a structure element, /Artifact marks non-real content.
+    if(parameters.size()>=1 and parameters.front().obj.isName())
+      {
+        entry.is_artifact = (parameters.front().obj.getName()=="/Artifact");
+      }
+
+    if(parameters.size()>=2 and parameters.back().is_dict())
+      {
+        QPDFObjectHandle dict = parameters.back().obj;
+
+        if(dict.hasKey("/MCID") and dict.getKey("/MCID").isInteger())
+          {
+            entry.mcid = static_cast<int>(dict.getKey("/MCID").getIntValue());
+          }
+
+        if(entry.is_artifact and dict.hasKey("/Type") and dict.getKey("/Type").isName())
+          {
+            entry.artifact_type = dict.getKey("/Type").getName();
+          }
+
+        if(entry.is_artifact and dict.hasKey("/Subtype") and dict.getKey("/Subtype").isName())
+          {
+            entry.artifact_subtype = dict.getKey("/Subtype").getName();
+          }
+      }
+
     if(config.apply_actual_text and parameters.size()>=2)
       {
         qpdf_stream_instruction& props = parameters.back();
@@ -1827,9 +1861,49 @@ namespace pdflib
     marked_content_entry entry = marked_content_stack.back();
     marked_content_stack.pop_back();
 
+    // Stamp tags before ActualText substitution: substitution may erase or
+    // merge cells, and the surviving cells keep their tags.
+    apply_marked_content_tags(entry);
+
     if(entry.has_actual_text)
       {
         apply_actual_text(entry);
+      }
+  }
+
+  // Stamp the sequence's /MCID and artifact type onto the cells drawn inside
+  // it. Sequences nest (a /Span inside a /P, a /P inside an /Artifact), and
+  // EMC unwinds innermost first, so a cell keeps the innermost value: only
+  // unstamped cells are written.
+  void pdf_decoder<STREAM>::apply_marked_content_tags(const marked_content_entry& entry)
+  {
+    if(entry.mcid<0 and not entry.is_artifact)
+      {
+        return;
+      }
+
+    std::size_t begin = entry.cells_begin;
+    std::size_t end   = page_cells.size();
+
+    if(begin>end)
+      {
+        return;
+      }
+
+    for(std::size_t i=begin; i<end; i++)
+      {
+        page_item<PAGE_CELL>& cell = page_cells[i];
+
+        if(entry.mcid>=0 and cell.mcid<0)
+          {
+            cell.mcid = entry.mcid;
+          }
+
+        if(entry.is_artifact and cell.artifact_type.empty())
+          {
+            cell.artifact_type    = entry.artifact_type.empty() ? "/Artifact" : entry.artifact_type;
+            cell.artifact_subtype = entry.artifact_subtype;
+          }
       }
   }
 
