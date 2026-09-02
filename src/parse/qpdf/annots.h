@@ -7,6 +7,7 @@
 #include <iostream>
 #include <iomanip>
 #include <unordered_set>
+#include <map>
 
 #include <nlohmann/json.hpp>
 #include <qpdf/QPDF.hh>
@@ -326,8 +327,335 @@ namespace pdflib
     return toc;
   }
   
+  /*** Tagged-PDF logical structure (PDF 32000-2, 14.7) ***/
+
+  // Object identity for structure elements: "obj gen" for indirect objects,
+  // an empty string for direct ones (rare, and then not referenceable anyway).
+  inline std::string struct_obj_id(QPDFObjectHandle& obj)
+  {
+    if(obj.isIndirect())
+      {
+        return std::to_string(obj.getObjectID())+" "+std::to_string(obj.getGeneration());
+      }
+    return "";
+  }
+
+  inline int struct_page_index(QPDFObjectHandle page,
+                               const std::map<std::string, int>& page_index)
+  {
+    if(not page.isDictionary())
+      {
+        return -1;
+      }
+    std::string id = struct_obj_id(page);
+    auto itr = page_index.find(id);
+    return (itr==page_index.end()) ? -1 : itr->second;
+  }
+
+  // Attribute objects (/A) are a dictionary or an array of dictionaries, each
+  // keyed by its owner (/O): Layout, List, Table, PrintField, Artifact,
+  // ARIA-1.1, ... Returned as {owner: {name: value}} with values via to_json.
+  inline nlohmann::json struct_attributes_in_json(QPDFObjectHandle attrs)
+  {
+    nlohmann::json result = nlohmann::json::object({});
+
+    std::vector<QPDFObjectHandle> dicts;
+    if(attrs.isDictionary())
+      {
+        dicts.push_back(attrs);
+      }
+    else if(attrs.isArray())
+      {
+        for(int i=0; i<attrs.getArrayNItems(); i++)
+          {
+            QPDFObjectHandle item = attrs.getArrayItem(i);
+            if(item.isDictionary()) { dicts.push_back(item); }
+            // integers interleaved in the array are revision numbers: skipped
+          }
+      }
+
+    for(auto& dict : dicts)
+      {
+        std::string owner = "";
+        if(dict.hasKey("/O") and dict.getKey("/O").isName())
+          {
+            owner = dict.getKey("/O").getName();
+          }
+
+        nlohmann::json values = nlohmann::json::object({});
+        for(auto key : dict.getKeys())
+          {
+            if(key=="/O") { continue; }
+            values[key] = to_json(dict.getKey(key), {}, 0, 4);
+          }
+        result[owner] = values;
+      }
+
+    return result;
+  }
+
+  inline void struct_string_entry(QPDFObjectHandle& elem, const std::string& key,
+                                  const std::string& name, nlohmann::json& out)
+  {
+    if(elem.hasKey(key) and elem.getKey(key).isString())
+      {
+        out[name] = utils::string::fix_into_valid_utf8(elem.getKey(key).getUTF8Value());
+      }
+  }
+
+  nlohmann::json extract_struct_elem_in_json(QPDFObjectHandle elem,
+                                             const std::map<std::string, int>& page_index,
+                                             std::unordered_set<std::string>& visited,
+                                             int& order, int level)
+  {
+    nlohmann::json result = nlohmann::json::object({});
+
+    if(level>=64 or not elem.isDictionary())
+      {
+        return result;
+      }
+
+    std::string id = struct_obj_id(elem);
+    if(not id.empty())
+      {
+        if(visited.count(id))
+          {
+            LOG_S(WARNING) << "cyclic structure element reference, skipping: " << id;
+            return result;
+          }
+        visited.insert(id);
+      }
+
+    result["id"]    = id;
+    result["order"] = order++;
+
+    if(elem.hasKey("/S") and elem.getKey("/S").isName())
+      {
+        result["type"] = elem.getKey("/S").getName();
+      }
+    else
+      {
+        result["type"] = "";
+      }
+
+    // PDF 2.0 namespace (14.7.4): /NS is a namespace dictionary with a /NS string
+    if(elem.hasKey("/NS") and elem.getKey("/NS").isDictionary())
+      {
+        QPDFObjectHandle ns = elem.getKey("/NS");
+        if(ns.hasKey("/NS") and ns.getKey("/NS").isString())
+          {
+            result["namespace"] = ns.getKey("/NS").getUTF8Value();
+          }
+      }
+
+    struct_string_entry(elem, "/T",          "title",       result);
+    struct_string_entry(elem, "/Lang",       "lang",        result);
+    struct_string_entry(elem, "/Alt",        "alt",         result);
+    struct_string_entry(elem, "/ActualText", "actual_text", result);
+    struct_string_entry(elem, "/E",          "expansion",   result);
+
+    if(elem.hasKey("/ID") and elem.getKey("/ID").isString())
+      {
+        result["element_id"] = elem.getKey("/ID").getUTF8Value();
+      }
+
+    int elem_page = -1;
+    if(elem.hasKey("/Pg"))
+      {
+        elem_page = struct_page_index(elem.getKey("/Pg"), page_index);
+        result["page"] = elem_page;
+      }
+
+    if(elem.hasKey("/A"))
+      {
+        result["attributes"] = struct_attributes_in_json(elem.getKey("/A"));
+      }
+
+    if(elem.hasKey("/Ref") and elem.getKey("/Ref").isArray())
+      {
+        nlohmann::json refs = nlohmann::json::array({});
+        QPDFObjectHandle ref = elem.getKey("/Ref");
+        for(int i=0; i<ref.getArrayNItems(); i++)
+          {
+            QPDFObjectHandle item = ref.getArrayItem(i);
+            refs.push_back(struct_obj_id(item));
+          }
+        result["ref"] = refs;
+      }
+
+    // Kids (14.7.5.2): a single kid or an array of kids, each being an
+    // integer MCID on the element's page, a marked-content reference dict
+    // (/Type /MCR), an object reference dict (/Type /OBJR), or a child element.
+    nlohmann::json kids = nlohmann::json::array({});
+
+    std::vector<QPDFObjectHandle> kid_items;
+    if(elem.hasKey("/K"))
+      {
+        QPDFObjectHandle k = elem.getKey("/K");
+        if(k.isArray())
+          {
+            for(int i=0; i<k.getArrayNItems(); i++) { kid_items.push_back(k.getArrayItem(i)); }
+          }
+        else if(not k.isNull())
+          {
+            kid_items.push_back(k);
+          }
+      }
+
+    for(auto& kid : kid_items)
+      {
+        if(kid.isInteger())
+          {
+            kids.push_back({{"kind", "mcid"}, {"page", elem_page},
+                            {"mcid", static_cast<int>(kid.getIntValue())}});
+          }
+        else if(kid.isDictionary())
+          {
+            std::string type = "";
+            if(kid.hasKey("/Type") and kid.getKey("/Type").isName())
+              {
+                type = kid.getKey("/Type").getName();
+              }
+
+            if(type=="/MCR")
+              {
+                int page = elem_page;
+                if(kid.hasKey("/Pg")) { page = struct_page_index(kid.getKey("/Pg"), page_index); }
+                int mcid = -1;
+                if(kid.hasKey("/MCID") and kid.getKey("/MCID").isInteger())
+                  {
+                    mcid = static_cast<int>(kid.getKey("/MCID").getIntValue());
+                  }
+                kids.push_back({{"kind", "mcid"}, {"page", page}, {"mcid", mcid}});
+              }
+            else if(type=="/OBJR")
+              {
+                int page = elem_page;
+                if(kid.hasKey("/Pg")) { page = struct_page_index(kid.getKey("/Pg"), page_index); }
+                std::string obj = "";
+                std::string subtype = "";
+                if(kid.hasKey("/Obj"))
+                  {
+                    QPDFObjectHandle target = kid.getKey("/Obj");
+                    obj = struct_obj_id(target);
+                    if(target.isDictionary() and target.hasKey("/Subtype") and
+                       target.getKey("/Subtype").isName())
+                      {
+                        subtype = target.getKey("/Subtype").getName();
+                      }
+                  }
+                kids.push_back({{"kind", "objref"}, {"page", page}, {"obj", obj}, {"subtype", subtype}});
+              }
+            else
+              {
+                nlohmann::json child = extract_struct_elem_in_json(kid, page_index, visited, order, level+1);
+                if(not child.empty())
+                  {
+                    child["kind"] = "element";
+                    kids.push_back(child);
+                  }
+              }
+          }
+      }
+
+    result["kids"] = kids;
+    return result;
+  }
+
+  nlohmann::json extract_structure_in_json(QPDF& pdf_obj, QPDFObjectHandle& root,
+                                           const std::vector<QPDFObjectHandle>& pages)
+  {
+    LOG_S(INFO) << __FUNCTION__;
+
+    nlohmann::json structure = nlohmann::json::value_t::null;
+
+    if(not root.hasKey("/StructTreeRoot") or not root.getKey("/StructTreeRoot").isDictionary())
+      {
+        LOG_S(INFO) << "no /StructTreeRoot detected ...";
+        return structure;
+      }
+
+    QPDFObjectHandle tree = root.getKey("/StructTreeRoot");
+    structure = nlohmann::json::object({});
+
+    // /MarkInfo /Marked declares the file as tagged (14.7.1)
+    bool marked = false;
+    if(root.hasKey("/MarkInfo") and root.getKey("/MarkInfo").isDictionary())
+      {
+        QPDFObjectHandle mark_info = root.getKey("/MarkInfo");
+        if(mark_info.hasKey("/Marked") and mark_info.getKey("/Marked").isBool())
+          {
+            marked = mark_info.getKey("/Marked").getBoolValue();
+          }
+      }
+    structure["marked"] = marked;
+
+    std::map<std::string, int> page_index;
+    for(std::size_t i=0; i<pages.size(); i++)
+      {
+        QPDFObjectHandle page = pages.at(i);
+        page_index[struct_obj_id(page)] = static_cast<int>(i);
+      }
+
+    nlohmann::json role_map = nlohmann::json::object({});
+    if(tree.hasKey("/RoleMap") and tree.getKey("/RoleMap").isDictionary())
+      {
+        QPDFObjectHandle rm = tree.getKey("/RoleMap");
+        for(auto key : rm.getKeys())
+          {
+            QPDFObjectHandle val = rm.getKey(key);
+            if(val.isName()) { role_map[key] = val.getName(); }
+          }
+      }
+    structure["role_map"] = role_map;
+
+    if(tree.hasKey("/Namespaces") and tree.getKey("/Namespaces").isArray())
+      {
+        nlohmann::json namespaces = nlohmann::json::array({});
+        QPDFObjectHandle nss = tree.getKey("/Namespaces");
+        for(int i=0; i<nss.getArrayNItems(); i++)
+          {
+            QPDFObjectHandle ns = nss.getArrayItem(i);
+            if(ns.isDictionary() and ns.hasKey("/NS") and ns.getKey("/NS").isString())
+              {
+                namespaces.push_back(ns.getKey("/NS").getUTF8Value());
+              }
+          }
+        structure["namespaces"] = namespaces;
+      }
+
+    std::unordered_set<std::string> visited;
+    int order = 0;
+    nlohmann::json elements = nlohmann::json::array({});
+
+    std::vector<QPDFObjectHandle> roots;
+    if(tree.hasKey("/K"))
+      {
+        QPDFObjectHandle k = tree.getKey("/K");
+        if(k.isArray())
+          {
+            for(int i=0; i<k.getArrayNItems(); i++) { roots.push_back(k.getArrayItem(i)); }
+          }
+        else if(k.isDictionary())
+          {
+            roots.push_back(k);
+          }
+      }
+
+    for(auto& elem : roots)
+      {
+        nlohmann::json e = extract_struct_elem_in_json(elem, page_index, visited, order, 0);
+        if(not e.empty()) { elements.push_back(e); }
+      }
+    structure["elements"] = elements;
+
+    LOG_S(INFO) << "structure tree: " << order << " element(s), marked=" << marked;
+    return structure;
+  }
+
   nlohmann::json extract_document_annotations_in_json(QPDF& pdf_obj,
-						      QPDFObjectHandle& root)
+						      QPDFObjectHandle& root,
+						      const std::vector<QPDFObjectHandle>& pages)
   {
     LOG_S(INFO) << __FUNCTION__;
     
@@ -340,7 +668,9 @@ namespace pdflib
     annots["language"] = extract_language_in_json(pdf_obj, root);
 
     annots["table_of_contents"] = extract_toc_in_json(pdf_obj, root);
-    
+
+    annots["structure"] = extract_structure_in_json(pdf_obj, root, pages);
+
     LOG_S(INFO) << "annotations: " << annots.dump(2);
     
     return annots;

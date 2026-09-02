@@ -162,7 +162,7 @@ namespace pdflib
         QPDFObjectHandle qpdf_root = qpdf_document.getRoot();
 	
         utils::timer annots_timer;
-        json_annots = extract_document_annotations_in_json(qpdf_document, qpdf_root);
+        json_annots = extract_document_annotations_in_json(qpdf_document, qpdf_root, qpdf_pages);
 
         double annots_elapsed = annots_timer.get_time();
         timings.add_timing(pdf_timings::KEY_EXTRACT_DOC_ANNOTATIONS, annots_elapsed);
