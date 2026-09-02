@@ -162,7 +162,7 @@ namespace pdflib
         QPDFObjectHandle qpdf_root = qpdf_document.getRoot();
 	
         utils::timer annots_timer;
-        json_annots = extract_document_annotations_in_json(qpdf_document, qpdf_root);
+        json_annots = extract_document_annotations_in_json(qpdf_document, qpdf_root, qpdf_pages);
 
         // composed here rather than inside the extractor above: resolving the
         // outline's destinations needs the pages and their geometry
