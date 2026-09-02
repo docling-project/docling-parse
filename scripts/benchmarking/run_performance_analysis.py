@@ -33,7 +33,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List
 
-from _common import PageRow, ensure_parent_dir, read_page_rows
+from _common import TASK_RENDER, PageRow, ensure_parent_dir, read_page_rows
 from docling_core.types.doc.page import PdfPageBoundaryType
 from tabulate import tabulate
 
@@ -72,11 +72,28 @@ DECODE_PAGE_CHILDREN = [
     "sanitise_contents",
 ]
 
+RENDER_PAGE_CHILDREN = [
+    "render_page.set_size",
+    "render_page.text",
+    "render_page.bitmap",
+    "render_page.shape",
+    "render_page.shading",
+    "render_page.widget",
+    "render_page.get_canvas",
+]
+
 TIMING_CHILDREN = {
     "pipeline": [
         "decode_page",
         "create_word_cells",
         "create_line_cells",
+        "render_page",
+    ],
+    "render_page": RENDER_PAGE_CHILDREN,
+    "render_page.text": [
+        "render_page.text.font_resolve",
+        "render_page.text.glyph_metrics",
+        "render_page.text.draw",
     ],
     "decode_page": DECODE_PAGE_CHILDREN,
     "sanitize_cells": [
@@ -101,6 +118,15 @@ TIMING_CHILDREN = {
         "parse_stream_total",
         "do_form_machinery_total",
         "do_image_total",
+    ],
+    "do_image_total": [
+        "do_image_total.jpeg",
+        "do_image_total.jpx",
+        "do_image_total.jbig2",
+        "do_image_total.ccitt",
+        "do_image_total.indexed",
+        "do_image_total.decode_array",
+        "do_image_total.soft_mask",
     ],
     "decode_fonts_total": [
         "font: init-copy",
@@ -285,6 +311,107 @@ def extract_timings_for_page(
         return Timings()
 
 
+def _resolve_render_scale(csv_path: Path, args) -> float | None:
+    """Render replay scale, or None to analyse decode-only.
+
+    Explicit --render wins. Otherwise turn it on when the rows being analysed
+    are render rows, since analysing those without rendering reports a fraction
+    of the time the CSV recorded and silently omits the dominant stage.
+    """
+    if args.render is not None:
+        return float(args.render)
+
+    if args.task == "parse":
+        return None
+
+    try:
+        tasks = {r.task for r in read_page_rows(csv_path)}
+    except Exception:
+        return None
+
+    if tasks == {TASK_RENDER}:
+        print(
+            "CSV holds only render rows: replaying through the render pipeline "
+            "at scale 2.0 (override with --render SCALE, disable with "
+            "--task parse)."
+        )
+        return 2.0
+
+    return None
+
+
+def analyze_pages_render(
+    pages_by_file: Dict[str, List[PageRow]],
+    decode_config: DecodeConfig,
+    content_config: ContentConfig,
+    scale: float,
+    loglevel: str,
+) -> List[PageTimings]:
+    """Re-run the selected pages through the *render* pipeline.
+
+    DoclingPdfParser has no render path, so a render CSV analysed through it
+    reports only decoding and leaves rasterisation -- the majority of the time
+    in that CSV -- unaccounted. The threaded parser is the API that renders, so
+    use it with a single worker: the per-page timings are per-page either way,
+    and one thread keeps them free of contention.
+    """
+    from docling_parse.pdf_parsers import RenderConfig  # type: ignore[import]
+
+    from docling_parse.pdf_parser import (
+        DoclingThreadedPdfParser,
+        ThreadedPdfParserConfig,
+    )
+
+    render_config = RenderConfig()
+    render_config.scale = scale
+
+    results: List[PageTimings] = []
+    for filename, pages in pages_by_file.items():
+        wanted = sorted({r.page_number for r in pages})
+        elapsed_by_page = {r.page_number: r.elapsed_s for r in pages}
+        parser = DoclingThreadedPdfParser(
+            parser_config=ThreadedPdfParserConfig(
+                loglevel=loglevel,
+                threads=1,
+                max_concurrent_results=4,
+                render_config=render_config,
+                page_content_config=content_config,
+            ),
+            decode_config=decode_config,
+        )
+        try:
+            parser.load(filename, page_numbers=wanted)
+        except Exception:
+            for r in pages:
+                results.append(
+                    PageTimings(
+                        filename=r.doc_key,
+                        page_number=r.page_number,
+                        elapsed_original=r.elapsed_s,
+                    )
+                )
+            continue
+
+        for result in parser.iterate_results():
+            page_no = result.page_number
+            timings = Timings()
+            if result.success:
+                try:
+                    timings = result.get_decoder_timings()
+                except Exception:
+                    timings = Timings()
+            results.append(
+                PageTimings(
+                    filename=filename,
+                    page_number=page_no,
+                    elapsed_original=elapsed_by_page.get(page_no, 0.0),
+                    timings=timings,
+                )
+            )
+
+    return results
+
+
 def analyze_pages(
     csv_path: Path,
     top_n: int | None,
@@ -297,6 +424,7 @@ def analyze_pages(
     backend: str | None = None,
     task: str | None = None,
     threads: int | None = None,
+    render_scale: float | None = None,
 ) -> List[PageTimings]:
     rows = read_page_rows(csv_path)
     cands = get_sorted_candidates(
@@ -323,6 +451,13 @@ def analyze_pages(
     pages_by_file: Dict[str, List[PageRow]] = defaultdict(list)
     for r in selected:
         pages_by_file[r.doc_key].append(r)
+
+    # A render CSV has to be replayed through the render pipeline, or the
+    # rasterisation it measured stays invisible.
+    if render_scale is not None:
+        return analyze_pages_render(
+            pages_by_file, decode_config, content_config, render_scale, loglevel
+        )
 
     parser = DoclingPdfParser(loglevel=loglevel)
     results: List[PageTimings] = []
@@ -631,6 +766,21 @@ def main(argv: List[str]) -> int:
     ap.add_argument("--backend", default=None, help="Keep only this backend")
     ap.add_argument("--task", default=None, help="Keep only this task")
     ap.add_argument(
+        "--render",
+        nargs="?",
+        type=float,
+        const=1.0,
+        default=None,
+        metavar="SCALE",
+        help=(
+            "Replay the selected pages through the render pipeline instead of "
+            "the decode-only one, so the render_page.* timings are reported "
+            "alongside decode_page.*. Bare --render uses scale 2.0; pass the "
+            "scale the CSV was produced with. Auto-enabled when every selected "
+            "row has task=render."
+        ),
+    )
+    ap.add_argument(
         "--threads", type=int, default=None, help="Keep only this thread count"
     )
     _add_bool_value_arg(
@@ -736,6 +886,7 @@ def main(argv: List[str]) -> int:
             backend=args.backend,
             task=args.task,
             threads=args.threads,
+            render_scale=_resolve_render_scale(csv_path, args),
         )
     except ValueError as e:
         print(f"Error: {e}")

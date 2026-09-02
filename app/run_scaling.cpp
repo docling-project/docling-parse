@@ -8,6 +8,7 @@
 #include <cctype>
 #include <chrono>
 #include <condition_variable>
+#include <cstddef>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -33,9 +34,11 @@ namespace
 
   enum class run_mode
   {
-    parse,
+    parse_without_bitmaps,
+    parse_with_bitmaps,
     render,
-    both,
+    default_mode,
+    all,
   };
 
   struct scheduled_doc
@@ -82,14 +85,16 @@ namespace
   struct cli_options
   {
     std::filesystem::path input;
-    run_mode mode = run_mode::render;
+    run_mode mode = run_mode::default_mode;
     bool recursive = false;
     std::optional<int> max_pages = std::nullopt;
     int max_concurrent_results = 64;
     std::vector<int> threads{1, 2, 4, 8, 12, 16};
-    float scale = 1.0f;
+    float scale = 2.0f;
+    std::size_t glyph_bbox_cache_capacity = 65536;
     bool enable_timing = false;
     std::filesystem::path timing_csv = "timing-cpp.csv";
+    std::optional<std::filesystem::path> output_dir = std::nullopt;
     std::string loglevel = "fatal";
   };
 
@@ -124,11 +129,13 @@ namespace
   {
     switch(mode)
       {
-      case run_mode::parse: return "parse";
+      case run_mode::parse_without_bitmaps: return "parse-without-bitmaps";
+      case run_mode::parse_with_bitmaps: return "parse-with-bitmaps";
       case run_mode::render: return "render";
-      case run_mode::both: return "both";
+      case run_mode::default_mode: return "default";
+      case run_mode::all: return "all";
       }
-    return "render";
+    return "default";
   }
 
   std::vector<int> parse_thread_counts(const std::string& raw)
@@ -197,6 +204,13 @@ namespace
         ss << minutes << ":"
            << std::setw(2) << std::setfill('0') << secs;
       }
+    return ss.str();
+  }
+
+  std::string zero_padded(std::size_t value, int width = 6)
+  {
+    std::ostringstream ss;
+    ss << std::setw(width) << std::setfill('0') << value;
     return ss.str();
   }
 
@@ -554,18 +568,39 @@ namespace
                        int num_threads,
                        int max_concurrent_results,
                        pdflib::decode_config decode_config,
-                       std::optional<pdflib::render_config> render_config):
+                       std::optional<pdflib::render_config> render_config,
+                       std::optional<std::filesystem::path> output_dir):
       schedule_(schedule),
       docs_(docs),
       num_threads_(num_threads),
       max_concurrent_results_(max_concurrent_results),
       decode_config_(decode_config),
-      render_config_(render_config)
+      render_config_(render_config),
+      output_dir_(std::move(output_dir))
     {
       if(render_config_.has_value())
         {
+          // Rendering needs the image samples and the embedded font programs,
+          // whatever the CLI asked for. Without the latter this benchmark
+          // silently rasterised with substituted system fonts, which is both
+          // cheaper and not what the library does.
+          decode_config_.extract_bitmap_pixels = true;
+          decode_config_.extract_font_programs = true;
+
+          // Same resolution hint the library sets, so this benchmark measures
+          // the decode work the library actually does; see
+          // docling_threaded_renderer for why only the scale form qualifies.
+          if(render_config_->scale > 0.0f)
+            {
+              decode_config_.bitmap_target_pixels_per_unit = render_config_->scale;
+            }
+
           font_resolver_ = std::make_shared<pdflib::blend2d_font_resolver>();
           font_resolver_->warm();
+
+          // shared across pages, exactly as docling_threaded_renderer does;
+          // a per-page cache would reload every embedded font program
+          embedded_font_cache_ = std::make_shared<pdflib::blend2d_embedded_font_cache>();
         }
     }
 
@@ -620,6 +655,18 @@ namespace
   private:
     void worker_loop()
     {
+      std::shared_ptr<pdflib::freetype_font_cache> freetype_font_cache;
+      std::shared_ptr<pdflib::glyph_bbox_cache> glyph_bbox_cache;
+      if(render_config_.has_value())
+        {
+          // FT_Face objects mutate their selected size and charmap while
+          // building an outline. This cache is reused across the worker's
+          // pages, but never shared with another render worker.
+          freetype_font_cache = std::make_shared<pdflib::freetype_font_cache>();
+          glyph_bbox_cache = std::make_shared<pdflib::glyph_bbox_cache>(
+            render_config_->glyph_bbox_cache_capacity);
+        }
+
       while(true)
         {
           const std::size_t task_index = next_task_.fetch_add(1);
@@ -668,11 +715,25 @@ namespace
               if(render_config_.has_value())
                 {
                   stage_start = clock_type::now();
-                  pdflib::renderer<pdflib::BLEND2D> rnd(*render_config_, font_resolver_);
+                  pdflib::renderer<pdflib::BLEND2D> rnd(*render_config_,
+                                                        font_resolver_,
+                                                        embedded_font_cache_,
+                                                        freetype_font_cache,
+                                                        glyph_bbox_cache);
                   page_decoder->get_instructions().iterate_over_instructions(rnd);
                   result.timings.render_page_s =
                     std::chrono::duration<double>(clock_type::now() - stage_start).count();
-                  result.image_data = rnd.get_canvas();
+                  if(output_dir_.has_value())
+                    {
+                      const auto page_path = *output_dir_ /
+                        ("doc_" + zero_padded(task.doc_index + 1) +
+                         "_page_" + zero_padded(task.page_number + 1) + ".png");
+                      rnd.save(page_path.string());
+                    }
+                  else
+                    {
+                      result.image_data = rnd.get_canvas();
+                    }
                 }
 
               result.timings.total_s =
@@ -735,7 +796,9 @@ namespace
     int max_concurrent_results_;
     pdflib::decode_config decode_config_;
     std::optional<pdflib::render_config> render_config_;
+    std::optional<std::filesystem::path> output_dir_;
     std::shared_ptr<pdflib::blend2d_font_resolver> font_resolver_;
+    std::shared_ptr<pdflib::blend2d_embedded_font_cache> embedded_font_cache_;
 
     std::vector<page_task> tasks_;
     std::atomic<std::size_t> next_task_{0};
@@ -769,6 +832,7 @@ namespace
               << std::setw(32) << "fit_glyph_bbox_to_target" << config.fit_glyph_bbox_to_target << "\n"
               << std::setw(32) << "resolve_fonts" << config.resolve_fonts << "\n"
               << std::setw(32) << "font_similarity_cutoff" << config.font_similarity_cutoff << "\n"
+              << std::setw(32) << "glyph_bbox_cache_capacity" << config.glyph_bbox_cache_capacity << "\n"
               << std::setw(32) << "scale" << config.scale << "\n"
               << std::setw(32) << "canvas_width" << config.canvas_width << "\n"
               << std::setw(32) << "canvas_height" << config.canvas_height << "\n";
@@ -778,7 +842,12 @@ namespace
                    const std::vector<benchmark_result>& results,
                    int total_pages)
   {
-    const double t1 = results.empty() ? 0.0 : results.front().wall_time_s;
+    const auto baseline = std::find_if(
+      results.begin(), results.end(),
+      [](const benchmark_result& result) { return result.threads == 1; });
+    const bool has_baseline = baseline != results.end()
+      && baseline->wall_time_s > 0.0;
+    const double t1 = has_baseline ? baseline->wall_time_s : 0.0;
 
     std::cout << "\n=== " << title << " ===\n";
     std::cout << std::left
@@ -787,15 +856,17 @@ namespace
               << std::setw(10) << "threads"
               << std::setw(18) << "wall_time (s)"
               << std::setw(18) << "vs threaded(1)"
+              << std::setw(14) << "efficiency"
               << std::setw(14) << "pages/sec"
               << std::setw(12) << "ms/page"
               << std::setw(10) << "errors"
               << "\n";
-    std::cout << std::string(100, '-') << "\n";
+    std::cout << std::string(114, '-') << "\n";
 
     for(const auto& result : results)
       {
-        const double speedup = result.wall_time_s > 0.0 ? t1 / result.wall_time_s : 0.0;
+        const double speedup = has_baseline && result.wall_time_s > 0.0
+          ? t1 / result.wall_time_s : 0.0;
         const double pages_per_sec = result.wall_time_s > 0.0
           ? static_cast<double>(total_pages) / result.wall_time_s : 0.0;
         const double ms_per_page = total_pages > 0
@@ -803,13 +874,24 @@ namespace
 
         std::ostringstream speedup_ss;
         speedup_ss << std::fixed << std::setprecision(2) << speedup << "x";
+        std::ostringstream efficiency_ss;
+        if(has_baseline && result.threads > 0 && result.wall_time_s > 0.0)
+          {
+            efficiency_ss << std::fixed << std::setprecision(0)
+                          << (100.0 * speedup / result.threads) << "%";
+          }
+        else
+          {
+            efficiency_ss << "n/a";
+          }
 
         std::cout << std::left
                   << std::setw(18) << "docling threaded"
                   << std::right
                   << std::setw(10) << result.threads
                   << std::setw(18) << std::fixed << std::setprecision(3) << result.wall_time_s
-                  << std::setw(18) << speedup_ss.str()
+                  << std::setw(18) << (has_baseline ? speedup_ss.str() : "n/a")
+                  << std::setw(14) << efficiency_ss.str()
                   << std::setw(14) << std::fixed << std::setprecision(1) << pages_per_sec
                   << std::setw(12) << std::fixed << std::setprecision(2) << ms_per_page
                   << std::setw(10) << result.errors
@@ -831,12 +913,14 @@ namespace
     cxxopts::Options options("run_scaling", "Thread-scaling benchmark for docling-parse C++");
     options.add_options()
       ("input", "Local PDF file or directory", cxxopts::value<std::string>())
-      ("mode", "Benchmark stage: parse, render, or both", cxxopts::value<std::string>()->default_value("render"))
+      ("mode", "Benchmark stage: parse-without-bitmaps, parse-with-bitmaps, render, default, or all", cxxopts::value<std::string>()->default_value("default"))
       ("recursive,r", "Recurse into subdirectories", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
       ("max-pages,l", "Maximum number of pages to process across all input PDFs", cxxopts::value<int>())
       ("max-concurrent-results", "Max buffered results for threaded processing", cxxopts::value<int>()->default_value("64"))
       ("threads", "Comma-separated thread counts", cxxopts::value<std::string>()->default_value("1,2,4,8,12,16"))
-      ("scale", "Render scale for render mode", cxxopts::value<float>()->default_value("1.0"))
+      ("scale", "Render scale for render mode", cxxopts::value<float>()->default_value("2.0"))
+      ("glyph-bbox-cache-capacity", "Maximum cached glyph bounding boxes per render worker; 0 disables caching", cxxopts::value<std::size_t>()->default_value("65536"))
+      ("output-dir", "Write rendered PNGs under this directory", cxxopts::value<std::string>())
       ("enable-timing", "Write one CSV timing row per page result", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
       ("timing-csv", "CSV path used when --enable-timing is set", cxxopts::value<std::string>()->default_value("timing-cpp.csv"))
       ("loglevel", "Log level [fatal, error, warning, info]", cxxopts::value<std::string>()->default_value("fatal"))
@@ -878,9 +962,15 @@ namespace
       }
     cli.threads = parse_thread_counts(result["threads"].as<std::string>());
     cli.scale = result["scale"].as<float>();
+    cli.glyph_bbox_cache_capacity =
+      result["glyph-bbox-cache-capacity"].as<std::size_t>();
     cli.enable_timing = result["enable-timing"].as<bool>();
     cli.timing_csv = result["timing-csv"].as<std::string>();
     cli.loglevel = result["loglevel"].as<std::string>();
+    if(result.count("output-dir"))
+      {
+        cli.output_dir = result["output-dir"].as<std::string>();
+      }
 
     if(result.count("max-pages"))
       {
@@ -890,21 +980,31 @@ namespace
     std::string raw_mode = result["mode"].as<std::string>();
     std::transform(raw_mode.begin(), raw_mode.end(), raw_mode.begin(),
                    [](unsigned char c) { return std::tolower(c); });
-    if(raw_mode == "parse")
+    if(raw_mode == "parse" or raw_mode == "parse-without-bitmaps")
       {
-        cli.mode = run_mode::parse;
+        cli.mode = run_mode::parse_without_bitmaps;
+      }
+    else if(raw_mode == "parse-with-bitmaps")
+      {
+        cli.mode = run_mode::parse_with_bitmaps;
       }
     else if(raw_mode == "render")
       {
         cli.mode = run_mode::render;
       }
-    else if(raw_mode == "both")
+    else if(raw_mode == "default")
       {
-        cli.mode = run_mode::both;
+        cli.mode = run_mode::default_mode;
+      }
+    else if(raw_mode == "all")
+      {
+        cli.mode = run_mode::all;
       }
     else
       {
-        throw std::runtime_error("--mode must be one of parse, render, both");
+        throw std::runtime_error(
+          "--mode must be parse-without-bitmaps, parse-with-bitmaps, render, "
+          "default, or all");
       }
 
     if(result.count("page-boundary")) { decode_config.page_boundary = result["page-boundary"].as<std::string>(); }
@@ -955,6 +1055,11 @@ int main(int argc, char* argv[])
           return 2;
         }
 
+      if(cli.output_dir.has_value())
+        {
+          std::filesystem::create_directories(*cli.output_dir);
+        }
+
       std::cout << "Benchmark: " << schedule.size()
                 << " documents, " << total_pages << " total pages\n";
       std::cout << "Mode: " << mode_to_string(cli.mode) << "\n";
@@ -966,7 +1071,9 @@ int main(int argc, char* argv[])
         }
       std::cout << "\n";
       std::cout << "Max concurrent results: " << cli.max_concurrent_results << "\n";
-      if(cli.mode == run_mode::render or cli.mode == run_mode::both)
+      if(cli.mode == run_mode::render
+         or cli.mode == run_mode::default_mode
+         or cli.mode == run_mode::all)
         {
           std::cout << "Render scale: " << cli.scale << "\n";
         }
@@ -974,7 +1081,10 @@ int main(int argc, char* argv[])
 
       print_decode_config(decode_config);
       auto render_config = default_render_config(cli.scale);
-      if(cli.mode == run_mode::render or cli.mode == run_mode::both)
+      render_config.glyph_bbox_cache_capacity = cli.glyph_bbox_cache_capacity;
+      if(cli.mode == run_mode::render
+         or cli.mode == run_mode::default_mode
+         or cli.mode == run_mode::all)
         {
           print_render_config(render_config);
         }
@@ -983,9 +1093,15 @@ int main(int argc, char* argv[])
       auto docs = load_documents(schedule);
 
       std::vector<run_mode> modes;
-      if(cli.mode == run_mode::both)
+      if(cli.mode == run_mode::all)
         {
-          modes = {run_mode::parse, run_mode::render};
+          modes = {run_mode::parse_without_bitmaps,
+                   run_mode::parse_with_bitmaps,
+                   run_mode::render};
+        }
+      else if(cli.mode == run_mode::default_mode)
+        {
+          modes = {run_mode::parse_without_bitmaps, run_mode::render};
         }
       else
         {
@@ -995,7 +1111,14 @@ int main(int argc, char* argv[])
       for(run_mode mode : modes)
         {
           const bool render = (mode == run_mode::render);
-          const std::string title = render ? "RENDER (decode + rasterise)" : "PARSE (decode only)";
+          const bool parse_with_bitmaps = mode == run_mode::parse_with_bitmaps;
+          const std::string title = render ? "RENDER (decode + rasterise)"
+            : parse_with_bitmaps ? "PARSE WITH BITMAPS (decode only)"
+            : "PARSE WITHOUT BITMAPS (decode only)";
+          auto mode_decode_config = decode_config;
+          mode_decode_config.keep_shapes = render or decode_config.keep_shapes;
+          mode_decode_config.keep_bitmaps = render or parse_with_bitmaps; // if render is not here, we skip the bitmap in the rendered page-image
+          mode_decode_config.extract_bitmap_pixels = parse_with_bitmaps; // if we have render here, we keep the bitmaps to be iterated over
           std::cout << "\n##### " << title << " #####\n";
 
           std::vector<benchmark_result> results;
@@ -1009,9 +1132,10 @@ int main(int argc, char* argv[])
                                            docs,
                                            threads,
                                            cli.max_concurrent_results,
-                                           decode_config,
+                                           mode_decode_config,
                                            render ? std::optional<pdflib::render_config>(render_config)
-                                                  : std::nullopt);
+                                                  : std::nullopt,
+                                           render ? cli.output_dir : std::nullopt);
               benchmark_result result = benchmark.run(render ? "render" : "parse",
                                                       cli.enable_timing,
                                                       cli.timing_csv);
