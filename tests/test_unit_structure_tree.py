@@ -130,6 +130,10 @@ def test_cells_carry_innermost_mcid_and_artifact_type():
             )
 
     assert by_mcid[0] == "Title"
+    # tags carry their own text and geometry for consumers without char cells
+    first = tags[min(tags)]
+    assert first.text == first.text.strip() != "" and first.rect is not None
+    assert first.rect.to_bounding_box().width > 0
     # the span's glyph was substituted by /ActualText and keeps the inner MCID
     assert by_mcid[2] == "fi"
     assert by_mcid[1] == "Bodytext"
