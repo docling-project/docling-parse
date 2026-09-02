@@ -5,8 +5,10 @@
 
 #include <filesystem>
 #include <fstream>
+#include <memory>
 #include <mutex>
 #include <optional>
+#include <qpdf/Buffer.hh>
 #include <qpdf/QPDFAcroFormDocumentHelper.hh>
 #include <qpdf/QPDF.hh>
 #include <qpdf/QPDFWriter.hh>
@@ -72,6 +74,8 @@ namespace pdflib
       int page_ind,
       bool keep_qpdf_warnings);
 
+    QPDFAcroFormDocumentHelper& source_acroform_helper();
+
     void ensure_annots_loaded();
 
     void update_timings(pdf_timings& timings_, bool set_timer);
@@ -83,6 +87,14 @@ namespace pdflib
     std::optional<std::string> password; // stored for thread-safe page decoding
 
     std::mutex thread_safe_buffer_mutex;
+
+    // Built at most once per document, and only once a page is found that
+    // actually carries annotations. Its constructor calls analyze(), which
+    // walks every field of /AcroForm and then every page of the document, so
+    // building it per page makes page extraction quadratic in the page count.
+    // Only ever touched under thread_safe_buffer_mutex.
+    std::unique_ptr<QPDFAcroFormDocumentHelper> src_afdh;
+
     pdf_timings timings;
 
     QPDF qpdf_document;
@@ -323,44 +335,68 @@ namespace pdflib
     // Thread-safe decoding uses standalone one-page PDF buffers.
     // Page extraction and serialization are intentionally serialized, and
     // the mutex is expected to remain held across QPDFWriter::write().
-    std::lock_guard<std::mutex> lock(thread_safe_buffer_mutex);
-    
-    //std::shared_ptr<std::string> result = nullptr;
+    utils::timer page_timer;
 
-    QPDFObjectHandle qpdf_page = qpdf_pages.at(page_ind);
-    
+    std::shared_ptr<Buffer> out = nullptr;
     {
-      utils::timer page_timer;
+      std::lock_guard<std::mutex> lock(thread_safe_buffer_mutex);
+
+      QPDFObjectHandle qpdf_page = qpdf_pages.at(page_ind);
+
       QPDF out_pdf;
       out_pdf.setSuppressWarnings(!keep_qpdf_warnings);
       out_pdf.emptyPDF();
-      
+
       QPDFPageDocumentHelper out_pages(out_pdf);
-      QPDFAcroFormDocumentHelper out_afdh(out_pdf);
-      QPDFAcroFormDocumentHelper src_afdh(qpdf_document);
       QPDFPageObjectHelper page_helper(qpdf_page);
       out_pages.addPage(page_helper, false);
       auto out_page = out_pages.getAllPages().at(0);
-      out_afdh.fixCopiedAnnotations(
-          out_page.getObjectHandle(), page_helper.getObjectHandle(), src_afdh);
-      
+
+      // fixCopiedAnnotations() begins by reading /Annots off the source page
+      // and returns immediately when it is not a non-empty array, so on such a
+      // page the call cannot change the output. Testing that here as well lets
+      // us skip building both helpers -- and the source helper is the
+      // expensive one. 91% of the pages of the reference corpus have no
+      // annotations at all.
+      QPDFObjectHandle qpdf_annots = qpdf_page.getKey("/Annots");
+      if(qpdf_annots.isArray() and qpdf_annots.getArrayNItems()>0)
+        {
+          QPDFAcroFormDocumentHelper out_afdh(out_pdf);
+          out_afdh.fixCopiedAnnotations(out_page.getObjectHandle(),
+                                        page_helper.getObjectHandle(),
+                                        source_acroform_helper());
+        }
+
       QPDFWriter writer(out_pdf);
       writer.setOutputMemory();
       writer.setObjectStreamMode(qpdf_o_preserve);
       writer.setStreamDataMode(qpdf_s_preserve);
       writer.setPreserveEncryption(true);
       writer.write();
-      
-      auto out = writer.getBufferSharedPointer();
 
-      result.first = 0;
-      result.second = std::make_shared<std::string>(reinterpret_cast<char const*>(out->getBuffer()),
-					     out->getSize());
-      
-      LOG_S(INFO) << "writing a pdf-page buffer in " << page_timer.get_time() << " [sec]";
+      out = writer.getBufferSharedPointer();
     }
 
+    // Copying qpdf's buffer into a std::string does not touch the shared
+    // document, so it happens after the lock is released.
+    result.first = 0;
+    result.second = std::make_shared<std::string>(reinterpret_cast<char const*>(out->getBuffer()),
+                                                  out->getSize());
+
+    LOG_S(INFO) << "writing a pdf-page buffer in " << page_timer.get_time() << " [sec]";
+
     return result;
+  }
+
+  QPDFAcroFormDocumentHelper& pdf_decoder<DOCUMENT>::source_acroform_helper()
+  {
+    // Caller holds thread_safe_buffer_mutex.
+    if(src_afdh==nullptr)
+      {
+        src_afdh = std::make_unique<QPDFAcroFormDocumentHelper>(qpdf_document);
+      }
+
+    return *src_afdh;
   }
 
   pdf_decoder<DOCUMENT>::page_decoder_ptr

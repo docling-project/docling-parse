@@ -100,7 +100,7 @@ namespace pdflib
     void decode_shadings();
     void decode_patterns();
 
-    void decode_xobjects();
+    void decode_xobjects(const decode_config& config);
 
     // Contents
     void decode_contents(const decode_config& config);
@@ -1073,7 +1073,7 @@ namespace pdflib
     if(qpdf_resources.hasKey("/XObject"))
       {
         qpdf_xobjects = qpdf_resources.getKey("/XObject");
-        decode_xobjects();
+        decode_xobjects(config);
       }
     else
       {
@@ -1116,11 +1116,16 @@ namespace pdflib
     page_patterns->set(qpdf_patterns);
   }
 
-  void pdf_decoder<PAGE>::decode_xobjects()
+  void pdf_decoder<PAGE>::decode_xobjects(const decode_config& config)
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    page_xobjects->set(qpdf_xobjects, timings);
+    // No point defiltering samples the caller will never look at: with
+    // keep_bitmaps off, Do_image() drops the image entirely.
+    const bool extract_bitmap_pixels =
+      config.keep_bitmaps and config.extract_bitmap_pixels;
+
+    page_xobjects->set(qpdf_xobjects, timings, extract_bitmap_pixels);
   }
 
   void pdf_decoder<PAGE>::decode_contents(const decode_config& config)

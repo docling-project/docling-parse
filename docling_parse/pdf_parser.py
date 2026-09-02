@@ -310,6 +310,15 @@ def _compile_decode_config(
     )
     cpp.keep_shapes = content_config.shapes_content_level >= ContentLevel.COMPUTE
     cpp.keep_bitmaps = content_config.bitmaps_content_level >= ContentLevel.COMPUTE
+    # Defiltering image samples and building the /SMask alpha plane is the whole
+    # cost of an image XObject, and it is only needed to hand the bytes back.
+    # Locating bitmaps -- bounding box, visibility, dimensions, colour space --
+    # comes from the XObject dictionary and stays available either way. The
+    # render pipelines force this back on in C++, since they need the pixels.
+    cpp.extract_bitmap_pixels = (
+        content_config.bitmaps_content_level >= ContentLevel.COMPUTE
+        and content_config.include_bitmap_bytes
+    )
     return cpp
 
 
@@ -391,8 +400,21 @@ def _to_page_geometry_from_decoder(
     )
 
 
+# PdfTextCell.rgba carries a ColorRGBA *instance* as its field default, and
+# pydantic deep-copies a model-valued default on every construction: about
+# eleven copy.deepcopy calls per cell, which profiling showed to be the single
+# largest cost of turning a decoded page into Python objects. Passing an
+# explicit copy of that same value skips the deepcopy and still gives every cell
+# its own instance, so the result is identical. Recomputed here from the field
+# rather than hard-coded, so it tracks whatever docling-core defaults to.
+_PDF_TEXT_CELL_RGBA_DEFAULT = PdfTextCell.model_fields["rgba"].get_default(
+    call_default_factory=True
+)
+
+
 def _to_cells_from_decoder(cells_container) -> List[Union[PdfTextCell, TextCell]]:
     result: List[Union[PdfTextCell, TextCell]] = []
+    rgba_default = _PDF_TEXT_CELL_RGBA_DEFAULT
 
     for ind, cell in enumerate(cells_container):
         result.append(
@@ -407,6 +429,7 @@ def _to_cells_from_decoder(cells_container) -> List[Union[PdfTextCell, TextCell]
                     r_x3=cell.r_x3,
                     r_y3=cell.r_y3,
                 ),
+                rgba=rgba_default.model_copy(),
                 text=cell.text,
                 orig=cell.text,
                 font_key=cell.font_key,
@@ -731,6 +754,11 @@ class PdfDocument:
                 needed.bitmaps_content_level >= ContentLevel.COMPUTE
                 and have.bitmaps_content_level < ContentLevel.COMPUTE
             )
+            or (
+                needed.bitmaps_content_level >= ContentLevel.COMPUTE
+                and needed.include_bitmap_bytes
+                and not have.include_bitmap_bytes
+            )
         ):
             needed.char_cells_content_level = max(
                 needed.char_cells_content_level, have.char_cells_content_level
@@ -746,6 +774,9 @@ class PdfDocument:
             )
             needed.bitmaps_content_level = max(
                 needed.bitmaps_content_level, have.bitmaps_content_level
+            )
+            needed.include_bitmap_bytes = (
+                needed.include_bitmap_bytes or have.include_bitmap_bytes
             )
             self._parser.unload_document_page(key=self._key, page=page)
             have = None
@@ -1174,11 +1205,13 @@ class PageParseResult:
         Python materialization, not the C++ decode. Any entity the batch
         computed (level >= COMPUTE) may be raised to COMPUTE_AND_MATERIALIZE per result —
         this is the intended pattern: decode the batch at COMPUTE, then surface
-        cells only on the pages that need them. You may also lower emit or
-        toggle include_bitmap_bytes. The only rejected case is requesting an
-        entity the batch skipped (never computed in C++): that cannot be
-        recovered without a re-decode and would otherwise yield empty data, so
-        set it on ThreadedPdfParserConfig.page_content_config instead.
+        cells only on the pages that need them. You may also lower emit, and
+        turn include_bitmap_bytes off. The rejected cases are the ones the
+        batch cannot serve: requesting an entity the batch skipped (never
+        computed in C++), or asking for bitmap bytes when the batch decoded
+        without them — the image samples were never defiltered, so the request
+        would otherwise yield empty data. Set either on
+        ThreadedPdfParserConfig.page_content_config instead.
         """
         cc = content_config or self._content_config
         if content_config is not None:
@@ -1210,6 +1243,16 @@ class PageParseResult:
                     "decode time; raise it on "
                     "ThreadedPdfParserConfig.page_content_config (to >= COMPUTE)"
                 )
+            if cc.include_bitmap_bytes and not batch.include_bitmap_bytes:
+                # the batch decoded with extract_bitmap_pixels off, so no image
+                # samples exist to hand back; returning empty bytes would look
+                # like an image with no content rather than a configuration
+                # mistake
+                raise ValueError(
+                    "content_config requests bitmap bytes but the batch decoded "
+                    "without them; set include_bitmap_bytes=True on "
+                    "ThreadedPdfParserConfig.page_content_config"
+                )
         cache_key = cc.cache_key()
         if cache_key not in self._pages:
             self._pages[cache_key] = segmented_page_from_decoder(
@@ -1222,6 +1265,19 @@ class PageParseResult:
     def get_timings(self) -> Timings:
         """Return structured timing data for this page parse."""
         return self._timings
+
+    def get_decoder_timings(self) -> Timings:
+        """Return the native per-phase timings for this page.
+
+        These are the decoder's own `pdf_timings` -- `decode_page` and its
+        children -- and, when the batch renders, the renderer's `render_page`
+        breakdown merged into the same map. `get_timings()` reports the four
+        coarse pipeline stages instead; this is what
+        scripts/benchmarking/run_performance_analysis.py needs to attribute
+        time inside a stage.
+        """
+        _, data = self._raw.get()
+        return Timings(data=dict(data))
 
     def intersects_with(
         self,
