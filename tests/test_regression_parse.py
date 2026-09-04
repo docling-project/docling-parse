@@ -1135,6 +1135,8 @@ def test_table_of_contents():
     first_entry = annotations.table_of_contents[0]
     assert first_entry.title == "Introduction", "First entry should be 'Introduction'"
     assert first_entry.level == 0, "Top-level entries should have level 0"
+    assert first_entry.page is not None, "Bookmark destination page should be exposed"
+    assert first_entry.page >= 0, "Bookmark destination page should be zero-based"
 
     # Find entry with children and verify nested structure
     model_arch_annot = next(
@@ -1153,6 +1155,10 @@ def test_table_of_contents():
 
     for child in model_arch_annot.children:
         assert child.level == 1, "Children of top-level entry should have level 1"
+
+    assert all(child.page is not None for child in model_arch_annot.children), (
+        "Nested bookmark destination pages should be exposed"
+    )
 
     pdf_doc.unload()
 

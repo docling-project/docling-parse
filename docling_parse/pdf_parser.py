@@ -95,6 +95,13 @@ class PdfTocEntry(BaseModel):
     children: List["PdfTocEntry"] | None = None
 
 
+class PdfTableOfContentsWithPage(PdfTableOfContents):
+    """A table-of-contents entry with its optional zero-based target page."""
+
+    page: int | None = None
+    children: List["PdfTableOfContentsWithPage"] = []
+
+
 class PdfAnnotations(BaseModel):
     """PDF document annotations including form fields, language, metadata, and table of contents.
 
@@ -711,7 +718,7 @@ class PdfDocument:
         ] = {}
         # Per page: the content config the cached page-decoder satisfies.
         self._decoded_content_configs: Dict[int, ContentConfig] = {}
-        self._toc: PdfTableOfContents | None = None
+        self._toc: PdfTableOfContentsWithPage | None = None
         self._meta: PdfMetaData | None = None
         self._annotations: PdfAnnotations | None = None
 
@@ -856,7 +863,7 @@ class PdfDocument:
             if self._toc is not None:
                 return self._toc
 
-            self._toc = PdfTableOfContents(text="<root>")
+            self._toc = PdfTableOfContentsWithPage(text="<root>")
             self._toc.children = self._to_table_of_contents(toc=toc)
 
             return self._toc
@@ -874,11 +881,15 @@ class PdfDocument:
                 self.get_page(page_no + 1, content_config=content_config),
             )
 
-    def _to_table_of_contents(self, toc: dict) -> List[PdfTableOfContents]:
+    def _to_table_of_contents(
+        self, toc: list[dict[str, Any]]
+    ) -> List[PdfTableOfContentsWithPage]:
 
-        result = []
+        result: List[PdfTableOfContentsWithPage] = []
         for item in toc:
-            subtoc = PdfTableOfContents(text=item["title"])
+            subtoc = PdfTableOfContentsWithPage(
+                text=item["title"], page=item.get("page")
+            )
             if "children" in item:
                 subtoc.children = self._to_table_of_contents(toc=item["children"])
             result.append(subtoc)
@@ -1623,6 +1634,32 @@ class DoclingThreadedPdfParser:
         if doc_key not in self._scheduled_page_counts:
             raise ValueError(f"Document key not loaded: {doc_key}")
         return self._scheduled_page_counts[doc_key]
+
+    def get_table_of_contents(self, doc_key: str) -> List[PdfTocEntry] | None:
+        """Return the page-aware table of contents for a loaded document."""
+        if doc_key not in self._page_counts:
+            raise ValueError(f"Document key not loaded: {doc_key}")
+
+        toc = self._parser.get_table_of_contents(key=doc_key)
+        if toc is None:
+            return None
+        return self._to_pdf_toc_entry(toc)
+
+    @staticmethod
+    def _to_pdf_toc_entry(toc_list: list[dict[str, Any]]) -> List[PdfTocEntry]:
+        result: List[PdfTocEntry] = []
+        for item in toc_list:
+            entry = PdfTocEntry(
+                title=item.get("title", ""),
+                level=item.get("level"),
+                page=item.get("page"),
+            )
+            if item.get("children"):
+                entry.children = DoclingThreadedPdfParser._to_pdf_toc_entry(
+                    item["children"]
+                )
+            result.append(entry)
+        return result
 
     def unload(self, doc_key: str) -> bool:
         """Unload one document after threaded processing has completed."""

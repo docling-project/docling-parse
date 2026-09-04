@@ -6,6 +6,7 @@
 #include <sstream>
 #include <iostream>
 #include <iomanip>
+#include <optional>
 #include <unordered_set>
 
 #include <nlohmann/json.hpp>
@@ -15,6 +16,47 @@
 
 namespace pdflib
 {
+  std::optional<int> get_toc_page_number(QPDF& pdf_obj, QPDFObjectHandle node)
+  {
+    QPDFObjectHandle destination;
+
+    if(node.hasKey("/Dest"))
+      {
+        destination = node.getKey("/Dest");
+      }
+    else if(node.hasKey("/A"))
+      {
+        QPDFObjectHandle action = node.getKey("/A");
+        if(action.isDictionary() and action.getKey("/S").isName() and
+           action.getKey("/S").getName() == "/GoTo" and action.hasKey("/D"))
+          {
+            destination = action.getKey("/D");
+          }
+      }
+
+    // Named destinations need name-tree resolution. Keep them page-less so
+    // unresolved destinations retain the existing API behaviour.
+    if(not destination.isArray() or destination.getArrayNItems() == 0)
+      {
+        return std::nullopt;
+      }
+
+    QPDFObjectHandle page = destination.getArrayItem(0);
+    if(not page.isIndirect())
+      {
+        return std::nullopt;
+      }
+
+    try
+      {
+        return pdf_obj.findPage(page);
+      }
+    catch(const std::exception&)
+      {
+        return std::nullopt;
+      }
+  }
+
   // FIXME: add a begin time to cap the max time spent in this routine
   nlohmann::json extract_annots_in_json(QPDFObjectHandle obj,
                                         std::unordered_set<std::string> prev_objs={},
@@ -225,18 +267,10 @@ namespace pdflib
         //toc_entry["link"] = to_json(node.getKey("/A"), {}, 0, 8);
       }
     
-    // Extract destination
-    if(node.hasKey("/Dest"))
+    // Extract destination page (zero-based), when it is directly resolvable.
+    if(auto page = get_toc_page_number(pdf_obj, node))
       {
-	//LOG_S(INFO) << "found a destination!";
-	
-        // Depending on the type of destination, extract its value
-	//auto dest = node.getKey("/Dest");
-        //toc_entry["destination"] = to_json(dest, {}, 0, 8);
-      }
-    else
-      {
-        //toc_entry["destination"] = "No destination";
+	 toc_entry["page"] = *page;
       }
 
     // Extract children

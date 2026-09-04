@@ -1089,6 +1089,12 @@ PYBIND11_MODULE(pdf_parsers, m) {
 
     Returns:
         int: Number of pages in the loaded document.)")
+    .def("get_table_of_contents",
+         [](docling::docling_threaded_parser& self, const std::string& key) {
+           return self.get_table_of_contents(key);
+         },
+         pybind11::arg("key"),
+         "Retrieve the document outline, including zero-based target page indices.")
     .def("scheduled_number_of_pages",
          [](docling::docling_threaded_parser& self, const std::string& key) -> int {
            return self.scheduled_number_of_pages(key);
@@ -1308,6 +1314,12 @@ PYBIND11_MODULE(pdf_parsers, m) {
            return self.number_of_pages(key);
          },
          pybind11::arg("key"))
+    .def("get_table_of_contents",
+         [](docling::docling_threaded_renderer& self, const std::string& key) {
+           return self.get_table_of_contents(key);
+         },
+         pybind11::arg("key"),
+         "Retrieve the document outline, including zero-based target page indices.")
     .def("scheduled_number_of_pages",
          [](docling::docling_threaded_renderer& self, const std::string& key) -> int {
            return self.scheduled_number_of_pages(key);
