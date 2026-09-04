@@ -1175,7 +1175,10 @@ def test_table_of_contents_resolves_named_goto_destinations():
     assert introduction.point is not None
     assert abs(introduction.point.x - 108.0) < 1e-3
     assert abs(introduction.point.y - 490.534) < 1e-3
-    assert (introduction.page_size.width, introduction.page_size.height) == (612.0, 792.0)
+    assert (introduction.page_size.width, introduction.page_size.height) == (
+        612.0,
+        792.0,
+    )
 
     assert entries["Model Architecture"].destination is not None
     assert entries["Model Architecture"].destination.page_no == 3
@@ -1251,7 +1254,13 @@ def test_outline_destination_references():
     pdf_doc, toc = _outline(build_destination_references())
     entries = _by_title(toc)
 
-    for title in ["explicit", "named string", "named object", "goto action", "goto action named"]:
+    for title in [
+        "explicit",
+        "named string",
+        "named object",
+        "goto action",
+        "goto action named",
+    ]:
         dest = entries[title].destination
         assert dest is not None, f"'{title}' should resolve to a destination"
         assert dest.page_no == 2, f"'{title}' should target page 2"
