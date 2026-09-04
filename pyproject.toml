@@ -86,6 +86,12 @@ perf = [
 package = true
 default-groups = "all"
 
+# TEMPORARY: the outline destinations need PdfTableOfContents.destination, which is
+# still under review in docling-core#747. Drop this block and raise the docling-core
+# floor in [project.dependencies] once that PR is released.
+[tool.uv.sources]
+docling-core = { git = "https://github.com/docling-project/docling-core.git", branch = "feat/extending-table-of-contents" }
+
 [tool.setuptools]
 include-package-data = true
 

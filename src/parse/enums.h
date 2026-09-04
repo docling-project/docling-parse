@@ -383,6 +383,83 @@ namespace pdflib
     return BLEND_MODE_UNKNOWN;
   }
 
+  // Syntax of an explicit destination array (12.3.2.2, table 151). The name that
+  // follows the page in `[page /Kind args]` selects how the viewer positions the
+  // page, and thereby which of the args (if any) is a vertical position.
+  enum pdf_destination_kind {
+    DESTINATION_XYZ,     // [page /XYZ left top zoom]
+    DESTINATION_FIT,     // [page /Fit]
+    DESTINATION_FIT_H,   // [page /FitH top]
+    DESTINATION_FIT_V,   // [page /FitV left]
+    DESTINATION_FIT_R,   // [page /FitR left bottom right top]
+    DESTINATION_FIT_B,   // [page /FitB]
+    DESTINATION_FIT_BH,  // [page /FitBH top]
+    DESTINATION_FIT_BV,  // [page /FitBV left]
+
+    DESTINATION_UNKNOWN,
+  };
+
+  inline std::string to_string(pdf_destination_kind kind)
+  {
+    switch(kind)
+      {
+      case DESTINATION_XYZ:    { return "XYZ"; }
+      case DESTINATION_FIT:    { return "FIT"; }
+      case DESTINATION_FIT_H:  { return "FIT_H"; }
+      case DESTINATION_FIT_V:  { return "FIT_V"; }
+      case DESTINATION_FIT_R:  { return "FIT_R"; }
+      case DESTINATION_FIT_B:  { return "FIT_B"; }
+      case DESTINATION_FIT_BH: { return "FIT_BH"; }
+      case DESTINATION_FIT_BV: { return "FIT_BV"; }
+
+      default: { return "UNKNOWN"; }
+      }
+  }
+
+  inline pdf_destination_kind to_destination_kind(const std::string& name)
+  {
+    if(name=="/XYZ")   { return DESTINATION_XYZ; }
+    if(name=="/Fit")   { return DESTINATION_FIT; }
+    if(name=="/FitH")  { return DESTINATION_FIT_H; }
+    if(name=="/FitV")  { return DESTINATION_FIT_V; }
+    if(name=="/FitR")  { return DESTINATION_FIT_R; }
+    if(name=="/FitB")  { return DESTINATION_FIT_B; }
+    if(name=="/FitBH") { return DESTINATION_FIT_BH; }
+    if(name=="/FitBV") { return DESTINATION_FIT_BV; }
+
+    return DESTINATION_UNKNOWN;
+  }
+
+  // Index of the vertical (top) coordinate within the args of a destination
+  // array, or -1 for the kinds that carry no vertical position.
+  inline int destination_top_index(pdf_destination_kind kind)
+  {
+    switch(kind)
+      {
+      case DESTINATION_XYZ:    { return 1; }  // left top zoom
+      case DESTINATION_FIT_H:  { return 0; }  // top
+      case DESTINATION_FIT_BH: { return 0; }  // top
+      case DESTINATION_FIT_R:  { return 3; }  // left bottom right top
+
+      default: { return -1; }
+      }
+  }
+
+  // Index of the horizontal (left) coordinate within the args of a destination
+  // array, or -1 for the kinds that carry no horizontal position.
+  inline int destination_left_index(pdf_destination_kind kind)
+  {
+    switch(kind)
+      {
+      case DESTINATION_XYZ:    { return 0; }  // left top zoom
+      case DESTINATION_FIT_V:  { return 0; }  // left
+      case DESTINATION_FIT_BV: { return 0; }  // left
+      case DESTINATION_FIT_R:  { return 0; }  // left bottom right top
+
+      default: { return -1; }
+      }
+  }
+
 }
 
 #endif
