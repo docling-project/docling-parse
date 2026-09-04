@@ -87,7 +87,11 @@ def _add_pages(
     titles: List[str],
     rotations: List[int] | None = None,
 ) -> tuple[int, List[int]]:
-    """Add a page tree whose pages each carry one heading. Returns (pages_ref, page_refs)."""
+    """Add a page tree whose pages each carry one heading.
+
+    Returns:
+        A (pages_ref, page_refs) tuple.
+    """
     pages_ref = pdf.reserve()
     font_ref = pdf.add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>")
 
@@ -176,7 +180,7 @@ def build_destination_kinds() -> bytes:
 
 
 def build_destination_references() -> bytes:
-    """The four ways an outline item can reference a destination (12.3.2.3, 12.6.4.2)."""
+    """The ways an outline item can reference a destination (12.3.2.3, 12.6.4.2)."""
     pdf = PdfBuilder()
     pdf.reserve()  # catalog is object 1
 

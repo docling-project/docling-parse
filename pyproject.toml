@@ -31,7 +31,7 @@ requires-python = ">=3.10"
 dependencies = [
     "pillow>=10.0.0,<13.0.0",
     "pydantic>=2.0.0",
-    "docling-core>=2.85.0,<3.0.0",
+    "docling-core>=2.95.0,<3.0.0",
     "pywin32>=305; sys_platform == 'win32'",
 ]
 [project.urls]
@@ -85,12 +85,6 @@ perf = [
 [tool.uv]
 package = true
 default-groups = "all"
-
-# TEMPORARY: the outline destinations need PdfTableOfContents.destination, which is
-# still under review in docling-core#747. Drop this block and raise the docling-core
-# floor in [project.dependencies] once that PR is released.
-[tool.uv.sources]
-docling-core = { git = "https://github.com/docling-project/docling-core.git", branch = "feat/extending-table-of-contents" }
 
 [tool.setuptools]
 include-package-data = true
