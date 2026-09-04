@@ -70,6 +70,8 @@ namespace docling
     int number_of_pages(std::string key) const;
     int scheduled_number_of_pages(std::string key) const;
 
+    nlohmann::json get_annotations(std::string key) const;
+
     bool unload_document(std::string key);
     void unload_all_documents();
 
@@ -332,6 +334,18 @@ namespace docling
       }
 
     return itr->second->get_number_of_pages();
+  }
+
+  template<typename Derived, typename ResultType>
+  nlohmann::json docling_threaded_base<Derived, ResultType>::get_annotations(std::string key) const
+  {
+    auto itr = key2doc.find(key);
+    if(itr == key2doc.end())
+      {
+        throw std::runtime_error("Document key not found: " + key);
+      }
+
+    return itr->second->get_annotations();
   }
 
   template<typename Derived, typename ResultType>

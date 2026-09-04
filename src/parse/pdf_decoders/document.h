@@ -164,6 +164,10 @@ namespace pdflib
         utils::timer annots_timer;
         json_annots = extract_document_annotations_in_json(qpdf_document, qpdf_root);
 
+        // composed here rather than inside the extractor above: resolving the
+        // outline's destinations needs the pages and their geometry
+        json_annots["table_of_contents"] = pdf_outline(qpdf_document, qpdf_pages).get();
+
         double annots_elapsed = annots_timer.get_time();
         timings.add_timing(pdf_timings::KEY_EXTRACT_DOC_ANNOTATIONS, annots_elapsed);
       }

@@ -1102,6 +1102,19 @@ PYBIND11_MODULE(pdf_parsers, m) {
 
     Returns:
         int: Number of pages that will be emitted by the threaded parser.)")
+    .def("get_annotations",
+         [](docling::docling_threaded_parser& self, const std::string& key) -> nlohmann::json {
+           return self.get_annotations(key);
+         },
+         pybind11::arg("key"),
+         R"(
+    Retrieve annotations for a loaded document and return them as JSON.
+
+    Parameters:
+        key (str): The unique key identifying the document.
+
+    Returns:
+        dict: A JSON object containing the annotations for the document.)")
     .def("unload_document",
          [](docling::docling_threaded_parser& self, const std::string& key) -> bool {
            return self.unload_document(key);
@@ -1311,6 +1324,11 @@ PYBIND11_MODULE(pdf_parsers, m) {
     .def("scheduled_number_of_pages",
          [](docling::docling_threaded_renderer& self, const std::string& key) -> int {
            return self.scheduled_number_of_pages(key);
+         },
+         pybind11::arg("key"))
+    .def("get_annotations",
+         [](docling::docling_threaded_renderer& self, const std::string& key) -> nlohmann::json {
+           return self.get_annotations(key);
          },
          pybind11::arg("key"))
     .def("unload_document",

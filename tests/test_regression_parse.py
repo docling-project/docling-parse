@@ -8,8 +8,10 @@ from collections import Counter
 from io import BytesIO
 from typing import Dict, List, Union
 
+from docling_core.types.doc.base import CoordOrigin
 from docling_core.types.doc.page import (
     BitmapResource,
+    PdfDestinationKind,
     PdfHyperlink,
     PdfPageBoundaryType,
     PdfShape,
@@ -27,6 +29,7 @@ from docling_parse.pdf_parser import (
     ContentLevel,
     DecodeConfig,
     DoclingPdfParser,
+    DoclingThreadedPdfParser,
     PdfDocument,
 )
 from tests.constants import PARSER_PAGE_RESTRICTIONS, SAMPLE_PDF
@@ -39,6 +42,12 @@ from tests.groundtruth_io import (
     read_groundtruth_text,
     resolve_groundtruth_path,
     write_groundtruth_text,
+)
+from tests.outline_fixtures import (
+    build_destination_kinds,
+    build_destination_references,
+    build_malformed_outline,
+    build_rotated_pages,
 )
 
 
@@ -1075,20 +1084,36 @@ def verify_annotations_recursive(true_annots, pred_annots):
         assert True  # Other types pass
 
 
+TOC_PDF = "tests/data/regression/table_of_contents_01.pdf"
+
+
+def _outline(
+    source: Union[str, bytes],
+) -> tuple[PdfDocument, PdfTableOfContents]:
+    """Load a document and return it together with its (non-empty) outline root.
+
+    `bytes` come from tests.outline_fixtures, which builds its PDFs in memory
+    because tests/data is a pinned Hugging Face snapshot, not repository content.
+    """
+    path_or_stream = BytesIO(source) if isinstance(source, bytes) else source
+
+    pdf_doc = DoclingPdfParser(loglevel="fatal").load(
+        path_or_stream=path_or_stream, lazy=True
+    )
+    toc = pdf_doc.get_table_of_contents()
+    assert toc is not None, "the document should have an outline"
+    return pdf_doc, toc
+
+
+def _by_title(toc: PdfTableOfContents) -> Dict[str, PdfTableOfContents]:
+    return {entry.text: entry for _, entry in toc.iterate()}
+
+
 def test_table_of_contents():
     """Test table of contents extraction from PDF documents."""
-    parser = DoclingPdfParser(loglevel="fatal")
+    pdf_doc, toc = _outline(TOC_PDF)
 
-    # Test with a PDF that has a TOC
-    pdf_doc = parser.load(
-        path_or_stream="tests/data/regression/table_of_contents_01.pdf", lazy=True
-    )
-
-    # Test get_table_of_contents() method
-    toc = pdf_doc.get_table_of_contents()
-    assert toc is not None, "TOC should not be None for table_of_contents_01.pdf"
     assert toc.text == "<root>", "Root TOC entry should have text '<root>'"
-    assert toc.children is not None, "Root TOC should have children"
     assert len(toc.children) > 0, "Root TOC should have at least one child"
 
     # Verify expected top-level entries exist
@@ -1104,9 +1129,6 @@ def test_table_of_contents():
         (child for child in toc.children if child.text == "Model Architecture"), None
     )
     assert model_arch_entry is not None, "Should find 'Model Architecture' entry"
-    assert model_arch_entry.children is not None, (
-        "'Model Architecture' should have children"
-    )
     assert len(model_arch_entry.children) >= 2, (
         "'Model Architecture' should have at least 2 children"
     )
@@ -1117,44 +1139,225 @@ def test_table_of_contents():
         "Should contain 'Mixture-of-Expert models' nested entry"
     )
 
+    # iterate() derives the level from the depth in the tree
+    levels = {entry.text: level for level, entry in toc.iterate()}
+    assert levels["Introduction"] == 0, "Top-level entries should be at level 0"
+    assert levels["Dense Models"] == 1, "Nested entries should be at level 1"
+
     # Test caching - calling again should return same instance
     toc2 = pdf_doc.get_table_of_contents()
     assert toc is toc2, "get_table_of_contents should return cached instance"
 
-    # Test get_annotations().table_of_contents
+    # get_annotations() exposes the very same tree
     annotations = pdf_doc.get_annotations()
     assert annotations is not None, "Annotations should not be None"
-    assert annotations.table_of_contents is not None, (
-        "annotations.table_of_contents should not be None"
+    assert annotations.table_of_contents is toc, (
+        "get_table_of_contents() and get_annotations() should return one tree"
     )
-    assert len(annotations.table_of_contents) > 0, (
-        "annotations.table_of_contents should have entries"
-    )
-
-    # Verify PdfTocEntry structure
-    first_entry = annotations.table_of_contents[0]
-    assert first_entry.title == "Introduction", "First entry should be 'Introduction'"
-    assert first_entry.level == 0, "Top-level entries should have level 0"
-
-    # Find entry with children and verify nested structure
-    model_arch_annot = next(
-        (e for e in annotations.table_of_contents if e.title == "Model Architecture"),
-        None,
-    )
-    assert model_arch_annot is not None, (
-        "Should find 'Model Architecture' in annotations TOC"
-    )
-    assert model_arch_annot.children is not None, (
-        "'Model Architecture' annotation should have children"
-    )
-    assert len(model_arch_annot.children) >= 2, (
-        "'Model Architecture' annotation should have at least 2 children"
-    )
-
-    for child in model_arch_annot.children:
-        assert child.level == 1, "Children of top-level entry should have level 1"
 
     pdf_doc.unload()
+
+
+def test_table_of_contents_resolves_named_goto_destinations():
+    """The outline of table_of_contents_01.pdf reaches its pages via /A /GoTo names."""
+    pdf_doc, toc = _outline(TOC_PDF)
+
+    number_of_pages = pdf_doc.number_of_pages()
+    entries = _by_title(toc)
+
+    # 'Introduction' is /A << /S /GoTo /D (section.1) >>, resolved through the
+    # /Names /Dests name tree to [<page 2> /XYZ 108 490.534 null]
+    introduction = entries["Introduction"].destination
+    assert introduction is not None, "'Introduction' should resolve to a destination"
+    assert introduction.page_no == 2
+    assert introduction.kind == PdfDestinationKind.XYZ
+    assert introduction.coord_origin == CoordOrigin.BOTTOMLEFT
+    assert introduction.point is not None
+    assert abs(introduction.point.x - 108.0) < 1e-3
+    assert abs(introduction.point.y - 490.534) < 1e-3
+    assert (introduction.page_size.width, introduction.page_size.height) == (
+        612.0,
+        792.0,
+    )
+
+    assert entries["Model Architecture"].destination is not None
+    assert entries["Model Architecture"].destination.page_no == 3
+
+    # Every resolved destination lands on a real page, at a position on that page.
+    resolved = 0
+    for _, entry in toc.iterate():
+        dest = entry.destination
+        if dest is None:
+            # this fixture is a 4-page excerpt, so later sections target pages that
+            # were cut away and are no longer part of the page tree
+            continue
+        resolved += 1
+        assert 1 <= dest.page_no <= number_of_pages
+        assert dest.point is not None
+        assert 0.0 <= dest.point.y <= dest.page_size.height
+
+    assert resolved > 0, "at least some destinations should resolve"
+
+    pdf_doc.unload()
+
+
+def test_outline_destination_kinds():
+    """Every explicit-destination syntax of ISO 32000-1, table 151, is understood."""
+    pdf_doc, toc = _outline(build_destination_kinds())
+    entries = _by_title(toc)
+
+    expected_kinds = {
+        "XYZ": PdfDestinationKind.XYZ,
+        "XYZ null top": PdfDestinationKind.XYZ,
+        "XYZ all null": PdfDestinationKind.XYZ,
+        "Fit": PdfDestinationKind.FIT,
+        "FitH": PdfDestinationKind.FIT_H,
+        "FitV": PdfDestinationKind.FIT_V,
+        "FitR": PdfDestinationKind.FIT_R,
+        "FitB": PdfDestinationKind.FIT_B,
+        "FitBH": PdfDestinationKind.FIT_BH,
+        "FitBV": PdfDestinationKind.FIT_BV,
+        "no kind": PdfDestinationKind.UNKNOWN,
+    }
+    for title, kind in expected_kinds.items():
+        dest = entries[title].destination
+        assert dest is not None, f"'{title}' should resolve to a destination"
+        assert dest.kind == kind, f"'{title}' should have kind {kind}"
+        assert dest.page_no == 1, f"'{title}' should target the first page"
+
+    # only the syntaxes that carry a vertical position produce a point
+    with_point = {"XYZ", "FitH", "FitR", "FitBH"}
+    for title in expected_kinds:
+        dest = entries[title].destination
+        assert dest is not None
+        assert (dest.point is not None) == (title in with_point), (
+            f"'{title}' should {'' if title in with_point else 'not '}carry a point"
+        )
+
+    xyz = entries["XYZ"].destination
+    assert xyz is not None and xyz.point is not None
+    assert abs(xyz.point.x - 108.0) < 1e-3
+    assert abs(xyz.point.y - 702.0) < 1e-3
+
+    # a null coordinate means "retain the current value", so it is not a position
+    assert entries["XYZ null top"].destination.point is None
+    assert entries["XYZ all null"].destination.point is None
+
+    # an item without /Dest and without /A has nowhere to go
+    assert entries["no destination"].destination is None
+
+    pdf_doc.unload()
+
+
+def test_outline_destination_references():
+    """Explicit, named and action destinations all reach the same page."""
+    pdf_doc, toc = _outline(build_destination_references())
+    entries = _by_title(toc)
+
+    for title in [
+        "explicit",
+        "named string",
+        "named object",
+        "goto action",
+        "goto action named",
+    ]:
+        dest = entries[title].destination
+        assert dest is not None, f"'{title}' should resolve to a destination"
+        assert dest.page_no == 2, f"'{title}' should target page 2"
+        assert dest.point is not None
+        assert abs(dest.point.y - 702.0) < 1e-3
+
+    # /GoToR points into another document, so it has no page in this one
+    assert entries["remote action"].destination is None, (
+        "a remote destination should not resolve to a page of this document"
+    )
+
+    pdf_doc.unload()
+
+
+def test_outline_destinations_follow_page_rotation():
+    """A destination lands on its heading whatever the page's /Rotate angle."""
+    pdf_doc, toc = _outline(build_rotated_pages())
+    entries = _by_title(toc)
+
+    for page_no, title in enumerate(
+        ["Rotate0", "Rotate90", "Rotate180", "Rotate270"], start=1
+    ):
+        dest = entries[title].destination
+        assert dest is not None, f"'{title}' should resolve to a destination"
+        assert dest.page_no == page_no
+        assert dest.point is not None
+
+        page = pdf_doc.get_page(page_no)
+        cells = [c for c in page.word_cells if c.text.strip() == title]
+        assert len(cells) == 1, f"page {page_no} should hold exactly one '{title}'"
+
+        bbox = cells[0].rect.to_bounding_box()
+        assert bbox.coord_origin == dest.coord_origin, (
+            "the destination and the cells must share a coordinate origin"
+        )
+
+        # The destination points at the top-left of the heading, so it sits within a
+        # line's height of the decoded cell. Without the /Rotate transform it would
+        # be most of a page away on three of these four pages.
+        eps = 20.0
+        assert bbox.l - eps <= dest.point.x <= bbox.r + eps, (
+            f"'{title}' destination x={dest.point.x} is not near the cell {bbox}"
+        )
+        assert bbox.b - eps <= dest.point.y <= bbox.t + eps, (
+            f"'{title}' destination y={dest.point.y} is not near the cell {bbox}"
+        )
+
+        # the rotated page is reported upright, so the size follows the rotation
+        assert (dest.page_size.width, dest.page_size.height) == (
+            (792.0, 612.0) if page_no in (2, 4) else (612.0, 792.0)
+        )
+
+    pdf_doc.unload()
+
+
+def test_outline_survives_malformed_entries():
+    """Cycles, missing titles and dangling pages degrade instead of throwing."""
+    pdf_doc, toc = _outline(build_malformed_outline())
+
+    entries = list(toc.iterate())
+    assert 0 < len(entries) < 100, "a cyclic outline must not walk forever"
+
+    titles = [entry.text for _, entry in entries]
+    assert "looping next" in titles
+    assert "looping child" in titles
+    assert "dangling page" in titles
+    assert "" in titles, "an item without /Title should keep an empty title"
+
+    by_title = _by_title(toc)
+
+    # a /FitH destination on a real page still resolves
+    untitled = by_title[""].destination
+    assert untitled is not None
+    assert untitled.page_no == 2
+    assert untitled.kind == PdfDestinationKind.FIT_H
+
+    # a destination page that is not in the page tree cannot be numbered
+    assert by_title["dangling page"].destination is None
+
+    pdf_doc.unload()
+
+
+def test_threaded_parser_annotations_match_single_threaded():
+    """The threaded parser reads the same outline, without decoding a page."""
+    pdf_doc, toc = _outline(TOC_PDF)
+    expected = toc.export_to_dict()
+    pdf_doc.unload()
+
+    threaded = DoclingThreadedPdfParser()
+    doc_key = threaded.load(path_or_stream=TOC_PDF)
+    try:
+        annotations = threaded.get_annotations(doc_key)
+        assert annotations is not None
+        assert annotations.table_of_contents is not None
+        assert annotations.table_of_contents.export_to_dict() == expected
+    finally:
+        threaded.unload_all()
 
 
 def test_table_of_contents_none_for_pdf_without_toc():
@@ -1169,9 +1372,9 @@ def test_table_of_contents_none_for_pdf_without_toc():
 
     annotations = pdf_doc.get_annotations()
     assert annotations is not None, "Annotations should not be None even without TOC"
-    assert (
-        annotations.table_of_contents is None or len(annotations.table_of_contents) == 0
-    ), "table_of_contents should be None or empty for PDF without TOC"
+    assert annotations.table_of_contents is None, (
+        "table_of_contents should be None for PDF without TOC"
+    )
 
     pdf_doc.unload()
 
@@ -1209,10 +1412,7 @@ def test_annotations_match_groundtruth():
             "table_of_contents": (
                 None
                 if pred_annotations.table_of_contents is None
-                else [
-                    entry.model_dump(exclude_none=True)
-                    for entry in pred_annotations.table_of_contents
-                ]
+                else pred_annotations.table_of_contents.export_to_dict()
             ),
         }
 
