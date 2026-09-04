@@ -69,6 +69,7 @@ namespace docling
 
     int number_of_pages(std::string key) const;
     int scheduled_number_of_pages(std::string key) const;
+    nlohmann::json get_table_of_contents(std::string key) const;
 
     bool unload_document(std::string key);
     void unload_all_documents();
@@ -123,6 +124,19 @@ namespace docling
   // ---------------------------------------------------------------------------
   // Implementation
   // ---------------------------------------------------------------------------
+
+  template<typename Derived, typename ResultType>
+  nlohmann::json docling_threaded_base<Derived, ResultType>::get_table_of_contents(
+      std::string key) const
+  {
+    auto itr = key2doc.find(key);
+    if(itr == key2doc.end())
+      {
+        return nlohmann::json::value_t::null;
+      }
+
+    return itr->second->get_table_of_contents();
+  }
 
   template<typename Derived, typename ResultType>
   docling_threaded_base<Derived, ResultType>::docling_threaded_base(
