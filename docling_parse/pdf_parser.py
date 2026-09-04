@@ -6,7 +6,7 @@ import math
 from enum import IntEnum
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple, Union
+from typing import Any, Dict, Iterator, List, Sequence, Tuple, Union
 
 from docling_core.types.doc.base import BoundingBox, CoordOrigin, ImageRefMode
 from docling_core.types.doc.document import ImageRef
@@ -15,6 +15,8 @@ from docling_core.types.doc.page import (
     BoundingRectangle,
     ColorRGBA,
     Coord2D,
+    FileAttachmentAnnotation,
+    PdfAttachment,
     PdfHyperlink,
     PdfMetaData,
     PdfPageBoundaryType,
@@ -75,6 +77,12 @@ from docling_parse.pdf_parsers import (  # type: ignore[import]
 
 # Configure logging
 _log = logging.getLogger(__name__)
+
+# Cap for eagerly-loaded attachment payloads (200 MB, per the PDF-attachment
+# PR spec). Attachments at or below this size carry their decoded bytes in
+# PdfAttachment.data; larger ones are reported with data=None (metadata only)
+# plus a warning.
+_MAX_ATTACHMENT_DATA_BYTES: int = 200 * 1024 * 1024
 
 
 class PdfTocEntry(BaseModel):
@@ -714,6 +722,7 @@ class PdfDocument:
         self._toc: PdfTableOfContents | None = None
         self._meta: PdfMetaData | None = None
         self._annotations: PdfAnnotations | None = None
+        self._attachments: List[PdfAttachment] | None = None
 
     def _ensure_page_decoder(
         self, page_no: int, content_config: ContentConfig
@@ -931,6 +940,97 @@ class PdfDocument:
         else:
             raise RuntimeError("This document is not loaded.")
 
+    def get_attachments(self) -> List[PdfAttachment]:
+        """Get embedded-file attachments, eagerly decoding binary payloads.
+
+        Attachments at or below ``_MAX_ATTACHMENT_DATA_BYTES`` (200 MB) carry
+        their decoded bytes in ``data``. Attachments above the cap, or whose
+        payload cannot be decoded, are still reported with their metadata but
+        with ``data=None`` plus a warning. The list is computed once and cached
+        on the document.
+
+        Returns:
+            List[PdfAttachment]: attachments with name, mime_type, size, page
+                annotations, and (within the cap) binary data.
+
+        Raises:
+            RuntimeError: if the document is not loaded (missing key).
+        """
+        if not self.is_loaded():
+            raise RuntimeError("This document is not loaded.")
+
+        if self._attachments is not None:
+            return self._attachments
+
+        raw = self._parser.get_attachments(key=self._key)
+        result: List[PdfAttachment] = []
+        for index, item in enumerate(raw):
+            name = item.get("name", "attachment")
+            mime = item.get("mime_type")
+            size = int(item.get("size", 0) or 0)
+            anns: List[FileAttachmentAnnotation] = []
+            for ja in item.get("annotations") or []:
+                try:
+                    bbox_vals = ja.get("bbox") or [0, 0, 0, 0]
+                    bbox = _to_bounding_rectangle(tuple(float(v) for v in bbox_vals))  # type: ignore[arg-type]
+                    anns.append(
+                        FileAttachmentAnnotation(
+                            page_no=int(ja.get("page_no", 0)) + 1, bbox=bbox
+                        )
+                    )
+                except Exception:
+                    _log.debug("Skipping malformed annotation %s", ja, exc_info=True)
+
+            data: bytes | None = None
+            try:
+                data = self.get_attachment_data(
+                    index, max_size=_MAX_ATTACHMENT_DATA_BYTES
+                )
+            except Exception as exc:
+                _log.warning(
+                    "Attachment %r (%s bytes) not decoded (%s); exposing metadata only",
+                    name,
+                    size,
+                    exc,
+                )
+
+            result.append(
+                PdfAttachment(
+                    name=name, mime_type=mime, size=size, annotations=anns, data=data
+                )
+            )
+
+        self._attachments = result
+        return result
+
+    def get_attachment_data(self, index: int, *, max_size: int) -> bytes:
+        """Get raw bytes for a single attachment (memory-safe, requires max_size).
+
+        Args:
+            index: Attachment index from get_attachments().
+            max_size: Maximum allowed decoded size (required, enforces caller policy).
+
+        Raises:
+            ValueError/RuntimeError: if size exceeds max_size or decode fails.
+        """
+        if not self.is_loaded():
+            raise RuntimeError("This document is not loaded.")
+        if not isinstance(max_size, int):
+            raise TypeError("max_size is required and must be an int")
+        return bytes(
+            self._parser.get_attachment_data(
+                key=self._key, index=index, max_size=max_size
+            )
+        )
+
+    def _attachments_for_page(self, page_no: int) -> List[PdfAttachment]:
+        """Attachments anchored to ``page_no`` via FileAttachment annotations."""
+        return [
+            att
+            for att in self.get_attachments()
+            if any(a.page_no == page_no for a in att.annotations)
+        ]
+
     def get_page(
         self,
         page_no: int,
@@ -949,6 +1049,7 @@ class PdfDocument:
 
         decoder = self._ensure_page_decoder(page_no, cc)
         page = segmented_page_from_decoder(decoder, self._boundary_type, cc)
+        page.attachments = self._attachments_for_page(page_no)
         self._pages[cache_key] = page
         return page
 
@@ -970,6 +1071,7 @@ class PdfDocument:
             self._decoded_content_configs.pop(page_no, None)
         decoder = self._ensure_page_decoder(page_no, cc)
         segmented_page = segmented_page_from_decoder(decoder, self._boundary_type, cc)
+        segmented_page.attachments = self._attachments_for_page(page_no)
         timings = Timings(
             data=dict(decoder.get_timings()),
             raw_data=dict(decoder.get_timings_raw()),

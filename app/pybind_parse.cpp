@@ -923,7 +923,66 @@ PYBIND11_MODULE(pdf_parsers, m) {
 
     Returns:
         dict: A None or string of the metadata in xml of the document.)")
-    
+
+    .def("get_attachments",
+	 [](docling::docling_parser &self, const std::string &key) -> nlohmann::json {
+	   return self.get_attachments(key);
+	 },
+	 pybind11::arg("key"),
+	 R"(
+    Retrieve attachments for the document identified by its unique key.
+
+    Parameters:
+        key (str): The unique key of the document.
+
+    Returns:
+        list: A JSON array of attachment metadata (name, mime_type, size, annotations).
+
+    Raises:
+        RuntimeError: If the key is not loaded.)")
+
+    .def("get_attachment_data",
+	 [](docling::docling_parser &self, const std::string &key, int index, long long max_size) -> pybind11::bytes {
+	   return self.get_attachment_data(key, index, max_size);
+	 },
+	 pybind11::arg("key"),
+	 pybind11::arg("index"),
+	 pybind11::arg("max_size"),
+	 R"(
+    Retrieve raw bytes for a single attachment.
+
+    Parameters:
+        key (str): The unique key of the document.
+        index (int): Attachment index from get_attachments().
+        max_size (int): Maximum allowed decoded size in bytes (required).
+
+    Returns:
+        bytes: Decoded attachment payload.
+
+    Raises:
+        RuntimeError: If the key is not loaded, index is out of range,
+            size exceeds max_size, or the stream cannot be decoded.)")
+
+    .def("write_attachment_data",
+	 [](docling::docling_parser &self, const std::string &key, int index, long long max_size, const std::string &path) {
+	   self.write_attachment_data(key, index, max_size, path);
+	 },
+	 pybind11::arg("key"),
+	 pybind11::arg("index"),
+	 pybind11::arg("max_size"),
+	 pybind11::arg("path"),
+	 R"(
+    Stream a single attachment directly to a file without buffering the full decoded payload.
+
+    Parameters:
+        key (str): The unique key of the document.
+        index (int): Attachment index from get_attachments().
+        max_size (int): Maximum allowed decoded size in bytes (required).
+        path (str): Destination file path.
+
+    Raises:
+        RuntimeError: If size exceeds max_size or the stream cannot be decoded.)")
+
     .def("get_page_decoder",
 	 [](docling::docling_parser &self,
 	    const std::string &key,

@@ -10,9 +10,11 @@
 #include <optional>
 #include <qpdf/Buffer.hh>
 #include <qpdf/QPDFAcroFormDocumentHelper.hh>
+#include <qpdf/Pipeline.hh>
 #include <qpdf/QPDF.hh>
 #include <qpdf/QPDFWriter.hh>
 
+#include <parse/qpdf/attachments.h>
 #include <parse/qpdf/logger.h>
 
 namespace pdflib
@@ -37,6 +39,10 @@ namespace pdflib
 
     nlohmann::json get_meta_xml();
     nlohmann::json get_table_of_contents();
+
+    nlohmann::json get_attachments();
+    std::shared_ptr<Buffer> get_attachment_data(int index, long long max_size);
+    void write_attachment_data(int index, long long max_size, const std::string& path);
 
     bool process_document_from_file(std::string& _filename,
                                     std::optional<std::string>& _password,
@@ -78,6 +84,13 @@ namespace pdflib
 
     void ensure_annots_loaded();
 
+    void ensure_attachments_loaded();
+
+    // Shared attachment helpers (deduped from get/write paths).
+    const AttachmentRecord& require_attachment_record(int index, long long max_size);
+    QPDFObjectHandle require_attachment_stream(int index, long long max_size);
+    static void warn_if_raw_length_exceeds(const QPDFObjectHandle& stream_obj, long long max_size);
+
     void update_timings(pdf_timings& timings_, bool set_timer);
 
   private:
@@ -105,6 +118,10 @@ namespace pdflib
     nlohmann::json json_annots;
     bool annots_loaded;
 
+    // Attachments (metadata only, lazy)
+    std::vector<AttachmentRecord> attachment_records;
+    bool attachments_loaded;
+
     // New: Persistent page decoders for typed API
     std::map<int, page_decoder_ptr> page_decoders;
   };
@@ -123,6 +140,8 @@ namespace pdflib
 
     json_annots(nlohmann::json::value_t::null),
     annots_loaded(false),
+    attachment_records({}),
+    attachments_loaded(false),
     page_decoders({})
   {
     configure_qpdf_warnings(qpdf_document);
@@ -142,6 +161,8 @@ namespace pdflib
 
     json_annots(nlohmann::json::value_t::null),
     annots_loaded(false),
+    attachment_records({}),
+    attachments_loaded(false),
     page_decoders({})
   {
     configure_qpdf_warnings(qpdf_document);
@@ -191,6 +212,145 @@ namespace pdflib
   {
     ensure_annots_loaded();
     return json_annots["table_of_contents"];
+  }
+
+  void pdf_decoder<DOCUMENT>::ensure_attachments_loaded()
+  {
+    if(attachments_loaded)
+      return;
+    try
+      {
+        QPDFObjectHandle qpdf_root = qpdf_document.getRoot();
+        attachment_records = extract_attachment_records(qpdf_document, qpdf_root);
+      }
+    catch(const std::exception& exc)
+      {
+        LOG_S(WARNING) << "filename: " << filename << " failed to extract attachments: " << exc.what();
+      }
+    attachments_loaded = true;
+  }
+
+  const AttachmentRecord& pdf_decoder<DOCUMENT>::require_attachment_record(int index, long long max_size)
+  {
+    ensure_attachments_loaded();
+    if(index < 0 || index >= static_cast<int>(attachment_records.size()))
+      throw std::out_of_range("attachment index out of range");
+    const auto& rec = attachment_records[static_cast<size_t>(index)];
+    if(rec.size > max_size)
+      throw std::runtime_error("attachment size " + std::to_string(rec.size) + " exceeds max_size " + std::to_string(max_size));
+    if(!rec.obj_gen.isIndirect())
+      throw std::runtime_error(
+        "attachment at index " + std::to_string(index) +
+        " has a direct (non-indirect) EF stream and cannot be fetched — direct streams have no indirect object ID");
+    return rec;
+  }
+
+  QPDFObjectHandle pdf_decoder<DOCUMENT>::require_attachment_stream(int index, long long max_size)
+  {
+    const auto& rec = require_attachment_record(index, max_size);
+    QPDFObjectHandle stream_obj;
+    try { stream_obj = qpdf_document.getObjectByObjGen(rec.obj_gen); }
+    catch(const std::exception& exc) { LOG_S(WARNING) << "attachment stream lookup failed: " << exc.what(); }
+    if(!stream_obj.isStream())
+      throw std::runtime_error("attachment stream not found for index " + std::to_string(index));
+    return stream_obj;
+  }
+
+  void pdf_decoder<DOCUMENT>::warn_if_raw_length_exceeds(const QPDFObjectHandle& stream_obj, long long max_size)
+  {
+    // Guard against filter bombs: compare the declared raw /Length against the
+    // limit before decoding. The 10x slack only decides when a mismatch is
+    // worth a warning (compression can legitimately expand); the decoded size
+    // is still enforced separately.
+    // NB: stream handles don't proxy hasKey/getKey on this qpdf version —
+    // the dict must be addressed via getDict().
+    try
+      {
+        QPDFObjectHandle dict = stream_obj.getDict();
+        if(dict.hasKey("/Length") && dict.getKey("/Length").isInteger())
+          {
+            long long raw_len = dict.getKey("/Length").getIntValue();
+            if(raw_len > max_size * 10)
+              LOG_S(WARNING) << "attachment raw Length " << raw_len << " is much larger than max_size " << max_size;
+          }
+      }
+    catch(const std::exception& exc)
+      {
+        LOG_S(WARNING) << "failed to read attachment /Length: " << exc.what();
+      }
+  }
+
+  nlohmann::json pdf_decoder<DOCUMENT>::get_attachments()
+  {
+    ensure_attachments_loaded();
+    return attachments_to_json(attachment_records);
+  }
+
+  std::shared_ptr<Buffer> pdf_decoder<DOCUMENT>::get_attachment_data(int index, long long max_size)
+  {
+    QPDFObjectHandle stream_obj = require_attachment_stream(index, max_size);
+    warn_if_raw_length_exceeds(stream_obj, max_size);
+
+    std::shared_ptr<Buffer> buf;
+    try
+      {
+        buf = stream_obj.getStreamData(qpdf_dl_all);
+      }
+    catch(const std::exception& exc)
+      {
+        throw std::runtime_error(std::string("failed to decode attachment stream: ") + exc.what());
+      }
+
+    if(!buf)
+      throw std::runtime_error("failed to get stream data for attachment " + std::to_string(index));
+
+    if(static_cast<long long>(buf->getSize()) > max_size)
+      throw std::runtime_error("decoded attachment size " + std::to_string(buf->getSize()) + " exceeds max_size " + std::to_string(max_size));
+
+    return buf;
+  }
+
+  void pdf_decoder<DOCUMENT>::write_attachment_data(int index, long long max_size, const std::string& path)
+  {
+    QPDFObjectHandle stream_obj = require_attachment_stream(index, max_size);
+    warn_if_raw_length_exceeds(stream_obj, max_size);
+
+    std::ofstream out(path, std::ios::binary);
+    if(!out)
+      throw std::runtime_error("failed to open attachment output file: " + path);
+
+    struct LimitedFilePipeline : public Pipeline
+    {
+      std::ofstream& out;
+      long long max_size;
+      long long written = 0;
+      LimitedFilePipeline(std::ofstream& o, long long m) : Pipeline("attachment-pipe", nullptr), out(o), max_size(m) {}
+      void write(unsigned char const* data, size_t len) override
+      {
+        written += static_cast<long long>(len);
+        if(written > max_size)
+          throw std::runtime_error("decoded attachment size " + std::to_string(written) + " exceeds max_size " + std::to_string(max_size));
+        out.write(reinterpret_cast<char const*>(data), len);
+        if(!out)
+          throw std::runtime_error("failed to write attachment data to file");
+      }
+      void finish() override { out.flush(); }
+    };
+
+    LimitedFilePipeline pipeline(out, max_size);
+    try
+      {
+        if(!stream_obj.pipeStreamData(&pipeline, 0, qpdf_dl_all))
+          throw std::runtime_error("failed to pipe attachment stream data for index " + std::to_string(index));
+        pipeline.finish();
+      }
+    catch(const std::exception&)
+      {
+        throw;
+      }
+
+    if(!out)
+      throw std::runtime_error("failed to write attachment data to file: " + path);
   }
 
   bool pdf_decoder<DOCUMENT>::process_document_from_file(std::string& _filename,
@@ -253,6 +413,12 @@ namespace pdflib
   {
     buffer = _buffer;
     password = _password;
+
+    // Reset cached state
+    attachment_records.clear();
+    attachments_loaded = false;
+    annots_loaded = false;
+    json_annots = nlohmann::json::value_t::null;
 
     LOG_S(INFO) << "start processing buffer of size " << buffer->size() << " by qpdf ...";
     
