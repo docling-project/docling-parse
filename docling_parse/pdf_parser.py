@@ -692,6 +692,28 @@ def _page_size_from_decoder(
     return abs(bbox[2] - bbox[0]), abs(bbox[3] - bbox[1])
 
 
+def _boundary_origin_from_decoder(
+    page_decoder: PdfPageDecoder,
+    boundary_type: PdfPageBoundaryType,
+) -> tuple[float, float]:
+    """Bottom-left corner of the page boundary in raw PDF user space.
+
+    Text cells come out of the decoder relative to this boundary; shape geometry
+    comes out in raw user space and has to be moved by this origin to share the
+    cells' frame.
+    """
+    bbox = _get_boundary_bbox(page_decoder.get_page_dimension(), boundary_type)
+    return min(bbox[0], bbox[2]), min(bbox[1], bbox[3])
+
+
+def _shape_bbox_in_boundary_frame(
+    bbox: tuple[float, float, float, float],
+    origin: tuple[float, float],
+) -> BoundingBox:
+    x0, y0 = origin
+    return _to_bounding_box((bbox[0] - x0, bbox[1] - y0, bbox[2] - x0, bbox[3] - y0))
+
+
 class PdfDocument:
     def __init__(
         self,
@@ -1312,10 +1334,15 @@ class PageParseResult:
         vertical: bool = True,
         tolerance: float = 1e-3,
     ) -> List[BoundingBox]:
-        """Return visible horizontal and/or vertical stroked shape segments."""
+        """Return visible horizontal and/or vertical stroked shape segments.
+
+        Boxes are relative to the page boundary, like the text cells.
+        """
+        decoder = self._require_page_decoder()
+        origin = _boundary_origin_from_decoder(decoder, self._boundary_type)
         return [
-            _to_bounding_box(tuple(bbox))
-            for bbox in self._require_page_decoder().get_shape_lines(
+            _shape_bbox_in_boundary_frame(tuple(bbox), origin)
+            for bbox in decoder.get_shape_lines(
                 horizontal=horizontal,
                 vertical=vertical,
                 tolerance=tolerance,
@@ -1327,10 +1354,15 @@ class PageParseResult:
         *,
         tolerance: float = 0.0,
     ) -> List[BoundingBox]:
-        """Return bboxes of visible shapes connected by overlapping bboxes."""
+        """Return bboxes of visible shapes connected by overlapping bboxes.
+
+        Boxes are relative to the page boundary, like the text cells.
+        """
+        decoder = self._require_page_decoder()
+        origin = _boundary_origin_from_decoder(decoder, self._boundary_type)
         return [
-            _to_bounding_box(tuple(bbox))
-            for bbox in self._require_page_decoder().get_connected_shape_bounding_boxes(
+            _shape_bbox_in_boundary_frame(tuple(bbox), origin)
+            for bbox in decoder.get_connected_shape_bounding_boxes(
                 tolerance=tolerance,
             )
         ]
