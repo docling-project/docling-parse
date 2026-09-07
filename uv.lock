@@ -678,8 +678,8 @@ wheels = [
 
 [[package]]
 name = "docling-core"
-version = "2.94.1"
-source = { git = "https://github.com/docling-project/docling-core.git?branch=feat%2Fextending-table-of-contents#3aab5e5d52ffd8a0d942b01b5c18930d6630408e" }
+version = "2.95.0"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "defusedxml" },
     { name = "doclang" },
@@ -694,6 +694,10 @@ dependencies = [
     { name = "tabulate" },
     { name = "typer" },
     { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/2d/b5/217831e148140fa70326742e9f820813592e3c932bda1f55ac2c76d3958c/docling_core-2.95.0.tar.gz", hash = "sha256:dd79a3db6d08a6d5f674fa66987aaf5c0f2705233cb329c2f19cd9472518796d", size = 371729, upload-time = "2026-09-04T15:17:44.315Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/09/72/9c62033a528be2ae276001faa3cfd01593a710d020b81eeb53d0b689d176/docling_core-2.95.0-py3-none-any.whl", hash = "sha256:bdaace4c575512f3dba36c2978fc3bf67f7fbedc2e8b3c3660b03bdab044fde8", size = 300013, upload-time = "2026-09-04T15:17:42.682Z" },
 ]
 
 [[package]]
@@ -740,7 +744,7 @@ perf = [
 
 [package.metadata]
 requires-dist = [
-    { name = "docling-core", git = "https://github.com/docling-project/docling-core.git?branch=feat%2Fextending-table-of-contents" },
+    { name = "docling-core", specifier = ">=2.95.0,<3.0.0" },
     { name = "pillow", specifier = ">=10.0.0,<13.0.0" },
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "pywin32", marker = "sys_platform == 'win32'", specifier = ">=305" },

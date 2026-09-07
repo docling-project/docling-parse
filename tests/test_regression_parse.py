@@ -1175,10 +1175,8 @@ def test_table_of_contents_resolves_named_goto_destinations():
     assert introduction.point is not None
     assert abs(introduction.point.x - 108.0) < 1e-3
     assert abs(introduction.point.y - 490.534) < 1e-3
-    assert (introduction.page_size.width, introduction.page_size.height) == (
-        612.0,
-        792.0,
-    )
+    assert abs(introduction.page_size.width - 612.0) < 1e-3
+    assert abs(introduction.page_size.height - 792.0) < 1e-3
 
     assert entries["Model Architecture"].destination is not None
     assert entries["Model Architecture"].destination.page_no == 3
@@ -1308,10 +1306,12 @@ def test_outline_destinations_follow_page_rotation():
             f"'{title}' destination y={dest.point.y} is not near the cell {bbox}"
         )
 
-        # the rotated page is reported upright, so the size follows the rotation
-        assert (dest.page_size.width, dest.page_size.height) == (
-            (792.0, 612.0) if page_no in (2, 4) else (612.0, 792.0)
-        )
+        # the rotated page is reported upright, so the size follows the rotation.
+        # The 90/270 rotation matrix goes through the media box corners, so the
+        # dimensions come back with a floating-point residue instead of exactly.
+        width, height = (792.0, 612.0) if page_no in (2, 4) else (612.0, 792.0)
+        assert abs(dest.page_size.width - width) < 1e-3
+        assert abs(dest.page_size.height - height) < 1e-3
 
     pdf_doc.unload()
 
