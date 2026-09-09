@@ -15,6 +15,9 @@
 // Include parse headers for typed bindings
 #include <parse.h>
 
+// Include edit headers for the lightweight, document-less helpers
+#include <edit.h>
+
 namespace
 {
   const char* pixel_format_name(pdflib::pixel_format fmt)
@@ -751,6 +754,62 @@ PYBIND11_MODULE(pdf_parsers, m) {
         level (str): Logging level as a string.
                      One of ['fatal', 'error', 'warning', 'info'])")
     
+    .def_static("get_number_of_pages",
+	 [](const std::string& filename,
+	    std::optional<std::string> password,
+	    bool keep_qpdf_warnings) -> int {
+	   std::string filename_ = filename;
+	   return pdflib::pdf_editor_tools::get_number_of_pages(filename_,
+								password,
+								keep_qpdf_warnings);
+	 },
+	 pybind11::arg("filename"),
+	 pybind11::arg("password") = pybind11::none(),
+	 pybind11::arg("keep_qpdf_warnings") = false,
+	 R"(
+    Get the number of pages of a PDF file without loading the document.
+
+    Parameters:
+        filename (str): Path to the PDF file.
+        password (str, optional): Password of the document.
+        keep_qpdf_warnings (bool): If true, QPDF warnings are emitted [default=False].
+
+    Returns:
+        int: The number of pages, or -1 if the document could not be read.)")
+
+    .def_static("get_number_of_pages_from_bytesio",
+	 [](pybind11::object bytes_io,
+	    std::optional<std::string> password,
+	    bool keep_qpdf_warnings) -> int {
+	   if(not pybind11::hasattr(bytes_io, "read"))
+	     {
+	       throw std::runtime_error("Expected a BytesIO object");
+	     }
+
+	   bytes_io.attr("seek")(0);
+	   pybind11::bytes data = bytes_io.attr("read")();
+
+	   auto data_buffer = std::make_shared<std::string>(data.cast<std::string>());
+
+	   return pdflib::pdf_editor_tools::get_number_of_pages(data_buffer,
+								password,
+								"counting pages from bytesio",
+								keep_qpdf_warnings);
+	 },
+	 pybind11::arg("bytes_io"),
+	 pybind11::arg("password") = pybind11::none(),
+	 pybind11::arg("keep_qpdf_warnings") = false,
+	 R"(
+    Get the number of pages of a PDF held in a BytesIO object without loading the document.
+
+    Parameters:
+        bytes_io (BytesIO): The PDF document as a BytesIO object.
+        password (str, optional): Password of the document.
+        keep_qpdf_warnings (bool): If true, QPDF warnings are emitted [default=False].
+
+    Returns:
+        int: The number of pages, or -1 if the document could not be read.)")
+
     .def("set_loglevel_with_label",
 	 [](docling::docling_parser &self, const std::string &level) -> void {
             self.set_loglevel_with_label(level);
