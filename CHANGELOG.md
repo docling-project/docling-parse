@@ -1,3 +1,9 @@
+## [v7.19.1](https://github.com/docling-project/docling-parse/releases/tag/v7.19.1) - 2026-09-11
+
+### Fix
+
+* Stray PostScript resource directives no longer poison the next colour operator ([#347](https://github.com/docling-project/docling-parse/issues/347)) ([`38bf252`](https://github.com/docling-project/docling-parse/commit/38bf25248fd1948c6d9d4dac67540cd463d2000d))
+
 ## [v7.19.0](https://github.com/docling-project/docling-parse/releases/tag/v7.19.0) - 2026-09-10
 
 ### Feature
