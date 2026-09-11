@@ -401,10 +401,14 @@ namespace pdflib
 
     if(instructions.size()>num_instr)
       {
-	LOG_S(ERROR) << "#-instructions " << instructions.size()
-		     << " exceeds expected value " << num_instr << " for "
-		     << name;
-	LOG_S(ERROR) << " => we can continue but might have incorrect results!";
+        const std::size_t excess = instructions.size() - num_instr;
+        LOG_S(WARNING) << "#-instructions " << instructions.size()
+                       << " exceeds expected value " << num_instr << " for "
+                       << name;
+        LOG_S(WARNING) << " => ignoring " << excess
+                       << " leading operand(s)";
+        instructions.erase(instructions.begin(),
+                           instructions.begin() + excess);
 	
 	return true;
       }
