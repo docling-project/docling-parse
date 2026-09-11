@@ -136,7 +136,9 @@ def test_text_shapes_and_bitmaps_share_one_frame(rotate: int) -> None:
         assert result.success, result.error_message
 
         expected_size = (300.0, 200.0) if rotate % 180 == 0 else (200.0, 300.0)
-        assert _close((result.page_width, result.page_height), expected_size, 1e-6)
+        assert (result.page_width, result.page_height) == pytest.approx(
+            expected_size, abs=1e-6
+        )
 
         page = result.get_page()
 
