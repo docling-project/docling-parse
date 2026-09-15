@@ -1554,6 +1554,8 @@ class DoclingThreadedPdfParser:
         path_or_stream: Union[str, Path, BytesIO],
         password: str | None = None,
         page_numbers: Sequence[int] | None = None,
+        *,
+        page_range: tuple[int, int] | None = None,
     ) -> str:
         """Load a document for parallel processing.
 
@@ -1561,10 +1563,16 @@ class DoclingThreadedPdfParser:
             path_or_stream: File path or BytesIO object.
             password: Optional password for protected files.
             page_numbers: Optional 1-indexed physical pages to schedule.
+            page_range: Optional inclusive 1-indexed physical page range to
+                schedule. The end is clipped to the document. Mutually exclusive
+                with page_numbers.
 
         Returns:
             str: The document key.
         """
+        if page_numbers is not None and page_range is not None:
+            raise ValueError("page_numbers and page_range are mutually exclusive")
+
         if isinstance(path_or_stream, str):
             path_or_stream = Path(path_or_stream)
 
@@ -1575,6 +1583,7 @@ class DoclingThreadedPdfParser:
                 filename=str(path_or_stream).encode("utf8"),
                 password=password,
                 page_numbers=list(page_numbers) if page_numbers is not None else None,
+                page_range=page_range,
             )
         elif isinstance(path_or_stream, BytesIO):
             hasher = hashlib.sha256(usedforsecurity=False)
@@ -1589,6 +1598,7 @@ class DoclingThreadedPdfParser:
                 bytes_io=path_or_stream,
                 password=password,
                 page_numbers=list(page_numbers) if page_numbers is not None else None,
+                page_range=page_range,
             )
         else:
             raise TypeError(
