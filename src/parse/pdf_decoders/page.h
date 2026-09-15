@@ -147,6 +147,10 @@ namespace pdflib
 
     void rotate_contents();
 
+    // Map a bbox from the raw content-stream space of the render instructions
+    // onto the frame of the sanitized page items (see page_frame_* below).
+    std::array<double, 4> to_page_frame(std::array<double, 4> bbox) const;
+
     bool can_reuse_sanitised_cells_for_line_cells(const decode_config& config) const;
 
     void sanitise_contents(std::string page_boundary);
@@ -211,6 +215,16 @@ namespace pdflib
     std::shared_ptr<pdf_resource<PAGE_FONTS>> acroform_fonts;
 
     pdf_render_instructions instructions;
+
+    // The render instructions stay in unrotated user space (the renderer
+    // orients its own canvas), while page_cells, page_shapes and page_images
+    // are rotated by rotate_contents() and moved to the page boundary by the
+    // dimension sanitator. Geometry queries that walk the instructions apply
+    // the same /Rotate and boundary origin, so their boxes land in the frame
+    // of the cells.
+    int page_frame_angle = 0;
+    std::pair<double, double> page_frame_delta = {0.0, 0.0};
+    std::pair<double, double> page_frame_origin = {0.0, 0.0};
 
     pdf_timings timings;
   };
@@ -557,7 +571,8 @@ namespace pdflib
             const std::array<double, 4> visible_shape_bbox =
               clipped_bbox(shape_bbox, instr.get_clip_state(), shape_visible);
 
-            if(shape_visible and bbox_intersects(bbox, visible_shape_bbox))
+            if(shape_visible and
+               bbox_intersects(bbox, to_page_frame(visible_shape_bbox)))
               {
                 return true;
               }
@@ -591,6 +606,10 @@ namespace pdflib
 
     const double tol = std::max(0.0, tolerance);
 
+    // a quarter-turn /Rotate swaps the axes between the raw instruction
+    // space and the page frame the caller asks about
+    const bool swaps_axes = (std::abs(page_frame_angle) % 180) == 90;
+
     for(const auto& instr : instructions.get_shape_instructions())
       {
         if(not shape_instruction_strokes_visible(instr)) { continue; }
@@ -613,10 +632,12 @@ namespace pdflib
               const bool is_vertical = std::abs(x1 - x0) <= tol;
 
               if(is_horizontal and is_vertical) { return; }
+              if(not is_horizontal and not is_vertical) { return; }
 
-              if((is_horizontal and not horizontal) or
-                 (is_vertical and not vertical) or
-                 (not is_horizontal and not is_vertical))
+              const bool frame_horizontal = swaps_axes ? is_vertical : is_horizontal;
+              const bool frame_vertical = swaps_axes ? is_horizontal : is_vertical;
+              if((frame_horizontal and not horizontal) or
+                 (frame_vertical and not vertical))
                 {
                   return;
                 }
@@ -625,7 +646,7 @@ namespace pdflib
               if(clip_axis_aligned_segment(x0, y0, x1, y1,
                                            instr.get_clip_state(), tol, bbox))
                 {
-                  result.push_back(bbox);
+                  result.push_back(to_page_frame(bbox));
                 }
             };
 
@@ -678,7 +699,7 @@ namespace pdflib
         std::array<double, 4> bbox = {0.0, 0.0, 0.0, 0.0};
         if(shape_visible_bbox(instr, bbox))
           {
-            boxes.push_back(bbox);
+            boxes.push_back(to_page_frame(bbox));
           }
       }
 
@@ -899,6 +920,14 @@ namespace pdflib
       sanitator.sanitize(page_cells, config.page_boundary);
       sanitator.sanitize(page_shapes, config.page_boundary);
       sanitator.sanitize(page_images, config.page_boundary);
+
+      // the same boundary the sanitator subtracted from the cells, read after
+      // rotate_contents() so it is already in the rotated space
+      std::array<double, 4> boundary = (config.page_boundary == "media_box")
+        ? page_dimension.get_media_bbox()
+        : page_dimension.get_crop_bbox();
+      page_frame_origin = {boundary[0], boundary[1]};
+
       timings.add_timing(pdf_timings::KEY_SANITIZE_ORIENTATION, local.get_time());
     }
 
@@ -2071,6 +2100,9 @@ namespace pdflib
 
     int angle = page_dimension.get_angle();
 
+    page_frame_angle = 0;
+    page_frame_delta = {0.0, 0.0};
+
     if((angle%360)==0)
       {
         return;
@@ -2086,11 +2118,29 @@ namespace pdflib
     std::pair<double, double> delta = page_dimension.rotate(angle);
     LOG_S(INFO) << "translation delta: " << delta.first << ", " << delta.second;
 
+    page_frame_angle = angle;
+    page_frame_delta = delta;
+
     page_cells.rotate(angle, delta);
     page_shapes.rotate(angle, delta);
     page_images.rotate(angle, delta);
     page_widgets.rotate(angle, delta);
     page_hyperlinks.rotate(angle, delta);
+  }
+
+  std::array<double, 4> pdf_decoder<PAGE>::to_page_frame(std::array<double, 4> bbox) const
+  {
+    // the rotation page_shapes received in rotate_contents() ...
+    utils::values::transform_bottomleft_bbox_inplace(page_frame_angle,
+                                                     page_frame_delta, bbox);
+
+    // ... followed by the translation the dimension sanitator applied
+    bbox[0] -= page_frame_origin.first;
+    bbox[1] -= page_frame_origin.second;
+    bbox[2] -= page_frame_origin.first;
+    bbox[3] -= page_frame_origin.second;
+
+    return bbox;
   }
 
   bool pdf_decoder<PAGE>::can_reuse_sanitised_cells_for_line_cells(const decode_config& config) const
