@@ -1,3 +1,13 @@
+## [v7.20.0](https://github.com/docling-project/docling-parse/releases/tag/v7.20.0) - 2026-09-15
+
+### Feature
+
+* Add-page-range-to-load ([#350](https://github.com/docling-project/docling-parse/issues/350)) ([`52b5d87`](https://github.com/docling-project/docling-parse/commit/52b5d87af1edba340597c3fb6aba22032cefb761))
+
+### Fix
+
+* Answer shape geometry queries in the frame of the text cells ([#344](https://github.com/docling-project/docling-parse/issues/344)) ([`162201f`](https://github.com/docling-project/docling-parse/commit/162201fbd61ee3a62029932b257f80d6804f5917))
+
 ## [v7.19.1](https://github.com/docling-project/docling-parse/releases/tag/v7.19.1) - 2026-09-11
 
 ### Fix
