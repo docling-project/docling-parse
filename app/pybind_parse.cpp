@@ -1092,13 +1092,15 @@ PYBIND11_MODULE(pdf_parsers, m) {
             const std::string& key,
             const std::string& filename,
             std::optional<std::string>& password,
-            std::optional<std::vector<int>>& page_numbers) -> bool {
-           return self.load_document(key, filename, password, page_numbers);
+            std::optional<std::vector<int>>& page_numbers,
+            std::optional<std::pair<std::int64_t, std::int64_t>>& page_range) -> bool {
+           return self.load_document(key, filename, password, page_numbers, page_range);
          },
          pybind11::arg("key"),
          pybind11::arg("filename"),
          pybind11::arg("password") = pybind11::none(),
          pybind11::arg("page_numbers") = pybind11::none(),
+         pybind11::arg("page_range") = pybind11::none(),
          R"(
     Load a document by key and filename.
 
@@ -1107,6 +1109,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
         filename (str): The path to the document file to load.
         password (str, optional): Optional password for password-protected files.
         page_numbers (Sequence[int], optional): Selected 1-indexed physical pages to schedule.
+        page_range (tuple[int, int], optional): Inclusive 1-indexed physical page range. Its end is clipped to the document.
 
     Returns:
         bool: True if the document was successfully loaded.)")
@@ -1116,13 +1119,15 @@ PYBIND11_MODULE(pdf_parsers, m) {
             const std::string& key,
             pybind11::object bytes_io,
             std::optional<std::string>& password,
-            std::optional<std::vector<int>>& page_numbers) -> bool {
-           return self.load_document_from_bytesio(key, bytes_io, password, page_numbers);
+            std::optional<std::vector<int>>& page_numbers,
+            std::optional<std::pair<std::int64_t, std::int64_t>>& page_range) -> bool {
+           return self.load_document_from_bytesio(key, bytes_io, password, page_numbers, page_range);
          },
          pybind11::arg("key"),
          pybind11::arg("bytes_io"),
          pybind11::arg("password") = pybind11::none(),
          pybind11::arg("page_numbers") = pybind11::none(),
+         pybind11::arg("page_range") = pybind11::none(),
          R"(
     Load a document from a BytesIO-like object.
 
@@ -1131,6 +1136,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
         bytes_io (Any): A BytesIO-like object containing the document data.
         password (str, optional): Optional password for password-protected files.
         page_numbers (Sequence[int], optional): Selected 1-indexed physical pages to schedule.
+        page_range (tuple[int, int], optional): Inclusive 1-indexed physical page range. Its end is clipped to the document.
 
     Returns:
         bool: True if the document was successfully loaded.)")
@@ -1354,26 +1360,30 @@ PYBIND11_MODULE(pdf_parsers, m) {
             const std::string& key,
             const std::string& filename,
             std::optional<std::string>& password,
-            std::optional<std::vector<int>>& page_numbers) -> bool {
-           return self.load_document(key, filename, password, page_numbers);
+            std::optional<std::vector<int>>& page_numbers,
+            std::optional<std::pair<std::int64_t, std::int64_t>>& page_range) -> bool {
+           return self.load_document(key, filename, password, page_numbers, page_range);
          },
          pybind11::arg("key"),
          pybind11::arg("filename"),
          pybind11::arg("password") = pybind11::none(),
-         pybind11::arg("page_numbers") = pybind11::none())
+         pybind11::arg("page_numbers") = pybind11::none(),
+         pybind11::arg("page_range") = pybind11::none())
 
     .def("load_document_from_bytesio",
          [](docling::docling_threaded_renderer& self,
             const std::string& key,
             pybind11::object bytes_io,
             std::optional<std::string>& password,
-            std::optional<std::vector<int>>& page_numbers) -> bool {
-           return self.load_document_from_bytesio(key, bytes_io, password, page_numbers);
+            std::optional<std::vector<int>>& page_numbers,
+            std::optional<std::pair<std::int64_t, std::int64_t>>& page_range) -> bool {
+           return self.load_document_from_bytesio(key, bytes_io, password, page_numbers, page_range);
          },
          pybind11::arg("key"),
          pybind11::arg("bytes_io"),
          pybind11::arg("password") = pybind11::none(),
-         pybind11::arg("page_numbers") = pybind11::none())
+         pybind11::arg("page_numbers") = pybind11::none(),
+         pybind11::arg("page_range") = pybind11::none())
 
     .def("number_of_pages",
          [](docling::docling_threaded_renderer& self, const std::string& key) -> int {
