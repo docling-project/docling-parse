@@ -11,9 +11,11 @@ from io import BytesIO
 
 from docling_parse.pdf_parser import (
     DoclingPdfParser,
+    DoclingThreadedPdfParser,
     PdfMarkedContentRef,
     PdfObjectRef,
     PdfStructureElement,
+    ThreadedPdfParserConfig,
 )
 from tests.pdf_builder import Object, build_pdf, content_stream
 
@@ -238,3 +240,19 @@ def test_layout_bbox_lands_on_its_cells_in_the_cell_frame():
     first = paragraphs[0].bbox
     assert first is not None
     assert (first.l, first.b, first.r, first.t) == (85, 75, 125, 95)
+
+
+def test_threaded_parser_serves_the_same_structure():
+    parser = DoclingThreadedPdfParser(
+        parser_config=ThreadedPdfParserConfig(loglevel="fatal", threads=1)
+    )
+    key = parser.load(BytesIO(_rotated_pdf()))
+    annotations = parser.get_annotations(key)
+    parser.unload(key)
+
+    single = DoclingPdfParser(loglevel="fatal").load(
+        path_or_stream=BytesIO(_rotated_pdf())
+    )
+    assert annotations is not None
+    assert annotations.structure is not None
+    assert annotations.structure == single.get_structure()
