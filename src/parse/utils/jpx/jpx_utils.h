@@ -119,8 +119,15 @@ inline uint8_t clamp_component_to_u8(int value, int precision, bool is_signed)
 
 } // namespace detail
 
+// `reduce` discards that many of the codestream's highest wavelet resolution
+// levels, so the decoded image comes back at 1/2^reduce of its stored size in
+// each direction (OpenJPEG's cp_reduce). The caller is responsible for only
+// asking for a reduction the drawn size can absorb; result.width/height report
+// what was actually produced, which every caller already reads rather than
+// assuming the dictionary's /Width and /Height.
 inline decoded_jpx_result decode_jpx_to_raw_pixels(uint8_t const* data,
-                                                   std::size_t size)
+                                                   std::size_t size,
+                                                   unsigned int reduce = 0)
 {
   decoded_jpx_result result;
 
@@ -144,6 +151,7 @@ inline decoded_jpx_result decode_jpx_to_raw_pixels(uint8_t const* data,
 
   opj_dparameters_t params{};
   opj_set_default_decoder_parameters(&params);
+  params.cp_reduce = reduce;
 
   const auto codec_format =
       detail::has_jp2_signature(data, size) ? OPJ_CODEC_JP2 : OPJ_CODEC_J2K;
@@ -232,6 +240,7 @@ inline decoded_jpx_result decode_jpx_to_raw_pixels(uint8_t const* data,
 
   LOG_S(INFO) << "decode_jpx_to_raw_pixels: decoded "
               << width << "x" << height
+              << " reduce=" << reduce
               << " components=" << numcomps
               << " color_space=" << jpeg::color_space_name(result.color_space)
               << " input_size=" << size;

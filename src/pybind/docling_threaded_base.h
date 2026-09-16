@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <atomic>
 #include <condition_variable>
+#include <cstdint>
 #include <mutex>
 #include <optional>
 #include <queue>
@@ -60,15 +61,19 @@ namespace docling
     bool load_document(std::string key,
                        std::string filename,
                        std::optional<std::string> password,
-                       std::optional<std::vector<int>> page_numbers = std::nullopt);
+                       std::optional<std::vector<int>> page_numbers = std::nullopt,
+                       std::optional<std::pair<std::int64_t, std::int64_t>> page_range = std::nullopt);
 
     bool load_document_from_bytesio(std::string key,
                                     pybind11::object bytes_io,
                                     std::optional<std::string> password,
-                                    std::optional<std::vector<int>> page_numbers = std::nullopt);
+                                    std::optional<std::vector<int>> page_numbers = std::nullopt,
+                                    std::optional<std::pair<std::int64_t, std::int64_t>> page_range = std::nullopt);
 
     int number_of_pages(std::string key) const;
     int scheduled_number_of_pages(std::string key) const;
+
+    nlohmann::json get_annotations(std::string key) const;
 
     bool unload_document(std::string key);
     void unload_all_documents();
@@ -80,9 +85,11 @@ namespace docling
   private:
 
     void set_loglevel_with_label(std::string level);
-    std::vector<int> normalise_page_numbers(const std::string& key,
-                                            int num_pages,
-                                            std::optional<std::vector<int>> page_numbers) const;
+    std::vector<int> normalise_page_selection(
+        const std::string& key,
+        int num_pages,
+        std::optional<std::vector<int>> page_numbers,
+        std::optional<std::pair<std::int64_t, std::int64_t>> page_range) const;
     void validate_unload_state() const;
     void reset_after_completion();
 
@@ -196,7 +203,8 @@ namespace docling
       std::string key,
       std::string filename,
       std::optional<std::string> password,
-      std::optional<std::vector<int>> page_numbers)
+      std::optional<std::vector<int>> page_numbers,
+      std::optional<std::pair<std::int64_t, std::int64_t>> page_range)
   {
     if(started.load())
       {
@@ -238,9 +246,11 @@ namespace docling
 
         try
           {
-            key2scheduled_pages[key] = normalise_page_numbers(key,
-                                                              key2doc.at(key)->get_number_of_pages(),
-                                                              page_numbers);
+            key2scheduled_pages[key] = normalise_page_selection(
+                key,
+                key2doc.at(key)->get_number_of_pages(),
+                page_numbers,
+                page_range);
           }
         catch(const std::exception& exc)
           {
@@ -260,7 +270,8 @@ namespace docling
       std::string key,
       pybind11::object bytes_io,
       std::optional<std::string> password,
-      std::optional<std::vector<int>> page_numbers)
+      std::optional<std::vector<int>> page_numbers,
+      std::optional<std::pair<std::int64_t, std::int64_t>> page_range)
   {
     if(started.load())
       {
@@ -309,9 +320,11 @@ namespace docling
 
     try
       {
-        key2scheduled_pages[key] = normalise_page_numbers(key,
-                                                          key2doc.at(key)->get_number_of_pages(),
-                                                          page_numbers);
+        key2scheduled_pages[key] = normalise_page_selection(
+            key,
+            key2doc.at(key)->get_number_of_pages(),
+            page_numbers,
+            page_range);
       }
     catch(const std::exception& exc)
       {
@@ -332,6 +345,18 @@ namespace docling
       }
 
     return itr->second->get_number_of_pages();
+  }
+
+  template<typename Derived, typename ResultType>
+  nlohmann::json docling_threaded_base<Derived, ResultType>::get_annotations(std::string key) const
+  {
+    auto itr = key2doc.find(key);
+    if(itr == key2doc.end())
+      {
+        throw std::runtime_error("Document key not found: " + key);
+      }
+
+    return itr->second->get_annotations();
   }
 
   template<typename Derived, typename ResultType>
@@ -372,10 +397,11 @@ namespace docling
   }
 
   template<typename Derived, typename ResultType>
-  std::vector<int> docling_threaded_base<Derived, ResultType>::normalise_page_numbers(
+  std::vector<int> docling_threaded_base<Derived, ResultType>::normalise_page_selection(
       const std::string& key,
       int num_pages,
-      std::optional<std::vector<int>> page_numbers) const
+      std::optional<std::vector<int>> page_numbers,
+      std::optional<std::pair<std::int64_t, std::int64_t>> page_range) const
   {
     std::vector<int> scheduled_pages;
 
@@ -385,6 +411,45 @@ namespace docling
         // from it would silently produce an empty task list
         throw std::runtime_error("Invalid page count " + std::to_string(num_pages)
                                  + " for document key " + key);
+      }
+
+    if(page_numbers.has_value() and page_range.has_value())
+      {
+        throw std::runtime_error("page_numbers and page_range are mutually exclusive");
+      }
+
+    if(page_range.has_value())
+      {
+        auto [start_page, end_page] = page_range.value();
+        if(start_page < 1)
+          {
+            throw std::runtime_error("Invalid page range start "
+                                     + std::to_string(start_page)
+                                     + " for document key " + key);
+          }
+        if(end_page < start_page)
+          {
+            throw std::runtime_error("Invalid page range ["
+                                     + std::to_string(start_page) + ", "
+                                     + std::to_string(end_page)
+                                     + "] for document key " + key);
+          }
+
+        std::int64_t clipped_end_page = std::min<std::int64_t>(end_page, num_pages);
+        if(start_page > clipped_end_page)
+          {
+            return scheduled_pages;
+          }
+
+        scheduled_pages.reserve(
+            static_cast<std::size_t>(clipped_end_page - start_page + 1));
+        for(std::int64_t page_number = start_page;
+            page_number <= clipped_end_page;
+            ++page_number)
+          {
+            scheduled_pages.push_back(static_cast<int>(page_number - 1));
+          }
+        return scheduled_pages;
       }
 
     if(not page_numbers.has_value())

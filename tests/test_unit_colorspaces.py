@@ -38,6 +38,23 @@ def _swatch_color(pdf: bytes) -> tuple[int, int, int]:
     return center_color(region_image(render_page(pdf), SWATCH))
 
 
+def test_postscript_resource_preamble_does_not_poison_gray_fill():
+    """Foreign resource directives leave the following PDF operands intact."""
+    pdf = simple_page_pdf(
+        "obj @pgfcolorspaces <<>>\n"
+        "put @resources << /ColorSpace @pgfcolorspaces >>\n"
+        "put @pgfcolorspaces << /pgfprgb [/Pattern /DeviceRGB] >>\n"
+        f"0 g\n{SWATCH_CONTENT_BOX}\n"
+    )
+
+    assert_color_near(
+        _swatch_color(pdf),
+        (0, 0, 0),
+        tolerance=1,
+        what="gray fill after foreign PostScript resource directives",
+    )
+
+
 def test_separation_tint_transform_is_evaluated():
     """A /Separation fill maps its tint through the transform, not around it.
 

@@ -37,9 +37,6 @@ namespace docling
     // keyed by a content hash of the font bytes, not by PDF object ids.
     std::shared_ptr<pdflib::blend2d_embedded_font_cache> embedded_font_cache_;
 
-    // Same sharing/keying for the Type 1 / bare CFF programs that Blend2D
-    // cannot load; FreeType serializes internally on its own mutex.
-    std::shared_ptr<pdflib::freetype_font_cache> freetype_font_cache_;
   };
 
   inline docling_threaded_renderer::docling_threaded_renderer(std::string loglevel,
@@ -53,19 +50,40 @@ namespace docling
                                                                          decode_config),
     render_cfg(render_config),
     font_resolver_(std::make_shared<pdflib::blend2d_font_resolver>()),
-    embedded_font_cache_(std::make_shared<pdflib::blend2d_embedded_font_cache>()),
-    freetype_font_cache_(std::make_shared<pdflib::freetype_font_cache>())
+    embedded_font_cache_(std::make_shared<pdflib::blend2d_embedded_font_cache>())
   {
     font_resolver_->warm();
 
-    // This pipeline always renders, so embedded font programs must be
-    // extracted during page decoding; parse-only pipelines leave this off.
+    // This pipeline always renders, so embedded font programs and image
+    // samples must be extracted during page decoding, whatever the caller
+    // asked for; parse-only pipelines leave both off.
     config.extract_font_programs = true;
+    config.extract_bitmap_pixels = true;
+
+    // Tell the decode side what resolution these samples end up being drawn
+    // at, so an oversampled scan is decoded down instead of decoded in full
+    // and then minified by the rasteriser.
+    //
+    // Only the scale form states a resolution that holds for every page.
+    // canvas_width/canvas_height fix a pixel count instead, so what that means
+    // per PDF unit depends on each page's own size, which is not known here;
+    // those leave the hint at its "unknown" default and every image decodes at
+    // full resolution, exactly as before.
+    if(render_cfg.scale > 0.0f)
+      {
+        config.bitmap_target_pixels_per_unit = render_cfg.scale;
+      }
   }
 
   inline void docling_threaded_renderer::worker_loop()
   {
     using clock_type = std::chrono::steady_clock;
+    // FT_Face objects mutate their selected size and charmap while building an
+    // outline. Keep one cache per worker so those operations do not serialize
+    // all render threads; it is still reused across this worker's pages.
+    auto freetype_font_cache = std::make_shared<pdflib::freetype_font_cache>();
+    auto glyph_bbox_cache = std::make_shared<pdflib::glyph_bbox_cache>(
+      render_cfg.glyph_bbox_cache_capacity);
 
     while(true)
       {
@@ -132,20 +150,38 @@ namespace docling
                   }
 
                 stage_start = clock_type::now();
-                pdflib::renderer<pdflib::BLEND2D> rnd(render_cfg,
-                                                      font_resolver_,
-                                                      embedded_font_cache_,
-                                                      freetype_font_cache_);
-                page_decoder->get_instructions().iterate_over_instructions(rnd);
-                result.timings.render_page_s
-                  = std::chrono::duration<double>(clock_type::now() - stage_start).count();
+                {
+                  pdflib::renderer<pdflib::BLEND2D> rnd(render_cfg,
+                                                        font_resolver_,
+                                                        embedded_font_cache_,
+                                                        freetype_font_cache,
+                                                        glyph_bbox_cache);
+                  page_decoder->get_instructions().iterate_over_instructions(rnd);
+                  result.timings.render_page_s
+                    = std::chrono::duration<double>(clock_type::now() - stage_start).count();
+
+                  result.success = true;
+                  result.page_decoder = page_decoder;
+                  result.image_data   = rnd.get_canvas();
+                  result.image_shape  = rnd.get_shape();
+
+                  // Fold the rasterisation timings into the page's own, so that
+                  // get_timings() reports rendering next to decoding and
+                  // run_performance_analysis.py can break the render stage down
+                  // the way it already breaks decode_page down. get_canvas()
+                  // is timed too, hence the merge after it.
+                  page_decoder->get_timings().merge(rnd.get_timings());
+                }
+
+                // The parent of the render_page.* children, so the analysis
+                // has a denominator. Covers canvas extraction as well, which
+                // render_page_s (the reported stage) deliberately does not.
+                page_decoder->get_timings().add_timing(
+                  pdflib::pdf_timings::KEY_RENDER_PAGE,
+                  std::chrono::duration<double>(clock_type::now() - stage_start).count());
 
                 result.timings.total_s
                   = std::chrono::duration<double>(clock_type::now() - total_start).count();
-                result.success = true;
-                result.page_decoder = page_decoder;
-                result.image_data   = rnd.get_canvas();
-                result.image_shape  = rnd.get_shape();
               }
           }
         catch(const std::exception& exc)

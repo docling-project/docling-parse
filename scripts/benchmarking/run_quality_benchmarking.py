@@ -43,9 +43,8 @@ if str(REPO_ROOT) not in sys.path:
 
 from PIL import Image
 from tabulate import tabulate
-from tqdm import tqdm
 
-from _common import ensure_parent_dir, safe_name
+from _common import ProgressBar, ensure_parent_dir, safe_name
 from run_performance_benchmarking import (
     apply_max_pages,
     find_pdfs,
@@ -1032,15 +1031,12 @@ def main(argv: List[str]) -> int:
 
     ensure_parent_dir(progress_log_path)
     with (
-        tqdm(total=len(page_jobs), desc="quality", unit="page") as progress,
+        ProgressBar(total=len(page_jobs), desc="quality", unit="page") as progress,
         progress_log_path.open("a", encoding="utf-8") as log_handle,
     ):
         for index, (job, result) in enumerate(
             zip(page_jobs, imap_jobs(run_page_job, page_jobs, args.workers)), start=1
         ):
-            progress.set_postfix_str(
-                f"{job.pdf_path.name}@{job.page_number}", refresh=False
-            )
             write_progress_log(
                 log_handle,
                 phase=args.compare,

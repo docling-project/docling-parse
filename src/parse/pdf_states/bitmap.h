@@ -4,6 +4,7 @@
 #define PDF_BITMAP_STATE_H
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 
 #include <parse/qpdf/stream_filters.h>
@@ -13,6 +14,145 @@
 
 namespace pdflib
 {
+  namespace detail
+  {
+    // Where Do_image() spends its time. pdf_state<BITMAP> has no pdf_timings
+    // of its own and threading one through its constructor would touch every
+    // graphics-state copy, so the phases accumulate here and
+    // pdf_decoder<STREAM>::do_image() reads the delta across one image.
+    // thread_local, so render workers do not share a counter; read as a
+    // before/after delta, so nesting or another caller cannot corrupt it.
+    struct image_phase_seconds
+    {
+      double samples_jpeg = 0.0;  // DCTDecode
+      double samples_jpx = 0.0;   // JPXDecode
+      double samples_jbig2 = 0.0; // JBIG2Decode
+      double samples_ccitt = 0.0; // CCITTFaxDecode
+      double indexed = 0.0;       // /Indexed palette expansion
+      double decode_array = 0.0;  // /Decode array application
+      double soft_mask = 0.0;     // alpha compositing and colour-plane resampling
+    };
+
+    inline image_phase_seconds& current_image_phases()
+    {
+      thread_local image_phase_seconds phases;
+      return phases;
+    }
+
+    // Adds its lifetime to one of the counters above, *excluding* the time
+    // taken by any phase timer nested inside it. The /Decode application runs
+    // inside the codec branches, so without this the phases overlap and sum to
+    // more than the parent they are meant to break down.
+    class image_phase_timer
+    {
+    public:
+
+      explicit image_phase_timer(double image_phase_seconds::*slot):
+        slot_(slot),
+        beg_(std::chrono::steady_clock::now()),
+        child_seconds_(0.0),
+        enclosing_(active())
+      {
+        active() = this;
+      }
+
+      ~image_phase_timer()
+      {
+        const std::chrono::duration<double> elapsed =
+          std::chrono::steady_clock::now() - beg_;
+
+        active() = enclosing_;
+        current_image_phases().*slot_ += elapsed.count() - child_seconds_;
+
+        if(enclosing_ != nullptr)
+          {
+            enclosing_->child_seconds_ += elapsed.count();
+          }
+      }
+
+      image_phase_timer(const image_phase_timer&) = delete;
+      image_phase_timer& operator=(const image_phase_timer&) = delete;
+
+    private:
+
+      static image_phase_timer*& active()
+      {
+        thread_local image_phase_timer* innermost = nullptr;
+        return innermost;
+      }
+
+      double image_phase_seconds::*slot_;
+      std::chrono::steady_clock::time_point beg_;
+      double child_seconds_;
+      image_phase_timer* enclosing_;
+    };
+
+    // How far a stored image may be decoded down before it stops covering the
+    // area it is drawn into. Returns the exponent r of a 1/2^r reduction, 0
+    // meaning "decode at full resolution".
+    //
+    // The bound is one stored sample per device pixel: a level is only taken
+    // when the image is still at least as large as the region it is painted
+    // into, so the rasteriser goes on minifying and is never asked to magnify
+    // samples it used to have. A 600 dpi A4 scan drawn full-page onto a scale-2
+    // canvas has ~8x the samples it needs in each direction and yields r = 3;
+    // an image drawn at or above its stored resolution yields 0 and decodes
+    // exactly as it does today.
+    //
+    // `drawn_*_units` is the axis-aligned extent of the drawn quad in PDF
+    // units. For a rotated or sheared image that overestimates the extent
+    // along each axis, so the reduction chosen is conservative.
+    inline int codec_reduction_shift(double drawn_width_units,
+                                     double drawn_height_units,
+                                     int source_width,
+                                     int source_height,
+                                     double target_pixels_per_unit)
+    {
+      // libjpeg implements 1/2, 1/4 and 1/8 as a reduced inverse DCT; beyond
+      // that it resamples, which is not obviously cheaper than letting the
+      // rasteriser do it. OpenJPEG has no such limit, but the same cap keeps
+      // the two codecs answering the same question.
+      constexpr int MAX_SHIFT = 3;
+
+      // Small images are never worth the fidelity risk: the whole point is the
+      // multi-megapixel scans, and a reduction that leaves a thumbnail with a
+      // few dozen samples per side is where a resampling artefact would show.
+      constexpr int MIN_SOURCE_EXTENT = 64;
+
+      if(target_pixels_per_unit <= 0.0
+         or source_width <= 0 or source_height <= 0
+         or drawn_width_units <= 0.0 or drawn_height_units <= 0.0)
+        {
+          return 0;
+        }
+
+      const double target_width = drawn_width_units * target_pixels_per_unit;
+      const double target_height = drawn_height_units * target_pixels_per_unit;
+
+      int shift = 0;
+      while(shift < MAX_SHIFT)
+        {
+          const int next_width = source_width >> (shift + 1);
+          const int next_height = source_height >> (shift + 1);
+
+          if(next_width < MIN_SOURCE_EXTENT or next_height < MIN_SOURCE_EXTENT)
+            {
+              break;
+            }
+
+          if(static_cast<double>(next_width) < target_width
+             or static_cast<double>(next_height) < target_height)
+            {
+              break;
+            }
+
+          ++shift;
+        }
+
+      return shift;
+    }
+  }
+
 
   template<>
   class pdf_state<BITMAP>
@@ -433,6 +573,34 @@ namespace pdflib
     cmyk_convention cmyk_conv = CMYK_CONVENTION_UNKNOWN;
 
     int channels = 0;
+
+    // An oversampled image is decoded down to the resolution it is drawn at,
+    // when the codec can do that natively. Three cases are held back:
+    //
+    //  - /Indexed images, whose bytes are palette indices rather than colour;
+    //    a codec resampling them would interpolate between index values, which
+    //    means nothing.
+    //  - stencil masks (/ImageMask), which are bilevel and go through CCITT or
+    //    JBIG2 anyway, neither of which decodes at a reduced resolution.
+    //  - images carrying a soft mask or /Mask, whose alpha plane is resolved on
+    //    its own grid; shrinking the colour plane would only make the resampling
+    //    at the end of this function pull it straight back up again.
+    //
+    // Only /DCTDecode and /JPXDecode act on this; the other branches ignore it.
+    const bool may_reduce_decode =
+      config.bitmap_target_pixels_per_unit > 0.0
+      and not image.soft_mask_data
+      and not image.image_mask
+      and not (image.indexed_palette and not image.indexed_palette->empty());
+
+    const int decode_reduction_shift =
+      may_reduce_decode
+      ? detail::codec_reduction_shift(image.x1 - image.x0,
+                                      image.y1 - image.y0,
+                                      image.image_width,
+                                      image.image_height,
+                                      config.bitmap_target_pixels_per_unit)
+      : 0;
     auto has_default_adobe_cmyk_decode = [&](std::vector<double> const& decode_array) -> bool
       {
         static constexpr double expected_decode[8] = {
@@ -460,6 +628,8 @@ namespace pdflib
             return;
           }
 
+        detail::image_phase_timer phase(&detail::image_phase_seconds::decode_array);
+
         const int pair_count = static_cast<int>(image.decode_array.size() / 2);
         for(size_t i = 0; i < dst->size(); ++i)
           {
@@ -480,6 +650,8 @@ namespace pdflib
                                       int w,
                                       int h) -> bool
       {
+        detail::image_phase_timer phase(&detail::image_phase_seconds::indexed);
+
         if(ncomps <= 0 or not image.indexed_palette or image.indexed_palette->empty() or not indices)
           {
             return false;
@@ -927,6 +1099,7 @@ namespace pdflib
             params.height      = image.image_height;
             params.decode      = image.decode_array;
             params.has_decode  = image.decode_present and not image.decode_array.empty();
+            params.scale_denom = 1 << decode_reduction_shift;
 
             LOG_S(INFO) << "bitmap: JPEG fallback parameters"
                         << " xobject_key=" << image.xobject_key
@@ -936,6 +1109,7 @@ namespace pdflib
                         << " size=" << params.width << "x" << params.height
                         << " decode_len=" << params.decode.size();
 
+            detail::image_phase_timer codec_phase(&detail::image_phase_seconds::samples_jpeg);
             auto decoded = jpeg::decode_pdf_jpeg_stream_to_raw_pixels(
                 reinterpret_cast<unsigned char const*>(codec_data->getBuffer()),
                 static_cast<std::size_t>(codec_data->getSize()),
@@ -1030,9 +1204,11 @@ namespace pdflib
                         << "decoding JPEG2000 via OpenJPEG "
                         << "for xobject_key=" << image.xobject_key;
 
+            detail::image_phase_timer codec_phase(&detail::image_phase_seconds::samples_jpx);
             auto decoded = jpx::decode_jpx_to_raw_pixels(
                 reinterpret_cast<uint8_t const*>(codec_data->getBuffer()),
-                static_cast<std::size_t>(codec_data->getSize()));
+                static_cast<std::size_t>(codec_data->getSize()),
+                static_cast<unsigned int>(decode_reduction_shift));
 
             if(not decoded.empty())
               {
@@ -1161,6 +1337,7 @@ namespace pdflib
                         << " bpc=" << image.bits_per_component
                         << " image_mask=" << (image.image_mask ? "true" : "false");
 
+            detail::image_phase_timer codec_phase(&detail::image_phase_seconds::samples_jbig2);
             auto bits = jbig2_decode(
                 {page_buf,    page_size},
                 {globals_buf, globals_size},
@@ -1222,6 +1399,7 @@ namespace pdflib
             const int w = image.image_width;
             const int h = image.image_height;
 
+            detail::image_phase_timer codec_phase(&detail::image_phase_seconds::samples_ccitt);
             auto decoded = ccitt::decode(
                 reinterpret_cast<const uint8_t*>(codec_data->getBuffer()),
                 static_cast<size_t>(codec_data->getSize()),
@@ -1397,6 +1575,8 @@ namespace pdflib
        and image.soft_mask_width > pixel_shape[1]
        and image.soft_mask_height > pixel_shape[0])
       {
+        detail::image_phase_timer phase(&detail::image_phase_seconds::soft_mask);
+
         const int src_h = pixel_shape[0];
         const int src_w = pixel_shape[1];
         const int ncomp = pixel_shape[2];

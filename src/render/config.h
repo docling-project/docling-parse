@@ -4,6 +4,7 @@
 #define PDF_RENDER_CONFIG_H
 
 #include <array>
+#include <cstddef>
 #include <cmath>
 #include <stdexcept>
 #include <utility>
@@ -87,6 +88,11 @@ namespace pdflib
     // the hardcoded fallback font is used instead.  Range [0, 1]; lower values
     // accept weaker matches, higher values are more strict.
     float font_similarity_cutoff = 0.75f;
+
+    // Maximum glyph outline bounding boxes cached by each render worker. The
+    // cache is worker-local, so this is not multiplied by the number of pages.
+    // Zero disables caching.
+    std::size_t glyph_bbox_cache_capacity = 65536;
 
     // Target render scale in multiples of the PDF page size (72 ppi baseline).
     // -1 means "disabled". Mutually exclusive with canvas_width/canvas_height.

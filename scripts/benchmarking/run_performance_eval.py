@@ -13,10 +13,13 @@ so the plots sit beside the report they belong to:
   1) `hist_stacked.png` --- per-page time histograms, one panel per series on a
      shared log-log axis
   2) `hist_pages_per_document.png` --- corpus shape
-  3) `scaling_<task>.png` --- docling-parse throughput against thread count
-  4) `hex_loglog_*.png` --- per-page time of docling-parse at one thread
+  3) `scaling_<task>_logy.png` and `scaling_<task>_linear.png` ---
+     docling-parse throughput against thread count
+  4) `parallel_efficiency_<task>.png` --- Docling parallel efficiency by
+     thread count
+  5) `hex_loglog_*.png` --- per-page time of docling-parse at one thread
      against each other package, log-log, one plot per package and task
-  5) a per-document statistics table and CSV
+  6) a per-document statistics table and CSV
 
 Usage examples:
   python scripts/benchmarking/run_performance_eval.py scripts/benchmarking/results/pages.csv
@@ -396,38 +399,68 @@ def plot_thread_scaling(
         if len(threads) < 2:
             continue
 
+        for yscale, suffix in (("log", "logy"), ("linear", "linear")):
+            fig, ax = plt.subplots(figsize=(8, 5))
+            (line_time,) = ax.plot(
+                threads,
+                sec_per_page,
+                "-o",
+                color="black",
+                label="total time / total pages",
+            )
+            if yscale == "log":
+                ax.set_yscale("log")
+            ax.set_xlabel("docling-parse threads")
+            ax.set_ylabel(
+                f"Seconds per page{' (log)' if yscale == 'log' else ''}",
+                color="black",
+            )
+            ax.tick_params(axis="y", labelcolor="black")
+            ax.set_xticks(threads)
+            ax.set_xticklabels([str(t) for t in threads])
+            ax.grid(True, alpha=0.3, which="both")
+
+            ax_rate = ax.twinx()
+            (line_rate,) = ax_rate.plot(
+                threads,
+                pages_per_sec,
+                "s-",
+                color="red",
+                label="total pages / total time",
+            )
+            if yscale == "log":
+                ax_rate.set_yscale("log")
+            ax_rate.set_ylabel(
+                f"Pages per second{' (log)' if yscale == 'log' else ''}",
+                color="red",
+            )
+            ax_rate.tick_params(axis="y", labelcolor="red")
+
+            ax.set_title(f"Thread scaling — docling-parse, {task}")
+            ax.legend(handles=[line_time, line_rate], loc="center right")
+            fig.tight_layout()
+            fig.savefig(viz_dir / f"scaling_{safe_name(task)}_{suffix}.png", dpi=150)
+            plt.close(fig)
+
+        if 1 not in threads:
+            print(f"  no docling-parse (1t) series for {task}; no efficiency plot")
+            continue
+        baseline = sec_per_page[threads.index(1)]
+        efficiency = [
+            100.0 * baseline / (count * elapsed)
+            for count, elapsed in zip(threads, sec_per_page)
+        ]
         fig, ax = plt.subplots(figsize=(8, 5))
-        (line_time,) = ax.plot(
-            threads,
-            sec_per_page,
-            "-o",
-            color="black",
-            label="total time / total pages",
-        )
-        ax.set_yscale("log")
+        ax.plot(threads, efficiency, "-o", color="black")
+        ax.axhline(100.0, color="gray", linestyle="--", linewidth=1)
         ax.set_xlabel("docling-parse threads")
-        ax.set_ylabel("Seconds per page (log)", color="black")
-        ax.tick_params(axis="y", labelcolor="black")
+        ax.set_ylabel("Parallel efficiency (%)")
+        ax.set_title(f"Parallel efficiency — docling-parse, {task}")
         ax.set_xticks(threads)
-        ax.set_xticklabels([str(t) for t in threads])
-        ax.grid(True, alpha=0.3, which="both")
-
-        ax_rate = ax.twinx()
-        (line_rate,) = ax_rate.plot(
-            threads,
-            pages_per_sec,
-            "s-",
-            color="red",
-            label="total pages / total time",
-        )
-        ax_rate.set_yscale("log")
-        ax_rate.set_ylabel("Pages per second (log)", color="red")
-        ax_rate.tick_params(axis="y", labelcolor="red")
-
-        ax.set_title(f"Thread scaling — docling-parse, {task}")
-        ax.legend(handles=[line_time, line_rate], loc="center right")
+        ax.set_ylim(bottom=0, top=max(105.0, max(efficiency) * 1.1))
+        ax.grid(True, alpha=0.3)
         fig.tight_layout()
-        fig.savefig(viz_dir / f"scaling_{safe_name(task)}.png", dpi=150)
+        fig.savefig(viz_dir / f"parallel_efficiency_{safe_name(task)}.png", dpi=150)
         plt.close(fig)
 
 

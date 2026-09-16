@@ -57,7 +57,13 @@ Important flags:
 - `--scale`: render scale (1.0 = 72 dpi)
 - `--other`: semicolon-separated single-threaded reference backends
 - `--bytesio`: load PDFs from memory instead of by path (docling-parse only)
-- `--output-dir`: where the outputs land (default `./scratch`)
+- `--only-threaded`: run nothing but `DoclingThreadedPdfParser` at each
+  `--threads` value; skips the sequential `DoclingPdfParser` baseline and every
+  3rd-party backend (overrides `--other`), and narrows `--compare` to
+  docling-parse. The `vs <baseline>` columns disappear with them
+- `--output-dir`: where the outputs land (default
+  `./scratch-performance-benchmarks-YYYY-MM-DD-HH-MM`, computed from the
+  current datetime, so a before/after pair of runs never collides)
 
 The config split is exposed as:
 
@@ -128,9 +134,15 @@ Flags:
 
 - `--compare [list]`: bare flag uses `docling-parse;pypdfium2`; otherwise a
   semicolon-separated list, or `all`
-- `--output-dir`: where the report and CSV land (default `./scratch`)
+- `--output-dir`: where the report and CSV land (default
+  `./scratch-performance-benchmarks-YYYY-MM-DD-HH-MM`)
 
 ## Outputs
+
+The threaded rows also carry an `efficiency` column: `vs threaded(1)` divided
+by the thread count, i.e. the fraction of a perfect linear speedup that thread
+count reaches. It is blank for the single-threaded reference backends, where it
+has no meaning.
 
 You only ever name a directory. Both files are named
 `<cpu>_<dataset>_<mode>`, derived from the machine and the run, so results

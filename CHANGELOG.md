@@ -1,3 +1,37 @@
+## [v7.20.0](https://github.com/docling-project/docling-parse/releases/tag/v7.20.0) - 2026-09-15
+
+### Feature
+
+* Add-page-range-to-load ([#350](https://github.com/docling-project/docling-parse/issues/350)) ([`52b5d87`](https://github.com/docling-project/docling-parse/commit/52b5d87af1edba340597c3fb6aba22032cefb761))
+
+### Fix
+
+* Answer shape geometry queries in the frame of the text cells ([#344](https://github.com/docling-project/docling-parse/issues/344)) ([`162201f`](https://github.com/docling-project/docling-parse/commit/162201fbd61ee3a62029932b257f80d6804f5917))
+
+## [v7.19.1](https://github.com/docling-project/docling-parse/releases/tag/v7.19.1) - 2026-09-11
+
+### Fix
+
+* Stray PostScript resource directives no longer poison the next colour operator ([#347](https://github.com/docling-project/docling-parse/issues/347)) ([`38bf252`](https://github.com/docling-project/docling-parse/commit/38bf25248fd1948c6d9d4dac67540cd463d2000d))
+
+## [v7.19.0](https://github.com/docling-project/docling-parse/releases/tag/v7.19.0) - 2026-09-10
+
+### Feature
+
+* Adding static page-count methods ([#346](https://github.com/docling-project/docling-parse/issues/346)) ([`b36d823`](https://github.com/docling-project/docling-parse/commit/b36d8238cc7bb0bf0249d09b8b1999857c489fe7))
+
+## [v7.18.0](https://github.com/docling-project/docling-parse/releases/tag/v7.18.0) - 2026-09-08
+
+### Feature
+
+* Resolve-bookmarks-using-page-aware-PDF-outlines ([#341](https://github.com/docling-project/docling-parse/issues/341)) ([`e6b04ca`](https://github.com/docling-project/docling-parse/commit/e6b04cab04f3d29ffd86ceb75b0d2a5548f96c97))
+
+## [v7.17.0](https://github.com/docling-project/docling-parse/releases/tag/v7.17.0) - 2026-09-02
+
+### Feature
+
+* Optimization of the parse/render with up to 3.84× speedup ([#333](https://github.com/docling-project/docling-parse/issues/333)) ([`0d9cac5`](https://github.com/docling-project/docling-parse/commit/0d9cac5807ee69683eead658273cfb1fdca8dc3b))
+
 ## [v7.16.0](https://github.com/docling-project/docling-parse/releases/tag/v7.16.0) - 2026-08-25
 
 ### Feature

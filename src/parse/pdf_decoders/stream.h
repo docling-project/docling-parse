@@ -522,12 +522,34 @@ namespace pdflib
 
     const pdf_resource<PAGE_XOBJECT_IMAGE>& xobj = page_xobjects->get_image(xobj_name);
 
+    // Read the image phase counters as a delta across this one image, so that
+    // nesting or another caller cannot leak into the numbers. See
+    // detail::current_image_phases() in pdf_states/bitmap.h.
+    const detail::image_phase_seconds before = detail::current_image_phases();
+
     utils::timer do_image_timer;
     current_bitmap_state().Do_image(xobj_name,
                                     xobj,
                                     current_shape_state().get_clip_state());
     double do_image_seconds = do_image_timer.get_time();
+
+    const detail::image_phase_seconds after = detail::current_image_phases();
+
     timings.add_timing(pdf_timings::KEY_DO_IMAGE_TOTAL, do_image_seconds);
+    timings.add_timing(pdf_timings::KEY_DO_IMAGE_JPEG,
+                       after.samples_jpeg - before.samples_jpeg);
+    timings.add_timing(pdf_timings::KEY_DO_IMAGE_JPX,
+                       after.samples_jpx - before.samples_jpx);
+    timings.add_timing(pdf_timings::KEY_DO_IMAGE_JBIG2,
+                       after.samples_jbig2 - before.samples_jbig2);
+    timings.add_timing(pdf_timings::KEY_DO_IMAGE_CCITT,
+                       after.samples_ccitt - before.samples_ccitt);
+    timings.add_timing(pdf_timings::KEY_DO_IMAGE_INDEXED,
+                       after.indexed - before.indexed);
+    timings.add_timing(pdf_timings::KEY_DO_IMAGE_DECODE_ARRAY,
+                       after.decode_array - before.decode_array);
+    timings.add_timing(pdf_timings::KEY_DO_IMAGE_SOFT_MASK,
+                       after.soft_mask - before.soft_mask);
     timings.note_attributed(do_image_seconds);
   }
 

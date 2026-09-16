@@ -84,6 +84,17 @@ namespace pdflib
     // Image xobject drawing/extraction (do_image -> Do_image)
     static const std::string KEY_DO_IMAGE_TOTAL;
 
+    // Phases inside Do_image. Accumulated through a thread-local counter in
+    // pdf_state<BITMAP> and read back by pdf_decoder<STREAM>::do_image, since
+    // the bitmap state has no timings of its own.
+    static const std::string KEY_DO_IMAGE_JPEG;
+    static const std::string KEY_DO_IMAGE_JPX;
+    static const std::string KEY_DO_IMAGE_JBIG2;
+    static const std::string KEY_DO_IMAGE_CCITT;
+    static const std::string KEY_DO_IMAGE_INDEXED;
+    static const std::string KEY_DO_IMAGE_DECODE_ARRAY;
+    static const std::string KEY_DO_IMAGE_SOFT_MASK;
+
     // Top-level page content-stream tokenization (decode_contents -> decode)
     static const std::string KEY_CONTENT_DECODE_TOTAL;
 
@@ -110,6 +121,21 @@ namespace pdflib
     static const std::string PREFIX_DECODE_GRPH;
     static const std::string PREFIX_DECODING_PAGE;
     static const std::string PREFIX_DECODE_PAGE;
+
+    // Rendering timing keys. The renderer keeps its own pdf_timings and the
+    // threaded pipeline merges it into the page's, so a render run reports
+    // rasterisation next to decoding instead of leaving it unaccounted.
+    static const std::string KEY_RENDER_PAGE;
+    static const std::string KEY_RENDER_SET_SIZE;
+    static const std::string KEY_RENDER_TEXT;
+    static const std::string KEY_RENDER_TEXT_GLYPH_METRICS;
+    static const std::string KEY_RENDER_TEXT_DRAW;
+    static const std::string KEY_RENDER_TEXT_FONT_RESOLVE;
+    static const std::string KEY_RENDER_BITMAP;
+    static const std::string KEY_RENDER_SHAPE;
+    static const std::string KEY_RENDER_SHADING;
+    static const std::string KEY_RENDER_WIDGET;
+    static const std::string KEY_RENDER_GET_CANVAS;
 
     // CMap parsing timing keys
     static const std::string KEY_CMAP_PARSE_TOTAL;
@@ -464,6 +490,26 @@ namespace pdflib
   const std::string pdf_timings::KEY_SANITIZE_CELLS_REMOVE_DUPLICATE_CELLS = "sanitize_cells.remove_duplicate_cells";
   const std::string pdf_timings::KEY_SANITIZE_CELLS_SANITIZE_TEXT = "sanitize_cells.sanitize_text";
 
+  const std::string pdf_timings::KEY_DO_IMAGE_JPEG = "do_image_total.jpeg";
+  const std::string pdf_timings::KEY_DO_IMAGE_JPX = "do_image_total.jpx";
+  const std::string pdf_timings::KEY_DO_IMAGE_JBIG2 = "do_image_total.jbig2";
+  const std::string pdf_timings::KEY_DO_IMAGE_CCITT = "do_image_total.ccitt";
+  const std::string pdf_timings::KEY_DO_IMAGE_INDEXED = "do_image_total.indexed";
+  const std::string pdf_timings::KEY_DO_IMAGE_DECODE_ARRAY = "do_image_total.decode_array";
+  const std::string pdf_timings::KEY_DO_IMAGE_SOFT_MASK = "do_image_total.soft_mask";
+
+  const std::string pdf_timings::KEY_RENDER_PAGE = "render_page";
+  const std::string pdf_timings::KEY_RENDER_SET_SIZE = "render_page.set_size";
+  const std::string pdf_timings::KEY_RENDER_TEXT = "render_page.text";
+  const std::string pdf_timings::KEY_RENDER_TEXT_GLYPH_METRICS = "render_page.text.glyph_metrics";
+  const std::string pdf_timings::KEY_RENDER_TEXT_DRAW = "render_page.text.draw";
+  const std::string pdf_timings::KEY_RENDER_TEXT_FONT_RESOLVE = "render_page.text.font_resolve";
+  const std::string pdf_timings::KEY_RENDER_BITMAP = "render_page.bitmap";
+  const std::string pdf_timings::KEY_RENDER_SHAPE = "render_page.shape";
+  const std::string pdf_timings::KEY_RENDER_SHADING = "render_page.shading";
+  const std::string pdf_timings::KEY_RENDER_WIDGET = "render_page.widget";
+  const std::string pdf_timings::KEY_RENDER_GET_CANVAS = "render_page.get_canvas";
+
   const std::string pdf_timings::KEY_PROCESS_DOCUMENT_FROM_FILE = "process_document_from_file";
   const std::string pdf_timings::KEY_PROCESS_DOCUMENT_FROM_BYTESIO = "process_document_from_bytesio";
   const std::string pdf_timings::KEY_QPDF_PROCESS = "qpdf_process";
@@ -487,6 +533,24 @@ namespace pdflib
   const std::unordered_set<std::string>& pdf_timings::get_static_keys()
   {
     static std::unordered_set<std::string> static_keys = {
+      KEY_DO_IMAGE_JPEG,
+      KEY_DO_IMAGE_JPX,
+      KEY_DO_IMAGE_JBIG2,
+      KEY_DO_IMAGE_CCITT,
+      KEY_DO_IMAGE_INDEXED,
+      KEY_DO_IMAGE_DECODE_ARRAY,
+      KEY_DO_IMAGE_SOFT_MASK,
+      KEY_RENDER_PAGE,
+      KEY_RENDER_SET_SIZE,
+      KEY_RENDER_TEXT,
+      KEY_RENDER_TEXT_GLYPH_METRICS,
+      KEY_RENDER_TEXT_DRAW,
+      KEY_RENDER_TEXT_FONT_RESOLVE,
+      KEY_RENDER_BITMAP,
+      KEY_RENDER_SHAPE,
+      KEY_RENDER_SHADING,
+      KEY_RENDER_WIDGET,
+      KEY_RENDER_GET_CANVAS,
       KEY_DECODE_PAGE,
       KEY_DECODE_DIMENSIONS,
       KEY_DECODE_RESOURCES,
@@ -599,6 +663,27 @@ namespace pdflib
       {KEY_SANITISE_CONTENTS,              KEY_DECODE_PAGE},
       {KEY_SANITIZE_CELLS_REMOVE_DUPLICATE_CELLS, KEY_SANITIZE_CELLS},
       {KEY_SANITIZE_CELLS_SANITIZE_TEXT,   KEY_SANITIZE_CELLS},
+
+      {KEY_DO_IMAGE_JPEG,                  KEY_DO_IMAGE_TOTAL},
+      {KEY_DO_IMAGE_JPX,                   KEY_DO_IMAGE_TOTAL},
+      {KEY_DO_IMAGE_JBIG2,                 KEY_DO_IMAGE_TOTAL},
+      {KEY_DO_IMAGE_CCITT,                 KEY_DO_IMAGE_TOTAL},
+      {KEY_DO_IMAGE_INDEXED,               KEY_DO_IMAGE_TOTAL},
+      {KEY_DO_IMAGE_DECODE_ARRAY,          KEY_DO_IMAGE_TOTAL},
+      {KEY_DO_IMAGE_SOFT_MASK,             KEY_DO_IMAGE_TOTAL},
+
+      // --- rendering ---
+      {KEY_RENDER_PAGE,                    ""},
+      {KEY_RENDER_SET_SIZE,                KEY_RENDER_PAGE},
+      {KEY_RENDER_TEXT,                    KEY_RENDER_PAGE},
+      {KEY_RENDER_BITMAP,                  KEY_RENDER_PAGE},
+      {KEY_RENDER_SHAPE,                   KEY_RENDER_PAGE},
+      {KEY_RENDER_SHADING,                 KEY_RENDER_PAGE},
+      {KEY_RENDER_WIDGET,                  KEY_RENDER_PAGE},
+      {KEY_RENDER_GET_CANVAS,              KEY_RENDER_PAGE},
+      {KEY_RENDER_TEXT_FONT_RESOLVE,       KEY_RENDER_TEXT},
+      {KEY_RENDER_TEXT_GLYPH_METRICS,      KEY_RENDER_TEXT},
+      {KEY_RENDER_TEXT_DRAW,               KEY_RENDER_TEXT},
 
       // --- decode_contents sub-timings ---
       {KEY_CONTENT_DECODE_TOTAL,           KEY_DECODE_CONTENTS},
@@ -820,6 +905,23 @@ namespace pdflib
     return ss.str();
   }
 
+}
+
+namespace utils
+{
+  inline scoped_timer::scoped_timer(pdflib::pdf_timings& timings,
+                                    const std::string& key):
+    timings_(timings),
+    key_(key),
+    beg_(std::chrono::steady_clock::now())
+  {}
+
+  inline scoped_timer::~scoped_timer()
+  {
+    const std::chrono::duration<double> elapsed =
+      std::chrono::steady_clock::now() - beg_;
+    timings_.add_timing(key_, elapsed.count());
+  }
 }
 
 #endif

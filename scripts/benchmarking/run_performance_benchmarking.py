@@ -3,43 +3,43 @@
 Thread-scaling benchmark for docling-parse.
 
 Runs DoclingThreadedPdfParser at increasing thread counts and prints a
-scaling table.  Three modes are supported:
+scaling table.  Five modes are supported:
 
-  parse   — decode-only (render_config=None); always includes a
-            single-threaded DoclingPdfParser baseline.
-  render  — decode + rasterise (RenderConfig.scale=...).
-  both    — runs both of the above and prints two tables.
+  parse-without-bitmap  — decode-only (render_config=None); always includes a
+                          single-threaded DoclingPdfParser baseline and sets
+                          include_bitmap_bytes=False.
+  parse-with-bitmap     — decode-only (render_config=None); always includes a
+                          single-threaded DoclingPdfParser baseline and sets
+                          include_bitmap_bytes=True.
+  render                — decode + rasterise (RenderConfig.scale=...).
+  default               — runs parse-without-bitmap and render.
+  all                   — runs both parse variants plus render.
 
-Third-party single-threaded backends (selected via --other) are run as
-additional baselines, in both parse and render modes.  Supported names:
-  - pypdfium2  (default)
-  - pymupdf
-
-Passing --compare switches to the comparison suite, which reports a per-page
-time distribution (mean/median/p95/p99) plus a wall-time speedup table for
-docling-parse at each thread count against every single-threaded backend.  It
-also captures the hardware, package versions and dataset revision, and can emit
-the markdown tables used by docs/performance_benchmarks.md.
+Third-party single-threaded backends are selected with
+--3rd-party-backends.  They provide reference rows for parse-without-bitmap and
+render; parse-with-bitmap is deliberately Docling-only because other packages
+do not expose the equivalent bitmap-byte materialisation workload.
 
 Inputs may be either a local PDF file/directory, or a Hugging Face dataset
 repo-id whose `pdf/` subfolder contains the PDFs.  When omitted, defaults to
 the HF repo `docling-project/performance-dataset-bo767`.
 
 Usage:
-    python scripts/benchmarking/run_performance_benchmarking.py                                   # HF default, render mode, pypdfium2
-    python scripts/benchmarking/run_performance_benchmarking.py ./pdfs --mode parse
-    python scripts/benchmarking/run_performance_benchmarking.py --mode both --other "pypdfium2;pymupdf"
+    python scripts/benchmarking/run_performance_benchmarking.py                                   # default modes, pypdfium2
+    python scripts/benchmarking/run_performance_benchmarking.py ./pdfs --mode parse-without-bitmap
+    python scripts/benchmarking/run_performance_benchmarking.py --mode all --3rd-party-backends all
     python scripts/benchmarking/run_performance_benchmarking.py ./pdfs --mode render --keep-char-cells=true \
         --create-word-cells=true --create-line-cells=true \
         --keep-shapes=true --keep-bitmaps=true
-    python scripts/benchmarking/run_performance_benchmarking.py --mode both --compare                 # docling-parse vs pypdfium2
-    python scripts/benchmarking/run_performance_benchmarking.py --threads 1,4,8,12 --compare all --mode render \
+    python scripts/benchmarking/run_performance_benchmarking.py --mode parse-with-bitmap --threads 1,12 --only-threaded  # before/after, no reference backends
+    python scripts/benchmarking/run_performance_benchmarking.py --threads 1,4,8,12 --3rd-party-backends all --mode render \
         --output-dir ./docs/performance_benchmarks/
 
-Every run writes `<output-dir>/<cpu>_<dataset>_<mode>.md` (a self-contained
-report: the exact command, the dataset, the machine, every config table, and
-the result tables) alongside a `.csv` of per-page timings for scripts/benchmarking/run_performance_eval.py
-and scripts/benchmarking/run_performance_analysis.py.  The output directory defaults to ./scratch.
+Every run writes `<output-dir>/<cpu>_<dataset>_<mode>.csv` with per-page
+timings for scripts/benchmarking/run_performance_eval.py and
+scripts/benchmarking/run_performance_analysis.py.  The output directory defaults to
+./scratch-performance-benchmarks-<YYYY-MM-DD-HH-MM>, so consecutive runs (e.g. before
+and after a change) never overwrite each other.
 """
 
 from __future__ import annotations
@@ -49,7 +49,6 @@ import contextlib
 import os
 import platform
 import re
-import shlex
 import subprocess
 import sys
 import time
@@ -62,6 +61,7 @@ from _common import (
     TASK_PARSE,
     TASK_RENDER,
     PageRow,
+    ProgressBar,
     find_pdfs,
     percentile,
     read_page_rows,
@@ -69,11 +69,12 @@ from _common import (
     write_page_rows,
 )
 from tabulate import tabulate
-from tqdm import tqdm
 
 DEFAULT_HF_REPO_ID = "docling-project/performance-dataset-bo767"
 HF_PDF_SUBDIR = "pdf"
-DEFAULT_OUTPUT_DIR = Path("scratch")
+DEFAULT_OUTPUT_DIR = Path(
+    f"scratch-performance-benchmarks-{datetime.now().strftime('%Y-%m-%d-%H-%M')}"
+)
 
 
 # -------- Input resolution --------
@@ -162,7 +163,7 @@ def page_counts(pdf_paths: List[Path]) -> List[Tuple[Path, int]]:
 
     parser = DoclingPdfParser(loglevel="fatal")
     counts: List[Tuple[Path, int]] = []
-    for pdf_path in tqdm(pdf_paths, desc="counting pages", unit="doc"):
+    for pdf_path in ProgressBar(pdf_paths, desc="counting pages", unit="doc"):
         try:
             d = parser.load(str(pdf_path), lazy=True)
             counts.append((pdf_path, d.number_of_pages()))
@@ -437,7 +438,9 @@ def _materialization_options_from_args(args: argparse.Namespace) -> dict[str, bo
         "materialize_line_cells": args.materialize_line_cells,
         "materialize_shapes": args.materialize_shapes,
         "materialize_bitmaps": args.materialize_bitmaps,
-        "materialize_bitmap_bytes": args.materialize_bitmap_bytes,
+        # The experiment mode, rather than a conflicting public switch,
+        # decides whether original bitmap bytes are materialised.
+        "materialize_bitmap_bytes": False,
     }
 
 
@@ -546,6 +549,7 @@ def config_tables(
         "fit_glyph_bbox_to_target",
         "resolve_fonts",
         "font_similarity_cutoff",
+        "glyph_bbox_cache_capacity",
         "scale",
         "canvas_width",
         "canvas_height",
@@ -619,7 +623,7 @@ def run_sequential_parse(
     parser = DoclingPdfParser(loglevel="fatal")
 
     t0 = time.perf_counter()
-    for pdf_path, page_numbers in tqdm(
+    for pdf_path, page_numbers in ProgressBar(
         pdf_schedule, desc="  sequential parse", unit="doc", leave=False
     ):
         try:
@@ -653,7 +657,7 @@ def run_pypdfium_parse(
 
     t0 = time.perf_counter()
     errors = 0
-    with tqdm(total=total_pages, desc="  pypdfium2-parse", unit="page") as pbar:
+    with ProgressBar(total=total_pages, desc="  pypdfium2-parse", unit="page") as pbar:
         for pdf_path, page_numbers in pdf_schedule:
             try:
                 doc = pdfium.PdfDocument(str(pdf_path))
@@ -702,7 +706,7 @@ def run_pypdfium_render(
 
     t0 = time.perf_counter()
     errors = 0
-    with tqdm(total=total_pages, desc="  pypdfium2-render", unit="page") as pbar:
+    with ProgressBar(total=total_pages, desc="  pypdfium2-render", unit="page") as pbar:
         for pdf_path, page_numbers in pdf_schedule:
             try:
                 doc = pdfium.PdfDocument(str(pdf_path))
@@ -761,7 +765,7 @@ def run_pymupdf_parse(
 
     t0 = time.perf_counter()
     errors = 0
-    with tqdm(total=total_pages, desc="  pymupdf-parse", unit="page") as pbar:
+    with ProgressBar(total=total_pages, desc="  pymupdf-parse", unit="page") as pbar:
         for pdf_path, page_numbers in pdf_schedule:
             try:
                 doc = fitz.open(str(pdf_path))
@@ -810,7 +814,7 @@ def run_pymupdf_render(
     matrix = fitz.Matrix(2, 2)
     t0 = time.perf_counter()
     errors = 0
-    with tqdm(total=total_pages, desc="  pymupdf-render", unit="page") as pbar:
+    with ProgressBar(total=total_pages, desc="  pymupdf-render", unit="page") as pbar:
         for pdf_path, page_numbers in pdf_schedule:
             try:
                 doc = fitz.open(str(pdf_path))
@@ -955,7 +959,7 @@ class _Collector:
         self.samples: List[PageRow] = []
         self.doc_errors = 0
         label = series_label(backend, task, threads)
-        self._pbar = tqdm(
+        self._pbar = ProgressBar(
             total=total_pages, desc=f"  {label}", unit="page", leave=False
         )
         self._t0 = time.perf_counter()
@@ -1370,6 +1374,14 @@ COMPARISON_BACKENDS: Dict[str, Tuple[object, Tuple[str, ...]]] = {
     "pypdf": (cmp_pypdf, (TASK_PARSE,)),
 }
 
+# The threaded Docling runner belongs in COMPARISON_BACKENDS because the
+# collector helpers also use it.  The public CLI selects only third parties.
+THIRD_PARTY_BACKENDS = {
+    name: value
+    for name, value in COMPARISON_BACKENDS.items()
+    if name != "docling-parse"
+}
+
 # Only docling-parse has a thread-safe multi-page pipeline; every other backend
 # is driven single-threaded and reported as such.
 THREADED_COMPARISON_BACKENDS = {"docling-parse"}
@@ -1401,6 +1413,23 @@ def parse_compare_arg(arg: str) -> List[str]:
         raise SystemExit(
             f"Unknown --compare backend(s): {unknown}. "
             f"Choose from: {list(COMPARISON_BACKENDS)}, or 'all'."
+        )
+    return names
+
+
+def parse_third_party_backends_arg(arg: str) -> List[str]:
+    """Parse --3rd-party-backends; 'all' selects every package, 'none' none."""
+    value = arg.strip().lower()
+    if value in ("", "none"):
+        return []
+    if value == "all":
+        return list(THIRD_PARTY_BACKENDS)
+    names = [name.strip() for name in arg.split(";") if name.strip()]
+    unknown = [name for name in names if name not in THIRD_PARTY_BACKENDS]
+    if unknown:
+        raise SystemExit(
+            f"Unknown --3rd-party-backends value(s): {unknown}. "
+            f"Choose from: {list(THIRD_PARTY_BACKENDS)}, 'all', or 'none'."
         )
     return names
 
@@ -2027,14 +2056,23 @@ def _print_table(
     `threaded_results` is a list of (num_threads, wall_time) for the docling
     threaded scaling sweep.
 
-    Columns: backend, threads, wall_time, vs threaded(1), one `vs <baseline>`
-    column per baseline (sequential docling and each selected `--other`),
-    then pages/sec and ms/page.  All `vs X` values are `X_time / row_time`,
-    so higher means the row is faster than X.
+    Columns: backend, threads, wall_time, vs threaded(1), efficiency, one
+    `vs <baseline>` column per baseline (sequential docling and each selected
+    `--other`), then pages/sec and ms/page.  All `vs X` values are
+    `X_time / row_time`, so higher means the row is faster than X.
+
+    `efficiency` is `vs threaded(1) / threads`: the fraction of a perfect
+    linear speedup this thread count achieves.  It is only meaningful for the
+    threaded rows, so the single-threaded reference backends leave it blank,
+    and it is left blank entirely when the sweep does not include a 1-thread
+    run to measure against.
     """
     threaded_1 = threaded_results[0][1] if threaded_results else float("nan")
+    # without a threads=1 row there is no baseline, and `vs threaded(1)` is
+    # measured against whatever the lowest thread count happened to be
+    has_baseline = bool(threaded_results) and threaded_results[0][0] == 1
 
-    headers = ["backend", "threads", "wall_time (s)", "vs threaded(1)"]
+    headers = ["backend", "threads", "wall_time (s)", "vs threaded(1)", "efficiency"]
     for label, _ in baselines:
         headers.append(f"vs {label}")
     headers.extend(["pages/sec", "ms/page"])
@@ -2044,13 +2082,22 @@ def _print_table(
     def _row(name: str, threads, t: float) -> List[str]:
         if _isnan(t):
             return (
-                [name, str(threads), "n/a", "n/a"]
+                [name, str(threads), "n/a", "n/a", "n/a"]
                 + ["n/a"] * n_vs_baseline
                 + ["n/a", "n/a"]
             )
         cells: List[str] = [name, str(threads), f"{t:.3f}"]
         vs_t1 = threaded_1 / t if t > 0 and not _isnan(threaded_1) else float("nan")
         cells.append(_fmt_speedup(vs_t1))
+        # parallel efficiency, only defined for the threaded sweep
+        cells.append(
+            f"{100.0 * vs_t1 / threads:.0f}%"
+            if has_baseline
+            and isinstance(threads, int)
+            and threads > 0
+            and not _isnan(vs_t1)
+            else ""
+        )
         for _, bt in baselines:
             vs_b = bt / t if t > 0 and not _isnan(bt) else float("nan")
             cells.append(_fmt_speedup(vs_b))
@@ -2079,20 +2126,21 @@ def _run_one_mode(
     thread_counts: List[int],
     max_concurrent_results: int,
     total_pages: int,
-    other_backends: List[str],
+    third_party_backends: List[str],
     *,
     render: bool,
     scale: float,
     decode_options: dict[str, bool],
     materialization_options: dict[str, bool],
     bytesio: bool,
+    sequential: bool,
     collected_runs: List[BackendRun],
 ) -> Tuple[List[Tuple[str, float]], List[Tuple[int, float]]]:
     baselines: List[Tuple[str, float]] = []
 
     # Sequential docling baseline is only meaningful for parse mode
     # (DoclingPdfParser has no rendering path).
-    if not render:
+    if sequential and not render:
         print("Running sequential (DoclingPdfParser) ...")
         t = run_sequential_parse(
             pdf_schedule,
@@ -2103,11 +2151,31 @@ def _run_one_mode(
         baselines.append(("sequential docling (1t)", t))
         print()
 
-    stage = "render" if render else "parse"
-    for name in other_backends:
-        fn = OTHER_BACKENDS[name][stage]
+    task = TASK_RENDER if render else TASK_PARSE
+    for name in third_party_backends:
+        runner, supported_tasks = THIRD_PARTY_BACKENDS[name]
+        if task not in supported_tasks:
+            print(f"Skipping {name}: it does not support {task}")
+            continue
+        stage = "render" if render else "parse"
         print(f"Running {name} {stage} reference (1 thread) ...")
-        t = fn(pdf_schedule, total_pages)
+        try:
+            run = runner(  # type: ignore[operator]
+                pdf_schedule,
+                total_pages,
+                render=render,
+                scale=scale,
+                threads=1,
+                max_concurrent_results=max_concurrent_results,
+                decode_options=decode_options,
+                materialization_options=materialization_options,
+                bytesio=bytesio,
+            )
+        except ImportError as e:
+            print(f"  Skipping {name}: not installed ({e})")
+            continue
+        collected_runs.append(run)
+        t = run.wall_s
         print(f"  {name}: {t:.3f}s")
         baselines.append((f"{name} (1t)", t))
         print()
@@ -2153,9 +2221,19 @@ def main(argv: List[str]) -> int:
     )
     ap.add_argument(
         "--mode",
-        choices=["parse", "render", "both"],
-        default="render",
-        help="Benchmark stage: parse (decode-only), render (decode+raster), or both (default: render)",
+        choices=[
+            "default",
+            "all",
+            "parse-without-bitmap",
+            "parse-with-bitmap",
+            "render",
+        ],
+        default="default",
+        help=(
+            "Benchmark stage: parse-without-bitmap, parse-with-bitmap, "
+            "render (decode+raster), default (parse-without-bitmap + render), "
+            "or all (all three; default: default)"
+        ),
     )
     ap.add_argument(
         "--recursive",
@@ -2194,8 +2272,8 @@ def main(argv: List[str]) -> int:
     ap.add_argument(
         "--scale",
         type=float,
-        default=1.0,
-        help="Render scale for rendering (default: 1.0; render/both modes only)",
+        default=2.0,
+        help="Render scale for rendering (default: 2.0; render/default/all modes only)",
     )
     _add_bool_value_arg(
         ap,
@@ -2257,20 +2335,26 @@ def main(argv: List[str]) -> int:
         default=True,
         help="Materialize bitmap locations into SegmentedPdfPage",
     )
-    _add_bool_value_arg(
-        ap,
-        "materialize-bitmap-bytes",
-        default=False,
-        help="Materialize bitmap image bytes when bitmap locations are materialized",
-    )
     ap.add_argument(
-        "--other",
+        "--3rd-party-backends",
+        dest="third_party_backends",
         type=str,
         default="pypdfium2",
         help=(
-            "Semicolon-separated 3rd-party single-threaded backends to run as "
-            f"reference baselines. Available: {';'.join(sorted(OTHER_BACKENDS))}. "
-            'Default: "pypdfium2". Use "" to skip.'
+            "Semicolon-separated 3rd-party single-threaded reference backends. "
+            f"Available: {';'.join(THIRD_PARTY_BACKENDS)}. Default: pypdfium2. "
+            "Use 'all' for every backend or 'none' to skip them. "
+            "They are not run for parse-with-bitmap because that bitmap-byte "
+            "materialisation workload has no equivalent API."
+        ),
+    )
+    ap.add_argument(
+        "--only-threaded",
+        action="store_true",
+        help=(
+            "Skip the single-threaded DoclingPdfParser parse baseline. "
+            "Third-party references remain controlled by "
+            "--3rd-party-backends."
         ),
     )
     ap.add_argument(
@@ -2279,43 +2363,20 @@ def main(argv: List[str]) -> int:
         help="(docling-parse only) Read PDFs into memory and load them as BytesIO",
     )
     ap.add_argument(
-        "--compare",
-        type=str,
-        nargs="?",
-        const=DEFAULT_COMPARE,
-        default="",
-        help=(
-            "Run the per-page comparison suite instead of only the scaling "
-            "tables. Bare --compare uses "
-            f'"{DEFAULT_COMPARE}"; pass a semicolon-separated list from '
-            f'{list(COMPARISON_BACKENDS)} or "all". docling-parse is run once '
-            "per --threads value; every other backend is single-threaded. "
-            "Omit the flag entirely to keep the previous behaviour."
-        ),
-    )
-    ap.add_argument(
         "--output-dir",
         type=Path,
         default=DEFAULT_OUTPUT_DIR,
         help=(
-            "Directory for the markdown report and the per-page CSV; created if "
-            "missing. Both are named <cpu>_<dataset>_<mode>, so runs on "
+            "Directory for the per-page CSV; created if missing. It is named "
+            "<cpu>_<dataset>_<mode>, so runs on "
             f"different machines never collide. Default: {DEFAULT_OUTPUT_DIR}"
         ),
     )
 
     args = ap.parse_args(argv)
-    if args.mode == "parse" and not _arg_was_passed(argv, "materialize-bitmaps"):
-        args.materialize_bitmaps = False
-
-    # Recorded verbatim in the report so a published number can be traced back
-    # to the invocation that produced it.
-    command = shlex.join(["python", *sys.argv])
-
     # Validate CLI args before doing any I/O (HF download, page counting).
     thread_counts = [int(x.strip()) for x in args.threads.split(",")]
-    other_backends = parse_other_arg(args.other)
-    compare_backends = parse_compare_arg(args.compare)
+    third_party_backends = parse_third_party_backends_arg(args.third_party_backends)
     decode_options = _decode_options_from_args(args)
     materialization_options = _materialization_options_from_args(args)
 
@@ -2340,25 +2401,16 @@ def main(argv: List[str]) -> int:
         "mode": args.mode,
         "thread counts": thread_counts,
         "max concurrent results": args.max_concurrent_results,
-        "other backends": other_backends or "(none)",
-        "comparison suite": compare_backends or "(off)",
+        "third-party backends": third_party_backends or "(none)",
         "max pages": args.max_pages if args.max_pages else "(all)",
         "pdf selection": args.pdf_selection or "(all)",
         "bytesio": args.bytesio,
     }
-    if args.mode in ("render", "both"):
+    if args.mode in ("render", "default", "all"):
         settings["render scale"] = args.scale
-
-    parameter_tables = config_tables(
-        render=args.mode in ("render", "both"),
-        scale=args.scale,
-        decode_options=decode_options,
-        materialization_options=materialization_options,
-    )
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
     basename = output_basename(system_info, dataset_info, args.mode)
-    markdown_path = args.output_dir / f"{basename}.md"
     pages_csv_path = args.output_dir / f"{basename}.csv"
 
     print("Benchmark:")
@@ -2369,93 +2421,62 @@ def main(argv: List[str]) -> int:
     print("System:")
     print(tabulate(system_rows(system_info), headers=["parameter", "value"]))
     print()
-    print_parameter_tables(parameter_tables)
     print(f"Output directory: {args.output_dir}")
-    if compare_backends:
-        # The markdown report is a rendering of the comparison tables, so the
-        # scaling sweep writes the per-page CSV only.
-        print(f"  markdown: {markdown_path}")
     print(f"  per-page: {pages_csv_path}")
     print()
 
-    if compare_backends:
-        tasks = []
-        if args.mode in ("parse", "both"):
-            tasks.append(TASK_PARSE)
-        if args.mode in ("render", "both"):
-            tasks.append(TASK_RENDER)
-
-        desired_series = set(
-            expected_comparison_series(compare_backends, tasks, thread_counts)
-        )
-        reusable_rows, reusable_series = complete_existing_comparison_rows(
-            pages_csv_path,
-            desired_series,
-            expected_page_keys(pdf_schedule),
-            total_pages,
-        )
-        if reusable_series:
-            print(
-                f"Found {len(reusable_series)} complete comparison series in "
-                f"{pages_csv_path}; only missing series will be measured."
-            )
-            for backend, task, threads in sorted(
-                reusable_series,
-                key=comparison_series_sort_key,
-            ):
-                print(f"  - {backend} [{task}] with {threads} thread(s)")
-
-        print("\n##### COMPARISON SUITE #####")
-        new_runs = run_comparison(
-            pdf_schedule,
-            total_pages,
-            compare_backends,
-            tasks,
-            thread_counts,
-            scale=args.scale,
-            max_concurrent_results=args.max_concurrent_results,
-            decode_options=decode_options,
-            materialization_options=materialization_options,
-            bytesio=args.bytesio,
-            skip_series=reusable_series,
-        )
-        runs = backend_runs_from_page_rows(reusable_rows) + new_runs
-        runs.sort(
-            key=lambda r: (_TASK_ORDER[r.task], _BACKEND_ORDER[r.backend], r.threads)
-        )
-        print_comparison_table(runs)
-        print_speedup_table(runs)
-        print_render_size_check(runs)
-
-        write_markdown_report(
-            markdown_path,
-            runs,
-            system_info=system_info,
-            dataset_info=dataset_info,
-            settings=settings,
-            parameter_tables=parameter_tables,
-            command=command,
-        )
-        write_pages_csv(pages_csv_path, runs)
-        return 0
-
     collected_runs: List[BackendRun] = []
-    modes_to_run = ["parse", "render"] if args.mode == "both" else [args.mode]
+    modes_to_run = (
+        ["parse-without-bitmap", "parse-with-bitmap", "render"]
+        if args.mode == "all"
+        else ["parse-without-bitmap", "render"]
+        if args.mode == "default"
+        else [args.mode]
+    )
     for m in modes_to_run:
+        mode_materialization_options = materialization_options.copy()
+        if m == "parse-without-bitmap":
+            if not _arg_was_passed(argv, "materialize-bitmaps"):
+                mode_materialization_options["materialize_bitmaps"] = False
+            mode_materialization_options["materialize_bitmap_bytes"] = False
+        elif m == "parse-with-bitmap":
+            if not _arg_was_passed(argv, "materialize-bitmaps"):
+                mode_materialization_options["materialize_bitmaps"] = False
+            mode_materialization_options["materialize_bitmap_bytes"] = True
+
         render = m == "render"
-        title = "RENDER (decode + rasterise)" if render else "PARSE (decode only)"
+        if m == "parse-without-bitmap":
+            title = "PARSE WITHOUT BITMAP BYTES (decode only)"
+        elif m == "parse-with-bitmap":
+            title = "PARSE WITH BITMAP BYTES (decode only)"
+        else:
+            title = "RENDER (decode + rasterise)"
         print(f"\n##### {title} #####")
+        print_parameter_tables(
+            config_tables(
+                render=render,
+                scale=args.scale,
+                decode_options=decode_options,
+                materialization_options=mode_materialization_options,
+            )
+        )
+        if m == "parse-with-bitmap" and third_party_backends:
+            print(
+                "Third-party references skipped: they cannot perform the "
+                "equivalent bitmap-byte materialisation workload."
+            )
         baselines, threaded_results = _run_one_mode(
             pdf_schedule,
             thread_counts,
             args.max_concurrent_results,
             total_pages,
-            other_backends,
+            [] if m == "parse-with-bitmap" else third_party_backends,
             render=render,
             scale=args.scale,
             decode_options=decode_options,
-            materialization_options=materialization_options,
+            materialization_options=mode_materialization_options,
             bytesio=args.bytesio,
+            sequential=not args.only_threaded,
             collected_runs=collected_runs,
         )
         _print_table(title, baselines, threaded_results, total_pages)

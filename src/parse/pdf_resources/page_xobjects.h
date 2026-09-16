@@ -156,7 +156,8 @@ namespace pdflib
     const pdf_resource<PAGE_XOBJECT_POSTSCRIPT>& get_postscript(std::string name);
 
     void set(QPDFObjectHandle& qpdf_xobjects_,
-             pdf_timings& timings);
+             pdf_timings& timings,
+             bool extract_bitmap_pixels = true);
 
   private:
 
@@ -331,7 +332,8 @@ namespace pdflib
   }
 
   void pdf_resource<PAGE_XOBJECTS>::set(QPDFObjectHandle& qpdf_xobjects,
-                                        pdf_timings& timings)
+                                        pdf_timings& timings,
+                                        bool extract_bitmap_pixels)
   {
     LOG_S(INFO) << __FUNCTION__;
 
@@ -385,7 +387,7 @@ namespace pdflib
               if(not xobj)
                 {
                   auto parsed_xobj = std::make_shared<pdf_resource<PAGE_XOBJECT_IMAGE>>();
-                  parsed_xobj->set(key, qpdf_obj);
+                  parsed_xobj->set(key, qpdf_obj, extract_bitmap_pixels);
                   xobj = parsed_xobj;
 
                   if(cacheable)

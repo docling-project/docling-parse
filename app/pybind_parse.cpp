@@ -15,6 +15,9 @@
 // Include parse headers for typed bindings
 #include <parse.h>
 
+// Include edit headers for the lightweight, document-less helpers
+#include <edit.h>
+
 namespace
 {
   const char* pixel_format_name(pdflib::pixel_format fmt)
@@ -382,6 +385,8 @@ PYBIND11_MODULE(pdf_parsers, m) {
     .def_readwrite("keep_glyphs", &pdflib::decode_config::keep_glyphs)
     .def_readwrite("keep_qpdf_warnings", &pdflib::decode_config::keep_qpdf_warnings)
     .def_readwrite("extract_font_programs", &pdflib::decode_config::extract_font_programs)
+    .def_readwrite("extract_bitmap_pixels", &pdflib::decode_config::extract_bitmap_pixels)
+    .def_readwrite("bitmap_target_pixels_per_unit", &pdflib::decode_config::bitmap_target_pixels_per_unit)
     .def("__copy__", [](const pdflib::decode_config& self) { return self; })
     .def("__deepcopy__", [](const pdflib::decode_config& self, pybind11::dict) { return self; });
 
@@ -749,6 +754,62 @@ PYBIND11_MODULE(pdf_parsers, m) {
         level (str): Logging level as a string.
                      One of ['fatal', 'error', 'warning', 'info'])")
     
+    .def_static("get_number_of_pages",
+	 [](const std::string& filename,
+	    std::optional<std::string> password,
+	    bool keep_qpdf_warnings) -> int {
+	   std::string filename_ = filename;
+	   return pdflib::pdf_editor_tools::get_number_of_pages(filename_,
+								password,
+								keep_qpdf_warnings);
+	 },
+	 pybind11::arg("filename"),
+	 pybind11::arg("password") = pybind11::none(),
+	 pybind11::arg("keep_qpdf_warnings") = false,
+	 R"(
+    Get the number of pages of a PDF file without loading the document.
+
+    Parameters:
+        filename (str): Path to the PDF file.
+        password (str, optional): Password of the document.
+        keep_qpdf_warnings (bool): If true, QPDF warnings are emitted [default=False].
+
+    Returns:
+        int: The number of pages, or -1 if the document could not be read.)")
+
+    .def_static("get_number_of_pages_from_bytesio",
+	 [](pybind11::object bytes_io,
+	    std::optional<std::string> password,
+	    bool keep_qpdf_warnings) -> int {
+	   if(not pybind11::hasattr(bytes_io, "read"))
+	     {
+	       throw std::runtime_error("Expected a BytesIO object");
+	     }
+
+	   bytes_io.attr("seek")(0);
+	   pybind11::bytes data = bytes_io.attr("read")();
+
+	   auto data_buffer = std::make_shared<std::string>(data.cast<std::string>());
+
+	   return pdflib::pdf_editor_tools::get_number_of_pages(data_buffer,
+								password,
+								"counting pages from bytesio",
+								keep_qpdf_warnings);
+	 },
+	 pybind11::arg("bytes_io"),
+	 pybind11::arg("password") = pybind11::none(),
+	 pybind11::arg("keep_qpdf_warnings") = false,
+	 R"(
+    Get the number of pages of a PDF held in a BytesIO object without loading the document.
+
+    Parameters:
+        bytes_io (BytesIO): The PDF document as a BytesIO object.
+        password (str, optional): Password of the document.
+        keep_qpdf_warnings (bool): If true, QPDF warnings are emitted [default=False].
+
+    Returns:
+        int: The number of pages, or -1 if the document could not be read.)")
+
     .def("set_loglevel_with_label",
 	 [](docling::docling_parser &self, const std::string &level) -> void {
             self.set_loglevel_with_label(level);
@@ -1031,13 +1092,15 @@ PYBIND11_MODULE(pdf_parsers, m) {
             const std::string& key,
             const std::string& filename,
             std::optional<std::string>& password,
-            std::optional<std::vector<int>>& page_numbers) -> bool {
-           return self.load_document(key, filename, password, page_numbers);
+            std::optional<std::vector<int>>& page_numbers,
+            std::optional<std::pair<std::int64_t, std::int64_t>>& page_range) -> bool {
+           return self.load_document(key, filename, password, page_numbers, page_range);
          },
          pybind11::arg("key"),
          pybind11::arg("filename"),
          pybind11::arg("password") = pybind11::none(),
          pybind11::arg("page_numbers") = pybind11::none(),
+         pybind11::arg("page_range") = pybind11::none(),
          R"(
     Load a document by key and filename.
 
@@ -1046,6 +1109,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
         filename (str): The path to the document file to load.
         password (str, optional): Optional password for password-protected files.
         page_numbers (Sequence[int], optional): Selected 1-indexed physical pages to schedule.
+        page_range (tuple[int, int], optional): Inclusive 1-indexed physical page range. Its end is clipped to the document.
 
     Returns:
         bool: True if the document was successfully loaded.)")
@@ -1055,13 +1119,15 @@ PYBIND11_MODULE(pdf_parsers, m) {
             const std::string& key,
             pybind11::object bytes_io,
             std::optional<std::string>& password,
-            std::optional<std::vector<int>>& page_numbers) -> bool {
-           return self.load_document_from_bytesio(key, bytes_io, password, page_numbers);
+            std::optional<std::vector<int>>& page_numbers,
+            std::optional<std::pair<std::int64_t, std::int64_t>>& page_range) -> bool {
+           return self.load_document_from_bytesio(key, bytes_io, password, page_numbers, page_range);
          },
          pybind11::arg("key"),
          pybind11::arg("bytes_io"),
          pybind11::arg("password") = pybind11::none(),
          pybind11::arg("page_numbers") = pybind11::none(),
+         pybind11::arg("page_range") = pybind11::none(),
          R"(
     Load a document from a BytesIO-like object.
 
@@ -1070,6 +1136,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
         bytes_io (Any): A BytesIO-like object containing the document data.
         password (str, optional): Optional password for password-protected files.
         page_numbers (Sequence[int], optional): Selected 1-indexed physical pages to schedule.
+        page_range (tuple[int, int], optional): Inclusive 1-indexed physical page range. Its end is clipped to the document.
 
     Returns:
         bool: True if the document was successfully loaded.)")
@@ -1100,6 +1167,19 @@ PYBIND11_MODULE(pdf_parsers, m) {
 
     Returns:
         int: Number of pages that will be emitted by the threaded parser.)")
+    .def("get_annotations",
+         [](docling::docling_threaded_parser& self, const std::string& key) -> nlohmann::json {
+           return self.get_annotations(key);
+         },
+         pybind11::arg("key"),
+         R"(
+    Retrieve annotations for a loaded document and return them as JSON.
+
+    Parameters:
+        key (str): The unique key identifying the document.
+
+    Returns:
+        dict: A JSON object containing the annotations for the document.)")
     .def("unload_document",
          [](docling::docling_threaded_parser& self, const std::string& key) -> bool {
            return self.unload_document(key);
@@ -1163,6 +1243,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
         resolve_fonts (bool): Resolve PDF font names to system fonts [default=true].
         use_embedded_fonts (bool): Prefer embedded font programs (TrueType/OpenType via Blend2D, Type 1/CFF via FreeType outlines) over system font resolution [default=true].
         font_similarity_cutoff (float): Minimum Jaccard similarity for fuzzy font matching; candidates below this threshold fall back to the default font [default=0.25].
+        glyph_bbox_cache_capacity (int): Maximum cached embedded-font glyph bounding boxes per render worker; zero disables caching [default=65536].
         scale (float): Target render scale in multiples of the PDF page size; -1 disables scale-based sizing [default=-1].
         canvas_width (int): Target canvas width in pixels; -1 means use PDF page size [default=-1].
         canvas_height (int): Target canvas height in pixels; -1 means use PDF page size [default=-1].
@@ -1181,6 +1262,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
     .def_readwrite("resolve_fonts",           &pdflib::render_config::resolve_fonts)
     .def_readwrite("use_embedded_fonts",      &pdflib::render_config::use_embedded_fonts)
     .def_readwrite("font_similarity_cutoff",  &pdflib::render_config::font_similarity_cutoff)
+    .def_readwrite("glyph_bbox_cache_capacity", &pdflib::render_config::glyph_bbox_cache_capacity)
     .def_readwrite("scale",                   &pdflib::render_config::scale)
     .def_readwrite("canvas_width",            &pdflib::render_config::canvas_width)
     .def_readwrite("canvas_height",           &pdflib::render_config::canvas_height);
@@ -1278,26 +1360,30 @@ PYBIND11_MODULE(pdf_parsers, m) {
             const std::string& key,
             const std::string& filename,
             std::optional<std::string>& password,
-            std::optional<std::vector<int>>& page_numbers) -> bool {
-           return self.load_document(key, filename, password, page_numbers);
+            std::optional<std::vector<int>>& page_numbers,
+            std::optional<std::pair<std::int64_t, std::int64_t>>& page_range) -> bool {
+           return self.load_document(key, filename, password, page_numbers, page_range);
          },
          pybind11::arg("key"),
          pybind11::arg("filename"),
          pybind11::arg("password") = pybind11::none(),
-         pybind11::arg("page_numbers") = pybind11::none())
+         pybind11::arg("page_numbers") = pybind11::none(),
+         pybind11::arg("page_range") = pybind11::none())
 
     .def("load_document_from_bytesio",
          [](docling::docling_threaded_renderer& self,
             const std::string& key,
             pybind11::object bytes_io,
             std::optional<std::string>& password,
-            std::optional<std::vector<int>>& page_numbers) -> bool {
-           return self.load_document_from_bytesio(key, bytes_io, password, page_numbers);
+            std::optional<std::vector<int>>& page_numbers,
+            std::optional<std::pair<std::int64_t, std::int64_t>>& page_range) -> bool {
+           return self.load_document_from_bytesio(key, bytes_io, password, page_numbers, page_range);
          },
          pybind11::arg("key"),
          pybind11::arg("bytes_io"),
          pybind11::arg("password") = pybind11::none(),
-         pybind11::arg("page_numbers") = pybind11::none())
+         pybind11::arg("page_numbers") = pybind11::none(),
+         pybind11::arg("page_range") = pybind11::none())
 
     .def("number_of_pages",
          [](docling::docling_threaded_renderer& self, const std::string& key) -> int {
@@ -1307,6 +1393,11 @@ PYBIND11_MODULE(pdf_parsers, m) {
     .def("scheduled_number_of_pages",
          [](docling::docling_threaded_renderer& self, const std::string& key) -> int {
            return self.scheduled_number_of_pages(key);
+         },
+         pybind11::arg("key"))
+    .def("get_annotations",
+         [](docling::docling_threaded_renderer& self, const std::string& key) -> nlohmann::json {
+           return self.get_annotations(key);
          },
          pybind11::arg("key"))
     .def("unload_document",

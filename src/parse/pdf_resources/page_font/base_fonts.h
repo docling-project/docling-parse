@@ -3,6 +3,7 @@
 #ifndef PDF_PAGE_FONT_BASE_FONTS_H
 #define PDF_PAGE_FONT_BASE_FONTS_H
 
+#include <memory>
 #include <unordered_set>
 #include <unordered_map>
 
@@ -10,6 +11,14 @@
 
 namespace pdflib
 {
+
+  // Outcome of matching a PDF font name against the built-in base fonts.
+  // `font` is empty when nothing matched, and `name` is then empty too.
+  struct base_font_match
+  {
+    std::shared_ptr<base_font> font = {};
+    std::string                name = {};
+  };
 
   class base_fonts
   {
@@ -22,15 +31,23 @@ namespace pdflib
 
     void print();
 
-    bool is_core_14_font(std::string font_name);
+    bool is_core_14_font(const std::string& font_name);
 
-    bool        has_corresponding_font(std::string font_name);
-    std::string get_corresponding_font(std::string font_name);
+    // Single pass over the base fonts, returning the longest key contained in
+    // the normalised name. Prefer this over the has_/get_ pair below: each of
+    // those scans every base font with a substring match, so asking both (or
+    // asking repeatedly for the same font) is expensive.
+    base_font_match find_corresponding_font(const std::string& font_name);
 
-    bool            has(std::string font_name);
-    base_font_type& get(std::string font_name);
+    bool        has_corresponding_font(const std::string& font_name);
+    std::string get_corresponding_font(const std::string& font_name);
 
-    base_font_type& operator[](std::string font_name);
+    bool has(const std::string& font_name);
+
+    // Throws std::out_of_range when the name is not a known base font.
+    std::shared_ptr<base_font_type> get(const std::string& font_name);
+
+    std::shared_ptr<base_font_type> operator[](const std::string& font_name);
     void verify_all();
 
     template<typename glyphs_type>
@@ -38,7 +55,7 @@ namespace pdflib
 
   private:
 
-    std::string normalise(std::string font_name);
+    std::string normalise(const std::string& font_name);
 
     std::string read_fontname(std::string filename);
 
@@ -50,7 +67,7 @@ namespace pdflib
     
     std::unordered_set<std::string> core_14_fonts;
 
-    std::unordered_map<std::string, base_font_type> name_to_basefont;
+    std::unordered_map<std::string, std::shared_ptr<base_font_type> > name_to_basefont;
   };
 
   base_fonts::base_fonts():
@@ -68,7 +85,7 @@ namespace pdflib
       }
   }
 
-  std::string base_fonts::normalise(std::string font_name)
+  std::string base_fonts::normalise(const std::string& font_name)
   {
     std::string norm_name="";
 
@@ -94,67 +111,65 @@ namespace pdflib
     return norm_name;
   }
 
-  bool base_fonts::is_core_14_font(std::string font_name)
+  bool base_fonts::is_core_14_font(const std::string& font_name)
   {
     std::string norm_name = normalise(font_name);
     return (core_14_fonts.count(norm_name)==1);
   }
 
-  bool base_fonts::has_corresponding_font(std::string font_name)
+  base_font_match base_fonts::find_corresponding_font(const std::string& font_name)
   {
     std::string norm_name = normalise(font_name);
+
+    base_font_match result;
     for(auto itr=name_to_basefont.begin(); itr!=name_to_basefont.end(); itr++)
       {
         if(norm_name.find(itr->first)!=std::string::npos)
           {
-	    //LOG_S(INFO) << "\t identified " << itr->first << " in " << font_name;	    
-            return true;
-          }
-      }
-
-    return false;
-  }
-
-  std::string base_fonts::get_corresponding_font(std::string font_name)
-  {
-    std::string norm_name = normalise(font_name);
-
-    std::string result = "";
-    for(auto itr=name_to_basefont.begin(); itr!=name_to_basefont.end(); itr++)
-      {
-        if(norm_name.find(itr->first)!=std::string::npos)
-          {	    
 	    // we have to be careful that "Helvetica" is not returned for Helvetice-Bold!
-	    if(result.size()<(itr->first).size())
+	    if(result.name.size()<(itr->first).size())
 	      {
-		result = itr->first;
+		result.name = itr->first;
+		result.font = itr->second;
 	      }
           }
       }
 
-    if(result.size()>0)
+    return result;
+  }
+
+  bool base_fonts::has_corresponding_font(const std::string& font_name)
+  {
+    return static_cast<bool>(find_corresponding_font(font_name).font);
+  }
+
+  std::string base_fonts::get_corresponding_font(const std::string& font_name)
+  {
+    base_font_match match = find_corresponding_font(font_name);
+
+    if(match.font)
       {
-	return result;
+	return match.name;
       }
 
-    LOG_S(ERROR) << "unkown " << font_name << "[norm_name=" << norm_name << "]";
+    LOG_S(ERROR) << "unkown " << font_name << "[norm_name=" << normalise(font_name) << "]";
     
     return "Unknown";
   }
 
-  bool base_fonts::has(std::string font_name)
+  bool base_fonts::has(const std::string& font_name)
   {
     std::string norm_name = normalise(font_name);
     return (name_to_basefont.count(norm_name)==1);
   }
 
-  base_font& base_fonts::get(std::string font_name)
+  std::shared_ptr<base_font> base_fonts::get(const std::string& font_name)
   {
     std::string norm_name = normalise(font_name);
     return name_to_basefont.at(norm_name);
   }
 
-  base_font& base_fonts::operator[](std::string font_name)
+  std::shared_ptr<base_font> base_fonts::operator[](const std::string& font_name)
   {
     std::string norm_name = normalise(font_name);
     return name_to_basefont.at(norm_name);
@@ -165,7 +180,7 @@ namespace pdflib
     for(auto& item : name_to_basefont)
       {
         LOG_S(INFO) << "verifying font: " << item.first;
-        item.second.initialise();
+        item.second->initialise();
       }
   }
 
@@ -189,8 +204,7 @@ namespace pdflib
         std::string fontname = read_fontname(path);
 	//LOG_S(INFO) << "\t font-name: " << fontname;
 
-	base_font bf(path, glyphs);	
-	name_to_basefont.emplace(std::pair<std::string, base_font>(fontname, bf));	
+	name_to_basefont.emplace(fontname, std::make_shared<base_font>(path, glyphs));
 
 	core_14_fonts.insert(fontname);
       }    
@@ -207,8 +221,7 @@ namespace pdflib
 	  {
 	    LOG_S(INFO) << "\t reading font " << fontname << "at " << path;
 	    
-	    base_font bf(path, glyphs);
-	    name_to_basefont.emplace(std::pair<std::string, base_font>(fontname, bf));	
+	    name_to_basefont.emplace(fontname, std::make_shared<base_font>(path, glyphs));
 	  }    
 	else
 	  {
@@ -229,8 +242,7 @@ namespace pdflib
 	  {
 	    LOG_S(INFO) << "\t reading font " << fontname << "at " << path;
 
-	    base_font bf(path, glyphs);
-	    name_to_basefont.emplace(std::pair<std::string, base_font>(fontname, bf));	
+	    name_to_basefont.emplace(fontname, std::make_shared<base_font>(path, glyphs));
 	  }    
 	else
 	  {
@@ -325,7 +337,9 @@ namespace pdflib
             continue;
           }
 
-        base_font bf = name_to_basefont.at(alias.second);
+        // the alias shares the font it points at: the metrics are identical and
+        // read-only, so there is no reason to hold a second copy of them
+        std::shared_ptr<base_font_type> bf = name_to_basefont.at(alias.second);
         name_to_basefont.emplace(alias.first, bf);
 
         core_14_fonts.insert(alias.first);

@@ -64,6 +64,17 @@ public:
   std::vector<double> decode; // length 2*ncomp; empty if absent
   bool has_decode = false;
   bool image_mask = false;
+
+  // libjpeg's scaled-decode denominator: the DCT is inverted at 1/scale_denom
+  // of full size, so the image comes back that much smaller for a fraction of
+  // the work. libjpeg accepts 1..16; only the powers of two 1, 2, 4 and 8 are
+  // used here, since those are the block-aligned cases it implements as a
+  // reduced IDCT rather than as a resampling pass. 1 is full size.
+  //
+  // Only honoured by decode_jpeg_to_raw_pixels(); the mask and stencil paths
+  // decode at full size, because their samples are composited against a
+  // colour plane whose grid they have to match.
+  int scale_denom = 1;
 };
 
 class decoded_jpeg_result {
@@ -964,9 +975,16 @@ inline decoded_jpeg_result decode_jpeg_to_raw_pixels(
         dinfo.out_color_space = requested_out_cs;
       }
 
+    if(params.scale_denom > 1)
+      {
+        dinfo.scale_num   = 1;
+        dinfo.scale_denom = static_cast<unsigned int>(params.scale_denom);
+      }
+
     LOG_S(INFO) << "decode_jpeg_to_raw_pixels"
                 << ": attempt=" << attempt_name
-                << " out_color_space(before start)=" << dinfo.out_color_space;
+                << " out_color_space(before start)=" << dinfo.out_color_space
+                << " scale=1/" << params.scale_denom;
 
     jpeg_start_decompress(&dinfo);
 
