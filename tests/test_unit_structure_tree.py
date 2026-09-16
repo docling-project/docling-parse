@@ -88,22 +88,22 @@ def test_structure_tree_is_read_with_attributes_and_kids():
     # role map resolves the custom heading type; the raw type is preserved
     assert heading.resolved_type(structure.role_map) == "/H1"
     assert heading.lang == "en"
-    assert heading.page == 0
-    assert heading.kids == [PdfMarkedContentRef(page=0, mcid=0)]
+    assert heading.page_no == 1
+    assert heading.kids == [PdfMarkedContentRef(page_no=1, mcid=0)]
 
     # nested elements keep their order and their own marked content
-    assert paragraph.kids[0] == PdfMarkedContentRef(page=0, mcid=1)
+    assert paragraph.kids[0] == PdfMarkedContentRef(page_no=1, mcid=1)
     span = paragraph.kids[1]
     assert isinstance(span, PdfStructureElement)
     assert span.type == "/Span"
     assert span.actual_text == "fi"
-    assert span.kids == [PdfMarkedContentRef(page=0, mcid=2)]
+    assert span.kids == [PdfMarkedContentRef(page_no=1, mcid=2)]
 
     assert figure.alt == "A grey square"
     assert figure.attributes == {"/Layout": {"/Placement": "/Block"}}
 
     # object references resolve to the annotation, /Ref to element ids
-    assert link.kids == [PdfObjectRef(page=0, obj="6 0", subtype="/Link")]
+    assert link.kids == [PdfObjectRef(page_no=1, obj="6 0", subtype="/Link")]
     assert link.ref == [paragraph.id]
 
     # depth-first order is the logical content order
@@ -159,3 +159,82 @@ def test_untagged_document_has_no_structure():
     doc = parser.load(path_or_stream=BytesIO(build_pdf(objects)))
     assert doc.get_structure() is None
     assert doc.get_page_marked_content(1) == []
+
+
+ROTATIONS = [0, 90, 180, 270]
+
+
+def _rotated_pdf() -> bytes:
+    """One page per /Rotate angle, each with a cropped page and a tagged paragraph
+    whose Layout /BBox surrounds its text."""
+    n = len(ROTATIONS)
+    font = 3 + 2 * n
+    root = font + 1
+    document = root + 1
+    page_refs = " ".join(f"{3 + 2 * i} 0 R" for i in range(n))
+    element_refs = " ".join(f"{document + 1 + i} 0 R" for i in range(n))
+
+    objects: list[Object] = [
+        "<< /Type /Catalog /Pages 2 0 R /MarkInfo << /Marked true >> "
+        f"/StructTreeRoot {root} 0 R >>",
+        f"<< /Type /Pages /Kids [{page_refs}] /Count {n} >>",
+    ]
+    for rotate in ROTATIONS:
+        page = len(objects) + 1
+        objects += [
+            f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 200] "
+            f"/CropBox [10 20 290 190] /Rotate {rotate} "
+            f"/Resources << /Font << /F1 {font} 0 R >> >> /Contents {page + 1} 0 R >>",
+            content_stream(
+                "/P <</MCID 0>> BDC BT /F1 12 Tf 100 100 Td (Box) Tj ET EMC\n"
+            ),
+        ]
+    objects += [
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica "
+        "/Encoding /WinAnsiEncoding >>",
+        f"<< /Type /StructTreeRoot /K [{document} 0 R] >>",
+        f"<< /Type /StructElem /S /Document /P {root} 0 R /K [{element_refs}] >>",
+    ]
+    for i in range(n):
+        objects.append(
+            f"<< /Type /StructElem /S /P /P {document} 0 R /Pg {3 + 2 * i} 0 R /K [0] "
+            "/A << /O /Layout /BBox [95 95 135 115] >> >>"
+        )
+    return build_pdf(objects)
+
+
+def test_layout_bbox_lands_on_its_cells_in_the_cell_frame():
+    doc = DoclingPdfParser(loglevel="fatal").load(
+        path_or_stream=BytesIO(_rotated_pdf())
+    )
+    structure = doc.get_structure()
+    assert structure is not None
+    paragraphs = [e for e in structure.iter_elements() if e.type == "/P"]
+    assert [p.page_no for p in paragraphs] == [1, 2, 3, 4]
+
+    for rotate, paragraph in zip(ROTATIONS, paragraphs):
+        bbox = paragraph.bbox
+        assert bbox is not None, rotate
+        # the authored attribute is kept as written, in default user space
+        assert paragraph.attributes["/Layout"]["/BBox"] == [95, 95, 135, 115]
+
+        # a quarter turn swaps the box's extent
+        width, height = (40, 20) if rotate in (0, 180) else (20, 40)
+        assert abs(bbox.width - width) < 1e-3, rotate
+        assert abs(bbox.height - height) < 1e-3, rotate
+
+        # and the box surrounds the text it tags, as the page reports that text
+        page_no = paragraph.page_no
+        assert page_no is not None
+        tags = [t for t in doc.get_page_marked_content(page_no) if t.mcid == 0]
+        assert "".join(t.text for t in tags) == "Box", rotate
+        for tag in tags:
+            assert tag.rect is not None
+            cell = tag.rect.to_bounding_box()
+            cx, cy = (cell.l + cell.r) / 2, (cell.b + cell.t) / 2
+            assert bbox.l < cx < bbox.r and bbox.b < cy < bbox.t, (rotate, cell, bbox)
+
+    # unrotated, the crop-box origin is all that moves the box
+    first = paragraphs[0].bbox
+    assert first is not None
+    assert (first.l, first.b, first.r, first.t) == (85, 75, 125, 95)

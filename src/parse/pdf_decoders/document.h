@@ -162,11 +162,15 @@ namespace pdflib
         QPDFObjectHandle qpdf_root = qpdf_document.getRoot();
 	
         utils::timer annots_timer;
-        json_annots = extract_document_annotations_in_json(qpdf_document, qpdf_root, qpdf_pages);
+        json_annots = extract_document_annotations_in_json(qpdf_document, qpdf_root);
 
         // composed here rather than inside the extractor above: resolving the
         // outline's destinations needs the pages and their geometry
         json_annots["table_of_contents"] = pdf_outline(qpdf_document, qpdf_pages).get();
+
+        // likewise the structure tree: its /Pg pages are numbered and its Layout
+        // /BBox attributes are placed in the frame of the page's cells
+        json_annots["structure"] = pdf_structure(qpdf_document, qpdf_pages).get();
 
         double annots_elapsed = annots_timer.get_time();
         timings.add_timing(pdf_timings::KEY_EXTRACT_DOC_ANNOTATIONS, annots_elapsed);
