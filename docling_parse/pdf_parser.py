@@ -112,7 +112,7 @@ class PdfMarkedContentRef(BaseModel):
     """A structure element kid that points at a marked-content sequence."""
 
     kind: Literal["mcid"] = "mcid"
-    page: int  # 0-based page index, -1 when the /Pg entry could not be resolved
+    page_no: int | None = None  # 1-based page number, None when /Pg does not resolve
     mcid: int
 
 
@@ -120,7 +120,7 @@ class PdfObjectRef(BaseModel):
     """A structure element kid that points at an annotation or XObject (/OBJR)."""
 
     kind: Literal["objref"] = "objref"
-    page: int
+    page_no: int | None = None  # 1-based page number, None when /Pg does not resolve
     obj: str  # "<num> <gen>" identity of the referenced object
     subtype: str | None = None  # annotation /Subtype when the target is an annotation
 
@@ -135,8 +135,12 @@ class PdfStructureElement(BaseModel):
         namespace: PDF 2.0 namespace URI (/NS) when present.
         title, lang, alt, actual_text, expansion: the /T, /Lang, /Alt, /ActualText and /E entries.
         element_id: the /ID entry.
-        page: 0-based index of the element's /Pg page, when present.
-        attributes: attribute objects keyed by owner (/O), e.g. {"/Layout": {"/Placement": "/Block"}}.
+        page_no: 1-based page number of the element's /Pg page, when it resolves.
+        bbox: the Layout /BBox attribute on that page, in the frame the page's cells are
+            reported in (rotation normalised, crop-box origin, bottom-left); None when the
+            element has no /BBox or no resolvable page.
+        attributes: attribute objects keyed by owner (/O), as authored, e.g.
+            {"/Layout": {"/Placement": "/Block"}}. A raw /BBox here is in default user space.
         ref: ids of elements referenced through /Ref.
         kids: children in order: marked-content refs, object refs, or nested elements.
     """
@@ -154,7 +158,8 @@ class PdfStructureElement(BaseModel):
     actual_text: str | None = None
     expansion: str | None = None
     element_id: str | None = None
-    page: int | None = None
+    page_no: int | None = None
+    bbox: BoundingBox | None = None
     attributes: Dict[str, Dict[str, Any]] = {}
     ref: List[str] = []
     kids: List[
