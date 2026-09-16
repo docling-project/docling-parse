@@ -602,14 +602,9 @@ namespace pdflib
     // Recovery order differs from the missing-width chain in get_width: a
     // font that lies in /Widths usually lies in /MissingWidth (or /DW) too,
     // so real base-font metrics are preferred over the declared default.
-    if(bfonts.has_corresponding_font(font_name) or
-       bfonts.has_corresponding_font(base_font))
+    if(matched_base_font().font)
       {
-        std::string fontname = bfonts.has_corresponding_font(font_name)
-          ? bfonts.get_corresponding_font(font_name)
-          : bfonts.get_corresponding_font(base_font);
-
-        auto& bfont = bfonts.get(fontname);
+        auto& bfont = *(matched_base_font().font);
 
         if(bfont.has(c) and bfont.get_width(c)>0)
           {
