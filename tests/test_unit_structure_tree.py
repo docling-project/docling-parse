@@ -15,7 +15,7 @@ from docling_parse.pdf_parser import (
     PdfObjectRef,
     PdfStructureElement,
 )
-from tests.pdf_builder import build_pdf, content_stream
+from tests.pdf_builder import Object, build_pdf, content_stream
 
 CONTENT = (
     "/Heading <</MCID 0>> BDC BT /F1 14 Tf 20 170 Td (Title) Tj ET EMC\n"
@@ -28,7 +28,7 @@ CONTENT = (
 
 
 def _tagged_pdf() -> bytes:
-    objects = [
+    objects: list[Object] = [
         # 1 catalog
         "<< /Type /Catalog /Pages 2 0 R /Lang (en-US) "
         "/MarkInfo << /Marked true >> /StructTreeRoot 7 0 R >>",
@@ -148,7 +148,7 @@ def test_cells_carry_innermost_mcid_and_artifact_type():
 
 def test_untagged_document_has_no_structure():
     parser = DoclingPdfParser(loglevel="fatal")
-    objects = [
+    objects: list[Object] = [
         "<< /Type /Catalog /Pages 2 0 R >>",
         "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
         "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] "
