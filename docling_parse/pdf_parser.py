@@ -862,6 +862,7 @@ def _to_annotations(annots: Dict[str, Any]) -> PdfAnnotations:
     Shared by the single-threaded and the threaded parser so the two cannot drift.
     """
     toc = annots.get("table_of_contents")
+    structure = annots.get("structure")
 
     return PdfAnnotations(
         form=annots.get("form"),
@@ -870,6 +871,11 @@ def _to_annotations(annots: Dict[str, Any]) -> PdfAnnotations:
         table_of_contents=(
             PdfTableOfContents(text="<root>", children=_to_table_of_contents(toc))
             if toc
+            else None
+        ),
+        structure=(
+            PdfStructure.model_validate(structure)
+            if isinstance(structure, dict)
             else None
         ),
     )
@@ -1044,18 +1050,9 @@ class PdfDocument:
 
     def get_structure(self) -> PdfStructure | None:
         """Get the tagged-PDF logical structure tree, or None when the file has none."""
-        if not self.is_loaded():
-            raise RuntimeError("This document is not loaded.")
+        annotations = self.get_annotations()
 
-        raw = self._parser.get_annotations(key=self._key)
-        if not isinstance(raw, dict):
-            return None
-
-        structure = raw.get("structure")
-        if not isinstance(structure, dict):
-            return None
-
-        return PdfStructure.model_validate(structure)
+        return annotations.structure if annotations is not None else None
 
     def get_page_marked_content(
         self, page_no: int, *, content_config: ContentConfig | None = None
@@ -1823,8 +1820,8 @@ class DoclingThreadedPdfParser:
         the threaded page decoding.
 
         Returns:
-            Optional[PdfAnnotations]: Annotations object with form, language, meta_xml
-                and table_of_contents fields. None if the document has no annotations.
+            Optional[PdfAnnotations]: Annotations object with form, language, meta_xml,
+                table_of_contents and structure fields. None if the document has no annotations.
         """
         if doc_key not in self._page_counts:
             raise ValueError(f"Document key not loaded: {doc_key}")
