@@ -1,0 +1,79 @@
+on:
+  workflow_call:
+
+concurrency:
+  group: regression-win-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.run_id }}
+  cancel-in-progress: true
+
+# The Windows amd64 extension needs the full MinGW/NASM/external-libs toolchain
+# (see wheels.yml), so this job does NOT build from source. It reuses the
+# win_amd64 wheel that build-wheels already produced -- ci.yml runs this job
+# with `needs: build-wheels` so the artifact exists. Only the platform-
+# independent parse/locale/embedded-font tests run here; the renderer
+# groundtruth is a Linux contract (an unembedded named font substitutes
+# Liberation Sans on Linux but the real Windows font here) and stays on the
+# Linux worker.
+jobs:
+  run-regression-windows:
+    runs-on: windows-2025
+    # Safety cap: a Windows-specific deadlock (e.g. in the threaded parser)
+    # should fail the job, not sit on a runner for the full 6h limit.
+    timeout-minutes: 30
+    env:
+      # uv run would otherwise implicitly re-sync and try to build the project
+      # from source (no toolchain here); keep it pinned to the wheel we install.
+      UV_NO_SYNC: "1"
+      PYTHON_VERSION: "3.13"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv and set the python version
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: '3.13'
+      - name: Download prebuilt win_amd64 wheel
+        uses: actions/download-artifact@v4
+        with:
+          name: python-package-distributions-py3.13-win_amd64
+          path: wheelhouse
+      - name: Cache HF regression corpus
+        # HF_DATASET_REVISION in tests/constants.py is a pinned commit hash, so
+        # hashing that file gives us automatic invalidation on bumps.
+        uses: actions/cache@v4
+        with:
+          path: tests/data
+          key: hf-regression-${{ hashFiles('tests/constants.py') }}
+      - name: Install deps and the prebuilt wheel
+        shell: bash
+        run: |
+          # Install every dependency and dev group but NOT the project itself,
+          # so nothing tries to compile the extension here.
+          uv sync --frozen --all-extras --no-install-project
+          # Drop in the extension we built in the wheels job.
+          uv pip install --no-deps wheelhouse/*.whl
+          # Remove the source package so `import docling_parse` resolves to the
+          # installed wheel (which carries the .pyd) instead of the source tree
+          # at repo root, which has no compiled extension and would shadow it.
+          rm -rf docling_parse
+          # Fail loudly here if the wheel's extension cannot be imported,
+          # rather than as an opaque error at pytest collection.
+          uv run python -c "import docling_parse.pdf_parsers"
+      # faulthandler_timeout is pytest's built-in (stdlib) hang detector: if a
+      # test runs longer than the timeout it dumps every thread's stack to the
+      # log, so a deadlock shows exactly where it is instead of an opaque hang.
+      - name: Regression tests (non-threaded)
+        shell: bash
+        run: |
+          uv run pytest -v -o faulthandler_timeout=120 \
+            tests/test_regression_parse.py \
+            tests/test_regression_embedded_fonts.py \
+            tests/test_regression_locale_safety.py
+      - name: Regression tests (threaded)
+        shell: bash
+        # Isolated and separately bounded: the threaded parser is the most
+        # likely place a Windows-only join deadlock would surface. Split out so
+        # the tests above still report, and so a hang here fails in ~10min with
+        # a thread dump rather than eating the whole job budget.
+        timeout-minutes: 10
+        run: |
+          uv run pytest -v -o faulthandler_timeout=120 \
+            tests/test_regression_threaded_parse.py
