@@ -2566,6 +2566,7 @@ namespace pdflib
       return cmap_initialized
 	and cmap_numb_to_char.count(numb)==1
 	and cmap_numb_to_char.at(numb).size()>0
+	and cmap_numb_to_char.at(numb)!=std::string(1, '\0')
 	and cmap_numb_to_char.at(numb)!=replacement_char;
     };
 
