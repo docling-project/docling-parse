@@ -42,7 +42,9 @@ _TOUNICODE = (
 )
 
 
-def _build_pdf(glyph_names: list, include_tounicode: bool) -> bytes:
+def _build_pdf(
+    glyph_names: list, include_tounicode: bool, base_font: str = "XXXXXX+FakeSubset"
+) -> bytes:
     differences = " ".join(f"/{name}" for name in glyph_names)
     tounicode = " /ToUnicode 6 0 R" if include_tounicode else ""
     content = "BT /F1 24 Tf 72 700 Td (ABC) Tj ET"
@@ -51,7 +53,7 @@ def _build_pdf(glyph_names: list, include_tounicode: bool) -> bytes:
         "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
         "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
         "/Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
-        "<< /Type /Font /Subtype /Type1 /BaseFont /XXXXXX+FakeSubset "
+        f"<< /Type /Font /Subtype /Type1 /BaseFont /{base_font} "
         "/Encoding << /Type /Encoding "
         f"/Differences [ 65 {differences} ] >>{tounicode} >>",
         f"<< /Length {len(content)} >>\nstream\n{content}\nendstream",
@@ -80,12 +82,17 @@ def _build_pdf(glyph_names: list, include_tounicode: bool) -> bytes:
 
 
 def _extract_text(
-    glyph_names: list, include_tounicode: bool, keep_glyphs: bool = True
+    glyph_names: list,
+    include_tounicode: bool,
+    keep_glyphs: bool = True,
+    base_font: str = "XXXXXX+FakeSubset",
 ) -> str:
     parser = DoclingPdfParser(loglevel="fatal")
     config = DecodeConfig(keep_glyphs=keep_glyphs)
     doc = parser.load(
-        path_or_stream=BytesIO(_build_pdf(glyph_names, include_tounicode)),
+        path_or_stream=BytesIO(
+            _build_pdf(glyph_names, include_tounicode, base_font=base_font)
+        ),
         decode_config=config,
     )
     _, page = next(doc.iterate_pages())
@@ -122,6 +129,15 @@ def test_meaningful_unknown_names_keep_name_fallback():
     text = _extract_text(["Th", "ft", "tt"], include_tounicode=False)
     assert text == "Thfttt"
     assert "GLYPH" not in text
+
+
+def test_adv_ps_symbol_uses_font_resource_mapping():
+    text = _extract_text(
+        ["C210", "C211", "C212"],
+        include_tounicode=False,
+        base_font="XXXXXX+AdvPSSym",
+    )
+    assert text == "®©™"
 
 
 def test_default_config_strips_gid_markers():

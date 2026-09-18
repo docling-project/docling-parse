@@ -250,6 +250,22 @@ namespace pdflib
 	  }
       }
 
+    std::vector<std::string> adv_ps_sym =
+      utils::filesystem::list_files(dirname+"/custom/AdvPSSym");
+    std::sort(adv_ps_sym.begin(), adv_ps_sym.end());
+
+    LOG_S(INFO) << "AdvPSSym-fonts: " << adv_ps_sym.size();
+    for(auto path:adv_ps_sym)
+      {
+	std::string fontname = read_fontname(path);
+
+	if(name_to_basefont.count(fontname)==0)
+	  {
+	    LOG_S(INFO) << "\t reading font " << fontname << "at " << path;
+	    name_to_basefont.emplace(fontname, std::make_shared<base_font>(path, glyphs));
+	  }
+      }
+
     register_standard_aliases();
 
     initialized = true;

@@ -2791,14 +2791,28 @@ namespace pdflib
 				       << diff_numb_to_char[numb]
 				       << " (from " << name << ")";
 		      }
-		    else if(std::regex_match(name, match, re_04)) // if the name is of type /C<decimal> treat the number as a Unicode code point
+		    else if(std::regex_match(name, match, re_04))
 		      {
 			uint32_t codepoint = static_cast<uint32_t>(std::stoul(match[3].str()));
-			std::vector<uint32_t> vec = {codepoint};
-			diff_numb_to_char[numb] = utils::string::vec_to_utf8(vec);
-			LOG_S(INFO) << "differences[" << numb << "] -> " << name
-				    << " -> " << diff_numb_to_char[numb]
-				    << " (codepoint=" << codepoint << ")";
+			const base_font_match& font_match = matched_font_name();
+			if(font_match.font and font_match.font->has(codepoint))
+			  {
+			    diff_numb_to_char[numb] = font_match.font->to_utf8(codepoint);
+			    LOG_S(INFO) << "differences[" << numb << "] -> " << name
+					<< " -> " << diff_numb_to_char[numb]
+					<< " (font resource=" << font_match.name << ")";
+			  }
+			else
+			  {
+			    // Some producers use /C<decimal> as a Unicode-like glyph
+			    // name. Keep that heuristic only when no font-specific
+			    // resource provides the actual legacy encoding.
+			    std::vector<uint32_t> vec = {codepoint};
+			    diff_numb_to_char[numb] = utils::string::vec_to_utf8(vec);
+			    LOG_S(INFO) << "differences[" << numb << "] -> " << name
+					<< " -> " << diff_numb_to_char[numb]
+					<< " (codepoint=" << codepoint << ")";
+			  }
 		      }
                     else
                       {
