@@ -24,20 +24,17 @@ namespace pdflib
     int number_of_chars();
 
     double average_char_width();
-
-    // Measure the separation between two cell boxes in coordinates aligned
-    // with this cell's reading direction. The first value is the gap along
-    // the text-advance axis; the second is the perpendicular gap between text
-    // lines. Overlapping intervals have a gap of zero on the respective axis.
-    std::pair<double, double> axis_gaps(page_item<PAGE_CELL>& other);
     
     bool is_adjacent_to(page_item<PAGE_CELL>& other, double delta);
 
-    // Two-epsilon variant for glyph-box-aware adjacency:
-    // eps_inline controls the gap in the text-advance direction; eps_cross
-    // controls separation perpendicular to it. Projecting the full boxes keeps
-    // glyph-specific ascenders and descenders from looking like word spaces.
-    bool is_adjacent_to(page_item<PAGE_CELL>& other, double eps_inline, double eps_cross);
+    // Two-epsilon variant for ligature-aware adjacency:
+    //   d0 = distance between this cell's bottom-right (r_x1, r_y1) and other's bottom-left (r_x0, r_y0)
+    //   d1 = distance between this cell's top-right   (r_x2, r_y2) and other's top-left    (r_x3, r_y3)
+    // eps_d0 controls the bottom-edge gap; eps_d1 controls the top-edge gap.
+    // For same-height cells d0 ≈ d1 ≈ horizontal gap.  When a ligature glyph is
+    // involved its taller bbox inflates d1 only, so eps_d1 can be relaxed
+    // independently without widening the horizontal-gap tolerance.
+    bool is_adjacent_to(page_item<PAGE_CELL>& other, double eps_d0, double eps_d1);
 
     bool has_same_reading_orientation(page_item<PAGE_CELL>& other);
     
@@ -296,76 +293,21 @@ namespace pdflib
     
     return (num_chars>0? len/num_chars : 0.0);
   }
-
-  std::pair<double, double> page_item<PAGE_CELL>::axis_gaps(page_item<PAGE_CELL>& other)
-  {
-    // The first glyph's left edge remains unchanged as cells are merged, so
-    // its perpendicular is a stable text-advance axis for the whole cell.
-    double u_x = r_y3-r_y0;
-    double u_y = -(r_x3-r_x0);
-    double norm = std::sqrt(u_x*u_x + u_y*u_y);
-
-    if(norm==0.0)
-      {
-	u_x = r_x1-r_x0;
-	u_y = r_y1-r_y0;
-	norm = std::sqrt(u_x*u_x + u_y*u_y);
-      }
-
-    if(norm==0.0)
-      {
-	double gap = std::sqrt((r_x1-other.r_x0)*(r_x1-other.r_x0) +
-	                       (r_y1-other.r_y0)*(r_y1-other.r_y0));
-	return {gap, gap};
-      }
-
-    u_x /= norm;
-    u_y /= norm;
-    double v_x = -u_y;
-    double v_y = u_x;
-
-    std::array<std::pair<double, double>, 4> this_corners = {{{r_x0, r_y0}, {r_x1, r_y1},
-	                                                       {r_x2, r_y2}, {r_x3, r_y3}}};
-    std::array<std::pair<double, double>, 4> other_corners = {{{other.r_x0, other.r_y0},
-	                                                        {other.r_x1, other.r_y1},
-	                                                        {other.r_x2, other.r_y2},
-	                                                        {other.r_x3, other.r_y3}}};
-
-    auto interval = [](const auto& corners, double axis_x, double axis_y)
-      {
-	double min_value = corners[0].first*axis_x + corners[0].second*axis_y;
-	double max_value = min_value;
-	for(std::size_t i=1; i<corners.size(); i++)
-	  {
-	    double value = corners[i].first*axis_x + corners[i].second*axis_y;
-	    min_value = std::min(min_value, value);
-	    max_value = std::max(max_value, value);
-	  }
-	return std::make_pair(min_value, max_value);
-      };
-
-    auto interval_gap = [](const auto& lhs, const auto& rhs)
-      {
-	return std::max(0.0, std::max(lhs.first, rhs.first)-std::min(lhs.second, rhs.second));
-      };
-
-    double inline_gap = interval_gap(interval(this_corners, u_x, u_y),
-	                             interval(other_corners, u_x, u_y));
-    double cross_gap = interval_gap(interval(this_corners, v_x, v_y),
-	                            interval(other_corners, v_x, v_y));
-    return {inline_gap, cross_gap};
-  }
   
   bool page_item<PAGE_CELL>::is_adjacent_to(page_item<PAGE_CELL>& other, double eps)
   {
-    auto gaps = axis_gaps(other);
-    return gaps.first<eps and gaps.second<eps;
+    double d0 = std::sqrt((r_x1-other.r_x0)*(r_x1-other.r_x0) + (r_y1-other.r_y0)*(r_y1-other.r_y0));
+    double d1 = std::sqrt((r_x2-other.r_x3)*(r_x2-other.r_x3) + (r_y2-other.r_y3)*(r_y2-other.r_y3));
+
+    return ((d0<eps) and (d1<eps));
   }
 
-  bool page_item<PAGE_CELL>::is_adjacent_to(page_item<PAGE_CELL>& other, double eps_inline, double eps_cross)
+  bool page_item<PAGE_CELL>::is_adjacent_to(page_item<PAGE_CELL>& other, double eps_d0, double eps_d1)
   {
-    auto gaps = axis_gaps(other);
-    return gaps.first<eps_inline and gaps.second<eps_cross;
+    double d0 = std::sqrt((r_x1-other.r_x0)*(r_x1-other.r_x0) + (r_y1-other.r_y0)*(r_y1-other.r_y0));
+    double d1 = std::sqrt((r_x2-other.r_x3)*(r_x2-other.r_x3) + (r_y2-other.r_y3)*(r_y2-other.r_y3));
+
+    return ((d0<eps_d0) and (d1<eps_d1));
   }
 
   bool page_item<PAGE_CELL>::has_same_reading_orientation(page_item<PAGE_CELL>& other)
@@ -385,11 +327,11 @@ namespace pdflib
 	LOG_S(ERROR) << "inconsistent merging of cells!";
       }
     
-    double inline_gap = axis_gaps(other).first;
+    double d0 = std::sqrt((r_x1-other.r_x0)*(r_x1-other.r_x0) + (r_y1-other.r_y0)*(r_y1-other.r_y0));
 
     if((not left_to_right) or (not other.left_to_right))
       {
-	if(delta<inline_gap)
+	if(delta<d0)
 	  {
 	    text = " " + text;
 	  }    
@@ -399,7 +341,7 @@ namespace pdflib
       }
     else
       {
-	if(delta<inline_gap)
+	if(delta<d0)
 	  {
 	    text += " ";
 	  }    
