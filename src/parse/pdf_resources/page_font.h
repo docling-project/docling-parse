@@ -1879,6 +1879,30 @@ namespace pdflib
         }
     }
 
+    // ISO 32000 defines ascent above the baseline and descent below it. Some
+    // producer-generated mathematical fonts nevertheless publish both values
+    // as positive numbers. Trusting those metrics collapses a tall delimiter
+    // to a shallow cell above its baseline even though /FontBBox correctly
+    // describes the embedded glyphs. Use that box when it is valid and the
+    // descriptor metrics do not straddle the baseline.
+    {
+      const bool descriptor_metrics_are_valid =
+        descent <= 0.0 and ascent >= 0.0 and descent < ascent;
+      const bool font_bbox_is_valid =
+        font_bbox[1] <= 0.0 and font_bbox[3] >= 0.0 and
+        font_bbox[1] < font_bbox[3];
+
+      if(not descriptor_metrics_are_valid and font_bbox_is_valid)
+        {
+          LOG_S(WARNING) << "invalid font ascent/descent ["
+                         << ascent << ", " << descent
+                         << "]; falling back on FontBBox vertical metrics ["
+                         << font_bbox[1] << ", " << font_bbox[3] << "]";
+          descent = font_bbox[1];
+          ascent = font_bbox[3];
+        }
+    }
+
     if(std::abs( ascent)<1.e-3 and 
        std::abs(descent)<1.e-3   )
       {
