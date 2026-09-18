@@ -3,6 +3,8 @@
 #ifndef PDF_TEXT_STATE_H
 #define PDF_TEXT_STATE_H
 
+#include <render/freetype_font_cache.h>
+
 namespace pdflib
 {
 
@@ -101,6 +103,10 @@ namespace pdflib
 
     pdf_render_instructions& instructions;
 
+    // Page-scoped: malformed fonts are rare, while repeated mathematical
+    // symbols should resolve their embedded outline only once.
+    std::shared_ptr<freetype_font_cache> glyph_metrics_cache;
+
     std::array<double, 9> text_matrix;
     std::array<double, 9> line_matrix;
 
@@ -144,7 +150,8 @@ namespace pdflib
     page_cells(page_cells_),
     page_fonts(page_fonts_),
 
-    instructions(instructions_)
+    instructions(instructions_),
+    glyph_metrics_cache(nullptr)
   {
     text_matrix = {1.0, 0.0, 0.0,
                    0.0, 1.0, 0.0,
@@ -165,7 +172,8 @@ namespace pdflib
     page_cells(other.page_cells),
     page_fonts(other.page_fonts),
 
-    instructions(other.instructions)
+    instructions(other.instructions),
+    glyph_metrics_cache(other.glyph_metrics_cache)
   {
     *this = other;
 
@@ -196,6 +204,7 @@ namespace pdflib
     this->vertical_mode = other.vertical_mode;
     this->vertical_origin_y = other.vertical_origin_y;
     this->vertical_displacement = other.vertical_displacement;
+    this->glyph_metrics_cache = other.glyph_metrics_cache;
 
     return *this;
   }
@@ -610,6 +619,34 @@ namespace pdflib
           ratio = font_capheight/font_ascent;
         }
 
+      bool has_embedded_glyph_bbox = false;
+      std::array<double, 4> embedded_glyph_bbox = {0.0, 0.0, 0.0, 0.0};
+      if(font.needs_embedded_glyph_bbox() and glyph_code >= 0)
+        {
+          if(glyph_metrics_cache == nullptr)
+            {
+              glyph_metrics_cache = std::make_shared<freetype_font_cache>();
+            }
+          auto font_blob = font.get_embedded_font_blob();
+          const std::string glyph_name =
+            font.get_glyph_name(static_cast<uint32_t>(glyph_code));
+          has_embedded_glyph_bbox =
+            glyph_metrics_cache->get_glyph_bbox(font_blob,
+                                                text,
+                                                glyph_code,
+                                                glyph_name,
+                                                embedded_glyph_bbox);
+          if(has_embedded_glyph_bbox)
+            {
+              // Preserve the PDF advance width horizontally. Tight horizontal
+              // ink bounds would change text flow; only the malformed vertical
+              // metrics need replacement.
+              font_descent = embedded_glyph_bbox[1];
+              font_ascent = embedded_glyph_bbox[3];
+              ratio = 1.0;
+            }
+        }
+
       /* // commented out for now ...
       if(glyph_code >= 0 and font.has_char_bbox(static_cast<uint32_t>(glyph_code)))
         {
@@ -737,7 +774,12 @@ namespace pdflib
 	
 	std::array<double, 8> glyph_rect = rect;
 	{
-	  if(glyph_code >= 0 and font.has_char_bbox(static_cast<uint32_t>(glyph_code)))
+	  if(has_embedded_glyph_bbox)
+	    {
+	      glyph_bbox = embedded_glyph_bbox;
+	      has_glyph_bbox = true;
+	    }
+	  else if(glyph_code >= 0 and font.has_char_bbox(static_cast<uint32_t>(glyph_code)))
 	    {
 	      glyph_bbox = font.get_char_bbox(static_cast<uint32_t>(glyph_code));
 	      has_glyph_bbox = true;

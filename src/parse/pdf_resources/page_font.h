@@ -92,6 +92,7 @@ namespace pdflib
 
     double get_ascent();
     double get_descent();
+    bool needs_embedded_glyph_bbox() const { return invalid_vertical_metrics; }
 
     double get_capheight();
     double get_xheight();
@@ -245,6 +246,7 @@ namespace pdflib
 
     double ascent;
     double descent;
+    bool invalid_vertical_metrics = false;
 
     double capheight;
     double xheight;
@@ -1900,6 +1902,7 @@ namespace pdflib
                          << font_bbox[1] << ", " << font_bbox[3] << "]";
           descent = font_bbox[1];
           ascent = font_bbox[3];
+          invalid_vertical_metrics = true;
         }
     }
 
