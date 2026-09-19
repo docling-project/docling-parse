@@ -26,6 +26,7 @@
 angbracketleft;3008
 angbracketright;3009
 circlecopyrt;00A9
+caret;2038
 controlNULL;0000
 #
 # TeX-related mappings using named values

@@ -1,0 +1,42 @@
+<!--
+
+    Copyright (C) 2012 pm286 <peter.murray.rust@googlemail.com>
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+            http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+-->
+<codePointSet encoding="ADVMT_MI" id="advmt_mi" resource="org/xmlcml/pdf2svg/codepoints/misc">
+
+
+    <codePointSet idRef="basicLatin" href="org/xmlcml/pdf2svg/codepoints/unicode/basicLatin.xml"/>
+
+    <codePoint unicode="U+00D7" name="C2" note="MULTIPLICATION SIGN"/>
+    <codePoint unicode="U+03B1" name="C11" note="GREEK SMALL LETTER ALPHA"/>
+    <codePoint unicode="U+03B2" name="C12" note="GREEK SMALL LETTER BETA"/>
+    <codePoint unicode="U+03B3" name="C13" note="GREEK SMALL LETTER GAMMA"/>
+    <codePoint unicode="U+25CB" name="C14" note="WHITE CIRCLE"/>
+    <codePoint unicode="U+2022" name="C15" note="BULLET"/>
+    <codePoint unicode="U+03B8" name="C18" note="GREEK SMALL LETTER THETA" />
+    <codePoint unicode="U+03BB" name="C21" note="GREEK SMALL LETTER LAMBDA" />
+    <codePoint unicode="U+03BC" name="C22" note="GREEK SMALL LETTER MU" />
+    <codePoint unicode="U+007E" name="C24" note="TILDE" />
+    <codePoint unicode="U+03C0" name="C25" note="GREEK SMALL LETTER PI" />
+    <codePoint unicode="U+03C1" name="C26" note="GREEK SMALL LETTER RHO" />
+    <codePoint unicode="U+03C1" name="C27" note="GREEK SMALL LETTER RHO" />
+    <codePoint unicode="U+03C3" name="C27" note="GREEK SMALL LETTER SIGMA" />
+    <codePoint unicode="U+03C7" name="C31" note="GREEK SMALL LETTER CHI" />
+    <codePoint unicode="U+00AE" name="C213" note="REGISTERED SIGN" />
+    <codePoint unicode="U+00A9" name="C223" note="COPYRIGHT SIGN" />
+    
+</codePointSet>
+

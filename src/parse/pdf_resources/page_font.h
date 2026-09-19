@@ -92,6 +92,7 @@ namespace pdflib
 
     double get_ascent();
     double get_descent();
+    bool needs_embedded_glyph_bbox() const { return invalid_vertical_metrics; }
 
     double get_capheight();
     double get_xheight();
@@ -245,6 +246,7 @@ namespace pdflib
 
     double ascent;
     double descent;
+    bool invalid_vertical_metrics = false;
 
     double capheight;
     double xheight;
@@ -828,6 +830,14 @@ namespace pdflib
         const std::string& fontname = matched_font_name().name;
 
         auto& fm = *(matched_font_name().font);
+
+        // A known legacy symbol font may falsely declare WinAnsi while using
+        // font-specific character codes. Its curated map is authoritative
+        // after /ToUnicode and /Differences.
+        if(fm.is_font_specific() and fm.has(c))
+          {
+            return fm.to_utf8(c);
+          }
 
         // If font declares a specific encoding (MacRoman, WinAnsi, etc.) AND it was
         // explicitly specified in the PDF, use that encoding instead of base font's built-in mapping
@@ -1879,6 +1889,31 @@ namespace pdflib
         }
     }
 
+    // ISO 32000 defines ascent above the baseline and descent below it. Some
+    // producer-generated mathematical fonts nevertheless publish both values
+    // as positive numbers. Trusting those metrics collapses a tall delimiter
+    // to a shallow cell above its baseline even though /FontBBox correctly
+    // describes the embedded glyphs. Use that box when it is valid and the
+    // descriptor metrics do not straddle the baseline.
+    {
+      const bool descriptor_metrics_are_valid =
+        descent <= 0.0 and ascent >= 0.0 and descent < ascent;
+      const bool font_bbox_is_valid =
+        font_bbox[1] <= 0.0 and font_bbox[3] >= 0.0 and
+        font_bbox[1] < font_bbox[3];
+
+      if(not descriptor_metrics_are_valid and font_bbox_is_valid)
+        {
+          LOG_S(WARNING) << "invalid font ascent/descent ["
+                         << ascent << ", " << descent
+                         << "]; falling back on FontBBox vertical metrics ["
+                         << font_bbox[1] << ", " << font_bbox[3] << "]";
+          descent = font_bbox[1];
+          ascent = font_bbox[3];
+          invalid_vertical_metrics = true;
+        }
+    }
+
     if(std::abs( ascent)<1.e-3 and 
        std::abs(descent)<1.e-3   )
       {
@@ -2764,14 +2799,28 @@ namespace pdflib
 				       << diff_numb_to_char[numb]
 				       << " (from " << name << ")";
 		      }
-		    else if(std::regex_match(name, match, re_04)) // if the name is of type /C<decimal> treat the number as a Unicode code point
+		    else if(std::regex_match(name, match, re_04))
 		      {
 			uint32_t codepoint = static_cast<uint32_t>(std::stoul(match[3].str()));
-			std::vector<uint32_t> vec = {codepoint};
-			diff_numb_to_char[numb] = utils::string::vec_to_utf8(vec);
-			LOG_S(INFO) << "differences[" << numb << "] -> " << name
-				    << " -> " << diff_numb_to_char[numb]
-				    << " (codepoint=" << codepoint << ")";
+			const base_font_match& font_match = matched_font_name();
+			if(font_match.font and font_match.font->has(codepoint))
+			  {
+			    diff_numb_to_char[numb] = font_match.font->to_utf8(codepoint);
+			    LOG_S(INFO) << "differences[" << numb << "] -> " << name
+					<< " -> " << diff_numb_to_char[numb]
+					<< " (font resource=" << font_match.name << ")";
+			  }
+			else
+			  {
+			    // Some producers use /C<decimal> as a Unicode-like glyph
+			    // name. Keep that heuristic only when no font-specific
+			    // resource provides the actual legacy encoding.
+			    std::vector<uint32_t> vec = {codepoint};
+			    diff_numb_to_char[numb] = utils::string::vec_to_utf8(vec);
+			    LOG_S(INFO) << "differences[" << numb << "] -> " << name
+					<< " -> " << diff_numb_to_char[numb]
+					<< " (codepoint=" << codepoint << ")";
+			  }
 		      }
                     else
                       {

@@ -37,6 +37,7 @@ namespace pdflib
     std::string get_string(uint32_t numb);
 
     std::string to_utf8(uint32_t numb);
+    bool is_font_specific();
 
     double get_ascend();
     double get_descend();
@@ -188,6 +189,14 @@ namespace pdflib
     initialise();
 
     return numb_to_utf8.at(numb);
+  }
+
+  bool base_font::is_font_specific()
+  {
+    initialise();
+
+    return properties.count("EncodingScheme")==1 and
+      properties["EncodingScheme"].get<std::string>()=="FontSpecific";
   }
 
   double base_font::get_ascend()

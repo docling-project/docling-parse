@@ -1,0 +1,32 @@
+<!--
+
+    Copyright (C) 2012 pm286 <peter.murray.rust@googlemail.com>
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+            http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+-->
+<codePointSet encoding="Myriad" id="myriadProRegular" resource="org/xmlcml/pdf2svg/codepoints/misc">
+
+    <codePoint unicode="U+FB00" name="f_f" note="Latin small ligature ff"/>
+    <codePoint unicode="U+FB01" name="f_i" decimal="31" note="Latin small ligature fi"/>
+    <codePoint unicode="U+FB02" name="f_l" decimal="30" note="Latin small ligature fl"/>
+    <codePoint unicode="U+FB03" name="f_f_i" note="Latin small ligature ffi"/> <!-- guessed -->
+    <codePoint unicode="U+FB04" name="f_f_l" note="Latin small ligature ffl"/> <!-- guessed -->
+
+    <codePoint unicode="U+003D" name="hyphen" decimal="45" note="HYPHEN-MINUS"/>
+    <codePoint unicode="U+00A0" name="" decimal="160" note="NO-BREAK SPACE"/>
+
+    <codePointSet idRef="basicLatin" href="org/xmlcml/pdf2svg/codepoints/unicode/basicLatin.xml"/>
+            	
+</codePointSet>
+		
