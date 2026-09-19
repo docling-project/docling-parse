@@ -1,0 +1,39 @@
+<!--
+
+    Copyright (C) 2012 pm286 <peter.murray.rust@googlemail.com>
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+            http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+-->
+<codePointSet encoding="AdvPSSym" id="AdvPSSym" resource="org/xmlcml/pdf2svg/codepoints/misc">
+
+<!-- this *might* be unicode compliant -->
+    
+    <codePoint unicode="U+00D7" name="periodcentered" decimal="183" note="MULTIPLICATION SIGN"/> 
+    <codePoint unicode="U+2264" name="sterling"       decimal="163" note="LESS-THAN OR EQUAL TO"/> 
+    <codePoint unicode="U+0027" name="cent"           decimal="162" note="APOSTROPHE"/> 
+    <codePoint unicode="U+00A9" name="ordfeminine"    decimal="170" note="COPYRIGHT"/> 
+    
+    <codePoint unicode="U+00B0" name="C176" note="DEGREE SIGN"/> 
+    <codePoint unicode="U+221D" name="C181" note="PROPORTIONAL TO"/> 
+    <codePoint unicode="U+00AE" name="C210" note="REGISTERED SIGN"/> 
+    <codePoint unicode="U+00A9" name="C211" note="COPYRIGHT SIGN"/> 
+    <codePoint unicode="U+2122" name="C212" note="TRADE MARK SIGN"/> 
+    <codePoint unicode="U+00AC" name="C216" note="NOT SIGN"/> 
+    <codePoint unicode="U+2038" name="C217" note="CARET"/> 
+    <codePoint unicode="U+2122" name="C228" note="TRADE MARK SIGN"/> 
+
+    <codePointSet idRef="unicode256" href="org/xmlcml/pdf2svg/codepoints/unicode/unicode256.xml"/> 
+    
+</codePointSet>
+

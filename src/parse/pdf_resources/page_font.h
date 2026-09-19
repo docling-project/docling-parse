@@ -831,6 +831,14 @@ namespace pdflib
 
         auto& fm = *(matched_font_name().font);
 
+        // A known legacy symbol font may falsely declare WinAnsi while using
+        // font-specific character codes. Its curated map is authoritative
+        // after /ToUnicode and /Differences.
+        if(fm.is_font_specific() and fm.has(c))
+          {
+            return fm.to_utf8(c);
+          }
+
         // If font declares a specific encoding (MacRoman, WinAnsi, etc.) AND it was
         // explicitly specified in the PDF, use that encoding instead of base font's built-in mapping
         if(has_explicit_encoding &&

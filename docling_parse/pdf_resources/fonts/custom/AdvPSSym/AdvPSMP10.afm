@@ -1,0 +1,24 @@
+StartFontMetrics 4.1
+Comment AdvPSMP10 mapping verified against elsevier-00.pdf
+FontName AdvPSMP10
+FullName AdvPSMP10
+FamilyName AdvPSMP10
+Weight Medium
+ItalicAngle 0
+IsFixedPitch false
+CharacterSet Special
+FontBBox 0 -302 989 802
+EncodingScheme FontSpecific
+StartCharMetrics 10
+C 47  ; WX 666 ; N Deltagreek ;
+C 88  ; WX 718 ; N xi ;
+C 97  ; WX 500 ; N alpha ;
+C 98  ; WX 552 ; N beta ;
+C 101 ; WX 385 ; N epsilon ;
+C 108 ; WX 552 ; N mugreek ;
+C 110 ; WX 500 ; N phi ;
+C 112 ; WX 552 ; N Sigma ;
+C 113 ; WX 552 ; N rho ;
+C 114 ; WX 552 ; N sigma ;
+EndCharMetrics
+EndFontMetrics

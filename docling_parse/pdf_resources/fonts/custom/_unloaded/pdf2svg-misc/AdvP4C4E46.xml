@@ -1,0 +1,82 @@
+<!--
+
+    Copyright (C) 2012 pm286 <peter.murray.rust@googlemail.com>
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+            http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+-->
+<codePointSet encoding="AdvP4C4E46" id="AdvP4C4E46" resource="org/xmlcml/pdf2svg/codepoints/misc"> 
+
+<!--  has descender brackets -->
+<!-- NO UNICODE POINTS, we believe -->
+
+    <codePoint unicode="U+0028" name="space" note="LEFT PARENTHESIS" />
+    <codePoint unicode="U+007B" name="parenleft" note="LEFT CURLY BRACKET" />
+    <codePoint unicode="U+0028" name="exclam" note="RIGHT PARENTHESIS" />
+    <codePoint unicode="U+005B" name="quotedbl" note="LEFT SQUARE BRACKET" /> <!-- perhaps large -->
+    <codePoint unicode="U+005D" name="numbersign" note="RIGHT SQUARE BRACKET" /> <!-- perhaps large -->
+    <codePoint unicode="U+239B" name="zero" note="LEFT PARENTHESIS UPPER HOOK" />
+    <codePoint unicode="U+239C" name="B" note="LEFT PARENTHESIS EXTENSION"/>
+    <codePoint unicode="U+239D" name="at" note="LEFT PARENTHESIS LOWER HOOK"/>
+    <codePoint unicode="U+239E" name="one" note="RIGHT PARENTHESIS UPPER HOOK" />
+    <codePoint unicode="U+239F" name="C" note="RIGHT PARENTHESIS EXTENSION" />
+    <codePoint unicode="U+23A0" name="A" note="RIGHT PARENTHESIS LOWER HOOK" />
+    <codePoint unicode="U+220F" name="Y" note="N-ARY PRODUCT" />
+    <codePoint unicode="U+2225" name="k" note="PARALLEL TO" />
+    <codePoint unicode="U+007B" name="n" note="LEFT CURLY BRACKET" />
+    <codePoint unicode="U+007D" name="o" note="RIGHT CURLY BRACKET" />
+    <codePoint unicode="U+221A" name="p" note="SQUARE ROOT" />
+    <codePoint unicode="U+221A" name="q" note="SQUARE ROOT" /> <!-- large descending -->
+    <codePoint unicode="U+221A" name="r" note="SQUARE ROOT" /> <!-- large descending -->
+    <codePoint unicode="U+221A" name="s" note="SQUARE ROOT" />
+    <codePoint unicode="U+221A" name="t" note="SQUARE ROOT" />
+    <codePoint unicode="U+23A2" name="u" note="RIGHT SQUARE BRACKET EXTENSION"/>
+    <codePoint unicode="U+23A1" name="v" note="RIGHT SQUARE BRACKET UPPER CORNER"/>
+
+    <codePoint unicode="U+23A1" name="two" note="RIGHT SQUARE BRACKET UPPER CORNER"/>
+    <codePoint unicode="U+23A2" name="six" note="RIGHT SQUARE BRACKET EXTENSION"/>
+    <codePoint unicode="U+23A3" name="four" note="RIGHT SQUARE BRACKET LOWER CORNER"/>
+    <codePoint unicode="U+23A4" name="three" note="RIGHT SQUARE BRACKET UPPER CORNER"/>
+    <codePoint unicode="U+23A5" name="seven" note="RIGHT SQUARE BRACKET EXTENSION"/>
+    <codePoint unicode="U+23A6" name="five" note="RIGHT SQUARE BRACKET LOWER CORNER"/>
+
+    <codePoint unicode="U+2211" decimal="80" name="P" note="N-ARY SUMMATION"/>  
+    <codePoint unicode="U+222B" decimal="82" name="R" note="INTEGRAL"/>  
+    <codePoint unicode="U+2211"              name="X" note="N-ARY SUMMATION" />
+    <codePoint unicode="U+222B" decimal="90" name="Z" note="INTEGRAL"/>  
+    <codePoint unicode="U+222B" decimal="240" name="eth" note="INTEGRAL"/>  
+    <codePoint unicode="U+221E" decimal="63" name="question" note="INFINITY"/>  
+	
+    <codePoint unicode="U+006C" decimal="8216" note="CURLY LETTER L - no idea what character"/>  
+	
+    <codePoint unicode="U+00AF" decimal="64259" note="MACRON"/>  
+	
+    <codePoint unicode="U+0028" name="C0" note="LEFT PARENTHESIS"/>
+    <codePoint unicode="U+0029" name="C1" note="RIGHT PARENTHESIS"/>
+    <codePoint unicode="U+005B" name="C2" note="LEFT SQUARE BRACKET"/>  
+    <codePoint unicode="U+005D" name="C3" note="RIGHT SQUARE BRACKET"/>  
+    <codePoint unicode="U+007B" name="C8" note="LEFT CURLY BRACKET"/>  
+    <codePoint unicode="U+007D" name="C9" note="RIGHT CURLY BRACKET"/>  
+    <codePoint unicode="U+0028" name="C16" note="LEFT PARENTHESIS"/>  
+    <codePoint unicode="U+0029" name="C17" note="RIGHT PARENTHESIS"/>
+    <codePoint unicode="U+0028" name="C18" note="LEFT PARENTHESIS"/>  <!--  larger size -->
+    <codePoint unicode="U+0029" name="C19" note="RIGHT PARENTHESIS"/> <!--  larger size --> 
+    <codePoint unicode="U+005B" name="C20" note="LEFT SQUARE BRACKET"/>  <!--  larger size -->
+    <codePoint unicode="U+005D" name="C21" note="RIGHT SQUARE BRACKET"/>  <!--  larger size -->
+    <codePoint unicode="U+007B" name="C26" note="LEFT CURLY BRACKET"/> <!--  larger size --> 
+    <codePoint unicode="U+007D" name="C27" note="RIGHT CURLY BRACKET"/> <!--  larger size --> 
+    <codePoint unicode="U+3008" name="C28" note="LEFT ANGLE BRACKET"/> <!--  larger size --> 
+    <codePoint unicode="U+3009" name="C29" note="RIGHT ANGLE BRACKET"/> <!--  larger size --> 
+    
+</codePointSet>
+		
