@@ -409,7 +409,7 @@ REGRESSION_PAGE_SELECTION: Dict[str, List[int]] = {
     "eb508b16-d4b7-497b-b665-9cb04320e820-1.pdf": [1],
     "ec62f8dc0265e965_0018.pdf": [1],
     "eccb6c51-2413-4a89-98f6-f29b68db742d-72.pdf": [1],
-    "elsevier-00.pdf": [1, 4],
+    "elsevier-00.pdf": [1, 4, 9],
     "ef2d2702-732e-42fd-94a8-f105b703ddd9-6.pdf": [1],
     "f07ada90-61b5-41aa-b7bc-dc0f4b09cbb0-22.pdf": [1],
     "f41b4838d5d45f01_0004.pdf": [1],
