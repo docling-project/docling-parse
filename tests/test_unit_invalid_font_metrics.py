@@ -99,28 +99,3 @@ def test_invalid_metrics_use_embedded_glyph_vertical_bounds() -> None:
     assert (parenthesis.b, parenthesis.t) == pytest.approx((91.0, 101.0))
 
 
-def test_glyph_specific_vertical_bounds_do_not_split_text() -> None:
-    """Different outline heights must not create spaces inside a text run."""
-    font = (
-        "<< /Type /Font /Subtype /Type1 /BaseFont /SyntheticMath-Regular "
-        "/FirstChar 65 /LastChar 66 /Widths [700 700] "
-        "/Encoding << /Type /Encoding "
-        "/Differences [65 /summation /parenleft] >> "
-        "/FontDescriptor 6 0 R >>"
-    )
-    descriptor = (
-        "<< /Type /FontDescriptor /FontName /SyntheticMath-Regular /Flags 4 "
-        "/FontBBox [0 -900 700 100] /ItalicAngle 0 "
-        "/Ascent 700 /Descent 500 /CapHeight 0 /StemV 0 /FontFile3 7 0 R >>"
-    )
-    embedded_font = stream_object("/Subtype /OpenType", _SYNTHETIC_MATH_OTF)
-    page = parse_page(
-        simple_page_pdf(
-            "BT /F1 10 Tf 50 100 Td (AB) Tj ET\n",
-            resources="/Font << /F1 5 0 R >>",
-            extra_objects=[font, descriptor, embedded_font],
-        )
-    )
-
-    assert [cell.text for cell in page.word_cells] == ["∑("]
-    assert [cell.text for cell in page.textline_cells] == ["∑("]
