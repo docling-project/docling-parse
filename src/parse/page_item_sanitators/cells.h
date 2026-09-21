@@ -406,9 +406,10 @@ namespace pdflib
      * threshold. Characters below the applicable threshold are merged into
      * words; words are then merged with normalized spaces into one line. Both
      * levels retain maximum enclosing rotation-aligned bounding boxes.
-     * Suppressed glyphs participate in those internal aggregates, but an
-     * aggregate whose final public text is empty is not emitted as a public
-     * word or line cell.
+     * Visible glyphs without a recoverable Unicode mapping retain their U+FFFD
+     * replacement character, so their aggregates remain honest, non-empty
+     * public cells. Blank unresolved glyph programs are classified earlier as
+     * semantic spaces and remain boundaries rather than words.
      *
      * @param cells Character cells in content/reading order; not modified.
      * @return Word and line collections derived from the same analysis.
@@ -919,10 +920,6 @@ namespace pdflib
               }
 
             page_item<PAGE_CELL> aggregate_cell = cell;
-            if(aggregate_cell.text_is_suppressed_glyph)
-              {
-                aggregate_cell.text.clear();
-              }
 
             if(starts_word)
               {

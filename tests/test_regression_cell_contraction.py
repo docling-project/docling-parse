@@ -151,3 +151,15 @@ def test_suppressed_only_aggregates_are_not_public_text_cells():
         hidden = _page(filename, page_no, keep_glyphs=False)
         assert all(cell.text for cell in hidden.word_cells)
         assert all(cell.text for cell in hidden.textline_cells)
+
+
+def test_visible_unmapped_glyphs_still_create_words_and_lines():
+    page = _page("10976580690960943929_004.pdf", 1)
+
+    assert len(page.word_cells) > 40
+    assert len(page.textline_cells) > 10
+    assert all(cell.text for cell in page.word_cells)
+    assert all(cell.text for cell in page.textline_cells)
+    assert any("\ufffd" in cell.text for cell in page.word_cells)
+    assert all("GLYPH<" not in cell.text for cell in page.word_cells)
+    assert all(cell.text.strip() for cell in page.word_cells)

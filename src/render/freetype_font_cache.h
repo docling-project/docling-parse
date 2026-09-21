@@ -89,14 +89,18 @@ namespace pdflib
                          BLPath& path,
                          double* out_advance = nullptr);
 
-    // Returns the exact outline bounds of one embedded glyph in PDF glyph
-    // space (1000 units per em). Glyph identity follows the same rules as
-    // build_text_path(), so /Encoding /Differences remains authoritative.
+    // Resolves one embedded glyph and returns its exact outline bounds in PDF
+    // glyph space (1000 units per em). Glyph identity follows the same rules
+    // as build_text_path(), so /Encoding /Differences remains authoritative.
+    // A successfully resolved blank glyph returns true with `has_ink == false`
+    // and a zero bbox; this lets text extraction distinguish a real space-like
+    // advance from a visible glyph whose Unicode mapping is unavailable.
     bool get_glyph_bbox(const std::shared_ptr<const embedded_font_blob>& blob,
                         const std::string& utf8_text,
                         int64_t char_code,
                         const std::string& glyph_name,
-                        std::array<double, 4>& bbox);
+                        std::array<double, 4>& bbox,
+                        bool* has_ink = nullptr);
 
     // Same, for a face read from a system font FILE. Glyph identity here is
     // the Unicode cmap and nothing else: the file is a substituted face, so
@@ -272,7 +276,8 @@ namespace pdflib
       const std::string& utf8_text,
       int64_t char_code,
       const std::string& glyph_name,
-      std::array<double, 4>& bbox)
+      std::array<double, 4>& bbox,
+      bool* has_ink)
   {
     if(library_ == nullptr or blob == nullptr or not blob->has_bytes())
       {
@@ -296,9 +301,19 @@ namespace pdflib
       }
 
     const glyph_entry* glyph = get_glyph_entry(entry, glyph_indices.front());
-    if(glyph == nullptr or not glyph->has_bbox)
+    if(glyph == nullptr)
       {
         return false;
+      }
+
+    if(has_ink != nullptr)
+      {
+        *has_ink = glyph->has_bbox;
+      }
+    bbox = {0.0, 0.0, 0.0, 0.0};
+    if(not glyph->has_bbox)
+      {
+        return true;
       }
 
     const double scale = 1000.0 / static_cast<double>(entry.face->units_per_EM);

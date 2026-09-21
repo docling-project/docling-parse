@@ -162,10 +162,10 @@ def test_adv_ps_mp10_uses_font_specific_mapping_over_winansi():
     assert text == "ΔξαβεμφΣρσ"
 
 
-def test_default_config_strips_gid_markers():
-    # Production default (keep_glyphs=False, see config.h): the marker is
-    # stripped to a space in pdf_states/text.h, so neither GLYPH<...> nor
-    # the fabricated gid-name text ever reaches the output.
+def test_default_config_replaces_gid_markers():
+    # Production default (keep_glyphs=False, see config.h): visible glyphs
+    # without Unicode mappings become U+FFFD, so neither the internal
+    # GLYPH<...> marker nor fabricated gid-name text reaches the output.
     text = _extract_text(
         ["gid00043", "gid00049", "gid00041"],
         include_tounicode=False,
@@ -173,4 +173,4 @@ def test_default_config_strips_gid_markers():
     )
     assert "GLYPH" not in text
     assert "gid" not in text
-    assert text.strip() == ""
+    assert text == "\ufffd" * 3

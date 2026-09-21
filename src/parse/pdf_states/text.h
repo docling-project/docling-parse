@@ -495,7 +495,11 @@ namespace pdflib
 	  (not config.keep_glyphs) and chars_.rfind("GLYPH<", 0) == 0;
 	if(text_is_suppressed_glyph)
 	  {
-	    chars_ = " ";
+	    // The glyph is visibly painted but the PDF supplies no authoritative
+	    // Unicode mapping. U+FFFD communicates that decoding loss without
+	    // exposing the internal GLYPH<...> diagnostic or pretending the glyph
+	    // is whitespace. Blank glyph programs are identified in add_cell().
+	    chars_ = "\xEF\xBF\xBD";
 	  }
 	
 	//LOG_S(INFO) << item.first << " --> "
@@ -656,9 +660,12 @@ namespace pdflib
         }
 
       bool has_embedded_glyph_bbox = false;
+      bool embedded_glyph_resolved = false;
+      bool embedded_glyph_has_ink = false;
       std::array<double, 4> embedded_glyph_bbox = {0.0, 0.0, 0.0, 0.0};
       if(not font.is_type3() and
-         font.needs_embedded_glyph_bbox() and glyph_code >= 0)
+         (font.needs_embedded_glyph_bbox() or text_is_suppressed_glyph) and
+         glyph_code >= 0)
         {
           if(glyph_metrics_cache == nullptr)
             {
@@ -667,13 +674,31 @@ namespace pdflib
           auto font_blob = font.get_embedded_font_blob();
           const std::string glyph_name =
             font.get_glyph_name(static_cast<uint32_t>(glyph_code));
-          has_embedded_glyph_bbox =
+          embedded_glyph_resolved =
             glyph_metrics_cache->get_glyph_bbox(font_blob,
                                                 text,
                                                 glyph_code,
                                                 glyph_name,
-                                                embedded_glyph_bbox);
-          if(has_embedded_glyph_bbox)
+                                                embedded_glyph_bbox,
+                                                &embedded_glyph_has_ink);
+          has_embedded_glyph_bbox =
+            embedded_glyph_resolved and embedded_glyph_has_ink;
+
+          if(text_is_suppressed_glyph and embedded_glyph_resolved and
+             not embedded_glyph_has_ink)
+            {
+              // Ghostscript's TT_BIAS encoding also hides the identity of
+              // space glyphs. Their empty outline is authoritative: retain
+              // the advance, but make it a semantic contraction boundary.
+              text = " ";
+              text_is_suppressed_glyph = false;
+              is_pdf_word_space = true;
+              font_descent = 0.0;
+              font_ascent = 0.0;
+              ratio = 1.0;
+            }
+          else if(has_embedded_glyph_bbox and
+                  font.needs_embedded_glyph_bbox())
             {
               // Preserve the PDF advance width horizontally. Tight horizontal
               // ink bounds would change text flow; only the malformed vertical
