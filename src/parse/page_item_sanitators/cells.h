@@ -170,11 +170,15 @@ namespace pdflib
      *
      * Cells remain in source order. Explicit space cells are preserved inside
      * the run as semantic word-boundary markers even when their geometry is
-     * empty.
+     * empty. `has_semantic_spaces` records whether those authoritative
+     * boundaries occur anywhere in the run, allowing ordinary inner-word
+     * placement variation to be treated differently from large positioned
+     * field jumps.
      */
     struct line_run
     {
       std::vector<page_item<PAGE_CELL>> cells;
+      bool has_semantic_spaces = false;
     };
 
     /**
@@ -370,8 +374,9 @@ namespace pdflib
      * two-cluster k-means separates ordinary character gaps from dilated word
      * gaps. Sparse or insufficiently separated samples use a conservative
      * default threshold of 0.25; valid inferred thresholds are clamped to at
-     * least 0.18. Explicit spaces remain hard boundaries at their own
-     * adjacency, but do not disable placement analysis elsewhere in the run.
+     * least 0.18. Runs containing explicit spaces do not use this inferred
+     * threshold: those source-level boundaries are authoritative, with only
+     * jumps larger than one character advance allowed to add a boundary.
      *
      * @param run One line of cells in source order.
      * @return Dimensionless normalized gap above which a new word begins.
@@ -401,11 +406,13 @@ namespace pdflib
     /**
      * @brief Constructs word and line cells in a single contraction pass.
      *
-     * Builds line runs and treats explicit space cells as local authoritative
-     * boundaries. Every run also infers a line-local cursor-placement gap
-     * threshold. Characters below the applicable threshold are merged into
-     * words; words are then merged with normalized spaces into one line. Both
-     * levels retain maximum enclosing rotation-aligned bounding boxes.
+     * Builds line runs and treats explicit space cells as authoritative
+     * boundaries. Runs without them infer a line-local cursor-placement gap
+     * threshold. Runs with them tolerate ordinary inner-word placement
+     * variation, while still splitting absolute-positioned fields separated
+     * by more than one neighboring character advance. Words are then merged
+     * with normalized spaces into one line. Both levels retain maximum
+     * enclosing rotation-aligned bounding boxes.
      * Visible glyphs without a recoverable Unicode mapping retain their U+FFFD
      * replacement character, so their aggregates remain honest, non-empty
      * public cells. Blank unresolved glyph programs are classified earlier as
@@ -694,6 +701,7 @@ namespace pdflib
         // the facing-edge geometry test.
         if(is_semantic_space(cell))
           {
+            runs.back().has_semantic_spaces = true;
             runs.back().cells.push_back(cell);
             continue;
           }
@@ -884,10 +892,13 @@ namespace pdflib
     contraction_result result;
     for(auto& run : collect_line_runs(cells))
       {
-        // Explicit PDF spaces remain hard local boundaries. Cursor-placement
-        // analysis still applies to every other adjacency, because separately
-        // positioned table fields frequently omit an intervening space.
-        const double word_gap = infer_word_gap(run);
+        // Explicit PDF spaces are authoritative normal boundaries. On those
+        // lines only a jump larger than a complete neighboring advance may
+        // add another boundary; this still separates absolutely positioned
+        // table fields without splitting a word merely because its glyph ink
+        // or placement has an irregular space-sized gap.
+        const double word_gap = run.has_semantic_spaces
+          ? 1.0 : infer_word_gap(run);
         std::vector<page_item<PAGE_CELL>> words;
         page_item<PAGE_CELL>* previous_visible = nullptr;
         bool explicit_boundary = false;
