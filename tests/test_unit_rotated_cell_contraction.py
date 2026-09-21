@@ -2,6 +2,7 @@
 """Rotation-invariant character adjacency and contraction."""
 
 from io import BytesIO
+from itertools import pairwise
 from math import hypot, sqrt
 
 import pytest
@@ -89,7 +90,9 @@ def _facing_edge_geometry(first, second) -> tuple[float, float]:
     return overlap, gap
 
 
-def _projection_bounds(cells, ux: float, uy: float) -> tuple[float, float, float, float]:
+def _projection_bounds(
+    cells, ux: float, uy: float
+) -> tuple[float, float, float, float]:
     nx, ny = -uy, ux
     points = []
     for cell in cells:
@@ -125,7 +128,7 @@ def test_facing_edges_contract_at_45_degrees():
     assert ux / norm == pytest.approx(1 / sqrt(2), abs=1e-5)
     assert uy / norm == pytest.approx(1 / sqrt(2), abs=1e-5)
 
-    geometry = [_facing_edge_geometry(a, b) for a, b in zip(chars, chars[1:])]
+    geometry = [_facing_edge_geometry(a, b) for a, b in pairwise(chars)]
     assert all(overlap > 0 for overlap, _ in geometry)
     assert geometry[0][1] == pytest.approx(0.0, abs=0.02)
     assert geometry[1][1] == pytest.approx(3.336, abs=0.02)

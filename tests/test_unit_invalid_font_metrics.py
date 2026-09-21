@@ -97,5 +97,3 @@ def test_invalid_metrics_use_embedded_glyph_vertical_bounds() -> None:
     assert (summation.b, summation.t) == pytest.approx((96.0, 100.0))
     assert (parenthesis.l, parenthesis.r) == pytest.approx((70.0, 77.0))
     assert (parenthesis.b, parenthesis.t) == pytest.approx((91.0, 101.0))
-
-

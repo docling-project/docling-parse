@@ -5,7 +5,6 @@ from pathlib import Path
 
 from docling_parse.pdf_parser import DecodeConfig, DoclingPdfParser
 
-
 DATA = Path(__file__).parent / "data" / "regression"
 
 
@@ -124,7 +123,7 @@ def test_standard_symbol_glyph_indices_recover_table_characters():
     page = _page("PDF32000_2008.pdf", 678)
     characters = {cell.text for cell in page.char_cells}
 
-    assert {"⊥", "φ", "ϕ", "∏", "∑", "√", "∪"} <= characters
+    assert {"⊥", "φ", "ϕ", "∏", "∑", "√", "∪"} <= characters  # noqa: RUF001
     assert all("GLYPH<" not in cell.text for cell in page.char_cells)
 
 
