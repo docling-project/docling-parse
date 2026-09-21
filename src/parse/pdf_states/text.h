@@ -72,6 +72,7 @@ namespace pdflib
                   std::string text,  double width,
                   int glyph_code,
                   bool text_is_suppressed_glyph,
+                  bool is_pdf_word_space,
                   int stack_size,
                   std::vector<page_item<PAGE_CELL> >& cells);
 
@@ -542,7 +543,8 @@ namespace pdflib
               }
 
             add_cell(font, text, width, static_cast<int>(item.first),
-                     text_is_suppressed_glyph, stack_size, cells);
+                     text_is_suppressed_glyph, is_word_space,
+                     stack_size, cells);
 
             if(vertical_mode)
               {
@@ -564,7 +566,7 @@ namespace pdflib
     //LOG_S(INFO) << "text-line: " << text;
     if(text.size()>0)
       {
-        add_cell(font, text, width, -1, false, stack_size, cells);
+        add_cell(font, text, width, -1, false, false, stack_size, cells);
       }
 
     return cells;
@@ -574,6 +576,7 @@ namespace pdflib
                                  std::string text, double width,
                                  int glyph_code,
                                  bool text_is_suppressed_glyph,
+                                 bool is_pdf_word_space,
                                  int stack_size,
                                  std::vector<page_item<PAGE_CELL> >& cells)
   {
@@ -767,6 +770,63 @@ namespace pdflib
       const double d_base_x = T_ctm[0] * t_base_x + T_ctm[3] * t_base_y + T_ctm[6];
       const double d_base_y = T_ctm[1] * t_base_x + T_ctm[4] * t_base_y + T_ctm[7];
 
+      // Preserve the PDF cursor geometry independently of the painted glyph
+      // bounds. Tight ink boxes are the right geometry for rendered output,
+      // but cursor origins and advances are the stable signal for deciding
+      // whether consecutive characters form a word or a line. In particular,
+      // this is unaffected by Type 3 side bearings and oversized mathematical
+      // operators.
+      auto map_text_point = [&](double gx, double gy,
+                                double& dx, double& dy)
+      {
+        const double tx = T_text[0] * gx + T_text[3] * gy + T_text[6];
+        const double ty = T_text[1] * gx + T_text[4] * gy + T_text[7];
+        dx = T_ctm[0] * tx + T_ctm[3] * ty + T_ctm[6];
+        dy = T_ctm[1] * tx + T_ctm[4] * ty + T_ctm[7];
+      };
+
+      const double placement_end_x = vertical_mode ? 0.0 : width;
+      const double placement_end_y = vertical_mode
+        ? rise + vertical_displacement
+        : rise;
+      map_text_point(0.0, rise,
+                     cell.text_origin_x, cell.text_origin_y);
+      map_text_point(placement_end_x, placement_end_y,
+                     cell.text_advance_x, cell.text_advance_y);
+
+      double axis_x = cell.text_advance_x - cell.text_origin_x;
+      double axis_y = cell.text_advance_y - cell.text_origin_y;
+      double axis_norm = std::hypot(axis_x, axis_y);
+      if(axis_norm <= 1.e-9)
+        {
+          // Zero-advance marks still need the physical writing direction.
+          // Use the transformed text-space basis, oriented like the font's
+          // normal cursor progression.
+          const double direction =
+            vertical_mode and vertical_displacement < 0.0 ? -1.0 : 1.0;
+          const double basis_x = vertical_mode ? 0.0 : direction;
+          const double basis_y = vertical_mode ? direction : 0.0;
+          axis_x = T_ctm[0] * (T_text[0] * basis_x + T_text[3] * basis_y) +
+                   T_ctm[3] * (T_text[1] * basis_x + T_text[4] * basis_y);
+          axis_y = T_ctm[1] * (T_text[0] * basis_x + T_text[3] * basis_y) +
+                   T_ctm[4] * (T_text[1] * basis_x + T_text[4] * basis_y);
+          axis_norm = std::hypot(axis_x, axis_y);
+        }
+      if(axis_norm > 1.e-9)
+        {
+          cell.writing_axis_x = axis_x / axis_norm;
+          cell.writing_axis_y = axis_y / axis_norm;
+          cell.has_text_placement = true;
+        }
+
+      double nominal_top_x = 0.0;
+      double nominal_top_y = 0.0;
+      map_text_point(0.0, rise + font_size,
+                     nominal_top_x, nominal_top_y);
+      cell.nominal_text_height = std::hypot(
+        nominal_top_x - cell.text_origin_x,
+        nominal_top_y - cell.text_origin_y);
+
       // LOG_S(INFO) << "base_x0_old: " << base[0] << ", base_y0_old: " << base[1];
       // LOG_S(INFO) << "base_x0_new: " << d_base_x << ", base_y0_new: " << d_base_y;
       
@@ -781,6 +841,7 @@ namespace pdflib
       {
 	cell.text = text;
 	cell.text_is_suppressed_glyph = text_is_suppressed_glyph;
+	cell.is_pdf_word_space = is_pdf_word_space;
 	cell.rendering_mode = rendering_mode;
 	
 	cell.space_width = space_width;

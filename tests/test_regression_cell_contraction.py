@@ -68,12 +68,86 @@ def test_suppressed_glyphs_still_contribute_to_word_and_line_geometry():
     hidden = _page(filename, 1, keep_glyphs=False)
     visible = _page(filename, 1, keep_glyphs=True)
 
-    assert [_rect(cell) for cell in hidden.word_cells] == [
-        _rect(cell) for cell in visible.word_cells
-    ]
-    assert [_rect(cell) for cell in hidden.textline_cells] == [
-        _rect(cell) for cell in visible.textline_cells
-    ]
+    visible_word_rects = {_rect(cell) for cell in visible.word_cells}
+    visible_line_rects = {_rect(cell) for cell in visible.textline_cells}
+    assert all(_rect(cell) in visible_word_rects for cell in hidden.word_cells)
+    assert all(_rect(cell) in visible_line_rects for cell in hidden.textline_cells)
     assert all("GLYPH<" not in cell.text for cell in hidden.char_cells)
     assert all("GLYPH<" not in cell.text for cell in hidden.word_cells)
     assert all("GLYPH<" not in cell.text for cell in hidden.textline_cells)
+
+
+def test_absolute_table_positions_break_words_even_when_the_line_has_spaces():
+    sports = _page("11096950916667132630-5.pdf", 2)
+    sports_words = [cell.text for cell in sports.word_cells]
+    assert "SRZoe" not in sports_words
+    assert "JRAmy" not in sports_words
+    assert "Zoe" in sports_words
+    assert "Amy" in sports_words
+
+    safety = _page("10869285887791127292_005.pdf", 9)
+    safety_words = [cell.text for cell in safety.word_cells]
+    assert "hoursWater" not in safety_words
+    assert "hoursRainbow" not in safety_words
+    assert "hours" in safety_words
+    assert "Water" in safety_words
+
+
+def test_math_limits_contract_with_the_base_operator_geometry():
+    page = _page("2508.13113v2.pdf", 4)
+    words = [cell.text for cell in page.word_cells]
+
+    assert "∑Kj=1" in words
+
+
+def test_positioned_math_components_do_not_absorb_preceding_prose():
+    page = _page("stream_parameter_misinterpretation_01.pdf", 1)
+    words = [cell.text for cell in page.word_cells]
+
+    assert words.count("where") == 2
+    assert all(not word.startswith("where√") for word in words)
+    assert any("√" in word and len(word) > 1 for word in words)
+
+
+def test_decimal_codepoint_glyph_names_recover_cover_text():
+    page = _page("298064347821956345-83.pdf", 1)
+    words = [cell.text for cell in page.word_cells]
+
+    assert "März" in words
+    assert "piqueteros" in words
+    assert "cacerolazos" in words
+    assert "&" in words
+    assert all("GLYPH<" not in cell.text for cell in page.char_cells)
+
+
+def test_standard_symbol_glyph_indices_recover_table_characters():
+    page = _page("PDF32000_2008.pdf", 678)
+    characters = {cell.text for cell in page.char_cells}
+
+    assert {"⊥", "φ", "ϕ", "∏", "∑", "√", "∪"} <= characters
+    assert all("GLYPH<" not in cell.text for cell in page.char_cells)
+
+
+def test_distant_vertical_figure_labels_do_not_contract():
+    cases = [
+        ("2203.01017v2.pdf", 1, {"22"}),
+        ("2203.01017v2.pdf", 3, {"010K", "per.Graph"}),
+        ("2206.01062.pdf", 3, {"8%Scientific", "Laws16%"}),
+        ("2206.01062.pdf", 5, {"are:(1)", "ABCD"}),
+    ]
+
+    for filename, page_no, forbidden in cases:
+        words = {cell.text for cell in _page(filename, page_no).word_cells}
+        assert forbidden.isdisjoint(words)
+
+
+def test_suppressed_only_aggregates_are_not_public_text_cells():
+    for filename, page_no in [
+        ("10976580690960943929_004.pdf", 4),
+        ("16134591854657313890-2.pdf", 2),
+        ("298064347821956345-83.pdf", 1),
+        ("5462902444445925132-4.pdf", 3),
+    ]:
+        hidden = _page(filename, page_no, keep_glyphs=False)
+        assert all(cell.text for cell in hidden.word_cells)
+        assert all(cell.text for cell in hidden.textline_cells)

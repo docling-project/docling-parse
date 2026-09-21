@@ -175,9 +175,6 @@ namespace pdflib
     struct line_run
     {
       std::vector<page_item<PAGE_CELL>> cells;
-      // When the source line contains real whitespace, those cells provide a
-      // stronger word-boundary signal than gaps between variable ink bounds.
-      bool has_semantic_spaces = false;
     };
 
     /**
@@ -218,6 +215,20 @@ namespace pdflib
     static double cell_space_width(const page_item<PAGE_CELL>& cell);
 
     /**
+     * @brief Returns the device-space distance advanced by one character.
+     *
+     * Prefers the transient PDF cursor origin and advance endpoint. Legacy or
+     * synthetic cells without placement metadata fall back to their reported
+     * space width, keeping the contractor usable for manually constructed
+     * PAGE_CELL inputs.
+     *
+     * @param cell Character cell whose local placement scale is required.
+     * @return A finite positive normalization length.
+     * @par Complexity O(1).
+     */
+    static double cell_advance_length(const page_item<PAGE_CELL>& cell);
+
+    /**
      * @brief Distinguishes real whitespace from a suppressed glyph marker.
      *
      * Undecodable but visible glyphs are exposed as a single space when
@@ -234,10 +245,10 @@ namespace pdflib
     /**
      * @brief Measures the directed gap from one cell to the next.
      *
-     * Derives the writing-direction unit vector from @p lhs, reverses it for
-     * right-to-left text, and projects the vector between the cells' facing-edge
-     * midpoints onto that axis. Positive values are separation; negative values
-     * indicate overlap. A degenerate writing edge produces positive infinity.
+     * Projects the vector from @p lhs's PDF cursor advance endpoint to @p
+     * rhs's cursor origin onto the physical writing axis. This measures text
+     * placement rather than painted side bearings. Legacy cells without
+     * placement metadata fall back to their facing ink edges.
      *
      * @param lhs Previous cell, which defines direction and trailing edge.
      * @param rhs Following cell, which supplies the leading edge.
@@ -246,6 +257,60 @@ namespace pdflib
      */
     static double forward_gap(const page_item<PAGE_CELL>& lhs,
                               const page_item<PAGE_CELL>& rhs);
+
+    /**
+     * @brief Recognizes a nearby off-baseline component placed by cursor
+     * rewind.
+     *
+     * Mathematical limits, fraction parts, radical contents, and assembled
+     * delimiters are commonly emitted after touching or rewinding the text
+     * cursor. The transverse displacement must also remain within two nominal
+     * character heights; this rejects unrelated figure labels that reuse the
+     * same x-coordinate several text lines away.
+     *
+     * @param lhs Previous visible character.
+     * @param rhs Candidate positioned component.
+     * @return True only for a geometrically local positioned attachment.
+     * @par Complexity O(1).
+     */
+    static bool is_local_positioned_attachment(
+      const page_item<PAGE_CELL>& lhs,
+      const page_item<PAGE_CELL>& rhs);
+
+    /**
+     * @brief Identifies cells emitted by a mathematical layout context.
+     *
+     * TeX/math font-family names and unambiguous non-ASCII mathematical
+     * operators qualify. Ordinary ASCII punctuation alone deliberately does
+     * not, because figure labels often align punctuation and headings at the
+     * same x-coordinate on neighboring rows.
+     *
+     * @param cell Character cell to classify.
+     * @return True when off-baseline positioning is plausibly mathematical.
+     * @par Complexity O(length of the font name and cell text).
+     */
+    static bool has_math_positioning_semantics(
+      const page_item<PAGE_CELL>& cell);
+
+    /**
+     * @brief Tests whether two characters may belong to one word despite a
+     * baseline shift.
+     *
+     * Characters on approximately the same baseline are compatible. A larger
+     * transverse shift is also accepted when the PDF cursor touches or rewinds
+     * along the writing axis, which is how typesetters place fraction parts,
+     * limits, radical contents, and assembled delimiters. Forward movement to
+     * a different baseline remains a boundary, preventing nearby prose from
+     * being absorbed into a following display equation.
+     *
+     * @param lhs Previous visible character.
+     * @param rhs Candidate character to append to the same word.
+     * @return True when their placement relationship is word-compatible.
+     * @par Complexity O(1).
+     */
+    static bool word_baselines_compatible(
+      const page_item<PAGE_CELL>& lhs,
+      const page_item<PAGE_CELL>& rhs);
 
     /**
      * @brief Measures transverse overlap between two cells' facing edges.
@@ -267,9 +332,13 @@ namespace pdflib
     /**
      * @brief Decides whether two visible cells continue the same text line.
      *
-     * Requires nearly parallel writing axes, positive facing-edge overlap, and
-     * a forward gap no larger than a layout-scale bound. The last condition
-     * separates columns or text blocks; word boundaries are inferred later.
+     * Requires nearly parallel writing axes, a cursor-placement gap between
+     * one backward and four forward neighboring character advances, and
+     * positive facing-edge overlap. The overlap requirement is relaxed only
+     * when placement-aware cursors touch or rewind, which is how vertically
+     * offset scripts, fraction parts, and stacked delimiters are positioned.
+     * The gap bounds still separate source-order column resets and forward
+     * layout jumps. Word boundaries are inferred later.
      *
      * @param lhs Previous visible cell in content order.
      * @param rhs Candidate following visible cell.
@@ -296,13 +365,13 @@ namespace pdflib
     /**
      * @brief Infers a line-local normalized threshold for word separation.
      *
-     * For lines without explicit spaces, gaps are divided by the neighboring
-     * cells' average space width. A fixed eight-iteration, one-dimensional
+     * Non-space cursor-placement gaps are divided by the neighboring cells'
+     * average advances. A fixed eight-iteration, one-dimensional
      * two-cluster k-means separates ordinary character gaps from dilated word
      * gaps. Sparse or insufficiently separated samples use a conservative
      * default threshold of 0.25; valid inferred thresholds are clamped to at
-     * least 0.18. Lines with semantic spaces do not call this method because
-     * their source-level boundaries are more reliable than ink-edge gaps.
+     * least 0.18. Explicit spaces remain hard boundaries at their own
+     * adjacency, but do not disable placement analysis elsewhere in the run.
      *
      * @param run One line of cells in source order.
      * @return Dimensionless normalized gap above which a new word begins.
@@ -332,11 +401,14 @@ namespace pdflib
     /**
      * @brief Constructs word and line cells in a single contraction pass.
      *
-     * Builds line runs and treats explicit space cells as authoritative
-     * boundaries. Only runs without such cells infer a line-local word-gap
+     * Builds line runs and treats explicit space cells as local authoritative
+     * boundaries. Every run also infers a line-local cursor-placement gap
      * threshold. Characters below the applicable threshold are merged into
      * words; words are then merged with normalized spaces into one line. Both
      * levels retain maximum enclosing rotation-aligned bounding boxes.
+     * Suppressed glyphs participate in those internal aggregates, but an
+     * aggregate whose final public text is empty is not emitted as a public
+     * word or line cell.
      *
      * @param cells Character cells in content/reading order; not modified.
      * @return Word and line collections derived from the same analysis.
@@ -365,17 +437,42 @@ namespace pdflib
     return std::max(1.e-6, 0.5 * cell_height(cell));
   }
 
+  inline double page_item_sanitator<PAGE_CELLS>::cell_advance_length(
+      const page_item<PAGE_CELL>& cell)
+  {
+    if(cell.has_text_placement)
+      {
+        const double advance = std::hypot(
+          cell.text_advance_x - cell.text_origin_x,
+          cell.text_advance_y - cell.text_origin_y);
+        if(std::isfinite(advance) and advance > 1.e-6)
+          {
+            return advance;
+          }
+      }
+    return cell_space_width(cell);
+  }
+
   inline bool page_item_sanitator<PAGE_CELLS>::is_semantic_space(
       const page_item<PAGE_CELL>& cell)
   {
-    return not cell.text_is_suppressed_glyph and
-           utils::string::is_space(cell.text);
+    return cell.is_pdf_word_space or
+           (not cell.text_is_suppressed_glyph and
+            utils::string::is_space(cell.text));
   }
 
   inline double page_item_sanitator<PAGE_CELLS>::forward_gap(
       const page_item<PAGE_CELL>& lhs,
       const page_item<PAGE_CELL>& rhs)
   {
+    if(lhs.has_text_placement and rhs.has_text_placement)
+      {
+        return (rhs.text_origin_x - lhs.text_advance_x) *
+                 lhs.writing_axis_x +
+               (rhs.text_origin_y - lhs.text_advance_y) *
+                 lhs.writing_axis_y;
+      }
+
     double ux = lhs.r_x1 - lhs.r_x0;
     double uy = lhs.r_y1 - lhs.r_y0;
     double norm = std::hypot(ux, uy);
@@ -406,6 +503,87 @@ namespace pdflib
       ? 0.5 * (rhs.r_y0 + rhs.r_y3)
       : 0.5 * (rhs.r_y1 + rhs.r_y2);
     return (head_x - tail_x) * ux + (head_y - tail_y) * uy;
+  }
+
+  inline bool page_item_sanitator<PAGE_CELLS>::word_baselines_compatible(
+      const page_item<PAGE_CELL>& lhs,
+      const page_item<PAGE_CELL>& rhs)
+  {
+    if(not lhs.has_text_placement or not rhs.has_text_placement)
+      {
+        return true;
+      }
+
+    const double nx = -lhs.writing_axis_y;
+    const double ny = lhs.writing_axis_x;
+    const double baseline_offset = std::abs(
+      (rhs.text_origin_x - lhs.text_origin_x) * nx +
+      (rhs.text_origin_y - lhs.text_origin_y) * ny);
+    const double nominal_height = std::max(
+      1.e-6,
+      std::min(lhs.nominal_text_height, rhs.nominal_text_height));
+    if(baseline_offset <= 0.35 * nominal_height)
+      {
+        return true;
+      }
+
+    return is_local_positioned_attachment(lhs, rhs);
+  }
+
+  inline bool page_item_sanitator<PAGE_CELLS>::is_local_positioned_attachment(
+      const page_item<PAGE_CELL>& lhs,
+      const page_item<PAGE_CELL>& rhs)
+  {
+    if(not lhs.has_text_placement or not rhs.has_text_placement)
+      {
+        return false;
+      }
+
+    const double scale = std::max(cell_advance_length(lhs),
+                                  cell_advance_length(rhs));
+    if(forward_gap(lhs, rhs) > 0.10 * scale)
+      {
+        return false;
+      }
+
+    const double nx = -lhs.writing_axis_y;
+    const double ny = lhs.writing_axis_x;
+    const double transverse_offset = std::abs(
+      (rhs.text_origin_x - lhs.text_origin_x) * nx +
+      (rhs.text_origin_y - lhs.text_origin_y) * ny);
+    const double nominal_height = std::max(
+      1.e-6,
+      std::max(lhs.nominal_text_height, rhs.nominal_text_height));
+    return transverse_offset <= 2.0 * nominal_height and
+           (has_math_positioning_semantics(lhs) or
+            has_math_positioning_semantics(rhs));
+  }
+
+  inline bool page_item_sanitator<PAGE_CELLS>::has_math_positioning_semantics(
+      const page_item<PAGE_CELL>& cell)
+  {
+    const std::string font = utils::string::to_lower(cell.font_name);
+    for(const char* token : {"cmmi", "cmsy", "cmex", "cmr", "cmbx",
+                             "msam", "msbm", "math", "symbol", "mtextra"})
+      {
+        if(font.find(token) != std::string::npos)
+          {
+            return true;
+          }
+      }
+
+    for(const char* symbol : {"∑", "∏", "∫", "√", "∞", "∈",
+                              "∉", "≠", "≤", "≥", "⊂", "⊃",
+                              "⊆", "⊇", "⊥", "∪", "∩", "⎛",
+                              "⎜", "⎝", "⎞", "⎟", "⎠", "⎡",
+                              "⎢", "⎣", "⎤", "⎥", "⎦"})
+      {
+        if(cell.text.find(symbol) != std::string::npos)
+          {
+            return true;
+          }
+      }
+    return false;
   }
 
   inline double page_item_sanitator<PAGE_CELLS>::facing_edge_overlap(
@@ -458,10 +636,14 @@ namespace pdflib
       const page_item<PAGE_CELL>& lhs,
       const page_item<PAGE_CELL>& rhs)
   {
-    double lux = lhs.r_x1 - lhs.r_x0;
-    double luy = lhs.r_y1 - lhs.r_y0;
-    double rux = rhs.r_x1 - rhs.r_x0;
-    double ruy = rhs.r_y1 - rhs.r_y0;
+    double lux = lhs.has_text_placement
+      ? lhs.writing_axis_x : lhs.r_x1 - lhs.r_x0;
+    double luy = lhs.has_text_placement
+      ? lhs.writing_axis_y : lhs.r_y1 - lhs.r_y0;
+    double rux = rhs.has_text_placement
+      ? rhs.writing_axis_x : rhs.r_x1 - rhs.r_x0;
+    double ruy = rhs.has_text_placement
+      ? rhs.writing_axis_y : rhs.r_y1 - rhs.r_y0;
     const double ln = std::hypot(lux, luy);
     const double rn = std::hypot(rux, ruy);
     if(ln <= 1.e-9 or rn <= 1.e-9)
@@ -470,24 +652,23 @@ namespace pdflib
       }
     lux /= ln; luy /= ln;
     rux /= rn; ruy /= rn;
-    if(std::abs(lux * rux + luy * ruy) < 0.985)
+    if(lux * rux + luy * ruy < 0.985)
       {
         return false;
       }
 
-    if(facing_edge_overlap(lhs, rhs) <= 1.e-6)
+    // A very large same-baseline cursor jump is a column/block boundary, not
+    // a line continuation. Character advances are local placement scales and
+    // cannot be inflated by tall ink or a malformed font space metric.
+    const double layout_scale = std::max(cell_advance_length(lhs),
+                                         cell_advance_length(rhs));
+    const double gap = forward_gap(lhs, rhs);
+    if(facing_edge_overlap(lhs, rhs) <= 1.e-6 and
+       not is_local_positioned_attachment(lhs, rhs))
       {
         return false;
       }
-
-    // A very large same-baseline jump is a column/block boundary, not a line
-    // continuation. This bound only separates layout regions; word decisions
-    // are made adaptively below.
-    const double layout_scale = std::max({cell_space_width(lhs),
-                                          cell_space_width(rhs),
-                                          0.5 * std::max(cell_height(lhs),
-                                                         cell_height(rhs))});
-    return forward_gap(lhs, rhs) <= 4.0 * layout_scale;
+    return -layout_scale <= gap and gap <= 4.0 * layout_scale;
   }
 
   inline std::vector<typename page_item_sanitator<PAGE_CELLS>::line_run>
@@ -512,7 +693,6 @@ namespace pdflib
         // the facing-edge geometry test.
         if(is_semantic_space(cell))
           {
-            runs.back().has_semantic_spaces = true;
             runs.back().cells.push_back(cell);
             continue;
           }
@@ -553,8 +733,8 @@ namespace pdflib
           }
         if(previous != nullptr and not crossed_explicit_space)
           {
-            const double scale = 0.5 * (cell_space_width(*previous) +
-                                        cell_space_width(cell));
+            const double scale = 0.5 * (cell_advance_length(*previous) +
+                                        cell_advance_length(cell));
             const double normalized = std::max(0.0, forward_gap(*previous, cell)) /
                                       std::max(1.e-6, scale);
             gaps.push_back(normalized);
@@ -703,13 +883,10 @@ namespace pdflib
     contraction_result result;
     for(auto& run : collect_line_runs(cells))
       {
-        // Explicit PDF spaces are authoritative. In their presence, applying
-        // ink-edge clustering as a second boundary source fragments fonts
-        // with uneven side bearings (especially tight Type 3 glyph boxes).
-        // PDFs that omit spaces still use adaptive geometric dilation.
-        const double word_gap = run.has_semantic_spaces
-          ? std::numeric_limits<double>::infinity()
-          : infer_word_gap(run);
+        // Explicit PDF spaces remain hard local boundaries. Cursor-placement
+        // analysis still applies to every other adjacency, because separately
+        // positioned table fields frequently omit an intervening space.
+        const double word_gap = infer_word_gap(run);
         std::vector<page_item<PAGE_CELL>> words;
         page_item<PAGE_CELL>* previous_visible = nullptr;
         bool explicit_boundary = false;
@@ -725,12 +902,20 @@ namespace pdflib
             bool starts_word = words.empty() or explicit_boundary;
             if(not starts_word and previous_visible != nullptr)
               {
-                const double scale = 0.5 * (cell_space_width(*previous_visible) +
-                                            cell_space_width(cell));
-                const double normalized_gap =
-                  std::max(0.0, forward_gap(*previous_visible, cell)) /
-                  std::max(1.e-6, scale);
-                starts_word = normalized_gap > word_gap;
+                if(not word_baselines_compatible(*previous_visible, cell))
+                  {
+                    starts_word = true;
+                  }
+                else
+                  {
+                    const double scale =
+                      0.5 * (cell_advance_length(*previous_visible) +
+                             cell_advance_length(cell));
+                    const double normalized_gap =
+                      std::max(0.0, forward_gap(*previous_visible, cell)) /
+                      std::max(1.e-6, scale);
+                    starts_word = normalized_gap > word_gap;
+                  }
               }
 
             page_item<PAGE_CELL> aggregate_cell = cell;
@@ -757,15 +942,24 @@ namespace pdflib
           }
 
         page_item<PAGE_CELL> line = words.front();
-        result.words.push_back(words.front());
+        if(not words.front().text.empty())
+          {
+            result.words.push_back(words.front());
+          }
         for(std::size_t i = 1; i < words.size(); ++i)
           {
-            result.words.push_back(words[i]);
+            if(not words[i].text.empty())
+              {
+                result.words.push_back(words[i]);
+              }
             const bool insert_space =
               not line.text.empty() and not words[i].text.empty();
             append_cell(line, words[i], insert_space);
           }
-        result.lines.push_back(line);
+        if(not line.text.empty())
+          {
+            result.lines.push_back(line);
+          }
       }
     return result;
   }

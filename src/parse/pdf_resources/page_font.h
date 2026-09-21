@@ -4,6 +4,7 @@
 #define PDF_PAGE_FONT_RESOURCE_H
 
 #include <parse/utils/ccitt/ccitt_utils.h>
+#include <parse/pdf_resources/page_font/symbol_glyph_indices.h>
 
 #include <parse/qpdf/qpdf_compat.h>
 
@@ -2588,6 +2589,8 @@ namespace pdflib
     std::regex re_01(R"(\/(.+)\.(.+))");
     std::regex re_02(R"((\/)?(uni|UNI)([0-9A-Fa-f]{4}))");
     std::regex re_04(R"((\/)(C)(\d+))");
+    std::regex re_decimal_codepoint(R"(G(\d+))");
+    std::regex re_symbol_glyph_index(R"(g(\d+))");
 
     // The unicode replacement character U+FFFD in utf8: a /ToUnicode
     // mapping to this value means 'unknown character' and is treated as
@@ -2614,6 +2617,60 @@ namespace pdflib
     // ('gid00043gid00049...') that downstream quality gates cannot detect
     // (docling-project/docling-parse#238).
     std::regex re_gid(R"((gid|glyph|g|cid|index)\d+)", std::regex::icase);
+
+    // A small family of PDF producers replaces every descriptive glyph name
+    // with an uppercase `G<decimal Unicode>` name. Do not infer that convention
+    // from one glyph: require every name in the Differences vector to match.
+    // G32 is the decisive embedded-space sentinel. Distiller's legacy `0150`
+    // fonts use the same convention even in subsets that happen not to contain
+    // a space, so that producer-specific suffix is the only accepted fallback.
+    bool decimal_codepoint_names = false;
+    if(diffs.isArray())
+      {
+        bool saw_name = false;
+        bool saw_space = false;
+        bool all_decimal_codepoints = true;
+        for(int l = 0; l < diffs.getArrayNItems(); ++l)
+          {
+            QPDFObjectHandle diff = diffs.getArrayItem(l);
+            if(diff.isNumber()) { continue; }
+
+            std::string raw_name;
+            if(not qpdf_object::get_name_or_string(diff, raw_name))
+              {
+                all_decimal_codepoints = false;
+                break;
+              }
+            if(not raw_name.empty() and raw_name.front() == '/')
+              {
+                raw_name.erase(raw_name.begin());
+              }
+
+            std::smatch decimal_match;
+            if(not std::regex_match(raw_name, decimal_match,
+                                    re_decimal_codepoint))
+              {
+                all_decimal_codepoints = false;
+                break;
+              }
+            const uint32_t codepoint =
+              static_cast<uint32_t>(std::stoul(decimal_match[1].str()));
+            if(not utf8::internal::is_code_point_valid(codepoint))
+              {
+                all_decimal_codepoints = false;
+                break;
+              }
+            saw_name = true;
+            saw_space = saw_space or codepoint == 32;
+          }
+        const bool legacy_distiller_0150 =
+          font_name.size() >= 4 and
+          font_name.compare(font_name.size() - 4, 4, "0150") == 0;
+        decimal_codepoint_names = saw_name and all_decimal_codepoints and
+                                  (saw_space or legacy_distiller_0150);
+      }
+
+    const bool standard_symbol_font = matched_font_name().name == "symbol";
 
     // Last-resort for glyph-names that neither the /ToUnicode cmap nor
     // any glyph-table could resolve (eg custom ligatures like /Th, /ft
@@ -2724,6 +2781,43 @@ namespace pdflib
 				    << " -> " << diff_numb_to_char[numb]
 				    << " (/ToUnicode)";
 		      }
+                    else if(decimal_codepoint_names and
+                            std::regex_match(name_, match,
+                                             re_decimal_codepoint))
+                      {
+                        const uint32_t codepoint = static_cast<uint32_t>(
+                          std::stoul(match[1].str()));
+                        std::vector<uint32_t> codepoints = {codepoint};
+                        diff_numb_to_char[numb] =
+                          utils::string::vec_to_utf8(codepoints);
+                        LOG_S(INFO) << "differences[" << numb << "] -> " << name
+                                    << " -> " << diff_numb_to_char[numb]
+                                    << " (decimal codepoint glyph-name)";
+                      }
+                    else if(standard_symbol_font and
+                            std::regex_match(name_, match,
+                                             re_symbol_glyph_index))
+                      {
+                        const std::size_t glyph_index = static_cast<std::size_t>(
+                          std::stoul(match[1].str()));
+                        const std::string_view glyph_name =
+                          standard_symbol_glyph_name(glyph_index);
+                        const std::string glyph_name_string(glyph_name);
+                        if(not glyph_name.empty() and
+                           glyphs.has(glyph_name_string))
+                          {
+                            diff_numb_to_char[numb] = glyphs[glyph_name_string];
+                            LOG_S(INFO) << "differences[" << numb << "] -> " << name
+                                        << " -> " << glyph_name_string
+                                        << " -> " << diff_numb_to_char[numb]
+                                        << " (standard Symbol glyph index)";
+                          }
+                        else
+                          {
+                            diff_numb_to_char[numb] =
+                              resolve_unknown_name(name, name_);
+                          }
+                      }
                     else if(glyphs.has(name)) // method 2: glyph-name -> unicode via the glyph-tables (AGL)
                       {
                         diff_numb_to_char[numb] = glyphs[name];
