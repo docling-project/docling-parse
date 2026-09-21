@@ -25,6 +25,9 @@ namespace pdflib
     struct type3_glyph
     {
       bool valid = false;
+      // The CharProc has metrics but no painting operator. It still advances
+      // text like whitespace, but has no ink rectangle to render or expose.
+      bool blank = false;
       int w = 0;
       int h = 0;
       // 8-bit mask in the renderer's image-mask convention: 0 paints the fill
@@ -3109,6 +3112,7 @@ namespace pdflib
     std::vector<std::array<double, 2> > cur;
     double cx = 0.0, cy = 0.0;   // current point, LOCAL coords
     bool any_fill = false;
+    bool unsupported_paint = false;
 
     // Row-vector affine [a b c d e f], composed like the PDF cm operator.
     std::array<double, 6> ctm = {1, 0, 0, 1, 0, 0};
@@ -3197,10 +3201,25 @@ namespace pdflib
             close_cur();
             any_fill = true;
           }
+        else if(op == "S" or op == "s" or op == "sh" or op == "Do" or
+                op == "Tj" or op == "TJ" or op == "'" or op == "\"")
+          {
+            // These operations can paint, but this lightweight Type 3 parser
+            // does not currently rasterize them. Do not misclassify such a
+            // glyph as whitespace merely because it has no supported fill.
+            unsupported_paint = true;
+          }
       }
     close_cur();
 
-    if(not any_fill or polys.empty()) { return nullptr; }
+    if(not any_fill)
+      {
+        if(unsupported_paint) { return nullptr; }
+        auto glyph = std::make_shared<type3_glyph>();
+        glyph->blank = true;
+        return glyph;
+      }
+    if(polys.empty()) { return nullptr; }
 
     double bx0 = polys[0][0][0], by0 = polys[0][0][1];
     double bx1 = bx0, by1 = by0;

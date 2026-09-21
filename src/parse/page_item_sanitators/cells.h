@@ -41,10 +41,11 @@ namespace pdflib
      * @brief Contracts character cells into inferred word cells.
      *
      * Characters are first divided into rotation-aware line runs. Within each
-     * run, normalized inter-character gaps are clustered to distinguish normal
-     * character placement from word spacing. Explicit space cells always form
-     * word boundaries. Each returned word receives the smallest rectangle,
-     * aligned with its writing direction, that encloses all constituent cells.
+     * run, explicit space cells are used as authoritative word boundaries when
+     * present. Lines without explicit spaces instead cluster normalized
+     * inter-character gaps to distinguish ordinary placement from word
+     * spacing. Each returned word receives the smallest rectangle, aligned
+     * with its writing direction, that encloses all constituent cells.
      *
      * The input cells are inspected but not modified. The current algorithm is
      * geometry-driven and does not use contraction parameters from @p config;
@@ -174,6 +175,9 @@ namespace pdflib
     struct line_run
     {
       std::vector<page_item<PAGE_CELL>> cells;
+      // When the source line contains real whitespace, those cells provide a
+      // stronger word-boundary signal than gaps between variable ink bounds.
+      bool has_semantic_spaces = false;
     };
 
     /**
@@ -212,6 +216,20 @@ namespace pdflib
      * @par Complexity O(1).
      */
     static double cell_space_width(const page_item<PAGE_CELL>& cell);
+
+    /**
+     * @brief Distinguishes real whitespace from a suppressed glyph marker.
+     *
+     * Undecodable but visible glyphs are exposed as a single space when
+     * `keep_glyphs` is disabled. Their transient suppression flag prevents
+     * that placeholder from becoming a hard word boundary or disappearing
+     * from line geometry. Genuine PDF spaces remain semantic boundaries.
+     *
+     * @param cell Character cell to classify.
+     * @return True only for actual whitespace cells.
+     * @par Complexity O(length of the cell text).
+     */
+    static bool is_semantic_space(const page_item<PAGE_CELL>& cell);
 
     /**
      * @brief Measures the directed gap from one cell to the next.
@@ -278,11 +296,13 @@ namespace pdflib
     /**
      * @brief Infers a line-local normalized threshold for word separation.
      *
-     * Gaps not crossing explicit spaces are divided by the neighboring cells'
-     * average space width. A fixed eight-iteration, one-dimensional two-cluster
-     * k-means separates ordinary character gaps from dilated word gaps. Sparse
-     * or insufficiently separated samples use a conservative default threshold
-     * of 0.25; valid inferred thresholds are clamped to at least 0.18.
+     * For lines without explicit spaces, gaps are divided by the neighboring
+     * cells' average space width. A fixed eight-iteration, one-dimensional
+     * two-cluster k-means separates ordinary character gaps from dilated word
+     * gaps. Sparse or insufficiently separated samples use a conservative
+     * default threshold of 0.25; valid inferred thresholds are clamped to at
+     * least 0.18. Lines with semantic spaces do not call this method because
+     * their source-level boundaries are more reliable than ink-edge gaps.
      *
      * @param run One line of cells in source order.
      * @return Dimensionless normalized gap above which a new word begins.
@@ -312,11 +332,11 @@ namespace pdflib
     /**
      * @brief Constructs word and line cells in a single contraction pass.
      *
-     * Builds line runs, infers a word-gap threshold independently for each run,
-     * and treats explicit space cells as unconditional boundaries. Characters
-     * below the threshold are merged into words; words are then merged with
-     * normalized spaces into one line. Both levels retain maximum enclosing
-     * rotation-aligned bounding boxes.
+     * Builds line runs and treats explicit space cells as authoritative
+     * boundaries. Only runs without such cells infer a line-local word-gap
+     * threshold. Characters below the applicable threshold are merged into
+     * words; words are then merged with normalized spaces into one line. Both
+     * levels retain maximum enclosing rotation-aligned bounding boxes.
      *
      * @param cells Character cells in content/reading order; not modified.
      * @return Word and line collections derived from the same analysis.
@@ -343,6 +363,13 @@ namespace pdflib
         return cell.space_width;
       }
     return std::max(1.e-6, 0.5 * cell_height(cell));
+  }
+
+  inline bool page_item_sanitator<PAGE_CELLS>::is_semantic_space(
+      const page_item<PAGE_CELL>& cell)
+  {
+    return not cell.text_is_suppressed_glyph and
+           utils::string::is_space(cell.text);
   }
 
   inline double page_item_sanitator<PAGE_CELLS>::forward_gap(
@@ -483,8 +510,9 @@ namespace pdflib
         // Explicit spaces are semantic boundary markers. Some PDFs give them
         // a zero-sized quad, so they neither start a line nor participate in
         // the facing-edge geometry test.
-        if(utils::string::is_space(cell.text))
+        if(is_semantic_space(cell))
           {
+            runs.back().has_semantic_spaces = true;
             runs.back().cells.push_back(cell);
             continue;
           }
@@ -493,7 +521,7 @@ namespace pdflib
         for(auto itr = runs.back().cells.rbegin();
             itr != runs.back().cells.rend(); ++itr)
           {
-            if(not utils::string::is_space(itr->text))
+            if(not is_semantic_space(*itr))
               {
                 previous_visible = &*itr;
                 break;
@@ -518,7 +546,7 @@ namespace pdflib
 
     for(const auto& cell : run.cells)
       {
-        if(utils::string::is_space(cell.text))
+        if(is_semantic_space(cell))
           {
             crossed_explicit_space = true;
             continue;
@@ -665,6 +693,8 @@ namespace pdflib
                              aggregate.r_x2, aggregate.r_x3});
     aggregate.y1 = std::max({aggregate.r_y0, aggregate.r_y1,
                              aggregate.r_y2, aggregate.r_y3});
+    aggregate.text_is_suppressed_glyph =
+      aggregate.text_is_suppressed_glyph and next.text_is_suppressed_glyph;
   }
 
   inline typename page_item_sanitator<PAGE_CELLS>::contraction_result
@@ -673,14 +703,20 @@ namespace pdflib
     contraction_result result;
     for(auto& run : collect_line_runs(cells))
       {
-        const double word_gap = infer_word_gap(run);
+        // Explicit PDF spaces are authoritative. In their presence, applying
+        // ink-edge clustering as a second boundary source fragments fonts
+        // with uneven side bearings (especially tight Type 3 glyph boxes).
+        // PDFs that omit spaces still use adaptive geometric dilation.
+        const double word_gap = run.has_semantic_spaces
+          ? std::numeric_limits<double>::infinity()
+          : infer_word_gap(run);
         std::vector<page_item<PAGE_CELL>> words;
         page_item<PAGE_CELL>* previous_visible = nullptr;
         bool explicit_boundary = false;
 
         for(auto& cell : run.cells)
           {
-            if(utils::string::is_space(cell.text))
+            if(is_semantic_space(cell))
               {
                 explicit_boundary = true;
                 continue;
@@ -697,13 +733,19 @@ namespace pdflib
                 starts_word = normalized_gap > word_gap;
               }
 
+            page_item<PAGE_CELL> aggregate_cell = cell;
+            if(aggregate_cell.text_is_suppressed_glyph)
+              {
+                aggregate_cell.text.clear();
+              }
+
             if(starts_word)
               {
-                words.push_back(cell);
+                words.push_back(std::move(aggregate_cell));
               }
             else
               {
-                append_cell(words.back(), cell, false);
+                append_cell(words.back(), aggregate_cell, false);
               }
             previous_visible = &cell;
             explicit_boundary = false;
@@ -719,7 +761,9 @@ namespace pdflib
         for(std::size_t i = 1; i < words.size(); ++i)
           {
             result.words.push_back(words[i]);
-            append_cell(line, words[i], true);
+            const bool insert_space =
+              not line.text.empty() and not words[i].text.empty();
+            append_cell(line, words[i], insert_space);
           }
         result.lines.push_back(line);
       }

@@ -92,6 +92,13 @@ namespace pdflib
     bool widget;
     bool last_merged_cell_was_ligature = false;
 
+    // A visible glyph whose Unicode mapping was unavailable may have its
+    // GLYPH<...> placeholder suppressed for public text output. Preserve that
+    // distinction during the current decode so contraction can still use the
+    // glyph's geometry instead of mistaking its replacement text for a real
+    // PDF space. This transient implementation detail is not serialized.
+    bool text_is_suppressed_glyph = false;
+
     // graphics state properties
     bool                has_graphics_state = false;
     double              line_width = -1;

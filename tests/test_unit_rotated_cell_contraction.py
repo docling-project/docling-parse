@@ -38,6 +38,31 @@ def _rotated_text_pdf() -> bytes:
     )
 
 
+def _explicit_space_with_irregular_inner_gap_pdf() -> bytes:
+    # A and B have a 3.336 pt gap even though they belong to one word. This
+    # models the varying side bearings exposed by tight Type 3 ink boxes. The
+    # same line contains a genuine PDF space between B and C, which is the
+    # authoritative word-boundary signal.
+    content = " ".join(
+        [
+            "BT /F1 12 Tf 100 50 Td",
+            "(A) Tj 11.340 0 Td",
+            "(B) Tj ( ) Tj (C) Tj (D) Tj ET",
+        ]
+    )
+    font = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Name /F1 >>"
+    return build_pdf(
+        [
+            "<< /Type /Catalog /Pages 2 0 R >>",
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 100] "
+            "/Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+            font,
+            f"<< /Length {len(content)} >>\nstream\n{content}\nendstream",
+        ]
+    )
+
+
 def _facing_edge_geometry(first, second) -> tuple[float, float]:
     """Return transverse overlap and forward gap of two LTR cell edges."""
     a = first.rect
@@ -114,3 +139,16 @@ def test_facing_edges_contract_at_45_degrees():
     char_bounds = _projection_bounds(chars[:2], ux / norm, uy / norm)
     word_bounds = _projection_bounds(page.word_cells[:1], ux / norm, uy / norm)
     assert word_bounds == pytest.approx(char_bounds, abs=1e-6)
+
+
+def test_explicit_spaces_override_irregular_inner_word_gaps():
+    document = DoclingPdfParser(loglevel="fatal").load(
+        path_or_stream=BytesIO(_explicit_space_with_irregular_inner_gap_pdf())
+    )
+    try:
+        _, page = next(document.iterate_pages())
+    finally:
+        document.unload()
+
+    assert [cell.text for cell in page.word_cells] == ["AB", "CD"]
+    assert [cell.text for cell in page.textline_cells] == ["AB CD"]

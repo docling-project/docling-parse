@@ -71,6 +71,7 @@ namespace pdflib
     void add_cell(pdf_resource<PAGE_FONT>& font,
                   std::string text,  double width,
                   int glyph_code,
+                  bool text_is_suppressed_glyph,
                   int stack_size,
                   std::vector<page_item<PAGE_CELL> >& cells);
 
@@ -83,6 +84,10 @@ namespace pdflib
     std::array<double, 8> compute_rect(double font_descent,
                                        double font_ascent,
                                        double width);
+
+    std::array<double, 8> compute_type3_rect(
+      const std::array<double, 6>& font_matrix,
+      const std::array<double, 6>& glyph_matrix);
 
     std::array<double, 4> compute_bbox(std::array<double, 8>& rect);
 
@@ -485,7 +490,9 @@ namespace pdflib
 			   << "): " << e.what() << "; emitting '" << chars_ << "'";
 	  }
 
-	if((not config.keep_glyphs) and chars_.rfind("GLYPH<", 0) == 0)
+	const bool text_is_suppressed_glyph =
+	  (not config.keep_glyphs) and chars_.rfind("GLYPH<", 0) == 0;
+	if(text_is_suppressed_glyph)
 	  {
 	    chars_ = " ";
 	  }
@@ -534,7 +541,8 @@ namespace pdflib
                   font.get_vertical_displacement(item.first) * font_size;
               }
 
-            add_cell(font, text, width, static_cast<int>(item.first), stack_size, cells);
+            add_cell(font, text, width, static_cast<int>(item.first),
+                     text_is_suppressed_glyph, stack_size, cells);
 
             if(vertical_mode)
               {
@@ -556,7 +564,7 @@ namespace pdflib
     //LOG_S(INFO) << "text-line: " << text;
     if(text.size()>0)
       {
-        add_cell(font, text, width, -1, stack_size, cells);
+        add_cell(font, text, width, -1, false, stack_size, cells);
       }
 
     return cells;
@@ -565,6 +573,7 @@ namespace pdflib
   void pdf_state<TEXT>::add_cell(pdf_resource<PAGE_FONT>& font,
                                  std::string text, double width,
                                  int glyph_code,
+                                 bool text_is_suppressed_glyph,
                                  int stack_size,
                                  std::vector<page_item<PAGE_CELL> >& cells)
   {
@@ -619,9 +628,34 @@ namespace pdflib
           ratio = font_capheight/font_ascent;
         }
 
+      // Type 3 fonts may advertise a deliberately loose /FontBBox (for
+      // example [-10 -10 10 10] with an identity /FontMatrix) even though
+      // their CharProcs draw in a roughly one-unit em. Extract the cached
+      // CharProc bounds here; valid painted glyphs are mapped directly below,
+      // while an unpainted procedure retains only its text advance.
+      std::shared_ptr<pdf_resource<PAGE_FONT>::type3_glyph> type3_glyph = nullptr;
+      if(font.is_type3() and glyph_code >= 0)
+        {
+          type3_glyph = font.get_type3_glyph(static_cast<uint32_t>(glyph_code));
+          if(type3_glyph and type3_glyph->blank)
+            {
+              // An unpainted glyph has an advance but no ink bounds. Keeping
+              // the width and collapsing the vertical extent represents that
+              // distinction without falling back to a loose font-wide box.
+              // Its glyph name is not visible text; expose it as semantic
+              // whitespace so contraction treats it as a boundary marker.
+              text = " ";
+              text_is_suppressed_glyph = false;
+              font_descent = 0.0;
+              font_ascent = 0.0;
+              ratio = 1.0;
+            }
+        }
+
       bool has_embedded_glyph_bbox = false;
       std::array<double, 4> embedded_glyph_bbox = {0.0, 0.0, 0.0, 0.0};
-      if(font.needs_embedded_glyph_bbox() and glyph_code >= 0)
+      if(not font.is_type3() and
+         font.needs_embedded_glyph_bbox() and glyph_code >= 0)
         {
           if(glyph_metrics_cache == nullptr)
             {
@@ -679,7 +713,19 @@ namespace pdflib
       
       // LOG_S(INFO) << "ratio: " << ratio;
 
-      std::array<double, 8> rect = compute_rect(font_descent*ratio, font_ascent*ratio, width);
+      std::array<double, 8> rect;
+      if(type3_glyph and type3_glyph->valid)
+        {
+          // A Type 3 glyph is painted by its CharProc rather than by the
+          // declared advance rectangle. Map the complete CharProc bounds so
+          // both dimensions match the rendered ink. The advance width remains
+          // responsible only for moving the text cursor below.
+          rect = compute_type3_rect(font.get_font_matrix(), type3_glyph->cm);
+        }
+      else
+        {
+          rect = compute_rect(font_descent*ratio, font_ascent*ratio, width);
+        }
       {
         cell.r_x0 = rect[0];
         cell.r_y0 = rect[1];
@@ -734,6 +780,7 @@ namespace pdflib
 
       {
 	cell.text = text;
+	cell.text_is_suppressed_glyph = text_is_suppressed_glyph;
 	cell.rendering_mode = rendering_mode;
 	
 	cell.space_width = space_width;
@@ -852,7 +899,7 @@ namespace pdflib
         // places, clips and paints it like any other image.
         if(font.is_type3() and glyph_code >= 0)
           {
-            auto g3 = font.get_type3_glyph(static_cast<uint32_t>(glyph_code));
+            auto g3 = type3_glyph;
             if(g3 and g3->valid and g3->mask)
               {
                 const std::array<double, 6>& fm = font.get_font_matrix();
@@ -1216,6 +1263,39 @@ namespace pdflib
     }
 
     return d_rect;
+  }
+
+  std::array<double, 8> pdf_state<TEXT>::compute_type3_rect(
+      const std::array<double, 6>& font_matrix,
+      const std::array<double, 6>& glyph_matrix)
+  {
+    // PAGE_CELL corners follow the writing-direction convention used by the
+    // contractor: bottom-left, bottom-right, top-right, top-left. The Type 3
+    // renderer maps the same unit square through these four transformations,
+    // so the extracted character box and painted glyph stay identical even
+    // under rotation, shear, rise, or a non-default FontMatrix.
+    constexpr std::array<std::array<double, 2>, 4> corners = {{
+      {{0.0, 0.0}}, {{1.0, 0.0}}, {{1.0, 1.0}}, {{0.0, 1.0}}
+    }};
+
+    std::array<double, 8> rect;
+    for(std::size_t i = 0; i < corners.size(); ++i)
+      {
+        const double gx = glyph_matrix[0]*corners[i][0] +
+                          glyph_matrix[2]*corners[i][1] + glyph_matrix[4];
+        const double gy = glyph_matrix[1]*corners[i][0] +
+                          glyph_matrix[3]*corners[i][1] + glyph_matrix[5];
+        const double ex = (font_matrix[0]*gx + font_matrix[2]*gy +
+                           font_matrix[4]) * font_size;
+        const double ey = (font_matrix[1]*gx + font_matrix[3]*gy +
+                           font_matrix[5]) * font_size + rise;
+        const double tx = text_matrix[0]*ex + text_matrix[3]*ey + text_matrix[6];
+        const double ty = text_matrix[1]*ex + text_matrix[4]*ey + text_matrix[7];
+        rect[2*i] = trafo_matrix[0]*tx + trafo_matrix[3]*ty + trafo_matrix[6];
+        rect[2*i + 1] =
+          trafo_matrix[1]*tx + trafo_matrix[4]*ty + trafo_matrix[7];
+      }
+    return rect;
   }
 
   std::array<double, 4> pdf_state<TEXT>::compute_bbox(std::array<double, 8>& rect)

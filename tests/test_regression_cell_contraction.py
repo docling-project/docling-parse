@@ -3,16 +3,17 @@
 
 from pathlib import Path
 
-from docling_parse.pdf_parser import DoclingPdfParser
+from docling_parse.pdf_parser import DecodeConfig, DoclingPdfParser
 
 
 DATA = Path(__file__).parent / "data" / "regression"
 
 
-def _page(filename: str, page_no: int):
+def _page(filename: str, page_no: int, *, keep_glyphs: bool = False):
     document = DoclingPdfParser(loglevel="fatal").load(
         path_or_stream=DATA / filename,
         lazy=True,
+        decode_config=DecodeConfig(keep_glyphs=keep_glyphs),
     )
     try:
         return document.get_page(page_no)
@@ -47,3 +48,32 @@ def test_elsevier_reference_words_do_not_contract_together():
         "An",
     ]
     assert all(" " not in word for word in words)
+
+
+def _rect(cell) -> tuple[float, ...]:
+    return (
+        cell.rect.r_x0,
+        cell.rect.r_y0,
+        cell.rect.r_x1,
+        cell.rect.r_y1,
+        cell.rect.r_x2,
+        cell.rect.r_y2,
+        cell.rect.r_x3,
+        cell.rect.r_y3,
+    )
+
+
+def test_suppressed_glyphs_still_contribute_to_word_and_line_geometry():
+    filename = "9acb62b4-4449-48d0-8127-f2be26349a6a-6.pdf"
+    hidden = _page(filename, 1, keep_glyphs=False)
+    visible = _page(filename, 1, keep_glyphs=True)
+
+    assert [_rect(cell) for cell in hidden.word_cells] == [
+        _rect(cell) for cell in visible.word_cells
+    ]
+    assert [_rect(cell) for cell in hidden.textline_cells] == [
+        _rect(cell) for cell in visible.textline_cells
+    ]
+    assert all("GLYPH<" not in cell.text for cell in hidden.char_cells)
+    assert all("GLYPH<" not in cell.text for cell in hidden.word_cells)
+    assert all("GLYPH<" not in cell.text for cell in hidden.textline_cells)
