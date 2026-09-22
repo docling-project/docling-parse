@@ -1,3 +1,13 @@
+## [v7.21.0](https://github.com/docling-project/docling-parse/releases/tag/v7.21.0) - 2026-09-22
+
+### Feature
+
+* Bbox of brackets, summations, missing font-mappings etc ([#351](https://github.com/docling-project/docling-parse/issues/351)) ([`e64d838`](https://github.com/docling-project/docling-parse/commit/e64d8388ac5529d0ada4d25bf70bbc69a64a8858))
+
+### Fix
+
+* Fall back to real metrics when a visible glyph declares zero width ([#328](https://github.com/docling-project/docling-parse/issues/328)) ([`669616c`](https://github.com/docling-project/docling-parse/commit/669616c89d118847e25d15a0d05fefa38393ccbc))
+
 ## [v7.20.0](https://github.com/docling-project/docling-parse/releases/tag/v7.20.0) - 2026-09-15
 
 ### Feature
