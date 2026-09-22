@@ -3463,65 +3463,52 @@ namespace pdflib
 
     space_index = -1;
 
+    // Subset fonts regularly map several codes to the same space character
+    // (Arial subsets in the regression corpus map four codes to U+0020, with
+    // widths 278, 333, 333 and 375). cmap_numb_to_char and diff_numb_to_char
+    // are std::unordered_map, so scanning them and keeping the first hit picks
+    // a code by the standard library's bucket order: libstdc++ and libc++ then
+    // disagree, the font reports a different space width per platform, and the
+    // width feeds the word contraction of every glyph that carries no advance
+    // of its own (combining marks). Collect the candidates and select the
+    // highest code instead, which is independent of the iteration order.
+    auto space_index_for = [&](const std::string& str) -> int64_t
+      {
+        int64_t selected = -1;
+        for(auto itr=cmap_numb_to_char.begin(); itr!=cmap_numb_to_char.end(); itr++)
+          {
+            if((itr->second)==str and numb_to_widths.count(itr->first)==1)
+              {
+                selected = std::max(selected, static_cast<int64_t>(itr->first));
+              }
+          }
+        for(auto itr=diff_numb_to_char.begin(); itr!=diff_numb_to_char.end(); itr++)
+          {
+            if((itr->second)==str and numb_to_widths.count(itr->first)==1)
+              {
+                selected = std::max(selected, static_cast<int64_t>(itr->first));
+              }
+          }
+        return selected;
+      };
+
     for(auto str:space_in_str)
       {
-	for(auto itr=cmap_numb_to_char.begin(); itr!=cmap_numb_to_char.end(); itr++)
-	  {
-	    if(space_index==-1 and (itr->second)==str and 
-	       numb_to_widths.count(itr->first)==1  ) 
-	      {
-		space_index = itr->first;
-	      }
-	    else if(space_index!=-1)
-	      {
-		break;
-	      }
-	    else
-	      {}
-	  }
-	
-	for(auto itr=diff_numb_to_char.begin(); itr!=diff_numb_to_char.end(); itr++)
-	  {
-	    if(space_index==-1 and (itr->second)==str and 
-	       numb_to_widths.count(itr->first)==1 ) 
-	      {
-		space_index = itr->first;
-	      }
-	    else if(space_index!=-1)
-	      {
-		break;
-	      }
-	    else
-	      {}
-	  }
+        const int64_t selected = space_index_for(str);
+        if(selected>=0)
+          {
+            space_index = static_cast<uint32_t>(selected);
+            break;
+          }
       }
 
-    for(auto itr=cmap_numb_to_char.begin(); itr!=cmap_numb_to_char.end(); itr++)
+    if(space_index==-1)
       {
-        if(space_index==-1 and itr->second=="\t" and numb_to_widths.count(itr->first)==1)
+        const int64_t selected = space_index_for("\t");
+        if(selected>=0)
           {
-            space_index = itr->first;
+            space_index = static_cast<uint32_t>(selected);
           }
-        else if(space_index!=-1)
-          {
-            break;
-          }
-        else
-          {}
-      }
-    
-    for(auto itr=diff_numb_to_char.begin(); itr!=diff_numb_to_char.end(); itr++)
-      {
-        if(space_index==-1 and itr->second=="\t" and numb_to_widths.count(itr->first)==1)
-          {
-            space_index = itr->first;
-          }
-        else if(space_index!=-1)
-          {
-            break;
-          }
-        else
-          {}
       }
 
     // just a guess ...

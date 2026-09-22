@@ -162,3 +162,16 @@ def test_visible_unmapped_glyphs_still_create_words_and_lines():
     assert any("\ufffd" in cell.text for cell in page.word_cells)
     assert all("GLYPH<" not in cell.text for cell in page.word_cells)
     assert all(cell.text.strip() for cell in page.word_cells)
+
+
+def test_arabic_marks_contract_with_their_base_letter():
+    """The /F13 Arial subset maps four codes to U+0020 (widths 278, 333, 333
+    and 375). Selecting one of them by unordered-map iteration order made the
+    reported space width platform dependent, and that width is the advance
+    fallback for zero-advance combining marks, so the marks were split off
+    their base letter on one platform and kept on the other."""
+    page = _page("17791c05056ff856_0022.pdf", 1)
+    words = [cell.text for cell in page.word_cells]
+
+    assert "ْرا" in words  # sukun + reh + alef
+    assert words.count("ْب") == 3  # sukun + beh
