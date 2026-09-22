@@ -1,0 +1,183 @@
+<!--
+
+Copyright (C) 2012 pm286 <peter.murray.rust@googlemail.com>
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+	http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+Thanks to: http://www.alanwood.net/demos/wingdings.html for mapping
+-->
+
+<codePointSet encoding="Wingdings" id="wingdings"  resource="org/xmlcml/pdf2svg/codepoints/misc">
+    
+    <codePoint unicode="U+270F"  decimal="33" name="pencil" unicodeName="Pencil" note="Dingbats"/>
+    <codePoint unicode="U+2702"  decimal="34" name="scissors"  unicodeName="Black scissors" note="Dingbats"/>
+    <codePoint unicode="U+2701"  decimal="35" name="scissorscutting"  unicodeName="Upper blade scissors" note="Dingbats"/>
+    <codePoint unicode="U+1F453" decimal="36" name="readingglasses"  unicodeName="Eyeglasses" note="Miscellaneous Symbols and Pictographs"/>
+    <codePoint unicode="U+1F514" decimal="37" name="bell"  unicodeName="Bell" note="Miscellaneous Symbols and Pictographs"/>
+    <codePoint unicode="U+1F4D6" decimal="38" name="book"  unicodeName="Open book" note="Miscellaneous Symbols and Pictographs"/>
+    <codePoint unicode="U+260E"  decimal="40" name="telephonesolid"  unicodeName="Black telephone" note="Miscellaneous Symbols"/>
+    <codePoint unicode="U+2706"  decimal="41" name="telhandsetcirc"  unicodeName="Telephone location sign" note="Dingbats"/>
+    <codePoint unicode="U+2709"  decimal="42" name="envelopeback"  unicodeName="Envelope" note="Dingbats"/>
+    <codePoint unicode="U+1F4EA" decimal="44" name="mailboxflagdwn"  unicodeName="Closed mailbox with lowered flag" note="Miscellaneous Symbols and Pictographs"/>
+    <codePoint unicode="U+1F4EB" decimal="45" name="mailboxflagup"  unicodeName="Closed mailbox with raised flag" note="Miscellaneous Symbols and Pictographs"/>
+    <codePoint unicode="U+1F4EC" decimal="46" name="mailbxopnflgup"  unicodeName="Open mailbox with raised flag" note="Miscellaneous Symbols and Pictographs"/>
+    <codePoint unicode="U+1F4ED" decimal="47" name="mailbxopnflgdwn"  unicodeName="Open mailbox with lowered flag" note="Miscellaneous Symbols and Pictographs"/>
+    <codePoint unicode="U+1F4C1" decimal="48" name="folder"  unicodeName="File folder" note="Miscellaneous Symbols and Pictographs"/>
+    <codePoint unicode="U+1F4C2" decimal="49" name="folderopen"  unicodeName="Open file folder" note="Miscellaneous Symbols and Pictographs"/>
+    <codePoint unicode="U+1F4C4" decimal="50" name="filetalltext1"  unicodeName="Page facing up" note="Miscellaneous Symbols and Pictographs"/>
+    <codePoint unicode="U+231B"  decimal="54" name="hourglass"  unicodeName="Hourglass" note="Miscellaneous Technical"/>
+    <codePoint unicode="U+2328"  decimal="55" name="keyboard"  unicodeName="Keyboard" note="Miscellaneous Technical"/>
+    <codePoint unicode="U+1F4BB" decimal="58" name="pc"  unicodeName="Personal computer" note="Miscellaneous Symbols and Pictographs"/>
+    <codePoint unicode="U+1F4BE" decimal="60" name="floppy3"  unicodeName="Floppy disk" note="Miscellaneous Symbols and Pictographs"/>
+    <codePoint unicode="U+2707"  decimal="62" name="tapereel"  unicodeName="Tape drive" note="Dingbats"/>
+    <codePoint unicode="U+270D"  decimal="63" name="handwrite"  unicodeName="Writing hand" note="Dingbats"/>
+    <codePoint unicode="U+270C"  decimal="65" name="handv"  unicodeName="Victory hand" note="Dingbats"/>
+    <codePoint unicode="U+1F44C" decimal="66" name="handok"  unicodeName="OK hand sign" note="Miscellaneous Symbols and Pictographs"/>
+    <codePoint unicode="U+1F44D" decimal="67" name="thumbup"  unicodeName="Thumbs up sign" note="Miscellaneous Symbols and Pictographs"/>
+    <codePoint unicode="U+1F44E" decimal="68" name="thumbdown"  unicodeName="Thumbs down sign" note="Miscellaneous Symbols and Pictographs"/>
+    <codePoint unicode="U+261C"  decimal="69" name="handptleft"  unicodeName="White left pointing index" note="Miscellaneous Symbols"/>
+    <codePoint unicode="U+261E"  decimal="70" name="handptright"  unicodeName="White right pointing index" note="Miscellaneous Symbols"/>
+    <codePoint unicode="U+261D"  decimal="71" name="handptup"  unicodeName="White up pointing index" note="Miscellaneous Symbols"/>
+    <codePoint unicode="U+261F"  decimal="72" name="handptdown"  unicodeName="White down pointing index" note="Miscellaneous Symbols"/>
+    <codePoint unicode="U+270B"  decimal="73" name="handhalt"  unicodeName="Raised hand" note="Dingbats"/>
+    <codePoint unicode="U+263A"  decimal="74" name="smileface"  unicodeName="White smiling face" note="Miscellaneous Symbols"/>
+    <codePoint unicode="U+1F610" decimal="75" name="neutralface"  unicodeName="Neutral face" note="Emoticons"/>
+    <codePoint unicode="U+2639"  decimal="76" name="frownface"  unicodeName="White frowning face" note="Miscellaneous Symbols"/>
+    <codePoint unicode="U+1F4A3" decimal="77" name="bomb"  unicodeName="Bomb" note="Miscellaneous Symbols and Pictographs"/>
+    <codePoint unicode="U+2620"  decimal="78" name="skullcrossbones"  unicodeName="Skull and crossbones" note="Miscellaneous Symbols"/>
+    <codePoint unicode="U+2690"  decimal="79" name="flag"  unicodeName="White flag" note="Miscellaneous Symbols"/>
+    <codePoint unicode="U+1F6A9" decimal="80" name="pennant"  unicodeName="Triangular flag on post" note="Transport and Map Symbols"/>
+    <codePoint unicode="U+2708"  decimal="81" name="airplane"  unicodeName="Airplane" note="Dingbats"/>
+    <codePoint unicode="U+263C"  decimal="82" name="sunshine"  unicodeName="White sun with rays" note="Miscellaneous Symbols"/>
+    <codePoint unicode="U+1F4A7" decimal="83" name="droplet"  unicodeName="Droplet" note="Miscellaneous Symbols and Pictographs"/>
+    <codePoint unicode="U+2744"  decimal="84" name="snowflake"  unicodeName="Snowflake" note="Dingbats"/>
+    <codePoint unicode="U+271E"  decimal="86" name="crossshadow"  unicodeName="Shadowed white Latin cross" note="Dingbats"/>
+    <codePoint unicode="U+2720"  decimal="88" name="crossmaltese"  unicodeName="Maltese cross" note="Dingbats"/>
+    <codePoint unicode="U+2721"  decimal="89" name="starofdavid"  unicodeName="Star of David" note="Dingbats"/>
+    <codePoint unicode="U+262A"  decimal="90" name="crescentstar"  unicodeName="Star and crescent" note="Miscellaneous Symbols"/>
+    <codePoint unicode="U+262F"  decimal="91" name="yinyang"  unicodeName="Yin Yang" note="Dingbats"/>
+    <codePoint unicode="U+0950"  decimal="92" name="om"  unicodeName="Devanagari Om" note="Devanagari"/>
+    <codePoint unicode="U+2638"  decimal="93" name="wheel"  unicodeName="Wheel of Dharma" note="Miscellaneous Symbols"/>
+    <codePoint unicode="U+2648"  decimal="94" name="aries"  unicodeName="Aries" note="Miscellaneous Symbols"/>
+    <codePoint unicode="U+2649"  decimal="95" name="taurus"  unicodeName="Taurus" note="Miscellaneous Symbols"/>
+    <codePoint unicode="U+264A"  decimal="96" name="gemini"  unicodeName="Gemini" note="Miscellaneous Symbols"/>
+    <codePoint unicode="U+264B"  decimal="97" name="cancer"  unicodeName="Cancer" note="Miscellaneous Symbols"/>
+    <codePoint unicode="U+264C"  decimal="98" name="leo"  unicodeName="Leo" note="Miscellaneous Symbols"/>
+    <codePoint unicode="U+264D"  decimal="99" name="virgo"  unicodeName="Virgo" note="Miscellaneous Symbols"/>
+    <codePoint unicode="U+264E"  decimal="100" name="libra"  unicodeName="Libra" note="Miscellaneous Symbols"/>
+    <codePoint unicode="U+264F"  decimal="101" name="scorpio"  unicodeName="Scorpio" note="Miscellaneous Symbols"/>
+    <codePoint unicode="U+2650"  decimal="102" name="saggitarius"  unicodeName="Sagittarius" note="Miscellaneous Symbols"/>
+    <codePoint unicode="U+2651"  decimal="103" name="capricorn"  unicodeName="Capricorn" note="Miscellaneous Symbols"/>
+    <codePoint unicode="U+2652"  decimal="104" name="aquarius"  unicodeName="Aquarius" note="Miscellaneous Symbols"/>
+    <codePoint unicode="U+2653"  decimal="105" name="pisces"  unicodeName="Pisces" note="Miscellaneous Symbols"/>
+    <codePoint unicode="U+0026"  decimal="106" name="ampersanditlc"  unicodeName="Ampersand (italic, lower-case)" note="Basic Latin (Garamond)"/>
+    <codePoint unicode="U+0026"  decimal="107" name="ampersandit" unicodeName="Ampersand (italic)" note="Basic Latin (cursive font)"/>
+    <codePoint unicode="U+25CF"  decimal="108" name="circle6"  unicodeName="Black circle" note="Geometric Shapes"/>
+    <codePoint unicode="U+274D"  decimal="109" name="circleshadowdwn"  unicodeName="Shadowed white circle" note="Dingbats"/>
+    <codePoint unicode="U+25A0"  decimal="110" name="square6"  unicodeName="Black square" note="Geometric Shapes"/>
+    <codePoint unicode="U+25A1"  decimal="111" name="box3"  unicodeName="White square" note="Geometric Shapes"/>
+    <codePoint unicode="U+2751"  decimal="113" name="boxshadowdwn"  unicodeName="Lower right shadowed white square" note="Dingbats"/>
+    <codePoint unicode="U+2752"  decimal="114" name="boxshadowup"  unicodeName="Upper right shadowed white square" note="Dingbats"/>
+    <codePoint unicode="U+2B27"  decimal="115" name="lozenge4"  unicodeName="Black medium lozenge" note="Miscellaneous Symbols and Arrows"/>
+    <codePoint unicode="U+29EB"  decimal="116" name="lozenge6"  unicodeName="Black lozenge" note="Miscellaneous Mathematical Symbols-B"/>
+    <codePoint unicode="U+25C6"  decimal="117" name="rhombus6"  unicodeName="Black diamond" note="Geometric Shapes"/>
+    <codePoint unicode="U+2756"  decimal="118" name="xrhombus"  unicodeName="Black diamond minus white X" note="Dingbats"/>
+    <codePoint unicode="U+2B25"  decimal="119" name="rhombus4"  unicodeName="Black medium diamond" note="Miscellaneous Symbols and Arrows"/>
+    <codePoint unicode="U+2327"  decimal="120" name="clear"  unicodeName="X in a rectangle box" note="Miscellaneous Technical"/>
+    <codePoint unicode="U+2353"  decimal="121" name="escape"  unicodeName="APL functional symbol quad up caret" note="Miscellaneous Technical"/>
+    <codePoint unicode="U+2318"  decimal="122" name="command"  unicodeName="Place of interest sign" note="Miscellaneous Symbols"/>
+    <codePoint unicode="U+2740"  decimal="123" name="rosette"  unicodeName="White florette" note="Dingbats"/>
+    <codePoint unicode="U+273F"  decimal="124" name="rosettesolid"  unicodeName="Black florette" note="Dingbats"/>
+    <codePoint unicode="U+275D"  decimal="125" name="quotedbllftbld"  unicodeName="Heavy double turned comma quotation mark ornament" note="Dingbats"/>
+    <codePoint unicode="U+275E"  decimal="126" name="quotedblrtbld"  unicodeName="Heavy double comma quotation mark ornament" note="Dingbats"/>
+    <codePoint unicode="U+25AF"  decimal="127" name=".notdef"  unicodeName="White vertical rectangle" note="Geometric Shapes"/>
+    <codePoint unicode="U+24EA"  decimal="128" name="zerosans"  unicodeName="Circled digit zero" note="Enclosed Alphanumerics"/>
+    <codePoint unicode="U+2460"  decimal="129" name="onesans"  unicodeName="Circled digit one" note="Enclosed Alphanumerics"/>
+    <codePoint unicode="U+2461"  decimal="130" name="twosans"  unicodeName="Circled digit two" note="Enclosed Alphanumerics"/>
+    <codePoint unicode="U+2462"  decimal="131" name="threesans"  unicodeName="Circled digit three" note="Enclosed Alphanumerics"/>
+    <codePoint unicode="U+2463"  decimal="132" name="foursans"  unicodeName="Circled digit four" note="Enclosed Alphanumerics"/>
+    <codePoint unicode="U+2464"  decimal="133" name="fivesans"  unicodeName="Circled digit five" note="Enclosed Alphanumerics"/>
+    <codePoint unicode="U+2465"  decimal="134" name="sixsans"  unicodeName="Circled digit six" note="Enclosed Alphanumerics"/>
+    <codePoint unicode="U+2466"  decimal="135" name="sevensans"  unicodeName="Circled digit seven" note="Enclosed Alphanumerics"/>
+    <codePoint unicode="U+2467"  decimal="136" name="eightsans"  unicodeName="Circled digit eight" note="Enclosed Alphanumerics"/>
+    <codePoint unicode="U+2468"  decimal="137" name="ninesans"  unicodeName="Circled digit nine" note="Enclosed Alphanumerics"/>
+    <codePoint unicode="U+2469"  decimal="138" name="tensans"  unicodeName="Circled number ten" note="Enclosed Alphanumerics"/>
+    <codePoint unicode="U+24FF"  decimal="139" name="zerosansinv"  unicodeName="Negative circled digit zero" note="Enclosed Alphanumerics"/>
+    <codePoint unicode="U+2776"  decimal="140" name="onesansinv"  unicodeName="Dingbat negative circled digit one" note="Dingbats"/>
+    <codePoint unicode="U+2777"  decimal="141" name="twosansinv"  unicodeName="Dingbat negative circled digit two" note="Dingbats"/>
+    <codePoint unicode="U+2778"  decimal="142" name="threesansinv"  unicodeName="Dingbat negative circled digit three" note="Dingbats"/>
+    <codePoint unicode="U+2779"  decimal="143" name="foursansinv"  unicodeName="Dingbat negative circled digit four" note="Dingbats"/>
+    <codePoint unicode="U+277A"  decimal="144" name="fivesansinv"  unicodeName="Dingbat negative circled digit five" note="Dingbats"/>
+    <codePoint unicode="U+277B"  decimal="145" name="sixsansinv"  unicodeName="Dingbat negative circled digit six" note="Dingbats"/>
+    <codePoint unicode="U+277C"  decimal="146" name="sevensansinv"  unicodeName="Dingbat negative circled digit seven" note="Dingbats"/>
+    <codePoint unicode="U+277D"  decimal="147" name="eightsansinv"  unicodeName="Dingbat negative circled digit eight" note="Dingbats"/>
+    <codePoint unicode="U+277E"  decimal="148" name="ninesansinv"  unicodeName="Dingbat negative circled digit nine" note="Dingbats"/>
+    <codePoint unicode="U+277F"  decimal="149" name="tensansinv"  unicodeName="Dingbat negative circled number ten" note="Dingbats"/>
+    <codePoint unicode="U+00B7"  decimal="158" name="circle2"  unicodeName="Middle dot" note="Latin-1 Supplement"/>
+    <codePoint unicode="U+2022"  decimal="159" name="circle4"  unicodeName="Bullet" note="General Punctuation"/>
+    <codePoint unicode="U+25AA"  decimal="160" name="square2"  unicodeName="Black small square" note="Geometric Shapes"/>
+    <codePoint unicode="U+25CB"  decimal="161" name="ring2"  unicodeName="White circle" note="Geometric Shapes"/>
+    <codePoint unicode="U+2B55"  decimal="162" name="ring4"  unicodeName="Heavy large circle" note="Miscellaneous Symbols and Arrows"/>
+    <codePoint unicode="U+25C9"  decimal="164" name="ringbutton2"  unicodeName="Fisheye" note="Geometric Shapes"/>
+    <codePoint unicode="U+25CE"  decimal="165" name="target"  unicodeName="Bullseye" note="Geometric Shapes"/>
+    <codePoint unicode="U+25AA"  decimal="167" name="square4"  unicodeName="Black small square" note="Geometric Shapes"/>
+    <codePoint unicode="U+25FB"  decimal="168" name="box2"  unicodeName="White medium square" note="Geometric Shapes"/>
+    <codePoint unicode="U+2726"  decimal="170" name="crosstar2"  unicodeName="Black four pointed star" note="Dingbats"/>
+    <codePoint unicode="U+2605"  decimal="171" name="pentastar2"  unicodeName="Black star" note="Miscellaneous Symbols"/>
+    <codePoint unicode="U+2736"  decimal="172" name="hexstar2"  unicodeName="Six pointed black star" note="Dingbats"/>
+    <codePoint unicode="U+2734"  decimal="173" name="octastar2"  unicodeName="Eight pointed black star" note="Dingbats"/>
+    <codePoint unicode="U+2739"  decimal="174" name="dodecastar3"  unicodeName="Twelve pointed black star" note="Dingbats"/>
+    <codePoint unicode="U+2735"  decimal="175" name="octastar4"  unicodeName="Eight pointed pinwheel star" note="Dingbats"/>
+    <codePoint unicode="U+2316"  decimal="177" name="registercircle"  unicodeName="Position indicator" note="Miscellaneous Technical"/>
+    <codePoint unicode="U+27E1"  decimal="178" name="cuspopen"  unicodeName="White concave-sided diamond" note="Miscellaneous Mathematical Symbols-A"/>
+    <codePoint unicode="U+2311"  decimal="179" name="cuspopen1"  unicodeName="Square lozenge" note="Miscellaneous Technical"/>
+    <codePoint unicode="U+272A"  decimal="181" name="circlestar"  unicodeName="Circled white star" note="Dingbats"/>
+    <codePoint unicode="U+2730"  decimal="182" name="starshadow"  unicodeName="Shadowed white star" note="Dingbats"/>
+    <codePoint unicode="U+1F550" decimal="183" name="oneoclock"  unicodeName="Clock face one oclock" note="Miscellaneous Symbols and Pictographs"/>
+    <codePoint unicode="U+1F551" decimal="184" name="twooclock"  unicodeName="Clock face two oclock" note="Miscellaneous Symbols and Pictographs"/>
+    <codePoint unicode="U+1F552" decimal="185" name="threeoclock"  unicodeName="Clock face three oclock" note="Miscellaneous Symbols and Pictographs"/>
+    <codePoint unicode="U+1F553" decimal="186" name="fouroclock"  unicodeName="Clock face four oclock" note="Miscellaneous Symbols and Pictographs"/>
+    <codePoint unicode="U+1F554" decimal="187" name="fiveoclock"  unicodeName="Clock face five oclock" note="Miscellaneous Symbols and Pictographs"/>
+    <codePoint unicode="U+1F555" decimal="188" name="sixoclock"  unicodeName="Clock face six oclock" note="Miscellaneous Symbols and Pictographs"/>
+    <codePoint unicode="U+1F556" decimal="189" name="sevenoclock"  unicodeName="Clock face seven oclock" note="Miscellaneous Symbols and Pictographs"/>
+    <codePoint unicode="U+1F557" decimal="190" name="eightoclock"  unicodeName="Clock face eight oclock" note="Miscellaneous Symbols and Pictographs"/>
+    <codePoint unicode="U+1F558" decimal="191" name="nineoclock"  unicodeName="Clock face nine oclock" note="Miscellaneous Symbols and Pictographs"/>
+    <codePoint unicode="U+1F559" decimal="192" name="tenoclock"  unicodeName="Clock face ten oclock" note="Miscellaneous Symbols and Pictographs"/>
+    <codePoint unicode="U+1F55A" decimal="193" name="elevenoclock"  unicodeName="Clock face eleven oclock" note="Miscellaneous Symbols and Pictographs"/>
+    <codePoint unicode="U+1F55B" decimal="194" name="twelveoclock"  unicodeName="Clock face twelve oclock" note="Miscellaneous Symbols and Pictographs"/>
+    <codePoint unicode="U+232B"  decimal="213" name="deleteleft"  unicodeName="Erase to the left" note="Miscellaneous Technical"/>
+    <codePoint unicode="U+2326"  decimal="214" name="deleteright"  unicodeName="Erase to the right" note="Miscellaneous Technical"/>
+    <codePoint unicode="U+27A2"  decimal="216" name="head2right"  unicodeName="Three-D top-lighted rightwards arrowhead" note="Dingbats"/>
+    <codePoint unicode="U+27B2"  decimal="220" name="circleright"  unicodeName="Circled heavy white rightwards arrow" note="Dingbats"/>
+    <codePoint unicode="U+2794"  decimal="232" name="barb4right"  unicodeName="Heavy wide-headed rightwards arrow" note="Dingbats"/>
+    <codePoint unicode="U+21E6"  decimal="239" name="bleft"  unicodeName="Leftwards white arrow" note="Arrows"/>
+    <codePoint unicode="U+21E8"  decimal="240" name="bright"  unicodeName="Rightwards white arrow" note="Arrows"/>
+    <codePoint unicode="U+21E7"  decimal="241" name="bup"  unicodeName="Upwards white arrow" note="Arrows"/>
+    <codePoint unicode="U+21E9"  decimal="242" name="bdown"  unicodeName="Downwards white arrow" note="Arrows"/>
+    <codePoint unicode="U+2B04"  decimal="243" name="bleftright"  unicodeName="Left right white arrow" note="Miscellaneous Symbols and Arrows"/>
+    <codePoint unicode="U+21F3"  decimal="244" name="bupdown"  unicodeName="Up down white arrow" note="Arrows"/>
+    <codePoint unicode="U+2B00"  decimal="245" name="bnw"  unicodeName="North east white arrow" note="Miscellaneous Symbols and Arrows"/>
+    <codePoint unicode="U+2B01"  decimal="246" name="bne"  unicodeName="North west white arrow" note="Miscellaneous Symbols and Arrows"/>
+    <codePoint unicode="U+2B03"  decimal="247" name="bsw"  unicodeName="South west white arrow" note="Miscellaneous Symbols and Arrows"/>
+    <codePoint unicode="U+2B02"  decimal="248" name="bse"  unicodeName="South east white arrow" note="Miscellaneous Symbols and Arrows"/>
+    <codePoint unicode="U+25AD"  decimal="249" name="bdash1"  unicodeName="White rectangle" note="Geometric Shapes"/>
+    <codePoint unicode="U+25AB"  decimal="250" name="bdash2"  unicodeName="White small square" note="Geometric Shapes"/>
+    <codePoint unicode="U+2717"  decimal="251" name="xmarkbld"  unicodeName="Ballot X" note="Dingbats"/>
+    <codePoint unicode="U+2713"  decimal="252" name="checkbld"  unicodeName="Check mark" note="Dingbats"/>
+    <codePoint unicode="U+2612"  decimal="253" name="boxxmarkbld"  unicodeName="Ballot box with X (font-weight:bold)" note="Dingbats"/>
+    <codePoint unicode="U+2611"  decimal="254" name="boxcheckbld"  unicodeName="Ballot box with check" note="Dingbats"/>
+
+    <codePoint unicode="U+25E2"  name="triangle45basert"  unicodeName="Black lower right triangle" />
+    <codePoint unicode="U+25E4"  name="triangle45toppleft"  unicodeName="Black upper left triangle" />
+
+</codePointSet>

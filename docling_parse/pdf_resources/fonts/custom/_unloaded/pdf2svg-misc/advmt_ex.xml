@@ -1,0 +1,34 @@
+<!--
+
+    Copyright (C) 2012 pm286 <peter.murray.rust@googlemail.com>
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+            http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+-->
+<codePointSet encoding="advmt_ex" id="advmt_ex" resource="org/xmlcml/pdf2svg/codepoints/defacto"> 
+    
+    <codePoint unicode="U+239B" name="zero" decimal="48" note="LEFT PARENTHESIS UPPER HOOK"/>  
+    <codePoint unicode="U+239D" name="at"   decimal="64" note="LEFT PARENTHESIS LOWER HOOK"/>  
+    <codePoint unicode="U+239C" name="B"    decimal="66" note="LEFT PARENTHESIS EXTENSION"/>  
+
+    <codePoint unicode="U+239E" name="one" decimal="49" note="RIGHT PARENTHESIS UPPER HOOK"/>  
+    <codePoint unicode="U+23A0" name="A"   decimal="65" note="RIGHT PARENTHESIS LOWER HOOK"/>  
+    <codePoint unicode="U+239F" name="C"    decimal="67" note="RIGHT PARENTHESIS EXTENSION"/>  
+
+    <codePoint unicode="U+220F" name="Y"    decimal="89" note="N-ARY PRODUCT"/>  
+
+    <codePoint unicode="U+0028" name="C18" note="LEFT PARENTHESIS"/>  
+    <codePoint unicode="U+0029" name="C19" note="RIGHT PARENTHESIS"/>  
+    
+</codePointSet>
+        

@@ -1,0 +1,62 @@
+<!--
+
+    Copyright (C) 2012 pm286 <peter.murray.rust@googlemail.com>
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+            http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+-->
+<codePointSet encoding="CMM" id="cmsy10" resource="org/xmlcml/pdf2svg/codepoints/misc">
+
+    <codePoint unicode="U+226A" name="lessmuch"                   note="MUCH LESS-THAN" />
+    <codePoint unicode="U+226B" name="greatermuch"   decimal="29" note="MUCH GREATER-THAN" />
+    <codePoint unicode="U+002F" name="negationslash" decimal="54" note="SOLIDUS" />
+    <codePoint unicode="U+007B" name="paragraph"     decimal="123" note="LEFT CURLY BRACKET" />
+    <codePoint unicode="U+007C" name="club"          decimal="124" note="VERTICAL LINE" />
+    <codePoint unicode="U+007D" name="diamond"          decimal="125" note="RIGHT CURLY BRACKET" />
+    <codePoint unicode="U+00D7" name=""              decimal="215" note="MULTIPLICATION SIGN" />
+	<codePoint unicode="U+00B1" name=".notdef" note="PLUS-MINUS SIGN"/>
+	
+	<!-- mathScript --> 
+    <codePointSet idRef="mathBoldScript" href="org/xmlcml/pdf2svg/codepoints/misc/mathBoldScript.xml"/>
+	
+	<!-- unicode broken? 8729 8733 fails; there may be two overlapping fonts :-( -->
+	
+	
+    <codePoint unicode="U+2020" name="" decimal="8224" note="DAGGER" />
+    <codePoint unicode="U+2021" name="" decimal="8225" note="DOUBLE DAGGER" />
+    <codePoint unicode="U+2022" name="" decimal="8226" note="BULLET" />
+    <codePoint unicode="U+2032" name="" decimal="8242" note="PRIME" />
+    <codePoint unicode="U+2192" name="" decimal="8594" note="RIGHTWARDS ARROW" />
+    <codePoint unicode="U+2208" name="" decimal="8712" note="ELEMENT OF" />
+    <codePoint unicode="U+2212" name="" decimal="8729" note="MINUS SIGN" />
+    <codePoint unicode="U+221A" name="" decimal="8730" note="SQUARE ROOT" />
+    <codePoint unicode="U+2212" name="" decimal="8722" note="MINUS SIGN" />
+    <codePoint unicode="U+221D" name="" decimal="8723" note="PROPORTIONAL TO" />
+    <codePoint unicode="U+221D" name="" decimal="8725" note="PROPORTIONAL TO" />
+    <codePoint unicode="U+2217" name="" decimal="8727" note="ASTERISK OPERATOR" />
+    <codePoint unicode="U+221D" name="" decimal="8733" note="PROPORTIONAL TO" />
+    <codePoint unicode="U+223C" name="" decimal="8764" note="TILDE OPERATOR" />
+    <codePoint unicode="U+2248" name="" decimal="8776" note="ALMOST EQUAL TO" />
+    <codePoint unicode="U+2261" name="" decimal="8801" note="IDENTICAL TO" />
+    <codePoint unicode="U+2264" name="" decimal="8804" note="LESS-THAN OR EQUAL TO" />
+    <codePoint unicode="U+2265" name="" decimal="8805" note="GREATER-THAN OR EQUAL TO" />
+    <codePoint unicode="U+2265" name="" decimal="8805" note="GREATER-THAN OR EQUAL TO" />
+    
+    <codePoint unicode="U+2243" name="similarequal"  note="ASYMPTOTICALLY EQUAL TO" />
+    <codePoint unicode="U+0394" name="unionsq"  note="GREEK CAPITAL LETTER DELTA" /> <!--might be an operator -->
+    
+<!-- 
+    <codePointSet idRef="unicode256" href="org/xmlcml/pdf2svg/codepoints/unicode/unicode256.xml"/>	
+    -->
+</codePointSet>
+

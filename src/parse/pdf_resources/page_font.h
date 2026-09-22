@@ -4,6 +4,7 @@
 #define PDF_PAGE_FONT_RESOURCE_H
 
 #include <parse/utils/ccitt/ccitt_utils.h>
+#include <parse/pdf_resources/page_font/symbol_glyph_indices.h>
 
 #include <parse/qpdf/qpdf_compat.h>
 
@@ -25,6 +26,9 @@ namespace pdflib
     struct type3_glyph
     {
       bool valid = false;
+      // The CharProc has metrics but no painting operator. It still advances
+      // text like whitespace, but has no ink rectangle to render or expose.
+      bool blank = false;
       int w = 0;
       int h = 0;
       // 8-bit mask in the renderer's image-mask convention: 0 paints the fill
@@ -92,6 +96,7 @@ namespace pdflib
 
     double get_ascent();
     double get_descent();
+    bool needs_embedded_glyph_bbox() const { return invalid_vertical_metrics; }
 
     double get_capheight();
     double get_xheight();
@@ -245,6 +250,7 @@ namespace pdflib
 
     double ascent;
     double descent;
+    bool invalid_vertical_metrics = false;
 
     double capheight;
     double xheight;
@@ -828,6 +834,14 @@ namespace pdflib
         const std::string& fontname = matched_font_name().name;
 
         auto& fm = *(matched_font_name().font);
+
+        // A known legacy symbol font may falsely declare WinAnsi while using
+        // font-specific character codes. Its curated map is authoritative
+        // after /ToUnicode and /Differences.
+        if(fm.is_font_specific() and fm.has(c))
+          {
+            return fm.to_utf8(c);
+          }
 
         // If font declares a specific encoding (MacRoman, WinAnsi, etc.) AND it was
         // explicitly specified in the PDF, use that encoding instead of base font's built-in mapping
@@ -1879,6 +1893,31 @@ namespace pdflib
         }
     }
 
+    // ISO 32000 defines ascent above the baseline and descent below it. Some
+    // producer-generated mathematical fonts nevertheless publish both values
+    // as positive numbers. Trusting those metrics collapses a tall delimiter
+    // to a shallow cell above its baseline even though /FontBBox correctly
+    // describes the embedded glyphs. Use that box when it is valid and the
+    // descriptor metrics do not straddle the baseline.
+    {
+      const bool descriptor_metrics_are_valid =
+        descent <= 0.0 and ascent >= 0.0 and descent < ascent;
+      const bool font_bbox_is_valid =
+        font_bbox[1] <= 0.0 and font_bbox[3] >= 0.0 and
+        font_bbox[1] < font_bbox[3];
+
+      if(not descriptor_metrics_are_valid and font_bbox_is_valid)
+        {
+          LOG_S(WARNING) << "invalid font ascent/descent ["
+                         << ascent << ", " << descent
+                         << "]; falling back on FontBBox vertical metrics ["
+                         << font_bbox[1] << ", " << font_bbox[3] << "]";
+          descent = font_bbox[1];
+          ascent = font_bbox[3];
+          invalid_vertical_metrics = true;
+        }
+    }
+
     if(std::abs( ascent)<1.e-3 and 
        std::abs(descent)<1.e-3   )
       {
@@ -2550,6 +2589,8 @@ namespace pdflib
     std::regex re_01(R"(\/(.+)\.(.+))");
     std::regex re_02(R"((\/)?(uni|UNI)([0-9A-Fa-f]{4}))");
     std::regex re_04(R"((\/)(C)(\d+))");
+    std::regex re_decimal_codepoint(R"(G(\d+))");
+    std::regex re_symbol_glyph_index(R"(g(\d+))");
 
     // The unicode replacement character U+FFFD in utf8: a /ToUnicode
     // mapping to this value means 'unknown character' and is treated as
@@ -2576,6 +2617,60 @@ namespace pdflib
     // ('gid00043gid00049...') that downstream quality gates cannot detect
     // (docling-project/docling-parse#238).
     std::regex re_gid(R"((gid|glyph|g|cid|index)\d+)", std::regex::icase);
+
+    // A small family of PDF producers replaces every descriptive glyph name
+    // with an uppercase `G<decimal Unicode>` name. Do not infer that convention
+    // from one glyph: require every name in the Differences vector to match.
+    // G32 is the decisive embedded-space sentinel. Distiller's legacy `0150`
+    // fonts use the same convention even in subsets that happen not to contain
+    // a space, so that producer-specific suffix is the only accepted fallback.
+    bool decimal_codepoint_names = false;
+    if(diffs.isArray())
+      {
+        bool saw_name = false;
+        bool saw_space = false;
+        bool all_decimal_codepoints = true;
+        for(int l = 0; l < diffs.getArrayNItems(); ++l)
+          {
+            QPDFObjectHandle diff = diffs.getArrayItem(l);
+            if(diff.isNumber()) { continue; }
+
+            std::string raw_name;
+            if(not qpdf_object::get_name_or_string(diff, raw_name))
+              {
+                all_decimal_codepoints = false;
+                break;
+              }
+            if(not raw_name.empty() and raw_name.front() == '/')
+              {
+                raw_name.erase(raw_name.begin());
+              }
+
+            std::smatch decimal_match;
+            if(not std::regex_match(raw_name, decimal_match,
+                                    re_decimal_codepoint))
+              {
+                all_decimal_codepoints = false;
+                break;
+              }
+            const uint32_t codepoint =
+              static_cast<uint32_t>(std::stoul(decimal_match[1].str()));
+            if(not utf8::internal::is_code_point_valid(codepoint))
+              {
+                all_decimal_codepoints = false;
+                break;
+              }
+            saw_name = true;
+            saw_space = saw_space or codepoint == 32;
+          }
+        const bool legacy_distiller_0150 =
+          font_name.size() >= 4 and
+          font_name.compare(font_name.size() - 4, 4, "0150") == 0;
+        decimal_codepoint_names = saw_name and all_decimal_codepoints and
+                                  (saw_space or legacy_distiller_0150);
+      }
+
+    const bool standard_symbol_font = matched_font_name().name == "symbol";
 
     // Last-resort for glyph-names that neither the /ToUnicode cmap nor
     // any glyph-table could resolve (eg custom ligatures like /Th, /ft
@@ -2686,6 +2781,43 @@ namespace pdflib
 				    << " -> " << diff_numb_to_char[numb]
 				    << " (/ToUnicode)";
 		      }
+                    else if(decimal_codepoint_names and
+                            std::regex_match(name_, match,
+                                             re_decimal_codepoint))
+                      {
+                        const uint32_t codepoint = static_cast<uint32_t>(
+                          std::stoul(match[1].str()));
+                        std::vector<uint32_t> codepoints = {codepoint};
+                        diff_numb_to_char[numb] =
+                          utils::string::vec_to_utf8(codepoints);
+                        LOG_S(INFO) << "differences[" << numb << "] -> " << name
+                                    << " -> " << diff_numb_to_char[numb]
+                                    << " (decimal codepoint glyph-name)";
+                      }
+                    else if(standard_symbol_font and
+                            std::regex_match(name_, match,
+                                             re_symbol_glyph_index))
+                      {
+                        const std::size_t glyph_index = static_cast<std::size_t>(
+                          std::stoul(match[1].str()));
+                        const std::string_view glyph_name =
+                          standard_symbol_glyph_name(glyph_index);
+                        const std::string glyph_name_string(glyph_name);
+                        if(not glyph_name.empty() and
+                           glyphs.has(glyph_name_string))
+                          {
+                            diff_numb_to_char[numb] = glyphs[glyph_name_string];
+                            LOG_S(INFO) << "differences[" << numb << "] -> " << name
+                                        << " -> " << glyph_name_string
+                                        << " -> " << diff_numb_to_char[numb]
+                                        << " (standard Symbol glyph index)";
+                          }
+                        else
+                          {
+                            diff_numb_to_char[numb] =
+                              resolve_unknown_name(name, name_);
+                          }
+                      }
                     else if(glyphs.has(name)) // method 2: glyph-name -> unicode via the glyph-tables (AGL)
                       {
                         diff_numb_to_char[numb] = glyphs[name];
@@ -2764,14 +2896,28 @@ namespace pdflib
 				       << diff_numb_to_char[numb]
 				       << " (from " << name << ")";
 		      }
-		    else if(std::regex_match(name, match, re_04)) // if the name is of type /C<decimal> treat the number as a Unicode code point
+		    else if(std::regex_match(name, match, re_04))
 		      {
 			uint32_t codepoint = static_cast<uint32_t>(std::stoul(match[3].str()));
-			std::vector<uint32_t> vec = {codepoint};
-			diff_numb_to_char[numb] = utils::string::vec_to_utf8(vec);
-			LOG_S(INFO) << "differences[" << numb << "] -> " << name
-				    << " -> " << diff_numb_to_char[numb]
-				    << " (codepoint=" << codepoint << ")";
+			const base_font_match& font_match = matched_font_name();
+			if(font_match.font and font_match.font->has(codepoint))
+			  {
+			    diff_numb_to_char[numb] = font_match.font->to_utf8(codepoint);
+			    LOG_S(INFO) << "differences[" << numb << "] -> " << name
+					<< " -> " << diff_numb_to_char[numb]
+					<< " (font resource=" << font_match.name << ")";
+			  }
+			else
+			  {
+			    // Some producers use /C<decimal> as a Unicode-like glyph
+			    // name. Keep that heuristic only when no font-specific
+			    // resource provides the actual legacy encoding.
+			    std::vector<uint32_t> vec = {codepoint};
+			    diff_numb_to_char[numb] = utils::string::vec_to_utf8(vec);
+			    LOG_S(INFO) << "differences[" << numb << "] -> " << name
+					<< " -> " << diff_numb_to_char[numb]
+					<< " (codepoint=" << codepoint << ")";
+			  }
 		      }
                     else
                       {
@@ -3060,6 +3206,7 @@ namespace pdflib
     std::vector<std::array<double, 2> > cur;
     double cx = 0.0, cy = 0.0;   // current point, LOCAL coords
     bool any_fill = false;
+    bool unsupported_paint = false;
 
     // Row-vector affine [a b c d e f], composed like the PDF cm operator.
     std::array<double, 6> ctm = {1, 0, 0, 1, 0, 0};
@@ -3148,10 +3295,25 @@ namespace pdflib
             close_cur();
             any_fill = true;
           }
+        else if(op == "S" or op == "s" or op == "sh" or op == "Do" or
+                op == "Tj" or op == "TJ" or op == "'" or op == "\"")
+          {
+            // These operations can paint, but this lightweight Type 3 parser
+            // does not currently rasterize them. Do not misclassify such a
+            // glyph as whitespace merely because it has no supported fill.
+            unsupported_paint = true;
+          }
       }
     close_cur();
 
-    if(not any_fill or polys.empty()) { return nullptr; }
+    if(not any_fill)
+      {
+        if(unsupported_paint) { return nullptr; }
+        auto glyph = std::make_shared<type3_glyph>();
+        glyph->blank = true;
+        return glyph;
+      }
+    if(polys.empty()) { return nullptr; }
 
     double bx0 = polys[0][0][0], by0 = polys[0][0][1];
     double bx1 = bx0, by1 = by0;
@@ -3301,65 +3463,52 @@ namespace pdflib
 
     space_index = -1;
 
+    // Subset fonts regularly map several codes to the same space character
+    // (Arial subsets in the regression corpus map four codes to U+0020, with
+    // widths 278, 333, 333 and 375). cmap_numb_to_char and diff_numb_to_char
+    // are std::unordered_map, so scanning them and keeping the first hit picks
+    // a code by the standard library's bucket order: libstdc++ and libc++ then
+    // disagree, the font reports a different space width per platform, and the
+    // width feeds the word contraction of every glyph that carries no advance
+    // of its own (combining marks). Collect the candidates and select the
+    // highest code instead, which is independent of the iteration order.
+    auto space_index_for = [&](const std::string& str) -> int64_t
+      {
+        int64_t selected = -1;
+        for(auto itr=cmap_numb_to_char.begin(); itr!=cmap_numb_to_char.end(); itr++)
+          {
+            if((itr->second)==str and numb_to_widths.count(itr->first)==1)
+              {
+                selected = std::max(selected, static_cast<int64_t>(itr->first));
+              }
+          }
+        for(auto itr=diff_numb_to_char.begin(); itr!=diff_numb_to_char.end(); itr++)
+          {
+            if((itr->second)==str and numb_to_widths.count(itr->first)==1)
+              {
+                selected = std::max(selected, static_cast<int64_t>(itr->first));
+              }
+          }
+        return selected;
+      };
+
     for(auto str:space_in_str)
       {
-	for(auto itr=cmap_numb_to_char.begin(); itr!=cmap_numb_to_char.end(); itr++)
-	  {
-	    if(space_index==-1 and (itr->second)==str and 
-	       numb_to_widths.count(itr->first)==1  ) 
-	      {
-		space_index = itr->first;
-	      }
-	    else if(space_index!=-1)
-	      {
-		break;
-	      }
-	    else
-	      {}
-	  }
-	
-	for(auto itr=diff_numb_to_char.begin(); itr!=diff_numb_to_char.end(); itr++)
-	  {
-	    if(space_index==-1 and (itr->second)==str and 
-	       numb_to_widths.count(itr->first)==1 ) 
-	      {
-		space_index = itr->first;
-	      }
-	    else if(space_index!=-1)
-	      {
-		break;
-	      }
-	    else
-	      {}
-	  }
+        const int64_t selected = space_index_for(str);
+        if(selected>=0)
+          {
+            space_index = static_cast<uint32_t>(selected);
+            break;
+          }
       }
 
-    for(auto itr=cmap_numb_to_char.begin(); itr!=cmap_numb_to_char.end(); itr++)
+    if(space_index==-1)
       {
-        if(space_index==-1 and itr->second=="\t" and numb_to_widths.count(itr->first)==1)
+        const int64_t selected = space_index_for("\t");
+        if(selected>=0)
           {
-            space_index = itr->first;
+            space_index = static_cast<uint32_t>(selected);
           }
-        else if(space_index!=-1)
-          {
-            break;
-          }
-        else
-          {}
-      }
-    
-    for(auto itr=diff_numb_to_char.begin(); itr!=diff_numb_to_char.end(); itr++)
-      {
-        if(space_index==-1 and itr->second=="\t" and numb_to_widths.count(itr->first)==1)
-          {
-            space_index = itr->first;
-          }
-        else if(space_index!=-1)
-          {
-            break;
-          }
-        else
-          {}
       }
 
     // just a guess ...

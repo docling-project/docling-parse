@@ -1910,6 +1910,13 @@ namespace pdflib
     const double dir_y = first.r_y1-first.r_y0;
 
     double max_proj = first.r_x1*dir_x + first.r_y1*dir_y;
+    double max_advance_proj = -std::numeric_limits<double>::infinity();
+    if(first.has_text_placement)
+      {
+        max_advance_proj =
+          first.text_advance_x * first.writing_axis_x +
+          first.text_advance_y * first.writing_axis_y;
+      }
 
     for(std::size_t i=begin+1; i<end; i++)
       {
@@ -1935,6 +1942,25 @@ namespace pdflib
             first.r_y1 = cell.r_y1;
             first.r_x2 = cell.r_x2;
             first.r_y2 = cell.r_y2;
+          }
+
+        // Contraction measures the next gap from the PDF cursor advance, not
+        // from the painted bbox. The replacement cell consumes the complete
+        // marked-content span, so its advance endpoint must likewise be the
+        // furthest endpoint of the cells it replaces. Otherwise the next
+        // character appears artificially separated after composed accents or
+        // ligatures even though the original glyph sequence touched it.
+        if(first.has_text_placement and cell.has_text_placement)
+          {
+            const double advance_proj =
+              cell.text_advance_x * first.writing_axis_x +
+              cell.text_advance_y * first.writing_axis_y;
+            if(advance_proj>max_advance_proj)
+              {
+                max_advance_proj = advance_proj;
+                first.text_advance_x = cell.text_advance_x;
+                first.text_advance_y = cell.text_advance_y;
+              }
           }
       }
 

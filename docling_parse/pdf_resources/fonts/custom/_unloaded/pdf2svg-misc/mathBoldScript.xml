@@ -1,0 +1,49 @@
+<!--
+
+    Copyright (C) 2012 pm286 <peter.murray.rust@googlemail.com>
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+            http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+-->
+<codePointSet encoding="mathBoldScript" id="mathBoldScript" resource="org/xmlcml/pdf2svg/codepoints/misc">
+
+<!--  math bold script referenced through latin characters -->
+    <codePoint unicode="U+1D4D0" hex="0x1D4D0"  name="A"                      note="MATHEMATICAL BOLD SCRIPT CAPITAL A"/>  
+    <codePoint unicode="U+1D4D1" hex="0x1D4D1"  name="B"                      note="MATHEMATICAL BOLD SCRIPT CAPITAL B"/>  
+    <codePoint unicode="U+1D4D2" hex="0x1D4D2"  name="C"                      note="MATHEMATICAL BOLD SCRIPT CAPITAL C"/>  
+    <codePoint unicode="U+1D4D3" hex="0x1D4D3"  name="D"                      note="MATHEMATICAL BOLD SCRIPT CAPITAL D"/>  
+    <codePoint unicode="U+1D4D4" hex="0x1D4D4"  name="E"                      note="MATHEMATICAL BOLD SCRIPT CAPITAL E"/>  
+    <codePoint unicode="U+1D4D5" hex="0x1D4D5"  name="F"                      note="MATHEMATICAL BOLD SCRIPT CAPITAL F"/>  
+    <codePoint unicode="U+1D4D6" hex="0x1D4D6"  name="G"                      note="MATHEMATICAL BOLD SCRIPT CAPITAL G"/>  
+    <codePoint unicode="U+1D4D7" hex="0x1D4D7"  name="H"                      note="MATHEMATICAL BOLD SCRIPT CAPITAL H"/>  
+    <codePoint unicode="U+1D4D8" hex="0x1D4D8"  name="I"                      note="MATHEMATICAL BOLD SCRIPT CAPITAL I"/>  
+    <codePoint unicode="U+1D4D9" hex="0x1D4D9"  name="J"                      note="MATHEMATICAL BOLD SCRIPT CAPITAL J"/>  
+    <codePoint unicode="U+1D4DA" hex="0x1D4DA"  name="K"                      note="MATHEMATICAL BOLD SCRIPT CAPITAL K"/>  
+    <codePoint unicode="U+1D4DB" hex="0x1D4DB"  name="L"                      note="MATHEMATICAL BOLD SCRIPT CAPITAL L"/>  
+    <codePoint unicode="U+1D4DC" hex="0x1D4DC"  name="M"                      note="MATHEMATICAL BOLD SCRIPT CAPITAL M"/>  
+    <codePoint unicode="U+1D4DD" hex="0x1D4DD"  name="N"                      note="MATHEMATICAL BOLD SCRIPT CAPITAL N"/>  
+    <codePoint unicode="U+1D4DE" hex="0x1D4DE"  name="O"                      note="MATHEMATICAL BOLD SCRIPT CAPITAL O"/>  
+    <codePoint unicode="U+1D4DF" hex="0x1D4DF"  name="P"                      note="MATHEMATICAL BOLD SCRIPT CAPITAL P"/>  
+    <codePoint unicode="U+1D4E0" hex="0x1D4E0"  name="Q"                      note="MATHEMATICAL BOLD SCRIPT CAPITAL Q"/>  
+    <codePoint unicode="U+1D4E1" hex="0x1D4E1"  name="R"                      note="MATHEMATICAL BOLD SCRIPT CAPITAL R"/>  
+    <codePoint unicode="U+1D4E2" hex="0x1D4E2"  name="S"                      note="MATHEMATICAL BOLD SCRIPT CAPITAL S"/>  
+    <codePoint unicode="U+1D4E3" hex="0x1D4E3"  name="T"                      note="MATHEMATICAL BOLD SCRIPT CAPITAL T"/>  
+    <codePoint unicode="U+1D4E4" hex="0x1D4E4"  name="U"                      note="MATHEMATICAL BOLD SCRIPT CAPITAL U"/>  
+    <codePoint unicode="U+1D4E5" hex="0x1D4E5"  name="V"                      note="MATHEMATICAL BOLD SCRIPT CAPITAL V"/>  
+    <codePoint unicode="U+1D4E6" hex="0x1D4E6"  name="W"                      note="MATHEMATICAL BOLD SCRIPT CAPITAL W"/>  
+    <codePoint unicode="U+1D4E7" hex="0x1D4E7"  name="X"                      note="MATHEMATICAL BOLD SCRIPT CAPITAL X"/>  
+    <codePoint unicode="U+1D4E8" hex="0x1D4E8"  name="Y"                      note="MATHEMATICAL BOLD SCRIPT CAPITAL Y"/>  
+    <codePoint unicode="U+1D4E9" hex="0x1D4E9"  name="Z"                      note="MATHEMATICAL BOLD SCRIPT CAPITAL Z"/>  
+	
+</codePointSet>
+

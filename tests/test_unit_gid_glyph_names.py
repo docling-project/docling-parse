@@ -42,18 +42,26 @@ _TOUNICODE = (
 )
 
 
-def _build_pdf(glyph_names: list, include_tounicode: bool) -> bytes:
-    differences = " ".join(f"/{name}" for name in glyph_names)
+def _build_pdf(
+    glyph_names: list | None,
+    include_tounicode: bool,
+    base_font: str = "XXXXXX+FakeSubset",
+    text: str = "ABC",
+) -> bytes:
+    if glyph_names is None:
+        encoding = "/Encoding /WinAnsiEncoding"
+    else:
+        differences = " ".join(f"/{name}" for name in glyph_names)
+        encoding = f"/Encoding << /Type /Encoding /Differences [ 65 {differences} ] >>"
     tounicode = " /ToUnicode 6 0 R" if include_tounicode else ""
-    content = "BT /F1 24 Tf 72 700 Td (ABC) Tj ET"
+    content = f"BT /F1 24 Tf 72 700 Td ({text}) Tj ET"
     objects = [
         "<< /Type /Catalog /Pages 2 0 R >>",
         "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
         "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
         "/Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
-        "<< /Type /Font /Subtype /Type1 /BaseFont /XXXXXX+FakeSubset "
-        "/Encoding << /Type /Encoding "
-        f"/Differences [ 65 {differences} ] >>{tounicode} >>",
+        f"<< /Type /Font /Subtype /Type1 /BaseFont /{base_font} "
+        f"{encoding}{tounicode} >>",
         f"<< /Length {len(content)} >>\nstream\n{content}\nendstream",
     ]
     if include_tounicode:
@@ -80,12 +88,23 @@ def _build_pdf(glyph_names: list, include_tounicode: bool) -> bytes:
 
 
 def _extract_text(
-    glyph_names: list, include_tounicode: bool, keep_glyphs: bool = True
+    glyph_names: list | None,
+    include_tounicode: bool,
+    keep_glyphs: bool = True,
+    base_font: str = "XXXXXX+FakeSubset",
+    text: str = "ABC",
 ) -> str:
     parser = DoclingPdfParser(loglevel="fatal")
     config = DecodeConfig(keep_glyphs=keep_glyphs)
     doc = parser.load(
-        path_or_stream=BytesIO(_build_pdf(glyph_names, include_tounicode)),
+        path_or_stream=BytesIO(
+            _build_pdf(
+                glyph_names,
+                include_tounicode,
+                base_font=base_font,
+                text=text,
+            )
+        ),
         decode_config=config,
     )
     _, page = next(doc.iterate_pages())
@@ -124,10 +143,29 @@ def test_meaningful_unknown_names_keep_name_fallback():
     assert "GLYPH" not in text
 
 
-def test_default_config_strips_gid_markers():
-    # Production default (keep_glyphs=False, see config.h): the marker is
-    # stripped to a space in pdf_states/text.h, so neither GLYPH<...> nor
-    # the fabricated gid-name text ever reaches the output.
+def test_adv_ps_symbol_uses_font_resource_mapping():
+    text = _extract_text(
+        ["C210", "C211", "C212"],
+        include_tounicode=False,
+        base_font="XXXXXX+AdvPSSym",
+    )
+    assert text == "®©™"
+
+
+def test_adv_ps_mp10_uses_font_specific_mapping_over_winansi():
+    text = _extract_text(
+        None,
+        include_tounicode=False,
+        base_font="XXXXXX+AdvPSMP10",
+        text="/Xabelnpqr",
+    )
+    assert text == "ΔξαβεμφΣρσ"
+
+
+def test_default_config_replaces_gid_markers():
+    # Production default (keep_glyphs=False, see config.h): visible glyphs
+    # without Unicode mappings become U+FFFD, so neither the internal
+    # GLYPH<...> marker nor fabricated gid-name text reaches the output.
     text = _extract_text(
         ["gid00043", "gid00049", "gid00041"],
         include_tounicode=False,
@@ -135,4 +173,4 @@ def test_default_config_strips_gid_markers():
     )
     assert "GLYPH" not in text
     assert "gid" not in text
-    assert text.strip() == ""
+    assert text == "\ufffd" * 3

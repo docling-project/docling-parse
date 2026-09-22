@@ -92,6 +92,34 @@ namespace pdflib
     bool widget;
     bool last_merged_cell_was_ligature = false;
 
+    // A visible glyph whose Unicode mapping was unavailable may have its
+    // GLYPH<...> placeholder suppressed for public text output. Preserve that
+    // distinction during the current decode so contraction can still use the
+    // glyph's geometry instead of mistaking its replacement text for a real
+    // PDF space. This transient implementation detail is not serialized.
+    bool text_is_suppressed_glyph = false;
+
+    // ISO 32000 word spacing applies to the one-byte source character code
+    // 32, independently of whether that font can map the glyph to Unicode.
+    // Retain that source-level fact so an unresolved space remains a semantic
+    // contraction boundary. This flag is transient and is not serialized.
+    bool is_pdf_word_space = false;
+
+    // Text-placement geometry captured before the PDF text cursor advances.
+    // Unlike the painted glyph quadrilateral above, these values describe
+    // where the PDF positions consecutive characters. Word and line
+    // contraction use them to distinguish cursor spacing from glyph ink side
+    // bearings. They are transient implementation details and are therefore
+    // intentionally absent from the serialized PAGE_CELL header.
+    bool   has_text_placement = false;
+    double text_origin_x = 0.0;
+    double text_origin_y = 0.0;
+    double text_advance_x = 0.0;
+    double text_advance_y = 0.0;
+    double writing_axis_x = 1.0;
+    double writing_axis_y = 0.0;
+    double nominal_text_height = 0.0;
+
     // graphics state properties
     bool                has_graphics_state = false;
     double              line_width = -1;

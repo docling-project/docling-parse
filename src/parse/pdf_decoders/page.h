@@ -83,6 +83,10 @@ namespace pdflib
     // Export this page as a standalone one-page PDF.
     void save_pdf_page(std::filesystem::path const& out_path) const;
 
+    // Map one raw render-instruction point into the normalized,
+    // display-oriented coordinate frame used by parsed text cells.
+    std::pair<double, double> to_page_frame_point(double x, double y) const;
+
   private:
 
     void decode_dimensions();
@@ -2143,17 +2147,17 @@ namespace pdflib
     return bbox;
   }
 
+  std::pair<double, double>
+  pdf_decoder<PAGE>::to_page_frame_point(double x, double y) const
+  {
+    utils::values::rotate_inplace(page_frame_angle, x, y);
+    utils::values::translate_inplace(page_frame_delta, x, y);
+    return {x - page_frame_origin.first, y - page_frame_origin.second};
+  }
+
   bool pdf_decoder<PAGE>::can_reuse_sanitised_cells_for_line_cells(const decode_config& config) const
   {
-    return (sanitised_cells_created and
-            config.do_sanitization and
-            config.enforce_same_font and
-            (std::abs(config.horizontal_cell_tolerance -
-                      config.DEFAULT_HORIZONTAL_CELL_TOLERANCE) < 1.e-6) and
-            (std::abs(config.line_space_width_factor_for_merge -
-                      config.DEFAULT_LINE_SPACE_WIDTH_FACTOR_FOR_MERGE) < 1.e-6) and
-            (std::abs(config.line_space_width_factor_for_merge_with_space -
-                      config.DEFAULT_LINE_SPACE_WIDTH_FACTOR_FOR_MERGE_WITH_SPACE) < 1.e-6));
+    return sanitised_cells_created and config.do_sanitization;
   }
 
   void pdf_decoder<PAGE>::sanitise_contents(std::string page_boundary)
@@ -2182,23 +2186,10 @@ namespace pdflib
                            step_timer.get_time());
       }
 
-      double horizontal_cell_tolerance =
-        decode_config::DEFAULT_HORIZONTAL_CELL_TOLERANCE;
-      bool enforce_same_font=true;
-      //double space_width_factor_for_merge=1.5;
-      double space_width_factor_for_merge =
-        decode_config::DEFAULT_LINE_SPACE_WIDTH_FACTOR_FOR_MERGE;
-      double space_width_factor_for_merge_with_space =
-        decode_config::DEFAULT_LINE_SPACE_WIDTH_FACTOR_FOR_MERGE_WITH_SPACE;
-
       {
         utils::timer step_timer;
-        sanitator.sanitize_bbox(cells,
-                                horizontal_cell_tolerance,
-                                enforce_same_font,
-                                space_width_factor_for_merge,
-                                space_width_factor_for_merge_with_space,
-                                false);
+        decode_config default_config;
+        cells = sanitator.create_line_cells(cells, default_config);
         timings.add_timing(pdf_timings::KEY_SANITISE_CONTENTS_SANITIZE_BBOX,
                            step_timer.get_time());
       }
@@ -2230,15 +2221,7 @@ namespace pdflib
 
     {
       utils::timer step_timer;
-      double space_width_factor_for_merge_with_space =
-        2.0*config.word_space_width_factor_for_merge;
-
-      sanitizer.sanitize_bbox(word_cells,
-                              config.horizontal_cell_tolerance,
-                              config.enforce_same_font,
-                              config.word_space_width_factor_for_merge,
-                              space_width_factor_for_merge_with_space,
-                              true);
+      word_cells = sanitizer.create_word_cells(word_cells, config);
       timings.add_timing(pdf_timings::KEY_CREATE_WORD_CELLS_SANITIZE_BBOX,
                          step_timer.get_time());
     }
@@ -2258,14 +2241,6 @@ namespace pdflib
             }
         }
       timings.add_timing(pdf_timings::KEY_CREATE_WORD_CELLS_ERASE_SPACES,
-                         step_timer.get_time());
-    }
-
-    // Remove duplicates (quadratic but necessary)
-    {
-      utils::timer step_timer;
-      sanitizer.remove_duplicate_cells(word_cells, 0.5, true);
-      timings.add_timing(pdf_timings::KEY_CREATE_WORD_CELLS_REMOVE_DUPLICATE_CELLS,
                          step_timer.get_time());
     }
 
@@ -2296,25 +2271,12 @@ namespace pdflib
     if(!reuse_sanitised_cells)
       {
         utils::timer step_timer;
-        sanitizer.sanitize_bbox(line_cells,
-                                config.horizontal_cell_tolerance,
-                                config.enforce_same_font,
-                                config.line_space_width_factor_for_merge,
-                                config.line_space_width_factor_for_merge_with_space,
-                                false);
+        line_cells = sanitizer.create_line_cells(line_cells, config);
         timings.add_timing(pdf_timings::KEY_CREATE_LINE_CELLS_SANITIZE_BBOX,
                            step_timer.get_time());
       }
 
     LOG_S(INFO) << "# line-cells: " << line_cells.size();
-
-    // Remove duplicates (quadratic but necessary)
-    {
-      utils::timer step_timer;
-      sanitizer.remove_duplicate_cells(line_cells, 0.5, true);
-      timings.add_timing(pdf_timings::KEY_CREATE_LINE_CELLS_REMOVE_DUPLICATE_CELLS,
-                         step_timer.get_time());
-    }
 
     line_cells_created = true;
 

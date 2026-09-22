@@ -1,0 +1,32 @@
+<!--
+
+    Copyright (C) 2012 pm286 <peter.murray.rust@googlemail.com>
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+            http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+-->
+<codePointSet encoding="MathPack" id="mathpack10" resource="org/xmlcml/pdf2svg/codepoints/misc">
+
+    <codePoint unicode="U+03B1" name="afii9825" note="GREEK SMALL LETTER ALPHA"/>
+    <codePoint unicode="U+03B2" name="afii9826" note="GREEK SMALL LETTER BETA"/>
+    <codePoint unicode="U+03B4" name="afii9829" note="GREEK SMALL LETTER DELTA"/>
+    <codePoint unicode="U+03BB" name="afii9838" note="GREEK SMALL LETTER LAMBDA"/>
+    <codePoint unicode="U+03C0" name="afii9843" note="GREEK SMALL LETTER PI"/>
+    <codePoint unicode="U+03C7" name="afii9851" note="GREEK SMALL LETTER CHI"/>
+    <codePoint unicode="U+03C9" name="afii9853" note="GREEK SMALL LETTER OMEGA"/>
+
+<!-- is this consistent? -->
+    <codePoint unicode="U+226A" name="afii9828"    note="MUCH LESS-THAN"/>  
+        	
+</codePointSet>
+		

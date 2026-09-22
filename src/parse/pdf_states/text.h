@@ -3,6 +3,8 @@
 #ifndef PDF_TEXT_STATE_H
 #define PDF_TEXT_STATE_H
 
+#include <render/freetype_font_cache.h>
+
 namespace pdflib
 {
 
@@ -69,6 +71,8 @@ namespace pdflib
     void add_cell(pdf_resource<PAGE_FONT>& font,
                   std::string text,  double width,
                   int glyph_code,
+                  bool text_is_suppressed_glyph,
+                  bool is_pdf_word_space,
                   int stack_size,
                   std::vector<page_item<PAGE_CELL> >& cells);
 
@@ -81,6 +85,10 @@ namespace pdflib
     std::array<double, 8> compute_rect(double font_descent,
                                        double font_ascent,
                                        double width);
+
+    std::array<double, 8> compute_type3_rect(
+      const std::array<double, 6>& font_matrix,
+      const std::array<double, 6>& glyph_matrix);
 
     std::array<double, 4> compute_bbox(std::array<double, 8>& rect);
 
@@ -100,6 +108,10 @@ namespace pdflib
     std::shared_ptr<pdf_resource<PAGE_FONTS>> page_fonts;
 
     pdf_render_instructions& instructions;
+
+    // Page-scoped: malformed fonts are rare, while repeated mathematical
+    // symbols should resolve their embedded outline only once.
+    std::shared_ptr<freetype_font_cache> glyph_metrics_cache;
 
     std::array<double, 9> text_matrix;
     std::array<double, 9> line_matrix;
@@ -144,7 +156,8 @@ namespace pdflib
     page_cells(page_cells_),
     page_fonts(page_fonts_),
 
-    instructions(instructions_)
+    instructions(instructions_),
+    glyph_metrics_cache(nullptr)
   {
     text_matrix = {1.0, 0.0, 0.0,
                    0.0, 1.0, 0.0,
@@ -165,7 +178,8 @@ namespace pdflib
     page_cells(other.page_cells),
     page_fonts(other.page_fonts),
 
-    instructions(other.instructions)
+    instructions(other.instructions),
+    glyph_metrics_cache(other.glyph_metrics_cache)
   {
     *this = other;
 
@@ -196,6 +210,7 @@ namespace pdflib
     this->vertical_mode = other.vertical_mode;
     this->vertical_origin_y = other.vertical_origin_y;
     this->vertical_displacement = other.vertical_displacement;
+    this->glyph_metrics_cache = other.glyph_metrics_cache;
 
     return *this;
   }
@@ -476,9 +491,15 @@ namespace pdflib
 			   << "): " << e.what() << "; emitting '" << chars_ << "'";
 	  }
 
-	if((not config.keep_glyphs) and chars_.rfind("GLYPH<", 0) == 0)
+	const bool text_is_suppressed_glyph =
+	  (not config.keep_glyphs) and chars_.rfind("GLYPH<", 0) == 0;
+	if(text_is_suppressed_glyph)
 	  {
-	    chars_ = " ";
+	    // The glyph is visibly painted but the PDF supplies no authoritative
+	    // Unicode mapping. U+FFFD communicates that decoding loss without
+	    // exposing the internal GLYPH<...> diagnostic or pretending the glyph
+	    // is whitespace. Blank glyph programs are identified in add_cell().
+	    chars_ = "\xEF\xBF\xBD";
 	  }
 	
 	//LOG_S(INFO) << item.first << " --> "
@@ -525,7 +546,9 @@ namespace pdflib
                   font.get_vertical_displacement(item.first) * font_size;
               }
 
-            add_cell(font, text, width, static_cast<int>(item.first), stack_size, cells);
+            add_cell(font, text, width, static_cast<int>(item.first),
+                     text_is_suppressed_glyph, is_word_space,
+                     stack_size, cells);
 
             if(vertical_mode)
               {
@@ -547,7 +570,7 @@ namespace pdflib
     //LOG_S(INFO) << "text-line: " << text;
     if(text.size()>0)
       {
-        add_cell(font, text, width, -1, stack_size, cells);
+        add_cell(font, text, width, -1, false, false, stack_size, cells);
       }
 
     return cells;
@@ -556,6 +579,8 @@ namespace pdflib
   void pdf_state<TEXT>::add_cell(pdf_resource<PAGE_FONT>& font,
                                  std::string text, double width,
                                  int glyph_code,
+                                 bool text_is_suppressed_glyph,
+                                 bool is_pdf_word_space,
                                  int stack_size,
                                  std::vector<page_item<PAGE_CELL> >& cells)
   {
@@ -610,6 +635,80 @@ namespace pdflib
           ratio = font_capheight/font_ascent;
         }
 
+      // Type 3 fonts may advertise a deliberately loose /FontBBox (for
+      // example [-10 -10 10 10] with an identity /FontMatrix) even though
+      // their CharProcs draw in a roughly one-unit em. Extract the cached
+      // CharProc bounds here; valid painted glyphs are mapped directly below,
+      // while an unpainted procedure retains only its text advance.
+      std::shared_ptr<pdf_resource<PAGE_FONT>::type3_glyph> type3_glyph = nullptr;
+      if(font.is_type3() and glyph_code >= 0)
+        {
+          type3_glyph = font.get_type3_glyph(static_cast<uint32_t>(glyph_code));
+          if(type3_glyph and type3_glyph->blank)
+            {
+              // An unpainted glyph has an advance but no ink bounds. Keeping
+              // the width and collapsing the vertical extent represents that
+              // distinction without falling back to a loose font-wide box.
+              // Its glyph name is not visible text; expose it as semantic
+              // whitespace so contraction treats it as a boundary marker.
+              text = " ";
+              text_is_suppressed_glyph = false;
+              font_descent = 0.0;
+              font_ascent = 0.0;
+              ratio = 1.0;
+            }
+        }
+
+      bool has_embedded_glyph_bbox = false;
+      bool embedded_glyph_resolved = false;
+      bool embedded_glyph_has_ink = false;
+      std::array<double, 4> embedded_glyph_bbox = {0.0, 0.0, 0.0, 0.0};
+      if(not font.is_type3() and
+         (font.needs_embedded_glyph_bbox() or text_is_suppressed_glyph) and
+         glyph_code >= 0)
+        {
+          if(glyph_metrics_cache == nullptr)
+            {
+              glyph_metrics_cache = std::make_shared<freetype_font_cache>();
+            }
+          auto font_blob = font.get_embedded_font_blob();
+          const std::string glyph_name =
+            font.get_glyph_name(static_cast<uint32_t>(glyph_code));
+          embedded_glyph_resolved =
+            glyph_metrics_cache->get_glyph_bbox(font_blob,
+                                                text,
+                                                glyph_code,
+                                                glyph_name,
+                                                embedded_glyph_bbox,
+                                                &embedded_glyph_has_ink);
+          has_embedded_glyph_bbox =
+            embedded_glyph_resolved and embedded_glyph_has_ink;
+
+          if(text_is_suppressed_glyph and embedded_glyph_resolved and
+             not embedded_glyph_has_ink)
+            {
+              // Ghostscript's TT_BIAS encoding also hides the identity of
+              // space glyphs. Their empty outline is authoritative: retain
+              // the advance, but make it a semantic contraction boundary.
+              text = " ";
+              text_is_suppressed_glyph = false;
+              is_pdf_word_space = true;
+              font_descent = 0.0;
+              font_ascent = 0.0;
+              ratio = 1.0;
+            }
+          else if(has_embedded_glyph_bbox and
+                  font.needs_embedded_glyph_bbox())
+            {
+              // Preserve the PDF advance width horizontally. Tight horizontal
+              // ink bounds would change text flow; only the malformed vertical
+              // metrics need replacement.
+              font_descent = embedded_glyph_bbox[1];
+              font_ascent = embedded_glyph_bbox[3];
+              ratio = 1.0;
+            }
+        }
+
       /* // commented out for now ...
       if(glyph_code >= 0 and font.has_char_bbox(static_cast<uint32_t>(glyph_code)))
         {
@@ -642,7 +741,19 @@ namespace pdflib
       
       // LOG_S(INFO) << "ratio: " << ratio;
 
-      std::array<double, 8> rect = compute_rect(font_descent*ratio, font_ascent*ratio, width);
+      std::array<double, 8> rect;
+      if(type3_glyph and type3_glyph->valid)
+        {
+          // A Type 3 glyph is painted by its CharProc rather than by the
+          // declared advance rectangle. Map the complete CharProc bounds so
+          // both dimensions match the rendered ink. The advance width remains
+          // responsible only for moving the text cursor below.
+          rect = compute_type3_rect(font.get_font_matrix(), type3_glyph->cm);
+        }
+      else
+        {
+          rect = compute_rect(font_descent*ratio, font_ascent*ratio, width);
+        }
       {
         cell.r_x0 = rect[0];
         cell.r_y0 = rect[1];
@@ -684,6 +795,63 @@ namespace pdflib
       const double d_base_x = T_ctm[0] * t_base_x + T_ctm[3] * t_base_y + T_ctm[6];
       const double d_base_y = T_ctm[1] * t_base_x + T_ctm[4] * t_base_y + T_ctm[7];
 
+      // Preserve the PDF cursor geometry independently of the painted glyph
+      // bounds. Tight ink boxes are the right geometry for rendered output,
+      // but cursor origins and advances are the stable signal for deciding
+      // whether consecutive characters form a word or a line. In particular,
+      // this is unaffected by Type 3 side bearings and oversized mathematical
+      // operators.
+      auto map_text_point = [&](double gx, double gy,
+                                double& dx, double& dy)
+      {
+        const double tx = T_text[0] * gx + T_text[3] * gy + T_text[6];
+        const double ty = T_text[1] * gx + T_text[4] * gy + T_text[7];
+        dx = T_ctm[0] * tx + T_ctm[3] * ty + T_ctm[6];
+        dy = T_ctm[1] * tx + T_ctm[4] * ty + T_ctm[7];
+      };
+
+      const double placement_end_x = vertical_mode ? 0.0 : width;
+      const double placement_end_y = vertical_mode
+        ? rise + vertical_displacement
+        : rise;
+      map_text_point(0.0, rise,
+                     cell.text_origin_x, cell.text_origin_y);
+      map_text_point(placement_end_x, placement_end_y,
+                     cell.text_advance_x, cell.text_advance_y);
+
+      double axis_x = cell.text_advance_x - cell.text_origin_x;
+      double axis_y = cell.text_advance_y - cell.text_origin_y;
+      double axis_norm = std::hypot(axis_x, axis_y);
+      if(axis_norm <= 1.e-9)
+        {
+          // Zero-advance marks still need the physical writing direction.
+          // Use the transformed text-space basis, oriented like the font's
+          // normal cursor progression.
+          const double direction =
+            vertical_mode and vertical_displacement < 0.0 ? -1.0 : 1.0;
+          const double basis_x = vertical_mode ? 0.0 : direction;
+          const double basis_y = vertical_mode ? direction : 0.0;
+          axis_x = T_ctm[0] * (T_text[0] * basis_x + T_text[3] * basis_y) +
+                   T_ctm[3] * (T_text[1] * basis_x + T_text[4] * basis_y);
+          axis_y = T_ctm[1] * (T_text[0] * basis_x + T_text[3] * basis_y) +
+                   T_ctm[4] * (T_text[1] * basis_x + T_text[4] * basis_y);
+          axis_norm = std::hypot(axis_x, axis_y);
+        }
+      if(axis_norm > 1.e-9)
+        {
+          cell.writing_axis_x = axis_x / axis_norm;
+          cell.writing_axis_y = axis_y / axis_norm;
+          cell.has_text_placement = true;
+        }
+
+      double nominal_top_x = 0.0;
+      double nominal_top_y = 0.0;
+      map_text_point(0.0, rise + font_size,
+                     nominal_top_x, nominal_top_y);
+      cell.nominal_text_height = std::hypot(
+        nominal_top_x - cell.text_origin_x,
+        nominal_top_y - cell.text_origin_y);
+
       // LOG_S(INFO) << "base_x0_old: " << base[0] << ", base_y0_old: " << base[1];
       // LOG_S(INFO) << "base_x0_new: " << d_base_x << ", base_y0_new: " << d_base_y;
       
@@ -697,6 +865,8 @@ namespace pdflib
 
       {
 	cell.text = text;
+	cell.text_is_suppressed_glyph = text_is_suppressed_glyph;
+	cell.is_pdf_word_space = is_pdf_word_space;
 	cell.rendering_mode = rendering_mode;
 	
 	cell.space_width = space_width;
@@ -737,7 +907,12 @@ namespace pdflib
 	
 	std::array<double, 8> glyph_rect = rect;
 	{
-	  if(glyph_code >= 0 and font.has_char_bbox(static_cast<uint32_t>(glyph_code)))
+	  if(has_embedded_glyph_bbox)
+	    {
+	      glyph_bbox = embedded_glyph_bbox;
+	      has_glyph_bbox = true;
+	    }
+	  else if(glyph_code >= 0 and font.has_char_bbox(static_cast<uint32_t>(glyph_code)))
 	    {
 	      glyph_bbox = font.get_char_bbox(static_cast<uint32_t>(glyph_code));
 	      has_glyph_bbox = true;
@@ -810,7 +985,7 @@ namespace pdflib
         // places, clips and paints it like any other image.
         if(font.is_type3() and glyph_code >= 0)
           {
-            auto g3 = font.get_type3_glyph(static_cast<uint32_t>(glyph_code));
+            auto g3 = type3_glyph;
             if(g3 and g3->valid and g3->mask)
               {
                 const std::array<double, 6>& fm = font.get_font_matrix();
@@ -1174,6 +1349,39 @@ namespace pdflib
     }
 
     return d_rect;
+  }
+
+  std::array<double, 8> pdf_state<TEXT>::compute_type3_rect(
+      const std::array<double, 6>& font_matrix,
+      const std::array<double, 6>& glyph_matrix)
+  {
+    // PAGE_CELL corners follow the writing-direction convention used by the
+    // contractor: bottom-left, bottom-right, top-right, top-left. The Type 3
+    // renderer maps the same unit square through these four transformations,
+    // so the extracted character box and painted glyph stay identical even
+    // under rotation, shear, rise, or a non-default FontMatrix.
+    constexpr std::array<std::array<double, 2>, 4> corners = {{
+      {{0.0, 0.0}}, {{1.0, 0.0}}, {{1.0, 1.0}}, {{0.0, 1.0}}
+    }};
+
+    std::array<double, 8> rect;
+    for(std::size_t i = 0; i < corners.size(); ++i)
+      {
+        const double gx = glyph_matrix[0]*corners[i][0] +
+                          glyph_matrix[2]*corners[i][1] + glyph_matrix[4];
+        const double gy = glyph_matrix[1]*corners[i][0] +
+                          glyph_matrix[3]*corners[i][1] + glyph_matrix[5];
+        const double ex = (font_matrix[0]*gx + font_matrix[2]*gy +
+                           font_matrix[4]) * font_size;
+        const double ey = (font_matrix[1]*gx + font_matrix[3]*gy +
+                           font_matrix[5]) * font_size + rise;
+        const double tx = text_matrix[0]*ex + text_matrix[3]*ey + text_matrix[6];
+        const double ty = text_matrix[1]*ex + text_matrix[4]*ey + text_matrix[7];
+        rect[2*i] = trafo_matrix[0]*tx + trafo_matrix[3]*ty + trafo_matrix[6];
+        rect[2*i + 1] =
+          trafo_matrix[1]*tx + trafo_matrix[4]*ty + trafo_matrix[7];
+      }
+    return rect;
   }
 
   std::array<double, 4> pdf_state<TEXT>::compute_bbox(std::array<double, 8>& rect)

@@ -1,0 +1,43 @@
+<!--
+    Gatherered from various observations
+
+    Copyright (C) 2012 pm286 <peter.murray.rust@googlemail.com>
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+            http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+-->
+<!-- 
+from http://www.tug.org/pipermail/tex-live/2011-June/029475.html
+
+[MTMI] doesn't exist : "the font MTMI is a virtual one, combining characters
+ from Times Italic with additional characters (such as an italic
+ letter v looking less like the Greek letter nu) contained in a font
+ RMTMI."
+ 
+ -->
+<!-- appears that names take priority over charvals 
+e.g. 
+<character charval="5" charname="Delta1" font="MTMI"/> 
+<character charval="946" charname="null" font="MTMI"/>
+
+the charname appears to take precedence over the charval
+-->
+<codePointSet encoding="Cyrillic" id="cyryl" resource="org/xmlcml/pdf2svg/codepoints/defacto">
+
+
+    <codePoint unicode="U+0447" name="cz"    note="CYRILLIC SMALL LETTER CHE"/>
+    <codePoint unicode="U+0429" name="Szsz"  note="CYRILLIC CAPITAL LETTER SHCHA"/>
+    <codePoint unicode="U+0416" name="zhet"  note="CYRILLIC CAPITAL LETTER ZHE"/>
+
+</codePointSet>
+

@@ -28,15 +28,13 @@ namespace pdflib
 
     bool create_word_cells = true;
     bool create_line_cells = true;
-    bool enforce_same_font = true;      // word & line cell creation
 
-    // word & line cell creation parameters
+    // Deprecated compatibility fields. The adaptive cell contractor no longer
+    // uses these values; they remain serialized/bound so existing callers and
+    // saved configurations continue to load.
+    bool enforce_same_font = true;
     double horizontal_cell_tolerance = DEFAULT_HORIZONTAL_CELL_TOLERANCE;
-
-    // word cell creation
     double word_space_width_factor_for_merge = DEFAULT_WORD_SPACE_WIDTH_FACTOR_FOR_MERGE;
-
-    // line cell creation
     double line_space_width_factor_for_merge = DEFAULT_LINE_SPACE_WIDTH_FACTOR_FOR_MERGE;
     double line_space_width_factor_for_merge_with_space =
       DEFAULT_LINE_SPACE_WIDTH_FACTOR_FOR_MERGE_WITH_SPACE;

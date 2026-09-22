@@ -1,0 +1,41 @@
+<!--
+
+    Copyright (C) 2012 pm286 <peter.murray.rust@googlemail.com>
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+            http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+-->
+<codePointSet encoding="advmt_sy" id="advmt_sy" resource="org/xmlcml/pdf2svg/codepoints/defacto"> 
+    
+    <codePoint unicode="U+0027" name="zero" decimal="48" note="APOSTROPHE"/>  
+    <codePoint unicode="U+2208" name="two"  decimal="50" note="ELEMEMT OF"/>  
+    <codePoint unicode="U+007B" name="f"    decimal="102" note="LEFT CURLY BRACKET"/>  
+    <codePoint unicode="U+0028" name="g"    decimal="103" note="LEFT PARENTHESIS"/>  
+    <codePoint unicode="U+007C" name="j"    decimal="106" note="VERTICAL LINE"/>
+    <codePoint unicode="U+002B" name="onequarter" decimal="188" note="PLUS SIGN"/>  
+    <codePoint unicode="U+0028" name="eth"  decimal="240" note="LEFT PARENTHESIS"/>  
+    <codePoint unicode="U+0029" name="Thorn" decimal="222" note="RIGHT PARENTHESIS"/>  
+    <codePoint unicode="U+003D" name="thorn" decimal="254" note="EQUALS SIGN"/>  
+    
+    <codePoint unicode="U+2212" name="C0" note="MINUS SIGN"/>  
+    <codePoint unicode="U+00D7" name="C2" note="MULTIPLICATION SIGN"/>  
+    <codePoint unicode="U+002A" name="C3" note="ASTERISK"/>  
+    <codePoint unicode="U+00B0" name="C14" note="DEGREE SIGN"/>  
+    <codePoint unicode="U+003E" name="C14" note="GREATER-THAN SIGN"/>  
+    <codePoint unicode="U+2022" name="C15" note="BULLET"/>  
+    <codePoint unicode="U+2264" name="C20" note="LESS-THAN OR EQUAL TO"/>  
+    <codePoint unicode="U+2265" name="C21" note="GREATER-THAN OR EQUAL TO"/>  
+    <codePoint unicode="U+007E" name="C24" note="TILDE"/>  
+    
+</codePointSet>
+        

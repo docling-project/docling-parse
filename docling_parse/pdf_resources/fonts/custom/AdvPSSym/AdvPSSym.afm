@@ -1,0 +1,33 @@
+StartFontMetrics 4.1
+Comment AdvPSSym character mapping adapted from ContentMine/pdf2svg
+Comment https://github.com/ContentMine/pdf2svg/blob/30f0bf8a0c39bfa65e30c2eb3ed4f96b9fdd744d/src/main/resources/org/xmlcml/pdf2svg/codepoints/misc/advPSSym.xml
+Comment Copyright (C) 2012 pm286 <peter.murray.rust@googlemail.com>
+Comment Licensed under the Apache License, Version 2.0
+FontName AdvPSSym
+FullName AdvPSSym
+FamilyName AdvPSSym
+Weight Medium
+ItalicAngle 0
+IsFixedPitch false
+CharacterSet Special
+FontBBox -177 -291 1083 1010
+EncodingScheme FontSpecific
+CapHeight 673
+XHeight 772
+Ascender 754
+Descender -226
+StartCharMetrics 12
+C 162 ; WX 191 ; N quotesingle ; B 59 463 132 718 ;
+C 163 ; WX 549 ; N lessequal ; B 29 0 526 639 ;
+C 170 ; WX 791 ; N copyright ; B 51 -15 741 675 ;
+C 176 ; WX 400 ; N degree ; B 50 385 350 685 ;
+C 181 ; WX 713 ; N proportional ; B 27 123 639 404 ;
+C 183 ; WX 549 ; N multiply ; B 17 8 533 524 ;
+C 210 ; WX 790 ; N registered ; B 50 -17 740 673 ;
+C 211 ; WX 791 ; N copyright ; B 51 -15 741 675 ;
+C 212 ; WX 890 ; N trademark ; B 18 293 855 673 ;
+C 216 ; WX 713 ; N logicalnot ; B 15 0 680 288 ;
+C 217 ; WX 603 ; N caret ; B 23 0 583 454 ;
+C 228 ; WX 786 ; N trademark ; B 5 293 725 673 ;
+EndCharMetrics
+EndFontMetrics

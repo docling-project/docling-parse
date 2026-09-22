@@ -14,7 +14,16 @@ fixtures use deliberately lopsided glyphs and check which way up they land.
 
 from __future__ import annotations
 
-from tests.pdf_builder import build_pdf, content_stream, render_page, stream_object
+import pytest
+from docling_core.types.doc.page import TextCellUnit
+
+from tests.pdf_builder import (
+    build_pdf,
+    content_stream,
+    parse_page,
+    render_page,
+    stream_object,
+)
 from tests.rendering_regression import (
     coverage_ratio,
     ink_bounds,
@@ -26,7 +35,14 @@ FONT_SIZE = 100
 GLYPH_BOX = (50.0, 50.0, 150.0, 150.0)
 
 
-def _type3_pdf(charproc: bytes, *, resources: str = "<< >>") -> bytes:
+def _type3_pdf(
+    charproc: bytes,
+    *,
+    resources: str = "<< >>",
+    font_bbox: str = "[0 0 1000 1000]",
+    font_matrix: str = "[0.001 0 0 0.001 0 0]",
+    width: int = 1000,
+) -> bytes:
     """One page drawing a single Type3 glyph 100pt tall at (50, 50)."""
     text = f"BT\n/T3 {FONT_SIZE} Tf\n50 50 Td\n(a) Tj\nET\n"
     return build_pdf(
@@ -36,15 +52,64 @@ def _type3_pdf(charproc: bytes, *, resources: str = "<< >>") -> bytes:
             "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] "
             "/Resources << /Font << /T3 5 0 R >> >> /Contents 4 0 R >>",
             content_stream(text),
-            "<< /Type /Font /Subtype /Type3 /FontBBox [0 0 1000 1000] "
-            "/FontMatrix [0.001 0 0 0.001 0 0] /CharProcs 6 0 R "
+            f"<< /Type /Font /Subtype /Type3 /FontBBox {font_bbox} "
+            f"/FontMatrix {font_matrix} /CharProcs 6 0 R "
             "/Encoding << /Type /Encoding /Differences [97 /square] >> "
-            "/FirstChar 97 /LastChar 97 /Widths [1000] "
+            f"/FirstChar 97 /LastChar 97 /Widths [{width}] "
             f"/Resources {resources} >>",
             "<< /square 7 0 R >>",
             charproc,
         ]
     )
+
+
+def test_character_bbox_uses_actual_charproc_bounds():
+    """A loose Type3 /FontBBox must not make the character cell enormous.
+
+    This mirrors producer-generated Type3 fonts that use an identity
+    /FontMatrix, a one-unit advance and a generic [-10, 10] font box while
+    drawing each glyph in an approximately one-unit CharProc coordinate range.
+    """
+    charproc = stream_object(
+        "",
+        b"1 0 -10 -10 10 10 d1\n0 -0.2 0.6 1 re f\n",
+    )
+    page = parse_page(
+        _type3_pdf(
+            charproc,
+            font_bbox="[-10 -10 10 10]",
+            font_matrix="[1 0 0 1 0 0]",
+            width=1,
+        )
+    )
+
+    cells = list(page.iterate_cells(TextCellUnit.CHAR))
+    assert len(cells) == 1
+    box = cells[0].rect.to_bounding_box()
+
+    assert box.width == pytest.approx(0.6 * FONT_SIZE, abs=0.1)
+    assert box.height == pytest.approx(FONT_SIZE, abs=0.1)
+
+
+def test_blank_charproc_has_advance_but_no_ink_height():
+    """A metrics-only Type3 glyph must not inherit a loose font bbox."""
+    charproc = stream_object("", b"1 0 -10 -10 10 10 d1\n")
+    page = parse_page(
+        _type3_pdf(
+            charproc,
+            font_bbox="[-10 -10 10 10]",
+            font_matrix="[1 0 0 1 0 0]",
+            width=1,
+        )
+    )
+
+    cells = list(page.iterate_cells(TextCellUnit.CHAR))
+    assert len(cells) == 1
+    assert cells[0].text == " "
+    box = cells[0].rect.to_bounding_box()
+
+    assert box.width == pytest.approx(FONT_SIZE, abs=0.1)
+    assert box.height == pytest.approx(0.0, abs=0.1)
 
 
 def test_vector_charproc_is_painted():

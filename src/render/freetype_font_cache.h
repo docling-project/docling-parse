@@ -14,6 +14,7 @@
 #endif
 #include <loguru.hpp>
 
+#include <array>
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -88,6 +89,19 @@ namespace pdflib
                          BLPath& path,
                          double* out_advance = nullptr);
 
+    // Resolves one embedded glyph and returns its exact outline bounds in PDF
+    // glyph space (1000 units per em). Glyph identity follows the same rules
+    // as build_text_path(), so /Encoding /Differences remains authoritative.
+    // A successfully resolved blank glyph returns true with `has_ink == false`
+    // and a zero bbox; this lets text extraction distinguish a real space-like
+    // advance from a visible glyph whose Unicode mapping is unavailable.
+    bool get_glyph_bbox(const std::shared_ptr<const embedded_font_blob>& blob,
+                        const std::string& utf8_text,
+                        int64_t char_code,
+                        const std::string& glyph_name,
+                        std::array<double, 4>& bbox,
+                        bool* has_ink = nullptr);
+
     // Same, for a face read from a system font FILE. Glyph identity here is
     // the Unicode cmap and nothing else: the file is a substituted face, so
     // the PDF's character codes and glyph names say nothing about it, and the
@@ -119,6 +133,8 @@ namespace pdflib
       // Decomposed outline in font units (FreeType y-up convention).
       BLPath path;
       double advance = 0.0; // horizontal advance in font units
+      std::array<double, 4> bbox = {0.0, 0.0, 0.0, 0.0};
+      bool has_bbox = false;
       bool failed = false;
     };
 
@@ -253,6 +269,59 @@ namespace pdflib
       }
 
     return emit_glyph_run(entry, glyph_indices, size, path, out_advance);
+  }
+
+  inline bool freetype_font_cache::get_glyph_bbox(
+      const std::shared_ptr<const embedded_font_blob>& blob,
+      const std::string& utf8_text,
+      int64_t char_code,
+      const std::string& glyph_name,
+      std::array<double, 4>& bbox,
+      bool* has_ink)
+  {
+    if(library_ == nullptr or blob == nullptr or not blob->has_bytes())
+      {
+        return false;
+      }
+
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    face_entry& entry = get_face_entry(blob);
+    if(entry.failed or entry.face == nullptr or entry.face->units_per_EM <= 0)
+      {
+        return false;
+      }
+
+    std::vector<FT_UInt> glyph_indices;
+    if(not resolve_glyph_indices(entry, blob, utf8_text, char_code,
+                                 glyph_name, glyph_indices)
+       or glyph_indices.size() != 1)
+      {
+        return false;
+      }
+
+    const glyph_entry* glyph = get_glyph_entry(entry, glyph_indices.front());
+    if(glyph == nullptr)
+      {
+        return false;
+      }
+
+    if(has_ink != nullptr)
+      {
+        *has_ink = glyph->has_bbox;
+      }
+    bbox = {0.0, 0.0, 0.0, 0.0};
+    if(not glyph->has_bbox)
+      {
+        return true;
+      }
+
+    const double scale = 1000.0 / static_cast<double>(entry.face->units_per_EM);
+    for(std::size_t i = 0; i < bbox.size(); i++)
+      {
+        bbox[i] = glyph->bbox[i] * scale;
+      }
+    return true;
   }
 
   inline bool freetype_font_cache::build_text_path_from_file(
@@ -678,6 +747,15 @@ namespace pdflib
 
         if(entry.face->glyph->format == FT_GLYPH_FORMAT_OUTLINE)
           {
+            FT_BBox box;
+            FT_Outline_Get_CBox(&entry.face->glyph->outline, &box);
+            glyph.bbox = {
+              static_cast<double>(box.xMin),
+              static_cast<double>(box.yMin),
+              static_cast<double>(box.xMax),
+              static_cast<double>(box.yMax)
+            };
+            glyph.has_bbox = box.xMin < box.xMax and box.yMin < box.yMax;
             glyph.failed = not decompose_outline(entry.face->glyph->outline, glyph.path);
           }
       }

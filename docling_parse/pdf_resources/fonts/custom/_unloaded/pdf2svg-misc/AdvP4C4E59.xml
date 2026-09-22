@@ -1,0 +1,48 @@
+<!--
+
+    Copyright (C) 2012 pm286 <peter.murray.rust@googlemail.com>
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+            http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+-->
+<codePointSet encoding="AdvP4C4E59" id="advp4c4e59" resource="org/xmlcml/pdf2svg/codepoints/misc"> 
+
+<!-- 
+    <codePoint unicode="U+002E" name="period" decimal="46" note="FULL STOP"/>  
+    <codePoint unicode="U+003B" name="semicolon" decimal="59" note="SEMICOLON"/>  
+    
+    <codePoint unicode="U+007E" name="asciitilde" note="TILDE"/>  
+    <codePoint unicode="U+005E" name="asciicircum" note="CIRCUMFLEX ACCENT"/>  
+    <codePoint unicode="U+002A" name="asterisk" note="ASTERISK"/> 
+-->
+    <codePoint unicode="U+0393" name="C0" note="GREEK CAPITAL LETTER GAMMA"/>
+    <codePoint unicode="U+039B" name="C3" note="GREEK CAPITAL LETTER LAMBDA"/>
+    <codePoint unicode="U+03A8" name="C9" note="GREEK CAPITAL LETTER PSI"/>
+    <codePoint unicode="U+2018" name="C18" note="LEFT SINGLE QUOTATION MARK"/>  
+    <codePoint unicode="U+007E" name="C19" note="TILDE"/>  
+    <codePoint unicode="U+02C7" name="C20" note="CARON"/>  
+    <codePoint unicode="U+0306" name="C21" note="COMBINING BREVE"/>
+    <codePoint unicode="U+00A8" name="C22" note="MACRON" />  
+    <codePoint unicode="U+00B0" name="C23" note="DEGREE SIGN" />  
+    <codePoint unicode="U+00DF" name="C25" note="LATIN SMALL LETTER SHARP S" />  
+    <codePoint unicode="U+00E6" name="C26" note="LATIN SMALL LETTER AE" />  
+    <codePoint unicode="U+2205" name="C28" note="EMPTY SET" />  
+    <codePoint unicode="U+0393" name="C255" note="GREEK CAPITAL LETTER GAMMA"/>
+    
+    <codePoint unicode="U+00A8" decimal="8364" note="DIAERESIS" />  
+    
+    <codePointSet idRef="basicLatin" href="org/xmlcml/pdf2svg/codepoints/unicode/basicLatin.xml"/>
+    <codePointSet idRef="unicode256" href="org/xmlcml/pdf2svg/codepoints/unicode/unicode256.xml"/>
+
+</codePointSet>
+		
