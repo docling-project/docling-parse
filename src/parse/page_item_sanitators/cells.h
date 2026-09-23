@@ -475,10 +475,27 @@ namespace pdflib
   {
     if(lhs.has_text_placement and rhs.has_text_placement)
       {
-        return (rhs.text_origin_x - lhs.text_advance_x) *
-                 lhs.writing_axis_x +
-               (rhs.text_origin_y - lhs.text_advance_y) *
-                 lhs.writing_axis_y;
+        const double gap =
+          (rhs.text_origin_x - lhs.text_advance_x) * lhs.writing_axis_x +
+          (rhs.text_origin_y - lhs.text_advance_y) * lhs.writing_axis_y;
+
+        // Right-to-left scripts are often emitted in logical order under a
+        // left-to-right text matrix, each glyph placed before the previous one
+        // by negative character spacing or TJ offsets. The gap is then the
+        // distance from the next glyph's advance end back to the previous
+        // origin.
+        const double progression =
+          (rhs.text_origin_x - lhs.text_origin_x) * lhs.writing_axis_x +
+          (rhs.text_origin_y - lhs.text_origin_y) * lhs.writing_axis_y;
+        if(not lhs.left_to_right and not rhs.left_to_right and
+           progression < 0.0)
+          {
+            return (lhs.text_origin_x - rhs.text_advance_x) *
+                     lhs.writing_axis_x +
+                   (lhs.text_origin_y - rhs.text_advance_y) *
+                     lhs.writing_axis_y;
+          }
+        return gap;
       }
 
     double ux = lhs.r_x1 - lhs.r_x0;
@@ -805,8 +822,34 @@ namespace pdflib
       page_item<PAGE_CELL>& next,
       bool insert_space)
   {
+    // Right-to-left text is prepended when the stream paints it in visual
+    // order. A stream in logical order places each cell before the text
+    // gathered so far along the bbox axis; overlapping cells such as
+    // combining marks keep the visual-order default.
+    double rx = aggregate.r_x1 - aggregate.r_x0;
+    double ry = aggregate.r_y1 - aggregate.r_y0;
+    const double rn = std::hypot(rx, ry);
+    bool logical_order = false;
+    if(rn > 1.e-9)
+      {
+        rx /= rn;
+        ry /= rn;
+        auto extent = [rx, ry](const page_item<PAGE_CELL>& cell)
+        {
+          const std::array<double, 4> u = {{
+            cell.r_x0 * rx + cell.r_y0 * ry, cell.r_x1 * rx + cell.r_y1 * ry,
+            cell.r_x2 * rx + cell.r_y2 * ry, cell.r_x3 * rx + cell.r_y3 * ry}};
+          return std::make_pair(*std::min_element(u.begin(), u.end()),
+                                *std::max_element(u.begin(), u.end()));
+        };
+        const auto a = extent(aggregate);
+        const auto n = extent(next);
+        const double eps = 0.25 * std::max(1.e-6, n.second - n.first);
+        logical_order = n.first < a.first - eps and n.second < a.second - eps;
+      }
+
     const bool ltr = aggregate.left_to_right and next.left_to_right;
-    if(ltr)
+    if(ltr or logical_order)
       {
         if(insert_space) { aggregate.text.push_back(' '); }
         aggregate.text += next.text;
@@ -814,6 +857,9 @@ namespace pdflib
     else
       {
         aggregate.text = next.text + (insert_space ? " " : "") + aggregate.text;
+      }
+    if(not ltr)
+      {
         aggregate.left_to_right = false;
       }
 
