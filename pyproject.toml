@@ -31,7 +31,7 @@ requires-python = ">=3.10"
 dependencies = [
     "pillow>=10.0.0,<13.0.0",
     "pydantic>=2.0.0",
-    "docling-core>=2.95.0,<3.0.0",
+    "docling-core>=2.99.0,<3.0.0",
     "pywin32>=305; sys_platform == 'win32'",
 ]
 [project.urls]
@@ -85,9 +85,6 @@ perf = [
 [tool.uv]
 package = true
 default-groups = "all"
-
-[tool.uv.sources]
-docling-core = { git = "git+https://github.com/docling-project/docling-core.git", branch = "feat/acroform-widget-extraction" }
 
 [tool.setuptools]
 include-package-data = true

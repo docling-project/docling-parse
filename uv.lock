@@ -678,8 +678,8 @@ wheels = [
 
 [[package]]
 name = "docling-core"
-version = "2.98.1"
-source = { git = "https://github.com/docling-project/docling-core.git?branch=feat%2Facroform-widget-extraction#050302fa73d2e2b19e8c9daaa90e2f0c4a3b6315" }
+version = "2.99.0"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "defusedxml" },
     { name = "doclang" },
@@ -695,6 +695,10 @@ dependencies = [
     { name = "tabulate" },
     { name = "typer" },
     { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/9f/30/4da99847d85e3a2aa61e751c1e8749a2ba223c2208b0a9a1ad1b174cdb5a/docling_core-2.99.0.tar.gz", hash = "sha256:bff91f3313cc092f0255743f708cb86b4efec41532b3c60aae3b790ef1f2a71a", size = 388534, upload-time = "2026-09-25T15:10:15.996Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d4/02/61a226c0ba319dc7da463fd137f88a728e4eb0353591d85064181a5016bb/docling_core-2.99.0-py3-none-any.whl", hash = "sha256:2ce0bae815de8139e8c0dc93736ba613609db777c3cbe392d9ec76bfabec6104", size = 309099, upload-time = "2026-09-25T15:10:14.163Z" },
 ]
 
 [[package]]
@@ -741,7 +745,7 @@ perf = [
 
 [package.metadata]
 requires-dist = [
-    { name = "docling-core", git = "https://github.com/docling-project/docling-core.git?branch=feat%2Facroform-widget-extraction" },
+    { name = "docling-core", specifier = ">=2.99.0,<3.0.0" },
     { name = "pillow", specifier = ">=10.0.0,<13.0.0" },
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "pywin32", marker = "sys_platform == 'win32'", specifier = ">=305" },
