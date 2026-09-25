@@ -374,9 +374,13 @@ namespace pdflib
      * two-cluster k-means separates ordinary character gaps from dilated word
      * gaps. Sparse or insufficiently separated samples use a conservative
      * default threshold of 0.25; valid inferred thresholds are clamped to at
-     * least 0.18. Runs containing explicit spaces do not use this inferred
-     * threshold: those source-level boundaries are authoritative, with only
-     * jumps larger than one character advance allowed to add a boundary.
+     * least 0.18. Word gaps spread far more widely than character gaps
+     * (justified lines, the em gap after a section number), so the threshold
+     * is also capped at 1.5 times the median character-cluster gap plus 0.20,
+     * and the cap is never below 0.25. Runs containing explicit spaces do not
+     * use this inferred threshold: those source-level boundaries are
+     * authoritative, with only jumps larger than one character advance
+     * allowed to add a boundary.
      *
      * @param run One line of cells in source order.
      * @return Dimensionless normalized gap above which a new word begins.
@@ -797,7 +801,18 @@ namespace pdflib
       {
         return 0.25;
       }
-    return std::max(0.18, 0.5 * (low + high));
+
+    // The median of the character cluster ignores word gaps that fall below
+    // the midpoint and rises with letter spacing.
+    const double midpoint = 0.5 * (low + high);
+    auto character_end = std::partition(
+      gaps.begin(), gaps.end(),
+      [midpoint](double gap) { return gap <= midpoint; });
+    auto median = gaps.begin() + (character_end - gaps.begin()) / 2;
+    std::nth_element(gaps.begin(), median, character_end);
+
+    return std::min(std::max(0.18, midpoint),
+                    std::max(0.25, 1.5 * (*median) + 0.20));
   }
 
   inline void page_item_sanitator<PAGE_CELLS>::append_cell(
