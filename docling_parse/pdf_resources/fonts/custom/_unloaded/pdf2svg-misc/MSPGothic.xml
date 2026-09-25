@@ -1,0 +1,36 @@
+<!--
+
+    Copyright (C) 2012 pm286 <peter.murray.rust@googlemail.com>
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+            http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+-->
+<codePointSet encoding="MS-PGothic" id="MSPGothic" resource="org/xmlcml/pdf2svg/codepoints/misc">
+
+    
+    <codePoint unicode="U+002E" decimal="16090" note="FULL STOP"/> 
+    <codePoint unicode="U+0030" decimal="16092" note="DIGIT ZERO"/> 
+    <codePoint unicode="U+0031" decimal="16093" note="DIGIT ONE"/> 
+    <codePoint unicode="U+0032" decimal="16094" note="DIGIT TWO"/> 
+    <codePoint unicode="U+0033" decimal="16095" note="DIGIT THREE"/> 
+    <codePoint unicode="U+0034" decimal="16096" note="DIGIT FOUR"/> 
+    <codePoint unicode="U+0035" decimal="16097" note="DIGIT FIVE"/> 
+    <codePoint unicode="U+0036" decimal="16098" note="DIGIT SIX"/> 
+    <codePoint unicode="U+0037" decimal="16099" note="DIGIT SEVEN"/> 
+    <codePoint unicode="U+0038" decimal="16100" note="DIGIT EIGHT"/> 
+    <codePoint unicode="U+0039" decimal="16101" note="DIGIT NONE"/> 
+
+    <codePointSet idRef="unicode256" href="org/xmlcml/pdf2svg/codepoints/unicode/unicode256.xml"/> 
+    
+</codePointSet>
+

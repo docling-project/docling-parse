@@ -28,6 +28,11 @@ namespace pdflib
 
     void render_shading(shading_instruction& instr);
 
+    void draw_debug_bboxes(const std::vector<std::array<double, 8>>& quads,
+                           double page_width,
+                           double page_height,
+                           uint32_t rgba);
+
   private:
 
     render_config config_;
@@ -102,6 +107,17 @@ namespace pdflib
     LOG_S(INFO) << __FUNCTION__
                 << "  key='" << instr.get_key() << "'"
                 << "  #-stops=" << instr.get_stops().size();
+  }
+
+  inline void renderer<NAIVE>::draw_debug_bboxes(
+      const std::vector<std::array<double, 8>>& quads,
+      double page_width,
+      double page_height,
+      uint32_t rgba)
+  {
+    LOG_S(INFO) << __FUNCTION__ << "  #-quads=" << quads.size()
+                << "  page=" << page_width << "x" << page_height
+                << "  rgba=" << rgba;
   }
 
 }

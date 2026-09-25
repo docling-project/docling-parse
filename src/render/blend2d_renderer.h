@@ -119,6 +119,14 @@ namespace pdflib
     // the filled outline rather than a reason to skip the shading.
     void render_shading(shading_instruction& instr);
 
+    // Draw debug quads expressed in the normalized, display-oriented page
+    // frame used by parsed cells. This is intentionally separate from text
+    // rendering: word and line boxes only exist after parsing/sanitization.
+    void draw_debug_bboxes(const std::vector<std::array<double, 8>>& quads,
+                           double page_width,
+                           double page_height,
+                           uint32_t rgba);
+
     // Returns the rendered canvas as RGBA bytes, row-major top-to-bottom, in
     // display orientation. The associated shape is {height, width, 4}.
     std::shared_ptr<std::vector<uint8_t>> get_canvas() const;
@@ -2114,6 +2122,41 @@ namespace pdflib
     ctx.set_stroke_style(BLRgba32(0xFF1070C0u));
     ctx.set_stroke_width(0.5);
     ctx.stroke_path(bbox_path);
+  }
+
+  inline void renderer<BLEND2D>::draw_debug_bboxes(
+      const std::vector<std::array<double, 8>>& quads,
+      double page_width,
+      double page_height,
+      uint32_t rgba)
+  {
+    if(quads.empty() or page_width <= 0.0 or page_height <= 0.0)
+      {
+        return;
+      }
+
+    // Parsed cells have already been rotated into display orientation and
+    // translated to the selected page boundary. Finish the PDF-space drawing
+    // first, then overlay directly on that display-oriented canvas.
+    finish_page_context();
+
+    BLContext ctx(image_);
+    const double sx = static_cast<double>(image_.width()) / page_width;
+    const double sy = static_cast<double>(image_.height()) / page_height;
+    ctx.set_stroke_style(BLRgba32(rgba));
+    ctx.set_stroke_width(1.0);
+
+    for(const auto& q : quads)
+      {
+        BLPath path;
+        path.move_to(q[0] * sx, image_.height() - q[1] * sy);
+        path.line_to(q[2] * sx, image_.height() - q[3] * sy);
+        path.line_to(q[4] * sx, image_.height() - q[5] * sy);
+        path.line_to(q[6] * sx, image_.height() - q[7] * sy);
+        path.close();
+        ctx.stroke_path(path);
+      }
+    ctx.end();
   }
 
   inline void renderer<BLEND2D>::draw_text_basepoint(

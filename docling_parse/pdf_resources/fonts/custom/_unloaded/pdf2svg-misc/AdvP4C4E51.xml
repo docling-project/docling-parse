@@ -1,0 +1,45 @@
+<!--
+
+    Copyright (C) 2012 pm286 <peter.murray.rust@googlemail.com>
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+            http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+-->
+<codePointSet encoding="AdvP4C4E51" id="AdvP4C4E51" resource="org/xmlcml/pdf2svg/codepoints/misc"> 
+
+    <!-- DOES NOT SUPPORT UNICODE -->
+    
+    <codePoint unicode="U+0210" decimal="8216" note="SCRIPT LETTER L"/>
+    
+    <codePoint unicode="U+002E" name="colon"     decimal="58" note="FULL STOP"/>
+    <codePoint unicode="U+002C" name="semicolon" decimal="59" note="COMMA"/>
+    <codePoint unicode="U+003C" name="less"      decimal="60" note="LESS-THAN SIGN"/>
+    <codePoint unicode="U+002F" name="equal"     decimal="61" note="SOLIDUS"/>
+    <codePoint unicode="U+003E" name="greater"   decimal="62" note="GREATER-THAN SIGN"/>
+    <codePoint unicode="U+2202" name="at     "   decimal="64" note="PARTIAL DIFFERENTIAL"/>
+    <codePoint unicode="U+007C" name="j"         decimal="106" note="VERTICAL LINE"/>
+
+    <codePoint unicode="U+03B5" name="C15" note="GREEK SMALL LETTER EPSILON"/>
+    <codePoint unicode="U+03B8" name="C18" note="GREEK SMALL LETTER THETA"/>
+    <codePoint unicode="U+03B9" name="C19" note="GREEK SMALL LETTER IOTA"/>
+    <codePoint unicode="U+03BA" name="C20" note="GREEK SMALL LETTER KAPPA"/>
+    <codePoint unicode="U+03BB" name="C21" note="GREEK SMALL LETTER LAMBDA"/>
+    <codePoint unicode="U+03BC" name="C22" note="GREEK SMALL LETTER MU"/>
+    <codePoint unicode="U+03BD" name="C23" note="GREEK SMALL LETTER NU"/>
+    <codePoint unicode="U+03C4" name="C27" note="GREEK SMALL LETTER TAU"/>
+    <codePoint unicode="U+03C6" name="C30" note="GREEK SMALL LETTER PHI"/>
+	
+    <codePoint unicode="U+03C6" name="period" note="GREEK SMALL LETTER PHI"/>
+	
+</codePointSet>
+		

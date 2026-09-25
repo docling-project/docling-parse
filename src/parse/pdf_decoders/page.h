@@ -84,6 +84,10 @@ namespace pdflib
     // Export this page as a standalone one-page PDF.
     void save_pdf_page(std::filesystem::path const& out_path) const;
 
+    // Map one raw render-instruction point into the normalized,
+    // display-oriented coordinate frame used by parsed text cells.
+    std::pair<double, double> to_page_frame_point(double x, double y) const;
+
   private:
 
     void decode_dimensions();
@@ -142,6 +146,10 @@ namespace pdflib
                                                    const std::array<double, 4>& rect);
 
     void rotate_contents();
+
+    // Map a bbox from the raw content-stream space of the render instructions
+    // onto the frame of the sanitized page items (see page_frame_* below).
+    std::array<double, 4> to_page_frame(std::array<double, 4> bbox) const;
 
     bool can_reuse_sanitised_cells_for_line_cells(const decode_config& config) const;
 
@@ -207,6 +215,16 @@ namespace pdflib
     std::shared_ptr<pdf_resource<PAGE_FONTS>> acroform_fonts;
 
     pdf_render_instructions instructions;
+
+    // The render instructions stay in unrotated user space (the renderer
+    // orients its own canvas), while page_cells, page_shapes and page_images
+    // are rotated by rotate_contents() and moved to the page boundary by the
+    // dimension sanitator. Geometry queries that walk the instructions apply
+    // the same /Rotate and boundary origin, so their boxes land in the frame
+    // of the cells.
+    int page_frame_angle = 0;
+    std::pair<double, double> page_frame_delta = {0.0, 0.0};
+    std::pair<double, double> page_frame_origin = {0.0, 0.0};
 
     pdf_timings timings;
   };
@@ -553,7 +571,8 @@ namespace pdflib
             const std::array<double, 4> visible_shape_bbox =
               clipped_bbox(shape_bbox, instr.get_clip_state(), shape_visible);
 
-            if(shape_visible and bbox_intersects(bbox, visible_shape_bbox))
+            if(shape_visible and
+               bbox_intersects(bbox, to_page_frame(visible_shape_bbox)))
               {
                 return true;
               }
@@ -587,6 +606,10 @@ namespace pdflib
 
     const double tol = std::max(0.0, tolerance);
 
+    // a quarter-turn /Rotate swaps the axes between the raw instruction
+    // space and the page frame the caller asks about
+    const bool swaps_axes = (std::abs(page_frame_angle) % 180) == 90;
+
     for(const auto& instr : instructions.get_shape_instructions())
       {
         if(not shape_instruction_strokes_visible(instr)) { continue; }
@@ -609,10 +632,12 @@ namespace pdflib
               const bool is_vertical = std::abs(x1 - x0) <= tol;
 
               if(is_horizontal and is_vertical) { return; }
+              if(not is_horizontal and not is_vertical) { return; }
 
-              if((is_horizontal and not horizontal) or
-                 (is_vertical and not vertical) or
-                 (not is_horizontal and not is_vertical))
+              const bool frame_horizontal = swaps_axes ? is_vertical : is_horizontal;
+              const bool frame_vertical = swaps_axes ? is_horizontal : is_vertical;
+              if((frame_horizontal and not horizontal) or
+                 (frame_vertical and not vertical))
                 {
                   return;
                 }
@@ -621,7 +646,7 @@ namespace pdflib
               if(clip_axis_aligned_segment(x0, y0, x1, y1,
                                            instr.get_clip_state(), tol, bbox))
                 {
-                  result.push_back(bbox);
+                  result.push_back(to_page_frame(bbox));
                 }
             };
 
@@ -674,7 +699,7 @@ namespace pdflib
         std::array<double, 4> bbox = {0.0, 0.0, 0.0, 0.0};
         if(shape_visible_bbox(instr, bbox))
           {
-            boxes.push_back(bbox);
+            boxes.push_back(to_page_frame(bbox));
           }
       }
 
@@ -895,6 +920,14 @@ namespace pdflib
       sanitator.sanitize(page_cells, config.page_boundary);
       sanitator.sanitize(page_shapes, config.page_boundary);
       sanitator.sanitize(page_images, config.page_boundary);
+
+      // the same boundary the sanitator subtracted from the cells, read after
+      // rotate_contents() so it is already in the rotated space
+      std::array<double, 4> boundary = (config.page_boundary == "media_box")
+        ? page_dimension.get_media_bbox()
+        : page_dimension.get_crop_bbox();
+      page_frame_origin = {boundary[0], boundary[1]};
+
       timings.add_timing(pdf_timings::KEY_SANITIZE_ORIENTATION, local.get_time());
     }
 
@@ -1920,6 +1953,9 @@ namespace pdflib
 
     int angle = page_dimension.get_angle();
 
+    page_frame_angle = 0;
+    page_frame_delta = {0.0, 0.0};
+
     if((angle%360)==0)
       {
         return;
@@ -1935,6 +1971,9 @@ namespace pdflib
     std::pair<double, double> delta = page_dimension.rotate(angle);
     LOG_S(INFO) << "translation delta: " << delta.first << ", " << delta.second;
 
+    page_frame_angle = angle;
+    page_frame_delta = delta;
+
     page_cells.rotate(angle, delta);
     page_shapes.rotate(angle, delta);
     page_images.rotate(angle, delta);
@@ -1942,17 +1981,32 @@ namespace pdflib
     page_hyperlinks.rotate(angle, delta);
   }
 
+  std::array<double, 4> pdf_decoder<PAGE>::to_page_frame(std::array<double, 4> bbox) const
+  {
+    // the rotation page_shapes received in rotate_contents() ...
+    utils::values::transform_bottomleft_bbox_inplace(page_frame_angle,
+                                                     page_frame_delta, bbox);
+
+    // ... followed by the translation the dimension sanitator applied
+    bbox[0] -= page_frame_origin.first;
+    bbox[1] -= page_frame_origin.second;
+    bbox[2] -= page_frame_origin.first;
+    bbox[3] -= page_frame_origin.second;
+
+    return bbox;
+  }
+
+  std::pair<double, double>
+  pdf_decoder<PAGE>::to_page_frame_point(double x, double y) const
+  {
+    utils::values::rotate_inplace(page_frame_angle, x, y);
+    utils::values::translate_inplace(page_frame_delta, x, y);
+    return {x - page_frame_origin.first, y - page_frame_origin.second};
+  }
+
   bool pdf_decoder<PAGE>::can_reuse_sanitised_cells_for_line_cells(const decode_config& config) const
   {
-    return (sanitised_cells_created and
-            config.do_sanitization and
-            config.enforce_same_font and
-            (std::abs(config.horizontal_cell_tolerance -
-                      config.DEFAULT_HORIZONTAL_CELL_TOLERANCE) < 1.e-6) and
-            (std::abs(config.line_space_width_factor_for_merge -
-                      config.DEFAULT_LINE_SPACE_WIDTH_FACTOR_FOR_MERGE) < 1.e-6) and
-            (std::abs(config.line_space_width_factor_for_merge_with_space -
-                      config.DEFAULT_LINE_SPACE_WIDTH_FACTOR_FOR_MERGE_WITH_SPACE) < 1.e-6));
+    return sanitised_cells_created and config.do_sanitization;
   }
 
   void pdf_decoder<PAGE>::sanitise_contents(std::string page_boundary)
@@ -1981,23 +2035,10 @@ namespace pdflib
                            step_timer.get_time());
       }
 
-      double horizontal_cell_tolerance =
-        decode_config::DEFAULT_HORIZONTAL_CELL_TOLERANCE;
-      bool enforce_same_font=true;
-      //double space_width_factor_for_merge=1.5;
-      double space_width_factor_for_merge =
-        decode_config::DEFAULT_LINE_SPACE_WIDTH_FACTOR_FOR_MERGE;
-      double space_width_factor_for_merge_with_space =
-        decode_config::DEFAULT_LINE_SPACE_WIDTH_FACTOR_FOR_MERGE_WITH_SPACE;
-
       {
         utils::timer step_timer;
-        sanitator.sanitize_bbox(cells,
-                                horizontal_cell_tolerance,
-                                enforce_same_font,
-                                space_width_factor_for_merge,
-                                space_width_factor_for_merge_with_space,
-                                false);
+        decode_config default_config;
+        cells = sanitator.create_line_cells(cells, default_config);
         timings.add_timing(pdf_timings::KEY_SANITISE_CONTENTS_SANITIZE_BBOX,
                            step_timer.get_time());
       }
@@ -2029,15 +2070,7 @@ namespace pdflib
 
     {
       utils::timer step_timer;
-      double space_width_factor_for_merge_with_space =
-        2.0*config.word_space_width_factor_for_merge;
-
-      sanitizer.sanitize_bbox(word_cells,
-                              config.horizontal_cell_tolerance,
-                              config.enforce_same_font,
-                              config.word_space_width_factor_for_merge,
-                              space_width_factor_for_merge_with_space,
-                              true);
+      word_cells = sanitizer.create_word_cells(word_cells, config);
       timings.add_timing(pdf_timings::KEY_CREATE_WORD_CELLS_SANITIZE_BBOX,
                          step_timer.get_time());
     }
@@ -2057,14 +2090,6 @@ namespace pdflib
             }
         }
       timings.add_timing(pdf_timings::KEY_CREATE_WORD_CELLS_ERASE_SPACES,
-                         step_timer.get_time());
-    }
-
-    // Remove duplicates (quadratic but necessary)
-    {
-      utils::timer step_timer;
-      sanitizer.remove_duplicate_cells(word_cells, 0.5, true);
-      timings.add_timing(pdf_timings::KEY_CREATE_WORD_CELLS_REMOVE_DUPLICATE_CELLS,
                          step_timer.get_time());
     }
 
@@ -2095,25 +2120,12 @@ namespace pdflib
     if(!reuse_sanitised_cells)
       {
         utils::timer step_timer;
-        sanitizer.sanitize_bbox(line_cells,
-                                config.horizontal_cell_tolerance,
-                                config.enforce_same_font,
-                                config.line_space_width_factor_for_merge,
-                                config.line_space_width_factor_for_merge_with_space,
-                                false);
+        line_cells = sanitizer.create_line_cells(line_cells, config);
         timings.add_timing(pdf_timings::KEY_CREATE_LINE_CELLS_SANITIZE_BBOX,
                            step_timer.get_time());
       }
 
     LOG_S(INFO) << "# line-cells: " << line_cells.size();
-
-    // Remove duplicates (quadratic but necessary)
-    {
-      utils::timer step_timer;
-      sanitizer.remove_duplicate_cells(line_cells, 0.5, true);
-      timings.add_timing(pdf_timings::KEY_CREATE_LINE_CELLS_REMOVE_DUPLICATE_CELLS,
-                         step_timer.get_time());
-    }
 
     line_cells_created = true;
 

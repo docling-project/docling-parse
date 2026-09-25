@@ -77,24 +77,6 @@ from docling_parse.pdf_parsers import (  # type: ignore[import]
 _log = logging.getLogger(__name__)
 
 
-class PdfTocEntry(BaseModel):
-    """PDF table of contents entry (recursive structure).
-
-    Attributes:
-        title: The text of the TOC entry
-        level: Nesting level in the hierarchy (0 for top level)
-        page: Page number this entry points to (optional)
-        children: Nested TOC entries (optional)
-    """
-
-    model_config = ConfigDict(extra="allow")
-
-    title: str
-    level: int | None = None
-    page: int | None = None
-    children: List["PdfTocEntry"] | None = None
-
-
 class PdfAnnotations(BaseModel):
     """PDF document annotations including form fields, language, metadata, and table of contents.
 
@@ -102,7 +84,8 @@ class PdfAnnotations(BaseModel):
         form: AcroForm data containing interactive form fields (raw dict structure). None if no forms present.
         language: Document language code (e.g., 'en-US', 'fr-FR'). None if not specified.
         meta_xml: XMP metadata as XML string. None if no metadata present.
-        table_of_contents: Document outline/bookmark structure as list of entries. None if no TOC.
+        table_of_contents: Document outline (bookmarks) as a tree under a synthetic root
+            entry. None if no outline present.
     """
 
     model_config = ConfigDict(validate_assignment=True, extra="allow")
@@ -110,7 +93,7 @@ class PdfAnnotations(BaseModel):
     form: Dict[str, Any] | None = None
     language: str | None = None
     meta_xml: str | None = None
-    table_of_contents: List[PdfTocEntry] | None = None
+    table_of_contents: PdfTableOfContents | None = None
 
 
 class Timings(BaseModel):
@@ -694,6 +677,42 @@ def _page_size_from_decoder(
     return abs(bbox[2] - bbox[0]), abs(bbox[3] - bbox[1])
 
 
+def _to_table_of_contents(toc: List[Dict[str, Any]]) -> List[PdfTableOfContents]:
+    """Convert raw outline entries into PdfTableOfContents entries.
+
+    The `destination` sub-dictionary is handed to pydantic as it comes: its keys are
+    the PdfDestination fields, so restating them here would only add a second place
+    to keep in sync. Recursion is safe: the C++ side caps the outline depth.
+    """
+    return [
+        PdfTableOfContents(
+            text=item.get("title", ""),
+            destination=item.get("destination"),
+            children=_to_table_of_contents(item.get("children") or []),
+        )
+        for item in toc
+    ]
+
+
+def _to_annotations(annots: Dict[str, Any]) -> PdfAnnotations:
+    """Convert the raw annotations dictionary into a PdfAnnotations.
+
+    Shared by the single-threaded and the threaded parser so the two cannot drift.
+    """
+    toc = annots.get("table_of_contents")
+
+    return PdfAnnotations(
+        form=annots.get("form"),
+        language=annots.get("language"),
+        meta_xml=annots.get("meta_xml"),
+        table_of_contents=(
+            PdfTableOfContents(text="<root>", children=_to_table_of_contents(toc))
+            if toc
+            else None
+        ),
+    )
+
+
 class PdfDocument:
     def __init__(
         self,
@@ -713,7 +732,6 @@ class PdfDocument:
         ] = {}
         # Per page: the content config the cached page-decoder satisfies.
         self._decoded_content_configs: Dict[int, ContentConfig] = {}
-        self._toc: PdfTableOfContents | None = None
         self._meta: PdfMetaData | None = None
         self._annotations: PdfAnnotations | None = None
 
@@ -849,21 +867,18 @@ class PdfDocument:
             raise RuntimeError("This document is not loaded.")
 
     def get_table_of_contents(self) -> PdfTableOfContents | None:
-        if self.is_loaded():
-            toc = self._parser.get_table_of_contents(key=self._key)
+        """Get the document outline (bookmarks) as a tree under a synthetic root entry.
 
-            if toc is None:
-                return self._toc
+        Each entry carries its `destination`, so a bookmark resolves to a page and,
+        where the PDF specifies one, to a position on that page.
 
-            if self._toc is not None:
-                return self._toc
+        Returns:
+            Optional[PdfTableOfContents]: The root entry, or None if the document has
+                no outline.
+        """
+        annotations = self.get_annotations()
 
-            self._toc = PdfTableOfContents(text="<root>")
-            self._toc.children = self._to_table_of_contents(toc=toc)
-
-            return self._toc
-        else:
-            raise RuntimeError("This document is not loaded.")
+        return annotations.table_of_contents if annotations is not None else None
 
     def iterate_pages(
         self,
@@ -875,31 +890,6 @@ class PdfDocument:
                 page_no + 1,
                 self.get_page(page_no + 1, content_config=content_config),
             )
-
-    def _to_table_of_contents(self, toc: dict) -> List[PdfTableOfContents]:
-
-        result = []
-        for item in toc:
-            subtoc = PdfTableOfContents(text=item["title"])
-            if "children" in item:
-                subtoc.children = self._to_table_of_contents(toc=item["children"])
-            result.append(subtoc)
-
-        return result
-
-    def _to_pdf_toc_entry(self, toc_list: List[Dict]) -> List[PdfTocEntry]:
-        """Convert raw TOC dict list to PdfTocEntry objects."""
-        result = []
-        for item in toc_list:
-            entry = PdfTocEntry(
-                title=item.get("title", ""),
-                level=item.get("level"),
-                page=item.get("page"),
-            )
-            if item.get("children"):
-                entry.children = self._to_pdf_toc_entry(item["children"])
-            result.append(entry)
-        return result
 
     def get_annotations(self) -> PdfAnnotations | None:
         """Get document annotations including form fields, language, metadata, and TOC.
@@ -917,17 +907,7 @@ class PdfDocument:
             if annots_dict is None:
                 return self._annotations
 
-            # Convert table_of_contents list of dicts to PdfTocEntry objects if present
-            toc_entries = None
-            if annots_dict.get("table_of_contents"):
-                toc_entries = self._to_pdf_toc_entry(annots_dict["table_of_contents"])
-
-            self._annotations = PdfAnnotations(
-                form=annots_dict.get("form"),
-                language=annots_dict.get("language"),
-                meta_xml=annots_dict.get("meta_xml"),
-                table_of_contents=toc_entries,
-            )
+            self._annotations = _to_annotations(annots_dict)
 
             return self._annotations
         else:
@@ -1291,8 +1271,10 @@ class PageParseResult:
     ) -> bool:
         """Return whether visible page content intersects bbox.
 
-        bbox may use top-left or bottom-left coordinates. Native code expects
-        page coordinates with bottom-left origin as [left, bottom, right, top].
+        bbox may use top-left or bottom-left coordinates, in the frame of the
+        text cells: relative to the page boundary and rotated by /Rotate.
+        Native code expects page coordinates with bottom-left origin as
+        [left, bottom, right, top].
         """
         bbox_bl = bbox.to_bottom_left_origin(page_height=self.page_height)
         left = min(bbox_bl.l, bbox_bl.r)
@@ -1314,7 +1296,11 @@ class PageParseResult:
         vertical: bool = True,
         tolerance: float = 1e-3,
     ) -> List[BoundingBox]:
-        """Return visible horizontal and/or vertical stroked shape segments."""
+        """Return visible horizontal and/or vertical stroked shape segments.
+
+        Boxes are in the frame of the text cells: bottom-left origin, relative
+        to the page boundary and rotated by /Rotate.
+        """
         return [
             _to_bounding_box(tuple(bbox))
             for bbox in self._require_page_decoder().get_shape_lines(
@@ -1329,7 +1315,11 @@ class PageParseResult:
         *,
         tolerance: float = 0.0,
     ) -> List[BoundingBox]:
-        """Return bboxes of visible shapes connected by overlapping bboxes."""
+        """Return bboxes of visible shapes connected by overlapping bboxes.
+
+        Boxes are in the frame of the text cells: bottom-left origin, relative
+        to the page boundary and rotated by /Rotate.
+        """
         return [
             _to_bounding_box(tuple(bbox))
             for bbox in self._require_page_decoder().get_connected_shape_bounding_boxes(
@@ -1566,6 +1556,8 @@ class DoclingThreadedPdfParser:
         path_or_stream: Union[str, Path, BytesIO],
         password: str | None = None,
         page_numbers: Sequence[int] | None = None,
+        *,
+        page_range: tuple[int, int] | None = None,
     ) -> str:
         """Load a document for parallel processing.
 
@@ -1573,10 +1565,16 @@ class DoclingThreadedPdfParser:
             path_or_stream: File path or BytesIO object.
             password: Optional password for protected files.
             page_numbers: Optional 1-indexed physical pages to schedule.
+            page_range: Optional inclusive 1-indexed physical page range to
+                schedule. The end is clipped to the document. Mutually exclusive
+                with page_numbers.
 
         Returns:
             str: The document key.
         """
+        if page_numbers is not None and page_range is not None:
+            raise ValueError("page_numbers and page_range are mutually exclusive")
+
         if isinstance(path_or_stream, str):
             path_or_stream = Path(path_or_stream)
 
@@ -1587,6 +1585,7 @@ class DoclingThreadedPdfParser:
                 filename=str(path_or_stream).encode("utf8"),
                 password=password,
                 page_numbers=list(page_numbers) if page_numbers is not None else None,
+                page_range=page_range,
             )
         elif isinstance(path_or_stream, BytesIO):
             hasher = hashlib.sha256(usedforsecurity=False)
@@ -1601,6 +1600,7 @@ class DoclingThreadedPdfParser:
                 bytes_io=path_or_stream,
                 password=password,
                 page_numbers=list(page_numbers) if page_numbers is not None else None,
+                page_range=page_range,
             )
         else:
             raise TypeError(
@@ -1625,6 +1625,24 @@ class DoclingThreadedPdfParser:
         if doc_key not in self._scheduled_page_counts:
             raise ValueError(f"Document key not loaded: {doc_key}")
         return self._scheduled_page_counts[doc_key]
+
+    def get_annotations(self, doc_key: str) -> PdfAnnotations | None:
+        """Get the annotations of a loaded document.
+
+        The annotations are structure-only: reading them decodes no page, so the
+        outline of a document can be read without waiting for, or interfering with,
+        the threaded page decoding.
+
+        Returns:
+            Optional[PdfAnnotations]: Annotations object with form, language, meta_xml
+                and table_of_contents fields. None if the document has no annotations.
+        """
+        if doc_key not in self._page_counts:
+            raise ValueError(f"Document key not loaded: {doc_key}")
+
+        annots = self._parser.get_annotations(key=doc_key)
+
+        return _to_annotations(annots) if annots is not None else None
 
     def unload(self, doc_key: str) -> bool:
         """Unload one document after threaded processing has completed."""

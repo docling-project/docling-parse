@@ -237,14 +237,18 @@ def export(
             f"{'page':>4}  text"
         )
 
-    for page_no in sorted(pages):
-        segmented_page, image = pages[page_no]
+    for source_page_no in sorted(pages):
+        segmented_page, image = pages[source_page_no]
+        # A selected page becomes a standalone one-page document. DocLang page
+        # images are numbered by document position, so its page/provenance must
+        # be 1 even when it came from a later page in the source PDF.
+        doc_page_no = 1 if page is not None else source_page_no
         n_cells, n_pics = _add_page_to_doc(
-            doc, page_no, segmented_page, image, dpi, unit, log_text=log_text
+            doc, doc_page_no, segmented_page, image, dpi, unit, log_text=log_text
         )
         total_cells += n_cells
         total_pictures += n_pics
-        print(f"  page {page_no}: {n_cells} {mode} cell(s), {n_pics} picture(s)")
+        print(f"  page {source_page_no}: {n_cells} {mode} cell(s), {n_pics} picture(s)")
 
     print(
         f"Assembled DoclingDocument: {len(pages)} page(s), "

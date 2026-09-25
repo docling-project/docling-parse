@@ -169,163 +169,6 @@ namespace pdflib
     return result;
   }
   
-  /*** Table of Contents ***/
-
-  nlohmann::json extract_toc_entry_in_json(QPDF& pdf_obj, QPDFObjectHandle& node, int level,
-                                           std::unordered_set<std::string>& visited)
-  {
-    LOG_S(INFO) << __FUNCTION__;
-    
-    nlohmann::json toc_entry = nlohmann::json::object({});
-
-    // securing we dont crash ...
-    if(level>=16)
-      {
-	return toc_entry;
-      }
-
-    //for(auto key : node.getKeys())
-    //{
-    //LOG_S(INFO) << " -> key: " << key;
-    //}
-    
-    // Extract title
-    if(node.hasKey("/Title"))
-      {
-	auto title = node.getKey("/Title");
-	
-	if(title.isString())
-	  {
-	    std::string val = title.getUTF8Value();
-
-            if(utf8::is_valid(val.begin(), val.end()))
-              {
-                toc_entry["title"] = val;
-		LOG_S(INFO) << "level: " << level << "\t" << val;
-              }
-            else
-              {
-                utf8::replace_invalid(val.begin(), val.end(),
-                                      std::back_inserter(val));
-                toc_entry["title"] = val;
-              }	    
-	  }
-	else
-	  {
-	    LOG_S(WARNING) << "title is not a string!";
-	    toc_entry["title"] = "<unknown>";
-	  }
-	
-        toc_entry["level"] = level;
-      }
-    
-    // Extract title
-    if(node.hasKey("/A"))
-      {
-        //toc_entry["link"] = to_json(node.getKey("/A"), {}, 0, 8);
-      }
-    
-    // Extract destination
-    if(node.hasKey("/Dest"))
-      {
-	//LOG_S(INFO) << "found a destination!";
-	
-        // Depending on the type of destination, extract its value
-	//auto dest = node.getKey("/Dest");
-        //toc_entry["destination"] = to_json(dest, {}, 0, 8);
-      }
-    else
-      {
-        //toc_entry["destination"] = "No destination";
-      }
-
-    // Extract children
-    if (node.hasKey("/First"))
-      {
-        QPDFObjectHandle first = node.getKey("/First");
-
-        while(first.isDictionary())
-          {
-            // Check for circular reference
-            std::string obj_ref = first.unparse();
-            if (visited.count(obj_ref))
-              {
-                LOG_S(WARNING) << "Circular TOC reference detected, skipping: " << obj_ref;
-                break;
-              }
-            visited.insert(obj_ref);
-
-            auto child = extract_toc_entry_in_json(pdf_obj, first, level+1, visited);
-            toc_entry["children"].push_back(child);
-
-            if(first.hasKey("/Next"))
-              {
-                first = first.getKey("/Next");
-              }
-            else
-              {
-                break;
-              }
-          }
-      }
-
-    return toc_entry;
-  }
-  
-  nlohmann::json extract_toc_in_json(QPDF& pdf_obj, QPDFObjectHandle& root)
-  {
-    LOG_S(INFO) << __FUNCTION__;
-    
-    nlohmann::json toc = nlohmann::json::value_t::null;
-
-    if(root.hasKey("/Outlines"))
-      {
-	LOG_S(INFO) << "/Outlines (=table-of-contents) detected!";
-	
-        QPDFObjectHandle outlines = root.getKey("/Outlines");
-
-        if(outlines.hasKey("/First"))
-          {
-            QPDFObjectHandle first = outlines.getKey("/First");
-
-            toc = nlohmann::json::array({});
-
-            // Track visited nodes to prevent infinite loops
-            std::unordered_set<std::string> visited;
-
-            while(first.isDictionary())
-              {
-                // Check for circular reference
-                std::string obj_ref = first.unparse();
-                if (visited.count(obj_ref))
-                  {
-                    LOG_S(WARNING) << "Circular TOC reference detected at top level, skipping: " << obj_ref;
-                    break;
-                  }
-                visited.insert(obj_ref);
-
-		int level=0;
-                toc.push_back(extract_toc_entry_in_json(pdf_obj, first, level, visited));
-
-                if(first.hasKey("/Next"))
-                  {
-                    first = first.getKey("/Next");
-                  }
-                else
-                  {
-                    break;
-                  }
-              }
-          }
-      }
-    else
-      {
-        LOG_S(INFO) << "no /Outlines (=table-of-contents) detected ...";
-      }
-
-    return toc;
-  }
-  
   nlohmann::json extract_document_annotations_in_json(QPDF& pdf_obj,
 						      QPDFObjectHandle& root)
   {
@@ -339,8 +182,10 @@ namespace pdflib
 
     annots["language"] = extract_language_in_json(pdf_obj, root);
 
-    annots["table_of_contents"] = extract_toc_in_json(pdf_obj, root);
-    
+    // The table-of-contents is composed by pdf_decoder<DOCUMENT>, not here: it
+    // resolves destinations against the page geometry, and pdf_outline therefore
+    // depends on page_item<PAGE_DIMENSION>, which is declared after this header.
+
     LOG_S(INFO) << "annotations: " << annots.dump(2);
     
     return annots;

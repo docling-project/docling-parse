@@ -1,0 +1,83 @@
+<!--
+
+    Copyright (C) 2012 pm286 <peter.murray.rust@googlemail.com>
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+            http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+-->
+<codePointSet encoding="MacMath" id="macmath" resource="org/xmlcml/pdf2svg/codepoints/misc"> <!--  I am not sure of this yet  -->
+
+<!--  this is adobe -->
+<!-- seems to contain both name and Cdd names -->
+
+    <codePoint unicode="U+007C" name="numbersign" decimal="35" note="VERTICAL LINE"/>  
+    <codePoint unicode="U+2229" name="backslash" decimal="92"  note="INTERSECTION"/>  
+    <codePoint unicode="U+2208" name="two"       decimal="50"  note="ELEMENT OF"/>  
+    <codePoint unicode="U+002F" name="six"                     note="SOLIDUS"/>  
+    <codePoint unicode="U+0028" name="eth"                     note="LEFT PARENTHESIS"/>  
+    <codePoint unicode="U+0029" name="Thorn"                   note="RIGHT PARENTHESIS"/>  
+    <codePoint unicode="U+002B" name="thorn" decimal="254"     note="PLUS"/>  
+    <codePoint unicode="U+003D" name="onequarter"              note="EQUALS"/>  
+    <codePoint unicode="U+003D" name="ellipsis"                note="EQUALS"/>  
+    <codePoint unicode="U+005B" name="onehalf"                 note="LEFT SQUARE BRACKET"/>  
+    
+    <codePointSet idRef="mathBoldScript" href="mathBoldScript.xml"/>
+    
+    <codePoint unicode="U+007B" name="f"                       note="LEFT CURLY BRACKET"/>  
+    <codePoint unicode="U+007D" name="g"                       note="RIGHT CURLY BRACKET"/>  
+    <codePoint unicode="U+3008" name="h" decimal="104"         note="LEFT ANGLE BRACKET"/>  
+    <codePoint unicode="U+3009" name="i" decimal="105"         note="RIGHT ANGLE BRACKET"/>  
+    <codePoint unicode="U+007C" name="j" decimal="106"         note="VERTICAL LINE"/>
+    <codePoint unicode="U+2225" name="k" decimal="107"         note="PARALLEL TO"/>
+    <codePoint unicode="U+2020" name="y" charval="121"         note="DAGGER"/>  
+    <codePoint unicode="U+221A" name="p" charval="112"         note="SQUARE ROOT"/>
+    <codePoint unicode="U+2021" name="z"                       note="DOUBLE DAGGER"/>  
+    <codePoint unicode="U+2032" name="zero"                    note="PRIME"/>
+    <codePoint unicode="U+2192" name="exclam"                  note="RIGHTWARDS ARROW"/>  
+    <codePoint unicode="U+21C4" name="Eth" charval="208"       note="reversible reaction should be: U+21CB U+21CC"/>  
+    <codePoint unicode="U+0028" decimal="240"                  note="LEFT PARENTHESIS"/> <!-- large -->  
+    <codePoint unicode="U+0029" decimal="222"                  note="RIGHT PARENTHESIS"/> <!-- large -->  
+
+    <codePoint unicode="U+002D" name="C0"     note="MINUS"/>  
+    <codePoint unicode="U+00B7" name="C1"     note="MIDDLE DOT"/>  
+    <codePoint unicode="U+00D7" name="C2"     note="MULTIPLICATION SIGN"/>  
+    <codePoint unicode="U+002A" name="C3"     note="ASTERISK"/>  
+    <codePoint unicode="U+00F7" name="C4"     note="DIVISION SIGN"/>  
+    <codePoint unicode="U+00B1" name="C6"     note="PLUS-MINUS SIGN"/>  
+    
+    <codePoint unicode="U+29BF" name="C12"    note="CIRCLED BULLET"/>  
+    <codePoint unicode="U+25CB" name="C13"    note="WHITE CIRCLE"/>  
+    <codePoint unicode="U+00B0" name="C14"    note="DEGREE SIGN" htmlName="deg"/>  
+    <codePoint unicode="U+2022" name="C15"    note="BULLET"/> 
+    <codePoint unicode="U+0028" name="C16"    note="LEFT PARENTHESIS"/>  
+    <codePoint unicode="U+0029" name="C17"    note="RIGHT PARENTHESIS"/>  
+    <codePoint unicode="U+0028" name="C18"    note="LEFT PARENTHESIS"/> 
+    <codePoint unicode="U+0029" name="C19"    note="RIGHT PARENTHESIS"/>     
+    <codePoint unicode="U+2264" name="C20"    note="LESS-THAN OR EQUAL TO"/>     
+    <codePoint unicode="U+2265" name="C21"    note="GREATER-THAN OR EQUAL TO"/>     
+    <codePoint unicode="U+030A" name="C23"    note="COMBINING RING ABOVE" />  
+    <codePoint unicode="U+00BB" name="C24"    note="RIGHT-POINTING DOUBLE ANGLE QUOTATION MARK" />  
+    <codePoint unicode="U+2245" name="C25"    note="APPROXIMATELY EQUAL TO" />  
+    <codePoint unicode="U+007B" name="C26"    note="LEFT CURLY BRACKET"/> 
+    <codePoint unicode="U+007D" name="C27"    note="RIGHT CURLY BRACKET"/>  
+    <codePoint unicode="U+226A" name="C28"    note="MUCH LESS-THAN"/> 
+    <codePoint unicode="U+226B" name="C29"    note="MUCH GREATER-THAN"/> 
+    <codePoint unicode="U+005D" name="C138"   note="RIGHT SQUARE BRACKET" />  
+    <codePoint unicode="U+2020" name="C160"   note="DAGGER" />  
+    <codePoint unicode="U+00AE" name="C210"   note="REGISTERED SIGN"/> 
+    <codePoint unicode="U+00A9" name="C211"   note="COPYRIGHT SIGN"/> 
+    <codePoint unicode="U+00A9" name="C223"   note="COPYRIGHT SIGN"/> 
+    <codePoint unicode="U+2212" name="C255"   note="MINUS SIGN"/> 
+    
+</codePointSet>
+        

@@ -6,6 +6,151 @@
 
 namespace
 {
+struct bbox_render_options
+{
+  bool draw_glyph_bbox = false;
+  bool draw_char_bbox = false;
+  bool draw_word_bbox = false;
+  bool draw_text_bbox = false;
+  bool print_bbox = false;
+};
+
+std::string table_text(std::string text)
+{
+  constexpr std::size_t max_size = 30;
+  std::replace(text.begin(), text.end(), '\t', ' ');
+  std::replace(text.begin(), text.end(), '\r', ' ');
+  std::replace(text.begin(), text.end(), '\n', ' ');
+  if(text.size() > max_size)
+    {
+      text.resize(max_size - 3);
+      text += "...";
+    }
+  return text;
+}
+
+void print_bbox_header_once()
+{
+  static bool printed = false;
+  if(printed) { return; }
+  printed = true;
+  std::cout << std::left
+            << std::setw(6) << "page"
+            << std::setw(9) << "mode"
+            << std::setw(32) << "text"
+            << std::right
+            << std::setw(11) << "x0" << std::setw(11) << "y0"
+            << std::setw(11) << "x1" << std::setw(11) << "y1"
+            << std::setw(11) << "x2" << std::setw(11) << "y2"
+            << std::setw(11) << "x3" << std::setw(11) << "y3"
+            << '\n';
+}
+
+void print_bbox_row(int page,
+                    std::string const& mode,
+                    std::string const& text,
+                    std::array<double, 8> const& quad)
+{
+  print_bbox_header_once();
+  std::cout << std::left
+            << std::setw(6) << page
+            << std::setw(9) << mode
+            << std::setw(32) << table_text(text)
+            << std::right << std::fixed << std::setprecision(3);
+  for(double coordinate : quad)
+    {
+      std::cout << std::setw(11) << coordinate;
+    }
+  std::cout << '\n';
+}
+
+void print_cell_bboxes(int page,
+                       std::string const& mode,
+                       pdflib::page_item<pdflib::PAGE_CELLS>& cells)
+{
+  for(auto& cell : cells)
+    {
+      if(not cell.active) { continue; }
+      print_bbox_row(page, mode, cell.text,
+                     {cell.r_x0, cell.r_y0, cell.r_x1, cell.r_y1,
+                      cell.r_x2, cell.r_y2, cell.r_x3, cell.r_y3});
+    }
+}
+
+std::vector<std::array<double, 8>> cell_quads(pdflib::page_item<pdflib::PAGE_CELLS>& cells)
+{
+  std::vector<std::array<double, 8>> result;
+  result.reserve(cells.size());
+  for(auto& cell : cells)
+    {
+      if(not cell.active) { continue; }
+      result.push_back({cell.r_x0, cell.r_y0, cell.r_x1, cell.r_y1,
+                        cell.r_x2, cell.r_y2, cell.r_x3, cell.r_y3});
+    }
+  return result;
+}
+
+template<typename Renderer>
+void draw_cell_bboxes(pdflib::pdf_decoder<pdflib::PAGE>& page,
+                      const pdflib::decode_config& config,
+                      Renderer& rnd,
+                      const bbox_render_options& options)
+{
+  if(options.print_bbox and options.draw_glyph_bbox)
+    {
+      for(const auto& glyph : page.get_instructions().get_text_instructions())
+        {
+          std::array<double, 8> quad = {
+            glyph.get_r_x0(), glyph.get_r_y0(),
+            glyph.get_r_x1(), glyph.get_r_y1(),
+            glyph.get_r_x2(), glyph.get_r_y2(),
+            glyph.get_r_x3(), glyph.get_r_y3()
+          };
+          for(std::size_t i = 0; i < quad.size(); i += 2)
+            {
+              const auto point = page.to_page_frame_point(quad[i], quad[i + 1]);
+              quad[i] = point.first;
+              quad[i + 1] = point.second;
+            }
+          print_bbox_row(page.get_page_number(), "glyph", glyph.get_text(), quad);
+        }
+    }
+
+  auto boundary = config.page_boundary == "media_box"
+    ? page.get_page_dimension().get_media_bbox()
+    : page.get_page_dimension().get_crop_bbox();
+  const double page_width = boundary[2] - boundary[0];
+  const double page_height = boundary[3] - boundary[1];
+
+  if(options.draw_char_bbox)
+    {
+      rnd.draw_debug_bboxes(cell_quads(page.get_char_cells()),
+                            page_width, page_height, 0xFF00A8E8u);
+      if(options.print_bbox)
+        {
+          print_cell_bboxes(page.get_page_number(), "char", page.get_char_cells());
+        }
+    }
+  if(options.draw_word_bbox)
+    {
+      rnd.draw_debug_bboxes(cell_quads(page.get_word_cells()),
+                            page_width, page_height, 0xFFFF8C00u);
+      if(options.print_bbox)
+        {
+          print_cell_bboxes(page.get_page_number(), "word", page.get_word_cells());
+        }
+    }
+  if(options.draw_text_bbox)
+    {
+      rnd.draw_debug_bboxes(cell_quads(page.get_line_cells()),
+                            page_width, page_height, 0xFFD020D0u);
+      if(options.print_bbox)
+        {
+          print_cell_bboxes(page.get_page_number(), "text", page.get_line_cells());
+        }
+    }
+}
+
 std::filesystem::path page_pdf_output_path(std::filesystem::path const& export_dir,
                                            std::filesystem::path const& pdf_path,
                                            int page)
@@ -49,7 +194,8 @@ bool decode_and_render(pdflib::pdf_decoder<pdflib::DOCUMENT>& doc,
                        std::filesystem::path const& bitmap_dir,
                        bool export_page_pdf_files,
                        std::filesystem::path const& page_pdf_dir,
-                       std::string const& pdf_path)
+                       std::string const& pdf_path,
+                       const bbox_render_options& bbox_options)
 {
   if (page == -1)
     {
@@ -73,6 +219,7 @@ bool decode_and_render(pdflib::pdf_decoder<pdflib::DOCUMENT>& doc,
                                                                    p));
                 }
               instructions.iterate_over_instructions(rnd);
+              draw_cell_bboxes(*page_decoder, page_config, rnd, bbox_options);
             }
         }
     }
@@ -95,6 +242,7 @@ bool decode_and_render(pdflib::pdf_decoder<pdflib::DOCUMENT>& doc,
                                                                page));
             }
           instructions.iterate_over_instructions(rnd);
+          draw_cell_bboxes(*page_decoder, page_config, rnd, bbox_options);
         }
       else
         {
@@ -117,7 +265,8 @@ int render_pdf_file(const std::string& pdf_path,
                     bool export_bitmaps,
                     const std::string& bitmap_dir,
                     bool export_page_pdf_files,
-                    const std::string& page_pdf_dir)
+                    const std::string& page_pdf_dir,
+                    const bbox_render_options& bbox_options)
 {
   pdflib::pdf_timings timings;
   pdflib::pdf_decoder<pdflib::DOCUMENT> doc(timings);
@@ -164,6 +313,7 @@ int render_pdf_file(const std::string& pdf_path,
                                                            p));
         }
       instructions.iterate_over_instructions(rnd);
+      draw_cell_bboxes(*page_decoder, page_config, rnd, bbox_options);
 
       if (save_output)
         {
@@ -212,7 +362,11 @@ int main(int argc, char* argv[])
         // ---- render_config ----
         ("render-text",    "Render glyph outlines for text cells (default: true)",          cxxopts::value<bool>()->implicit_value("true"))
         ("min-stroke-width", "Minimum stroke width in device pixels for hairlines and sub-pixel vector strokes (default: 1.0)", cxxopts::value<float>())
-        ("draw-text-bbox", "Draw bounding quad around each text cell",                      cxxopts::value<bool>()->implicit_value("true"))
+        ("draw-glyph-bbox", "Draw the raw text-render-instruction (glyph) quad",             cxxopts::value<bool>()->implicit_value("true"))
+        ("draw-char-bbox",  "Draw decoded character-cell quads",                             cxxopts::value<bool>()->implicit_value("true"))
+        ("draw-word-bbox",  "Draw contracted word-cell quads",                               cxxopts::value<bool>()->implicit_value("true"))
+        ("draw-text-bbox",  "Draw contracted line/text-cell quads",                          cxxopts::value<bool>()->implicit_value("true"))
+        ("print-bbox",      "Print enabled bbox modes as an aligned table on stdout",       cxxopts::value<bool>()->implicit_value("true"))
         ("draw-text-basepoint", "Draw the text base point as a small red dot",              cxxopts::value<bool>()->implicit_value("true"))
         ("display-widgets", "Draw the bounds of each widget (form-field) annotation",       cxxopts::value<bool>()->implicit_value("true"))
         ("color-widgets",  "RGB triple (0-255) for the widget overlay, e.g. 0,153,255",     cxxopts::value<std::vector<int>>())
@@ -235,11 +389,6 @@ int main(int argc, char* argv[])
         ("max-num-bitmaps", "Cap on number of bitmaps per page (-1 = no cap)",              cxxopts::value<int>())
         ("create-word-cells",  "Build word-level cells (default: true)",                    cxxopts::value<bool>()->implicit_value("true"))
         ("create-line-cells",  "Build line-level cells (default: true)",                    cxxopts::value<bool>()->implicit_value("true"))
-        ("enforce-same-font",  "Require same font within a word/line cell (default: true)", cxxopts::value<bool>()->implicit_value("true"))
-        ("horizontal-cell-tolerance", "Horizontal merge tolerance (default: 1.0)",          cxxopts::value<double>())
-        ("word-space-factor",  "Space-width factor for word merging (default: 0.33)",       cxxopts::value<double>())
-        ("line-space-factor",  "Space-width factor for line merging (default: 1.0)",        cxxopts::value<double>())
-        ("line-space-factor-with-space", "Space-width factor for line merging with space (default: 0.33)", cxxopts::value<double>())
         ("keep-glyphs",        "Keep unmapped GLYPH<...> tokens (default: false)",          cxxopts::value<bool>()->implicit_value("true"))
         ("keep-qpdf-warnings", "Emit QPDF warnings (default: false)",                       cxxopts::value<bool>()->implicit_value("true"))
         ("extract-font-programs", "Extract embedded font programs for rendering (default: true)", cxxopts::value<bool>()->implicit_value("true"))
@@ -294,6 +443,12 @@ int main(int argc, char* argv[])
 
       // --- decode_config ---
       pdflib::decode_config page_config;
+      bbox_render_options bbox_options;
+      bbox_options.draw_glyph_bbox = result.count("draw-glyph-bbox") and result["draw-glyph-bbox"].as<bool>();
+      bbox_options.draw_char_bbox = result.count("draw-char-bbox") and result["draw-char-bbox"].as<bool>();
+      bbox_options.draw_word_bbox = result.count("draw-word-bbox") and result["draw-word-bbox"].as<bool>();
+      bbox_options.draw_text_bbox = result.count("draw-text-bbox") and result["draw-text-bbox"].as<bool>();
+      bbox_options.print_bbox = result.count("print-bbox") and result["print-bbox"].as<bool>();
       if (result.count("page-boundary"))            { page_config.page_boundary             = result["page-boundary"].as<std::string>(); }
       if (result.count("do-sanitization"))          { page_config.do_sanitization            = result["do-sanitization"].as<bool>(); }
       if (result.count("keep-char-cells"))          { page_config.keep_char_cells            = result["keep-char-cells"].as<bool>(); }
@@ -303,11 +458,6 @@ int main(int argc, char* argv[])
       if (result.count("max-num-bitmaps"))          { page_config.max_num_bitmaps            = result["max-num-bitmaps"].as<int>(); }
       if (result.count("create-word-cells"))        { page_config.create_word_cells          = result["create-word-cells"].as<bool>(); }
       if (result.count("create-line-cells"))        { page_config.create_line_cells          = result["create-line-cells"].as<bool>(); }
-      if (result.count("enforce-same-font"))        { page_config.enforce_same_font          = result["enforce-same-font"].as<bool>(); }
-      if (result.count("horizontal-cell-tolerance")){ page_config.horizontal_cell_tolerance  = result["horizontal-cell-tolerance"].as<double>(); }
-      if (result.count("word-space-factor"))        { page_config.word_space_width_factor_for_merge = result["word-space-factor"].as<double>(); }
-      if (result.count("line-space-factor"))        { page_config.line_space_width_factor_for_merge = result["line-space-factor"].as<double>(); }
-      if (result.count("line-space-factor-with-space")) { page_config.line_space_width_factor_for_merge_with_space = result["line-space-factor-with-space"].as<double>(); }
       if (result.count("keep-glyphs"))              { page_config.keep_glyphs               = result["keep-glyphs"].as<bool>(); }
       if (result.count("keep-qpdf-warnings"))       { page_config.keep_qpdf_warnings        = result["keep-qpdf-warnings"].as<bool>(); }
       // This app always renders, so embedded font extraction defaults to on.
@@ -315,6 +465,9 @@ int main(int argc, char* argv[])
       page_config.extract_bitmap_pixels = true;
       if (result.count("extract-font-programs"))    { page_config.extract_font_programs     = result["extract-font-programs"].as<bool>(); }
       if (result.count("populate-json"))            { page_config.populate_json_objects      = result["populate-json"].as<bool>(); }
+      if (bbox_options.draw_char_bbox) { page_config.keep_char_cells = true; }
+      if (bbox_options.draw_word_bbox) { page_config.create_word_cells = true; }
+      if (bbox_options.draw_text_bbox) { page_config.create_line_cells = true; }
       bool export_bitmaps = result["export-bitmaps"].as<bool>();
       bool export_page_pdf_files = result["export-page-pdf"].as<bool>();
 
@@ -322,7 +475,7 @@ int main(int argc, char* argv[])
       pdflib::render_config cfg;
       if (result.count("render-text"))    { cfg.render_text    = result["render-text"].as<bool>(); }
       if (result.count("min-stroke-width")) { cfg.min_stroke_width = result["min-stroke-width"].as<float>(); }
-      if (result.count("draw-text-bbox")) { cfg.draw_text_bbox = result["draw-text-bbox"].as<bool>(); }
+      cfg.draw_text_bbox = bbox_options.draw_glyph_bbox;
       if (result.count("draw-text-basepoint")) { cfg.draw_text_basepoint = result["draw-text-basepoint"].as<bool>(); }
       if (result.count("display-widgets")) { cfg.display_widgets = result["display-widgets"].as<bool>(); }
       if (result.count("color-widgets"))
@@ -412,7 +565,8 @@ int main(int argc, char* argv[])
                                         std::filesystem::path(bitmap_dir),
                                         export_page_pdf_files,
                                         std::filesystem::path(page_pdf_dir),
-                                        ifile)) { return 1; }
+                                        ifile,
+                                        bbox_options)) { return 1; }
               if (result.count("output"))
                 {
                   rnd.save(ofile);
@@ -430,7 +584,8 @@ int main(int argc, char* argv[])
                                         std::filesystem::path(bitmap_dir),
                                         export_page_pdf_files,
                                         std::filesystem::path(page_pdf_dir),
-                                        ifile)) { return 1; }
+                                        ifile,
+                                        bbox_options)) { return 1; }
             }
 
           LOG_S(INFO) << "total-time [sec]: " << timer.get_time();
@@ -481,7 +636,8 @@ int main(int argc, char* argv[])
                                                 export_bitmaps,
                                                 bitmap_dir,
                                                 export_page_pdf_files,
-                                                page_pdf_dir);
+                                                page_pdf_dir,
+                                                bbox_options);
               if (pages == 0)
                 {
                   ++failed_files;
