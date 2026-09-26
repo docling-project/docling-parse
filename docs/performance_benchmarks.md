@@ -89,6 +89,8 @@ pdfminer.six and pypdf have no rendering path at all, so they appear only in the
 
 #### Render (decode + rasterise at scale 2)
 
+**M3 max**
+
 <table>
   <thead>
     <tr><th>Backend</th><th align="right">Threads</th><th align="right">Wall time (s)</th><th align="right">vs threaded (1)</th><th align="right">Efficiency</th><th align="right">vs PyMuPDF (1t)</th><th align="right">vs pypdfium2 (1t)</th><th align="right">vs pdfplumber (1t)</th><th align="right">Pages/sec</th><th align="right">ms/page</th></tr>
@@ -105,6 +107,18 @@ pdfminer.six and pypdf have no rendering path at all, so they appear only in the
     <tr><td>docling threaded</td><td align="right">16</td><td align="right">193.763</td><td align="right">9.59×</td><td align="right">60%</td><td align="right">11.87×</td><td align="right">5.33×</td><td align="right">17.00×</td><td align="right">281.7</td><td align="right">3.55</td></tr>
   </tbody>
 </table>
+
+**AMD Ryzen 7-9800x3d-8-core processor**
+
+backend           threads      wall_time (s)  vs threaded(1)    efficiency    vs pypdfium2 (1t)      pages/sec    ms/page
+----------------  ---------  ---------------  ----------------  ------------  -------------------  -----------  ---------
+pypdfium2 (1t)    -                 1136.58   1.87x                           1.00x                       48        20.82
+docling threaded  1                 2126.69   1.00x             100%          0.53x                       25.7      38.96
+docling threaded  2                 1070.48   1.99x             99%           1.06x                       51        19.61
+docling threaded  4                  550.254  3.86x             97%           2.07x                       99.2      10.08
+docling threaded  8                  306.593  6.94x             87%           3.71x                      178         5.62
+docling threaded  12                 286.67   7.42x             62%           3.96x                      190.4       5.25
+docling threaded  16                 267.282  7.96x             50%           4.25x                      204.2       4.9
 
 #### Linear thread scaling
 
