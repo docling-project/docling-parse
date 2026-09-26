@@ -1,3 +1,13 @@
+## [v7.22.0](https://github.com/docling-project/docling-parse/releases/tag/v7.22.0) - 2026-09-26
+
+### Feature
+
+* Expose complete AcroForm widget state ([#334](https://github.com/docling-project/docling-parse/issues/334)) ([`824063d`](https://github.com/docling-project/docling-parse/commit/824063d392142ffa5d0097dfc13faf963a9be113))
+
+### Fix
+
+* Fall back from null cmap mappings ([#352](https://github.com/docling-project/docling-parse/issues/352)) ([`78bfce0`](https://github.com/docling-project/docling-parse/commit/78bfce0b4a6ef6f463e97b0fb7705aeb03b5af36))
+
 ## Unreleased
 
 ### Feature
