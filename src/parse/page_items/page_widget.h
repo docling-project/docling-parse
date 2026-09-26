@@ -3,6 +3,8 @@
 #ifndef PAGE_ITEM_WIDGET_H
 #define PAGE_ITEM_WIDGET_H
 
+#include <cstdint>
+
 namespace pdflib
 {
 
@@ -33,6 +35,8 @@ namespace pdflib
     std::string description;
     std::string field_name;
     std::string field_type;
+    std::uint32_t field_flags;
+    std::string appearance_state;
   };
 
   page_item<PAGE_WIDGET>::page_item():
@@ -41,7 +45,9 @@ namespace pdflib
     text(),
     description(),
     field_name(),
-    field_type()
+    field_type(),
+    field_flags(0),
+    appearance_state()
   {}
 
   page_item<PAGE_WIDGET>::~page_item()
@@ -60,6 +66,8 @@ namespace pdflib
       result["description"] = description;
       result["field_name"] = field_name;
       result["field_type"] = field_type;
+      result["field_flags"] = field_flags;
+      result["appearance_state"] = appearance_state;
     }
     return result;
   }
