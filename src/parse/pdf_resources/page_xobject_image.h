@@ -4,6 +4,7 @@
 #define PDF_PAGE_XOBJECT_IMAGE_RESOURCE_H
 
 #include <parse/utils/ccitt/ccitt_utils.h>
+#include <third_party/pdfium_jbig2.h>
 
 #include <cstdint>
 #include <cstring>
@@ -1241,10 +1242,9 @@ namespace pdflib
         return;
       }
 
-    // A stencil mask is very often CCITTFax-compressed, which qpdf cannot
-    // defilter; decode it here. `ccitt::decode` yields one byte per pixel
-    // with 0 = dark.
-    std::vector<uint8_t> ccitt_samples;
+    // A stencil mask is very often CCITTFax- or JBIG2-compressed, which qpdf
+    // cannot defilter; decode it here into one byte per pixel with 0 = dark.
+    std::vector<uint8_t> mask_samples;
     if(not smask.has_decoded_stream_data())
       {
         QPDFObjectHandle mdict = qpdf_smask.getDict();
@@ -1269,14 +1269,49 @@ namespace pdflib
               }
 
             auto encoded = smask.get_codec_stream_data();
-            ccitt_samples = ccitt::decode(
+            mask_samples = ccitt::decode(
               reinterpret_cast<const uint8_t*>(encoded->getBuffer()),
               encoded->getSize(), sm_w, sm_h, ccitt_parms);
-            if(ccitt_samples.size() < static_cast<size_t>(sm_w) * sm_h)
+            if(mask_samples.size() < static_cast<size_t>(sm_w) * sm_h)
               {
                 LOG_S(WARNING) << "mask CCITT decode too small for xobject_key="
                                << xobject_key;
                 return;
+              }
+            smask_bpc = 8;
+          }
+        else if(filter.find("JBIG2Decode") != std::string::npos and
+                smask.has_codec_stream_data())
+          {
+            // MRC scans stencil their foreground layer with a JBIG2 mask.
+            // `jbig2_decode` returns packed 1bpp rows with 0 = black, so
+            // expanding each bit to 0x00/0xFF matches the CCITT samples above.
+            auto encoded = smask.get_codec_stream_data();
+            auto globals = smask.get_jbig2_globals_data();
+            const bool has_globals = globals and globals->getSize() > 0;
+            auto bits = jbig2_decode(
+              {reinterpret_cast<const uint8_t*>(encoded->getBuffer()), encoded->getSize()},
+              {has_globals ? reinterpret_cast<const uint8_t*>(globals->getBuffer()) : nullptr,
+               has_globals ? globals->getSize() : 0},
+              static_cast<uint32_t>(sm_w), static_cast<uint32_t>(sm_h));
+
+            const size_t pitch = (static_cast<size_t>(sm_w) + 7u) / 8u;
+            if(bits.size() < pitch * static_cast<size_t>(sm_h))
+              {
+                LOG_S(WARNING) << "mask JBIG2 decode failed for xobject_key="
+                               << xobject_key;
+                return;
+              }
+
+            mask_samples.resize(static_cast<size_t>(sm_w) * sm_h);
+            for(int row = 0; row < sm_h; ++row)
+              {
+                for(int col = 0; col < sm_w; ++col)
+                  {
+                    const uint8_t byte = bits[static_cast<size_t>(row) * pitch + col / 8];
+                    const bool bit = ((byte >> (7 - (col % 8))) & 1u) != 0;
+                    mask_samples[static_cast<size_t>(row) * sm_w + col] = bit ? 0xFFu : 0x00u;
+                  }
               }
             smask_bpc = 8;
           }
@@ -1296,7 +1331,7 @@ namespace pdflib
     // eight columns to be the whole row, so the transparent part of the image
     // keeps painting. Expand to one byte per sample first.
     std::vector<uint8_t> smask_unpacked;
-    if(smask_bpc != 8 and ccitt_samples.empty())
+    if(smask_bpc != 8 and mask_samples.empty())
       {
         const size_t row_bits = static_cast<size_t>(sm_w) * static_cast<size_t>(smask_bpc);
         const size_t row_bytes = (row_bits + 7u) / 8u;
@@ -1336,7 +1371,7 @@ namespace pdflib
       }
 
     const size_t smask_expected = static_cast<size_t>(sm_w) * sm_h;
-    if(smask_unpacked.empty() and ccitt_samples.empty()
+    if(smask_unpacked.empty() and mask_samples.empty()
        and smask_buf->getSize() < smask_expected)
       {
         LOG_S(WARNING) << "SMask decoded stream too small for xobject_key=" << xobject_key
@@ -1357,7 +1392,7 @@ namespace pdflib
     out->resize(static_cast<size_t>(dst_w) * dst_h);
 
     auto const* src =
-      not ccitt_samples.empty() ? ccitt_samples.data()
+      not mask_samples.empty() ? mask_samples.data()
       : not smask_unpacked.empty() ? smask_unpacked.data()
       : reinterpret_cast<uint8_t const*>(smask_buf->getBuffer());
     auto const decode = smask.get_decode_array();
@@ -1378,8 +1413,8 @@ namespace pdflib
                 alpha = jpeg::apply_decode_component(alpha, decode[0], decode[1]);
               }
             // Stencil (/Mask): a 1-sample masks the pixel OUT, the inverse
-            // of /SMask's alpha reading. ccitt::decode returns 0 = dark =
-            // sample 0 = painted, so the same inversion applies there.
+            // of /SMask's alpha reading. The CCITT and JBIG2 samples above use
+            // 0 = dark = sample 0 = painted, so the same inversion applies there.
             (*out)[static_cast<size_t>(row) * dst_w + col] =
               stencil ? static_cast<uint8_t>(255 - alpha) : alpha;
           }
