@@ -374,9 +374,9 @@ namespace pdflib
      * two-cluster k-means separates ordinary character gaps from dilated word
      * gaps. Sparse or insufficiently separated samples use a conservative
      * default threshold of 0.25; valid inferred thresholds are clamped to at
-     * least 0.18. Runs containing explicit spaces do not use this inferred
-     * threshold: those source-level boundaries are authoritative, with only
-     * jumps larger than one character advance allowed to add a boundary.
+     * least 0.18. Contraction caps the resulting threshold at 0.35 so a much
+     * larger gap elsewhere in a short line cannot hide a word boundary.
+     * Runs containing explicit spaces use the same cap for unmarked gaps.
      *
      * @param run One line of cells in source order.
      * @return Dimensionless normalized gap above which a new word begins.
@@ -408,9 +408,8 @@ namespace pdflib
      *
      * Builds line runs and treats explicit space cells as authoritative
      * boundaries. Runs without them infer a line-local cursor-placement gap
-     * threshold. Runs with them tolerate ordinary inner-word placement
-     * variation, while still splitting absolute-positioned fields separated
-     * by more than one neighboring character advance. Words are then merged
+     * threshold. Both kinds of runs split unmarked gaps above 0.35 neighboring
+     * character advances. Words are then merged
      * with normalized spaces into one line. Both levels retain maximum
      * enclosing rotation-aligned bounding boxes.
      * Visible glyphs without a recoverable Unicode mapping retain their U+FFFD
@@ -464,7 +463,7 @@ namespace pdflib
   inline bool page_item_sanitator<PAGE_CELLS>::is_semantic_space(
       const page_item<PAGE_CELL>& cell)
   {
-    return cell.is_pdf_word_space or
+    return (cell.is_pdf_word_space and cell.text_is_suppressed_glyph) or
            (not cell.text_is_suppressed_glyph and
             utils::string::is_space(cell.text));
   }
@@ -892,19 +891,18 @@ namespace pdflib
     contraction_result result;
     for(auto& run : collect_line_runs(cells))
       {
-        // Explicit PDF spaces are authoritative normal boundaries. On those
-        // lines only a jump larger than a complete neighboring advance may
-        // add another boundary; this still separates absolutely positioned
-        // table fields without splitting a word merely because its glyph ink
-        // or placement has an irregular space-sized gap.
-        const double word_gap = run.has_semantic_spaces
-          ? 1.0 : infer_word_gap(run);
+        // Explicit PDF spaces remain authoritative boundaries. Cap unmarked
+        // gaps as well: a large section-number gap can otherwise raise the
+        // inferred threshold past every word gap in a short heading.
+        const double word_gap = std::min(
+          0.35, run.has_semantic_spaces ? 1.0 : infer_word_gap(run));
         std::vector<page_item<PAGE_CELL>> words;
         page_item<PAGE_CELL>* previous_visible = nullptr;
         bool explicit_boundary = false;
 
-        for(auto& cell : run.cells)
+        for(std::size_t index = 0; index < run.cells.size(); ++index)
           {
+            auto& cell = run.cells[index];
             if(is_semantic_space(cell))
               {
                 explicit_boundary = true;
@@ -912,6 +910,19 @@ namespace pdflib
               }
 
             bool starts_word = words.empty() or explicit_boundary;
+            // TOC leaders may omit the boundary before their first dot while
+            // explicitly spacing every subsequent dot. Keep that first dot
+            // with the leader instead of attaching it to the heading.
+            if(not starts_word and cell.text == "." and
+               index + 4 < run.cells.size() and
+               is_semantic_space(run.cells[index + 1]) and
+               run.cells[index + 2].text == "." and
+               is_semantic_space(run.cells[index + 3]) and
+               run.cells[index + 4].text == "." and
+               previous_visible != nullptr and previous_visible->text != ".")
+              {
+                starts_word = true;
+              }
             if(not starts_word and previous_visible != nullptr)
               {
                 if(not word_baselines_compatible(*previous_visible, cell))

@@ -1,11 +1,59 @@
 #!/usr/bin/env python
 """Targeted regressions for adaptive character-to-word contraction."""
 
+from io import BytesIO
 from pathlib import Path
 
 from docling_parse.pdf_parser import DecodeConfig, DoclingPdfParser
 
 DATA = Path(__file__).parent / "data" / "regression"
+
+
+def _pdf_with_code_32_period() -> BytesIO:
+    """Map source byte 32 to a dot through /ToUnicode."""
+    cmap = (
+        b"/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n"
+        b"/CMapName /Repro def\n/CMapType 2 def\n"
+        b"1 begincodespacerange\n<00> <FF>\nendcodespacerange\n"
+        b"1 beginbfchar\n<20> <002E>\nendbfchar\n"
+        b"endcmap\nCMapName currentdict /CMap defineresource pop\nend\nend\n"
+    )
+    content = b"BT /F1 24 Tf 72 700 Td <3820383331> Tj ET"
+
+    def stream(data: bytes) -> bytes:
+        return f"<< /Length {len(data)} >>\nstream\n".encode() + data + b"\nendstream"
+
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] "
+        b"/Resources << /Font << /F1 4 0 R >> >> /Contents 6 0 R >>",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /ToUnicode 5 0 R >>",
+        stream(cmap),
+        stream(content),
+    ]
+    pdf = bytearray(b"%PDF-1.7\n")
+    offsets = []
+    for number, obj in enumerate(objects, 1):
+        offsets.append(len(pdf))
+        pdf += f"{number} 0 obj\n".encode() + obj + b"\nendobj\n"
+    xref = len(pdf)
+    pdf += f"xref\n0 {len(objects) + 1}\n0000000000 65535 f \n".encode()
+    for offset in offsets:
+        pdf += f"{offset:010d} 00000 n \n".encode()
+    pdf += (
+        f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\n"
+        f"startxref\n{xref}\n%%EOF\n"
+    ).encode()
+    return BytesIO(pdf)
+
+
+def test_source_code_32_can_decode_to_a_visible_glyph():
+    document = DoclingPdfParser(loglevel="fatal").load(_pdf_with_code_32_period())
+    try:
+        assert [cell.text for cell in document.get_page(1).word_cells] == ["8.831"]
+    finally:
+        document.unload()
 
 
 def _page(filename: str, page_no: int, *, keep_glyphs: bool = False):
@@ -29,6 +77,39 @@ def test_newspaper_uses_local_dilation_for_word_boundaries():
     assert words[start : start + 6] == ["Heute", "lest", "ihr", "die", "letzte", "Aus-"]
     assert "Heute lest ihr die letzte Aus-" in lines
     assert all(" " not in word for word in words)
+
+
+def test_short_headings_keep_inferred_word_boundaries():
+    page = _page("2305.03393v1-pg9.pdf", 1)
+    lines = [cell.text for cell in page.textline_cells]
+
+    assert "5.1 Hyper Parameter Optimization" in lines
+    assert "5.2 Quantitative Results" in lines
+
+
+def test_positioned_prose_and_headers_keep_word_boundaries():
+    paper = _page("2203.01017v2.pdf", 1)
+    assert any("custom OCR decoders" in cell.text for cell in paper.textline_cells)
+
+    details = _page("2203.01017v2.pdf", 6)
+    assert "5.1. Implementation Details" in [
+        cell.text for cell in details.textline_cells
+    ]
+
+    layout = _page("2206.01062.pdf", 3)
+    assert any(
+        "DocLayNet: A Large Human-Annotated Dataset for Document-Layout Analysis"
+        in cell.text
+        for cell in layout.textline_cells
+    )
+
+
+def test_first_toc_leader_dot_does_not_attach_to_heading():
+    page = _page("redp5110_sampled.pdf", 2)
+    words = [cell.text for cell in page.word_cells]
+
+    assert "Roles" in words
+    assert "Roles." not in words
 
 
 def test_elsevier_reference_words_do_not_contract_together():

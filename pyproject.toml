@@ -46,7 +46,8 @@ requires = [
     "cibuildwheel>=2.19.2,<4.0.0; python_version >= '3.11'",
     "wheel>=0.43.0,<1.0.0",
     "delocate>=0.11.0,<1.0.0",
-    "cmake>=3.27.0,<4.0.0"
+    "cmake>=3.27.0,<5.0.0; sys_platform != 'win32'",
+    "cmake>=4.2.0,<5.0.0; sys_platform == 'win32'"
 ]
 build-backend = "setuptools.build_meta"
 
@@ -58,7 +59,8 @@ build = [
     "cibuildwheel>=2.19.2,<4.0.0; python_version >= '3.11'",
     "wheel>=0.43.0,<1.0.0",
     "delocate>=0.11.0,<1.0.0",
-    "cmake>=3.27.0,<4.0.0"
+    "cmake>=3.27.0,<5.0.0; sys_platform != 'win32'",
+    "cmake>=4.2.0,<5.0.0; sys_platform == 'win32'"
 ]
 dev = [
     "pytest>=9.0.3,<10.0.0",
@@ -155,6 +157,7 @@ max-complexity = 30
 combine-as-imports = true
 
 [tool.mypy]
+exclude = "^tests/data/"
 pretty = true
 no_implicit_optional = true
 namespace_packages = true

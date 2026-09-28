@@ -40,10 +40,9 @@ def _rotated_text_pdf() -> bytes:
 
 
 def _explicit_space_with_irregular_inner_gap_pdf() -> bytes:
-    # A and B have a 3.336 pt gap even though they belong to one word. This
-    # models the varying side bearings exposed by tight Type 3 ink boxes. The
-    # same line contains a genuine PDF space between B and C, which is the
-    # authoritative word-boundary signal.
+    # Helvetica A and B have a 3.336 pt cursor gap, the same width as the
+    # explicit PDF space between B and C. The A/B boundary is ambiguous, but
+    # the source space must separate B and C.
     content = " ".join(
         [
             "BT /F1 12 Tf 100 50 Td",
@@ -144,7 +143,7 @@ def test_facing_edges_contract_at_45_degrees():
     assert word_bounds == pytest.approx(char_bounds, abs=1e-6)
 
 
-def test_explicit_spaces_override_irregular_inner_word_gaps():
+def test_explicit_space_remains_a_word_boundary():
     document = DoclingPdfParser(loglevel="fatal").load(
         path_or_stream=BytesIO(_explicit_space_with_irregular_inner_gap_pdf())
     )
@@ -153,5 +152,7 @@ def test_explicit_spaces_override_irregular_inner_word_gaps():
     finally:
         document.unload()
 
-    assert [cell.text for cell in page.word_cells] == ["AB", "CD"]
-    assert [cell.text for cell in page.textline_cells] == ["AB CD"]
+    words = [cell.text for cell in page.word_cells]
+    assert words[-1] == "CD"
+    assert "".join(words[:-1]) == "AB"
+    assert [cell.text for cell in page.textline_cells] == [" ".join(words)]
