@@ -28,8 +28,7 @@ def _pdf_with_code_32_period() -> BytesIO:
         b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
         b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] "
         b"/Resources << /Font << /F1 4 0 R >> >> /Contents 6 0 R >>",
-        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica "
-        b"/ToUnicode 5 0 R >>",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /ToUnicode 5 0 R >>",
         stream(cmap),
         stream(content),
     ]
@@ -93,11 +92,16 @@ def test_positioned_prose_and_headers_keep_word_boundaries():
     assert any("custom OCR decoders" in cell.text for cell in paper.textline_cells)
 
     details = _page("2203.01017v2.pdf", 6)
-    assert "5.1. Implementation Details" in [cell.text for cell in details.textline_cells]
+    assert "5.1. Implementation Details" in [
+        cell.text for cell in details.textline_cells
+    ]
 
     layout = _page("2206.01062.pdf", 3)
-    assert any("DocLayNet: A Large Human-Annotated Dataset for Document-Layout Analysis"
-               in cell.text for cell in layout.textline_cells)
+    assert any(
+        "DocLayNet: A Large Human-Annotated Dataset for Document-Layout Analysis"
+        in cell.text
+        for cell in layout.textline_cells
+    )
 
 
 def test_first_toc_leader_dot_does_not_attach_to_heading():

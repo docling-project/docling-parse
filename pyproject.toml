@@ -155,6 +155,7 @@ max-complexity = 30
 combine-as-imports = true
 
 [tool.mypy]
+exclude = "^tests/data/"
 pretty = true
 no_implicit_optional = true
 namespace_packages = true
