@@ -64,7 +64,7 @@ jobs:
             platform: "windows"
             platform_id: "win_amd64"      
 
-          - name: "windows-11-arm"
+          - name: "windows-11-vs2026-arm"
             platform: "windows"
             platform_id: "win_arm64"
 
@@ -317,7 +317,7 @@ jobs:
               Add-Content -Path $env:GITHUB_ENV -Value "CMAKE_INCLUDE_PATH=C:/windows-libs/zlib-ng-arm64/include"
               Add-Content -Path $env:GITHUB_ENV -Value "PATH=C:/windows-libs/zlib-ng-arm64/bin;$env:PATH"
               # MSVC with Visual Studio generator; -A ARM64 targets the ARM64 platform explicitly
-              Add-Content -Path $env:GITHUB_ENV -Value "CMAKE_GENERATOR=Visual Studio 17 2022"
+              Add-Content -Path $env:GITHUB_ENV -Value "CMAKE_GENERATOR=Visual Studio 18 2026"
               Add-Content -Path $env:GITHUB_ENV -Value "CMAKE_ARGS=-A ARM64 -DZLIB_ROOT=C:/windows-libs/zlib-ng-arm64 -DZLIB_LIBRARY=C:/windows-libs/zlib-ng-arm64/lib/zlibstatic.lib -DZLIB_INCLUDE_DIR=C:/windows-libs/zlib-ng-arm64/include"
           }
           Add-Content -Path $env:GITHUB_ENV -Value 'PYTHON_MODULE_EXTENSION=${SETUPTOOLS_EXT_SUFFIX}'
