@@ -1,3 +1,10 @@
+## [v7.22.1](https://github.com/docling-project/docling-parse/releases/tag/v7.22.1) - 2026-09-28
+
+### Fix
+
+* Updated the page_item_sanitators/cells.h and its associated ground-truth ([#361](https://github.com/docling-project/docling-parse/issues/361)) ([`96960c3`](https://github.com/docling-project/docling-parse/commit/96960c3f13af88dd89037fd6fb681fdb5281a497))
+* **sanitizer:** Fold curly double quotes to `"`, not `'` ([#349](https://github.com/docling-project/docling-parse/issues/349)) ([`ea4a14d`](https://github.com/docling-project/docling-parse/commit/ea4a14d3ed1bab7fb3521b3e8f4db38f83a32eaf))
+
 ## [v7.22.0](https://github.com/docling-project/docling-parse/releases/tag/v7.22.0) - 2026-09-26
 
 ### Feature
