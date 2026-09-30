@@ -105,7 +105,9 @@ namespace pdflib
      * A later cell equal to an earlier one in text, font name and every rotated
      * corner is removed wherever it falls in the sequence: a block of lines
      * painted more than once at the same position interleaves the copies of
-     * each line with the block's other lines.
+     * each line with the block's other lines. Where such a copy's own pass went
+     * on to paint the rest of a line the earlier pass left open, that rest is
+     * moved to follow the original (relocate_overprint_continuations()).
      *
      * For every active cell, later cells with identical text and font name are
      * also compared corner by corner. A later cell is removed when every rotated
@@ -356,6 +358,38 @@ namespace pdflib
      */
     static bool continues_line(const page_item<PAGE_CELL>& lhs,
                                const page_item<PAGE_CELL>& rhs);
+
+    /**
+     * @brief Joins the rest of an overprinted line to the line it continues.
+     *
+     * Some producers paint a line in passes: each pass repaints part of the
+     * line exactly over the previous pass, then paints characters that pass
+     * did not. Once the exact copies are removed, those characters are
+     * stranded after other lines. For each stretch of removed copies followed
+     * by surviving cells, the surviving continuation is moved to follow the
+     * original of the last copied cell when all of these hold:
+     *
+     * - every step of the continuation, from the last copied glyph on,
+     *   continues the line (continues_line()) and is no wider than the line's
+     *   own spacing -- between glyphs of one word, or across a semantic space
+     *   -- measured on the copy's part of the line and the original's part of
+     *   the same line: the widest such gap plus the spread the line shows;
+     * - the original survives (the tolerant scan did not remove it) and its
+     *   current successor does not continue its line, so an earlier pass left
+     *   the line open there and no other text is spliced;
+     * - copied spaces set the insertion point only while their originals
+     *   already follow the original glyph.
+     *
+     * Semantic spaces never anchor a geometric test. Without an exact copy
+     * nothing moves, so pages that are not overprinted are unchanged.
+     *
+     * @param[in,out] cells Cells in content order; inactive cells are dropped.
+     * @param original For each cell, the index of the earlier cell it exactly
+     *        copies, or std::numeric_limits<std::size_t>::max().
+     */
+    static void relocate_overprint_continuations(
+        page_item<PAGE_CELLS>& cells,
+        const std::vector<std::size_t>& original);
 
     /**
      * @brief Partitions active, non-empty cells into rotation-aware line runs.
@@ -1083,16 +1117,21 @@ namespace pdflib
     using painted_glyph = std::tuple<std::string, std::string,
                                      double, double, double, double,
                                      double, double, double, double>;
-    std::set<painted_glyph> painted;
+    constexpr std::size_t no_original = std::numeric_limits<std::size_t>::max();
+    std::map<painted_glyph, std::size_t> painted;
+    std::vector<std::size_t> original(cells.size(), no_original);
     for(std::size_t i = 0; i < cells.size(); ++i)
       {
         auto& cell = cells[i];
         if(not cell.active) { continue; }
-        if(not painted.emplace(cell.text, cell.font_name,
-                               cell.r_x0, cell.r_y0, cell.r_x1, cell.r_y1,
-                               cell.r_x2, cell.r_y2, cell.r_x3, cell.r_y3).second)
+        auto [first, inserted] = painted.emplace(
+            painted_glyph(cell.text, cell.font_name,
+                          cell.r_x0, cell.r_y0, cell.r_x1, cell.r_y1,
+                          cell.r_x2, cell.r_y2, cell.r_x3, cell.r_y3), i);
+        if(not inserted)
           {
             cell.active = false;
+            original[i] = first->second;
           }
       }
 
@@ -1117,7 +1156,188 @@ namespace pdflib
               }
           }
       }
-    cells.remove_inactive_cells();
+    relocate_overprint_continuations(cells, original);
+  }
+
+  inline void page_item_sanitator<PAGE_CELLS>::relocate_overprint_continuations(
+      page_item<PAGE_CELLS>& cells,
+      const std::vector<std::size_t>& original)
+  {
+    constexpr std::size_t none = std::numeric_limits<std::size_t>::max();
+    const std::size_t n = cells.size();
+    auto is_copy = [&](std::size_t i) { return original[i] != none; };
+    auto visible = [&](std::size_t i)
+      { return not cells[i].text.empty() and not is_semantic_space(cells[i]); };
+
+    // The target order: a linked list over the surviving cells.
+    std::vector<std::size_t> next(n, none), prev(n, none);
+    std::size_t head = none, tail = none;
+    for(std::size_t i = 0; i < n; ++i)
+      {
+        if(not cells[i].active) { continue; }
+        if(tail == none) { head = i; } else { next[tail] = i; prev[i] = tail; }
+        tail = i;
+      }
+    auto unlink = [&](std::size_t i)
+      {
+        if(prev[i] != none) { next[prev[i]] = next[i]; } else { head = next[i]; }
+        if(next[i] != none) { prev[next[i]] = prev[i]; }
+        prev[i] = next[i] = none;
+      };
+    auto link_after = [&](std::size_t at, std::size_t i)
+      {
+        next[i] = next[at]; prev[i] = at;
+        if(next[at] != none) { prev[next[at]] = i; }
+        next[at] = i;
+      };
+
+    // The stream as painted: surviving cells and exact copies, in order.
+    std::vector<std::size_t> seq;
+    for(std::size_t i = 0; i < n; ++i)
+      {
+        if(cells[i].active or is_copy(i)) { seq.push_back(i); }
+      }
+
+    // Gaps within a word and gaps across a space, over parts of one line. A step may be
+    // as wide as the widest of its kind plus the spread the line shows (widest - narrowest).
+    struct gaps
+    {
+      double low = 0.0, high = 0.0;
+      bool seen = false;
+      void add(double gap)
+      {
+        low = seen ? std::min(low, gap) : gap;
+        high = seen ? std::max(high, gap) : gap;
+        seen = true;
+      }
+      double bound() const { return high + (high - low); }
+    };
+    struct spacing { gaps intra, word; };
+    auto measure = [&](const std::vector<std::size_t>& ids, spacing& ev)
+      {
+        std::size_t last_visible = none;
+        bool spaced = false;
+        for(std::size_t j : ids)
+          {
+            if(not visible(j))
+              {
+                spaced = spaced or (last_visible != none and is_semantic_space(cells[j]));
+                continue;
+              }
+            if(last_visible != none)
+              {
+                const double gap = forward_gap(cells[last_visible], cells[j]);
+                (spaced ? ev.word : ev.intra).add(gap);
+              }
+            last_visible = j;
+            spaced = false;
+          }
+      };
+    auto spaced_between = [&](std::size_t p, std::size_t q)
+      {
+        for(std::size_t r = p + 1; r < q; ++r)
+          {
+            if(is_semantic_space(cells[seq[r]])) { return true; }
+          }
+        return false;
+      };
+    auto step_ok = [&](std::size_t p, std::size_t q, const spacing& ev)
+      {
+        const auto& lhs = cells[seq[p]];
+        const auto& rhs = cells[seq[q]];
+        if(not continues_line(lhs, rhs)) { return false; }
+        const gaps& kind = spaced_between(p, q) ? ev.word : ev.intra;
+        return kind.seen and forward_gap(lhs, rhs) <= kind.bound() + 1.e-6;
+      };
+
+    for(std::size_t p = 0; p < seq.size(); )
+      {
+        if(not is_copy(seq[p])) { ++p; continue; }
+        const std::size_t s = p;
+        while(p < seq.size() and is_copy(seq[p])) { ++p; }
+        const std::size_t e = p - 1, k = p;
+        if(k >= seq.size()) { break; }
+
+        std::size_t jv = none;                       // the last copied glyph
+        for(std::size_t q = e + 1; q-- > s; )
+          {
+            if(visible(seq[q])) { jv = q; break; }
+          }
+        std::size_t kv = none;                       // the first continuing glyph
+        for(std::size_t q = k; q < seq.size() and not is_copy(seq[q]); ++q)
+          {
+            if(visible(seq[q])) { kv = q; break; }
+          }
+        if(jv == none or kv == none) { continue; }
+        const std::size_t a = original[seq[jv]];
+        // An original the tolerant scan removed is not in the target order: nothing to follow.
+        if(not cells[a].active) { continue; }
+
+        // The line's own spacing: the copy's part of the line ...
+        std::vector<std::size_t> part;
+        std::size_t follow = seq[jv];
+        for(std::size_t q = jv + 1; q-- > s; )
+          {
+            if(visible(seq[q]) and q != jv)
+              {
+                if(not continues_line(cells[seq[q]], cells[follow])) { break; }
+                follow = seq[q];
+              }
+            part.push_back(seq[q]);
+          }
+        std::reverse(part.begin(), part.end());
+        spacing ev;
+        measure(part, ev);
+        // ... and the original's part of the same line, in the current order.
+        part.clear();
+        follow = a;
+        for(std::size_t j = a; j != none; j = prev[j])
+          {
+            if(visible(j) and j != a)
+              {
+                if(not continues_line(cells[j], cells[follow])) { break; }
+                follow = j;
+              }
+            part.push_back(j);
+          }
+        std::reverse(part.begin(), part.end());
+        measure(part, ev);
+
+        if(not step_ok(jv, kv, ev)) { continue; }
+
+        // The earlier pass must have left the line open after the original.
+        std::size_t successor = next[a];
+        while(successor != none and not visible(successor)) { successor = next[successor]; }
+        if(successor != none and continues_line(cells[a], cells[successor])) { continue; }
+
+        // Copied spaces keep their place while their originals follow the glyph.
+        std::size_t at = a;
+        for(std::size_t q = jv + 1; q <= e and next[at] == original[seq[q]]; ++q)
+          {
+            at = original[seq[q]];
+          }
+
+        std::size_t end = k, last_visible = jv;
+        for(std::size_t q = k; q < seq.size() and not is_copy(seq[q]); ++q)
+          {
+            if(visible(seq[q]))
+              {
+                if(not step_ok(last_visible, q, ev)) { break; }
+                last_visible = q;
+              }
+            end = q + 1;
+          }
+        while(end > k and not visible(seq[end - 1])) { --end; }  // trailing spaces stay
+        if(end == k) { continue; }
+
+        for(std::size_t q = k; q < end; ++q) { unlink(seq[q]); }
+        for(std::size_t q = k; q < end; ++q) { link_after(at, seq[q]); at = seq[q]; }
+        p = end;
+      }
+
+    page_item<PAGE_CELLS> ordered;
+    for(std::size_t i = head; i != none; i = next[i]) { ordered.push_back(cells[i]); }
+    cells = ordered;
   }
 
   inline void page_item_sanitator<PAGE_CELLS>::sanitize_text(
