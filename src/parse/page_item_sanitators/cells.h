@@ -108,6 +108,10 @@ namespace pdflib
      * the scan stops after the rotated y-coordinate differs by more than
      * @p eps; this assumes the input is ordered by line position.
      *
+     * The corners must also lie within half of the earlier cell's width: on
+     * text smaller than about a point, @p eps exceeds a whole glyph, and the
+     * next identical glyph of a word ("mm", "tt") is not a redraw.
+     *
      * This compatibility cleanup is intentionally separate from word and line
      * construction so its quadratic worst-case cost is not paid by contraction.
      *
@@ -1074,6 +1078,14 @@ namespace pdflib
     for(std::size_t i = 0; i < cells.size(); ++i)
       {
         if(not cells[i].active) { continue; }
+
+        // A redraw (e.g. stroke-then-fill bold) overlaps its original by more
+        // than half a glyph; on tiny text eps alone spans the next letter.
+        double width = utils::values::distance(cells[i].r_x0, cells[i].r_y0,
+                                               cells[i].r_x1, cells[i].r_y1);
+        double tol = std::min(eps, 0.5 * width);
+        auto overlaps = [tol](double d) { return d < tol or d == 0.0; };
+
         for(std::size_t j = i + 1; j < cells.size(); ++j)
           {
             if(same_line and std::abs(cells[i].r_y0 - cells[j].r_y0) > eps)
@@ -1083,10 +1095,10 @@ namespace pdflib
             if(not cells[j].active) { continue; }
             if(cells[i].font_name == cells[j].font_name and
                cells[i].text == cells[j].text and
-               utils::values::distance(cells[i].r_x0, cells[i].r_y0, cells[j].r_x0, cells[j].r_y0) < eps and
-               utils::values::distance(cells[i].r_x1, cells[i].r_y1, cells[j].r_x1, cells[j].r_y1) < eps and
-               utils::values::distance(cells[i].r_x2, cells[i].r_y2, cells[j].r_x2, cells[j].r_y2) < eps and
-               utils::values::distance(cells[i].r_x3, cells[i].r_y3, cells[j].r_x3, cells[j].r_y3) < eps)
+               overlaps(utils::values::distance(cells[i].r_x0, cells[i].r_y0, cells[j].r_x0, cells[j].r_y0)) and
+               overlaps(utils::values::distance(cells[i].r_x1, cells[i].r_y1, cells[j].r_x1, cells[j].r_y1)) and
+               overlaps(utils::values::distance(cells[i].r_x2, cells[i].r_y2, cells[j].r_x2, cells[j].r_y2)) and
+               overlaps(utils::values::distance(cells[i].r_x3, cells[i].r_y3, cells[j].r_x3, cells[j].r_y3)))
               {
                 cells[j].active = false;
               }
