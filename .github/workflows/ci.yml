@@ -27,6 +27,12 @@ jobs:
   regression-tests:
     if: ${{ github.event_name == 'push' || (github.event.pull_request.head.repo.full_name != 'docling-project/docling-parse' && github.event.pull_request.head.repo.full_name != 'docling-project/docling-parse') }}
     uses: ./.github/workflows/regression.yml
+  regression-tests-windows:
+    # Reuses the win_amd64 wheel from build-wheels instead of compiling the
+    # extension (which needs the full MinGW toolchain), so it must run after it.
+    needs: build-wheels
+    if: ${{ github.event_name == 'push' || (github.event.pull_request.head.repo.full_name != 'docling-project/docling-parse' && github.event.pull_request.head.repo.full_name != 'docling-project/docling-parse') }}
+    uses: ./.github/workflows/regression-windows.yml
   build-wheels:
     if: ${{ github.event_name == 'push' || (github.event.pull_request.head.repo.full_name != 'docling-project/docling-parse' && github.event.pull_request.head.repo.full_name != 'docling-project/docling-parse') }}
     uses: ./.github/workflows/wheels.yml
