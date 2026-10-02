@@ -378,6 +378,14 @@ namespace pdflib
 
     instr_count += 1;
 
+    // Keep the physical displacement from numeric TJ items until the next
+    // string fragment is decoded. The displacement is transient metadata on
+    // that fragment; it lets contraction distinguish an explicit positioned
+    // field boundary from ordinary glyph spacing without changing serialized
+    // PAGE_CELL data.
+    double pending_tj_adjustment = 0.0;
+    bool has_pending_tj_adjustment = false;
+
     for(auto item : instructions[0].obj.getArrayAsVector())
       {
         if(item.isString())
@@ -387,10 +395,18 @@ namespace pdflib
             std::vector<page_item<PAGE_CELL> > cells = generate_cells(item,
                                                                       stack_size);
 
+            if(has_pending_tj_adjustment and not cells.empty())
+              {
+                cells.front().has_tj_adjustment = true;
+                cells.front().tj_adjustment = pending_tj_adjustment;
+              }
             for(auto& cell:cells)
               {
                 page_cells.push_back(cell);
               }
+
+            pending_tj_adjustment = 0.0;
+            has_pending_tj_adjustment = false;
           }
         else if(item.isNumber())
           {
@@ -401,6 +417,9 @@ namespace pdflib
             const double tx = vertical_mode ? 0.0 : adjust * h_scaling;
             const double ty = vertical_mode ? adjust : 0.0;
 
+            pending_tj_adjustment += vertical_mode ? ty : tx;
+            has_pending_tj_adjustment = has_pending_tj_adjustment or
+                                         std::abs(vertical_mode ? ty : tx) > 1.e-9;
             move_cursor(tx, ty);
           }
         else
