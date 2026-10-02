@@ -162,6 +162,20 @@ def test_adv_ps_mp10_uses_font_specific_mapping_over_winansi():
     assert text == "ΔξαβεμφΣρσ"
 
 
+def test_symbol_follows_declared_winansi_where_it_has_the_glyph():
+    # WinAnsi names code 0xD7 `multiply`, a glyph Symbol has, so the page
+    # shows a multiplication sign, not Symbol's own 0xD7 (`dotmath`). Codes
+    # 0x61 and 0x62 name `a` and `b`, which Symbol lacks, so a renderer
+    # falls back to Symbol's own codes: alpha and beta.
+    text = _extract_text(
+        None,
+        include_tounicode=False,
+        base_font="XXXXXX+Symbol",
+        text="a\xd7b",
+    )
+    assert text == "α×β"
+
+
 def test_default_config_replaces_gid_markers():
     # Production default (keep_glyphs=False, see config.h): visible glyphs
     # without Unicode mappings become U+FFFD, so neither the internal
