@@ -22,6 +22,12 @@ namespace pdflib
 
     void sanitize(page_item<PAGE_IMAGES>& images, std::string page_boundary);
 
+    // Annotation rectangles (widgets, hyperlinks) are only moved onto the
+    // page boundary, never dropped: a form field outside the crop box is
+    // still part of the form.
+    template<typename annots_type>
+    void translate(annots_type& annots, std::string page_boundary);
+
   private:
 
     std::array<double, 4> get_page_boundary(std::string page_boundary);
@@ -408,6 +414,22 @@ namespace pdflib
 	}
       }
     */
+  }
+
+  template<typename annots_type>
+  void page_item_sanitator<PAGE_DIMENSION>::translate(annots_type& annots, std::string page_boundary)
+  {
+    LOG_S(INFO) << __FUNCTION__;
+
+    std::array<double, 4> page_bbox = get_page_boundary(page_boundary);
+
+    for(auto& annot : annots)
+      {
+        annot.x0 -= page_bbox[0];
+        annot.y0 -= page_bbox[1];
+        annot.x1 -= page_bbox[0];
+        annot.y1 -= page_bbox[1];
+      }
   }
 
   void page_item_sanitator<PAGE_DIMENSION>::transform(std::array<double, 2>& v,

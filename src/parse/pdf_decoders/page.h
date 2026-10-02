@@ -920,6 +920,8 @@ namespace pdflib
       sanitator.sanitize(page_cells, config.page_boundary);
       sanitator.sanitize(page_shapes, config.page_boundary);
       sanitator.sanitize(page_images, config.page_boundary);
+      sanitator.translate(page_widgets, config.page_boundary);
+      sanitator.translate(page_hyperlinks, config.page_boundary);
 
       // the same boundary the sanitator subtracted from the cells, read after
       // rotate_contents() so it is already in the rotated space

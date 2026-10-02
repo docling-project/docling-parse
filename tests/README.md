@@ -131,10 +131,10 @@ helpers rather than `open()` when touching groundtruth:
 
 ```python
 from tests.groundtruth_io import (
-    groundtruth_exists,      # true for either encoding
-    load_groundtruth_json,   # read, auto-detecting encoding
-    dump_groundtruth_json,   # write, following DOCLING_PARSE_GT_FORMAT
-    load_segmented_page,     # SegmentedPdfPage from either encoding
+    groundtruth_exists,  # true for either encoding
+    load_groundtruth_json,  # read, auto-detecting encoding
+    dump_groundtruth_json,  # write, following DOCLING_PARSE_GT_FORMAT
+    load_segmented_page,  # SegmentedPdfPage from either encoding
     read_groundtruth_text,
     write_groundtruth_text,
     resolve_groundtruth_path,  # the path actually on disk, for error messages
