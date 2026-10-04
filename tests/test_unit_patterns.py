@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import pytest
 
-from tests.pdf_builder import render_page, simple_page_pdf, stream_object
+from tests.pdf_builder import parse_page, render_page, simple_page_pdf, stream_object
 from tests.rendering_regression import (
     assert_color_near,
     center_color,
@@ -393,3 +393,44 @@ def test_unresolved_pattern_keeps_the_stroke():
     assert 0.0 < coverage < 0.3, (
         f"expected only the outline to paint, got {coverage:.3f} coverage"
     )
+
+
+# longer than the small-string buffer, so the name lives on the heap
+SHADING_PATTERN_NAME = "AxialShadingPatternWithALongName"
+
+
+def _shading_pattern_page(depth: int) -> bytes:
+    """An axial shading-pattern fill inside `depth` nested `q` ... `Q`."""
+    content = (
+        "q\n" * depth
+        + f"/Pattern cs /{SHADING_PATTERN_NAME} scn\n"
+        + f"{FILL_BOX[0]} {FILL_BOX[0]} "
+        + f"{FILL_BOX[2] - FILL_BOX[0]} {FILL_BOX[3] - FILL_BOX[1]} re f\n"
+        + "Q\n" * depth
+    )
+    pattern = (
+        "<< /Type /Pattern /PatternType 2 /Shading << /ShadingType 2 "
+        "/ColorSpace /DeviceRGB /Coords [20 0 180 0] "
+        "/Function << /FunctionType 2 /Domain [0 1] /C0 [1 0 0] /C1 [0 0 1] /N 1 >> "
+        ">> >>"
+    )
+    return simple_page_pdf(
+        content,
+        resources=f"/Pattern << /{SHADING_PATTERN_NAME} 5 0 R >>",
+        extra_objects=[pattern],
+    )
+
+
+@pytest.mark.parametrize("depth", range(18))
+def test_shading_pattern_fill_survives_graphics_state_growth(depth):
+    """A shading-pattern fill parses at any `q` nesting depth.
+
+    The pattern name was passed by reference into the current graphics state,
+    and painting the pattern pushes a new state. When that push reallocated the
+    state stack, the name dangled, and copying it read freed memory: a garbage
+    length that threw std::bad_alloc ("Page N failed to parse"), or corrupted
+    the heap. Which depths reallocate depends on the stack's growth, so every
+    depth up to a few doublings is tried.
+    """
+    page = parse_page(_shading_pattern_page(depth))
+    assert page is not None
