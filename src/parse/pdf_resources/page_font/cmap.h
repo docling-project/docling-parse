@@ -55,6 +55,14 @@ namespace pdflib
                    const std::string              src_end,
                    const std::vector<std::string> tgt);
 
+    // A bfrange is expanded code by code, so a corrupt bound (srcCode2 below
+    // srcCode1, or a span far wider than any code space) must be rejected
+    // before `end - begin + 1` wraps around and becomes a multi-gigabyte
+    // reservation. Same limit as the cidrange parser in font_cid.h.
+    static constexpr uint32_t max_range_length = 65536;
+
+    static bool is_valid_range(uint32_t begin, uint32_t end);
+
     // Helper to remove trailing null bytes from a string
     static void remove_trailing_nulls(std::string& str);
 
@@ -816,6 +824,19 @@ namespace pdflib
     _map[c] = tgt;
   }
 
+  bool cmap_parser::is_valid_range(uint32_t begin, uint32_t end)
+  {
+    if(begin <= end and (end - begin) < max_range_length)
+      {
+        return true;
+      }
+
+    LOG_S(WARNING) << "ignoring malformed bfrange: begin=" << begin
+                   << ", end=" << end << " (end must be >= begin and the range at most "
+                   << max_range_length << " codes)";
+    return false;
+  }
+
   void cmap_parser::set_range(const std::string src_begin,
                               const std::string src_end,
                               const std::string tgt)
@@ -838,6 +859,11 @@ namespace pdflib
       {
         LOG_S(WARNING) << "itr_end!=src_end.end() --> errors might occur in the cmap: "
                        << "'" << src_end << "' -> " << end;
+      }
+
+    if(not is_valid_range(begin, end))
+      {
+        return;
       }
 
     //LOG_S(INFO) << __FUNCTION__ << "\t"
@@ -895,6 +921,11 @@ namespace pdflib
 
     auto itr_end = src_end.begin();
     uint32_t end = utf8::next(itr_end, src_end.end());
+
+    if(not is_valid_range(begin, end))
+      {
+        return;
+      }
 
     // Pre-reserve capacity to avoid rehashing during bulk insertions
     _map.reserve(_map.size() + (end - begin + 1));

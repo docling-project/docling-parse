@@ -47,6 +47,7 @@ def _identity_h_pdf(
     text_bytes: str,
     to_unicode: bool,
     default_width: str = "",
+    to_unicode_cmap: str = TO_UNICODE_AB,
 ) -> bytes:
     """A page setting two-byte codes in a non-embedded Identity-H font."""
     content = f"BT\n/F1 {FONT_SIZE} Tf\n20 100 Td\n<{text_bytes}> Tj\nET\n"
@@ -63,7 +64,7 @@ def _identity_h_pdf(
         "<< /Type /Font /Subtype /CIDFontType2 /BaseFont /Test-Identity "
         "/CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> "
         f"/FontDescriptor 8 0 R{default_width} >>",
-        stream_object("", TO_UNICODE_AB.encode("latin-1")),
+        stream_object("", to_unicode_cmap.encode("latin-1")),
         "<< /Type /FontDescriptor /FontName /Test-Identity /Flags 4 "
         "/FontBBox [0 -200 1000 800] /ItalicAngle 0 /Ascent 800 /Descent -200 "
         "/CapHeight 700 /StemV 80 >>",
@@ -145,4 +146,43 @@ def test_explicit_dw_is_honoured():
     width = abs(box.r - box.l)
     assert width == pytest.approx(FONT_SIZE, rel=0.2), (
         f"two glyphs at /DW 500 measured {width:.1f}pt, expected about {FONT_SIZE}pt"
+    )
+
+
+TO_UNICODE_REVERSED_RANGE = """/CIDInit /ProcSet findresource begin
+12 dict begin
+begincmap
+/CMapName /Test-UCS2 def
+/CMapType 2 def
+1 begincodespacerange
+<0000> <FFFF>
+endcodespacerange
+2 beginbfrange
+<FFFF> <00FF> <0058>
+<0001> <0002> <0041>
+endbfrange
+endcmap
+CMapName currentdict /CMap defineresource pop
+end
+end"""
+
+
+def test_reversed_bfrange_is_ignored():
+    """A bfrange whose end lies below its start is skipped, not expanded.
+
+    Its size, `end - begin + 1`, wrapped around in unsigned arithmetic to about
+    four billion codes; reserving a map that large threw std::bad_alloc, or,
+    with no memory limit, used all the memory the machine had. Such ranges
+    occur in real subset fonts (seen: `<ffff> <00ff>` in a ToUnicode CMap
+    written by an optimiser). The well-formed range next to it must still map.
+    """
+    text = _text(
+        _identity_h_pdf(
+            text_bytes="00010002",
+            to_unicode=True,
+            to_unicode_cmap=TO_UNICODE_REVERSED_RANGE,
+        )
+    )
+    assert text == "AB", (
+        f"expected the valid bfrange to map the codes to 'AB', got {text!r}"
     )
