@@ -103,7 +103,11 @@ namespace pdflib
     // `scn` naming a tiling pattern: replay the pattern cell across the page
     // box, clipped to the path being filled. `even_odd` is that path's fill
     // rule. Returns false when the pattern cannot be resolved or painted.
-    bool do_pattern_fill(const std::string& pattern_name, bool even_odd);
+    // `pattern_name` is taken by value: callers pass the fill pattern name
+    // held by the current graphics state, and painting the pattern pushes a
+    // new state (`q`), which can reallocate the state stack and leave a
+    // reference dangling.
+    bool do_pattern_fill(std::string pattern_name, bool even_odd);
     bool do_coons_patch_pattern_fill(const std::string& pattern_name,
                                      pdf_resource<PAGE_PATTERN>& pattern,
                                      bool even_odd);
@@ -1256,7 +1260,7 @@ namespace pdflib
   // 8.7.4.5: `sh` paints the named shading over the whole current clip
   // region, taking its colours from the shading's own colour space and
   // function rather than from the current fill colour.
-  bool pdf_decoder<STREAM>::do_pattern_fill(const std::string& pattern_name,
+  bool pdf_decoder<STREAM>::do_pattern_fill(std::string pattern_name,
                                             bool even_odd)
   {
     if(not page_patterns or page_patterns->count(pattern_name) == 0)
