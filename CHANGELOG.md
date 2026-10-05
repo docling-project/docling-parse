@@ -1,3 +1,12 @@
+## [v7.22.2](https://github.com/docling-project/docling-parse/releases/tag/v7.22.2) - 2026-10-05
+
+### Fix
+
+* Ignore malformed ToUnicode bfranges instead of reserving ~4G map entries ([#381](https://github.com/docling-project/docling-parse/issues/381)) ([`6d7ccf2`](https://github.com/docling-project/docling-parse/commit/6d7ccf26d09a38a86a08a8fadaf46987766b53e0))
+* Take the pattern name by value in do_pattern_fill ([#382](https://github.com/docling-project/docling-parse/issues/382)) ([`92ee655`](https://github.com/docling-project/docling-parse/commit/92ee6553b102a7984998abbe4ddea646b45db6c8))
+* Read font directory env vars wide on Windows ([#364](https://github.com/docling-project/docling-parse/issues/364)) ([`0c0eff2`](https://github.com/docling-project/docling-parse/commit/0c0eff2def1b7a594bcb536e7b0dc546524ae5d9))
+* Translate widget and hyperlink rects to the page boundary ([#376](https://github.com/docling-project/docling-parse/issues/376)) ([`6b5b6fd`](https://github.com/docling-project/docling-parse/commit/6b5b6fd0c70fbcde43bc35d0dad004047fdee7a2))
+
 ## [v7.22.1](https://github.com/docling-project/docling-parse/releases/tag/v7.22.1) - 2026-09-28
 
 ### Fix
