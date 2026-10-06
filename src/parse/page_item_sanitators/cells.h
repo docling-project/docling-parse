@@ -896,9 +896,126 @@ namespace pdflib
         // inferred threshold past every word gap in a short heading.
         const double word_gap = std::min(
           0.35, run.has_semantic_spaces ? 1.0 : infer_word_gap(run));
+        // A gap in units of the font space width of the glyphs either side.
+        const auto space_units = [](const page_item<PAGE_CELL>& lhs,
+                                    const page_item<PAGE_CELL>& rhs) -> double
+          {
+            const double unit =
+              0.5 * (cell_space_width(lhs) + cell_space_width(rhs));
+            return std::max(0.0, forward_gap(lhs, rhs)) / std::max(1.e-6, unit);
+          };
+        const auto median_of = [](std::vector<double> values) -> double
+          {
+            std::sort(values.begin(), values.end());
+            const std::size_t n = values.size();
+            return n % 2 ? values[n / 2] : 0.5 * (values[n / 2 - 1] + values[n / 2]);
+          };
+        // On a spaced run: the median effective width of its explicit spaces
+        // (1.0 when none is measurable, e.g. a table cell whose only space
+        // trails it; -1.0 when every space is collapsed by Tw and so says
+        // nothing), and its unmarked gaps, which are wide only when the run is
+        // letter-spaced.
+        double space_reference = -1.0;
+        // Each unmarked gap is kept with its font: a gap between two fonts is no
+        // letter-spacing evidence for either, and one font's tracking must not
+        // vouch for another font's gap. Each is also kept with its segment (the
+        // stretch between explicit spaces), so a gap can be compared with the
+        // letter gaps of its own word.
+        // Grouped and sorted once per run, so the judgement below is a lookup
+        // and not a copy and a sort per candidate boundary. Segment groups are
+        // indexed by segment number, so finding one does not scan the line.
+        using font_groups = std::vector<std::pair<std::string, std::vector<double>>>;
+        font_groups unmarked;
+        std::vector<font_groups> in_segment;
+        if(run.has_semantic_spaces)
+          {
+            std::vector<double> spaces;
+            const page_item<PAGE_CELL>* before = nullptr;
+            bool crossed = false;
+            std::size_t segment = 0;
+            for(const auto& c : run.cells)
+              {
+                if(is_semantic_space(c)) { crossed = true; ++segment; continue; }
+                if(before != nullptr)
+                  {
+                    if(crossed) { spaces.push_back(space_units(*before, c)); }
+                    else if(before->font_name == c.font_name)
+                      {
+                        const double gap = space_units(*before, c);
+                        const auto same_font = [&c](const auto& g) { return g.first == c.font_name; };
+                        auto group = std::find_if(unmarked.begin(), unmarked.end(), same_font);
+                        if(group == unmarked.end())
+                          {
+                            unmarked.emplace_back(c.font_name, std::vector<double>());
+                            group = std::prev(unmarked.end());
+                          }
+                        group->second.push_back(gap);
+                        if(in_segment.size() <= segment) { in_segment.resize(segment + 1); }
+                        font_groups& fonts = in_segment[segment];
+                        auto local = std::find_if(fonts.begin(), fonts.end(), same_font);
+                        if(local == fonts.end())
+                          {
+                            fonts.emplace_back(c.font_name, std::vector<double>());
+                            local = std::prev(fonts.end());
+                          }
+                        local->second.push_back(gap);
+                      }
+                  }
+                before = &c;
+                crossed = false;
+              }
+            for(auto& group : unmarked) { std::sort(group.second.begin(), group.second.end()); }
+            for(auto& fonts : in_segment)
+              {
+                for(auto& group : fonts) { std::sort(group.second.begin(), group.second.end()); }
+              }
+            std::vector<double> usable;
+            for(double w : spaces) { if(w > 0.25) { usable.push_back(w); } }
+            if(spaces.empty()) { space_reference = 1.0; }
+            else if(not usable.empty()) { space_reference = median_of(usable); }
+          }
+        // The number and median of the gaps in a sorted group other than the
+        // gap under test, read off the sorted list with its one position skipped.
+        const auto others = [](const std::vector<double>& sorted,
+                               double gap) -> std::pair<std::size_t, double>
+          {
+            const std::size_t at = static_cast<std::size_t>(
+              std::lower_bound(sorted.begin(), sorted.end(), gap - 1.e-9) - sorted.begin());
+            const bool found = at < sorted.size() and std::abs(sorted[at] - gap) < 1.e-9;
+            const std::size_t n = sorted.size() - (found ? 1 : 0);
+            if(n == 0) { return {0, 0.0}; }
+            const auto other = [&sorted, at, found](std::size_t i) -> double
+              { return sorted[(found and i >= at) ? i + 1 : i]; };
+            return {n, n % 2 ? other(n / 2) : 0.5 * (other(n / 2 - 1) + other(n / 2))};
+          };
+        // A run is letter-spaced only on evidence from its OTHER unmarked
+        // gaps IN THE SAME FONT: at least three of them, the gap under test
+        // left out, so a lone kerned gap cannot vouch for itself and a
+        // differently-fonted tracked span cannot vouch for it either. And the
+        // gap must not stand out from the other letter gaps of its own segment:
+        // tracking widens every gap of a word, so a gap wider than its
+        // neighbours is a word boundary however tracked the rest of the line is.
+        const auto letter_spaced_like = [&unmarked, &in_segment, &others](
+          double gap, const std::string& font, std::size_t segment) -> bool
+          {
+            const auto group = std::find_if(unmarked.begin(), unmarked.end(),
+                                            [&font](const auto& g) { return g.first == font; });
+            if(group == unmarked.end()) { return false; }
+            const auto [n, typical] = others(group->second, gap);
+            if(n < 3 or typical < 0.3 or gap > 1.5 * typical) { return false; }
+            if(segment >= in_segment.size()) { return true; }
+            const font_groups& fonts = in_segment[segment];
+            const auto local = std::find_if(fonts.begin(), fonts.end(),
+                                            [&font](const auto& g) { return g.first == font; });
+            if(local == fonts.end()) { return true; }
+            const auto [n_local, neighbours] = others(local->second, gap);
+            return n_local == 0 or gap <= 1.5 * neighbours;
+          };
+
         std::vector<page_item<PAGE_CELL>> words;
         page_item<PAGE_CELL>* previous_visible = nullptr;
         bool explicit_boundary = false;
+        std::size_t segment = 0;
 
         for(std::size_t index = 0; index < run.cells.size(); ++index)
           {
@@ -906,6 +1023,7 @@ namespace pdflib
             if(is_semantic_space(cell))
               {
                 explicit_boundary = true;
+                ++segment;
                 continue;
               }
 
@@ -938,6 +1056,26 @@ namespace pdflib
                       std::max(0.0, forward_gap(*previous_visible, cell)) /
                       std::max(1.e-6, scale);
                     starts_word = normalized_gap > word_gap;
+                    // On a spaced run, drop a boundary the gap does not earn:
+                    // under half the run's own space AND either under half a
+                    // font space (the reference is capped at 1.3 because
+                    // justified stretch and table gutters inflate the median)
+                    // or no wider than a letter-spaced run's usual gap (judged
+                    // from the run's other gaps and its segment's). Never
+                    // across a font change.
+                    // This can only remove a split.
+                    if(starts_word and space_reference > 0.0 and
+                       previous_visible->font_name == cell.font_name)
+                      {
+                        const double gap = space_units(*previous_visible, cell);
+                        if(gap < 0.5 * space_reference)
+                          {
+                            const bool small =
+                              gap < 0.5 * std::min(space_reference, 1.3);
+                            const bool lettered = letter_spaced_like(gap, cell.font_name, segment);
+                            starts_word = not (small or lettered);
+                          }
+                      }
                   }
               }
 
