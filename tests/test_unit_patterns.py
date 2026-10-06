@@ -487,7 +487,8 @@ def test_tiling_lattice_is_not_replayed_when_shapes_are_skipped():
     every fill, and every stroke it produced was then dropped by the same
     shape guards. A CAD sheet hatched with a few thousand pattern fills took
     minutes to decode for text alone (docling-parse#375). The replay is tied
-    to shape tracking now, the same way shading patterns already were.
+    to shape tracking now, the same way shading patterns already were, and
+    with shapes kept the cell is decoded once as tile content.
     """
     pdf = _text_cell_pattern_page()
 
@@ -495,9 +496,201 @@ def test_tiling_lattice_is_not_replayed_when_shapes_are_skipped():
         "a skipped-shapes decode replayed the pattern cell"
     )
 
-    with_shapes = _textline_texts(pdf, keep_shapes=True)
-    assert "label" in with_shapes
-    replayed = [line for line in with_shapes if line != "label"]
-    assert replayed and all(set(line) <= {"x", " "} for line in replayed), (
-        "keeping shapes must still replay the cell across the lattice"
+    # With shapes kept the cell is decoded as tile content: it is painted
+    # across the fill, and its glyphs are not page text either.
+    assert _textline_texts(pdf, keep_shapes=True) == ["label"], (
+        "a tiling cell's text must not become page text"
     )
+    image = region_image(render_page(pdf), FILL_BOX)
+    assert coverage_ratio(image) > 0.005, (
+        "keeping shapes must still paint the cell across the fill"
+    )
+
+
+def _parse_shapes(pdf_bytes: bytes):
+    """Parse one page with shapes materialised and return its shape items."""
+    from io import BytesIO
+
+    from docling_parse.pdf_parser import ContentConfig, ContentLevel, DoclingPdfParser
+
+    config = ContentConfig(
+        char_cells_content_level=ContentLevel.COMPUTE,
+        word_cells_content_level=ContentLevel.COMPUTE_AND_MATERIALIZE,
+        line_cells_content_level=ContentLevel.COMPUTE_AND_MATERIALIZE,
+        shapes_content_level=ContentLevel.COMPUTE_AND_MATERIALIZE,
+        bitmaps_content_level=ContentLevel.COMPUTE_AND_MATERIALIZE,
+        include_bitmap_bytes=False,
+    )
+    doc = DoclingPdfParser(loglevel="fatal").load(BytesIO(pdf_bytes), lazy=True)
+    return doc.get_page(1, content_config=config).shapes
+
+
+def _hatched_regions_page(count: int) -> bytes:
+    """`count` separate 40x40 regions, each filled with the ink-square pattern."""
+    parts = ["/Pattern cs /P0 scn"]
+    for i in range(count):
+        x = 10.0 + (i % 4) * 46.0
+        y = 10.0 + (i // 4) * 46.0
+        parts.append(f"{x} {y} 40 40 re f")
+    return simple_page_pdf(
+        "\n".join(parts) + "\n",
+        resources="/Pattern << /P0 5 0 R >>",
+        extra_objects=[_tiling_pattern_object()],
+    )
+
+
+def test_pattern_fill_yields_one_shape_per_region():
+    """A pattern fill is one shape item: its outline, not its replayed cells.
+
+    Each tiling fill used to replay the cell on a lattice of up to 17x17
+    positions and register every cell stroke as a page shape and a render
+    instruction. A CAD sheet hatched with thousands of regions produced
+    millions of them and took minutes to decode (docling-parse#375). The cell
+    is now decoded once and the renderer tiles it, so the page keeps the
+    filled outline alone -- which is also what region tests such as
+    `intersects_with` want to see there.
+    """
+    shapes = _parse_shapes(_hatched_regions_page(12))
+    assert len(shapes) == 12, (
+        f"expected one outline per hatched region, got {len(shapes)} shapes"
+    )
+
+    # the bottom-left region, in top-left page coordinates
+    rendered = render_page(_hatched_regions_page(12))
+    image = region_image(rendered, (10.0, 150.0, 50.0, 190.0))
+    assert abs(coverage_ratio(image) - CELL_COVERAGE) < 0.06, (
+        "the hatched region must still be painted at the cell's coverage"
+    )
+
+
+def test_cell_larger_than_the_page_is_still_painted():
+    """A cell too large to tile falls back to the direct replay.
+
+    The tile would be bigger than anything it fills, so the cell is placed
+    directly instead -- a handful of placements, which is what the replay is
+    good at. The page must come out painted either way.
+    """
+    big = 300.0  # the page is 200x200
+    pattern = stream_object(
+        "/Type /Pattern /PatternType 1 /PaintType 1 /TilingType 1 "
+        f"/BBox [0 0 {big} {big}] /XStep {big} /YStep {big} "
+        "/Resources << >> /Matrix [1 0 0 1 0 0]",
+        f"1 0 0 rg\n0 0 {big} {big} re f\n".encode("latin-1"),
+    )
+    pdf = _pattern_filled_page(pattern)
+
+    image = region_image(render_page(pdf), FILL_BOX)
+    assert coverage_ratio(image) > 0.98, (
+        "a page-sized cell must still paint the whole fill region"
+    )
+    assert_color_near(
+        center_color(image),
+        (255, 0, 0),
+        tolerance=40,
+        what="a page-sized cell's colour must reach the fill",
+    )
+
+
+def test_cell_wider_than_its_step_wraps_into_the_tile():
+    """Ink past the step box lands in the neighbouring cell (8.7.3.1).
+
+    A cell whose /BBox exceeds /XStep overlaps the next cell. With the cell
+    rasterised once per step box, what spills past the box must be drawn
+    again shifted by a step, or the overlapping part of every cell is lost.
+    """
+    # ink square sits at 25..35 of a 20 pt step: entirely outside its own box
+    pattern = stream_object(
+        "/Type /Pattern /PatternType 1 /PaintType 1 /TilingType 1 "
+        f"/BBox [0 0 {2 * CELL} {2 * CELL}] /XStep {CELL} /YStep {CELL} "
+        "/Resources << >> /Matrix [1 0 0 1 0 0]",
+        f"1 0 0 rg\n{CELL + 5} {CELL + 5} {INK} {INK} re f\n".encode("latin-1"),
+    )
+    pdf = _pattern_filled_page(pattern)
+
+    image = region_image(render_page(pdf), FILL_BOX)
+    assert abs(coverage_ratio(image) - CELL_COVERAGE) < 0.06, (
+        "the spilled ink must be tiled at the cell's coverage"
+    )
+
+
+def test_pattern_cell_that_paints_with_itself_terminates():
+    """A cell filling with its own pattern is skipped, not recursed into.
+
+    The cell's /Resources name the pattern object itself, so decoding the
+    cell asks for the cell again. The decode must stop at that point and
+    the page must still parse and render; the outer fill paints nothing
+    sensible and that is accepted.
+    """
+    pattern = stream_object(
+        "/Type /Pattern /PatternType 1 /PaintType 1 /TilingType 1 "
+        f"/BBox [0 0 {CELL} {CELL}] /XStep {CELL} /YStep {CELL} "
+        "/Resources << /Pattern << /P0 5 0 R >> >> /Matrix [1 0 0 1 0 0]",
+        f"/Pattern cs /P0 scn\n0 0 {INK} {INK} re f\n".encode("latin-1"),
+    )
+    pdf = _pattern_filled_page(pattern)
+
+    assert parse_page(pdf) is not None
+    assert render_page(pdf) is not None
+
+
+def _parse_bitmaps(pdf_bytes: bytes):
+    """Parse one page with bitmaps materialised and return its bitmap items."""
+    from io import BytesIO
+
+    from docling_parse.pdf_parser import ContentConfig, ContentLevel, DoclingPdfParser
+
+    config = ContentConfig(
+        char_cells_content_level=ContentLevel.COMPUTE,
+        word_cells_content_level=ContentLevel.COMPUTE_AND_MATERIALIZE,
+        line_cells_content_level=ContentLevel.COMPUTE_AND_MATERIALIZE,
+        shapes_content_level=ContentLevel.COMPUTE_AND_MATERIALIZE,
+        bitmaps_content_level=ContentLevel.COMPUTE_AND_MATERIALIZE,
+        include_bitmap_bytes=False,
+    )
+    doc = DoclingPdfParser(loglevel="fatal").load(BytesIO(pdf_bytes), lazy=True)
+    return doc.get_page(1, content_config=config).bitmap_resources
+
+
+def test_image_cell_pattern_reports_one_image_over_the_fill():
+    """A cell that draws an image makes the filled region image content.
+
+    Textured fills are tiling patterns whose cell is an image. The lattice
+    used to place that image once per cell, hundreds of page bitmaps for one
+    fill; docling reads the page's bitmap rectangles to decide where to run
+    OCR, so the region must still be reported as an image, once, over the
+    area the fill covers.
+    """
+    image = stream_object(
+        "/Type /XObject /Subtype /Image /Width 2 /Height 2 "
+        "/ColorSpace /DeviceGray /BitsPerComponent 8",
+        bytes([0, 255, 255, 0]),
+    )
+    pattern = stream_object(
+        "/Type /Pattern /PatternType 1 /PaintType 1 /TilingType 1 "
+        f"/BBox [0 0 {CELL} {CELL}] /XStep {CELL} /YStep {CELL} "
+        "/Resources << /XObject << /Im0 6 0 R >> >> /Matrix [1 0 0 1 0 0]",
+        f"q {INK} 0 0 {INK} 0 0 cm /Im0 Do Q\n".encode("latin-1"),
+    )
+    content = (
+        "/Pattern cs /P0 scn\n"
+        f"{FILL_BOX[0]} {FILL_BOX[0]} "
+        f"{FILL_BOX[2] - FILL_BOX[0]} {FILL_BOX[3] - FILL_BOX[1]} re f\n"
+    )
+    pdf = simple_page_pdf(
+        content,
+        resources="/Pattern << /P0 5 0 R >>",
+        extra_objects=[pattern, image],
+    )
+
+    bitmaps = _parse_bitmaps(pdf)
+    assert len(bitmaps) == 1, f"expected one page image, got {len(bitmaps)}"
+    box = bitmaps[0].rect.to_bounding_box()
+    assert abs(box.l - FILL_BOX[0]) < 0.5 and abs(box.r - FILL_BOX[2]) < 0.5, (
+        "the page image must span the filled region"
+    )
+    assert abs(box.width - (FILL_BOX[2] - FILL_BOX[0])) < 0.5
+    assert abs(box.height - (FILL_BOX[3] - FILL_BOX[1])) < 0.5
+
+    # and the tile itself is still painted from the image
+    rendered = region_image(render_page(pdf), FILL_BOX)
+    assert coverage_ratio(rendered) > 0.05, "the image cell must be painted"

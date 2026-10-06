@@ -108,6 +108,32 @@ namespace pdflib
     // new state (`q`), which can reallocate the state stack and leave a
     // reference dangling.
     bool do_pattern_fill(std::string pattern_name, bool even_odd);
+
+    // Nesting depth of tiling-cell decodes on this thread. A cell may paint
+    // with another pattern, and a cell's own /Resources may name the very
+    // pattern being decoded under a fresh resource object, so the per-object
+    // flag cannot see every cycle; a depth cap catches the rest.
+    static int& tiling_depth()
+    {
+      static thread_local int depth = 0;
+      return depth;
+    }
+    static constexpr int max_tiling_depth = 4;
+
+    // The renderer-side half of a tiling-pattern fill: the cell decoded once
+    // per pattern (and per colour for an uncoloured one) in pattern space,
+    // packaged with the pattern-space -> page-space matrix `pat`. Returns
+    // nullptr when the cell cannot be decoded or paints nothing.
+    // Reports the decoded cell's images once more at page level, over the
+    // bbox of the path being filled, so the region still counts as image
+    // content without the lattice of per-cell placements.
+    void report_tiling_cell_images(pdf_resource<PAGE_PATTERN>& pattern,
+                                   const std::string& paint_key);
+
+    std::shared_ptr<const tiling_paint> make_tiling_paint(const std::string& pattern_name,
+                                                          pdf_resource<PAGE_PATTERN>& pattern,
+                                                          const std::vector<qpdf_stream_instruction>& cell,
+                                                          const std::array<double, 9>& pat);
     bool do_coons_patch_pattern_fill(const std::string& pattern_name,
                                      pdf_resource<PAGE_PATTERN>& pattern,
                                      bool even_odd);
@@ -1394,6 +1420,57 @@ namespace pdflib
     // pattern coordinates and put it off the top of the page.
     const std::array<double, 9> to_pattern = mul(mul(want, base_ctm_), inv);
 
+    // The common case -- every hatch on a CAD sheet -- is a cell smaller than
+    // the page. It is decoded once and handed to the renderer, which fills
+    // the path with the repeated tile in one instruction. The lattice replay
+    // below is kept for cells larger than the page, where a tile would be
+    // bigger than what it fills and the replay is a handful of cells.
+    {
+      const std::array<double, 9> pat = mul(want, base_ctm_);
+      const double step_x = pattern.get_x_step();
+      const double step_y = pattern.get_y_step();
+      if(step_x > 0.0 and step_y > 0.0)
+        {
+          const double len_x = std::hypot(step_x * pat[0], step_x * pat[1]);
+          const double len_y = std::hypot(step_y * pat[3], step_y * pat[4]);
+          const std::array<double, 4> crop = page_dimension.get_crop_bbox();
+          const double crop_w = std::abs(crop[2] - crop[0]);
+          const double crop_h = std::abs(crop[3] - crop[1]);
+
+          if(std::isfinite(len_x) and std::isfinite(len_y) and
+             len_x > 0.0 and len_y > 0.0 and len_x <= crop_w and len_y <= crop_h)
+            {
+              if(pattern.is_decoding() or tiling_depth() >= max_tiling_depth)
+                {
+                  // A cell painting with its own pattern, directly or through
+                  // a chain: nothing sensible to paint, and replaying it would
+                  // recurse without end.
+                  LOG_S(WARNING) << "pattern " << pattern_name
+                                 << ": nested pattern cell at depth " << tiling_depth()
+                                 << ", fill skipped";
+                  return false;
+                }
+
+              std::shared_ptr<const tiling_paint> paint =
+                make_tiling_paint(pattern_name, pattern, cell, pat);
+              if(paint)
+                {
+                  current_shape_state().set_pending_tiling_paint(paint);
+                  report_tiling_cell_images(pattern, paint->get_key());
+                  return true;
+                }
+            }
+        }
+    }
+
+    if(tiling_depth() >= max_tiling_depth)
+      {
+        LOG_S(WARNING) << "pattern " << pattern_name
+                       << ": nested pattern replay at depth " << tiling_depth()
+                       << ", fill skipped";
+        return false;
+      }
+
     // How many cells to lay down: cover the filled path in pattern space.
     // Falling back to the page box keeps patterns usable when the path cannot
     // produce a finite bbox, but the path bbox is the normal case and avoids
@@ -1491,6 +1568,7 @@ namespace pdflib
 
     bool painted = false;
 
+    tiling_depth() += 1;
     for(int iy = iy0; iy <= iy1; iy++)
       {
         for(int ix = ix0; ix <= ix1; ix++)
@@ -1540,10 +1618,158 @@ namespace pdflib
             painted = true;
           }
       }
+    tiling_depth() -= 1;
 
     this->Q();
 
     return painted;
+  }
+
+  void pdf_decoder<STREAM>::report_tiling_cell_images(pdf_resource<PAGE_PATTERN>& pattern,
+                                                      const std::string& paint_key)
+  {
+    const std::string::size_type colon = paint_key.find(':');
+    const std::string color_key =
+      colon == std::string::npos ? std::string() : paint_key.substr(colon + 1);
+
+    std::shared_ptr<page_item<PAGE_IMAGES> > images = pattern.get_decoded_cell_images(color_key);
+    if(not images or images->size() == 0)
+      {
+        return;
+      }
+
+    std::array<double, 4> box = page_dimension.get_crop_bbox();
+    if(not current_shape_state().get_current_path_bbox(box))
+      {
+        return;
+      }
+
+    // One page image per cell image, over the region the fill covers: the
+    // lattice placed the cell's image hundreds of times inside that region,
+    // and what matters downstream is that the region is image content.
+    for(std::size_t i = 0; i < images->size(); i++)
+      {
+        page_item<PAGE_IMAGE> image = (*images)[i];
+
+        image.x0 = box[0];
+        image.y0 = box[1];
+        image.x1 = box[2];
+        image.y1 = box[3];
+
+        image.r_x0 = box[0]; image.r_y0 = box[1];
+        image.r_x1 = box[0]; image.r_y1 = box[3];
+        image.r_x2 = box[2]; image.r_y2 = box[3];
+        image.r_x3 = box[2]; image.r_y3 = box[1];
+
+        image.has_visible_bbox = false;
+
+        page_images.push_back(image);
+      }
+  }
+
+  std::shared_ptr<const tiling_paint> pdf_decoder<STREAM>::make_tiling_paint(
+    const std::string& pattern_name,
+    pdf_resource<PAGE_PATTERN>& pattern,
+    const std::vector<qpdf_stream_instruction>& cell,
+    const std::array<double, 9>& pat)
+  {
+    // An uncoloured cell (PaintType 2) is a stencil painted in the colour the
+    // scn operands gave, so its decoded form depends on that colour.
+    const std::array<int, 3> rgb = current_graphic_state().get_rgb_filling_ops();
+    std::string color_key;
+    if(pattern.get_paint_type() == 2)
+      {
+        color_key = std::to_string(rgb[0]) + "," + std::to_string(rgb[1]) + ","
+                  + std::to_string(rgb[2]);
+      }
+
+    std::shared_ptr<pdf_render_instructions> decoded = pattern.get_decoded_cell(color_key);
+    if(not decoded)
+      {
+        decoded = std::make_shared<pdf_render_instructions>();
+
+        // The cell's text and images are tile content, not page content, so
+        // the decode gets sinks of its own.
+        page_item<PAGE_CELLS>  cell_cells;
+        page_item<PAGE_SHAPES> cell_shapes;
+        page_item<PAGE_IMAGES> cell_images;
+
+        auto page_fonts_       = std::make_shared<pdf_resource<PAGE_FONTS>>(page_fonts);
+        auto page_grphs_       = std::make_shared<pdf_resource<PAGE_GRPHS>>(page_grphs);
+        auto page_colorspaces_ = std::make_shared<pdf_resource<PAGE_COLORSPACES>>(page_colorspaces);
+        auto page_shadings_    = std::make_shared<pdf_resource<PAGE_SHADINGS>>(page_shadings);
+        auto page_patterns_    = std::make_shared<pdf_resource<PAGE_PATTERNS>>(page_patterns);
+        auto page_xobjects_    = std::make_shared<pdf_resource<PAGE_XOBJECTS>>(page_xobjects);
+
+        if(pattern.has_resources())
+          {
+            QPDFObjectHandle res = pattern.get_resources();
+            if(res.hasKey("/Font"))      { QPDFObjectHandle o = res.getKey("/Font");      page_fonts_->set(o, timings); }
+            if(res.hasKey("/ExtGState")) { QPDFObjectHandle o = res.getKey("/ExtGState"); page_grphs_->set(o, timings); }
+            if(res.hasKey("/ColorSpace")){ QPDFObjectHandle o = res.getKey("/ColorSpace");page_colorspaces_->set(o); }
+            if(res.hasKey("/Shading"))   { QPDFObjectHandle o = res.getKey("/Shading");   page_shadings_->set(o); }
+            if(res.hasKey("/Pattern"))   { QPDFObjectHandle o = res.getKey("/Pattern");   page_patterns_->set(o); }
+            if(res.hasKey("/XObject"))   { QPDFObjectHandle o = res.getKey("/XObject");   page_xobjects_->set(o, timings); }
+          }
+
+        pdf_decoder<STREAM> cell_stream(config,
+                                        page_dimension,
+                                        cell_cells,
+                                        cell_shapes,
+                                        cell_images,
+                                        page_fonts_,
+                                        page_grphs_,
+                                        page_colorspaces_,
+                                        page_shadings_,
+                                        page_patterns_,
+                                        page_xobjects_,
+                                        *decoded,
+                                        timings);
+
+        // A fresh state, not a copy of the fill's: the identity CTM keeps the
+        // cell in pattern space, and no clip or path is inherited.
+        cell_stream.q();
+        if(pattern.get_paint_type() == 2)
+          {
+            cell_stream.current_graphic_state().set_uncolored_pattern_rgb(rgb);
+          }
+
+        pattern.set_decoding(true);
+        tiling_depth() += 1;
+        try
+          {
+            std::vector<qpdf_stream_instruction> parameters;
+            std::vector<qpdf_stream_instruction> insts = cell;
+            cell_stream.interprete(insts, parameters);
+          }
+        catch(const std::exception& e)
+          {
+            LOG_S(WARNING) << "pattern " << pattern_name << ": cell decode failed: " << e.what();
+            decoded = std::make_shared<pdf_render_instructions>();
+          }
+        tiling_depth() -= 1;
+        pattern.set_decoding(false);
+        cell_stream.Q();
+
+        pattern.set_decoded_cell(color_key, decoded,
+                                 std::make_shared<page_item<PAGE_IMAGES> >(cell_images));
+      }
+
+    if(decoded->empty())
+      {
+        return nullptr;
+      }
+
+    const double step_x = pattern.get_x_step();
+    const double step_y = pattern.get_y_step();
+    const std::array<double, 6> matrix = {pat[0], pat[1], pat[3], pat[4], pat[6], pat[7]};
+    const std::array<double, 4> bbox = pattern.has_bbox()
+      ? pattern.get_bbox()
+      : std::array<double, 4>{0.0, 0.0, step_x, step_y};
+
+    return std::make_shared<const tiling_paint>(
+      color_key.empty() ? pattern_name : pattern_name + ":" + color_key,
+      decoded, matrix, step_x, step_y, bbox);
   }
 
   void pdf_decoder<STREAM>::do_shading(const std::string& sh_name)
