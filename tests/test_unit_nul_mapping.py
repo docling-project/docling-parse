@@ -37,18 +37,22 @@ def _extract_character(mapping: str, glyph_name: str) -> str:
     return page.char_cells[0].text
 
 
+# The minus sign is kept as U+2212, not folded to "-" (docling-parse#362).
+MINUS = "\u2212"
+
+
 def test_authoritative_minus_overrides_conflicting_identity_before_normalization():
-    assert _extract_character(mapping="2212", glyph_name="plus") == "-"
+    assert _extract_character(mapping="2212", glyph_name="plus") == MINUS
 
 
-@pytest.mark.parametrize(("glyph_name", "expected"), [("minus", "-"), ("plus", "+")])
+@pytest.mark.parametrize(("glyph_name", "expected"), [("minus", MINUS), ("plus", "+")])
 def test_nul_mapping_recovers_from_known_glyph_identity(glyph_name: str, expected: str):
     assert _extract_character(mapping="0000", glyph_name=glyph_name) == expected
 
 
 @pytest.mark.parametrize("mapping", ["FFFF", "FFFE", "FDD0"])
 @pytest.mark.parametrize(
-    ("glyph_name", "expected"), [("f_f_i", "ffi"), ("f_i", "fi"), ("minus", "-")]
+    ("glyph_name", "expected"), [("f_f_i", "ffi"), ("f_i", "fi"), ("minus", MINUS)]
 )
 def test_noncharacter_mapping_recovers_from_glyph_name(
     mapping: str, glyph_name: str, expected: str

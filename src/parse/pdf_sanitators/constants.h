@@ -55,12 +55,13 @@ namespace pdflib
       {"\u200E", ""},
       {"\u200F", ""},      
       
+      // Only the hyphen variants fold to `-`: the line-joining dehyphenation
+      // downstream recognises an ASCII hyphen alone. U+2012..U+2015 (figure,
+      // en and em dash, horizontal bar) and U+2212 (minus) carry meaning of
+      // their own (`3-5` is not `3–5`, `2024–2026` is a range) and are kept
+      // (docling-parse#362).
       {"\u2010", "-"},
       {"\u2011", "-"},
-      {"\u2012", "-"},
-      {"\u2013", "-"},
-      {"\u2014", "-"},
-      {"\u2015", "-"},
 
       {"\u2018", "'"},
       {"\u2019", "'"},
@@ -70,8 +71,6 @@ namespace pdflib
       {"\u201D", "\""},
       {"\u201E", "\""},
       {"\u201F", "\""},
-      
-      {"\u2212", "-"},
     };
 
   };
