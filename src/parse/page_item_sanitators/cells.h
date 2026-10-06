@@ -1057,24 +1057,26 @@ namespace pdflib
                       std::max(1.e-6, scale);
                     starts_word = normalized_gap > word_gap;
                     // On a spaced run, drop a boundary the gap does not earn:
-                    // under half the run's own space AND either under half a
-                    // font space (the reference is capped at 1.3 because
-                    // justified stretch and table gutters inflate the median)
-                    // or no wider than a letter-spaced run's usual gap (judged
-                    // from the run's other gaps and its segment's). Never
-                    // across a font change.
+                    // either under half a font space and half the run's own
+                    // space (the reference is capped at 1.3 because justified
+                    // stretch and table gutters inflate the median), or under
+                    // 0.8 of the run's own space and no wider than a
+                    // letter-spaced run's usual gap (judged from the run's
+                    // other gaps and its segment's). Real tracking is often
+                    // 0.6-0.8 of a space, so half a space is too tight for the
+                    // second; at a full space positioned maths symbols join.
+                    // Never across a font change.
                     // This can only remove a split.
                     if(starts_word and space_reference > 0.0 and
                        previous_visible->font_name == cell.font_name)
                       {
                         const double gap = space_units(*previous_visible, cell);
-                        if(gap < 0.5 * space_reference)
-                          {
-                            const bool small =
-                              gap < 0.5 * std::min(space_reference, 1.3);
-                            const bool lettered = letter_spaced_like(gap, cell.font_name, segment);
-                            starts_word = not (small or lettered);
-                          }
+                        const bool small =
+                          gap < 0.5 * std::min(space_reference, 1.3);
+                        const bool lettered =
+                          gap < 0.8 * space_reference and
+                          letter_spaced_like(gap, cell.font_name, segment);
+                        starts_word = not (small or lettered);
                       }
                   }
               }

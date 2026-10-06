@@ -84,6 +84,21 @@ def test_space_collapsed_by_negative_word_spacing_is_no_reference():
     assert _words("[(HE) -166.6666667 (LLO)] TJ -3.336 Tw ( X) Tj") == ["HELLO", "X"]
 
 
+def test_tracking_under_a_measured_space_rejoins():
+    # Ordinary explicit spaces, so the run's space reference is one font space,
+    # and the letter gaps of `little` are 0.7 of it (-195 = 0.7 x 278): wider
+    # than half a space, which real tracking routinely is, and still one word.
+    # Narrow letters, so each gap also passes the word-gap threshold.
+    tracked = "[(l) -195 (i) -195 (t) -195 (t) -195 (l) -195 (e)] TJ"
+    assert _words(f"(AB CD ) Tj {tracked}") == ["AB", "CD", "little"]
+
+
+def test_untracked_words_at_the_same_gap_stay_split():
+    # The same 0.7-space gap between two untracked words: no other gap on the
+    # run is that wide, so nothing vouches for it.
+    assert _words("(AB CD ) Tj [(lit) -195 (tilt)] TJ") == ["AB", "CD", "lit", "tilt"]
+
+
 def test_uniform_tracking_across_a_boundary_is_not_detectable():
     # The documented limit: when ONE and TWO are tracked by the same amount as
     # the gap between them, nothing on the page marks that boundary, and the
