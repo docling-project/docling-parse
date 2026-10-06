@@ -26,6 +26,41 @@ namespace pdflib
     bool is_valid() const { return type_ == 1 or type_ == 2; }
     int get_pattern_type() const { return type_; }
 
+    // Tiling only: 1 = coloured (the cell sets its own colours), 2 =
+    // uncoloured (the cell is a stencil painted in the scn operand colour).
+    int get_paint_type() const { return paint_type_; }
+
+    // The cell decoded into render instructions in pattern space, cached per
+    // paint colour key ("" for a coloured pattern) so a hatch used by every
+    // region of a CAD sheet is decoded once per page, not once per fill.
+    std::shared_ptr<pdf_render_instructions> get_decoded_cell(const std::string& color_key) const
+    {
+      auto it = cell_cache_.find(color_key);
+      return it == cell_cache_.end() ? nullptr : it->second;
+    }
+
+    void set_decoded_cell(const std::string& color_key,
+                          std::shared_ptr<pdf_render_instructions> cell,
+                          std::shared_ptr<page_item<PAGE_IMAGES> > images) const
+    {
+      cell_cache_[color_key] = std::move(cell);
+      cell_images_cache_[color_key] = std::move(images);
+    }
+
+    // The images the cell draws, kept so a fill can report one page image
+    // over the region it covers: downstream OCR decisions are made on the
+    // page's image rectangles.
+    std::shared_ptr<page_item<PAGE_IMAGES> > get_decoded_cell_images(const std::string& color_key) const
+    {
+      auto it = cell_images_cache_.find(color_key);
+      return it == cell_images_cache_.end() ? nullptr : it->second;
+    }
+
+    // True while the cell is being decoded: a cell that paints with its own
+    // pattern must not recurse into itself.
+    bool is_decoding() const { return decoding_; }
+    void set_decoding(bool on) const { decoding_ = on; }
+
     // Pattern space -> the default space of the page (NOT the CTM in force
     // when the pattern is used; 8.7.3.1).
     const std::array<double, 9>& get_matrix() const { return matrix_; }
@@ -58,6 +93,7 @@ namespace pdflib
 
     std::string key_;
     int type_ = 0;
+    int paint_type_ = 1;
 
     std::array<double, 9> matrix_ = {1, 0, 0, 0, 1, 0, 0, 0, 1};
     bool has_bbox_ = false;
@@ -68,6 +104,10 @@ namespace pdflib
     QPDFObjectHandle qpdf_pattern_;
     QPDFObjectHandle resources_;
     QPDFObjectHandle shading_;
+
+    mutable std::map<std::string, std::shared_ptr<pdf_render_instructions> > cell_cache_;
+    mutable std::map<std::string, std::shared_ptr<page_item<PAGE_IMAGES> > > cell_images_cache_;
+    mutable bool decoding_ = false;
 
     mutable bool stream_parsed_ = false;
     mutable std::vector<qpdf_stream_instruction> stream_cache_;
@@ -94,6 +134,11 @@ namespace pdflib
     if(dict.hasKey("/PatternType") and dict.getKey("/PatternType").isInteger())
       {
         type_ = static_cast<int>(dict.getKey("/PatternType").getIntValue());
+      }
+
+    if(dict.hasKey("/PaintType") and dict.getKey("/PaintType").isInteger())
+      {
+        paint_type_ = static_cast<int>(dict.getKey("/PaintType").getIntValue());
       }
 
     if(dict.hasKey("/Matrix") and dict.getKey("/Matrix").isArray() and

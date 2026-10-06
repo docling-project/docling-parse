@@ -189,6 +189,14 @@ namespace pdflib
     // should be.
     bool get_fill_is_unresolved_pattern() const { return fill_is_unresolved_pattern; }
 
+    // The colour an uncoloured tiling pattern (PaintType 2) paints with: the
+    // scn operands that selected it, used for both its fills and strokes.
+    void set_uncolored_pattern_rgb(const std::array<int, 3>& rgb)
+    {
+      rgb_filling_ops = rgb;
+      rgb_stroking_ops = rgb;
+    }
+
     // Name given by the scn that selected a pattern, empty when none.
     const std::string& get_fill_pattern_name() const { return fill_pattern_name; }
     void materialize_pattern_fill_color();

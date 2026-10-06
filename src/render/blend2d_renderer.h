@@ -14,6 +14,8 @@
 #include <blend2d/blend2d.h>
 
 #include <algorithm>
+#include <map>
+#include <tuple>
 #include <array>
 #include <cctype>
 #include <cmath>
@@ -1816,6 +1818,25 @@ namespace pdflib
     // polygon's hull), which is what the clip skip-test needs.
     BLPath make_shape_path(const shape_instruction& instr, BLRect& bbox,
                            bool flatten_curves = false) const;
+
+    // Tiling-pattern fills (ISO 32000-1, 8.7.3.3). The decoded cell is
+    // rasterised once into a tile at the canvas resolution and the path is
+    // filled with a repeating BLPattern of it; the lattice is Blend2D's.
+    // `style` is left untouched and false returned when the tile cannot be
+    // built, in which case the fill paints nothing: the fill colour the
+    // instruction carries is the Pattern space placeholder, not a paint.
+    bool tile_pattern_style(const shape_instruction& instr,
+                            BLPattern& style,
+                            double dx,
+                            double dy);
+
+    BLImage rasterize_tile(const tiling_paint& paint, int width, int height);
+
+    // Tiles built for this page, keyed by decoded cell and tile pixel size,
+    // up to a byte budget; past it a tile is built per fill and not kept.
+    std::map<std::tuple<const void*, int, int>, BLImage> tile_cache_;
+    std::size_t tile_cache_bytes_ = 0;
+    static constexpr std::size_t max_tile_cache_bytes = 64u * 1024u * 1024u;
 
     // Draws a semi-transparent yellow placeholder over the bitmap destination
     // quad. This makes missing or invalid image data visible in debug renders.
@@ -3947,6 +3968,161 @@ namespace pdflib
   // make_shape_path
   // ---------------------------------------------------------------------------
 
+  inline bool renderer<BLEND2D>::tile_pattern_style(const shape_instruction& instr,
+                                                    BLPattern& style,
+                                                    double dx,
+                                                    double dy)
+  {
+    const tiling_paint& paint = instr.get_tiling_paint();
+    const double step_x = paint.get_x_step();
+    const double step_y = paint.get_y_step();
+    if (not paint.get_cell() or step_x <= 0.0 or step_y <= 0.0)
+      {
+        return false;
+      }
+
+    // pattern space -> page space -> canvas (y flipped), as in render_shading
+    const std::array<double, 6>& m = paint.get_matrix();
+    BLMatrix2D pattern_to_canvas(m[0], m[1], m[2], m[3], m[4], m[5]);
+    pattern_to_canvas.post_transform(
+      BLMatrix2D(scale_x_, 0.0, 0.0, -scale_y_,
+                 -scale_x_ * origin_x_,
+                 static_cast<double>(canvas_height_) + scale_y_ * origin_y_));
+
+    // One step along each lattice axis, in canvas pixels: the tile's size.
+    const BLPoint vx = pattern_to_canvas.map_vector(step_x, 0.0);
+    const BLPoint vy = pattern_to_canvas.map_vector(0.0, step_y);
+    const double len_x = std::hypot(vx.x, vx.y);
+    const double len_y = std::hypot(vy.x, vy.y);
+    if (not std::isfinite(len_x) or not std::isfinite(len_y) or
+        len_x <= 0.0 or len_y <= 0.0)
+      {
+        return false;
+      }
+
+    // A tile is at most 16 MB (PRGB32): past these the tile is scaled up by
+    // the pattern transform rather than grown. A step box larger than the
+    // page never gets here (the decoder replays those cells directly).
+    constexpr int max_tile_side = 2048;
+    int width  = std::clamp(static_cast<int>(std::lround(len_x)), 1, max_tile_side);
+    int height = std::clamp(static_cast<int>(std::lround(len_y)), 1, max_tile_side);
+    constexpr long max_tile_pixels = 2048L * 2048L;
+    if (static_cast<long>(width) * height > max_tile_pixels)
+      {
+        const double shrink = std::sqrt(static_cast<double>(max_tile_pixels)
+                                        / (static_cast<double>(width) * height));
+        width  = std::max(1, static_cast<int>(width * shrink));
+        height = std::max(1, static_cast<int>(height * shrink));
+      }
+
+    const auto key = std::make_tuple(static_cast<const void*>(paint.get_cell().get()),
+                                     width, height);
+    BLImage uncached;
+    auto it = tile_cache_.find(key);
+    if (it == tile_cache_.end())
+      {
+        BLImage tile = rasterize_tile(paint, width, height);
+        const std::size_t bytes = static_cast<std::size_t>(width) * height * 4u;
+        if (tile_cache_bytes_ + bytes <= max_tile_cache_bytes)
+          {
+            tile_cache_bytes_ += bytes;
+            it = tile_cache_.emplace(key, std::move(tile)).first;
+          }
+        else
+          {
+            uncached = std::move(tile);
+          }
+      }
+    const BLImage& tile = (it == tile_cache_.end()) ? uncached : it->second;
+    if (tile.is_empty())
+      {
+        return false;
+      }
+
+    // tile pixels -> pattern space: the tile covers one step box from the
+    // cell's bbox origin, row 0 at the top of that box.
+    const std::array<double, 4>& bbox = paint.get_bbox();
+    BLMatrix2D transform(step_x / width, 0.0,
+                         0.0, -step_y / height,
+                         bbox[0], bbox[1] + step_y);
+    transform.post_transform(pattern_to_canvas);
+    transform.post_translate(dx, dy);
+
+    style = BLPattern(tile, BL_EXTEND_MODE_REPEAT, transform);
+    return true;
+  }
+
+  inline BLImage renderer<BLEND2D>::rasterize_tile(const tiling_paint& paint,
+                                                   int width,
+                                                   int height)
+  {
+    const double step_x = paint.get_x_step();
+    const double step_y = paint.get_y_step();
+    const std::array<double, 4>& bbox = paint.get_bbox();
+
+    // The tile is a page of its own: one step box of pattern space, at the
+    // pixel size the pattern's placement on this canvas asks for.
+    render_config config = config_;
+    config.scale = -1.0f;
+    config.canvas_width = width;
+    config.canvas_height = height;
+    config.draw_text_bbox = false;
+    config.draw_text_basepoint = false;
+
+    renderer<BLEND2D> tile(config,
+                           font_resolver_,
+                           embedded_font_cache_,
+                           freetype_font_cache_,
+                           glyph_bbox_cache_);
+
+    size_instruction size;
+    size.media_bbox = {bbox[0], bbox[1], bbox[0] + step_x, bbox[1] + step_y};
+    size.crop_bbox = size.media_bbox;
+    size.angle = 0;
+
+    try
+      {
+        tile.set_size(size);
+
+        // Transparent, not the opaque white a page starts on: the fill
+        // region shows through between the cell's marks.
+        {
+          BLContext& ctx = tile.page_context();
+          ctx.set_comp_op(BL_COMP_OP_SRC_COPY);
+          ctx.fill_all(BLRgba32(0x00000000u));
+          ctx.set_comp_op(BL_COMP_OP_SRC_OVER);
+        }
+
+        // A cell wider than its step overlaps its neighbours (8.7.3.1), so
+        // what spills past the step box is drawn again shifted by a step and
+        // lands inside it.
+        constexpr double overlap_eps = 1e-6;
+        const bool wraps_x = (bbox[2] - bbox[0]) > step_x * (1.0 + overlap_eps);
+        const bool wraps_y = (bbox[3] - bbox[1]) > step_y * (1.0 + overlap_eps);
+
+        pdf_render_instructions& cell = *paint.get_cell();
+        for (int j = (wraps_y ? -1 : 0); j <= (wraps_y ? 1 : 0); j++)
+          {
+            for (int i = (wraps_x ? -1 : 0); i <= (wraps_x ? 1 : 0); i++)
+              {
+                cell.iterate_over_content(tile, i * step_x, j * step_y);
+              }
+          }
+
+        tile.finish_page_context();
+      }
+    catch (const std::exception& e)
+      {
+        LOG_S(WARNING) << "rasterize_tile: pattern " << paint.get_key()
+                       << " failed: " << e.what();
+        return BLImage();
+      }
+
+    BLImage out = std::move(tile.image_);
+    tile.image_.reset();
+    return out;
+  }
+
   inline BLPath renderer<BLEND2D>::make_shape_path(const shape_instruction& instr,
                                                    BLRect& bbox,
                                                    bool flatten_curves) const
@@ -4439,6 +4615,22 @@ namespace pdflib
       (mode == SHAPE_PAINT_STROKE or mode == SHAPE_PAINT_FILL_STROKE)
       and stroke_alpha > min_visible_alpha;
 
+    // A pattern fill paints with its tile or not at all (#375). The tile is
+    // a BLPattern in canvas space, so it serves the direct fill and the
+    // coverage-window fill below alike.
+    BLPattern tile_style;
+    bool tile_ready = false;
+    if (do_fill and instr.has_tiling_paint())
+      {
+        tile_ready = tile_pattern_style(instr, tile_style, 0.0, 0.0);
+        if (not tile_ready)
+          {
+            LOG_S(WARNING) << "render_shape: no tile for pattern "
+                           << instr.get_tiling_paint().get_key() << ", fill skipped";
+          }
+      }
+    const bool paints_fill = do_fill and (tile_ready or not instr.has_tiling_paint());
+
     // the line width arrives in page space; scale to canvas and keep
     // sub-pixel strokes visible (PDF `0 w` means hairline)
     const double stroke_width = std::max(
@@ -4563,8 +4755,8 @@ namespace pdflib
     // what keeps a crescent from filling its bounding box and a line from
     // running past a circular clip. Fill and stroke composite separately, in
     // the PDF order, each with its own alpha, under the context blend mode.
-    auto paint_masked = [&](const char* what, const BLRgba32& style,
-                            auto&& draw) -> bool
+    auto paint_masked = [&](const char* what, auto&& draw,
+                            auto&& composite) -> bool
     {
       BLImage coverage;
       if (coverage.create(mask_area.w, mask_area.h, BL_FORMAT_A8) != BL_SUCCESS)
@@ -4589,24 +4781,48 @@ namespace pdflib
           LOG_S(WARNING) << "render_shape: could not apply clip mask to "
                          << what;
         }
-      return ctx.fill_mask(BLPointI(mask_area.x, mask_area.y), coverage, style)
-        == BL_SUCCESS;
+      return composite(coverage) == BL_SUCCESS;
     };
+    const BLPointI mask_origin(mask_area.x, mask_area.y);
 
-    if (do_fill)
+    if (paints_fill)
       {
         const BLRgba32 style = make_rgba32(instr.get_rgb_filling(), fill_alpha);
         const bool masked =
-          use_mask and paint_masked("fill", style, [&](BLContext& cctx)
+          use_mask and paint_masked("fill", [&](BLContext& cctx)
           {
             cctx.set_fill_rule(fill_rule);
             cctx.fill_path(path, BLRgba32(0xFFFFFFFFu));
+          },
+          [&](const BLImage& coverage) -> BLResult
+          {
+            if (tile_ready)
+              {
+                // the pattern is a fill style, so it goes through the
+                // context's style rather than the colour argument
+                ctx.set_fill_style(tile_style);
+                ctx.set_fill_alpha(fill_alpha);
+                const BLResult result = ctx.fill_mask(mask_origin, coverage);
+                ctx.set_fill_alpha(1.0);
+                return result;
+              }
+            return ctx.fill_mask(mask_origin, coverage, style);
           });
 
         if (not masked)
           {
             ctx.set_fill_rule(fill_rule);
-            ctx.fill_path(path, style);
+            if (tile_ready)
+              {
+                ctx.set_fill_style(tile_style);
+                ctx.set_fill_alpha(fill_alpha);
+                ctx.fill_path(path);
+                ctx.set_fill_alpha(1.0);
+              }
+            else
+              {
+                ctx.fill_path(path, style);
+              }
           }
       }
 
@@ -4626,10 +4842,14 @@ namespace pdflib
 
         const BLRgba32 style = make_rgba32(instr.get_rgb_stroking(), stroke_alpha);
         const bool masked =
-          use_mask and paint_masked("stroke", style, [&](BLContext& cctx)
+          use_mask and paint_masked("stroke", [&](BLContext& cctx)
           {
             apply_stroke_options(cctx);
             cctx.stroke_path(stroke_path, BLRgba32(0xFFFFFFFFu));
+          },
+          [&](const BLImage& coverage) -> BLResult
+          {
+            return ctx.fill_mask(mask_origin, coverage, style);
           });
 
         if (not masked)
