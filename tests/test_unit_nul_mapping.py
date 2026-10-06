@@ -51,3 +51,15 @@ def test_nul_mapping_with_unknown_identity_remains_unresolved():
         _extract_character(mapping="0000", glyph_name="gid00043")
         == "GLYPH<name:gid00043>"
     )
+
+
+@pytest.mark.parametrize("glyph_name", ["g15C", "g15c", "gA1", "GID00043"])
+def test_nul_mapping_with_hexadecimal_glyph_index_name_remains_unresolved(
+    glyph_name: str,
+):
+    # Skia/PDF names Type 3 glyphs `g%X` (hexadecimal gid), so a bare index
+    # may carry letters A-F; it still identifies no reading text.
+    assert (
+        _extract_character(mapping="0000", glyph_name=glyph_name)
+        == f"GLYPH<name:{glyph_name}>"
+    )
