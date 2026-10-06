@@ -1332,7 +1332,17 @@ namespace pdflib
         return false;
       }
 
-    std::vector<qpdf_stream_instruction> cell = pattern.parse_stream();
+    // Without shape tracking the cell's strokes and fills are dropped on the
+    // floor (every shape operator returns early), and the path being filled
+    // was never recorded, so the lattice falls back to the page box. Replaying
+    // up to 17x17 cells per fill then costs seconds per page on CAD hatching
+    // and paints nothing. Same rule as the shading-pattern branch above.
+    if(not config.keep_shapes)
+      {
+        return false;
+      }
+
+    const std::vector<qpdf_stream_instruction>& cell = pattern.parse_stream();
     if(cell.empty())
       {
         return false;
