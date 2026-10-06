@@ -434,3 +434,70 @@ def test_shading_pattern_fill_survives_graphics_state_growth(depth):
     """
     page = parse_page(_shading_pattern_page(depth))
     assert page is not None
+
+
+def _text_cell_pattern_page() -> bytes:
+    """A tiling pattern whose cell draws a glyph, filled under a page label."""
+    pattern = stream_object(
+        "/Type /Pattern /PatternType 1 /PaintType 1 /TilingType 1 "
+        f"/BBox [0 0 {CELL} {CELL}] /XStep {CELL} /YStep {CELL} "
+        "/Resources << /Font << /F0 6 0 R >> >> /Matrix [1 0 0 1 0 0]",
+        b"BT /F0 8 Tf 2 2 Td (x) Tj ET\n",
+    )
+    font = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"
+    content = (
+        "BT /F0 12 Tf 20 190 Td (label) Tj ET\n"
+        "/Pattern cs /P0 scn\n"
+        f"{FILL_BOX[0]} {FILL_BOX[0]} "
+        f"{FILL_BOX[2] - FILL_BOX[0]} {FILL_BOX[3] - FILL_BOX[1]} re f\n"
+    )
+    return simple_page_pdf(
+        content,
+        resources="/Font << /F0 6 0 R >> /Pattern << /P0 5 0 R >>",
+        extra_objects=[pattern, font],
+    )
+
+
+def _textline_texts(pdf_bytes: bytes, *, keep_shapes: bool) -> list[str]:
+    from io import BytesIO
+
+    from docling_parse.pdf_parser import ContentConfig, ContentLevel, DoclingPdfParser
+
+    config = ContentConfig(
+        char_cells_content_level=ContentLevel.COMPUTE,
+        word_cells_content_level=ContentLevel.COMPUTE_AND_MATERIALIZE,
+        line_cells_content_level=ContentLevel.COMPUTE_AND_MATERIALIZE,
+        shapes_content_level=(
+            ContentLevel.COMPUTE if keep_shapes else ContentLevel.SKIP
+        ),
+        bitmaps_content_level=ContentLevel.COMPUTE_AND_MATERIALIZE,
+        include_bitmap_bytes=False,
+    )
+    doc = DoclingPdfParser(loglevel="fatal").load(BytesIO(pdf_bytes), lazy=True)
+    page = doc.get_page(1, content_config=config)
+    return [cell.text for cell in page.textline_cells]
+
+
+def test_tiling_lattice_is_not_replayed_when_shapes_are_skipped():
+    """Skipping shapes skips the tiling replay, not just its output.
+
+    Each tiling fill replays its cell on a lattice of up to 17x17 nested
+    stream decoders. Without shape tracking the path being filled is never
+    recorded, so the lattice fell back to the page box and ran in full for
+    every fill, and every stroke it produced was then dropped by the same
+    shape guards. A CAD sheet hatched with a few thousand pattern fills took
+    minutes to decode for text alone (docling-parse#375). The replay is tied
+    to shape tracking now, the same way shading patterns already were.
+    """
+    pdf = _text_cell_pattern_page()
+
+    assert _textline_texts(pdf, keep_shapes=False) == ["label"], (
+        "a skipped-shapes decode replayed the pattern cell"
+    )
+
+    with_shapes = _textline_texts(pdf, keep_shapes=True)
+    assert "label" in with_shapes
+    replayed = [line for line in with_shapes if line != "label"]
+    assert replayed and all(set(line) <= {"x", " "} for line in replayed), (
+        "keeping shapes must still replay the cell across the lattice"
+    )

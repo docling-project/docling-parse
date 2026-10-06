@@ -47,7 +47,9 @@ namespace pdflib
       return resources.isDictionary();
     }
 
-    std::vector<qpdf_stream_instruction> parse_stream() const;
+    // Parsed once and cached: a hatch pattern is painted once per filled
+    // region, and a CAD sheet has thousands of them.
+    const std::vector<qpdf_stream_instruction>& parse_stream() const;
 
     // Shading pattern only.
     QPDFObjectHandle get_shading() const { return shading_; }
@@ -66,6 +68,9 @@ namespace pdflib
     QPDFObjectHandle qpdf_pattern_;
     QPDFObjectHandle resources_;
     QPDFObjectHandle shading_;
+
+    mutable bool stream_parsed_ = false;
+    mutable std::vector<qpdf_stream_instruction> stream_cache_;
   };
 
   pdf_resource<PAGE_PATTERN>::pdf_resource()
@@ -141,9 +146,15 @@ namespace pdflib
                 << (has_bbox_ ? " with /BBox" : " no /BBox");
   }
 
-  std::vector<qpdf_stream_instruction> pdf_resource<PAGE_PATTERN>::parse_stream() const
+  const std::vector<qpdf_stream_instruction>& pdf_resource<PAGE_PATTERN>::parse_stream() const
   {
-    std::vector<qpdf_stream_instruction> insts;
+    if(stream_parsed_)
+      {
+        return stream_cache_;
+      }
+    stream_parsed_ = true;
+
+    std::vector<qpdf_stream_instruction>& insts = stream_cache_;
 
     QPDFObjectHandle stream = qpdf_pattern_;
     if(not stream.isStream())
