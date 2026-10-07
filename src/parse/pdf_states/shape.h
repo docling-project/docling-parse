@@ -89,6 +89,14 @@ namespace pdflib
     clip_state_instruction get_clip_state() const;
     bool get_current_path_bbox(std::array<double, 4>& bbox) const;
 
+    // The tile the next painting operator fills its path with, set by the
+    // stream decoder once it has resolved the fill's /Pattern colour to a
+    // decoded tiling cell. Consumed (and cleared) by register_paths.
+    void set_pending_tiling_paint(std::shared_ptr<const tiling_paint> paint)
+    {
+      pending_tiling_paint_ = std::move(paint);
+    }
+
   private:
 
     bool verify(std::vector<qpdf_stream_instruction>& instructions,
@@ -141,6 +149,8 @@ namespace pdflib
     // group id of each entry in `clippings`: one W/W* capture = one group
     std::vector<int> clipping_groups;
     int next_clip_group = 0;
+
+    std::shared_ptr<const tiling_paint> pending_tiling_paint_;
 
     clipping_path_mode_type clipping_path_mode;
     bool clipping_path_pending;
@@ -196,6 +206,7 @@ namespace pdflib
     this->clippings  = other.clippings;
     this->clipping_groups = other.clipping_groups;
     this->next_clip_group = other.next_clip_group;
+    this->pending_tiling_paint_ = other.pending_tiling_paint_;
     this->clipping_path_mode = other.clipping_path_mode;
     this->clipping_path_pending = other.clipping_path_pending;
 
@@ -757,9 +768,17 @@ namespace pdflib
         // unaffected; a fill+stroke keeps its stroke.
         shape_paint_mode effective_mode = paint_mode;
         bool emit_instruction = true;
+        std::shared_ptr<const tiling_paint> paint;
         if(grph_state.get_fill_is_unresolved_pattern())
           {
-            if(paint_mode == SHAPE_PAINT_FILL)
+            if(pending_tiling_paint_ and
+               (paint_mode == SHAPE_PAINT_FILL or paint_mode == SHAPE_PAINT_FILL_STROKE))
+              {
+                // The pattern was resolved to a decoded tiling cell: the path
+                // is filled with that tile by the renderer, in one instruction.
+                paint = pending_tiling_paint_;
+              }
+            else if(paint_mode == SHAPE_PAINT_FILL)
               {
                 LOG_S(INFO) << "shape: skipping fill with an unresolved /Pattern colour";
                 // Only the painting is skipped. Returning here would also skip
@@ -791,10 +810,17 @@ namespace pdflib
                                        grph_state.get_fill_alpha(),
                                        get_clip_state());
             shpinstr.set_blend_mode(grph_state.get_blend_mode());
+            if(paint)
+              {
+                shpinstr.set_tiling_paint(paint);
+              }
 
             instructions.add_shape_instruction(std::move(shpinstr));
           }
       }
+
+    // The tile belongs to this painting operator alone.
+    pending_tiling_paint_.reset();
 
     // a pending W/W* clip takes effect after *any* painting operator (not
     // only after `n`); it must not affect the instruction emitted above,
