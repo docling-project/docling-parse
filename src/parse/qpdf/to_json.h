@@ -10,9 +10,26 @@
 
 #include <nlohmann/json.hpp>
 #include <qpdf/QPDF.hh>
+#include <qpdf/QUtil.hh>
 
 namespace pdflib
 {
+  // A name object comes out of qpdf with its #xx escapes resolved, as raw
+  // bytes (ISO 32000-1, 7.3.5). Names meant for display should be UTF-8,
+  // but forms written by older tools spell non-ASCII option names in
+  // PDFDocEncoding, as in /zur#fcck for "zurück". Keep valid UTF-8 as it is
+  // and transcode the rest the way getUTF8Value() transcodes text strings,
+  // so that every name handed to Python decodes instead of raising.
+  std::string name_to_utf8(QPDFObjectHandle name)
+  {
+    std::string raw = name.getName();
+    if(utf8::is_valid(raw.begin(), raw.end()))
+      {
+        return raw;
+      }
+    return QUtil::pdf_doc_to_utf8(raw);
+  }
+
   std::pair<bool, std::string> to_string(QPDFObjectHandle obj,
 					 const std::string& key)
   {
@@ -26,7 +43,7 @@ namespace pdflib
     else if(obj.hasKey(key) and obj.getKey(key).isName())
       {
 	result.first = true;
-	result.second = obj.getKey(key).getName();
+	result.second = name_to_utf8(obj.getKey(key));
       }
 
     return result;
