@@ -1071,12 +1071,12 @@ namespace pdflib
                        previous_visible->font_name == cell.font_name)
                       {
                         const double gap = space_units(*previous_visible, cell);
-                        const bool small =
+                        const bool narrow =
                           gap < 0.5 * std::min(space_reference, 1.3);
                         const bool lettered =
                           gap < 0.8 * space_reference and
                           letter_spaced_like(gap, cell.font_name, segment);
-                        starts_word = not (small or lettered);
+                        starts_word = not (narrow or lettered);
                       }
                   }
               }
