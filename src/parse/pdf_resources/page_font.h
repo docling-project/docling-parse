@@ -197,6 +197,12 @@ namespace pdflib
     void init_charprocs();
     void init_space_index();
 
+    // The embedded program's builtin encoding as the source of reading text
+    // (9.6.6.2 / 9.6.6.4); read lazily, on the first code that needs it.
+    bool uses_builtin_encoding() const;
+    bool resolve_builtin_encoding(uint32_t c, std::string& text);
+    void init_builtin_encoding();
+
     void print_tables();
 
   private:
@@ -293,6 +299,9 @@ namespace pdflib
 
     bool font_blob_initialized = false;
     std::shared_ptr<const embedded_font_blob> font_blob;
+
+    bool builtin_encoding_initialized = false;
+    std::map<uint32_t, std::string> builtin_numb_to_char;
   };
 
   font_glyphs    pdf_resource<PAGE_FONT>::glyphs = font_glyphs();
@@ -817,6 +826,8 @@ namespace pdflib
     // first and only falls back to glyph-name based methods. For codes
     // not covered by /Differences, the cmap is consulted directly below.
 
+    std::string builtin_text;
+
     if(diff_initialized and diff_numb_to_char.count(c)>0)
       {
         return diff_numb_to_char.at(c);
@@ -824,6 +835,14 @@ namespace pdflib
     else if(cmap_initialized and cmap_numb_to_char.count(c)>0)
       {
         return cmap_numb_to_char.at(c);
+      }
+    // A symbolic font without a declared base encoding maps its codes
+    // through the embedded program's builtin encoding (9.6.6.2 / 9.6.6.4).
+    // That is the producer's own statement of what each code draws, so it
+    // outranks a name-matched base-font table and the encoding fallback.
+    else if(uses_builtin_encoding() and resolve_builtin_encoding(c, builtin_text))
+      {
+        return builtin_text;
       }
     else if(matched_font_name().font)
       {
@@ -914,25 +933,87 @@ namespace pdflib
   {
     // Fallback for codes that none of the authoritative sources resolved
     // (/Encoding/Differences, the /ToUnicode or predefined CID cmap, or a
-    // known base-font table). When an explicit cmap exists but does not
-    // cover this code, and the code bears no relation to the standard
-    // Latin encodings (symbolic font, or composite font whose codes are
-    // CIDs), the encoding tables would fabricate unrelated text — e.g. an
-    // Arabic ligature glyph subsetted at code 0x23 coming out as '#'
-    // (docling#3802). Emit a glyph marker instead, so downstream consumers
-    // can detect the unresolved glyph.
-    if(cmap_initialized and (is_symbolic or subtype==TYPE_0))
+    // known base-font table). For a symbolic font, or a composite (Type0/CID)
+    // font, the standard Latin encoding tables bear no relation to the font's
+    // codes, so applying them here fabricates unrelated text — e.g. an Arabic
+    // ligature glyph subsetted at code 0x23 coming out as '#' (docling#3802).
+    // Emit a glyph marker instead, so downstream consumers can detect the
+    // unresolved glyph.
+    //
+    // Beyond the parsed-cmap-misses-the-code case (#299), this also covers a
+    // symbolic font with no usable cmap at all — a /ToUnicode that failed to
+    // parse ("could not find cmap in '/ToUnicode'"), or none present — but
+    // ONLY when the font also declares no simple encoding. Many producers set
+    // the symbolic flag on fonts that nonetheless declare /WinAnsiEncoding or
+    // an /Encoding dict with /Differences; for those, codes outside
+    // /Differences legitimately resolve through the declared base encoding
+    // (PDF 32000-1 9.6.6), so falling through is not fabrication
+    // (docling-parse#299 follow-up; #322 regression fix).
+    //
+    // By the time a code reaches this point the embedded program's builtin
+    // encoding has already been consulted (get_correct_character), so a
+    // marker here means the program itself carries no text for the glyph.
+    const bool has_declared_simple_encoding =
+      (has_explicit_encoding and encoding != CMAP_RESOURCES) or diff_initialized;
+
+    if(subtype==TYPE_0 or
+       (is_symbolic and (cmap_initialized or not has_declared_simple_encoding)))
       {
         unknown_numbs[c] += 1;
 
-        LOG_S(WARNING) << "Symbol not in the cmap of a symbolic or composite font: "
-                       << int(c) << "; font-name: " << font_name
+        LOG_S(WARNING) << "No authoritative mapping for code in a symbolic or "
+                       << "composite font: " << int(c) << "; font-name: " << font_name
                        << "; emitting glyph marker instead of encoding fallback";
 
         return "GLYPH<" + std::to_string(c) + ">";
       }
 
     return get_character_from_encoding(c);
+  }
+
+  bool pdf_resource<PAGE_FONT>::uses_builtin_encoding() const
+  {
+    // Type 0 codes are CIDs and Type 3 glyphs are content streams: neither
+    // has a builtin encoding to read. A declared base encoding (a name, or
+    // /BaseEncoding in an /Encoding dict) overrides the builtin one; a bare
+    // /Differences array only overrides the codes it lists (9.6.6.1).
+    const bool has_declared_base_encoding =
+      has_explicit_encoding and encoding != CMAP_RESOURCES;
+
+    return subtype != TYPE_0 and subtype != TYPE_3 and
+      is_symbolic and not has_declared_base_encoding;
+  }
+
+  bool pdf_resource<PAGE_FONT>::resolve_builtin_encoding(uint32_t c, std::string& text)
+  {
+    if(not builtin_encoding_initialized)
+      {
+        init_builtin_encoding();
+      }
+
+    auto itr = builtin_numb_to_char.find(c);
+    if(itr == builtin_numb_to_char.end())
+      {
+        return false;
+      }
+
+    text = itr->second;
+    return true;
+  }
+
+  void pdf_resource<PAGE_FONT>::init_builtin_encoding()
+  {
+    builtin_encoding_initialized = true;
+
+    auto blob = get_embedded_font_blob();
+    if(not blob or not blob->get_bytes())
+      {
+        LOG_S(INFO) << __FUNCTION__ << ": no embedded font program for " << font_name
+                    << "; builtin encoding unavailable";
+        return;
+      }
+
+    builtin_numb_to_char = builtin_font_encoding::decode(*(blob->get_bytes()), glyphs, font_name);
   }
 
   std::string pdf_resource<PAGE_FONT>::get_character_from_encoding(uint32_t c)
