@@ -1557,11 +1557,11 @@ namespace pdflib
     std::string text = "";
     QPDFObjectHandle value = field.getValue();
     if(value.isString()) { text = value.getUTF8Value(); }
-    else if(value.isName()) { text = value.getName(); }
+    else if(value.isName()) { text = name_to_utf8(value); }
 
     std::string appearance_state = "";
     QPDFObjectHandle appearance = annot.getKey("/AS");
-    if(appearance.isName()) { appearance_state = appearance.getName(); }
+    if(appearance.isName()) { appearance_state = name_to_utf8(appearance); }
 
     page_item<PAGE_WIDGET> widget;
     {
