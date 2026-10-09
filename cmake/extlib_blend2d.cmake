@@ -65,8 +65,18 @@ else()
         # width is 252..255 mod 256 run a zero-length span for 2^32 pixels and
         # segfault (docling-parse #365). Drop the patch and the PATCH_COMMAND
         # when the pin moves past the upstream fix.
+        #
+        # Backport of blend2d/blend2d#270 (fixes blend2d/blend2d#269): the
+        # stroker's quad offsetting loop split a curve forever when the split
+        # step was below the precision of the coordinates, which happens at the
+        # turning point of a nearly collinear quad (a sub-pixel stroked cubic
+        # hung page rendering, docling-parse #393). Drop it under the same
+        # condition as the patch above.
         PATCH_COMMAND  ${CMAKE_COMMAND}
             -DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/blend2d-fillanalytic-stale-i.patch
+            -P ${CMAKE_CURRENT_LIST_DIR}/apply_patch.cmake
+        COMMAND        ${CMAKE_COMMAND}
+            -DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/blend2d-stroke-offset-quad-stall.patch
             -P ${CMAKE_CURRENT_LIST_DIR}/apply_patch.cmake
     )
     FetchContent_MakeAvailable(blend2d)
