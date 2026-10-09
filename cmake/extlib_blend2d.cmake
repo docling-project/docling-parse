@@ -59,6 +59,44 @@ else()
         # bump deliberately. This is the commit the font-rendering code was
         # validated against.
         GIT_TAG        6dbc2cefbc996379e07104e34519a440b49b15d7
+        # Backport of blend2d/blend2d#268 (fixes blend2d/blend2d#267): the JIT
+        # analytic fill reused a stale span length when the last BitWord of a
+        # scanline was all ones, which made an affine image blit whose clip
+        # width is 252..255 mod 256 run a zero-length span for 2^32 pixels and
+        # segfault (docling-parse #365). Drop the patch and the PATCH_COMMAND
+        # when the pin moves past the upstream fix.
+        #
+        # Backport of blend2d/blend2d#270 (fixes blend2d/blend2d#269): the
+        # stroker's quad offsetting loop split a curve forever when the split
+        # step was below the precision of the coordinates, which happens at the
+        # turning point of a nearly collinear quad (a sub-pixel stroked cubic
+        # hung page rendering, docling-parse #393). Drop it under the same
+        # condition as the patch above.
+        #
+        # Backport of blend2d/blend2d#271: near a cusp, the stroker used a leg
+        # of a few ULPs of rounding noise as a direction, which could put an
+        # outline control point arbitrarily far away (a streak across the
+        # page), and it did not join the offsets of consecutive parts where
+        # the tangent turned back (missing ink at near-cusps). Drop it under
+        # the same condition as the patches above.
+        #
+        # Backport of blend2d/blend2d#273 (fixes blend2d/blend2d#272): the
+        # cusps of a flat cubic were computed with the textbook quadratic
+        # formula, which divides by zero when the cusp equation is linear, so
+        # a curve like P -> Q -> Q -> P was not drawn at all. Drop it under the
+        # same condition as the patches above.
+        PATCH_COMMAND  ${CMAKE_COMMAND}
+            -DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/blend2d-fillanalytic-stale-i.patch
+            -P ${CMAKE_CURRENT_LIST_DIR}/apply_patch.cmake
+        COMMAND        ${CMAKE_COMMAND}
+            -DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/blend2d-stroke-offset-quad-stall.patch
+            -P ${CMAKE_CURRENT_LIST_DIR}/apply_patch.cmake
+        COMMAND        ${CMAKE_COMMAND}
+            -DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/blend2d-stroke-offset-degenerate-legs.patch
+            -P ${CMAKE_CURRENT_LIST_DIR}/apply_patch.cmake
+        COMMAND        ${CMAKE_COMMAND}
+            -DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/blend2d-stroke-flat-cubic-linear-cusp.patch
+            -P ${CMAKE_CURRENT_LIST_DIR}/apply_patch.cmake
     )
     FetchContent_MakeAvailable(blend2d)
     # Release wheels must not contain Blend2D's debug assertion path. Blend2D
