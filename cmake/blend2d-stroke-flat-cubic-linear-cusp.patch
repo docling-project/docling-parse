@@ -1,0 +1,27 @@
+--- a/blend2d/core/pathstroke.cpp
++++ b/blend2d/core/pathstroke.cpp
+@@ -389,13 +389,20 @@ SmoothPolyTo:
+               double r2 = Geometry::dot(p[2] - p[0], r);
+               double r3 = Geometry::dot(p[3] - p[0], r);
+ 
+-              double a = 1.0 / (3.0 * r1 - 3.0 * r2 + r3);
++              // Parameters of the cusps are the roots of `a * t^2 - 2 * b * t + r1` (the derivative along the line).
++              // Use the stable form of the quadratic formula - `a` is zero when the derivative is linear, for example
++              // P -> Q -> Q -> P, which would make both roots NaN or infinite and lose the cusp. A negative discriminant
++              // still yields NaN (no cusps). Sort the roots so the cusps are visited in order.
++              double a = 3.0 * r1 - 3.0 * r2 + r3;
+               double b = 2.0 * r1 - r2;
+               double s = Math::sqrt(r2 * (r2 - r1) - r1 * (r3 - r1));
++              double q = b + Math::copy_sign(s, b);
+ 
+-              // Parameters of the cusps.
+-              double t1 = a * (b - s);
+-              double t2 = a * (b + s);
++              double t1 = q / a;
++              double t2 = r1 / q;
++
++              if (t2 < t1)
++                BLInternal::swap(t1, t2);
+ 
+               // Offset the first and second cusps (if they exist).
+               poly_size = 0;
