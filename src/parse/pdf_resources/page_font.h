@@ -2596,7 +2596,17 @@ namespace pdflib
     // mapping to this value means 'unknown character' and is treated as
     // no mapping at all, so the glyph-name based methods can still
     // recover the code (eg /bullet.003 mapped to U+FFFD by the cmap).
-    const std::string replacement_char = "\xEF\xBF\xBD";
+    const uint32_t replacement_char = 0xFFFD;
+
+    // Unicode noncharacters (U+FDD0..U+FDEF and the last two code points
+    // of every plane) are reserved for internal use and never stand for
+    // text, so a /ToUnicode mapping to one of them carries no information
+    // either (eg ligatures /f_f_i mapped to <ffff>, see
+    // docling-project/docling-parse#394).
+    auto is_noncharacter = [](uint32_t cp)
+    {
+      return (0xFDD0<=cp and cp<=0xFDEF) or (cp & 0xFFFE)==0xFFFE;
+    };
 
     // PDF 32000-1 (section 9.10.2) defines the /ToUnicode cmap as the
     // first and most authoritative method to map a character-code to
@@ -2604,11 +2614,27 @@ namespace pdflib
     // cmap entry exists for the code.
     auto has_to_unicode = [&](int numb)
     {
-      return cmap_initialized
-	and cmap_numb_to_char.count(numb)==1
-	and cmap_numb_to_char.at(numb).size()>0
-	and cmap_numb_to_char.at(numb)!=std::string(1, '\0')
-	and cmap_numb_to_char.at(numb)!=replacement_char;
+      if(not cmap_initialized or cmap_numb_to_char.count(numb)!=1)
+	{
+	  return false;
+	}
+
+      const std::string& value = cmap_numb_to_char.at(numb);
+      if(value.empty())
+	{
+	  return false;
+	}
+
+      // Only a mapping to a single unusable code point is discarded.
+      auto itr = value.begin();
+      utf8::utfchar32_t cp = 0;
+      if(utf8::internal::validate_next(itr, value.end(), cp)!=utf8::internal::UTF8_OK
+	 or itr!=value.end())
+	{
+	  return true;
+	}
+
+      return cp!=0 and cp!=replacement_char and not is_noncharacter(cp);
     };
 
     // Subset generators (FontForge, fontTools, mPDF, ...) name glyphs by

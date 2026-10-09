@@ -46,6 +46,17 @@ def test_nul_mapping_recovers_from_known_glyph_identity(glyph_name: str, expecte
     assert _extract_character(mapping="0000", glyph_name=glyph_name) == expected
 
 
+@pytest.mark.parametrize("mapping", ["FFFF", "FFFE", "FDD0"])
+@pytest.mark.parametrize(
+    ("glyph_name", "expected"), [("f_f_i", "ffi"), ("f_i", "fi"), ("minus", "-")]
+)
+def test_noncharacter_mapping_recovers_from_glyph_name(
+    mapping: str, glyph_name: str, expected: str
+):
+    # docling-project/docling-parse#394: LaTeX subsets map ligatures to <ffff>.
+    assert _extract_character(mapping=mapping, glyph_name=glyph_name) == expected
+
+
 def test_nul_mapping_with_unknown_identity_remains_unresolved():
     assert (
         _extract_character(mapping="0000", glyph_name="gid00043")
