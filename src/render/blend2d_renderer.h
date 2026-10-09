@@ -199,6 +199,16 @@ namespace pdflib
     // orientation, derived from the page's /Rotate. In [0, 3].
     int quarter_turns_ = 0;
 
+    // Coverage mask of the last non-rectangular clip a shape was painted
+    // through, built over the whole clip box. Dense drawings put hundreds of
+    // strokes under one clip; rasterising the clip once for all of them is
+    // what keeps masking the strokes affordable.
+    clip_state_instruction shape_clip_key_;
+    BLImage shape_clip_mask_;
+    BLRectI shape_clip_area_{};
+    bool shape_clip_empty_ = false;
+    bool shape_clip_valid_ = false;
+
     // Guards the one-shot canvas rotation, so that repeated canvas access
     // (get_canvas() followed by save(), for instance) rotates only once.
     mutable bool rotation_applied_ = false;
@@ -811,6 +821,39 @@ namespace pdflib
       return true;
     }
 
+    // Multiplies an A8 coverage image by the window of an A8 clip mask that
+    // starts at (mask_x, mask_y).
+    static bool multiply_a8_by_a8(BLImage& coverage, const BLImage& mask,
+                                  int mask_x, int mask_y)
+    {
+      BLImageData d, s;
+      if(coverage.make_mutable(&d) != BL_SUCCESS or mask.get_data(&s) != BL_SUCCESS)
+        {
+          return false;
+        }
+      if(d.format != BL_FORMAT_A8 or s.format != BL_FORMAT_A8) { return false; }
+      if(d.size.w <= 0 or d.size.h <= 0) { return false; }
+      if(mask_x < 0 or mask_y < 0 or
+         mask_x + d.size.w > s.size.w or mask_y + d.size.h > s.size.h)
+        {
+          return false;
+        }
+
+      for(int y = 0; y < d.size.h; y++)
+        {
+          uint8_t* drow = static_cast<uint8_t*>(d.pixel_data) + y * d.stride;
+          const uint8_t* srow =
+            static_cast<const uint8_t*>(s.pixel_data) + (mask_y + y) * s.stride + mask_x;
+          for(int x = 0; x < d.size.w; x++)
+            {
+              const uint32_t m = srow[x];
+              if(m == 255 or drow[x] == 0) { continue; }
+              drow[x] = static_cast<uint8_t>((drow[x] * m + 127) / 255);
+            }
+        }
+      return true;
+    }
+
     static bool fill_a8(BLImage& image, uint8_t value)
     {
       BLImageData d;
@@ -913,6 +956,67 @@ namespace pdflib
       return true;
     }
 
+    // Canvas-space bounding box of the region a clip state leaves paintable:
+    // the subpaths of one W/W* capture are unioned, different captures are
+    // intersected. Returns false when no clip path has a usable bbox.
+    bool clip_state_canvas_bbox(const clip_state_instruction& clip_state,
+                                BLRect& rect) const
+    {
+      std::unordered_map<int, BLRect> group_bboxes;
+      for(const auto& clip_path : clip_state.get_paths())
+        {
+          BLRect bbox;
+          if(not clip_path_canvas_bbox(clip_path, bbox)) { continue; }
+
+          auto it = group_bboxes.find(clip_path.get_clip_group());
+          if(it == group_bboxes.end())
+            {
+              group_bboxes.emplace(clip_path.get_clip_group(), bbox);
+              continue;
+            }
+          const double x0 = std::min(it->second.x, bbox.x);
+          const double y0 = std::min(it->second.y, bbox.y);
+          const double x1 = std::max(it->second.x + it->second.w, bbox.x + bbox.w);
+          const double y1 = std::max(it->second.y + it->second.h, bbox.y + bbox.h);
+          it->second = BLRect(x0, y0, x1 - x0, y1 - y0);
+        }
+
+      if(group_bboxes.empty()) { return false; }
+
+      double x0 = -std::numeric_limits<double>::infinity();
+      double y0 = -std::numeric_limits<double>::infinity();
+      double x1 = std::numeric_limits<double>::infinity();
+      double y1 = std::numeric_limits<double>::infinity();
+      for(const auto& entry : group_bboxes)
+        {
+          x0 = std::max(x0, entry.second.x);
+          y0 = std::max(y0, entry.second.y);
+          x1 = std::min(x1, entry.second.x + entry.second.w);
+          y1 = std::min(y1, entry.second.y + entry.second.h);
+        }
+      rect = BLRect(x0, y0, std::max(0.0, x1 - x0), std::max(0.0, y1 - y0));
+      return true;
+    }
+
+    static bool same_clip_state(const clip_state_instruction& a,
+                                const clip_state_instruction& b)
+    {
+      if(a.get_rule() != b.get_rule()) { return false; }
+      const auto& pa = a.get_paths();
+      const auto& pb = b.get_paths();
+      if(pa.size() != pb.size()) { return false; }
+      for(size_t i = 0; i < pa.size(); i++)
+        {
+          if(pa[i].get_clip_group() != pb[i].get_clip_group() or
+             pa[i].get_x() != pb[i].get_x() or
+             pa[i].get_y() != pb[i].get_y())
+            {
+              return false;
+            }
+        }
+      return true;
+    }
+
     // True when the clip carries a path clip_to_rect cannot express. Such a
     // clip is applied through a coverage mask instead; the rectangular paths
     // beside it still go through the cheap context clip.
@@ -1010,6 +1114,17 @@ namespace pdflib
       // art, a text-shaped clip). Only DIFFERENT captures intersect.
       // Intersecting the subpaths individually made any such stencil empty,
       // and everything filled through it vanished.
+      std::unordered_map<int, int> group_sizes;
+      for(const auto& clip_path : clip_state.get_paths())
+        {
+          group_sizes[clip_path.get_clip_group()]++;
+        }
+
+      // A group goes through the mask when it has a curved path or more than
+      // one subpath (a union of rectangles is not a context clip either).
+      // Such a group that misses the area leaves nothing to paint; without
+      // the check every subpath was skipped below, no mask was built, and the
+      // caller painted the shape unclipped.
       std::unordered_map<int, BLRect> group_bboxes;
       std::unordered_map<int, bool> group_needs_mask;
       for(const auto& clip_path : clip_state.get_paths())
@@ -1017,7 +1132,7 @@ namespace pdflib
           BLRect rect;
           const bool is_rect = get_axis_aligned_clip_rect(clip_path, rect);
           const int group = clip_path.get_clip_group();
-          if(not is_rect) { group_needs_mask[group] = true; }
+          if(not is_rect or group_sizes[group] > 1) { group_needs_mask[group] = true; }
 
           BLRect bbox;
           if(clip_path_canvas_bbox(clip_path, bbox))
@@ -1927,6 +2042,7 @@ namespace pdflib
 
     canvas_width_ = width;
     canvas_height_ = height;
+    shape_clip_valid_ = false;
     shape_ = {display_height, display_width, 4};
 
     LOG_S(INFO) << "set_size:"
@@ -3763,9 +3879,10 @@ namespace pdflib
   //
   // Fill first, stroke on top (the PDF paint order for B/b operators), with
   // the fill rule, colors, stroke width and cap/join parameters delivered by
-  // the parse layer. Only axis-aligned rectangular clips are applied; dashed
-  // strokes render solid because the vendored Blend2D stroker does not
-  // implement dashing.
+  // the parse layer. Axis-aligned rectangular clips go through the context
+  // clip, other clips through a coverage mask applied to the fill and to the
+  // stroke. Dashed strokes render solid because the vendored Blend2D stroker
+  // does not implement dashing.
   // ---------------------------------------------------------------------------
 
   inline void renderer<BLEND2D>::render_shape(shape_instruction& instr)
@@ -3786,6 +3903,43 @@ namespace pdflib
 
     BLContext& ctx = page_context();
 
+    const shape_paint_mode mode = instr.get_paint_mode();
+
+    // ExtGState constant alpha: alpha 0 paint is invisible and skipped
+    // entirely (a common idiom for hiding helper geometry).
+    static constexpr double min_visible_alpha = 1.0 / 512.0;
+    const double fill_alpha = instr.get_fill_alpha();
+    const double stroke_alpha = instr.get_stroke_alpha();
+
+    const bool do_fill =
+      (mode == SHAPE_PAINT_FILL or mode == SHAPE_PAINT_FILL_STROKE)
+      and fill_alpha > min_visible_alpha;
+    const bool do_stroke =
+      (mode == SHAPE_PAINT_STROKE or mode == SHAPE_PAINT_FILL_STROKE)
+      and stroke_alpha > min_visible_alpha;
+
+    // the line width arrives in page space; scale to canvas and keep
+    // sub-pixel strokes visible (PDF `0 w` means hairline)
+    const double stroke_width = std::max(
+      instr.get_line_width() * 0.5 * (scale_x_ + scale_y_),
+      static_cast<double>(config_.min_stroke_width));
+
+    // The area this shape can paint. A stroke reaches half its width past the
+    // path, further at square caps (sqrt 2) and miter joins (the miter
+    // limit). Without this a horizontal rule has a zero-height box: the clip
+    // tests below then find nothing to paint and the rule disappears.
+    BLRect paint_bbox = bbox;
+    if (do_stroke)
+      {
+        double reach = 0.5 * stroke_width * std::sqrt(2.0);
+        if (to_stroke_join(instr.get_line_join()) == BL_STROKE_JOIN_MITER_BEVEL)
+          {
+            reach = std::max(reach, 0.5 * stroke_width * instr.get_miter_limit());
+          }
+        paint_bbox = BLRect(bbox.x - reach, bbox.y - reach,
+                            bbox.w + 2.0 * reach, bbox.h + 2.0 * reach);
+      }
+
     // Both scopes unwind on every exit below, in reverse order of their
     // construction: the clip was saved inside the blend mode, so it comes off
     // first.
@@ -3795,7 +3949,7 @@ namespace pdflib
     if (instr.has_clip_state())
       {
         const clip_apply_result clip_result =
-          apply_clip_state(ctx, instr.get_clip_state(), bbox);
+          apply_clip_state(ctx, instr.get_clip_state(), paint_bbox);
         if (clip_result == CLIP_EMPTY)
           {
             return;
@@ -3808,137 +3962,154 @@ namespace pdflib
       }
 
     // A curved clip cannot be expressed by clip_to_rect, so apply_clip_state
-    // leaves it out and the fill would spill over its whole bounding box.
-    // Rasterise those paths into a coverage mask and paint through it.
-    BLImage clip_mask;
+    // leaves it out and the paint would spill over its whole bounding box.
+    // Rasterise those paths into a coverage mask and paint through it. The
+    // mask covers the whole clip box and is reused while the clip stays the
+    // same; each shape only reads the window it can paint.
     BLRectI mask_area(0, 0, 0, 0);
+    bool use_mask = false;
     if (instr.has_clip_state() and clip_state_has_non_rect(instr.get_clip_state()))
       {
         if(config_.render_non_rect_clip_masks)
           {
-            mask_area = canvas_clamped_rect(bbox);
-            // LOG_S(INFO) << "render_shape: building clip mask"
-            //             << " bbox=(" << bbox.x << ", " << bbox.y
-            //             << ", " << bbox.w << ", " << bbox.h << ")"
-            //             << " mask_area=(" << mask_area.x << ", " << mask_area.y
-            //             << ", " << mask_area.w << ", " << mask_area.h << ")";
-            const clip_mask_result clip =
-              build_clip_mask(instr.get_clip_state(), mask_area);
-            if(clip.empty_clip)
+            const clip_state_instruction& clip_state = instr.get_clip_state();
+            const BLRectI paint_area = canvas_clamped_rect(paint_bbox);
+
+            if (not (shape_clip_valid_ and same_clip_state(shape_clip_key_, clip_state)))
+              {
+                BLRect clip_bbox(0.0, 0.0, canvas_width_, canvas_height_);
+                clip_state_canvas_bbox(clip_state, clip_bbox);
+                shape_clip_area_ = canvas_clamped_rect(clip_bbox);
+
+                // build_clip_mask refuses oversized areas. A clip box that is
+                // too big to cache is masked per shape, over the shape's own
+                // window, and not kept.
+                const bool cacheable = shape_clip_area_.w <= 8192
+                                       and shape_clip_area_.h <= 8192;
+                if (not cacheable)
+                  {
+                    shape_clip_area_ = paint_area;
+                  }
+
+                clip_mask_result clip = build_clip_mask(clip_state, shape_clip_area_);
+                shape_clip_key_ = clip_state;
+                shape_clip_mask_ = std::move(clip.image);
+                shape_clip_empty_ = clip.empty_clip;
+                shape_clip_valid_ = cacheable;
+              }
+
+            if (shape_clip_empty_)
               {
                 // The clip leaves this shape nothing to paint. Leaving through
                 // here used to skip the restores below and strand the clip on
                 // the context.
                 return;
               }
-            clip_mask = std::move(clip.image);
-            // LOG_S(INFO) << "render_shape: build_clip_mask returned empty="
-            //             << (clip_mask.is_empty() ? "true" : "false");
-          }
-        else
-          {
-            // LOG_S(INFO) << "render_shape: non-rectangular clip mask disabled";
-          }
-      }
 
-    const shape_paint_mode mode = instr.get_paint_mode();
-
-    // ExtGState constant alpha: alpha 0 paint is invisible and skipped
-    // entirely (a common idiom for hiding helper geometry).
-    static constexpr double min_visible_alpha = 1.0 / 512.0;
-    const double fill_alpha = instr.get_fill_alpha();
-    const double stroke_alpha = instr.get_stroke_alpha();
-
-    if ((mode == SHAPE_PAINT_FILL or mode == SHAPE_PAINT_FILL_STROKE)
-        and fill_alpha > min_visible_alpha)
-      {
-        ctx.set_fill_rule(instr.get_fill_rule() == SHAPE_FILL_EVEN_ODD
-                            ? BL_FILL_RULE_EVEN_ODD
-                            : BL_FILL_RULE_NON_ZERO);
-        ctx.set_fill_style(make_rgba32(instr.get_rgb_filling(), fill_alpha));
-
-        if (not clip_mask.is_empty())
-          {
-            // LOG_S(INFO) << "render_shape: clipped fill layer begin"
-            //             << " area=(" << mask_area.x << ", " << mask_area.y
-            //             << ", " << mask_area.w << ", " << mask_area.h << ")";
-            // Paint the fill into an offscreen window, knock it back with the
-            // clip coverage, then composite. Blend2D cannot clip to a path, so
-            // this is what keeps a crescent from filling its bounding box.
-            BLImage layer;
-            const BLResult layer_create =
-              layer.create(mask_area.w, mask_area.h, BL_FORMAT_PRGB32);
-            // LOG_S(INFO) << "render_shape: layer.create result=" << layer_create;
-            if (layer_create == BL_SUCCESS)
+            if (not shape_clip_mask_.is_empty())
               {
-                {
-                  // LOG_S(INFO) << "render_shape: filling clipped layer";
-                  BLContext lctx(layer);
-                  lctx.set_comp_op(BL_COMP_OP_SRC_COPY);
-                  lctx.fill_all(BLRgba32(0x00000000u));
-                  lctx.set_comp_op(BL_COMP_OP_SRC_OVER);
-                  lctx.set_fill_rule(instr.get_fill_rule() == SHAPE_FILL_EVEN_ODD
-                                       ? BL_FILL_RULE_EVEN_ODD
-                                       : BL_FILL_RULE_NON_ZERO);
-
-                  BLPath shifted;
-                  shifted.add_path(path,
-                                   BLMatrix2D::make_translation(-mask_area.x, -mask_area.y));
-                  lctx.fill_path(shifted,
-                                 make_rgba32(instr.get_rgb_filling(), fill_alpha));
-                  lctx.end();
-                  // LOG_S(INFO) << "render_shape: clipped layer filled";
-                }
-
-                // LOG_S(INFO) << "render_shape: applying clip mask to layer";
-                if (not multiply_prgb32_by_a8(layer, clip_mask))
+                const int x0 = std::max(paint_area.x, shape_clip_area_.x);
+                const int y0 = std::max(paint_area.y, shape_clip_area_.y);
+                const int x1 = std::min(paint_area.x + paint_area.w,
+                                        shape_clip_area_.x + shape_clip_area_.w);
+                const int y1 = std::min(paint_area.y + paint_area.h,
+                                        shape_clip_area_.y + shape_clip_area_.h);
+                if (x1 <= x0 or y1 <= y0)
                   {
-                    LOG_S(WARNING) << "render_shape: could not apply clip mask";
+                    return; // the shape lies outside the clip box
                   }
-                // LOG_S(INFO) << "render_shape: clip mask applied";
-
-                // LOG_S(INFO) << "render_shape: blitting clipped layer";
-                ctx.blit_image(BLPointI(mask_area.x, mask_area.y), layer);
-                // LOG_S(INFO) << "render_shape: clipped layer blitted";
+                mask_area = BLRectI(x0, y0, x1 - x0, y1 - y0);
+                use_mask = true;
               }
-            else
-              {
-                LOG_S(WARNING) << "render_shape: layer allocation failed,"
-                               << " filling path without mask";
-                ctx.fill_path(path);
-              }
-          }
-        else
-          {
-            ctx.fill_path(path);
           }
       }
 
-    if ((mode == SHAPE_PAINT_STROKE or mode == SHAPE_PAINT_FILL_STROKE)
-        and stroke_alpha > min_visible_alpha)
+    const BLFillRule fill_rule = instr.get_fill_rule() == SHAPE_FILL_EVEN_ODD
+                                   ? BL_FILL_RULE_EVEN_ODD
+                                   : BL_FILL_RULE_NON_ZERO;
+
+    auto apply_stroke_options = [&](BLContext& c)
+    {
+      c.set_stroke_width(stroke_width);
+      c.set_stroke_caps(to_stroke_cap(instr.get_line_cap()));
+      c.set_stroke_join(to_stroke_join(instr.get_line_join()));
+      c.set_stroke_miter_limit(instr.get_miter_limit());
+    };
+
+    // Paints through the clip coverage. Blend2D cannot clip to a path, so the
+    // shape is rasterised into an A8 coverage window, knocked back with the
+    // clip mask, and composited with fill_mask in the paint colour. This is
+    // what keeps a crescent from filling its bounding box and a line from
+    // running past a circular clip. Fill and stroke composite separately, in
+    // the PDF order, each with its own alpha, under the context blend mode.
+    auto paint_masked = [&](const char* what, const BLRgba32& style,
+                            auto&& draw) -> bool
+    {
+      BLImage coverage;
+      if (coverage.create(mask_area.w, mask_area.h, BL_FORMAT_A8) != BL_SUCCESS)
+        {
+          LOG_S(WARNING) << "render_shape: " << what << " coverage allocation"
+                         << " failed, painting without mask";
+          return false;
+        }
+
       {
-        ctx.set_stroke_style(make_rgba32(instr.get_rgb_stroking(),
-                                         stroke_alpha));
+        BLContext cctx(coverage);
+        cctx.clear_all();
+        cctx.translate(-mask_area.x, -mask_area.y);
+        draw(cctx);
+        cctx.end();
+      }
 
-        // the line width arrives in page space; scale to canvas and keep
-        // sub-pixel strokes visible (PDF `0 w` means hairline)
-        const double width =
-          instr.get_line_width() * 0.5 * (scale_x_ + scale_y_);
-        ctx.set_stroke_width(std::max(
-          width,
-          static_cast<double>(config_.min_stroke_width)));
+      if (not multiply_a8_by_a8(coverage, shape_clip_mask_,
+                                mask_area.x - shape_clip_area_.x,
+                                mask_area.y - shape_clip_area_.y))
+        {
+          LOG_S(WARNING) << "render_shape: could not apply clip mask to "
+                         << what;
+        }
+      return ctx.fill_mask(BLPointI(mask_area.x, mask_area.y), coverage, style)
+        == BL_SUCCESS;
+    };
 
-        ctx.set_stroke_caps(to_stroke_cap(instr.get_line_cap()));
-        ctx.set_stroke_join(to_stroke_join(instr.get_line_join()));
-        ctx.set_stroke_miter_limit(instr.get_miter_limit());
+    if (do_fill)
+      {
+        const BLRgba32 style = make_rgba32(instr.get_rgb_filling(), fill_alpha);
+        const bool masked =
+          use_mask and paint_masked("fill", style, [&](BLContext& cctx)
+          {
+            cctx.set_fill_rule(fill_rule);
+            cctx.fill_path(path, BLRgba32(0xFFFFFFFFu));
+          });
 
+        if (not masked)
+          {
+            ctx.set_fill_rule(fill_rule);
+            ctx.fill_path(path, style);
+          }
+      }
+
+    if (do_stroke)
+      {
         if (not instr.get_dash_array().empty())
           {
             LOG_S(INFO) << "render_shape: dash pattern ignored"
                         << " (not implemented by the Blend2D stroker)";
           }
 
-        ctx.stroke_path(path);
+        const BLRgba32 style = make_rgba32(instr.get_rgb_stroking(), stroke_alpha);
+        const bool masked =
+          use_mask and paint_masked("stroke", style, [&](BLContext& cctx)
+          {
+            apply_stroke_options(cctx);
+            cctx.stroke_path(path, BLRgba32(0xFFFFFFFFu));
+          });
+
+        if (not masked)
+          {
+            apply_stroke_options(ctx);
+            ctx.stroke_path(path, style);
+          }
       }
   }
 
