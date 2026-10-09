@@ -72,11 +72,21 @@ else()
         # turning point of a nearly collinear quad (a sub-pixel stroked cubic
         # hung page rendering, docling-parse #393). Drop it under the same
         # condition as the patch above.
+        #
+        # Backport of blend2d/blend2d#271: near a cusp, the stroker used a leg
+        # of a few ULPs of rounding noise as a direction, which could put an
+        # outline control point arbitrarily far away (a streak across the
+        # page), and it did not join the offsets of consecutive parts where
+        # the tangent turned back (missing ink at near-cusps). Drop it under
+        # the same condition as the patches above.
         PATCH_COMMAND  ${CMAKE_COMMAND}
             -DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/blend2d-fillanalytic-stale-i.patch
             -P ${CMAKE_CURRENT_LIST_DIR}/apply_patch.cmake
         COMMAND        ${CMAKE_COMMAND}
             -DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/blend2d-stroke-offset-quad-stall.patch
+            -P ${CMAKE_CURRENT_LIST_DIR}/apply_patch.cmake
+        COMMAND        ${CMAKE_COMMAND}
+            -DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/blend2d-stroke-offset-degenerate-legs.patch
             -P ${CMAKE_CURRENT_LIST_DIR}/apply_patch.cmake
     )
     FetchContent_MakeAvailable(blend2d)
