@@ -1218,6 +1218,9 @@ class PageParseResult:
         self._pages: Dict[tuple[int, int, int, int, int, bool], SegmentedPdfPage] = {}
         self._page_decoder: PdfPageDecoder | None = None
         self._default_image: PILImage.Image | None = None
+        # Last image rendered at a non-default scale: OCR crops several regions
+        # of a page at the same scale, and each crop would re-render the page.
+        self._scaled_image: tuple[float, PILImage.Image] | None = None
 
         self.doc_key: str = raw_result.doc_key
         self.page_number: int = raw_result.page_number + 1
@@ -1449,6 +1452,8 @@ class PageParseResult:
         return self._default_image
 
     def _render_image_at_scale(self, scale: float) -> PILImage.Image:
+        if self._scaled_image is not None and self._scaled_image[0] == scale:
+            return self._scaled_image[1]
         page_decoder = self._require_page_decoder()
         render_config = self._rendering_config()
         render_config.scale = scale
@@ -1459,7 +1464,8 @@ class PageParseResult:
             raise RuntimeError(
                 f"Rendered image is empty for page {self.page_number} of {self.doc_key}"
             )
-        return self._image_from_bytes(raw_bytes, image_shape)
+        self._scaled_image = (scale, self._image_from_bytes(raw_bytes, image_shape))
+        return self._scaled_image[1]
 
     def _render_image_at_canvas_size(
         self, canvas_size: tuple[int, int]
