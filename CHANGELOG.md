@@ -1,3 +1,10 @@
+## [v7.22.3](https://github.com/docling-project/docling-parse/releases/tag/v7.22.3) - 2026-10-13
+
+### Fix
+
+* Unit stroke curves ([#407](https://github.com/docling-project/docling-parse/issues/407)) ([`30ae51f`](https://github.com/docling-project/docling-parse/commit/30ae51feb4ee4b4cc69c9e9aaee78eb74d4206fd))
+* **render:** Decode JBIG2 /Mask stencils ([#360](https://github.com/docling-project/docling-parse/issues/360)) ([`e0e678c`](https://github.com/docling-project/docling-parse/commit/e0e678ce182a8a9b1b143e50251b51048ad767e4))
+
 ## [v7.22.2](https://github.com/docling-project/docling-parse/releases/tag/v7.22.2) - 2026-10-05
 
 ### Fix
