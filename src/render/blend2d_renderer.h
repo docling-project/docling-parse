@@ -1590,7 +1590,8 @@ namespace pdflib
     // the canvas-space bounding rectangle of all touched points. Control
     // points give a conservative bbox (a Bézier never leaves its control
     // polygon's hull), which is what the clip skip-test needs.
-    BLPath make_shape_path(const shape_instruction& instr, BLRect& bbox) const;
+    BLPath make_shape_path(const shape_instruction& instr, BLRect& bbox,
+                           bool flatten_curves = false) const;
 
     // Draws a semi-transparent yellow placeholder over the bitmap destination
     // quad. This makes missing or invalid image data visible in debug renders.
@@ -3673,9 +3674,48 @@ namespace pdflib
   // ---------------------------------------------------------------------------
 
   inline BLPath renderer<BLEND2D>::make_shape_path(const shape_instruction& instr,
-                                                   BLRect& bbox) const
+                                                   BLRect& bbox,
+                                                   bool flatten_curves) const
   {
     BLPath path;
+
+    // Blend2D's curve stroker can repeatedly split a near-cusp quadratic
+    // without making progress at floating-point precision. Feed strokes a
+    // polyline instead, keeping the original cubic geometry for fills.
+    // Comparing the controls with the chord's degree-elevated controls also
+    // detects collinear reversals and loops (distance to a line does not).
+    const auto append_flattened_cubic = [&](const auto& self,
+                                            BLPoint p0, BLPoint p1,
+                                            BLPoint p2, BLPoint p3,
+                                            unsigned depth) -> void
+    {
+      constexpr double tolerance = 0.05; // canvas pixels, independent of scale
+      constexpr unsigned max_depth = 20;
+      const double error1 = std::hypot(
+        p1.x - (p0.x * (2.0 / 3.0) + p3.x / 3.0),
+        p1.y - (p0.y * (2.0 / 3.0) + p3.y / 3.0));
+      const double error2 = std::hypot(
+        p2.x - (p0.x / 3.0 + p3.x * (2.0 / 3.0)),
+        p2.y - (p0.y / 3.0 + p3.y * (2.0 / 3.0)));
+      if (depth == max_depth or std::max(error1, error2) <= tolerance)
+        {
+          path.line_to(p3.x, p3.y);
+          return;
+        }
+
+      const auto midpoint = [](BLPoint a, BLPoint b)
+      {
+        return BLPoint(a.x * 0.5 + b.x * 0.5, a.y * 0.5 + b.y * 0.5);
+      };
+      const BLPoint p01 = midpoint(p0, p1);
+      const BLPoint p12 = midpoint(p1, p2);
+      const BLPoint p23 = midpoint(p2, p3);
+      const BLPoint p012 = midpoint(p01, p12);
+      const BLPoint p123 = midpoint(p12, p23);
+      const BLPoint mid = midpoint(p012, p123);
+      self(self, p0, p01, p012, mid, depth + 1);
+      self(self, mid, p123, p23, p3, depth + 1);
+    };
 
     double x_min = std::numeric_limits<double>::infinity();
     double y_min = std::numeric_limits<double>::infinity();
@@ -3733,7 +3773,17 @@ namespace pdflib
                 const double y3 = canvas_y(py[k + 2]);
                 k += 3;
 
-                path.cubic_to(x1, y1, x2, y2, x3, y3);
+                if (flatten_curves)
+                  {
+                    const BLPoint p0 = path.vertex_data()[path.size() - 1];
+                    append_flattened_cubic(append_flattened_cubic, p0,
+                                          BLPoint(x1, y1), BLPoint(x2, y2),
+                                          BLPoint(x3, y3), 0);
+                  }
+                else
+                  {
+                    path.cubic_to(x1, y1, x2, y2, x3, y3);
+                  }
                 accumulate(x1, y1);
                 accumulate(x2, y2);
                 accumulate(x3, y3);
@@ -3938,7 +3988,8 @@ namespace pdflib
                         << " (not implemented by the Blend2D stroker)";
           }
 
-        ctx.stroke_path(path);
+        BLRect stroke_bbox;
+        ctx.stroke_path(make_shape_path(instr, stroke_bbox, true));
       }
   }
 
