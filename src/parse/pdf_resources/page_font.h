@@ -837,8 +837,13 @@ namespace pdflib
 
         // A known legacy symbol font may falsely declare WinAnsi while using
         // font-specific character codes. Its curated map is authoritative
-        // after /ToUnicode and /Differences.
-        if(fm.is_font_specific() and fm.has(c))
+        // after /ToUnicode and /Differences, for the codes whose declared
+        // glyph the font does not have. Where it has that glyph, the declared
+        // encoding governs, as it does for the glyph drawn (see
+        // freetype_font_cache::resolve_glyph_indices): Symbol declared as
+        // WinAnsi paints `multiply` at 0xD7, not its own `dotmath`.
+        if(fm.is_font_specific() and fm.has(c) and
+           not fm.has_glyph_name(get_glyph_name(c)))
           {
             return fm.to_utf8(c);
           }
