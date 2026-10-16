@@ -1639,6 +1639,7 @@ namespace pdflib
                               source,
                               std::move(clip_state));
     binstr.set_blend_mode(grph_state.get_blend_mode());
+    binstr.set_soft_mask(grph_state.get_soft_mask_instruction());
     binstr.set_filters(image.filters);
 
     instructions.add_bitmap_instruction(std::move(binstr));
