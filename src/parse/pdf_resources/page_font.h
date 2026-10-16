@@ -49,6 +49,18 @@ namespace pdflib
 
 
     const static inline std::string RESOURCE_DIR_KEY = "pdf_resource_directory";
+
+    // ISO 32000-2, 9.8.1 gives /Ascent, /Descent, /CapHeight and /XHeight in
+    // glyph space: 1/1000 em for every font type except Type 3, whose
+    // /FontMatrix is folded in through type3_yscale. Real fonts keep these
+    // within a few em of the baseline (the regression corpus tops out at
+    // 3117). Beyond this bound the value is producer garbage, such as the
+    // packed bytes /Ascent 67306242 (0x04030302) of docling-parse#402. A
+    // cell built from such a value towers over the page, and the
+    // page-boundary sanitizer then deletes every glyph of the font. MuPDF
+    // stops trusting an ascent above 8 em (FZ_MAX_TRUSTWORTHY_ASCENT); the
+    // same bound covers all four metrics here.
+    static constexpr double MAX_PLAUSIBLE_VERTICAL_METRIC = 8000.0;
     
   public:
 
@@ -175,6 +187,7 @@ namespace pdflib
     const base_font_match& matched_base_font();
 
     void init_ascent_and_descent();
+    bool is_plausible_vertical_metric(double value) const;
 
     void init_default_width();
 
@@ -1807,9 +1820,25 @@ namespace pdflib
                 << " uses-builtin-encoding=" << font_blob->get_uses_builtin_encoding();
   }
 
+  bool pdf_resource<PAGE_FONT>::is_plausible_vertical_metric(double value) const
+  {
+    // type3_yscale folds the Type 3 /FontMatrix in, so the bound applies in
+    // the same 1/1000 em units for every font type.
+    return std::isfinite(value) and
+      std::abs(value * type3_yscale) <= MAX_PLAUSIBLE_VERTICAL_METRIC;
+  }
+
   void pdf_resource<PAGE_FONT>::init_ascent_and_descent()
   {
     LOG_S(INFO) << __FUNCTION__;
+
+    // /FontBBox is the first fallback for a missing or unusable metric, but
+    // only where it is itself believable: the producer bug that packs garbage
+    // into /Ascent can do the same to the bounding box.
+    const bool font_bbox_top_usable =
+      std::abs(font_bbox[3])>1.e-3 and is_plausible_vertical_metric(font_bbox[3]);
+    const bool font_bbox_bottom_usable =
+      std::abs(font_bbox[1])>1.e-3 and is_plausible_vertical_metric(font_bbox[1]);
 
     ascent=0;
     {
@@ -1831,6 +1860,14 @@ namespace pdflib
           LOG_S(WARNING) << "'ascend' was not explicitely defined ...";
         }
 
+      if(ascent_defined and not is_plausible_vertical_metric(ascent))
+        {
+          LOG_S(WARNING) << "implausible ascent (=" << ascent << ") in the font descriptor of "
+                         << base_font << ": ignoring it";
+          ascent_defined=false;
+          invalid_vertical_metrics = true;
+        }
+
       if(not ascent_defined)
         {
           if(bfonts.has(base_font))
@@ -1838,7 +1875,7 @@ namespace pdflib
               ascent = bfonts[base_font]->get_ascend();
               LOG_S(WARNING) << " -> ascend (=" << ascent << ") retrieved from base-font (=" << base_font << ")";
             }
-          else if(std::abs(font_bbox[3])>1.e-3)
+          else if(font_bbox_top_usable)
             {
               ascent = font_bbox[3];
               LOG_S(WARNING) << " -> falling back on font-bbox for ascent (=" << ascent << ")";
@@ -1872,6 +1909,14 @@ namespace pdflib
           LOG_S(WARNING) << "'descend' was not explicitely defined ...";
         }
 
+      if(descent_defined and not is_plausible_vertical_metric(descent))
+        {
+          LOG_S(WARNING) << "implausible descent (=" << descent << ") in the font descriptor of "
+                         << base_font << ": ignoring it";
+          descent_defined=false;
+          invalid_vertical_metrics = true;
+        }
+
       if(not descent_defined)
         {
           if(bfonts.has(base_font))
@@ -1879,7 +1924,7 @@ namespace pdflib
               descent = bfonts[base_font]->get_descend();
               LOG_S(WARNING) << " -> descend (=" << descent << ") retrieved from base-font (=" << base_font << ")";
             }
-          else if(std::abs(font_bbox[1])>1.e-3)
+          else if(font_bbox_bottom_usable)
             {
               descent = font_bbox[1];
               LOG_S(WARNING) << " -> falling back on font-bbox for descent (=" << descent << ")";
@@ -1904,7 +1949,9 @@ namespace pdflib
         descent <= 0.0 and ascent >= 0.0 and descent < ascent;
       const bool font_bbox_is_valid =
         font_bbox[1] <= 0.0 and font_bbox[3] >= 0.0 and
-        font_bbox[1] < font_bbox[3];
+        font_bbox[1] < font_bbox[3] and
+        is_plausible_vertical_metric(font_bbox[1]) and
+        is_plausible_vertical_metric(font_bbox[3]);
 
       if(not descriptor_metrics_are_valid and font_bbox_is_valid)
         {
@@ -1924,13 +1971,13 @@ namespace pdflib
         LOG_S(ERROR) << "ascent (=" << ascent << ") and descent (=" << descent << ") are "
                      << "equal to zero. This might lead to weird representation!";
 
-	if(std::abs(font_bbox[1])>1.e-3)
+	if(font_bbox_bottom_usable)
 	  {
 	    descent = font_bbox[1];
 	    LOG_S(WARNING) << " -> falling back on font-bbox for descent (=" << descent << ")";
 	  }
 
-	if(std::abs(font_bbox[3])>1.e-3)
+	if(font_bbox_top_usable)
 	  {
 	    ascent = font_bbox[3];
 	    LOG_S(WARNING) << " -> falling back on font-bbox for ascent (=" << ascent << ")";
@@ -1939,22 +1986,33 @@ namespace pdflib
 
     capheight=0;
     {
-      //bool capheight_defined=false;
+      bool capheight_defined=false;
       if(qpdf_object::get_number(qpdf_font, {"/FontDescriptor", "/CapHeight"}, capheight))
         {
-          //capheight_defined=true;
+          capheight_defined=true;
 
           LOG_S(INFO) << "capheight: " << capheight;
         }
       else if(qpdf_object::get_number(qpdf_desc_font, {"/FontDescriptor", "/CapHeight"}, capheight))
         {
-          //capheight_defined=true;
+          capheight_defined=true;
 
           LOG_S(INFO) << "capheight: " << capheight;
         }
       else
         {
           LOG_S(WARNING) << "'capheight' was not explicitely defined ...";
+        }
+
+      if(capheight_defined and not is_plausible_vertical_metric(capheight))
+        {
+          LOG_S(WARNING) << "implausible capheight (=" << capheight << ") in the font descriptor of "
+                         << base_font << ": ignoring it";
+          capheight_defined=false;
+        }
+
+      if(not capheight_defined)
+        {
 	  if(bfonts.has(base_font))
 	    {
 	      capheight = bfonts[base_font]->get_capheight();
@@ -1970,22 +2028,34 @@ namespace pdflib
 
     xheight=0;
     {
-      //bool xheight_defined=false;
+      bool xheight_defined=false;
       if(qpdf_object::get_number(qpdf_font, {"/FontDescriptor", "/XHeight"}, xheight))
         {
-          //xheight_defined=true;
+          xheight_defined=true;
 
           LOG_S(INFO) << "xheight: " << xheight;
         }
       else if(qpdf_object::get_number(qpdf_desc_font, {"/FontDescriptor", "/XHeight"}, xheight))
         {
-          //xheight_defined=true;
+          xheight_defined=true;
 
           LOG_S(INFO) << "xheight: " << xheight;
         }
       else
         {
           LOG_S(WARNING) << "'xheight' was not explicitely defined ...";
+        }
+
+      if(xheight_defined and not is_plausible_vertical_metric(xheight))
+        {
+          LOG_S(WARNING) << "implausible xheight (=" << xheight << ") in the font descriptor of "
+                         << base_font << ": ignoring it";
+          xheight = 0;
+          xheight_defined=false;
+        }
+
+      if(not xheight_defined)
+        {
 	  if(bfonts.has(base_font))
 	    {
 	      xheight = bfonts[base_font]->get_xheight();
