@@ -311,6 +311,78 @@ namespace pdflib
                               const page_item<PAGE_CELL>& rhs);
 
     /**
+     * @brief Tests whether a box cuts a cell's glyph along the writing axis.
+     *
+     * The glyph quad and the box are projected on the writing axis. The glyph
+     * counts as cut when the part of its extent outside the box exceeds
+     * CLIP_HIDDEN_FRACTION of the larger of that extent and the nominal text
+     * height. A box shorter than the nominal text height along the writing
+     * axis never cuts: a cell holds at least one glyph, while a clip drawn
+     * tight around the ink of a period, or a sliver clip under which a
+     * producer repaints a glyph, is narrower than the glyph itself. Only the
+     * writing axis matters: a glyph cut top or bottom still sits in its word
+     * and line.
+     *
+     * @param cell Character cell.
+     * @param box Axis-aligned box in page coordinates (x0, y0, x1, y1).
+     * @return True when the box hides part of the glyph along the writing
+     * axis.
+     * @par Complexity O(1).
+     */
+    static bool cut_by(const page_item<PAGE_CELL>& cell,
+                       const std::array<double, 4>& box);
+
+    /**
+     * @brief Tests whether a cell's own clip cuts its glyph.
+     *
+     * @return False for a cell without a clip box; otherwise cut_by() with
+     * the cell's clip box.
+     * @par Complexity O(1).
+     */
+    static bool clip_hides(const page_item<PAGE_CELL>& cell);
+
+    /**
+     * @brief Tests whether two cells were painted under different clips.
+     *
+     * A cell without a clip box differs from one with a clip box; two clip
+     * boxes differ when any edge differs by more than CLIP_BBOX_EPS.
+     *
+     * @par Complexity O(1).
+     */
+    static bool clips_differ(const page_item<PAGE_CELL>& lhs,
+                             const page_item<PAGE_CELL>& rhs);
+
+    /**
+     * @brief Tests whether a clip border separates two consecutive glyphs.
+     *
+     * A producer that fits text into a table cell clips it to the cell, and
+     * the hidden end of the text runs under the next cell. Two glyphs under
+     * different clip boxes, of which at least one is cut by its own clip,
+     * were fitted into different boxes and do not form one word or one line,
+     * whatever their geometry says. When only one of the two has a clip box,
+     * the other belongs to the same box as long as it lies inside it: some
+     * producers clip only the glyph that overflows the cell and draw the rest
+     * of the word unclipped. Glyphs that are whole under their clips always
+     * may join, since producers also wrap every text run, or every glyph, in
+     * a clip that does not cut it.
+     *
+     * @param lhs Previous visible character.
+     * @param rhs Following character.
+     * @return True when the two must stay in different words and lines.
+     * @par Complexity O(1).
+     */
+    static bool clip_boundary(const page_item<PAGE_CELL>& lhs,
+                              const page_item<PAGE_CELL>& rhs);
+
+    // Fraction of a glyph's extent along the writing axis (or of its nominal
+    // text height, whichever is larger) that a box must hide before the glyph
+    // counts as cut.
+    static constexpr double CLIP_HIDDEN_FRACTION = 0.2;
+
+    // Clip boxes whose edges differ by less than this are the same clip.
+    static constexpr double CLIP_BBOX_EPS = 1.e-3;
+
+    /**
      * @brief Recognizes a nearby off-baseline component placed by cursor
      * rewind.
      *
@@ -651,6 +723,113 @@ namespace pdflib
     return (head_x - tail_x) * ux + (head_y - tail_y) * uy;
   }
 
+  inline bool page_item_sanitator<PAGE_CELLS>::cut_by(
+      const page_item<PAGE_CELL>& cell,
+      const std::array<double, 4>& box)
+  {
+    double ux = cell.has_text_placement
+      ? cell.writing_axis_x : cell.r_x1 - cell.r_x0;
+    double uy = cell.has_text_placement
+      ? cell.writing_axis_y : cell.r_y1 - cell.r_y0;
+    const double norm = std::hypot(ux, uy);
+    if(norm <= 1.e-9)
+      {
+        return false;
+      }
+    ux /= norm;
+    uy /= norm;
+
+    auto extent = [&](const std::array<std::pair<double, double>, 4>& corners,
+                      double& lo, double& hi)
+    {
+      lo = std::numeric_limits<double>::infinity();
+      hi = -std::numeric_limits<double>::infinity();
+      for(const auto& corner : corners)
+        {
+          const double u = corner.first * ux + corner.second * uy;
+          lo = std::min(lo, u);
+          hi = std::max(hi, u);
+        }
+    };
+
+    double glyph_lo = 0.0, glyph_hi = 0.0;
+    extent({{{cell.r_x0, cell.r_y0}, {cell.r_x1, cell.r_y1},
+             {cell.r_x2, cell.r_y2}, {cell.r_x3, cell.r_y3}}},
+           glyph_lo, glyph_hi);
+
+    double box_lo = 0.0, box_hi = 0.0;
+    extent({{{box[0], box[1]}, {box[2], box[1]},
+             {box[2], box[3]}, {box[0], box[3]}}},
+           box_lo, box_hi);
+
+    // a box that cannot hold one glyph is not a cell
+    if(box_hi - box_lo < cell.nominal_text_height)
+      {
+        return false;
+      }
+
+    const double hidden = std::max(0.0, box_lo - glyph_lo) +
+                          std::max(0.0, glyph_hi - box_hi);
+    const double scale = std::max({1.e-6,
+                                   glyph_hi - glyph_lo,
+                                   cell.nominal_text_height});
+    return hidden > CLIP_HIDDEN_FRACTION * scale;
+  }
+
+  inline bool page_item_sanitator<PAGE_CELLS>::clip_hides(
+      const page_item<PAGE_CELL>& cell)
+  {
+    if(not cell.has_clip_bbox)
+      {
+        return false;
+      }
+    return cut_by(cell, {cell.clip_x0, cell.clip_y0,
+                         cell.clip_x1, cell.clip_y1});
+  }
+
+  inline bool page_item_sanitator<PAGE_CELLS>::clips_differ(
+      const page_item<PAGE_CELL>& lhs,
+      const page_item<PAGE_CELL>& rhs)
+  {
+    if(lhs.has_clip_bbox != rhs.has_clip_bbox)
+      {
+        return true;
+      }
+    if(not lhs.has_clip_bbox)
+      {
+        return false;
+      }
+    return std::abs(lhs.clip_x0 - rhs.clip_x0) > CLIP_BBOX_EPS or
+           std::abs(lhs.clip_y0 - rhs.clip_y0) > CLIP_BBOX_EPS or
+           std::abs(lhs.clip_x1 - rhs.clip_x1) > CLIP_BBOX_EPS or
+           std::abs(lhs.clip_y1 - rhs.clip_y1) > CLIP_BBOX_EPS;
+  }
+
+  inline bool page_item_sanitator<PAGE_CELLS>::clip_boundary(
+      const page_item<PAGE_CELL>& lhs,
+      const page_item<PAGE_CELL>& rhs)
+  {
+    if(lhs.has_clip_bbox and rhs.has_clip_bbox)
+      {
+        return clips_differ(lhs, rhs) and
+               (clip_hides(lhs) or clip_hides(rhs));
+      }
+    if(not lhs.has_clip_bbox and not rhs.has_clip_bbox)
+      {
+        return false;
+      }
+
+    // one clip box: the cut glyph and its box, and the glyph without a clip
+    const page_item<PAGE_CELL>& clipped = lhs.has_clip_bbox ? lhs : rhs;
+    const page_item<PAGE_CELL>& other = lhs.has_clip_bbox ? rhs : lhs;
+    if(not clip_hides(clipped))
+      {
+        return false;
+      }
+    return cut_by(other, {clipped.clip_x0, clipped.clip_y0,
+                          clipped.clip_x1, clipped.clip_y1});
+  }
+
   inline bool page_item_sanitator<PAGE_CELLS>::word_baselines_compatible(
       const page_item<PAGE_CELL>& lhs,
       const page_item<PAGE_CELL>& rhs)
@@ -782,6 +961,11 @@ namespace pdflib
       const page_item<PAGE_CELL>& lhs,
       const page_item<PAGE_CELL>& rhs)
   {
+    if(clip_boundary(lhs, rhs))
+      {
+        return false;
+      }
+
     double lux = lhs.has_text_placement
       ? lhs.writing_axis_x : lhs.r_x1 - lhs.r_x0;
     double luy = lhs.has_text_placement
@@ -887,7 +1071,8 @@ namespace pdflib
             previous = nullptr;
             continue;
           }
-        if(previous != nullptr and previous->text != "." and cell.text != ".")
+        if(previous != nullptr and previous->text != "." and cell.text != "." and
+           not clip_boundary(*previous, cell))
           {
             const double gap = advance_gap(*previous, cell);
             if(gap <= spaced_word_gap_advances_max)
@@ -962,7 +1147,7 @@ namespace pdflib
             previous = nullptr;
             continue;
           }
-        if(previous != nullptr)
+        if(previous != nullptr and not clip_boundary(*previous, cell))
           {
             ++seams;
             if(touches_cjk(*previous, cell))
@@ -1075,6 +1260,14 @@ namespace pdflib
     if(not ltr)
       {
         aggregate.left_to_right = false;
+      }
+
+    // A word or line keeps the clip box all its glyphs share. Glyphs under
+    // different clips only join when none is cut, and then no single box
+    // describes the aggregate.
+    if(aggregate.has_clip_bbox and clips_differ(aggregate, next))
+      {
+        aggregate.has_clip_bbox = false;
       }
 
     // Compute the maximum bbox in the text's own coordinate frame. Merely
@@ -1194,7 +1387,8 @@ namespace pdflib
               }
             if(not starts_word and previous_visible != nullptr)
               {
-                if(not word_baselines_compatible(*previous_visible, cell))
+                if(clip_boundary(*previous_visible, cell) or
+                   not word_baselines_compatible(*previous_visible, cell))
                   {
                     starts_word = true;
                   }

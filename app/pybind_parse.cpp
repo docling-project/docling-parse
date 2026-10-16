@@ -356,6 +356,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
         keep_char_cells (bool): Expose individual char cells in the decoded output. Internal base text cells are still built when words or lines are requested [default=true].
         keep_shapes (bool): Keep all the graphic shapes [default=true].
         keep_bitmaps (bool): Keep all the bitmap resources [default=true].
+        keep_clips (bool): Track clip paths so text cells carry the box of the clip they were painted under, also when shapes are skipped [default=true].
         max_num_lines (int): Maximum number of lines to keep (-1 means no cap) [default=-1].
         max_num_bitmaps (int): Maximum number of bitmaps to keep (-1 means no cap) [default=-1].
         min_visible_clip_extent (float): Minimum clip width/height treated as a usable image clip [default=1e-3].
@@ -370,6 +371,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
     .def_readwrite("keep_char_cells", &pdflib::decode_config::keep_char_cells)
     .def_readwrite("keep_shapes", &pdflib::decode_config::keep_shapes)
     .def_readwrite("keep_bitmaps", &pdflib::decode_config::keep_bitmaps)
+    .def_readwrite("keep_clips", &pdflib::decode_config::keep_clips)
     .def_readwrite("max_num_lines", &pdflib::decode_config::max_num_lines)
     .def_readwrite("max_num_bitmaps", &pdflib::decode_config::max_num_bitmaps)
     .def_readwrite("min_visible_clip_extent", &pdflib::decode_config::min_visible_clip_extent)
@@ -419,7 +421,12 @@ PYBIND11_MODULE(pdf_parsers, m) {
     .def_readonly("left_to_right", &pdflib::page_item<pdflib::PAGE_CELL>::left_to_right)
     .def_readonly("mcid", &pdflib::page_item<pdflib::PAGE_CELL>::mcid)
     .def_readonly("artifact_type", &pdflib::page_item<pdflib::PAGE_CELL>::artifact_type)
-    .def_readonly("artifact_subtype", &pdflib::page_item<pdflib::PAGE_CELL>::artifact_subtype);
+    .def_readonly("artifact_subtype", &pdflib::page_item<pdflib::PAGE_CELL>::artifact_subtype)
+    .def_readonly("has_clip_bbox", &pdflib::page_item<pdflib::PAGE_CELL>::has_clip_bbox)
+    .def_readonly("clip_x0", &pdflib::page_item<pdflib::PAGE_CELL>::clip_x0)
+    .def_readonly("clip_y0", &pdflib::page_item<pdflib::PAGE_CELL>::clip_y0)
+    .def_readonly("clip_x1", &pdflib::page_item<pdflib::PAGE_CELL>::clip_x1)
+    .def_readonly("clip_y1", &pdflib::page_item<pdflib::PAGE_CELL>::clip_y1);
 
   // PdfShape - graphic shape with coordinates
   pybind11::class_<pdflib::page_item<pdflib::PAGE_SHAPE>>(m, "PdfShape")
