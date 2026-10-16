@@ -455,3 +455,28 @@ def test_unreadable_mask_paints_unmasked(smask: str, description: str):
     pdf = _build_pdf(MASKED_BOX, "/ExtGState << /G1 5 0 R >>", [smask])
     image = _render(pdf)
     _assert_color(_pixel(image, 100, 50), BLUE, description)
+
+
+def test_decodes_per_page_are_capped():
+    """A page can install a new mask with every `gs` for next to nothing.
+    Past 512 distinct masks the rest of the page paints unmasked: the box
+    under the first mask is half-blended, the one under the 600th is opaque."""
+    count = 600
+    objects: List[str] = []
+    resources = []
+    for index in range(1, count + 1):
+        smask_number = 5 + 2 * (index - 1)
+        objects.append(_smask(f"{smask_number + 1} 0 R"))
+        objects.append(_group(f"0.5 g 0 0 {PAGE_WIDTH} {PAGE_HEIGHT} re f"))
+        resources.append(f"/G{index} {smask_number} 0 R")
+
+    content = (
+        f"1 0 0 rg 0 0 {PAGE_WIDTH} {PAGE_HEIGHT} re f "
+        f"/G1 gs 0 0 1 rg 0 0 {PAGE_WIDTH // 2} {PAGE_HEIGHT} re f "
+        + " ".join(f"/G{index} gs" for index in range(2, count))
+        + f" /G{count} gs 0 0 1 rg {PAGE_WIDTH // 2} 0 {PAGE_WIDTH // 2} {PAGE_HEIGHT} re f"
+    )
+    pdf = _build_pdf(content, f"/ExtGState << {' '.join(resources)} >>", objects)
+    image = _render(pdf)
+    _assert_color(_pixel(image, 50, 50), HALF_BLUE_ON_RED, "under the first mask")
+    _assert_color(_pixel(image, 150, 50), BLUE, "past the per-page cap")
