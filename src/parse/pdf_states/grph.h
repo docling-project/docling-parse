@@ -201,9 +201,29 @@ namespace pdflib
       return (blend_mode == BLEND_MODE_NORMAL) ? group_blend_mode : blend_mode;
     }
 
-    // /SMask is carried on the state (it is part of it and survives q/Q) but
-    // not composited yet.
+    // /SMask is part of the graphics state (it survives q/Q). A `gs` that
+    // installs one leaves the parsed entry and the CTM of that moment here;
+    // the stream decoder then decodes the group -- it has the resources and
+    // the state does not -- and hands back the instruction every paint under
+    // the mask carries.
     soft_mask_state get_soft_mask() const { return soft_mask; }
+    const std::shared_ptr<const soft_mask_spec>& get_soft_mask_spec() const { return soft_mask_spec_; }
+    const std::array<double, 9>& get_soft_mask_ctm() const { return soft_mask_ctm_; }
+
+    // True between the `gs` that installed a mask and the decode of its group.
+    bool has_pending_soft_mask() const
+    {
+      return soft_mask_spec_ != nullptr and soft_mask_instr_ == nullptr;
+    }
+
+    void set_soft_mask_instruction(std::shared_ptr<soft_mask_instruction> instr)
+    {
+      soft_mask_instr_ = std::move(instr);
+    }
+    const std::shared_ptr<soft_mask_instruction>& get_soft_mask_instruction() const
+    {
+      return soft_mask_instr_;
+    }
 
     // Enters a transparency group XObject (11.6.6). The group is supposed to
     // be composited as a unit: its contents paint into their own buffer with a
@@ -284,6 +304,12 @@ namespace pdflib
     blend_mode_name blend_mode;
     soft_mask_state soft_mask;
 
+    // the mask installed by the last `gs` that set one, the CTM at that `gs`
+    // (the mask's coordinate system, 11.6.5.1) and the decoded group
+    std::shared_ptr<const soft_mask_spec>  soft_mask_spec_;
+    std::array<double, 9>                  soft_mask_ctm_;
+    std::shared_ptr<soft_mask_instruction> soft_mask_instr_;
+
     // accumulated parameters of the enclosing transparency groups
     double          group_alpha;
     blend_mode_name group_blend_mode;
@@ -325,6 +351,12 @@ namespace pdflib
 
     blend_mode(BLEND_MODE_NORMAL),
     soft_mask(SOFT_MASK_NONE),
+
+    soft_mask_spec_(nullptr),
+    soft_mask_ctm_({1.0, 0.0, 0.0,
+                    0.0, 1.0, 0.0,
+                    0.0, 0.0, 1.0}),
+    soft_mask_instr_(nullptr),
 
     group_alpha(1.0),
     group_blend_mode(BLEND_MODE_NORMAL)
@@ -371,6 +403,9 @@ namespace pdflib
 
     this->blend_mode = other.blend_mode;
     this->soft_mask = other.soft_mask;
+    this->soft_mask_spec_ = other.soft_mask_spec_;
+    this->soft_mask_ctm_ = other.soft_mask_ctm_;
+    this->soft_mask_instr_ = other.soft_mask_instr_;
 
     this->group_alpha = other.group_alpha;
     this->group_blend_mode = other.group_blend_mode;
@@ -671,13 +706,23 @@ namespace pdflib
 	dash_phase = grph.get_dash_phase();
       }
 
-    // recorded for downstream reporting; neither is composited yet, the
-    // deviation is reported once per ExtGState in pdf_resource<PAGE_GRPH>
     if(grph.has_blend_mode()) { blend_mode = grph.get_blend_mode(); }
 
-    if(grph.get_soft_mask()!=SOFT_MASK_ABSENT)
+    if(grph.get_soft_mask()==SOFT_MASK_NONE)
       {
-	soft_mask = grph.get_soft_mask();
+        soft_mask = SOFT_MASK_NONE;
+        soft_mask_spec_ = nullptr;
+        soft_mask_instr_ = nullptr;
+      }
+    else if(grph.get_soft_mask()==SOFT_MASK_PRESENT)
+      {
+        // The mask's coordinate system is the CTM at this `gs`, not the one
+        // at the paint (11.6.5.1), so it is captured now. The group itself is
+        // decoded by the stream decoder right after this returns.
+        soft_mask = SOFT_MASK_PRESENT;
+        soft_mask_spec_ = grph.get_soft_mask_spec();
+        soft_mask_ctm_ = trafo_matrix;
+        soft_mask_instr_ = nullptr;
       }
 
     LOG_S(INFO) << "gs " << key

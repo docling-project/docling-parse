@@ -18,6 +18,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <limits>
 #include <memory>
@@ -187,6 +188,33 @@ namespace pdflib
     mutable BLImage    image_;  // internal canvas (PRGB32 format)
     mutable BLContext  context_;
     mutable bool       context_active_ = false;
+
+    // The context paint goes through: the page context, or an offscreen
+    // layer while a soft mask is being rasterised or applied. Routed through
+    // page_context(), so the paint routines know nothing of either.
+    mutable BLContext* context_override_ = nullptr;
+
+    struct context_override_scope
+    {
+      context_override_scope(BLContext*& slot, BLContext* ctx):
+        slot_(slot), saved_(slot)
+      {
+        slot_ = ctx;
+      }
+      ~context_override_scope() { slot_ = saved_; }
+
+      context_override_scope(const context_override_scope&) = delete;
+      context_override_scope& operator=(const context_override_scope&) = delete;
+
+      BLContext*& slot_;
+      BLContext*  saved_;
+    };
+
+    // Canvas-sized A8 coverage of every soft mask met on this page, keyed by
+    // the mask. One mask covers many objects (a shadow per photo, a feather
+    // per figure) and the group render behind the plane is the costly part.
+    // An empty image records a build that failed, so it is not retried.
+    std::unordered_map<const soft_mask_instruction*, BLImage> soft_mask_planes_;
     std::array<int, 3> shape_;  // {height, width, 4}, display orientation
     int canvas_width_ = 0;     // internal canvas width (unrotated page space)
     int canvas_height_ = 0;    // internal canvas height (unrotated page space)
@@ -810,6 +838,76 @@ namespace pdflib
         }
       return true;
     }
+
+    // Same, with the mask read through a window at (ox, oy): the layer is a
+    // cut-out of the canvas and the mask covers the whole canvas.
+    static bool multiply_prgb32_by_a8_window(BLImage& layer,
+                                             const BLImage& mask,
+                                             int ox, int oy)
+    {
+      BLImageData d, s;
+      if(layer.make_mutable(&d) != BL_SUCCESS or mask.get_data(&s) != BL_SUCCESS)
+        {
+          return false;
+        }
+      if(d.format != BL_FORMAT_PRGB32 or s.format != BL_FORMAT_A8) { return false; }
+      if(d.size.w <= 0 or d.size.h <= 0) { return false; }
+      if(ox < 0 or oy < 0 or
+         ox + d.size.w > s.size.w or oy + d.size.h > s.size.h)
+        {
+          return false;
+        }
+      if(d.stride < static_cast<intptr_t>(d.size.w) * 4 or
+         s.stride < s.size.w)
+        {
+          return false;
+        }
+
+      for(int y = 0; y < d.size.h; y++)
+        {
+          uint8_t* drow = static_cast<uint8_t*>(d.pixel_data) + y * d.stride;
+          const uint8_t* srow =
+            static_cast<const uint8_t*>(s.pixel_data) + (y + oy) * s.stride + ox;
+          for(int x = 0; x < d.size.w; x++)
+            {
+              const uint32_t m = srow[x];
+              if(m == 255) { continue; }
+              uint8_t* px = drow + 4 * x;
+              for(int c = 0; c < 4; c++)
+                {
+                  px[c] = static_cast<uint8_t>((px[c] * m + 127) / 255);
+                }
+            }
+        }
+      return true;
+    }
+
+    // Soft masks (ISO 32000-1, 11.6.5). An instruction painted under one is
+    // painted into a layer, the layer is multiplied by the mask's coverage
+    // and the result composited -- the same route a non-rectangular clip
+    // takes, with the coverage coming from the mask group's luminosity.
+    template<typename instruction_type>
+    bool soft_mask_applies(const instruction_type& instr) const
+    {
+      // context_override_ is set while painting into a layer: the masked
+      // instruction re-enters its paint routine there and must not mask twice
+      return instr.has_soft_mask()
+         and config_.render_soft_masks
+         and context_override_ == nullptr
+         and has_canvas();
+    }
+
+    // The mask's coverage over the whole canvas, built on first use and
+    // cached per mask for the page. Null when it could not be built.
+    const BLImage* soft_mask_plane(soft_mask_instruction& mask);
+
+    // Runs `paint` (which draws through page_context()) into a layer over
+    // `bbox`, knocks the layer back with the mask and blits it with `mode`.
+    template<typename paint_type>
+    void paint_through_soft_mask(soft_mask_instruction& mask,
+                                 const BLRect& bbox,
+                                 blend_mode_name mode,
+                                 paint_type&& paint);
 
     static bool fill_a8(BLImage& image, uint8_t value)
     {
@@ -1738,6 +1836,11 @@ namespace pdflib
 
   inline BLContext& renderer<BLEND2D>::page_context()
   {
+    if (context_override_ != nullptr)
+      {
+        return *context_override_;
+      }
+
     if (context_active_)
       {
         return context_;
@@ -2735,6 +2838,24 @@ namespace pdflib
 
   inline void renderer<BLEND2D>::render_text(text_instruction& instr)
   {
+    // Type3 and invisible text paint no glyphs, so there is nothing to mask.
+    if (soft_mask_applies(instr) and not instr.is_type3() and not instr.is_invisible())
+      {
+        const text_geometry geom = make_text_geometry(instr);
+        if (geom.quad_h >= 0.5)
+          {
+            // glyphs overhang their cell, so the layer takes a margin of the size
+            BLRect bbox = axis_aligned_rect(geom.bbox);
+            const double margin = geom.size + 2.0;
+            bbox = BLRect(bbox.x - margin, bbox.y - margin,
+                          bbox.w + 2.0 * margin, bbox.h + 2.0 * margin);
+
+            paint_through_soft_mask(*instr.get_soft_mask(), bbox, instr.get_blend_mode(),
+                                    [&]() { render_text(instr); });
+            return;
+          }
+      }
+
     utils::scoped_timer phase_timer(timings_, pdf_timings::KEY_RENDER_TEXT);
 
     // LOG_S(INFO) << __FUNCTION__;
@@ -3385,6 +3506,22 @@ namespace pdflib
 
   inline void renderer<BLEND2D>::render_bitmap(bitmap_instruction& instr)
   {
+    if (soft_mask_applies(instr))
+      {
+        const bitmap_quad quad = {
+          canvas_x(instr.get_r_x0()), canvas_y(instr.get_r_y0()),
+          canvas_x(instr.get_r_x1()), canvas_y(instr.get_r_y1()),
+          canvas_x(instr.get_r_x2()), canvas_y(instr.get_r_y2()),
+          canvas_x(instr.get_r_x3()), canvas_y(instr.get_r_y3())
+        };
+        BLRect bbox = axis_aligned_rect(quad);
+        bbox = BLRect(bbox.x - 1.0, bbox.y - 1.0, bbox.w + 2.0, bbox.h + 2.0);
+
+        paint_through_soft_mask(*instr.get_soft_mask(), bbox, instr.get_blend_mode(),
+                                [&]() { render_bitmap(instr); });
+        return;
+      }
+
     utils::scoped_timer phase_timer(timings_, pdf_timings::KEY_RENDER_BITMAP);
 
     LOG_S(INFO) << __FUNCTION__ << " for xobject_key=" << instr.get_key();
@@ -3818,8 +3955,237 @@ namespace pdflib
   // implement dashing.
   // ---------------------------------------------------------------------------
 
+  // ---------------------------------------------------------------------------
+  // soft_mask_plane / paint_through_soft_mask
+  //
+  // A soft mask is a transparency group whose luminosity (or alpha) is the
+  // coverage of everything painted under it (11.6.5). The group arrives as
+  // page-space instructions; it is painted once onto a page-sized canvas over
+  // its /BC backdrop, read back as an A8 plane through /TR, and the plane is
+  // then applied to each masked instruction the way a non-rectangular clip is.
+  // ---------------------------------------------------------------------------
+
+  inline const BLImage* renderer<BLEND2D>::soft_mask_plane(soft_mask_instruction& mask)
+  {
+    auto found = soft_mask_planes_.find(&mask);
+    if (found != soft_mask_planes_.end())
+      {
+        return found->second.is_empty() ? nullptr : &found->second;
+      }
+
+    BLImage& plane = soft_mask_planes_[&mask];
+
+    const int w = canvas_width_;
+    const int h = canvas_height_;
+    if (w <= 0 or h <= 0 or w > 8192 or h > 8192)
+      {
+        LOG_S(WARNING) << "soft_mask_plane: canvas " << w << "x" << h
+                       << " is too large for a mask plane; ExtGState "
+                       << mask.get_key() << " paints unmasked";
+        return nullptr;
+      }
+
+    // 1. The group over its backdrop, on a canvas of the page's size: its
+    //    instructions are in page space, like the page's own.
+    BLImage group;
+    if (group.create(w, h, BL_FORMAT_PRGB32) != BL_SUCCESS)
+      {
+        LOG_S(WARNING) << "soft_mask_plane: could not allocate the group canvas;"
+                       << " ExtGState " << mask.get_key() << " paints unmasked";
+        return nullptr;
+      }
+
+    {
+      BLContext gctx(group);
+      gctx.set_comp_op(BL_COMP_OP_SRC_COPY);
+      if (mask.is_luminosity())
+        {
+          gctx.fill_all(make_rgba32(mask.get_backdrop_rgb(), 1.0));
+        }
+      else
+        {
+          gctx.fill_all(BLRgba32(0x00000000u));
+        }
+      gctx.set_comp_op(BL_COMP_OP_SRC_OVER);
+
+      {
+        context_override_scope scope(context_override_, &gctx);
+        mask.get_group().iterate_over_instructions(*this, false);
+      }
+      gctx.end();
+    }
+
+    // 2. Coverage of the group's /BBox: beyond it the backdrop shows.
+    BLImage inside;
+    if (inside.create(w, h, BL_FORMAT_A8) != BL_SUCCESS)
+      {
+        LOG_S(WARNING) << "soft_mask_plane: could not allocate the bbox plane;"
+                       << " ExtGState " << mask.get_key() << " paints unmasked";
+        return nullptr;
+      }
+
+    {
+      const std::array<double, 8>& q = mask.get_bbox_quad();
+      BLPath quad;
+      quad.move_to(canvas_x(q[0]), canvas_y(q[1]));
+      for (int c = 1; c < 4; c++)
+        {
+          quad.line_to(canvas_x(q[2 * c]), canvas_y(q[2 * c + 1]));
+        }
+      quad.close();
+
+      if (not rasterize_path_to_a8(inside, quad, BL_FILL_RULE_NON_ZERO))
+        {
+          LOG_S(WARNING) << "soft_mask_plane: could not rasterise the bbox;"
+                         << " ExtGState " << mask.get_key() << " paints unmasked";
+          return nullptr;
+        }
+    }
+
+    // 3. Luminosity (or alpha), through /TR, into coverage.
+    if (plane.create(w, h, BL_FORMAT_A8) != BL_SUCCESS)
+      {
+        LOG_S(WARNING) << "soft_mask_plane: could not allocate the mask plane;"
+                       << " ExtGState " << mask.get_key() << " paints unmasked";
+        plane.reset();
+        return nullptr;
+      }
+
+    BLImageData g, in, p;
+    if (group.get_data(&g) != BL_SUCCESS or
+        inside.get_data(&in) != BL_SUCCESS or
+        plane.make_mutable(&p) != BL_SUCCESS)
+      {
+        plane.reset();
+        return nullptr;
+      }
+
+    const bool luminosity = mask.is_luminosity();
+    const std::vector<uint8_t>& transfer = mask.get_transfer();
+
+    // 0.3 R + 0.59 G + 0.11 B (11.6.5.2) in 8.8 fixed point
+    auto luminance = [](uint32_t r, uint32_t g_, uint32_t b) -> int
+      {
+        return static_cast<int>((77 * r + 151 * g_ + 28 * b + 128) >> 8);
+      };
+    auto through_transfer = [&](int v) -> int
+      {
+        return transfer.empty() ? v : transfer[static_cast<std::size_t>(v)];
+      };
+
+    const std::array<int, 3>& bc = mask.get_backdrop_rgb();
+    const int outside = luminosity
+      ? through_transfer(luminance(bc[0], bc[1], bc[2]))
+      : through_transfer(0);
+
+    for (int y = 0; y < h; y++)
+      {
+        const uint8_t* grow = static_cast<const uint8_t*>(g.pixel_data) + y * g.stride;
+        const uint8_t* irow = static_cast<const uint8_t*>(in.pixel_data) + y * in.stride;
+        uint8_t* prow = static_cast<uint8_t*>(p.pixel_data) + y * p.stride;
+
+        for (int x = 0; x < w; x++)
+          {
+            uint32_t px = 0;
+            std::memcpy(&px, grow + 4 * x, sizeof(px));
+
+            // PRGB32 is 0xAARRGGBB; the group canvas is opaque for a
+            // luminosity mask, so its colour is not premultiplied away.
+            const int value = luminosity
+              ? luminance((px >> 16) & 0xFFu, (px >> 8) & 0xFFu, px & 0xFFu)
+              : static_cast<int>(px >> 24);
+
+            const int covered = irow[x];
+            prow[x] = static_cast<uint8_t>(
+              (through_transfer(value) * covered + outside * (255 - covered) + 127) / 255);
+          }
+      }
+
+    LOG_S(INFO) << "soft_mask_plane: built " << w << "x" << h
+                << " plane for ExtGState " << mask.get_key()
+                << " (" << (luminosity ? "luminosity" : "alpha") << ")";
+    return &plane;
+  }
+
+  template<typename paint_type>
+  inline void renderer<BLEND2D>::paint_through_soft_mask(soft_mask_instruction& mask,
+                                                         const BLRect& bbox,
+                                                         blend_mode_name mode,
+                                                         paint_type&& paint)
+  {
+    utils::scoped_timer phase_timer(timings_, pdf_timings::KEY_RENDER_SOFT_MASK);
+
+    const BLImage* plane = soft_mask_plane(mask);
+    if (plane == nullptr)
+      {
+        // reported by soft_mask_plane; unmasked paint is what the page got
+        // before masks were composited at all
+        paint();
+        return;
+      }
+
+    const BLRectI area = canvas_clamped_rect(bbox);
+    if (area.w <= 0 or area.h <= 0) { return; }
+
+    BLImage layer;
+    if (layer.create(area.w, area.h, BL_FORMAT_PRGB32) != BL_SUCCESS)
+      {
+        LOG_S(WARNING) << "paint_through_soft_mask: could not allocate a "
+                       << area.w << "x" << area.h << " layer, painting unmasked";
+        paint();
+        return;
+      }
+
+    {
+      BLContext lctx(layer);
+      lctx.set_comp_op(BL_COMP_OP_SRC_COPY);
+      lctx.fill_all(BLRgba32(0x00000000u));
+      lctx.set_comp_op(BL_COMP_OP_SRC_OVER);
+
+      // the layer is a window onto the canvas, so the paint routine draws in
+      // canvas coordinates as it always does
+      lctx.translate(-area.x, -area.y);
+      {
+        context_override_scope scope(context_override_, &lctx);
+        paint();
+      }
+      lctx.end();
+    }
+
+    if (not multiply_prgb32_by_a8_window(layer, *plane, area.x, area.y))
+      {
+        LOG_S(WARNING) << "paint_through_soft_mask: could not apply the mask of ExtGState "
+                       << mask.get_key();
+      }
+
+    // The blend mode belongs to this composite. The paint routine also set
+    // it on the layer, where it had nothing to blend with and painted as
+    // Normal, which is what a layer needs.
+    BLContext& ctx = page_context();
+    const blend_mode_scope blend(ctx, mode);
+    ctx.blit_image(BLPointI(area.x, area.y), layer);
+  }
+
   inline void renderer<BLEND2D>::render_shape(shape_instruction& instr)
   {
+    if (soft_mask_applies(instr))
+      {
+        BLRect bbox;
+        const BLPath path = make_shape_path(instr, bbox);
+        if (path.is_empty()) { return; }
+
+        // a stroke reaches beyond the path; the layer must hold all of it
+        const double reach =
+          instr.get_line_width() * 0.5 * (scale_x_ + scale_y_)
+          * std::max(1.0, instr.get_miter_limit()) + 2.0;
+        bbox = BLRect(bbox.x - reach, bbox.y - reach,
+                      bbox.w + 2.0 * reach, bbox.h + 2.0 * reach);
+
+        paint_through_soft_mask(*instr.get_soft_mask(), bbox, instr.get_blend_mode(),
+                                [&]() { render_shape(instr); });
+        return;
+      }
+
     utils::scoped_timer phase_timer(timings_, pdf_timings::KEY_RENDER_SHAPE);
 
     if (not has_canvas()) { return; }
@@ -4008,6 +4374,18 @@ namespace pdflib
 
   inline void renderer<BLEND2D>::render_shading(shading_instruction& instr)
   {
+    if (soft_mask_applies(instr))
+      {
+        // a shading covers its clip region, which can be the whole page
+        const BLRect bbox(0.0, 0.0,
+                          static_cast<double>(canvas_width_),
+                          static_cast<double>(canvas_height_));
+
+        paint_through_soft_mask(*instr.get_soft_mask(), bbox, instr.get_blend_mode(),
+                                [&]() { render_shading(instr); });
+        return;
+      }
+
     utils::scoped_timer phase_timer(timings_, pdf_timings::KEY_RENDER_SHADING);
 
     if (not has_canvas()) { return; }

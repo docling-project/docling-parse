@@ -6,6 +6,23 @@
 namespace pdflib
 {
 
+  // An ExtGState /SMask entry as parsed (ISO 32000-1, 11.6.5.1, Table 144):
+  // the transparency group that paints the mask, which of its planes the mask
+  // is read from, the backdrop the group is composited against and the
+  // transfer function that maps the result to coverage.
+  //
+  // The group's content stream is not decoded here. That needs the resources
+  // and the CTM in force at the `gs`, so the stream decoder does it, once
+  // per entry and CTM, into a soft_mask_instruction.
+  struct soft_mask_spec
+  {
+    std::string        key;                        // ExtGState resource name
+    QPDFObjectHandle   group;                      // /G, a form XObject stream
+    bool               luminosity = true;          // /S /Luminosity, else /Alpha
+    std::array<int, 3> backdrop_rgb = {0, 0, 0};   // /BC in device RGB, black when absent
+    std::vector<uint8_t> transfer;                 // /TR sampled at 256 points, empty = identity
+  };
+
   // A single entry of a page's (or form's) /ExtGState resource dictionary,
   // ie the parameter set a `gs` operator installs into the graphics state.
   //
@@ -50,12 +67,16 @@ namespace pdflib
     const std::vector<double>& get_dash_array() const { return dash_array_; }
     double                     get_dash_phase() const { return dash_phase_; }
 
-    // Transparency parameters: parsed and reported, not composited.
+    // Transparency parameters. /BM and /SMask are composited by the
+    // renderer; /AIS is recorded only.
     bool has_blend_mode()    const { return has_blend_mode_; }
     bool has_alpha_is_shape() const { return has_alpha_is_shape_; }
 
     blend_mode_name get_blend_mode()     const { return blend_mode_; }
     soft_mask_state get_soft_mask()      const { return soft_mask_; }
+
+    // The parsed /SMask when get_soft_mask() is SOFT_MASK_PRESENT, else null.
+    const std::shared_ptr<const soft_mask_spec>& get_soft_mask_spec() const { return soft_mask_spec_; }
     bool            get_alpha_is_shape() const { return alpha_is_shape_; }
 
     // /Font: [font_ref size]. The font is an indirect reference to a font
@@ -77,6 +98,11 @@ namespace pdflib
     void set_alpha(QPDFObjectHandle& qpdf_grph);
     void set_stroke_parameters(QPDFObjectHandle& qpdf_grph);
     void set_transparency_parameters(QPDFObjectHandle& qpdf_grph);
+
+    // Reads an /SMask dictionary. Null when it cannot be read, in which case
+    // the reason has been logged.
+    static std::shared_ptr<const soft_mask_spec> parse_soft_mask(const std::string& key,
+                                                                 QPDFObjectHandle smask);
 
   private:
 
@@ -108,6 +134,7 @@ namespace pdflib
     blend_mode_name blend_mode_     = BLEND_MODE_NORMAL;
 
     soft_mask_state soft_mask_ = SOFT_MASK_ABSENT;
+    std::shared_ptr<const soft_mask_spec> soft_mask_spec_;
 
     bool has_alpha_is_shape_ = false;
     bool alpha_is_shape_     = false;
@@ -325,9 +352,139 @@ namespace pdflib
       }
   }
 
-  // /BM, /SMask, /AIS, /Font and /RI are recorded but not applied: blending
-  // and soft masks need compositing support in the renderer, and /Font needs
-  // the text state, which `gs` does not reach.
+  std::shared_ptr<const soft_mask_spec>
+  pdf_resource<PAGE_GRPH>::parse_soft_mask(const std::string& key,
+                                           QPDFObjectHandle smask)
+  {
+    if(not smask.isDictionary())
+      {
+        LOG_S(WARNING) << "ExtGState " << key
+                       << ": /SMask is neither /None nor a dictionary, paint stays unmasked";
+        return nullptr;
+      }
+
+    if(not smask.hasKey("/G") or not smask.getKey("/G").isStream())
+      {
+        LOG_S(WARNING) << "ExtGState " << key
+                       << ": soft mask has no /G group stream, paint stays unmasked";
+        return nullptr;
+      }
+
+    auto spec = std::make_shared<soft_mask_spec>();
+    spec->key = key;
+    spec->group = smask.getKey("/G");
+
+    if(smask.hasKey("/S") and smask.getKey("/S").isName())
+      {
+        const std::string type = smask.getKey("/S").getName();
+        if(type=="/Alpha")
+          {
+            spec->luminosity = false;
+          }
+        else if(type!="/Luminosity")
+          {
+            LOG_S(WARNING) << "ExtGState " << key << ": unknown soft mask type "
+                           << type << ", reading it as /Luminosity";
+          }
+      }
+
+    // /BC is given in the group's colour space. The component count says
+    // which device space to read it as, the way SC/sc operands are read.
+    if(smask.hasKey("/BC") and smask.getKey("/BC").isArray())
+      {
+        QPDFObjectHandle BC = smask.getKey("/BC");
+
+        std::vector<double> comps;
+        for(int i=0; i<BC.getArrayNItems(); i++)
+          {
+            QPDFObjectHandle item = BC.getArrayItem(i);
+            if(item.isNumber())
+              {
+                const double v = utils::numeric::locale_safe_numeric_value(item);
+                comps.push_back(std::min(1.0, std::max(0.0, v)));
+              }
+          }
+
+        auto to_byte = [](double v) { return static_cast<int>(std::lround(255.0 * v)); };
+
+        if(comps.size()==1)
+          {
+            spec->backdrop_rgb = {to_byte(comps[0]), to_byte(comps[0]), to_byte(comps[0])};
+          }
+        else if(comps.size()==3)
+          {
+            spec->backdrop_rgb = {to_byte(comps[0]), to_byte(comps[1]), to_byte(comps[2])};
+          }
+        else if(comps.size()==4)
+          {
+            const double k = comps[3];
+            spec->backdrop_rgb = {to_byte((1.0 - comps[0]) * (1.0 - k)),
+                                  to_byte((1.0 - comps[1]) * (1.0 - k)),
+                                  to_byte((1.0 - comps[2]) * (1.0 - k))};
+          }
+        else
+          {
+            LOG_S(WARNING) << "ExtGState " << key << ": soft mask /BC has "
+                           << comps.size() << " components, using black";
+          }
+      }
+
+    // /TR maps the group's luminosity (or alpha) to coverage. It is sampled
+    // once here so the renderer only indexes a table.
+    if(smask.hasKey("/TR"))
+      {
+        QPDFObjectHandle TR = smask.getKey("/TR");
+
+        if(TR.isName())
+          {
+            if(TR.getName()!="/Identity")
+              {
+                LOG_S(WARNING) << "ExtGState " << key << ": soft mask /TR "
+                               << TR.getName() << " is not a function, using the identity";
+              }
+          }
+        else
+          {
+            pdf_function function;
+            if(function.set(TR) and function.get_num_inputs()==1)
+              {
+                std::vector<uint8_t> table(256, 0);
+                std::vector<double> out;
+                bool ok = true;
+                for(int i=0; i<256 and ok; i++)
+                  {
+                    ok = function.evaluate(i / 255.0, out) and not out.empty();
+                    if(ok)
+                      {
+                        const double v = std::min(1.0, std::max(0.0, out[0]));
+                        table[i] = static_cast<uint8_t>(std::lround(255.0 * v));
+                      }
+                  }
+
+                if(ok)
+                  {
+                    spec->transfer = std::move(table);
+                  }
+                else
+                  {
+                    LOG_S(WARNING) << "ExtGState " << key
+                                   << ": soft mask /TR could not be evaluated, using the identity";
+                  }
+              }
+            else
+              {
+                LOG_S(WARNING) << "ExtGState " << key << ": soft mask /TR unreadable ("
+                               << function.get_reason() << "), using the identity";
+              }
+          }
+      }
+
+    return spec;
+  }
+
+  // /BM and /SMask are kept for the renderer to composite. /AIS, /Font and
+  // /RI are recorded but not applied: /Font needs the text state, which `gs`
+  // does not reach.
   //
   // The deviations are reported here rather than in `gs`, so that each
   // affected ExtGState is named exactly once per document instead of once per
@@ -373,13 +530,16 @@ namespace pdflib
       {
         QPDFObjectHandle SMask = qpdf_grph.getKey("/SMask");
 
-        soft_mask_ = (SMask.isName() and SMask.getName()=="/None")?
-          SOFT_MASK_NONE : SOFT_MASK_PRESENT;
-
-        if(soft_mask_==SOFT_MASK_PRESENT)
+        if(SMask.isName() and SMask.getName()=="/None")
           {
-            LOG_S(WARNING) << "ExtGState " << key
-                           << ": soft mask is not applied, paint stays unmasked";
+            soft_mask_ = SOFT_MASK_NONE;
+          }
+        else
+          {
+            // A mask that cannot be read clears the current one rather than
+            // keeping a stale mask on paint it was never meant for.
+            soft_mask_spec_ = parse_soft_mask(key, SMask);
+            soft_mask_ = soft_mask_spec_ ? SOFT_MASK_PRESENT : SOFT_MASK_NONE;
           }
       }
 
