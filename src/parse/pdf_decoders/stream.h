@@ -198,14 +198,23 @@ namespace pdflib
     // entry's address and the CTM at the `gs`; the entry is held alongside
     // so its address cannot be reused while the key is live. A failed decode
     // is kept, as null, so it is not retried.
+    //
+    // A page can install a new mask with every `gs` for next to nothing, so
+    // the number of decodes is capped: past max_soft_mask_decodes the rest of
+    // the page paints unmasked, reported once.
     struct soft_mask_cache_entry
     {
       std::shared_ptr<const soft_mask_spec>  spec;
       std::shared_ptr<soft_mask_instruction> mask;
     };
-    std::shared_ptr<std::unordered_map<std::string, soft_mask_cache_entry>>
-    soft_mask_cache_ =
-      std::make_shared<std::unordered_map<std::string, soft_mask_cache_entry>>();
+    struct soft_mask_page_cache
+    {
+      std::unordered_map<std::string, soft_mask_cache_entry> decoded;
+      bool budget_reported = false;
+    };
+    static constexpr std::size_t max_soft_mask_decodes = 512;
+    std::shared_ptr<soft_mask_page_cache> soft_mask_cache_ =
+      std::make_shared<soft_mask_page_cache>();
 
     // Greater than zero while decoding a soft mask's own group. A mask set
     // inside a mask is not composited; it is reported instead.
@@ -1829,23 +1838,36 @@ namespace pdflib
         return;
       }
 
+    // the CTM is quantised so that float noise between two `gs` of the same
+    // mask does not make two decodes
     std::string cache_key = std::to_string(reinterpret_cast<std::uintptr_t>(spec.get()));
     for(double v : ctm)
       {
-        cache_key += ':' + std::to_string(v);
+        cache_key += ':' + std::to_string(std::round(v * 1000.0) / 1000.0);
       }
 
     std::shared_ptr<soft_mask_instruction> mask;
 
-    auto found = soft_mask_cache_->find(cache_key);
-    if(found != soft_mask_cache_->end())
+    auto& decoded = soft_mask_cache_->decoded;
+    auto found = decoded.find(cache_key);
+    if(found != decoded.end())
       {
         mask = found->second.mask;
+      }
+    else if(decoded.size() >= max_soft_mask_decodes)
+      {
+        if(not soft_mask_cache_->budget_reported)
+          {
+            LOG_S(WARNING) << "ExtGState " << spec->key << ": " << decoded.size()
+                           << " soft masks decoded on this page already, the rest paint unmasked";
+            soft_mask_cache_->budget_reported = true;
+          }
+        return;
       }
     else
       {
         mask = decode_soft_mask(*spec, ctm);
-        (*soft_mask_cache_)[cache_key] = soft_mask_cache_entry{spec, mask};
+        decoded[cache_key] = soft_mask_cache_entry{spec, mask};
       }
 
     if(mask)
