@@ -10,7 +10,10 @@ the pair's advance) below the cap, while a kern between narrow glyphs (`n|f`
 in `Confidential`: 0.10 em, but 0.24 of the pair) rises above it, so no
 threshold in that unit separates the two. These tests pin the replacement for
 such runs: the gap in em (font-size units), minus the run's uniform letter
-spacing, against a fixed 0.13 em. Runs that carry space glyphs are unchanged.
+spacing, against 0.13 em. On a tightly justified line the threshold follows the
+line's own word spacing (70 % of the median confirmed word gap, never below
+0.09 em), because pair kerning between a space and a capital takes a tight word
+gap under 0.13 em. Runs that carry space glyphs are unchanged.
 
 Every page is built in memory with core-14 fonts, or with a non-embedded GBK
 font for the CJK cases, so each test reads as the content stream it is about.
@@ -111,6 +114,29 @@ def test_a_per_glyph_correction_stays_joined():
     # spaces: 0.11 em, but 0.42 of the pair `f|l`.
     words, _ = _cells("[(Inf) -106 (lammation)] TJ", size=10.4)
     assert words == ["Inflammation"]
+
+
+def test_a_kerned_word_gap_on_a_tightly_justified_line_survives():
+    # newspaper-00.pdf: word gaps of 0.15 em in a condensed face, and pair
+    # kerning between the space and `V` takes the gap before `Verteilung` down
+    # to 0.115 em. The two other word gaps of the line put its threshold at
+    # 0.105 em.
+    words, lines = _cells("[(und) -115 (Verteilung) -150 (unserer) -150 (Gra-)] TJ")
+    assert words == ["und", "Verteilung", "unserer", "Gra-"]
+    assert lines == ["und Verteilung unserer Gra-"]
+
+
+def test_a_kerned_seam_with_no_word_gaps_around_it_stays_joined():
+    # The same 0.115 em gap with nothing on the line to compare it with.
+    words, _ = _cells("[(Con) -115 (fidential)] TJ")
+    assert words == ["Confidential"]
+
+
+def test_ordinary_word_spacing_does_not_lower_the_threshold():
+    # Word gaps of 0.25 em: 70 % of that is above 0.13 em, so the threshold
+    # stays at 0.13 em and the 0.12 em gap inside `datasystem` stays joined.
+    words, _ = _cells("[(an) -250 (ideal) -250 (data) -120 (system)] TJ")
+    assert words == ["an", "ideal", "datasystem"]
 
 
 def test_a_letter_spaced_heading_stays_whole():

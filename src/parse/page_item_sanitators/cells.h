@@ -208,6 +208,28 @@ namespace pdflib
     static constexpr double unspaced_word_gap_em = 0.13;
 
     /**
+     * On a tightly justified line the threshold follows the line's own word
+     * spacing: this fraction of the median confirmed word gap, but never
+     * below `unspaced_word_gap_floor_em` and never above
+     * `unspaced_word_gap_em`. Pair kerning between a space and a capital
+     * `V`, `W`, `A` or a `w` takes up to 0.05 em off a 0.15 em word gap; the
+     * other word gaps of the line show that it is still a word gap.
+     */
+    static constexpr double tight_line_word_gap_fraction = 0.7;
+    static constexpr double unspaced_word_gap_floor_em = 0.09;
+
+    /**
+     * @brief Gap thresholds of one run without space glyphs, in em.
+     */
+    struct unspaced_gap_profile
+    {
+      /** Uniform letter spacing removed from every gap; 0 for most lines. */
+      double tracking = 0.0;
+      /** Gap above the letter spacing at which a word starts. */
+      double word_gap = unspaced_word_gap_em;
+    };
+
+    /**
      * @brief Measures a cell perpendicular to its writing direction.
      *
      * Returns the average length of the `(r0,r3)` and `(r1,r2)` side edges.
@@ -420,13 +442,14 @@ namespace pdflib
                             const page_item<PAGE_CELL>& rhs);
 
     /**
-     * @brief Uniform letter spacing of a run without space glyphs, in em.
+     * @brief Letter spacing and word-gap threshold of a run without space
+     * glyphs, in em.
      *
      * Letter-spaced headings and justified CJK text open every gap of the
-     * line by the same amount. That amount is removed from each gap before
-     * the word-gap threshold is applied, so tracking does not read as word
-     * spacing. The estimate uses the em gaps of baseline-compatible seams
-     * and needs at least four of them:
+     * line by the same amount. That amount (`tracking`) is removed from each
+     * gap before the word-gap threshold is applied, so tracking does not
+     * read as word spacing. The estimate uses the em gaps of
+     * baseline-compatible seams and needs at least four of them:
      *
      * - when more than half of the seams touch a CJK character, the median
      *   gap, at most 0.5 em (justification spreads every character);
@@ -435,13 +458,17 @@ namespace pdflib
      *   the value lies in (0.03, 0.2] em. Wider tracking is not recognised,
      *   because positioned mathematics reaches the same gaps.
      *
-     * Ordinary lines return 0.
+     * Ordinary lines have a tracking of 0. For them, the threshold
+     * (`word_gap`) starts at `unspaced_word_gap_em` and follows the line's
+     * own word spacing when that is tight: with at least two gaps above the
+     * threshold, it becomes `tight_line_word_gap_fraction` of their median,
+     * clamped to [`unspaced_word_gap_floor_em`, `unspaced_word_gap_em`].
      *
      * @param run One line of cells in source order, without space glyphs.
-     * @return Letter spacing in em, or 0 when none is recognised.
+     * @return Tracking and word-gap threshold for the run.
      * @par Complexity O(n log n) for the sort.
      */
-    static double infer_tracking(const line_run& run);
+    static unspaced_gap_profile infer_unspaced_gap_profile(const line_run& run);
 
     /**
      * @brief Appends one cell to a text aggregate and expands its geometry.
@@ -470,7 +497,8 @@ namespace pdflib
      * neighboring character advances also starts a word. A run without any
      * space glyph (TeX output, most positioned headings) is judged in font
      * size units instead: a gap starts a word when it exceeds the run's
-     * letter spacing by more than `unspaced_word_gap_em`. Words are then
+     * letter spacing by more than the run's word-gap threshold, see
+     * `infer_unspaced_gap_profile()`. Words are then
      * merged with normalized spaces into one line. Both levels retain maximum
      * enclosing rotation-aligned bounding boxes.
      * Visible glyphs without a recoverable Unicode mapping retain their U+FFFD
@@ -832,9 +860,11 @@ namespace pdflib
     return edge_is_cjk(lhs.text, true) or edge_is_cjk(rhs.text, false);
   }
 
-  inline double page_item_sanitator<PAGE_CELLS>::infer_tracking(
+  inline typename page_item_sanitator<PAGE_CELLS>::unspaced_gap_profile
+  page_item_sanitator<PAGE_CELLS>::infer_unspaced_gap_profile(
       const line_run& run)
   {
+    unspaced_gap_profile profile;
     std::vector<double> gaps;
     std::size_t seams = 0;
     std::size_t cjk_seams = 0;
@@ -866,31 +896,54 @@ namespace pdflib
 
     if(gaps.size() < 4)
       {
-        return 0.0;
+        return profile;
       }
     std::sort(gaps.begin(), gaps.end());
+    auto median_of = [](const std::vector<double>& sorted) -> double
+    {
+      const std::size_t half = sorted.size() / 2;
+      return sorted.size() % 2 == 1
+        ? sorted[half]
+        : 0.5 * (sorted[half - 1] + sorted[half]);
+    };
 
     if(2 * cjk_seams > seams)
       {
-        const std::size_t half = gaps.size() / 2;
-        const double median = gaps.size() % 2 == 1
-          ? gaps[half]
-          : 0.5 * (gaps[half - 1] + gaps[half]);
-        return std::min(0.5, median);
+        profile.tracking = std::min(0.5, median_of(gaps));
+        return profile;
       }
 
     const std::size_t zeros = static_cast<std::size_t>(std::count_if(
       gaps.begin(), gaps.end(), [](double gap) { return gap < 0.01; }));
-    if(10 * zeros >= gaps.size())
-      {
-        return 0.0;
-      }
     const double low_quantile = gaps[gaps.size() / 5];
-    if(low_quantile > 0.03 and low_quantile <= 0.2)
+    if(10 * zeros < gaps.size() and
+       low_quantile > 0.03 and low_quantile <= 0.2)
       {
-        return low_quantile;
+        profile.tracking = low_quantile;
+        return profile;
       }
-    return 0.0;
+
+    // Tightly justified lines in condensed faces have word gaps of 0.14 to
+    // 0.16 em, and pair kerning between the space and a capital `V`, `W`,
+    // `A` or a `w` takes up to 0.05 em off some of them (`undVerteilung`,
+    // `tut:Wir` in newspaper-00.pdf). The other word gaps of the line show
+    // where its word spacing sits.
+    std::vector<double> word_gaps;
+    for(double gap : gaps)
+      {
+        if(gap > unspaced_word_gap_em)
+          {
+            word_gaps.push_back(gap);
+          }
+      }
+    if(word_gaps.size() >= 2)
+      {
+        profile.word_gap = std::min(
+          unspaced_word_gap_em,
+          std::max(unspaced_word_gap_floor_em,
+                   tight_line_word_gap_fraction * median_of(word_gaps)));
+      }
+    return profile;
   }
 
   inline void page_item_sanitator<PAGE_CELLS>::append_cell(
@@ -991,8 +1044,9 @@ namespace pdflib
         // spacing: the advance unit shrinks a word gap next to a wide glyph
         // (`m`, `W`) below any fixed cap while a kern next to narrow glyphs
         // rises above it, so no threshold in that unit separates the two.
-        const double tracking =
-          run.has_semantic_spaces ? 0.0 : infer_tracking(run);
+        const unspaced_gap_profile profile = run.has_semantic_spaces
+          ? unspaced_gap_profile{}
+          : infer_unspaced_gap_profile(run);
         std::vector<page_item<PAGE_CELL>> words;
         page_item<PAGE_CELL>* previous_visible = nullptr;
         bool explicit_boundary = false;
@@ -1033,8 +1087,9 @@ namespace pdflib
                   }
                 else
                   {
-                    starts_word = em_gap(*previous_visible, cell) - tracking >
-                                  unspaced_word_gap_em;
+                    starts_word =
+                      em_gap(*previous_visible, cell) - profile.tracking >
+                      profile.word_gap;
                   }
               }
 
