@@ -162,6 +162,11 @@ namespace pdflib
     SHADING_RENDER_INSTRUCTION, // paint a shading (`sh`) over the clip region
   };
 
+  // An ExtGState soft mask decoded for the renderer (soft_mask_instruction.h).
+  // It holds render instructions of its own, so it is defined after the
+  // container below; the paint instructions only ever hold it by pointer.
+  class soft_mask_instruction;
+
   // One sample of a shading's colour ramp: `offset` runs from 0.0 at the
   // start of the shading axis to 1.0 at its end (the shading's /Domain is
   // already folded in), `rgb` is the colour there in 0-255 device RGB.
@@ -338,6 +343,14 @@ namespace pdflib
     void set_blend_mode(blend_mode_name mode) { blend_mode_ = mode; }
     blend_mode_name get_blend_mode() const { return blend_mode_; }
 
+    // ExtGState /SMask in force when this was painted (11.6.5), decoded to
+    // page-space instructions; null when none. Every instruction painted
+    // under the same mask shares one object, so the renderer rasterises the
+    // mask once.
+    void set_soft_mask(std::shared_ptr<soft_mask_instruction> mask) { soft_mask_ = std::move(mask); }
+    const std::shared_ptr<soft_mask_instruction>& get_soft_mask() const { return soft_mask_; }
+    bool has_soft_mask() const { return soft_mask_ != nullptr; }
+
     void set_rendering_mode(int mode) { rendering_mode_ = mode; }
     int get_rendering_mode() const { return rendering_mode_; }
     bool is_invisible() const { return rendering_mode_ == 3 or rendering_mode_ == 7; }
@@ -412,6 +425,7 @@ namespace pdflib
     double fill_alpha_ = 1.0;
     clip_state_instruction clip_state_;
     blend_mode_name blend_mode_ = BLEND_MODE_NORMAL;
+    std::shared_ptr<soft_mask_instruction> soft_mask_;
     int rendering_mode_ = 0;
   };
 
@@ -584,6 +598,14 @@ namespace pdflib
     void set_blend_mode(blend_mode_name mode) { blend_mode_ = mode; }
     blend_mode_name get_blend_mode() const { return blend_mode_; }
 
+    // ExtGState /SMask in force when this was painted (11.6.5), decoded to
+    // page-space instructions; null when none. Every instruction painted
+    // under the same mask shares one object, so the renderer rasterises the
+    // mask once.
+    void set_soft_mask(std::shared_ptr<soft_mask_instruction> mask) { soft_mask_ = std::move(mask); }
+    const std::shared_ptr<soft_mask_instruction>& get_soft_mask() const { return soft_mask_; }
+    bool has_soft_mask() const { return soft_mask_ != nullptr; }
+
     // The /Filter chain of the stream these samples came out of, in the order
     // the PDF lists it (e.g. {"/FlateDecode", "/JPXDecode"}); empty for an
     // uncompressed image and for a rasterised Type3 glyph, which has no stream
@@ -639,6 +661,7 @@ namespace pdflib
     std::function<bitmap_samples(double)> redecode_;
 
     blend_mode_name blend_mode_ = BLEND_MODE_NORMAL;
+    std::shared_ptr<soft_mask_instruction> soft_mask_;
     std::vector<std::string> filters_;
 
     const std::string xobject_key;
@@ -826,6 +849,8 @@ namespace pdflib
                              stroke_alpha, fill_alpha,
                              clip_state.translated(dx, dy));
       copy.blend_mode_ = blend_mode_;
+      // the mask is anchored in page space, so a moved copy keeps it as is
+      copy.soft_mask_ = soft_mask_;
       return copy;
     }
 
@@ -835,9 +860,18 @@ namespace pdflib
     void set_blend_mode(blend_mode_name mode) { blend_mode_ = mode; }
     blend_mode_name get_blend_mode() const { return blend_mode_; }
 
+    // ExtGState /SMask in force when this was painted (11.6.5), decoded to
+    // page-space instructions; null when none. Every instruction painted
+    // under the same mask shares one object, so the renderer rasterises the
+    // mask once.
+    void set_soft_mask(std::shared_ptr<soft_mask_instruction> mask) { soft_mask_ = std::move(mask); }
+    const std::shared_ptr<soft_mask_instruction>& get_soft_mask() const { return soft_mask_; }
+    bool has_soft_mask() const { return soft_mask_ != nullptr; }
+
   private:
 
     blend_mode_name blend_mode_ = BLEND_MODE_NORMAL;
+    std::shared_ptr<soft_mask_instruction> soft_mask_;
 
     const std::vector<shape_subpath> subpaths;
 
@@ -926,6 +960,8 @@ namespace pdflib
                                extend_start, extend_end, fill_alpha,
                                clip_state.translated(dx, dy));
       copy.blend_mode_ = blend_mode_;
+      // the mask is anchored in page space, so a moved copy keeps it as is
+      copy.soft_mask_ = soft_mask_;
       return copy;
     }
 
@@ -935,9 +971,18 @@ namespace pdflib
     void set_blend_mode(blend_mode_name mode) { blend_mode_ = mode; }
     blend_mode_name get_blend_mode() const { return blend_mode_; }
 
+    // ExtGState /SMask in force when this was painted (11.6.5), decoded to
+    // page-space instructions; null when none. Every instruction painted
+    // under the same mask shares one object, so the renderer rasterises the
+    // mask once.
+    void set_soft_mask(std::shared_ptr<soft_mask_instruction> mask) { soft_mask_ = std::move(mask); }
+    const std::shared_ptr<soft_mask_instruction>& get_soft_mask() const { return soft_mask_; }
+    bool has_soft_mask() const { return soft_mask_ != nullptr; }
+
   private:
 
     blend_mode_name blend_mode_ = BLEND_MODE_NORMAL;
+    std::shared_ptr<soft_mask_instruction> soft_mask_;
 
     const std::string               shading_key;
     const shading_geometry          geometry;
@@ -992,9 +1037,11 @@ namespace pdflib
       return shading_instructions;
     }
 
-    // render method
+    // render method. `set_size` sizes the renderer's canvas from the size
+    // instruction first; a soft-mask group is painted onto a canvas the
+    // renderer already holds, so it passes false.
     template<typename renderer_type>
-    void iterate_over_instructions(renderer_type& renderer);
+    void iterate_over_instructions(renderer_type& renderer, bool set_size = true);
 
   private:
 
@@ -1056,9 +1103,13 @@ namespace pdflib
   }
 
   template<typename renderer_type>
-  void pdf_render_instructions::iterate_over_instructions(renderer_type& renderer)
+  void pdf_render_instructions::iterate_over_instructions(renderer_type& renderer,
+                                                          bool set_size)
   {
-    renderer.set_size(size_instr);
+    if(set_size)
+      {
+        renderer.set_size(size_instr);
+      }
 
     for(const auto& instr : instructions)
       {
