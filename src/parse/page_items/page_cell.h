@@ -153,6 +153,19 @@ namespace pdflib
     double              line_width = -1;
     std::array<int, 3>  rgb_stroking_ops = {0, 0, 0};
     std::array<int, 3>  rgb_filling_ops  = {0, 0, 0};
+
+    // Axis-aligned box, in page coordinates, of the clip region in force when
+    // the glyph was painted (ISO 32000-1, 8.5.4); unset when nothing clipped
+    // it. The quad above is the full glyph box, and the part of it outside
+    // this box is not visible on the page. A producer that fits long text
+    // into a table cell by clipping it to the cell leaves only this box to
+    // say which cell the text belongs to. A word or line cell carries the box
+    // when all of its glyphs share it. Not part of the positional JSON record.
+    bool   has_clip_bbox = false;
+    double clip_x0 = 0.0;
+    double clip_y0 = 0.0;
+    double clip_x1 = 0.0;
+    double clip_y1 = 0.0;
   };
 
   page_item<PAGE_CELL>::page_item():
@@ -237,6 +250,26 @@ namespace pdflib
     utils::values::translate_inplace(delta, r_x1, r_y1);
     utils::values::translate_inplace(delta, r_x2, r_y2);
     utils::values::translate_inplace(delta, r_x3, r_y3);    
+
+    if(has_clip_bbox)
+      {
+        utils::values::rotate_inplace(angle, clip_x0, clip_y0);
+        utils::values::rotate_inplace(angle, clip_x1, clip_y1);
+
+        utils::values::translate_inplace(delta, clip_x0, clip_y0);
+        utils::values::translate_inplace(delta, clip_x1, clip_y1);
+
+        // the box stays min/max ordered after the rotation
+        const double clip_x_min = std::min(clip_x0, clip_x1);
+        const double clip_x_max = std::max(clip_x0, clip_x1);
+        clip_x0 = clip_x_min;
+        clip_x1 = clip_x_max;
+
+        const double clip_y_min = std::min(clip_y0, clip_y1);
+        const double clip_y_max = std::max(clip_y0, clip_y1);
+        clip_y0 = clip_y_min;
+        clip_y1 = clip_y_max;
+      }
   }
   
   nlohmann::json page_item<PAGE_CELL>::get()

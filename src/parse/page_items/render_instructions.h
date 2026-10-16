@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <functional>
+#include <map>
 #include <optional>
 #include <string>
 #include <vector>
@@ -123,6 +124,83 @@ namespace pdflib
     bool has_clip() const
     {
       return rule != CLIP_RULE_NONE and not paths.empty();
+    }
+
+    // Axis-aligned box, in page space, of the region this clip state admits.
+    // Every W/W* capture (a clip group) bounds later painting to the union of
+    // its subpaths, and successive captures intersect (ISO 32000-1, 8.5.4);
+    // the box of that intersection is what a consumer of text cells can use
+    // without rasterising the paths. A non-rectangular clip is
+    // over-approximated by it. Returns false when nothing clips. An empty
+    // intersection still clips everything and comes back as a zero-size box,
+    // so a glyph under it reads as hidden.
+    bool get_bbox(std::array<double, 4>& bbox) const
+    {
+      if(not has_clip())
+        {
+          return false;
+        }
+
+      std::map<int, std::array<double, 4>> groups;
+      for(const auto& path : paths)
+        {
+          if(path.empty())
+            {
+              continue;
+            }
+          const auto& xs = path.get_x();
+          const auto& ys = path.get_y();
+          const std::size_t n = path.size();
+          std::array<double, 4> box = {xs[0], ys[0], xs[0], ys[0]};
+          for(std::size_t i = 1; i < n; i++)
+            {
+              box[0] = std::min(box[0], xs[i]);
+              box[1] = std::min(box[1], ys[i]);
+              box[2] = std::max(box[2], xs[i]);
+              box[3] = std::max(box[3], ys[i]);
+            }
+          auto itr = groups.find(path.get_clip_group());
+          if(itr == groups.end())
+            {
+              groups.emplace(path.get_clip_group(), box);
+            }
+          else
+            {
+              itr->second[0] = std::min(itr->second[0], box[0]);
+              itr->second[1] = std::min(itr->second[1], box[1]);
+              itr->second[2] = std::max(itr->second[2], box[2]);
+              itr->second[3] = std::max(itr->second[3], box[3]);
+            }
+        }
+      if(groups.empty())
+        {
+          return false;
+        }
+
+      bool first = true;
+      for(const auto& item : groups)
+        {
+          const auto& box = item.second;
+          if(first)
+            {
+              bbox = box;
+              first = false;
+              continue;
+            }
+          bbox[0] = std::max(bbox[0], box[0]);
+          bbox[1] = std::max(bbox[1], box[1]);
+          bbox[2] = std::min(bbox[2], box[2]);
+          bbox[3] = std::min(bbox[3], box[3]);
+        }
+      if(bbox[2] < bbox[0])
+        {
+          bbox[2] = bbox[0];
+        }
+      if(bbox[3] < bbox[1])
+        {
+          bbox[3] = bbox[1];
+        }
+      return true;
     }
 
     clip_state_instruction translated(double dx, double dy) const
