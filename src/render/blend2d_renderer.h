@@ -215,6 +215,14 @@ namespace pdflib
     // per figure) and the group render behind the plane is the costly part.
     // An empty image records a build that failed, so it is not retried.
     std::unordered_map<const soft_mask_instruction*, BLImage> soft_mask_planes_;
+
+    // Budget for those planes. Each is a canvas-sized A8 image, and a page can
+    // install a new mask with every `gs` for next to nothing, so without a
+    // bound a hostile page holds gigabytes. Past the budget the cache is
+    // dropped and planes are rebuilt as they are needed, which bounds memory
+    // at the cost of time.
+    static constexpr std::size_t max_soft_mask_plane_bytes = std::size_t(256) << 20;
+    std::size_t soft_mask_plane_bytes_ = 0;
     std::array<int, 3> shape_;  // {height, width, 4}, display orientation
     int canvas_width_ = 0;     // internal canvas width (unrotated page space)
     int canvas_height_ = 0;    // internal canvas height (unrotated page space)
@@ -3973,8 +3981,6 @@ namespace pdflib
         return found->second.is_empty() ? nullptr : &found->second;
       }
 
-    BLImage& plane = soft_mask_planes_[&mask];
-
     const int w = canvas_width_;
     const int h = canvas_height_;
     if (w <= 0 or h <= 0 or w > 8192 or h > 8192)
@@ -3982,8 +3988,23 @@ namespace pdflib
         LOG_S(WARNING) << "soft_mask_plane: canvas " << w << "x" << h
                        << " is too large for a mask plane; ExtGState "
                        << mask.get_key() << " paints unmasked";
+        soft_mask_planes_[&mask];
         return nullptr;
       }
+
+    const std::size_t plane_bytes = static_cast<std::size_t>(w) * static_cast<std::size_t>(h);
+    if (soft_mask_plane_bytes_ + plane_bytes > max_soft_mask_plane_bytes)
+      {
+        // Nothing holds a pointer into the cache across instructions, so the
+        // planes can go; the ones still in use are rebuilt on their next paint.
+        LOG_S(WARNING) << "soft_mask_plane: " << soft_mask_planes_.size()
+                       << " cached mask planes reach the " << (max_soft_mask_plane_bytes >> 20)
+                       << " MB budget, dropping them";
+        soft_mask_planes_.clear();
+        soft_mask_plane_bytes_ = 0;
+      }
+
+    BLImage& plane = soft_mask_planes_[&mask];
 
     // 1. The group over its backdrop, on a canvas of the page's size: its
     //    instructions are in page space, like the page's own.
@@ -4100,6 +4121,8 @@ namespace pdflib
               (through_transfer(value) * covered + outside * (255 - covered) + 127) / 255);
           }
       }
+
+    soft_mask_plane_bytes_ += plane_bytes;
 
     LOG_S(INFO) << "soft_mask_plane: built " << w << "x" << h
                 << " plane for ExtGState " << mask.get_key()
