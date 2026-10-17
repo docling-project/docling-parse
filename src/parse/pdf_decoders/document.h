@@ -11,8 +11,10 @@
 #include <qpdf/Buffer.hh>
 #include <qpdf/QPDFAcroFormDocumentHelper.hh>
 #include <qpdf/QPDF.hh>
+#include <qpdf/QPDFExc.hh>
 #include <qpdf/QPDFWriter.hh>
 
+#include <parse/qpdf/load_error.h>
 #include <parse/qpdf/logger.h>
 #include <parse/qpdf/page_integrity.h>
 
@@ -33,6 +35,12 @@ namespace pdflib
     int get_number_of_pages() { return number_of_pages; }
 
     std::string get_filename() { return filename; }
+
+    // Why the last process_document_* call returned false: a category
+    // from load_error and the message of the underlying failure. Both
+    // are empty while no load has failed.
+    const std::string& get_load_error_category() const { return load_error_category; }
+    const std::string& get_load_error_message() const { return load_error_message; }
 
     nlohmann::json get_annotations();
 
@@ -83,6 +91,8 @@ namespace pdflib
     // object the file does not contain (docling-parse#374).
     void ensure_page_content_present(int page_number);
 
+    void record_load_error(const std::string& category, const std::string& message);
+
     void update_timings(pdf_timings& timings_, bool set_timer);
 
   private:
@@ -111,6 +121,9 @@ namespace pdflib
     // reconstructing the cross-reference table). Set once at load time
     // and read by the worker threads afterwards.
     bool qpdf_reported_damage;
+
+    std::string load_error_category;
+    std::string load_error_message;
 
     nlohmann::json json_annots;
     bool annots_loaded;
@@ -235,6 +248,7 @@ namespace pdflib
     std::ifstream ifs(fs_path, std::ios::binary | std::ios::ate);
     if(!ifs.is_open())
       {
+        record_load_error(load_error::IO, "could not open file: " + filename);
         LOG_S(ERROR) << "could not open file: " << filename;
         return false;
       }
@@ -245,6 +259,7 @@ namespace pdflib
     auto file_buffer = std::make_shared<std::string>(file_size, '\0');
     if(!ifs.read(file_buffer->data(), file_size))
       {
+        record_load_error(load_error::IO, "could not read file: " + filename);
         LOG_S(ERROR) << "could not read file: " << filename;
         return false;
       }
@@ -269,6 +284,9 @@ namespace pdflib
   {
     buffer = _buffer;
     password = _password;
+
+    load_error_category.clear();
+    load_error_message.clear();
 
     LOG_S(INFO) << "start processing buffer of size " << buffer->size() << " by qpdf ...";
     
@@ -308,8 +326,16 @@ namespace pdflib
 	
         LOG_S(INFO) << "#-pages: " << number_of_pages;	
       }
+    catch(const QPDFExc & exc)
+      {
+        // qpdf says why: an invalid password, a file it could not repair, ...
+        record_load_error(load_error::category_of(exc.getErrorCode()), exc.what());
+        LOG_S(ERROR) << "could not process buffer by qpdf: " << exc.what();
+        return false;
+      }
     catch(const std::exception & exc)
       {
+        record_load_error(load_error::UNKNOWN, exc.what());
         LOG_S(ERROR) << "could not process buffer by qpdf: " << exc.what();
         return false;
       }
@@ -319,6 +345,13 @@ namespace pdflib
     timings.add_timing(pdf_timings::KEY_PROCESS_DOCUMENT_FROM_BYTESIO, timer.get_time());
     
     return true;
+  }
+
+  void pdf_decoder<DOCUMENT>::record_load_error(const std::string& category,
+                                                const std::string& message)
+  {
+    load_error_category = category;
+    load_error_message = message;
   }
 
   std::pair<int, std::shared_ptr<std::string> > pdf_decoder<DOCUMENT>::get_thread_safe_page_buffer(
