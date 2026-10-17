@@ -429,6 +429,38 @@ def test_mask_inside_the_mask_group_is_not_applied():
     _assert_color(_pixel(image, 100, 50), HALF_BLUE_ON_RED, "outer mask only")
 
 
+@pytest.mark.parametrize(
+    ("inner_gs", "expected", "description"),
+    [
+        ("", HALF_BLUE_ON_RED, "no mask of its own"),
+        ("/GN gs", HALF_BLUE_ON_RED, "/SMask /None inside"),
+        ("/G1 gs", (191, 0, 64), "the same 50% mask again"),
+    ],
+)
+def test_mask_at_the_do_masks_a_transparency_group(
+    inner_gs: str, expected: Tuple[int, int, int], description: str
+):
+    """A transparency group painted under a mask is masked as a whole (11.6.6).
+    A mask its content installs, or clears, acts inside the group only: a
+    50% mask inside a group drawn under a 50% mask leaves a quarter of the
+    blue, which is what pdfium shows."""
+    pdf = _build_pdf(
+        f"1 0 0 rg 0 0 {PAGE_WIDTH} {PAGE_HEIGHT} re f /G1 gs /Fm1 Do",
+        "/ExtGState << /G1 5 0 R /GN << /SMask /None >> >> /XObject << /Fm1 7 0 R >>",
+        [
+            _smask("6 0 R"),
+            _group(f"0.5 g 0 0 {PAGE_WIDTH} {PAGE_HEIGHT} re f"),
+            _stream(
+                f"/Type /XObject /Subtype /Form /BBox {FULL_BBOX} "
+                "/Group << /S /Transparency /CS /DeviceRGB >>",
+                f"{inner_gs} {BOX}",
+            ),
+        ],
+    )
+    image = _render(pdf)
+    _assert_color(_pixel(image, 100, 50), expected, description)
+
+
 # ---------------------------------------------------------------------------
 # the switch
 # ---------------------------------------------------------------------------

@@ -31,6 +31,22 @@ namespace pdflib
       bbox_quad_(bbox_quad)
     {}
 
+    // Two masks in force at once, the coverage being the product of both.
+    // A transparency group painted under a mask is masked as a whole, and a
+    // mask its content installs applies inside the group (11.6.6); with the
+    // group's parameters pushed down onto its content (see
+    // pdf_state<GRPH>::enter_transparency_group), each paint inside carries
+    // both masks.
+    soft_mask_instruction(std::shared_ptr<soft_mask_instruction> outer,
+                          std::shared_ptr<soft_mask_instruction> inner):
+      key_(outer->get_key() + "*" + inner->get_key()),
+      luminosity_(true),
+      backdrop_rgb_({0, 0, 0}),
+      bbox_quad_({}),
+      outer_(std::move(outer)),
+      inner_(std::move(inner))
+    {}
+
     // The ExtGState resource name the mask came from, for diagnostics.
     const std::string& get_key() const { return key_; }
 
@@ -53,6 +69,11 @@ namespace pdflib
     pdf_render_instructions&       get_group()       { return group_; }
     const pdf_render_instructions& get_group() const { return group_; }
 
+    // True for the product of two masks, which has no group of its own.
+    bool is_intersection() const { return outer_ != nullptr; }
+    const std::shared_ptr<soft_mask_instruction>& get_outer() const { return outer_; }
+    const std::shared_ptr<soft_mask_instruction>& get_inner() const { return inner_; }
+
   private:
 
     std::string           key_;
@@ -62,6 +83,9 @@ namespace pdflib
     std::array<double, 8> bbox_quad_;
 
     pdf_render_instructions group_;
+
+    std::shared_ptr<soft_mask_instruction> outer_;
+    std::shared_ptr<soft_mask_instruction> inner_;
   };
 
 }

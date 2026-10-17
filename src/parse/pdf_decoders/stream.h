@@ -207,9 +207,15 @@ namespace pdflib
       std::shared_ptr<const soft_mask_spec>  spec;
       std::shared_ptr<soft_mask_instruction> mask;
     };
+    //
+    // A mask installed inside a transparency group painted under another
+    // mask is intersected with it; the intersections are kept here too, keyed
+    // by the two masks, so every paint under the same pair shares one.
     struct soft_mask_page_cache
     {
       std::unordered_map<std::string, soft_mask_cache_entry> decoded;
+      std::map<std::pair<const soft_mask_instruction*, const soft_mask_instruction*>,
+               std::shared_ptr<soft_mask_instruction>> intersected;
       bool budget_reported = false;
     };
     static constexpr std::size_t max_soft_mask_decodes = 512;
@@ -1870,10 +1876,24 @@ namespace pdflib
         decoded[cache_key] = soft_mask_cache_entry{spec, mask};
       }
 
-    if(mask)
+    if(not mask) { return; }
+
+    std::shared_ptr<soft_mask_instruction> paint_mask = mask;
+
+    const std::shared_ptr<soft_mask_instruction>& outer =
+      current_graphic_state().get_group_soft_mask();
+    if(outer)
       {
-        current_graphic_state().set_soft_mask_instruction(mask);
+        auto& intersected = soft_mask_cache_->intersected;
+        auto& both = intersected[{outer.get(), mask.get()}];
+        if(not both)
+          {
+            both = std::make_shared<soft_mask_instruction>(outer, mask);
+          }
+        paint_mask = both;
       }
+
+    current_graphic_state().set_soft_mask_instruction(mask, paint_mask);
   }
 
   // The group is decoded the way `Do` decodes a form, with two differences:

@@ -204,8 +204,9 @@ namespace pdflib
     // /SMask is part of the graphics state (it survives q/Q). A `gs` that
     // installs one leaves the parsed entry and the CTM of that moment here;
     // the stream decoder then decodes the group -- it has the resources and
-    // the state does not -- and hands back the instruction every paint under
-    // the mask carries.
+    // the state does not -- and hands back the decoded mask together with
+    // the instruction every paint under it carries: the mask itself, or its
+    // intersection with the mask of an enclosing transparency group.
     soft_mask_state get_soft_mask() const { return soft_mask; }
     const std::shared_ptr<const soft_mask_spec>& get_soft_mask_spec() const { return soft_mask_spec_; }
     const std::array<double, 9>& get_soft_mask_ctm() const { return soft_mask_ctm_; }
@@ -216,13 +217,23 @@ namespace pdflib
       return soft_mask_spec_ != nullptr and soft_mask_instr_ == nullptr;
     }
 
-    void set_soft_mask_instruction(std::shared_ptr<soft_mask_instruction> instr)
+    void set_soft_mask_instruction(std::shared_ptr<soft_mask_instruction> instr,
+                                   std::shared_ptr<soft_mask_instruction> paint_instr)
     {
       soft_mask_instr_ = std::move(instr);
+      paint_soft_mask_ = std::move(paint_instr);
     }
+
+    // The mask a paint carries now, null when nothing masks it.
     const std::shared_ptr<soft_mask_instruction>& get_soft_mask_instruction() const
     {
-      return soft_mask_instr_;
+      return paint_soft_mask_;
+    }
+
+    // The mask in force at the `Do` of the enclosing transparency groups.
+    const std::shared_ptr<soft_mask_instruction>& get_group_soft_mask() const
+    {
+      return group_soft_mask_;
     }
 
     // Enters a transparency group XObject (11.6.6). The group is supposed to
@@ -231,7 +242,9 @@ namespace pdflib
     // page with the alpha and blend mode in force at the `Do`. There is no
     // such buffer here, so the group's parameters are instead pushed down onto
     // everything it paints. That is the same picture whenever the group's
-    // contents do not overlap each other, and too strong where they do.
+    // contents do not overlap each other, and too strong where they do. A
+    // soft mask goes the same way: the one in force at the `Do` masks every
+    // paint inside, on top of any mask the group's content installs.
     void enter_transparency_group();
 
   private:
@@ -310,9 +323,14 @@ namespace pdflib
     std::array<double, 9>                  soft_mask_ctm_;
     std::shared_ptr<soft_mask_instruction> soft_mask_instr_;
 
+    // what paints carry: soft_mask_instr_, group_soft_mask_ or the two
+    // intersected
+    std::shared_ptr<soft_mask_instruction> paint_soft_mask_;
+
     // accumulated parameters of the enclosing transparency groups
     double          group_alpha;
     blend_mode_name group_blend_mode;
+    std::shared_ptr<soft_mask_instruction> group_soft_mask_;
   };
 
   pdf_state<GRPH>::pdf_state(std::array<double, 9>&    trafo_matrix_,
@@ -357,9 +375,11 @@ namespace pdflib
                     0.0, 1.0, 0.0,
                     0.0, 0.0, 1.0}),
     soft_mask_instr_(nullptr),
+    paint_soft_mask_(nullptr),
 
     group_alpha(1.0),
-    group_blend_mode(BLEND_MODE_NORMAL)
+    group_blend_mode(BLEND_MODE_NORMAL),
+    group_soft_mask_(nullptr)
   {}
 
   pdf_state<GRPH>::pdf_state(const pdf_state<GRPH>& other):
@@ -406,9 +426,11 @@ namespace pdflib
     this->soft_mask_spec_ = other.soft_mask_spec_;
     this->soft_mask_ctm_ = other.soft_mask_ctm_;
     this->soft_mask_instr_ = other.soft_mask_instr_;
+    this->paint_soft_mask_ = other.paint_soft_mask_;
 
     this->group_alpha = other.group_alpha;
     this->group_blend_mode = other.group_blend_mode;
+    this->group_soft_mask_ = other.group_soft_mask_;
 
     return *this;
   }
@@ -416,14 +438,20 @@ namespace pdflib
   void pdf_state<GRPH>::enter_transparency_group()
   {
     // Fold what is in force at the `Do` into the group parameters, then reset
-    // the state itself: 11.6.6 starts a group's contents at alpha 1 and
-    // Normal, and the content's own ExtGState will say otherwise if it means to.
+    // the state itself: 11.6.6 starts a group's contents at alpha 1, Normal
+    // and no soft mask, and the content's own ExtGState will say otherwise if
+    // it means to.
     group_alpha = get_fill_alpha();
     group_blend_mode = get_blend_mode();
+    group_soft_mask_ = paint_soft_mask_;
 
     stroke_alpha = 1.0;
     fill_alpha = 1.0;
     blend_mode = BLEND_MODE_NORMAL;
+
+    soft_mask = SOFT_MASK_NONE;
+    soft_mask_spec_ = nullptr;
+    soft_mask_instr_ = nullptr;
   }
 
   bool pdf_state<GRPH>::verify(std::vector<qpdf_stream_instruction>& instructions,
@@ -713,6 +741,7 @@ namespace pdflib
         soft_mask = SOFT_MASK_NONE;
         soft_mask_spec_ = nullptr;
         soft_mask_instr_ = nullptr;
+        paint_soft_mask_ = group_soft_mask_;
       }
     else if(grph.get_soft_mask()==SOFT_MASK_PRESENT)
       {
@@ -723,6 +752,7 @@ namespace pdflib
         soft_mask_spec_ = grph.get_soft_mask_spec();
         soft_mask_ctm_ = trafo_matrix;
         soft_mask_instr_ = nullptr;
+        paint_soft_mask_ = group_soft_mask_;
       }
 
     LOG_S(INFO) << "gs " << key
