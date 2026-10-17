@@ -209,6 +209,7 @@ namespace pdflib
     void init_ws();
 
     void init_cmap(pdf_timings& timings);
+    void fold_symbol_font_private_use();
     void init_cmap_resource();
 
     void init_font_flags();
@@ -2566,6 +2567,8 @@ namespace pdflib
 
 	      cmap_numb_to_char = parser.get();
 	    }
+
+	    fold_symbol_font_private_use();
 	  }
 	else if(qpdf_obj.isString())
 	  {
@@ -2603,6 +2606,62 @@ namespace pdflib
     else
       {
 	cmap_initialized = false;
+      }
+  }
+
+  // Office exporters embed Symbol and ZapfDingbats with a /ToUnicode map that
+  // sends every glyph to the "symbol charset" private-use block, U+F000 plus
+  // the byte code, so bullets, operators, Greek letters and even parentheses
+  // would reach the text as invisible private-use characters. When the base
+  // font is one of these two core fonts, fold such values back through the
+  // font's own encoding (AFM glyph names via the glyph list); codes the
+  // encoding does not cover, and every other font, stay as they are, since
+  // CJK gaiji and Arabic presentation fonts use the same block for real text.
+  void pdf_resource<PAGE_FONT>::fold_symbol_font_private_use()
+  {
+    if(cmap_numb_to_char.is_identity() or cmap_numb_to_char.empty())
+      {
+        return;
+      }
+
+    const base_font_match& match = matched_base_font();
+    if(not match.font or
+       (match.name != "symbol" and match.name != "zapfdingbats"))
+      {
+        return;
+      }
+
+    std::unordered_map<uint32_t, std::string> folded;
+    std::size_t folded_count = 0;
+    for(auto itr = cmap_numb_to_char.begin(); itr != cmap_numb_to_char.end(); itr++)
+      {
+        const std::string& value = itr->second;
+
+        std::vector<uint32_t> code_points;
+        if(utf8::is_valid(value.begin(), value.end()))
+          {
+            utf8::utf8to32(value.begin(), value.end(),
+                           std::back_inserter(code_points));
+          }
+
+        if(code_points.size() == 1 and
+           0xF020 <= code_points.front() and code_points.front() <= 0xF0FF and
+           match.font->has(code_points.front() - 0xF000))
+          {
+            folded[itr->first] = match.font->to_utf8(code_points.front() - 0xF000);
+            folded_count += 1;
+          }
+        else
+          {
+            folded[itr->first] = value;
+          }
+      }
+
+    if(folded_count > 0)
+      {
+        LOG_S(INFO) << "folded " << folded_count << " private-use /ToUnicode values of "
+                    << base_font << " through the " << match.name << " encoding";
+        cmap_numb_to_char = cmap_value(std::move(folded));
       }
   }
 
