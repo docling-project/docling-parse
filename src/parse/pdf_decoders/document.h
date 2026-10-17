@@ -14,6 +14,7 @@
 #include <qpdf/QPDFWriter.hh>
 
 #include <parse/qpdf/logger.h>
+#include <parse/qpdf/page_integrity.h>
 
 namespace pdflib
 {
@@ -78,6 +79,10 @@ namespace pdflib
 
     void ensure_annots_loaded();
 
+    // Throws missing_page_object_error when the page references an
+    // object the file does not contain (docling-parse#374).
+    void ensure_page_content_present(int page_number);
+
     void update_timings(pdf_timings& timings_, bool set_timer);
 
   private:
@@ -102,6 +107,11 @@ namespace pdflib
 
     int number_of_pages;
 
+    // qpdf had to repair the file while loading it (for example by
+    // reconstructing the cross-reference table). Set once at load time
+    // and read by the worker threads afterwards.
+    bool qpdf_reported_damage;
+
     nlohmann::json json_annots;
     bool annots_loaded;
 
@@ -120,6 +130,7 @@ namespace pdflib
     qpdf_pages({}),
 
     number_of_pages(-1),
+    qpdf_reported_damage(false),
 
     json_annots(nlohmann::json::value_t::null),
     annots_loaded(false),
@@ -139,6 +150,7 @@ namespace pdflib
     qpdf_pages({}),
 
     number_of_pages(-1),
+    qpdf_reported_damage(false),
 
     json_annots(nlohmann::json::value_t::null),
     annots_loaded(false),
@@ -292,6 +304,7 @@ namespace pdflib
 
 	qpdf_pages = qpdf_document.getAllPages();
 	number_of_pages = qpdf_pages.size();
+	qpdf_reported_damage = qpdf_document.anyWarnings();
 	
         LOG_S(INFO) << "#-pages: " << number_of_pages;	
       }
@@ -403,10 +416,38 @@ namespace pdflib
     return *src_afdh;
   }
 
+  void pdf_decoder<DOCUMENT>::ensure_page_content_present(int page_number)
+  {
+    std::string missing;
+    {
+      // Resolving the page's references may load objects into the shared
+      // qpdf document, which is only ever touched under this mutex.
+      std::lock_guard<std::mutex> lock(thread_safe_buffer_mutex);
+      missing = qpdf_page_integrity::find_missing_content(qpdf_pages.at(page_number));
+    }
+
+    if(missing.empty())
+      {
+        return;
+      }
+
+    std::string message = "page references " + missing + ", which is not in the file";
+    if(qpdf_reported_damage)
+      {
+        message += " (qpdf had to repair the document while loading it)";
+      }
+    message += ": the PDF is truncated or damaged";
+
+    LOG_S(ERROR) << message;
+    throw missing_page_object_error(message);
+  }
+
   pdf_decoder<DOCUMENT>::page_decoder_ptr
   pdf_decoder<DOCUMENT>::make_thread_safe_page_decoder(int page_number,
                                                        bool keep_qpdf_warnings)
   {
+    ensure_page_content_present(page_number);
+
     std::pair<int, std::shared_ptr<std::string> > result =
       get_thread_safe_page_buffer(page_number, keep_qpdf_warnings);
 
@@ -510,6 +551,7 @@ namespace pdflib
       else
         {
 	  LOG_S(INFO) << "decoding page thread-unsafe";
+          ensure_page_content_present(page_number);
           QPDFObjectHandle qpdf_page = qpdf_pages.at(page_number);
 
           page_decoder = std::make_shared<pdf_decoder<PAGE>>(qpdf_page, page_number);
