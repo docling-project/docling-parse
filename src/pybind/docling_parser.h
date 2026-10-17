@@ -5,7 +5,10 @@
 
 #include <atomic>
 #include <list>
+#include <map>
 #include <optional>
+#include <string>
+#include <unordered_map>
 #ifdef _WIN32
 #include <locale>
 #include <codecvt>
@@ -53,6 +56,10 @@ namespace docling
 
     int number_of_pages(std::string key);
 
+    // Return and clear why the last load of `key` failed:
+    // {"category": ..., "message": ...}, or an empty map.
+    std::map<std::string, std::string> take_load_error(std::string key);
+
     nlohmann::json get_annotations(std::string key);
 
     nlohmann::json get_meta_xml(std::string key);
@@ -76,6 +83,9 @@ namespace docling
     page_decoder_ptr_type find_page_decoder(const std::string& key, int page);
     void add_page_decoder(const std::string& key, int page, page_decoder_ptr_type page_decoder);
     void remove_page_decoders(const std::string& key);
+    void record_load_error(const std::string& key,
+                           const std::string& category,
+                           const std::string& message);
     void remove_page_decoder(const std::string& key, int page);
     void trim_page_decoders();
 
@@ -84,6 +94,10 @@ namespace docling
     std::string pdf_resources_dir;
 
     std::unordered_map<std::string, doc_decoder_ptr_type> doc_decoders;
+
+    // Failed loads by key, until Python collects the reason.
+    std::unordered_map<std::string, std::map<std::string, std::string>> load_errors;
+
     std::list<page_decoder_cache_entry> page_decoders;
     int max_concurrent_results;
     std::atomic<int> total_processed_pages{0};
@@ -151,11 +165,34 @@ namespace docling
     return (doc_decoders.count(key)==1);
   }
 
+  std::map<std::string, std::string> docling_parser::take_load_error(std::string key)
+  {
+    std::map<std::string, std::string> result;
+
+    auto itr = load_errors.find(key);
+    if(itr != load_errors.end())
+      {
+        result = itr->second;
+        load_errors.erase(itr);
+      }
+
+    return result;
+  }
+
+  void docling_parser::record_load_error(const std::string& key,
+                                         const std::string& category,
+                                         const std::string& message)
+  {
+    load_errors[key] = {{"category", category}, {"message", message}};
+  }
+
   bool docling_parser::load_document(std::string key,
 				     std::string filename,
 				     std::optional<std::string> password,
                                      bool keep_qpdf_warnings)
   {
+    load_errors.erase(key);
+
 #ifdef _WIN32
     // Convert UTF-8 string to UTF-16 wstring
     std::wstring_convert<std::codecvt_utf8_utf16<wchar_t> > converter;
@@ -177,6 +214,9 @@ namespace docling
           {
             // do not keep a decoder that never parsed the document: it would
             // report is_loaded()=true and a number_of_pages of -1
+            record_load_error(key,
+                              doc_decoders.at(key)->get_load_error_category(),
+                              doc_decoders.at(key)->get_load_error_message());
             doc_decoders.erase(key);
             LOG_S(ERROR) << "could not process document for key=" << key;
             return false;
@@ -185,6 +225,7 @@ namespace docling
         return true;
       }
 
+    record_load_error(key, pdflib::load_error::IO, "file not found: " + filename);
     LOG_S(ERROR) << "File not found: " << filename;
     return false;
   }
@@ -202,6 +243,8 @@ namespace docling
 
       throw std::runtime_error("Expected a BytesIO object");
     }
+
+    load_errors.erase(key);
 
     // Seek to the beginning of the BytesIO stream
     bytes_io.attr("seek")(0);
@@ -226,6 +269,9 @@ namespace docling
           {
             // do not keep a decoder that never parsed the document: it would
             // report is_loaded()=true and a number_of_pages of -1
+            record_load_error(key,
+                              doc_decoders.at(key)->get_load_error_category(),
+                              doc_decoders.at(key)->get_load_error_message());
             doc_decoders.erase(key);
             LOG_S(ERROR) << "could not decode bytesio object for key="<<key;
             return false;
@@ -235,6 +281,7 @@ namespace docling
       }
     catch(const std::exception& exc)
       {
+        record_load_error(key, pdflib::load_error::UNKNOWN, exc.what());
         doc_decoders.erase(key);
         LOG_S(ERROR) << "could not decode bytesio object for key="<<key;
         return false;
