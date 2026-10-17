@@ -134,6 +134,7 @@ namespace pdflib
     static const std::string KEY_RENDER_BITMAP;
     static const std::string KEY_RENDER_SHAPE;
     static const std::string KEY_RENDER_SHADING;
+    static const std::string KEY_RENDER_SOFT_MASK;
     static const std::string KEY_RENDER_WIDGET;
     static const std::string KEY_RENDER_GET_CANVAS;
 
@@ -507,6 +508,9 @@ namespace pdflib
   const std::string pdf_timings::KEY_RENDER_BITMAP = "render_page.bitmap";
   const std::string pdf_timings::KEY_RENDER_SHAPE = "render_page.shape";
   const std::string pdf_timings::KEY_RENDER_SHADING = "render_page.shading";
+  // painting through ExtGState soft masks: the mask raster plus the masked
+  // paint itself, which the per-kind keys above do not see
+  const std::string pdf_timings::KEY_RENDER_SOFT_MASK = "render_page.soft_mask";
   const std::string pdf_timings::KEY_RENDER_WIDGET = "render_page.widget";
   const std::string pdf_timings::KEY_RENDER_GET_CANVAS = "render_page.get_canvas";
 
@@ -549,6 +553,7 @@ namespace pdflib
       KEY_RENDER_BITMAP,
       KEY_RENDER_SHAPE,
       KEY_RENDER_SHADING,
+      KEY_RENDER_SOFT_MASK,
       KEY_RENDER_WIDGET,
       KEY_RENDER_GET_CANVAS,
       KEY_DECODE_PAGE,
@@ -679,6 +684,7 @@ namespace pdflib
       {KEY_RENDER_BITMAP,                  KEY_RENDER_PAGE},
       {KEY_RENDER_SHAPE,                   KEY_RENDER_PAGE},
       {KEY_RENDER_SHADING,                 KEY_RENDER_PAGE},
+      {KEY_RENDER_SOFT_MASK,               KEY_RENDER_PAGE},
       {KEY_RENDER_WIDGET,                  KEY_RENDER_PAGE},
       {KEY_RENDER_GET_CANVAS,              KEY_RENDER_PAGE},
       {KEY_RENDER_TEXT_FONT_RESOLVE,       KEY_RENDER_TEXT},

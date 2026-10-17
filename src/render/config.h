@@ -38,6 +38,13 @@ namespace pdflib
     // simple rectangular clips are applied; non-rectangular clips are ignored.
     bool render_non_rect_clip_masks = true;
 
+    // Composite paint through ExtGState soft masks (/SMask, ISO 32000-1
+    // 11.6.5): the mask group is rasterised once per page and its luminosity
+    // (or alpha) scales everything painted under it. When false, such paint
+    // lands unmasked, which is what a drop shadow or feathered photo edge
+    // looks like as an opaque box.
+    bool render_soft_masks = true;
+
     // Minimum stroke width in device pixels. PDF hairlines (`0 w`) and
     // sub-pixel strokes are promoted to this width so they remain visible.
     float min_stroke_width = 1.0f;
