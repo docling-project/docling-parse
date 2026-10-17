@@ -909,6 +909,9 @@ namespace pdflib
     // cached per mask for the page. Null when it could not be built.
     const BLImage* soft_mask_plane(soft_mask_instruction& mask);
 
+    // The plane of an intersection: the product of its two masks' planes.
+    const BLImage* soft_mask_intersection_plane(soft_mask_instruction& mask);
+
     // Runs `paint` (which draws through page_context()) into a layer over
     // `bbox`, knocks the layer back with the mask and blits it with `mode`.
     template<typename paint_type>
@@ -3981,6 +3984,11 @@ namespace pdflib
         return found->second.is_empty() ? nullptr : &found->second;
       }
 
+    if (mask.is_intersection())
+      {
+        return soft_mask_intersection_plane(mask);
+      }
+
     const int w = canvas_width_;
     const int h = canvas_height_;
     if (w <= 0 or h <= 0 or w > 8192 or h > 8192)
@@ -4127,6 +4135,70 @@ namespace pdflib
     LOG_S(INFO) << "soft_mask_plane: built " << w << "x" << h
                 << " plane for ExtGState " << mask.get_key()
                 << " (" << (luminosity ? "luminosity" : "alpha") << ")";
+    return &plane;
+  }
+
+  inline const BLImage* renderer<BLEND2D>::soft_mask_intersection_plane(soft_mask_instruction& mask)
+  {
+    // BLImage copies share pixels, so these hold both planes even if building
+    // the second one drops the cache.
+    BLImage outer;
+    if (const BLImage* plane = soft_mask_plane(*mask.get_outer())) { outer = *plane; }
+
+    BLImage inner;
+    if (const BLImage* plane = soft_mask_plane(*mask.get_inner())) { inner = *plane; }
+
+    // A part that could not be built was reported, and paints unmasked on
+    // its own; here it drops out of the product the same way.
+    if (outer.is_empty() or inner.is_empty())
+      {
+        BLImage& plane = soft_mask_planes_[&mask];
+        plane = outer.is_empty() ? inner : outer;
+        return plane.is_empty() ? nullptr : &plane;
+      }
+
+    const int w = outer.width();
+    const int h = outer.height();
+    const std::size_t plane_bytes = static_cast<std::size_t>(w) * static_cast<std::size_t>(h);
+    if (soft_mask_plane_bytes_ + plane_bytes > max_soft_mask_plane_bytes)
+      {
+        LOG_S(WARNING) << "soft_mask_plane: " << soft_mask_planes_.size()
+                       << " cached mask planes reach the " << (max_soft_mask_plane_bytes >> 20)
+                       << " MB budget, dropping them";
+        soft_mask_planes_.clear();
+        soft_mask_plane_bytes_ = 0;
+      }
+
+    BLImage& plane = soft_mask_planes_[&mask];
+
+    BLImageData o, i, p;
+    if (plane.create(w, h, BL_FORMAT_A8) != BL_SUCCESS or
+        outer.get_data(&o) != BL_SUCCESS or
+        inner.get_data(&i) != BL_SUCCESS or
+        plane.make_mutable(&p) != BL_SUCCESS)
+      {
+        LOG_S(WARNING) << "soft_mask_plane: could not allocate the plane of "
+                       << mask.get_key() << "; paints unmasked";
+        plane.reset();
+        return nullptr;
+      }
+
+    for (int y = 0; y < h; y++)
+      {
+        const uint8_t* orow = static_cast<const uint8_t*>(o.pixel_data) + y * o.stride;
+        const uint8_t* irow = static_cast<const uint8_t*>(i.pixel_data) + y * i.stride;
+        uint8_t* prow = static_cast<uint8_t*>(p.pixel_data) + y * p.stride;
+
+        for (int x = 0; x < w; x++)
+          {
+            prow[x] = static_cast<uint8_t>((orow[x] * irow[x] + 127) / 255);
+          }
+      }
+
+    soft_mask_plane_bytes_ += plane_bytes;
+
+    LOG_S(INFO) << "soft_mask_plane: built " << w << "x" << h
+                << " plane for the intersection " << mask.get_key();
     return &plane;
   }
 
