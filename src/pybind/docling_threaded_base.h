@@ -7,10 +7,12 @@
 #include <atomic>
 #include <condition_variable>
 #include <cstdint>
+#include <map>
 #include <mutex>
 #include <optional>
 #include <queue>
 #include <stdexcept>
+#include <string>
 #include <thread>
 #include <unordered_map>
 #include <utility>
@@ -73,6 +75,10 @@ namespace docling
     int number_of_pages(std::string key) const;
     int scheduled_number_of_pages(std::string key) const;
 
+    // Return and clear why the last load of `key` failed:
+    // {"category": ..., "message": ...}, or an empty map.
+    std::map<std::string, std::string> take_load_error(std::string key);
+
     nlohmann::json get_annotations(std::string key) const;
 
     bool unload_document(std::string key);
@@ -91,6 +97,9 @@ namespace docling
         std::optional<std::vector<int>> page_numbers,
         std::optional<std::pair<std::int64_t, std::int64_t>> page_range) const;
     void validate_unload_state() const;
+    void record_load_error(const std::string& key,
+                           const std::string& category,
+                           const std::string& message);
     void reset_after_completion();
 
     void build_task_queue();
@@ -107,6 +116,9 @@ namespace docling
 
     std::unordered_map<std::string, doc_decoder_ptr_type> key2doc;
     std::unordered_map<std::string, std::vector<int>> key2scheduled_pages;
+
+    // Failed loads by key, until Python collects the reason.
+    std::unordered_map<std::string, std::map<std::string, std::string>> load_errors;
 
     // Task queue: (doc_key, page_number) pairs
     std::queue<std::pair<std::string, int>> task_queue;
@@ -212,6 +224,8 @@ namespace docling
         return false;
       }
 
+    load_errors.erase(key);
+
 #ifdef _WIN32
     std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
     std::wstring wide_filename = converter.from_bytes(filename);
@@ -232,6 +246,9 @@ namespace docling
               {
                 // do not keep a decoder that never parsed the document: it
                 // would schedule zero pages and report a page count of -1
+                record_load_error(key,
+                                  key2doc.at(key)->get_load_error_category(),
+                                  key2doc.at(key)->get_load_error_message());
                 key2doc.erase(key);
                 LOG_S(ERROR) << "could not decode file object for key=" << key;
                 return false;
@@ -239,6 +256,7 @@ namespace docling
           }
         catch(const std::exception& exc)
           {
+            record_load_error(key, pdflib::load_error::UNKNOWN, exc.what());
             key2doc.erase(key);
             LOG_S(ERROR) << "could not decode file object for key=" << key;
             return false;
@@ -261,6 +279,7 @@ namespace docling
         return true;
       }
 
+    record_load_error(key, pdflib::load_error::IO, "file not found: " + filename);
     LOG_S(ERROR) << "File not found: " << filename;
     return false;
   }
@@ -278,6 +297,8 @@ namespace docling
         LOG_S(ERROR) << "Cannot load documents after processing has started";
         return false;
       }
+
+    load_errors.erase(key);
 
     LOG_S(INFO) << __FILE__ << ":" << __LINE__ << "\t" << __FUNCTION__;
 
@@ -304,6 +325,9 @@ namespace docling
           {
             // do not keep a decoder that never parsed the document: it would
             // schedule zero pages and report a page count of -1
+            record_load_error(key,
+                              key2doc.at(key)->get_load_error_category(),
+                              key2doc.at(key)->get_load_error_message());
             key2doc.erase(key);
             key2scheduled_pages.erase(key);
             LOG_S(ERROR) << "could not decode bytesio object for key=" << key;
@@ -312,6 +336,7 @@ namespace docling
       }
     catch(const std::exception& exc)
       {
+        record_load_error(key, pdflib::load_error::UNKNOWN, exc.what());
         key2doc.erase(key);
         key2scheduled_pages.erase(key);
         LOG_S(ERROR) << "could not decode bytesio object for key=" << key;
@@ -333,6 +358,30 @@ namespace docling
         throw;
       }
     return true;
+  }
+
+  template<typename Derived, typename ResultType>
+  std::map<std::string, std::string>
+  docling_threaded_base<Derived, ResultType>::take_load_error(std::string key)
+  {
+    std::map<std::string, std::string> result;
+
+    auto itr = load_errors.find(key);
+    if(itr != load_errors.end())
+      {
+        result = itr->second;
+        load_errors.erase(itr);
+      }
+
+    return result;
+  }
+
+  template<typename Derived, typename ResultType>
+  void docling_threaded_base<Derived, ResultType>::record_load_error(const std::string& key,
+                                                                     const std::string& category,
+                                                                     const std::string& message)
+  {
+    load_errors[key] = {{"category", category}, {"message", message}};
   }
 
   template<typename Derived, typename ResultType>
