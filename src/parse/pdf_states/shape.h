@@ -578,17 +578,14 @@ namespace pdflib
         return true;
       }
 
-    if(instructions.size()<num_instr) // fatal ...
-      {
-        std::stringstream ss;
-        ss << "#-instructions " << instructions.size()
-           << " does not match expected value " << num_instr
-           << " for PDF operation: "
-           << name;
-
-        LOG_S(ERROR) << ss.str();
-        throw std::logic_error(ss.str());
-      }
+    // Too few operands: one damaged operator is not a reason to drop the
+    // rest of the page (a bit-flipped Flate stream leaves tokens such as
+    // `Tj41.749` behind, and the `Tw` that follows arrives with nothing).
+    // Skip the operator, as other readers do, and carry on.
+    LOG_S(ERROR) << "#-instructions " << instructions.size()
+                 << " does not match expected value " << num_instr
+                 << " for PDF operation: " << name
+                 << " => skipping the operator";
 
     return false;
   }

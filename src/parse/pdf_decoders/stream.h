@@ -405,7 +405,26 @@ namespace pdflib
               }
             LOG_S(INFO) << " --> " << std::setw(12) << inst.key << " | " << inst.val;
 
-            execute_operator(inst, parameters);
+            // An operand of the wrong type, a resource that fails to load, a
+            // malformed inline image: in a damaged stream any of these can
+            // surface as an exception from one operator. That operator is
+            // lost either way; the ones after it need not be. Log it and go
+            // on, as mupdf does ("ignoring error during interpretation").
+            // Resource exhaustion (std::bad_alloc) is not caught here.
+            try
+              {
+                execute_operator(inst, parameters);
+              }
+            catch(const std::logic_error& e)
+              {
+                LOG_S(ERROR) << "operator " << inst.val << " failed (" << e.what()
+                             << ") => skipping the operator";
+              }
+            catch(const std::runtime_error& e)
+              {
+                LOG_S(ERROR) << "operator " << inst.val << " failed (" << e.what()
+                             << ") => skipping the operator";
+              }
 
             parameters.clear();
           }
@@ -428,11 +447,8 @@ namespace pdflib
   {
     if(stack.size()==0)
       {
-        std::stringstream message;
-        message << "stack-size is zero in " << __FILE__ << ":" << __LINE__;
-
-        LOG_S(ERROR) << message.str();
-        throw std::logic_error(message.str());
+        LOG_S(ERROR) << "graphics state stack is empty: starting from a fresh state";
+        ensure_stack();
       }
 
     pdf_state<GLOBAL>& state = stack.back();
@@ -508,14 +524,16 @@ namespace pdflib
 
   void pdf_decoder<STREAM>::Q()
   {
-    if(stack.size()>0)
+    // The bottom entry is the state the stream started in, not something a
+    // `q` pushed: a `Q` without its `q` (a truncated stream, a damaged one)
+    // must not pop it, or every operator after it has no state to run in.
+    if(stack.size()>1)
       {
         stack.pop_back();
       }
     else
       {
-        LOG_S(ERROR) << "invoking 'Q' on empty stack!";
-        //throw std::logic_error(__FILE__);
+        LOG_S(ERROR) << "invoking 'Q' without a matching 'q': keeping the base state";
       }
   }
 
