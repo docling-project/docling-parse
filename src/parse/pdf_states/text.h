@@ -233,17 +233,14 @@ namespace pdflib
         return true;
       }
 
-    if(instructions.size()<num_instr) // fatal ...
-      {
-        std::stringstream ss;
-        ss << "#-instructions " << instructions.size()
-           << " does not match expected value " << num_instr
-           << " for PDF operation: "
-           << name;
-
-        LOG_S(ERROR) << ss.str();
-        throw std::logic_error(ss.str());
-      }
+    // Too few operands: one damaged operator is not a reason to drop the
+    // rest of the page (a bit-flipped Flate stream leaves tokens such as
+    // `Tj41.749` behind, and the `Tw` that follows arrives with nothing).
+    // Skip the operator, as other readers do, and carry on.
+    LOG_S(ERROR) << "#-instructions " << instructions.size()
+                 << " does not match expected value " << num_instr
+                 << " for PDF operation: " << name
+                 << " => skipping the operator";
 
     return false;
   }
@@ -312,6 +309,14 @@ namespace pdflib
     //assert(instructions.size()==2);
     if(not verify(instructions, 2, __FUNCTION__) ) { return; }
 
+    if(not instructions[0].is_string() or not instructions[1].is_number())
+      {
+        LOG_S(ERROR) << "Tf operands are not a name and a number: "
+                     << instructions[0].val << " " << instructions[1].val
+                     << " => keeping the current font";
+        return;
+      }
+
     std::string prev_fontname = font_name;
     
     font_name = instructions[0].to_utf8_string();
@@ -358,6 +363,15 @@ namespace pdflib
   {
     //assert(instructions.size()==1);
     if(not verify(instructions, 1, __FUNCTION__) ) { return; }
+
+    // A damaged stream can leave a number where the string belongs
+    // (`3.34 Tj`): skip it, as TJ does for its array items.
+    if(not instructions[0].obj.isString())
+      {
+        LOG_S(ERROR) << "Tj operand is not a string: " << instructions[0].val
+                     << " [" << instructions[0].key << "] => skipping the operator";
+        return;
+      }
 
     instr_count += 1;
 
