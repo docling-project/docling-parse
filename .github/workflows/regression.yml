@@ -12,7 +12,7 @@ jobs:
   run-regression:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install system fonts
         # See checks.yml for why these packages are pinned.
         run: |
@@ -33,13 +33,14 @@ jobs:
           fi
           test -n "$(fc-list :lang=ko file)"
       - name: Install uv and set the python version
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v10.3.0
         with:
           python-version: '3.13'
+          activate-environment: true
       - name: Cache HF regression corpus
         # HF_DATASET_REVISION in tests/constants.py is a pinned commit hash, so
         # hashing that file gives us automatic invalidation on bumps.
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: tests/data
           key: hf-regression-${{ hashFiles('tests/constants.py') }}

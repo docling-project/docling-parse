@@ -18,6 +18,7 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.15",
 ]
 readme = "README.md"
 authors = [
@@ -43,7 +44,7 @@ requires = [
     "setuptools>=77.0.3",
     "pybind11>=2.13.6",
     "cibuildwheel>=2.19.2,<3.0.0; python_version < '3.11'",
-    "cibuildwheel>=2.19.2,<4.0.0; python_version >= '3.11'",
+    "cibuildwheel>=4.3.0,<5.0.0; python_version >= '3.11'",
     "wheel>=0.43.0,<1.0.0",
     "delocate>=0.11.0,<1.0.0",
     "cmake>=3.27.0,<5.0.0; sys_platform != 'win32'",
@@ -56,7 +57,7 @@ build = [
     "setuptools>=77.0.3",
     "pybind11>=2.13.6",
     "cibuildwheel>=2.19.2,<3.0.0; python_version < '3.11'",
-    "cibuildwheel>=2.19.2,<4.0.0; python_version >= '3.11'",
+    "cibuildwheel>=4.3.0,<5.0.0; python_version >= '3.11'",
     "wheel>=0.43.0,<1.0.0",
     "delocate>=0.11.0,<1.0.0",
     "cmake>=3.27.0,<5.0.0; sys_platform != 'win32'",
@@ -76,7 +77,7 @@ perf = [
     "matplotlib>=3.10.8",
     "pdfplumber>=0.11.7",
     "pdfminer.six>=20240706",
-    "pymupdf>=1.26.4",
+    "pymupdf>=1.26.4,<2.0",  # 2.x hard-requires onnxruntime (no cp315 wheels yet)
     "pypdf>=5.1.0",
     "pypdfium2>=4.30.0",
     "huggingface-hub>=1.11.0",
@@ -162,7 +163,6 @@ pretty = true
 no_implicit_optional = true
 namespace_packages = true
 show_error_codes = true
-python_version = "3.10"
 
 [[tool.mypy.overrides]]
 module = [

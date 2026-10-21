@@ -13,9 +13,9 @@ jobs:
     runs-on: ubuntu-24.04
     strategy:
       matrix:
-        python-version: ['3.10', '3.11', '3.12', '3.13', '3.14']
+        python-version: ['3.10', '3.11', '3.12', '3.13', '3.14', '3.15']
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install system fonts
         # The renderer substitutes a SYSTEM face for every font a PDF names but
         # does not embed, and the ubuntu-24.04 image ships essentially none
@@ -52,9 +52,10 @@ jobs:
           fi
           test -n "$(fc-list :lang=ko file)"
       - name: Install uv and set the python version
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v10.3.0
         with:
           python-version: ${{ matrix.python-version }}
+          activate-environment: true
       - name: Sync and install with uv
         run: |
           uv sync --frozen --all-extras
