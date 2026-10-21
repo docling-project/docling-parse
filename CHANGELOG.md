@@ -1,3 +1,9 @@
+## [v7.22.4](https://github.com/docling-project/docling-parse/releases/tag/v7.22.4) - 2026-10-21
+
+### Fix
+
+* Allow Pillow 13 ([#420](https://github.com/docling-project/docling-parse/issues/420)) ([`fbe3190`](https://github.com/docling-project/docling-parse/commit/fbe31904e81093c4f4a4f2ea3f5d1f8d36b0962c))
+
 ## [v7.22.3](https://github.com/docling-project/docling-parse/releases/tag/v7.22.3) - 2026-10-13
 
 ### Fix
