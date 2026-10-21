@@ -775,7 +775,7 @@ perf = [
 [package.metadata]
 requires-dist = [
     { name = "docling-core", specifier = ">=2.99.0,<3.0.0" },
-    { name = "pillow", specifier = ">=10.0.0,<13.0.0" },
+    { name = "pillow", specifier = ">=10.0.0,<14.0.0" },
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "pywin32", marker = "sys_platform == 'win32'", specifier = ">=305" },
 ]
