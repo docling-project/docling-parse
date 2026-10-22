@@ -1,3 +1,9 @@
+## [v7.23.0](https://github.com/docling-project/docling-parse/releases/tag/v7.23.0) - 2026-10-22
+
+### Feature
+
+* Support for py3.15 ([#421](https://github.com/docling-project/docling-parse/issues/421)) ([`101de10`](https://github.com/docling-project/docling-parse/commit/101de108f935af64d046a819445a1d2157766371))
+
 ## [v7.22.4](https://github.com/docling-project/docling-parse/releases/tag/v7.22.4) - 2026-10-21
 
 ### Fix

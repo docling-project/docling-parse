@@ -920,7 +920,7 @@ wheels = [
 
 [[package]]
 name = "docling-parse"
-version = "7.22.4"
+version = "7.23.0"
 source = { editable = "." }
 default-groups = "all"
 dependencies = [
