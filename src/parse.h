@@ -76,6 +76,7 @@
 #include <parse/page_items/page_hyperlink.h>
 #include <parse/page_items/page_hyperlinks.h>
 #include <parse/page_items/render_instructions.h>
+#include <parse/page_items/soft_mask_instruction.h>
 
 // the outline resolves its destinations against the page geometry, so it comes
 // after the page items rather than next to the other qpdf extractors
@@ -98,12 +99,13 @@
 #include <parse/pdf_resources/page_font.h>
 #include <parse/pdf_resources/page_fonts.h>
 
+// pdf_function carries the colour ramp of a shading, the tint transform of a
+// /Separation or /DeviceN colour space and the transfer function of a soft
+// mask, so it comes before the resources that hold those
+#include <parse/pdf_resources/pdf_function.h>
+
 #include <parse/pdf_resources/page_grph.h>
 #include <parse/pdf_resources/page_grphs.h>
-
-// pdf_function carries both the colour ramp of a shading and the tint
-// transform of a /Separation or /DeviceN colour space, so it comes first
-#include <parse/pdf_resources/pdf_function.h>
 
 #include <parse/pdf_resources/page_colorspace.h>
 #include <parse/pdf_resources/page_colorspaces.h>
