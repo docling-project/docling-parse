@@ -413,17 +413,12 @@ namespace pdflib
 	return true;
       }
 
-    if(instructions.size()<num_instr) // fatal ...
-      {
-	std::stringstream ss;
-	ss << "#-instructions " << instructions.size()
-	   << " does not match expected value " << num_instr
-	   << " for PDF operation: "
-	   << name;
-	
-	LOG_S(ERROR) << ss.str();
-	throw std::logic_error(ss.str());	
-      }    
+    // Too few operands: skip the operator rather than end the page; see
+    // pdf_state<TEXT>::verify.
+    LOG_S(ERROR) << "#-instructions " << instructions.size()
+                 << " does not match expected value " << num_instr
+                 << " for PDF operation: " << name
+                 << " => skipping the operator";
 
     return false;
   }
