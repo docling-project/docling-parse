@@ -21,8 +21,8 @@ namespace pdflib
     // One Type3 glyph, extracted from its /CharProcs procedure. The dominant
     // Type3 pattern (TeX / dvipdfm output) draws each glyph as a single inline
     // 1-bit image mask placed by a `cm`; this captures exactly that shape.
-    // Glyphs whose procedure does not match stay invalid and draw nothing --
-    // preferable to the black placeholder boxes they used to produce.
+    // Glyphs whose procedure does not match get no glyph here; the stream
+    // decoder runs their procedure instead (pdf_state<TEXT>::type3_procedure).
     struct type3_glyph
     {
       bool valid = false;
@@ -43,8 +43,15 @@ namespace pdflib
     const std::array<double, 6>& get_font_matrix();
 
     // Lazily extracts and caches the glyph for a character code; nullptr when
-    // the code has no procedure or the procedure is not the inline-mask form.
+    // the code has no procedure or the procedure paints in another way than an
+    // inline image mask or filled paths.
     std::shared_ptr<type3_glyph> get_type3_glyph(uint32_t code);
+
+    // The /CharProcs stream of a character code, or null when it has none.
+    QPDFObjectHandle get_type3_charproc(uint32_t code);
+
+    // The font's own /Resources (Type3 only), or null when it has none.
+    QPDFObjectHandle get_type3_resources();
 
 
 
@@ -2988,21 +2995,14 @@ namespace pdflib
 
     try
       {
-        const std::string name = get_glyph_name(code);
-        if(not name.empty() and
-           qpdf_font.isDictionary() and qpdf_font.hasKey("/CharProcs") and
-           qpdf_font.getKey("/CharProcs").isDictionary())
+        QPDFObjectHandle charproc = get_type3_charproc(code);
+        if(charproc.isStream())
           {
-            QPDFObjectHandle procs = qpdf_font.getKey("/CharProcs");
-            const std::string key = "/" + name;
-            if(procs.hasKey(key) and procs.getKey(key).isStream())
+            auto buffer = charproc.getStreamData();
+            if(buffer and buffer->getSize() > 0)
               {
-                auto buffer = procs.getKey(key).getStreamData();
-                if(buffer and buffer->getSize() > 0)
-                  {
-                    const char* raw = reinterpret_cast<const char*>(buffer->getBuffer());
-                    result = parse_type3_charproc(std::string(raw, buffer->getSize()));
-                  }
+                const char* raw = reinterpret_cast<const char*>(buffer->getBuffer());
+                result = parse_type3_charproc(std::string(raw, buffer->getSize()));
               }
           }
       }
@@ -3015,6 +3015,42 @@ namespace pdflib
 
     type3_cache_.emplace(code, result);
     return result;
+  }
+
+  inline QPDFObjectHandle pdf_resource<PAGE_FONT>::get_type3_charproc(uint32_t code)
+  {
+    try
+      {
+        const std::string name = get_glyph_name(code);
+        if(not name.empty() and
+           qpdf_font.isDictionary() and qpdf_font.hasKey("/CharProcs") and
+           qpdf_font.getKey("/CharProcs").isDictionary())
+          {
+            QPDFObjectHandle procs = qpdf_font.getKey("/CharProcs");
+            const std::string key = "/" + name;
+            if(procs.hasKey(key) and procs.getKey(key).isStream())
+              {
+                return procs.getKey(key);
+              }
+          }
+      }
+    catch(const std::exception& e)
+      {
+        LOG_S(WARNING) << "type3: no charproc for code " << code << ": " << e.what();
+      }
+
+    return QPDFObjectHandle::newNull();
+  }
+
+  inline QPDFObjectHandle pdf_resource<PAGE_FONT>::get_type3_resources()
+  {
+    if(is_type3() and qpdf_font.isDictionary() and qpdf_font.hasKey("/Resources") and
+       qpdf_font.getKey("/Resources").isDictionary())
+      {
+        return qpdf_font.getKey("/Resources");
+      }
+
+    return QPDFObjectHandle::newNull();
   }
 
   inline std::shared_ptr<pdf_resource<PAGE_FONT>::type3_glyph>

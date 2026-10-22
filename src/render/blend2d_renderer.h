@@ -2748,7 +2748,7 @@ namespace pdflib
     if (geom.quad_h < 0.5) { return; }
 
     // Type3 glyphs are content-stream procedures; their ink arrives as
-    // image-mask bitmaps emitted at parse time. Drawing the cell text through
+    // bitmaps and shapes emitted at parse time. Drawing the cell text through
     // a font face here could only produce placeholder boxes over that ink.
     if (instr.is_type3()) { return; }
 

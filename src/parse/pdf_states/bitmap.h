@@ -190,6 +190,10 @@ namespace pdflib
                          std::shared_ptr<std::vector<uint8_t>> indexed_rgb_palette,
                          clip_state_instruction clip_state = clip_state_instruction());
 
+    // Set while a Type3 CharProc runs: its images are the glyph's ink, so
+    // they are tagged as glyph bitmaps.
+    bool paints_type3_glyph = false;
+
   private:
 
     enum visible_bbox_state
@@ -240,6 +244,7 @@ namespace pdflib
   {}
 
   pdf_state<BITMAP>::pdf_state(const pdf_state<BITMAP>& other):
+    paints_type3_glyph(other.paints_type3_glyph),
     config(other.config),
     grph_state(other.grph_state),
     trafo_matrix(other.trafo_matrix),
@@ -252,6 +257,8 @@ namespace pdflib
 
   pdf_state<BITMAP>& pdf_state<BITMAP>::operator=(const pdf_state<BITMAP>& other)
   {
+    this->paints_type3_glyph = other.paints_type3_glyph;
+
     return *this;
   }
 
@@ -413,7 +420,8 @@ namespace pdflib
 
     page_images.push_back(image);
 
-    add_bitmap_instruction(image, std::move(clip_state), BITMAP_SOURCE_XOBJECT);
+    add_bitmap_instruction(image, std::move(clip_state),
+                           paints_type3_glyph ? BITMAP_SOURCE_TYPE3_GLYPH : BITMAP_SOURCE_XOBJECT);
   }
 
   void pdf_state<BITMAP>::Do_inline_image(
@@ -500,7 +508,8 @@ namespace pdflib
     image.rgb_filling_ops    = grph_state.get_rgb_filling_ops();
 
     page_images.push_back(image);
-    add_bitmap_instruction(image, std::move(clip_state), BITMAP_SOURCE_INLINE);
+    add_bitmap_instruction(image, std::move(clip_state),
+                           paints_type3_glyph ? BITMAP_SOURCE_TYPE3_GLYPH : BITMAP_SOURCE_INLINE);
   }
 
   void pdf_state<BITMAP>::populate_geometry(
