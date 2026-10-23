@@ -18,7 +18,15 @@ else()
     file(MAKE_DIRECTORY ${EXTERNALS_PREFIX_PATH}/lib)
 
     set(OPENJPEG_URL https://github.com/uclouvain/openjpeg.git)
-    set(OPENJPEG_TAG v2.5.3)
+    # v2.5.3 (and also the latest tag v2.5.4) is affected by OSV-2025-219, a
+    # heap-buffer-overflow WRITE in opj_j2k_read_tile_header /
+    # opj_j2k_read_sod (OSS-Fuzz 403673832, severity HIGH). The fix is merged
+    # on master but no release tag contains it yet, so pin the fix commit
+    # directly: d33cbecc is the merge of uclouvain/openjpeg#1621 ("Fix heap
+    # buffer overflow in opj_j2k_read_sod") and contains the other OSV fixed
+    # commit 91d08b1 as a parent. Replace this with the v2.5.5+ tag once one
+    # is released.
+    set(OPENJPEG_TAG d33cbecc148d3affcdf403211fddc2cc5d442379)
     # GCC/MinGW -> libopenjp2.a, MSVC -> openjp2.lib (Windows arm64 uses MSVC).
     if(MSVC)
         set(OPENJPEG_IMPORTED_LIB ${EXTERNALS_PREFIX_PATH}/lib/openjp2.lib)

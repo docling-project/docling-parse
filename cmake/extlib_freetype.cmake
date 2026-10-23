@@ -19,7 +19,12 @@ else()
     file(MAKE_DIRECTORY ${EXTERNALS_PREFIX_PATH}/lib)
 
     set(FREETYPE_URL https://github.com/freetype/freetype.git)
-    set(FREETYPE_TAG VER-2-13-3)
+    # VER-2-13-3 is affected by CVE-2026-23865, an integer overflow in
+    # tt_var_load_item_variation_store (src/truetype/ttgxvar.c) leading to an
+    # out-of-bounds read when parsing HVAR/VVAR/MVAR tables of OpenType
+    # variable fonts. Fixed in VER-2-14-2; VER-2-14-3 is the latest patch
+    # release of that line.
+    set(FREETYPE_TAG VER-2-14-3)
     # GCC/MinGW -> libfreetype.a, MSVC -> freetype.lib (Windows arm64 uses MSVC).
     # DISABLE_FORCE_DEBUG_POSTFIX + Release avoid the "d" postfix, so the name is
     # stable per-toolchain.

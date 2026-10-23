@@ -33,7 +33,11 @@ else()
     file(MAKE_DIRECTORY ${EXTERNALS_PREFIX_PATH}/lib)
 
     set(LCMS2_URL https://github.com/mm2/Little-CMS.git)
-    set(LCMS2_TAG lcms2.17)
+    # lcms2.17 (and also 2.18) is affected by CVE-2026-41254 /
+    # GHSA-4xp6-rcgg-m9qq, an integer overflow in CubeSize (src/cmslut.c).
+    # Fixed in lcms2.19 (commits da6110b1, e0641b18); lcms2.19.1 is the
+    # latest release containing those fixes.
+    set(LCMS2_TAG lcms2.19.1)
 
     if(WIN32)
         # Windows (MSVC and MinGW): use vendored CMakeLists. Upstream has no
