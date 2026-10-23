@@ -12,7 +12,7 @@ from docling_parse.pdf_parser import (
     DoclingThreadedPdfParser,
     ThreadedPdfParserConfig,
 )
-from tests.pdf_builder import build_pdf, content_stream
+from tests.pdf_builder import build_pdf, content_stream, parse_page
 
 
 def _form_pdf() -> bytes:
@@ -166,3 +166,47 @@ def test_widgets_and_hyperlinks_share_the_text_cells_boundary_frame(
         assert sorted((box.width, box.height)) == pytest.approx([30.0, 50.0])
         assert box.l <= word.l and word.r <= box.r
         assert box.b <= min(word.b, word.t) and max(word.b, word.t) <= box.t
+
+
+def _radio_group_pdf(option: str) -> bytes:
+    # A two-option radio group whose selected option is `option`, written
+    # verbatim as the name token of /V and /AS. The field name carries the
+    # same umlaut as a PDFDocEncoding text string.
+    return build_pdf(
+        [
+            "<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [4 0 R] >> >>",
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 200] "
+            "/Resources << /Font << /F1 7 0 R >> >> "
+            "/Contents 8 0 R /Annots [5 0 R 6 0 R] >>",
+            f"<< /FT /Btn /Ff 49152 /T (zur\\374ck) /V {option} /Kids [5 0 R 6 0 R] >>",
+            "<< /Type /Annot /Subtype /Widget /Parent 4 0 R "
+            f"/AS {option} /Rect [10 10 30 30] >>",
+            "<< /Type /Annot /Subtype /Widget /Parent 4 0 R "
+            "/AS /Off /Rect [40 10 60 30] >>",
+            "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+            content_stream("BT /F1 12 Tf 20 100 Td (page text) Tj ET\n"),
+        ]
+    )
+
+
+@pytest.mark.parametrize(
+    "option",
+    ["/R#fcckfahrt", "/R#c3#bcckfahrt"],
+    ids=["pdfdoc_encoding", "utf8"],
+)
+def test_non_ascii_option_name_is_transcoded_and_keeps_the_page(option):
+    # Older form tools spell umlauts in option names as PDFDocEncoding
+    # bytes. Those bytes are not UTF-8, and a std::string that is not
+    # UTF-8 raises UnicodeDecodeError on the pybind11 boundary, which used
+    # to abort the whole page (issue #391).
+    page = parse_page(_radio_group_pdf(option))
+
+    assert [cell.text for cell in page.textline_cells] == ["page text"]
+    assert [
+        (w.widget_field_name, w.widget_text, w.widget_appearance_state)
+        for w in page.widgets
+    ] == [
+        ("zurück", "/Rückfahrt", "/Rückfahrt"),
+        ("zurück", "/Rückfahrt", "/Off"),
+    ]
