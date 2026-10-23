@@ -385,6 +385,21 @@ namespace pdflib
     static double infer_word_gap(const line_run& run);
 
     /**
+     * @brief Detects a forward TJ positioning jump that should force a word
+     * boundary.
+     *
+     * Numeric TJ adjustments are part of the PDF source semantics and can
+     * survive as a small geometric gap after font metrics are applied. Only
+     * forward jumps are considered: negative physical adjustments are typical
+     * kerning and must continue to contract. The jump is normalized by the
+     * average per-character advance of the two fragments, so a long TJ string
+     * cannot hide a meaningful inter-field adjustment.
+     */
+    static bool tj_adjustment_is_boundary(
+        const page_item<PAGE_CELL>& lhs,
+        const page_item<PAGE_CELL>& rhs);
+
+    /**
      * @brief Appends one cell to a text aggregate and expands its geometry.
      *
      * Text is appended or prepended according to writing direction, optionally
@@ -799,6 +814,26 @@ namespace pdflib
     return std::max(0.18, 0.5 * (low + high));
   }
 
+  inline bool page_item_sanitator<PAGE_CELLS>::tj_adjustment_is_boundary(
+      const page_item<PAGE_CELL>& lhs,
+      const page_item<PAGE_CELL>& rhs)
+  {
+    if(not rhs.has_tj_adjustment or rhs.tj_adjustment <= 0.0)
+      {
+        return false;
+      }
+
+    const double lhs_chars = std::max(1, lhs.number_of_chars());
+    const double rhs_chars = std::max(1, rhs.number_of_chars());
+    const double lhs_advance = cell_advance_length(lhs) / lhs_chars;
+    const double rhs_advance = cell_advance_length(rhs) / rhs_chars;
+    const double scale = 0.5 * (lhs_advance + rhs_advance);
+
+    // Around a quarter of one character advance is large enough to retain
+    // explicit field/word spacing while leaving ordinary kerning intact.
+    return rhs.tj_adjustment > 0.25 * std::max(1.e-6, scale);
+  }
+
   inline void page_item_sanitator<PAGE_CELLS>::append_cell(
       page_item<PAGE_CELL>& aggregate,
       page_item<PAGE_CELL>& next,
@@ -910,6 +945,11 @@ namespace pdflib
               }
 
             bool starts_word = words.empty() or explicit_boundary;
+            if(not starts_word and previous_visible != nullptr and
+               tj_adjustment_is_boundary(*previous_visible, cell))
+              {
+                starts_word = true;
+              }
             // TOC leaders may omit the boundary before their first dot while
             // explicitly spacing every subsequent dot. Keep that first dot
             // with the leader instead of attaching it to the heading.
@@ -971,6 +1011,21 @@ namespace pdflib
               {
                 result.words.push_back(words[i]);
               }
+
+            // A significant forward TJ adjustment is a source-level field
+            // boundary. Keep that boundary in the line view as well as the
+            // word view; otherwise a backend exposing textline cells would
+            // immediately glue the recovered fields back into one cell.
+            if(tj_adjustment_is_boundary(words[i - 1], words[i]))
+              {
+                if(not line.text.empty())
+                  {
+                    result.lines.push_back(line);
+                  }
+                line = words[i];
+                continue;
+              }
+
             const bool insert_space =
               not line.text.empty() and not words[i].text.empty();
             append_cell(line, words[i], insert_space);
