@@ -374,9 +374,14 @@ namespace pdflib
      * two-cluster k-means separates ordinary character gaps from dilated word
      * gaps. Sparse or insufficiently separated samples use a conservative
      * default threshold of 0.25; valid inferred thresholds are clamped to at
-     * least 0.18. Contraction caps the resulting threshold at 0.35 so a much
-     * larger gap elsewhere in a short line cannot hide a word boundary.
-     * Runs containing explicit spaces use the same cap for unmarked gaps.
+     * least 0.18. Word gaps spread far more widely than character gaps
+     * (justified lines, the em gap after a section number), so the threshold
+     * is also capped. The cap is 0.35, raised to 1.5 times the median
+     * character-cluster gap plus 0.20 when letter spacing opens that cluster;
+     * gaps next to leader dots do not count towards the median. Runs
+     * containing explicit spaces skip the clustering: their words are marked,
+     * and an unmarked gap adds a boundary above the same cap, or above one
+     * advance.
      *
      * @param run One line of cells in source order.
      * @return Dimensionless normalized gap above which a new word begins.
@@ -408,8 +413,9 @@ namespace pdflib
      *
      * Builds line runs and treats explicit space cells as authoritative
      * boundaries. Runs without them infer a line-local cursor-placement gap
-     * threshold. Both kinds of runs split unmarked gaps above 0.35 neighboring
-     * character advances. Words are then merged
+     * threshold. Runs with them split unmarked gaps above 0.35 neighboring
+     * character advances, more where the line is letter-spaced. Words are
+     * then merged
      * with normalized spaces into one line. Both levels retain maximum
      * enclosing rotation-aligned bounding boxes.
      * Visible glyphs without a recoverable Unicode mapping retain their U+FFFD
@@ -729,6 +735,9 @@ namespace pdflib
       const line_run& run)
   {
     std::vector<double> gaps;
+    // Gaps between letters only: leader dots are spaced like words, and
+    // would otherwise pass for letter spacing.
+    std::vector<double> letter_gaps;
     const page_item<PAGE_CELL>* previous = nullptr;
     bool crossed_explicit_space = false;
 
@@ -746,9 +755,39 @@ namespace pdflib
             const double normalized = std::max(0.0, forward_gap(*previous, cell)) /
                                       std::max(1.e-6, scale);
             gaps.push_back(normalized);
+            if(previous->text != "." and cell.text != ".")
+              {
+                letter_gaps.push_back(normalized);
+              }
           }
         previous = &cell;
         crossed_explicit_space = false;
+      }
+
+    // Letter spacing opens every gap on a line, so the median gap below the
+    // word threshold measures it. The cap on unmarked word gaps starts at
+    // 0.35 and rises with that median, keeping tracked text whole without
+    // letting a wide gap elsewhere on the line hide a word boundary. Fewer
+    // than three such gaps (a lone math symbol, one table digit) are no
+    // evidence of tracking.
+    const auto letter_spacing_cap = [&letter_gaps](double below) {
+        auto end = std::partition(letter_gaps.begin(), letter_gaps.end(),
+                                  [below](double gap) { return gap <= below; });
+        if(end - letter_gaps.begin() < 3)
+          {
+            return 0.35;
+          }
+        auto median = letter_gaps.begin() + (end - letter_gaps.begin()) / 2;
+        std::nth_element(letter_gaps.begin(), median, end);
+        return std::max(0.35, 1.5 * (*median) + 0.20);
+    };
+
+    if(run.has_semantic_spaces)
+      {
+        // The spaces already mark the words. An unmarked gap adds a boundary
+        // only above the capped threshold; a whole advance always does, so
+        // absolutely positioned table fields still separate.
+        return std::min(1.0, letter_spacing_cap(1.0));
       }
 
     if(gaps.size() < 2)
@@ -796,7 +835,9 @@ namespace pdflib
       {
         return 0.25;
       }
-    return std::max(0.18, 0.5 * (low + high));
+
+    const double midpoint = 0.5 * (low + high);
+    return std::min(std::max(0.18, midpoint), letter_spacing_cap(midpoint));
   }
 
   inline void page_item_sanitator<PAGE_CELLS>::append_cell(
@@ -891,11 +932,11 @@ namespace pdflib
     contraction_result result;
     for(auto& run : collect_line_runs(cells))
       {
-        // Explicit PDF spaces remain authoritative boundaries. Cap unmarked
-        // gaps as well: a large section-number gap can otherwise raise the
-        // inferred threshold past every word gap in a short heading.
-        const double word_gap = std::min(
-          0.35, run.has_semantic_spaces ? 1.0 : infer_word_gap(run));
+        // Explicit PDF spaces remain authoritative boundaries. The threshold
+        // for unmarked gaps is relative to the line's own character gaps on
+        // both kinds of run, so a wide section-number gap cannot hide a word
+        // boundary and letter spacing cannot manufacture one.
+        const double word_gap = infer_word_gap(run);
         std::vector<page_item<PAGE_CELL>> words;
         page_item<PAGE_CELL>* previous_visible = nullptr;
         bool explicit_boundary = false;
