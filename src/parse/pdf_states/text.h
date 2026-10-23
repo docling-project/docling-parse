@@ -681,8 +681,14 @@ namespace pdflib
       bool embedded_glyph_resolved = false;
       bool embedded_glyph_has_ink = false;
       std::array<double, 4> embedded_glyph_bbox = {0.0, 0.0, 0.0, 0.0};
+      // Some producers map the space glyph to a control character (for
+      // example U+0008) in /ToUnicode. Whether such a word-space code is a
+      // space is decided by its glyph below, not by the mapped text.
+      const bool control_word_space =
+        is_pdf_word_space and utils::string::is_control(text);
       if(not font.is_type3() and
-         (font.needs_embedded_glyph_bbox() or text_is_suppressed_glyph) and
+         (font.needs_embedded_glyph_bbox() or text_is_suppressed_glyph or
+          control_word_space) and
          glyph_code >= 0)
         {
           if(glyph_metrics_cache == nullptr)
@@ -714,6 +720,14 @@ namespace pdflib
               font_descent = 0.0;
               font_ascent = 0.0;
               ratio = 1.0;
+            }
+          else if(control_word_space and
+                  ((embedded_glyph_resolved and not embedded_glyph_has_ink) or
+                   (font_blob == nullptr and glyph_name == "space")))
+            {
+              // The glyph paints nothing, so the control character is not
+              // text: expose the space it draws.
+              text = " ";
             }
           else if(has_embedded_glyph_bbox and
                   font.needs_embedded_glyph_bbox())

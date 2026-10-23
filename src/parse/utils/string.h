@@ -268,6 +268,22 @@ namespace utils
       return false;      
     }
     
+    bool is_control(const std::string& val)
+    {
+      if(val.size()==0 or not utf8::is_valid(val.begin(), val.end()))
+	{
+	  return false;
+	}
+
+      std::vector<uint32_t> utf32_chars={};
+      utf8::utf8to32(val.begin(), val.end(), std::back_inserter(utf32_chars));
+
+      // C0 controls, DEL and C1 controls
+      return utf32_chars.size()==1 and
+	(utf32_chars.at(0)<0x0020 or
+	 (0x007F<=utf32_chars.at(0) and utf32_chars.at(0)<=0x009F));
+    }
+
     // Function to check if a Unicode character is punctuation or whitespace
     bool is_punctuation_or_space(char32_t ch)
     {
