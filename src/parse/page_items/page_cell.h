@@ -120,6 +120,14 @@ namespace pdflib
     double writing_axis_y = 0.0;
     double nominal_text_height = 0.0;
 
+    // Physical cursor displacement introduced by the preceding numeric item
+    // in a TJ array. Positive values move the next text fragment forward and
+    // can represent a semantic field/word boundary even when the resulting
+    // geometric gap is similar to ordinary character spacing. Transient and
+    // intentionally not serialized.
+    bool   has_tj_adjustment = false;
+    double tj_adjustment = 0.0;
+
     // graphics state properties
     bool                has_graphics_state = false;
     double              line_width = -1;
