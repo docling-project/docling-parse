@@ -59,6 +59,15 @@ else()
         # bump deliberately. This is the commit the font-rendering code was
         # validated against.
         GIT_TAG        6dbc2cefbc996379e07104e34519a440b49b15d7
+        # Backport of blend2d/blend2d#268 (fixes blend2d/blend2d#267): the JIT
+        # analytic fill reused a stale span length when the last BitWord of a
+        # scanline was all ones, which made an affine image blit whose clip
+        # width is 252..255 mod 256 run a zero-length span for 2^32 pixels and
+        # segfault (docling-parse #365). Drop the patch and the PATCH_COMMAND
+        # when the pin moves past the upstream fix.
+        PATCH_COMMAND  ${CMAKE_COMMAND}
+            -DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/blend2d-fillanalytic-stale-i.patch
+            -P ${CMAKE_CURRENT_LIST_DIR}/apply_patch.cmake
     )
     FetchContent_MakeAvailable(blend2d)
     # Release wheels must not contain Blend2D's debug assertion path. Blend2D
