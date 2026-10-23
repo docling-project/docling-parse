@@ -2612,12 +2612,14 @@ namespace pdflib
     };
 
     // Subset generators (FontForge, fontTools, mPDF, ...) name glyphs by
-    // bare index: /gid00043, /g43, /glyph43, /cid43, /index43. Such a name
+    // bare index: /gid00043, /g43, /glyph43, /cid43, /index43. Skia/PDF
+    // (Chrome print-to-PDF, Notion exports) writes `g%X`, so the index may
+    // carry hexadecimal digits: /g15C, /gA1. Such a name
     // identifies the glyph inside the embedded font program but carries no
     // reading text, so keeping it fabricates plausible-looking garbage
     // ('gid00043gid00049...') that downstream quality gates cannot detect
     // (docling-project/docling-parse#238).
-    std::regex re_gid(R"((gid|glyph|g|cid|index)\d+)", std::regex::icase);
+    std::regex re_gid(R"((gid|glyph|g|cid|index)[0-9A-Fa-f]+)", std::regex::icase);
 
     // A small family of PDF producers replaces every descriptive glyph name
     // with an uppercase `G<decimal Unicode>` name. Do not infer that convention
