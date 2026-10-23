@@ -90,9 +90,27 @@ namespace pdflib
       const std::array<double, 6>& font_matrix,
       const std::array<double, 6>& glyph_matrix);
 
+    // Glyph space -> user space for the glyph at the current text position.
+    std::array<double, 6> compute_type3_matrix(
+      const std::array<double, 6>& font_matrix);
+
     std::array<double, 4> compute_bbox(std::array<double, 8>& rect);
 
   public:
+
+    // A Type3 glyph whose CharProc paints with operators that the glyph
+    // parser of pdf_resource<PAGE_FONT> does not rasterise, such as an image
+    // `Do`. The stream decoder runs the CharProc after the show-string.
+    struct type3_procedure
+    {
+      QPDFObjectHandle charproc;
+      QPDFObjectHandle resources;
+      std::array<double, 6> matrix;
+    };
+
+    // Filled by add_cell() and emptied by the stream decoder after each
+    // show-string, so operator= does not copy it.
+    std::vector<type3_procedure> pending_type3_procedures;
 
     static int block_count;
     static int instr_count;
@@ -1032,6 +1050,17 @@ namespace pdflib
 
                 instructions.add_bitmap_instruction(std::move(b3));
               }
+            else if(not g3)
+              {
+                QPDFObjectHandle charproc =
+                  font.get_type3_charproc(static_cast<uint32_t>(glyph_code));
+                if(charproc.isStream())
+                  {
+                    pending_type3_procedures.push_back(
+                      {charproc, font.get_type3_resources(),
+                       compute_type3_matrix(font.get_font_matrix())});
+                  }
+              }
           }
 
         if(config.extract_font_programs)
@@ -1382,6 +1411,28 @@ namespace pdflib
           trafo_matrix[1]*tx + trafo_matrix[4]*ty + trafo_matrix[7];
       }
     return rect;
+  }
+
+  std::array<double, 6> pdf_state<TEXT>::compute_type3_matrix(
+      const std::array<double, 6>& font_matrix)
+  {
+    // The same mapping as compute_type3_rect() without the CTM, which the
+    // stream decoder applies: /FontMatrix, font size and rise, text matrix.
+    const double a = font_matrix[0]*font_size;
+    const double b = font_matrix[1]*font_size;
+    const double c = font_matrix[2]*font_size;
+    const double d = font_matrix[3]*font_size;
+    const double e = font_matrix[4]*font_size;
+    const double f = font_matrix[5]*font_size + rise;
+
+    return {
+      a*text_matrix[0] + b*text_matrix[3],
+      a*text_matrix[1] + b*text_matrix[4],
+      c*text_matrix[0] + d*text_matrix[3],
+      c*text_matrix[1] + d*text_matrix[4],
+      e*text_matrix[0] + f*text_matrix[3] + text_matrix[6],
+      e*text_matrix[1] + f*text_matrix[4] + text_matrix[7]
+    };
   }
 
   std::array<double, 4> pdf_state<TEXT>::compute_bbox(std::array<double, 8>& rect)

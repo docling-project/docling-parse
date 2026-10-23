@@ -6,6 +6,10 @@ how to draw glyphs from a face draws nothing at all: pages set in a Type3 font
 came out blank. Charprocs come in two kinds -- an inline image mask, or ordinary
 path painting -- and both had to be executed.
 
+A charproc that paints in any other way -- an image XObject from the font's own
+/Resources, the way Chrome and Skia export colour emoji, or a colour inline
+image -- is run through the content-stream interpreter like a form XObject.
+
 Orientation is the part that is easy to get subtly wrong: glyph space is
 y-up like user space, and taking the image-mask corner order from the wrong
 place renders every glyph upside down, which still looks like text. So these
@@ -25,6 +29,7 @@ from tests.pdf_builder import (
     stream_object,
 )
 from tests.rendering_regression import (
+    average_color,
     coverage_ratio,
     ink_bounds,
     quadrant_coverage,
@@ -42,8 +47,12 @@ def _type3_pdf(
     font_bbox: str = "[0 0 1000 1000]",
     font_matrix: str = "[0.001 0 0 0.001 0 0]",
     width: int = 1000,
+    extra_objects: tuple[bytes, ...] = (),
 ) -> bytes:
-    """One page drawing a single Type3 glyph 100pt tall at (50, 50)."""
+    """One page drawing a single Type3 glyph 100pt tall at (50, 50).
+
+    `extra_objects` become objects 8, 9, ..., for the font's /Resources.
+    """
     text = f"BT\n/T3 {FONT_SIZE} Tf\n50 50 Td\n(a) Tj\nET\n"
     return build_pdf(
         [
@@ -59,6 +68,7 @@ def _type3_pdf(
             f"/Resources {resources} >>",
             "<< /square 7 0 R >>",
             charproc,
+            *extra_objects,
         ]
     )
 
@@ -189,3 +199,93 @@ def test_image_mask_charproc_is_painted():
         f"an image-mask charproc covered only {coverage_ratio(image):.3f} of "
         "the glyph box"
     )
+
+
+RED = bytes([0xFF, 0x00, 0x00])
+BLUE = bytes([0x00, 0x00, 0xFF])
+
+
+def _rgb_image(width: int, height: int, samples: bytes) -> bytes:
+    return stream_object(
+        f"/Type /XObject /Subtype /Image /Width {width} /Height {height} "
+        "/ColorSpace /DeviceRGB /BitsPerComponent 8",
+        samples,
+    )
+
+
+def _image_xobject_pdf(image: bytes) -> bytes:
+    """A colour glyph drawn by an image XObject of the font's own /Resources.
+
+    This is how Chrome and Skia export colour emoji
+    (docling-project/docling#4922).
+    """
+    charproc = stream_object("", b"1000 0 d0\nq 1000 0 0 1000 0 0 cm /Im Do Q\n")
+    return _type3_pdf(
+        charproc,
+        resources="<< /XObject << /Im 8 0 R >> >>",
+        extra_objects=(image,),
+    )
+
+
+def _is_red(color: tuple[float, float, float]) -> bool:
+    red, green, blue = color
+    return red > 200 and green < 60 and blue < 60
+
+
+def _is_blue(color: tuple[float, float, float]) -> bool:
+    red, green, blue = color
+    return red < 60 and green < 60 and blue > 200
+
+
+def test_image_xobject_charproc_is_painted():
+    """A charproc that paints an image XObject puts that image on the page."""
+    pdf = _image_xobject_pdf(_rgb_image(2, 2, RED * 4))
+    image = region_image(render_page(pdf), GLYPH_BOX)
+
+    assert coverage_ratio(image) > 0.8, (
+        f"an image-XObject charproc covered only {coverage_ratio(image):.3f} of "
+        "the glyph box"
+    )
+    assert _is_red(average_color(image)), average_color(image)
+
+
+def test_image_xobject_charproc_is_not_upside_down():
+    """The first image row is the top of the glyph."""
+    pdf = _image_xobject_pdf(_rgb_image(1, 2, RED + BLUE))
+    result = render_page(pdf)
+    left, top, right, bottom = GLYPH_BOX
+    middle = (top + bottom) / 2
+
+    upper = region_image(result, (left, top, right, middle - 5))
+    lower = region_image(result, (left, middle + 5, right, bottom))
+
+    assert _is_red(average_color(upper)), average_color(upper)
+    assert _is_blue(average_color(lower)), average_color(lower)
+
+
+def test_colour_inline_image_charproc_is_painted():
+    """An inline image that is not a 1-bit mask paints too."""
+    charproc = stream_object(
+        "",
+        b"1000 0 d0\nq\n1000 0 0 1000 0 0 cm\n"
+        b"BI /W 2 /H 2 /CS /RGB /BPC 8 ID\n" + RED * 4 + b"\nEI\nQ\n",
+    )
+    image = region_image(render_page(_type3_pdf(charproc)), GLYPH_BOX)
+
+    assert coverage_ratio(image) > 0.8, (
+        f"a colour inline-image charproc covered only {coverage_ratio(image):.3f} "
+        "of the glyph box"
+    )
+    assert _is_red(average_color(image)), average_color(image)
+
+
+def test_image_charproc_is_a_glyph_not_a_page_image():
+    """The image of a glyph is its ink: one character and no page bitmap."""
+    pdf = _image_xobject_pdf(_rgb_image(2, 2, RED * 4))
+
+    page = parse_page(pdf)
+    assert len(list(page.iterate_cells(TextCellUnit.CHAR))) == 1
+    assert len(page.bitmap_resources) == 0
+
+    artifacts = render_page(pdf)._export_bitmap_artifacts()
+    assert [artifact.get("source") for artifact in artifacts] == ["type3_glyph"]

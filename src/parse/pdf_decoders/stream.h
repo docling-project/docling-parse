@@ -93,6 +93,11 @@ namespace pdflib
     void do_form(const std::string& xobj_name,
 		 const xobject_subtype_name& xobj_subtype);
 
+    // Runs the Type3 CharProcs that the last show-string queued, see
+    // pdf_state<TEXT>::type3_procedure.
+    void paint_type3_glyphs();
+    void do_type3_glyph(const pdf_state<TEXT>::type3_procedure& glyph);
+
     void do_postscript(const std::string& xobj_name,
        const xobject_subtype_name& xobj_subtype);
 
@@ -1777,6 +1782,155 @@ namespace pdflib
 
   }
 
+  void pdf_decoder<STREAM>::paint_type3_glyphs()
+  {
+    auto& pending = current_text_state().pending_type3_procedures;
+    if(pending.empty())
+      {
+        return;
+      }
+
+    // do_type3_glyph() pushes a copy of the current state, so take the queue
+    // out of it first.
+    std::vector<pdf_state<TEXT>::type3_procedure> glyphs;
+    glyphs.swap(pending);
+
+    for(const auto& glyph : glyphs)
+      {
+        do_type3_glyph(glyph);
+      }
+  }
+
+  void pdf_decoder<STREAM>::do_type3_glyph(const pdf_state<TEXT>::type3_procedure& glyph)
+  {
+    LOG_S(INFO) << __FUNCTION__;
+
+    // A CharProc can show text in a Type3 font whose CharProc leads back to
+    // it, directly or through a form XObject.
+    constexpr int max_depth = 8;
+    static thread_local int depth = 0;
+    if(depth >= max_depth)
+      {
+        LOG_S(WARNING) << "Type3 glyph procedures nest deeper than " << max_depth
+                       << " levels, the glyph is not painted";
+        return;
+      }
+
+    std::vector<qpdf_stream_instruction> insts;
+    try
+      {
+        qpdf_stream_decoder decoder(insts);
+        QPDFObjectHandle charproc = glyph.charproc;
+        decoder.decode(charproc);
+      }
+    catch(const std::exception& e)
+      {
+        LOG_S(WARNING) << "could not decode a Type3 glyph procedure: " << e.what();
+        return;
+      }
+
+    // 9.6.5: names in the CharProc resolve against the font's /Resources,
+    // and against the page's when the font has none.
+    auto page_fonts_       = std::make_shared<pdf_resource<PAGE_FONTS>>(page_fonts);
+    auto page_grphs_       = std::make_shared<pdf_resource<PAGE_GRPHS>>(page_grphs);
+    auto page_colorspaces_ = std::make_shared<pdf_resource<PAGE_COLORSPACES>>(page_colorspaces);
+    auto page_shadings_    = std::make_shared<pdf_resource<PAGE_SHADINGS>>(page_shadings);
+    auto page_patterns_    = std::make_shared<pdf_resource<PAGE_PATTERNS>>(page_patterns);
+    auto page_xobjects_    = std::make_shared<pdf_resource<PAGE_XOBJECTS>>(page_xobjects);
+
+    QPDFObjectHandle resources = glyph.resources;
+    if(resources.isDictionary())
+      {
+        if(resources.hasKey("/Font"))
+          {
+            QPDFObjectHandle fonts = resources.getKey("/Font");
+            page_fonts_->set(fonts, timings);
+          }
+        if(resources.hasKey("/ExtGState"))
+          {
+            QPDFObjectHandle grphs = resources.getKey("/ExtGState");
+            page_grphs_->set(grphs, timings);
+          }
+        if(resources.hasKey("/ColorSpace"))
+          {
+            QPDFObjectHandle colorspaces = resources.getKey("/ColorSpace");
+            page_colorspaces_->set(colorspaces);
+          }
+        if(resources.hasKey("/Shading"))
+          {
+            QPDFObjectHandle shadings = resources.getKey("/Shading");
+            page_shadings_->set(shadings);
+          }
+        if(resources.hasKey("/Pattern"))
+          {
+            QPDFObjectHandle patterns = resources.getKey("/Pattern");
+            page_patterns_->set(patterns);
+          }
+        if(resources.hasKey("/XObject"))
+          {
+            QPDFObjectHandle xobjects = resources.getKey("/XObject");
+            page_xobjects_->set(xobjects, timings);
+          }
+      }
+
+    // The glyph is not page content: its text cell already exists, and its
+    // paths and images are ink, not shapes or pictures. Only the render
+    // instructions are kept.
+    page_item<PAGE_CELLS>  glyph_cells;
+    page_item<PAGE_SHAPES> glyph_shapes;
+    page_item<PAGE_IMAGES> glyph_images;
+
+    this->q();
+    current_global_state().cm(glyph.matrix);
+    current_bitmap_state().paints_type3_glyph = true;
+    {
+      pdf_decoder<STREAM> new_stream(config,
+
+                                     page_dimension,
+                                     glyph_cells,
+                                     glyph_shapes,
+                                     glyph_images,
+
+                                     page_fonts_,
+                                     page_grphs_,
+                                     page_colorspaces_,
+                                     page_shadings_,
+                                     page_patterns_,
+                                     page_xobjects_,
+
+                                     instructions,
+
+                                     timings);
+
+      bool updated_stack = new_stream.update_stack(stack, stack_count);
+
+      std::vector<qpdf_stream_instruction> parameters;
+
+      depth += 1;
+      try
+        {
+          new_stream.interprete(insts, parameters);
+        }
+      catch(...)
+        {
+          depth -= 1;
+          throw;
+        }
+      depth -= 1;
+
+      if(updated_stack)
+        {
+          new_stream.Q();
+        }
+
+      for(auto item:new_stream.get_unknown_operators())
+        {
+          unknown_operators.insert(item);
+        }
+    }
+    this->Q();
+  }
+
   void pdf_decoder<STREAM>::do_postscript(const std::string& xobj_name,
                                           const xobject_subtype_name& xobj_subtype)
   {
@@ -2356,6 +2510,7 @@ namespace pdflib
         {
           LOG_S(INFO) << "executing " << to_string(name);
           current_text_state().Tj(parameters, stack_count);
+          paint_type3_glyphs();
         }
         break;
 
@@ -2363,6 +2518,7 @@ namespace pdflib
         {
           LOG_S(INFO) << "executing " << to_string(name);
           current_text_state().TJ(parameters, stack_count);
+          paint_type3_glyphs();
         }
         break;
 
@@ -2376,6 +2532,7 @@ namespace pdflib
 
           std::vector<qpdf_stream_instruction> Tj_params = {parameters[0]};
           current_text_state().Tj(Tj_params, stack_count);
+          paint_type3_glyphs();
         }
         break;
 
@@ -2395,6 +2552,7 @@ namespace pdflib
 
           std::vector<qpdf_stream_instruction> Tj_params = {parameters[2]};
           current_text_state().Tj(Tj_params, stack_count);
+          paint_type3_glyphs();
         }
         break;
 
