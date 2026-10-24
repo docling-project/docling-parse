@@ -1587,8 +1587,8 @@ namespace pdflib
     font_program.base_font = base_font;
     font_program.font_name = font_name;
     font_program.from_descendant_font = from_descendant_font;
-    font_program.descriptor_json = to_json(descriptor_obj, {}, 0, 2);
-    font_program.stream_dict_json = to_json(stream_obj, {}, 0, 2);
+    font_program.descriptor_json = to_json(descriptor_obj, 0, 2);
+    font_program.stream_dict_json = to_json(stream_obj, 0, 2);
     // Disabled: dumping the full stream dictionary per font floods the logs.
     // LOG_S(INFO) << __FUNCTION__
     //             << ": stream-dict-json=\n"
