@@ -102,8 +102,13 @@ namespace pdflib
     /**
      * @brief Removes matching cells that may be separated in the sequence.
      *
+     * A later cell equal to an earlier one in text, font name and every rotated
+     * corner is removed wherever it falls in the sequence: a block of lines
+     * painted more than once at the same position interleaves the copies of
+     * each line with the block's other lines.
+     *
      * For every active cell, later cells with identical text and font name are
-     * compared corner by corner. A later cell is removed when every rotated
+     * also compared corner by corner. A later cell is removed when every rotated
      * corner lies within @p eps of the earlier cell. When @p same_line is true,
      * the scan stops after the rotated y-coordinate differs by more than
      * @p eps; this assumes the input is ordered by line position.
@@ -1071,6 +1076,26 @@ namespace pdflib
   {
     // Retained for compatibility with the decode cleanup path. Word/line
     // construction itself does not call this quadratic routine.
+
+    // A glyph painted again at exactly the same place, wherever its copy
+    // falls in the sequence. Only an exact match counts here: a different
+    // text overlapping this one can put an equal glyph within eps of it.
+    using painted_glyph = std::tuple<std::string, std::string,
+                                     double, double, double, double,
+                                     double, double, double, double>;
+    std::set<painted_glyph> painted;
+    for(std::size_t i = 0; i < cells.size(); ++i)
+      {
+        auto& cell = cells[i];
+        if(not cell.active) { continue; }
+        if(not painted.emplace(cell.text, cell.font_name,
+                               cell.r_x0, cell.r_y0, cell.r_x1, cell.r_y1,
+                               cell.r_x2, cell.r_y2, cell.r_x3, cell.r_y3).second)
+          {
+            cell.active = false;
+          }
+      }
+
     for(std::size_t i = 0; i < cells.size(); ++i)
       {
         if(not cells[i].active) { continue; }
