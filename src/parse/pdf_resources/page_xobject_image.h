@@ -196,8 +196,8 @@ namespace pdflib
     std::shared_ptr<Buffer>  get_decoded_stream_data() const;
     bool                     has_soft_mask_data() const;
     std::shared_ptr<std::vector<uint8_t>> get_soft_mask_data() const;
-    int get_soft_mask_width() const { return soft_mask_width; }
-    int get_soft_mask_height() const { return soft_mask_height; }
+    int get_soft_mask_width() const { load_pixels(); return soft_mask_width; }
+    int get_soft_mask_height() const { load_pixels(); return soft_mask_height; }
 
     // Determine file extension from filters (e.g. ".jpg", ".jp2", ".jb2", ".bin")
     std::string pick_extension() const;
@@ -216,9 +216,12 @@ namespace pdflib
 
     void init_filters();
 
-    void init_stream_data();
-    void init_codec_stream_data();
-    void init_soft_mask_data();
+    // Defilters the samples and the soft mask on first use of a pixel getter.
+    void load_pixels() const;
+
+    void init_stream_data() const;
+    void init_codec_stream_data() const;
+    void init_soft_mask_data() const;
 
     // Resolves a /Separation or /DeviceN /ColorSpace array into a colour space
     // resource, keeping it only when its tint transform is usable.
@@ -226,9 +229,11 @@ namespace pdflib
 
   private:
 
-    QPDFObjectHandle qpdf_xobject;
+    // mutable: QPDF's stream readers are non-const, and load_pixels() reads
+    // the stream from the const getters.
+    mutable QPDFObjectHandle qpdf_xobject;
 
-    QPDFObjectHandle qpdf_xobject_dict;
+    mutable QPDFObjectHandle qpdf_xobject_dict;
     nlohmann::json   json_xobject_dict;
 
     std::string xobject_key;
@@ -258,21 +263,23 @@ namespace pdflib
     std::string      intent;
     std::vector<std::string> image_filters;
 
-    // Stream data
-    std::shared_ptr<Buffer> raw_stream_data;
+    // Stream data. Loaded lazily by load_pixels(): pages that share one
+    // /Resources dictionary list every image of the document, but draw few.
+    mutable std::shared_ptr<Buffer> raw_stream_data;
 
     // The raw stream with the transport filters that precede the image codec
     // undone -- the bytes the codec was handed at encode time. Aliases
     // raw_stream_data when the codec is the first filter in the chain.
-    std::shared_ptr<Buffer> codec_stream_data;
+    mutable std::shared_ptr<Buffer> codec_stream_data;
 
-    std::shared_ptr<Buffer> decoded_stream_data;
-    std::shared_ptr<std::vector<uint8_t>> soft_mask_data;
+    mutable std::shared_ptr<Buffer> decoded_stream_data;
+    mutable std::shared_ptr<std::vector<uint8_t>> soft_mask_data;
 
-    // set() argument, kept so parse() can consult it
+    // set() argument, kept so load_pixels() can consult it
     bool extract_pixels_ = true;
-    int soft_mask_width = 0;
-    int soft_mask_height = 0;
+    mutable bool pixels_loaded_ = false;
+    mutable int soft_mask_width = 0;
+    mutable int soft_mask_height = 0;
 
     // PDF image semantics
     std::vector<double> decode_array; // length 2*ncomp when present
@@ -326,6 +333,7 @@ namespace pdflib
     xobject_key  = xobject_key_;
     qpdf_xobject = qpdf_xobject_;
     extract_pixels_ = extract_pixels;
+    pixels_loaded_ = false;
 
     parse();
 
@@ -349,15 +357,23 @@ namespace pdflib
 
     init_filters();
     init_image_properties();
+  }
 
+  void pdf_resource<PAGE_XOBJECT_IMAGE>::load_pixels() const
+  {
     // Defiltering the samples and building the alpha plane is the whole cost
-    // of an image XObject; everything above comes from the dictionary. A
+    // of an image XObject; everything parse() reads comes from the
+    // dictionary. Deferring it to the first `Do` keeps a page from holding
+    // the pixels of images it only lists in a shared /Resources (#424). A
     // caller that only wants to know where the bitmaps are skips both.
-    if(extract_pixels_)
+    if(pixels_loaded_ or not extract_pixels_)
       {
-        init_stream_data();
-        init_soft_mask_data();
+        return;
       }
+    pixels_loaded_ = true;
+
+    init_stream_data();
+    init_soft_mask_data();
   }
 
   void pdf_resource<PAGE_XOBJECT_IMAGE>::init_image_properties()
@@ -1081,7 +1097,7 @@ namespace pdflib
       }
   }
 
-  void pdf_resource<PAGE_XOBJECT_IMAGE>::init_stream_data()
+  void pdf_resource<PAGE_XOBJECT_IMAGE>::init_stream_data() const
   {
     LOG_S(INFO) << __FUNCTION__;
 
@@ -1116,7 +1132,7 @@ namespace pdflib
     init_codec_stream_data();
   }
 
-  void pdf_resource<PAGE_XOBJECT_IMAGE>::init_codec_stream_data()
+  void pdf_resource<PAGE_XOBJECT_IMAGE>::init_codec_stream_data() const
   {
     // QPDF declares a whole /Filter chain unfilterable as soon as one of its
     // filters is an image codec it will not invert, so `decoded_stream_data`
@@ -1163,7 +1179,7 @@ namespace pdflib
       }
   }
 
-  void pdf_resource<PAGE_XOBJECT_IMAGE>::init_soft_mask_data()
+  void pdf_resource<PAGE_XOBJECT_IMAGE>::init_soft_mask_data() const
   {
     soft_mask_data.reset();
 
@@ -1581,41 +1597,49 @@ namespace pdflib
 
   bool pdf_resource<PAGE_XOBJECT_IMAGE>::has_raw_stream_data() const
   {
+    load_pixels();
     return (raw_stream_data != nullptr && raw_stream_data->getSize() > 0);
   }
 
   std::shared_ptr<Buffer> pdf_resource<PAGE_XOBJECT_IMAGE>::get_raw_stream_data() const
   {
+    load_pixels();
     return raw_stream_data;
   }
 
   bool pdf_resource<PAGE_XOBJECT_IMAGE>::has_codec_stream_data() const
   {
+    load_pixels();
     return (codec_stream_data != nullptr && codec_stream_data->getSize() > 0);
   }
 
   std::shared_ptr<Buffer> pdf_resource<PAGE_XOBJECT_IMAGE>::get_codec_stream_data() const
   {
+    load_pixels();
     return codec_stream_data;
   }
 
   bool pdf_resource<PAGE_XOBJECT_IMAGE>::has_decoded_stream_data() const
   {
+    load_pixels();
     return (decoded_stream_data != nullptr && decoded_stream_data->getSize() > 0);
   }
 
   std::shared_ptr<Buffer> pdf_resource<PAGE_XOBJECT_IMAGE>::get_decoded_stream_data() const
   {
+    load_pixels();
     return decoded_stream_data;
   }
 
   bool pdf_resource<PAGE_XOBJECT_IMAGE>::has_soft_mask_data() const
   {
+    load_pixels();
     return (soft_mask_data != nullptr and not soft_mask_data->empty());
   }
 
   std::shared_ptr<std::vector<uint8_t>> pdf_resource<PAGE_XOBJECT_IMAGE>::get_soft_mask_data() const
   {
+    load_pixels();
     return soft_mask_data;
   }
 
