@@ -1,3 +1,20 @@
+## [v7.23.1](https://github.com/docling-project/docling-parse/releases/tag/v7.23.1) - 2026-10-26
+
+### Fix
+
+* Transcode non-UTF-8 widget names instead of losing the page ([#392](https://github.com/docling-project/docling-parse/issues/392)) ([`15c3f6a`](https://github.com/docling-project/docling-parse/commit/15c3f6a9609b00271cf7551a1ea216b2f91d1e01))
+* Fail a page whose content the truncated file no longer contains ([#415](https://github.com/docling-project/docling-parse/issues/415)) ([`7b7b273`](https://github.com/docling-project/docling-parse/commit/7b7b273339722541a6576631e95996a295df052c))
+* Keep the page when a damaged content stream breaks one operator ([#418](https://github.com/docling-project/docling-parse/issues/418)) ([`1357898`](https://github.com/docling-project/docling-parse/commit/1357898b1d749f975841c055a5dd194cc3f56b00))
+* Fall back from noncharacter ToUnicode mappings ([#395](https://github.com/docling-project/docling-parse/issues/395)) ([`3c91d2b`](https://github.com/docling-project/docling-parse/commit/3c91d2b372c9554e38aba6c14fda2b60ba0deee5))
+* Treat a space glyph mapped to a control character as a space ([#408](https://github.com/docling-project/docling-parse/issues/408)) ([`6d41900`](https://github.com/docling-project/docling-parse/commit/6d419002e6d2b4fab40a40f5e0048a9f1a74e4f3))
+* Ignore implausible vertical metrics in a font descriptor ([#412](https://github.com/docling-project/docling-parse/issues/412)) ([`2a9a6f8`](https://github.com/docling-project/docling-parse/commit/2a9a6f8b3a1f0d286da57e83911204bc3073f044))
+* **render:** Paint Type3 glyphs whose CharProc draws an image ([#422](https://github.com/docling-project/docling-parse/issues/422)) ([`dc69024`](https://github.com/docling-project/docling-parse/commit/dc690243ef79104c835facc0d776f15d5b31eec9))
+* Update pinned third-party libraries with known CVEs ([#423](https://github.com/docling-project/docling-parse/issues/423)) ([`bbfae48`](https://github.com/docling-project/docling-parse/commit/bbfae4839e31396ba06c1ebbd46362a4447269b1))
+
+### Documentation
+
+* Adding performance numbers ([#353](https://github.com/docling-project/docling-parse/issues/353)) ([`f8512ab`](https://github.com/docling-project/docling-parse/commit/f8512ab517428eea2c1e70d9b8db141bdbfa9ab8))
+
 ## [v7.23.0](https://github.com/docling-project/docling-parse/releases/tag/v7.23.0) - 2026-10-22
 
 ### Feature
