@@ -17,6 +17,7 @@
 #include <parse/qpdf/load_error.h>
 #include <parse/qpdf/logger.h>
 #include <parse/qpdf/page_integrity.h>
+#include <parse/qpdf/page_resources.h>
 
 namespace pdflib
 {
@@ -416,6 +417,10 @@ namespace pdflib
                                         page_helper.getObjectHandle(),
                                         source_acroform_helper());
         }
+
+      // Without this, every page buffer carries the streams of all images
+      // that pages sharing one /Resources name, drawn or not.
+      qpdf_page_resources::remove_unreferenced_resources(out_page);
 
       QPDFWriter writer(out_pdf);
       writer.setOutputMemory();
