@@ -186,7 +186,7 @@ namespace pdflib
 
     embedded_font_format resolve_embedded_font_format() const;
     bool resolve_cid_to_gid_identity() const;
-    std::vector<uint16_t> resolve_cid_to_gid_map() const;
+    std::vector<uint16_t> resolve_code_to_gid_map() const;
     void build_embedded_font_blob();
     
     // Resolution of this font onto one of the built-in base fonts. See the
@@ -257,6 +257,10 @@ namespace pdflib
     font_encoding_name encoding;
     bool               has_explicit_encoding; // true if encoding was found in PDF, false if defaulted
     bool               is_symbolic = false;   // /FontDescriptor /Flags bit 3 (PDF 32000-1 table 123)
+
+    // code -> CID of an embedded /Encoding CMap; left empty when the CMap
+    // inherits through usecmap, whose entries are not read
+    std::unordered_map<uint32_t, uint32_t> embedded_code_to_cid;
 
     font_subtype_name  subtype;
 
@@ -1197,8 +1201,10 @@ namespace pdflib
     // An embedded CMap may inherit from a predefined one. Only its name is
     // available here, so the inherited codespace is reported rather than
     // silently assumed.
-    auto report_usecmap = [](const std::string& parent)
+    bool inherits = false;
+    auto report_usecmap = [&inherits](const std::string& parent)
     {
+      inherits = true;
       LOG_S(WARNING) << "embedded cmap inherits from " << parent
                      << ": the inherited entries are not applied";
     };
@@ -1221,6 +1227,11 @@ namespace pdflib
 
     LOG_S(INFO) << "embedded cmap: " << cmap_codespaces.size() << " codespace-range(s), "
                 << tables.code_to_cid.size() << " code-to-cid entries";
+
+    if(not inherits)
+      {
+        embedded_code_to_cid = std::move(tables.code_to_cid);
+      }
   }
 
   void pdf_resource<PAGE_FONT>::init_subtype()
@@ -1763,7 +1774,7 @@ namespace pdflib
       }
 
     // PDF spec: /CIDToGIDMap defaults to /Identity when absent. A stream is
-    // an explicit map, read by resolve_cid_to_gid_map().
+    // an explicit map, read by resolve_code_to_gid_map().
     QPDFObjectHandle value = qpdf_object::get_path(qpdf_desc_font, {"/CIDToGIDMap"});
     if(value.isNull())
       {
@@ -1774,7 +1785,7 @@ namespace pdflib
     return qpdf_object::get_name_or_string(value, name) and name == "/Identity";
   }
 
-  std::vector<uint16_t> pdf_resource<PAGE_FONT>::resolve_cid_to_gid_map() const
+  std::vector<uint16_t> pdf_resource<PAGE_FONT>::resolve_code_to_gid_map() const
   {
     std::vector<uint16_t> map;
 
@@ -1811,7 +1822,44 @@ namespace pdflib
         map.clear();
       }
 
-    return map;
+    // The renderer holds character codes, and the map is indexed by CID:
+    // compose it with the /Encoding CMap's code -> CID (9.7.6.2). Under
+    // Identity-H/V the code is the CID already.
+    if(map.empty() or encoding == IDENTITY_H or encoding == IDENTITY_V)
+      {
+        return map;
+      }
+
+    const std::unordered_map<uint32_t, uint32_t>* code_to_cid = nullptr;
+    if(encoding == CMAP_STREAM)
+      {
+        code_to_cid = &embedded_code_to_cid;
+      }
+    else if(encoding == CMAP_RESOURCES and cids.decode_cmap_resource(encoding_name))
+      {
+        code_to_cid = &cids.get(encoding_name).get_code_to_cid();
+      }
+
+    // Without a code -> CID table the map cannot be applied: an empty result
+    // keeps the Unicode-shaping path.
+    if(code_to_cid == nullptr)
+      {
+        return {};
+      }
+
+    // shortcut: codes above 0xFFFF (four-byte codespaces) are left unmapped
+    // and render through Unicode shaping; widen the table if one ever matters.
+    std::vector<uint16_t> code_to_gid;
+    for(const auto& [code, cid] : *code_to_cid)
+      {
+        if(code <= 0xFFFF and cid < map.size() and map[cid] != 0)
+          {
+            if(code >= code_to_gid.size()) { code_to_gid.resize(code + 1, 0); }
+            code_to_gid[code] = map[cid];
+          }
+      }
+
+    return code_to_gid;
   }
 
   void pdf_resource<PAGE_FONT>::build_embedded_font_blob()
@@ -1855,7 +1903,7 @@ namespace pdflib
       resolve_cid_to_gid_identity(),
       uses_builtin_encoding,
       std::move(bytes),
-      resolve_cid_to_gid_map());
+      resolve_code_to_gid_map());
 
     LOG_S(INFO) << __FUNCTION__
                 << ": font-key=" << font_key
@@ -1866,7 +1914,7 @@ namespace pdflib
                 << " cache-key=" << font_blob->get_cache_key()
                 << " cid=" << font_blob->get_is_cid_font()
                 << " cid-to-gid-identity=" << font_blob->get_cid_to_gid_identity()
-                << " has-cid-to-gid=" << font_blob->has_cid_to_gid()
+                << " has-code-to-gid=" << font_blob->has_code_to_gid()
                 << " uses-builtin-encoding=" << font_blob->get_uses_builtin_encoding();
   }
 

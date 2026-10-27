@@ -33,7 +33,7 @@ namespace pdflib
                        bool cid_to_gid_identity,
                        bool uses_builtin_encoding,
                        std::shared_ptr<const std::vector<uint8_t> > bytes,
-                       std::vector<uint16_t> cid_to_gid_map = {});
+                       std::vector<uint16_t> code_to_gid_map);
 
     // Content-derived identity (FNV-1a over the decoded bytes + size).
     // PDF object ids are NOT used: they are only unique within one document,
@@ -55,19 +55,21 @@ namespace pdflib
     bool get_cid_to_gid_identity() const { return cid_to_gid_identity; }
 
     // True when a CID font's character codes address glyphs directly: an
-    // identity /CIDToGIDMap, or an explicit /CIDToGIDMap stream.
-    bool has_cid_to_gid() const
+    // identity /CIDToGIDMap, or a /CIDToGIDMap stream whose CIDs the
+    // /Encoding CMap resolves.
+    bool has_code_to_gid() const
     {
-      return is_cid_font and (cid_to_gid_identity or not cid_to_gid_map.empty());
+      return is_cid_font and (cid_to_gid_identity or not code_to_gid_map.empty());
     }
 
-    // Glyph index of a CID under has_cid_to_gid(). A CID beyond the end of
-    // the /CIDToGIDMap stream maps to GID 0 (ISO 32000-1, 9.7.4.2).
-    uint32_t cid_to_gid(int64_t cid) const
+    // Glyph index of a PDF character code under has_code_to_gid(). An
+    // identity map takes the code itself, as before (exact for
+    // Identity-H/V); an unmapped code gives GID 0.
+    uint32_t code_to_gid(int64_t code) const
     {
-      if(cid_to_gid_identity) { return static_cast<uint32_t>(cid); }
-      return (cid >= 0 and static_cast<size_t>(cid) < cid_to_gid_map.size())
-        ? cid_to_gid_map[static_cast<size_t>(cid)] : 0;
+      if(cid_to_gid_identity) { return static_cast<uint32_t>(code); }
+      return (code >= 0 and static_cast<size_t>(code) < code_to_gid_map.size())
+        ? code_to_gid_map[static_cast<size_t>(code)] : 0;
     }
 
     // True for a simple font that is symbolic (/FontDescriptor /Flags bit 3)
@@ -101,8 +103,9 @@ namespace pdflib
 
     std::shared_ptr<const std::vector<uint8_t> > bytes;
 
-    // decoded /CIDToGIDMap stream (CID -> GID); empty when identity or absent
-    std::vector<uint16_t> cid_to_gid_map;
+    // /CIDToGIDMap stream composed with the /Encoding CMap (code -> GID);
+    // empty when the map is identity or absent, or its CIDs are unresolved
+    std::vector<uint16_t> code_to_gid_map;
   };
 
   inline embedded_font_blob::embedded_font_blob():
@@ -115,7 +118,7 @@ namespace pdflib
     cid_to_gid_identity(false),
     uses_builtin_encoding(false),
     bytes(nullptr),
-    cid_to_gid_map()
+    code_to_gid_map()
   {}
 
   inline embedded_font_blob::embedded_font_blob(std::string cache_key_,
@@ -127,7 +130,7 @@ namespace pdflib
                                                 bool cid_to_gid_identity_,
                                                 bool uses_builtin_encoding_,
                                                 std::shared_ptr<const std::vector<uint8_t> > bytes_,
-                                                std::vector<uint16_t> cid_to_gid_map_):
+                                                std::vector<uint16_t> code_to_gid_map_):
     cache_key(std::move(cache_key_)),
     font_name(std::move(font_name_)),
     base_font(std::move(base_font_)),
@@ -137,7 +140,7 @@ namespace pdflib
     cid_to_gid_identity(cid_to_gid_identity_),
     uses_builtin_encoding(uses_builtin_encoding_),
     bytes(std::move(bytes_)),
-    cid_to_gid_map(std::move(cid_to_gid_map_))
+    code_to_gid_map(std::move(code_to_gid_map_))
   {}
 
   inline bool embedded_font_blob::has_bytes() const

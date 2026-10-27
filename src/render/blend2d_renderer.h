@@ -439,7 +439,7 @@ namespace pdflib
 
     // Glyph-identity mapping by PDF character code against an embedded
     // (Blend2D-loaded) face: CID fonts map the character code to the glyph
-    // index through /CIDToGIDMap (identity or stream); simple fonts are
+    // index through /Encoding and /CIDToGIDMap; simple fonts are
     // tried through the 0xF000 private-use convention ((3,0) symbol cmaps)
     // and then with the raw character code ((1,0) / format-0 builtin cmaps,
     // as written by Cairo/LibreOffice subsetters). Used both as the primary
@@ -455,9 +455,9 @@ namespace pdflib
 
       const auto& blob = instr.get_embedded_font();
 
-      if (blob->has_cid_to_gid())
+      if (blob->has_code_to_gid())
         {
-          const uint32_t glyph_id = blob->cid_to_gid(char_code);
+          const uint32_t glyph_id = blob->code_to_gid(char_code);
           gb.set_glyphs(&glyph_id, 1);
           // shape() rejects glyph content, so position directly.
           if (font.position_glyphs(gb) == BL_SUCCESS and
@@ -465,7 +465,7 @@ namespace pdflib
               gb.placement_data() != nullptr)
             {
               LOG_S(INFO) << "render_text: recovered glyph via CIDToGIDMap"
-                          << " cid=" << char_code
+                          << " char_code=" << char_code
                           << " font_name=`" << instr.get_font_name() << "`";
               return true;
             }
@@ -2900,7 +2900,7 @@ namespace pdflib
               using_embedded_font and
               instr.has_embedded_font() and
               (embedded_blob->get_is_cid_font()
-                 ? embedded_blob->has_cid_to_gid()
+                 ? embedded_blob->has_code_to_gid()
                  : embedded_blob->get_uses_builtin_encoding());
 
             if (char_code_first)
