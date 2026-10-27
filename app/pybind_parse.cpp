@@ -1270,6 +1270,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
         render_shapes (bool): Paint vector shape instructions [default=true].
         render_shadings (bool): Paint shading instructions [default=true].
         render_non_rect_clip_masks (bool): Apply non-rectangular clip masks [default=true].
+        render_soft_masks (bool): Composite paint through ExtGState soft masks (/SMask) [default=true].
         min_stroke_width (float): Minimum stroke width in device pixels for hairlines and sub-pixel vector strokes [default=1.0].
         draw_text_bbox (bool): Draw bounding quad for each text cell [default=false].
         draw_text_basepoint (bool): Draw the text baseline origin as a small red dot [default=false].
@@ -1289,6 +1290,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
     .def_readwrite("render_shapes",           &pdflib::render_config::render_shapes)
     .def_readwrite("render_shadings",         &pdflib::render_config::render_shadings)
     .def_readwrite("render_non_rect_clip_masks", &pdflib::render_config::render_non_rect_clip_masks)
+    .def_readwrite("render_soft_masks",       &pdflib::render_config::render_soft_masks)
     .def_readwrite("min_stroke_width",        &pdflib::render_config::min_stroke_width)
     .def_readwrite("draw_text_bbox",          &pdflib::render_config::draw_text_bbox)
     .def_readwrite("draw_text_basepoint",     &pdflib::render_config::draw_text_basepoint)

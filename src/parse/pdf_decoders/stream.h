@@ -101,6 +101,14 @@ namespace pdflib
     void do_postscript(const std::string& xobj_name,
        const xobject_subtype_name& xobj_subtype);
 
+    // Soft masks (11.6.5). A `gs` that installs one leaves its group
+    // undecoded on the graphics state; this decodes the group -- once per
+    // ExtGState entry and CTM -- into page-space instructions the renderer
+    // composites, and hands the result to the state.
+    void resolve_soft_mask();
+    std::shared_ptr<soft_mask_instruction>
+    decode_soft_mask(const soft_mask_spec& spec, const std::array<double, 9>& ctm);
+
     // `sh`: resolve the named /Shading resource and emit the paint
     // instruction that covers the current clip region.
     void do_shading(const std::string& sh_name);
@@ -188,6 +196,40 @@ namespace pdflib
     int stack_count;
     int inline_image_count = 0;
     inline_image_entry inline_image;
+
+    // Decoded soft masks, shared by every decoder of one page (forms,
+    // patterns, appearance streams) so a mask installed at page level and
+    // painted under inside a form is decoded once. Keyed by the parsed
+    // entry's address and the CTM at the `gs`; the entry is held alongside
+    // so its address cannot be reused while the key is live. A failed decode
+    // is kept, as null, so it is not retried.
+    //
+    // A page can install a new mask with every `gs` for next to nothing, so
+    // the number of decodes is capped: past max_soft_mask_decodes the rest of
+    // the page paints unmasked, reported once.
+    struct soft_mask_cache_entry
+    {
+      std::shared_ptr<const soft_mask_spec>  spec;
+      std::shared_ptr<soft_mask_instruction> mask;
+    };
+    //
+    // A mask installed inside a transparency group painted under another
+    // mask is intersected with it; the intersections are kept here too, keyed
+    // by the two masks, so every paint under the same pair shares one.
+    struct soft_mask_page_cache
+    {
+      std::unordered_map<std::string, soft_mask_cache_entry> decoded;
+      std::map<std::pair<const soft_mask_instruction*, const soft_mask_instruction*>,
+               std::shared_ptr<soft_mask_instruction>> intersected;
+      bool budget_reported = false;
+    };
+    static constexpr std::size_t max_soft_mask_decodes = 512;
+    std::shared_ptr<soft_mask_page_cache> soft_mask_cache_ =
+      std::make_shared<soft_mask_page_cache>();
+
+    // Greater than zero while decoding a soft mask's own group. A mask set
+    // inside a mask is not composited; it is reported instead.
+    int soft_mask_depth_ = 0;
 
     // BDC/EMC pairs must balance within a single content stream (PDF 32000-1,
     // 14.6), so this stack is per-decoder; cells created by nested form
@@ -1024,6 +1066,7 @@ namespace pdflib
                               grph_state.get_fill_alpha(),
                               clip_state);
       instr.set_blend_mode(grph_state.get_blend_mode());
+      instr.set_soft_mask(grph_state.get_soft_mask_instruction());
       return instr;
     }
   }
@@ -1344,6 +1387,7 @@ namespace pdflib
           current_graphic_state().get_fill_alpha(),
           std::move(clip_state));
         shinstr.set_blend_mode(current_graphic_state().get_blend_mode());
+        shinstr.set_soft_mask(current_graphic_state().get_soft_mask_instruction());
         instructions.add_shading_instruction(std::move(shinstr));
 
         this->Q();
@@ -1540,6 +1584,9 @@ namespace pdflib
                                             instructions,
                                             timings);
 
+            cell_stream.soft_mask_cache_ = soft_mask_cache_;
+            cell_stream.soft_mask_depth_ = soft_mask_depth_;
+
             bool updated_stack = cell_stream.update_stack(stack, stack_count);
             cell_stream.current_graphic_state().materialize_pattern_fill_color();
 
@@ -1641,6 +1688,7 @@ namespace pdflib
                                 std::move(clip_state));
 
     shinstr.set_blend_mode(current_graphic_state().get_blend_mode());
+    shinstr.set_soft_mask(current_graphic_state().get_soft_mask_instruction());
 
     instructions.add_shading_instruction(std::move(shinstr));
   }
@@ -1763,6 +1811,9 @@ namespace pdflib
                                        instructions,
 
                                        timings);
+
+        new_stream.soft_mask_cache_ = soft_mask_cache_;
+        new_stream.soft_mask_depth_ = soft_mask_depth_;
 
         bool updated_stack = new_stream.update_stack(stack, stack_count);
 
@@ -1947,6 +1998,177 @@ namespace pdflib
         }
     }
     this->Q();
+  }
+
+  void pdf_decoder<STREAM>::resolve_soft_mask()
+  {
+    if(not current_graphic_state().has_pending_soft_mask()) { return; }
+
+    // Copies: decoding pushes states of its own and may reallocate the stack.
+    const std::shared_ptr<const soft_mask_spec> spec =
+      current_graphic_state().get_soft_mask_spec();
+    const std::array<double, 9> ctm = current_graphic_state().get_soft_mask_ctm();
+
+    if(soft_mask_depth_ > 0)
+      {
+        LOG_S(WARNING) << "ExtGState " << spec->key
+                       << ": soft mask set inside a soft-mask group is not applied";
+        return;
+      }
+
+    // the CTM is quantised so that float noise between two `gs` of the same
+    // mask does not make two decodes
+    std::string cache_key = std::to_string(reinterpret_cast<std::uintptr_t>(spec.get()));
+    for(double v : ctm)
+      {
+        cache_key += ':' + std::to_string(std::round(v * 1000.0) / 1000.0);
+      }
+
+    std::shared_ptr<soft_mask_instruction> mask;
+
+    auto& decoded = soft_mask_cache_->decoded;
+    auto found = decoded.find(cache_key);
+    if(found != decoded.end())
+      {
+        mask = found->second.mask;
+      }
+    else if(decoded.size() >= max_soft_mask_decodes)
+      {
+        if(not soft_mask_cache_->budget_reported)
+          {
+            LOG_S(WARNING) << "ExtGState " << spec->key << ": " << decoded.size()
+                           << " soft masks decoded on this page already, the rest paint unmasked";
+            soft_mask_cache_->budget_reported = true;
+          }
+        return;
+      }
+    else
+      {
+        mask = decode_soft_mask(*spec, ctm);
+        decoded[cache_key] = soft_mask_cache_entry{spec, mask};
+      }
+
+    if(not mask) { return; }
+
+    std::shared_ptr<soft_mask_instruction> paint_mask = mask;
+
+    const std::shared_ptr<soft_mask_instruction>& outer =
+      current_graphic_state().get_group_soft_mask();
+    if(outer)
+      {
+        auto& intersected = soft_mask_cache_->intersected;
+        auto& both = intersected[{outer.get(), mask.get()}];
+        if(not both)
+          {
+            both = std::make_shared<soft_mask_instruction>(outer, mask);
+          }
+        paint_mask = both;
+      }
+
+    current_graphic_state().set_soft_mask_instruction(mask, paint_mask);
+  }
+
+  // The group is decoded the way `Do` decodes a form, with two differences:
+  // it lands in containers of its own, since what it paints is coverage and
+  // not page content (none of its cells, shapes or images may reach the
+  // page), and it starts from the CTM at the `gs` rather than the current one.
+  std::shared_ptr<soft_mask_instruction>
+  pdf_decoder<STREAM>::decode_soft_mask(const soft_mask_spec& spec,
+                                        const std::array<double, 9>& ctm)
+  {
+    LOG_S(INFO) << "decoding the soft mask of ExtGState " << spec.key;
+
+    try
+      {
+        pdf_resource<PAGE_XOBJECT_FORM> form;
+        form.set("SMask:" + spec.key, spec.group);
+
+        // the group's own resources, with the current ones as fallback
+        auto fonts_       = std::make_shared<pdf_resource<PAGE_FONTS>>(page_fonts);
+        auto grphs_       = std::make_shared<pdf_resource<PAGE_GRPHS>>(page_grphs);
+        auto colorspaces_ = std::make_shared<pdf_resource<PAGE_COLORSPACES>>(page_colorspaces);
+        auto shadings_    = std::make_shared<pdf_resource<PAGE_SHADINGS>>(page_shadings);
+        auto patterns_    = std::make_shared<pdf_resource<PAGE_PATTERNS>>(page_patterns);
+        auto xobjects_    = std::make_shared<pdf_resource<PAGE_XOBJECTS>>(page_xobjects);
+
+        if(form.has_fonts())       { QPDFObjectHandle r = form.get_fonts();       fonts_->set(r, timings); }
+        if(form.has_grphs())       { QPDFObjectHandle r = form.get_grphs();       grphs_->set(r, timings); }
+        if(form.has_colorspaces()) { QPDFObjectHandle r = form.get_colorspaces(); colorspaces_->set(r); }
+        if(form.has_shadings())    { QPDFObjectHandle r = form.get_shadings();    shadings_->set(r); }
+        if(form.has_patterns())    { QPDFObjectHandle r = form.get_patterns();    patterns_->set(r); }
+        if(form.has_xobjects())    { QPDFObjectHandle r = form.get_xobjects();    xobjects_->set(r, timings); }
+
+        // Mask space is the group's /Matrix composed with the CTM at the `gs`,
+        // in the order `cm` composes them (form first, then the CTM).
+        const std::array<double, 6> fm = form.get_matrix();
+        const std::array<double, 6> matrix = {
+          fm[0] * ctm[0] + fm[1] * ctm[3],
+          fm[0] * ctm[1] + fm[1] * ctm[4],
+          fm[2] * ctm[0] + fm[3] * ctm[3],
+          fm[2] * ctm[1] + fm[3] * ctm[4],
+          fm[4] * ctm[0] + fm[5] * ctm[3] + ctm[6],
+          fm[4] * ctm[1] + fm[5] * ctm[4] + ctm[7]};
+
+        // the /BBox corners in page space: outside them the backdrop shows
+        const std::array<double, 4> bbox = form.get_bbox();
+        const double xs[4] = {bbox[0], bbox[2], bbox[2], bbox[0]};
+        const double ys[4] = {bbox[1], bbox[1], bbox[3], bbox[3]};
+
+        std::array<double, 8> quad{};
+        for(int c = 0; c < 4; c++)
+          {
+            quad[2 * c]     = matrix[0] * xs[c] + matrix[2] * ys[c] + matrix[4];
+            quad[2 * c + 1] = matrix[1] * xs[c] + matrix[3] * ys[c] + matrix[5];
+          }
+
+        auto mask = std::make_shared<soft_mask_instruction>(spec.key,
+                                                            spec.luminosity,
+                                                            spec.backdrop_rgb,
+                                                            spec.transfer,
+                                                            quad);
+
+        page_item<PAGE_DIMENSION> mask_dimension;
+        page_item<PAGE_CELLS>     mask_cells;
+        page_item<PAGE_SHAPES>    mask_shapes;
+        page_item<PAGE_IMAGES>    mask_images;
+
+        pdf_decoder<STREAM> mask_decoder(config,
+                                         mask_dimension,
+                                         mask_cells,
+                                         mask_shapes,
+                                         mask_images,
+                                         fonts_,
+                                         grphs_,
+                                         colorspaces_,
+                                         shadings_,
+                                         patterns_,
+                                         xobjects_,
+                                         mask->get_group(),
+                                         timings);
+        mask_decoder.soft_mask_cache_ = soft_mask_cache_;
+        mask_decoder.soft_mask_depth_ = soft_mask_depth_ + 1;
+
+        QPDFObjectHandle group = spec.group;
+        mask_decoder.decode(group);
+        mask_decoder.set_base_matrix(matrix);
+
+        std::vector<qpdf_stream_instruction> parameters;
+        mask_decoder.interprete(parameters);
+
+        for(const auto& item : mask_decoder.get_unknown_operators())
+          {
+            unknown_operators.insert(item);
+          }
+
+        return mask;
+      }
+    catch(const std::exception& exc)
+      {
+        LOG_S(WARNING) << "ExtGState " << spec.key
+                       << ": soft mask group could not be decoded (" << exc.what()
+                       << "), paint stays unmasked";
+        return nullptr;
+      }
   }
 
   void pdf_decoder<STREAM>::do_postscript(const std::string& xobj_name,
@@ -2211,6 +2433,7 @@ namespace pdflib
         {
           LOG_S(INFO) << "executing " << to_string(name);
           current_graphic_state().gs(parameters);
+          resolve_soft_mask();
         }
         break;
 
