@@ -1,3 +1,14 @@
+## [v7.24.0](https://github.com/docling-project/docling-parse/releases/tag/v7.24.0) - 2026-10-27
+
+### Feature
+
+* Report why a document failed to load, so a password is told from a damaged file ([#414](https://github.com/docling-project/docling-parse/issues/414)) ([`3317576`](https://github.com/docling-project/docling-parse/commit/33175762f5324d987e4d8bb01f191900c96a5cc2))
+
+### Fix
+
+* Resolve /CIDToGIDMap streams for CIDFontType2 glyph lookup ([#426](https://github.com/docling-project/docling-parse/issues/426)) ([`8099e94`](https://github.com/docling-project/docling-parse/commit/8099e94fe9a872fe2ceb63618ecbda5beb91e9da))
+* Decode image XObject samples only when a page draws them ([#425](https://github.com/docling-project/docling-parse/issues/425)) ([`341aea5`](https://github.com/docling-project/docling-parse/commit/341aea52ce999d266bd62d5bde625502e7c13ea7))
+
 ## [v7.23.1](https://github.com/docling-project/docling-parse/releases/tag/v7.23.1) - 2026-10-26
 
 ### Fix
