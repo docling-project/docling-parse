@@ -633,7 +633,18 @@ namespace pdflib
     // The reduced samples fit a render at the configured scale only. A later
     // render at a finer scale (PageParseResult.get_image(scale=...)) decodes
     // the image again from its encoded bytes, which the page keeps anyway.
-    if(decode_reduction_shift > 0)
+    //
+    // Only /DCTDecode and /JPXDecode honour the shift. Every other branch
+    // (Flate, raw, CCITT, JBIG2, or a stream QPDF already decoded) returns
+    // full-resolution samples, which a finer render would only decode again
+    // unchanged, so the re-decoder is kept for samples that really are reduced.
+    const auto& decoded_shape = binstr.get_shape();
+    const bool samples_reduced =
+      binstr.has_data()
+      and (decoded_shape[0] < image.image_height
+           or decoded_shape[1] < image.image_width);
+
+    if(decode_reduction_shift > 0 and samples_reduced)
       {
         binstr.set_redecoder(
           config.bitmap_target_pixels_per_unit,
