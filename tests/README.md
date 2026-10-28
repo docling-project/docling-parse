@@ -20,6 +20,10 @@ A new test belongs in the first group unless it genuinely needs the corpus: a
 failure there names the operator that broke, while a corpus failure only names
 a page.
 
+A unit test does not replace the evidence that a pull request needs: every
+change must also be shown on a real document. See "Submitting pull requests" in
+[CONTRIBUTING.md](../CONTRIBUTING.md#submitting-pull-requests).
+
 ## Running Tests
 
 Run the full test suite:
@@ -392,6 +396,13 @@ Consequently `PYPDFIUM_IMAGE_TOLERANCE` is not a regression limit. It is only
 the cut-off that decides which pages are called out in the report and, by
 default, which ones get a visualization written.
 
+For the same reason, this report does not count as the image regression test
+that a rendering pull request needs. That test must fail on `main` and pass
+with the change, comparing against pypdfium2 on the pages the pull request
+cites. `render_pypdfium_page()` and `measure_image_pair()` in
+`rendering_regression.py` provide the reference render and the metrics. See
+"Rendering changes" in [CONTRIBUTING.md](../CONTRIBUTING.md#rendering-changes).
+
 ### Three-panel visualizations
 
 Comparison images are written to:
@@ -590,3 +601,11 @@ the environment, for example `HF_TOKEN` or `HUGGINGFACE_HUB_TOKEN`.
 After publishing a new dataset revision, update `HF_DATASET_REVISION` in
 `tests/constants.py` so CI and local runs use the intended snapshot.
 `tests/data_utils.py` imports it from there and does the download.
+
+Publishing a ground-truth revision and bumping `HF_DATASET_REVISION` are
+maintainer steps, done when a change is merged. In a contributed pull request,
+do not pin `HF_DATASET_REVISION` to a revision from an open dataset pull
+request. Use the content-hash comparison above to list the pages whose ground
+truth changes, and give the reason for each page in the pull request
+description. See "Ground truth" in
+[CONTRIBUTING.md](../CONTRIBUTING.md#ground-truth).
