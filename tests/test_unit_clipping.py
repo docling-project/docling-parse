@@ -265,3 +265,90 @@ def test_an_image_whose_clip_is_empty_does_not_clip_the_rest_of_the_page():
         f"the fill painted after an abandoned image covered {coverage:.3f} of "
         "its own box; a clip left on the context is cutting it"
     )
+
+
+# Strokes go through the same clip as fills (docling-parse#378). The stroke
+# branch used to paint straight onto the page, past a curved clip, and the clip
+# tests ran on the path's own box: zero-height for a horizontal rule, which
+# then counted as clipped away entirely.
+
+LEFT_OF_DISC = (0.0, 0.0, CENTER - RADIUS - 5, 200.0)  # top-left coordinates
+
+
+def test_circular_clip_cuts_a_stroke():
+    """A wide diagonal through a circular clip stops at the circle."""
+    content = (
+        "q\n" + circle_path(CENTER, CENTER, RADIUS) + "W n\n"
+        "0 0 1 RG 8 w\n"
+        "10 40 m 190 160 l S\n"
+        "Q\n"
+    )
+    result = render_page(simple_page_pdf(content))
+    assert coverage_ratio(region_image(result, LEFT_OF_DISC)) < 0.001, (
+        "the stroke ran past the circular clip"
+    )
+    assert coverage_ratio(region_image(result, (95.0, 95.0, 105.0, 105.0))) > 0.5, (
+        "the part of the stroke inside the circle is missing"
+    )
+
+
+@pytest.mark.parametrize(
+    "rule",
+    ["10 100 m 190 100 l S", "100 10 m 100 190 l S"],
+    ids=["horizontal", "vertical"],
+)
+def test_axis_aligned_rule_under_a_curved_clip_is_drawn(rule: str):
+    """A rule has a zero-area path box, but its stroke still paints."""
+    content = (
+        "q\n" + circle_path(CENTER, CENTER, RADIUS) + f"W n\n0 0 1 RG 8 w\n{rule}\nQ\n"
+    )
+    result = render_page(simple_page_pdf(content))
+    assert coverage_ratio(region_image(result, (97.0, 97.0, 103.0, 103.0))) > 0.9, (
+        "the rule vanished under the circular clip"
+    )
+    assert coverage_ratio(region_image(result, LEFT_OF_DISC)) < 0.001
+    assert (
+        coverage_ratio(region_image(result, (0.0, 0.0, 200.0, CENTER - RADIUS - 5)))
+        < 0.001
+    )
+
+
+def test_union_of_rectangles_clips_a_fill_outside_it():
+    """One `W` over two rectangles is a union clip, and nothing outside it paints.
+
+    Two subpaths of one capture go through the coverage mask. When the shape
+    missed both rectangles, no mask was built and the shape was painted with
+    no clip at all.
+    """
+    content = (
+        "q\n20 20 70 160 re 110 20 70 160 re W n\n"
+        "0 0 1 rg\n"
+        "0 0 200 15 re f\n"
+        "0 0 1 RG 4 w\n"
+        "0 100 m 200 100 l S\n"
+        "Q\n"
+    )
+    result = render_page(simple_page_pdf(content))
+    assert coverage_ratio(region_image(result, (0.0, 185.0, 200.0, 200.0))) < 0.001, (
+        "a fill outside the clip rectangles reached the page"
+    )
+    assert coverage_ratio(region_image(result, (92.0, 90.0, 108.0, 110.0))) < 0.001, (
+        "the stroke crossed the gap between the clip rectangles"
+    )
+    assert coverage_ratio(region_image(result, (30.0, 99.5, 80.0, 100.5))) > 0.9, (
+        "the stroke is missing inside the clip rectangles"
+    )
+
+
+def test_stroke_reaching_into_a_rectangular_clip_is_kept():
+    """A stroke whose path lies outside the clip can still paint inside it.
+
+    The path runs 2pt below the clip; half of the 8pt line width reaches 2pt
+    into it.
+    """
+    content = "q\n50 50 100 100 re W n\n0 0 1 RG 8 w\n60 48 m 140 48 l S\nQ\n"
+    result = render_page(simple_page_pdf(content))
+    assert coverage_ratio(region_image(result, (60.0, 148.5, 140.0, 149.5))) > 0.9, (
+        "the part of the stroke inside the clip was dropped"
+    )
+    assert coverage_ratio(region_image(result, (60.0, 150.5, 140.0, 156.0))) < 0.001
