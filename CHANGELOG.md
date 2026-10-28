@@ -1,3 +1,9 @@
+## [v7.24.1](https://github.com/docling-project/docling-parse/releases/tag/v7.24.1) - 2026-10-28
+
+### Fix
+
+* **render:** Decode reduced bitmaps again for a finer re-render ([#429](https://github.com/docling-project/docling-parse/issues/429)) ([`436ff5a`](https://github.com/docling-project/docling-parse/commit/436ff5ac0d09f9a994251fb41bc1ff04ceb2f6f4))
+
 ## [v7.24.0](https://github.com/docling-project/docling-parse/releases/tag/v7.24.0) - 2026-10-27
 
 ### Feature
