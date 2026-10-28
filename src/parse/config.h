@@ -74,6 +74,10 @@ namespace pdflib
     // magnify what it used to minify. Rendered output does change: the
     // discarded resolution levels are ones the rasteriser would have
     // resampled away, but not with the same filter the codec uses.
+    //
+    // A later render of the same instructions at a finer resolution decodes
+    // the reduced images again from their encoded bytes, so it matches a
+    // render whose decode was sized for it (bitmap_instruction::redecoded_for).
     double bitmap_target_pixels_per_unit = 0.0;
 
     // threading

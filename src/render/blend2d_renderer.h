@@ -3385,6 +3385,16 @@ namespace pdflib
 
   inline void renderer<BLEND2D>::render_bitmap(bitmap_instruction& instr)
   {
+    // Samples decoded down for a coarser render are decoded again when this
+    // render is finer, so a re-render at a larger scale is not upscaled.
+    const double pixels_per_unit =
+      config_.scale > 0.0f ? config_.scale : std::max(scale_x_, scale_y_);
+    if (auto sharper = instr.redecoded_for(pixels_per_unit))
+      {
+        render_bitmap(*sharper);
+        return;
+      }
+
     utils::scoped_timer phase_timer(timings_, pdf_timings::KEY_RENDER_BITMAP);
 
     LOG_S(INFO) << __FUNCTION__ << " for xobject_key=" << instr.get_key();

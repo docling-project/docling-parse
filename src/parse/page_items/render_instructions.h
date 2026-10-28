@@ -5,6 +5,8 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <functional>
+#include <optional>
 #include <string>
 #include <vector>
 #include <array>
@@ -27,6 +29,15 @@ namespace pdflib
     CMYK_CONVENTION_UNKNOWN,
     CMYK_CONVENTION_ADOBE_INVERTED,
     CMYK_CONVENTION_PROCESS,
+  };
+
+  // The decoded samples of one image, as a bitmap_instruction carries them.
+  struct bitmap_samples
+  {
+    std::shared_ptr<std::vector<uint8_t> > data;
+    std::array<int, 3> shape = {0, 0, 0};
+    pixel_format fmt = PIXEL_FORMAT_UNKNOWN;
+    cmyk_convention cmyk_conv = CMYK_CONVENTION_UNKNOWN;
   };
 
   enum clip_rule {
@@ -585,18 +596,58 @@ namespace pdflib
     void set_filters(std::vector<std::string> filters) { filters_ = std::move(filters); }
     const std::vector<std::string>& get_filters() const { return filters_; }
 
+    // Set when the samples were decoded at a reduced resolution, sized for a
+    // render at `pixels_per_unit` (decode_config::bitmap_target_pixels_per_unit).
+    // `redecode` decodes the image again for a finer target and returns empty
+    // samples when the stored ones already cover it. It holds the encoded
+    // bytes the page keeps anyway, never full-resolution pixels.
+    void set_redecoder(double pixels_per_unit,
+                       std::function<bitmap_samples(double)> redecode)
+    {
+      decoded_for_pixels_per_unit_ = pixels_per_unit;
+      redecode_ = std::move(redecode);
+    }
+
+    // A copy of this instruction with samples decoded for a render at
+    // `pixels_per_unit`, when the stored ones were reduced below what that
+    // render needs; otherwise nothing, and the stored samples are drawn.
+    std::optional<bitmap_instruction> redecoded_for(double pixels_per_unit) const
+    {
+      if(not redecode_ or pixels_per_unit <= decoded_for_pixels_per_unit_)
+        {
+          return std::nullopt;
+        }
+
+      bitmap_samples samples = redecode_(pixels_per_unit);
+      if(not samples.data or samples.data->empty())
+        {
+          return std::nullopt;
+        }
+
+      bitmap_instruction sharper(*this);
+      sharper.data = std::move(samples.data);
+      sharper.shape = samples.shape;
+      sharper.fmt = samples.fmt;
+      sharper.cmyk_conv = samples.cmyk_conv;
+      sharper.redecode_ = nullptr;
+      return sharper;
+    }
+
   private:
+
+    double decoded_for_pixels_per_unit_ = 0.0;
+    std::function<bitmap_samples(double)> redecode_;
 
     blend_mode_name blend_mode_ = BLEND_MODE_NORMAL;
     std::vector<std::string> filters_;
 
     const std::string xobject_key;
     
-    const std::shared_ptr<std::vector<uint8_t> > data;
+    std::shared_ptr<std::vector<uint8_t> > data;
     const std::shared_ptr<std::vector<uint8_t> > alpha_data;
-    const cmyk_convention cmyk_conv;
-    const std::array<int, 3> shape;
-    const pixel_format fmt;
+    cmyk_convention cmyk_conv;
+    std::array<int, 3> shape;
+    pixel_format fmt;
     const bool image_mask;
     const std::array<int, 3> rgb_filling;
     const double fill_alpha;

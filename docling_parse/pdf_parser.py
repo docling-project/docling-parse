@@ -1218,6 +1218,11 @@ class PageParseResult:
         self._pages: Dict[tuple[int, int, int, int, int, bool], SegmentedPdfPage] = {}
         self._page_decoder: PdfPageDecoder | None = None
         self._default_image: PILImage.Image | None = None
+        # Last image rendered at a non-default scale for a cropped request: OCR
+        # crops several regions of a page at the same scale, and each crop would
+        # re-render the page. Full-page requests are not kept: callers such as
+        # Docling cache those already, and one per live page adds up quickly.
+        self._scaled_image: tuple[float, PILImage.Image] | None = None
 
         self.doc_key: str = raw_result.doc_key
         self.page_number: int = raw_result.page_number + 1
@@ -1448,7 +1453,9 @@ class PageParseResult:
             )
         return self._default_image
 
-    def _render_image_at_scale(self, scale: float) -> PILImage.Image:
+    def _render_image_at_scale(self, scale: float, cache: bool) -> PILImage.Image:
+        if self._scaled_image is not None and self._scaled_image[0] == scale:
+            return self._scaled_image[1]
         page_decoder = self._require_page_decoder()
         render_config = self._rendering_config()
         render_config.scale = scale
@@ -1459,7 +1466,10 @@ class PageParseResult:
             raise RuntimeError(
                 f"Rendered image is empty for page {self.page_number} of {self.doc_key}"
             )
-        return self._image_from_bytes(raw_bytes, image_shape)
+        image = self._image_from_bytes(raw_bytes, image_shape)
+        if cache:
+            self._scaled_image = (scale, image)
+        return image
 
     def _render_image_at_canvas_size(
         self, canvas_size: tuple[int, int]
@@ -1519,7 +1529,7 @@ class PageParseResult:
             ):
                 image = self._get_default_image()
             else:
-                image = self._render_image_at_scale(scale)
+                image = self._render_image_at_scale(scale, cache=cropbox is not None)
         else:
             assert canvas_size is not None
             if canvas_size[0] <= 0 or canvas_size[1] <= 0:
