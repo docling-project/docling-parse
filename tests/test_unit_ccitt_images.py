@@ -20,14 +20,12 @@ takes that padding for code bits, so the second row is already wrong.
 
 from __future__ import annotations
 
-import io
 import zlib
 from base64 import a85encode
-from collections.abc import Sequence
 
 import pytest
-from PIL import Image, TiffImagePlugin
 
+from tests.image_fixtures import g4_codes, middle_half
 from tests.pdf_builder import render_page, simple_page_pdf, stream_object
 from tests.rendering_regression import assert_color_near, center_color, region_image
 
@@ -44,45 +42,6 @@ MARGIN = (55.0, 55.0, 70.0, 70.0)
 # Still inside the image, below the ink: this is where a row that decoded out
 # of step with the codes shows up, as ink running on to the image's bottom.
 BELOW_INK = (90.0, 130.0, 110.0, 145.0)
-
-
-def middle_half(extent: int) -> range:
-    return range(extent // 4, 3 * extent // 4)
-
-
-# ---------------------------------------------------------------------------
-# Fixtures encoded by Pillow, so the codes under test come from a real fax
-# encoder rather than from this file's understanding of one.
-# ---------------------------------------------------------------------------
-
-
-def g4_codes(
-    columns: int, rows: int, ink_columns: Sequence[range], ink_rows: range
-) -> bytes:
-    """Group 4 codes for bands of ink, `columns` pixels to the row.
-
-    Pillow writes a mode-"1" image with photometric=BlackIsZero, which makes
-    its *0* pixels the codestream's white runs. A PDF reads the opposite way
-    round under the default /BlackIs1 false, where a decoded 0 bit is black, so
-    the image handed to Pillow is the inverse of the samples wanted back.
-    """
-    image = Image.new("1", (columns, rows), 0)
-    for y in ink_rows:
-        for band in ink_columns:
-            for x in band:
-                image.putpixel((x, y), 1)
-
-    buffer = io.BytesIO()
-    image.save(buffer, format="TIFF", compression="group4")
-
-    tiff = Image.open(io.BytesIO(buffer.getvalue()))
-    # Only a TIFF carries the strip tags this reads back out.
-    assert isinstance(tiff, TiffImagePlugin.TiffImageFile)
-
-    offsets, counts = tiff.tag_v2[273], tiff.tag_v2[279]
-    assert len(offsets) == 1, "the fixture wants one strip, i.e. one codestream"
-
-    return buffer.getvalue()[offsets[0] : offsets[0] + counts[0]]
 
 
 # ---------------------------------------------------------------------------
