@@ -125,6 +125,10 @@ namespace pdflib
     std::string load_error_category;
     std::string load_error_message;
 
+    // Built on the first call to get_annotations(), get_meta_xml() or
+    // get_table_of_contents(), never during load: a conversion that reads
+    // only the pages pays nothing for the form, the metadata stream and the
+    // outline. Only ever touched under thread_safe_buffer_mutex.
     nlohmann::json json_annots;
     bool annots_loaded;
 
@@ -177,6 +181,11 @@ namespace pdflib
 
   void pdf_decoder<DOCUMENT>::ensure_annots_loaded()
   {
+    // Reads qpdf_document, which the page-buffer writer below also uses:
+    // with the threaded parser a worker may be copying a page out while the
+    // main thread asks for the annotations.
+    std::lock_guard<std::mutex> lock(thread_safe_buffer_mutex);
+
     if(annots_loaded)
       {
         return;
@@ -339,8 +348,6 @@ namespace pdflib
         LOG_S(ERROR) << "could not process buffer by qpdf: " << exc.what();
         return false;
       }
-    
-    ensure_annots_loaded();
 
     timings.add_timing(pdf_timings::KEY_PROCESS_DOCUMENT_FROM_BYTESIO, timer.get_time());
     
