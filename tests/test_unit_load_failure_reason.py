@@ -23,6 +23,8 @@ from docling_parse.pdf_parser import (
     PdfLoadError,
     PdfLoadErrorCategory,
     PdfPasswordError,
+    RenderConfig,
+    ThreadedPdfParserConfig,
 )
 from tests.pdf_builder import simple_page_pdf
 
@@ -62,8 +64,16 @@ def _threaded_parser():
     return DoclingThreadedPdfParser()
 
 
+def _threaded_renderer():
+    return DoclingThreadedPdfParser(
+        parser_config=ThreadedPdfParserConfig(render_config=RenderConfig())
+    )
+
+
 PARSERS = pytest.mark.parametrize(
-    "make_parser", [_plain_parser, _threaded_parser], ids=["plain", "threaded"]
+    "make_parser",
+    [_plain_parser, _threaded_parser, _threaded_renderer],
+    ids=["plain", "threaded", "renderer"],
 )
 
 

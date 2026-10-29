@@ -1421,6 +1421,23 @@ PYBIND11_MODULE(pdf_parsers, m) {
          pybind11::arg("page_numbers") = pybind11::none(),
          pybind11::arg("page_range") = pybind11::none())
 
+    .def("take_load_error",
+         [](docling::docling_threaded_renderer& self, const std::string& key) -> std::map<std::string, std::string> {
+           return self.take_load_error(key);
+         },
+         pybind11::arg("key"),
+         R"(
+    Return and clear why the last load of `key` failed.
+
+    Parameters:
+        key (str): The key passed to the failed load call.
+
+    Returns:
+        dict[str, str]: {"category": ..., "message": ...}, or an empty dict when
+        no failure is recorded for the key. category is one of "password",
+        "damaged", "unsupported", "io" and "unknown"; message is the text of
+        the underlying (qpdf) error.)")
+
     .def("number_of_pages",
          [](docling::docling_threaded_renderer& self, const std::string& key) -> int {
            return self.number_of_pages(key);
