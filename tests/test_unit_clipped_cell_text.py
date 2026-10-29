@@ -40,7 +40,7 @@ def cell_box(row: int, col: int) -> tuple[float, float, float, float]:
     return (COLUMNS[col], y_top - ROW_H, COLUMNS[col + 1], y_top)
 
 
-def clipped_table_pdf() -> bytes:
+def clipped_table_pdf(media_box: str = MEDIA_BOX) -> bytes:
     """The table of #404: every cell's text is drawn inside the cell's clip."""
     content = ["0.5 w"]
     for i in range(len(ROWS) + 1):
@@ -55,7 +55,7 @@ def clipped_table_pdf() -> bytes:
                 f"q {x0} {y0} {x1 - x0} {y1 - y0} re W n "
                 f"BT /F1 9 Tf {x0 + 3} {y1 - 15} Td ({text}) Tj ET Q"
             )
-    return simple_page_pdf("\n".join(content), resources=HELVETICA, media_box=MEDIA_BOX)
+    return simple_page_pdf("\n".join(content), resources=HELVETICA, media_box=media_box)
 
 
 def words_of(page) -> list[str]:
@@ -130,6 +130,22 @@ def test_clip_box_is_tracked_without_shapes():
         ) == cell_box(1, 1)
     finally:
         doc.unload()
+
+
+def test_clip_box_moves_with_a_page_box_that_does_not_start_at_zero():
+    """Cells are shifted to the page box origin; their clip box must shift too."""
+    dx, dy = -15.0, -21.0
+    page = parse_page(clipped_table_pdf(media_box=f"[{dx} {dy} {612 + dx} {792 + dy}]"))
+
+    def shifted(box: tuple[float, float, float, float]) -> tuple[float, ...]:
+        return (box[0] - dx, box[1] - dy, box[2] - dx, box[3] - dy)
+
+    by_text = {cell.text: cell for cell in page.word_cells}
+    assert clip_of(by_text["AB-1001-XYZ"]) == shifted(cell_box(1, 0))
+    assert clip_of(by_text["level"]) == shifted(cell_box(1, 1))
+    # a clip box left at the unshifted place cuts glyphs that the page shows,
+    # which splits this line although no clip hides anything in it
+    assert "AB-1002 Gutter cleaning" in lines_of(page)
 
 
 def test_keep_clips_off_restores_the_glyph_only_cells():
