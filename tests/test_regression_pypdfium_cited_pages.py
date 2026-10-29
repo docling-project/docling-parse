@@ -39,6 +39,19 @@ CITED_PAGES = [
         ),
         id="calrgb-image",
     ),
+    # docling#4861: a scanned invoice written as a /CalGray CCITT Group 4 image
+    # by an image-to-PDF converter. It was drawn as the yellow placeholder, so
+    # OCR on the rendered page found nothing (mean_abs_error 38.1, changed_pixels_ratio
+    # 0.111 before the fix; 3.30 and 0.051 after it, the rest being how the 1-bit
+    # scan is anti-aliased when downsampled).
+    pytest.param(
+        "APT002_issue_calibrated_gray_colorspace.pdf",
+        1,
+        ImageTolerance(
+            pixel_threshold=12, mean_abs_error=5.0, changed_pixels_ratio=0.08
+        ),
+        id="calgray-fax-scan",
+    ),
 ]
 
 

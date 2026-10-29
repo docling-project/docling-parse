@@ -19,20 +19,13 @@ namespace pdflib
 
   namespace detail
   {
-    // The device space whose samples a plain colour-space family reads as.
-    // Image samples of these families carry no tint transform or palette, so
-    // the family is all the image path needs; the dictionary behind /CalGray
-    // or /CalRGB only refines how those samples look, which the renderer does
-    // not model.
-    inline std::string device_space_for_family(color_space_family family)
+    // [/CalGray dict] and [/CalRGB dict] samples read as their device space; the
+    // calibration (WhitePoint, Gamma, Matrix) is not modelled. Other names pass through.
+    inline std::string cal_to_device_space(std::string const& name)
     {
-      switch(family)
-        {
-        case COLOR_SPACE_GRAY: return "/DeviceGray";
-        case COLOR_SPACE_RGB:  return "/DeviceRGB";
-        case COLOR_SPACE_CMYK: return "/DeviceCMYK";
-        default:               return "";
-        }
+      if(name == "/CalGray") return "/DeviceGray";
+      if(name == "/CalRGB")  return "/DeviceRGB";
+      return name;
     }
 
     inline int icc_signature_to_components(char const* sig)
@@ -630,26 +623,9 @@ namespace pdflib
                                             << " -> " << indexed_base_cs;
                               }
                           }
-                        else if(base_name.isName() and base_name.getName() != "/Separation")
-                          {
-                            // A [/CalGray dict] or [/CalRGB dict] base reads as
-                            // its device space, as a top-level one does below.
-                            // A family the resource cannot map keeps its name
-                            // and is reported as unsupported once the palette
-                            // is expanded. (A /Separation base is a tint space;
-                            // it is parsed right below, once.)
-                            pdf_resource<PAGE_COLORSPACE> base_space;
-                            base_space.set(xobject_key + "/IndexedBase", base_obj);
-                            const std::string device_space =
-                              detail::device_space_for_family(base_space.get_family());
-                            indexed_base_cs = device_space.empty() ? base_name.getName()
-                                                                   : device_space;
-                            LOG_S(INFO) << "Indexed array base color space: "
-                                        << base_name.getName() << " -> " << indexed_base_cs;
-                          }
                         else if(base_name.isName())
                           {
-                            indexed_base_cs = base_name.getName();
+                            indexed_base_cs = detail::cal_to_device_space(base_name.getName());
                             LOG_S(INFO) << "Indexed array base color space: " << indexed_base_cs;
                           }
 
@@ -813,28 +789,11 @@ namespace pdflib
                           }
                       }
                   }
-                else
+                else if(name_obj.isName()
+                        and (name_obj.getName() == "/CalGray" or name_obj.getName() == "/CalRGB"))
                   {
-                    // Anything else is a space the image path has no
-                    // sample-level needs for, which today means [/CalGray dict]
-                    // and [/CalRGB dict] (ISO 32000-1, 8.6.5.2 and 8.6.5.3).
-                    // Let the colour-space resource classify it, as it already
-                    // does for fill and stroke colours, and read the samples
-                    // as the device space of that family. Left as the array's
-                    // JSON dump the space is reported as unsupported
-                    // downstream and the image is dropped for a placeholder;
-                    // PDF/A image-to-PDF converters write scanned bilevel pages
-                    // as /CalGray, so whole scans came out as that placeholder.
-                    pdf_resource<PAGE_COLORSPACE> cie_space;
-                    cie_space.set(xobject_key + "/ColorSpace", qpdf_cs);
-                    const std::string device_space =
-                      detail::device_space_for_family(cie_space.get_family());
-                    if(not device_space.empty())
-                      {
-                        LOG_S(INFO) << "reading " << name_obj.unparse()
-                                    << " /ColorSpace samples as " << device_space;
-                        color_space = device_space;
-                      }
+                    color_space = detail::cal_to_device_space(name_obj.getName());
+                    LOG_S(INFO) << "reading " << name_obj.getName() << " samples as " << color_space;
                   }
               }
           }
