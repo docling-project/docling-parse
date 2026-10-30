@@ -3,6 +3,7 @@ include local_build.py
 include *.md
 include uv.lock
 include LICENSE
+include scripts/compare_blend2d_patches.py
 
 recursive-include app *
 recursive-include cmake *

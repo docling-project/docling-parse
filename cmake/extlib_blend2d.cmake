@@ -85,18 +85,18 @@ else()
         # formula, which divides by zero when the cusp equation is linear, so
         # a curve like P -> Q -> Q -> P was not drawn at all. Drop it under the
         # same condition as the patches above.
-        PATCH_COMMAND  ${CMAKE_COMMAND}
-            -DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/blend2d-fillanalytic-stale-i.patch
-            -P ${CMAKE_CURRENT_LIST_DIR}/apply_patch.cmake
-        COMMAND        ${CMAKE_COMMAND}
-            -DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/blend2d-stroke-offset-quad-stall.patch
-            -P ${CMAKE_CURRENT_LIST_DIR}/apply_patch.cmake
-        COMMAND        ${CMAKE_COMMAND}
-            -DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/blend2d-stroke-offset-degenerate-legs.patch
-            -P ${CMAKE_CURRENT_LIST_DIR}/apply_patch.cmake
-        COMMAND        ${CMAKE_COMMAND}
-            -DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/blend2d-stroke-flat-cubic-linear-cusp.patch
-            -P ${CMAKE_CURRENT_LIST_DIR}/apply_patch.cmake
+        PATCH_COMMAND  "${CMAKE_COMMAND}"
+            "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/blend2d-fillanalytic-stale-i.patch"
+            -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch.cmake"
+        COMMAND        "${CMAKE_COMMAND}"
+            "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/blend2d-stroke-offset-quad-stall.patch"
+            -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch.cmake"
+        COMMAND        "${CMAKE_COMMAND}"
+            "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/blend2d-stroke-offset-degenerate-legs.patch"
+            -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch.cmake"
+        COMMAND        "${CMAKE_COMMAND}"
+            "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/blend2d-stroke-flat-cubic-linear-cusp.patch"
+            -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch.cmake"
     )
     FetchContent_MakeAvailable(blend2d)
     # Release wheels must not contain Blend2D's debug assertion path. Blend2D

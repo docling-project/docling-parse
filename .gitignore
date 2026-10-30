@@ -15,6 +15,9 @@ tests/data/**
 *.json
 *.png
 *.dclx
+# Source documents and comparison panels retained for this PR's evidence.
+!/.plans/blend2d-evidence/pdfs/*.pdf
+!/.plans/blend2d-evidence/*.png
 scratch*
 docs/performance_benchmarks/*.csv
 
