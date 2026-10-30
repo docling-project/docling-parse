@@ -165,7 +165,9 @@ def render_page(pdf_bytes: bytes, *, scale: float = 2.0, page_no: int = 1):
     raise AssertionError(f"page {page_no} produced no render result")
 
 
-def parse_page(pdf_bytes: bytes, *, page_no: int = 1):
+def parse_page(
+    pdf_bytes: bytes, *, page_no: int = 1, do_char_normalization: bool = True
+):
     """Parse one page of an in-memory PDF without rendering it."""
     from io import BytesIO
 
@@ -176,6 +178,7 @@ def parse_page(pdf_bytes: bytes, *, page_no: int = 1):
         BytesIO(pdf_bytes),
         decode_config=DecodeConfig(
             do_sanitization=True,
+            do_char_normalization=do_char_normalization,
             keep_glyphs=True,
             keep_qpdf_warnings=False,
         ),

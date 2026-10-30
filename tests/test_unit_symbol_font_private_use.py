@@ -72,10 +72,11 @@ def test_symbolmt_bullet_behind_a_private_use_map_is_a_bullet():
 
 def test_symbolmt_operators_and_greek_fold_through_the_symbol_encoding():
     # `θ = <U+2212>`, as set by an equation editor with F0xx /ToUnicode values. The
-    # fold gives `minus` U+2212, which the text sanitizer keeps.
+    # fold gives `minus` U+2212, which the text sanitizer folds to `-` by default
+    # (do_char_normalization).
     entries = {"0003": "F020", "0010": "F02D", "0020": "F03D", "0071": "F071"}
     words = _identity_h_words("CKIGNK+SymbolMT", entries, "007100030020000300100003")
-    assert words == ["θ", "=", "\u2212"]
+    assert words == ["θ", "=", "-"]
 
 
 def test_zapfdingbats_square_behind_a_private_use_map_is_a_square():
