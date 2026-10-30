@@ -946,7 +946,7 @@ namespace pdflib
 
       {
         utils::timer step_timer;
-        sanitator.sanitize_text(page_cells);
+        sanitator.sanitize_text(page_cells, config.do_char_normalization);
         timings.add_timing(pdf_timings::KEY_SANITIZE_CELLS_SANITIZE_TEXT,
                            step_timer.get_time());
       }
