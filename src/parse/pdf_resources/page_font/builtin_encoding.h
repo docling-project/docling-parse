@@ -36,9 +36,9 @@ namespace pdflib
   public:
 
     // code -> utf8 for every single-byte code the program resolves.
-    static std::map<uint32_t, std::string> decode(const std::vector<uint8_t>& program,
-                                                  font_glyphs& glyphs,
-                                                  const std::string& font_name);
+    static std::unordered_map<uint32_t, std::string> decode(const std::vector<uint8_t>& program,
+                                                            font_glyphs& glyphs,
+                                                            const std::string& font_name);
 
     // Glyph index of a character code through the builtin charmaps; 0 when
     // none of them maps the code.
@@ -57,12 +57,12 @@ namespace pdflib
     static void append_code_point(std::string& text, uint32_t code_point);
   };
 
-  inline std::map<uint32_t, std::string>
+  inline std::unordered_map<uint32_t, std::string>
   builtin_font_encoding::decode(const std::vector<uint8_t>& program,
                                 font_glyphs& glyphs,
                                 const std::string& font_name)
   {
-    std::map<uint32_t, std::string> result;
+    std::unordered_map<uint32_t, std::string> result;
 
     FT_Library library = nullptr;
     if(FT_Init_FreeType(&library) != 0)

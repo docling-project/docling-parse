@@ -328,7 +328,7 @@ namespace pdflib
     std::shared_ptr<const embedded_font_blob> font_blob;
 
     bool builtin_encoding_initialized = false;
-    std::map<uint32_t, std::string> builtin_numb_to_char;
+    std::unordered_map<uint32_t, std::string> builtin_numb_to_char;
   };
 
   font_glyphs    pdf_resource<PAGE_FONT>::glyphs = font_glyphs();
