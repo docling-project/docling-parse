@@ -120,3 +120,23 @@ def test_explicit_widths_take_precedence_over_base_metrics():
     assert advances
     for advance in advances:
         assert abs(advance - 10.0) < 0.01
+
+
+def test_non_ascii_widths_follow_the_declared_encoding():
+    """Codes are resolved through the declared /WinAnsiEncoding before the AFM.
+
+    The AFM numbers glyphs in the font's built-in (Standard) encoding, so the
+    raw code gave WinAnsi `©` (0xA9) the width of Standard's `quotesingle` and
+    `é` (0xE9) that of `Oslash`; `í` (0xED), unassigned in Standard and listed
+    in the AFM only as an unencoded `C -1` glyph, fell back to 500 units
+    (docling-parse#403). At 100 pt the advance in points is units / 10.
+    """
+    for code, afm_width in (("\251", 760), ("\351", 444), ("\355", 278)):
+        advances = _char_advances("Times-Roman", f"X{code}X", font_size=100)
+        assert advances == [72.2, afm_width / 10], code
+
+
+def test_apostrophe_width_follows_the_declared_encoding():
+    """WinAnsi 0x27 is `quotesingle` (180), not Standard's `quoteright` (333)."""
+    advances = _char_advances("Times-Roman", "X'X", font_size=100)
+    assert advances == [72.2, 18.0]
