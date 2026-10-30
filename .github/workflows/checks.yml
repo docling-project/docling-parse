@@ -80,3 +80,25 @@ jobs:
           uv run pytest -v tests/test_unit_*.py
       - name: Build with uv
         run: uv build
+      - name: Test native Blend2D patches
+        run: |
+          uv run python - <<'PY'
+          import subprocess
+          import sys
+          import pybind11
+
+          subprocess.run([
+              "cmake", "-S", ".", "-B", "build",
+              "-DDOCLING_PARSE_BUILD_BLEND2D_TESTS=ON",
+              "-DPYBIND11_FINDPYTHON=ON",
+              "-DPython_EXECUTABLE=" + sys.executable,
+              "-Dpybind11_DIR=" + pybind11.get_cmake_dir(),
+          ], check=True)
+          subprocess.run([
+              "cmake", "--build", "build", "--target", "blend2d_patch_regression",
+              "--parallel", "2",
+          ], check=True)
+          subprocess.run([
+              "ctest", "--test-dir", "build", "--output-on-failure", "-R", "^blend2d_",
+          ], check=True)
+          PY

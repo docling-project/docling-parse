@@ -34,6 +34,38 @@ Run only the self-contained tests (no corpus download, a few seconds):
 uv run pytest tests/test_unit_*.py -q
 ```
 
+The Blend2D patch tests also exercise the native library directly. This matters
+because the renderer currently flattens stroked cubics (#407), which bypasses
+the native stroker defects covered by the PDF fixtures:
+
+```bash
+cmake -S . -B build -DDOCLING_PARSE_BUILD_BLEND2D_TESTS=ON
+cmake --build build --target blend2d_patch_regression --parallel 2
+ctest --test-dir build --output-on-failure -R '^blend2d_'
+```
+
+Each native case has a 60-second timeout. The CI checks workflow runs them.
+The real-document affine-fill crash test uses the original Honda manual from
+#365 in `.plans/blend2d-evidence/pdfs/31ZH7600.pdf`. Override its location with
+`DOCLING_PARSE_HONDA_MANUAL`. It verifies the document hash, renders page 7 at
+scale 3 in a child process, and enforces the pypdfium2 image tolerance. Source
+distributions without the evidence directory skip unless a manual is supplied.
+The source PDFs are retained with the evidence for a later dataset addition.
+
+```bash
+DOCLING_PARSE_HONDA_MANUAL=/path/to/31ZH7600.pdf \
+  uv run pytest tests/test_regression_blend2d_patches.py -q
+```
+
+For a patch's before/after evidence, use
+`scripts/compare_blend2d_patches.py capture` before and after rebuilding, then
+`report`. Its default input is every page of every local corpus PDF, including
+pages outside the CI sample. It records crashes/timeouts, hashes the input PDFs
+and extension, rejects incomplete captures, and writes both pypdfium2 metrics
+and reference/before/after panels. The report checks increases against the
+existing MAE 9.0 / changed-pixel-ratio 0.09 tolerances; baseline failures have no
+invented metrics. Run the script with `--help` for example commands.
+
 Run focused parser and renderer regression tests:
 
 ```bash

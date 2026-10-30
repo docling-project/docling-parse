@@ -1,0 +1,22 @@
+--- a/blend2d/core/pathstroke.cpp
++++ b/blend2d/core/pathstroke.cpp
+@@ -869,8 +869,19 @@ SmoothPolyTo:
+         if (!(t > kOffsetQuadEpsilonT && t < 1.0 - kOffsetQuadEpsilonT))
+           t = 1.0;
+ 
++        BLPoint p1 = iter.part[1];
+         BLPoint part[3];
+         Geometry::split(Geometry::quad_ref(iter.part), Geometry::quad_out(part), Geometry::quad_out(iter.part), t);
++
++        // If the split returned the same curve, `t` passed the epsilon check, but the step it represents is below
++        // the precision of the coordinates and this loop would never terminate. This happens when a part starts at
++        // the turning point of a nearly collinear quad - the derivative there is only rounding noise, and so is `t`.
++        // The control point of such a part is noise as well, so offset the rest of it as its chord.
++        if (part[0] == part[2] && iter.part[1] == p1) {
++          offset_quad_simple(iter.part[0], Math::lerp(iter.part[0], iter.part[2]), iter.part[2]);
++          break;
++        }
++
+         offset_quad_simple(part[0], part[1], part[2]);
+ 
+         if (t == 1.0)
