@@ -47,7 +47,9 @@ cmake --build build --target blend2d_patch_regression --parallel 2
 ctest --test-dir build --output-on-failure -R '^blend2d_'
 ```
 
-Each native case has a 60-second timeout. The CI checks workflow runs them.
+Each native case has a 60-second timeout and remains available for local checks.
+CI relies on Blend2D's own tests for the native routines and runs the Python
+integration/regression tests in this repository.
 The real-document cases are parameters of
 `test_regression_pypdfium_cited_pages.py`, using PDFs from the pinned regression
 dataset. Each case names its document, 1-based PDF page, render scale, and
