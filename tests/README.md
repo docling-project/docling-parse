@@ -48,26 +48,34 @@ ctest --test-dir build --output-on-failure -R '^blend2d_'
 ```
 
 Each native case has a 60-second timeout. The CI checks workflow runs them.
-The real-document affine-fill crash test uses the original Honda manual from
-#365 in `.plans/blend2d-evidence/pdfs/31ZH7600.pdf`. Override its location with
-`DOCLING_PARSE_HONDA_MANUAL`. It verifies the document hash, renders page 7 at
-scale 3 in a child process, and enforces the pypdfium2 image tolerance. Source
-distributions without the evidence directory skip unless a manual is supplied.
-The source PDFs are retained with the evidence for a later dataset addition.
+The real-document cases are parameters of
+`test_regression_pypdfium_cited_pages.py`, using PDFs from the pinned regression
+dataset. Each case names its document, 1-based PDF page, render scale, and
+image tolerance. Rendering runs in a child process with a 60-second timeout,
+and the result must match pypdfium2 within the case's tolerance.
+
+The large-document selections deliberately cover only the reported pages:
+
+| Document | Selected PDF page | Enforced render scale | Regression |
+| --- | ---: | ---: | --- |
+| `31ZH7600.pdf` | 7 | 3.0 | Affine image fill at the clip edge (#365) |
+| `NAB-22-29.pdf` | 29 | 2.0 | Subpixel stroked curve (#393) |
+
+The ordinary parser/render corpus tests use those page selections from
+`regression_page_selection.py`. The cited-page test additionally renders at
+the case's explicit scale: scale 3 is essential to reproduce the affine-fill
+crash. No external document paths or document-specific environment variables
+are needed.
 
 ```bash
-DOCLING_PARSE_HONDA_MANUAL=/path/to/31ZH7600.pdf \
-  uv run pytest tests/test_regression_blend2d_patches.py -q
+uv run pytest tests/test_regression_pypdfium_cited_pages.py -q
 ```
 
-For a patch's before/after evidence, use
-`scripts/compare_blend2d_patches.py capture` before and after rebuilding, then
-`report`. Its default input is every page of every local corpus PDF, including
-pages outside the CI sample. It records crashes/timeouts, hashes the input PDFs
-and extension, rejects incomplete captures, and writes both pypdfium2 metrics
-and reference/before/after panels. The report checks increases against the
-existing MAE 9.0 / changed-pixel-ratio 0.09 tolerances; baseline failures have no
-invented metrics. Run the script with `--help` for example commands.
+For corpus-wide pypdfium2 metrics and visualizations, use the existing
+`test_regression_pypdfium_render.py` report. The cited-page tests enforce their
+image tolerances; the corpus-wide pypdfium2 report remains non-failing on
+pixel differences. Stored renderer ground truth is checked separately by
+`test_regression_threaded_render.py`.
 
 Run focused parser and renderer regression tests:
 
