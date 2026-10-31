@@ -34,6 +34,9 @@ Run only the self-contained tests (no corpus download, a few seconds):
 uv run pytest tests/test_unit_*.py -q
 ```
 
+The fixes are supplied by the versioned `PeterStaar-IBM/blend2d` fork release
+selected in `cmake/extlib_blend2d.cmake`; no CMake patch step is required.
+
 The Blend2D patch tests also exercise the native library directly. This matters
 because the renderer currently flattens stroked cubics (#407), which bypasses
 the native stroker defects covered by the PDF fixtures:

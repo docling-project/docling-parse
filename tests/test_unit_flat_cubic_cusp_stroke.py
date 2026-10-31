@@ -7,8 +7,8 @@ by the quadratic's leading coefficient; that coefficient is zero when the cusp
 equation is linear, and the cusp was lost. A curve that goes out and comes back
 on itself, P -> Q -> Q -> P, was then stroked as a line from P to P and not
 drawn at all, and a cusp past the end point was cut off at the end point
-(blend2d/blend2d#272, fixed by blend2d/blend2d#273, carried here as
-`cmake/blend2d-stroke-flat-cubic-linear-cusp.patch`).
+(blend2d/blend2d#272, fixed by blend2d/blend2d#273 and included in the pinned
+Docling Blend2D fork release).
 """
 
 from __future__ import annotations

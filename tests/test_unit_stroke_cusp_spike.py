@@ -7,8 +7,8 @@ point of the curve, where its last leg is a few ULPs of rounding noise. Blend2D
 used that leg as a direction; when it pointed backwards, the offset control
 point landed arbitrarily far away. On this page a hairline cubic of about
 0.6 x 0.7 px rendered as a vertical streak over the full height of the canvas.
-The fix (blend2d/blend2d#271, carried here as
-`cmake/blend2d-stroke-offset-degenerate-legs.patch`) ignores such legs and
+The fix (blend2d/blend2d#271, included in the pinned Docling Blend2D fork
+release) ignores such legs and
 joins the offsets of consecutive pieces where the tangent turns back.
 
 The fixture was found by rendering random tiny hairline cubics, shaped like the

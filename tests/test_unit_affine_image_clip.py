@@ -10,7 +10,7 @@ last 64-bit coverage word in Blend2D's analytic rasterizer. The skewed top edge
 crossing the right clip edge flags every cell of that word, and Blend2D's JIT
 fill then reused a stale span length, ran a zero-length span for 2^32 pixels,
 and walked the destination pointer off the heap (blend2d/blend2d#267, fixed by
-blend2d/blend2d#268, carried here as `cmake/blend2d-fillanalytic-stale-i.patch`).
+blend2d/blend2d#268, included in the pinned Docling Blend2D fork release).
 
 The fixture reproduces that configuration on a tiny page: 255.5 x 5 pt renders
 to 511 x 10 px at scale 2, and a 16 x 16 image is placed so that its skewed top

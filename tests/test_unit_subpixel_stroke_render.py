@@ -11,8 +11,8 @@ itself; after a split landed on the turning point, the derivative of the rest
 was only rounding noise, the next split parameter was computed from that noise,
 and the split returned the same curve. The loop never terminated, inside the
 native call, so neither Python nor Docling's document timeout could stop it
-(blend2d/blend2d#269, fixed by blend2d/blend2d#270, carried here as
-`cmake/blend2d-stroke-offset-quad-stall.patch`).
+(blend2d/blend2d#269, fixed by blend2d/blend2d#270 and included in the pinned
+Docling Blend2D fork release).
 
 The fixture is the reporter's one-page reproducer, stroked in black instead of
 white so the test can also check where the ink lands. The render runs in a
