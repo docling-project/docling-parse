@@ -1208,11 +1208,20 @@ PYBIND11_MODULE(pdf_parsers, m) {
         int: Number of pages that will be emitted by the threaded parser.)")
     .def("get_annotations",
          [](docling::docling_threaded_parser& self, const std::string& key) -> nlohmann::json {
-           return self.get_annotations(key);
+           // The lookup runs under the GIL, like unload_document; the pointer
+           // keeps the document alive once the GIL is released.
+           auto document = self.find_document(key);
+
+           pybind11::gil_scoped_release release;
+           return document->get_annotations();
          },
          pybind11::arg("key"),
          R"(
     Retrieve annotations for a loaded document and return them as JSON.
+
+    The first call for a document builds them, and may wait for a worker to
+    finish copying a page out of the document; the GIL is released meanwhile.
+    Later calls return the cached JSON.
 
     Parameters:
         key (str): The unique key identifying the document.
@@ -1453,7 +1462,11 @@ PYBIND11_MODULE(pdf_parsers, m) {
          pybind11::arg("key"))
     .def("get_annotations",
          [](docling::docling_threaded_renderer& self, const std::string& key) -> nlohmann::json {
-           return self.get_annotations(key);
+           // See the parser binding of the same name.
+           auto document = self.find_document(key);
+
+           pybind11::gil_scoped_release release;
+           return document->get_annotations();
          },
          pybind11::arg("key"))
     .def("unload_document",
