@@ -6,7 +6,8 @@
 #include <sstream>
 #include <iostream>
 #include <iomanip>
-#include <set>
+#include <cstddef>
+#include <functional>
 #include <unordered_set>
 
 #include <nlohmann/json.hpp>
@@ -106,6 +107,27 @@ namespace pdflib
     return names.count(type.getName())==1;
   }
 
+  // QPDFObjGen compares and orders, but has no std::hash. The hasher for
+  // every unordered container keyed by object id, here and in the resource
+  // caches of the page decoder.
+  class qpdf_objgen_hash
+  {
+  public:
+
+    std::size_t operator()(QPDFObjGen const& og) const;
+  };
+
+  inline std::size_t qpdf_objgen_hash::operator()(QPDFObjGen const& og) const
+  {
+    std::size_t h1 = std::hash<int>{}(og.getObj());
+    std::size_t h2 = std::hash<int>{}(og.getGen());
+    return h1 ^ (h2 + 0x9e3779b9 + (h1 << 6) + (h1 >> 2));
+  }
+
+  // Probed, inserted into and erased from, never walked: hashed rather
+  // than ordered.
+  using object_path = std::unordered_set<QPDFObjGen, qpdf_objgen_hash>;
+
   // `path` holds the ids of the indirect dictionaries and arrays that are
   // being expanded on the current path, so that a cycle is written as a
   // reference instead of recursing. Direct objects are inline and cannot
@@ -120,7 +142,7 @@ namespace pdflib
   // structure tree is a DAG that names each page from every element on it,
   // and each of those paths expanded the page again.
   nlohmann::json to_json_impl(QPDFObjectHandle obj,
-                              std::set<QPDFObjGen>& path,
+                              object_path& path,
                               int level,
                               int max_level)
   {
@@ -295,7 +317,7 @@ namespace pdflib
 
   nlohmann::json to_json(QPDFObjectHandle obj, int level=0, int max_level=32)
   {
-    std::set<QPDFObjGen> path;
+    object_path path;
     return to_json_impl(obj, path, level, max_level);
   }
 
