@@ -77,9 +77,10 @@
 #include <parse/page_items/page_hyperlinks.h>
 #include <parse/page_items/render_instructions.h>
 
-// the outline resolves its destinations against the page geometry, so it comes
+// the outline and the structure tree resolve their pages against the page geometry, so they come
 // after the page items rather than next to the other qpdf extractors
 #include <parse/qpdf/outline.h>
+#include <parse/qpdf/structure.h>
 
 // pdf-resource
 #include <parse/pdf_resources/page_font/glyphs.h>
