@@ -136,7 +136,8 @@ namespace pdflib
         for(auto key : rm.getKeys())
           {
             QPDFObjectHandle val = rm.getKey(key);
-            if(val.isName()) { role_map[key] = val.getName(); }
+            // names are raw bytes (7.3.5): transcode them as to_json() does
+            if(val.isName()) { role_map[pdflib::name_to_utf8(key)] = pdflib::name_to_utf8(val); }
           }
       }
     structure["role_map"] = role_map;
@@ -207,7 +208,7 @@ namespace pdflib
 
     if(elem.hasKey("/S") and elem.getKey("/S").isName())
       {
-        result["type"] = elem.getKey("/S").getName();
+        result["type"] = pdflib::name_to_utf8(elem.getKey("/S"));
       }
     else
       {
@@ -349,7 +350,7 @@ namespace pdflib
             if(target.isDictionary() and target.hasKey("/Subtype") and
                target.getKey("/Subtype").isName())
               {
-                subtype = target.getKey("/Subtype").getName();
+                subtype = pdflib::name_to_utf8(target.getKey("/Subtype"));
               }
           }
         result = {{"kind", "objref"}, {"obj", obj}, {"subtype", subtype}};
@@ -405,14 +406,14 @@ namespace pdflib
         std::string owner = "";
         if(dict.hasKey("/O") and dict.getKey("/O").isName())
           {
-            owner = dict.getKey("/O").getName();
+            owner = pdflib::name_to_utf8(dict.getKey("/O"));
           }
 
         nlohmann::json values = nlohmann::json::object({});
         for(auto key : dict.getKeys())
           {
             if(key=="/O") { continue; }
-            values[key] = pdflib::to_json(dict.getKey(key), 0, 4);
+            values[pdflib::name_to_utf8(key)] = pdflib::to_json(dict.getKey(key), 0, 4);
           }
         result[owner] = values;
       }
