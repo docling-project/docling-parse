@@ -81,6 +81,13 @@ namespace docling
 
     nlohmann::json get_annotations(std::string key) const;
 
+    doc_decoder_ptr_type get_document_decoder(const std::string& key) const
+    {
+      auto it = key2doc.find(key);
+      if(it == key2doc.end()) { throw std::runtime_error("Document key not found: " + key); }
+      return it->second;
+    }
+
     bool unload_document(std::string key);
     void unload_all_documents();
 

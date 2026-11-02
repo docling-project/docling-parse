@@ -17,8 +17,7 @@ namespace pdflib
 {
   // FIXME: add a begin time to cap the max time spent in this routine
   nlohmann::json extract_annots_in_json(QPDFObjectHandle obj,
-                                        std::unordered_set<std::string> prev_objs={},
-                                        int level=0, int max_level=16)
+                                        int level=0, int max_level=32)
   {
     LOG_S(INFO) << __FUNCTION__;
 
@@ -40,7 +39,7 @@ namespace pdflib
         QPDFObjectHandle annot = obj.getKey("/Annot");
         if(not annot.isNull())
           {
-            result = to_json(annot, prev_objs, level, max_level);
+            result = to_json(annot, level, max_level);
           }
       }
     else if(level==0 and obj.isDictionary() and
@@ -49,7 +48,7 @@ namespace pdflib
         QPDFObjectHandle annots = obj.getKey("/Annots");
         if(not annots.isNull())
           {
-            result = to_json(annots, prev_objs, level, max_level);
+            result = to_json(annots, level, max_level);
           }
       }
 
@@ -69,7 +68,7 @@ namespace pdflib
 	
 	try
 	  {
-	    result = to_json(root.getKey("/AcroForm"), {}, 0, 16);
+	    result = to_json(root.getKey("/AcroForm"));
 	  }
 	catch(const std::exception& exc)
 	  {

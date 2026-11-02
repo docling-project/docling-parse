@@ -3,8 +3,19 @@
 #ifndef PAGE_ITEM_CELL_H
 #define PAGE_ITEM_CELL_H
 
+#include <memory>
+
 namespace pdflib
 {
+
+  // Shared by glyphs of an artifact span and their copied/contracted cells.
+  // Ordinary cells allocate nothing; ownership follows cells, not a document
+  // registry, so retained PdfCell objects remain valid after parser unload.
+  struct marked_content_artifact
+  {
+    std::string type;
+    std::string subtype;
+  };
 
   template<>
   class page_item<PAGE_CELL>
@@ -124,8 +135,18 @@ namespace pdflib
     // marked-content sequence the glyph was drawn in (-1 when untagged), and
     // the artifact /Type when the glyph sits inside an /Artifact sequence.
     int         mcid = -1;
-    std::string artifact_type = "";
-    std::string artifact_subtype = "";
+    std::shared_ptr<const marked_content_artifact> artifact;
+
+    const std::string& get_artifact_type() const
+    {
+      static const std::string empty;
+      return artifact ? artifact->type : empty;
+    }
+    const std::string& get_artifact_subtype() const
+    {
+      static const std::string empty;
+      return artifact ? artifact->subtype : empty;
+    }
 
     // graphics state properties
     bool                has_graphics_state = false;
@@ -257,8 +278,8 @@ namespace pdflib
       cell.push_back(rgb_filling_ops);  // 24
 
       cell.push_back(mcid);          // 25
-      cell.push_back(artifact_type); // 26
-      cell.push_back(artifact_subtype); // 27
+      cell.push_back(get_artifact_type()); // 26
+      cell.push_back(get_artifact_subtype()); // 27
     }
     assert(cell.size()==header.size());
 
@@ -304,9 +325,15 @@ namespace pdflib
 	if(data.size()>23) { rgb_stroking_ops   = data.at(23).get<std::array<int, 3> >(); }
 	if(data.size()>24) { rgb_filling_ops    = data.at(24).get<std::array<int, 3> >(); }
 
-	if(data.size()>25) { mcid          = data.at(25).get<int>(); }
-	if(data.size()>26) { artifact_type = data.at(26).get<std::string>(); }
-	if(data.size()>27) { artifact_subtype = data.at(27).get<std::string>(); }
+        mcid = data.size()>25 ? data.at(25).get<int>() : -1;
+        artifact.reset();
+        std::string artifact_type = data.size()>26 ? data.at(26).get<std::string>() : "";
+        std::string artifact_subtype = data.size()>27 ? data.at(27).get<std::string>() : "";
+        if(not artifact_type.empty() or not artifact_subtype.empty())
+          {
+            artifact = std::make_shared<const marked_content_artifact>(
+              marked_content_artifact{std::move(artifact_type), std::move(artifact_subtype)});
+          }
 
         return true;
       }
@@ -369,6 +396,8 @@ namespace pdflib
   
   bool page_item<PAGE_CELL>::merge_with(page_item<PAGE_CELL>& other, double delta)
   {
+    // Linkage describes the first source cell, as before the compact storage
+    // change. Mixed word/line spans do not synthesize a new MCID or artifact.
     if(not has_same_reading_orientation(other))
       {
 	LOG_S(ERROR) << "inconsistent merging of cells!";

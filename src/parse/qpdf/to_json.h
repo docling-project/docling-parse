@@ -6,6 +6,8 @@
 #include <sstream>
 #include <iostream>
 #include <iomanip>
+#include <set>
+#include <limits>
 #include <unordered_set>
 
 #include <nlohmann/json.hpp>
@@ -80,33 +82,32 @@ namespace pdflib
     return {false, ""};
   }
 
-  // FIXME: add a begin time to cap the max time spent in this routine
-  nlohmann::json to_json(QPDFObjectHandle obj,
-			 std::unordered_set<std::string> prev_objs={},
-                         int level=0,
-			 int max_level=32)
+  nlohmann::json to_json_impl(QPDFObjectHandle obj,
+                              std::set<QPDFObjGen>& path,
+                              int level, int max_level, std::size_t& remaining)
   {
     nlohmann::json result;
+    if(remaining==0) { return "[exceeding node budget]"; }
+    --remaining;
 
-    if(obj.isDictionary() or obj.isArray())
+    // Attribute/annotation values may refer back into the entire document.
+    if(level>0 and obj.isDictionary())
       {
-        std::string this_obj = obj.unparse();
-
-        if(not utf8::is_valid(this_obj.begin(), this_obj.end()))
+        auto type = obj.getKey("/Type");
+        static const std::unordered_set<std::string> document_types = {
+          "/Catalog", "/Pages", "/Page", "/StructTreeRoot", "/StructElem"};
+        if(type.isName() and document_types.count(type.getName()))
           {
-            utf8::replace_invalid(this_obj.begin(), this_obj.end(),
-                                  std::back_inserter(this_obj));
-            LOG_S(WARNING) << "fixed already encountered object: " << this_obj;
+            auto ref = obj.isIndirect() ? " '"+obj.unparse()+"'" : "";
+            return "[skipping "+type.getName()+" object"+ref+"]";
           }
-
-        if(prev_objs.count(this_obj)==1)
+      }
+    bool on_path = obj.isIndirect() and (obj.isDictionary() or obj.isArray());
+    if(on_path)
+      {
+        if(not path.insert(obj.getObjGen()).second)
           {
-            result = "[ref to previous object: '"+this_obj+"']";
-            return result;
-          }
-        else
-          {
-            prev_objs.insert(this_obj);
+            return "[ref to previous object: '"+obj.unparse()+"']";
           }
       }
 
@@ -126,6 +127,11 @@ namespace pdflib
 
             for(auto key : obj.getKeys())
               {
+                if(remaining==0)
+                  {
+                    result[key] = "[exceeding node budget]";
+                    break;
+                  }
                 //LOG_S(INFO) << "key: " << key;
 
                 if(keys_to_be_skipped.count(key)==1)
@@ -134,7 +140,7 @@ namespace pdflib
                   }
                 else
                   {
-                    result[key] = to_json(obj.getKey(key), prev_objs, level+1);
+                    result[key] = to_json_impl(obj.getKey(key), path, level+1, max_level, remaining);
                   }
               }
           }
@@ -145,8 +151,12 @@ namespace pdflib
               {
                 QPDFObjectHandle new_obj = obj.getArrayItem(l);
 
-                auto item = to_json(new_obj, prev_objs, level+1);
-                result.push_back(item);
+                result.push_back(to_json_impl(new_obj, path, level+1, max_level, remaining));
+                if(remaining==0)
+                  {
+                    if(l+1<obj.getArrayNItems()) { result.push_back("[exceeding node budget]"); }
+                    break;
+                  }
               }
           }
         else if(obj.isStream())
@@ -262,7 +272,15 @@ namespace pdflib
         result = "[exceeding recursion]";
       }
 
+    if(on_path) { path.erase(obj.getObjGen()); }
     return result;
+  }
+
+  nlohmann::json to_json(QPDFObjectHandle obj, int level=0, int max_level=32,
+                        std::size_t max_nodes=std::numeric_limits<std::size_t>::max())
+  {
+    std::set<QPDFObjGen> path;
+    return to_json_impl(obj, path, level, max_level, max_nodes);
   }
 
   void print_obj(QPDFObjectHandle obj, int level = 0)
