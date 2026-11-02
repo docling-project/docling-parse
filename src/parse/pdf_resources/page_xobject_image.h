@@ -19,6 +19,15 @@ namespace pdflib
 
   namespace detail
   {
+    // [/CalGray dict] and [/CalRGB dict] samples read as their device space; the
+    // calibration (WhitePoint, Gamma, Matrix) is not modelled. Other names pass through.
+    inline std::string cal_to_device_space(std::string const& name)
+    {
+      if(name == "/CalGray") return "/DeviceGray";
+      if(name == "/CalRGB")  return "/DeviceRGB";
+      return name;
+    }
+
     inline int icc_signature_to_components(char const* sig)
     {
       if(std::memcmp(sig, "GRAY", 4) == 0) return 1;
@@ -616,7 +625,7 @@ namespace pdflib
                           }
                         else if(base_name.isName())
                           {
-                            indexed_base_cs = base_name.getName();
+                            indexed_base_cs = detail::cal_to_device_space(base_name.getName());
                             LOG_S(INFO) << "Indexed array base color space: " << indexed_base_cs;
                           }
 
@@ -779,6 +788,12 @@ namespace pdflib
                               }
                           }
                       }
+                  }
+                else if(name_obj.isName()
+                        and (name_obj.getName() == "/CalGray" or name_obj.getName() == "/CalRGB"))
+                  {
+                    color_space = detail::cal_to_device_space(name_obj.getName());
+                    LOG_S(INFO) << "reading " << name_obj.getName() << " samples as " << color_space;
                   }
               }
           }

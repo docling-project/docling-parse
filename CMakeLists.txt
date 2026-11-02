@@ -228,6 +228,19 @@ set_target_properties(parse PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 target_link_libraries(parse ${DEPENDENCIES} ${LIB_LINK})
 
+# Test the native library directly: the renderer's curve-flattening workaround
+# (#407) otherwise bypasses the stroker routines patched for #396/#400/#401.
+option(DOCLING_PARSE_BUILD_BLEND2D_TESTS "Build native Blend2D patch regression tests" OFF)
+if(DOCLING_PARSE_BUILD_BLEND2D_TESTS)
+    enable_testing()
+    add_executable(blend2d_patch_regression tests/cpp/test_blend2d_patches.cpp)
+    target_link_libraries(blend2d_patch_regression PRIVATE blend2d)
+    foreach(case affine stall spike flat-return flat-overshoot)
+        add_test(NAME blend2d_${case} COMMAND blend2d_patch_regression ${case})
+        set_tests_properties(blend2d_${case} PROPERTIES TIMEOUT 60)
+    endforeach()
+endif()
+
 # ***************************
 # ***  Python-binding     ***
 # ***************************

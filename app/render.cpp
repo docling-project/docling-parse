@@ -13,7 +13,35 @@ struct bbox_render_options
   bool draw_word_bbox = false;
   bool draw_text_bbox = false;
   bool print_bbox = false;
+  bool display_char_on_cli = false;
+  bool display_word_on_cli = false;
+  bool display_text_on_cli = false;
 };
+
+void display_cells_on_cli(int page,
+                          const std::string& mode,
+                          pdflib::page_item<pdflib::PAGE_CELLS>& cells)
+{
+  static bool printed_header = false;
+  if(not printed_header)
+    {
+      std::cout << "page\tmode\tx0\ty0\tx1\ty1\tx2\ty2\tx3\ty3\tfont-name\ttext\n";
+      printed_header = true;
+    }
+  for(const auto& cell : cells)
+    {
+      if(not cell.active) { continue; }
+      std::ostringstream row;
+      row << page << '\t' << mode << std::fixed << std::setprecision(3)
+          << '\t' << cell.r_x0 << '\t' << cell.r_y0
+          << '\t' << cell.r_x1 << '\t' << cell.r_y1
+          << '\t' << cell.r_x2 << '\t' << cell.r_y2
+          << '\t' << cell.r_x3 << '\t' << cell.r_y3
+          << '\t' << std::quoted(cell.font_name)
+          << '\t' << std::quoted(cell.text) << '\n';
+      std::cout << row.str();
+    }
+}
 
 std::string table_text(std::string text)
 {
@@ -96,6 +124,19 @@ void draw_cell_bboxes(pdflib::pdf_decoder<pdflib::PAGE>& page,
                       Renderer& rnd,
                       const bbox_render_options& options)
 {
+  if(options.display_char_on_cli)
+    {
+      display_cells_on_cli(page.get_page_number(), "char", page.get_char_cells());
+    }
+  if(options.display_word_on_cli)
+    {
+      display_cells_on_cli(page.get_page_number(), "word", page.get_word_cells());
+    }
+  if(options.display_text_on_cli)
+    {
+      display_cells_on_cli(page.get_page_number(), "text", page.get_line_cells());
+    }
+
   if(options.print_bbox and options.draw_glyph_bbox)
     {
       for(const auto& glyph : page.get_instructions().get_text_instructions())
@@ -367,6 +408,9 @@ int main(int argc, char* argv[])
         ("draw-word-bbox",  "Draw contracted word-cell quads",                               cxxopts::value<bool>()->implicit_value("true"))
         ("draw-text-bbox",  "Draw contracted line/text-cell quads",                          cxxopts::value<bool>()->implicit_value("true"))
         ("print-bbox",      "Print enabled bbox modes as an aligned table on stdout",       cxxopts::value<bool>()->implicit_value("true"))
+        ("display-char-on-cli", "Print character corners, font name and text on stdout", cxxopts::value<bool>()->implicit_value("true"))
+        ("display-word-on-cli", "Print word corners, font name and text on stdout",      cxxopts::value<bool>()->implicit_value("true"))
+        ("display-text-on-cli", "Print line corners, font name and text on stdout",      cxxopts::value<bool>()->implicit_value("true"))
         ("draw-text-basepoint", "Draw the text base point as a small red dot",              cxxopts::value<bool>()->implicit_value("true"))
         ("display-widgets", "Draw the bounds of each widget (form-field) annotation",       cxxopts::value<bool>()->implicit_value("true"))
         ("color-widgets",  "RGB triple (0-255) for the widget overlay, e.g. 0,153,255",     cxxopts::value<std::vector<int>>())
@@ -449,6 +493,9 @@ int main(int argc, char* argv[])
       bbox_options.draw_word_bbox = result.count("draw-word-bbox") and result["draw-word-bbox"].as<bool>();
       bbox_options.draw_text_bbox = result.count("draw-text-bbox") and result["draw-text-bbox"].as<bool>();
       bbox_options.print_bbox = result.count("print-bbox") and result["print-bbox"].as<bool>();
+      bbox_options.display_char_on_cli = result.count("display-char-on-cli") and result["display-char-on-cli"].as<bool>();
+      bbox_options.display_word_on_cli = result.count("display-word-on-cli") and result["display-word-on-cli"].as<bool>();
+      bbox_options.display_text_on_cli = result.count("display-text-on-cli") and result["display-text-on-cli"].as<bool>();
       if (result.count("page-boundary"))            { page_config.page_boundary             = result["page-boundary"].as<std::string>(); }
       if (result.count("do-sanitization"))          { page_config.do_sanitization            = result["do-sanitization"].as<bool>(); }
       if (result.count("keep-char-cells"))          { page_config.keep_char_cells            = result["keep-char-cells"].as<bool>(); }
@@ -465,9 +512,9 @@ int main(int argc, char* argv[])
       page_config.extract_bitmap_pixels = true;
       if (result.count("extract-font-programs"))    { page_config.extract_font_programs     = result["extract-font-programs"].as<bool>(); }
       if (result.count("populate-json"))            { page_config.populate_json_objects      = result["populate-json"].as<bool>(); }
-      if (bbox_options.draw_char_bbox) { page_config.keep_char_cells = true; }
-      if (bbox_options.draw_word_bbox) { page_config.create_word_cells = true; }
-      if (bbox_options.draw_text_bbox) { page_config.create_line_cells = true; }
+      if (bbox_options.draw_char_bbox or bbox_options.display_char_on_cli) { page_config.keep_char_cells = true; }
+      if (bbox_options.draw_word_bbox or bbox_options.display_word_on_cli) { page_config.create_word_cells = true; }
+      if (bbox_options.draw_text_bbox or bbox_options.display_text_on_cli) { page_config.create_line_cells = true; }
       bool export_bitmaps = result["export-bitmaps"].as<bool>();
       bool export_page_pdf_files = result["export-page-pdf"].as<bool>();
 

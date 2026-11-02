@@ -1,3 +1,10 @@
+## [v7.24.2](https://github.com/docling-project/docling-parse/releases/tag/v7.24.2) - 2026-10-29
+
+### Fix
+
+* Bind take_load_error for the threaded renderer ([#432](https://github.com/docling-project/docling-parse/issues/432)) ([`4ebbb8a`](https://github.com/docling-project/docling-parse/commit/4ebbb8afa3516e2aec1f3d37bf67568fb3deb9ed))
+* **render:** Draw images in /CalGray and /CalRGB colour spaces ([#411](https://github.com/docling-project/docling-parse/issues/411)) ([`4df810b`](https://github.com/docling-project/docling-parse/commit/4df810b4878603dbe64ae8ad2b7c13cb47299480))
+
 ## [v7.24.1](https://github.com/docling-project/docling-parse/releases/tag/v7.24.1) - 2026-10-28
 
 ### Fix

@@ -416,7 +416,10 @@ PYBIND11_MODULE(pdf_parsers, m) {
     .def_readonly("font_key", &pdflib::page_item<pdflib::PAGE_CELL>::font_key)
     .def_readonly("font_name", &pdflib::page_item<pdflib::PAGE_CELL>::font_name)
     .def_readonly("widget", &pdflib::page_item<pdflib::PAGE_CELL>::widget)
-    .def_readonly("left_to_right", &pdflib::page_item<pdflib::PAGE_CELL>::left_to_right);
+    .def_readonly("left_to_right", &pdflib::page_item<pdflib::PAGE_CELL>::left_to_right)
+    .def_readonly("mcid", &pdflib::page_item<pdflib::PAGE_CELL>::mcid)
+    .def_readonly("artifact_type", &pdflib::page_item<pdflib::PAGE_CELL>::artifact_type)
+    .def_readonly("artifact_subtype", &pdflib::page_item<pdflib::PAGE_CELL>::artifact_subtype);
 
   // PdfShape - graphic shape with coordinates
   pybind11::class_<pdflib::page_item<pdflib::PAGE_SHAPE>>(m, "PdfShape")
@@ -1207,11 +1210,20 @@ PYBIND11_MODULE(pdf_parsers, m) {
         int: Number of pages that will be emitted by the threaded parser.)")
     .def("get_annotations",
          [](docling::docling_threaded_parser& self, const std::string& key) -> nlohmann::json {
-           return self.get_annotations(key);
+           // The lookup runs under the GIL, like unload_document; the pointer
+           // keeps the document alive once the GIL is released.
+           auto document = self.find_document(key);
+
+           pybind11::gil_scoped_release release;
+           return document->get_annotations();
          },
          pybind11::arg("key"),
          R"(
     Retrieve annotations for a loaded document and return them as JSON.
+
+    The first call for a document builds them, and may wait for a worker to
+    finish copying a page out of the document; the GIL is released meanwhile.
+    Later calls return the cached JSON.
 
     Parameters:
         key (str): The unique key identifying the document.
@@ -1423,6 +1435,23 @@ PYBIND11_MODULE(pdf_parsers, m) {
          pybind11::arg("page_numbers") = pybind11::none(),
          pybind11::arg("page_range") = pybind11::none())
 
+    .def("take_load_error",
+         [](docling::docling_threaded_renderer& self, const std::string& key) -> std::map<std::string, std::string> {
+           return self.take_load_error(key);
+         },
+         pybind11::arg("key"),
+         R"(
+    Return and clear why the last load of `key` failed.
+
+    Parameters:
+        key (str): The key passed to the failed load call.
+
+    Returns:
+        dict[str, str]: {"category": ..., "message": ...}, or an empty dict when
+        no failure is recorded for the key. category is one of "password",
+        "damaged", "unsupported", "io" and "unknown"; message is the text of
+        the underlying (qpdf) error.)")
+
     .def("number_of_pages",
          [](docling::docling_threaded_renderer& self, const std::string& key) -> int {
            return self.number_of_pages(key);
@@ -1435,7 +1464,11 @@ PYBIND11_MODULE(pdf_parsers, m) {
          pybind11::arg("key"))
     .def("get_annotations",
          [](docling::docling_threaded_renderer& self, const std::string& key) -> nlohmann::json {
-           return self.get_annotations(key);
+           // See the parser binding of the same name.
+           auto document = self.find_document(key);
+
+           pybind11::gil_scoped_release release;
+           return document->get_annotations();
          },
          pybind11::arg("key"))
     .def("unload_document",
