@@ -9,6 +9,7 @@ from tests.constants import HF_DATASET_REPO_ID, HF_DATASET_REVISION
 TESTS_DIR = Path(__file__).resolve().parent
 TEST_DATA_DIR = TESTS_DIR / "data"
 TEST_DATA_GROUNDTRUTH_DIR = TEST_DATA_DIR / "groundtruth"
+PARSER_GROUNDTRUTH_DELTA_DIR = TEST_DATA_DIR / "groundtruth_delta" / "parser"
 PARSER_GROUNDTRUTH_DIR = TEST_DATA_GROUNDTRUTH_DIR / "parser"
 RENDER_GROUNDTRUTH_DIR = TEST_DATA_GROUNDTRUTH_DIR / "render"
 # One metadata file per page, describing every bitmap the page painted. The

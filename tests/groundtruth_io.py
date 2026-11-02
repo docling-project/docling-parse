@@ -54,8 +54,8 @@ COMPRESS_ON_WRITE = GROUNDTRUTH_FORMAT == "gz"
 # through LFS -- see "Reviewing a refresh in the dataset repo" in tests/README.md.
 # It costs ~223 MB of working tree: the three families are 264 MB plain against
 # 40 MB gzipped, on a tree that is otherwise ~1.5 GB.
-# `.delta.txt` is not groundtruth at all -- it is written next to a failing
-# artifact for a human to read, and deleted once the page passes.
+# `.delta.txt` is diagnostic output, not groundtruth. Parser diagnostics are
+# written separately under tests/data/groundtruth_delta/parser.
 NEVER_COMPRESS_SUFFIXES = (".char.txt", ".word.txt", ".line.txt", ".delta.txt")
 
 

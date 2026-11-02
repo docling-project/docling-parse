@@ -166,8 +166,9 @@ Two families are deliberately left uncompressed:
   are line-oriented, so they diff cell by cell. This costs ~223 MB (264 MB plain
   against 40 MB gzipped) and only pays off alongside the `.gitattributes` change
   described below.
-- **`*.delta.txt`** -- not groundtruth; written next to a failing artifact for a
-  human to read and deleted once the page passes.
+- **`*.delta.txt`** -- diagnostic output, not groundtruth; written under
+  `tests/data/groundtruth_delta/parser/`. Textline diagnostics are deleted
+  when the corresponding comparison passes.
 
 `render/pages` and `render/bitmap_data` are never touched either: PNG and JPEG
 payloads are already compressed.
