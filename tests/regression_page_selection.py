@@ -179,6 +179,7 @@ REGRESSION_PAGE_SELECTION: Dict[str, List[int]] = {
     "2c869f08-1058-427d-8be3-82f743d570af-54.pdf": [1],
     "2e007283-8929-4437-9e0f-e3cea6a95ebb-13.pdf": [1],
     "3040977140767198439-1.pdf": [1],
+    "31ZH7600.pdf": [7],  # Affine image at the clip edge (#365).
     "335fea0ba454ba15_0004.pdf": [1],
     "3584964174907633090-1.pdf": [1, 2],
     "35e7191b-47ad-44a5-8120-2d87acc55d7f-10.pdf": [1],
@@ -301,6 +302,7 @@ REGRESSION_PAGE_SELECTION: Dict[str, List[int]] = {
     "9f61fc9b930e66e6_0002.pdf": [1],
     "CN102017000717986CN00001077030360BPDFZH20200630CN00Q-1.pdf": [1, 3, 4, 7, 10],
     "CN112019000093292CN00001135187520BPDFZH20230728CN00H-1.pdf": [1, 3, 4, 6, 7],
+    "NAB-22-29.pdf": [29],  # Subpixel stroked curve (#393).
     "PDF32000_2008.pdf": [1, 2, 745, 748, 752],
     "WOCN22110969_20220808_WO2024031287A1_20240215-15.pdf": [11, 16, 17, 27, 35],
     "WOJP25000663_20250110_WO2025203994A1_20251002-21.pdf": [21, 23, 28, 29, 31],

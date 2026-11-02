@@ -34,6 +34,51 @@ Run only the self-contained tests (no corpus download, a few seconds):
 uv run pytest tests/test_unit_*.py -q
 ```
 
+The fixes are supplied by the versioned `PeterStaar-IBM/blend2d` fork release
+selected in `cmake/extlib_blend2d.cmake`; no CMake patch step is required.
+
+The Blend2D patch tests also exercise the native library directly. This matters
+because the renderer currently flattens stroked cubics (#407), which bypasses
+the native stroker defects covered by the PDF fixtures:
+
+```bash
+cmake -S . -B build -DDOCLING_PARSE_BUILD_BLEND2D_TESTS=ON
+cmake --build build --target blend2d_patch_regression --parallel 2
+ctest --test-dir build --output-on-failure -R '^blend2d_'
+```
+
+Each native case has a 60-second timeout and remains available for local checks.
+CI relies on Blend2D's own tests for the native routines and runs the Python
+integration/regression tests in this repository.
+The real-document cases are parameters of
+`test_regression_pypdfium_cited_pages.py`, using PDFs from the pinned regression
+dataset. Each case names its document, 1-based PDF page, render scale, and
+image tolerance. Rendering runs in a child process with a 60-second timeout,
+and the result must match pypdfium2 within the case's tolerance.
+
+The large-document selections deliberately cover only the reported pages:
+
+| Document | Selected PDF page | Enforced render scale | Regression |
+| --- | ---: | ---: | --- |
+| `31ZH7600.pdf` | 7 | 3.0 | Affine image fill at the clip edge (#365) |
+| `NAB-22-29.pdf` | 29 | 2.0 | Subpixel stroked curve (#393) |
+
+The ordinary parser/render corpus tests use those page selections from
+`regression_page_selection.py`. The cited-page test additionally renders at
+the case's explicit scale: scale 3 is essential to reproduce the affine-fill
+crash. No external document paths or document-specific environment variables
+are needed.
+
+```bash
+uv run pytest tests/test_regression_pypdfium_cited_pages.py -q
+```
+
+For corpus-wide pypdfium2 metrics and visualizations, use the existing
+`test_regression_pypdfium_render.py` report. The cited-page tests enforce their
+image tolerances; the corpus-wide pypdfium2 report remains non-failing on
+pixel differences. Stored renderer ground truth is checked separately by
+`test_regression_threaded_render.py`.
+
 Run focused parser and renderer regression tests:
 
 ```bash
