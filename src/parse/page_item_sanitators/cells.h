@@ -195,9 +195,17 @@ namespace pdflib
 
     /**
      * Unmarked gap, in neighboring character advances, above which a word
-     * starts in a run that carries explicit space glyphs.
+     * starts in a run that carries explicit space glyphs. A letter-spaced
+     * line raises it, see `infer_spaced_word_gap()`.
      */
     static constexpr double spaced_word_gap_advances = 0.35;
+
+    /**
+     * Unmarked gap, in neighboring character advances, that starts a word
+     * in a run with space glyphs however wide its letter spacing:
+     * absolutely positioned table fields separate by whole advances.
+     */
+    static constexpr double spaced_word_gap_advances_max = 1.0;
 
     /**
      * Unmarked gap, in em above the run's letter spacing, at which a word
@@ -417,6 +425,26 @@ namespace pdflib
                               const page_item<PAGE_CELL>& rhs);
 
     /**
+     * @brief Word-gap threshold of a run with space glyphs, in advances.
+     *
+     * The space glyphs mark the words, and an unmarked gap adds a boundary
+     * above `spaced_word_gap_advances`. Letter spacing opens every gap of a
+     * tracked line, often past that, so the threshold follows the line's
+     * own letter spacing: 1.5 times the median unmarked gap below one
+     * advance, plus 0.20. The median is taken over the gaps between glyphs
+     * that are not leader dots (dots are spaced like words and would pass
+     * for tracking), and needs at least three of them: a single gap, as
+     * between a lone math symbol or one table digit and its neighbour, is
+     * no evidence of tracking. The result never exceeds
+     * `spaced_word_gap_advances_max`.
+     *
+     * @param run One line of cells in source order, with space glyphs.
+     * @return Threshold in neighboring character advances.
+     * @par Complexity O(n) plus one selection.
+     */
+    static double infer_spaced_word_gap(const line_run& run);
+
+    /**
      * @brief Unmarked gap between two cells in units of the font size (em).
      *
      * The forward gap is divided by the mean nominal text height of the two
@@ -494,7 +522,8 @@ namespace pdflib
      *
      * Builds line runs and treats explicit space cells as authoritative
      * boundaries. In a run that carries them, an unmarked gap above 0.35
-     * neighboring character advances also starts a word. A run without any
+     * neighboring character advances also starts a word, or above more on
+     * a letter-spaced line, see `infer_spaced_word_gap()`. A run without any
      * space glyph (TeX output, most positioned headings) is judged in font
      * size units instead: a gap starts a word when it exceeds the run's
      * letter spacing by more than the run's word-gap threshold, see
@@ -840,6 +869,41 @@ namespace pdflib
     return std::max(0.0, forward_gap(lhs, rhs)) / std::max(1.e-6, scale);
   }
 
+  inline double page_item_sanitator<PAGE_CELLS>::infer_spaced_word_gap(
+      const line_run& run)
+  {
+    // The unmarked gaps between the space glyphs, letters only: a gap next
+    // to a leader dot is a word gap whatever its size.
+    std::vector<double> letter_gaps;
+    const page_item<PAGE_CELL>* previous = nullptr;
+    for(const auto& cell : run.cells)
+      {
+        if(is_semantic_space(cell))
+          {
+            previous = nullptr;
+            continue;
+          }
+        if(previous != nullptr and previous->text != "." and cell.text != ".")
+          {
+            const double gap = advance_gap(*previous, cell);
+            if(gap <= spaced_word_gap_advances_max)
+              {
+                letter_gaps.push_back(gap);
+              }
+          }
+        previous = &cell;
+      }
+
+    if(letter_gaps.size() < 3)
+      {
+        return spaced_word_gap_advances;
+      }
+    auto median = letter_gaps.begin() + letter_gaps.size() / 2;
+    std::nth_element(letter_gaps.begin(), median, letter_gaps.end());
+    return std::min(spaced_word_gap_advances_max,
+                    std::max(spaced_word_gap_advances, 1.5 * (*median) + 0.20));
+  }
+
   inline double page_item_sanitator<PAGE_CELLS>::em_gap(
       const page_item<PAGE_CELL>& lhs,
       const page_item<PAGE_CELL>& rhs)
@@ -1085,7 +1149,8 @@ namespace pdflib
     for(auto& run : collect_line_runs(cells))
       {
         // Explicit PDF spaces remain authoritative boundaries, and the
-        // unmarked gaps between them are judged in character advances. A
+        // unmarked gaps between them are judged in character advances,
+        // above a threshold that rises with the line's letter spacing. A
         // run without any space glyph is judged in em, above its own letter
         // spacing: the advance unit shrinks a word gap next to a wide glyph
         // (`m`, `W`) below any fixed cap while a kern next to narrow glyphs
@@ -1093,6 +1158,9 @@ namespace pdflib
         const unspaced_gap_profile profile = run.has_semantic_spaces
           ? unspaced_gap_profile{}
           : infer_unspaced_gap_profile(run);
+        const double spaced_word_gap = run.has_semantic_spaces
+          ? infer_spaced_word_gap(run)
+          : spaced_word_gap_advances;
         std::vector<page_item<PAGE_CELL>> words;
         page_item<PAGE_CELL>* previous_visible = nullptr;
         bool explicit_boundary = false;
@@ -1129,7 +1197,7 @@ namespace pdflib
                 else if(run.has_semantic_spaces)
                   {
                     starts_word = advance_gap(*previous_visible, cell) >
-                                  spaced_word_gap_advances;
+                                  spaced_word_gap;
                   }
                 else
                   {
