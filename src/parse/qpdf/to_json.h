@@ -6,6 +6,8 @@
 #include <sstream>
 #include <iostream>
 #include <iomanip>
+#include <cstddef>
+#include <functional>
 #include <unordered_set>
 
 #include <nlohmann/json.hpp>
@@ -80,34 +82,88 @@ namespace pdflib
     return {false, ""};
   }
 
-  // FIXME: add a begin time to cap the max time spent in this routine
-  nlohmann::json to_json(QPDFObjectHandle obj,
-			 std::unordered_set<std::string> prev_objs={},
-                         int level=0,
-			 int max_level=32)
+  // Dictionaries that are the document itself rather than annotation or
+  // form content. Followed from an annotation, each of them pulls the
+  // document into the export: a signature's /Reference[*]/Data points back
+  // at the catalog (Acrobat and iText write it for DocMDP and FieldMDP), a
+  // link destination names a page, a structure element names its /Pg. They
+  // are written out as references instead, like /Parent and /P already are.
+  bool is_document_structure(QPDFObjectHandle obj)
+  {
+    if(not obj.isDictionary())
+      {
+        return false;
+      }
+
+    QPDFObjectHandle type = obj.getKey("/Type");
+    if(not type.isName())
+      {
+        return false;
+      }
+
+    const static std::unordered_set<std::string> names = {
+      "/Catalog", "/Pages", "/Page", "/StructTreeRoot", "/StructElem"};
+
+    return names.count(type.getName())==1;
+  }
+
+  // QPDFObjGen compares and orders, but has no std::hash. The hasher for
+  // every unordered container keyed by object id, here and in the resource
+  // caches of the page decoder.
+  class qpdf_objgen_hash
+  {
+  public:
+
+    std::size_t operator()(QPDFObjGen const& og) const;
+  };
+
+  inline std::size_t qpdf_objgen_hash::operator()(QPDFObjGen const& og) const
+  {
+    std::size_t h1 = std::hash<int>{}(og.getObj());
+    std::size_t h2 = std::hash<int>{}(og.getGen());
+    return h1 ^ (h2 + 0x9e3779b9 + (h1 << 6) + (h1 >> 2));
+  }
+
+  // Probed, inserted into and erased from, never walked: hashed rather
+  // than ordered.
+  using object_path = std::unordered_set<QPDFObjGen, qpdf_objgen_hash>;
+
+  // `path` holds the ids of the indirect dictionaries and arrays that are
+  // being expanded on the current path, so that a cycle is written as a
+  // reference instead of recursing. Direct objects are inline and cannot
+  // close a cycle, so they are not tracked.
+  //
+  // Until docling-parse#399 the guard was the unparsed text of every
+  // dictionary and array, direct ones included, collected into a set that
+  // was copied into every recursive call; for a direct object that text is
+  // its whole subtree, serialised once per level of nesting. That overhead
+  // only became visible once an export escaped into the document through a
+  // signature's /Reference[0]/Data (see is_document_structure above): the
+  // structure tree is a DAG that names each page from every element on it,
+  // and each of those paths expanded the page again.
+  nlohmann::json to_json_impl(QPDFObjectHandle obj,
+                              object_path& path,
+                              int level,
+                              int max_level)
   {
     nlohmann::json result;
 
-    if(obj.isDictionary() or obj.isArray())
+    if(level>0 and is_document_structure(obj))
       {
-        std::string this_obj = obj.unparse();
+        std::string ref = obj.isIndirect() ? " '"+obj.unparse()+"'" : "";
+        result = "[skipping "+obj.getKey("/Type").getName()+" object"+ref+"]";
+        return result;
+      }
 
-        if(not utf8::is_valid(this_obj.begin(), this_obj.end()))
+    bool on_path = false;
+    if(obj.isIndirect() and (obj.isDictionary() or obj.isArray()))
+      {
+        if(not path.insert(obj.getObjGen()).second)
           {
-            utf8::replace_invalid(this_obj.begin(), this_obj.end(),
-                                  std::back_inserter(this_obj));
-            LOG_S(WARNING) << "fixed already encountered object: " << this_obj;
-          }
-
-        if(prev_objs.count(this_obj)==1)
-          {
-            result = "[ref to previous object: '"+this_obj+"']";
+            result = "[ref to previous object: '"+obj.unparse()+"']";
             return result;
           }
-        else
-          {
-            prev_objs.insert(this_obj);
-          }
+        on_path = true;
       }
 
     if(level<max_level)
@@ -116,36 +172,25 @@ namespace pdflib
 
         if(obj.isDictionary())
           {
-            /*
-              LOG_S(INFO) << "detected dict: ";
-              for(auto key : obj.getKeys())
-              {
-              LOG_S(INFO) << " -> key: " << key;
-              }
-            */
-
             for(auto key : obj.getKeys())
               {
-                //LOG_S(INFO) << "key: " << key;
-
                 if(keys_to_be_skipped.count(key)==1)
                   {
                     result[key] = "[skipping " + key + "]";
                   }
                 else
                   {
-                    result[key] = to_json(obj.getKey(key), prev_objs, level+1);
+                    result[key] = to_json_impl(obj.getKey(key), path, level+1, max_level);
                   }
               }
           }
         else if(obj.isArray())
           {
-            //LOG_S(INFO) << "array: " << obj.getArrayNItems();
             for(int l=0; l<obj.getArrayNItems(); l++)
               {
                 QPDFObjectHandle new_obj = obj.getArrayItem(l);
 
-                auto item = to_json(new_obj, prev_objs, level+1);
+                auto item = to_json_impl(new_obj, path, level+1, max_level);
                 result.push_back(item);
               }
           }
@@ -262,7 +307,18 @@ namespace pdflib
         result = "[exceeding recursion]";
       }
 
+    if(on_path)
+      {
+        path.erase(obj.getObjGen());
+      }
+
     return result;
+  }
+
+  nlohmann::json to_json(QPDFObjectHandle obj, int level=0, int max_level=32)
+  {
+    object_path path;
+    return to_json_impl(obj, path, level, max_level);
   }
 
   void print_obj(QPDFObjectHandle obj, int level = 0)

@@ -86,6 +86,8 @@ namespace pdflib
     QPDFAcroFormDocumentHelper& source_acroform_helper();
 
     void ensure_annots_loaded();
+    void load_annots();
+    nlohmann::json annots_field(const char* key) const;
 
     // Throws missing_page_object_error when the page references an
     // object the file does not contain (docling-parse#374).
@@ -125,8 +127,14 @@ namespace pdflib
     std::string load_error_category;
     std::string load_error_message;
 
+    // Built on the first call to get_annotations(), get_meta_xml() or
+    // get_table_of_contents(), never during load: a conversion that reads
+    // only the pages pays nothing for the form, the metadata stream and the
+    // outline. Written exactly once, by load_annots() under
+    // thread_safe_buffer_mutex; annots_once publishes the result, and the
+    // getters then read it without taking that mutex.
     nlohmann::json json_annots;
-    bool annots_loaded;
+    std::once_flag annots_once;
 
     // New: Persistent page decoders for typed API
     std::map<int, page_decoder_ptr> page_decoders;
@@ -146,7 +154,6 @@ namespace pdflib
     qpdf_reported_damage(false),
 
     json_annots(nlohmann::json::value_t::null),
-    annots_loaded(false),
     page_decoders({})
   {
     configure_qpdf_warnings(qpdf_document);
@@ -166,7 +173,6 @@ namespace pdflib
     qpdf_reported_damage(false),
 
     json_annots(nlohmann::json::value_t::null),
-    annots_loaded(false),
     page_decoders({})
   {
     configure_qpdf_warnings(qpdf_document);
@@ -177,15 +183,24 @@ namespace pdflib
 
   void pdf_decoder<DOCUMENT>::ensure_annots_loaded()
   {
-    if(annots_loaded)
-      {
-        return;
-      }
+    // The first caller builds json_annots; every later caller returns as
+    // soon as that has happened, without queueing behind the page-buffer
+    // writer for a value that is already there. A plain flag read outside
+    // the mutex would be a data race; call_once publishes it properly.
+    std::call_once(annots_once, [this]() { load_annots(); });
+  }
+
+  void pdf_decoder<DOCUMENT>::load_annots()
+  {
+    // Reads qpdf_document, which the page-buffer writer below also uses:
+    // with the threaded parser a worker may be copying a page out while the
+    // main thread asks for the annotations.
+    std::lock_guard<std::mutex> lock(thread_safe_buffer_mutex);
 
     try
       {
         QPDFObjectHandle qpdf_root = qpdf_document.getRoot();
-	
+
         utils::timer annots_timer;
         json_annots = extract_document_annotations_in_json(qpdf_document, qpdf_root);
 
@@ -204,8 +219,20 @@ namespace pdflib
       {
         LOG_S(WARNING) << "filename: " << filename << " can not find any `annotations` " << exc.what();
       }
+  }
 
-    annots_loaded = true;
+  nlohmann::json pdf_decoder<DOCUMENT>::annots_field(const char* key) const
+  {
+    // Not operator[]: on a missing key it inserts, and on a null json_annots
+    // it first turns the value into an object. Both are writes to a value
+    // that other threads may be reading.
+    auto itr = json_annots.find(key);
+    if(itr==json_annots.end())
+      {
+        return nlohmann::json(nullptr);
+      }
+
+    return *itr;
   }
 
   nlohmann::json pdf_decoder<DOCUMENT>::get_annotations()
@@ -217,13 +244,13 @@ namespace pdflib
   nlohmann::json pdf_decoder<DOCUMENT>::get_meta_xml()
   {
     ensure_annots_loaded();
-    return json_annots["meta_xml"];
+    return annots_field("meta_xml");
   }
 
   nlohmann::json pdf_decoder<DOCUMENT>::get_table_of_contents()
   {
     ensure_annots_loaded();
-    return json_annots["table_of_contents"];
+    return annots_field("table_of_contents");
   }
 
   bool pdf_decoder<DOCUMENT>::process_document_from_file(std::string& _filename,
@@ -343,8 +370,6 @@ namespace pdflib
         LOG_S(ERROR) << "could not process buffer by qpdf: " << exc.what();
         return false;
       }
-    
-    ensure_annots_loaded();
 
     timings.add_timing(pdf_timings::KEY_PROCESS_DOCUMENT_FROM_BYTESIO, timer.get_time());
     

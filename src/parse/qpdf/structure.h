@@ -412,7 +412,7 @@ namespace pdflib
         for(auto key : dict.getKeys())
           {
             if(key=="/O") { continue; }
-            values[key] = pdflib::to_json(dict.getKey(key), {}, 0, 4);
+            values[key] = pdflib::to_json(dict.getKey(key), 0, 4);
           }
         result[owner] = values;
       }

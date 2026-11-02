@@ -1912,9 +1912,10 @@ class DoclingThreadedPdfParser:
     def get_annotations(self, doc_key: str) -> PdfAnnotations | None:
         """Get the annotations of a loaded document.
 
-        The annotations are structure-only: reading them decodes no page, so the
-        outline of a document can be read without waiting for, or interfering with,
-        the threaded page decoding.
+        The annotations are structure-only: reading them decodes no page. The
+        first call builds them, and can wait for a worker to finish copying one
+        page out of the document; later calls return the cached result without
+        taking any lock, also while the workers are running.
 
         Returns:
             Optional[PdfAnnotations]: Annotations object with form, language, meta_xml,

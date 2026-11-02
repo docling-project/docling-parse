@@ -5,13 +5,6 @@
 
 namespace pdflib
 {
-  class qpdf_objgen_hash
-  {
-  public:
-
-    std::size_t operator()(QPDFObjGen const& og) const;
-  };
-
   class xobject_parse_cache
   {
   public:
@@ -52,13 +45,6 @@ namespace pdflib
                        std::shared_ptr<const pdf_resource<PAGE_XOBJECT_POSTSCRIPT> >,
                        qpdf_objgen_hash> postscript_;
   };
-
-  inline std::size_t qpdf_objgen_hash::operator()(QPDFObjGen const& og) const
-  {
-    std::size_t h1 = std::hash<int>{}(og.getObj());
-    std::size_t h2 = std::hash<int>{}(og.getGen());
-    return h1 ^ (h2 + 0x9e3779b9 + (h1 << 6) + (h1 >> 2));
-  }
 
   inline bool xobject_parse_cache::find_subtype(QPDFObjGen const& og,
                                                 xobject_subtype_name& subtype) const
