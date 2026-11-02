@@ -3,6 +3,7 @@
 
 Run with:
     python scripts/tools/update_regression_dataset.py
+    python scripts/tools/update_regression_dataset.py --dry-run
 
 Existing groundtruth changes require [y/n/a] approval. No files are deleted,
 and no changes are committed or pushed.
@@ -10,6 +11,7 @@ and no changes are committed or pushed.
 
 from __future__ import annotations
 
+import argparse
 import difflib
 import filecmp
 import gzip
@@ -33,8 +35,12 @@ def warn(message: str) -> None:
     print(f"WARNING: {message}", file=sys.stderr)
 
 
-def ensure_dataset() -> None:
+def ensure_dataset(*, dry_run: bool = False) -> bool:
     if not DATASET.exists():
+        if dry_run:
+            warn(f"Would clone {DATASET_URL} on main into {DATASET}")
+            warn("File comparison requires the dataset checkout; stopping dry run.")
+            return False
         DATASET.parent.mkdir(parents=True, exist_ok=True)
         subprocess.run(
             ["git", "clone", "--branch", "main", DATASET_URL, str(DATASET)],
@@ -46,7 +52,12 @@ def ensure_dataset() -> None:
         ["git", "-C", str(DATASET), "branch", "--show-current"], text=True
     ).strip()
     if branch != "main":
+        if dry_run:
+            warn(f"Would switch {DATASET} from {branch or 'detached HEAD'} to main")
+            warn("File comparison requires main; stopping dry run.")
+            return False
         subprocess.run(["git", "-C", str(DATASET), "switch", "main"], check=True)
+    return True
 
 
 def files_under(directory: Path) -> dict[Path, Path]:
@@ -57,13 +68,16 @@ def files_under(directory: Path) -> dict[Path, Path]:
     }
 
 
-def copy_file(source: Path, destination: Path) -> None:
+def copy_file(source: Path, destination: Path, *, dry_run: bool = False) -> None:
+    if dry_run:
+        warn(f"Would copy: {source} -> {destination}")
+        return
     destination.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(source, destination)
     print(f"Copied: {source} -> {destination}")
 
 
-def sync_pdfs(source: Path, destination: Path) -> None:
+def sync_pdfs(source: Path, destination: Path, *, dry_run: bool = False) -> None:
     local = files_under(source)
     remote = files_under(destination)
     for directory, files in ((source, local), (destination, remote)):
@@ -72,7 +86,7 @@ def sync_pdfs(source: Path, destination: Path) -> None:
                 warn(f"Non-PDF file: {directory / relative}")
     for relative, path in local.items():
         if relative.suffix.lower() == ".pdf" and relative not in remote:
-            copy_file(path, destination / relative)
+            copy_file(path, destination / relative, dry_run=dry_run)
     for relative in remote:
         if relative.suffix.lower() == ".pdf" and relative not in local:
             warn(f"Dataset PDF has no local counterpart: {destination / relative}")
@@ -154,7 +168,11 @@ def selected_groundtruth(
 
 
 def sync_groundtruth(
-    source: Path, destination: Path, selection: dict[str, list[int]]
+    source: Path,
+    destination: Path,
+    selection: dict[str, list[int]],
+    *,
+    dry_run: bool = False,
 ) -> None:
     local = selected_groundtruth(source, selection)
     remote = selected_groundtruth(destination, selection)
@@ -162,9 +180,12 @@ def sync_groundtruth(
     for relative, incoming in local.items():
         existing = destination / relative
         if relative not in remote:
-            copy_file(incoming, existing)
+            copy_file(incoming, existing, dry_run=dry_run)
             continue
         if filecmp.cmp(incoming, existing, shallow=False):
+            continue
+        if dry_run:
+            warn(f"Would replace (requires approval): {existing} with {incoming}")
             continue
         if not accept_all:
             print(f"\nChanged groundtruth: {relative}")
@@ -180,6 +201,13 @@ def sync_groundtruth(
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Only warn about planned actions; do not modify files or prompt.",
+    )
+    args = parser.parse_args()
     try:
         regression = ROOT / "tests/data/regression"
         groundtruth = ROOT / "tests/data/groundtruth"
@@ -189,9 +217,15 @@ def main() -> int:
         selection = runpy.run_path(str(ROOT / "tests/regression_page_selection.py"))[
             "REGRESSION_PAGE_SELECTION"
         ]
-        ensure_dataset()
-        sync_pdfs(regression, DATASET / "regression")
-        sync_groundtruth(groundtruth, DATASET / "groundtruth", selection)
+        if not ensure_dataset(dry_run=args.dry_run):
+            return 0
+        sync_pdfs(regression, DATASET / "regression", dry_run=args.dry_run)
+        sync_groundtruth(
+            groundtruth,
+            DATASET / "groundtruth",
+            selection,
+            dry_run=args.dry_run,
+        )
     except (EOFError, KeyboardInterrupt):
         print("\nStopped. Previously copied files remain.", file=sys.stderr)
         return 130

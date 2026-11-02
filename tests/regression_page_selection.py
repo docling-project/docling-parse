@@ -9,6 +9,10 @@ have exposed a defect. Re-run the script after adding documents to
 from typing import Dict, List
 
 REGRESSION_PAGE_SELECTION: Dict[str, List[int]] = {
+    "IterMethBook_2ndEd.pdf": [1],
+    "PLAW-117publ169": [1, 2, 3],
+    "tr254.pdf": [1, 2, 3],
+
     "0060e2bf-aba6-417a-94a6-f6776664ad7d-2.pdf": [1],
     "024805ca-0473-491f-8e49-6444ecac3d4b-5.pdf": [1],
     "06789070-26e8-44e2-9d53-8d1e307b721f-1.pdf": [1],

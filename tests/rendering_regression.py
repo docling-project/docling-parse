@@ -19,7 +19,7 @@ from tests.groundtruth_io import (
 )
 from tests.test_regression_parse import _round_floats
 
-RENDER_DELTA_FOLDER = Path("tests/data/render_deltas")
+RENDER_DELTA_FOLDER = Path("tests/data/groundtruth_delta/render/pages")
 RENDER_VISUALIZATION_FOLDER = Path("tests/data/visualizations")
 
 

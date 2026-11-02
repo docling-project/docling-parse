@@ -410,7 +410,7 @@ rendering regressions.
 On image comparison failure, diagnostic files are written under:
 
 ```text
-tests/data/render_deltas/
+tests/data/groundtruth_delta/render/pages/
 ```
 
 The generated files include actual, expected, and amplified diff PNGs.
@@ -523,7 +523,7 @@ the groundtruth test:
 - `render_pypdfium_page()` renders the reference page.
 - `flatten_on_white()` puts both renders on the same page background.
 - `amplified_difference()` builds the difference panel, and is also used for the
-  `render_deltas` diff artifacts.
+  `groundtruth_delta/render/pages` diff artifacts.
 - `write_comparison_visualization()` assembles and writes the three-panel png.
 
 ## Regression Data
@@ -562,11 +562,12 @@ tests/data/
   cases/                  focused case fixtures
   errors/                 failure and error-handling fixtures
   synthetic/              synthetic PDF fixtures
-  render_deltas/          diff artifacts written on image comparison failure
+  groundtruth_delta/parser/        parser failure diagnostics
+  groundtruth_delta/render/pages/  actual, expected, and diff PNGs on image comparison failure
   visualizations/         three-panel renderer comparison images
 ```
 
-`render_deltas/` and `visualizations/` are produced by test runs and are not
+`groundtruth_delta/` and `visualizations/` are produced by test runs and are not
 part of the downloaded dataset.
 
 Groundtruth files are named after the document they came from, so they linger
