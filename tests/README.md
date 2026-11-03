@@ -656,3 +656,52 @@ request. Use the content-hash comparison above to list the pages whose ground
 truth changes, and give the reason for each page in the pull request
 description. See "Ground truth" in
 [CONTRIBUTING.md](../CONTRIBUTING.md#ground-truth).
+
+### Updating a Pull Request From a Contributor's Fork
+
+Maintainers can push a regression dataset pin update into an existing pull
+request when the contributor has enabled maintainer edits.
+
+Start with no uncommitted tracked changes. Replace the example fork owner,
+branch, and pull request number below with the pull request's actual values:
+
+```bash
+FORK_OWNER=contributor
+PR_BRANCH=fix/example
+PR_NUMBER=123
+
+# Add the remote once; skip this if it already exists.
+git remote add "$FORK_OWNER" "git@github.com:$FORK_OWNER/docling-parse.git"
+git fetch "$FORK_OWNER"
+git switch -c "pr-$PR_NUMBER-regression" --track "$FORK_OWNER/$PR_BRANCH"
+```
+
+Rebuild the package with the pull request's changes, then rerun the regression
+tests:
+
+```bash
+uv sync
+uv run pytest -v tests/test_regression_*.py
+```
+
+If the output changes are intended, refresh the affected groundtruth using
+the procedure above and review the content differences. Publish the dataset
+changes and a new dataset tag if needed, then set `HF_DATASET_REVISION` in
+`tests/constants.py` to the published revision or tag. This is a maintainer
+step coordinated with merging; do not use an unmerged dataset pull request
+as the pin.
+
+Review and commit the pin update, then push to the contributor's original
+branch to update the existing pull request:
+
+```bash
+git diff -- tests/constants.py
+git add tests/constants.py
+git diff --cached
+git commit -m "test: update regression dataset revision"
+git push "$FORK_OWNER" "HEAD:refs/heads/$PR_BRANCH"
+```
+
+Stage any other intended source or test changes explicitly before committing.
+Dataset files under `tests/data` are ignored by this repository and must be
+published separately. No force push is needed.
