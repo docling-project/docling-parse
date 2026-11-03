@@ -21,15 +21,20 @@ namespace pdflib
   // but forms written by older tools spell non-ASCII option names in
   // PDFDocEncoding, as in /zur#fcck for "zurück". Keep valid UTF-8 as it is
   // and transcode the rest the way getUTF8Value() transcodes text strings,
-  // so that every name handed to Python decodes instead of raising.
-  std::string name_to_utf8(QPDFObjectHandle name)
+  // so that every name handed to Python decodes instead of raising. The
+  // keys of a dictionary are names too (7.3.7), hence the string overload.
+  std::string name_to_utf8(const std::string& raw)
   {
-    std::string raw = name.getName();
     if(utf8::is_valid(raw.begin(), raw.end()))
       {
         return raw;
       }
     return QUtil::pdf_doc_to_utf8(raw);
+  }
+
+  std::string name_to_utf8(QPDFObjectHandle name)
+  {
+    return name_to_utf8(name.getName());
   }
 
   std::pair<bool, std::string> to_string(QPDFObjectHandle obj,
@@ -174,13 +179,14 @@ namespace pdflib
           {
             for(auto key : obj.getKeys())
               {
+                const std::string key_utf8 = name_to_utf8(key);
                 if(keys_to_be_skipped.count(key)==1)
                   {
-                    result[key] = "[skipping " + key + "]";
+                    result[key_utf8] = "[skipping " + key_utf8 + "]";
                   }
                 else
                   {
-                    result[key] = to_json_impl(obj.getKey(key), path, level+1, max_level);
+                    result[key_utf8] = to_json_impl(obj.getKey(key), path, level+1, max_level);
                   }
               }
           }
@@ -225,24 +231,7 @@ namespace pdflib
           }
         else if(obj.isName())
           {
-            std::string val = obj.getName();
-
-            if(utf8::is_valid(val.begin(), val.end()))
-              {
-                result = val;
-              }
-            else
-              {
-                LOG_S(WARNING) << "val is not utf8: " << val;
-
-                std::string tmp;
-                utf8::replace_invalid(val.begin(), val.end(),
-                                      std::back_inserter(tmp));
-
-                LOG_S(WARNING) << " --> " << tmp;
-
-                result = tmp;
-              }
+            result = name_to_utf8(obj);
           }
         else if(obj.isString())
           {

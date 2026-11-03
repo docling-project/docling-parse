@@ -2448,12 +2448,12 @@ namespace pdflib
 
         if(entry.is_artifact and dict.hasKey("/Type") and dict.getKey("/Type").isName())
           {
-            entry.artifact_type = dict.getKey("/Type").getName();
+            entry.artifact_type = pdflib::name_to_utf8(dict.getKey("/Type"));
           }
 
         if(entry.is_artifact and dict.hasKey("/Subtype") and dict.getKey("/Subtype").isName())
           {
-            entry.artifact_subtype = dict.getKey("/Subtype").getName();
+            entry.artifact_subtype = pdflib::name_to_utf8(dict.getKey("/Subtype"));
           }
       }
 

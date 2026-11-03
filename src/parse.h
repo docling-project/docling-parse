@@ -85,6 +85,7 @@
 
 // pdf-resource
 #include <parse/pdf_resources/page_font/glyphs.h>
+#include <parse/pdf_resources/page_font/builtin_encoding.h>
 #include <parse/pdf_resources/page_font/font_cid.h>
 #include <parse/pdf_resources/page_font/font_cids.h>
 #include <parse/pdf_resources/page_font/encoding.h>
