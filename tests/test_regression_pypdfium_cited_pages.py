@@ -92,6 +92,43 @@ CITED_PAGES = [
         ),
         id="subpixel-stroked-curve",
     ),
+    # #384: a magazine cover whose photo is a transparency group painted under
+    # an ExtGState soft mask, with a second mask inside the group. Without the
+    # mask the photo was painted opaque to its bounding box (mean_abs_error
+    # 11.89, changed_pixels_ratio 0.326 before the fix; 1.58 and 0.020 after).
+    pytest.param(
+        "complex_invisible_fonts_01.pdf",
+        1,
+        PYPDFIUM_RENDER_SCALE,
+        ImageTolerance(
+            pixel_threshold=12, mean_abs_error=3.0, changed_pixels_ratio=0.05
+        ),
+        id="extgstate-soft-mask",
+    ),
+    # #378: a card whose rounded border is stroked under a curved clip. The
+    # stroke ran past the clip at the corners (mean_abs_error 6.46,
+    # changed_pixels_ratio 0.151 before the fix; 5.03 and 0.130 after).
+    pytest.param(
+        "921558209587984065-1.pdf",
+        1,
+        PYPDFIUM_RENDER_SCALE,
+        ImageTolerance(
+            pixel_threshold=12, mean_abs_error=5.8, changed_pixels_ratio=0.142
+        ),
+        id="stroke-through-curved-clip",
+    ),
+    # #384 again, the common case: a drop shadow under a title is a soft-masked
+    # fill. Without the mask it was a solid grey block (mean_abs_error 4.41,
+    # changed_pixels_ratio 0.094 before the fix; 1.54 and 0.032 after).
+    pytest.param(
+        "17898535961965146676-4.pdf",
+        1,
+        PYPDFIUM_RENDER_SCALE,
+        ImageTolerance(
+            pixel_threshold=12, mean_abs_error=2.5, changed_pixels_ratio=0.05
+        ),
+        id="soft-masked-drop-shadow",
+    ),
 ]
 
 
