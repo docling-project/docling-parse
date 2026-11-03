@@ -210,3 +210,43 @@ def test_non_ascii_option_name_is_transcoded_and_keeps_the_page(option):
         ("zurück", "/Rückfahrt", "/Rückfahrt"),
         ("zurück", "/Rückfahrt", "/Off"),
     ]
+
+
+def _form_with_gbk_font_keys() -> bytes:
+    # pdfium's test corpus (fx/form/combo_box_format.pdf and three more) names
+    # a default-resources font /#cb#ce#cc#e5: GBK bytes for 宋体, not UTF-8.
+    # Two keys that differ only in such bytes must stay two keys.
+    return build_pdf(
+        [
+            "<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [5 0 R] "
+            "/DA (/Helv 0 Tf 0 g) /DR << /Font << /Helv 6 0 R "
+            "/#cb#ce#cc#e5 6 0 R /#cc#e5#cb#ce 6 0 R >> >> >> >>",
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] "
+            "/Contents 4 0 R /Annots [5 0 R] >>",
+            content_stream(""),
+            "<< /Type /Annot /Subtype /Widget /FT /Tx /T (name) "
+            "/Rect [10 160 100 180] >>",
+            "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+        ]
+    )
+
+
+def test_dictionary_keys_that_are_not_utf8_keep_the_form():
+    # The export cannot know the code page of a name, so the keys come out
+    # transcoded from PDFDocEncoding like every other name it cannot read as
+    # UTF-8. What matters is that the form loads and the keys stay distinct:
+    # replacing the bytes with U+FFFD would merge the two font entries.
+    doc = DoclingPdfParser(loglevel="fatal").load(
+        path_or_stream=BytesIO(_form_with_gbk_font_keys()), lazy=True
+    )
+    annotations = doc.get_annotations()
+    assert annotations is not None and annotations.form is not None
+
+    fonts = annotations.form["/DR"]["/Font"]
+    assert sorted(fonts) == [
+        "/Helv",
+        "/" + bytes.fromhex("cbcecce5").decode("latin-1"),
+        "/" + bytes.fromhex("cce5cbce").decode("latin-1"),
+    ]
+    doc.unload()

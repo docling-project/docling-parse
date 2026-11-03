@@ -130,12 +130,16 @@ namespace pdflib
      * `ABC`. Geometry, font metadata, ordering, and active state are unchanged.
      *
      * @param[in,out] cells Cells whose text fields are normalized in place.
+     * @param do_char_normalization Also applies
+     * `text_constants::dash_replacements`, which fold typographic dashes and
+     * the minus sign to `-`.
      *
      * @par Complexity
      * Linear in the number of cells times the configured replacement count and
      * the cost of the individual string replacements.
      */
-    void sanitize_text(page_item<PAGE_CELLS>& cells);
+    void sanitize_text(page_item<PAGE_CELLS>& cells,
+                       bool do_char_normalization);
 
     /**
      * @brief Legacy in-place entry point for word or line contraction.
@@ -1362,7 +1366,8 @@ namespace pdflib
   }
 
   inline void page_item_sanitator<PAGE_CELLS>::sanitize_text(
-      page_item<PAGE_CELLS>& cells)
+      page_item<PAGE_CELLS>& cells,
+      bool do_char_normalization)
   {
     for(auto& cell : cells)
       {
@@ -1370,6 +1375,13 @@ namespace pdflib
         for(const auto& pair : text_constants::replacements)
           {
             utils::string::replace(cell.text, pair.first, pair.second);
+          }
+        if(do_char_normalization)
+          {
+            for(const auto& pair : text_constants::dash_replacements)
+              {
+                utils::string::replace(cell.text, pair.first, pair.second);
+              }
           }
       }
 

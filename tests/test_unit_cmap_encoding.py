@@ -186,3 +186,57 @@ def test_reversed_bfrange_is_ignored():
     assert text == "AB", (
         f"expected the valid bfrange to map the codes to 'AB', got {text!r}"
     )
+
+
+TO_UNICODE_SURROGATE_RANGE_CODES = """/CIDInit /ProcSet findresource begin
+12 dict begin
+begincmap
+/CMapName /Test-UCS2 def
+/CMapType 2 def
+1 begincodespacerange
+<0000> <FFFF>
+endcodespacerange
+2 beginbfchar
+<0047> <0058>
+<DFA8> <AC00>
+endbfchar
+1 beginbfrange
+<D800> <D801> <0041>
+endbfrange
+endcmap
+CMapName currentdict /CMap defineresource pop
+end
+end"""
+
+
+def test_bfchar_source_code_in_surrogate_range_is_mapped():
+    """A source code between 0xD800 and 0xDFFF maps like any other code.
+
+    Source codes are byte sequences, not text. They were decoded as UTF-16,
+    which rejects lone surrogates; the fallback string that came back keyed
+    the mapping under 'G' (0x47). So the code itself lost its text, and code
+    0x47 took the text of the bad entry. Large CJK fonts reach this range: in
+    reported files every space of a Korean font came out as a quote mark.
+    """
+    text = _text(
+        _identity_h_pdf(
+            text_bytes="DFA80047",
+            to_unicode=True,
+            to_unicode_cmap=TO_UNICODE_SURROGATE_RANGE_CODES,
+        )
+    )
+    assert text == "가X", (
+        f"expected <DFA8> to give U+AC00 and <0047> to keep 'X', got {text!r}"
+    )
+
+
+def test_bfrange_bounds_in_surrogate_range_are_mapped():
+    """A bfrange whose bounds lie between 0xD800 and 0xDFFF is expanded."""
+    text = _text(
+        _identity_h_pdf(
+            text_bytes="D800D801",
+            to_unicode=True,
+            to_unicode_cmap=TO_UNICODE_SURROGATE_RANGE_CODES,
+        )
+    )
+    assert text == "AB", f"expected the range to map to 'AB', got {text!r}"
