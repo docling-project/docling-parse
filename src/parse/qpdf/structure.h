@@ -136,7 +136,8 @@ namespace pdflib
         for(auto key : rm.getKeys())
           {
             QPDFObjectHandle val = rm.getKey(key);
-            if(val.isName()) { role_map[key] = val.getName(); }
+            // names are raw bytes (7.3.5): transcode them as to_json() does
+            if(val.isName()) { role_map[pdflib::name_to_utf8(key)] = pdflib::name_to_utf8(val); }
           }
       }
     structure["role_map"] = std::move(role_map);
@@ -205,7 +206,7 @@ namespace pdflib
 
     if(elem.hasKey("/S") and elem.getKey("/S").isName())
       {
-        result["type"] = elem.getKey("/S").getName();
+        result["type"] = pdflib::name_to_utf8(elem.getKey("/S"));
       }
     else
       {
@@ -345,7 +346,7 @@ namespace pdflib
             if(target.isDictionary() and target.hasKey("/Subtype") and
                target.getKey("/Subtype").isName())
               {
-                subtype = target.getKey("/Subtype").getName();
+                subtype = pdflib::name_to_utf8(target.getKey("/Subtype"));
               }
           }
         result = {{"kind", "objref"}, {"obj", obj}, {"subtype", subtype}};
@@ -401,7 +402,7 @@ namespace pdflib
         std::string owner = "";
         if(dict.hasKey("/O") and dict.getKey("/O").isName())
           {
-            owner = dict.getKey("/O").getName();
+            owner = pdflib::name_to_utf8(dict.getKey("/O"));
           }
 
         nlohmann::json values = nlohmann::json::object({});
@@ -411,7 +412,7 @@ namespace pdflib
             // Start below the attribute owner so a document object used as an
             // attribute value is skipped even when it is the value's root.
             // Depth alone cannot bound repeated expansion of a wide DAG.
-            values[key] = pdflib::to_json(dict.getKey(key), 1, 5, 4096);
+            values[pdflib::name_to_utf8(key)] = pdflib::to_json(dict.getKey(key), 1, 5, 4096);
           }
         result[owner] = std::move(values);
       }

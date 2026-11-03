@@ -15,40 +15,26 @@
 
 namespace pdflib
 {
-  // FIXME: add a begin time to cap the max time spent in this routine
-  nlohmann::json extract_annots_in_json(QPDFObjectHandle obj,
-                                        int level=0, int max_level=32)
+  nlohmann::json extract_annots_in_json(QPDFObjectHandle obj)
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    /*
-    if(obj.isDictionary())
-      {
-        for(auto key : obj.getKeys())
-          {
-            LOG_S(INFO) << "key: " << key;
-          }
-      }
-    */
-    
     nlohmann::json result;
 
-    if(level==0 and obj.isDictionary() and
-       obj.hasKey("/Annot"))
+    if(obj.isDictionary() and obj.hasKey("/Annot"))
       {
         QPDFObjectHandle annot = obj.getKey("/Annot");
         if(not annot.isNull())
           {
-            result = to_json(annot, level, max_level);
+            result = to_json(annot);
           }
       }
-    else if(level==0 and obj.isDictionary() and
-            obj.hasKey("/Annots"))
+    else if(obj.isDictionary() and obj.hasKey("/Annots"))
       {
         QPDFObjectHandle annots = obj.getKey("/Annots");
         if(not annots.isNull())
           {
-            result = to_json(annots, level, max_level);
+            result = to_json(annots);
           }
       }
 

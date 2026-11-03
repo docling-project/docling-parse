@@ -1023,6 +1023,7 @@ namespace pdflib
         tinstr.set_clip_state(shape_state.get_clip_state());
         tinstr.set_rendering_mode(rendering_mode);
         tinstr.set_blend_mode(grph_state.get_blend_mode());
+        tinstr.set_soft_mask(grph_state.get_soft_mask_instruction());
         tinstr.set_is_type3(font.is_type3());
 
         // A Type3 glyph is a content-stream procedure, not a font glyph, so

@@ -55,12 +55,10 @@ namespace pdflib
       {"\u200E", ""},
       {"\u200F", ""},      
       
+      // The hyphen variants always fold to `-`: the line-joining dehyphenation
+      // downstream recognises an ASCII hyphen alone.
       {"\u2010", "-"},
       {"\u2011", "-"},
-      {"\u2012", "-"},
-      {"\u2013", "-"},
-      {"\u2014", "-"},
-      {"\u2015", "-"},
 
       {"\u2018", "'"},
       {"\u2019", "'"},
@@ -70,7 +68,17 @@ namespace pdflib
       {"\u201D", "\""},
       {"\u201E", "\""},
       {"\u201F", "\""},
-      
+    };
+
+    // Applied only when decode_config::do_char_normalization is on. U+2012..U+2015
+    // (figure, en and em dash, horizontal bar) and U+2212 (minus) carry meaning of
+    // their own (`3-5` is not `3–5`, `2024–2026` is a range), so a caller can opt
+    // out and keep them (docling-parse#362).
+    const static inline std::vector<std::pair<std::string, std::string> > dash_replacements = {
+      {"\u2012", "-"},
+      {"\u2013", "-"},
+      {"\u2014", "-"},
+      {"\u2015", "-"},
       {"\u2212", "-"},
     };
 

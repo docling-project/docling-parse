@@ -6,7 +6,8 @@
 #include <sstream>
 #include <iostream>
 #include <iomanip>
-#include <set>
+#include <cstddef>
+#include <functional>
 #include <limits>
 #include <unordered_set>
 
@@ -21,15 +22,20 @@ namespace pdflib
   // but forms written by older tools spell non-ASCII option names in
   // PDFDocEncoding, as in /zur#fcck for "zurück". Keep valid UTF-8 as it is
   // and transcode the rest the way getUTF8Value() transcodes text strings,
-  // so that every name handed to Python decodes instead of raising.
-  std::string name_to_utf8(QPDFObjectHandle name)
+  // so that every name handed to Python decodes instead of raising. The
+  // keys of a dictionary are names too (7.3.7), hence the string overload.
+  std::string name_to_utf8(const std::string& raw)
   {
-    std::string raw = name.getName();
     if(utf8::is_valid(raw.begin(), raw.end()))
       {
         return raw;
       }
     return QUtil::pdf_doc_to_utf8(raw);
+  }
+
+  std::string name_to_utf8(QPDFObjectHandle name)
+  {
+    return name_to_utf8(name.getName());
   }
 
   std::pair<bool, std::string> to_string(QPDFObjectHandle obj,
@@ -82,33 +88,90 @@ namespace pdflib
     return {false, ""};
   }
 
+  // Dictionaries that are the document itself rather than annotation or
+  // form content. Followed from an annotation, each of them pulls the
+  // document into the export: a signature's /Reference[*]/Data points back
+  // at the catalog (Acrobat and iText write it for DocMDP and FieldMDP), a
+  // link destination names a page, a structure element names its /Pg. They
+  // are written out as references instead, like /Parent and /P already are.
+  bool is_document_structure(QPDFObjectHandle obj)
+  {
+    if(not obj.isDictionary())
+      {
+        return false;
+      }
+
+    QPDFObjectHandle type = obj.getKey("/Type");
+    if(not type.isName())
+      {
+        return false;
+      }
+
+    const static std::unordered_set<std::string> names = {
+      "/Catalog", "/Pages", "/Page", "/StructTreeRoot", "/StructElem"};
+
+    return names.count(type.getName())==1;
+  }
+
+  // QPDFObjGen compares and orders, but has no std::hash. The hasher for
+  // every unordered container keyed by object id, here and in the resource
+  // caches of the page decoder.
+  class qpdf_objgen_hash
+  {
+  public:
+
+    std::size_t operator()(QPDFObjGen const& og) const;
+  };
+
+  inline std::size_t qpdf_objgen_hash::operator()(QPDFObjGen const& og) const
+  {
+    std::size_t h1 = std::hash<int>{}(og.getObj());
+    std::size_t h2 = std::hash<int>{}(og.getGen());
+    return h1 ^ (h2 + 0x9e3779b9 + (h1 << 6) + (h1 >> 2));
+  }
+
+  // Probed, inserted into and erased from, never walked: hashed rather
+  // than ordered.
+  using object_path = std::unordered_set<QPDFObjGen, qpdf_objgen_hash>;
+
+  // `path` holds the ids of the indirect dictionaries and arrays that are
+  // being expanded on the current path, so that a cycle is written as a
+  // reference instead of recursing. Direct objects are inline and cannot
+  // close a cycle, so they are not tracked.
+  //
+  // Until docling-parse#399 the guard was the unparsed text of every
+  // dictionary and array, direct ones included, collected into a set that
+  // was copied into every recursive call; for a direct object that text is
+  // its whole subtree, serialised once per level of nesting. That overhead
+  // only became visible once an export escaped into the document through a
+  // signature's /Reference[0]/Data (see is_document_structure above): the
+  // structure tree is a DAG that names each page from every element on it,
+  // and each of those paths expanded the page again.
   nlohmann::json to_json_impl(QPDFObjectHandle obj,
-                              std::set<QPDFObjGen>& path,
-                              int level, int max_level, std::size_t& remaining)
+                              object_path& path,
+                              int level,
+                              int max_level, std::size_t& remaining)
   {
     nlohmann::json result;
     if(remaining==0) { return "[exceeding node budget]"; }
     --remaining;
 
-    // Attribute/annotation values may refer back into the entire document.
-    if(level>0 and obj.isDictionary())
+    if(level>0 and is_document_structure(obj))
       {
-        auto type = obj.getKey("/Type");
-        static const std::unordered_set<std::string> document_types = {
-          "/Catalog", "/Pages", "/Page", "/StructTreeRoot", "/StructElem"};
-        if(type.isName() and document_types.count(type.getName()))
-          {
-            auto ref = obj.isIndirect() ? " '"+obj.unparse()+"'" : "";
-            return "[skipping "+type.getName()+" object"+ref+"]";
-          }
+        std::string ref = obj.isIndirect() ? " '"+obj.unparse()+"'" : "";
+        result = "[skipping "+obj.getKey("/Type").getName()+" object"+ref+"]";
+        return result;
       }
-    bool on_path = obj.isIndirect() and (obj.isDictionary() or obj.isArray());
-    if(on_path)
+
+    bool on_path = false;
+    if(obj.isIndirect() and (obj.isDictionary() or obj.isArray()))
       {
         if(not path.insert(obj.getObjGen()).second)
           {
-            return "[ref to previous object: '"+obj.unparse()+"']";
+            result = "[ref to previous object: '"+obj.unparse()+"']";
+            return result;
           }
+        on_path = true;
       }
 
     if(level<max_level)
@@ -117,36 +180,26 @@ namespace pdflib
 
         if(obj.isDictionary())
           {
-            /*
-              LOG_S(INFO) << "detected dict: ";
-              for(auto key : obj.getKeys())
-              {
-              LOG_S(INFO) << " -> key: " << key;
-              }
-            */
-
             for(auto key : obj.getKeys())
               {
+                const std::string key_utf8 = name_to_utf8(key);
                 if(remaining==0)
                   {
-                    result[key] = "[exceeding node budget]";
+                    result[key_utf8] = "[exceeding node budget]";
                     break;
                   }
-                //LOG_S(INFO) << "key: " << key;
-
                 if(keys_to_be_skipped.count(key)==1)
                   {
-                    result[key] = "[skipping " + key + "]";
+                    result[key_utf8] = "[skipping " + key_utf8 + "]";
                   }
                 else
                   {
-                    result[key] = to_json_impl(obj.getKey(key), path, level+1, max_level, remaining);
+                    result[key_utf8] = to_json_impl(obj.getKey(key), path, level+1, max_level, remaining);
                   }
               }
           }
         else if(obj.isArray())
           {
-            //LOG_S(INFO) << "array: " << obj.getArrayNItems();
             for(int l=0; l<obj.getArrayNItems(); l++)
               {
                 QPDFObjectHandle new_obj = obj.getArrayItem(l);
@@ -190,24 +243,7 @@ namespace pdflib
           }
         else if(obj.isName())
           {
-            std::string val = obj.getName();
-
-            if(utf8::is_valid(val.begin(), val.end()))
-              {
-                result = val;
-              }
-            else
-              {
-                LOG_S(WARNING) << "val is not utf8: " << val;
-
-                std::string tmp;
-                utf8::replace_invalid(val.begin(), val.end(),
-                                      std::back_inserter(tmp));
-
-                LOG_S(WARNING) << " --> " << tmp;
-
-                result = tmp;
-              }
+            result = name_to_utf8(obj);
           }
         else if(obj.isString())
           {
@@ -272,14 +308,18 @@ namespace pdflib
         result = "[exceeding recursion]";
       }
 
-    if(on_path) { path.erase(obj.getObjGen()); }
+    if(on_path)
+      {
+        path.erase(obj.getObjGen());
+      }
+
     return result;
   }
 
   nlohmann::json to_json(QPDFObjectHandle obj, int level=0, int max_level=32,
                         std::size_t max_nodes=std::numeric_limits<std::size_t>::max())
   {
-    std::set<QPDFObjGen> path;
+    object_path path;
     return to_json_impl(obj, path, level, max_level, max_nodes);
   }
 

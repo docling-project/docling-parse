@@ -34,6 +34,67 @@ maintainers of each component affected.
 
 For a list of the maintainers, see the [MAINTAINERS.md](MAINTAINERS.md) page.
 
+## Submitting pull requests
+
+These rules keep pull requests reviewable. A pull request that does not follow
+them can be put on hold until it is resubmitted.
+
+### Scope
+
+- One topic per pull request. Changes that touch the same functions or files
+  belong to the same topic. One commit per logical fix within a pull request is
+  fine.
+- Rebase on current `main` before you submit, and use no merge commits. To
+  update a branch, run `git rebase upstream/main` and push with
+  `git push --force-with-lease`.
+- Do not stack pull requests. Open the next pull request in a topic only after
+  the previous one in that topic has been merged or closed.
+- When a pull request replaces earlier ones, close them and link them from the
+  description.
+
+### Evidence from real documents
+
+Every change must be shown on a real document. Synthetic test PDFs built with
+`tests/pdf_builder.py` are welcome as unit tests, but they do not show that a
+change matters in practice.
+
+- Use the [regression dataset](https://huggingface.co/datasets/docling-project/regression-dataset-for-docling-parse)
+  first. If a document in it already shows the problem, name the document and
+  the page numbers in the description, and do not open a dataset pull request.
+- Open a pull request against the regression dataset only when no existing
+  document reproduces the problem. It adds the new document, with a license
+  that allows redistribution, and says which problem the document reproduces.
+- Text, font and segmentation fixes: for each cited page, show a before/after
+  diff of the affected text cells or words.
+
+### Rendering changes
+
+A rendering change must show that the output improves, which in practice means
+that it moves closer to pypdfium2.
+
+- For each cited page, include a three-panel comparison: pypdfium2, before,
+  after. `tests/test_regression_pypdfium_render.py` writes these panels (see
+  [tests/README.md](tests/README.md#cross-renderer-comparison-against-pypdfium2)).
+- Include a before/after table of `mean_abs_error` and `changed_pixels_ratio`
+  against pypdfium2 over the whole regression corpus. The cited pages must
+  improve, and no page may get worse by more than `PYPDFIUM_IMAGE_TOLERANCE` in
+  `tests/test_regression_pypdfium_render.py`.
+- Add an image regression test that fails on `main` and passes with the change,
+  and that compares against pypdfium2 on the cited pages.
+  `test_regression_pypdfium_render.py` only reports differences and never
+  fails, so on its own it does not count as this test.
+- Blend2D patches also need a link to the issue or pull request filed upstream
+  with Blend2D, and a real document that crashes, hangs or renders incorrectly
+  without the patch.
+
+### Ground truth
+
+- Do not pin `HF_DATASET_REVISION` in `tests/constants.py` to a revision from an
+  open dataset pull request.
+- If a change alters the ground truth of existing regression pages, list those
+  pages in the description and say why each one changes. The maintainers update
+  the ground truth when they merge.
+
 
 ## Legal
 

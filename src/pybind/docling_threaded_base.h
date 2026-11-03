@@ -79,7 +79,10 @@ namespace docling
     // {"category": ..., "message": ...}, or an empty map.
     std::map<std::string, std::string> take_load_error(std::string key);
 
-    nlohmann::json get_annotations(std::string key) const;
+    // The decoder loaded under `key`; throws when there is none. A binding
+    // holds the pointer across a GIL release, so a document unloaded
+    // meanwhile stays alive until the binding returns.
+    doc_decoder_ptr_type find_document(const std::string& key) const;
 
     doc_decoder_ptr_type get_document_decoder(const std::string& key) const
     {
@@ -404,7 +407,8 @@ namespace docling
   }
 
   template<typename Derived, typename ResultType>
-  nlohmann::json docling_threaded_base<Derived, ResultType>::get_annotations(std::string key) const
+  typename docling_threaded_base<Derived, ResultType>::doc_decoder_ptr_type
+  docling_threaded_base<Derived, ResultType>::find_document(const std::string& key) const
   {
     auto itr = key2doc.find(key);
     if(itr == key2doc.end())
@@ -412,7 +416,7 @@ namespace docling
         throw std::runtime_error("Document key not found: " + key);
       }
 
-    return itr->second->get_annotations();
+    return itr->second;
   }
 
   template<typename Derived, typename ResultType>

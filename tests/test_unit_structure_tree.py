@@ -256,3 +256,56 @@ def test_threaded_parser_serves_the_same_structure():
     assert annotations is not None
     assert annotations.structure is not None
     assert annotations.structure == single.get_structure()
+
+
+def _pdfdoc_named_pdf() -> bytes:
+    # A producer that localises its custom structure types writes them as
+    # PDFDocEncoding bytes: /Absatz#fc is "Absatzü", /Fu#dfzeile is "Fußzeile".
+    # Neither is valid UTF-8.
+    content = (
+        "/Absatz#fc <</MCID 0>> BDC BT /F1 10 Tf 20 150 Td (Body) Tj ET EMC\n"
+        "/Artifact <</Type /Pagination#e9 /Subtype /Fu#dfzeile>> BDC "
+        "BT /F1 8 Tf 20 20 Td (Page1) Tj ET EMC\n"
+    )
+    objects: list[Object] = [
+        "<< /Type /Catalog /Pages 2 0 R /MarkInfo << /Marked true >> "
+        "/StructTreeRoot 6 0 R >>",
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] "
+        "/Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R /StructParents 0 >>",
+        content_stream(content),
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica "
+        "/Encoding /WinAnsiEncoding >>",
+        # 6 root: the role map maps the custom type to /P
+        "<< /Type /StructTreeRoot /K [7 0 R] /RoleMap << /Absatz#fc /P >> "
+        "/ParentTree << /Nums [0 [7 0 R]] >> >>",
+        # 7 element: custom type, attribute owner and key in the same encoding
+        "<< /Type /StructElem /S /Absatz#fc /P 6 0 R /Pg 3 0 R /K [0] "
+        "/A << /O /Layout#e9 /Platzierung#e9 /Block >> >>",
+    ]
+    return build_pdf(objects)
+
+
+def test_names_in_pdfdoc_encoding_are_transcoded():
+    # Names are raw bytes (ISO 32000-1, 7.3.5). The ones that are not UTF-8
+    # are transcoded from PDFDocEncoding, as the form export already does,
+    # instead of failing the whole annotations call at the Python boundary.
+    doc = DoclingPdfParser(loglevel="fatal").load(
+        path_or_stream=BytesIO(_pdfdoc_named_pdf())
+    )
+    structure = doc.get_structure()
+    assert structure is not None
+    assert structure.role_map == {"/Absatzü": "/P"}
+
+    (element,) = structure.elements
+    assert element.type == "/Absatzü"
+    assert element.resolved_type(structure.role_map) == "/P"
+    assert element.attributes == {"/Layouté": {"/Platzierungé": "/Block"}}
+
+    artifacts = {
+        (tag.artifact_type, tag.artifact_subtype)
+        for tag in doc.get_page_marked_content(1)
+        if tag.artifact_type
+    }
+    assert artifacts == {("/Paginationé", "/Fußzeile")}
+    doc.unload()

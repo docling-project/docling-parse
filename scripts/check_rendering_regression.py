@@ -11,7 +11,7 @@ It therefore works on images that already exist rather than rendering anything,
 which is also why it needs nothing from the test-suite:
 
     # re-read the artifacts a failing render regression left behind
-    python scripts/check_rendering_regression.py --from-deltas tests/data/render_deltas
+    python scripts/check_rendering_regression.py --from-deltas tests/data/groundtruth_delta/render/pages
 
     # compare two arbitrary images
     python scripts/check_rendering_regression.py --actual a.png --expected b.png --json
@@ -29,7 +29,7 @@ from typing import cast
 
 from PIL import Image, ImageChops, ImageStat
 
-DEFAULT_DELTA_DIR = Path("tests/data/render_deltas")
+DEFAULT_DELTA_DIR = Path("tests/data/groundtruth_delta/render/pages")
 DEFAULT_PIXEL_THRESHOLD = 12
 
 
@@ -77,7 +77,7 @@ def _parse_args() -> argparse.Namespace:
         type=Path,
         help=(
             "Directory of *.actual.png/*.expected.png pairs, as written by a "
-            "failing render regression (tests/data/render_deltas)."
+            "failing render regression (tests/data/groundtruth_delta/render/pages)."
         ),
     )
     parser.add_argument(

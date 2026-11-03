@@ -89,6 +89,10 @@ namespace pdflib
     // accents, hyphenation). Only substituted into spans that drew text cells.
     bool apply_actual_text = true;
 
+    // fold typographic dashes (U+2012..U+2015) and the minus sign (U+2212) to
+    // `-` in cell text. Off keeps the characters the document encodes.
+    bool do_char_normalization = true;
+
     // debug: in production, we dont want to have ugly GLYPH<...>
     bool keep_glyphs = false;
     bool keep_qpdf_warnings = false;
@@ -136,6 +140,7 @@ namespace pdflib
     j["release_native_memory_every_n_pages"] = release_native_memory_every_n_pages;
 
     j["apply_actual_text"] = apply_actual_text;
+    j["do_char_normalization"] = do_char_normalization;
 
     j["keep_glyphs"] = keep_glyphs;
     j["keep_qpdf_warnings"] = keep_qpdf_warnings;
@@ -175,6 +180,7 @@ namespace pdflib
     if(j.count("release_native_memory_every_n_pages")) { release_native_memory_every_n_pages = j["release_native_memory_every_n_pages"]; }
 
     if(j.count("apply_actual_text")) { apply_actual_text = j["apply_actual_text"]; }
+    if(j.count("do_char_normalization")) { do_char_normalization = j["do_char_normalization"]; }
 
     if(j.count("keep_glyphs")) { keep_glyphs = j["keep_glyphs"]; }
     if(j.count("keep_qpdf_warnings")) { keep_qpdf_warnings = j["keep_qpdf_warnings"]; }
@@ -235,6 +241,7 @@ namespace pdflib
        << std::setw(48) << "extract_font_programs" << (extract_font_programs ? "true" : "false") << "\n"
        << std::setw(48) << "release_native_memory_every_n_pages" << release_native_memory_every_n_pages << "\n"
        << std::setw(48) << "apply_actual_text" << (apply_actual_text ? "true" : "false") << "\n"
+       << std::setw(48) << "do_char_normalization" << (do_char_normalization ? "true" : "false") << "\n"
        << std::setw(48) << "keep_glyphs" << (keep_glyphs ? "true" : "false") << "\n"
        << std::setw(48) << "keep_qpdf_warnings" << (keep_qpdf_warnings ? "true" : "false") << "\n";
 

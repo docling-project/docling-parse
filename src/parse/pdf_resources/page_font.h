@@ -209,6 +209,7 @@ namespace pdflib
     void init_ws();
 
     void init_cmap(pdf_timings& timings);
+    void fold_symbol_font_private_use();
     void init_cmap_resource();
 
     void init_font_flags();
@@ -217,6 +218,12 @@ namespace pdflib
 
     void init_charprocs();
     void init_space_index();
+
+    // The embedded program's builtin encoding as the source of reading text
+    // (9.6.6.2 / 9.6.6.4); read lazily, on the first code that needs it.
+    bool uses_builtin_encoding() const;
+    bool resolve_builtin_encoding(uint32_t c, std::string& text);
+    void init_builtin_encoding();
 
     void print_tables();
 
@@ -241,8 +248,9 @@ namespace pdflib
     // all of them with a substring test per entry, and the call sites below ask
     // per glyph. font_name and base_font are both fixed once init_font_name()
     // has run, so each resolution is computed at most once per font resource.
-    // matched_base_font_ backs the call sites that fall back to /BaseFont;
-    // matched_font_name_ backs get_character_from_encoding(), which must not.
+    // matched_base_font_ backs the call sites that fall back to /BaseFont,
+    // get_character_from_encoding() among them; matched_font_name_ backs the
+    // ones that must match the font name alone.
     bool            matched_font_name_resolved_ = false;
     base_font_match matched_font_name_;
     bool            matched_base_font_resolved_ = false;
@@ -318,6 +326,9 @@ namespace pdflib
 
     bool font_blob_initialized = false;
     std::shared_ptr<const embedded_font_blob> font_blob;
+
+    bool builtin_encoding_initialized = false;
+    std::unordered_map<uint32_t, std::string> builtin_numb_to_char;
   };
 
   font_glyphs    pdf_resource<PAGE_FONT>::glyphs = font_glyphs();
@@ -842,6 +853,8 @@ namespace pdflib
     // first and only falls back to glyph-name based methods. For codes
     // not covered by /Differences, the cmap is consulted directly below.
 
+    std::string builtin_text;
+
     if(diff_initialized and diff_numb_to_char.count(c)>0)
       {
         return diff_numb_to_char.at(c);
@@ -850,15 +863,25 @@ namespace pdflib
       {
         return cmap_numb_to_char.at(c);
       }
-    else if(matched_font_name().font)
+    // A symbolic font without a declared base encoding maps its codes
+    // through the embedded program's builtin encoding (9.6.6.2 / 9.6.6.4).
+    // That is the producer's own statement of what each code draws, so it
+    // outranks a name-matched base-font table and the encoding fallback.
+    else if(uses_builtin_encoding() and resolve_builtin_encoding(c, builtin_text))
+      {
+        return builtin_text;
+      }
+    else if(matched_base_font().font)
       {
         // check if the font-name is registered as a 'special' font, eg
-        // the TeX mathematical fonts. Note this deliberately does not fall back
-        // to /BaseFont the way the metrics lookups do.
+        // the TeX mathematical fonts. The font-name alone is not enough:
+        // a font dict carrying the (obsolete) /Name entry reports it as
+        // font_name (eg '/F5'), so the base-font must be consulted too,
+        // as the width/bbox lookups above already do.
 
-        const std::string& fontname = matched_font_name().name;
+        const std::string& fontname = matched_base_font().name;
 
-        auto& fm = *(matched_font_name().font);
+        auto& fm = *(matched_base_font().font);
 
         // A known legacy symbol font may falsely declare WinAnsi while using
         // font-specific character codes. Its curated map is authoritative
@@ -939,25 +962,87 @@ namespace pdflib
   {
     // Fallback for codes that none of the authoritative sources resolved
     // (/Encoding/Differences, the /ToUnicode or predefined CID cmap, or a
-    // known base-font table). When an explicit cmap exists but does not
-    // cover this code, and the code bears no relation to the standard
-    // Latin encodings (symbolic font, or composite font whose codes are
-    // CIDs), the encoding tables would fabricate unrelated text — e.g. an
-    // Arabic ligature glyph subsetted at code 0x23 coming out as '#'
-    // (docling#3802). Emit a glyph marker instead, so downstream consumers
-    // can detect the unresolved glyph.
-    if(cmap_initialized and (is_symbolic or subtype==TYPE_0))
+    // known base-font table). For a symbolic font, or a composite (Type0/CID)
+    // font, the standard Latin encoding tables bear no relation to the font's
+    // codes, so applying them here fabricates unrelated text — e.g. an Arabic
+    // ligature glyph subsetted at code 0x23 coming out as '#' (docling#3802).
+    // Emit a glyph marker instead, so downstream consumers can detect the
+    // unresolved glyph.
+    //
+    // Beyond the parsed-cmap-misses-the-code case (#299), this also covers a
+    // symbolic font with no usable cmap at all — a /ToUnicode that failed to
+    // parse ("could not find cmap in '/ToUnicode'"), or none present — but
+    // ONLY when the font also declares no simple encoding. Many producers set
+    // the symbolic flag on fonts that nonetheless declare /WinAnsiEncoding or
+    // an /Encoding dict with /Differences; for those, codes outside
+    // /Differences legitimately resolve through the declared base encoding
+    // (PDF 32000-1 9.6.6), so falling through is not fabrication
+    // (docling-parse#299 follow-up; #322 regression fix).
+    //
+    // By the time a code reaches this point the embedded program's builtin
+    // encoding has already been consulted (get_correct_character), so a
+    // marker here means the program itself carries no text for the glyph.
+    const bool has_declared_simple_encoding =
+      (has_explicit_encoding and encoding != CMAP_RESOURCES) or diff_initialized;
+
+    if(subtype==TYPE_0 or
+       (is_symbolic and (cmap_initialized or not has_declared_simple_encoding)))
       {
         unknown_numbs[c] += 1;
 
-        LOG_S(WARNING) << "Symbol not in the cmap of a symbolic or composite font: "
-                       << int(c) << "; font-name: " << font_name
+        LOG_S(WARNING) << "No authoritative mapping for code in a symbolic or "
+                       << "composite font: " << int(c) << "; font-name: " << font_name
                        << "; emitting glyph marker instead of encoding fallback";
 
         return "GLYPH<" + std::to_string(c) + ">";
       }
 
     return get_character_from_encoding(c);
+  }
+
+  bool pdf_resource<PAGE_FONT>::uses_builtin_encoding() const
+  {
+    // Type 0 codes are CIDs and Type 3 glyphs are content streams: neither
+    // has a builtin encoding to read. A declared base encoding (a name, or
+    // /BaseEncoding in an /Encoding dict) overrides the builtin one; a bare
+    // /Differences array only overrides the codes it lists (9.6.6.1).
+    const bool has_declared_base_encoding =
+      has_explicit_encoding and encoding != CMAP_RESOURCES;
+
+    return subtype != TYPE_0 and subtype != TYPE_3 and
+      is_symbolic and not has_declared_base_encoding;
+  }
+
+  bool pdf_resource<PAGE_FONT>::resolve_builtin_encoding(uint32_t c, std::string& text)
+  {
+    if(not builtin_encoding_initialized)
+      {
+        init_builtin_encoding();
+      }
+
+    auto itr = builtin_numb_to_char.find(c);
+    if(itr == builtin_numb_to_char.end())
+      {
+        return false;
+      }
+
+    text = itr->second;
+    return true;
+  }
+
+  void pdf_resource<PAGE_FONT>::init_builtin_encoding()
+  {
+    builtin_encoding_initialized = true;
+
+    auto blob = get_embedded_font_blob();
+    if(not blob or not blob->get_bytes())
+      {
+        LOG_S(INFO) << __FUNCTION__ << ": no embedded font program for " << font_name
+                    << "; builtin encoding unavailable";
+        return;
+      }
+
+    builtin_numb_to_char = builtin_font_encoding::decode(*(blob->get_bytes()), glyphs, font_name);
   }
 
   std::string pdf_resource<PAGE_FONT>::get_character_from_encoding(uint32_t c)
@@ -2563,6 +2648,8 @@ namespace pdflib
 
 	      cmap_numb_to_char = parser.get();
 	    }
+
+	    fold_symbol_font_private_use();
 	  }
 	else if(qpdf_obj.isString())
 	  {
@@ -2600,6 +2687,62 @@ namespace pdflib
     else
       {
 	cmap_initialized = false;
+      }
+  }
+
+  // Office exporters embed Symbol and ZapfDingbats with a /ToUnicode map that
+  // sends every glyph to the "symbol charset" private-use block, U+F000 plus
+  // the byte code, so bullets, operators, Greek letters and even parentheses
+  // would reach the text as invisible private-use characters. When the base
+  // font is one of these two core fonts, fold such values back through the
+  // font's own encoding (AFM glyph names via the glyph list); codes the
+  // encoding does not cover, and every other font, stay as they are, since
+  // CJK gaiji and Arabic presentation fonts use the same block for real text.
+  void pdf_resource<PAGE_FONT>::fold_symbol_font_private_use()
+  {
+    if(cmap_numb_to_char.is_identity() or cmap_numb_to_char.empty())
+      {
+        return;
+      }
+
+    const base_font_match& match = matched_base_font();
+    if(not match.font or
+       (match.name != "symbol" and match.name != "zapfdingbats"))
+      {
+        return;
+      }
+
+    std::unordered_map<uint32_t, std::string> folded;
+    std::size_t folded_count = 0;
+    for(auto itr = cmap_numb_to_char.begin(); itr != cmap_numb_to_char.end(); itr++)
+      {
+        const std::string& value = itr->second;
+
+        std::vector<uint32_t> code_points;
+        if(utf8::is_valid(value.begin(), value.end()))
+          {
+            utf8::utf8to32(value.begin(), value.end(),
+                           std::back_inserter(code_points));
+          }
+
+        if(code_points.size() == 1 and
+           0xF020 <= code_points.front() and code_points.front() <= 0xF0FF and
+           match.font->has(code_points.front() - 0xF000))
+          {
+            folded[itr->first] = match.font->to_utf8(code_points.front() - 0xF000);
+            folded_count += 1;
+          }
+        else
+          {
+            folded[itr->first] = value;
+          }
+      }
+
+    if(folded_count > 0)
+      {
+        LOG_S(INFO) << "folded " << folded_count << " private-use /ToUnicode values of "
+                    << base_font << " through the " << match.name << " encoding";
+        cmap_numb_to_char = cmap_value(std::move(folded));
       }
   }
 
@@ -2806,12 +2949,14 @@ namespace pdflib
     };
 
     // Subset generators (FontForge, fontTools, mPDF, ...) name glyphs by
-    // bare index: /gid00043, /g43, /glyph43, /cid43, /index43. Such a name
+    // bare index: /gid00043, /g43, /glyph43, /cid43, /index43. Skia/PDF
+    // (Chrome print-to-PDF, Notion exports) writes `g%X`, so the index may
+    // carry hexadecimal digits: /g15C, /gA1. Such a name
     // identifies the glyph inside the embedded font program but carries no
     // reading text, so keeping it fabricates plausible-looking garbage
     // ('gid00043gid00049...') that downstream quality gates cannot detect
     // (docling-project/docling-parse#238).
-    std::regex re_gid(R"((gid|glyph|g|cid|index)\d+)", std::regex::icase);
+    std::regex re_gid(R"((gid|glyph|g|cid|index)[0-9A-Fa-f]+)", std::regex::icase);
 
     // A small family of PDF producers replaces every descriptive glyph name
     // with an uppercase `G<decimal Unicode>` name. Do not infer that convention

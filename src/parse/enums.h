@@ -332,7 +332,7 @@ namespace pdflib
   enum soft_mask_state {
     SOFT_MASK_ABSENT,   // key not in the dictionary: inherit the current mask
     SOFT_MASK_NONE,     // /None: clear the current soft mask
-    SOFT_MASK_PRESENT,  // a mask dictionary (not applied)
+    SOFT_MASK_PRESENT,  // a mask dictionary (see soft_mask_spec)
   };
 
   std::string to_string(blend_mode_name name)

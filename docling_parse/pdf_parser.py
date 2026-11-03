@@ -453,6 +453,7 @@ class DecodeConfig(BaseModel):
     do_thread_safe: bool = True
     release_native_memory_every_n_pages: int = 0
     apply_actual_text: bool = True
+    do_char_normalization: bool = True
     keep_glyphs: bool = False
     keep_qpdf_warnings: bool = False
 
@@ -486,6 +487,7 @@ def _compile_decode_config(
         decode_config.release_native_memory_every_n_pages
     )
     cpp.apply_actual_text = decode_config.apply_actual_text
+    cpp.do_char_normalization = decode_config.do_char_normalization
     cpp.keep_glyphs = decode_config.keep_glyphs
     cpp.keep_qpdf_warnings = decode_config.keep_qpdf_warnings
     cpp.keep_char_cells = (
@@ -1799,6 +1801,8 @@ def _copy_render_config(src: RenderConfig) -> RenderConfig:
         dst.render_shadings = src.render_shadings
     if hasattr(src, "render_non_rect_clip_masks"):
         dst.render_non_rect_clip_masks = src.render_non_rect_clip_masks
+    if hasattr(src, "render_soft_masks"):
+        dst.render_soft_masks = src.render_soft_masks
     dst.min_stroke_width = src.min_stroke_width
     dst.draw_text_bbox = src.draw_text_bbox
     dst.resolve_fonts = src.resolve_fonts
@@ -1966,8 +1970,10 @@ class DoclingThreadedPdfParser:
     def get_annotations(self, doc_key: str) -> PdfAnnotations | None:
         """Get the annotations of a loaded document.
 
-        The first request extracts structure under the document mutex and may
-        wait for page extraction. Later requests share the cached mutable model.
+        Reading annotations decodes no page. The first request builds the
+        annotations and structure under the document mutex and may wait for
+        page extraction. Later requests share the cached mutable model
+        without taking the document mutex, also while workers are running.
 
         Returns:
             Optional[PdfAnnotations]: Annotations object with form, language, meta_xml,
