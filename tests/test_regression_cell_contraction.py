@@ -87,6 +87,13 @@ def test_short_headings_keep_inferred_word_boundaries():
     assert "5.2 Quantitative Results" in lines
 
 
+def test_letter_spaced_text_with_space_glyphs_stays_whole():
+    # The Portuguese table is letter-spaced and its lines carry suppressed
+    # space glyphs: the opened letter gaps must not split its words.
+    table = _page("14289803404128846560-14.pdf", 14)
+    assert "Tinta" in [cell.text for cell in table.textline_cells]
+
+
 def test_positioned_prose_and_headers_keep_word_boundaries():
     paper = _page("2203.01017v2.pdf", 1)
     assert any("custom OCR decoders" in cell.text for cell in paper.textline_cells)
