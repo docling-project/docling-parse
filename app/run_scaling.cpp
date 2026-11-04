@@ -340,6 +340,39 @@ namespace
     return config;
   }
 
+  // The config a mode's workers decode with: the CLI values plus what the mode
+  // requires. Both the printed table and the benchmark use this result.
+  pdflib::decode_config effective_decode_config(run_mode mode,
+                                                pdflib::decode_config config,
+                                                const pdflib::render_config& render_config)
+  {
+    const bool render = (mode == run_mode::render);
+    const bool parse_with_bitmaps = (mode == run_mode::parse_with_bitmaps);
+
+    config.keep_shapes = render or config.keep_shapes;
+    // without keep_bitmaps the renderer has no bitmaps to iterate over
+    config.keep_bitmaps = render or parse_with_bitmaps;
+    config.extract_bitmap_pixels = render or parse_with_bitmaps;
+
+    if(render)
+      {
+        // Rendering needs the embedded font programs, whatever the CLI asked
+        // for. Without them this benchmark silently rasterised with substituted
+        // system fonts, which is both cheaper and not what the library does.
+        config.extract_font_programs = true;
+
+        // Same resolution hint the library sets, so this benchmark measures
+        // the decode work the library actually does; see
+        // docling_threaded_renderer for why only the scale form qualifies.
+        if(render_config.scale > 0.0f)
+          {
+            config.bitmap_target_pixels_per_unit = render_config.scale;
+          }
+      }
+
+    return config;
+  }
+
   std::vector<std::filesystem::path> find_pdfs(const std::filesystem::path& input,
                                                bool recursive)
   {
@@ -580,21 +613,6 @@ namespace
     {
       if(render_config_.has_value())
         {
-          // Rendering needs the image samples and the embedded font programs,
-          // whatever the CLI asked for. Without the latter this benchmark
-          // silently rasterised with substituted system fonts, which is both
-          // cheaper and not what the library does.
-          decode_config_.extract_bitmap_pixels = true;
-          decode_config_.extract_font_programs = true;
-
-          // Same resolution hint the library sets, so this benchmark measures
-          // the decode work the library actually does; see
-          // docling_threaded_renderer for why only the scale form qualifies.
-          if(render_config_->scale > 0.0f)
-            {
-              decode_config_.bitmap_target_pixels_per_unit = render_config_->scale;
-            }
-
           font_resolver_ = std::make_shared<pdflib::blend2d_font_resolver>();
           font_resolver_->warm();
 
@@ -812,31 +830,6 @@ namespace
 
     std::vector<std::thread> workers_;
   };
-
-  void print_decode_config(const pdflib::decode_config& config)
-  {
-    std::cout << "Decode config:\n" << config.to_string() << "\n";
-  }
-
-  void print_render_config(const pdflib::render_config& config)
-  {
-    std::cout << "Render config:\n"
-              << std::left
-              << std::setw(32) << "parameter" << "value\n"
-              << std::string(44, '-') << "\n"
-              << std::setw(32) << "render_text" << config.render_text << "\n"
-              << std::setw(32) << "min_stroke_width" << config.min_stroke_width << "\n"
-              << std::setw(32) << "draw_text_bbox" << config.draw_text_bbox << "\n"
-              << std::setw(32) << "draw_text_basepoint" << config.draw_text_basepoint << "\n"
-              << std::setw(32) << "display_widgets" << config.display_widgets << "\n"
-              << std::setw(32) << "fit_glyph_bbox_to_target" << config.fit_glyph_bbox_to_target << "\n"
-              << std::setw(32) << "resolve_fonts" << config.resolve_fonts << "\n"
-              << std::setw(32) << "font_similarity_cutoff" << config.font_similarity_cutoff << "\n"
-              << std::setw(32) << "glyph_bbox_cache_capacity" << config.glyph_bbox_cache_capacity << "\n"
-              << std::setw(32) << "scale" << config.scale << "\n"
-              << std::setw(32) << "canvas_width" << config.canvas_width << "\n"
-              << std::setw(32) << "canvas_height" << config.canvas_height << "\n";
-  }
 
   void print_table(const std::string& title,
                    const std::vector<benchmark_result>& results,
@@ -1079,18 +1072,8 @@ int main(int argc, char* argv[])
         }
       std::cout << "\n";
 
-      print_decode_config(decode_config);
       auto render_config = default_render_config(cli.scale);
       render_config.glyph_bbox_cache_capacity = cli.glyph_bbox_cache_capacity;
-      if(cli.mode == run_mode::render
-         or cli.mode == run_mode::default_mode
-         or cli.mode == run_mode::all)
-        {
-          print_render_config(render_config);
-        }
-
-      std::cout << "\nLoading documents ...\n";
-      auto docs = load_documents(schedule);
 
       std::vector<run_mode> modes;
       if(cli.mode == run_mode::all)
@@ -1110,15 +1093,29 @@ int main(int argc, char* argv[])
 
       for(run_mode mode : modes)
         {
+          std::cout << "Decode config (" << mode_to_string(mode) << "):\n"
+                    << effective_decode_config(mode, decode_config, render_config).to_string()
+                    << "\n";
+        }
+      if(cli.mode == run_mode::render
+         or cli.mode == run_mode::default_mode
+         or cli.mode == run_mode::all)
+        {
+          std::cout << "Render config:\n" << render_config.to_string();
+        }
+
+      std::cout << "\nLoading documents ...\n";
+      auto docs = load_documents(schedule);
+
+      for(run_mode mode : modes)
+        {
           const bool render = (mode == run_mode::render);
           const bool parse_with_bitmaps = mode == run_mode::parse_with_bitmaps;
           const std::string title = render ? "RENDER (decode + rasterise)"
             : parse_with_bitmaps ? "PARSE WITH BITMAPS (decode only)"
             : "PARSE WITHOUT BITMAPS (decode only)";
-          auto mode_decode_config = decode_config;
-          mode_decode_config.keep_shapes = render or decode_config.keep_shapes;
-          mode_decode_config.keep_bitmaps = render or parse_with_bitmaps; // if render is not here, we skip the bitmap in the rendered page-image
-          mode_decode_config.extract_bitmap_pixels = parse_with_bitmaps; // if we have render here, we keep the bitmaps to be iterated over
+          const auto mode_decode_config =
+            effective_decode_config(mode, decode_config, render_config);
           std::cout << "\n##### " << title << " #####\n";
 
           std::vector<benchmark_result> results;

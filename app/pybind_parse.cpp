@@ -389,6 +389,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
     .def_readwrite("extract_font_programs", &pdflib::decode_config::extract_font_programs)
     .def_readwrite("extract_bitmap_pixels", &pdflib::decode_config::extract_bitmap_pixels)
     .def_readwrite("bitmap_target_pixels_per_unit", &pdflib::decode_config::bitmap_target_pixels_per_unit)
+    .def("to_string", &pdflib::decode_config::to_string)
     .def("__copy__", [](const pdflib::decode_config& self) { return self; })
     .def("__deepcopy__", [](const pdflib::decode_config& self, pybind11::dict) { return self; });
 
@@ -1332,6 +1333,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
         canvas_height (int): Target canvas height in pixels; -1 means use PDF page size [default=-1].
     )")
     .def(pybind11::init<>())
+    .def("to_string", &pdflib::render_config::to_string)
     .def_readwrite("render_text",             &pdflib::render_config::render_text)
     .def_readwrite("render_shapes",           &pdflib::render_config::render_shapes)
     .def_readwrite("render_shadings",         &pdflib::render_config::render_shadings)
@@ -1438,6 +1440,12 @@ PYBIND11_MODULE(pdf_parsers, m) {
         max_concurrent_results (int): Maximum results buffered before workers pause.
         decode_config (DecodePageConfig): Configuration for page decoding.
         render_config (RenderConfig): Configuration for page rendering.)")
+
+    .def_property_readonly("decode_config",
+         [](const docling::docling_threaded_renderer& self) -> pdflib::decode_config {
+           return self.get_decode_config();
+         },
+         "Copy of the config the workers decode with, including the settings rendering forces on.")
 
     .def("load_document",
          [](docling::docling_threaded_renderer& self,

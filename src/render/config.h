@@ -6,7 +6,10 @@
 #include <array>
 #include <cstddef>
 #include <cmath>
+#include <iomanip>
+#include <sstream>
 #include <stdexcept>
+#include <string>
 #include <utility>
 
 namespace pdflib
@@ -109,7 +112,40 @@ namespace pdflib
     // If only one is set the other is derived to preserve the page aspect ratio.
     int canvas_width  = -1;
     int canvas_height = -1;
+
+    std::string to_string() const;
   };
+
+  inline std::string render_config::to_string() const
+  {
+    std::stringstream ss;
+
+    ss << std::left << std::boolalpha
+       << std::setw(32) << "parameter" << "value" << "\n"
+       << std::string(44, '-') << "\n"
+       << std::setw(32) << "render_text" << render_text << "\n"
+       << std::setw(32) << "render_shapes" << render_shapes << "\n"
+       << std::setw(32) << "render_shadings" << render_shadings << "\n"
+       << std::setw(32) << "render_non_rect_clip_masks" << render_non_rect_clip_masks << "\n"
+       << std::setw(32) << "render_soft_masks" << render_soft_masks << "\n"
+       << std::setw(32) << "min_stroke_width" << min_stroke_width << "\n"
+       << std::setw(32) << "draw_text_bbox" << draw_text_bbox << "\n"
+       << std::setw(32) << "draw_text_basepoint" << draw_text_basepoint << "\n"
+       << std::setw(32) << "display_widgets" << display_widgets << "\n"
+       << std::setw(32) << "color_widgets"
+       << (std::to_string(color_widgets[0]) + "," + std::to_string(color_widgets[1]) + ","
+           + std::to_string(color_widgets[2])) << "\n"
+       << std::setw(32) << "fit_glyph_bbox_to_target" << fit_glyph_bbox_to_target << "\n"
+       << std::setw(32) << "resolve_fonts" << resolve_fonts << "\n"
+       << std::setw(32) << "use_embedded_fonts" << use_embedded_fonts << "\n"
+       << std::setw(32) << "font_similarity_cutoff" << font_similarity_cutoff << "\n"
+       << std::setw(32) << "glyph_bbox_cache_capacity" << glyph_bbox_cache_capacity << "\n"
+       << std::setw(32) << "scale" << scale << "\n"
+       << std::setw(32) << "canvas_width" << canvas_width << "\n"
+       << std::setw(32) << "canvas_height" << canvas_height << "\n";
+
+    return ss.str();
+  }
 
   inline void validate_render_config(const render_config& config)
   {

@@ -1084,6 +1084,48 @@ def configurations(threads):
     return parser, decode
 
 
+def print_settings(backend, threads, threads_arg):
+    """Print the resolved settings; they follow Docling, so none can be set here."""
+    config, decode = configurations(threads[0])
+    content = config.page_content_config
+    native = backend in ("both", "threaded")
+
+    rows = [("backend", backend)]
+    if backend in ("both", "pdfium"):
+        rows.append(("pdfium_oversampling", 1.5))
+    if native:
+        rows += [
+            (
+                "profile",
+                "backend-default" if threads_arg == "default" else "scaling-override",
+            ),
+            ("threads", ",".join(str(count) for count in threads)),
+            ("max_concurrent_results", config.max_concurrent_results),
+            ("boundary_type", config.boundary_type.value),
+            ("char_cells_content_level", content.char_cells_content_level.name),
+            ("word_cells_content_level", content.word_cells_content_level.name),
+            ("line_cells_content_level", content.line_cells_content_level.name),
+            ("shapes_content_level", content.shapes_content_level.name),
+            ("bitmaps_content_level", content.bitmaps_content_level.name),
+            ("include_bitmap_bytes", content.include_bitmap_bytes),
+        ]
+    rows.append(("requested_image_scale", 1.0))
+
+    print("\nBenchmark config:")
+    print(f"{'parameter':<32}value")
+    print("-" * 44)
+    for name, value in rows:
+        print(f"{name:<32}{value}")
+
+    if native:
+        # The renderer forces some decode settings in C++, so the table is read
+        # back from it rather than derived from the config passed in here.
+        parser = DoclingThreadedPdfParser(parser_config=config, decode_config=decode)
+        print(f"\nDecode config:\n{parser._parser.decode_config.to_string()}")
+        print(f"Render config:\n{config.render_config.to_string()}")
+    sys.stdout.flush()
+
+
 def serialize(value):
     if hasattr(value, "model_dump"):
         return value.model_dump(mode="python")
@@ -1513,6 +1555,7 @@ def main():
             with pypdfium2_lock:
                 with pdfium.PdfDocument(name) as document:
                     total_pages += len(document)
+    print_settings(args.backend, threads, args.threads)
     meta = provenance()
     reports = []
     schedule = []

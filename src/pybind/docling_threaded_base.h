@@ -98,6 +98,9 @@ namespace docling
 
     ResultType get_task();
 
+    // The config the workers decode with, after any pipeline overrides.
+    const pdflib::decode_config& get_decode_config() const;
+
   private:
 
     void set_loglevel_with_label(std::string level);
@@ -660,6 +663,12 @@ namespace docling
     cv_results_consumed.notify_one();
 
     return result;
+  }
+
+  template<typename Derived, typename ResultType>
+  const pdflib::decode_config& docling_threaded_base<Derived, ResultType>::get_decode_config() const
+  {
+    return config;
   }
 
 }
