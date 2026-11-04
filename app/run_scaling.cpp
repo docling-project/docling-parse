@@ -62,6 +62,11 @@ namespace
     double create_word_cells_s = 0.0;
     double create_line_cells_s = 0.0;
     double render_page_s = 0.0;
+    double get_canvas_s = 0.0;
+    double save_png_s = 0.0;
+    double collect_detail_s = 0.0;
+    double worker_queue_wait_s = 0.0;
+    double consumer_wait_s = 0.0;
   };
 
   struct page_result
@@ -71,6 +76,7 @@ namespace
     bool success = false;
     std::string error_message;
     page_timings timings;
+    std::unordered_map<std::string, double> detail_timings;
     std::shared_ptr<page_decoder_type> page_decoder;
     std::shared_ptr<std::vector<uint8_t>> image_data;
   };
@@ -535,6 +541,138 @@ namespace
     return escaped;
   }
 
+  struct timing_stage
+  {
+    const char* name;
+    double page_timings::*value;
+  };
+
+  const std::vector<timing_stage>& timing_stages()
+  {
+    static const std::vector<timing_stage> stages = {
+      {"total_s", &page_timings::total_s},
+      {"make_page_decoder_s", &page_timings::make_page_decoder_s},
+      {"decode_page_s", &page_timings::decode_page_s},
+      {"create_word_cells_s", &page_timings::create_word_cells_s},
+      {"create_line_cells_s", &page_timings::create_line_cells_s},
+      {"render_page_s", &page_timings::render_page_s},
+      {"get_canvas_s", &page_timings::get_canvas_s},
+      {"save_png_s", &page_timings::save_png_s},
+      {"collect_detail_s", &page_timings::collect_detail_s},
+      {"worker_queue_wait_s", &page_timings::worker_queue_wait_s},
+      {"consumer_wait_s", &page_timings::consumer_wait_s},
+    };
+    return stages;
+  }
+
+  void collect_detail_timings(page_result& result,
+                              const pdflib::pdf_timings& timings)
+  {
+    const auto start = clock_type::now();
+    for(const auto& item : timings.to_sum_map())
+      {
+        // Keep a bounded vocabulary; omit dynamic per-font/resource names.
+        if(pdflib::pdf_timings::is_static_key(item.first))
+          {
+            result.detail_timings[item.first] += item.second;
+          }
+      }
+    result.timings.collect_detail_s +=
+      std::chrono::duration<double>(clock_type::now() - start).count();
+  }
+
+  class timing_summary
+  {
+  public:
+    void add(const page_result& result)
+    {
+      for(const auto& stage : timing_stages())
+        {
+          totals_.*(stage.value) += result.timings.*(stage.value);
+        }
+      for(const auto& item : result.detail_timings)
+        {
+          details_[item.first] += item.second;
+        }
+      auto& doc = documents_[result.doc_key];
+      doc.worker_s += result.timings.total_s;
+      ++doc.pages;
+      if(not result.success) { ++doc.errors; }
+
+      slowest_.push_back({result.doc_key, result.page_number,
+                          result.timings.total_s, result.success});
+      std::sort(slowest_.begin(), slowest_.end(), [](const auto& a, const auto& b) {
+        return a.worker_s > b.worker_s;
+      });
+      if(slowest_.size() > 10) { slowest_.pop_back(); }
+    }
+
+    void add_csv_write(double seconds) { csv_write_s_ += seconds; }
+
+    void print(int threads, double wall_s) const
+    {
+      std::cout << "\nTiming diagnostics (threads=" << threads << ", CSV schema 2)\n"
+                << std::fixed << std::setprecision(6)
+                << "  wall_s: " << wall_s << " (includes collection/CSV; excludes summary printing)\n"
+                << "  Worker elapsed seconds summed across pages; not CPU seconds.\n"
+                << "  total_s includes detail collection, excludes queue wait.\n";
+      for(const auto& stage : timing_stages())
+        {
+          if(stage.value != &page_timings::consumer_wait_s)
+            {
+              std::cout << "  " << std::left << std::setw(30) << stage.name
+                        << std::right << totals_.*(stage.value) << "\n";
+            }
+        }
+      std::cout << "  consumer_wait_s: " << totals_.consumer_wait_s << "\n"
+                << "  consumer_csv_write_s: " << csv_write_s_ << "\n"
+                << "  Queue waits include mutex acquisition and condition waiting;\n"
+                << "  they overlap across threads and are not added to wall time.\n"
+                << "\nNative detail worker-seconds (nested; do not sum parent/child rows):\n"
+                << pdflib::pdf_timings::format_tree_table(details_);
+
+      std::vector<std::pair<std::string, document_total>> docs(documents_.begin(),
+                                                               documents_.end());
+      std::sort(docs.begin(), docs.end(), [](const auto& a, const auto& b) {
+        return a.second.worker_s > b.second.worker_s;
+      });
+      std::cout << "\nTop documents by summed page worker elapsed (not document wall time):\n";
+      for(std::size_t i = 0; i < std::min<std::size_t>(10, docs.size()); ++i)
+        {
+          std::cout << "  " << docs[i].second.worker_s << " s  "
+                    << docs[i].second.pages << " pages  "
+                    << docs[i].second.errors << " errors  " << docs[i].first << "\n";
+        }
+      std::cout << "Top pages by worker elapsed (1-based page numbers):\n";
+      for(const auto& page : slowest_)
+        {
+          std::cout << "  " << page.worker_s << " s  " << page.doc_key
+                    << " page=" << page.page_number + 1
+                    << " success=" << (page.success ? "true" : "false") << "\n";
+        }
+    }
+
+  private:
+    struct document_total
+    {
+      double worker_s = 0.0;
+      int pages = 0;
+      int errors = 0;
+    };
+    struct slow_page
+    {
+      std::string doc_key;
+      int page_number;
+      double worker_s;
+      bool success;
+    };
+    page_timings totals_;
+    std::unordered_map<std::string, double> details_;
+    std::unordered_map<std::string, document_total> documents_;
+    std::vector<slow_page> slowest_;
+    double csv_write_s_ = 0.0;
+  };
+
   class timing_csv_writer
   {
   public:
@@ -548,6 +686,22 @@ namespace
 
       const bool write_header = (not std::filesystem::exists(path))
         or std::filesystem::file_size(path) == 0;
+      const auto expected_header = header();
+      if(not write_header)
+        {
+          std::ifstream existing(path);
+          std::string existing_header;
+          std::getline(existing, existing_header);
+          if(not existing_header.empty() and existing_header.back() == '\r')
+            {
+              existing_header.pop_back();
+            }
+          if(existing_header != expected_header)
+            {
+              throw std::runtime_error("incompatible timing CSV header: " + path.string()
+                                       + "; choose a new --timing-csv path (schema 2)");
+            }
+        }
       out_.open(path, std::ios::app);
       if(not out_)
         {
@@ -555,11 +709,9 @@ namespace
         }
       if(write_header)
         {
-          out_ << "mode,threads,render,doc_key,page_number,success,"
-               << "timing_total_s,timing_make_page_decoder_s,timing_decode_page_s,"
-               << "timing_create_word_cells_s,timing_create_line_cells_s,"
-               << "timing_render_page_s,error_message\n";
+          out_ << expected_header << '\n';
         }
+      out_ << std::setprecision(9);
     }
 
     void write(const std::string& mode,
@@ -572,23 +724,40 @@ namespace
           return;
         }
 
-      out_ << mode << ','
+      out_ << "2," << mode << ','
            << threads << ','
            << (render ? "true" : "false") << ','
            << csv_escape(result.doc_key) << ','
            << (result.page_number + 1) << ','
-           << (result.success ? "true" : "false") << ','
-           << result.timings.total_s << ','
-           << result.timings.make_page_decoder_s << ','
-           << result.timings.decode_page_s << ','
-           << result.timings.create_word_cells_s << ','
-           << result.timings.create_line_cells_s << ','
-           << result.timings.render_page_s << ','
-           << csv_escape(result.error_message)
-           << '\n';
+           << (result.success ? "true" : "false");
+      for(const auto& stage : timing_stages())
+        {
+          out_ << ',' << result.timings.*(stage.value);
+        }
+      out_ << ',' << csv_escape(nlohmann::json(result.detail_timings).dump())
+           << ',' << csv_escape(result.error_message) << '\n';
+    }
+
+    void finish()
+    {
+      if(enabled_)
+        {
+          out_.flush();
+          if(not out_) { throw std::runtime_error("could not finish writing timing CSV"); }
+        }
     }
 
   private:
+    static std::string header()
+    {
+      std::string result = "schema_version,mode,threads,render,doc_key,page_number,success";
+      for(const auto& stage : timing_stages())
+        {
+          result += ",timing_";
+          result += stage.name;
+        }
+      return result + ",detail_timings_json,error_message";
+    }
     bool enabled_;
     std::ofstream out_;
   };
@@ -626,12 +795,14 @@ namespace
                          bool enable_timing,
                          const std::filesystem::path& timing_csv)
     {
+      enable_timing_ = enable_timing;
       tasks_ = build_tasks(schedule_);
       next_task_.store(0);
       tasks_remaining_.store(static_cast<int>(tasks_.size()));
       active_workers_.store(std::min(num_threads_, static_cast<int>(tasks_.size())));
 
       timing_csv_writer csv_writer(enable_timing, timing_csv);
+      timing_summary summary;
 
       auto start = clock_type::now();
 
@@ -653,7 +824,14 @@ namespace
               ++errors;
             }
 
-          csv_writer.write(mode, num_threads_, render_config_.has_value(), result);
+          if(enable_timing_)
+            {
+              summary.add(result);
+              const auto csv_start = clock_type::now();
+              csv_writer.write(mode, num_threads_, render_config_.has_value(), result);
+              summary.add_csv_write(
+                std::chrono::duration<double>(clock_type::now() - csv_start).count());
+            }
           progress.update(completed);
         }
       progress.finish();
@@ -666,7 +844,15 @@ namespace
             }
         }
 
+      if(enable_timing_)
+        {
+          const auto flush_start = clock_type::now();
+          csv_writer.finish();
+          summary.add_csv_write(
+            std::chrono::duration<double>(clock_type::now() - flush_start).count());
+        }
       const double elapsed = std::chrono::duration<double>(clock_type::now() - start).count();
+      if(enable_timing_) { summary.print(num_threads_, elapsed); }
       return benchmark_result{num_threads_, elapsed, errors};
     }
 
@@ -698,10 +884,9 @@ namespace
           result.doc_key = schedule_[task.doc_index].path.string();
           result.page_number = task.page_number;
 
+          const auto total_start = clock_type::now();
           try
             {
-              auto total_start = clock_type::now();
-
               auto stage_start = clock_type::now();
               auto page_decoder = docs_[task.doc_index]->make_thread_safe_page_decoder(
                 task.page_number,
@@ -741,21 +926,44 @@ namespace
                   page_decoder->get_instructions().iterate_over_instructions(rnd);
                   result.timings.render_page_s =
                     std::chrono::duration<double>(clock_type::now() - stage_start).count();
+                  auto output_start = enable_timing_ ? clock_type::now()
+                                                    : clock_type::time_point{};
                   if(output_dir_.has_value())
                     {
                       const auto page_path = *output_dir_ /
                         ("doc_" + zero_padded(task.doc_index + 1) +
                          "_page_" + zero_padded(task.page_number + 1) + ".png");
                       rnd.save(page_path.string());
+                      if(enable_timing_)
+                        {
+                          result.timings.save_png_s =
+                            std::chrono::duration<double>(clock_type::now() - output_start).count();
+                        }
                     }
                   else
                     {
                       result.image_data = rnd.get_canvas();
+                      if(enable_timing_)
+                        {
+                          result.timings.get_canvas_s =
+                            std::chrono::duration<double>(clock_type::now() - output_start).count();
+                        }
+                    }
+                  if(enable_timing_)
+                    {
+                      // Render parent includes output extraction, but excludes
+                      // collecting the already-recorded renderer detail timings.
+                      const double render_total_s =
+                        std::chrono::duration<double>(clock_type::now() - stage_start).count();
+                      collect_detail_timings(result, rnd.get_timings());
+                      result.detail_timings[pdflib::pdf_timings::KEY_RENDER_PAGE] = render_total_s;
                     }
                 }
 
-              result.timings.total_s =
-                std::chrono::duration<double>(clock_type::now() - total_start).count();
+              if(enable_timing_)
+                {
+                  collect_detail_timings(result, page_decoder->get_timings());
+                }
               result.success = true;
               result.page_decoder = page_decoder;
             }
@@ -764,6 +972,8 @@ namespace
               result.success = false;
               result.error_message = exc.what();
             }
+          result.timings.total_s =
+            std::chrono::duration<double>(clock_type::now() - total_start).count();
 
           push_result(std::move(result));
         }
@@ -774,11 +984,17 @@ namespace
 
     void push_result(page_result result)
     {
+      const auto wait_start = enable_timing_ ? clock_type::now() : clock_type::time_point{};
       std::unique_lock<std::mutex> lock(results_mutex_);
       results_consumed_.wait(lock, [this]() {
         return static_cast<int>(results_.size()) < max_concurrent_results_;
       });
 
+      if(enable_timing_)
+        {
+          result.timings.worker_queue_wait_s =
+            std::chrono::duration<double>(clock_type::now() - wait_start).count();
+        }
       results_.push(std::move(result));
       lock.unlock();
       results_available_.notify_one();
@@ -786,6 +1002,7 @@ namespace
 
     page_result get_result()
     {
+      const auto wait_start = enable_timing_ ? clock_type::now() : clock_type::time_point{};
       std::unique_lock<std::mutex> lock(results_mutex_);
       results_available_.wait(lock, [this]() {
         return not results_.empty() or active_workers_.load() == 0;
@@ -800,6 +1017,11 @@ namespace
         }
 
       page_result result = std::move(results_.front());
+      if(enable_timing_)
+        {
+          result.timings.consumer_wait_s =
+            std::chrono::duration<double>(clock_type::now() - wait_start).count();
+        }
       results_.pop();
       tasks_remaining_.fetch_sub(1);
       lock.unlock();
@@ -812,6 +1034,7 @@ namespace
     const std::vector<doc_decoder_ptr>& docs_;
     int num_threads_;
     int max_concurrent_results_;
+    bool enable_timing_ = false;
     pdflib::decode_config decode_config_;
     std::optional<pdflib::render_config> render_config_;
     std::optional<std::filesystem::path> output_dir_;
@@ -914,7 +1137,7 @@ namespace
       ("scale", "Render scale for render mode", cxxopts::value<float>()->default_value("2.0"))
       ("glyph-bbox-cache-capacity", "Maximum cached glyph bounding boxes per render worker; 0 disables caching", cxxopts::value<std::size_t>()->default_value("65536"))
       ("output-dir", "Write rendered PNGs under this directory", cxxopts::value<std::string>())
-      ("enable-timing", "Write one CSV timing row per page result", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
+      ("enable-timing", "Write schema-2 per-page CSV timings and print native stage/wait summaries", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
       ("timing-csv", "CSV path used when --enable-timing is set", cxxopts::value<std::string>()->default_value("timing-cpp.csv"))
       ("loglevel", "Log level [fatal, error, warning, info]", cxxopts::value<std::string>()->default_value("fatal"))
       ("page-boundary", "Page boundary [crop_box, media_box]", cxxopts::value<std::string>())

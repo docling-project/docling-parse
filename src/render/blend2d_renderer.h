@@ -3347,7 +3347,14 @@ namespace pdflib
             // rasterisers differ slightly in weight, so drawing one word from
             // both leaves it visibly patchy. One bad outline condemns the face
             // for the rest of the page.
+            std::string substituted_face_key;
             const std::string* glyph_bbox_face_key = nullptr;
+            if (not using_embedded_font)
+              {
+                substituted_face_key =
+                  "blend2d-face:" + std::to_string(font.face().unique_id());
+                glyph_bbox_face_key = &substituted_face_key;
+              }
             if (using_embedded_font)
               {
                 const std::string& face_key =
