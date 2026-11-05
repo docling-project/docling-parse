@@ -583,11 +583,11 @@ def _to_page_geometry_from_decoder(
         angle=page_dim.get_angle(),
         boundary_type=boundary_type,
         rect=_to_bounding_rectangle(boundary_bbox),
-        art_bbox=_to_bounding_box(crop_bbox),
+        art_bbox=_to_bounding_box(tuple(page_dim.get_art_bbox())),
         media_bbox=_to_bounding_box(media_bbox),
-        trim_bbox=_to_bounding_box(crop_bbox),
+        trim_bbox=_to_bounding_box(tuple(page_dim.get_trim_bbox())),
         crop_bbox=_to_bounding_box(crop_bbox),
-        bleed_bbox=_to_bounding_box(crop_bbox),
+        bleed_bbox=_to_bounding_box(tuple(page_dim.get_bleed_bbox())),
     )
 
 
