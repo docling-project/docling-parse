@@ -56,7 +56,7 @@ RENDERER_IMAGE_TOLERANCE = ImageTolerance(
 # macOS, where this groundtruth was written, has Hiragino / AppleGothic /
 # PingFang; Linux has Noto CJK. Two different typefaces drawing the same page
 # differ far more than a rendering change ever would, and no amount of work on
-# our side converges them -- see .plans/cjk_system_font_fallback_freetype.md.
+# our side converges them -- see .plans/completed/cjk_system_font_fallback_freetype.md.
 #
 # They are still compared, at a tolerance wide enough for the substitution and
 # no wider, so a page that stops rendering CJK at all (which is what a host

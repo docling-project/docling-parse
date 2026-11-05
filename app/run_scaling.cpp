@@ -77,6 +77,7 @@ namespace
     std::string error_message;
     page_timings timings;
     std::unordered_map<std::string, double> detail_timings;
+    std::optional<nlohmann::json> glyph_cache_diagnostics;
     std::shared_ptr<page_decoder_type> page_decoder;
     std::shared_ptr<std::vector<uint8_t>> image_data;
   };
@@ -100,6 +101,7 @@ namespace
     std::size_t glyph_bbox_cache_capacity = 65536;
     bool enable_timing = false;
     std::filesystem::path timing_csv = "timing-cpp.csv";
+    std::optional<std::filesystem::path> glyph_cache_diagnostics = std::nullopt;
     std::optional<std::filesystem::path> output_dir = std::nullopt;
     std::string loglevel = "fatal";
   };
@@ -193,24 +195,7 @@ namespace
 
   std::string format_duration(double seconds)
   {
-    const int total_seconds = static_cast<int>(seconds);
-    const int hours = total_seconds / 3600;
-    const int minutes = (total_seconds % 3600) / 60;
-    const int secs = total_seconds % 60;
-
-    std::ostringstream ss;
-    if(hours > 0)
-      {
-        ss << hours << ":"
-           << std::setw(2) << std::setfill('0') << minutes << ":"
-           << std::setw(2) << std::setfill('0') << secs;
-      }
-    else
-      {
-        ss << minutes << ":"
-           << std::setw(2) << std::setfill('0') << secs;
-      }
-    return ss.str();
+    return std::to_string(static_cast<int>(seconds));
   }
 
   std::string zero_padded(std::size_t value, int width = 6)
@@ -762,6 +747,26 @@ namespace
     std::ofstream out_;
   };
 
+  nlohmann::json glyph_cache_delta(
+      const pdflib::glyph_bbox_cache::diagnostics& before,
+      const pdflib::glyph_bbox_cache::diagnostics& after)
+  {
+    return {
+      {"lookups", after.lookups - before.lookups},
+      {"hits", after.hits - before.hits},
+      {"misses", after.misses - before.misses},
+      {"insertions", after.insertions - before.insertions},
+      {"updates", after.updates - before.updates},
+      {"evictions", after.evictions - before.evictions},
+      {"outline_attempts", after.outline_attempts - before.outline_attempts},
+      {"outline_successes", after.outline_successes - before.outline_successes},
+      {"lookup_s", after.lookup_s - before.lookup_s},
+      {"hit_touch_s", after.hit_touch_s - before.hit_touch_s},
+      {"insert_s", after.insert_s - before.insert_s},
+      {"outline_s", after.outline_s - before.outline_s},
+    };
+  }
+
   class threaded_benchmark
   {
   public:
@@ -793,9 +798,15 @@ namespace
 
     benchmark_result run(const std::string& mode,
                          bool enable_timing,
-                         const std::filesystem::path& timing_csv)
+                         const std::filesystem::path& timing_csv,
+                         std::ostream* glyph_diagnostics = nullptr)
     {
+      if(glyph_diagnostics and not render_config_.has_value())
+        {
+          throw std::runtime_error("glyph-cache diagnostics require render mode");
+        }
       enable_timing_ = enable_timing;
+      glyph_diagnostics_enabled_ = glyph_diagnostics != nullptr;
       tasks_ = build_tasks(schedule_);
       next_task_.store(0);
       tasks_remaining_.store(static_cast<int>(tasks_.size()));
@@ -808,7 +819,7 @@ namespace
 
       for(int i = 0; i < active_workers_.load(); ++i)
         {
-          workers_.emplace_back(&threaded_benchmark::worker_loop, this);
+          workers_.emplace_back(&threaded_benchmark::worker_loop, this, i);
         }
 
       int errors = 0;
@@ -832,6 +843,10 @@ namespace
               summary.add_csv_write(
                 std::chrono::duration<double>(clock_type::now() - csv_start).count());
             }
+          if(glyph_diagnostics and result.glyph_cache_diagnostics.has_value())
+            {
+              *glyph_diagnostics << result.glyph_cache_diagnostics->dump() << '\n';
+            }
           progress.update(completed);
         }
       progress.finish();
@@ -851,13 +866,21 @@ namespace
           summary.add_csv_write(
             std::chrono::duration<double>(clock_type::now() - flush_start).count());
         }
+      if(glyph_diagnostics)
+        {
+          glyph_diagnostics->flush();
+          if(not *glyph_diagnostics)
+            {
+              throw std::runtime_error("could not write glyph-cache diagnostics");
+            }
+        }
       const double elapsed = std::chrono::duration<double>(clock_type::now() - start).count();
       if(enable_timing_) { summary.print(num_threads_, elapsed); }
       return benchmark_result{num_threads_, elapsed, errors};
     }
 
   private:
-    void worker_loop()
+    void worker_loop(int worker_id)
     {
       std::shared_ptr<pdflib::freetype_font_cache> freetype_font_cache;
       std::shared_ptr<pdflib::glyph_bbox_cache> glyph_bbox_cache;
@@ -868,9 +891,10 @@ namespace
           // pages, but never shared with another render worker.
           freetype_font_cache = std::make_shared<pdflib::freetype_font_cache>();
           glyph_bbox_cache = std::make_shared<pdflib::glyph_bbox_cache>(
-            render_config_->glyph_bbox_cache_capacity);
+            render_config_->glyph_bbox_cache_capacity, glyph_diagnostics_enabled_);
         }
 
+      std::size_t worker_page_index = 0;
       while(true)
         {
           const std::size_t task_index = next_task_.fetch_add(1);
@@ -883,6 +907,15 @@ namespace
           page_result result;
           result.doc_key = schedule_[task.doc_index].path.string();
           result.page_number = task.page_number;
+          ++worker_page_index;
+
+          pdflib::glyph_bbox_cache::diagnostics glyph_before;
+          std::size_t entries_before = 0;
+          if(glyph_diagnostics_enabled_)
+            {
+              glyph_before = glyph_bbox_cache->snapshot_diagnostics();
+              entries_before = glyph_bbox_cache->size();
+            }
 
           const auto total_start = clock_type::now();
           try
@@ -972,6 +1005,23 @@ namespace
               result.success = false;
               result.error_message = exc.what();
             }
+          if(glyph_diagnostics_enabled_)
+            {
+              result.glyph_cache_diagnostics = {
+                {"schema_version", 1},
+                {"threads", num_threads_},
+                {"worker_id", worker_id},
+                {"worker_page_index", worker_page_index},
+                {"doc_key", result.doc_key},
+                {"page_number", result.page_number + 1},
+                {"success", result.success},
+                {"capacity", render_config_->glyph_bbox_cache_capacity},
+                {"entries_before", entries_before},
+                {"entries_after", glyph_bbox_cache->size()},
+                {"delta", glyph_cache_delta(glyph_before,
+                                           glyph_bbox_cache->snapshot_diagnostics())},
+              };
+            }
           result.timings.total_s =
             std::chrono::duration<double>(clock_type::now() - total_start).count();
 
@@ -1035,6 +1085,7 @@ namespace
     int num_threads_;
     int max_concurrent_results_;
     bool enable_timing_ = false;
+    bool glyph_diagnostics_enabled_ = false;
     pdflib::decode_config decode_config_;
     std::optional<pdflib::render_config> render_config_;
     std::optional<std::filesystem::path> output_dir_;
@@ -1136,6 +1187,7 @@ namespace
       ("threads", "Comma-separated thread counts", cxxopts::value<std::string>()->default_value("1,2,4,8,12,16"))
       ("scale", "Render scale for render mode", cxxopts::value<float>()->default_value("2.0"))
       ("glyph-bbox-cache-capacity", "Maximum cached glyph bounding boxes per render worker; 0 disables caching", cxxopts::value<std::size_t>()->default_value("65536"))
+      ("glyph-cache-diagnostics", "Write per-page worker-local glyph-cache counts/timings to a new JSONL file (render mode only)", cxxopts::value<std::string>())
       ("output-dir", "Write rendered PNGs under this directory", cxxopts::value<std::string>())
       ("enable-timing", "Write schema-2 per-page CSV timings and print native stage/wait summaries", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
       ("timing-csv", "CSV path used when --enable-timing is set", cxxopts::value<std::string>()->default_value("timing-cpp.csv"))
@@ -1182,6 +1234,10 @@ namespace
       result["glyph-bbox-cache-capacity"].as<std::size_t>();
     cli.enable_timing = result["enable-timing"].as<bool>();
     cli.timing_csv = result["timing-csv"].as<std::string>();
+    if(result.count("glyph-cache-diagnostics"))
+      {
+        cli.glyph_cache_diagnostics = result["glyph-cache-diagnostics"].as<std::string>();
+      }
     cli.loglevel = result["loglevel"].as<std::string>();
     if(result.count("output-dir"))
       {
@@ -1223,6 +1279,11 @@ namespace
           "default, or all");
       }
 
+    if(cli.glyph_cache_diagnostics.has_value() and cli.mode != run_mode::render)
+      {
+        throw std::runtime_error("--glyph-cache-diagnostics requires --mode render");
+      }
+
     if(result.count("page-boundary")) { decode_config.page_boundary = result["page-boundary"].as<std::string>(); }
     if(result.count("do-sanitization")) { decode_config.do_sanitization = parse_bool(result["do-sanitization"].as<std::string>()); }
     if(result.count("keep-char-cells")) { decode_config.keep_char_cells = parse_bool(result["keep-char-cells"].as<std::string>()); }
@@ -1254,6 +1315,30 @@ int main(int argc, char* argv[])
       pdflib::decode_config decode_config = default_decode_config();
       cli_options cli = parse_cli(argc, argv, decode_config);
       set_loglevel(cli.loglevel);
+
+      // One stream serves all requested thread counts in this invocation.
+      // Refuse old output rather than appending another run to it.
+      std::ofstream glyph_diagnostics;
+      if(cli.glyph_cache_diagnostics.has_value())
+        {
+          if(cli.enable_timing and
+             std::filesystem::weakly_canonical(*cli.glyph_cache_diagnostics) ==
+               std::filesystem::weakly_canonical(cli.timing_csv))
+            {
+              throw std::runtime_error("glyph-cache diagnostics and timing CSV need different paths");
+            }
+          if(std::filesystem::exists(*cli.glyph_cache_diagnostics))
+            {
+              throw std::runtime_error("glyph-cache diagnostics already exist; choose a new path: "
+                                       + cli.glyph_cache_diagnostics->string());
+            }
+          glyph_diagnostics.open(*cli.glyph_cache_diagnostics);
+          if(not glyph_diagnostics)
+            {
+              throw std::runtime_error("could not open glyph-cache diagnostics: "
+                                       + cli.glyph_cache_diagnostics->string());
+            }
+        }
       initialise_fonts();
 
       auto pdfs = find_pdfs(cli.input, cli.recursive);
@@ -1358,7 +1443,9 @@ int main(int argc, char* argv[])
                                            render ? cli.output_dir : std::nullopt);
               benchmark_result result = benchmark.run(render ? "render" : "parse",
                                                       cli.enable_timing,
-                                                      cli.timing_csv);
+                                                      cli.timing_csv,
+                                                      cli.glyph_cache_diagnostics.has_value()
+                                                        ? &glyph_diagnostics : nullptr);
               results.push_back(result);
               std::cout << "  threads=" << threads
                         << ": " << std::fixed << std::setprecision(3)

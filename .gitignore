@@ -15,6 +15,7 @@ tests/data/**
 *.json
 *.png
 *.dclx
+*.csv
 # Source documents and comparison panels retained for this PR's evidence.
 .sessions/*
 .references/*

@@ -442,9 +442,17 @@ namespace pdflib
           if (not glyph_bbox_cache_->find(face_key, glyph_ids[l], font.size(), box))
             {
               BLPath path;
-              if (font.get_glyph_outlines(glyph_ids[l], identity, path) != BL_SUCCESS ||
-                  path.is_empty() ||
-                  path.get_bounding_box(&box) != BL_SUCCESS)
+              bool has_bounds;
+              {
+                glyph_bbox_cache::scoped_measurement outline(
+                  *glyph_bbox_cache_, &glyph_bbox_cache::diagnostics::outline_s);
+                outline.outline_attempt();
+                has_bounds =
+                  font.get_glyph_outlines(glyph_ids[l], identity, path) == BL_SUCCESS &&
+                  not path.is_empty() && path.get_bounding_box(&box) == BL_SUCCESS;
+                if(has_bounds) { outline.outline_success(); }
+              }
+              if (not has_bounds)
                 {
                   continue;
                 }
@@ -2442,20 +2450,26 @@ namespace pdflib
         not glyph_bbox_cache_->find(*face_key, glyph_id, font.size(), rendered_box))
       {
         BLPath glyph_path;
-        const BLResult outline_res =
-          font.get_glyph_outlines(glyph_id, identity, glyph_path);
-        if (outline_res != BL_SUCCESS || glyph_path.is_empty())
-          {
-            return adjustment;
-          }
+        {
+          glyph_bbox_cache::scoped_measurement outline(
+            *glyph_bbox_cache_, &glyph_bbox_cache::diagnostics::outline_s);
+          outline.outline_attempt();
+          const BLResult outline_res =
+            font.get_glyph_outlines(glyph_id, identity, glyph_path);
+          if (outline_res != BL_SUCCESS || glyph_path.is_empty())
+            {
+              return adjustment;
+            }
 
-        const BLResult bbox_res = glyph_path.get_bounding_box(&rendered_box);
-        if (bbox_res != BL_SUCCESS)
-          {
-            LOG_S(WARNING) << "render_text: glyph outline bbox failed"
-                           << " (BLResult=" << bbox_res << ")";
-            return adjustment;
-          }
+          const BLResult bbox_res = glyph_path.get_bounding_box(&rendered_box);
+          if (bbox_res != BL_SUCCESS)
+            {
+              LOG_S(WARNING) << "render_text: glyph outline bbox failed"
+                             << " (BLResult=" << bbox_res << ")";
+              return adjustment;
+            }
+          outline.outline_success();
+        }
 
         if (face_key != nullptr)
           {
