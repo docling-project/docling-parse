@@ -813,7 +813,7 @@ class PyPdfiumPageBackend(ManagedPdfiumPageBackend):
                 textline_cells=text_cells,
                 char_cells=[],
                 word_cells=[],
-                has_textlines=len(text_cells) > 0,
+                has_lines=len(text_cells) > 0,
                 has_words=False,
                 has_chars=False,
             )
@@ -1158,9 +1158,10 @@ def git_state(path):
 
 def provenance():
     import docling_core
-    import docling_parse.pdf_parsers as extension
 
     import docling_parse.pdf_parser as parser_module
+
+    extension = importlib.import_module("docling_parse.pdf_parsers")
 
     packages = {}
     for name in ("docling-parse", "docling-core", "pypdfium2", "pillow", "rtree"):
