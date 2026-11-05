@@ -270,6 +270,9 @@ namespace pdflib
     mutable std::unordered_set<std::string> distrusted_embedded_faces_;
     std::unordered_map<std::string, blend2d_font_resolver::resolved_face>
       local_font_cache_;
+    // Reuse shared-cache results, including failed loads, without taking
+    // its lock again for every text instruction on this page.
+    std::unordered_map<std::string, BLFontFace> local_embedded_face_cache_;
 
     // One spare canvas per thread, handed between the successive per-page
     // renderers that a render worker creates. Function-local so it is
@@ -3106,7 +3109,15 @@ namespace pdflib
       {
         utils::scoped_timer font_timer(
           timings_, pdf_timings::KEY_RENDER_TEXT_FONT_RESOLVE);
-        face = embedded_font_cache_->resolve(instr.get_embedded_font());
+        const auto& blob = instr.get_embedded_font();
+        const auto& key = blob->get_cache_key();
+        auto cached = local_embedded_face_cache_.find(key);
+        if (cached == local_embedded_face_cache_.end())
+          {
+            cached = local_embedded_face_cache_.emplace(
+              key, embedded_font_cache_->resolve(blob)).first;
+          }
+        face = cached->second;
         using_embedded_font = face.is_valid();
         if (not using_embedded_font)
           {
