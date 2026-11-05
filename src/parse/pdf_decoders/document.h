@@ -520,7 +520,12 @@ namespace pdflib
       // Resolving the page's references may load objects into the shared
       // qpdf document, which is only ever touched under this mutex.
       std::lock_guard<std::mutex> lock(thread_safe_buffer_mutex);
-      missing = qpdf_page_integrity::find_missing_content(qpdf_pages.at(page_number));
+      auto page = qpdf_pages.at(page_number);
+      missing = qpdf_page_integrity::find_missing_content(page);
+      if(missing.empty() and qpdf_reported_damage)
+        {
+          missing = qpdf_page_integrity::find_repaired_resources(qpdf_document, page, *buffer);
+        }
     }
 
     if(missing.empty())
