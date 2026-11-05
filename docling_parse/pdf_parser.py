@@ -450,6 +450,10 @@ class DecodeConfig(BaseModel):
     max_num_lines: int = -1
     max_num_bitmaps: int = -1
     min_visible_clip_extent: float = 1e-3
+    # Track clip paths so text cells carry the box of the clip they were
+    # painted under, also when shapes are skipped. Costs the path construction
+    # on pages that clip, not the shape output.
+    keep_clips: bool = True
     do_thread_safe: bool = True
     release_native_memory_every_n_pages: int = 0
     apply_actual_text: bool = True
@@ -482,6 +486,7 @@ def _compile_decode_config(
     cpp.max_num_lines = decode_config.max_num_lines
     cpp.max_num_bitmaps = decode_config.max_num_bitmaps
     cpp.min_visible_clip_extent = decode_config.min_visible_clip_extent
+    cpp.keep_clips = decode_config.keep_clips
     cpp.do_thread_safe = decode_config.do_thread_safe
     cpp.release_native_memory_every_n_pages = (
         decode_config.release_native_memory_every_n_pages
@@ -603,6 +608,24 @@ _PDF_TEXT_CELL_RGBA_DEFAULT = PdfTextCell.model_fields["rgba"].get_default(
 )
 
 
+# The clip box of a text cell lands in docling-core's PdfTextCell.clip_bbox. A
+# docling-core release without that field ignores the keyword, so the box is
+# only built when the model can hold it; the check is on the model, once.
+_PDF_TEXT_CELL_HAS_CLIP_BBOX = "clip_bbox" in PdfTextCell.model_fields
+
+
+def _clip_bbox_from_decoder(cell) -> BoundingBox | None:
+    if not (_PDF_TEXT_CELL_HAS_CLIP_BBOX and cell.has_clip_bbox):
+        return None
+    return BoundingBox(
+        l=cell.clip_x0,
+        b=cell.clip_y0,
+        r=cell.clip_x1,
+        t=cell.clip_y1,
+        coord_origin=CoordOrigin.BOTTOMLEFT,
+    )
+
+
 def _to_cells_from_decoder(cells_container) -> List[Union[PdfTextCell, TextCell]]:
     result: List[Union[PdfTextCell, TextCell]] = []
     rgba_default = _PDF_TEXT_CELL_RGBA_DEFAULT
@@ -633,6 +656,7 @@ def _to_cells_from_decoder(cells_container) -> List[Union[PdfTextCell, TextCell]
                 ),
                 index=ind,
                 rendering_mode=cell.rendering_mode,
+                clip_bbox=_clip_bbox_from_decoder(cell),
             )
         )
 
