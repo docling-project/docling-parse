@@ -2539,6 +2539,8 @@ namespace pdflib
       int out_w,
       int out_h) const
   {
+    utils::scoped_timer prepare_timer(timings_, pdf_timings::KEY_RENDER_BITMAP_PREPARE);
+
     const auto& src_data = instr.get_data();
     const auto& alpha_data = instr.get_alpha_data();
     const bool image_mask = instr.is_image_mask();
@@ -2546,6 +2548,12 @@ namespace pdflib
     const auto fill_rgb = instr.get_rgb_filling();
     const int dw = std::max(1, out_w);
     const int dh = std::max(1, out_h);
+
+    // Both branches include allocation and conversion; the reduced-size
+    // branch also performs the existing premultiplied box averaging.
+    utils::scoped_timer samples_timer(
+      timings_, (dw == sw and dh == sh) ? pdf_timings::KEY_RENDER_BITMAP_CONVERT
+                                      : pdf_timings::KEY_RENDER_BITMAP_DOWNSAMPLE);
 
     BLImage src_img;
     src_img.create(dw, dh, BL_FORMAT_PRGB32);
@@ -2574,6 +2582,49 @@ namespace pdflib
                     << " rgb=(" << static_cast<int>(r) << ","
                     << static_cast<int>(g) << ","
                     << static_cast<int>(b) << ")";
+      }
+
+    if (fmt == PIXEL_FORMAT_GRAY and sc == 1
+        and not image_mask and not use_soft_mask_alpha
+        and dw <= sw and dh <= sh and (dw < sw or dh < sh))
+      {
+        // render_bitmap validated the buffer. For opaque gray, all three
+        // premultiplied color samples equal the source byte, so average once.
+        const auto* pixels = src_data->data();
+        for (int y = 0; y < dh; ++y)
+          {
+            auto* drow = reinterpret_cast<uint32_t*>(base + y * stride);
+            const int sy0 = (y * sh) / dh;
+            const int sy1 = std::min(sh, std::max(sy0 + 1, ((y + 1) * sh) / dh));
+            for (int x = 0; x < dw; ++x)
+              {
+                const int sx0 = (x * sw) / dw;
+                const int sx1 = std::min(sw, std::max(sx0 + 1, ((x + 1) * sw) / dw));
+                const uint32_t n = static_cast<uint32_t>(sy1 - sy0)
+                                 * static_cast<uint32_t>(sx1 - sx0);
+                uint32_t gray_sum = 0;
+                for (int sy = sy0; sy < sy1; ++sy)
+                  {
+                    const auto* row = pixels + static_cast<size_t>(sy) * sw;
+                    for (int sx = sx0; sx < sx1; ++sx)
+                      {
+                        gray_sum += row[sx];
+                      }
+                  }
+                if (n == 0)
+                  {
+                    drow[x] = 0u;
+                    continue;
+                  }
+                const uint32_t gray = gray_sum / n;
+                // Match the generic uint32_t accumulators, including wrap
+                // for unusually large boxes; do not replace this with 255.
+                const uint32_t alpha_sum = 255u * n;
+                drow[x] = ((alpha_sum / n) << 24)
+                        | (gray << 16) | (gray << 8) | gray;
+              }
+          }
+        return src_img;
       }
 
     // Convert one source sample to the exact PRGB32 value the old full-size
@@ -3807,6 +3858,10 @@ namespace pdflib
 
     BLImage src_img = build_bitmap_image(instr, sw, sh, sc, use_soft_mask_alpha,
                                          blit_w, blit_h);
+
+    // Includes clipping, masks, compositing, and drawing. Source-image
+    // destruction remains in the bitmap parent, after this timer ends.
+    utils::scoped_timer paint_timer(timings_, pdf_timings::KEY_RENDER_BITMAP_PAINT);
 
     const bool can_use_axis_aligned_fast_path =
       axis_aligned and right_angle and quarter_turns == 0;

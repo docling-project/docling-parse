@@ -133,6 +133,10 @@ namespace pdflib
     static const std::string KEY_RENDER_TEXT_DRAW;
     static const std::string KEY_RENDER_TEXT_FONT_RESOLVE;
     static const std::string KEY_RENDER_BITMAP;
+    static const std::string KEY_RENDER_BITMAP_PREPARE;
+    static const std::string KEY_RENDER_BITMAP_CONVERT;
+    static const std::string KEY_RENDER_BITMAP_DOWNSAMPLE;
+    static const std::string KEY_RENDER_BITMAP_PAINT;
     static const std::string KEY_RENDER_SHAPE;
     static const std::string KEY_RENDER_SHADING;
     static const std::string KEY_RENDER_SOFT_MASK;
@@ -507,6 +511,10 @@ namespace pdflib
   const std::string pdf_timings::KEY_RENDER_TEXT_DRAW = "render_page.text.draw";
   const std::string pdf_timings::KEY_RENDER_TEXT_FONT_RESOLVE = "render_page.text.font_resolve";
   const std::string pdf_timings::KEY_RENDER_BITMAP = "render_page.bitmap";
+  const std::string pdf_timings::KEY_RENDER_BITMAP_PREPARE = "render_page.bitmap.prepare";
+  const std::string pdf_timings::KEY_RENDER_BITMAP_CONVERT = "render_page.bitmap.prepare.convert";
+  const std::string pdf_timings::KEY_RENDER_BITMAP_DOWNSAMPLE = "render_page.bitmap.prepare.downsample";
+  const std::string pdf_timings::KEY_RENDER_BITMAP_PAINT = "render_page.bitmap.paint";
   const std::string pdf_timings::KEY_RENDER_SHAPE = "render_page.shape";
   const std::string pdf_timings::KEY_RENDER_SHADING = "render_page.shading";
   // painting through ExtGState soft masks: the mask raster plus the masked
@@ -553,6 +561,10 @@ namespace pdflib
       KEY_RENDER_TEXT_DRAW,
       KEY_RENDER_TEXT_FONT_RESOLVE,
       KEY_RENDER_BITMAP,
+      KEY_RENDER_BITMAP_PREPARE,
+      KEY_RENDER_BITMAP_CONVERT,
+      KEY_RENDER_BITMAP_DOWNSAMPLE,
+      KEY_RENDER_BITMAP_PAINT,
       KEY_RENDER_SHAPE,
       KEY_RENDER_SHADING,
       KEY_RENDER_SOFT_MASK,
@@ -685,6 +697,10 @@ namespace pdflib
       {KEY_RENDER_SET_SIZE,                KEY_RENDER_PAGE},
       {KEY_RENDER_TEXT,                    KEY_RENDER_PAGE},
       {KEY_RENDER_BITMAP,                  KEY_RENDER_PAGE},
+      {KEY_RENDER_BITMAP_PREPARE,          KEY_RENDER_BITMAP},
+      {KEY_RENDER_BITMAP_CONVERT,          KEY_RENDER_BITMAP_PREPARE},
+      {KEY_RENDER_BITMAP_DOWNSAMPLE,       KEY_RENDER_BITMAP_PREPARE},
+      {KEY_RENDER_BITMAP_PAINT,            KEY_RENDER_BITMAP},
       {KEY_RENDER_SHAPE,                   KEY_RENDER_PAGE},
       {KEY_RENDER_SHADING,                 KEY_RENDER_PAGE},
       {KEY_RENDER_SOFT_MASK,               KEY_RENDER_PAGE},
