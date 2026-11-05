@@ -1300,6 +1300,11 @@ class DoclingPdfParser:
                 keep_qpdf_warnings=effective_decode_config.keep_qpdf_warnings,
             )
 
+        else:
+            raise TypeError(
+                f"Expected str, Path, or BytesIO, got {type(path_or_stream)}"
+            )
+
         if success:
             result_doc = PdfDocument(
                 parser=self.parser,
