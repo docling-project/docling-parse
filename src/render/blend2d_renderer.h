@@ -439,7 +439,7 @@ namespace pdflib
       for (size_t l = 0; l < count; ++l)
         {
           BLBox box;
-          if (not glyph_bbox_cache_->find(face_key, glyph_ids[l], size, box))
+          if (not glyph_bbox_cache_->find(face_key, glyph_ids[l], font.size(), box))
             {
               BLPath path;
               if (font.get_glyph_outlines(glyph_ids[l], identity, path) != BL_SUCCESS ||
@@ -448,7 +448,7 @@ namespace pdflib
                 {
                   continue;
                 }
-              glyph_bbox_cache_->insert(face_key, glyph_ids[l], size, box);
+              glyph_bbox_cache_->insert(face_key, glyph_ids[l], font.size(), box);
             }
 
           if ((box.x1 - box.x0) > limit or (box.y1 - box.y0) > limit)
@@ -2439,7 +2439,7 @@ namespace pdflib
                               0.0, 0.0);
     BLBox rendered_box;
     if (face_key == nullptr ||
-        not glyph_bbox_cache_->find(*face_key, glyph_id, size, rendered_box))
+        not glyph_bbox_cache_->find(*face_key, glyph_id, font.size(), rendered_box))
       {
         BLPath glyph_path;
         const BLResult outline_res =
@@ -2459,7 +2459,7 @@ namespace pdflib
 
         if (face_key != nullptr)
           {
-            glyph_bbox_cache_->insert(*face_key, glyph_id, size, rendered_box);
+            glyph_bbox_cache_->insert(*face_key, glyph_id, font.size(), rendered_box);
           }
       }
 
