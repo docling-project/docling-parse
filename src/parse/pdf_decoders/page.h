@@ -1163,8 +1163,11 @@ namespace pdflib
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    QPDFPageObjectHelper          qpdf_page_object(qpdf_page);
-    std::vector<QPDFObjectHandle> contents = qpdf_page_object.getPageContents();
+    // The streams of a /Contents array are one content stream, divided at
+    // token boundaries (ISO 32000-1, 7.8.2): a token, such as the array of a
+    // `TJ`, can begin in one stream and end in the next. QPDF concatenates
+    // them (with a newline between), so they are tokenized as one.
+    QPDFObjectHandle contents = qpdf_page.getKey("/Contents");
 
     pdf_decoder<STREAM> stream_decoder(config,
 
@@ -1181,8 +1184,6 @@ namespace pdflib
                                        instructions,
                                        timings);
 
-    int cnt = 0;
-
     // Split decode_contents into: page content-stream tokenization
     // (content_decode_total) vs. operator-execution self-time
     // (interprete_ops_total). The latter is the interpretation wall time minus
@@ -1192,27 +1193,22 @@ namespace pdflib
     double attributed_before  = timings.attributed_total();
 
     std::vector<qpdf_stream_instruction> parameters;
-    for(auto content:contents)
+    {
+      utils::timer content_decode_timer;
+      stream_decoder.decode(contents);
+      timings.add_timing(pdf_timings::KEY_CONTENT_DECODE_TOTAL, content_decode_timer.get_time());
+    }
+    //stream_decoder.print();
+
+    {
+      utils::timer interprete_timer;
+      stream_decoder.interprete(parameters);
+      interprete_seconds += interprete_timer.get_time();
+    }
+
+    if(parameters.size()>0)
       {
-        LOG_S(INFO) << "--------------- start decoding content stream (" << (cnt++) << ")... ---------------";
-
-        {
-          utils::timer content_decode_timer;
-          stream_decoder.decode(content);
-          timings.add_timing(pdf_timings::KEY_CONTENT_DECODE_TOTAL, content_decode_timer.get_time());
-        }
-        //stream_decoder.print();
-
-        {
-          utils::timer interprete_timer;
-          stream_decoder.interprete(parameters);
-          interprete_seconds += interprete_timer.get_time();
-        }
-
-        if(parameters.size()>0)
-          {
-            LOG_S(WARNING) << "stream is ending with non-zero number of parameters";
-          }
+        LOG_S(WARNING) << "page content is ending with non-zero number of parameters";
       }
 
     double attributed_during = timings.attributed_total() - attributed_before;
