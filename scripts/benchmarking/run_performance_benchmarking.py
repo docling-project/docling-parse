@@ -751,7 +751,7 @@ def run_pymupdf_parse(
 ) -> float:
     """Single-threaded pymupdf text extraction."""
     try:
-        import fitz  # PyMuPDF
+        import pymupdf
     except ImportError as e:
         print(f"  pymupdf not available: {e}", file=sys.stderr)
         return float("nan")
@@ -759,7 +759,7 @@ def run_pymupdf_parse(
     # MuPDF writes "MuPDF error: ..." lines to stderr from the C layer;
     # silence them so perf output stays clean.
     try:
-        fitz.TOOLS.mupdf_display_errors(False)
+        pymupdf.TOOLS.mupdf_display_errors(False)
     except Exception:
         pass
 
@@ -768,14 +768,14 @@ def run_pymupdf_parse(
     with ProgressBar(total=total_pages, desc="  pymupdf-parse", unit="page") as pbar:
         for pdf_path, page_numbers in pdf_schedule:
             try:
-                doc = fitz.open(str(pdf_path))
+                doc = pymupdf.open(str(pdf_path))
             except Exception as e:
                 print(f"  pymupdf open error on {pdf_path}: {e}")
                 errors += 1
                 continue
             try:
                 pages = (
-                    doc
+                    (doc[index] for index in range(doc.page_count))
                     if page_numbers is None
                     else (doc[page_number - 1] for page_number in page_numbers)
                 )
@@ -801,30 +801,30 @@ def run_pymupdf_render(
 ) -> float:
     """Single-threaded pymupdf: text extract + scale=2 render to PIL."""
     try:
-        import fitz  # PyMuPDF
+        import pymupdf
     except ImportError as e:
         print(f"  pymupdf not available: {e}", file=sys.stderr)
         return float("nan")
 
     try:
-        fitz.TOOLS.mupdf_display_errors(False)
+        pymupdf.TOOLS.mupdf_display_errors(False)
     except Exception:
         pass
 
-    matrix = fitz.Matrix(2, 2)
+    matrix = pymupdf.Matrix(2, 2)
     t0 = time.perf_counter()
     errors = 0
     with ProgressBar(total=total_pages, desc="  pymupdf-render", unit="page") as pbar:
         for pdf_path, page_numbers in pdf_schedule:
             try:
-                doc = fitz.open(str(pdf_path))
+                doc = pymupdf.open(str(pdf_path))
             except Exception as e:
                 print(f"  pymupdf open error on {pdf_path}: {e}")
                 errors += 1
                 continue
             try:
                 pages = (
-                    doc
+                    (doc[index] for index in range(doc.page_count))
                     if page_numbers is None
                     else (doc[page_number - 1] for page_number in page_numbers)
                 )
@@ -1184,18 +1184,18 @@ def cmp_pymupdf(
     `get_text("text")` is deliberately not used: it returns a plain string with
     no geometry, which would not be the same task as the other backends.
     """
-    import fitz  # PyMuPDF
+    import pymupdf
 
     # MuPDF writes "MuPDF error: ..." lines to stderr from the C layer;
     # silence them so perf output stays clean.
     with contextlib.suppress(Exception):
-        fitz.TOOLS.mupdf_display_errors(False)
+        pymupdf.TOOLS.mupdf_display_errors(False)
 
-    matrix = fitz.Matrix(scale, scale)
+    matrix = pymupdf.Matrix(scale, scale)
     c = _Collector("pymupdf", TASK_RENDER if render else TASK_PARSE, total_pages)
     for pdf_path, page_numbers in schedule:
         try:
-            doc = fitz.open(str(pdf_path))
+            doc = pymupdf.open(str(pdf_path))
         except Exception as e:
             c.document_failed(str(pdf_path), e)
             continue
@@ -2363,6 +2363,11 @@ def main(argv: List[str]) -> int:
         help="(docling-parse only) Read PDFs into memory and load them as BytesIO",
     )
     ap.add_argument(
+        "--suppress-config",
+        action="store_true",
+        help="Hide benchmark, system and configuration tables; retain progress and results",
+    )
+    ap.add_argument(
         "--output-dir",
         type=Path,
         default=DEFAULT_OUTPUT_DIR,
@@ -2413,14 +2418,17 @@ def main(argv: List[str]) -> int:
     basename = output_basename(system_info, dataset_info, args.mode)
     pages_csv_path = args.output_dir / f"{basename}.csv"
 
-    print("Benchmark:")
-    print(
-        tabulate(benchmark_rows(dataset_info, settings), headers=["parameter", "value"])
-    )
-    print()
-    print("System:")
-    print(tabulate(system_rows(system_info), headers=["parameter", "value"]))
-    print()
+    if not args.suppress_config:
+        print("Benchmark:")
+        print(
+            tabulate(
+                benchmark_rows(dataset_info, settings), headers=["parameter", "value"]
+            )
+        )
+        print()
+        print("System:")
+        print(tabulate(system_rows(system_info), headers=["parameter", "value"]))
+        print()
     print(f"Output directory: {args.output_dir}")
     print(f"  per-page: {pages_csv_path}")
     print()
@@ -2452,14 +2460,14 @@ def main(argv: List[str]) -> int:
         else:
             title = "RENDER (decode + rasterise)"
         print(f"\n##### {title} #####")
-        print_parameter_tables(
-            config_tables(
-                render=render,
-                scale=args.scale,
-                decode_options=decode_options,
-                materialization_options=mode_materialization_options,
-            )
+        tables = config_tables(
+            render=render,
+            scale=args.scale,
+            decode_options=decode_options,
+            materialization_options=mode_materialization_options,
         )
+        if not args.suppress_config:
+            print_parameter_tables(tables)
         if m == "parse-with-bitmap" and third_party_backends:
             print(
                 "Third-party references skipped: they cannot perform the "

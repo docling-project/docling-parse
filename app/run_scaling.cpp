@@ -100,6 +100,8 @@ namespace
     float scale = 2.0f;
     std::size_t glyph_bbox_cache_capacity = 65536;
     bool enable_timing = false;
+    bool suppress_config = false;
+    bool suppress_timings = false;
     std::filesystem::path timing_csv = "timing-cpp.csv";
     std::optional<std::filesystem::path> glyph_cache_diagnostics = std::nullopt;
     std::optional<std::filesystem::path> output_dir = std::nullopt;
@@ -594,9 +596,9 @@ namespace
 
     void add_csv_write(double seconds) { csv_write_s_ += seconds; }
 
-    void print(int threads, double wall_s) const
+    void print(int threads, double wall_s, std::ostream& out = std::cout) const
     {
-      std::cout << "\nTiming diagnostics (threads=" << threads << ", CSV schema 2)\n"
+      out << "\nTiming diagnostics (threads=" << threads << ", CSV schema 2)\n"
                 << std::fixed << std::setprecision(6)
                 << "  wall_s: " << wall_s << " (includes collection/CSV; excludes summary printing)\n"
                 << "  Worker elapsed seconds summed across pages; not CPU seconds.\n"
@@ -605,11 +607,11 @@ namespace
         {
           if(stage.value != &page_timings::consumer_wait_s)
             {
-              std::cout << "  " << std::left << std::setw(30) << stage.name
+              out << "  " << std::left << std::setw(30) << stage.name
                         << std::right << totals_.*(stage.value) << "\n";
             }
         }
-      std::cout << "  consumer_wait_s: " << totals_.consumer_wait_s << "\n"
+      out << "  consumer_wait_s: " << totals_.consumer_wait_s << "\n"
                 << "  consumer_csv_write_s: " << csv_write_s_ << "\n"
                 << "  Queue waits include mutex acquisition and condition waiting;\n"
                 << "  they overlap across threads and are not added to wall time.\n"
@@ -621,17 +623,17 @@ namespace
       std::sort(docs.begin(), docs.end(), [](const auto& a, const auto& b) {
         return a.second.worker_s > b.second.worker_s;
       });
-      std::cout << "\nTop documents by summed page worker elapsed (not document wall time):\n";
+      out << "\nTop documents by summed page worker elapsed (not document wall time):\n";
       for(std::size_t i = 0; i < std::min<std::size_t>(10, docs.size()); ++i)
         {
-          std::cout << "  " << docs[i].second.worker_s << " s  "
+          out << "  " << docs[i].second.worker_s << " s  "
                     << docs[i].second.pages << " pages  "
                     << docs[i].second.errors << " errors  " << docs[i].first << "\n";
         }
-      std::cout << "Top pages by worker elapsed (1-based page numbers):\n";
+      out << "Top pages by worker elapsed (1-based page numbers):\n";
       for(const auto& page : slowest_)
         {
-          std::cout << "  " << page.worker_s << " s  " << page.doc_key
+          out << "  " << page.worker_s << " s  " << page.doc_key
                     << " page=" << page.page_number + 1
                     << " success=" << (page.success ? "true" : "false") << "\n";
         }
@@ -799,7 +801,8 @@ namespace
     benchmark_result run(const std::string& mode,
                          bool enable_timing,
                          const std::filesystem::path& timing_csv,
-                         std::ostream* glyph_diagnostics = nullptr)
+                         std::ostream* glyph_diagnostics = nullptr,
+                         std::ostream* timing_output = nullptr)
     {
       if(glyph_diagnostics and not render_config_.has_value())
         {
@@ -875,7 +878,19 @@ namespace
             }
         }
       const double elapsed = std::chrono::duration<double>(clock_type::now() - start).count();
-      if(enable_timing_) { summary.print(num_threads_, elapsed); }
+      if(enable_timing_)
+        {
+          summary.print(num_threads_, elapsed,
+                        timing_output ? *timing_output : std::cout);
+          if(timing_output)
+            {
+              timing_output->flush();
+              if(not *timing_output)
+                {
+                  throw std::runtime_error("could not write timing summary");
+                }
+            }
+        }
       return benchmark_result{num_threads_, elapsed, errors};
     }
 
@@ -1191,6 +1206,8 @@ namespace
       ("output-dir", "Write rendered PNGs under this directory", cxxopts::value<std::string>())
       ("enable-timing", "Write schema-2 per-page CSV timings and print native stage/wait summaries", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
       ("timing-csv", "CSV path used when --enable-timing is set", cxxopts::value<std::string>()->default_value("timing-cpp.csv"))
+      ("suppress-config", "Hide configuration tables; retain progress and results", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
+      ("suppress-timings", "Write timing summaries to <timing-csv>.summary.log instead of the console", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
       ("loglevel", "Log level [fatal, error, warning, info]", cxxopts::value<std::string>()->default_value("fatal"))
       ("page-boundary", "Page boundary [crop_box, media_box]", cxxopts::value<std::string>())
       ("do-sanitization", "Run post-parse sanitization", cxxopts::value<std::string>())
@@ -1233,6 +1250,8 @@ namespace
     cli.glyph_bbox_cache_capacity =
       result["glyph-bbox-cache-capacity"].as<std::size_t>();
     cli.enable_timing = result["enable-timing"].as<bool>();
+    cli.suppress_config = result["suppress-config"].as<bool>();
+    cli.suppress_timings = result["suppress-timings"].as<bool>();
     cli.timing_csv = result["timing-csv"].as<std::string>();
     if(result.count("glyph-cache-diagnostics"))
       {
@@ -1315,6 +1334,30 @@ int main(int argc, char* argv[])
       pdflib::decode_config decode_config = default_decode_config();
       cli_options cli = parse_cli(argc, argv, decode_config);
       set_loglevel(cli.loglevel);
+
+      // Summary output is outside the measured interval, just like console
+      // printing. Keep one stream for all modes/thread counts in this run.
+      std::ofstream timing_output;
+      if(cli.enable_timing and cli.suppress_timings)
+        {
+          const std::filesystem::path path = cli.timing_csv.string() + ".summary.log";
+          if(cli.glyph_cache_diagnostics.has_value() and
+             std::filesystem::weakly_canonical(*cli.glyph_cache_diagnostics) ==
+               std::filesystem::weakly_canonical(path))
+            {
+              throw std::runtime_error("glyph-cache diagnostics and timing summary need different paths");
+            }
+          if(std::filesystem::exists(path))
+            {
+              throw std::runtime_error("timing summary already exists; choose a new --timing-csv path: "
+                                       + path.string());
+            }
+          timing_output.open(path);
+          if(not timing_output)
+            {
+              throw std::runtime_error("could not open timing summary: " + path.string());
+            }
+        }
 
       // One stream serves all requested thread counts in this invocation.
       // Refuse old output rather than appending another run to it.
@@ -1399,17 +1442,20 @@ int main(int argc, char* argv[])
           modes = {cli.mode};
         }
 
-      for(run_mode mode : modes)
+      if(not cli.suppress_config)
         {
-          std::cout << "Decode config (" << mode_to_string(mode) << "):\n"
-                    << effective_decode_config(mode, decode_config, render_config).to_string()
-                    << "\n";
-        }
-      if(cli.mode == run_mode::render
-         or cli.mode == run_mode::default_mode
-         or cli.mode == run_mode::all)
-        {
-          std::cout << "Render config:\n" << render_config.to_string();
+          for(run_mode mode : modes)
+            {
+              std::cout << "Decode config (" << mode_to_string(mode) << "):\n"
+                        << effective_decode_config(mode, decode_config, render_config).to_string()
+                        << "\n";
+            }
+          if(cli.mode == run_mode::render
+             or cli.mode == run_mode::default_mode
+             or cli.mode == run_mode::all)
+            {
+              std::cout << "Render config:\n" << render_config.to_string();
+            }
         }
 
       std::cout << "\nLoading documents ...\n";
@@ -1445,7 +1491,9 @@ int main(int argc, char* argv[])
                                                       cli.enable_timing,
                                                       cli.timing_csv,
                                                       cli.glyph_cache_diagnostics.has_value()
-                                                        ? &glyph_diagnostics : nullptr);
+                                                        ? &glyph_diagnostics : nullptr,
+                                                      cli.enable_timing and cli.suppress_timings
+                                                        ? &timing_output : nullptr);
               results.push_back(result);
               std::cout << "  threads=" << threads
                         << ": " << std::fixed << std::setprecision(3)

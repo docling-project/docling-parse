@@ -1084,7 +1084,7 @@ def configurations(threads):
     return parser, decode
 
 
-def print_settings(backend, threads, threads_arg):
+def print_settings(backend, threads, threads_arg, *, suppress=False):
     """Print the resolved settings; they follow Docling, so none can be set here."""
     config, decode = configurations(threads[0])
     content = config.page_content_config
@@ -1111,6 +1111,16 @@ def print_settings(backend, threads, threads_arg):
         ]
     rows.append(("requested_image_scale", 1.0))
 
+    decode_text = render_text = ""
+    if native:
+        # Resolve the effective settings even when their display is suppressed:
+        # constructing this parser also performs untimed native initialization.
+        parser = DoclingThreadedPdfParser(parser_config=config, decode_config=decode)
+        decode_text = parser._parser.decode_config.to_string()
+        render_text = config.render_config.to_string()
+    if suppress:
+        return
+
     print("\nBenchmark config:")
     print(f"{'parameter':<32}value")
     print("-" * 44)
@@ -1120,9 +1130,8 @@ def print_settings(backend, threads, threads_arg):
     if native:
         # The renderer forces some decode settings in C++, so the table is read
         # back from it rather than derived from the config passed in here.
-        parser = DoclingThreadedPdfParser(parser_config=config, decode_config=decode)
-        print(f"\nDecode config:\n{parser._parser.decode_config.to_string()}")
-        print(f"Render config:\n{config.render_config.to_string()}")
+        print(f"\nDecode config:\n{decode_text}")
+        print(f"Render config:\n{render_text}")
     sys.stdout.flush()
 
 
@@ -1519,6 +1528,11 @@ def main():
         type=Path,
         help="Override report JSON path and place page files beside it; otherwise <output-dir>/report.json",
     )
+    cli.add_argument(
+        "--suppress-config",
+        action="store_true",
+        help="Hide configuration tables; retain progress and the report path",
+    )
     args = cli.parse_args()
     # argparse uses the positional default even when --selection was supplied.
     if args.selection and args.pdf == [DEFAULT_HF_REPO_ID]:
@@ -1556,7 +1570,7 @@ def main():
             with pypdfium2_lock:
                 with pdfium.PdfDocument(name) as document:
                     total_pages += len(document)
-    print_settings(args.backend, threads, args.threads)
+    print_settings(args.backend, threads, args.threads, suppress=args.suppress_config)
     meta = provenance()
     reports = []
     schedule = []
