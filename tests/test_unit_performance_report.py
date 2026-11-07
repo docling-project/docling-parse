@@ -374,7 +374,9 @@ def test_profiled_report_figures_captions_and_phase_exports(tmp_path: Path):
     )
     assert "#### Render page-images\n" in text
     assert "#### Render page-images and construct word/line text geometry\n" in text
-    assert "#### Page-images, word/line text geometry and bitmap bounding boxes\n" in text
+    assert (
+        "#### Page-images, word/line text geometry and bitmap bounding boxes\n" in text
+    )
     assert "##### Where the time goes" in text and "##### Duration distribution" in text
     assert "--create-word-cells=false --create-line-cells=false" in text
     assert "--create-word-cells=true --create-line-cells=true" in text

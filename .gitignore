@@ -1,6 +1,7 @@
 *~
 externals
 build
+build.log*
 dist
 extlib_*/
 scratch_*
