@@ -23,6 +23,7 @@ from io import BytesIO
 import pytest
 
 from docling_parse.pdf_parser import (
+    DecodeConfig,
     DoclingPdfParser,
     DoclingThreadedPdfParser,
     ThreadedPdfParserConfig,
@@ -170,6 +171,7 @@ def _single_page(
     trailing_objects: list[str | bytes],
     *,
     parent_resources: str = "",
+    page_extra: str = "",
 ) -> bytes:
     """Catalog, page tree, page and content stream (objects 1-4), then
     `trailing_objects` as objects 5, 6, ... which a cut can take away."""
@@ -179,22 +181,71 @@ def _single_page(
             "<< /Type /Catalog /Pages 2 0 R >>",
             f"<< /Type /Pages /Kids [3 0 R] /Count 1{pages_entry} >>",
             "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200]"
-            f" /Resources {resources_entry} /Contents 4 0 R >>",
+            f" {page_extra} /Resources {resources_entry} /Contents 4 0 R >>",
             content_stream("BT /F1 12 Tf 20 100 Td (PAGE 1 CONTENT) Tj ET"),
             *trailing_objects,
         ]
     )
 
 
-def test_lost_resources_object_is_reported():
+@pytest.mark.parametrize(
+    "page_extra",
+    ["", "/PieceInfo << /Test << /Private (>> endobj) >> >> % >> endobj\n"],
+    ids=["plain", "nested-syntax"],
+)
+def test_lost_resources_object_is_reported(page_extra):
     # the content survives the cut, the resources dictionary (5) and the
     # font it names (6) do not
-    pdf = _single_page("5 0 R", ["<< /Font << /F1 6 0 R >> >>", FONT])
+    pdf = _single_page(
+        "5 0 R", ["<< /Font << /F1 6 0 R >> >>", FONT], page_extra=page_extra
+    )
 
     (result,) = _threaded_results(_cut_inside_header_of(pdf, 5))
 
     assert not result.success
     assert "/Resources 5 0 R" in result.error_message
+
+
+@pytest.mark.parametrize("thread_safe", [False, True])
+def test_lost_resources_object_raises_when_not_threaded(thread_safe):
+    pdf = _single_page("5 0 R", ["<< /Font << /F1 6 0 R >> >>", FONT])
+    parser = DoclingPdfParser(loglevel="fatal")
+    doc = parser.load(
+        BytesIO(_cut_inside_header_of(pdf, 5)),
+        decode_config=DecodeConfig(do_thread_safe=thread_safe),
+    )
+
+    assert doc.number_of_pages() == 1
+    with pytest.raises(RuntimeError, match=r"/Resources 5 0 R.*truncated or damaged"):
+        doc.get_page(1)
+
+
+@pytest.mark.parametrize("resources", ["", "/Resources null", "/Resources << >>"])
+@pytest.mark.parametrize("content", ["", "0 0 20 20 re f"])
+def test_repaired_resource_free_pages_are_accepted(resources, content):
+    # No fonts or images are needed. A missing resources entry can legitimately
+    # be repaired to an empty dictionary, even on a page containing a shape.
+    # Include nested syntax and misleading text to exercise dictionary bounds.
+    pdf = build_pdf(
+        [
+            "<< /Type /Catalog /Pages 2 0 R >>",
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200]"
+            f" {resources} /Contents 4 0 R"
+            " /PieceInfo << /Test << /Private (>> endobj) >> >> >>",
+            content_stream(content),
+            "null",
+        ]
+    )
+    damaged = _cut_inside_header_of(pdf, 5)
+
+    (result,) = _threaded_results(damaged)
+    assert result.success
+    assert _cells(result) == 0
+
+    parser = DoclingPdfParser(loglevel="fatal")
+    doc = parser.load(BytesIO(damaged))
+    assert len(doc.get_page(1).char_cells) == 0
 
 
 def test_resources_inherited_from_the_page_tree_are_accepted():

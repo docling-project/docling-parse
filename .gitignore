@@ -1,6 +1,7 @@
 *~
 externals
 build
+build.log*
 dist
 extlib_*/
 scratch_*
@@ -15,6 +16,7 @@ tests/data/**
 *.json
 *.png
 *.dclx
+*.csv
 # Source documents and comparison panels retained for this PR's evidence.
 .sessions/*
 .references/*
@@ -25,6 +27,10 @@ tests/data/**
 .plans/*/*.png
 scratch*
 docs/performance_benchmarks/*.csv
+
+# Published benchmark figures and compact provenance.
+!docs/performance_benchmarks/2026-11-bo767-m3-max/*.png
+!docs/performance_benchmarks/2026-11-bo767-m3-max/provenance.json
 
 # Created by https://www.toptal.com/developers/gitignore/api/python,macos,emacs,cmake,virtualenv
 # Edit at https://www.toptal.com/developers/gitignore?templates=python,macos,emacs,cmake,virtualenv

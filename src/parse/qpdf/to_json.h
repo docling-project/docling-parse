@@ -8,6 +8,7 @@
 #include <iomanip>
 #include <cstddef>
 #include <functional>
+#include <limits>
 #include <unordered_set>
 
 #include <nlohmann/json.hpp>
@@ -149,9 +150,11 @@ namespace pdflib
   nlohmann::json to_json_impl(QPDFObjectHandle obj,
                               object_path& path,
                               int level,
-                              int max_level)
+                              int max_level, std::size_t& remaining)
   {
     nlohmann::json result;
+    if(remaining==0) { return "[exceeding node budget]"; }
+    --remaining;
 
     if(level>0 and is_document_structure(obj))
       {
@@ -180,13 +183,18 @@ namespace pdflib
             for(auto key : obj.getKeys())
               {
                 const std::string key_utf8 = name_to_utf8(key);
+                if(remaining==0)
+                  {
+                    result[key_utf8] = "[exceeding node budget]";
+                    break;
+                  }
                 if(keys_to_be_skipped.count(key)==1)
                   {
                     result[key_utf8] = "[skipping " + key_utf8 + "]";
                   }
                 else
                   {
-                    result[key_utf8] = to_json_impl(obj.getKey(key), path, level+1, max_level);
+                    result[key_utf8] = to_json_impl(obj.getKey(key), path, level+1, max_level, remaining);
                   }
               }
           }
@@ -196,8 +204,12 @@ namespace pdflib
               {
                 QPDFObjectHandle new_obj = obj.getArrayItem(l);
 
-                auto item = to_json_impl(new_obj, path, level+1, max_level);
-                result.push_back(item);
+                result.push_back(to_json_impl(new_obj, path, level+1, max_level, remaining));
+                if(remaining==0)
+                  {
+                    if(l+1<obj.getArrayNItems()) { result.push_back("[exceeding node budget]"); }
+                    break;
+                  }
               }
           }
         else if(obj.isStream())
@@ -304,10 +316,11 @@ namespace pdflib
     return result;
   }
 
-  nlohmann::json to_json(QPDFObjectHandle obj, int level=0, int max_level=32)
+  nlohmann::json to_json(QPDFObjectHandle obj, int level=0, int max_level=32,
+                        std::size_t max_nodes=std::numeric_limits<std::size_t>::max())
   {
     object_path path;
-    return to_json_impl(obj, path, level, max_level);
+    return to_json_impl(obj, path, level, max_level, max_nodes);
   }
 
   void print_obj(QPDFObjectHandle obj, int level = 0)

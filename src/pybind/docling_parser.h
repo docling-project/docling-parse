@@ -62,6 +62,15 @@ namespace docling
 
     nlohmann::json get_annotations(std::string key);
 
+    // Snapshot ownership while Python holds the GIL, before a binding releases
+    // it for immutable/lazy document reads. Unload can then remove the map entry
+    // without destroying an in-flight decoder.
+    doc_decoder_ptr_type get_document_decoder(const std::string& key)
+    {
+      auto it = doc_decoders.find(key);
+      return it == doc_decoders.end() ? nullptr : it->second;
+    }
+
     nlohmann::json get_meta_xml(std::string key);
     nlohmann::json get_table_of_contents(std::string key);
 
