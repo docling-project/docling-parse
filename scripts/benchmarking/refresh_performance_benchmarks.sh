@@ -16,6 +16,7 @@ Environment:
   DATASET=bo767               Select bo20, bo767 or bo10k
   DATASET_REVISION=<revision>  Override the selected dataset's pinned revision
   OUT=<new directory>         Default: a unique scratch-performance-refresh-* path
+  RECOVER_FROM=<bundle>        Reuse validated native/replay results; recollect comparisons in a new bundle
 
 Default dataset pins (PDFs / pages):
   bo20   65b9971b3fa939fe4ef89be678237e6928049b67      20 / 496
@@ -44,6 +45,15 @@ fi
 
 REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 cd "$REPO_ROOT"
+if [[ -n ${RECOVER_FROM:-} ]]; then
+  if [[ ${BUILD_MODE:-incremental} != incremental ]]; then
+    echo "Recovery reuses recorded native binaries; BUILD_MODE must be incremental." >&2
+    exit 2
+  fi
+  recovery=(uv run --no-sync python scripts/benchmarking/recover_performance_benchmarks.py "$RECOVER_FROM")
+  if [[ -n ${OUT:-} ]]; then recovery+=(--output-dir "$OUT"); fi
+  exec "${recovery[@]}"
+fi
 REPEATS=${REPEATS:-1}
 THREADS=${THREADS:-1,4,8,12}
 RUN_COMPARISON=${RUN_COMPARISON:-0}
@@ -349,6 +359,10 @@ cp build/CMakeCache.txt "$OUT/CMakeCache.txt"
 if [[ -f build/CMakeFiles/run_scaling.exe.dir/flags.make ]]; then
   cp build/CMakeFiles/run_scaling.exe.dir/flags.make "$OUT/native-flags.make"
 fi
+if [[ $RUN_COMPARISON == 1 ]]; then
+  run_logged "$OUT/reference-preflight.log" "Preflight: check PyMuPDF regression before corpus measurements" \
+    uv run --no-sync python scripts/benchmarking/_performance_runtime.py "$OUT/metadata.json"
+fi
 
 # Keep each command array nonempty for Bash 3.2 with nounset (macOS default).
 native_runner=(./build/run_scaling.exe)
@@ -418,6 +432,7 @@ for (( repetition=1; repetition<=REPEATS; repetition++ )); do
         --keep-shapes="$scene" --keep-bitmaps="$scene" \
         --materialize-char-cells=true --materialize-word-cells=false \
         --materialize-line-cells=false --materialize-shapes=false --materialize-bitmaps=false \
+        --checkpoint-dir "$comparison_dir/checkpoints" \
         --output-dir "$comparison_dir"
     done
   fi

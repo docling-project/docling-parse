@@ -2,7 +2,7 @@
 """Validate and plot a refresh_performance_benchmarks.sh output directory.
 
 Scaling uses native console/summary-file wall_s, replay document total_s, or comparison
-console wall time. Worker elapsed seconds and arrival gaps are never substituted
+checkpoint wall time (console wall time for older bundles). Worker elapsed seconds and arrival gaps are never substituted
 for wall time. Different workloads remain in separate tables and figures.
 """
 
@@ -10,11 +10,13 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import math
 import re
 import shlex
 import statistics
+import subprocess
 import textwrap
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -33,19 +35,54 @@ NATIVE_PROFILES = {
 BACKEND_LABELS = {"pdfium": "pypdfium2", "threaded": "docling-parse"}
 
 
+def committed_source_matches(
+    metadata: dict[str, Any], provenance: dict[str, Any], repository: Path
+) -> bool:
+    """Accept a mid-run commit only when its patch is the exact recorded diff."""
+    original = metadata["source_revision"]
+    replay = provenance["parse_git"]
+    if replay["diff_sha256"] != hashlib.sha256(b"").hexdigest() or not all(
+        re.fullmatch(r"[0-9a-f]{40}", revision)
+        for revision in (original, replay["revision"])
+    ):
+        return False
+    try:
+        patch = subprocess.check_output(
+            ["git", "diff", "--no-ext-diff", original, replay["revision"], "--"],
+            cwd=repository,
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+        script = subprocess.check_output(
+            [
+                "git",
+                "show",
+                replay["revision"]
+                + ":scripts/benchmarking/run_performance_benchmarking_with_docling_settings.py",
+            ],
+            cwd=repository,
+            stderr=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return False
+    return hashlib.sha256(patch.encode()).hexdigest() == metadata[
+        "source_diff_sha256"
+    ] and hashlib.sha256(script).hexdigest() == provenance.get("script_sha256")
+
+
 def task_title(workload: str, task: str) -> str:
     if workload == "native":
         return {
-            "render-only": "Render images",
-            "render-with-text": "Render images and construct word/line text geometry",
-            "render": "Render images and construct word/line text geometry (legacy profile)",
+            "render-only": "Render page-images",
+            "render-with-text": "Render page-images and construct word/line text geometry",
+            "render": "Render page-images and construct word/line text geometry (legacy profile)",
         }[task]
     if workload == "replay":
-        return "Images, word/line text geometry and bitmap bounding boxes"
+        return "Page-images, word/line text geometry and bitmap bounding boxes"
     return (
-        "Character text and bounding boxes"
+        "Text and geometry via package APIs"
         if task == "parse"
-        else "Images plus character text and bounding boxes"
+        else "Page-images plus text and geometry via package APIs"
     )
 
 
@@ -93,6 +130,7 @@ class Measurement:
     timing_basis: str
     phases: dict[str, float] = field(default_factory=dict)
     durations: list[float] = field(default_factory=list)
+    package_version: str = ""
 
     @property
     def group(self) -> tuple[str, str, str, int]:
@@ -124,6 +162,22 @@ class ReportInputs:
             self.expected.update((item["name"], p) for p in range(1, item["pages"] + 1))
         require(bool(self.expected), "Empty dataset manifest")
         self.canvas_checks: list[dict[str, Any]] = []
+        self.committed_replay_sources: set[str] = set()
+        self.excluded_comparisons: list[dict[str, Any]] = []
+        self.comparison_errors: list[dict[str, Any]] = []
+
+    def package_version(self, backend: str, workload: str) -> str:
+        package = {"threaded": "docling-parse", "pdfium": "pypdfium2"}.get(
+            backend, backend
+        )
+        provenance = (
+            self.metadata.get("comparison_provenance", {})
+            if workload == "comparison"
+            else {}
+        )
+        return provenance.get("packages", self.metadata.get("packages", {})).get(
+            package, ""
+        )
 
     def identity(self, document: str, page: Any) -> tuple[str, int]:
         document = document.removeprefix("key=")
@@ -245,22 +299,29 @@ class ReportInputs:
                     "native wall_s; includes collection/CSV; excludes document preload",
                     stages,
                     durations[t],
+                    package_version=self.package_version("docling-parse", "native"),
                 )
             )
         return result
 
     def replay(self, path: Path) -> list[Measurement]:
         report = json.loads(path.read_text())
-        require(
-            report["provenance"]["parse_git"]["revision"]
-            == self.metadata["source_revision"],
-            f"Replay source revision differs from build metadata: {path}",
-        )
-        require(
-            report["provenance"]["parse_git"]["diff_sha256"]
-            == self.metadata["source_diff_sha256"],
-            f"Replay tracked source diff changed during the run: {path}",
-        )
+        replay_git = report["provenance"]["parse_git"]
+        if replay_git["revision"] == self.metadata["source_revision"]:
+            require(
+                replay_git["diff_sha256"] == self.metadata["source_diff_sha256"],
+                f"Replay tracked source diff changed during the run: {path}",
+            )
+        else:
+            require(
+                committed_source_matches(
+                    self.metadata,
+                    report["provenance"],
+                    Path(__file__).resolve().parents[2],
+                ),
+                f"Replay source revision differs from build metadata without verified patch equivalence: {path}",
+            )
+            self.committed_replay_sources.add(replay_git["revision"])
         result = []
         for run in report["runs"]:
             settings = run["settings"]
@@ -341,6 +402,7 @@ class ReportInputs:
                     "sum of document total_s; includes construction/load, processing and unload",
                     dict(phases),
                     durations,
+                    package_version=self.package_version(settings["backend"], "replay"),
                 )
             )
         return result
@@ -349,6 +411,36 @@ class ReportInputs:
         log_path = path.parent / "run.log"
         log = log_path.read_text()
         task = "parse" if path.parent.name == "parse-without-bitmap" else "parse+render"
+        provenance = self.metadata.get("comparison_provenance")
+        checkpoints = {}
+        if provenance is not None:
+            for checkpoint in sorted((path.parent / "checkpoints").glob("*.json")):
+                state = json.loads(checkpoint.read_text())
+                if state["run"]["task"] != task:
+                    continue
+                require(
+                    state["provenance"] == provenance,
+                    f"Comparison checkpoint provenance differs from metadata: {checkpoint}",
+                )
+                require(
+                    state["schema_version"] == 1,
+                    f"Unsupported checkpoint schema: {checkpoint}",
+                )
+                csv_path = checkpoint.with_suffix(".csv")
+                sha = hashlib.sha256()
+                with csv_path.open("rb") as stream:
+                    for chunk in iter(lambda: stream.read(8 * 1024 * 1024), b""):
+                        sha.update(chunk)
+                require(
+                    sha.hexdigest() == state["csv_sha256"],
+                    f"Comparison checkpoint CSV changed: {csv_path}",
+                )
+                group = state["run"]["backend"], int(state["run"]["threads"])
+                require(
+                    group not in checkpoints,
+                    f"Duplicate comparison checkpoint: {checkpoint}",
+                )
+                checkpoints[group] = state
         table = log.rsplit("=== ", 1)[-1]
         walls = {}
         for line in table.splitlines():
@@ -363,16 +455,17 @@ class ReportInputs:
                 walls[reference[1], 1] = seconds(reference[2])
         seen: dict[tuple[str, int], set[tuple[str, int]]] = defaultdict(set)
         durations: dict[tuple[str, int], list[float]] = defaultdict(list)
+        errors: dict[tuple[str, int], dict[tuple[str, int], str]] = defaultdict(dict)
         sizes: dict[tuple[str, int], dict[tuple[str, int], tuple[int, int]]] = (
             defaultdict(dict)
         )
         with path.open(newline="") as stream:
             for row in csv.DictReader(stream):
                 require(
-                    row["success"] == "1"
-                    and not row["error_message"]
+                    row["success"] in ("0", "1")
+                    and (row["success"] == "0" or not row["error_message"])
                     and row["task"] == task,
-                    f"Invalid or unsuccessful comparison page: {path}",
+                    f"Invalid comparison page: {path}",
                 )
                 group = row["backend"], int(row["threads"])
                 identity = self.identity(row["doc_key"], row["page_number"])
@@ -382,17 +475,81 @@ class ReportInputs:
                 )
                 seen[group].add(identity)
                 durations[group].append(seconds(row["elapsed_s"]))
+                if row["success"] == "0":
+                    require(
+                        provenance is not None and row["backend"] != "docling-parse",
+                        f"Unsuccessful comparison page: {path}: {group}: {identity}",
+                    )
+                    errors[group][identity] = (
+                        row["error_message"] or "Unspecified page error"
+                    )
+                    continue
                 size = int(row["image_width"]), int(row["image_height"])
                 if task == "parse+render":
                     require(min(size) > 0, f"Missing comparison image size: {path}")
                     sizes[group][identity] = size
         require(set(seen) == set(walls), f"Comparison CSV/log series mismatch: {path}")
+        if provenance is not None:
+            require(
+                set(checkpoints) == set(seen), f"Missing comparison checkpoints: {path}"
+            )
+            for group in seen:
+                exact = seconds(checkpoints[group]["run"]["wall_s"])
+                # The runner first formats to 3 decimals. Older tabulate output
+                # reparsed that string and printed only 6 significant digits.
+                rounded = float(f"{exact:.3f}")
+                require(
+                    any(
+                        math.isclose(walls[group], value, rel_tol=0, abs_tol=1e-9)
+                        for value in (rounded, float(f"{rounded:.6g}"))
+                    ),
+                    f"Comparison checkpoint/log wall time mismatch: {path}: {group}",
+                )
+                walls[group] = exact
         result = []
         for (backend, t), identities in seen.items():
             require(
                 identities == self.expected,
                 f"Incomplete comparison page set: {path}: {backend}",
             )
+            if provenance is not None:
+                state = checkpoints[backend, t]
+                require(
+                    state["run"]["doc_errors"] == 0,
+                    f"Comparison checkpoint has document failures: {path}: {backend}",
+                )
+                require(
+                    state["complete"] == (not errors[backend, t]),
+                    f"Comparison checkpoint success status disagrees with page results: {path}: {backend}",
+                )
+            if errors[backend, t]:
+                self.excluded_comparisons.append(
+                    {
+                        "backend": backend,
+                        "package_version": self.package_version(backend, "comparison"),
+                        "task": task,
+                        "threads": t,
+                        "repetition": self.repetition(path),
+                        "wall_s": walls[backend, t],
+                        "attempted_pages": len(identities),
+                        "successful_pages": len(identities) - len(errors[backend, t]),
+                        "failed_pages": len(errors[backend, t]),
+                        "source": str(path.relative_to(self.root)),
+                    }
+                )
+                for (document, page), error in errors[backend, t].items():
+                    self.comparison_errors.append(
+                        {
+                            "backend": backend,
+                            "task": task,
+                            "threads": t,
+                            "repetition": self.repetition(path),
+                            "document": document,
+                            "page": page,
+                            "error_message": error,
+                        }
+                    )
+                continue
             result.append(
                 Measurement(
                     "comparison",
@@ -404,11 +561,16 @@ class ReportInputs:
                     len(identities),
                     len(self.files),
                     str(log_path.relative_to(self.root)),
-                    "whole-corpus console wall time, rounded to 0.001 s; includes document loading",
+                    (
+                        "whole-corpus checkpoint wall time; includes document loading"
+                        if provenance is not None
+                        else "whole-corpus console wall time, rounded for display; includes document loading"
+                    ),
                     durations=durations[backend, t],
+                    package_version=self.package_version(backend, "comparison"),
                 )
             )
-            if sizes:
+            if sizes and (backend, t) in sizes and not errors["pypdfium2", 1]:
                 reference_sizes = sizes["pypdfium2", 1]
                 require(
                     set(reference_sizes) == self.expected,
@@ -430,15 +592,27 @@ class ReportInputs:
                 )
         return result
 
-    def load(self) -> list[Measurement]:
+    def load(self, *, include_comparison: bool = True) -> list[Measurement]:
+        self.canvas_checks.clear()
+        self.committed_replay_sources.clear()
+        self.excluded_comparisons.clear()
+        self.comparison_errors.clear()
         measurements = []
         for path in sorted((self.root / "native").rglob("*.csv")):
             measurements.extend(self.native(path))
         for path in sorted((self.root / "replay").glob("r*/*/report.json")):
             measurements.extend(self.replay(path))
-        for path in sorted((self.root / "comparison").glob("r*/*/*.csv")):
-            measurements.extend(self.comparison(path))
+        if include_comparison:
+            for path in sorted((self.root / "comparison").glob("r*/*/*.csv")):
+                measurements.extend(self.comparison(path))
         actual = [(m.group, m.repetition) for m in measurements]
+        actual.extend(
+            (
+                ("comparison", row["backend"], row["task"], row["threads"]),
+                row["repetition"],
+            )
+            for row in self.excluded_comparisons
+        )
         require(len(actual) == len(set(actual)), "Duplicate measurement/repetition")
         expected = set()
         for r in range(1, self.metadata["repeats"] + 1):
@@ -446,11 +620,11 @@ class ReportInputs:
                 for profile in self.native_profiles:
                     expected.add((("native", "docling-parse", profile, t), r))
                 expected.add((("replay", "threaded", "render", t), r))
-                if self.metadata["comparison"]:
+                if self.metadata["comparison"] and include_comparison:
                     for task in ("parse", "parse+render"):
                         expected.add((("comparison", "docling-parse", task, t), r))
             expected.add((("replay", "pdfium", "render", 1), r))
-            if self.metadata["comparison"]:
+            if self.metadata["comparison"] and include_comparison:
                 for backend in (
                     "pymupdf",
                     "pypdfium2",
@@ -469,7 +643,22 @@ class ReportInputs:
             f"Missing/unexpected measurements: missing={expected - set(actual)}, extra={set(actual) - expected}",
         )
         require(all(m.wall_s > 0 for m in measurements), "Nonpositive corpus wall time")
-        return measurements
+        require(
+            all(row["wall_s"] > 0 for row in self.excluded_comparisons),
+            "Nonpositive excluded comparison wall time",
+        )
+        # If any repetition failed, do not bias medians by selecting only the
+        # successful repetitions of that backend/task/thread series.
+        excluded = {
+            (row["backend"], row["task"], row["threads"])
+            for row in self.excluded_comparisons
+        }
+        return [
+            m
+            for m in measurements
+            if m.workload != "comparison"
+            or (m.backend, m.task, m.threads) not in excluded
+        ]
 
 
 def summarize(measurements: list[Measurement]) -> list[dict[str, Any]]:
@@ -482,6 +671,10 @@ def summarize(measurements: list[Measurement]) -> list[dict[str, Any]]:
     }
     result = []
     for key, values in sorted(groups.items()):
+        require(
+            len({m.package_version for m in values}) == 1,
+            f"Mixed package versions in series: {key}",
+        )
         workload, backend, task, threads = key
         wall = medians[key]
         docling_backend = "threaded" if workload == "replay" else "docling-parse"
@@ -493,6 +686,7 @@ def summarize(measurements: list[Measurement]) -> list[dict[str, Any]]:
             {
                 "workload": workload,
                 "backend": backend,
+                "package_version": values[0].package_version,
                 "task": task,
                 "threads": threads,
                 "repetitions": len(values),
@@ -526,8 +720,152 @@ def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         writer.writerows(rows)
 
 
+def python_experiment_explanation(summary: list[dict[str, Any]]) -> list[str]:
+    """Explain the launcher workloads, using this bundle's paired render results."""
+    workloads = {row["workload"] for row in summary}
+    if not {"replay", "comparison"}.issubset(workloads):
+        return []
+    lines = [
+        "## Understanding the two Python experiments",
+        "",
+        "**These sections measure different workloads and Python output representations.** "
+        "They share a corpus, but their pages/second values cannot be subtracted to measure "
+        "isolated Python overhead or interpreted as a change in native renderer performance. "
+        "Neither experiment runs OCR, model inference or complete document conversion.",
+        "",
+        "### What each experiment measures",
+        "",
+        "The Docling-settings replay uses "
+        "`run_performance_benchmarking_with_docling_settings.py` to replay selected backend "
+        "operations from a pinned Docling revision, including adapter processing. "
+        "The cross-package experiment uses `run_performance_benchmarking.py` to exercise "
+        "each package's supported extraction API, optionally followed by rendering. "
+        "It does not construct a common Docling output model across packages.",
+        "",
+        "| Aspect | Python scaling with Docling settings | Python cross-package comparison |",
+        "|---|---|---|",
+        "| PDFium page-image generation | Render at 1.5 times the requested scale, copy the PIL image, "
+        "then resize to the requested dimensions | Render directly at the requested scale and obtain a PIL image |",
+        "| PDFium text processing | Read character data, select text geometrically, normalize coordinates, "
+        "merge fragmented cells and construct segmented-page models | Iterate PDFium text rectangles and call "
+        "`get_text_bounded()`; no Docling page models or cell-merging adapter |",
+        "| Docling text output | Compute characters internally; materialize word and line models, "
+        "without character models | Materialize character models; word/line construction is disabled |",
+        "| Docling page-image output | Obtain the rendered page-image and convert it to RGB | Obtain the rendered "
+        "image without the replay's explicit RGB conversion |",
+        "| Additional geometry | Query separator lines, connected shapes and bitmap bounds | "
+        "These adapter queries and separate bitmap-bound outputs are omitted |",
+        "| Docling document scheduling | Construct a parser, load, process and unload one document at a time; "
+        "native page work within that document is threaded | Construct one parser and submit all documents "
+        "before consuming results; native work can overlap submission |",
+        "| Native-memory release policy | Every 128 pages | No periodic release (`0`) |",
+        "| Reported wall time | Sum of document timers, including parser construction, loading, processing "
+        "and unloading | Corpus timer including document loading and result consumption; parser construction "
+        "occurs before this timer |",
+        "| Timed bookkeeping | Per-page metadata generation, JSONL writes and progress updates | Per-page "
+        "timing collection and progress updates; checkpoint and final CSV writes occur after measurement |",
+        "",
+        "Repeated image and segmented-page requests in the replay check caching; they do not repeat "
+        "the underlying work. Both render profiles decode the image content needed to draw a page, "
+        "even when exporting bitmap bytes or bitmap bounding-box models is disabled.",
+        "",
+        "Text geometry is also different **within** the cross-package experiment: docling-parse "
+        "materializes character cells; PDFium returns text rectangles; PyMuPDF returns `rawdict` "
+        "character data; pdfplumber exposes `page.chars`; pdfminer.six walks `LTChar` objects; "
+        "and pypdf's visitor exposes text-chunk positions. Its speedups compare these selected API "
+        "workloads, not identical output granularity or extraction quality.",
+        "",
+        "### Reading this run's throughput",
+        "",
+        "Compare the replay with the cross-package **render** rows. Cross-package parse-only "
+        "rows do not generate page-images. The table below pairs successful render measurements for "
+        "the same package version and thread count; it does not assert equivalent workloads.",
+        "",
+    ]
+    replay = {
+        (BACKEND_LABELS.get(row["backend"], row["backend"]), row["threads"]): row
+        for row in summary
+        if row["workload"] == "replay" and row["task"] == "render"
+    }
+    comparison = {
+        (row["backend"], row["threads"]): row
+        for row in summary
+        if row["workload"] == "comparison" and row["task"] == "parse+render"
+    }
+    pairs = sorted(
+        (
+            key
+            for key in replay.keys() & comparison.keys()
+            if replay[key]["package_version"] == comparison[key]["package_version"]
+        ),
+        key=lambda key: (key[0] != "pypdfium2", key[0], key[1]),
+    )
+    if pairs:
+        lines += [
+            "| Backend | Version | Threads | Docling-settings replay, pages/s | Cross-package text + render, pages/s |",
+            "|---|---|---:|---:|---:|",
+        ]
+        for key in pairs:
+            a, b = replay[key], comparison[key]
+            lines.append(
+                f"| {key[0]} | {a['package_version'] or '—'} | {key[1]} "
+                f"| {a['pages_per_s']:.1f} | {b['pages_per_s']:.1f} |"
+            )
+        lines += [""]
+    else:
+        lines += [
+            "No successful render pairs with matching package versions and thread counts are available.",
+            "",
+        ]
+    lines += [
+        "For PDFium, the replay performs additional text adaptation, geometry queries, model construction "
+        "and image processing. Its intermediate image has approximately **2.25 times as many pixels** "
+        "before resizing. These are verified workload differences; the measurements do not isolate "
+        "their individual contributions to the timing gap.",
+        "",
+        "For Docling, the replay requests additional adapter operations but avoids constructing a Python "
+        "model for every character. It instead materializes word and line models. The cross-package "
+        "character-model construction runs through the Python result consumer; adding native workers "
+        "does not parallelize that Python construction loop. Character-level output therefore introduces "
+        "a possible consumer bottleneck, even though this profile omits several replay operations.",
+        "",
+    ]
+    parse = sorted(
+        (
+            row
+            for row in summary
+            if row["workload"] == "comparison"
+            and row["backend"] == "docling-parse"
+            and row["task"] == "parse"
+        ),
+        key=lambda row: row["threads"],
+    )
+    if len(parse) > 1 and parse[0]["threads"] == 1:
+        first, last = parse[0], parse[-1]
+        lines += [
+            f"In this run, cross-package Docling parse-only throughput is {first['pages_per_s']:.1f} "
+            f"pages/s at one thread and {last['pages_per_s']:.1f} pages/s at {last['threads']} threads. "
+            "These observations help assess scaling for the character-output workload.",
+            "",
+        ]
+    return [
+        *lines,
+        "**Bottleneck attribution remains an inference.** These runs do not separately time "
+        "character materialization or queue stalls, so they cannot quantify how much of the gap "
+        "comes from either. Document scheduling, memory policy and process/cache state also differ: "
+        "the launcher uses a fresh process per replay profile/thread count, while each cross-package "
+        "mode runs its references and Docling thread sweep in one process. Use each experiment's "
+        "own one-thread baseline when interpreting speedup and parallel efficiency.",
+        "",
+    ]
+
+
 def write_report(
-    inputs: ReportInputs, measurements: list[Measurement], output: Path
+    inputs: ReportInputs,
+    measurements: list[Measurement],
+    output: Path,
+    *,
+    core_only: bool = False,
 ) -> None:
     output.mkdir(parents=True, exist_ok=True)
     summary = summarize(measurements)
@@ -538,6 +876,7 @@ def write_report(
             {
                 "workload": m.workload,
                 "backend": m.backend,
+                "package_version": m.package_version,
                 "task": m.task,
                 "threads": m.threads,
                 "repetition": m.repetition,
@@ -566,6 +905,9 @@ def write_report(
             ],
         )
     write_csv(output / "canvas_checks.csv", inputs.canvas_checks)
+    if not core_only:
+        write_csv(output / "excluded_comparisons.csv", inputs.excluded_comparisons)
+        write_csv(output / "comparison_errors.csv", inputs.comparison_errors)
     meta = inputs.metadata
     lines = [
         "# Performance measurement report",
@@ -586,19 +928,84 @@ def write_report(
         "References never cross workloads or tasks; efficiency uses the docling-parse baseline.",
         "",
     ]
+    if core_only:
+        lines += [
+            "**Core results only:** native and Python replay profiles are complete. "
+            "Cross-package comparisons are excluded from this report.",
+            "",
+        ]
+    elif inputs.excluded_comparisons:
+        lines += [
+            "**Reference page failures:** affected comparison series are excluded from all "
+            "performance tables, speedups and figures across all repetitions. Every expected "
+            "page was attempted; failures are listed below and in `comparison_errors.csv`.",
+            "",
+        ]
+    if inputs.committed_replay_sources:
+        revisions = ", ".join(f"`{r}`" for r in sorted(inputs.committed_replay_sources))
+        lines += [
+            f"Replay source committed during collection: {revisions}. Each commit's patch "
+            "exactly matches the build's recorded working-tree diff; replay script hashes "
+            "also match. The original build and replay provenance are preserved.",
+            "",
+        ]
+    if meta.get("recovery"):
+        lines += [
+            f"Core measurements reused from `{meta['recovery']['source_bundle']}`. "
+            "Comparisons were recollected with their own recorded source/package provenance.",
+            "",
+        ]
+    if meta.get("comparison_provenance") and not core_only:
+        comparison = meta["comparison_provenance"]
+        lines += [
+            "## Comparison provenance",
+            "",
+            f"Comparison source: `{comparison['source_revision']}`; diff SHA-256: "
+            f"`{comparison['source_diff_sha256']}`. Original core provenance above is preserved.",
+            "",
+            "| Package | Core run metadata | Comparison version |",
+            "|---|---|---|",
+        ]
+        for package, version in sorted(comparison["packages"].items()):
+            lines.append(
+                f"| {package} | {meta.get('packages', {}).get(package, '—')} | {version} |"
+            )
+        lines += [""]
     for workload in ("native", "replay", "comparison"):
         rows = [row for row in summary if row["workload"] == workload]
         if not rows:
             continue
+        if workload == "replay":
+            lines += python_experiment_explanation(summary)
         lines += [
             f"## {WORKLOAD_LABELS[workload]}",
             "",
+        ]
+        if workload == "replay":
+            lines += [
+                "This standalone backend-operation replay creates page-images and text, and requests bitmap "
+                "bounding boxes and separator geometry, including coordinate normalization and text "
+                "cleanup. Docling materializes word/line models; PDFium builds merged textline models "
+                "from its rectangles, so segmentation differs. It excludes OCR, model inference and "
+                "Docling framework construction; it is not a full document-conversion benchmark.",
+                "",
+            ]
+        elif workload == "comparison":
+            lines += [
+                "This experiment measures package-specific text and geometry APIs, optionally with page "
+                "page-images. Docling materializes character models, PDFium returns rectangle text, and other "
+                "packages expose their own geometry granularity. Word/line construction and separate "
+                "bitmap-bound models are disabled in the Docling profile. These are API workload "
+                "comparisons, with different outputs from the Docling-settings replay.",
+                "",
+            ]
+        lines += [
             rows[0]["timing_basis"] + ".",
             "",
-            "| Backend | Task | Threads | Runs | Wall median (s) | Min-max (s) | Pages/s | "
+            "| Backend | Version | Task | Threads | Runs | Wall median (s) | Min-max (s) | Pages/s | "
             + ("Speedup vs pypdfium2 (1t) | " if workload != "native" else "")
             + "Speedup vs docling-parse (1t) | Efficiency |",
-            "|---|---|---:|---:|---:|---:|---:|"
+            "|---|---|---|---:|---:|---:|---:|---:|"
             + ("---:|" if workload != "native" else "")
             + "---:|---:|",
         ]
@@ -620,6 +1027,7 @@ def write_report(
             )
             lines.append(
                 f"| {BACKEND_LABELS.get(row['backend'], row['backend'])} "
+                f"| {row['package_version'] or '—'} "
                 f"| {task_title(workload, row['task'])} | {row['threads']} | {row['repetitions']} "
                 f"| {row['median_wall_s']:.3f} | {row['min_wall_s']:.3f}-{row['max_wall_s']:.3f} "
                 f"| {row['pages_per_s']:.1f} | "
@@ -627,7 +1035,41 @@ def write_report(
                 + f"{speedup} | {efficiency} |"
             )
         lines += [""]
-    if inputs.canvas_checks:
+    if inputs.excluded_comparisons and not core_only:
+        lines += [
+            "## Excluded reference comparisons",
+            "",
+            "These runs attempted the full corpus but did not successfully process every page. "
+            "Their wall times are retained for audit in `excluded_comparisons.csv`; they are "
+            "not throughput measurements. Raw measurements and provenance are unchanged.",
+            "",
+            "| Backend | Version | Task | Threads | Repetition | Attempted pages | Successful pages | Failed pages |",
+            "|---|---|---|---:|---:|---:|---:|---:|",
+        ]
+        lines += [
+            f"| {row['backend']} | {row['package_version']} | {row['task']} | {row['threads']} "
+            f"| {row['repetition']} | {row['attempted_pages']} | {row['successful_pages']} | {row['failed_pages']} |"
+            for row in inputs.excluded_comparisons
+        ]
+        lines += [
+            "",
+            "### Page errors",
+            "",
+            "Document/page numbers are 1-based. Full error messages are in `comparison_errors.csv`.",
+            "",
+            "| Backend | Repetition | Document | Page | Error |",
+            "|---|---:|---|---:|---|",
+        ]
+        for row in inputs.comparison_errors:
+            error = row["error_message"].replace("|", "\\|").replace("\n", " ")
+            if len(error) > 180:
+                error = error[:177] + "..."
+            lines.append(
+                f"| {row['backend']} | {row['repetition']} | {row['document']} "
+                f"| {row['page']} | {error} |"
+            )
+        lines += [""]
+    if inputs.canvas_checks and not core_only:
         lines += [
             "## Comparison canvas sizes",
             "",
@@ -643,7 +1085,10 @@ def write_report(
         ]
         lines += [""]
     figures = plot(measurements, summary, output)
-    lines += figure_sections(inputs.metadata, measurements, figures)
+    figure_meta = (
+        {**inputs.metadata, "comparison": False} if core_only else inputs.metadata
+    )
+    lines += figure_sections(figure_meta, measurements, figures)
     (output / "summary.md").write_text("\n".join(lines) + "\n")
 
 
@@ -754,7 +1199,7 @@ def figure_sections(
                 )
             elif workload == "replay":
                 description = (
-                    "This profile follows Docling settings: it creates RGB images, consumes word/line "
+                    "This profile follows Docling settings: it creates RGB page-images, consumes word/line "
                     "text geometry, materializes bitmap bounding boxes and queries reading-order "
                     "separators. Text segmentation differs between PDFium and docling-parse. "
                     "The timer includes per-document parser construction/loading, processing and unloading."
@@ -764,9 +1209,9 @@ def figure_sections(
                     "This API comparison extracts text with positions using each package's supported "
                     "geometry API; Docling materializes character models with word/line aggregation disabled. "
                     + (
-                        "Supported renderers also create page images. "
+                        "Supported renderers also create page-images. "
                         if task == "parse+render"
-                        else "Page images are not requested. "
+                        else "Page-images are not requested. "
                     )
                     + "Separate bitmap bounding-box models are not materialized. Geometry granularity "
                     "differs across packages; the timer includes document loading."
@@ -1001,12 +1446,19 @@ def main() -> None:
         "input", type=Path, help="Launcher output containing metadata.json"
     )
     parser.add_argument("--output-dir", type=Path, help="Default: INPUT/report")
+    parser.add_argument(
+        "--core-only",
+        action="store_true",
+        help="Validate/report native and Python replay results, excluding comparisons; default output: INPUT/report-core",
+    )
     args = parser.parse_args()
     try:
         inputs = ReportInputs(args.input.resolve())
-        measurements = inputs.load()
-        output = args.output_dir or inputs.root / "report"
-        write_report(inputs, measurements, output)
+        measurements = inputs.load(include_comparison=not args.core_only)
+        output = args.output_dir or inputs.root / (
+            "report-core" if args.core_only else "report"
+        )
+        write_report(inputs, measurements, output, core_only=args.core_only)
     except (ValueError, KeyError, OSError) as error:
         parser.exit(1, f"Cannot produce a complete benchmark report: {error}\n")
     print(
