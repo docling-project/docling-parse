@@ -228,6 +228,14 @@ set_target_properties(parse PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 target_link_libraries(parse ${DEPENDENCIES} ${LIB_LINK})
 
+option(DOCLING_PARSE_BUILD_STRUCTURE_TESTS "Build the native structure concurrency harness" OFF)
+if(DOCLING_PARSE_BUILD_STRUCTURE_TESTS)
+    add_executable(structure_concurrency tests/cpp/test_structure_concurrency.cpp)
+    set_property(TARGET structure_concurrency PROPERTY CXX_STANDARD 20)
+    add_dependencies(structure_concurrency ${DEPENDENCIES})
+    target_link_libraries(structure_concurrency PRIVATE ${DEPENDENCIES} ${LIB_LINK})
+endif()
+
 # Test the native library directly: the renderer's curve-flattening workaround
 # (#407) otherwise bypasses the stroker routines patched for #396/#400/#401.
 option(DOCLING_PARSE_BUILD_BLEND2D_TESTS "Build native Blend2D patch regression tests" OFF)

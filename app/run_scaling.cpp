@@ -62,6 +62,11 @@ namespace
     double create_word_cells_s = 0.0;
     double create_line_cells_s = 0.0;
     double render_page_s = 0.0;
+    double get_canvas_s = 0.0;
+    double save_png_s = 0.0;
+    double collect_detail_s = 0.0;
+    double worker_queue_wait_s = 0.0;
+    double consumer_wait_s = 0.0;
   };
 
   struct page_result
@@ -71,6 +76,8 @@ namespace
     bool success = false;
     std::string error_message;
     page_timings timings;
+    std::unordered_map<std::string, double> detail_timings;
+    std::optional<nlohmann::json> glyph_cache_diagnostics;
     std::shared_ptr<page_decoder_type> page_decoder;
     std::shared_ptr<std::vector<uint8_t>> image_data;
   };
@@ -93,7 +100,10 @@ namespace
     float scale = 2.0f;
     std::size_t glyph_bbox_cache_capacity = 65536;
     bool enable_timing = false;
+    bool suppress_config = false;
+    bool suppress_timings = false;
     std::filesystem::path timing_csv = "timing-cpp.csv";
+    std::optional<std::filesystem::path> glyph_cache_diagnostics = std::nullopt;
     std::optional<std::filesystem::path> output_dir = std::nullopt;
     std::string loglevel = "fatal";
   };
@@ -187,24 +197,7 @@ namespace
 
   std::string format_duration(double seconds)
   {
-    const int total_seconds = static_cast<int>(seconds);
-    const int hours = total_seconds / 3600;
-    const int minutes = (total_seconds % 3600) / 60;
-    const int secs = total_seconds % 60;
-
-    std::ostringstream ss;
-    if(hours > 0)
-      {
-        ss << hours << ":"
-           << std::setw(2) << std::setfill('0') << minutes << ":"
-           << std::setw(2) << std::setfill('0') << secs;
-      }
-    else
-      {
-        ss << minutes << ":"
-           << std::setw(2) << std::setfill('0') << secs;
-      }
-    return ss.str();
+    return std::to_string(static_cast<int>(seconds));
   }
 
   std::string zero_padded(std::size_t value, int width = 6)
@@ -337,6 +330,39 @@ namespace
     config.scale = scale;
     config.canvas_width = -1;
     config.canvas_height = -1;
+    return config;
+  }
+
+  // The config a mode's workers decode with: the CLI values plus what the mode
+  // requires. Both the printed table and the benchmark use this result.
+  pdflib::decode_config effective_decode_config(run_mode mode,
+                                                pdflib::decode_config config,
+                                                const pdflib::render_config& render_config)
+  {
+    const bool render = (mode == run_mode::render);
+    const bool parse_with_bitmaps = (mode == run_mode::parse_with_bitmaps);
+
+    config.keep_shapes = render or config.keep_shapes;
+    // without keep_bitmaps the renderer has no bitmaps to iterate over
+    config.keep_bitmaps = render or parse_with_bitmaps;
+    config.extract_bitmap_pixels = render or parse_with_bitmaps;
+
+    if(render)
+      {
+        // Rendering needs the embedded font programs, whatever the CLI asked
+        // for. Without them this benchmark silently rasterised with substituted
+        // system fonts, which is both cheaper and not what the library does.
+        config.extract_font_programs = true;
+
+        // Same resolution hint the library sets, so this benchmark measures
+        // the decode work the library actually does; see
+        // docling_threaded_renderer for why only the scale form qualifies.
+        if(render_config.scale > 0.0f)
+          {
+            config.bitmap_target_pixels_per_unit = render_config.scale;
+          }
+      }
+
     return config;
   }
 
@@ -502,6 +528,138 @@ namespace
     return escaped;
   }
 
+  struct timing_stage
+  {
+    const char* name;
+    double page_timings::*value;
+  };
+
+  const std::vector<timing_stage>& timing_stages()
+  {
+    static const std::vector<timing_stage> stages = {
+      {"total_s", &page_timings::total_s},
+      {"make_page_decoder_s", &page_timings::make_page_decoder_s},
+      {"decode_page_s", &page_timings::decode_page_s},
+      {"create_word_cells_s", &page_timings::create_word_cells_s},
+      {"create_line_cells_s", &page_timings::create_line_cells_s},
+      {"render_page_s", &page_timings::render_page_s},
+      {"get_canvas_s", &page_timings::get_canvas_s},
+      {"save_png_s", &page_timings::save_png_s},
+      {"collect_detail_s", &page_timings::collect_detail_s},
+      {"worker_queue_wait_s", &page_timings::worker_queue_wait_s},
+      {"consumer_wait_s", &page_timings::consumer_wait_s},
+    };
+    return stages;
+  }
+
+  void collect_detail_timings(page_result& result,
+                              const pdflib::pdf_timings& timings)
+  {
+    const auto start = clock_type::now();
+    for(const auto& item : timings.to_sum_map())
+      {
+        // Keep a bounded vocabulary; omit dynamic per-font/resource names.
+        if(pdflib::pdf_timings::is_static_key(item.first))
+          {
+            result.detail_timings[item.first] += item.second;
+          }
+      }
+    result.timings.collect_detail_s +=
+      std::chrono::duration<double>(clock_type::now() - start).count();
+  }
+
+  class timing_summary
+  {
+  public:
+    void add(const page_result& result)
+    {
+      for(const auto& stage : timing_stages())
+        {
+          totals_.*(stage.value) += result.timings.*(stage.value);
+        }
+      for(const auto& item : result.detail_timings)
+        {
+          details_[item.first] += item.second;
+        }
+      auto& doc = documents_[result.doc_key];
+      doc.worker_s += result.timings.total_s;
+      ++doc.pages;
+      if(not result.success) { ++doc.errors; }
+
+      slowest_.push_back({result.doc_key, result.page_number,
+                          result.timings.total_s, result.success});
+      std::sort(slowest_.begin(), slowest_.end(), [](const auto& a, const auto& b) {
+        return a.worker_s > b.worker_s;
+      });
+      if(slowest_.size() > 10) { slowest_.pop_back(); }
+    }
+
+    void add_csv_write(double seconds) { csv_write_s_ += seconds; }
+
+    void print(int threads, double wall_s, std::ostream& out = std::cout) const
+    {
+      out << "\nTiming diagnostics (threads=" << threads << ", CSV schema 2)\n"
+                << std::fixed << std::setprecision(6)
+                << "  wall_s: " << wall_s << " (includes collection/CSV; excludes summary printing)\n"
+                << "  Worker elapsed seconds summed across pages; not CPU seconds.\n"
+                << "  total_s includes detail collection, excludes queue wait.\n";
+      for(const auto& stage : timing_stages())
+        {
+          if(stage.value != &page_timings::consumer_wait_s)
+            {
+              out << "  " << std::left << std::setw(30) << stage.name
+                        << std::right << totals_.*(stage.value) << "\n";
+            }
+        }
+      out << "  consumer_wait_s: " << totals_.consumer_wait_s << "\n"
+                << "  consumer_csv_write_s: " << csv_write_s_ << "\n"
+                << "  Queue waits include mutex acquisition and condition waiting;\n"
+                << "  they overlap across threads and are not added to wall time.\n"
+                << "\nNative detail worker-seconds (nested; do not sum parent/child rows):\n"
+                << pdflib::pdf_timings::format_tree_table(details_);
+
+      std::vector<std::pair<std::string, document_total>> docs(documents_.begin(),
+                                                               documents_.end());
+      std::sort(docs.begin(), docs.end(), [](const auto& a, const auto& b) {
+        return a.second.worker_s > b.second.worker_s;
+      });
+      out << "\nTop documents by summed page worker elapsed (not document wall time):\n";
+      for(std::size_t i = 0; i < std::min<std::size_t>(10, docs.size()); ++i)
+        {
+          out << "  " << docs[i].second.worker_s << " s  "
+                    << docs[i].second.pages << " pages  "
+                    << docs[i].second.errors << " errors  " << docs[i].first << "\n";
+        }
+      out << "Top pages by worker elapsed (1-based page numbers):\n";
+      for(const auto& page : slowest_)
+        {
+          out << "  " << page.worker_s << " s  " << page.doc_key
+                    << " page=" << page.page_number + 1
+                    << " success=" << (page.success ? "true" : "false") << "\n";
+        }
+    }
+
+  private:
+    struct document_total
+    {
+      double worker_s = 0.0;
+      int pages = 0;
+      int errors = 0;
+    };
+    struct slow_page
+    {
+      std::string doc_key;
+      int page_number;
+      double worker_s;
+      bool success;
+    };
+    page_timings totals_;
+    std::unordered_map<std::string, double> details_;
+    std::unordered_map<std::string, document_total> documents_;
+    std::vector<slow_page> slowest_;
+    double csv_write_s_ = 0.0;
+  };
+
   class timing_csv_writer
   {
   public:
@@ -515,6 +673,22 @@ namespace
 
       const bool write_header = (not std::filesystem::exists(path))
         or std::filesystem::file_size(path) == 0;
+      const auto expected_header = header();
+      if(not write_header)
+        {
+          std::ifstream existing(path);
+          std::string existing_header;
+          std::getline(existing, existing_header);
+          if(not existing_header.empty() and existing_header.back() == '\r')
+            {
+              existing_header.pop_back();
+            }
+          if(existing_header != expected_header)
+            {
+              throw std::runtime_error("incompatible timing CSV header: " + path.string()
+                                       + "; choose a new --timing-csv path (schema 2)");
+            }
+        }
       out_.open(path, std::ios::app);
       if(not out_)
         {
@@ -522,11 +696,9 @@ namespace
         }
       if(write_header)
         {
-          out_ << "mode,threads,render,doc_key,page_number,success,"
-               << "timing_total_s,timing_make_page_decoder_s,timing_decode_page_s,"
-               << "timing_create_word_cells_s,timing_create_line_cells_s,"
-               << "timing_render_page_s,error_message\n";
+          out_ << expected_header << '\n';
         }
+      out_ << std::setprecision(9);
     }
 
     void write(const std::string& mode,
@@ -539,26 +711,63 @@ namespace
           return;
         }
 
-      out_ << mode << ','
+      out_ << "2," << mode << ','
            << threads << ','
            << (render ? "true" : "false") << ','
            << csv_escape(result.doc_key) << ','
            << (result.page_number + 1) << ','
-           << (result.success ? "true" : "false") << ','
-           << result.timings.total_s << ','
-           << result.timings.make_page_decoder_s << ','
-           << result.timings.decode_page_s << ','
-           << result.timings.create_word_cells_s << ','
-           << result.timings.create_line_cells_s << ','
-           << result.timings.render_page_s << ','
-           << csv_escape(result.error_message)
-           << '\n';
+           << (result.success ? "true" : "false");
+      for(const auto& stage : timing_stages())
+        {
+          out_ << ',' << result.timings.*(stage.value);
+        }
+      out_ << ',' << csv_escape(nlohmann::json(result.detail_timings).dump())
+           << ',' << csv_escape(result.error_message) << '\n';
+    }
+
+    void finish()
+    {
+      if(enabled_)
+        {
+          out_.flush();
+          if(not out_) { throw std::runtime_error("could not finish writing timing CSV"); }
+        }
     }
 
   private:
+    static std::string header()
+    {
+      std::string result = "schema_version,mode,threads,render,doc_key,page_number,success";
+      for(const auto& stage : timing_stages())
+        {
+          result += ",timing_";
+          result += stage.name;
+        }
+      return result + ",detail_timings_json,error_message";
+    }
     bool enabled_;
     std::ofstream out_;
   };
+
+  nlohmann::json glyph_cache_delta(
+      const pdflib::glyph_bbox_cache::diagnostics& before,
+      const pdflib::glyph_bbox_cache::diagnostics& after)
+  {
+    return {
+      {"lookups", after.lookups - before.lookups},
+      {"hits", after.hits - before.hits},
+      {"misses", after.misses - before.misses},
+      {"insertions", after.insertions - before.insertions},
+      {"updates", after.updates - before.updates},
+      {"evictions", after.evictions - before.evictions},
+      {"outline_attempts", after.outline_attempts - before.outline_attempts},
+      {"outline_successes", after.outline_successes - before.outline_successes},
+      {"lookup_s", after.lookup_s - before.lookup_s},
+      {"hit_touch_s", after.hit_touch_s - before.hit_touch_s},
+      {"insert_s", after.insert_s - before.insert_s},
+      {"outline_s", after.outline_s - before.outline_s},
+    };
+  }
 
   class threaded_benchmark
   {
@@ -580,21 +789,6 @@ namespace
     {
       if(render_config_.has_value())
         {
-          // Rendering needs the image samples and the embedded font programs,
-          // whatever the CLI asked for. Without the latter this benchmark
-          // silently rasterised with substituted system fonts, which is both
-          // cheaper and not what the library does.
-          decode_config_.extract_bitmap_pixels = true;
-          decode_config_.extract_font_programs = true;
-
-          // Same resolution hint the library sets, so this benchmark measures
-          // the decode work the library actually does; see
-          // docling_threaded_renderer for why only the scale form qualifies.
-          if(render_config_->scale > 0.0f)
-            {
-              decode_config_.bitmap_target_pixels_per_unit = render_config_->scale;
-            }
-
           font_resolver_ = std::make_shared<pdflib::blend2d_font_resolver>();
           font_resolver_->warm();
 
@@ -606,20 +800,29 @@ namespace
 
     benchmark_result run(const std::string& mode,
                          bool enable_timing,
-                         const std::filesystem::path& timing_csv)
+                         const std::filesystem::path& timing_csv,
+                         std::ostream* glyph_diagnostics = nullptr,
+                         std::ostream* timing_output = nullptr)
     {
+      if(glyph_diagnostics and not render_config_.has_value())
+        {
+          throw std::runtime_error("glyph-cache diagnostics require render mode");
+        }
+      enable_timing_ = enable_timing;
+      glyph_diagnostics_enabled_ = glyph_diagnostics != nullptr;
       tasks_ = build_tasks(schedule_);
       next_task_.store(0);
       tasks_remaining_.store(static_cast<int>(tasks_.size()));
       active_workers_.store(std::min(num_threads_, static_cast<int>(tasks_.size())));
 
       timing_csv_writer csv_writer(enable_timing, timing_csv);
+      timing_summary summary;
 
       auto start = clock_type::now();
 
       for(int i = 0; i < active_workers_.load(); ++i)
         {
-          workers_.emplace_back(&threaded_benchmark::worker_loop, this);
+          workers_.emplace_back(&threaded_benchmark::worker_loop, this, i);
         }
 
       int errors = 0;
@@ -635,7 +838,18 @@ namespace
               ++errors;
             }
 
-          csv_writer.write(mode, num_threads_, render_config_.has_value(), result);
+          if(enable_timing_)
+            {
+              summary.add(result);
+              const auto csv_start = clock_type::now();
+              csv_writer.write(mode, num_threads_, render_config_.has_value(), result);
+              summary.add_csv_write(
+                std::chrono::duration<double>(clock_type::now() - csv_start).count());
+            }
+          if(glyph_diagnostics and result.glyph_cache_diagnostics.has_value())
+            {
+              *glyph_diagnostics << result.glyph_cache_diagnostics->dump() << '\n';
+            }
           progress.update(completed);
         }
       progress.finish();
@@ -648,12 +862,40 @@ namespace
             }
         }
 
+      if(enable_timing_)
+        {
+          const auto flush_start = clock_type::now();
+          csv_writer.finish();
+          summary.add_csv_write(
+            std::chrono::duration<double>(clock_type::now() - flush_start).count());
+        }
+      if(glyph_diagnostics)
+        {
+          glyph_diagnostics->flush();
+          if(not *glyph_diagnostics)
+            {
+              throw std::runtime_error("could not write glyph-cache diagnostics");
+            }
+        }
       const double elapsed = std::chrono::duration<double>(clock_type::now() - start).count();
+      if(enable_timing_)
+        {
+          summary.print(num_threads_, elapsed,
+                        timing_output ? *timing_output : std::cout);
+          if(timing_output)
+            {
+              timing_output->flush();
+              if(not *timing_output)
+                {
+                  throw std::runtime_error("could not write timing summary");
+                }
+            }
+        }
       return benchmark_result{num_threads_, elapsed, errors};
     }
 
   private:
-    void worker_loop()
+    void worker_loop(int worker_id)
     {
       std::shared_ptr<pdflib::freetype_font_cache> freetype_font_cache;
       std::shared_ptr<pdflib::glyph_bbox_cache> glyph_bbox_cache;
@@ -664,9 +906,10 @@ namespace
           // pages, but never shared with another render worker.
           freetype_font_cache = std::make_shared<pdflib::freetype_font_cache>();
           glyph_bbox_cache = std::make_shared<pdflib::glyph_bbox_cache>(
-            render_config_->glyph_bbox_cache_capacity);
+            render_config_->glyph_bbox_cache_capacity, glyph_diagnostics_enabled_);
         }
 
+      std::size_t worker_page_index = 0;
       while(true)
         {
           const std::size_t task_index = next_task_.fetch_add(1);
@@ -679,11 +922,19 @@ namespace
           page_result result;
           result.doc_key = schedule_[task.doc_index].path.string();
           result.page_number = task.page_number;
+          ++worker_page_index;
 
+          pdflib::glyph_bbox_cache::diagnostics glyph_before;
+          std::size_t entries_before = 0;
+          if(glyph_diagnostics_enabled_)
+            {
+              glyph_before = glyph_bbox_cache->snapshot_diagnostics();
+              entries_before = glyph_bbox_cache->size();
+            }
+
+          const auto total_start = clock_type::now();
           try
             {
-              auto total_start = clock_type::now();
-
               auto stage_start = clock_type::now();
               auto page_decoder = docs_[task.doc_index]->make_thread_safe_page_decoder(
                 task.page_number,
@@ -723,21 +974,44 @@ namespace
                   page_decoder->get_instructions().iterate_over_instructions(rnd);
                   result.timings.render_page_s =
                     std::chrono::duration<double>(clock_type::now() - stage_start).count();
+                  auto output_start = enable_timing_ ? clock_type::now()
+                                                    : clock_type::time_point{};
                   if(output_dir_.has_value())
                     {
                       const auto page_path = *output_dir_ /
                         ("doc_" + zero_padded(task.doc_index + 1) +
                          "_page_" + zero_padded(task.page_number + 1) + ".png");
                       rnd.save(page_path.string());
+                      if(enable_timing_)
+                        {
+                          result.timings.save_png_s =
+                            std::chrono::duration<double>(clock_type::now() - output_start).count();
+                        }
                     }
                   else
                     {
                       result.image_data = rnd.get_canvas();
+                      if(enable_timing_)
+                        {
+                          result.timings.get_canvas_s =
+                            std::chrono::duration<double>(clock_type::now() - output_start).count();
+                        }
+                    }
+                  if(enable_timing_)
+                    {
+                      // Render parent includes output extraction, but excludes
+                      // collecting the already-recorded renderer detail timings.
+                      const double render_total_s =
+                        std::chrono::duration<double>(clock_type::now() - stage_start).count();
+                      collect_detail_timings(result, rnd.get_timings());
+                      result.detail_timings[pdflib::pdf_timings::KEY_RENDER_PAGE] = render_total_s;
                     }
                 }
 
-              result.timings.total_s =
-                std::chrono::duration<double>(clock_type::now() - total_start).count();
+              if(enable_timing_)
+                {
+                  collect_detail_timings(result, page_decoder->get_timings());
+                }
               result.success = true;
               result.page_decoder = page_decoder;
             }
@@ -746,6 +1020,25 @@ namespace
               result.success = false;
               result.error_message = exc.what();
             }
+          if(glyph_diagnostics_enabled_)
+            {
+              result.glyph_cache_diagnostics = {
+                {"schema_version", 1},
+                {"threads", num_threads_},
+                {"worker_id", worker_id},
+                {"worker_page_index", worker_page_index},
+                {"doc_key", result.doc_key},
+                {"page_number", result.page_number + 1},
+                {"success", result.success},
+                {"capacity", render_config_->glyph_bbox_cache_capacity},
+                {"entries_before", entries_before},
+                {"entries_after", glyph_bbox_cache->size()},
+                {"delta", glyph_cache_delta(glyph_before,
+                                           glyph_bbox_cache->snapshot_diagnostics())},
+              };
+            }
+          result.timings.total_s =
+            std::chrono::duration<double>(clock_type::now() - total_start).count();
 
           push_result(std::move(result));
         }
@@ -756,11 +1049,17 @@ namespace
 
     void push_result(page_result result)
     {
+      const auto wait_start = enable_timing_ ? clock_type::now() : clock_type::time_point{};
       std::unique_lock<std::mutex> lock(results_mutex_);
       results_consumed_.wait(lock, [this]() {
         return static_cast<int>(results_.size()) < max_concurrent_results_;
       });
 
+      if(enable_timing_)
+        {
+          result.timings.worker_queue_wait_s =
+            std::chrono::duration<double>(clock_type::now() - wait_start).count();
+        }
       results_.push(std::move(result));
       lock.unlock();
       results_available_.notify_one();
@@ -768,6 +1067,7 @@ namespace
 
     page_result get_result()
     {
+      const auto wait_start = enable_timing_ ? clock_type::now() : clock_type::time_point{};
       std::unique_lock<std::mutex> lock(results_mutex_);
       results_available_.wait(lock, [this]() {
         return not results_.empty() or active_workers_.load() == 0;
@@ -782,6 +1082,11 @@ namespace
         }
 
       page_result result = std::move(results_.front());
+      if(enable_timing_)
+        {
+          result.timings.consumer_wait_s =
+            std::chrono::duration<double>(clock_type::now() - wait_start).count();
+        }
       results_.pop();
       tasks_remaining_.fetch_sub(1);
       lock.unlock();
@@ -794,6 +1099,8 @@ namespace
     const std::vector<doc_decoder_ptr>& docs_;
     int num_threads_;
     int max_concurrent_results_;
+    bool enable_timing_ = false;
+    bool glyph_diagnostics_enabled_ = false;
     pdflib::decode_config decode_config_;
     std::optional<pdflib::render_config> render_config_;
     std::optional<std::filesystem::path> output_dir_;
@@ -812,31 +1119,6 @@ namespace
 
     std::vector<std::thread> workers_;
   };
-
-  void print_decode_config(const pdflib::decode_config& config)
-  {
-    std::cout << "Decode config:\n" << config.to_string() << "\n";
-  }
-
-  void print_render_config(const pdflib::render_config& config)
-  {
-    std::cout << "Render config:\n"
-              << std::left
-              << std::setw(32) << "parameter" << "value\n"
-              << std::string(44, '-') << "\n"
-              << std::setw(32) << "render_text" << config.render_text << "\n"
-              << std::setw(32) << "min_stroke_width" << config.min_stroke_width << "\n"
-              << std::setw(32) << "draw_text_bbox" << config.draw_text_bbox << "\n"
-              << std::setw(32) << "draw_text_basepoint" << config.draw_text_basepoint << "\n"
-              << std::setw(32) << "display_widgets" << config.display_widgets << "\n"
-              << std::setw(32) << "fit_glyph_bbox_to_target" << config.fit_glyph_bbox_to_target << "\n"
-              << std::setw(32) << "resolve_fonts" << config.resolve_fonts << "\n"
-              << std::setw(32) << "font_similarity_cutoff" << config.font_similarity_cutoff << "\n"
-              << std::setw(32) << "glyph_bbox_cache_capacity" << config.glyph_bbox_cache_capacity << "\n"
-              << std::setw(32) << "scale" << config.scale << "\n"
-              << std::setw(32) << "canvas_width" << config.canvas_width << "\n"
-              << std::setw(32) << "canvas_height" << config.canvas_height << "\n";
-  }
 
   void print_table(const std::string& title,
                    const std::vector<benchmark_result>& results,
@@ -920,9 +1202,12 @@ namespace
       ("threads", "Comma-separated thread counts", cxxopts::value<std::string>()->default_value("1,2,4,8,12,16"))
       ("scale", "Render scale for render mode", cxxopts::value<float>()->default_value("2.0"))
       ("glyph-bbox-cache-capacity", "Maximum cached glyph bounding boxes per render worker; 0 disables caching", cxxopts::value<std::size_t>()->default_value("65536"))
+      ("glyph-cache-diagnostics", "Write per-page worker-local glyph-cache counts/timings to a new JSONL file (render mode only)", cxxopts::value<std::string>())
       ("output-dir", "Write rendered PNGs under this directory", cxxopts::value<std::string>())
-      ("enable-timing", "Write one CSV timing row per page result", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
+      ("enable-timing", "Write schema-2 per-page CSV timings and print native stage/wait summaries", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
       ("timing-csv", "CSV path used when --enable-timing is set", cxxopts::value<std::string>()->default_value("timing-cpp.csv"))
+      ("suppress-config", "Hide configuration tables; retain progress and results", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
+      ("suppress-timings", "Write timing summaries to <timing-csv>.summary.log instead of the console", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
       ("loglevel", "Log level [fatal, error, warning, info]", cxxopts::value<std::string>()->default_value("fatal"))
       ("page-boundary", "Page boundary [crop_box, media_box]", cxxopts::value<std::string>())
       ("do-sanitization", "Run post-parse sanitization", cxxopts::value<std::string>())
@@ -965,7 +1250,13 @@ namespace
     cli.glyph_bbox_cache_capacity =
       result["glyph-bbox-cache-capacity"].as<std::size_t>();
     cli.enable_timing = result["enable-timing"].as<bool>();
+    cli.suppress_config = result["suppress-config"].as<bool>();
+    cli.suppress_timings = result["suppress-timings"].as<bool>();
     cli.timing_csv = result["timing-csv"].as<std::string>();
+    if(result.count("glyph-cache-diagnostics"))
+      {
+        cli.glyph_cache_diagnostics = result["glyph-cache-diagnostics"].as<std::string>();
+      }
     cli.loglevel = result["loglevel"].as<std::string>();
     if(result.count("output-dir"))
       {
@@ -1007,6 +1298,11 @@ namespace
           "default, or all");
       }
 
+    if(cli.glyph_cache_diagnostics.has_value() and cli.mode != run_mode::render)
+      {
+        throw std::runtime_error("--glyph-cache-diagnostics requires --mode render");
+      }
+
     if(result.count("page-boundary")) { decode_config.page_boundary = result["page-boundary"].as<std::string>(); }
     if(result.count("do-sanitization")) { decode_config.do_sanitization = parse_bool(result["do-sanitization"].as<std::string>()); }
     if(result.count("keep-char-cells")) { decode_config.keep_char_cells = parse_bool(result["keep-char-cells"].as<std::string>()); }
@@ -1038,6 +1334,54 @@ int main(int argc, char* argv[])
       pdflib::decode_config decode_config = default_decode_config();
       cli_options cli = parse_cli(argc, argv, decode_config);
       set_loglevel(cli.loglevel);
+
+      // Summary output is outside the measured interval, just like console
+      // printing. Keep one stream for all modes/thread counts in this run.
+      std::ofstream timing_output;
+      if(cli.enable_timing and cli.suppress_timings)
+        {
+          const std::filesystem::path path = cli.timing_csv.string() + ".summary.log";
+          if(cli.glyph_cache_diagnostics.has_value() and
+             std::filesystem::weakly_canonical(*cli.glyph_cache_diagnostics) ==
+               std::filesystem::weakly_canonical(path))
+            {
+              throw std::runtime_error("glyph-cache diagnostics and timing summary need different paths");
+            }
+          if(std::filesystem::exists(path))
+            {
+              throw std::runtime_error("timing summary already exists; choose a new --timing-csv path: "
+                                       + path.string());
+            }
+          timing_output.open(path);
+          if(not timing_output)
+            {
+              throw std::runtime_error("could not open timing summary: " + path.string());
+            }
+        }
+
+      // One stream serves all requested thread counts in this invocation.
+      // Refuse old output rather than appending another run to it.
+      std::ofstream glyph_diagnostics;
+      if(cli.glyph_cache_diagnostics.has_value())
+        {
+          if(cli.enable_timing and
+             std::filesystem::weakly_canonical(*cli.glyph_cache_diagnostics) ==
+               std::filesystem::weakly_canonical(cli.timing_csv))
+            {
+              throw std::runtime_error("glyph-cache diagnostics and timing CSV need different paths");
+            }
+          if(std::filesystem::exists(*cli.glyph_cache_diagnostics))
+            {
+              throw std::runtime_error("glyph-cache diagnostics already exist; choose a new path: "
+                                       + cli.glyph_cache_diagnostics->string());
+            }
+          glyph_diagnostics.open(*cli.glyph_cache_diagnostics);
+          if(not glyph_diagnostics)
+            {
+              throw std::runtime_error("could not open glyph-cache diagnostics: "
+                                       + cli.glyph_cache_diagnostics->string());
+            }
+        }
       initialise_fonts();
 
       auto pdfs = find_pdfs(cli.input, cli.recursive);
@@ -1079,18 +1423,8 @@ int main(int argc, char* argv[])
         }
       std::cout << "\n";
 
-      print_decode_config(decode_config);
       auto render_config = default_render_config(cli.scale);
       render_config.glyph_bbox_cache_capacity = cli.glyph_bbox_cache_capacity;
-      if(cli.mode == run_mode::render
-         or cli.mode == run_mode::default_mode
-         or cli.mode == run_mode::all)
-        {
-          print_render_config(render_config);
-        }
-
-      std::cout << "\nLoading documents ...\n";
-      auto docs = load_documents(schedule);
 
       std::vector<run_mode> modes;
       if(cli.mode == run_mode::all)
@@ -1108,6 +1442,25 @@ int main(int argc, char* argv[])
           modes = {cli.mode};
         }
 
+      if(not cli.suppress_config)
+        {
+          for(run_mode mode : modes)
+            {
+              std::cout << "Decode config (" << mode_to_string(mode) << "):\n"
+                        << effective_decode_config(mode, decode_config, render_config).to_string()
+                        << "\n";
+            }
+          if(cli.mode == run_mode::render
+             or cli.mode == run_mode::default_mode
+             or cli.mode == run_mode::all)
+            {
+              std::cout << "Render config:\n" << render_config.to_string();
+            }
+        }
+
+      std::cout << "\nLoading documents ...\n";
+      auto docs = load_documents(schedule);
+
       for(run_mode mode : modes)
         {
           const bool render = (mode == run_mode::render);
@@ -1115,10 +1468,8 @@ int main(int argc, char* argv[])
           const std::string title = render ? "RENDER (decode + rasterise)"
             : parse_with_bitmaps ? "PARSE WITH BITMAPS (decode only)"
             : "PARSE WITHOUT BITMAPS (decode only)";
-          auto mode_decode_config = decode_config;
-          mode_decode_config.keep_shapes = render or decode_config.keep_shapes;
-          mode_decode_config.keep_bitmaps = render or parse_with_bitmaps; // if render is not here, we skip the bitmap in the rendered page-image
-          mode_decode_config.extract_bitmap_pixels = parse_with_bitmaps; // if we have render here, we keep the bitmaps to be iterated over
+          const auto mode_decode_config =
+            effective_decode_config(mode, decode_config, render_config);
           std::cout << "\n##### " << title << " #####\n";
 
           std::vector<benchmark_result> results;
@@ -1138,7 +1489,11 @@ int main(int argc, char* argv[])
                                            render ? cli.output_dir : std::nullopt);
               benchmark_result result = benchmark.run(render ? "render" : "parse",
                                                       cli.enable_timing,
-                                                      cli.timing_csv);
+                                                      cli.timing_csv,
+                                                      cli.glyph_cache_diagnostics.has_value()
+                                                        ? &glyph_diagnostics : nullptr,
+                                                      cli.enable_timing and cli.suppress_timings
+                                                        ? &timing_output : nullptr);
               results.push_back(result);
               std::cout << "  threads=" << threads
                         << ": " << std::fixed << std::setprecision(3)

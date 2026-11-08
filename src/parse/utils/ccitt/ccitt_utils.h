@@ -738,13 +738,14 @@ inline bool decode_g4_row(BitReader&                   br,
             }
         }
 
-      // --- Find reference elements ---
-      int b1 = find_b1(ref, a0, color, width);
-      int b2 = find_b2(ref, b1, width);
+      // Horizontal mode uses explicit runs; only other modes need b1.
+      const int b1 = (mode == 1) ? width
+                                : find_b1(ref, a0, color, width);
 
       if(mode == 0)
         {
           // --- Pass mode ---
+          const int b2 = find_b2(ref, b1, width);
           // Pass skips the next pair of reference changing elements, so the
           // current run extends from `run_start` up to the second one, `b2`.
           fill_binary_span(cur, run_start, b2, color);

@@ -4,6 +4,7 @@
 #define PDF_BITMAP_STATE_H
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 
@@ -705,6 +706,28 @@ namespace pdflib
           }
 
         detail::image_phase_timer phase(&detail::image_phase_seconds::decode_array);
+
+        if(ncomps == 1)
+          {
+            const double dmin = image.decode_array[0];
+            const double dmax = image.decode_array[1];
+            if(dmin == 0.0 and dmax == 1.0) { return; }
+
+            // Amortize the table over at least one full byte alphabet; tiny
+            // images keep the scalar path. Use the existing mapping function
+            // so lookup preserves its floating-point rounding and clamping.
+            if(dst->size() >= 256)
+              {
+                std::array<uint8_t, 256> mapping;
+                for(size_t sample = 0; sample < mapping.size(); ++sample)
+                  {
+                    mapping[sample] = jpeg::apply_decode_component(
+                      static_cast<uint8_t>(sample), dmin, dmax);
+                  }
+                for(auto& sample : *dst) { sample = mapping[sample]; }
+                return;
+              }
+          }
 
         const int pair_count = static_cast<int>(image.decode_array.size() / 2);
         for(size_t i = 0; i < dst->size(); ++i)

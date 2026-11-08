@@ -873,28 +873,31 @@ def segmented_page_from_decoder(
 def _marked_content_from_decoder(decoder: PdfPageDecoder) -> List[PdfMarkedContentTag]:
     """Tagged-PDF linkage of the decoder's char cells (see PdfMarkedContentTag)."""
     tags: List[PdfMarkedContentTag] = []
-    for index, cell in enumerate(decoder.get_char_cells()):
-        mcid = int(cell.mcid)
-        artifact_type = cell.artifact_type or None
-        if mcid < 0 and artifact_type is None:
-            continue
+    for (
+        index,
+        text,
+        rect,
+        mcid,
+        artifact_type,
+        artifact_subtype,
+    ) in decoder.get_marked_content():
         tags.append(
             PdfMarkedContentTag(
                 index=index,
-                text=cell.text,
+                text=text,
                 rect=BoundingRectangle(
-                    r_x0=cell.r_x0,
-                    r_y0=cell.r_y0,
-                    r_x1=cell.r_x1,
-                    r_y1=cell.r_y1,
-                    r_x2=cell.r_x2,
-                    r_y2=cell.r_y2,
-                    r_x3=cell.r_x3,
-                    r_y3=cell.r_y3,
+                    r_x0=rect[0],
+                    r_y0=rect[1],
+                    r_x1=rect[2],
+                    r_y1=rect[3],
+                    r_x2=rect[4],
+                    r_y2=rect[5],
+                    r_x3=rect[6],
+                    r_y3=rect[7],
                 ),
                 mcid=mcid,
-                artifact_type=artifact_type,
-                artifact_subtype=cell.artifact_subtype or None,
+                artifact_type=artifact_type or None,
+                artifact_subtype=artifact_subtype or None,
             )
         )
     return tags
@@ -978,6 +981,11 @@ class PdfDocument:
         self._decoded_content_configs: Dict[int, ContentConfig] = {}
         self._meta: PdfMetaData | None = None
         self._annotations: PdfAnnotations | None = None
+        self._structure: PdfStructure | None = None
+        self._structure_loaded = False
+        self._table_of_contents: PdfTableOfContents | None = None
+        self._table_of_contents_loaded = False
+        self._marked_content: Dict[int, List[PdfMarkedContentTag]] = {}
 
     def _ensure_page_decoder(
         self, page_no: int, content_config: ContentConfig
@@ -1043,6 +1051,7 @@ class PdfDocument:
                 needed.include_bitmap_bytes or have.include_bitmap_bytes
             )
             self._parser.unload_document_page(key=self._key, page=page)
+            self._marked_content.pop(page_no, None)
             have = None
 
         decode_content_config = needed if have is None else have
@@ -1063,6 +1072,13 @@ class PdfDocument:
     def unload(self) -> bool:
         self._pages.clear()
         self._decoded_content_configs.clear()
+        self._marked_content.clear()
+        self._annotations = None
+        self._structure = None
+        self._structure_loaded = False
+        self._table_of_contents = None
+        self._table_of_contents_loaded = False
+        self._meta = None
 
         if self.is_loaded():
             return self._parser.unload_document(self._key)
@@ -1076,13 +1092,14 @@ class PdfDocument:
                 _log.error("page_no should always be >=1!")
 
             cache_keys = [k for k in self._pages if k[0] == page_no]
-            if cache_keys:
+            if cache_keys or page_no in self._decoded_content_configs:
                 # we are using 0 indexing in the C++ docling-parse!
                 page_num = page_no - 1
                 self._parser.unload_document_page(key=self._key, page=page_num)
                 for k in cache_keys:
                     del self._pages[k]
             self._decoded_content_configs.pop(page_no, None)
+            self._marked_content.pop(page_no, None)
 
     def number_of_pages(self) -> int:
         if self.is_loaded():
@@ -1120,23 +1137,43 @@ class PdfDocument:
             Optional[PdfTableOfContents]: The root entry, or None if the document has
                 no outline.
         """
-        annotations = self.get_annotations()
-
-        return annotations.table_of_contents if annotations is not None else None
+        if not self.is_loaded():
+            raise RuntimeError("This document is not loaded.")
+        if self._annotations is not None:
+            return self._annotations.table_of_contents
+        if not self._table_of_contents_loaded:
+            toc = self._parser.get_table_of_contents(key=self._key)
+            self._table_of_contents = (
+                PdfTableOfContents(text="<root>", children=_to_table_of_contents(toc))
+                if toc
+                else None
+            )
+            self._table_of_contents_loaded = True
+        return self._table_of_contents
 
     def get_structure(self) -> PdfStructure | None:
         """Get the tagged-PDF logical structure tree, or None when the file has none."""
-        annotations = self.get_annotations()
-
-        return annotations.structure if annotations is not None else None
+        if not self.is_loaded():
+            raise RuntimeError("This document is not loaded.")
+        if self._annotations is not None:
+            return self._annotations.structure
+        if not self._structure_loaded:
+            raw = self._parser.get_structure(key=self._key)
+            self._structure = (
+                PdfStructure.model_validate(raw) if isinstance(raw, dict) else None
+            )
+            self._structure_loaded = True
+        return self._structure
 
     def get_page_marked_content(
         self, page_no: int, *, content_config: ContentConfig | None = None
     ) -> List[PdfMarkedContentTag]:
-        """Marked-content tags (/MCID, /Artifact) of the page's char cells, by cell index."""
+        """Cached tags by char-cell index; callers share the returned mutable list."""
         cc = content_config or self._content_config
         decoder = self._ensure_page_decoder(page_no, cc)
-        return _marked_content_from_decoder(decoder)
+        if page_no not in self._marked_content:
+            self._marked_content[page_no] = _marked_content_from_decoder(decoder)
+        return self._marked_content[page_no]
 
     def iterate_pages(
         self,
@@ -1166,6 +1203,16 @@ class PdfDocument:
                 return self._annotations
 
             self._annotations = _to_annotations(annots_dict)
+            if self._table_of_contents_loaded:
+                self._annotations.table_of_contents = self._table_of_contents
+            else:
+                self._table_of_contents = self._annotations.table_of_contents
+                self._table_of_contents_loaded = True
+            if self._structure_loaded:
+                self._annotations.structure = self._structure
+            else:
+                self._structure = self._annotations.structure
+                self._structure_loaded = True
 
             return self._annotations
         else:
@@ -1408,6 +1455,7 @@ class PageParseResult:
         self._batch_content_config = batch_content_config
         self._pages: Dict[tuple[int, int, int, int, int, bool], SegmentedPdfPage] = {}
         self._page_decoder: PdfPageDecoder | None = None
+        self._marked_content: List[PdfMarkedContentTag] | None = None
         self._default_image: PILImage.Image | None = None
         # Last image rendered at a non-default scale for a cropped request: OCR
         # crops several regions of a page at the same scale, and each crop would
@@ -1445,8 +1493,12 @@ class PageParseResult:
         return self._raw.error()
 
     def get_marked_content(self) -> List[PdfMarkedContentTag]:
-        """Marked-content tags (/MCID, /Artifact) of this page's char cells, by cell index."""
-        return _marked_content_from_decoder(self._require_page_decoder())
+        """Cached linkage of this page's char cells; callers share the returned list."""
+        if self._marked_content is None:
+            self._marked_content = _marked_content_from_decoder(
+                self._require_page_decoder()
+            )
+        return self._marked_content
 
     def _require_page_decoder(self) -> PdfPageDecoder:
         if not self.success:
@@ -1820,6 +1872,7 @@ class DoclingThreadedPdfParser:
         )
         self._page_counts: Dict[str, int] = {}
         self._scheduled_page_counts: Dict[str, int] = {}
+        self._annotations: Dict[str, PdfAnnotations | None] = {}
 
         if parser_config.render_config is None:
             self._parser = _threaded_pdf_parser(
@@ -1903,6 +1956,7 @@ class DoclingThreadedPdfParser:
             raise _load_error(self._parser, key, password)
 
         self._page_counts[key] = self._parser.number_of_pages(key)
+        self._annotations.pop(key, None)
         self._scheduled_page_counts[key] = self._parser.scheduled_number_of_pages(key)
         return key
 
@@ -1921,10 +1975,10 @@ class DoclingThreadedPdfParser:
     def get_annotations(self, doc_key: str) -> PdfAnnotations | None:
         """Get the annotations of a loaded document.
 
-        The annotations are structure-only: reading them decodes no page. The
-        first call builds them, and can wait for a worker to finish copying one
-        page out of the document; later calls return the cached result without
-        taking any lock, also while the workers are running.
+        Reading annotations decodes no page. The first request builds the
+        annotations and structure under the document mutex and may wait for
+        page extraction. Later requests share the cached mutable model
+        without taking the document mutex, also while workers are running.
 
         Returns:
             Optional[PdfAnnotations]: Annotations object with form, language, meta_xml,
@@ -1933,14 +1987,18 @@ class DoclingThreadedPdfParser:
         if doc_key not in self._page_counts:
             raise ValueError(f"Document key not loaded: {doc_key}")
 
-        annots = self._parser.get_annotations(key=doc_key)
-
-        return _to_annotations(annots) if annots is not None else None
+        if doc_key not in self._annotations:
+            annots = self._parser.get_annotations(key=doc_key)
+            self._annotations[doc_key] = (
+                _to_annotations(annots) if annots is not None else None
+            )
+        return self._annotations[doc_key]
 
     def unload(self, doc_key: str) -> bool:
         """Unload one document after threaded processing has completed."""
         unloaded = self._parser.unload_document(doc_key)
         self._page_counts.pop(doc_key, None)
+        self._annotations.pop(doc_key, None)
         self._scheduled_page_counts.pop(doc_key, None)
         return unloaded
 
@@ -1948,6 +2006,7 @@ class DoclingThreadedPdfParser:
         """Unload all documents after threaded processing has completed."""
         self._parser.unload_all_documents()
         self._page_counts.clear()
+        self._annotations.clear()
         self._scheduled_page_counts.clear()
 
     def has_tasks(self) -> bool:

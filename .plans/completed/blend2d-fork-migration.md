@@ -129,8 +129,8 @@ git add -- \
   tests/test_unit_subpixel_stroke_render.py \
   tests/test_unit_stroke_cusp_spike.py \
   tests/test_unit_flat_cubic_cusp_stroke.py \
-  .plans/blend2d-fork-migration.md \
-  .plans/blend2d-patches-consolidation.md \
+  .plans/completed/blend2d-fork-migration.md \
+  .plans/completed/blend2d-patches-consolidation.md \
   .plans/blend2d-evidence
 git diff --cached --stat
 git commit -s -m "build: consume versioned Blend2D fork release"

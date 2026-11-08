@@ -55,7 +55,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Iterable, Iterator, List, Tuple
+from typing import Callable, Dict, Iterable, Iterator, List, Tuple
 
 from _common import (
     TASK_PARSE,
@@ -68,6 +68,7 @@ from _common import (
     series_label,
     write_page_rows,
 )
+from _performance_runtime import BenchmarkCheckpoints, digest, runtime_provenance
 from tabulate import tabulate
 
 DEFAULT_HF_REPO_ID = "docling-project/performance-dataset-bo767"
@@ -751,7 +752,7 @@ def run_pymupdf_parse(
 ) -> float:
     """Single-threaded pymupdf text extraction."""
     try:
-        import fitz  # PyMuPDF
+        import pymupdf
     except ImportError as e:
         print(f"  pymupdf not available: {e}", file=sys.stderr)
         return float("nan")
@@ -759,7 +760,7 @@ def run_pymupdf_parse(
     # MuPDF writes "MuPDF error: ..." lines to stderr from the C layer;
     # silence them so perf output stays clean.
     try:
-        fitz.TOOLS.mupdf_display_errors(False)
+        pymupdf.TOOLS.mupdf_display_errors(False)
     except Exception:
         pass
 
@@ -768,14 +769,14 @@ def run_pymupdf_parse(
     with ProgressBar(total=total_pages, desc="  pymupdf-parse", unit="page") as pbar:
         for pdf_path, page_numbers in pdf_schedule:
             try:
-                doc = fitz.open(str(pdf_path))
+                doc = pymupdf.open(str(pdf_path))
             except Exception as e:
                 print(f"  pymupdf open error on {pdf_path}: {e}")
                 errors += 1
                 continue
             try:
                 pages = (
-                    doc
+                    (doc[index] for index in range(doc.page_count))
                     if page_numbers is None
                     else (doc[page_number - 1] for page_number in page_numbers)
                 )
@@ -801,30 +802,30 @@ def run_pymupdf_render(
 ) -> float:
     """Single-threaded pymupdf: text extract + scale=2 render to PIL."""
     try:
-        import fitz  # PyMuPDF
+        import pymupdf
     except ImportError as e:
         print(f"  pymupdf not available: {e}", file=sys.stderr)
         return float("nan")
 
     try:
-        fitz.TOOLS.mupdf_display_errors(False)
+        pymupdf.TOOLS.mupdf_display_errors(False)
     except Exception:
         pass
 
-    matrix = fitz.Matrix(2, 2)
+    matrix = pymupdf.Matrix(2, 2)
     t0 = time.perf_counter()
     errors = 0
     with ProgressBar(total=total_pages, desc="  pymupdf-render", unit="page") as pbar:
         for pdf_path, page_numbers in pdf_schedule:
             try:
-                doc = fitz.open(str(pdf_path))
+                doc = pymupdf.open(str(pdf_path))
             except Exception as e:
                 print(f"  pymupdf open error on {pdf_path}: {e}")
                 errors += 1
                 continue
             try:
                 pages = (
-                    doc
+                    (doc[index] for index in range(doc.page_count))
                     if page_numbers is None
                     else (doc[page_number - 1] for page_number in page_numbers)
                 )
@@ -1184,18 +1185,18 @@ def cmp_pymupdf(
     `get_text("text")` is deliberately not used: it returns a plain string with
     no geometry, which would not be the same task as the other backends.
     """
-    import fitz  # PyMuPDF
+    import pymupdf
 
     # MuPDF writes "MuPDF error: ..." lines to stderr from the C layer;
     # silence them so perf output stays clean.
     with contextlib.suppress(Exception):
-        fitz.TOOLS.mupdf_display_errors(False)
+        pymupdf.TOOLS.mupdf_display_errors(False)
 
-    matrix = fitz.Matrix(scale, scale)
+    matrix = pymupdf.Matrix(scale, scale)
     c = _Collector("pymupdf", TASK_RENDER if render else TASK_PARSE, total_pages)
     for pdf_path, page_numbers in schedule:
         try:
-            doc = fitz.open(str(pdf_path))
+            doc = pymupdf.open(str(pdf_path))
         except Exception as e:
             c.document_failed(str(pdf_path), e)
             continue
@@ -2115,7 +2116,9 @@ def _print_table(
 
     print()
     print(f"=== {title} ===")
-    print(tabulate(rows, headers=headers))
+    # Preserve the explicit decimals instead of tabulate reparsing and rounding
+    # long corpus wall times to its default six significant digits.
+    print(tabulate(rows, headers=headers, disable_numparse=True))
 
 
 # -------- Mode runner --------
@@ -2135,6 +2138,8 @@ def _run_one_mode(
     bytesio: bool,
     sequential: bool,
     collected_runs: List[BackendRun],
+    checkpoints: BenchmarkCheckpoints | None = None,
+    resume: bool = False,
 ) -> Tuple[List[Tuple[str, float]], List[Tuple[int, float]]]:
     baselines: List[Tuple[str, float]] = []
 
@@ -2152,6 +2157,22 @@ def _run_one_mode(
         print()
 
     task = TASK_RENDER if render else TASK_PARSE
+
+    def obtain(
+        backend: str, threads: int, measure: Callable[[], BackendRun]
+    ) -> BackendRun:
+        if checkpoints is not None and resume:
+            cached = checkpoints.load(backend, task, threads)
+            if cached is not None:
+                print(
+                    f"  Reusing completed checkpoint: {backend}, {task}, {threads} thread(s)"
+                )
+                return BackendRun(**cached)
+        run = measure()
+        if checkpoints is not None:
+            checkpoints.save(run)
+        return run
+
     for name in third_party_backends:
         runner, supported_tasks = THIRD_PARTY_BACKENDS[name]
         if task not in supported_tasks:
@@ -2160,17 +2181,21 @@ def _run_one_mode(
         stage = "render" if render else "parse"
         print(f"Running {name} {stage} reference (1 thread) ...")
         try:
-            run = runner(  # type: ignore[operator]
-                pdf_schedule,
-                total_pages,
-                render=render,
-                scale=scale,
-                threads=1,
-                max_concurrent_results=max_concurrent_results,
-                decode_options=decode_options,
-                materialization_options=materialization_options,
-                bytesio=bytesio,
-            )
+
+            def measure_reference() -> BackendRun:
+                return runner(  # type: ignore[operator]
+                    pdf_schedule,
+                    total_pages,
+                    render=render,
+                    scale=scale,
+                    threads=1,
+                    max_concurrent_results=max_concurrent_results,
+                    decode_options=decode_options,
+                    materialization_options=materialization_options,
+                    bytesio=bytesio,
+                )
+
+            run = obtain(name, 1, measure_reference)
         except ImportError as e:
             print(f"  Skipping {name}: not installed ({e})")
             continue
@@ -2184,17 +2209,21 @@ def _run_one_mode(
     stage_label = "renderer" if render else "parser"
     for n in thread_counts:
         print(f"Running threaded {stage_label} with {n} threads ...")
-        run = run_threaded(
-            pdf_schedule,
-            num_threads=n,
-            max_concurrent_results=max_concurrent_results,
-            total_pages=total_pages,
-            render=render,
-            scale=scale,
-            decode_options=decode_options,
-            materialization_options=materialization_options,
-            bytesio=bytesio,
-        )
+
+        def measure_threaded() -> BackendRun:
+            return run_threaded(
+                pdf_schedule,
+                num_threads=n,
+                max_concurrent_results=max_concurrent_results,
+                total_pages=total_pages,
+                render=render,
+                scale=scale,
+                decode_options=decode_options,
+                materialization_options=materialization_options,
+                bytesio=bytesio,
+            )
+
+        run = obtain("docling-parse", n, measure_threaded)
         collected_runs.append(run)
         threaded_results.append((n, run.wall_s))
         print(f"  threads={n}: {run.wall_s:.3f}s")
@@ -2363,6 +2392,21 @@ def main(argv: List[str]) -> int:
         help="(docling-parse only) Read PDFs into memory and load them as BytesIO",
     )
     ap.add_argument(
+        "--suppress-config",
+        action="store_true",
+        help="Hide benchmark, system and configuration tables; retain progress and results",
+    )
+    ap.add_argument(
+        "--checkpoint-dir",
+        type=Path,
+        help="Save each completed reference/threaded series outside its measured wall time",
+    )
+    ap.add_argument(
+        "--resume",
+        action="store_true",
+        help="Reuse complete checkpoints with matching inputs, settings, code and packages",
+    )
+    ap.add_argument(
         "--output-dir",
         type=Path,
         default=DEFAULT_OUTPUT_DIR,
@@ -2374,6 +2418,8 @@ def main(argv: List[str]) -> int:
     )
 
     args = ap.parse_args(argv)
+    if args.resume and args.checkpoint_dir is None:
+        ap.error("--resume requires --checkpoint-dir")
     # Validate CLI args before doing any I/O (HF download, page counting).
     thread_counts = [int(x.strip()) for x in args.threads.split(",")]
     third_party_backends = parse_third_party_backends_arg(args.third_party_backends)
@@ -2413,19 +2459,34 @@ def main(argv: List[str]) -> int:
     basename = output_basename(system_info, dataset_info, args.mode)
     pages_csv_path = args.output_dir / f"{basename}.csv"
 
-    print("Benchmark:")
-    print(
-        tabulate(benchmark_rows(dataset_info, settings), headers=["parameter", "value"])
-    )
-    print()
-    print("System:")
-    print(tabulate(system_rows(system_info), headers=["parameter", "value"]))
-    print()
+    if not args.suppress_config:
+        print("Benchmark:")
+        print(
+            tabulate(
+                benchmark_rows(dataset_info, settings), headers=["parameter", "value"]
+            )
+        )
+        print()
+        print("System:")
+        print(tabulate(system_rows(system_info), headers=["parameter", "value"]))
+        print()
     print(f"Output directory: {args.output_dir}")
     print(f"  per-page: {pages_csv_path}")
     print()
 
     collected_runs: List[BackendRun] = []
+    checkpoint_inputs = None
+    checkpoint_provenance = None
+    if args.checkpoint_dir is not None:
+        print(
+            "Verifying checkpoint input hashes (outside benchmark timers) ...",
+            flush=True,
+        )
+        checkpoint_inputs = [
+            {"path": str(path), "pages": pages, "sha256": digest(path)}
+            for path, pages in pdf_schedule
+        ]
+        checkpoint_provenance = runtime_provenance()
     modes_to_run = (
         ["parse-without-bitmap", "parse-with-bitmap", "render"]
         if args.mode == "all"
@@ -2452,18 +2513,34 @@ def main(argv: List[str]) -> int:
         else:
             title = "RENDER (decode + rasterise)"
         print(f"\n##### {title} #####")
-        print_parameter_tables(
-            config_tables(
-                render=render,
-                scale=args.scale,
-                decode_options=decode_options,
-                materialization_options=mode_materialization_options,
-            )
+        tables = config_tables(
+            render=render,
+            scale=args.scale,
+            decode_options=decode_options,
+            materialization_options=mode_materialization_options,
         )
+        if not args.suppress_config:
+            print_parameter_tables(tables)
         if m == "parse-with-bitmap" and third_party_backends:
             print(
                 "Third-party references skipped: they cannot perform the "
                 "equivalent bitmap-byte materialisation workload."
+            )
+        checkpoints = None
+        if args.checkpoint_dir is not None and checkpoint_provenance is not None:
+            checkpoints = BenchmarkCheckpoints(
+                args.checkpoint_dir,
+                {
+                    "inputs": checkpoint_inputs,
+                    "mode": m,
+                    "scale": args.scale,
+                    "max_concurrent_results": args.max_concurrent_results,
+                    "bytesio": args.bytesio,
+                    "decode": decode_options,
+                    "materialization": mode_materialization_options,
+                },
+                checkpoint_provenance,
+                total_pages,
             )
         baselines, threaded_results = _run_one_mode(
             pdf_schedule,
@@ -2478,6 +2555,8 @@ def main(argv: List[str]) -> int:
             bytesio=args.bytesio,
             sequential=not args.only_threaded,
             collected_runs=collected_runs,
+            checkpoints=checkpoints,
+            resume=args.resume,
         )
         _print_table(title, baselines, threaded_results, total_pages)
 

@@ -3,12 +3,17 @@
 #ifndef QPDF_PAGE_INTEGRITY_H
 #define QPDF_PAGE_INTEGRITY_H
 
+#include <cstdio>
 #include <set>
 #include <stdexcept>
 #include <string>
 #include <utility>
 
+#include <qpdf/BufferInputSource.hh>
+#include <qpdf/QPDF.hh>
+#include <qpdf/QPDFExc.hh>
 #include <qpdf/QPDFObjectHandle.hh>
+#include <qpdf/QPDFTokenizer.hh>
 
 namespace pdflib
 {
@@ -182,6 +187,95 @@ namespace pdflib
             }
         }
 
+      return "";
+    }
+
+    // Read just the original page dictionary. Tokenizing its extent handles
+    // nested dictionaries, comments and strings containing >> or endobj;
+    // neither the rest of the PDF nor stream data is copied into the parser.
+    inline std::string find_missing_in_original_page(QPDF& document,
+                                                      Buffer& source,
+                                                      qpdf_offset_t offset)
+    {
+      if(offset < 0 or static_cast<std::size_t>(offset) >= source.getSize())
+        {
+          return "";
+        }
+
+      BufferInputSource input("original page dictionary", &source);
+      input.seek(offset, SEEK_SET);
+      QPDFTokenizer tokenizer;
+      tokenizer.allowEOF();
+      if(tokenizer.readToken(input, "original page dictionary").getType()
+         != QPDFTokenizer::tt_dict_open)
+        {
+          return "";
+        }
+
+      std::size_t depth = 1;
+      while(depth > 0)
+        {
+          auto token = tokenizer.readToken(input, "original page dictionary");
+          if(token.getType() == QPDFTokenizer::tt_eof)
+            {
+              return "";
+            }
+          if(token.getType() == QPDFTokenizer::tt_dict_open) { ++depth; }
+          if(token.getType() == QPDFTokenizer::tt_dict_close) { --depth; }
+        }
+
+      const char* data = reinterpret_cast<const char*>(source.getBuffer());
+      std::string dictionary(data + offset,
+                             static_cast<std::size_t>(input.tell() - offset));
+      auto original = QPDFObjectHandle::parse(&document, dictionary);
+      return find_missing_content(original);
+    }
+
+    // Newer qpdf versions replace missing/invalid page resources with a new
+    // empty dictionary during page-tree recovery, sometimes before loading
+    // returns. Only inspect the retained source for this synthesized value:
+    // an actual empty dictionary has a parsed offset and needs no fallback.
+    // The caller holds the document mutex and has already checked for damage.
+    inline std::string find_repaired_resources(QPDF& document,
+                                                QPDFObjectHandle page,
+                                                std::string& source)
+    {
+      auto resources = page.getKey("/Resources");
+      if(not resources.isDictionary() or resources.getParsedOffset() >= 0
+         or not resources.getDictAsMap().empty())
+        {
+          return "";
+        }
+
+      try
+        {
+          const auto xref = document.getXRefTable();
+          auto entry = xref.find(page.getObjGen());
+          if(entry == xref.end()) { return ""; }
+
+          const auto offset = page.getParsedOffset();
+          if(entry->second.getType() == 1)
+            {
+              Buffer bytes(reinterpret_cast<unsigned char*>(source.data()), source.size());
+              return find_missing_in_original_page(document, bytes, offset);
+            }
+          if(entry->second.getType() == 2)
+            {
+              // A compressed page's parsed offset is relative to its decoded
+              // object stream, not the PDF file.
+              auto stream = document.getObjectByID(entry->second.getObjStreamNumber(), 0);
+              if(stream.isStream())
+                {
+                  auto bytes = stream.getStreamData();
+                  return find_missing_in_original_page(document, *bytes, offset);
+                }
+            }
+        }
+      catch(const QPDFExc&)
+        {
+          // An unreadable original dictionary provides no additional evidence
+          // of a dangling reference. Preserve qpdf's existing recovery.
+        }
       return "";
     }
   }

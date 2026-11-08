@@ -91,10 +91,6 @@ namespace pdflib
     visited({}),
     order(0)
   {
-    for(std::size_t ind=0; ind<qpdf_pages.size(); ind++)
-      {
-        page_numbers[qpdf_pages.at(ind).getObjGen()] = static_cast<int>(ind)+1;
-      }
   }
 
   pdf_structure::~pdf_structure()
@@ -115,6 +111,10 @@ namespace pdflib
       }
 
     QPDFObjectHandle tree = root.getKey("/StructTreeRoot");
+    for(std::size_t ind=0; ind<qpdf_pages.size(); ind++)
+      {
+        page_numbers.emplace(qpdf_pages.at(ind).getObjGen(), static_cast<int>(ind)+1);
+      }
     structure = nlohmann::json::object({});
 
     // /MarkInfo /Marked declares the file as tagged (14.7.1)
@@ -140,7 +140,7 @@ namespace pdflib
             if(val.isName()) { role_map[pdflib::name_to_utf8(key)] = pdflib::name_to_utf8(val); }
           }
       }
-    structure["role_map"] = role_map;
+    structure["role_map"] = std::move(role_map);
 
     if(tree.hasKey("/Namespaces") and tree.getKey("/Namespaces").isArray())
       {
@@ -154,30 +154,28 @@ namespace pdflib
                 namespaces.push_back(ns.getKey("/NS").getUTF8Value());
               }
           }
-        structure["namespaces"] = namespaces;
+        structure["namespaces"] = std::move(namespaces);
       }
 
-    std::vector<QPDFObjectHandle> roots;
+    nlohmann::json elements = nlohmann::json::array();
+    auto append_element = [&](QPDFObjectHandle elem) {
+      auto e = to_json(elem, 0);
+      if(not e.empty()) { elements.push_back(std::move(e)); }
+    };
     if(tree.hasKey("/K"))
       {
         QPDFObjectHandle k = tree.getKey("/K");
         if(k.isArray())
           {
-            for(int i=0; i<k.getArrayNItems(); i++) { roots.push_back(k.getArrayItem(i)); }
+            for(int i=0; i<k.getArrayNItems(); i++) { append_element(k.getArrayItem(i)); }
           }
         else if(k.isDictionary())
           {
-            roots.push_back(k);
+            append_element(k);
           }
       }
 
-    nlohmann::json elements = nlohmann::json::array({});
-    for(auto& elem : roots)
-      {
-        nlohmann::json e = to_json(elem, 0);
-        if(not e.empty()) { elements.push_back(e); }
-      }
-    structure["elements"] = elements;
+    structure["elements"] = std::move(elements);
 
     LOG_S(INFO) << "structure tree: " << order << " element(s), marked=" << marked;
     return structure;
@@ -248,9 +246,9 @@ namespace pdflib
         nlohmann::json attributes = get_attributes(elem.getKey("/A"));
 
         nlohmann::json bbox = get_bbox(attributes, page_no);
-        if(not bbox.is_null()) { result["bbox"] = bbox; }
+        if(not bbox.is_null()) { result["bbox"] = std::move(bbox); }
 
-        result["attributes"] = attributes;
+        result["attributes"] = std::move(attributes);
       }
 
     if(elem.hasKey("/Ref") and elem.getKey("/Ref").isArray())
@@ -261,33 +259,31 @@ namespace pdflib
           {
             refs.push_back(get_id(ref.getArrayItem(i)));
           }
-        result["ref"] = refs;
+        result["ref"] = std::move(refs);
       }
 
     // Kids (14.7.5.2): a single kid or an array of kids, each being an integer
     // MCID on the element's page, a marked-content reference dict (/Type /MCR),
     // an object reference dict (/Type /OBJR), or a child element.
-    std::vector<QPDFObjectHandle> kid_items;
+    nlohmann::json kids = nlohmann::json::array();
+    auto append_kid = [&](QPDFObjectHandle kid) {
+      auto item = get_kid(kid, page_no, level);
+      if(not item.is_null()) { kids.push_back(std::move(item)); }
+    };
     if(elem.hasKey("/K"))
       {
         QPDFObjectHandle k = elem.getKey("/K");
         if(k.isArray())
           {
-            for(int i=0; i<k.getArrayNItems(); i++) { kid_items.push_back(k.getArrayItem(i)); }
+            for(int i=0; i<k.getArrayNItems(); i++) { append_kid(k.getArrayItem(i)); }
           }
         else if(not k.isNull())
           {
-            kid_items.push_back(k);
+            append_kid(k);
           }
       }
 
-    nlohmann::json kids = nlohmann::json::array({});
-    for(auto& kid : kid_items)
-      {
-        nlohmann::json item = get_kid(kid, page_no, level);
-        if(not item.is_null()) { kids.push_back(item); }
-      }
-    result["kids"] = kids;
+    result["kids"] = std::move(kids);
 
     return result;
   }
@@ -413,9 +409,12 @@ namespace pdflib
         for(auto key : dict.getKeys())
           {
             if(key=="/O") { continue; }
-            values[pdflib::name_to_utf8(key)] = pdflib::to_json(dict.getKey(key), 0, 4);
+            // Start below the attribute owner so a document object used as an
+            // attribute value is skipped even when it is the value's root.
+            // Depth alone cannot bound repeated expansion of a wide DAG.
+            values[pdflib::name_to_utf8(key)] = pdflib::to_json(dict.getKey(key), 1, 5, 4096);
           }
-        result[owner] = values;
+        result[owner] = std::move(values);
       }
 
     return result;
