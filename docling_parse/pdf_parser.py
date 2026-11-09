@@ -608,22 +608,26 @@ _PDF_TEXT_CELL_RGBA_DEFAULT = PdfTextCell.model_fields["rgba"].get_default(
 )
 
 
-# The clip box of a text cell lands in docling-core's PdfTextCell.clip_bbox. A
-# docling-core release without that field ignores the keyword, so the box is
-# only built when the model can hold it; the check is on the model, once.
+# The clip box of a text cell lands in docling-core's PdfTextCell.clip_bbox.
+# Releases before that field exist must not receive the keyword, and mypy
+# checks the call against whichever release the lockfile pins, so the keyword
+# travels in a mapping that stays empty unless the model can hold the field.
+# The check is on the model, once.
 _PDF_TEXT_CELL_HAS_CLIP_BBOX = "clip_bbox" in PdfTextCell.model_fields
 
 
-def _clip_bbox_from_decoder(cell) -> BoundingBox | None:
+def _clip_bbox_fields_from_decoder(cell) -> Dict[str, Any]:
     if not (_PDF_TEXT_CELL_HAS_CLIP_BBOX and cell.has_clip_bbox):
-        return None
-    return BoundingBox(
-        l=cell.clip_x0,
-        b=cell.clip_y0,
-        r=cell.clip_x1,
-        t=cell.clip_y1,
-        coord_origin=CoordOrigin.BOTTOMLEFT,
-    )
+        return {}
+    return {
+        "clip_bbox": BoundingBox(
+            l=cell.clip_x0,
+            b=cell.clip_y0,
+            r=cell.clip_x1,
+            t=cell.clip_y1,
+            coord_origin=CoordOrigin.BOTTOMLEFT,
+        )
+    }
 
 
 def _to_cells_from_decoder(cells_container) -> List[Union[PdfTextCell, TextCell]]:
@@ -656,7 +660,7 @@ def _to_cells_from_decoder(cells_container) -> List[Union[PdfTextCell, TextCell]
                 ),
                 index=ind,
                 rendering_mode=cell.rendering_mode,
-                clip_bbox=_clip_bbox_from_decoder(cell),
+                **_clip_bbox_fields_from_decoder(cell),
             )
         )
 
