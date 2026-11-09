@@ -1,3 +1,24 @@
+## [v7.25.0](https://github.com/docling-project/docling-parse/releases/tag/v7.25.0) - 2026-11-09
+
+### Feature
+
+* Working on parallel efficiency ([#435](https://github.com/docling-project/docling-parse/issues/435)) ([`c2b39af`](https://github.com/docling-project/docling-parse/commit/c2b39afa59d95caabec4707f63fca2838c516ae1))
+* Consolidate Blend2D rendering prs according to #428 ([#433](https://github.com/docling-project/docling-parse/issues/433)) ([`ec1dfed`](https://github.com/docling-project/docling-parse/commit/ec1dfed0ba7b58b4436ee912cfaae00f295bc866))
+* Read the tagged-PDF structure tree and link text cells to marked content ([#337](https://github.com/docling-project/docling-parse/issues/337)) ([`7a920a5`](https://github.com/docling-project/docling-parse/commit/7a920a5ad5347aa8ed72c5dd2dff1f2d9e3cb20e))
+
+### Fix
+
+* Add better error messaging ([#442](https://github.com/docling-project/docling-parse/issues/442)) ([`1b7a5fe`](https://github.com/docling-project/docling-parse/commit/1b7a5fe5e411480edefe669b5a805e8f97c2192e))
+* **render:** Stroke clipping, tiling patterns and soft masks, consolidated per #428 ([#439](https://github.com/docling-project/docling-parse/issues/439)) ([`f4b12cf`](https://github.com/docling-project/docling-parse/commit/f4b12cf2d114397dd1601027c3b0b586d7f3a594))
+* **text:** Word and cell segmentation fixes, consolidated per #428 ([#437](https://github.com/docling-project/docling-parse/issues/437)) ([`01cd139`](https://github.com/docling-project/docling-parse/commit/01cd1393fb0e3dd414a60de215fc106fe837bb61))
+* Transcode PDF names that are not UTF-8 before they reach Python ([#438](https://github.com/docling-project/docling-parse/issues/438)) ([`fa338f7`](https://github.com/docling-project/docling-parse/commit/fa338f7fb3129081d4f46a5af07b6cf1e2c24276))
+* **fonts:** Font and ToUnicode decoding fixes, consolidated per #428 ([#431](https://github.com/docling-project/docling-parse/issues/431)) ([`8aa5cac`](https://github.com/docling-project/docling-parse/commit/8aa5cacc860fd802bdc02b43252a69f66808880e))
+* Keep the /AcroForm JSON export out of the document behind a signature ([#410](https://github.com/docling-project/docling-parse/issues/410)) ([`eb19698`](https://github.com/docling-project/docling-parse/commit/eb19698df62b682dcea9b762af805f7e641167e7))
+
+### Documentation
+
+* Add pull request submission guidelines ([#430](https://github.com/docling-project/docling-parse/issues/430)) ([`6dbd6a8`](https://github.com/docling-project/docling-parse/commit/6dbd6a83d93b720637fd80629961f14ee6bb3df9))
+
 ## [v7.24.2](https://github.com/docling-project/docling-parse/releases/tag/v7.24.2) - 2026-10-29
 
 ### Fix
