@@ -37,10 +37,11 @@ jobs:
         with:
           python-version: '3.13'
           activate-environment: true
-      - name: Cache HF regression corpus
+      - name: Restore HF regression corpus
+        id: hf-regression-cache
         # HF_DATASET_REVISION in tests/constants.py is a pinned commit hash, so
         # hashing that file gives us automatic invalidation on bumps.
-        uses: actions/cache@v6
+        uses: actions/cache/restore@v6
         with:
           path: tests/data
           key: hf-regression-${{ hashFiles('tests/constants.py') }}
@@ -48,6 +49,15 @@ jobs:
         run: |
           uv sync --frozen --all-extras
           ls docling_parse/pdf_parsers*.so
+      - name: Ensure HF regression corpus is downloaded
+        run: uv run python -c "from tests.data_utils import ensure_test_data_downloaded; ensure_test_data_downloaded()"
+      - name: Save HF regression corpus
+        # Save before tests so failures cannot prevent caching the download.
+        if: steps.hf-regression-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: tests/data
+          key: ${{ steps.hf-regression-cache.outputs.cache-primary-key }}
       - name: Regression tests
         env:
           DOCLING_PARSE_CJK_FALLBACK_FONT: /usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc
