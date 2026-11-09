@@ -696,7 +696,6 @@ def test_image_cell_pattern_reports_one_image_over_the_fill():
     assert coverage_ratio(rendered) > 0.05, "the image cell must be painted"
 
 
-
 def test_dash_pattern_replaces_previous_pattern():
     pdf = simple_page_pdf(
         "[3 2] 0 d\n"
