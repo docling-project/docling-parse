@@ -389,6 +389,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
     .def_readwrite("extract_font_programs", &pdflib::decode_config::extract_font_programs)
     .def_readwrite("extract_bitmap_pixels", &pdflib::decode_config::extract_bitmap_pixels)
     .def_readwrite("bitmap_target_pixels_per_unit", &pdflib::decode_config::bitmap_target_pixels_per_unit)
+    .def("to_string", &pdflib::decode_config::to_string)
     .def("__copy__", [](const pdflib::decode_config& self) { return self; })
     .def("__deepcopy__", [](const pdflib::decode_config& self, pybind11::dict) { return self; });
 
@@ -418,10 +419,12 @@ PYBIND11_MODULE(pdf_parsers, m) {
     .def_readonly("widget", &pdflib::page_item<pdflib::PAGE_CELL>::widget)
     .def_readonly("left_to_right", &pdflib::page_item<pdflib::PAGE_CELL>::left_to_right)
     .def_readonly("mcid", &pdflib::page_item<pdflib::PAGE_CELL>::mcid)
-    .def_readonly("artifact_type", &pdflib::page_item<pdflib::PAGE_CELL>::artifact_type)
-    .def_readonly("artifact_subtype", &pdflib::page_item<pdflib::PAGE_CELL>::artifact_subtype);
+    .def_property_readonly("artifact_type", &pdflib::page_item<pdflib::PAGE_CELL>::get_artifact_type)
+    .def_property_readonly("artifact_subtype", &pdflib::page_item<pdflib::PAGE_CELL>::get_artifact_subtype);
 
   // PdfShape - graphic shape with coordinates
+  m.attr("PDF_CELL_SIZE") = sizeof(pdflib::page_item<pdflib::PAGE_CELL>);
+
   pybind11::class_<pdflib::page_item<pdflib::PAGE_SHAPE>>(m, "PdfShape")
     .def("get_x",
          static_cast<std::vector<double>& (pdflib::page_item<pdflib::PAGE_SHAPE>::*)()>(
@@ -494,7 +497,13 @@ PYBIND11_MODULE(pdf_parsers, m) {
     .def("get_crop_bbox", &pdflib::page_item<pdflib::PAGE_DIMENSION>::get_crop_bbox,
 	 "Get crop box as [x0, y0, x1, y1]")
     .def("get_media_bbox", &pdflib::page_item<pdflib::PAGE_DIMENSION>::get_media_bbox,
-	 "Get media box as [x0, y0, x1, y1]");
+	 "Get media box as [x0, y0, x1, y1]")
+    .def("get_bleed_bbox", &pdflib::page_item<pdflib::PAGE_DIMENSION>::get_bleed_bbox,
+	 "Get bleed box as [x0, y0, x1, y1]")
+    .def("get_trim_bbox", &pdflib::page_item<pdflib::PAGE_DIMENSION>::get_trim_bbox,
+	 "Get trim box as [x0, y0, x1, y1]")
+    .def("get_art_bbox", &pdflib::page_item<pdflib::PAGE_DIMENSION>::get_art_bbox,
+	 "Get art box as [x0, y0, x1, y1]");
 
   // PdfWidget - form field widget with bounding box and field info
   pybind11::class_<pdflib::page_item<pdflib::PAGE_WIDGET>>(m, "PdfWidget")
@@ -604,6 +613,10 @@ PYBIND11_MODULE(pdf_parsers, m) {
     .def("get_char_cells", &pdflib::pdf_decoder<pdflib::PAGE>::get_char_cells,
 	 pybind11::return_value_policy::reference_internal,
 	 "Get individual character cells")
+    .def("get_marked_content", [](pdflib::pdf_decoder<pdflib::PAGE>& self) {
+      pybind11::gil_scoped_release release;
+      return self.get_marked_content();
+    }, "Batch export of character-cell linkage, text and geometry")
     .def("get_word_cells", &pdflib::pdf_decoder<pdflib::PAGE>::get_word_cells,
 	 pybind11::return_value_policy::reference_internal,
 	 "Get word cells (aggregated from char cells)")
@@ -730,6 +743,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
   m.attr("TIMING_KEY_PROCESS_DOCUMENT_FROM_BYTESIO") = pdflib::pdf_timings::KEY_PROCESS_DOCUMENT_FROM_BYTESIO;
   m.attr("TIMING_KEY_QPDF_PROCESS") = pdflib::pdf_timings::KEY_QPDF_PROCESS;
   m.attr("TIMING_KEY_EXTRACT_DOC_ANNOTATIONS") = pdflib::pdf_timings::KEY_EXTRACT_DOC_ANNOTATIONS;
+  m.attr("TIMING_KEY_EXTRACT_STRUCTURE") = pdflib::pdf_timings::KEY_EXTRACT_STRUCTURE;
   m.attr("TIMING_KEY_DECODE_DOCUMENT") = pdflib::pdf_timings::KEY_DECODE_DOCUMENT;
 
   m.attr("TIMING_PREFIX_DECODE_FONT") = pdflib::pdf_timings::PREFIX_DECODE_FONT;
@@ -965,9 +979,24 @@ PYBIND11_MODULE(pdf_parsers, m) {
     Returns:
         int: The number of pages in the document.)")
 
+    .def("get_structure", [](docling::docling_parser& self, const std::string& key) {
+      auto doc = self.get_document_decoder(key);
+      if(not doc) { throw std::runtime_error("Document key not found: " + key); }
+      pybind11::gil_scoped_release release;
+      return doc->get_structure();
+    }, pybind11::arg("key"))
+    .def("get_document_timings", [](docling::docling_parser& self, const std::string& key) {
+      auto doc = self.get_document_decoder(key);
+      if(not doc) { throw std::runtime_error("Document key not found: " + key); }
+      pybind11::gil_scoped_release release;
+      return doc->get_document_timings();
+    }, pybind11::arg("key"))
     .def("get_annotations",
 	 [](docling::docling_parser &self, const std::string &key) -> nlohmann::json {
-	   return self.get_annotations(key);
+           auto doc = self.get_document_decoder(key);
+           if(not doc) { return nullptr; }
+           pybind11::gil_scoped_release release;
+           return doc->get_annotations();
 	 },
 	 pybind11::arg("key"),
 	 R"(
@@ -1208,6 +1237,16 @@ PYBIND11_MODULE(pdf_parsers, m) {
 
     Returns:
         int: Number of pages that will be emitted by the threaded parser.)")
+    .def("get_structure", [](docling::docling_threaded_parser& self, const std::string& key) {
+      auto doc = self.get_document_decoder(key);
+      pybind11::gil_scoped_release release;
+      return doc->get_structure();
+    }, pybind11::arg("key"))
+    .def("get_document_timings", [](docling::docling_threaded_parser& self, const std::string& key) {
+      auto doc = self.get_document_decoder(key);
+      pybind11::gil_scoped_release release;
+      return doc->get_document_timings();
+    }, pybind11::arg("key"))
     .def("get_annotations",
          [](docling::docling_threaded_parser& self, const std::string& key) -> nlohmann::json {
            // The lookup runs under the GIL, like unload_document; the pointer
@@ -1300,6 +1339,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
         canvas_height (int): Target canvas height in pixels; -1 means use PDF page size [default=-1].
     )")
     .def(pybind11::init<>())
+    .def("to_string", &pdflib::render_config::to_string)
     .def_readwrite("render_text",             &pdflib::render_config::render_text)
     .def_readwrite("render_shapes",           &pdflib::render_config::render_shapes)
     .def_readwrite("render_shadings",         &pdflib::render_config::render_shadings)
@@ -1407,6 +1447,12 @@ PYBIND11_MODULE(pdf_parsers, m) {
         decode_config (DecodePageConfig): Configuration for page decoding.
         render_config (RenderConfig): Configuration for page rendering.)")
 
+    .def_property_readonly("decode_config",
+         [](const docling::docling_threaded_renderer& self) -> pdflib::decode_config {
+           return self.get_decode_config();
+         },
+         "Copy of the config the workers decode with, including the settings rendering forces on.")
+
     .def("load_document",
          [](docling::docling_threaded_renderer& self,
             const std::string& key,
@@ -1464,6 +1510,16 @@ PYBIND11_MODULE(pdf_parsers, m) {
            return self.scheduled_number_of_pages(key);
          },
          pybind11::arg("key"))
+    .def("get_structure", [](docling::docling_threaded_renderer& self, const std::string& key) {
+      auto doc = self.get_document_decoder(key);
+      pybind11::gil_scoped_release release;
+      return doc->get_structure();
+    }, pybind11::arg("key"))
+    .def("get_document_timings", [](docling::docling_threaded_renderer& self, const std::string& key) {
+      auto doc = self.get_document_decoder(key);
+      pybind11::gil_scoped_release release;
+      return doc->get_document_timings();
+    }, pybind11::arg("key"))
     .def("get_annotations",
          [](docling::docling_threaded_renderer& self, const std::string& key) -> nlohmann::json {
            // See the parser binding of the same name.

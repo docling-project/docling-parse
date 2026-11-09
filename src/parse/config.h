@@ -239,6 +239,7 @@ namespace pdflib
        << std::setw(48) << "line_space_width_factor_for_merge_with_space" << line_space_width_factor_for_merge_with_space << "\n"
        << std::setw(48) << "populate_json_objects" << (populate_json_objects ? "true" : "false") << "\n"
        << std::setw(48) << "extract_font_programs" << (extract_font_programs ? "true" : "false") << "\n"
+       << std::setw(48) << "do_thread_safe" << (do_thread_safe ? "true" : "false") << "\n"
        << std::setw(48) << "release_native_memory_every_n_pages" << release_native_memory_every_n_pages << "\n"
        << std::setw(48) << "apply_actual_text" << (apply_actual_text ? "true" : "false") << "\n"
        << std::setw(48) << "do_char_normalization" << (do_char_normalization ? "true" : "false") << "\n"

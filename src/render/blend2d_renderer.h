@@ -270,6 +270,9 @@ namespace pdflib
     mutable std::unordered_set<std::string> distrusted_embedded_faces_;
     std::unordered_map<std::string, blend2d_font_resolver::resolved_face>
       local_font_cache_;
+    // Reuse shared-cache results, including failed loads, without taking
+    // its lock again for every text instruction on this page.
+    std::unordered_map<std::string, BLFontFace> local_embedded_face_cache_;
 
     // One spare canvas per thread, handed between the successive per-page
     // renderers that a render worker creates. Function-local so it is
@@ -436,16 +439,24 @@ namespace pdflib
       for (size_t l = 0; l < count; ++l)
         {
           BLBox box;
-          if (not glyph_bbox_cache_->find(face_key, glyph_ids[l], size, box))
+          if (not glyph_bbox_cache_->find(face_key, glyph_ids[l], font.size(), box))
             {
               BLPath path;
-              if (font.get_glyph_outlines(glyph_ids[l], identity, path) != BL_SUCCESS ||
-                  path.is_empty() ||
-                  path.get_bounding_box(&box) != BL_SUCCESS)
+              bool has_bounds;
+              {
+                glyph_bbox_cache::scoped_measurement outline(
+                  *glyph_bbox_cache_, &glyph_bbox_cache::diagnostics::outline_s);
+                outline.outline_attempt();
+                has_bounds =
+                  font.get_glyph_outlines(glyph_ids[l], identity, path) == BL_SUCCESS &&
+                  not path.is_empty() && path.get_bounding_box(&box) == BL_SUCCESS;
+                if(has_bounds) { outline.outline_success(); }
+              }
+              if (not has_bounds)
                 {
                   continue;
                 }
-              glyph_bbox_cache_->insert(face_key, glyph_ids[l], size, box);
+              glyph_bbox_cache_->insert(face_key, glyph_ids[l], font.size(), box);
             }
 
           if ((box.x1 - box.x0) > limit or (box.y1 - box.y0) > limit)
@@ -2436,27 +2447,33 @@ namespace pdflib
                               0.0, 0.0);
     BLBox rendered_box;
     if (face_key == nullptr ||
-        not glyph_bbox_cache_->find(*face_key, glyph_id, size, rendered_box))
+        not glyph_bbox_cache_->find(*face_key, glyph_id, font.size(), rendered_box))
       {
         BLPath glyph_path;
-        const BLResult outline_res =
-          font.get_glyph_outlines(glyph_id, identity, glyph_path);
-        if (outline_res != BL_SUCCESS || glyph_path.is_empty())
-          {
-            return adjustment;
-          }
+        {
+          glyph_bbox_cache::scoped_measurement outline(
+            *glyph_bbox_cache_, &glyph_bbox_cache::diagnostics::outline_s);
+          outline.outline_attempt();
+          const BLResult outline_res =
+            font.get_glyph_outlines(glyph_id, identity, glyph_path);
+          if (outline_res != BL_SUCCESS || glyph_path.is_empty())
+            {
+              return adjustment;
+            }
 
-        const BLResult bbox_res = glyph_path.get_bounding_box(&rendered_box);
-        if (bbox_res != BL_SUCCESS)
-          {
-            LOG_S(WARNING) << "render_text: glyph outline bbox failed"
-                           << " (BLResult=" << bbox_res << ")";
-            return adjustment;
-          }
+          const BLResult bbox_res = glyph_path.get_bounding_box(&rendered_box);
+          if (bbox_res != BL_SUCCESS)
+            {
+              LOG_S(WARNING) << "render_text: glyph outline bbox failed"
+                             << " (BLResult=" << bbox_res << ")";
+              return adjustment;
+            }
+          outline.outline_success();
+        }
 
         if (face_key != nullptr)
           {
-            glyph_bbox_cache_->insert(*face_key, glyph_id, size, rendered_box);
+            glyph_bbox_cache_->insert(*face_key, glyph_id, font.size(), rendered_box);
           }
       }
 
@@ -2539,6 +2556,8 @@ namespace pdflib
       int out_w,
       int out_h) const
   {
+    utils::scoped_timer prepare_timer(timings_, pdf_timings::KEY_RENDER_BITMAP_PREPARE);
+
     const auto& src_data = instr.get_data();
     const auto& alpha_data = instr.get_alpha_data();
     const bool image_mask = instr.is_image_mask();
@@ -2546,6 +2565,12 @@ namespace pdflib
     const auto fill_rgb = instr.get_rgb_filling();
     const int dw = std::max(1, out_w);
     const int dh = std::max(1, out_h);
+
+    // Both branches include allocation and conversion; the reduced-size
+    // branch also performs the existing premultiplied box averaging.
+    utils::scoped_timer samples_timer(
+      timings_, (dw == sw and dh == sh) ? pdf_timings::KEY_RENDER_BITMAP_CONVERT
+                                      : pdf_timings::KEY_RENDER_BITMAP_DOWNSAMPLE);
 
     BLImage src_img;
     src_img.create(dw, dh, BL_FORMAT_PRGB32);
@@ -2574,6 +2599,49 @@ namespace pdflib
                     << " rgb=(" << static_cast<int>(r) << ","
                     << static_cast<int>(g) << ","
                     << static_cast<int>(b) << ")";
+      }
+
+    if (fmt == PIXEL_FORMAT_GRAY and sc == 1
+        and not image_mask and not use_soft_mask_alpha
+        and dw <= sw and dh <= sh and (dw < sw or dh < sh))
+      {
+        // render_bitmap validated the buffer. For opaque gray, all three
+        // premultiplied color samples equal the source byte, so average once.
+        const auto* pixels = src_data->data();
+        for (int y = 0; y < dh; ++y)
+          {
+            auto* drow = reinterpret_cast<uint32_t*>(base + y * stride);
+            const int sy0 = (y * sh) / dh;
+            const int sy1 = std::min(sh, std::max(sy0 + 1, ((y + 1) * sh) / dh));
+            for (int x = 0; x < dw; ++x)
+              {
+                const int sx0 = (x * sw) / dw;
+                const int sx1 = std::min(sw, std::max(sx0 + 1, ((x + 1) * sw) / dw));
+                const uint32_t n = static_cast<uint32_t>(sy1 - sy0)
+                                 * static_cast<uint32_t>(sx1 - sx0);
+                uint32_t gray_sum = 0;
+                for (int sy = sy0; sy < sy1; ++sy)
+                  {
+                    const auto* row = pixels + static_cast<size_t>(sy) * sw;
+                    for (int sx = sx0; sx < sx1; ++sx)
+                      {
+                        gray_sum += row[sx];
+                      }
+                  }
+                if (n == 0)
+                  {
+                    drow[x] = 0u;
+                    continue;
+                  }
+                const uint32_t gray = gray_sum / n;
+                // Match the generic uint32_t accumulators, including wrap
+                // for unusually large boxes; do not replace this with 255.
+                const uint32_t alpha_sum = 255u * n;
+                drow[x] = ((alpha_sum / n) << 24)
+                        | (gray << 16) | (gray << 8) | gray;
+              }
+          }
+        return src_img;
       }
 
     // Convert one source sample to the exact PRGB32 value the old full-size
@@ -3055,7 +3123,15 @@ namespace pdflib
       {
         utils::scoped_timer font_timer(
           timings_, pdf_timings::KEY_RENDER_TEXT_FONT_RESOLVE);
-        face = embedded_font_cache_->resolve(instr.get_embedded_font());
+        const auto& blob = instr.get_embedded_font();
+        const auto& key = blob->get_cache_key();
+        auto cached = local_embedded_face_cache_.find(key);
+        if (cached == local_embedded_face_cache_.end())
+          {
+            cached = local_embedded_face_cache_.emplace(
+              key, embedded_font_cache_->resolve(blob)).first;
+          }
+        face = cached->second;
         using_embedded_font = face.is_valid();
         if (not using_embedded_font)
           {
@@ -3347,7 +3423,14 @@ namespace pdflib
             // rasterisers differ slightly in weight, so drawing one word from
             // both leaves it visibly patchy. One bad outline condemns the face
             // for the rest of the page.
+            std::string substituted_face_key;
             const std::string* glyph_bbox_face_key = nullptr;
+            if (not using_embedded_font)
+              {
+                substituted_face_key =
+                  "blend2d-face:" + std::to_string(font.face().unique_id());
+                glyph_bbox_face_key = &substituted_face_key;
+              }
             if (using_embedded_font)
               {
                 const std::string& face_key =
@@ -3800,6 +3883,10 @@ namespace pdflib
 
     BLImage src_img = build_bitmap_image(instr, sw, sh, sc, use_soft_mask_alpha,
                                          blit_w, blit_h);
+
+    // Includes clipping, masks, compositing, and drawing. Source-image
+    // destruction remains in the bitmap parent, after this timer ends.
+    utils::scoped_timer paint_timer(timings_, pdf_timings::KEY_RENDER_BITMAP_PAINT);
 
     const bool can_use_axis_aligned_fast_path =
       axis_aligned and right_angle and quarter_turns == 0;
