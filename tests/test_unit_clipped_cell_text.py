@@ -358,3 +358,28 @@ def test_a_glyph_repainted_under_a_sliver_clip_does_not_split_the_word():
     )
     assert "".join(words_of(page)).replace("dd", "d") == "den"
     assert len(lines_of(page)) == 1
+
+
+def nested_clips_pdf() -> bytes:
+    """A page clip, a cell clip inside it, a clip that only overlaps it, and
+    text under the page clip alone after the inner clips are restored."""
+    content = (
+        "q 100 600 300 150 re W n "
+        "q 120 700 100 20 re W n BT /F1 10 Tf 123 705 Td (inside) Tj ET Q "
+        "q 350 640 200 40 re W n BT /F1 10 Tf 353 650 Td (across) Tj ET Q "
+        "BT /F1 10 Tf 123 620 Td (outer) Tj ET "
+        "Q"
+    )
+    return simple_page_pdf(content, resources=HELVETICA, media_box=MEDIA_BOX)
+
+
+@requires_clip_bbox
+def test_nested_clips_intersect_and_a_restore_brings_the_outer_clip_back():
+    """Successive clips intersect (8.5.4): the box is that of the intersection,
+    and `Q` restores the box of the enclosing clip."""
+    page = parse_page(nested_clips_pdf())
+
+    by_text = {cell.text: cell for cell in page.word_cells}
+    assert clip_of(by_text["inside"]) == (120.0, 700.0, 220.0, 720.0)
+    assert clip_of(by_text["across"]) == (350.0, 640.0, 400.0, 680.0)
+    assert clip_of(by_text["outer"]) == (100.0, 600.0, 400.0, 750.0)
