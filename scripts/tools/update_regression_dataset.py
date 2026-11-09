@@ -146,12 +146,20 @@ def selected_groundtruth(
     directory: Path, selection: dict[str, list[int]]
 ) -> dict[Path, Path]:
     selected = {}
+    checked_documents: set[str] = set()
     for relative, path in files_under(directory).items():
         match = re.fullmatch(r"(.+\.pdf)\.page_no_(\d+)\..+", path.name)
         if match is None:
             warn(f"Skipping unrecognized groundtruth filename: {path}")
             continue
         document, page = match.groups()
+        if document not in checked_documents:
+            checked_documents.add(document)
+            pdf = directory.parent / "regression" / document
+            if not pdf.is_file():
+                warn(
+                    f"Groundtruth has no corresponding PDF: {pdf}; referenced by {path}"
+                )
         pages = selection.get(document)
         if pages is None:
             warn(

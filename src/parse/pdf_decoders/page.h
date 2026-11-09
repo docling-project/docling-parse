@@ -4,6 +4,7 @@
 #define PDF_PAGE_DECODER_H
 
 #include <optional>
+#include <tuple>
 #include <qpdf/QPDF.hh>
 #include <qpdf/QPDFFormFieldObjectHelper.hh>
 #include <qpdf/QPDFPageDocumentHelper.hh>
@@ -52,6 +53,24 @@ namespace pdflib
     page_item<PAGE_CELLS>& get_word_cells() { return word_cells; }
     page_item<PAGE_CELLS>& get_line_cells() { return line_cells; }
 
+    using marked_content_record = std::tuple<std::size_t, std::string,
+      std::array<double, 8>, int, std::string, std::string>;
+    std::vector<marked_content_record> get_marked_content()
+    {
+      std::vector<marked_content_record> result;
+      if(not has_marked_content) { return result; }
+      for(std::size_t i=0; i<char_cells.size(); ++i)
+        {
+          const auto& cell = char_cells.at(i);
+          if(cell.mcid<0 and cell.get_artifact_type().empty()) { continue; }
+          result.emplace_back(i, cell.text, std::array<double, 8>{
+            cell.r_x0, cell.r_y0, cell.r_x1, cell.r_y1,
+            cell.r_x2, cell.r_y2, cell.r_x3, cell.r_y3},
+            cell.mcid, cell.get_artifact_type(), cell.get_artifact_subtype());
+        }
+      return result;
+    }
+
     bool has_word_cells() const { return word_cells_created; }
     bool has_line_cells() const { return line_cells_created; }
 
@@ -89,6 +108,8 @@ namespace pdflib
     std::pair<double, double> to_page_frame_point(double x, double y) const;
 
   private:
+
+    bool has_marked_content = false;
 
     void decode_dimensions();
 
@@ -967,10 +988,14 @@ namespace pdflib
     if(config.keep_char_cells)
       {
         char_cells = page_cells;
+        has_marked_content = std::any_of(char_cells.begin(), char_cells.end(), [](const auto& cell) {
+          return cell.mcid>=0 or not cell.get_artifact_type().empty();
+        });
       }
     else
       {
         char_cells.clear();
+        has_marked_content = false;
       }
 
     timings.add_timing(pdf_timings::KEY_DECODE_PAGE, global.get_time());

@@ -30,7 +30,7 @@ jobs:
         # BL_ERROR_FONT_CFF_INVALID_DATA; the renderer now falls back to
         # FreeType for those files, but the static build is what the
         # groundtruth numbers were measured against. See
-        # .plans/cjk_system_font_fallback_freetype.md.
+        # .plans/completed/cjk_system_font_fallback_freetype.md.
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \

@@ -62,7 +62,7 @@ else()
         # https://github.com/blend2d/blend2d/pull/275
         # Once merged, switch back to blend2d/blend2d and pin a validated upstream
         # master commit containing the fixes; check the matching AsmJit revision.
-        GIT_TAG        08d76290aded4885aafacd89c59303283a72a118
+        GIT_TAG        408cec025e6fc36a7bbd7f641968cc7584600dc5 # 08d76290aded4885aafacd89c59303283a72a118
     )
     FetchContent_MakeAvailable(blend2d)
     # Release wheels must not contain Blend2D's debug assertion path. Blend2D

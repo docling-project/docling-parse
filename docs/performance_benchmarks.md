@@ -1,187 +1,589 @@
-# Performance Benchmarks
+# Performance benchmarks
 
-## Overview of other open-source, low-level PDF parsers
+Measurements collected November 6–7, 2026, on an **Apple M3 Max with 64 GiB memory**, using **767 PDFs / 54,730 pages**. The Docling-settings workload creates **page-images and text**, including word/line models, bitmap bounding boxes and separator geometry.
 
-At the time of writing (date: 3 Aug 2026), we have the following packages (ranked by download numbers),
+A **page-image** is a raster of the complete PDF page. It is distinct from an embedded bitmap extracted from inside the PDF. Embedded bitmaps are decoded as needed to render pages; the published profiles do not export their original image bytes as separate outputs.
 
-<table>
-  <thead>
-    <tr><th align="right">Rank</th><th>Python package</th><th>Primary use</th><th align="right">GitHub stars</th><th align="right">PyPI downloads/month</th></tr>
-  </thead>
-  <tbody>
-    <tr><td align="right">1</td><td><strong>pypdf</strong></td><td>Read, merge, split, crop, encrypt and modify PDFs in pure Python</td><td align="right">~10.1k</td><td align="right"><strong>122,033,329</strong> (<a href="https://github.com/py-pdf/pypdf">GitHub</a>)</td></tr>
-    <tr><td align="right">2</td><td><strong>PyMuPDF</strong></td><td>High-performance rendering, extraction, search and modification</td><td align="right">~10.4k</td><td align="right"><strong>106,838,492</strong> (<a href="https://github.com/pymupdf/PyMuPDF">GitHub</a>)</td></tr>
-    <tr><td align="right">3</td><td><strong>pypdfium2</strong></td><td>Fast PDFium bindings for rendering, inspection and manipulation</td><td align="right">803</td><td align="right"><strong>74,384,565</strong> (<a href="https://github.com/pypdfium2-team/pypdfium2">GitHub</a>)</td></tr>
-    <tr><td align="right">4</td><td><strong>pdfminer.six</strong></td><td>Detailed text extraction, layout analysis and low-level parsing</td><td align="right">~7.0k</td><td align="right"><strong>69,090,692</strong> (<a href="https://github.com/pdfminer/pdfminer.six">GitHub</a>)</td></tr>
-    <tr><td align="right">5</td><td><strong>pdfplumber</strong></td><td>Text and table extraction with coordinates and visual debugging</td><td align="right">~10.6k</td><td align="right"><strong>57,151,282</strong> (<a href="https://github.com/jsvine/pdfplumber">GitHub</a>)</td></tr>
-    <tr><td align="right">6</td><td><strong>WeasyPrint</strong></td><td>Generate PDFs from HTML and CSS</td><td align="right">~9.5k</td><td align="right"><strong>33,945,746</strong> (<a href="https://github.com/Kozea/WeasyPrint">GitHub</a>)</td></tr>
-    <tr><td align="right">7</td><td><strong>fpdf2</strong></td><td>Lightweight programmatic PDF generation</td><td align="right">~1.5k</td><td align="right"><strong>18,548,247</strong> (<a href="https://github.com/py-pdf/fpdf2">GitHub</a>)</td></tr>
-    <tr><td align="right">8</td><td><strong>pikepdf</strong></td><td>Robust PDF repair and low-level manipulation using QPDF</td><td align="right">~2.8k</td><td align="right"><strong>9,393,114</strong> (<a href="https://github.com/pikepdf/pikepdf">GitHub</a>)</td></tr>
-    <tr><td align="right">9</td><td><strong>OCRmyPDF</strong></td><td>Add searchable OCR layers to scanned PDFs and produce PDF/A</td><td align="right">~34.3k</td><td align="right"><strong>1,107,206</strong> (<a href="https://github.com/ocrmypdf/OCRmyPDF">GitHub</a>)</td></tr>
-    <tr><td align="right">10</td><td><strong>camelot-py</strong></td><td>Extract structured tables into pandas DataFrames</td><td align="right">~3.8k</td><td align="right"><strong>771,757</strong> (<a href="https://github.com/camelot-dev/camelot">GitHub</a>)</td></tr>
-  </tbody>
-</table>
+These results contain **one observation per configuration**. They do not establish run-to-run variability. Native rendering, Python with Docling settings and cross-package API workloads have separate timing boundaries and output contracts.
 
-[1]: https://github.com/py-pdf/pypdf "GitHub - py-pdf/pypdf: A pure-python PDF library capable of splitting, merging, cropping, and transforming the pages of PDF files · GitHub"
-[2]: https://github.com/pymupdf/PyMuPDF "GitHub - pymupdf/PyMuPDF: PyMuPDF is a high performance Python library for data extraction, analysis, conversion & manipulation of PDF (and other) documents. · GitHub"
-[3]: https://github.com/pypdfium2-team/pypdfium2 "GitHub - pypdfium2-team/pypdfium2: Python bindings to PDFium, reasonably cross-platform. · GitHub"
-[4]: https://github.com/pdfminer/pdfminer.six "GitHub - pdfminer/pdfminer.six: Community maintained fork of pdfminer - we fathom PDF · GitHub"
-[5]: https://github.com/jsvine/pdfplumber "GitHub - jsvine/pdfplumber: Plumb a PDF for detailed information about each char, rectangle, line, et cetera — and easily extract text and tables. · GitHub"
-[6]: https://github.com/Kozea/WeasyPrint "GitHub - Kozea/WeasyPrint: The awesome document factory · GitHub"
-[7]: https://github.com/py-pdf/fpdf2 "GitHub - py-pdf/fpdf2: Simple PDF generation for Python · GitHub"
-[8]: https://github.com/pikepdf/pikepdf "GitHub - pikepdf/pikepdf: A Python library for reading and writing PDF, powered by QPDF · GitHub"
-[9]: https://github.com/ocrmypdf/OCRmyPDF "GitHub - ocrmypdf/OCRmyPDF: OCRmyPDF adds an OCR text layer to scanned PDF files, allowing them to be searched · GitHub"
-[10]: https://github.com/camelot-dev/camelot "GitHub - camelot-dev/camelot: A Python library to extract tabular data from PDFs · GitHub"
+| Workload | Threads | Wall time (s) | Pages/s | Parallel efficiency |
+|---|---:|---:|---:|---:|
+| Native C++, page-images | 12 | 104.020 | 526.1 | 86.4% |
+| Native C++, page-images + word/line text geometry | 12 | 102.791 | 532.4 | 87.4% |
+| Python, Docling settings: page-images + text | 12 | 248.806 | 220.0 | 36.9% |
 
-## Performance comparison on parsing and rendering
+The following sections explain each workload before comparing its results. Speedup and efficiency always use a one-thread baseline from the same workload; subtracting these wall times does not isolate Python language overhead.
 
-Here we evaluate the top-5 python packages that provide the parsing (i.e. text-extraction from PDF with location) and page-rendering.
+## Workloads and timing boundaries
 
-### What is measured
+Three experiments answer different questions:
 
-Two tasks are timed:
+| Experiment | Runner | What the reported wall time includes |
+|---|---|---|
+| Native C++ scaling | `build/run_scaling.exe` | Page decoder construction, decoding, word/line computation, rasterization, canvas extraction, result collection and timing CSV output. Document loading is outside the timer. |
+| Python scaling with Docling settings | `run_performance_benchmarking_with_docling_settings.py` | Per-document parser construction/loading, processing, text-model and page-image consumption, separator queries, JSONL output and unloading. |
+| Optional cross-package comparison | `run_performance_benchmarking.py` | Each selected package's complete corpus workload, including document loading. The Docling row uses the public threaded Python API. |
 
-- **`parse`** — extract the text of every page *together with its location*. Every package therefore uses its position-bearing API, not a plain-text dump.
-- **`parse+render`** — the same, plus rasterising the page at `--scale` (`scale=1.0` is 72 dpi) and materialising it as a PIL image.
+Native C++ produces native results. The replay also materializes Python models and
+RGB page-images, uses a different document lifecycle, and releases native memory every
+128 pages. Their runtime difference is not an isolated measurement of Python
+language overhead.
 
-<table>
-  <thead>
-    <tr><th>Python package</th><th><code>parse</code></th><th><code>parse+render</code></th></tr>
-  </thead>
-  <tbody>
-    <tr><td><strong>docling-parse</strong></td><td><code>DoclingThreadedPdfParser</code></td><td>+ <code>RenderConfig</code></td></tr>
-    <tr><td><strong>PyMuPDF</strong></td><td><code>page.get_text("rawdict")</code></td><td>+ <code>page.get_pixmap()</code> → <code>pil_image()</code></td></tr>
-    <tr><td><strong>pypdfium2</strong></td><td>text-page rects + <code>get_text_bounded()</code></td><td>+ <code>page.render()</code> → <code>to_pil()</code></td></tr>
-    <tr><td><strong>pdfplumber</strong></td><td><code>page.chars</code></td><td>+ <code>page.to_image()</code></td></tr>
-    <tr><td><strong>pdfminer.six</strong></td><td><code>extract_pages()</code> + <code>LTChar</code> walk</td><td>not supported</td></tr>
-    <tr><td><strong>pypdf</strong></td><td><code>extract_text(visitor_text=...)</code></td><td>not supported</td></tr>
-  </tbody>
-</table>
+The replay follows a pinned inspection of Docling revision
+`07154cdc82500058ad9377bac92beed3de820458`. It excludes OCR, layout/table models,
+inference and Docling framework construction. Exact parity with the actual
+Docling backend has not been independently established.
 
-Two notes on fairness. PyMuPDF is timed on `get_text("rawdict")` rather than the much faster `get_text("text")`, because the latter returns a bare string with no geometry and would not be the same task. pdfplumber has no rasteriser of its own — `to_image()` delegates to pypdfium2 — so its render row is pdfminer extraction plus a PDFium raster, which is how a pdfplumber user would in practice obtain both.
+## Dataset and configuration
 
-pdfminer.six and pypdf have no rendering path at all, so they appear only in the `parse` task.
+Within each run, all experiments use the selected pinned dataset and file order.
+The default is Bo767:
 
-**Threading.** docling-parse decodes pages in parallel, and to our knowledge none of the other packages expose a thread-safe multi-page pipeline. docling-parse is therefore measured once per thread count, and every other package is measured single-threaded and reported with `threads = 1`.
+| Parameter | Value |
+|---|---|
+| Dataset | `docling-project/performance-dataset-bo767` |
+| Revision | `221c19e716d6ede5d18fd1560bc938ab19cc1a70` |
+| Documents / pages | 767 / 54,730 |
+| Render scale | 1.0: requested output at 72 dpi |
+| Result queue capacity | 32 |
+| Thread counts | 1, 4, 8, 12 by default |
+| QPDF | Bundled version recorded after the build; current pin: 12.4.2 |
+| Machine / operating system | Apple M3 Max, arm64, 64 GiB; macOS 26.6.2 |
+| Python / Docling packages | Python 3.12.11; docling-parse 7.24.2; docling-core 2.103.1 |
+| Native build | CMake Release, `-O3 -DNDEBUG`, C++20; compiler driver `/usr/bin/c++`; exact compiler version was not archived |
+| Source and build identities | See the provenance section and compact JSON linked below |
+| Repetitions | One per configuration; no empirical variability range |
 
-### Results
+Set `DATASET=bo20` for 20 PDFs / 496 pages, or `DATASET=bo10k` for 10,000 PDFs /
+213,538 pages. Each corpus has its own pinned revision, listed in
+[the benchmarking tools README](../scripts/benchmarking/README.md#publication-bundle-and-plots).
+`DATASET_REVISION` can override the selected corpus's pin; the requested revision
+and resolved commit are saved in the run metadata.
 
-#### Parse without bitmap bytes (decode only)
+The earlier Bo767 snapshot `c684df54de2081a6de1192cee12713b54759c6bb` contained
+753 PDFs / 54,584 pages. Restoring 14 PDFs added 146 pages. Existing reports from
+that snapshot keep their original inputs and must not be mixed with measurements
+of the complete corpus. The launcher records ordered filenames, page counts and
+SHA-256 hashes so the exact inputs can be checked.
 
-<table>
-  <thead>
-    <tr><th>Backend</th><th align="right">Threads</th><th align="right">Wall time (s)</th><th align="right">vs threaded (1)</th><th align="right">Efficiency</th><th align="right">vs PyMuPDF (1t)</th><th align="right">vs pypdfium2 (1t)</th><th align="right">vs pdfplumber (1t)</th><th align="right">vs pdfminer.six (1t)</th><th align="right">vs pypdf (1t)</th><th align="right">Pages/sec</th><th align="right">ms/page</th></tr>
-  </thead>
-  <tbody>
-    <tr><td>pymupdf (1t)</td><td align="right">–</td><td align="right">1370.2</td><td align="right">0.22×</td><td align="right"></td><td align="right">1.00×</td><td align="right">0.19×</td><td align="right">1.63×</td><td align="right">1.57×</td><td align="right">0.55×</td><td align="right">39.8</td><td align="right">25.1</td></tr>
-    <tr><td>pypdfium2 (1t)</td><td align="right">–</td><td align="right">256.229</td><td align="right">1.17×</td><td align="right"></td><td align="right">5.35×</td><td align="right">1.00×</td><td align="right">8.74×</td><td align="right">8.38×</td><td align="right">2.95×</td><td align="right">213</td><td align="right">4.69</td></tr>
-    <tr><td>pdfplumber (1t)</td><td align="right">–</td><td align="right">2239.82</td><td align="right">0.13×</td><td align="right"></td><td align="right">0.61×</td><td align="right">0.11×</td><td align="right">1.00×</td><td align="right">0.96×</td><td align="right">0.34×</td><td align="right">24.4</td><td align="right">41.03</td></tr>
-    <tr><td>pdfminer.six (1t)</td><td align="right">–</td><td align="right">2146.92</td><td align="right">0.14×</td><td align="right"></td><td align="right">0.64×</td><td align="right">0.12×</td><td align="right">1.04×</td><td align="right">1.00×</td><td align="right">0.35×</td><td align="right">25.4</td><td align="right">39.33</td></tr>
-    <tr><td>pypdf (1t)</td><td align="right">–</td><td align="right">755.656</td><td align="right">0.40×</td><td align="right"></td><td align="right">1.81×</td><td align="right">0.34×</td><td align="right">2.96×</td><td align="right">2.84×</td><td align="right">1.00×</td><td align="right">72.2</td><td align="right">13.84</td></tr>
-    <tr><td>docling threaded</td><td align="right">1</td><td align="right">298.603</td><td align="right">1.00×</td><td align="right">100%</td><td align="right">4.59×</td><td align="right">0.86×</td><td align="right">7.50×</td><td align="right">7.19×</td><td align="right">2.53×</td><td align="right">182.8</td><td align="right">5.47</td></tr>
-    <tr><td>docling threaded</td><td align="right">2</td><td align="right">156.293</td><td align="right">1.91×</td><td align="right">96%</td><td align="right">8.77×</td><td align="right">1.64×</td><td align="right">14.33×</td><td align="right">13.74×</td><td align="right">4.83×</td><td align="right">349.2</td><td align="right">2.86</td></tr>
-    <tr><td>docling threaded</td><td align="right">4</td><td align="right">86.643</td><td align="right">3.45×</td><td align="right">86%</td><td align="right">15.81×</td><td align="right">2.96×</td><td align="right">25.85×</td><td align="right">24.78×</td><td align="right">8.72×</td><td align="right">630</td><td align="right">1.59</td></tr>
-    <tr><td>docling threaded</td><td align="right">8</td><td align="right">52.539</td><td align="right">5.68×</td><td align="right">71%</td><td align="right">26.08×</td><td align="right">4.88×</td><td align="right">42.63×</td><td align="right">40.86×</td><td align="right">14.38×</td><td align="right">1038.9</td><td align="right">0.96</td></tr>
-    <tr><td>docling threaded</td><td align="right">12</td><td align="right">44.856</td><td align="right">6.66×</td><td align="right">55%</td><td align="right">30.55×</td><td align="right">5.71×</td><td align="right">49.93×</td><td align="right">47.86×</td><td align="right">16.85×</td><td align="right">1216.9</td><td align="right">0.82</td></tr>
-    <tr><td>docling threaded</td><td align="right">16</td><td align="right">44.154</td><td align="right">6.76×</td><td align="right">42%</td><td align="right">31.03×</td><td align="right">5.80×</td><td align="right">50.73×</td><td align="right">48.62×</td><td align="right">17.11×</td><td align="right">1236.2</td><td align="right">0.81</td></tr>
-  </tbody>
-</table>
+Native rendering is measured twice: `render-only` disables word/line cell
+construction, while `render-with-text` enables both. Both decode characters and
+bitmap geometry needed for drawing and extract native RGBA canvases. Neither
+materializes Python models or separate bitmap bounding-box outputs.
+Python replay materializes word/line models and bitmap bounds, computes shapes
+without materializing their models, and excludes bitmap image-byte export.
+Both native profiles and replay use crop-box boundaries and enable same-font
+enforcement.
 
-#### Render (decode + rasterise at scale 2)
+The replay requests scale-1 page-images from both backends. PDFium renders at 1.5 times
+the requested scale and resizes; docling-parse renders at scale 1 and converts to
+RGB. Equal output dimensions do not establish equal pixels or text segmentation.
 
-**M3 max**
+The corpus has 1–2,227 pages per document: median 24, mean 71.4. This uneven document size helps explain why document lifecycle and page scheduling matter when interpreting parallel efficiency.
 
-<table>
-  <thead>
-    <tr><th>Backend</th><th align="right">Threads</th><th align="right">Wall time (s)</th><th align="right">vs threaded (1)</th><th align="right">Efficiency</th><th align="right">vs PyMuPDF (1t)</th><th align="right">vs pypdfium2 (1t)</th><th align="right">vs pdfplumber (1t)</th><th align="right">Pages/sec</th><th align="right">ms/page</th></tr>
-  </thead>
-  <tbody>
-    <tr><td>pymupdf (1t)</td><td align="right">–</td><td align="right">2299.18</td><td align="right">0.81×</td><td align="right"></td><td align="right">1.00×</td><td align="right">0.45×</td><td align="right">1.43×</td><td align="right">23.7</td><td align="right">42.12</td></tr>
-    <tr><td>pypdfium2 (1t)</td><td align="right">–</td><td align="right">1031.87</td><td align="right">1.80×</td><td align="right"></td><td align="right">2.23×</td><td align="right">1.00×</td><td align="right">3.19×</td><td align="right">52.9</td><td align="right">18.9</td></tr>
-    <tr><td>pdfplumber (1t)</td><td align="right">–</td><td align="right">3293.9</td><td align="right">0.56×</td><td align="right"></td><td align="right">0.70×</td><td align="right">0.31×</td><td align="right">1.00×</td><td align="right">16.6</td><td align="right">60.35</td></tr>
-    <tr><td>docling threaded</td><td align="right">1</td><td align="right">1858.78</td><td align="right">1.00×</td><td align="right">100%</td><td align="right">1.24×</td><td align="right">0.56×</td><td align="right">1.77×</td><td align="right">29.4</td><td align="right">34.05</td></tr>
-    <tr><td>docling threaded</td><td align="right">2</td><td align="right">931.04</td><td align="right">2.00×</td><td align="right">100%</td><td align="right">2.47×</td><td align="right">1.11×</td><td align="right">3.54×</td><td align="right">58.6</td><td align="right">17.06</td></tr>
-    <tr><td>docling threaded</td><td align="right">4</td><td align="right">492.556</td><td align="right">3.77×</td><td align="right">94%</td><td align="right">4.67×</td><td align="right">2.09×</td><td align="right">6.69×</td><td align="right">110.8</td><td align="right">9.02</td></tr>
-    <tr><td>docling threaded</td><td align="right">8</td><td align="right">270.882</td><td align="right">6.86×</td><td align="right">86%</td><td align="right">8.49×</td><td align="right">3.81×</td><td align="right">12.16×</td><td align="right">201.5</td><td align="right">4.96</td></tr>
-    <tr><td>docling threaded</td><td align="right">12</td><td align="right">205.269</td><td align="right">9.06×</td><td align="right">75%</td><td align="right">11.20×</td><td align="right">5.03×</td><td align="right">16.05×</td><td align="right">265.9</td><td align="right">3.76</td></tr>
-    <tr><td>docling threaded</td><td align="right">16</td><td align="right">193.763</td><td align="right">9.59×</td><td align="right">60%</td><td align="right">11.87×</td><td align="right">5.33×</td><td align="right">17.00×</td><td align="right">281.7</td><td align="right">3.55</td></tr>
-  </tbody>
-</table>
+## Native C++ scaling
 
-**AMD Ryzen 7-9800x3d-8-core processor**
+Both profiles decode and render page-images into native RGBA canvases. `render-only` disables word/line cell construction; `render-with-text` enables both. Character and bitmap geometry required for drawing is computed in either profile. Python models and separate embedded-bitmap image outputs are not produced.
 
-backend           threads      wall_time (s)  vs threaded(1)    efficiency    vs pypdfium2 (1t)      pages/sec    ms/page
-----------------  ---------  ---------------  ----------------  ------------  -------------------  -----------  ---------
-pypdfium2 (1t)    -                 1136.58   1.87x                           1.00x                       48        20.82
-docling threaded  1                 2126.69   1.00x             100%          0.53x                       25.7      38.96
-docling threaded  2                 1070.48   1.99x             99%           1.06x                       51        19.61
-docling threaded  4                  550.254  3.86x             97%           2.07x                       99.2      10.08
-docling threaded  8                  306.593  6.94x             87%           3.71x                      178         5.62
-docling threaded  12                 286.67   7.42x             62%           3.96x                      190.4       5.25
-docling threaded  16                 267.282  7.96x             50%           4.25x                      204.2       4.9
+The timer includes decoder construction, decoding, word/line computation when enabled, rasterization, canvas extraction, collection and timing CSV output. Document loading is outside the timer. Stage timing is enabled; glyph-cache diagnostics and saving rendered page-images as PNG files are disabled.
 
-#### Linear thread scaling
+| Profile | Threads | Wall time (s) | Pages/s | Speedup vs 1 thread | Efficiency |
+|---|---:|---:|---:|---:|---:|
+| Page-images | 1 | 1078.813 | 50.7 | 1.00x | 100.0% |
+| Page-images | 4 | 281.504 | 194.4 | 3.83x | 95.8% |
+| Page-images | 8 | 148.472 | 368.6 | 7.27x | 90.8% |
+| Page-images | 12 | 104.020 | 526.1 | 10.37x | 86.4% |
+| Page-images + word/line geometry | 1 | 1077.483 | 50.8 | 1.00x | 100.0% |
+| Page-images + word/line geometry | 4 | 284.828 | 192.2 | 3.78x | 94.6% |
+| Page-images + word/line geometry | 8 | 151.327 | 361.7 | 7.12x | 89.0% |
+| Page-images + word/line geometry | 12 | 102.791 | 532.4 | 10.48x | 87.4% |
 
-![Linear thread scaling of docling-parse](./performance_benchmarks/apple_m3_max_performance-dataset-bo767_render/scaling_parse-render_linear.png)
+At 12 threads, throughput reaches 526.1 pages/s for page-images and 532.4 pages/s with word/line construction. Relative to their own one-thread baselines, these are 10.37x and 10.48x speedups, with 86.4% and 87.4% efficiency.
 
-Wall-clock runtime and throughput by docling-parse thread count. Apple M3 Max; `parse+render`; `scale = 2` (144 dpi).
+The two profiles have similar observed wall times. The slightly faster result with word/line construction does not establish that constructing text is free or beneficial: each configuration was run once. Stage totals in the one-thread text profile include 750.3 worker-seconds of decoding, 287.7 of rendering and 20.6 of word-cell construction; decoding is the largest measured stage.
 
-#### Parallel efficiency
+### Page-images
 
-![Parallel efficiency of docling-parse](./performance_benchmarks/apple_m3_max_performance-dataset-bo767_render/parallel_efficiency_parse-render.png)
+#### Wall time and throughput
 
-Parallel efficiency relative to the one-thread docling-parse run. Apple M3 Max; `parse+render`; `scale = 2` (144 dpi).
+Corpus wall time and pages per second. Document loading is excluded. The single observations do not provide a variability estimate.
 
-#### Per-page time distributions
+![Wall time and throughput](performance_benchmarks/2026-11-bo767-m3-max/native_render_only_runtime.png)
 
-![Per-page time histograms](./performance_benchmarks/apple_m3_max_performance-dataset-bo767_render/hist_stacked.png)
+#### Speedup and parallel efficiency
 
-Per-page timing distributions for every measured configuration. Apple M3 Max; `parse+render`; `scale = 2` (144 dpi).
+Each profile uses its own one-thread result. Dashed lines show ideal speedup and 100% efficiency.
 
-#### Per-page correlation against other packages
+![Speedup and parallel efficiency](performance_benchmarks/2026-11-bo767-m3-max/native_render_only_scaling.png)
 
-![docling-parse vs pypdfium2, per page](./performance_benchmarks/apple_m3_max_performance-dataset-bo767_render/hex_loglog_docling-parse-parse-render-_vs_pypdfium2-parse-render-.png)
+#### Where the native time goes
 
-Per-page timing comparison of docling-parse and pypdfium2; the red diagonal marks equal time. Apple M3 Max; `parse+render`; `scale = 2` (144 dpi).
+Stacked bars sum page worker elapsed by stage. Workers overlap: the stacked total is neither corpus wall time nor CPU time. Internal waits are included in worker elapsed.
 
-### Reproducing these numbers
+![Where the native time goes](performance_benchmarks/2026-11-bo767-m3-max/native_render_only_phases.png)
 
-Install the benchmark dependencies (this pulls in every third-party package in the table):
+#### Page worker-duration distribution
 
-```sh
-uv sync --group perf
+Page worker durations on logarithmic axes show the long tail and how it changes with thread count. These are not end-to-end page latencies or document wall times.
+
+![Page worker-duration distribution](performance_benchmarks/2026-11-bo767-m3-max/native_render_only_distribution.png)
+
+<details>
+<summary>Reproduce the measurements for these figures</summary>
+
+Run from the repository root after building. Set `PDF_ROOT` to the pinned corpus directory. Each invocation below runs in a fresh process and writes to a new output directory.
+
+```bash
+set -euo pipefail
+PDF_ROOT=/path/to/performance-dataset-bo767/pdf
+REPRO_OUT=$(mktemp -d "$PWD/scratch-performance-reproduce-XXXXXX")
+for ((r=1; r<=1; r++)); do
+  for t in 1 4 8 12; do
+    ./build/run_scaling.exe "$PDF_ROOT" -v WARNING --recursive --mode render \
+      --threads "$t" --max-concurrent-results 32 --scale 1.0 \
+      --create-word-cells=false --create-line-cells=false \
+      --enable-timing --timing-csv "$REPRO_OUT/r${r}-t${t}.csv" \
+      2>&1 | tee "$REPRO_OUT/r${r}-t${t}.log"
+  done
+done
 ```
 
-Then run the comparison suite. It downloads the dataset from Hugging Face on first use, runs the requested tasks, prints the tables, and writes a full report:
+</details>
 
-```sh
-uv run python ./scripts/benchmarking/run_performance_benchmarking.py --3rd-party-backends all --only-threaded
+### Page-images and word/line text geometry
+
+#### Wall time and throughput
+
+Corpus wall time and pages per second. Document loading is excluded. The single observations do not provide a variability estimate.
+
+![Wall time and throughput](performance_benchmarks/2026-11-bo767-m3-max/native_render_with_text_runtime.png)
+
+#### Speedup and parallel efficiency
+
+Each profile uses its own one-thread result. Dashed lines show ideal speedup and 100% efficiency.
+
+![Speedup and parallel efficiency](performance_benchmarks/2026-11-bo767-m3-max/native_render_with_text_scaling.png)
+
+#### Where the native time goes
+
+Stacked bars sum page worker elapsed by stage. Workers overlap: the stacked total is neither corpus wall time nor CPU time. Internal waits are included in worker elapsed.
+
+![Where the native time goes](performance_benchmarks/2026-11-bo767-m3-max/native_render_with_text_phases.png)
+
+#### Page worker-duration distribution
+
+Page worker durations on logarithmic axes show the long tail and how it changes with thread count. These are not end-to-end page latencies or document wall times.
+
+![Page worker-duration distribution](performance_benchmarks/2026-11-bo767-m3-max/native_render_with_text_distribution.png)
+
+<details>
+<summary>Reproduce the measurements for these figures</summary>
+
+Run from the repository root after building. Set `PDF_ROOT` to the pinned corpus directory. Each invocation below runs in a fresh process and writes to a new output directory.
+
+```bash
+set -euo pipefail
+PDF_ROOT=/path/to/performance-dataset-bo767/pdf
+REPRO_OUT=$(mktemp -d "$PWD/scratch-performance-reproduce-XXXXXX")
+for ((r=1; r<=1; r++)); do
+  for t in 1 4 8 12; do
+    ./build/run_scaling.exe "$PDF_ROOT" -v WARNING --recursive --mode render \
+      --threads "$t" --max-concurrent-results 32 --scale 1.0 \
+      --create-word-cells=true --create-line-cells=true \
+      --enable-timing --timing-csv "$REPRO_OUT/r${r}-t${t}.csv" \
+      2>&1 | tee "$REPRO_OUT/r${r}-t${t}.log"
+  done
+done
 ```
 
-You only name a directory. The report and the per-page CSV are named `<cpu>_<dataset>_<mode>` — for example `apple_m3_max_performance-dataset-bo767_render.md` — so results from different machines never overwrite each other. Numbers are only comparable within a single row of the *System hardware* column, so the tables in this file are aggregated from those per-machine reports rather than produced in one run.
+</details>
 
-Each report is self-contained: it records the exact command it was produced by, the dataset name/revision/size, the machine and the version of every benchmarked package, the decode/content/render configs the run was driven with, and all result tables. That is what makes a number here traceable without the terminal scrollback it came from.
+## Understanding the two Python experiments
 
-Useful variations:
+**These sections measure different workloads and Python output representations.** They share a corpus, but their pages/second values cannot be subtracted to measure isolated Python overhead or interpreted as a change in native renderer performance. Neither experiment runs OCR, model inference or complete document conversion.
 
-- `--compare` on its own compares only docling-parse against pypdfium2, which is the cheapest meaningful run.
-- `--max-pages 5000` caps the total page count for a quick check; the cap is applied in input order and the last document is truncated, so the subset is reproducible.
-- `--mode both` runs `parse` and `parse+render` in one go.
-- Omitting `--compare` gives the thread-scaling tables instead; that mode writes the per-page CSV only.
-- The default `--output-dir` is `./scratch`, so an exploratory run does not touch the docs.
+### What each experiment measures
 
-For a stable measurement, run on an otherwise idle machine, and note that the first run of a dataset pays for a cold file cache.
+The Docling-settings replay uses `run_performance_benchmarking_with_docling_settings.py` to replay selected backend operations from a pinned Docling revision, including adapter processing. The cross-package experiment uses `run_performance_benchmarking.py` to exercise each package's supported extraction API, optionally followed by rendering. It does not construct a common Docling output model across packages.
 
-The companion CSV holds one row per `(backend, task, threads, document, page)`, including the rendered `image_width` and `image_height`. It is the input for the render size check and, via `scripts/benchmarking/run_performance_eval.py`, for every plot shown above.
+| Aspect | Python scaling with Docling settings | Python cross-package comparison |
+|---|---|---|
+| PDFium page-image generation | Render at 1.5 times the requested scale, copy the PIL image, then resize to the requested dimensions | Render directly at the requested scale and obtain a PIL image |
+| PDFium text processing | Read character data, select text geometrically, normalize coordinates, merge fragmented cells and construct segmented-page models | Iterate PDFium text rectangles and call `get_text_bounded()`; no Docling page models or cell-merging adapter |
+| Docling text output | Compute characters internally; materialize word and line models, without character models | Materialize character models; word/line construction is disabled |
+| Docling page-image output | Obtain the rendered page-image and convert it to RGB | Obtain the rendered image without the replay's explicit RGB conversion |
+| Additional geometry | Query separator lines, connected shapes and bitmap bounds | These adapter queries and separate bitmap-bound outputs are omitted |
+| Docling document scheduling | Construct a parser, load, process and unload one document at a time; native page work within that document is threaded | Construct one parser and submit all documents before consuming results; native work can overlap submission |
+| Native-memory release policy | Every 128 pages | No periodic release (`0`) |
+| Reported wall time | Sum of document timers, including parser construction, loading, processing and unloading | Corpus timer including document loading and result consumption; parser construction occurs before this timer |
+| Timed bookkeeping | Per-page metadata generation, JSONL writes and progress updates | Per-page timing collection and progress updates; checkpoint and final CSV writes occur after measurement |
 
-### Overview of Regression and Performance datasets
+Repeated image and segmented-page requests in the replay check caching; they do not repeat the underlying work. Both render profiles decode the image content needed to draw a page, even when exporting bitmap bytes or bitmap bounding-box models is disabled.
 
-**docling-project/performance-dataset-bo767** — revision `c684df5`
+Text geometry is also different **within** the cross-package experiment: docling-parse materializes character cells; PDFium returns text rectangles; PyMuPDF returns `rawdict` character data; pdfplumber exposes `page.chars`; pdfminer.six walks `LTChar` objects; and pypdf's visitor exposes text-chunk positions. Its speedups compare these selected API workloads, not identical output granularity or extraction quality.
 
-- number of documents: **753**
-- number of pages: **54,584**
-- median document: ~30 pages; longest: ~1,600 pages
+### Reading this run's throughput
 
-![Pages per document](./performance_benchmarks/apple_m3_max_performance-dataset-bo767_render/hist_pages_per_document.png)
+Compare the replay with the cross-package **render** rows. Cross-package parse-only rows do not generate page-images. The table below pairs successful render measurements for the same package version and thread count; it does not assert equivalent workloads.
 
-The distribution is broad and roughly log-uniform between 4 and 200 pages, with a spike of single- and two-page documents (110 of the 753) and a thin tail past 1,000 pages. That spread is why per-page quantiles are computed over pages rather than over documents — a per-document average would be dominated by the short documents, which are the majority by count but a small fraction of the pages.
+| Backend | Version | Threads | Docling-settings replay, pages/s | Cross-package text + render, pages/s |
+|---|---|---:|---:|---:|
+| pypdfium2 | 5.14.0 | 1 | 36.9 | 95.8 |
+| docling-parse | 7.24.2 | 1 | 49.7 | 42.5 |
+| docling-parse | 7.24.2 | 4 | 151.3 | 63.4 |
+| docling-parse | 7.24.2 | 8 | 201.4 | 65.3 |
+| docling-parse | 7.24.2 | 12 | 220.0 | 64.9 |
+
+For PDFium, the replay performs additional text adaptation, geometry queries, model construction and image processing. Its intermediate image has approximately **2.25 times as many pixels** before resizing. These are verified workload differences; the measurements do not isolate their individual contributions to the timing gap.
+
+For Docling, the replay requests additional adapter operations but avoids constructing a Python model for every character. It instead materializes word and line models. The cross-package character-model construction runs through the Python result consumer; adding native workers does not parallelize that Python construction loop. Character-level output therefore introduces a possible consumer bottleneck, even though this profile omits several replay operations.
+
+In this run, cross-package Docling parse-only throughput is 69.5 pages/s at one thread and 69.1 pages/s at 12 threads. These observations help assess scaling for the character-output workload.
+
+**Bottleneck attribution remains an inference.** These runs do not separately time character materialization or queue stalls, so they cannot quantify how much of the gap comes from either. Document scheduling, memory policy and process/cache state also differ: the launcher uses a fresh process per replay profile/thread count, while each cross-package mode runs its references and Docling thread sweep in one process. Use each experiment's own one-thread baseline when interpreting speedup and parallel efficiency.
+
+## Python scaling with Docling settings
+
+This workload creates **RGB page-images and text**, consumes segmented text models, obtains bitmap bounding boxes and queries separator geometry. Docling computes characters internally but materializes word/line models; PDFium constructs merged textline cells using its adapter. The text segmentation and page-image pixels are not identical across the engines.
+
+The standalone replay follows Docling revision `07154cdc82500058ad9377bac92beed3de820458`. It excludes OCR, layout/table inference and Docling framework construction; exact parity with the full Docling backend has not been independently established.
+
+The reported wall time is the sum of document `total_s`, including per-document parser construction/loading, page processing, model and page-image consumption, JSONL metadata writes, progress updates and unloading. Imports, corpus verification and final report serialization are outside this boundary.
+
+| Backend | Version | Threads | Wall time (s) | Pages/s | Speedup vs PDFium (1t) | Speedup vs Docling (1t) | Efficiency |
+|---|---|---:|---:|---:|---:|---:|---:|
+| pypdfium2 | 5.14.0 | 1 | 1485.068 | 36.9 | 1.00x | 0.74x | — |
+| docling-parse | 7.24.2 | 1 | 1100.957 | 49.7 | 1.35x | 1.00x | 100.0% |
+| docling-parse | 7.24.2 | 4 | 361.817 | 151.3 | 4.10x | 3.04x | 76.1% |
+| docling-parse | 7.24.2 | 8 | 271.772 | 201.4 | 5.46x | 4.05x | 50.6% |
+| docling-parse | 7.24.2 | 12 | 248.806 | 220.0 | 5.97x | 4.42x | 36.9% |
+
+Docling reaches 220.0 pages/s at 12 threads: 4.42x its one-thread result and 5.97x the PDFium replay result. These speedups refer to this page-image-and-text workload. They should not be transferred to the cross-package API comparison below.
+
+The replay constructs and uses a parser for one document at a time. Native page work within that document is threaded, but documents are processed serially. Across the full corpus, Docling construction/load totals stay near 32.5–32.9 seconds while page-processing time decreases. At 12 threads, construction/load accounts for about 13.1% of the measured total. This is a serial contribution in this harness, not a general statement about every Docling deployment.
+
+| Docling threads | Construction/load (s) | Page processing (s) | Unload (s) | Total (s) |
+|---:|---:|---:|---:|---:|
+| 1 | 32.888 | 1067.594 | 0.474 | 1100.957 |
+| 4 | 32.642 | 328.571 | 0.604 | 361.817 |
+| 8 | 32.635 | 238.493 | 0.645 | 271.772 |
+| 12 | 32.537 | 215.620 | 0.649 | 248.806 |
+
+On this corpus, the Docling replay materializes 12,207,024 word cells and 2,304,136 line cells, without character models. The PDFium replay returns 3,126,124 merged textline cells. These counts describe different segmentation contracts and do not establish extraction accuracy.
+
+### Page-images and text: figures
+
+#### Page-image-and-text wall time and throughput
+
+Backend totals include parser construction/load, page processing and unloading. PDFium is driven with one worker; Docling uses the thread sweep.
+
+![Page-image-and-text wall time and throughput](performance_benchmarks/2026-11-bo767-m3-max/replay_runtime.png)
+
+#### Python replay speedup and parallel efficiency
+
+Docling speedup is relative to its own one-thread replay. The work includes Python output construction and a document-by-document lifecycle.
+
+![Python replay speedup and parallel efficiency](performance_benchmarks/2026-11-bo767-m3-max/replay_scaling.png)
+
+#### Document construction, processing and unloading
+
+These are summed document phases, unlike the native worker-stage bars. Construction/load remains nearly constant while threaded page processing decreases.
+
+![Document construction, processing and unloading](performance_benchmarks/2026-11-bo767-m3-max/replay_phases.png)
+
+#### Whole-document duration distribution
+
+Histograms pool document total times on logarithmic axes. Replay JSONL contains page output metadata, not individual page timings; it cannot supply per-page latency histograms.
+
+![Whole-document duration distribution](performance_benchmarks/2026-11-bo767-m3-max/replay_distribution.png)
+
+<details>
+<summary>Reproduce the measurements for these figures</summary>
+
+Run from the repository root after building. Set `PDF_ROOT` to the pinned corpus directory. Each invocation below runs in a fresh process and writes to a new output directory.
+
+```bash
+set -euo pipefail
+PDF_ROOT=/path/to/performance-dataset-bo767/pdf
+REPRO_OUT=$(mktemp -d "$PWD/scratch-performance-reproduce-XXXXXX")
+for ((r=1; r<=1; r++)); do
+  uv run --no-sync python scripts/benchmarking/run_performance_benchmarking_with_docling_settings.py "$PDF_ROOT" \
+    --backend pdfium --dataset-revision 221c19e716d6ede5d18fd1560bc938ab19cc1a70 \
+    --output-dir "$REPRO_OUT/r${r}-pdfium" 2>&1 | tee "$REPRO_OUT/r${r}-pdfium.log"
+  for t in 1 4 8 12; do
+    uv run --no-sync python scripts/benchmarking/run_performance_benchmarking_with_docling_settings.py "$PDF_ROOT" \
+      --backend threaded --threads "$t" --dataset-revision 221c19e716d6ede5d18fd1560bc938ab19cc1a70 \
+      --output-dir "$REPRO_OUT/r${r}-t${t}" 2>&1 | tee "$REPRO_OUT/r${r}-t${t}.log"
+  done
+done
+```
+
+</details>
+
+## Python cross-package comparison
+
+This experiment measures the selected public text/geometry APIs, optionally followed by rendering a page-image. It creates no shared Docling output representation for the reference packages. Docling materializes character models, with word/line construction and separate bitmap-bound models disabled. Reference packages are driven with one worker in this harness; Docling uses the requested native page-thread sweep.
+
+The table and figures above explain why this workload differs from the Docling-settings replay. Its rates measure the chosen APIs and output granularity; they do not establish equal output fidelity or general limits on other packages' concurrency.
+
+| Package | Text/geometry API | Page-image rendering API |
+|---|---|---|
+| docling-parse | Threaded parser with materialized character cells | Native renderer and `get_image()` |
+| PyMuPDF | `get_text("rawdict")` character data | `get_pixmap()` and `pil_image()` |
+| pypdfium2 | Text-page rectangles and bounded text | `page.render()` and `to_pil()` |
+| pdfplumber | `page.chars` | `page.to_image()`, using PDFium |
+| pdfminer.six | `extract_pages()` and an `LTChar` walk | Unsupported |
+| pypdf | `extract_text(visitor_text=...)` text-chunk positions | Unsupported |
+
+The corpus timer includes document loading and result consumption. Docling parser construction precedes the timer. Exact wall times come from completed-series checkpoints, whose provenance and CSV hashes are validated. Console rounding is checked for consistency; per-page worker timings and arrival gaps are not substituted for corpus wall time.
+
+### Text and geometry, without page-images
+
+| Backend | Version | Threads | Wall time (s) | Pages/s | Speedup vs PDFium (1t) | Speedup vs Docling (1t) | Efficiency |
+|---|---|---:|---:|---:|---:|---:|---:|
+| docling-parse | 7.24.2 | 1 | 787.445 | 69.5 | 0.25x | 1.00x | 100.0% |
+| docling-parse | 7.24.2 | 4 | 776.090 | 70.5 | 0.25x | 1.01x | 25.4% |
+| docling-parse | 7.24.2 | 8 | 784.243 | 69.8 | 0.25x | 1.00x | 12.6% |
+| docling-parse | 7.24.2 | 12 | 792.253 | 69.1 | 0.24x | 0.99x | 8.3% |
+| pdfminer.six | 20260107 | 1 | 1591.772 | 34.4 | 0.12x | 0.49x | — |
+| pdfplumber | 0.11.10 | 1 | 1688.906 | 32.4 | 0.11x | 0.47x | — |
+| pymupdf | 1.27.2.3 | 1 | 1422.534 | 38.5 | 0.14x | 0.55x | — |
+| pypdfium2 | 5.14.0 | 1 | 193.079 | 283.5 | 1.00x | 4.08x | — |
+
+#### Text/geometry API wall time and throughput
+
+No page-images are created. Geometry varies from individual characters to rectangles or text chunks, depending on the package.
+
+![Text/geometry API wall time and throughput](performance_benchmarks/2026-11-bo767-m3-max/comparison_parse_runtime.png)
+
+#### Character-model workload speedup and efficiency
+
+The scalable series is Docling, relative to its one-thread API workload. The nearly flat throughput is consistent with a Python consumer bottleneck, but character materialization and queue stalls were not separately timed.
+
+![Character-model workload speedup and efficiency](performance_benchmarks/2026-11-bo767-m3-max/comparison_parse_scaling.png)
+
+<details>
+<summary>Reproduce the measurements for these figures</summary>
+
+Run from the repository root after building. Set `PDF_ROOT` to the pinned corpus directory. Each invocation below runs in a fresh process and writes to a new output directory.
+
+```bash
+set -euo pipefail
+PDF_ROOT=/path/to/performance-dataset-bo767/pdf
+REPRO_OUT=$(mktemp -d "$PWD/scratch-performance-reproduce-XXXXXX")
+for ((r=1; r<=1; r++)); do
+  uv run --no-sync python scripts/benchmarking/run_performance_benchmarking.py "$PDF_ROOT" \
+    --recursive --mode parse-without-bitmap --threads 1,4,8,12 --scale 1.0 --max-concurrent-results 32 \
+    --3rd-party-backends all --only-threaded \
+    --keep-char-cells=true --create-word-cells=false --create-line-cells=false \
+    --keep-shapes=false --keep-bitmaps=false \
+    --materialize-char-cells=true --materialize-word-cells=false \
+    --materialize-line-cells=false --materialize-shapes=false --materialize-bitmaps=false \
+    --output-dir "$REPRO_OUT/r${r}" 2>&1 | tee "$REPRO_OUT/r${r}.log"
+done
+```
+
+</details>
+
+### Page-images plus text and geometry
+
+| Backend | Version | Threads | Wall time (s) | Pages/s | Speedup vs PDFium (1t) | Speedup vs Docling (1t) | Efficiency |
+|---|---|---:|---:|---:|---:|---:|---:|
+| docling-parse | 7.24.2 | 1 | 1287.637 | 42.5 | 0.44x | 1.00x | 100.0% |
+| docling-parse | 7.24.2 | 4 | 863.604 | 63.4 | 0.66x | 1.49x | 37.3% |
+| docling-parse | 7.24.2 | 8 | 838.376 | 65.3 | 0.68x | 1.54x | 19.2% |
+| docling-parse | 7.24.2 | 12 | 842.685 | 64.9 | 0.68x | 1.53x | 12.7% |
+| pdfplumber | 0.11.10 | 1 | 2309.746 | 23.7 | 0.25x | 0.56x | — |
+| pymupdf | 1.27.2.3 | 1 | 1822.560 | 30.0 | 0.31x | 0.71x | — |
+| pypdfium2 | 5.14.0 | 1 | 571.583 | 95.8 | 1.00x | 2.25x | — |
+
+All seven successful rendering series cover 54,730 pages. Against PDFium, none differ in canvas size by more than two pixels; the largest observed delta is one pixel. Matching output dimensions do not establish pixel equivalence or equal rendering quality.
+
+#### Page-image and text/geometry API wall time and throughput
+
+This includes rendering at the requested scale plus each package's extraction API. PDFium does not perform the replay's 1.5-times-scale render, copy/resize or Docling model construction.
+
+![Page-image and text/geometry API wall time and throughput](performance_benchmarks/2026-11-bo767-m3-max/comparison_parse_render_runtime.png)
+
+#### Page-image and character-model workload scaling
+
+Docling scales from 42.5 to 64.9 pages/s at 12 threads, with 1.53x speedup. This is a different consumer/output workload from the 220.0 pages/s Docling-settings replay.
+
+![Page-image and character-model workload scaling](performance_benchmarks/2026-11-bo767-m3-max/comparison_parse_render_scaling.png)
+
+<details>
+<summary>Reproduce the measurements for these figures</summary>
+
+Run from the repository root after building. Set `PDF_ROOT` to the pinned corpus directory. Each invocation below runs in a fresh process and writes to a new output directory.
+
+```bash
+set -euo pipefail
+PDF_ROOT=/path/to/performance-dataset-bo767/pdf
+REPRO_OUT=$(mktemp -d "$PWD/scratch-performance-reproduce-XXXXXX")
+for ((r=1; r<=1; r++)); do
+  uv run --no-sync python scripts/benchmarking/run_performance_benchmarking.py "$PDF_ROOT" \
+    --recursive --mode render --threads 1,4,8,12 --scale 1.0 --max-concurrent-results 32 \
+    --3rd-party-backends all --only-threaded \
+    --keep-char-cells=true --create-word-cells=false --create-line-cells=false \
+    --keep-shapes=true --keep-bitmaps=true \
+    --materialize-char-cells=true --materialize-word-cells=false \
+    --materialize-line-cells=false --materialize-shapes=false --materialize-bitmaps=false \
+    --output-dir "$REPRO_OUT/r${r}" 2>&1 | tee "$REPRO_OUT/r${r}.log"
+done
+```
+
+</details>
+
+### Reference failures and recovery
+
+`pypdf 6.21.1` attempted all 54,730 pages but failed on 16, leaving 54,714 successful pages. Its series is excluded from performance tables, speedups and figures. The recorded failure cases are:
+
+| Document | Pages (1-based) | Error |
+|---|---|---|
+| `1067588.pdf` | 191 | Maximum tokens per stream reached |
+| `1106182.pdf` | 21 | Maximum tokens per stream reached |
+| `1161467.pdf` | 20–22, 24–30 | Multiple `/FontFile` entries |
+| `1245654.pdf` | 20 | Maximum tokens per stream reached |
+| `2216123.pdf` | 55, 153, 162 | Maximum tokens per stream reached |
+
+The original cross-package render run aborted in PyMuPDF 1.28.2 on Bo767 `1293644.pdf`, page 3. The reference was pinned to PyMuPDF 1.27.2.3, which rendered all 453 pages of that document. Recovery validated and reused the completed native/Python-replay measurements, then recollected both cross-package modes under separately recorded provenance. The failed original PyMuPDF run supplies no published performance result.
+
+All 28 included corpus measurements completed without page failures. Full error details and raw checkpoints remain in the retained local bundles. A reference failure is reported separately only after every expected page was attempted; missing coverage, changed provenance/checksums and native failures still fail report validation.
+
+## Provenance and scope
+
+The compact [publication provenance](performance_benchmarks/2026-11-bo767-m3-max/provenance.json) records the dataset identity, build/extension hashes, source revisions and diff hashes, package versions, artifact hashes and original bundle identifiers. The local raw measurements remain in:
+
+- Core measurements: `scratch-performance-refresh-20261106-132832-Ued2aI`.
+- Completed comparison and report: `scratch-performance-recovery-c2rz8gq0`.
+
+The core build recorded source revision `929a2b6ed7cc9648d9b9c3153362d6ee9542402a` plus its working-tree diff. Replay recorded `6dade98230ee60aaaa01a5db7111bda45382695d` after those changes were committed during the run. The commit patch exactly matches the recorded build diff, and the replay script hash matches that commit. Comparison provenance records `6dade98230ee60aaaa01a5db7111bda45382695d` plus its later diff. Recovery verified that the native binary, extension, core packages, Python and machine matched the original core run.
+
+| Package | Version used |
+|---|---|
+| docling-parse | 7.24.2 |
+| docling-core | 2.103.1 |
+| pypdfium2 | 5.14.0 |
+| Pillow | 12.3.0 |
+| rtree | 1.4.1 |
+| PyMuPDF, completed comparison | 1.27.2.3 |
+| pdfplumber | 0.11.10 |
+| pdfminer.six | 20260107 |
+| pypdf, excluded reference | 6.21.1 |
+| Matplotlib | 3.11.2 |
+
+Build settings were CMake Release, `-O3 -DNDEBUG` and C++20, using `/usr/bin/c++` and the macOS SDK selected by `xcrun`. The native compiler version was not archived; Python reports Clang 20.1.4 as its own build compiler, which must not be substituted for the native compiler version.
+
+The source bundles and full page-level CSV/JSONL data remain local. This documentation publishes the figures, tables and compact provenance rather than copying those data files into the repository. The figures total about 1.4 MB.
+
+Throughput is pages divided by corpus wall time. Amortized milliseconds/page are `1000 * wall / pages`, not individual-page latency. Speedup is `wall(1) / wall(N)` within the same workload/backend/task; parallel efficiency is `100 * speedup / N`. With one repetition, a median equals the single observation and a min–max range provides no empirical variability information.
+
+## Run the refresh
+
+From the repository root, launch the native and Python page-image-and-text experiments:
+
+```sh
+bash scripts/benchmarking/refresh_performance_benchmarks.sh
+```
+
+To refresh every section of this page, including the slower cross-package suite,
+and collect three repetitions:
+
+```sh
+REPEATS=3 RUN_COMPARISON=1 \
+  bash scripts/benchmarking/refresh_performance_benchmarks.sh
+```
+
+These are full-corpus measurements and can take hours. The script installs the
+build/dev/perf dependency groups, checks/builds the Python extension and standalone
+executable incrementally, runs the damaged-page unit tests, resolves
+the pinned snapshot, and records provenance before timing. It does not edit this
+page or publish results.
+
+`BUILD_MODE=incremental` is the default. Existing `build/` and `externals/`
+directories are reused; CMake checks dependencies and recompiles affected
+targets. Unchanged targets are reused. Cached repository, Python, SDK and
+compiler paths are checked before and after dependency synchronization.
+An incompatible cache stops the run and requests `BUILD_MODE=clean`.
+
+Use `BUILD_MODE=clean` after SDK/toolchain changes or bundled dependency pin/patch
+upgrades. Existing directories are then moved to `previous-build/` and
+`previous-externals/` under the new output directory before rebuilding from
+scratch. Build work remains outside all benchmark timers; each bundle records
+the selected mode and native binary/extension hashes.
+Setup stages and experiments are labeled by repetition, backend and thread
+count. Runner output, including page progress bars, is streamed to the terminal
+and saved in the run log. `BENCHMARK_OUTPUT=compact` is the launcher default:
+repeated config tables and native timing tables are hidden, while progress and
+result tables remain visible. Native timing summaries are saved beside each CSV
+as `<timing-csv>.summary.log` and used by the report. Set
+`BENCHMARK_OUTPUT=full` to print all benchmark tables. Standalone runners keep
+their full output unless `--suppress-config` and, for C++, `--suppress-timings`
+are requested. Completion messages report command elapsed time;
+the report still uses each benchmark's own documented wall-time boundary.
+On macOS, the launcher selects the current SDK with `xcrun`. A failed phase
+prints its exit status, log path and final 40 log lines, then stops.
+
+Each native thread profile and each replay backend/thread profile runs in its
+own process. Runs execute sequentially. Each cross-package mode runs in one
+process per repetition and measures its selected packages sequentially.
+
+Run on an otherwise idle machine. Dataset verification reads the files before
+measurement, so these are not cold-cache benchmarks. Repeat ranges expose
+observed variation; they are not confidence intervals. Thread counts above the
+machine's available physical/performance cores need separate interpretation.
+
+Optional launcher settings:
+
+```sh
+# Small corpus for quick benchmark iterations; incremental build by default.
+DATASET=bo20 THREADS=1,4 \
+  bash scripts/benchmarking/refresh_performance_benchmarks.sh
+
+# Shorter thread sweep; output directory must not already exist.
+THREADS=1,4,8 REPEATS=1 OUT=scratch-performance-my-run \
+  bash scripts/benchmarking/refresh_performance_benchmarks.sh
+
+# Force a fresh build, for example after a bundled dependency upgrade.
+BUILD_MODE=clean DATASET=bo20 \
+  bash scripts/benchmarking/refresh_performance_benchmarks.sh
+
+bash scripts/benchmarking/refresh_performance_benchmarks.sh --help
+```
+
+A successful launch prints the path to `report/summary.md`. Raw logs and page data
+stay in that unique output directory. Inspect an active phase by tailing its log;
+a nonzero exit stops the launcher and preserves completed measurements.
+
+## Regenerate a report or recover a failed run
+
+Regenerate the completed report without rebuilding or rerunning benchmarks:
+
+```sh
+uv run --no-sync python scripts/benchmarking/run_performance_report.py \
+  scratch-performance-recovery-c2rz8gq0
+```
+
+A report-only run validates the saved measurements and regenerates tables and figures. Reference page failures are documented in its local `excluded_comparisons.csv` and `comparison_errors.csv`; the affected series is omitted from performance metrics across all repetitions. The published tables and figures are a reviewed snapshot, not automatically overwritten by the launcher.
+
+For an interrupted benchmark, recover into a new bundle:
+
+```sh
+RECOVER_FROM=/absolute/path/to/scratch-performance-refresh-RUN \
+  bash scripts/benchmarking/refresh_performance_benchmarks.sh
+```
+
+Recovery requires matching native binary/extension hashes, core packages, Python and machine, plus the original dataset hashes. It links the original native/replay artifacts, so keep the original bundle. It records comparison provenance separately and can reuse compatible completed checkpoints from an interrupted recovery. `BUILD_MODE=clean` is incompatible with recovery.
+
+Reference-enabled refreshes preflight the known PyMuPDF page in a subprocess, when that PDF is present. Completed comparison series are checkpointed after their timers stop. If measurements finished and only reporting failed, use the report generator directly instead of rerunning recovery.
+
+To inspect complete native/replay results while excluding comparisons:
+
+```sh
+uv run --no-sync python scripts/benchmarking/run_performance_report.py \
+  /absolute/path/to/scratch-performance-refresh-RUN --core-only
+```
+
+This writes `report-core/`, explicitly labeling comparisons as excluded. See [the benchmarking tools README](../scripts/benchmarking/README.md) for detailed runner, output and recovery options. The older `run_performance_eval.py` uses arrival-gap-based scaling plots; use the report's corpus-wall-time figures for the comparisons on this page.
+
+Performance measurements are separate from rendering or extraction quality: see [quality benchmarks](quality_benchmarks.md). Earlier measurements are retained in [legacy performance benchmarks](legacy/legacy_performance_benchmarks.md).

@@ -84,12 +84,22 @@ namespace docling
     // meanwhile stays alive until the binding returns.
     doc_decoder_ptr_type find_document(const std::string& key) const;
 
+    doc_decoder_ptr_type get_document_decoder(const std::string& key) const
+    {
+      auto it = key2doc.find(key);
+      if(it == key2doc.end()) { throw std::runtime_error("Document key not found: " + key); }
+      return it->second;
+    }
+
     bool unload_document(std::string key);
     void unload_all_documents();
 
     bool has_tasks();
 
     ResultType get_task();
+
+    // The config the workers decode with, after any pipeline overrides.
+    const pdflib::decode_config& get_decode_config() const;
 
   private:
 
@@ -653,6 +663,12 @@ namespace docling
     cv_results_consumed.notify_one();
 
     return result;
+  }
+
+  template<typename Derived, typename ResultType>
+  const pdflib::decode_config& docling_threaded_base<Derived, ResultType>::get_decode_config() const
+  {
+    return config;
   }
 
 }

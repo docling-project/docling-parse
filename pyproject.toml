@@ -1,6 +1,6 @@
 [project]
 name = "docling-parse"
-version = "7.24.2"
+version = "7.25.0"
 description = "Simple package to extract text with coordinates from programmatic PDFs"
 license = "MIT"
 keywords = ["docling", "pdf", "parser"]
@@ -77,9 +77,11 @@ perf = [
     "matplotlib>=3.10.8",
     "pdfplumber>=0.11.7",
     "pdfminer.six>=20240706",
-    "pymupdf>=1.26.4,<2.0",  # 2.x hard-requires onnxruntime (no cp315 wheels yet)
+    # PyMuPDF 1.28.2 aborts rendering page 3 of bo767/1293644.pdf; 1.27.2.3 renders all 453 pages.
+    "pymupdf==1.27.2.3",
     "pypdf>=5.1.0",
     "pypdfium2>=4.30.0",
+    "rtree>=1.4.1,<2.0",
     "huggingface-hub>=1.11.0",
     "tabulate>=0.9.0,<1.0.0",
 ]
