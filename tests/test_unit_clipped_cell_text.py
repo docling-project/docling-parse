@@ -6,6 +6,11 @@ box: `q <cell> re W n ... Q`. The page shows the part that fits; the text layer
 keeps the whole string, whose hidden end runs under the next column. The char,
 word and line cells carry the box of that clip, and two glyphs under different
 clips, of which one is cut by its clip, never join into one word or line.
+
+The grouping tests run against any docling-core. The tests that read the box
+off `PdfTextCell.clip_bbox` need the docling-core that has the field
+(docling-project/docling-core#964) and are skipped otherwise, as the parser
+itself fills the field only when the installed model has it.
 """
 
 from __future__ import annotations
@@ -13,6 +18,7 @@ from __future__ import annotations
 from io import BytesIO
 
 import pytest
+from docling_core.types.doc.page import PdfTextCell
 
 from docling_parse.pdf_parser import (
     ContentConfig,
@@ -32,6 +38,11 @@ COLUMNS = [72, 122, 252, 302, 372]
 TOP, ROW_H = 720, 22
 MEDIA_BOX = "[0 0 612 792]"
 HELVETICA = "/Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >>"
+
+requires_clip_bbox = pytest.mark.skipif(
+    "clip_bbox" not in PdfTextCell.model_fields,
+    reason="the installed docling-core has no PdfTextCell.clip_bbox (docling-core#964)",
+)
 
 
 def cell_box(row: int, col: int) -> tuple[float, float, float, float]:
@@ -92,14 +103,20 @@ def test_clipped_cell_text_stays_in_its_cell():
         "AB-1002 Gutter cleaning", "m", "120",
         "AB-1003-LONG", "Repainting of window frames and fascia boards", "m2", "85",
     ]  # fmt: skip
+    # the hidden tail of the description lies under Unit and Amount by its
+    # glyph box
+    by_text = {cell.text: cell for cell in page.word_cells}
+    assert by_text["level"].rect.to_bounding_box().l > COLUMNS[2]
 
-    # every word and line carries the clip of the cell it was drawn in: the
-    # hidden tail of the description lies under Unit and Amount by its glyph
-    # box, and under Description by its clip box
+
+@requires_clip_bbox
+def test_clipped_cell_text_carries_the_box_of_its_cell():
+    """Every word and line carries the clip of the cell it was drawn in."""
+    page = parse_page(clipped_table_pdf())
+
     by_text = {cell.text: cell for cell in page.word_cells}
     assert clip_of(by_text["AB-1001-XYZ"]) == cell_box(1, 0)
     assert clip_of(by_text["level"]) == cell_box(1, 1)
-    assert by_text["level"].rect.to_bounding_box().l > COLUMNS[2]
     assert clip_of(by_text["pcs"]) == cell_box(1, 2)
     assert clip_of(by_text["boards"]) == cell_box(3, 1)
 
@@ -113,54 +130,80 @@ def test_clipped_cell_text_stays_in_its_cell():
     assert [clip_of(cell) for cell in chars] == [cell_box(1, 0)]
 
 
-def test_clip_box_is_tracked_without_shapes():
-    """docling skips shapes when it does not render; the clip box must survive."""
+def parse_table_without_shapes(**decode_kwargs):
+    """docling skips shapes when it does not render; the clip must survive that."""
     parser = DoclingPdfParser(loglevel="fatal")
     doc = parser.load(
         BytesIO(clipped_table_pdf()),
+        decode_config=DecodeConfig(**decode_kwargs),
         content_config=ContentConfig(shapes_content_level=ContentLevel.SKIP),
     )
     try:
-        page = doc.get_page(1)
-        assert page.shapes == []
-        assert "AB-1001-XYZ" in words_of(page)
-        assert "AB-1001-XYZReplacement" not in words_of(page)
-        assert clip_of(
-            next(c for c in page.word_cells if c.text == "level")
-        ) == cell_box(1, 1)
+        return doc.get_page(1)
     finally:
         doc.unload()
 
 
+def test_clips_split_words_without_shapes():
+    page = parse_table_without_shapes()
+    assert page.shapes == []
+    assert "AB-1001-XYZ" in words_of(page)
+    assert "AB-1001-XYZReplacement" not in words_of(page)
+
+
+@requires_clip_bbox
+def test_clip_box_is_tracked_without_shapes():
+    page = parse_table_without_shapes()
+    assert clip_of(next(c for c in page.word_cells if c.text == "level")) == cell_box(
+        1, 1
+    )
+
+
+SHIFT_DX, SHIFT_DY = -15.0, -21.0
+
+
+def parse_shifted_table():
+    """The table on a page whose media box does not start at (0, 0)."""
+    dx, dy = SHIFT_DX, SHIFT_DY
+    return parse_page(clipped_table_pdf(media_box=f"[{dx} {dy} {612 + dx} {792 + dy}]"))
+
+
+def test_a_shifted_page_box_keeps_uncut_lines_whole():
+    """Cells are shifted to the page box origin; their clip box must shift too.
+
+    A clip box left at the unshifted place cuts glyphs that the page shows,
+    which splits this line although no clip hides anything in it.
+    """
+    page = parse_shifted_table()
+    assert "AB-1002 Gutter cleaning" in lines_of(page)
+
+
+@requires_clip_bbox
 def test_clip_box_moves_with_a_page_box_that_does_not_start_at_zero():
-    """Cells are shifted to the page box origin; their clip box must shift too."""
-    dx, dy = -15.0, -21.0
-    page = parse_page(clipped_table_pdf(media_box=f"[{dx} {dy} {612 + dx} {792 + dy}]"))
+    page = parse_shifted_table()
 
     def shifted(box: tuple[float, float, float, float]) -> tuple[float, ...]:
-        return (box[0] - dx, box[1] - dy, box[2] - dx, box[3] - dy)
+        return (
+            box[0] - SHIFT_DX,
+            box[1] - SHIFT_DY,
+            box[2] - SHIFT_DX,
+            box[3] - SHIFT_DY,
+        )
 
     by_text = {cell.text: cell for cell in page.word_cells}
     assert clip_of(by_text["AB-1001-XYZ"]) == shifted(cell_box(1, 0))
     assert clip_of(by_text["level"]) == shifted(cell_box(1, 1))
-    # a clip box left at the unshifted place cuts glyphs that the page shows,
-    # which splits this line although no clip hides anything in it
-    assert "AB-1002 Gutter cleaning" in lines_of(page)
 
 
 def test_keep_clips_off_restores_the_glyph_only_cells():
-    parser = DoclingPdfParser(loglevel="fatal")
-    doc = parser.load(
-        BytesIO(clipped_table_pdf()),
-        decode_config=DecodeConfig(keep_clips=False),
-        content_config=ContentConfig(shapes_content_level=ContentLevel.SKIP),
-    )
-    try:
-        page = doc.get_page(1)
-        assert all(cell.clip_bbox is None for cell in page.word_cells)
-        assert "AB-1001-XYZReplacement" in words_of(page)
-    finally:
-        doc.unload()
+    page = parse_table_without_shapes(keep_clips=False)
+    assert "AB-1001-XYZReplacement" in words_of(page)
+
+
+@requires_clip_bbox
+def test_keep_clips_off_leaves_no_clip_box():
+    page = parse_table_without_shapes(keep_clips=False)
+    assert all(cell.clip_bbox is None for cell in page.word_cells)
 
 
 def run_clipped_pdf(runs: list[tuple[str, float, float, float, float]]) -> bytes:
@@ -179,9 +222,9 @@ def run_clipped_pdf(runs: list[tuple[str, float, float, float, float]]) -> bytes
 HEL_W, LO_W, HELLO_W, WORLD_W, SPACE_W = 15.0, 7.78, 22.78, 26.11, 2.78
 
 
-def test_runs_under_clips_that_do_not_cut_them_still_join():
-    """A producer that wraps every text run in a clip around it changes nothing."""
-    page = parse_page(
+def parse_uncut_runs():
+    """A producer that wraps every text run in a clip around it."""
+    return parse_page(
         run_clipped_pdf(
             [
                 ("Hel", 100.0, 700, HEL_W, 12),
@@ -190,22 +233,26 @@ def test_runs_under_clips_that_do_not_cut_them_still_join():
             ]
         )
     )
+
+
+def test_runs_under_clips_that_do_not_cut_them_still_join():
+    page = parse_uncut_runs()
     assert words_of(page) == ["Hello", "World"]
     assert lines_of(page) == ["Hello World"]
-    # the word that spans two clips carries none; the whole-run word keeps its
+
+
+@requires_clip_bbox
+def test_a_word_across_two_clips_carries_no_box():
+    """The word that spans two clips carries none; the whole-run word keeps its."""
+    page = parse_uncut_runs()
     assert clip_of(page.word_cells[0]) is None
     assert clip_of(page.word_cells[1]) == (125.56, 697, 151.67, 709)
     assert clip_of(page.textline_cells[0]) is None
 
 
-@pytest.mark.parametrize("visible_width", [12.0, 20.0])
-def test_a_cut_run_does_not_join_the_next_clip(visible_width: float):
-    """`Hello` clipped short runs under `World`, drawn at x=115 in its own clip.
-
-    By geometry alone the hidden `lo` overlaps `World`: the gap is negative, the
-    word test clamps it to zero, and the line test allows a jump of one advance.
-    """
-    page = parse_page(
+def parse_cut_run(visible_width: float):
+    """`Hello` clipped short runs under `World`, drawn at x=115 in its own clip."""
+    return parse_page(
         run_clipped_pdf(
             [
                 ("Hello", 100.0, 700, visible_width, 12),
@@ -213,29 +260,51 @@ def test_a_cut_run_does_not_join_the_next_clip(visible_width: float):
             ]
         )
     )
+
+
+@pytest.mark.parametrize("visible_width", [12.0, 20.0])
+def test_a_cut_run_does_not_join_the_next_clip(visible_width: float):
+    """By geometry alone the hidden `lo` overlaps `World`: the gap is negative,
+    the word test clamps it to zero, and the line test allows a jump of one
+    advance.
+    """
+    page = parse_cut_run(visible_width)
     assert words_of(page) == ["Hello", "World"]
     assert lines_of(page) == ["Hello", "World"]
+
+
+@requires_clip_bbox
+@pytest.mark.parametrize("visible_width", [12.0, 20.0])
+def test_a_cut_run_and_its_neighbour_carry_their_own_boxes(visible_width: float):
+    page = parse_cut_run(visible_width)
     assert clip_of(page.word_cells[0]) == (100.0, 697, 100.0 + visible_width, 709)
     assert clip_of(page.word_cells[1]) == (115.0, 697, 141.11, 709)
 
 
-def test_a_clip_on_the_overflowing_glyph_alone_keeps_the_word():
-    """Some producers draw a word unclipped and clip only the glyph that overflows.
-
-    `Montclai` is drawn without a clip and `r` under the cell's clip, which cuts
-    it. The unclipped glyphs lie inside that box, so the word stays whole.
-    """
+def overflowing_glyph_pdf() -> bytes:
+    """`Montclai` drawn without a clip and `r` under the cell's clip, which cuts it."""
     # Helvetica 10 pt: "Montclai" is 37.23 wide, "r" 3.33; the cell ends 2.56 pt
     # into the r, more than a fifth of the em
     content = (
         "BT /F1 10 Tf 100 700 Td (Montclai) Tj ET\n"
         "q 100 697 38 12 re W n BT /F1 10 Tf 137.23 700 Td (r) Tj ET Q"
     )
-    page = parse_page(
-        simple_page_pdf(content, resources=HELVETICA, media_box=MEDIA_BOX)
-    )
+    return simple_page_pdf(content, resources=HELVETICA, media_box=MEDIA_BOX)
+
+
+def test_a_clip_on_the_overflowing_glyph_alone_keeps_the_word():
+    """Some producers draw a word unclipped and clip only the glyph that overflows.
+
+    The unclipped glyphs lie inside that box, so the word stays whole.
+    """
+    page = parse_page(overflowing_glyph_pdf())
     assert words_of(page) == ["Montclair"]
     assert lines_of(page) == ["Montclair"]
+
+
+@requires_clip_bbox
+def test_a_word_with_one_clipped_glyph_carries_no_box():
+    page = parse_page(overflowing_glyph_pdf())
     assert clip_of(page.word_cells[0]) is None
 
 
