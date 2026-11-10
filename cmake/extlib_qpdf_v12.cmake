@@ -19,7 +19,7 @@ else()
 
   set(QPDF_URL https://github.com/qpdf/qpdf.git)
   
-  set(QPDF_TAG v12.2.0 )
+  set(QPDF_TAG v12.4.2 )
   # GCC/MinGW and MSVC name the installed static libraries differently
   # (GCC/MinGW -> libqpdf.a / libjpeg.a, MSVC -> qpdf.lib / jpeg-static.lib).
   # The Windows arm64 wheel builds with MSVC, so select the names per-toolchain.
@@ -47,7 +47,7 @@ else()
 
   ExternalProject_Add(extlib_qpdf
 
-      PREFIX extlib_qpdf
+      PREFIX extlib_qpdf-${QPDF_TAG}
 
       DEPENDS extlib_jpeg
 

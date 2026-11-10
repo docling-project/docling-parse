@@ -54,11 +54,15 @@ else()
 
     FetchContent_Declare(
         blend2d
-        GIT_REPOSITORY https://github.com/blend2d/blend2d.git
-        # Pinned so the (renamed, snake_case) C++ API cannot drift under us;
-        # bump deliberately. This is the commit the font-rendering code was
-        # validated against.
-        GIT_TAG        6dbc2cefbc996379e07104e34519a440b49b15d7
+        GIT_REPOSITORY https://github.com/PeterStaar-IBM/blend2d.git
+        # Pinned fork commit from docling/0.21.2-patches (blend2d/blend2d#275):
+        # upstream 6dbc2ce (0.21.2) with fixes #268, #270, #271, and #273.
+        # Keep the matching AsmJit pin above; update both deliberately.
+        # This fork revision is proposed upstream in:
+        # https://github.com/blend2d/blend2d/pull/275
+        # Once merged, switch back to blend2d/blend2d and pin a validated upstream
+        # master commit containing the fixes; check the matching AsmJit revision.
+        GIT_TAG        408cec025e6fc36a7bbd7f641968cc7584600dc5 # 08d76290aded4885aafacd89c59303283a72a118
     )
     FetchContent_MakeAvailable(blend2d)
     # Release wheels must not contain Blend2D's debug assertion path. Blend2D

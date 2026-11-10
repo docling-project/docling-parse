@@ -1,294 +1,341 @@
 # Benchmarking tools
 
-Four entry points:
-
-| Script | Role | Reads | Writes |
-| --- | --- | --- | --- |
-| `run_performance_benchmarking.py` | **Measure.** Thread-scaling sweeps and cross-package comparison | PDFs (local or a Hugging Face dataset) | terminal tables, per-page CSV, markdown |
-| `run_performance_eval.py` | **Plot.** Histograms, scatters, hexbins, per-document stats | per-page CSV | PNGs + CSV in a directory named after the CSV |
-| `run_performance_analysis.py` | **Drill down.** Slowest pages, C++ stage timings | per-page CSV | analysis CSV / detailed table |
-| `run_quality_benchmarking.py` | **Compare quality.** Text and render agreement across PDF engines | PDFs (local or a Hugging Face dataset) | quality CSVs, render visualizations, histograms |
-
-They are chained by one file format: the per-page CSV that `run_performance_benchmarking.py
---pages-csv` writes. Every row carries its own `backend`, `task` and `threads`,
-so one file can hold several packages at several thread counts, and the other
-two scripts split it into series themselves rather than guessing from the
-filename.
-
-`_common.py` owns `PageRow`, the performance CSV schema, and shared helpers
-(`find_pdfs`, `percentile`, ...). It is a library, not an entry point.
-
-## Install
-
-Core docling runs work with the normal project install. The third-party
-backends need the perf group:
+For the current publication workflow, use one launcher:
 
 ```sh
-uv sync --group perf
+bash scripts/benchmarking/refresh_performance_benchmarks.sh
+# Include cross-package parsing/rendering and repeated measurements:
+REPEATS=3 RUN_COMPARISON=1 bash scripts/benchmarking/refresh_performance_benchmarks.sh
 ```
 
-That installs pymupdf, pypdfium2, pdfplumber, pdfminer.six, pypdf and
-matplotlib. Backends that are missing are skipped with a message rather than
-failing the run.
+See [the performance page](../../docs/performance_benchmarks.md) for workload
+contracts, timing boundaries and publication placeholders. The launcher rebuilds
+the native executable and Python extension, verifies the pinned corpus, runs
+each native/replay profile in a fresh process, and writes a unique output bundle.
+It does not update the documentation. Full runs can take hours.
 
-## `run_performance_benchmarking.py`
+| Entry point | Role | Inputs | Outputs |
+|---|---|---|---|
+| `refresh_performance_benchmarks.sh` | Build and run the publication workflow | Pinned HF dataset; environment settings shown by `--help` | Raw measurements, provenance, generated report and PNGs |
+| `run_performance_report.py` | Validate and summarize a launcher bundle | Bundle containing `metadata.json` | `report/summary.md`, CSV tables, PNGs |
+| `recover_performance_benchmarks.py` | Reuse completed core results and recollect comparisons | Existing bundle; normally invoked through `RECOVER_FROM` | New bundle with original core artifacts and separate comparison provenance |
+| `run_performance_benchmarking_with_docling_settings.py` | Standalone backend replay | PDFs or pinned HF revision | `report.json` and page metadata JSONL |
+| `run_performance_benchmarking.py` | Python API scaling and cross-package measurement | PDFs or HF dataset | Console tables and per-page CSV |
+| `run_performance_eval.py` | Explore Python comparison page timings | Comparison per-page CSV | Histograms, scaling/correlation PNGs, document statistics |
+| `run_performance_analysis.py` | Replay slow pages for detailed native timings | Comparison per-page CSV and original PDFs | Analysis CSV or detailed timing table |
+| `run_quality_benchmarking.py` | Compare text and raster quality | PDFs or HF dataset | Quality CSVs and comparison visualizations |
 
-### Thread-scaling sweep (default)
+## Install and rebuild
 
-Runs docling-parse at several thread counts and reports pages/sec plus speedup
-against single-threaded baselines.
+For individual tools:
 
 ```sh
-python scripts/benchmarking/run_performance_benchmarking.py ./dataset --mode parse
-python scripts/benchmarking/run_performance_benchmarking.py ./dataset --mode render --threads 1,2,4,8,12,16
-python scripts/benchmarking/run_performance_benchmarking.py --mode both --other "pypdfium2;pymupdf"
+uv sync --group build --group dev --group perf
+# Rebuild the extension after C++ changes:
+uv run --no-sync python local_build.py
+uv run --no-sync cmake --build build --target run_scaling.exe --parallel 8
 ```
 
-Inputs: a local PDF file, a local directory of PDFs, or a Hugging Face dataset
-repo id whose `pdf/` subdirectory contains PDFs (the default is
-`docling-project/performance-dataset-bo767`).
+The launcher defaults to `BUILD_MODE=incremental`: existing `build/` and
+`externals/` are retained. It configures/builds/installs the Python extension and
+checks/builds the standalone executable; CMake recompiles affected targets and
+reuses unchanged ones. Both checks run before any measurements.
 
-Modes: `parse` (decode only), `render` (decode plus raster), `both`.
+The launcher checks cached repository, Python, SDK and compiler paths before
+dependency synchronization, and again afterwards in case Python changed. An
+incompatible cache stops the run with a `BUILD_MODE=clean` instruction.
+Use clean mode after SDK/toolchain changes or bundled dependency pin/patch
+upgrades: it archives existing directories as `OUT/previous-build` and
+`OUT/previous-externals`, then builds from scratch. It selects the current macOS
+SDK and preserves old outputs rather than deleting them. Failed
+commands print their exit status, log path and final 40 log lines before stopping.
+Each experiment displays its number, repetition, backend and thread count. Live
+runner output includes its existing page progress bar and is also saved in full.
+Completion messages show command elapsed time, separate from benchmark wall time.
+The launcher defaults to `BENCHMARK_OUTPUT=compact`: live progress, short run
+headers, result tables and error messages remain visible, while repeated config
+tables and native timing tables are suppressed. Use `BENCHMARK_OUTPUT=full` to
+restore the full benchmark output. Setup/build output is unaffected.
 
-Important flags:
-
-- `--max-pages/-l`: exact total page cap across the input set
-- `--max-concurrent-results`: threaded backpressure limit
-- `--scale`: render scale (1.0 = 72 dpi)
-- `--other`: semicolon-separated single-threaded reference backends
-- `--bytesio`: load PDFs from memory instead of by path (docling-parse only)
-- `--only-threaded`: run nothing but `DoclingThreadedPdfParser` at each
-  `--threads` value; skips the sequential `DoclingPdfParser` baseline and every
-  3rd-party backend (overrides `--other`), and narrows `--compare` to
-  docling-parse. The `vs <baseline>` columns disappear with them
-- `--output-dir`: where the outputs land (default
-  `./scratch-performance-benchmarks-YYYY-MM-DD-HH-MM`, computed from the
-  current datetime, so a before/after pair of runs never collides)
-
-The config split is exposed as:
-
-- decode-stage booleans: `--keep-char-cells`, `--create-word-cells`,
-  `--create-line-cells`, `--keep-shapes`, `--keep-bitmaps`
-- materialization booleans: `--materialize-char-cells`,
-  `--materialize-word-cells`, `--materialize-line-cells`,
-  `--materialize-shapes`, `--materialize-bitmaps`,
-  `--materialize-bitmap-bytes`
-
-compiled into `DecodeConfig` and into `ContentConfig`'s `ContentLevel.SKIP`,
-`COMPUTE` and `COMPUTE_AND_MATERIALIZE`.
-
-### Comparison suite (`--compare`)
-
-`--compare` replaces the scaling tables with the ones published in
-`docs/performance_benchmarks.md`: a per-page time distribution, a wall-time
-speedup grid, and a render size check. Without the flag the script behaves as
-it always did.
+Standalone runners retain their full output by default. All three accept
+`--suppress-config`; the native executable also accepts `--suppress-timings`.
+With `--enable-timing --suppress-timings`, native timing summaries go to
+`<timing-csv>.summary.log`, including exact wall time, stage totals, the timing
+tree and slowest pages/documents. The report reads that file when present and
+also supports older console-only logs. Timing collection and CSV data are
+unchanged. Config suppression retains the replay's untimed parser initialization.
 
 ```sh
-# docling-parse vs pypdfium2, the default pairing
-python scripts/benchmarking/run_performance_benchmarking.py --mode both --compare
+# Force a fresh dependency and native build when needed.
+BUILD_MODE=clean DATASET=bo20 \
+  bash scripts/benchmarking/refresh_performance_benchmarks.sh
 
-# every backend, writing the report into the docs
-python scripts/benchmarking/run_performance_benchmarking.py --threads 1,4,8,12 --compare all --mode render \
-    --output-dir ./docs/performance_benchmarks/
+BENCHMARK_OUTPUT=full DATASET=bo20 \
+  bash scripts/benchmarking/refresh_performance_benchmarks.sh
 ```
 
-Backends and the API each one is timed on:
+The `perf` group includes the five
+reference packages, Matplotlib, PDFium and R-tree support. Selected comparison
+backends that cannot import are skipped by the old measurement runner; the new
+bundle report rejects the resulting incomplete suite.
 
-| name | `parse` | `parse+render` |
-| --- | --- | --- |
-| `docling-parse` | `DoclingThreadedPdfParser` | + `RenderConfig` |
-| `pymupdf` | `page.get_text("rawdict")` | + `get_pixmap` → `pil_image` |
-| `pypdfium2` | textpage rects + `get_text_bounded` | + `page.render` → `to_pil` |
-| `pdfplumber` | `page.chars` | + `page.to_image()` |
-| `pdfminer.six` | `extract_pages` + `LTChar` walk | not supported |
-| `pypdf` | `extract_text(visitor_text=...)` | not supported |
+## Publication bundle and plots
 
-Each backend uses a *position-bearing* extraction API, so every row measures
-the same task. `pymupdf` deliberately uses `rawdict` rather than
-`get_text("text")`, which returns a bare string and would be a cheaper task.
-
-docling-parse is run once per `--threads` value; every other package is run
-single-threaded, because none of them expose a thread-safe multi-page pipeline.
-
-How the numbers are defined:
-
-- `total time` is a wall clock around the whole corpus, including opening
-  documents. This is the number that shows the benefit of threading.
-- the per-page distribution is the cost of a *single* page, so it stays roughly
-  flat as threads increase while `total time` drops. Third-party backends are
-  timed with a wall clock around each page's work (document open/close
-  excluded); docling-parse reports the C++ page timing, because under
-  concurrency no wall-clock interval belongs to one page. The table's
-  `per-page source` column states which of the two a row used.
-
-In render mode the rasterised width and height of every page are recorded, and
-a *render size check* table compares each backend page by page against
-pypdfium2, which is run first and treated as ground truth (PDFium is the
-rasteriser three of the six packages ultimately rely on; docling-parse and then
-pymupdf are the fallbacks when pypdfium2 is not in the run). A timing
-comparison only means something if all backends produced the same canvas, so
-this reports how many pages agree within 2 px and the worst offender.
-
-Flags:
-
-- `--compare [list]`: bare flag uses `docling-parse;pypdfium2`; otherwise a
-  semicolon-separated list, or `all`
-- `--output-dir`: where the report and CSV land (default
-  `./scratch-performance-benchmarks-YYYY-MM-DD-HH-MM`)
-
-## Outputs
-
-The threaded rows also carry an `efficiency` column: `vs threaded(1)` divided
-by the thread count, i.e. the fraction of a perfect linear speedup that thread
-count reaches. It is blank for the single-threaded reference backends, where it
-has no meaning.
-
-You only ever name a directory. Both files are named
-`<cpu>_<dataset>_<mode>`, derived from the machine and the run, so results
-from different machines never overwrite each other:
-
-```
-docs/performance_benchmarks/
-  apple_m3_max_performance-dataset-bo767_render.md
-  apple_m3_max_performance-dataset-bo767_render.csv
+```sh
+bash scripts/benchmarking/refresh_performance_benchmarks.sh --help
+# Use a new output path; existing paths are rejected to prevent CSV appends.
+THREADS=1,4,8 REPEATS=1 OUT=scratch-performance-new-run \
+  bash scripts/benchmarking/refresh_performance_benchmarks.sh
 ```
 
-The markdown report is self-contained, so a published number never has to be
-traced through terminal scrollback. It holds:
+Choose the corpus with `DATASET=bo20`, `DATASET=bo767` (default), or
+`DATASET=bo10k`. Each selects the matching
+`docling-project/performance-dataset-<name>` repository and a pinned revision:
 
-- the **exact command** that produced it, and a timestamp
-- a **Benchmark** table: dataset, source, revision, document and page counts,
-  mode, thread counts, backends, render scale
-- a **System** table: cpu, cores, memory, platform, python, and the version of
-  every package that was benchmarked
-- **Decode config**, **Content config** and **Render config** tables, showing
-  the parameters the run was actually driven with
-- the result, speedup and render-size-check tables
+| Dataset | Default revision | PDFs | Pages |
+|---|---|---:|---:|
+| `bo20` | `65b9971b3fa939fe4ef89be678237e6928049b67` | 20 | 496 |
+| `bo767` | `221c19e716d6ede5d18fd1560bc938ab19cc1a70` | 767 | 54,730 |
+| `bo10k` | `f85e203f95879e2f5d77059a6bfeffe667cd359e` | 10,000 | 213,538 |
 
-The scaling sweep (no `--compare`) writes the per-page CSV only; the markdown
-report is a rendering of the comparison tables.
+```sh
+# Smaller corpus and thread sweep; builds incrementally by default.
+DATASET=bo20 THREADS=1,4 \
+  bash scripts/benchmarking/refresh_performance_benchmarks.sh
 
-## Per-page CSV format
-
-One row per timed page:
-
+DATASET=bo10k \
+  bash scripts/benchmarking/refresh_performance_benchmarks.sh
 ```
+
+`DATASET_REVISION` overrides the selected repository's default pin. The requested
+revision, resolved commit, repository, file hashes and counts are recorded in
+`metadata.json`. Default snapshots are checked against the counts above.
+The historical Bo767 snapshot `c684df54de2081a6de1192cee12713b54759c6bb`
+contained 753 PDFs / 54,584 pages; its existing reports retain those inputs.
+Compare runs with matching corpus revisions and file identities.
+
+## Reference preflight, checkpoints and recovery
+
+The perf dependency group pins **PyMuPDF 1.27.2.3**. Version 1.28.2 aborts in
+MuPDF display-list construction on **Bo767 `1293644.pdf`, page 3**. The pinned
+version was checked on all 453 pages with text extraction, rasterization and PIL
+conversion. See [the matching upstream report](https://github.com/pymupdf/PyMuPDF/issues/5149).
+When `RUN_COMPARISON=1`, the launcher probes this page in a disposable subprocess
+before any corpus measurements if the PDF is present in the selected dataset.
+A native abort or timeout fails the preflight with the document/page and package
+version, instead of wasting the preceding scaling runs.
+
+Comparison runs checkpoint each completed backend/thread series with its wall
+time, page CSV, CSV hash, source/package provenance and input/settings identity.
+Saving happens after that series' timer stops. The launcher supplies
+`--checkpoint-dir`; standalone comparison runs can use the same option and add
+`--resume` to reuse matching complete checkpoints. A failed backend's partial
+pages are not treated as a completed measurement.
+
+To recover a failed refresh without repeating completed native/replay measurements:
+
+```sh
+RECOVER_FROM=/absolute/path/to/scratch-performance-refresh-RUN \
+  bash scripts/benchmarking/refresh_performance_benchmarks.sh
+```
+
+Recovery creates a **new** bundle using the dataset, repetitions and thread
+counts from the source bundle. It synchronizes the pinned dependencies while
+retaining the installed local project, checks the recorded machine, Python, core
+packages, native binary/extension hashes and QPDF version, then validates the
+complete core results and dataset hashes. It links the original native/replay
+artifacts, so **keep the original bundle**. It does not rebuild native targets.
+If scripts were committed during collection, replay provenance is accepted only
+when the commit patch exactly matches the recorded build diff and the replay
+script hash matches that commit. The report explains this equivalence.
+
+Both comparison modes are recollected under the current reference versions.
+Compatible checkpoints from a previous recovery are copied and reused; a
+reference-version or source change prevents checkpoint reuse. The original
+metadata is retained as `original-metadata.json`. `comparison_provenance` records
+the new environment separately, and report tables show package versions. The
+completed original parse comparison remains in its original bundle.
+
+If recovery is interrupted, use the newly printed recovery directory as
+`RECOVER_FROM` to retain compatible completed comparison checkpoints.
+`OUT` may select a new output directory; `BUILD_MODE=clean` is incompatible with
+recovery because the recorded core binaries must remain unchanged.
+
+You can also inspect the completed core results independently:
+
+```sh
+uv run --no-sync python scripts/benchmarking/run_performance_report.py \
+  /absolute/path/to/scratch-performance-refresh-RUN --core-only
+```
+
+This validates all requested native/replay profiles and writes `report-core/`,
+clearly labeling comparisons as excluded. The normal report still requires the
+complete comparison suite and rejects missing profiles or mixed provenance.
+
+For a finished comparison whose report failed, regenerate directly without
+recovery or benchmark reruns:
+
+```sh
+uv run --no-sync python scripts/benchmarking/run_performance_report.py \
+  /absolute/path/to/scratch-performance-recovery-RUN
+```
+
+A reference series with page errors is listed under **Excluded reference
+comparisons**, with attempted/successful/failed page counts. Its timings remain
+in `excluded_comparisons.csv`, and document/page/error details are written to
+`comparison_errors.csv`. All repetitions of that series are excluded from
+performance tables, speedups and figures. Reporting requires full attempted-page
+coverage, matching checkpoint provenance and checksums; missing pages and native
+errors still fail validation. Original CSVs, checkpoints and metadata are retained.
+
+Native stage timers and CSV output are enabled; glyph diagnostics and PNG
+saving are disabled. Every repetition runs both `render-only` (word/line cell
+construction disabled) and `render-with-text` (both enabled), with separate
+fresh processes for each profile/thread count. Both decode characters and bitmap
+geometry needed for drawing; Python models and separate bitmap-bound outputs
+are not materialized. The native wall clock excludes document preload. Replay
+wall time sums document totals including construction/load, processing and
+unload. Comparison wall time comes from the exact completed-series checkpoint,
+including document loading. Older bundles without checkpoints use rounded console
+wall times. The report checks console rounding against checkpoint timings,
+including older tables rounded to six significant digits. These remain separate
+result series.
+
+Every output bundle preserves `metadata.json`, exact commands, build logs,
+tests, raw native CSV/log pairs, replay JSON/JSONL and optional comparison CSVs.
+To regenerate tables and figures:
+
+```sh
+uv run --no-sync python scripts/benchmarking/run_performance_report.py \
+  scratch-performance-new-run
+```
+
+Results go to `INPUT/report`, or the directory supplied by `--output-dir`.
+The report validates complete page sets, repetitions and native log/CSV sums.
+It writes `summary.md`, `summary.csv`, `runs.csv`, phase CSVs, optional canvas
+checks, and runtime/scaling/phase/distribution PNGs.
+Native CSVs are stored under `native/<profile>/r*/t*.csv`. Profiles are recorded
+in metadata, and native baselines, stage totals and histograms stay separate.
+New native figures use `native_render_only_*` and `native_render_with_text_*`;
+legacy bundles keep their original single profile and figure names.
+
+The generated `Figures` section places C++ before Python, with explicit workload
+subtitles for images, text geometry and bitmap bounding boxes. Each plot has a
+caption, and each profile includes shell commands that reproduce its measurements
+with fresh output paths. A complete launcher command regenerates the whole bundle.
+
+Native histograms use page worker elapsed. Replay histograms use document
+totals: its page JSONL stores outputs, not per-page timings. Phase bars show the
+run nearest each median total. Error bars show observed minimum–maximum wall
+time, not confidence intervals.
+
+## Individual Python API comparison
+
+The currently supported modes are `parse-without-bitmap`, `parse-with-bitmap`,
+`render`, `default` (parse without bitmap bytes plus render), and `all`.
+
+```sh
+uv run --group perf python scripts/benchmarking/run_performance_benchmarking.py \
+  ./pdfs --mode render --threads 1,4,8,12 --scale 1 \
+  --max-concurrent-results 32 --3rd-party-backends all --only-threaded \
+  --output-dir scratch-comparison-new-run
+```
+
+Inputs may be a local PDF/directory or an HF dataset ID. This runner has no
+revision flag: for a pinned comparison, pass the same snapshot directory used by
+the other runners, as the launcher does. Add `--recursive` for nested local PDFs.
+
+Supported flags include:
+
+- `--3rd-party-backends`: `all`, `none`, or a semicolon-separated list of
+  `pymupdf;pypdfium2;pdfplumber;pdfminer.six;pypdf`.
+- `--only-threaded`: skip the sequential Docling parse baseline. Reference
+  packages remain controlled by `--3rd-party-backends`.
+- `--threads`, `--scale`, `--max-concurrent-results`, `--max-pages`,
+  `--pdf-selection`, `--bytesio`, `--output-dir`.
+- `--keep-char-cells`, `--create-word-cells`, `--create-line-cells`,
+  `--keep-shapes`, `--keep-bitmaps`.
+- `--materialize-char-cells`, `--materialize-word-cells`,
+  `--materialize-line-cells`, `--materialize-shapes`,
+  `--materialize-bitmaps`.
+
+Boolean flags take `true` or `false`. Bitmap-byte export is selected by the
+experiment mode; it has no separate CLI switch. Third-party packages are
+excluded from the bitmap-byte-export mode.
+
+The runner writes `<cpu>_<input-name>_<mode>.csv` under the supplied output
+directory and prints the result/configuration tables to stdout. Capture stdout
+as a log to retain the corpus wall times. It currently does not write a
+Markdown report. There are no `--compare`, `--other`, `--pages-csv` or
+`--mode both` options.
+
+## Backend-settings replay
+
+```sh
+uv run --group perf python \
+  scripts/benchmarking/run_performance_benchmarking_with_docling_settings.py \
+  docling-project/performance-dataset-bo767 \
+  --dataset-revision 221c19e716d6ede5d18fd1560bc938ab19cc1a70 \
+  --backend threaded --threads 8 --output-dir scratch-replay-new-run
+```
+
+Choose `--backend pdfium`, `threaded` or `both`. A comma-separated thread
+list is supported, but use separate invocations for independent process/RSS
+measurements. `--threads default` uses accelerator environment resolution;
+explicit counts are labeled scaling overrides.
+
+Outputs contain source/package/configuration provenance, per-document phase
+timings, API/output counters and streamed page metadata. The replay includes
+Python model materialization, separators and RGB images and excludes model
+inference and Docling framework construction. See the script header for the
+pinned source inspection and limitations. Native CSV, replay JSONL and comparison
+CSV are different formats; they must not be passed interchangeably to plotting
+tools.
+
+## Existing page-level exploration tools
+
+`_common.py` defines the comparison `PageRow` schema:
+
+```text
 backend,task,threads,doc_key,page_number,success,elapsed_s,wall_gap_s,
 image_width,image_height,make_page_decoder_s,decode_page_s,
 create_word_cells_s,create_line_cells_s,render_page_s,error_message
 ```
 
-- `elapsed_s` — the per-page cost used for all statistics
-- `wall_gap_s` — observed arrival gap; equals `elapsed_s` when unthreaded
-- `image_width` / `image_height` — rasterised size, zero outside `parse+render`
-- the `*_s` stage columns — C++ breakdown, zero for third-party backends
-
-This is the only format the tools read. A CSV without a `backend` column is
-skipped, so scanning a directory of unrelated CSVs is harmless.
-
-## `run_performance_eval.py`
-
 ```sh
-python scripts/benchmarking/run_performance_eval.py docs/performance_benchmarks/apple_m3_max_bo767_render.csv
-python scripts/benchmarking/run_performance_eval.py docs/performance_benchmarks   # scan a directory
-python scripts/benchmarking/run_performance_eval.py pages.csv --task parse --threads 1
-python scripts/benchmarking/run_performance_eval.py                               # defaults to scripts/benchmarking/results
+uv run --group perf python scripts/benchmarking/run_performance_eval.py \
+  scratch-comparison-new-run/COMPARISON.csv --viz-dir scratch-comparison-plots
+
+uv run --group perf python scripts/benchmarking/run_performance_analysis.py \
+  scratch-comparison-new-run/COMPARISON.csv --backend docling-parse \
+  --task 'parse+render' --threads 8 --top 20 --render 1.0
 ```
 
-Without `--viz-dir`, plots go to the input CSV path with `.csv` dropped —
-`apple_m3_max_bo767_render.csv` produces `apple_m3_max_bo767_render/` beside
-it, so the plots inherit the run's name and sit next to the markdown report
-they belong to. Several inputs land in a `viz/` directory next to them.
+Replace `COMPARISON.csv` with the filename printed by the measurement runner.
+Evaluation generates histograms, hexbins, per-document statistics and scaling
+plots. Its scaling plots sum arrival gaps, which omit document loading and may
+omit native processing already performed during submission. They do not share
+the corpus-wall boundary of the publication tables. Use
+`run_performance_report.py` for publication runtime and efficiency figures.
 
-Produces:
+Docling page durations are native worker elapsed; reference page durations are
+wall measurements around page operations. Neither distribution is the
+amortized `corpus wall / page count`. Equal-size renders are not automatically
+pixel-equivalent.
 
-- `hist_stacked.png` — per-page time histograms, one panel per series on a
-  shared log-log x-axis. Filter to a single backend and task and the panels
-  become the thread sweep.
-- `hist_pages_per_document.png` — corpus shape
-- `scaling_<task>.png` — docling-parse against its thread count: seconds/page
-  on the left axis (black `-o`) and pages/second on the right (red `s-`), both
-  log-scaled
-- `hex_loglog_<reference>_vs_<package>.png` — per-page time of docling-parse at
-  one thread against each other package, log-log, with the `x=y` diagonal
-- a per-document statistics table and `per_document.csv`
+Analysis replays pages and requires the original files. Pass the measured scale
+and content/decode flags explicitly; defaults may differ from the original run.
 
-The scaling plot reconstructs total time as the sum of `wall_gap_s`, which
-tiles the interval from the end of loading to the last result. Summing
-`elapsed_s` would be wrong: that is per-page cost, which by design stays flat
-as threads increase.
-
-Hexbins never cross tasks (a `parse` time against a `parse+render` time is not
-a like-for-like page), and other docling-parse thread counts are excluded
-because per-page cost is the same quantity at any thread count — those plots
-would just be the diagonal.
-
-Flags: `--backend`, `--task`, `--threads` to filter, `--bins`, `--viz-dir`,
-`--top-documents`.
-
-## `run_quality_benchmarking.py`
-
-Compares output quality rather than speed. Render comparison reuses the same
-image metrics and three-panel visualizations as
-`tests/test_regression_pypdfium_render.py`; text comparison reports per-page string
-similarity and edit counts after optional whitespace normalization.
+## Quality benchmarking
 
 ```sh
-python scripts/benchmarking/run_quality_benchmarking.py ./dataset
-python scripts/benchmarking/run_quality_benchmarking.py ./dataset --compare render
-python scripts/benchmarking/run_quality_benchmarking.py ./dataset \
-    --reference-renderer pypdfium2 --renderers docling-parse,pymupdf
-python scripts/benchmarking/run_quality_benchmarking.py ./dataset \
-    --reference-parser pypdfium2 --parsers docling-parse,pymupdf,pypdf
+uv run --group perf python scripts/benchmarking/run_quality_benchmarking.py ./pdfs
+uv run --group perf python scripts/benchmarking/run_quality_benchmarking.py ./pdfs \
+  --compare render --reference-renderer pypdfium2 --renderers docling-parse,pymupdf
 ```
 
-Inputs: a local PDF file, a local directory of PDFs, or a Hugging Face dataset
-repo id whose `pdf/` subdirectory contains PDFs. The default is
-`docling-project/regression-dataset-for-docling-parse`, using the pinned
-regression snapshot from `tests.constants` and its `regression/` subdirectory.
-
-Supported renderers: `docling-parse`, `pypdfium2`, `pymupdf`.
-
-Supported text parsers: `docling-parse`, `pypdfium2`, `pymupdf`,
-`pdfplumber`, `pdfminer.six`, `pypdf`.
-
-Outputs under `--output-dir` (default
-`./scratch-quality-benchmarks-YYYY-MM-DD-MM`, computed from the current
-datetime):
-
-- `render_quality.csv`: one row per page and renderer pair, with dimensions,
-  `normalized_delta`, `mean_abs_error`, changed-pixel ratio and tolerance flag
-- `text_quality.csv`: one row per page and parser pair, with similarity ratio,
-  character counts and insertion/deletion/replacement counts
-- `current_page.jsonl`: flushed breadcrumbs for the page being processed, useful
-  when native code aborts before Python can write normal CSV output
-- `visualizations/`: three-panel render comparisons and corpus histograms,
-  controlled by `--render-visualizations=all|above-tolerance|none`; default is
-  `all`
-
-Important flags:
-
-- `--compare`: `parse`, `render`, or `both` (default)
-- `--max-pages/-l`: exact total page cap across the input set
-- `--recursive`: search local input directories recursively
-- `--scale`: render scale (1.0 = 72 dpi)
-- `--text-normalization`: `whitespace` or `none`
-- `--progress-log`: override the JSONL breadcrumb path
-
-## `run_performance_analysis.py`
-
-Replays the slowest pages from a per-page CSV and extracts detailed decode
-timings:
-
-```sh
-python scripts/benchmarking/run_performance_analysis.py scripts/benchmarking/results/pages.csv --top 25
-python scripts/benchmarking/run_performance_analysis.py scripts/benchmarking/results/pages.csv --nth 7
-python scripts/benchmarking/run_performance_analysis.py pages.csv --top 25 --task parse --threads 1
-```
-
-- `--top N`: per-page CSV of static timings for the N slowest pages, plus an
-  aggregate breakdown of where the time went
-- `--nth N`: full static and dynamic timing table for one page
-- `--backend` / `--task` / `--threads`: narrow a mixed CSV to one series
-- `--min-sec`: ignore pages faster than this
+The default input is the pinned regression dataset in `tests.constants`.
+Outputs include `render_quality.csv`, `text_quality.csv`, render comparison
+panels and quality-distribution plots. Quality evidence is separate from the
+performance refresh; the launcher's damaged-page preflight is not a complete
+render-quality regression run.

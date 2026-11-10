@@ -268,6 +268,22 @@ namespace utils
       return false;      
     }
     
+    bool is_control(const std::string& val)
+    {
+      if(val.size()==0 or not utf8::is_valid(val.begin(), val.end()))
+	{
+	  return false;
+	}
+
+      std::vector<uint32_t> utf32_chars={};
+      utf8::utf8to32(val.begin(), val.end(), std::back_inserter(utf32_chars));
+
+      // C0 controls, DEL and C1 controls
+      return utf32_chars.size()==1 and
+	(utf32_chars.at(0)<0x0020 or
+	 (0x007F<=utf32_chars.at(0) and utf32_chars.at(0)<=0x009F));
+    }
+
     // Function to check if a Unicode character is punctuation or whitespace
     bool is_punctuation_or_space(char32_t ch)
     {
@@ -345,6 +361,22 @@ namespace utils
         (ch >= 0x07C0 && ch <= 0x07FF);    // N’Ko
     }
     
+    // Function to check if a Unicode character is a CJK character: Han,
+    // Hiragana, Katakana, Hangul, Bopomofo, the CJK symbol and punctuation
+    // block, and the halfwidth/fullwidth forms. Justified CJK text spreads
+    // every character by the same amount, so word contraction treats the
+    // gaps of such a line differently from Latin letter gaps.
+    bool is_cjk_char(uint32_t ch)
+    {
+      return
+        (ch >= 0x2E80 && ch <= 0x9FFF) ||    // CJK radicals .. unified ideographs,
+                                             // including kana, Hangul jamo, bopomofo
+        (ch >= 0xAC00 && ch <= 0xD7AF) ||    // Hangul syllables
+        (ch >= 0xF900 && ch <= 0xFAFF) ||    // CJK compatibility ideographs
+        (ch >= 0xFF00 && ch <= 0xFFEF) ||    // halfwidth and fullwidth forms
+        (ch >= 0x20000 && ch <= 0x2FFFF);    // CJK unified ideographs ext. B-F
+    }
+
     bool is_right_to_left(const std::string& val)
     {
       if(val.size()==0)

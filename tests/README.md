@@ -20,6 +20,10 @@ A new test belongs in the first group unless it genuinely needs the corpus: a
 failure there names the operator that broke, while a corpus failure only names
 a page.
 
+A unit test does not replace the evidence that a pull request needs: every
+change must also be shown on a real document. See "Submitting pull requests" in
+[CONTRIBUTING.md](../CONTRIBUTING.md#submitting-pull-requests).
+
 ## Running Tests
 
 Run the full test suite:
@@ -33,6 +37,51 @@ Run only the self-contained tests (no corpus download, a few seconds):
 ```bash
 uv run pytest tests/test_unit_*.py -q
 ```
+
+The fixes are supplied by the versioned `PeterStaar-IBM/blend2d` fork release
+selected in `cmake/extlib_blend2d.cmake`; no CMake patch step is required.
+
+The Blend2D patch tests also exercise the native library directly. This matters
+because the renderer currently flattens stroked cubics (#407), which bypasses
+the native stroker defects covered by the PDF fixtures:
+
+```bash
+cmake -S . -B build -DDOCLING_PARSE_BUILD_BLEND2D_TESTS=ON
+cmake --build build --target blend2d_patch_regression --parallel 2
+ctest --test-dir build --output-on-failure -R '^blend2d_'
+```
+
+Each native case has a 60-second timeout and remains available for local checks.
+CI relies on Blend2D's own tests for the native routines and runs the Python
+integration/regression tests in this repository.
+The real-document cases are parameters of
+`test_regression_pypdfium_cited_pages.py`, using PDFs from the pinned regression
+dataset. Each case names its document, 1-based PDF page, render scale, and
+image tolerance. Rendering runs in a child process with a 60-second timeout,
+and the result must match pypdfium2 within the case's tolerance.
+
+The large-document selections deliberately cover only the reported pages:
+
+| Document | Selected PDF page | Enforced render scale | Regression |
+| --- | ---: | ---: | --- |
+| `31ZH7600.pdf` | 7 | 3.0 | Affine image fill at the clip edge (#365) |
+| `NAB-22-29.pdf` | 29 | 2.0 | Subpixel stroked curve (#393) |
+
+The ordinary parser/render corpus tests use those page selections from
+`regression_page_selection.py`. The cited-page test additionally renders at
+the case's explicit scale: scale 3 is essential to reproduce the affine-fill
+crash. No external document paths or document-specific environment variables
+are needed.
+
+```bash
+uv run pytest tests/test_regression_pypdfium_cited_pages.py -q
+```
+
+For corpus-wide pypdfium2 metrics and visualizations, use the existing
+`test_regression_pypdfium_render.py` report. The cited-page tests enforce their
+image tolerances; the corpus-wide pypdfium2 report remains non-failing on
+pixel differences. Stored renderer ground truth is checked separately by
+`test_regression_threaded_render.py`.
 
 Run focused parser and renderer regression tests:
 
@@ -117,8 +166,9 @@ Two families are deliberately left uncompressed:
   are line-oriented, so they diff cell by cell. This costs ~223 MB (264 MB plain
   against 40 MB gzipped) and only pays off alongside the `.gitattributes` change
   described below.
-- **`*.delta.txt`** -- not groundtruth; written next to a failing artifact for a
-  human to read and deleted once the page passes.
+- **`*.delta.txt`** -- diagnostic output, not groundtruth; written under
+  `tests/data/groundtruth_delta/parser/`. Textline diagnostics are deleted
+  when the corresponding comparison passes.
 
 `render/pages` and `render/bitmap_data` are never touched either: PNG and JPEG
 payloads are already compressed.
@@ -131,10 +181,10 @@ helpers rather than `open()` when touching groundtruth:
 
 ```python
 from tests.groundtruth_io import (
-    groundtruth_exists,      # true for either encoding
-    load_groundtruth_json,   # read, auto-detecting encoding
-    dump_groundtruth_json,   # write, following DOCLING_PARSE_GT_FORMAT
-    load_segmented_page,     # SegmentedPdfPage from either encoding
+    groundtruth_exists,  # true for either encoding
+    load_groundtruth_json,  # read, auto-detecting encoding
+    dump_groundtruth_json,  # write, following DOCLING_PARSE_GT_FORMAT
+    load_segmented_page,  # SegmentedPdfPage from either encoding
     read_groundtruth_text,
     write_groundtruth_text,
     resolve_groundtruth_path,  # the path actually on disk, for error messages
@@ -360,7 +410,7 @@ rendering regressions.
 On image comparison failure, diagnostic files are written under:
 
 ```text
-tests/data/render_deltas/
+tests/data/groundtruth_delta/render/pages/
 ```
 
 The generated files include actual, expected, and amplified diff PNGs.
@@ -391,6 +441,13 @@ no page could be compared at all. It is skipped when pypdfium2 is not installed.
 Consequently `PYPDFIUM_IMAGE_TOLERANCE` is not a regression limit. It is only
 the cut-off that decides which pages are called out in the report and, by
 default, which ones get a visualization written.
+
+For the same reason, this report does not count as the image regression test
+that a rendering pull request needs. That test must fail on `main` and pass
+with the change, comparing against pypdfium2 on the pages the pull request
+cites. `render_pypdfium_page()` and `measure_image_pair()` in
+`rendering_regression.py` provide the reference render and the metrics. See
+"Rendering changes" in [CONTRIBUTING.md](../CONTRIBUTING.md#rendering-changes).
 
 ### Three-panel visualizations
 
@@ -466,7 +523,7 @@ the groundtruth test:
 - `render_pypdfium_page()` renders the reference page.
 - `flatten_on_white()` puts both renders on the same page background.
 - `amplified_difference()` builds the difference panel, and is also used for the
-  `render_deltas` diff artifacts.
+  `groundtruth_delta/render/pages` diff artifacts.
 - `write_comparison_visualization()` assembles and writes the three-panel png.
 
 ## Regression Data
@@ -505,11 +562,12 @@ tests/data/
   cases/                  focused case fixtures
   errors/                 failure and error-handling fixtures
   synthetic/              synthetic PDF fixtures
-  render_deltas/          diff artifacts written on image comparison failure
+  groundtruth_delta/parser/        parser failure diagnostics
+  groundtruth_delta/render/pages/  actual, expected, and diff PNGs on image comparison failure
   visualizations/         three-panel renderer comparison images
 ```
 
-`render_deltas/` and `visualizations/` are produced by test runs and are not
+`groundtruth_delta/` and `visualizations/` are produced by test runs and are not
 part of the downloaded dataset.
 
 Groundtruth files are named after the document they came from, so they linger
@@ -590,3 +648,60 @@ the environment, for example `HF_TOKEN` or `HUGGINGFACE_HUB_TOKEN`.
 After publishing a new dataset revision, update `HF_DATASET_REVISION` in
 `tests/constants.py` so CI and local runs use the intended snapshot.
 `tests/data_utils.py` imports it from there and does the download.
+
+Publishing a ground-truth revision and bumping `HF_DATASET_REVISION` are
+maintainer steps, done when a change is merged. In a contributed pull request,
+do not pin `HF_DATASET_REVISION` to a revision from an open dataset pull
+request. Use the content-hash comparison above to list the pages whose ground
+truth changes, and give the reason for each page in the pull request
+description. See "Ground truth" in
+[CONTRIBUTING.md](../CONTRIBUTING.md#ground-truth).
+
+### Updating a Pull Request From a Contributor's Fork
+
+Maintainers can push a regression dataset pin update into an existing pull
+request when the contributor has enabled maintainer edits.
+
+Start with no uncommitted tracked changes. Replace the example fork owner,
+branch, and pull request number below with the pull request's actual values:
+
+```bash
+FORK_OWNER=contributor
+PR_BRANCH=fix/example
+PR_NUMBER=123
+
+# Add the remote once; skip this if it already exists.
+git remote add "$FORK_OWNER" "git@github.com:$FORK_OWNER/docling-parse.git"
+git fetch "$FORK_OWNER"
+git switch -c "pr-$PR_NUMBER-regression" --track "$FORK_OWNER/$PR_BRANCH"
+```
+
+Rebuild the package with the pull request's changes, then rerun the regression
+tests:
+
+```bash
+uv sync
+uv run pytest -v tests/test_regression_*.py
+```
+
+If the output changes are intended, refresh the affected groundtruth using
+the procedure above and review the content differences. Publish the dataset
+changes and a new dataset tag if needed, then set `HF_DATASET_REVISION` in
+`tests/constants.py` to the published revision or tag. This is a maintainer
+step coordinated with merging; do not use an unmerged dataset pull request
+as the pin.
+
+Review and commit the pin update, then push to the contributor's original
+branch to update the existing pull request:
+
+```bash
+git diff -- tests/constants.py
+git add tests/constants.py
+git diff --cached
+git commit -m "test: update regression dataset revision"
+git push "$FORK_OWNER" "HEAD:refs/heads/$PR_BRANCH"
+```
+
+Stage any other intended source or test changes explicitly before committing.
+Dataset files under `tests/data` are ignored by this repository and must be
+published separately. No force push is needed.

@@ -5,6 +5,8 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <functional>
+#include <optional>
 #include <string>
 #include <vector>
 #include <array>
@@ -27,6 +29,15 @@ namespace pdflib
     CMYK_CONVENTION_UNKNOWN,
     CMYK_CONVENTION_ADOBE_INVERTED,
     CMYK_CONVENTION_PROCESS,
+  };
+
+  // The decoded samples of one image, as a bitmap_instruction carries them.
+  struct bitmap_samples
+  {
+    std::shared_ptr<std::vector<uint8_t> > data;
+    std::array<int, 3> shape = {0, 0, 0};
+    pixel_format fmt = PIXEL_FORMAT_UNKNOWN;
+    cmyk_convention cmyk_conv = CMYK_CONVENTION_UNKNOWN;
   };
 
   enum clip_rule {
@@ -150,6 +161,11 @@ namespace pdflib
     SHAPE_RENDER_INSTRUCTION, // draw shapes (lines, shapes, filling, etc)
     SHADING_RENDER_INSTRUCTION, // paint a shading (`sh`) over the clip region
   };
+
+  // An ExtGState soft mask decoded for the renderer (soft_mask_instruction.h).
+  // It holds render instructions of its own, so it is defined after the
+  // container below; the paint instructions only ever hold it by pointer.
+  class soft_mask_instruction;
 
   // One sample of a shading's colour ramp: `offset` runs from 0.0 at the
   // start of the shading axis to 1.0 at its end (the shading's /Domain is
@@ -327,6 +343,14 @@ namespace pdflib
     void set_blend_mode(blend_mode_name mode) { blend_mode_ = mode; }
     blend_mode_name get_blend_mode() const { return blend_mode_; }
 
+    // ExtGState /SMask in force when this was painted (11.6.5), decoded to
+    // page-space instructions; null when none. Every instruction painted
+    // under the same mask shares one object, so the renderer rasterises the
+    // mask once.
+    void set_soft_mask(std::shared_ptr<soft_mask_instruction> mask) { soft_mask_ = std::move(mask); }
+    const std::shared_ptr<soft_mask_instruction>& get_soft_mask() const { return soft_mask_; }
+    bool has_soft_mask() const { return soft_mask_ != nullptr; }
+
     void set_rendering_mode(int mode) { rendering_mode_ = mode; }
     int get_rendering_mode() const { return rendering_mode_; }
     bool is_invisible() const { return rendering_mode_ == 3 or rendering_mode_ == 7; }
@@ -401,6 +425,7 @@ namespace pdflib
     double fill_alpha_ = 1.0;
     clip_state_instruction clip_state_;
     blend_mode_name blend_mode_ = BLEND_MODE_NORMAL;
+    std::shared_ptr<soft_mask_instruction> soft_mask_;
     int rendering_mode_ = 0;
   };
 
@@ -567,11 +592,33 @@ namespace pdflib
     const clip_state_instruction& get_clip_state() const { return clip_state; }
     bool has_clip_state() const { return clip_state.has_clip(); }
 
+    bitmap_instruction translated(double dx, double dy) const
+    {
+      bitmap_instruction copy(xobject_key, data, alpha_data, cmyk_conv, shape,
+                              fmt, image_mask, rgb_filling, fill_alpha,
+                              r_x0 + dx, r_y0 + dy,
+                              r_x1 + dx, r_y1 + dy,
+                              r_x2 + dx, r_y2 + dy,
+                              r_x3 + dx, r_y3 + dy,
+                              source, clip_state.translated(dx, dy));
+      copy.blend_mode_ = blend_mode_;
+      copy.filters_ = filters_;
+      return copy;
+    }
+
     // ExtGState /BM in force when this was painted (11.3.5). Set after
     // construction, like the other late additions here, so the constructor
     // signature stays put.
     void set_blend_mode(blend_mode_name mode) { blend_mode_ = mode; }
     blend_mode_name get_blend_mode() const { return blend_mode_; }
+
+    // ExtGState /SMask in force when this was painted (11.6.5), decoded to
+    // page-space instructions; null when none. Every instruction painted
+    // under the same mask shares one object, so the renderer rasterises the
+    // mask once.
+    void set_soft_mask(std::shared_ptr<soft_mask_instruction> mask) { soft_mask_ = std::move(mask); }
+    const std::shared_ptr<soft_mask_instruction>& get_soft_mask() const { return soft_mask_; }
+    bool has_soft_mask() const { return soft_mask_ != nullptr; }
 
     // The /Filter chain of the stream these samples came out of, in the order
     // the PDF lists it (e.g. {"/FlateDecode", "/JPXDecode"}); empty for an
@@ -585,18 +632,59 @@ namespace pdflib
     void set_filters(std::vector<std::string> filters) { filters_ = std::move(filters); }
     const std::vector<std::string>& get_filters() const { return filters_; }
 
+    // Set when the samples were decoded at a reduced resolution, sized for a
+    // render at `pixels_per_unit` (decode_config::bitmap_target_pixels_per_unit).
+    // `redecode` decodes the image again for a finer target and returns empty
+    // samples when the stored ones already cover it. It holds the encoded
+    // bytes the page keeps anyway, never full-resolution pixels.
+    void set_redecoder(double pixels_per_unit,
+                       std::function<bitmap_samples(double)> redecode)
+    {
+      decoded_for_pixels_per_unit_ = pixels_per_unit;
+      redecode_ = std::move(redecode);
+    }
+
+    // A copy of this instruction with samples decoded for a render at
+    // `pixels_per_unit`, when the stored ones were reduced below what that
+    // render needs; otherwise nothing, and the stored samples are drawn.
+    std::optional<bitmap_instruction> redecoded_for(double pixels_per_unit) const
+    {
+      if(not redecode_ or pixels_per_unit <= decoded_for_pixels_per_unit_)
+        {
+          return std::nullopt;
+        }
+
+      bitmap_samples samples = redecode_(pixels_per_unit);
+      if(not samples.data or samples.data->empty())
+        {
+          return std::nullopt;
+        }
+
+      bitmap_instruction sharper(*this);
+      sharper.data = std::move(samples.data);
+      sharper.shape = samples.shape;
+      sharper.fmt = samples.fmt;
+      sharper.cmyk_conv = samples.cmyk_conv;
+      sharper.redecode_ = nullptr;
+      return sharper;
+    }
+
   private:
 
+    double decoded_for_pixels_per_unit_ = 0.0;
+    std::function<bitmap_samples(double)> redecode_;
+
     blend_mode_name blend_mode_ = BLEND_MODE_NORMAL;
+    std::shared_ptr<soft_mask_instruction> soft_mask_;
     std::vector<std::string> filters_;
 
     const std::string xobject_key;
     
-    const std::shared_ptr<std::vector<uint8_t> > data;
+    std::shared_ptr<std::vector<uint8_t> > data;
     const std::shared_ptr<std::vector<uint8_t> > alpha_data;
-    const cmyk_convention cmyk_conv;
-    const std::array<int, 3> shape;
-    const pixel_format fmt;
+    cmyk_convention cmyk_conv;
+    std::array<int, 3> shape;
+    pixel_format fmt;
     const bool image_mask;
     const std::array<int, 3> rgb_filling;
     const double fill_alpha;
@@ -694,6 +782,62 @@ namespace pdflib
   // of the painted path plus the graphics-state parameters needed to color
   // it. Fill rules operate on the whole path, so the subpaths must stay in
   // one instruction (a rectangle-with-hole is two subpaths of one fill).
+  class pdf_render_instructions;
+
+  // A tiling pattern (ISO 32000-1, 8.7.3.3) used as the fill of one path.
+  // The cell is decoded once per pattern into its own instruction list, in
+  // pattern space; the renderer rasterises it to a tile and fills the path
+  // with that tile repeated. Replaying the cell per lattice position emitted
+  // one instruction per cell stroke -- 289 cells per fill at the lattice cap
+  // -- which is what made a hatched CAD sheet take minutes to decode.
+  class tiling_paint
+  {
+  public:
+    tiling_paint(std::string key,
+                 std::shared_ptr<pdf_render_instructions> cell,
+                 std::array<double, 6> matrix,
+                 double x_step,
+                 double y_step,
+                 std::array<double, 4> bbox):
+      key_(std::move(key)),
+      cell_(std::move(cell)),
+      matrix_(matrix),
+      x_step_(x_step),
+      y_step_(y_step),
+      bbox_(bbox) {}
+
+    const std::string& get_key() const { return key_; }
+
+    // The decoded cell, in pattern space.
+    const std::shared_ptr<pdf_render_instructions>& get_cell() const { return cell_; }
+
+    // Pattern space -> page space, as a PDF matrix [a b c d e f].
+    const std::array<double, 6>& get_matrix() const { return matrix_; }
+
+    double get_x_step() const { return x_step_; }
+    double get_y_step() const { return y_step_; }
+
+    // Cell bounding box in pattern space; its origin anchors the lattice.
+    const std::array<double, 4>& get_bbox() const { return bbox_; }
+
+    tiling_paint translated(double dx, double dy) const
+    {
+      std::array<double, 6> m = matrix_;
+      m[4] += dx;
+      m[5] += dy;
+      return tiling_paint(key_, cell_, m, x_step_, y_step_, bbox_);
+    }
+
+  private:
+
+    std::string key_;
+    std::shared_ptr<pdf_render_instructions> cell_;
+    std::array<double, 6> matrix_;
+    double x_step_;
+    double y_step_;
+    std::array<double, 4> bbox_;
+  };
+
   class shape_instruction
   {
   public:
@@ -760,6 +904,15 @@ namespace pdflib
     const clip_state_instruction& get_clip_state() const { return clip_state; }
     bool has_clip_state() const { return clip_state.has_clip(); }
 
+    // Set when the fill colour is a tiling pattern: the renderer fills the
+    // path with the pattern's tile instead of rgb_filling.
+    void set_tiling_paint(std::shared_ptr<const tiling_paint> paint)
+    {
+      tiling_paint_ = std::move(paint);
+    }
+    bool has_tiling_paint() const { return static_cast<bool>(tiling_paint_); }
+    const tiling_paint& get_tiling_paint() const { return *tiling_paint_; }
+
     shape_instruction translated(double dx, double dy) const
     {
       std::vector<shape_subpath> subpaths_;
@@ -775,6 +928,13 @@ namespace pdflib
                              stroke_alpha, fill_alpha,
                              clip_state.translated(dx, dy));
       copy.blend_mode_ = blend_mode_;
+      // the mask is anchored in page space, so a moved copy keeps it as is
+      copy.soft_mask_ = soft_mask_;
+      if(tiling_paint_)
+        {
+          copy.tiling_paint_ =
+            std::make_shared<const tiling_paint>(tiling_paint_->translated(dx, dy));
+        }
       return copy;
     }
 
@@ -784,9 +944,19 @@ namespace pdflib
     void set_blend_mode(blend_mode_name mode) { blend_mode_ = mode; }
     blend_mode_name get_blend_mode() const { return blend_mode_; }
 
+    // ExtGState /SMask in force when this was painted (11.6.5), decoded to
+    // page-space instructions; null when none. Every instruction painted
+    // under the same mask shares one object, so the renderer rasterises the
+    // mask once.
+    void set_soft_mask(std::shared_ptr<soft_mask_instruction> mask) { soft_mask_ = std::move(mask); }
+    const std::shared_ptr<soft_mask_instruction>& get_soft_mask() const { return soft_mask_; }
+    bool has_soft_mask() const { return soft_mask_ != nullptr; }
+
   private:
 
     blend_mode_name blend_mode_ = BLEND_MODE_NORMAL;
+    std::shared_ptr<soft_mask_instruction> soft_mask_;
+    std::shared_ptr<const tiling_paint> tiling_paint_;
 
     const std::vector<shape_subpath> subpaths;
 
@@ -875,6 +1045,8 @@ namespace pdflib
                                extend_start, extend_end, fill_alpha,
                                clip_state.translated(dx, dy));
       copy.blend_mode_ = blend_mode_;
+      // the mask is anchored in page space, so a moved copy keeps it as is
+      copy.soft_mask_ = soft_mask_;
       return copy;
     }
 
@@ -884,9 +1056,18 @@ namespace pdflib
     void set_blend_mode(blend_mode_name mode) { blend_mode_ = mode; }
     blend_mode_name get_blend_mode() const { return blend_mode_; }
 
+    // ExtGState /SMask in force when this was painted (11.6.5), decoded to
+    // page-space instructions; null when none. Every instruction painted
+    // under the same mask shares one object, so the renderer rasterises the
+    // mask once.
+    void set_soft_mask(std::shared_ptr<soft_mask_instruction> mask) { soft_mask_ = std::move(mask); }
+    const std::shared_ptr<soft_mask_instruction>& get_soft_mask() const { return soft_mask_; }
+    bool has_soft_mask() const { return soft_mask_ != nullptr; }
+
   private:
 
     blend_mode_name blend_mode_ = BLEND_MODE_NORMAL;
+    std::shared_ptr<soft_mask_instruction> soft_mask_;
 
     const std::string               shading_key;
     const shading_geometry          geometry;
@@ -941,9 +1122,25 @@ namespace pdflib
       return shading_instructions;
     }
 
-    // render method
+    const std::vector<bitmap_instruction_type>& get_bitmap_instructions() const
+    {
+      return bitmap_instructions;
+    }
+
+    bool empty() const { return instructions.empty(); }
+
+    // render method. `set_size` sizes the renderer's canvas from the size
+    // instruction first; a soft-mask group is painted onto a canvas the
+    // renderer already holds, so it passes false.
     template<typename renderer_type>
-    void iterate_over_instructions(renderer_type& renderer);
+    void iterate_over_instructions(renderer_type& renderer, bool set_size = true);
+
+    // The content alone, without the page-size instruction, shifted by
+    // (dx, dy) in page units: how a decoded tiling cell is drawn onto its
+    // tile, and drawn again at the step offsets when the cell overlaps its
+    // neighbours. Widgets are page furniture and are not shifted.
+    template<typename renderer_type>
+    void iterate_over_content(renderer_type& renderer, double dx = 0.0, double dy = 0.0);
 
   private:
 
@@ -1005,12 +1202,63 @@ namespace pdflib
   }
 
   template<typename renderer_type>
-  void pdf_render_instructions::iterate_over_instructions(renderer_type& renderer)
+  void pdf_render_instructions::iterate_over_instructions(renderer_type& renderer,
+                                                          bool set_size)
   {
-    renderer.set_size(size_instr);
+    if(set_size)
+      {
+        renderer.set_size(size_instr);
+      }
+
+    iterate_over_content(renderer);
+  }
+
+  template<typename renderer_type>
+  void pdf_render_instructions::iterate_over_content(renderer_type& renderer,
+                                                     double dx, double dy)
+  {
+    const bool shifted = (dx != 0.0 or dy != 0.0);
 
     for(const auto& instr : instructions)
       {
+        if(shifted)
+          {
+            switch(instr.name)
+              {
+              case TEXT_RENDER_INSTRUCTION:
+                {
+                  text_instruction_type copy = text_instructions.at(instr.index).translated(dx, dy);
+                  renderer.render_text(copy);
+                }
+                break;
+
+              case BITMAP_RENDER_INSTRUCTION:
+                {
+                  bitmap_instruction_type copy = bitmap_instructions.at(instr.index).translated(dx, dy);
+                  renderer.render_bitmap(copy);
+                }
+                break;
+
+              case SHAPE_RENDER_INSTRUCTION:
+                {
+                  shape_instruction_type copy = shape_instructions.at(instr.index).translated(dx, dy);
+                  renderer.render_shape(copy);
+                }
+                break;
+
+              case SHADING_RENDER_INSTRUCTION:
+                {
+                  shading_instruction_type copy = shading_instructions.at(instr.index).translated(dx, dy);
+                  renderer.render_shading(copy);
+                }
+                break;
+
+              default:
+                {}
+              }
+            continue;
+          }
+
 	switch(instr.name)
 	  {
 	  case TEXT_RENDER_INSTRUCTION:

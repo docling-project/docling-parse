@@ -21,6 +21,9 @@ namespace pdflib
     bool keep_char_cells = true;
     bool keep_shapes = true;
     bool keep_bitmaps = true;
+    // Track clip paths for the clip box of text cells even when shapes are
+    // not kept; costs the path construction, not the shape output.
+    bool keep_clips = true;
 
     int max_num_lines = -1;   // -1 means no cap
     int max_num_bitmaps = -1; // -1 means no cap
@@ -74,6 +77,10 @@ namespace pdflib
     // magnify what it used to minify. Rendered output does change: the
     // discarded resolution levels are ones the rasteriser would have
     // resampled away, but not with the same filter the codec uses.
+    //
+    // A later render of the same instructions at a finer resolution decodes
+    // the reduced images again from their encoded bytes, so it matches a
+    // render whose decode was sized for it (bitmap_instruction::redecoded_for).
     double bitmap_target_pixels_per_unit = 0.0;
 
     // threading
@@ -84,6 +91,10 @@ namespace pdflib
     // the producer-declared exact Unicode of a glyph run (ligatures, composed
     // accents, hyphenation). Only substituted into spans that drew text cells.
     bool apply_actual_text = true;
+
+    // fold typographic dashes (U+2012..U+2015) and the minus sign (U+2212) to
+    // `-` in cell text. Off keeps the characters the document encodes.
+    bool do_char_normalization = true;
 
     // debug: in production, we dont want to have ugly GLYPH<...>
     bool keep_glyphs = false;
@@ -109,6 +120,7 @@ namespace pdflib
     j["keep_char_cells"] = keep_char_cells;
     j["keep_shapes"] = keep_shapes;
     j["keep_bitmaps"] = keep_bitmaps;
+    j["keep_clips"] = keep_clips;
 
     j["max_num_lines"] = max_num_lines;
     j["max_num_bitmaps"] = max_num_bitmaps;
@@ -132,6 +144,7 @@ namespace pdflib
     j["release_native_memory_every_n_pages"] = release_native_memory_every_n_pages;
 
     j["apply_actual_text"] = apply_actual_text;
+    j["do_char_normalization"] = do_char_normalization;
 
     j["keep_glyphs"] = keep_glyphs;
     j["keep_qpdf_warnings"] = keep_qpdf_warnings;
@@ -148,6 +161,7 @@ namespace pdflib
     if(j.count("keep_char_cells")) { keep_char_cells = j["keep_char_cells"]; }
     if(j.count("keep_shapes")) { keep_shapes = j["keep_shapes"]; }
     if(j.count("keep_bitmaps")) { keep_bitmaps = j["keep_bitmaps"]; }
+    if(j.count("keep_clips")) { keep_clips = j["keep_clips"]; }
 
     if(j.count("max_num_lines")) { max_num_lines = j["max_num_lines"]; }
     if(j.count("max_num_bitmaps")) { max_num_bitmaps = j["max_num_bitmaps"]; }
@@ -171,6 +185,7 @@ namespace pdflib
     if(j.count("release_native_memory_every_n_pages")) { release_native_memory_every_n_pages = j["release_native_memory_every_n_pages"]; }
 
     if(j.count("apply_actual_text")) { apply_actual_text = j["apply_actual_text"]; }
+    if(j.count("do_char_normalization")) { do_char_normalization = j["do_char_normalization"]; }
 
     if(j.count("keep_glyphs")) { keep_glyphs = j["keep_glyphs"]; }
     if(j.count("keep_qpdf_warnings")) { keep_qpdf_warnings = j["keep_qpdf_warnings"]; }
@@ -215,6 +230,7 @@ namespace pdflib
        << std::setw(48) << "keep_char_cells" << (keep_char_cells ? "true" : "false") << "\n"
        << std::setw(48) << "keep_shapes" << (keep_shapes ? "true" : "false") << "\n"
        << std::setw(48) << "keep_bitmaps" << (keep_bitmaps ? "true" : "false") << "\n"
+       << std::setw(48) << "keep_clips" << (keep_clips ? "true" : "false") << "\n"
        << std::setw(48) << "extract_bitmap_pixels" << (extract_bitmap_pixels ? "true" : "false") << "\n"
        << std::setw(48) << "bitmap_target_pixels_per_unit" << bitmap_target_pixels_per_unit << "\n"
        << std::setw(48) << "max_num_lines" << max_num_lines << "\n"
@@ -229,8 +245,10 @@ namespace pdflib
        << std::setw(48) << "line_space_width_factor_for_merge_with_space" << line_space_width_factor_for_merge_with_space << "\n"
        << std::setw(48) << "populate_json_objects" << (populate_json_objects ? "true" : "false") << "\n"
        << std::setw(48) << "extract_font_programs" << (extract_font_programs ? "true" : "false") << "\n"
+       << std::setw(48) << "do_thread_safe" << (do_thread_safe ? "true" : "false") << "\n"
        << std::setw(48) << "release_native_memory_every_n_pages" << release_native_memory_every_n_pages << "\n"
        << std::setw(48) << "apply_actual_text" << (apply_actual_text ? "true" : "false") << "\n"
+       << std::setw(48) << "do_char_normalization" << (do_char_normalization ? "true" : "false") << "\n"
        << std::setw(48) << "keep_glyphs" << (keep_glyphs ? "true" : "false") << "\n"
        << std::setw(48) << "keep_qpdf_warnings" << (keep_qpdf_warnings ? "true" : "false") << "\n";
 

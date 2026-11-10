@@ -47,6 +47,7 @@ def _identity_h_pdf(
     text_bytes: str,
     to_unicode: bool,
     default_width: str = "",
+    to_unicode_cmap: str = TO_UNICODE_AB,
 ) -> bytes:
     """A page setting two-byte codes in a non-embedded Identity-H font."""
     content = f"BT\n/F1 {FONT_SIZE} Tf\n20 100 Td\n<{text_bytes}> Tj\nET\n"
@@ -63,7 +64,7 @@ def _identity_h_pdf(
         "<< /Type /Font /Subtype /CIDFontType2 /BaseFont /Test-Identity "
         "/CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> "
         f"/FontDescriptor 8 0 R{default_width} >>",
-        stream_object("", TO_UNICODE_AB.encode("latin-1")),
+        stream_object("", to_unicode_cmap.encode("latin-1")),
         "<< /Type /FontDescriptor /FontName /Test-Identity /Flags 4 "
         "/FontBBox [0 -200 1000 800] /ItalicAngle 0 /Ascent 800 /Descent -200 "
         "/CapHeight 700 /StemV 80 >>",
@@ -146,3 +147,96 @@ def test_explicit_dw_is_honoured():
     assert width == pytest.approx(FONT_SIZE, rel=0.2), (
         f"two glyphs at /DW 500 measured {width:.1f}pt, expected about {FONT_SIZE}pt"
     )
+
+
+TO_UNICODE_REVERSED_RANGE = """/CIDInit /ProcSet findresource begin
+12 dict begin
+begincmap
+/CMapName /Test-UCS2 def
+/CMapType 2 def
+1 begincodespacerange
+<0000> <FFFF>
+endcodespacerange
+2 beginbfrange
+<FFFF> <00FF> <0058>
+<0001> <0002> <0041>
+endbfrange
+endcmap
+CMapName currentdict /CMap defineresource pop
+end
+end"""
+
+
+def test_reversed_bfrange_is_ignored():
+    """A bfrange whose end lies below its start is skipped, not expanded.
+
+    Its size, `end - begin + 1`, wrapped around in unsigned arithmetic to about
+    four billion codes; reserving a map that large threw std::bad_alloc, or,
+    with no memory limit, used all the memory the machine had. Such ranges
+    occur in real subset fonts (seen: `<ffff> <00ff>` in a ToUnicode CMap
+    written by an optimiser). The well-formed range next to it must still map.
+    """
+    text = _text(
+        _identity_h_pdf(
+            text_bytes="00010002",
+            to_unicode=True,
+            to_unicode_cmap=TO_UNICODE_REVERSED_RANGE,
+        )
+    )
+    assert text == "AB", (
+        f"expected the valid bfrange to map the codes to 'AB', got {text!r}"
+    )
+
+
+TO_UNICODE_SURROGATE_RANGE_CODES = """/CIDInit /ProcSet findresource begin
+12 dict begin
+begincmap
+/CMapName /Test-UCS2 def
+/CMapType 2 def
+1 begincodespacerange
+<0000> <FFFF>
+endcodespacerange
+2 beginbfchar
+<0047> <0058>
+<DFA8> <AC00>
+endbfchar
+1 beginbfrange
+<D800> <D801> <0041>
+endbfrange
+endcmap
+CMapName currentdict /CMap defineresource pop
+end
+end"""
+
+
+def test_bfchar_source_code_in_surrogate_range_is_mapped():
+    """A source code between 0xD800 and 0xDFFF maps like any other code.
+
+    Source codes are byte sequences, not text. They were decoded as UTF-16,
+    which rejects lone surrogates; the fallback string that came back keyed
+    the mapping under 'G' (0x47). So the code itself lost its text, and code
+    0x47 took the text of the bad entry. Large CJK fonts reach this range: in
+    reported files every space of a Korean font came out as a quote mark.
+    """
+    text = _text(
+        _identity_h_pdf(
+            text_bytes="DFA80047",
+            to_unicode=True,
+            to_unicode_cmap=TO_UNICODE_SURROGATE_RANGE_CODES,
+        )
+    )
+    assert text == "가X", (
+        f"expected <DFA8> to give U+AC00 and <0047> to keep 'X', got {text!r}"
+    )
+
+
+def test_bfrange_bounds_in_surrogate_range_are_mapped():
+    """A bfrange whose bounds lie between 0xD800 and 0xDFFF is expanded."""
+    text = _text(
+        _identity_h_pdf(
+            text_bytes="D800D801",
+            to_unicode=True,
+            to_unicode_cmap=TO_UNICODE_SURROGATE_RANGE_CODES,
+        )
+    )
+    assert text == "AB", f"expected the range to map to 'AB', got {text!r}"

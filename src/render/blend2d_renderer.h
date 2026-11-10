@@ -14,10 +14,13 @@
 #include <blend2d/blend2d.h>
 
 #include <algorithm>
+#include <map>
+#include <tuple>
 #include <array>
 #include <cctype>
 #include <cmath>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <limits>
 #include <memory>
@@ -187,6 +190,41 @@ namespace pdflib
     mutable BLImage    image_;  // internal canvas (PRGB32 format)
     mutable BLContext  context_;
     mutable bool       context_active_ = false;
+
+    // The context paint goes through: the page context, or an offscreen
+    // layer while a soft mask is being rasterised or applied. Routed through
+    // page_context(), so the paint routines know nothing of either.
+    mutable BLContext* context_override_ = nullptr;
+
+    struct context_override_scope
+    {
+      context_override_scope(BLContext*& slot, BLContext* ctx):
+        slot_(slot), saved_(slot)
+      {
+        slot_ = ctx;
+      }
+      ~context_override_scope() { slot_ = saved_; }
+
+      context_override_scope(const context_override_scope&) = delete;
+      context_override_scope& operator=(const context_override_scope&) = delete;
+
+      BLContext*& slot_;
+      BLContext*  saved_;
+    };
+
+    // Canvas-sized A8 coverage of every soft mask met on this page, keyed by
+    // the mask. One mask covers many objects (a shadow per photo, a feather
+    // per figure) and the group render behind the plane is the costly part.
+    // An empty image records a build that failed, so it is not retried.
+    std::unordered_map<const soft_mask_instruction*, BLImage> soft_mask_planes_;
+
+    // Budget for those planes. Each is a canvas-sized A8 image, and a page can
+    // install a new mask with every `gs` for next to nothing, so without a
+    // bound a hostile page holds gigabytes. Past the budget the cache is
+    // dropped and planes are rebuilt as they are needed, which bounds memory
+    // at the cost of time.
+    static constexpr std::size_t max_soft_mask_plane_bytes = std::size_t(256) << 20;
+    std::size_t soft_mask_plane_bytes_ = 0;
     std::array<int, 3> shape_;  // {height, width, 4}, display orientation
     int canvas_width_ = 0;     // internal canvas width (unrotated page space)
     int canvas_height_ = 0;    // internal canvas height (unrotated page space)
@@ -198,6 +236,16 @@ namespace pdflib
     // Quarter turns clockwise that take the internal canvas into display
     // orientation, derived from the page's /Rotate. In [0, 3].
     int quarter_turns_ = 0;
+
+    // Coverage mask of the last non-rectangular clip a shape was painted
+    // through, built over the whole clip box. Dense drawings put hundreds of
+    // strokes under one clip; rasterising the clip once for all of them is
+    // what keeps masking the strokes affordable.
+    clip_state_instruction shape_clip_key_;
+    BLImage shape_clip_mask_;
+    BLRectI shape_clip_area_{};
+    bool shape_clip_empty_ = false;
+    bool shape_clip_valid_ = false;
 
     // Guards the one-shot canvas rotation, so that repeated canvas access
     // (get_canvas() followed by save(), for instance) rotates only once.
@@ -222,6 +270,9 @@ namespace pdflib
     mutable std::unordered_set<std::string> distrusted_embedded_faces_;
     std::unordered_map<std::string, blend2d_font_resolver::resolved_face>
       local_font_cache_;
+    // Reuse shared-cache results, including failed loads, without taking
+    // its lock again for every text instruction on this page.
+    std::unordered_map<std::string, BLFontFace> local_embedded_face_cache_;
 
     // One spare canvas per thread, handed between the successive per-page
     // renderers that a render worker creates. Function-local so it is
@@ -388,16 +439,24 @@ namespace pdflib
       for (size_t l = 0; l < count; ++l)
         {
           BLBox box;
-          if (not glyph_bbox_cache_->find(face_key, glyph_ids[l], size, box))
+          if (not glyph_bbox_cache_->find(face_key, glyph_ids[l], font.size(), box))
             {
               BLPath path;
-              if (font.get_glyph_outlines(glyph_ids[l], identity, path) != BL_SUCCESS ||
-                  path.is_empty() ||
-                  path.get_bounding_box(&box) != BL_SUCCESS)
+              bool has_bounds;
+              {
+                glyph_bbox_cache::scoped_measurement outline(
+                  *glyph_bbox_cache_, &glyph_bbox_cache::diagnostics::outline_s);
+                outline.outline_attempt();
+                has_bounds =
+                  font.get_glyph_outlines(glyph_ids[l], identity, path) == BL_SUCCESS &&
+                  not path.is_empty() && path.get_bounding_box(&box) == BL_SUCCESS;
+                if(has_bounds) { outline.outline_success(); }
+              }
+              if (not has_bounds)
                 {
                   continue;
                 }
-              glyph_bbox_cache_->insert(face_key, glyph_ids[l], size, box);
+              glyph_bbox_cache_->insert(face_key, glyph_ids[l], font.size(), box);
             }
 
           if ((box.x1 - box.x0) > limit or (box.y1 - box.y0) > limit)
@@ -438,13 +497,13 @@ namespace pdflib
                                 double h_scale);
 
     // Glyph-identity mapping by PDF character code against an embedded
-    // (Blend2D-loaded) face: CID fonts with an identity CIDToGIDMap use the
-    // character code as glyph index directly; simple fonts are tried through
-    // the 0xF000 private-use convention ((3,0) symbol cmaps) and then with
-    // the raw character code ((1,0) / format-0 builtin cmaps, as written by
-    // Cairo/LibreOffice subsetters). Used both as the primary path for
-    // symbolic fonts and as recovery when Unicode shaping failed or
-    // produced only .notdef. On success gb holds a positioned glyph run
+    // (Blend2D-loaded) face: CID fonts map the character code to the glyph
+    // index through /Encoding and /CIDToGIDMap; simple fonts are
+    // tried through the 0xF000 private-use convention ((3,0) symbol cmaps)
+    // and then with the raw character code ((1,0) / format-0 builtin cmaps,
+    // as written by Cairo/LibreOffice subsetters). Used both as the primary
+    // path for symbolic fonts and as recovery when Unicode shaping failed
+    // or produced only .notdef. On success gb holds a positioned glyph run
     // ready for fill_glyph_run.
     static bool recover_embedded_glyphs(const BLFont& font,
                                         text_instruction& instr,
@@ -455,17 +514,17 @@ namespace pdflib
 
       const auto& blob = instr.get_embedded_font();
 
-      if (blob->get_is_cid_font() and blob->get_cid_to_gid_identity())
+      if (blob->has_code_to_gid())
         {
-          const uint32_t glyph_id = static_cast<uint32_t>(char_code);
+          const uint32_t glyph_id = blob->code_to_gid(char_code);
           gb.set_glyphs(&glyph_id, 1);
           // shape() rejects glyph content, so position directly.
           if (font.position_glyphs(gb) == BL_SUCCESS and
               not gb.is_empty() and
               gb.placement_data() != nullptr)
             {
-              LOG_S(INFO) << "render_text: recovered glyph via CID identity"
-                          << " cid=" << char_code
+              LOG_S(INFO) << "render_text: recovered glyph via CIDToGIDMap"
+                          << " char_code=" << char_code
                           << " font_name=`" << instr.get_font_name() << "`";
               return true;
             }
@@ -811,6 +870,112 @@ namespace pdflib
       return true;
     }
 
+    // Same, with the mask read through a window at (ox, oy): the layer is a
+    // cut-out of the canvas and the mask covers the whole canvas.
+    static bool multiply_prgb32_by_a8_window(BLImage& layer,
+                                             const BLImage& mask,
+                                             int ox, int oy)
+    {
+      BLImageData d, s;
+      if(layer.make_mutable(&d) != BL_SUCCESS or mask.get_data(&s) != BL_SUCCESS)
+        {
+          return false;
+        }
+      if(d.format != BL_FORMAT_PRGB32 or s.format != BL_FORMAT_A8) { return false; }
+      if(d.size.w <= 0 or d.size.h <= 0) { return false; }
+      if(ox < 0 or oy < 0 or
+         ox + d.size.w > s.size.w or oy + d.size.h > s.size.h)
+        {
+          return false;
+        }
+      if(d.stride < static_cast<intptr_t>(d.size.w) * 4 or
+         s.stride < s.size.w)
+        {
+          return false;
+        }
+
+      for(int y = 0; y < d.size.h; y++)
+        {
+          uint8_t* drow = static_cast<uint8_t*>(d.pixel_data) + y * d.stride;
+          const uint8_t* srow =
+            static_cast<const uint8_t*>(s.pixel_data) + (y + oy) * s.stride + ox;
+          for(int x = 0; x < d.size.w; x++)
+            {
+              const uint32_t m = srow[x];
+              if(m == 255) { continue; }
+              uint8_t* px = drow + 4 * x;
+              for(int c = 0; c < 4; c++)
+                {
+                  px[c] = static_cast<uint8_t>((px[c] * m + 127) / 255);
+                }
+            }
+        }
+      return true;
+    }
+
+    // Soft masks (ISO 32000-1, 11.6.5). An instruction painted under one is
+    // painted into a layer, the layer is multiplied by the mask's coverage
+    // and the result composited -- the same route a non-rectangular clip
+    // takes, with the coverage coming from the mask group's luminosity.
+    template<typename instruction_type>
+    bool soft_mask_applies(const instruction_type& instr) const
+    {
+      // context_override_ is set while painting into a layer: the masked
+      // instruction re-enters its paint routine there and must not mask twice
+      return instr.has_soft_mask()
+         and config_.render_soft_masks
+         and context_override_ == nullptr
+         and has_canvas();
+    }
+
+    // The mask's coverage over the whole canvas, built on first use and
+    // cached per mask for the page. Null when it could not be built.
+    const BLImage* soft_mask_plane(soft_mask_instruction& mask);
+
+    // The plane of an intersection: the product of its two masks' planes.
+    const BLImage* soft_mask_intersection_plane(soft_mask_instruction& mask);
+
+    // Runs `paint` (which draws through page_context()) into a layer over
+    // `bbox`, knocks the layer back with the mask and blits it with `mode`.
+    template<typename paint_type>
+    void paint_through_soft_mask(soft_mask_instruction& mask,
+                                 const BLRect& bbox,
+                                 blend_mode_name mode,
+                                 paint_type&& paint);
+
+    // Multiplies an A8 coverage image by the window of an A8 clip mask that
+    // starts at (mask_x, mask_y).
+    static bool multiply_a8_by_a8(BLImage& coverage, const BLImage& mask,
+                                  int mask_x, int mask_y)
+    {
+      BLImageData d, s;
+      if(coverage.make_mutable(&d) != BL_SUCCESS or mask.get_data(&s) != BL_SUCCESS)
+        {
+          return false;
+        }
+      if(d.format != BL_FORMAT_A8 or s.format != BL_FORMAT_A8) { return false; }
+      if(d.size.w <= 0 or d.size.h <= 0) { return false; }
+      if(mask_x < 0 or mask_y < 0 or
+         mask_x + d.size.w > s.size.w or mask_y + d.size.h > s.size.h)
+        {
+          return false;
+        }
+
+      for(int y = 0; y < d.size.h; y++)
+        {
+          uint8_t* drow = static_cast<uint8_t*>(d.pixel_data) + y * d.stride;
+          const uint8_t* srow =
+            static_cast<const uint8_t*>(s.pixel_data) + (mask_y + y) * s.stride + mask_x;
+          for(int x = 0; x < d.size.w; x++)
+            {
+              const uint32_t m = srow[x];
+              if(m == 255 or drow[x] == 0) { continue; }
+              drow[x] = static_cast<uint8_t>((drow[x] * m + 127) / 255);
+            }
+        }
+      return true;
+    }
+
     static bool fill_a8(BLImage& image, uint8_t value)
     {
       BLImageData d;
@@ -913,6 +1078,67 @@ namespace pdflib
       return true;
     }
 
+    // Canvas-space bounding box of the region a clip state leaves paintable:
+    // the subpaths of one W/W* capture are unioned, different captures are
+    // intersected. Returns false when no clip path has a usable bbox.
+    bool clip_state_canvas_bbox(const clip_state_instruction& clip_state,
+                                BLRect& rect) const
+    {
+      std::unordered_map<int, BLRect> group_bboxes;
+      for(const auto& clip_path : clip_state.get_paths())
+        {
+          BLRect bbox;
+          if(not clip_path_canvas_bbox(clip_path, bbox)) { continue; }
+
+          auto it = group_bboxes.find(clip_path.get_clip_group());
+          if(it == group_bboxes.end())
+            {
+              group_bboxes.emplace(clip_path.get_clip_group(), bbox);
+              continue;
+            }
+          const double x0 = std::min(it->second.x, bbox.x);
+          const double y0 = std::min(it->second.y, bbox.y);
+          const double x1 = std::max(it->second.x + it->second.w, bbox.x + bbox.w);
+          const double y1 = std::max(it->second.y + it->second.h, bbox.y + bbox.h);
+          it->second = BLRect(x0, y0, x1 - x0, y1 - y0);
+        }
+
+      if(group_bboxes.empty()) { return false; }
+
+      double x0 = -std::numeric_limits<double>::infinity();
+      double y0 = -std::numeric_limits<double>::infinity();
+      double x1 = std::numeric_limits<double>::infinity();
+      double y1 = std::numeric_limits<double>::infinity();
+      for(const auto& entry : group_bboxes)
+        {
+          x0 = std::max(x0, entry.second.x);
+          y0 = std::max(y0, entry.second.y);
+          x1 = std::min(x1, entry.second.x + entry.second.w);
+          y1 = std::min(y1, entry.second.y + entry.second.h);
+        }
+      rect = BLRect(x0, y0, std::max(0.0, x1 - x0), std::max(0.0, y1 - y0));
+      return true;
+    }
+
+    static bool same_clip_state(const clip_state_instruction& a,
+                                const clip_state_instruction& b)
+    {
+      if(a.get_rule() != b.get_rule()) { return false; }
+      const auto& pa = a.get_paths();
+      const auto& pb = b.get_paths();
+      if(pa.size() != pb.size()) { return false; }
+      for(size_t i = 0; i < pa.size(); i++)
+        {
+          if(pa[i].get_clip_group() != pb[i].get_clip_group() or
+             pa[i].get_x() != pb[i].get_x() or
+             pa[i].get_y() != pb[i].get_y())
+            {
+              return false;
+            }
+        }
+      return true;
+    }
+
     // True when the clip carries a path clip_to_rect cannot express. Such a
     // clip is applied through a coverage mask instead; the rectangular paths
     // beside it still go through the cheap context clip.
@@ -1010,6 +1236,17 @@ namespace pdflib
       // art, a text-shaped clip). Only DIFFERENT captures intersect.
       // Intersecting the subpaths individually made any such stencil empty,
       // and everything filled through it vanished.
+      std::unordered_map<int, int> group_sizes;
+      for(const auto& clip_path : clip_state.get_paths())
+        {
+          group_sizes[clip_path.get_clip_group()]++;
+        }
+
+      // A group goes through the mask when it has a curved path or more than
+      // one subpath (a union of rectangles is not a context clip either).
+      // Such a group that misses the area leaves nothing to paint; without
+      // the check every subpath was skipped below, no mask was built, and the
+      // caller painted the shape unclipped.
       std::unordered_map<int, BLRect> group_bboxes;
       std::unordered_map<int, bool> group_needs_mask;
       for(const auto& clip_path : clip_state.get_paths())
@@ -1017,7 +1254,7 @@ namespace pdflib
           BLRect rect;
           const bool is_rect = get_axis_aligned_clip_rect(clip_path, rect);
           const int group = clip_path.get_clip_group();
-          if(not is_rect) { group_needs_mask[group] = true; }
+          if(not is_rect or group_sizes[group] > 1) { group_needs_mask[group] = true; }
 
           BLRect bbox;
           if(clip_path_canvas_bbox(clip_path, bbox))
@@ -1590,7 +1827,27 @@ namespace pdflib
     // the canvas-space bounding rectangle of all touched points. Control
     // points give a conservative bbox (a Bézier never leaves its control
     // polygon's hull), which is what the clip skip-test needs.
-    BLPath make_shape_path(const shape_instruction& instr, BLRect& bbox) const;
+    BLPath make_shape_path(const shape_instruction& instr, BLRect& bbox,
+                           bool flatten_curves = false) const;
+
+    // Tiling-pattern fills (ISO 32000-1, 8.7.3.3). The decoded cell is
+    // rasterised once into a tile at the canvas resolution and the path is
+    // filled with a repeating BLPattern of it; the lattice is Blend2D's.
+    // `style` is left untouched and false returned when the tile cannot be
+    // built, in which case the fill paints nothing: the fill colour the
+    // instruction carries is the Pattern space placeholder, not a paint.
+    bool tile_pattern_style(const shape_instruction& instr,
+                            BLPattern& style,
+                            double dx,
+                            double dy);
+
+    BLImage rasterize_tile(const tiling_paint& paint, int width, int height);
+
+    // Tiles built for this page, keyed by decoded cell and tile pixel size,
+    // up to a byte budget; past it a tile is built per fill and not kept.
+    std::map<std::tuple<const void*, int, int>, BLImage> tile_cache_;
+    std::size_t tile_cache_bytes_ = 0;
+    static constexpr std::size_t max_tile_cache_bytes = 64u * 1024u * 1024u;
 
     // Draws a semi-transparent yellow placeholder over the bitmap destination
     // quad. This makes missing or invalid image data visible in debug renders.
@@ -1737,6 +1994,11 @@ namespace pdflib
 
   inline BLContext& renderer<BLEND2D>::page_context()
   {
+    if (context_override_ != nullptr)
+      {
+        return *context_override_;
+      }
+
     if (context_active_)
       {
         return context_;
@@ -1927,6 +2189,7 @@ namespace pdflib
 
     canvas_width_ = width;
     canvas_height_ = height;
+    shape_clip_valid_ = false;
     shape_ = {display_height, display_width, 4};
 
     LOG_S(INFO) << "set_size:"
@@ -2184,27 +2447,33 @@ namespace pdflib
                               0.0, 0.0);
     BLBox rendered_box;
     if (face_key == nullptr ||
-        not glyph_bbox_cache_->find(*face_key, glyph_id, size, rendered_box))
+        not glyph_bbox_cache_->find(*face_key, glyph_id, font.size(), rendered_box))
       {
         BLPath glyph_path;
-        const BLResult outline_res =
-          font.get_glyph_outlines(glyph_id, identity, glyph_path);
-        if (outline_res != BL_SUCCESS || glyph_path.is_empty())
-          {
-            return adjustment;
-          }
+        {
+          glyph_bbox_cache::scoped_measurement outline(
+            *glyph_bbox_cache_, &glyph_bbox_cache::diagnostics::outline_s);
+          outline.outline_attempt();
+          const BLResult outline_res =
+            font.get_glyph_outlines(glyph_id, identity, glyph_path);
+          if (outline_res != BL_SUCCESS || glyph_path.is_empty())
+            {
+              return adjustment;
+            }
 
-        const BLResult bbox_res = glyph_path.get_bounding_box(&rendered_box);
-        if (bbox_res != BL_SUCCESS)
-          {
-            LOG_S(WARNING) << "render_text: glyph outline bbox failed"
-                           << " (BLResult=" << bbox_res << ")";
-            return adjustment;
-          }
+          const BLResult bbox_res = glyph_path.get_bounding_box(&rendered_box);
+          if (bbox_res != BL_SUCCESS)
+            {
+              LOG_S(WARNING) << "render_text: glyph outline bbox failed"
+                             << " (BLResult=" << bbox_res << ")";
+              return adjustment;
+            }
+          outline.outline_success();
+        }
 
         if (face_key != nullptr)
           {
-            glyph_bbox_cache_->insert(*face_key, glyph_id, size, rendered_box);
+            glyph_bbox_cache_->insert(*face_key, glyph_id, font.size(), rendered_box);
           }
       }
 
@@ -2287,6 +2556,8 @@ namespace pdflib
       int out_w,
       int out_h) const
   {
+    utils::scoped_timer prepare_timer(timings_, pdf_timings::KEY_RENDER_BITMAP_PREPARE);
+
     const auto& src_data = instr.get_data();
     const auto& alpha_data = instr.get_alpha_data();
     const bool image_mask = instr.is_image_mask();
@@ -2294,6 +2565,12 @@ namespace pdflib
     const auto fill_rgb = instr.get_rgb_filling();
     const int dw = std::max(1, out_w);
     const int dh = std::max(1, out_h);
+
+    // Both branches include allocation and conversion; the reduced-size
+    // branch also performs the existing premultiplied box averaging.
+    utils::scoped_timer samples_timer(
+      timings_, (dw == sw and dh == sh) ? pdf_timings::KEY_RENDER_BITMAP_CONVERT
+                                      : pdf_timings::KEY_RENDER_BITMAP_DOWNSAMPLE);
 
     BLImage src_img;
     src_img.create(dw, dh, BL_FORMAT_PRGB32);
@@ -2322,6 +2599,49 @@ namespace pdflib
                     << " rgb=(" << static_cast<int>(r) << ","
                     << static_cast<int>(g) << ","
                     << static_cast<int>(b) << ")";
+      }
+
+    if (fmt == PIXEL_FORMAT_GRAY and sc == 1
+        and not image_mask and not use_soft_mask_alpha
+        and dw <= sw and dh <= sh and (dw < sw or dh < sh))
+      {
+        // render_bitmap validated the buffer. For opaque gray, all three
+        // premultiplied color samples equal the source byte, so average once.
+        const auto* pixels = src_data->data();
+        for (int y = 0; y < dh; ++y)
+          {
+            auto* drow = reinterpret_cast<uint32_t*>(base + y * stride);
+            const int sy0 = (y * sh) / dh;
+            const int sy1 = std::min(sh, std::max(sy0 + 1, ((y + 1) * sh) / dh));
+            for (int x = 0; x < dw; ++x)
+              {
+                const int sx0 = (x * sw) / dw;
+                const int sx1 = std::min(sw, std::max(sx0 + 1, ((x + 1) * sw) / dw));
+                const uint32_t n = static_cast<uint32_t>(sy1 - sy0)
+                                 * static_cast<uint32_t>(sx1 - sx0);
+                uint32_t gray_sum = 0;
+                for (int sy = sy0; sy < sy1; ++sy)
+                  {
+                    const auto* row = pixels + static_cast<size_t>(sy) * sw;
+                    for (int sx = sx0; sx < sx1; ++sx)
+                      {
+                        gray_sum += row[sx];
+                      }
+                  }
+                if (n == 0)
+                  {
+                    drow[x] = 0u;
+                    continue;
+                  }
+                const uint32_t gray = gray_sum / n;
+                // Match the generic uint32_t accumulators, including wrap
+                // for unusually large boxes; do not replace this with 255.
+                const uint32_t alpha_sum = 255u * n;
+                drow[x] = ((alpha_sum / n) << 24)
+                        | (gray << 16) | (gray << 8) | gray;
+              }
+          }
+        return src_img;
       }
 
     // Convert one source sample to the exact PRGB32 value the old full-size
@@ -2734,6 +3054,24 @@ namespace pdflib
 
   inline void renderer<BLEND2D>::render_text(text_instruction& instr)
   {
+    // Type3 and invisible text paint no glyphs, so there is nothing to mask.
+    if (soft_mask_applies(instr) and not instr.is_type3() and not instr.is_invisible())
+      {
+        const text_geometry geom = make_text_geometry(instr);
+        if (geom.quad_h >= 0.5)
+          {
+            // glyphs overhang their cell, so the layer takes a margin of the size
+            BLRect bbox = axis_aligned_rect(geom.bbox);
+            const double margin = geom.size + 2.0;
+            bbox = BLRect(bbox.x - margin, bbox.y - margin,
+                          bbox.w + 2.0 * margin, bbox.h + 2.0 * margin);
+
+            paint_through_soft_mask(*instr.get_soft_mask(), bbox, instr.get_blend_mode(),
+                                    [&]() { render_text(instr); });
+            return;
+          }
+      }
+
     utils::scoped_timer phase_timer(timings_, pdf_timings::KEY_RENDER_TEXT);
 
     // LOG_S(INFO) << __FUNCTION__;
@@ -2747,7 +3085,7 @@ namespace pdflib
     if (geom.quad_h < 0.5) { return; }
 
     // Type3 glyphs are content-stream procedures; their ink arrives as
-    // image-mask bitmaps emitted at parse time. Drawing the cell text through
+    // bitmaps and shapes emitted at parse time. Drawing the cell text through
     // a font face here could only produce placeholder boxes over that ink.
     if (instr.is_type3()) { return; }
 
@@ -2785,7 +3123,15 @@ namespace pdflib
       {
         utils::scoped_timer font_timer(
           timings_, pdf_timings::KEY_RENDER_TEXT_FONT_RESOLVE);
-        face = embedded_font_cache_->resolve(instr.get_embedded_font());
+        const auto& blob = instr.get_embedded_font();
+        const auto& key = blob->get_cache_key();
+        auto cached = local_embedded_face_cache_.find(key);
+        if (cached == local_embedded_face_cache_.end())
+          {
+            cached = local_embedded_face_cache_.emplace(
+              key, embedded_font_cache_->resolve(blob)).first;
+          }
+        face = cached->second;
         using_embedded_font = face.is_valid();
         if (not using_embedded_font)
           {
@@ -2888,7 +3234,7 @@ namespace pdflib
             // glyph (e.g. U+0020 hitting subset code 0x20). Resolve by
             // character code first for such faces.
             //
-            // CID fonts with an identity CIDToGIDMap must also resolve by
+            // CID fonts with a /CIDToGIDMap must also resolve by
             // character code first: the content-stream CID is the exact glyph
             // the producer chose (contextual Arabic forms, lam-alef ligatures,
             // …). Round-tripping through the Unicode cmap instead picks the
@@ -2899,7 +3245,7 @@ namespace pdflib
               using_embedded_font and
               instr.has_embedded_font() and
               (embedded_blob->get_is_cid_font()
-                 ? embedded_blob->get_cid_to_gid_identity()
+                 ? embedded_blob->has_code_to_gid()
                  : embedded_blob->get_uses_builtin_encoding());
 
             if (char_code_first)
@@ -3077,7 +3423,14 @@ namespace pdflib
             // rasterisers differ slightly in weight, so drawing one word from
             // both leaves it visibly patchy. One bad outline condemns the face
             // for the rest of the page.
+            std::string substituted_face_key;
             const std::string* glyph_bbox_face_key = nullptr;
+            if (not using_embedded_font)
+              {
+                substituted_face_key =
+                  "blend2d-face:" + std::to_string(font.face().unique_id());
+                glyph_bbox_face_key = &substituted_face_key;
+              }
             if (using_embedded_font)
               {
                 const std::string& face_key =
@@ -3384,6 +3737,32 @@ namespace pdflib
 
   inline void renderer<BLEND2D>::render_bitmap(bitmap_instruction& instr)
   {
+    if (soft_mask_applies(instr))
+      {
+        const bitmap_quad quad = {
+          canvas_x(instr.get_r_x0()), canvas_y(instr.get_r_y0()),
+          canvas_x(instr.get_r_x1()), canvas_y(instr.get_r_y1()),
+          canvas_x(instr.get_r_x2()), canvas_y(instr.get_r_y2()),
+          canvas_x(instr.get_r_x3()), canvas_y(instr.get_r_y3())
+        };
+        BLRect bbox = axis_aligned_rect(quad);
+        bbox = BLRect(bbox.x - 1.0, bbox.y - 1.0, bbox.w + 2.0, bbox.h + 2.0);
+
+        paint_through_soft_mask(*instr.get_soft_mask(), bbox, instr.get_blend_mode(),
+                                [&]() { render_bitmap(instr); });
+        return;
+      }
+
+    // Samples decoded down for a coarser render are decoded again when this
+    // render is finer, so a re-render at a larger scale is not upscaled.
+    const double pixels_per_unit =
+      config_.scale > 0.0f ? config_.scale : std::max(scale_x_, scale_y_);
+    if (auto sharper = instr.redecoded_for(pixels_per_unit))
+      {
+        render_bitmap(*sharper);
+        return;
+      }
+
     utils::scoped_timer phase_timer(timings_, pdf_timings::KEY_RENDER_BITMAP);
 
     LOG_S(INFO) << __FUNCTION__ << " for xobject_key=" << instr.get_key();
@@ -3504,6 +3883,10 @@ namespace pdflib
 
     BLImage src_img = build_bitmap_image(instr, sw, sh, sc, use_soft_mask_alpha,
                                          blit_w, blit_h);
+
+    // Includes clipping, masks, compositing, and drawing. Source-image
+    // destruction remains in the bitmap parent, after this timer ends.
+    utils::scoped_timer paint_timer(timings_, pdf_timings::KEY_RENDER_BITMAP_PAINT);
 
     const bool can_use_axis_aligned_fast_path =
       axis_aligned and right_angle and quarter_turns == 0;
@@ -3672,10 +4055,204 @@ namespace pdflib
   // make_shape_path
   // ---------------------------------------------------------------------------
 
+  inline bool renderer<BLEND2D>::tile_pattern_style(const shape_instruction& instr,
+                                                    BLPattern& style,
+                                                    double dx,
+                                                    double dy)
+  {
+    const tiling_paint& paint = instr.get_tiling_paint();
+    const double step_x = paint.get_x_step();
+    const double step_y = paint.get_y_step();
+    if (not paint.get_cell() or step_x <= 0.0 or step_y <= 0.0)
+      {
+        return false;
+      }
+
+    // pattern space -> page space -> canvas (y flipped), as in render_shading
+    const std::array<double, 6>& m = paint.get_matrix();
+    BLMatrix2D pattern_to_canvas(m[0], m[1], m[2], m[3], m[4], m[5]);
+    pattern_to_canvas.post_transform(
+      BLMatrix2D(scale_x_, 0.0, 0.0, -scale_y_,
+                 -scale_x_ * origin_x_,
+                 static_cast<double>(canvas_height_) + scale_y_ * origin_y_));
+
+    // One step along each lattice axis, in canvas pixels: the tile's size.
+    const BLPoint vx = pattern_to_canvas.map_vector(step_x, 0.0);
+    const BLPoint vy = pattern_to_canvas.map_vector(0.0, step_y);
+    const double len_x = std::hypot(vx.x, vx.y);
+    const double len_y = std::hypot(vy.x, vy.y);
+    if (not std::isfinite(len_x) or not std::isfinite(len_y) or
+        len_x <= 0.0 or len_y <= 0.0)
+      {
+        return false;
+      }
+
+    // A tile is at most 16 MB (PRGB32): past these the tile is scaled up by
+    // the pattern transform rather than grown. A step box larger than the
+    // page never gets here (the decoder replays those cells directly).
+    constexpr int max_tile_side = 2048;
+    int width  = std::clamp(static_cast<int>(std::lround(len_x)), 1, max_tile_side);
+    int height = std::clamp(static_cast<int>(std::lround(len_y)), 1, max_tile_side);
+    constexpr long max_tile_pixels = 2048L * 2048L;
+    if (static_cast<long>(width) * height > max_tile_pixels)
+      {
+        const double shrink = std::sqrt(static_cast<double>(max_tile_pixels)
+                                        / (static_cast<double>(width) * height));
+        width  = std::max(1, static_cast<int>(width * shrink));
+        height = std::max(1, static_cast<int>(height * shrink));
+      }
+
+    const auto key = std::make_tuple(static_cast<const void*>(paint.get_cell().get()),
+                                     width, height);
+    BLImage uncached;
+    auto it = tile_cache_.find(key);
+    if (it == tile_cache_.end())
+      {
+        BLImage tile = rasterize_tile(paint, width, height);
+        const std::size_t bytes = static_cast<std::size_t>(width) * height * 4u;
+        if (tile_cache_bytes_ + bytes <= max_tile_cache_bytes)
+          {
+            tile_cache_bytes_ += bytes;
+            it = tile_cache_.emplace(key, std::move(tile)).first;
+          }
+        else
+          {
+            uncached = std::move(tile);
+          }
+      }
+    const BLImage& tile = (it == tile_cache_.end()) ? uncached : it->second;
+    if (tile.is_empty())
+      {
+        return false;
+      }
+
+    // tile pixels -> pattern space: the tile covers one step box from the
+    // cell's bbox origin, row 0 at the top of that box.
+    const std::array<double, 4>& bbox = paint.get_bbox();
+    BLMatrix2D transform(step_x / width, 0.0,
+                         0.0, -step_y / height,
+                         bbox[0], bbox[1] + step_y);
+    transform.post_transform(pattern_to_canvas);
+    transform.post_translate(dx, dy);
+
+    style = BLPattern(tile, BL_EXTEND_MODE_REPEAT, transform);
+    return true;
+  }
+
+  inline BLImage renderer<BLEND2D>::rasterize_tile(const tiling_paint& paint,
+                                                   int width,
+                                                   int height)
+  {
+    const double step_x = paint.get_x_step();
+    const double step_y = paint.get_y_step();
+    const std::array<double, 4>& bbox = paint.get_bbox();
+
+    // The tile is a page of its own: one step box of pattern space, at the
+    // pixel size the pattern's placement on this canvas asks for.
+    render_config config = config_;
+    config.scale = -1.0f;
+    config.canvas_width = width;
+    config.canvas_height = height;
+    config.draw_text_bbox = false;
+    config.draw_text_basepoint = false;
+
+    renderer<BLEND2D> tile(config,
+                           font_resolver_,
+                           embedded_font_cache_,
+                           freetype_font_cache_,
+                           glyph_bbox_cache_);
+
+    size_instruction size;
+    size.media_bbox = {bbox[0], bbox[1], bbox[0] + step_x, bbox[1] + step_y};
+    size.crop_bbox = size.media_bbox;
+    size.angle = 0;
+
+    try
+      {
+        tile.set_size(size);
+
+        // Transparent, not the opaque white a page starts on: the fill
+        // region shows through between the cell's marks.
+        {
+          BLContext& ctx = tile.page_context();
+          ctx.set_comp_op(BL_COMP_OP_SRC_COPY);
+          ctx.fill_all(BLRgba32(0x00000000u));
+          ctx.set_comp_op(BL_COMP_OP_SRC_OVER);
+        }
+
+        // A cell wider than its step overlaps its neighbours (8.7.3.1), so
+        // what spills past the step box is drawn again shifted by a step and
+        // lands inside it.
+        constexpr double overlap_eps = 1e-6;
+        const bool wraps_x = (bbox[2] - bbox[0]) > step_x * (1.0 + overlap_eps);
+        const bool wraps_y = (bbox[3] - bbox[1]) > step_y * (1.0 + overlap_eps);
+
+        pdf_render_instructions& cell = *paint.get_cell();
+        for (int j = (wraps_y ? -1 : 0); j <= (wraps_y ? 1 : 0); j++)
+          {
+            for (int i = (wraps_x ? -1 : 0); i <= (wraps_x ? 1 : 0); i++)
+              {
+                cell.iterate_over_content(tile, i * step_x, j * step_y);
+              }
+          }
+
+        tile.finish_page_context();
+      }
+    catch (const std::exception& e)
+      {
+        LOG_S(WARNING) << "rasterize_tile: pattern " << paint.get_key()
+                       << " failed: " << e.what();
+        return BLImage();
+      }
+
+    BLImage out = std::move(tile.image_);
+    tile.image_.reset();
+    return out;
+  }
+
   inline BLPath renderer<BLEND2D>::make_shape_path(const shape_instruction& instr,
-                                                   BLRect& bbox) const
+                                                   BLRect& bbox,
+                                                   bool flatten_curves) const
   {
     BLPath path;
+
+    // Blend2D's curve stroker can repeatedly split a near-cusp quadratic
+    // without making progress at floating-point precision. Feed strokes a
+    // polyline instead, keeping the original cubic geometry for fills.
+    // Comparing the controls with the chord's degree-elevated controls also
+    // detects collinear reversals and loops (distance to a line does not).
+    const auto append_flattened_cubic = [&](const auto& self,
+                                            BLPoint p0, BLPoint p1,
+                                            BLPoint p2, BLPoint p3,
+                                            unsigned depth) -> void
+    {
+      constexpr double tolerance = 0.05; // canvas pixels, independent of scale
+      constexpr unsigned max_depth = 20;
+      const double error1 = std::hypot(
+        p1.x - (p0.x * (2.0 / 3.0) + p3.x / 3.0),
+        p1.y - (p0.y * (2.0 / 3.0) + p3.y / 3.0));
+      const double error2 = std::hypot(
+        p2.x - (p0.x / 3.0 + p3.x * (2.0 / 3.0)),
+        p2.y - (p0.y / 3.0 + p3.y * (2.0 / 3.0)));
+      if (depth == max_depth or std::max(error1, error2) <= tolerance)
+        {
+          path.line_to(p3.x, p3.y);
+          return;
+        }
+
+      const auto midpoint = [](BLPoint a, BLPoint b)
+      {
+        return BLPoint(a.x * 0.5 + b.x * 0.5, a.y * 0.5 + b.y * 0.5);
+      };
+      const BLPoint p01 = midpoint(p0, p1);
+      const BLPoint p12 = midpoint(p1, p2);
+      const BLPoint p23 = midpoint(p2, p3);
+      const BLPoint p012 = midpoint(p01, p12);
+      const BLPoint p123 = midpoint(p12, p23);
+      const BLPoint mid = midpoint(p012, p123);
+      self(self, p0, p01, p012, mid, depth + 1);
+      self(self, mid, p123, p23, p3, depth + 1);
+    };
 
     double x_min = std::numeric_limits<double>::infinity();
     double y_min = std::numeric_limits<double>::infinity();
@@ -3733,7 +4310,17 @@ namespace pdflib
                 const double y3 = canvas_y(py[k + 2]);
                 k += 3;
 
-                path.cubic_to(x1, y1, x2, y2, x3, y3);
+                if (flatten_curves)
+                  {
+                    const BLPoint p0 = path.vertex_data()[path.size() - 1];
+                    append_flattened_cubic(append_flattened_cubic, p0,
+                                          BLPoint(x1, y1), BLPoint(x2, y2),
+                                          BLPoint(x3, y3), 0);
+                  }
+                else
+                  {
+                    path.cubic_to(x1, y1, x2, y2, x3, y3);
+                  }
                 accumulate(x1, y1);
                 accumulate(x2, y2);
                 accumulate(x3, y3);
@@ -3763,13 +4350,327 @@ namespace pdflib
   //
   // Fill first, stroke on top (the PDF paint order for B/b operators), with
   // the fill rule, colors, stroke width and cap/join parameters delivered by
-  // the parse layer. Only axis-aligned rectangular clips are applied; dashed
-  // strokes render solid because the vendored Blend2D stroker does not
-  // implement dashing.
+  // the parse layer. Axis-aligned rectangular clips go through the context
+  // clip, other clips through a coverage mask applied to the fill and to the
+  // stroke. Dashed strokes render solid because the vendored Blend2D stroker
+  // does not implement dashing.
   // ---------------------------------------------------------------------------
+
+  // ---------------------------------------------------------------------------
+  // soft_mask_plane / paint_through_soft_mask
+  //
+  // A soft mask is a transparency group whose luminosity (or alpha) is the
+  // coverage of everything painted under it (11.6.5). The group arrives as
+  // page-space instructions; it is painted once onto a page-sized canvas over
+  // its /BC backdrop, read back as an A8 plane through /TR, and the plane is
+  // then applied to each masked instruction the way a non-rectangular clip is.
+  // ---------------------------------------------------------------------------
+
+  inline const BLImage* renderer<BLEND2D>::soft_mask_plane(soft_mask_instruction& mask)
+  {
+    auto found = soft_mask_planes_.find(&mask);
+    if (found != soft_mask_planes_.end())
+      {
+        return found->second.is_empty() ? nullptr : &found->second;
+      }
+
+    if (mask.is_intersection())
+      {
+        return soft_mask_intersection_plane(mask);
+      }
+
+    const int w = canvas_width_;
+    const int h = canvas_height_;
+    if (w <= 0 or h <= 0 or w > 8192 or h > 8192)
+      {
+        LOG_S(WARNING) << "soft_mask_plane: canvas " << w << "x" << h
+                       << " is too large for a mask plane; ExtGState "
+                       << mask.get_key() << " paints unmasked";
+        soft_mask_planes_[&mask];
+        return nullptr;
+      }
+
+    const std::size_t plane_bytes = static_cast<std::size_t>(w) * static_cast<std::size_t>(h);
+    if (soft_mask_plane_bytes_ + plane_bytes > max_soft_mask_plane_bytes)
+      {
+        // Nothing holds a pointer into the cache across instructions, so the
+        // planes can go; the ones still in use are rebuilt on their next paint.
+        LOG_S(WARNING) << "soft_mask_plane: " << soft_mask_planes_.size()
+                       << " cached mask planes reach the " << (max_soft_mask_plane_bytes >> 20)
+                       << " MB budget, dropping them";
+        soft_mask_planes_.clear();
+        soft_mask_plane_bytes_ = 0;
+      }
+
+    BLImage& plane = soft_mask_planes_[&mask];
+
+    // 1. The group over its backdrop, on a canvas of the page's size: its
+    //    instructions are in page space, like the page's own.
+    BLImage group;
+    if (group.create(w, h, BL_FORMAT_PRGB32) != BL_SUCCESS)
+      {
+        LOG_S(WARNING) << "soft_mask_plane: could not allocate the group canvas;"
+                       << " ExtGState " << mask.get_key() << " paints unmasked";
+        return nullptr;
+      }
+
+    {
+      BLContext gctx(group);
+      gctx.set_comp_op(BL_COMP_OP_SRC_COPY);
+      if (mask.is_luminosity())
+        {
+          gctx.fill_all(make_rgba32(mask.get_backdrop_rgb(), 1.0));
+        }
+      else
+        {
+          gctx.fill_all(BLRgba32(0x00000000u));
+        }
+      gctx.set_comp_op(BL_COMP_OP_SRC_OVER);
+
+      {
+        context_override_scope scope(context_override_, &gctx);
+        mask.get_group().iterate_over_instructions(*this, false);
+      }
+      gctx.end();
+    }
+
+    // 2. Coverage of the group's /BBox: beyond it the backdrop shows.
+    BLImage inside;
+    if (inside.create(w, h, BL_FORMAT_A8) != BL_SUCCESS)
+      {
+        LOG_S(WARNING) << "soft_mask_plane: could not allocate the bbox plane;"
+                       << " ExtGState " << mask.get_key() << " paints unmasked";
+        return nullptr;
+      }
+
+    {
+      const std::array<double, 8>& q = mask.get_bbox_quad();
+      BLPath quad;
+      quad.move_to(canvas_x(q[0]), canvas_y(q[1]));
+      for (int c = 1; c < 4; c++)
+        {
+          quad.line_to(canvas_x(q[2 * c]), canvas_y(q[2 * c + 1]));
+        }
+      quad.close();
+
+      if (not rasterize_path_to_a8(inside, quad, BL_FILL_RULE_NON_ZERO))
+        {
+          LOG_S(WARNING) << "soft_mask_plane: could not rasterise the bbox;"
+                         << " ExtGState " << mask.get_key() << " paints unmasked";
+          return nullptr;
+        }
+    }
+
+    // 3. Luminosity (or alpha), through /TR, into coverage.
+    if (plane.create(w, h, BL_FORMAT_A8) != BL_SUCCESS)
+      {
+        LOG_S(WARNING) << "soft_mask_plane: could not allocate the mask plane;"
+                       << " ExtGState " << mask.get_key() << " paints unmasked";
+        plane.reset();
+        return nullptr;
+      }
+
+    BLImageData g, in, p;
+    if (group.get_data(&g) != BL_SUCCESS or
+        inside.get_data(&in) != BL_SUCCESS or
+        plane.make_mutable(&p) != BL_SUCCESS)
+      {
+        plane.reset();
+        return nullptr;
+      }
+
+    const bool luminosity = mask.is_luminosity();
+    const std::vector<uint8_t>& transfer = mask.get_transfer();
+
+    // 0.3 R + 0.59 G + 0.11 B (11.6.5.2) in 8.8 fixed point
+    auto luminance = [](uint32_t r, uint32_t g_, uint32_t b) -> int
+      {
+        return static_cast<int>((77 * r + 151 * g_ + 28 * b + 128) >> 8);
+      };
+    auto through_transfer = [&](int v) -> int
+      {
+        return transfer.empty() ? v : transfer[static_cast<std::size_t>(v)];
+      };
+
+    const std::array<int, 3>& bc = mask.get_backdrop_rgb();
+    const int outside = luminosity
+      ? through_transfer(luminance(bc[0], bc[1], bc[2]))
+      : through_transfer(0);
+
+    for (int y = 0; y < h; y++)
+      {
+        const uint8_t* grow = static_cast<const uint8_t*>(g.pixel_data) + y * g.stride;
+        const uint8_t* irow = static_cast<const uint8_t*>(in.pixel_data) + y * in.stride;
+        uint8_t* prow = static_cast<uint8_t*>(p.pixel_data) + y * p.stride;
+
+        for (int x = 0; x < w; x++)
+          {
+            uint32_t px = 0;
+            std::memcpy(&px, grow + 4 * x, sizeof(px));
+
+            // PRGB32 is 0xAARRGGBB; the group canvas is opaque for a
+            // luminosity mask, so its colour is not premultiplied away.
+            const int value = luminosity
+              ? luminance((px >> 16) & 0xFFu, (px >> 8) & 0xFFu, px & 0xFFu)
+              : static_cast<int>(px >> 24);
+
+            const int covered = irow[x];
+            prow[x] = static_cast<uint8_t>(
+              (through_transfer(value) * covered + outside * (255 - covered) + 127) / 255);
+          }
+      }
+
+    soft_mask_plane_bytes_ += plane_bytes;
+
+    LOG_S(INFO) << "soft_mask_plane: built " << w << "x" << h
+                << " plane for ExtGState " << mask.get_key()
+                << " (" << (luminosity ? "luminosity" : "alpha") << ")";
+    return &plane;
+  }
+
+  inline const BLImage* renderer<BLEND2D>::soft_mask_intersection_plane(soft_mask_instruction& mask)
+  {
+    // BLImage copies share pixels, so these hold both planes even if building
+    // the second one drops the cache.
+    BLImage outer;
+    if (const BLImage* plane = soft_mask_plane(*mask.get_outer())) { outer = *plane; }
+
+    BLImage inner;
+    if (const BLImage* plane = soft_mask_plane(*mask.get_inner())) { inner = *plane; }
+
+    // A part that could not be built was reported, and paints unmasked on
+    // its own; here it drops out of the product the same way.
+    if (outer.is_empty() or inner.is_empty())
+      {
+        BLImage& plane = soft_mask_planes_[&mask];
+        plane = outer.is_empty() ? inner : outer;
+        return plane.is_empty() ? nullptr : &plane;
+      }
+
+    const int w = outer.width();
+    const int h = outer.height();
+    const std::size_t plane_bytes = static_cast<std::size_t>(w) * static_cast<std::size_t>(h);
+    if (soft_mask_plane_bytes_ + plane_bytes > max_soft_mask_plane_bytes)
+      {
+        LOG_S(WARNING) << "soft_mask_plane: " << soft_mask_planes_.size()
+                       << " cached mask planes reach the " << (max_soft_mask_plane_bytes >> 20)
+                       << " MB budget, dropping them";
+        soft_mask_planes_.clear();
+        soft_mask_plane_bytes_ = 0;
+      }
+
+    BLImage& plane = soft_mask_planes_[&mask];
+
+    BLImageData o, i, p;
+    if (plane.create(w, h, BL_FORMAT_A8) != BL_SUCCESS or
+        outer.get_data(&o) != BL_SUCCESS or
+        inner.get_data(&i) != BL_SUCCESS or
+        plane.make_mutable(&p) != BL_SUCCESS)
+      {
+        LOG_S(WARNING) << "soft_mask_plane: could not allocate the plane of "
+                       << mask.get_key() << "; paints unmasked";
+        plane.reset();
+        return nullptr;
+      }
+
+    for (int y = 0; y < h; y++)
+      {
+        const uint8_t* orow = static_cast<const uint8_t*>(o.pixel_data) + y * o.stride;
+        const uint8_t* irow = static_cast<const uint8_t*>(i.pixel_data) + y * i.stride;
+        uint8_t* prow = static_cast<uint8_t*>(p.pixel_data) + y * p.stride;
+
+        for (int x = 0; x < w; x++)
+          {
+            prow[x] = static_cast<uint8_t>((orow[x] * irow[x] + 127) / 255);
+          }
+      }
+
+    soft_mask_plane_bytes_ += plane_bytes;
+
+    LOG_S(INFO) << "soft_mask_plane: built " << w << "x" << h
+                << " plane for the intersection " << mask.get_key();
+    return &plane;
+  }
+
+  template<typename paint_type>
+  inline void renderer<BLEND2D>::paint_through_soft_mask(soft_mask_instruction& mask,
+                                                         const BLRect& bbox,
+                                                         blend_mode_name mode,
+                                                         paint_type&& paint)
+  {
+    utils::scoped_timer phase_timer(timings_, pdf_timings::KEY_RENDER_SOFT_MASK);
+
+    const BLImage* plane = soft_mask_plane(mask);
+    if (plane == nullptr)
+      {
+        // reported by soft_mask_plane; unmasked paint is what the page got
+        // before masks were composited at all
+        paint();
+        return;
+      }
+
+    const BLRectI area = canvas_clamped_rect(bbox);
+    if (area.w <= 0 or area.h <= 0) { return; }
+
+    BLImage layer;
+    if (layer.create(area.w, area.h, BL_FORMAT_PRGB32) != BL_SUCCESS)
+      {
+        LOG_S(WARNING) << "paint_through_soft_mask: could not allocate a "
+                       << area.w << "x" << area.h << " layer, painting unmasked";
+        paint();
+        return;
+      }
+
+    {
+      BLContext lctx(layer);
+      lctx.set_comp_op(BL_COMP_OP_SRC_COPY);
+      lctx.fill_all(BLRgba32(0x00000000u));
+      lctx.set_comp_op(BL_COMP_OP_SRC_OVER);
+
+      // the layer is a window onto the canvas, so the paint routine draws in
+      // canvas coordinates as it always does
+      lctx.translate(-area.x, -area.y);
+      {
+        context_override_scope scope(context_override_, &lctx);
+        paint();
+      }
+      lctx.end();
+    }
+
+    if (not multiply_prgb32_by_a8_window(layer, *plane, area.x, area.y))
+      {
+        LOG_S(WARNING) << "paint_through_soft_mask: could not apply the mask of ExtGState "
+                       << mask.get_key();
+      }
+
+    // The blend mode belongs to this composite. The paint routine also set
+    // it on the layer, where it had nothing to blend with and painted as
+    // Normal, which is what a layer needs.
+    BLContext& ctx = page_context();
+    const blend_mode_scope blend(ctx, mode);
+    ctx.blit_image(BLPointI(area.x, area.y), layer);
+  }
 
   inline void renderer<BLEND2D>::render_shape(shape_instruction& instr)
   {
+    if (soft_mask_applies(instr))
+      {
+        BLRect bbox;
+        const BLPath path = make_shape_path(instr, bbox);
+        if (path.is_empty()) { return; }
+
+        // a stroke reaches beyond the path; the layer must hold all of it
+        const double reach =
+          instr.get_line_width() * 0.5 * (scale_x_ + scale_y_)
+          * std::max(1.0, instr.get_miter_limit()) + 2.0;
+        bbox = BLRect(bbox.x - reach, bbox.y - reach,
+                      bbox.w + 2.0 * reach, bbox.h + 2.0 * reach);
+
+        paint_through_soft_mask(*instr.get_soft_mask(), bbox, instr.get_blend_mode(),
+                                [&]() { render_shape(instr); });
+        return;
+      }
+
     utils::scoped_timer phase_timer(timings_, pdf_timings::KEY_RENDER_SHAPE);
 
     if (not has_canvas()) { return; }
@@ -3786,6 +4687,59 @@ namespace pdflib
 
     BLContext& ctx = page_context();
 
+    const shape_paint_mode mode = instr.get_paint_mode();
+
+    // ExtGState constant alpha: alpha 0 paint is invisible and skipped
+    // entirely (a common idiom for hiding helper geometry).
+    static constexpr double min_visible_alpha = 1.0 / 512.0;
+    const double fill_alpha = instr.get_fill_alpha();
+    const double stroke_alpha = instr.get_stroke_alpha();
+
+    const bool do_fill =
+      (mode == SHAPE_PAINT_FILL or mode == SHAPE_PAINT_FILL_STROKE)
+      and fill_alpha > min_visible_alpha;
+    const bool do_stroke =
+      (mode == SHAPE_PAINT_STROKE or mode == SHAPE_PAINT_FILL_STROKE)
+      and stroke_alpha > min_visible_alpha;
+
+    // A pattern fill paints with its tile or not at all (#375). The tile is
+    // a BLPattern in canvas space, so it serves the direct fill and the
+    // coverage-window fill below alike.
+    BLPattern tile_style;
+    bool tile_ready = false;
+    if (do_fill and instr.has_tiling_paint())
+      {
+        tile_ready = tile_pattern_style(instr, tile_style, 0.0, 0.0);
+        if (not tile_ready)
+          {
+            LOG_S(WARNING) << "render_shape: no tile for pattern "
+                           << instr.get_tiling_paint().get_key() << ", fill skipped";
+          }
+      }
+    const bool paints_fill = do_fill and (tile_ready or not instr.has_tiling_paint());
+
+    // the line width arrives in page space; scale to canvas and keep
+    // sub-pixel strokes visible (PDF `0 w` means hairline)
+    const double stroke_width = std::max(
+      instr.get_line_width() * 0.5 * (scale_x_ + scale_y_),
+      static_cast<double>(config_.min_stroke_width));
+
+    // The area this shape can paint. A stroke reaches half its width past the
+    // path, further at square caps (sqrt 2) and miter joins (the miter
+    // limit). Without this a horizontal rule has a zero-height box: the clip
+    // tests below then find nothing to paint and the rule disappears.
+    BLRect paint_bbox = bbox;
+    if (do_stroke)
+      {
+        double reach = 0.5 * stroke_width * std::sqrt(2.0);
+        if (to_stroke_join(instr.get_line_join()) == BL_STROKE_JOIN_MITER_BEVEL)
+          {
+            reach = std::max(reach, 0.5 * stroke_width * instr.get_miter_limit());
+          }
+        paint_bbox = BLRect(bbox.x - reach, bbox.y - reach,
+                            bbox.w + 2.0 * reach, bbox.h + 2.0 * reach);
+      }
+
     // Both scopes unwind on every exit below, in reverse order of their
     // construction: the clip was saved inside the blend mode, so it comes off
     // first.
@@ -3795,7 +4749,7 @@ namespace pdflib
     if (instr.has_clip_state())
       {
         const clip_apply_result clip_result =
-          apply_clip_state(ctx, instr.get_clip_state(), bbox);
+          apply_clip_state(ctx, instr.get_clip_state(), paint_bbox);
         if (clip_result == CLIP_EMPTY)
           {
             return;
@@ -3808,137 +4762,188 @@ namespace pdflib
       }
 
     // A curved clip cannot be expressed by clip_to_rect, so apply_clip_state
-    // leaves it out and the fill would spill over its whole bounding box.
-    // Rasterise those paths into a coverage mask and paint through it.
-    BLImage clip_mask;
+    // leaves it out and the paint would spill over its whole bounding box.
+    // Rasterise those paths into a coverage mask and paint through it. The
+    // mask covers the whole clip box and is reused while the clip stays the
+    // same; each shape only reads the window it can paint.
     BLRectI mask_area(0, 0, 0, 0);
+    bool use_mask = false;
     if (instr.has_clip_state() and clip_state_has_non_rect(instr.get_clip_state()))
       {
         if(config_.render_non_rect_clip_masks)
           {
-            mask_area = canvas_clamped_rect(bbox);
-            // LOG_S(INFO) << "render_shape: building clip mask"
-            //             << " bbox=(" << bbox.x << ", " << bbox.y
-            //             << ", " << bbox.w << ", " << bbox.h << ")"
-            //             << " mask_area=(" << mask_area.x << ", " << mask_area.y
-            //             << ", " << mask_area.w << ", " << mask_area.h << ")";
-            const clip_mask_result clip =
-              build_clip_mask(instr.get_clip_state(), mask_area);
-            if(clip.empty_clip)
+            const clip_state_instruction& clip_state = instr.get_clip_state();
+            const BLRectI paint_area = canvas_clamped_rect(paint_bbox);
+
+            if (not (shape_clip_valid_ and same_clip_state(shape_clip_key_, clip_state)))
+              {
+                BLRect clip_bbox(0.0, 0.0, canvas_width_, canvas_height_);
+                clip_state_canvas_bbox(clip_state, clip_bbox);
+                shape_clip_area_ = canvas_clamped_rect(clip_bbox);
+
+                // build_clip_mask refuses oversized areas. A clip box that is
+                // too big to cache is masked per shape, over the shape's own
+                // window, and not kept.
+                const bool cacheable = shape_clip_area_.w <= 8192
+                                       and shape_clip_area_.h <= 8192;
+                if (not cacheable)
+                  {
+                    shape_clip_area_ = paint_area;
+                  }
+
+                clip_mask_result clip = build_clip_mask(clip_state, shape_clip_area_);
+                shape_clip_key_ = clip_state;
+                shape_clip_mask_ = std::move(clip.image);
+                shape_clip_empty_ = clip.empty_clip;
+                shape_clip_valid_ = cacheable;
+              }
+
+            if (shape_clip_empty_)
               {
                 // The clip leaves this shape nothing to paint. Leaving through
                 // here used to skip the restores below and strand the clip on
                 // the context.
                 return;
               }
-            clip_mask = std::move(clip.image);
-            // LOG_S(INFO) << "render_shape: build_clip_mask returned empty="
-            //             << (clip_mask.is_empty() ? "true" : "false");
-          }
-        else
-          {
-            // LOG_S(INFO) << "render_shape: non-rectangular clip mask disabled";
+
+            if (not shape_clip_mask_.is_empty())
+              {
+                const int x0 = std::max(paint_area.x, shape_clip_area_.x);
+                const int y0 = std::max(paint_area.y, shape_clip_area_.y);
+                const int x1 = std::min(paint_area.x + paint_area.w,
+                                        shape_clip_area_.x + shape_clip_area_.w);
+                const int y1 = std::min(paint_area.y + paint_area.h,
+                                        shape_clip_area_.y + shape_clip_area_.h);
+                if (x1 <= x0 or y1 <= y0)
+                  {
+                    return; // the shape lies outside the clip box
+                  }
+                mask_area = BLRectI(x0, y0, x1 - x0, y1 - y0);
+                use_mask = true;
+              }
           }
       }
 
-    const shape_paint_mode mode = instr.get_paint_mode();
+    const BLFillRule fill_rule = instr.get_fill_rule() == SHAPE_FILL_EVEN_ODD
+                                   ? BL_FILL_RULE_EVEN_ODD
+                                   : BL_FILL_RULE_NON_ZERO;
 
-    // ExtGState constant alpha: alpha 0 paint is invisible and skipped
-    // entirely (a common idiom for hiding helper geometry).
-    static constexpr double min_visible_alpha = 1.0 / 512.0;
-    const double fill_alpha = instr.get_fill_alpha();
-    const double stroke_alpha = instr.get_stroke_alpha();
+    auto apply_stroke_options = [&](BLContext& c)
+    {
+      c.set_stroke_width(stroke_width);
+      c.set_stroke_caps(to_stroke_cap(instr.get_line_cap()));
+      c.set_stroke_join(to_stroke_join(instr.get_line_join()));
+      c.set_stroke_miter_limit(instr.get_miter_limit());
+    };
 
-    if ((mode == SHAPE_PAINT_FILL or mode == SHAPE_PAINT_FILL_STROKE)
-        and fill_alpha > min_visible_alpha)
+    // Paints through the clip coverage. Blend2D cannot clip to a path, so the
+    // shape is rasterised into an A8 coverage window, knocked back with the
+    // clip mask, and composited with fill_mask in the paint colour. This is
+    // what keeps a crescent from filling its bounding box and a line from
+    // running past a circular clip. Fill and stroke composite separately, in
+    // the PDF order, each with its own alpha, under the context blend mode.
+    auto paint_masked = [&](const char* what, auto&& draw,
+                            auto&& composite) -> bool
+    {
+      BLImage coverage;
+      if (coverage.create(mask_area.w, mask_area.h, BL_FORMAT_A8) != BL_SUCCESS)
+        {
+          LOG_S(WARNING) << "render_shape: " << what << " coverage allocation"
+                         << " failed, painting without mask";
+          return false;
+        }
+
       {
-        ctx.set_fill_rule(instr.get_fill_rule() == SHAPE_FILL_EVEN_ODD
-                            ? BL_FILL_RULE_EVEN_ODD
-                            : BL_FILL_RULE_NON_ZERO);
-        ctx.set_fill_style(make_rgba32(instr.get_rgb_filling(), fill_alpha));
+        BLContext cctx(coverage);
+        cctx.clear_all();
+        cctx.translate(-mask_area.x, -mask_area.y);
+        draw(cctx);
+        cctx.end();
+      }
 
-        if (not clip_mask.is_empty())
+      if (not multiply_a8_by_a8(coverage, shape_clip_mask_,
+                                mask_area.x - shape_clip_area_.x,
+                                mask_area.y - shape_clip_area_.y))
+        {
+          LOG_S(WARNING) << "render_shape: could not apply clip mask to "
+                         << what;
+        }
+      return composite(coverage) == BL_SUCCESS;
+    };
+    const BLPointI mask_origin(mask_area.x, mask_area.y);
+
+    if (paints_fill)
+      {
+        const BLRgba32 style = make_rgba32(instr.get_rgb_filling(), fill_alpha);
+        const bool masked =
+          use_mask and paint_masked("fill", [&](BLContext& cctx)
           {
-            // LOG_S(INFO) << "render_shape: clipped fill layer begin"
-            //             << " area=(" << mask_area.x << ", " << mask_area.y
-            //             << ", " << mask_area.w << ", " << mask_area.h << ")";
-            // Paint the fill into an offscreen window, knock it back with the
-            // clip coverage, then composite. Blend2D cannot clip to a path, so
-            // this is what keeps a crescent from filling its bounding box.
-            BLImage layer;
-            const BLResult layer_create =
-              layer.create(mask_area.w, mask_area.h, BL_FORMAT_PRGB32);
-            // LOG_S(INFO) << "render_shape: layer.create result=" << layer_create;
-            if (layer_create == BL_SUCCESS)
+            cctx.set_fill_rule(fill_rule);
+            cctx.fill_path(path, BLRgba32(0xFFFFFFFFu));
+          },
+          [&](const BLImage& coverage) -> BLResult
+          {
+            if (tile_ready)
               {
-                {
-                  // LOG_S(INFO) << "render_shape: filling clipped layer";
-                  BLContext lctx(layer);
-                  lctx.set_comp_op(BL_COMP_OP_SRC_COPY);
-                  lctx.fill_all(BLRgba32(0x00000000u));
-                  lctx.set_comp_op(BL_COMP_OP_SRC_OVER);
-                  lctx.set_fill_rule(instr.get_fill_rule() == SHAPE_FILL_EVEN_ODD
-                                       ? BL_FILL_RULE_EVEN_ODD
-                                       : BL_FILL_RULE_NON_ZERO);
+                // the pattern is a fill style, so it goes through the
+                // context's style rather than the colour argument
+                ctx.set_fill_style(tile_style);
+                ctx.set_fill_alpha(fill_alpha);
+                const BLResult result = ctx.fill_mask(mask_origin, coverage);
+                ctx.set_fill_alpha(1.0);
+                return result;
+              }
+            return ctx.fill_mask(mask_origin, coverage, style);
+          });
 
-                  BLPath shifted;
-                  shifted.add_path(path,
-                                   BLMatrix2D::make_translation(-mask_area.x, -mask_area.y));
-                  lctx.fill_path(shifted,
-                                 make_rgba32(instr.get_rgb_filling(), fill_alpha));
-                  lctx.end();
-                  // LOG_S(INFO) << "render_shape: clipped layer filled";
-                }
-
-                // LOG_S(INFO) << "render_shape: applying clip mask to layer";
-                if (not multiply_prgb32_by_a8(layer, clip_mask))
-                  {
-                    LOG_S(WARNING) << "render_shape: could not apply clip mask";
-                  }
-                // LOG_S(INFO) << "render_shape: clip mask applied";
-
-                // LOG_S(INFO) << "render_shape: blitting clipped layer";
-                ctx.blit_image(BLPointI(mask_area.x, mask_area.y), layer);
-                // LOG_S(INFO) << "render_shape: clipped layer blitted";
+        if (not masked)
+          {
+            ctx.set_fill_rule(fill_rule);
+            if (tile_ready)
+              {
+                ctx.set_fill_style(tile_style);
+                ctx.set_fill_alpha(fill_alpha);
+                ctx.fill_path(path);
+                ctx.set_fill_alpha(1.0);
               }
             else
               {
-                LOG_S(WARNING) << "render_shape: layer allocation failed,"
-                               << " filling path without mask";
-                ctx.fill_path(path);
+                ctx.fill_path(path, style);
               }
-          }
-        else
-          {
-            ctx.fill_path(path);
           }
       }
 
-    if ((mode == SHAPE_PAINT_STROKE or mode == SHAPE_PAINT_FILL_STROKE)
-        and stroke_alpha > min_visible_alpha)
+    if (do_stroke)
       {
-        ctx.set_stroke_style(make_rgba32(instr.get_rgb_stroking(),
-                                         stroke_alpha));
-
-        // the line width arrives in page space; scale to canvas and keep
-        // sub-pixel strokes visible (PDF `0 w` means hairline)
-        const double width =
-          instr.get_line_width() * 0.5 * (scale_x_ + scale_y_);
-        ctx.set_stroke_width(std::max(
-          width,
-          static_cast<double>(config_.min_stroke_width)));
-
-        ctx.set_stroke_caps(to_stroke_cap(instr.get_line_cap()));
-        ctx.set_stroke_join(to_stroke_join(instr.get_line_join()));
-        ctx.set_stroke_miter_limit(instr.get_miter_limit());
-
         if (not instr.get_dash_array().empty())
           {
             LOG_S(INFO) << "render_shape: dash pattern ignored"
                         << " (not implemented by the Blend2D stroker)";
           }
 
-        ctx.stroke_path(path);
+        // Blend2D's curve stroker can stall on a near-cusp curve, so strokes
+        // use the flattened outline (#407). Its points stay inside the
+        // control-point bbox that sized the mask window above.
+        BLRect stroke_bbox;
+        const BLPath stroke_path = make_shape_path(instr, stroke_bbox, true);
+
+        const BLRgba32 style = make_rgba32(instr.get_rgb_stroking(), stroke_alpha);
+        const bool masked =
+          use_mask and paint_masked("stroke", [&](BLContext& cctx)
+          {
+            apply_stroke_options(cctx);
+            cctx.stroke_path(stroke_path, BLRgba32(0xFFFFFFFFu));
+          },
+          [&](const BLImage& coverage) -> BLResult
+          {
+            return ctx.fill_mask(mask_origin, coverage, style);
+          });
+
+        if (not masked)
+          {
+            apply_stroke_options(ctx);
+            ctx.stroke_path(stroke_path, style);
+          }
       }
   }
 
@@ -3957,6 +4962,18 @@ namespace pdflib
 
   inline void renderer<BLEND2D>::render_shading(shading_instruction& instr)
   {
+    if (soft_mask_applies(instr))
+      {
+        // a shading covers its clip region, which can be the whole page
+        const BLRect bbox(0.0, 0.0,
+                          static_cast<double>(canvas_width_),
+                          static_cast<double>(canvas_height_));
+
+        paint_through_soft_mask(*instr.get_soft_mask(), bbox, instr.get_blend_mode(),
+                                [&]() { render_shading(instr); });
+        return;
+      }
+
     utils::scoped_timer phase_timer(timings_, pdf_timings::KEY_RENDER_SHADING);
 
     if (not has_canvas()) { return; }

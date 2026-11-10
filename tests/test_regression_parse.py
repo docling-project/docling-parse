@@ -33,7 +33,7 @@ from docling_parse.pdf_parser import (
     PdfDocument,
 )
 from tests.constants import PARSER_PAGE_RESTRICTIONS, SAMPLE_PDF
-from tests.data_utils import PARSER_GROUNDTRUTH_DIR
+from tests.data_utils import PARSER_GROUNDTRUTH_DELTA_DIR, PARSER_GROUNDTRUTH_DIR
 from tests.groundtruth_io import (
     dump_groundtruth_json,
     groundtruth_exists,
@@ -49,6 +49,14 @@ from tests.outline_fixtures import (
     build_malformed_outline,
     build_rotated_pages,
 )
+
+
+def _delta_path(filename: str, unit: str) -> str:
+    """Locate generated diagnostics outside the reference groundtruth tree."""
+    PARSER_GROUNDTRUTH_DELTA_DIR.mkdir(parents=True, exist_ok=True)
+    return os.fspath(
+        PARSER_GROUNDTRUTH_DELTA_DIR / f"{os.path.basename(filename)}.{unit}.delta.txt"
+    )
 
 
 def write_textline_delta(lines: List[str], filename: str, separator: str) -> None:
@@ -230,10 +238,10 @@ def _describe_cell_count_mismatch(
 
     A count mismatch says nothing about *which* cells appeared or vanished, and
     the interesting cases so far have been intermittent, so the run that hits
-    one is the only chance to see it. Write the full comparison next to the
-    groundtruth and keep the assertion message short.
+    one is the only chance to see it. Write the full comparison under
+    tests/data/groundtruth_delta/parser and keep the assertion message short.
     """
-    delta_path = filename + ".cells.delta.txt"
+    delta_path = _delta_path(filename, "cells")
 
     def key(cell) -> tuple:
         rect = cell.rect
@@ -682,7 +690,7 @@ def test_reference_documents_from_filenames(update_groundtruth: bool):
                         )
 
                         _fname = fname + f".{unit}.txt"
-                        delta_fname = fname + f".{unit}.delta.txt"
+                        delta_fname = _delta_path(fname, str(unit))
 
                         content = read_groundtruth_text(_fname)
                         lines = content.split(SPECIAL_SEPERATOR) if content else []

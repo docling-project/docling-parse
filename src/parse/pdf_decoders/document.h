@@ -11,9 +11,12 @@
 #include <qpdf/Buffer.hh>
 #include <qpdf/QPDFAcroFormDocumentHelper.hh>
 #include <qpdf/QPDF.hh>
+#include <qpdf/QPDFExc.hh>
 #include <qpdf/QPDFWriter.hh>
 
+#include <parse/qpdf/load_error.h>
 #include <parse/qpdf/logger.h>
+#include <parse/qpdf/page_integrity.h>
 
 namespace pdflib
 {
@@ -33,7 +36,15 @@ namespace pdflib
 
     std::string get_filename() { return filename; }
 
+    // Why the last process_document_* call returned false: a category
+    // from load_error and the message of the underlying failure. Both
+    // are empty while no load has failed.
+    const std::string& get_load_error_category() const { return load_error_category; }
+    const std::string& get_load_error_message() const { return load_error_message; }
+
     nlohmann::json get_annotations();
+    nlohmann::json get_structure();
+    std::unordered_map<std::string, double> get_document_timings();
 
     nlohmann::json get_meta_xml();
     nlohmann::json get_table_of_contents();
@@ -77,6 +88,15 @@ namespace pdflib
     QPDFAcroFormDocumentHelper& source_acroform_helper();
 
     void ensure_annots_loaded();
+    void ensure_structure_loaded();
+    void load_annots();
+    nlohmann::json annots_field(const char* key) const;
+
+    // Throws missing_page_object_error when the page references an
+    // object the file does not contain (docling-parse#374).
+    void ensure_page_content_present(int page_number);
+
+    void record_load_error(const std::string& category, const std::string& message);
 
     void update_timings(pdf_timings& timings_, bool set_timer);
 
@@ -102,8 +122,24 @@ namespace pdflib
 
     int number_of_pages;
 
+    // qpdf had to repair the file while loading it (for example by
+    // reconstructing the cross-reference table). Set once at load time
+    // and read by the worker threads afterwards.
+    bool qpdf_reported_damage;
+
+    std::string load_error_category;
+    std::string load_error_message;
+
+    // Built on the first call to get_annotations(), get_meta_xml() or
+    // get_table_of_contents(), never during load: a conversion that reads
+    // only the pages pays nothing for the form, the metadata stream and the
+    // outline. Written exactly once, by load_annots() under
+    // thread_safe_buffer_mutex; annots_once publishes the result, and the
+    // getters then read it without taking that mutex.
     nlohmann::json json_annots;
-    bool annots_loaded;
+    std::once_flag annots_once;
+    std::once_flag structure_once;
+    nlohmann::json json_structure;
 
     // New: Persistent page decoders for typed API
     std::map<int, page_decoder_ptr> page_decoders;
@@ -120,9 +156,9 @@ namespace pdflib
     qpdf_pages({}),
 
     number_of_pages(-1),
+    qpdf_reported_damage(false),
 
     json_annots(nlohmann::json::value_t::null),
-    annots_loaded(false),
     page_decoders({})
   {
     configure_qpdf_warnings(qpdf_document);
@@ -139,9 +175,9 @@ namespace pdflib
     qpdf_pages({}),
 
     number_of_pages(-1),
+    qpdf_reported_damage(false),
 
     json_annots(nlohmann::json::value_t::null),
-    annots_loaded(false),
     page_decoders({})
   {
     configure_qpdf_warnings(qpdf_document);
@@ -152,15 +188,24 @@ namespace pdflib
 
   void pdf_decoder<DOCUMENT>::ensure_annots_loaded()
   {
-    if(annots_loaded)
-      {
-        return;
-      }
+    // The first caller builds json_annots; every later caller returns as
+    // soon as that has happened, without queueing behind the page-buffer
+    // writer for a value that is already there. A plain flag read outside
+    // the mutex would be a data race; call_once publishes it properly.
+    std::call_once(annots_once, [this]() { load_annots(); });
+  }
+
+  void pdf_decoder<DOCUMENT>::load_annots()
+  {
+    // Reads qpdf_document, which the page-buffer writer below also uses:
+    // with the threaded parser a worker may be copying a page out while the
+    // main thread asks for the annotations.
+    std::lock_guard<std::mutex> lock(thread_safe_buffer_mutex);
 
     try
       {
         QPDFObjectHandle qpdf_root = qpdf_document.getRoot();
-	
+
         utils::timer annots_timer;
         json_annots = extract_document_annotations_in_json(qpdf_document, qpdf_root);
 
@@ -175,26 +220,72 @@ namespace pdflib
       {
         LOG_S(WARNING) << "filename: " << filename << " can not find any `annotations` " << exc.what();
       }
+  }
 
-    annots_loaded = true;
+  nlohmann::json pdf_decoder<DOCUMENT>::annots_field(const char* key) const
+  {
+    // Not operator[]: on a missing key it inserts, and on a null json_annots
+    // it first turns the value into an object. Both are writes to a value
+    // that other threads may be reading.
+    auto itr = json_annots.find(key);
+    if(itr==json_annots.end())
+      {
+        return nlohmann::json(nullptr);
+      }
+
+    return *itr;
   }
 
   nlohmann::json pdf_decoder<DOCUMENT>::get_annotations()
   {
     ensure_annots_loaded();
-    return json_annots;
+    auto result = json_annots;
+    result["structure"] = get_structure();
+    return result;
+  }
+
+  void pdf_decoder<DOCUMENT>::ensure_structure_loaded()
+  {
+    std::call_once(structure_once, [this] {
+      // QPDF lazily resolves references; serialize this first read with page
+      // extraction. call_once publishes the immutable cache to later readers.
+      std::lock_guard<std::mutex> lock(thread_safe_buffer_mutex);
+      utils::timer timer;
+      try
+        {
+          json_structure = pdf_structure(qpdf_document, qpdf_pages).get();
+        }
+      catch(const std::exception& exc)
+        {
+          LOG_S(WARNING) << "filename: " << filename << " can not read structure: " << exc.what();
+          json_structure = nullptr;
+        }
+      timings.add_timing(pdf_timings::KEY_EXTRACT_STRUCTURE, timer.get_time());
+    });
+  }
+
+  nlohmann::json pdf_decoder<DOCUMENT>::get_structure()
+  {
+    ensure_structure_loaded();
+    return json_structure;
+  }
+
+  std::unordered_map<std::string, double> pdf_decoder<DOCUMENT>::get_document_timings()
+  {
+    std::lock_guard<std::mutex> lock(thread_safe_buffer_mutex);
+    return timings.to_sum_map();
   }
 
   nlohmann::json pdf_decoder<DOCUMENT>::get_meta_xml()
   {
     ensure_annots_loaded();
-    return json_annots["meta_xml"];
+    return annots_field("meta_xml");
   }
 
   nlohmann::json pdf_decoder<DOCUMENT>::get_table_of_contents()
   {
     ensure_annots_loaded();
-    return json_annots["table_of_contents"];
+    return annots_field("table_of_contents");
   }
 
   bool pdf_decoder<DOCUMENT>::process_document_from_file(std::string& _filename,
@@ -223,6 +314,7 @@ namespace pdflib
     std::ifstream ifs(fs_path, std::ios::binary | std::ios::ate);
     if(!ifs.is_open())
       {
+        record_load_error(load_error::IO, "could not open file: " + filename);
         LOG_S(ERROR) << "could not open file: " << filename;
         return false;
       }
@@ -233,6 +325,7 @@ namespace pdflib
     auto file_buffer = std::make_shared<std::string>(file_size, '\0');
     if(!ifs.read(file_buffer->data(), file_size))
       {
+        record_load_error(load_error::IO, "could not read file: " + filename);
         LOG_S(ERROR) << "could not read file: " << filename;
         return false;
       }
@@ -257,6 +350,9 @@ namespace pdflib
   {
     buffer = _buffer;
     password = _password;
+
+    load_error_category.clear();
+    load_error_message.clear();
 
     LOG_S(INFO) << "start processing buffer of size " << buffer->size() << " by qpdf ...";
     
@@ -292,20 +388,34 @@ namespace pdflib
 
 	qpdf_pages = qpdf_document.getAllPages();
 	number_of_pages = qpdf_pages.size();
+	qpdf_reported_damage = qpdf_document.anyWarnings();
 	
         LOG_S(INFO) << "#-pages: " << number_of_pages;	
       }
-    catch(const std::exception & exc)
+    catch(const QPDFExc & exc)
       {
+        // qpdf says why: an invalid password, a file it could not repair, ...
+        record_load_error(load_error::category_of(exc.getErrorCode()), exc.what());
         LOG_S(ERROR) << "could not process buffer by qpdf: " << exc.what();
         return false;
       }
-    
-    ensure_annots_loaded();
+    catch(const std::exception & exc)
+      {
+        record_load_error(load_error::UNKNOWN, exc.what());
+        LOG_S(ERROR) << "could not process buffer by qpdf: " << exc.what();
+        return false;
+      }
 
     timings.add_timing(pdf_timings::KEY_PROCESS_DOCUMENT_FROM_BYTESIO, timer.get_time());
     
     return true;
+  }
+
+  void pdf_decoder<DOCUMENT>::record_load_error(const std::string& category,
+                                                const std::string& message)
+  {
+    load_error_category = category;
+    load_error_message = message;
   }
 
   std::pair<int, std::shared_ptr<std::string> > pdf_decoder<DOCUMENT>::get_thread_safe_page_buffer(
@@ -403,10 +513,43 @@ namespace pdflib
     return *src_afdh;
   }
 
+  void pdf_decoder<DOCUMENT>::ensure_page_content_present(int page_number)
+  {
+    std::string missing;
+    {
+      // Resolving the page's references may load objects into the shared
+      // qpdf document, which is only ever touched under this mutex.
+      std::lock_guard<std::mutex> lock(thread_safe_buffer_mutex);
+      auto page = qpdf_pages.at(page_number);
+      missing = qpdf_page_integrity::find_missing_content(page);
+      if(missing.empty() and qpdf_reported_damage)
+        {
+          missing = qpdf_page_integrity::find_repaired_resources(qpdf_document, page, *buffer);
+        }
+    }
+
+    if(missing.empty())
+      {
+        return;
+      }
+
+    std::string message = "page references " + missing + ", which is not in the file";
+    if(qpdf_reported_damage)
+      {
+        message += " (qpdf had to repair the document while loading it)";
+      }
+    message += ": the PDF is truncated or damaged";
+
+    LOG_S(ERROR) << message;
+    throw missing_page_object_error(message);
+  }
+
   pdf_decoder<DOCUMENT>::page_decoder_ptr
   pdf_decoder<DOCUMENT>::make_thread_safe_page_decoder(int page_number,
                                                        bool keep_qpdf_warnings)
   {
+    ensure_page_content_present(page_number);
+
     std::pair<int, std::shared_ptr<std::string> > result =
       get_thread_safe_page_buffer(page_number, keep_qpdf_warnings);
 
@@ -452,6 +595,7 @@ namespace pdflib
   void pdf_decoder<DOCUMENT>::update_timings(pdf_timings& timings_,
                                              bool set_timer)
   {
+    std::lock_guard<std::mutex> lock(thread_safe_buffer_mutex);
     if(set_timer)
       {
         // Clear existing timings when starting a new batch
@@ -499,7 +643,12 @@ namespace pdflib
     // Get the QPDF page and decode it
     std::shared_ptr<pdf_decoder<PAGE> > page_decoder = nullptr;
     {
-      bool set_timer = (timings.empty());
+      bool set_timer;
+      {
+        std::lock_guard<std::mutex> lock(thread_safe_buffer_mutex);
+        set_timer = timings.empty();
+      }
+      std::unique_lock<std::mutex> document_lock(thread_safe_buffer_mutex, std::defer_lock);
 
       if(config.do_thread_safe)
         {
@@ -510,12 +659,17 @@ namespace pdflib
       else
         {
 	  LOG_S(INFO) << "decoding page thread-unsafe";
+          ensure_page_content_present(page_number);
+          // This path decodes directly from the shared QPDF. A lazy structure
+          // reader can run with the GIL released, so protect the whole decode.
+          document_lock.lock();
           QPDFObjectHandle qpdf_page = qpdf_pages.at(page_number);
 
           page_decoder = std::make_shared<pdf_decoder<PAGE>>(qpdf_page, page_number);
         }
 
       page_decoder->decode_page(config);
+      if(document_lock.owns_lock()) { document_lock.unlock(); }
 
       update_timings(page_decoder->get_timings(), set_timer);
     }
@@ -538,7 +692,10 @@ namespace pdflib
 
     std::stringstream ss;
     ss << pdf_timings::PREFIX_DECODE_PAGE << page_number;
-    timings.add_timing(ss.str(), timer.get_time());
+    {
+      std::lock_guard<std::mutex> lock(thread_safe_buffer_mutex);
+      timings.add_timing(ss.str(), timer.get_time());
+    }
 
     return page_decoder;
   }

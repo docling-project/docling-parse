@@ -7,6 +7,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <chrono>
 #include <cstring>
 #include <functional>
 #include <string>
@@ -22,10 +23,57 @@ namespace pdflib
   class glyph_bbox_cache
   {
   public:
-    explicit glyph_bbox_cache(std::size_t capacity): capacity_(capacity)
+    struct diagnostics
+    {
+      uint64_t lookups = 0, hits = 0, misses = 0;
+      uint64_t insertions = 0, updates = 0, evictions = 0;
+      uint64_t outline_attempts = 0, outline_successes = 0;
+      double lookup_s = 0.0, hit_touch_s = 0.0;
+      double insert_s = 0.0, outline_s = 0.0;
+    };
+
+    // Disabled scopes perform no clock reads or counter updates. Diagnostics
+    // belong to this worker-local cache and require no synchronization.
+    class scoped_measurement
+    {
+    public:
+      scoped_measurement(glyph_bbox_cache& cache, double diagnostics::*slot):
+        stats_(cache.diagnostics_enabled_ ? &cache.diagnostics_ : nullptr),
+        slot_(slot),
+        start_(stats_ ? clock_type::now() : clock_type::time_point{})
+      {}
+
+      ~scoped_measurement() { stop(); }
+      scoped_measurement(const scoped_measurement&) = delete;
+      scoped_measurement& operator=(const scoped_measurement&) = delete;
+
+      void stop()
+      {
+        if(stats_)
+          {
+            stats_->*slot_ += std::chrono::duration<double>(clock_type::now() - start_).count();
+            stats_ = nullptr;
+          }
+      }
+
+      void outline_attempt() { if(stats_) { ++stats_->outline_attempts; } }
+      void outline_success() { if(stats_) { ++stats_->outline_successes; } }
+
+    private:
+      using clock_type = std::chrono::steady_clock;
+      diagnostics* stats_;
+      double diagnostics::*slot_;
+      clock_type::time_point start_;
+    };
+
+    explicit glyph_bbox_cache(std::size_t capacity, bool diagnostics_enabled = false):
+      capacity_(capacity), diagnostics_enabled_(diagnostics_enabled)
     {
       heap_.reserve(capacity_);
     }
+
+    diagnostics snapshot_diagnostics() const { return diagnostics_; }
+    std::size_t size() const { return entries_.size(); }
 
     // Returns false on a miss or when caching is disabled (capacity == 0).
     bool find(const std::string& face_key,
@@ -33,12 +81,27 @@ namespace pdflib
               double font_size,
               BLBox& bbox)
     {
-      if(capacity_ == 0) { return false; }
+      if(diagnostics_enabled_) { ++diagnostics_.lookups; }
+      if(capacity_ == 0)
+        {
+          if(diagnostics_enabled_) { ++diagnostics_.misses; }
+          return false;
+        }
 
+      scoped_measurement lookup(*this, &diagnostics::lookup_s);
       const auto itr = entries_.find(make_key(face_key, glyph_id, font_size));
-      if(itr == entries_.end()) { return false; }
+      lookup.stop();
+      if(itr == entries_.end())
+        {
+          if(diagnostics_enabled_) { ++diagnostics_.misses; }
+          return false;
+        }
 
-      touch(itr);
+      if(diagnostics_enabled_) { ++diagnostics_.hits; }
+      {
+        scoped_measurement hit_touch(*this, &diagnostics::hit_touch_s);
+        touch(itr);
+      }
       bbox = itr->second.bbox;
       return true;
     }
@@ -50,10 +113,12 @@ namespace pdflib
     {
       if(capacity_ == 0) { return; }
 
+      scoped_measurement insertion(*this, &diagnostics::insert_s);
       key cache_key = make_key(face_key, glyph_id, font_size);
       const auto existing = entries_.find(cache_key);
       if(existing != entries_.end())
         {
+          if(diagnostics_enabled_) { ++diagnostics_.updates; }
           existing->second.bbox = bbox;
           touch(existing);
           return;
@@ -61,11 +126,12 @@ namespace pdflib
 
       if(entries_.size() >= capacity_)
         {
-          // The heap root is the exact LFU victim. Recency breaks equal-use
-          // ties, preventing an old one-hit entry from living forever.
+          // The heap root is the least recently used entry, so glyphs from
+          // earlier documents cannot retain slots on frequency alone.
           const key victim_key = *heap_.front()->cache_key;
           remove_root();
           entries_.erase(victim_key);
+          if(diagnostics_enabled_) { ++diagnostics_.evictions; }
         }
 
       entry new_entry;
@@ -73,6 +139,7 @@ namespace pdflib
       new_entry.use_count = 1;
       new_entry.last_used = ++clock_;
       const auto inserted = entries_.emplace(std::move(cache_key), new_entry);
+      if(diagnostics_enabled_) { ++diagnostics_.insertions; }
       entry& value = inserted.first->second;
       value.cache_key = &inserted.first->first;
       value.heap_index = heap_.size();
@@ -136,9 +203,7 @@ namespace pdflib
 
     static bool is_less_evictable(const entry* left, const entry* right)
     {
-      return left->use_count != right->use_count
-        ? left->use_count < right->use_count
-        : left->last_used < right->last_used;
+      return left->last_used < right->last_used;
     }
 
     void swap_heap_entries(std::size_t left, std::size_t right)
@@ -194,6 +259,8 @@ namespace pdflib
     }
 
     std::size_t capacity_ = 0;
+    bool diagnostics_enabled_ = false;
+    diagnostics diagnostics_;
     uint64_t clock_ = 0;
     std::unordered_map<key, entry, key_hash> entries_;
     std::vector<entry*> heap_;

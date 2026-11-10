@@ -3,7 +3,8 @@
 
 from io import BytesIO
 
-from docling_core.types.doc.page import PdfWidget
+import pytest
+from docling_core.types.doc.page import PdfPageBoundaryType, PdfWidget
 
 from docling_parse.pdf_parser import (
     DecodeConfig,
@@ -11,7 +12,7 @@ from docling_parse.pdf_parser import (
     DoclingThreadedPdfParser,
     ThreadedPdfParserConfig,
 )
-from tests.pdf_builder import build_pdf, content_stream
+from tests.pdf_builder import build_pdf, content_stream, parse_page
 
 
 def _form_pdf() -> bytes:
@@ -118,3 +119,134 @@ def test_acroform_widget_contract_matches_threaded_parser():
 
     assert [_widget_data(widget) for widget in sequential] == expected
     assert [_widget_data(widget) for widget in threaded] == expected
+
+
+def _shifted_crop_box_pdf(rotate: int) -> bytes:
+    # Media box at the origin, crop box at (50, 40). The widget and the link
+    # both frame the word ``Hello`` drawn at user-space (100, 120).
+    return build_pdf(
+        [
+            "<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [6 0 R] >> >>",
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 400 300] "
+            f"/CropBox [50 40 350 240] /Rotate {rotate} "
+            "/Resources << /Font << /F1 5 0 R >> >> "
+            "/Contents 4 0 R /Annots [6 0 R 7 0 R] >>",
+            content_stream("BT /F1 12 Tf 100 120 Td (Hello) Tj ET\n"),
+            "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+            "<< /Type /Annot /Subtype /Widget /FT /Tx /T (name) "
+            "/Rect [95 110 145 140] >>",
+            "<< /Type /Annot /Subtype /Link /Rect [95 110 145 140] "
+            "/A << /S /URI /URI (https://example.com) >> >>",
+        ]
+    )
+
+
+@pytest.mark.parametrize("rotate", [0, 90, 180, 270])
+@pytest.mark.parametrize(
+    "boundary_type", [PdfPageBoundaryType.CROP_BOX, PdfPageBoundaryType.MEDIA_BOX]
+)
+def test_widgets_and_hyperlinks_share_the_text_cells_boundary_frame(
+    rotate: int, boundary_type: PdfPageBoundaryType
+):
+    document = DoclingPdfParser(loglevel="fatal").load(
+        BytesIO(_shifted_crop_box_pdf(rotate)),
+        boundary_type=boundary_type,
+        decode_config=DecodeConfig(keep_qpdf_warnings=False),
+    )
+    page = document.get_page(1)
+
+    word = next(c for c in page.word_cells if c.text == "Hello").rect.to_bounding_box()
+    (widget,) = page.widgets
+    (hyperlink,) = page.hyperlinks
+
+    for annot in (widget, hyperlink):
+        box = annot.rect.to_bounding_box()
+        assert (annot.rect.r_x0, annot.rect.r_y0) == pytest.approx((box.l, box.b))
+        assert sorted((box.width, box.height)) == pytest.approx([30.0, 50.0])
+        assert box.l <= word.l and word.r <= box.r
+        assert box.b <= min(word.b, word.t) and max(word.b, word.t) <= box.t
+
+
+def _radio_group_pdf(option: str) -> bytes:
+    # A two-option radio group whose selected option is `option`, written
+    # verbatim as the name token of /V and /AS. The field name carries the
+    # same umlaut as a PDFDocEncoding text string.
+    return build_pdf(
+        [
+            "<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [4 0 R] >> >>",
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 200] "
+            "/Resources << /Font << /F1 7 0 R >> >> "
+            "/Contents 8 0 R /Annots [5 0 R 6 0 R] >>",
+            f"<< /FT /Btn /Ff 49152 /T (zur\\374ck) /V {option} /Kids [5 0 R 6 0 R] >>",
+            "<< /Type /Annot /Subtype /Widget /Parent 4 0 R "
+            f"/AS {option} /Rect [10 10 30 30] >>",
+            "<< /Type /Annot /Subtype /Widget /Parent 4 0 R "
+            "/AS /Off /Rect [40 10 60 30] >>",
+            "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+            content_stream("BT /F1 12 Tf 20 100 Td (page text) Tj ET\n"),
+        ]
+    )
+
+
+@pytest.mark.parametrize(
+    "option",
+    ["/R#fcckfahrt", "/R#c3#bcckfahrt"],
+    ids=["pdfdoc_encoding", "utf8"],
+)
+def test_non_ascii_option_name_is_transcoded_and_keeps_the_page(option):
+    # Older form tools spell umlauts in option names as PDFDocEncoding
+    # bytes. Those bytes are not UTF-8, and a std::string that is not
+    # UTF-8 raises UnicodeDecodeError on the pybind11 boundary, which used
+    # to abort the whole page (issue #391).
+    page = parse_page(_radio_group_pdf(option))
+
+    assert [cell.text for cell in page.textline_cells] == ["page text"]
+    assert [
+        (w.widget_field_name, w.widget_text, w.widget_appearance_state)
+        for w in page.widgets
+    ] == [
+        ("zurück", "/Rückfahrt", "/Rückfahrt"),
+        ("zurück", "/Rückfahrt", "/Off"),
+    ]
+
+
+def _form_with_gbk_font_keys() -> bytes:
+    # pdfium's test corpus (fx/form/combo_box_format.pdf and three more) names
+    # a default-resources font /#cb#ce#cc#e5: GBK bytes for 宋体, not UTF-8.
+    # Two keys that differ only in such bytes must stay two keys.
+    return build_pdf(
+        [
+            "<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [5 0 R] "
+            "/DA (/Helv 0 Tf 0 g) /DR << /Font << /Helv 6 0 R "
+            "/#cb#ce#cc#e5 6 0 R /#cc#e5#cb#ce 6 0 R >> >> >> >>",
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] "
+            "/Contents 4 0 R /Annots [5 0 R] >>",
+            content_stream(""),
+            "<< /Type /Annot /Subtype /Widget /FT /Tx /T (name) "
+            "/Rect [10 160 100 180] >>",
+            "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+        ]
+    )
+
+
+def test_dictionary_keys_that_are_not_utf8_keep_the_form():
+    # The export cannot know the code page of a name, so the keys come out
+    # transcoded from PDFDocEncoding like every other name it cannot read as
+    # UTF-8. What matters is that the form loads and the keys stay distinct:
+    # replacing the bytes with U+FFFD would merge the two font entries.
+    doc = DoclingPdfParser(loglevel="fatal").load(
+        path_or_stream=BytesIO(_form_with_gbk_font_keys()), lazy=True
+    )
+    annotations = doc.get_annotations()
+    assert annotations is not None and annotations.form is not None
+
+    fonts = annotations.form["/DR"]["/Font"]
+    assert sorted(fonts) == [
+        "/Helv",
+        "/" + bytes.fromhex("cbcecce5").decode("latin-1"),
+        "/" + bytes.fromhex("cce5cbce").decode("latin-1"),
+    ]
+    doc.unload()

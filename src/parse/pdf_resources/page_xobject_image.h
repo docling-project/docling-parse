@@ -4,6 +4,7 @@
 #define PDF_PAGE_XOBJECT_IMAGE_RESOURCE_H
 
 #include <parse/utils/ccitt/ccitt_utils.h>
+#include <third_party/pdfium_jbig2.h>
 
 #include <cstdint>
 #include <cstring>
@@ -18,6 +19,15 @@ namespace pdflib
 
   namespace detail
   {
+    // [/CalGray dict] and [/CalRGB dict] samples read as their device space; the
+    // calibration (WhitePoint, Gamma, Matrix) is not modelled. Other names pass through.
+    inline std::string cal_to_device_space(std::string const& name)
+    {
+      if(name == "/CalGray") return "/DeviceGray";
+      if(name == "/CalRGB")  return "/DeviceRGB";
+      return name;
+    }
+
     inline int icc_signature_to_components(char const* sig)
     {
       if(std::memcmp(sig, "GRAY", 4) == 0) return 1;
@@ -195,8 +205,8 @@ namespace pdflib
     std::shared_ptr<Buffer>  get_decoded_stream_data() const;
     bool                     has_soft_mask_data() const;
     std::shared_ptr<std::vector<uint8_t>> get_soft_mask_data() const;
-    int get_soft_mask_width() const { return soft_mask_width; }
-    int get_soft_mask_height() const { return soft_mask_height; }
+    int get_soft_mask_width() const { load_pixels(); return soft_mask_width; }
+    int get_soft_mask_height() const { load_pixels(); return soft_mask_height; }
 
     // Determine file extension from filters (e.g. ".jpg", ".jp2", ".jb2", ".bin")
     std::string pick_extension() const;
@@ -215,9 +225,12 @@ namespace pdflib
 
     void init_filters();
 
-    void init_stream_data();
-    void init_codec_stream_data();
-    void init_soft_mask_data();
+    // Defilters the samples and the soft mask on first use of a pixel getter.
+    void load_pixels() const;
+
+    void init_stream_data() const;
+    void init_codec_stream_data() const;
+    void init_soft_mask_data() const;
 
     // Resolves a /Separation or /DeviceN /ColorSpace array into a colour space
     // resource, keeping it only when its tint transform is usable.
@@ -225,9 +238,11 @@ namespace pdflib
 
   private:
 
-    QPDFObjectHandle qpdf_xobject;
+    // mutable: QPDF's stream readers are non-const, and load_pixels() reads
+    // the stream from the const getters.
+    mutable QPDFObjectHandle qpdf_xobject;
 
-    QPDFObjectHandle qpdf_xobject_dict;
+    mutable QPDFObjectHandle qpdf_xobject_dict;
     nlohmann::json   json_xobject_dict;
 
     std::string xobject_key;
@@ -257,21 +272,23 @@ namespace pdflib
     std::string      intent;
     std::vector<std::string> image_filters;
 
-    // Stream data
-    std::shared_ptr<Buffer> raw_stream_data;
+    // Stream data. Loaded lazily by load_pixels(): pages that share one
+    // /Resources dictionary list every image of the document, but draw few.
+    mutable std::shared_ptr<Buffer> raw_stream_data;
 
     // The raw stream with the transport filters that precede the image codec
     // undone -- the bytes the codec was handed at encode time. Aliases
     // raw_stream_data when the codec is the first filter in the chain.
-    std::shared_ptr<Buffer> codec_stream_data;
+    mutable std::shared_ptr<Buffer> codec_stream_data;
 
-    std::shared_ptr<Buffer> decoded_stream_data;
-    std::shared_ptr<std::vector<uint8_t>> soft_mask_data;
+    mutable std::shared_ptr<Buffer> decoded_stream_data;
+    mutable std::shared_ptr<std::vector<uint8_t>> soft_mask_data;
 
-    // set() argument, kept so parse() can consult it
+    // set() argument, kept so load_pixels() can consult it
     bool extract_pixels_ = true;
-    int soft_mask_width = 0;
-    int soft_mask_height = 0;
+    mutable bool pixels_loaded_ = false;
+    mutable int soft_mask_width = 0;
+    mutable int soft_mask_height = 0;
 
     // PDF image semantics
     std::vector<double> decode_array; // length 2*ncomp when present
@@ -325,6 +342,7 @@ namespace pdflib
     xobject_key  = xobject_key_;
     qpdf_xobject = qpdf_xobject_;
     extract_pixels_ = extract_pixels;
+    pixels_loaded_ = false;
 
     parse();
 
@@ -348,15 +366,23 @@ namespace pdflib
 
     init_filters();
     init_image_properties();
+  }
 
+  void pdf_resource<PAGE_XOBJECT_IMAGE>::load_pixels() const
+  {
     // Defiltering the samples and building the alpha plane is the whole cost
-    // of an image XObject; everything above comes from the dictionary. A
+    // of an image XObject; everything parse() reads comes from the
+    // dictionary. Deferring it to the first `Do` keeps a page from holding
+    // the pixels of images it only lists in a shared /Resources (#424). A
     // caller that only wants to know where the bitmaps are skips both.
-    if(extract_pixels_)
+    if(pixels_loaded_ or not extract_pixels_)
       {
-        init_stream_data();
-        init_soft_mask_data();
+        return;
       }
+    pixels_loaded_ = true;
+
+    init_stream_data();
+    init_soft_mask_data();
   }
 
   void pdf_resource<PAGE_XOBJECT_IMAGE>::init_image_properties()
@@ -599,7 +625,7 @@ namespace pdflib
                           }
                         else if(base_name.isName())
                           {
-                            indexed_base_cs = base_name.getName();
+                            indexed_base_cs = detail::cal_to_device_space(base_name.getName());
                             LOG_S(INFO) << "Indexed array base color space: " << indexed_base_cs;
                           }
 
@@ -762,6 +788,12 @@ namespace pdflib
                               }
                           }
                       }
+                  }
+                else if(name_obj.isName()
+                        and (name_obj.getName() == "/CalGray" or name_obj.getName() == "/CalRGB"))
+                  {
+                    color_space = detail::cal_to_device_space(name_obj.getName());
+                    LOG_S(INFO) << "reading " << name_obj.getName() << " samples as " << color_space;
                   }
               }
           }
@@ -1080,7 +1112,7 @@ namespace pdflib
       }
   }
 
-  void pdf_resource<PAGE_XOBJECT_IMAGE>::init_stream_data()
+  void pdf_resource<PAGE_XOBJECT_IMAGE>::init_stream_data() const
   {
     LOG_S(INFO) << __FUNCTION__;
 
@@ -1115,7 +1147,7 @@ namespace pdflib
     init_codec_stream_data();
   }
 
-  void pdf_resource<PAGE_XOBJECT_IMAGE>::init_codec_stream_data()
+  void pdf_resource<PAGE_XOBJECT_IMAGE>::init_codec_stream_data() const
   {
     // QPDF declares a whole /Filter chain unfilterable as soon as one of its
     // filters is an image codec it will not invert, so `decoded_stream_data`
@@ -1162,7 +1194,7 @@ namespace pdflib
       }
   }
 
-  void pdf_resource<PAGE_XOBJECT_IMAGE>::init_soft_mask_data()
+  void pdf_resource<PAGE_XOBJECT_IMAGE>::init_soft_mask_data() const
   {
     soft_mask_data.reset();
 
@@ -1241,10 +1273,9 @@ namespace pdflib
         return;
       }
 
-    // A stencil mask is very often CCITTFax-compressed, which qpdf cannot
-    // defilter; decode it here. `ccitt::decode` yields one byte per pixel
-    // with 0 = dark.
-    std::vector<uint8_t> ccitt_samples;
+    // A stencil mask is very often CCITTFax- or JBIG2-compressed, which qpdf
+    // cannot defilter; decode it here into one byte per pixel with 0 = dark.
+    std::vector<uint8_t> mask_samples;
     if(not smask.has_decoded_stream_data())
       {
         QPDFObjectHandle mdict = qpdf_smask.getDict();
@@ -1269,14 +1300,49 @@ namespace pdflib
               }
 
             auto encoded = smask.get_codec_stream_data();
-            ccitt_samples = ccitt::decode(
+            mask_samples = ccitt::decode(
               reinterpret_cast<const uint8_t*>(encoded->getBuffer()),
               encoded->getSize(), sm_w, sm_h, ccitt_parms);
-            if(ccitt_samples.size() < static_cast<size_t>(sm_w) * sm_h)
+            if(mask_samples.size() < static_cast<size_t>(sm_w) * sm_h)
               {
                 LOG_S(WARNING) << "mask CCITT decode too small for xobject_key="
                                << xobject_key;
                 return;
+              }
+            smask_bpc = 8;
+          }
+        else if(filter.find("JBIG2Decode") != std::string::npos and
+                smask.has_codec_stream_data())
+          {
+            // MRC scans stencil their foreground layer with a JBIG2 mask.
+            // `jbig2_decode` returns packed 1bpp rows with 0 = black, so
+            // expanding each bit to 0x00/0xFF matches the CCITT samples above.
+            auto encoded = smask.get_codec_stream_data();
+            auto globals = smask.get_jbig2_globals_data();
+            const bool has_globals = globals and globals->getSize() > 0;
+            auto bits = jbig2_decode(
+              {reinterpret_cast<const uint8_t*>(encoded->getBuffer()), encoded->getSize()},
+              {has_globals ? reinterpret_cast<const uint8_t*>(globals->getBuffer()) : nullptr,
+               has_globals ? globals->getSize() : 0},
+              static_cast<uint32_t>(sm_w), static_cast<uint32_t>(sm_h));
+
+            const size_t pitch = (static_cast<size_t>(sm_w) + 7u) / 8u;
+            if(bits.size() < pitch * static_cast<size_t>(sm_h))
+              {
+                LOG_S(WARNING) << "mask JBIG2 decode failed for xobject_key="
+                               << xobject_key;
+                return;
+              }
+
+            mask_samples.resize(static_cast<size_t>(sm_w) * sm_h);
+            for(int row = 0; row < sm_h; ++row)
+              {
+                for(int col = 0; col < sm_w; ++col)
+                  {
+                    const uint8_t byte = bits[static_cast<size_t>(row) * pitch + col / 8];
+                    const bool bit = ((byte >> (7 - (col % 8))) & 1u) != 0;
+                    mask_samples[static_cast<size_t>(row) * sm_w + col] = bit ? 0xFFu : 0x00u;
+                  }
               }
             smask_bpc = 8;
           }
@@ -1296,7 +1362,7 @@ namespace pdflib
     // eight columns to be the whole row, so the transparent part of the image
     // keeps painting. Expand to one byte per sample first.
     std::vector<uint8_t> smask_unpacked;
-    if(smask_bpc != 8 and ccitt_samples.empty())
+    if(smask_bpc != 8 and mask_samples.empty())
       {
         const size_t row_bits = static_cast<size_t>(sm_w) * static_cast<size_t>(smask_bpc);
         const size_t row_bytes = (row_bits + 7u) / 8u;
@@ -1336,7 +1402,7 @@ namespace pdflib
       }
 
     const size_t smask_expected = static_cast<size_t>(sm_w) * sm_h;
-    if(smask_unpacked.empty() and ccitt_samples.empty()
+    if(smask_unpacked.empty() and mask_samples.empty()
        and smask_buf->getSize() < smask_expected)
       {
         LOG_S(WARNING) << "SMask decoded stream too small for xobject_key=" << xobject_key
@@ -1357,7 +1423,7 @@ namespace pdflib
     out->resize(static_cast<size_t>(dst_w) * dst_h);
 
     auto const* src =
-      not ccitt_samples.empty() ? ccitt_samples.data()
+      not mask_samples.empty() ? mask_samples.data()
       : not smask_unpacked.empty() ? smask_unpacked.data()
       : reinterpret_cast<uint8_t const*>(smask_buf->getBuffer());
     auto const decode = smask.get_decode_array();
@@ -1378,8 +1444,8 @@ namespace pdflib
                 alpha = jpeg::apply_decode_component(alpha, decode[0], decode[1]);
               }
             // Stencil (/Mask): a 1-sample masks the pixel OUT, the inverse
-            // of /SMask's alpha reading. ccitt::decode returns 0 = dark =
-            // sample 0 = painted, so the same inversion applies there.
+            // of /SMask's alpha reading. The CCITT and JBIG2 samples above use
+            // 0 = dark = sample 0 = painted, so the same inversion applies there.
             (*out)[static_cast<size_t>(row) * dst_w + col] =
               stencil ? static_cast<uint8_t>(255 - alpha) : alpha;
           }
@@ -1546,41 +1612,49 @@ namespace pdflib
 
   bool pdf_resource<PAGE_XOBJECT_IMAGE>::has_raw_stream_data() const
   {
+    load_pixels();
     return (raw_stream_data != nullptr && raw_stream_data->getSize() > 0);
   }
 
   std::shared_ptr<Buffer> pdf_resource<PAGE_XOBJECT_IMAGE>::get_raw_stream_data() const
   {
+    load_pixels();
     return raw_stream_data;
   }
 
   bool pdf_resource<PAGE_XOBJECT_IMAGE>::has_codec_stream_data() const
   {
+    load_pixels();
     return (codec_stream_data != nullptr && codec_stream_data->getSize() > 0);
   }
 
   std::shared_ptr<Buffer> pdf_resource<PAGE_XOBJECT_IMAGE>::get_codec_stream_data() const
   {
+    load_pixels();
     return codec_stream_data;
   }
 
   bool pdf_resource<PAGE_XOBJECT_IMAGE>::has_decoded_stream_data() const
   {
+    load_pixels();
     return (decoded_stream_data != nullptr && decoded_stream_data->getSize() > 0);
   }
 
   std::shared_ptr<Buffer> pdf_resource<PAGE_XOBJECT_IMAGE>::get_decoded_stream_data() const
   {
+    load_pixels();
     return decoded_stream_data;
   }
 
   bool pdf_resource<PAGE_XOBJECT_IMAGE>::has_soft_mask_data() const
   {
+    load_pixels();
     return (soft_mask_data != nullptr and not soft_mask_data->empty());
   }
 
   std::shared_ptr<std::vector<uint8_t>> pdf_resource<PAGE_XOBJECT_IMAGE>::get_soft_mask_data() const
   {
+    load_pixels();
     return soft_mask_data;
   }
 

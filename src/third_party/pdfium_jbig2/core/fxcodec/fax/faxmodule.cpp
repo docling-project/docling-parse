@@ -86,7 +86,7 @@ int FindBit(pdfium::span<const uint8_t> data_buf,
   while (byte_pos < max_byte) {
     uint8_t data = data_buf[byte_pos] ^ bit_xor;
     if (data) {
-      return byte_pos * 8 + kOneLeadPos[data];
+      return std::min(byte_pos * 8 + kOneLeadPos[data], max_pos);
     }
     ++byte_pos;
   }
@@ -220,7 +220,8 @@ const uint8_t kFaxWhiteRunIns[] = {
     0,          0x04,       23,         0,          0x08,       20,
     0,          0x0c,       19,         0,          0x13,       26,
     0,          0x17,       21,         0,          0x18,       28,
-    0,          0x24,       27,         0,          0x28,       24,
+    0,          0x24,       27,         0,          0x27,       18,
+    0,          0x28,       24,
     0,          0x2B,       25,         0,          0x37,       256 % 256,
     256 / 256,  42,         0x02,       29,         0,          0x03,
     30,         0,          0x04,       45,         0,          0x05,
@@ -299,6 +300,7 @@ void FaxG4GetRow(const uint8_t* src_buf,
                  uint8_t* dest_buf,
                  pdfium::span<const uint8_t> ref_buf,
                  int columns) {
+  // See TABLE 1/T.6 "Code table" in ITU-T T.6.
   int a0 = -1;
   bool a0color = true;
   while (true) {
@@ -325,8 +327,10 @@ void FaxG4GetRow(const uint8_t* src_buf,
 
       bool bit2 = NextBit(src_buf, bitpos);
       if (bit1) {
+        // Mode "Vertical", VR(1), VL(1).
         v_delta = bit2 ? 1 : -1;
       } else if (bit2) {
+        // Mode "Horizontal".
         int run_len1 = 0;
         while (true) {
           int run = FaxGetRun(
@@ -336,10 +340,26 @@ void FaxG4GetRow(const uint8_t* src_buf,
                             kFaxBlackRunIns),
               src_buf, bitpos, bitsize);
           run_len1 += run;
+          if (run_len1 > columns) {
+            // No legal 1-D run exceeds the row width.
+            return;
+          }
           if (run < 64) {
             break;
           }
         }
+        if (a0 < 0) {
+          ++run_len1;
+        }
+        if (run_len1 < 0) {
+          return;
+        }
+
+        a1 = a0 + run_len1;
+        if (!a0color) {
+          FaxFillBits(dest_buf, columns, a0, a1);
+        }
+
         int run_len2 = 0;
         while (true) {
           int run = FaxGetRun(
@@ -349,57 +369,101 @@ void FaxG4GetRow(const uint8_t* src_buf,
                             kFaxWhiteRunIns),
               src_buf, bitpos, bitsize);
           run_len2 += run;
+          if (run_len2 > columns) {
+            // No legal 1-D run exceeds the row width.
+            return;
+          }
           if (run < 64) {
             break;
           }
         }
-        a1 = a0 + run_len1 + 1;
+        if (run_len2 < 0) {
+          return;
+        }
         a2 = a1 + run_len2;
-        if (!a0color) {
-          FaxFillBits(dest_buf, columns, a0 + 1, a1);
-        } else {
+        if (a0color) {
           FaxFillBits(dest_buf, columns, a1, a2);
         }
+
         a0 = a2;
-        continue;
+        if (a0 < columns) {
+          continue;
+        }
+
+        return;
       } else {
         if (*bitpos >= bitsize) {
           return;
         }
-        bool bit3 = NextBit(src_buf, bitpos);
-        if (bit3) {
+
+        if (NextBit(src_buf, bitpos)) {
+          // Mode "Pass".
+          if (!a0color) {
+            FaxFillBits(dest_buf, columns, a0, b2);
+          }
+
+          if (b2 >= columns) {
+            return;
+          }
+
+          a0 = b2;
+          continue;
+        }
+
+        if (*bitpos >= bitsize) {
+          return;
+        }
+
+        bool next_bit1 = NextBit(src_buf, bitpos);
+        if (*bitpos >= bitsize) {
+          return;
+        }
+
+        bool next_bit2 = NextBit(src_buf, bitpos);
+        if (next_bit1) {
+          // Mode "Vertical", VR(2), VL(2).
+          v_delta = next_bit2 ? 2 : -2;
+        } else if (next_bit2) {
           if (*bitpos >= bitsize) {
             return;
           }
-          bool bit4 = NextBit(src_buf, bitpos);
-          v_delta = bit4 ? 2 : -2;
+
+          // Mode "Vertical", VR(3), VL(3).
+          v_delta = NextBit(src_buf, bitpos) ? 3 : -3;
         } else {
           if (*bitpos >= bitsize) {
             return;
           }
-          bool bit4 = NextBit(src_buf, bitpos);
-          if (bit4) {
-            if (*bitpos >= bitsize) {
-              return;
-            }
-            bool bit5 = NextBit(src_buf, bitpos);
-            v_delta = bit5 ? 3 : -3;
-          } else {
-            return;
+
+          // Extension.
+          if (NextBit(src_buf, bitpos)) {
+            *bitpos += 3;
+            continue;
           }
+          *bitpos += 5;
+          return;
         }
       }
+    } else {
+      // Mode "Vertical", V(0).
     }
+
     a1 = b1 + v_delta;
     if (!a0color) {
-      FaxFillBits(dest_buf, columns, a0 + 1, a1);
-    } else {
-      FaxFillBits(dest_buf, columns, a1, b1);
+      FaxFillBits(dest_buf, columns, a0, a1);
     }
+
+    if (a1 >= columns) {
+      return;
+    }
+
+    // The position of picture element must be monotonic increasing.
+    if (a0 >= a1) {
+      return;
+    }
+
     a0 = a1;
-    if (a0 < columns) {
-      a0color = (dest_buf[a0 / 8] & (1 << (7 - a0 % 8))) != 0;
-    }
+    a0color = !a0color;
   }
 }
 

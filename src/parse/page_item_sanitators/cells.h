@@ -135,12 +135,16 @@ namespace pdflib
      * `ABC`. Geometry, font metadata, ordering, and active state are unchanged.
      *
      * @param[in,out] cells Cells whose text fields are normalized in place.
+     * @param do_char_normalization Also applies
+     * `text_constants::dash_replacements`, which fold typographic dashes and
+     * the minus sign to `-`.
      *
      * @par Complexity
      * Linear in the number of cells times the configured replacement count and
      * the cost of the individual string replacements.
      */
-    void sanitize_text(page_item<PAGE_CELLS>& cells);
+    void sanitize_text(page_item<PAGE_CELLS>& cells,
+                       bool do_char_normalization);
 
     /**
      * @brief Legacy in-place entry point for word or line contraction.
@@ -196,6 +200,50 @@ namespace pdflib
     {
       page_item<PAGE_CELLS> words;
       page_item<PAGE_CELLS> lines;
+    };
+
+    /**
+     * Unmarked gap, in neighboring character advances, above which a word
+     * starts in a run that carries explicit space glyphs. A letter-spaced
+     * line raises it, see `infer_spaced_word_gap()`.
+     */
+    static constexpr double spaced_word_gap_advances = 0.35;
+
+    /**
+     * Unmarked gap, in neighboring character advances, that starts a word
+     * in a run with space glyphs however wide its letter spacing:
+     * absolutely positioned table fields separate by whole advances.
+     */
+    static constexpr double spaced_word_gap_advances_max = 1.0;
+
+    /**
+     * Unmarked gap, in em above the run's letter spacing, at which a word
+     * starts in a run without space glyphs. Word gaps of TeX and of
+     * positioned headings reach down to about 0.21 em (0.14 em in condensed
+     * headline faces); kerns and per-glyph corrections stay under 0.11 em.
+     */
+    static constexpr double unspaced_word_gap_em = 0.13;
+
+    /**
+     * On a tightly justified line the threshold follows the line's own word
+     * spacing: this fraction of the median confirmed word gap, but never
+     * below `unspaced_word_gap_floor_em` and never above
+     * `unspaced_word_gap_em`. Pair kerning between a space and a capital
+     * `V`, `W`, `A` or a `w` takes up to 0.05 em off a 0.15 em word gap; the
+     * other word gaps of the line show that it is still a word gap.
+     */
+    static constexpr double tight_line_word_gap_fraction = 0.7;
+    static constexpr double unspaced_word_gap_floor_em = 0.09;
+
+    /**
+     * @brief Gap thresholds of one run without space glyphs, in em.
+     */
+    struct unspaced_gap_profile
+    {
+      /** Uniform letter spacing removed from every gap; 0 for most lines. */
+      double tracking = 0.0;
+      /** Gap above the letter spacing at which a word starts. */
+      double word_gap = unspaced_word_gap_em;
     };
 
     /**
@@ -266,6 +314,78 @@ namespace pdflib
      */
     static double forward_gap(const page_item<PAGE_CELL>& lhs,
                               const page_item<PAGE_CELL>& rhs);
+
+    /**
+     * @brief Tests whether a box cuts a cell's glyph along the writing axis.
+     *
+     * The glyph quad and the box are projected on the writing axis. The glyph
+     * counts as cut when the part of its extent outside the box exceeds
+     * CLIP_HIDDEN_FRACTION of the larger of that extent and the nominal text
+     * height. A box shorter than the nominal text height along the writing
+     * axis never cuts: a cell holds at least one glyph, while a clip drawn
+     * tight around the ink of a period, or a sliver clip under which a
+     * producer repaints a glyph, is narrower than the glyph itself. Only the
+     * writing axis matters: a glyph cut top or bottom still sits in its word
+     * and line.
+     *
+     * @param cell Character cell.
+     * @param box Axis-aligned box in page coordinates (x0, y0, x1, y1).
+     * @return True when the box hides part of the glyph along the writing
+     * axis.
+     * @par Complexity O(1).
+     */
+    static bool cut_by(const page_item<PAGE_CELL>& cell,
+                       const std::array<double, 4>& box);
+
+    /**
+     * @brief Tests whether a cell's own clip cuts its glyph.
+     *
+     * @return False for a cell without a clip box; otherwise cut_by() with
+     * the cell's clip box.
+     * @par Complexity O(1).
+     */
+    static bool clip_hides(const page_item<PAGE_CELL>& cell);
+
+    /**
+     * @brief Tests whether two cells were painted under different clips.
+     *
+     * A cell without a clip box differs from one with a clip box; two clip
+     * boxes differ when any edge differs by more than CLIP_BBOX_EPS.
+     *
+     * @par Complexity O(1).
+     */
+    static bool clips_differ(const page_item<PAGE_CELL>& lhs,
+                             const page_item<PAGE_CELL>& rhs);
+
+    /**
+     * @brief Tests whether a clip border separates two consecutive glyphs.
+     *
+     * A producer that fits text into a table cell clips it to the cell, and
+     * the hidden end of the text runs under the next cell. Two glyphs under
+     * different clip boxes, of which at least one is cut by its own clip,
+     * were fitted into different boxes and do not form one word or one line,
+     * whatever their geometry says. When only one of the two has a clip box,
+     * the other belongs to the same box as long as it lies inside it: some
+     * producers clip only the glyph that overflows the cell and draw the rest
+     * of the word unclipped. Glyphs that are whole under their clips always
+     * may join, since producers also wrap every text run, or every glyph, in
+     * a clip that does not cut it.
+     *
+     * @param lhs Previous visible character.
+     * @param rhs Following character.
+     * @return True when the two must stay in different words and lines.
+     * @par Complexity O(1).
+     */
+    static bool clip_boundary(const page_item<PAGE_CELL>& lhs,
+                              const page_item<PAGE_CELL>& rhs);
+
+    // Fraction of a glyph's extent along the writing axis (or of its nominal
+    // text height, whichever is larger) that a box must hide before the glyph
+    // counts as cut.
+    static constexpr double CLIP_HIDDEN_FRACTION = 0.2;
+
+    // Clip boxes whose edges differ by less than this are the same clip.
+    static constexpr double CLIP_BBOX_EPS = 1.e-3;
 
     /**
      * @brief Recognizes a nearby off-baseline component placed by cursor
@@ -372,22 +492,92 @@ namespace pdflib
     static std::vector<line_run> collect_line_runs(page_item<PAGE_CELLS>& cells);
 
     /**
-     * @brief Infers a line-local normalized threshold for word separation.
+     * @brief Unmarked gap between two cells in units of their advances.
      *
-     * Non-space cursor-placement gaps are divided by the neighboring cells'
-     * average advances. A fixed eight-iteration, one-dimensional
-     * two-cluster k-means separates ordinary character gaps from dilated word
-     * gaps. Sparse or insufficiently separated samples use a conservative
-     * default threshold of 0.25; valid inferred thresholds are clamped to at
-     * least 0.18. Contraction caps the resulting threshold at 0.35 so a much
-     * larger gap elsewhere in a short line cannot hide a word boundary.
-     * Runs containing explicit spaces use the same cap for unmarked gaps.
+     * The forward gap is divided by the mean advance of the two cells, so a
+     * gap of one narrow letter counts as 1.0 next to `i` and as 0.3 next to
+     * `m`. Runs that carry explicit space glyphs use this unit for the
+     * unmarked gaps that remain between them.
      *
-     * @param run One line of cells in source order.
-     * @return Dimensionless normalized gap above which a new word begins.
-     * @par Complexity O(n), with a constant number of clustering iterations.
+     * @return Dimensionless non-negative gap.
+     * @par Complexity O(1).
      */
-    static double infer_word_gap(const line_run& run);
+    static double advance_gap(const page_item<PAGE_CELL>& lhs,
+                              const page_item<PAGE_CELL>& rhs);
+
+    /**
+     * @brief Word-gap threshold of a run with space glyphs, in advances.
+     *
+     * The space glyphs mark the words, and an unmarked gap adds a boundary
+     * above `spaced_word_gap_advances`. Letter spacing opens every gap of a
+     * tracked line, often past that, so the threshold follows the line's
+     * own letter spacing: 1.5 times the median unmarked gap below one
+     * advance, plus 0.20. The median is taken over the gaps between glyphs
+     * that are not leader dots (dots are spaced like words and would pass
+     * for tracking), and needs at least three of them: a single gap, as
+     * between a lone math symbol or one table digit and its neighbour, is
+     * no evidence of tracking. The result never exceeds
+     * `spaced_word_gap_advances_max`.
+     *
+     * @param run One line of cells in source order, with space glyphs.
+     * @return Threshold in neighboring character advances.
+     * @par Complexity O(n) plus one selection.
+     */
+    static double infer_spaced_word_gap(const line_run& run);
+
+    /**
+     * @brief Unmarked gap between two cells in units of the font size (em).
+     *
+     * The forward gap is divided by the mean nominal text height of the two
+     * cells, which is the font size in page units. Unlike `advance_gap()`,
+     * the unit does not depend on which glyphs enclose the gap: a TJ word
+     * space of 0.25 em measures 0.25 next to `i` and next to `m` alike.
+     * Cells without placement metadata fall back to their geometric height.
+     *
+     * @return Dimensionless non-negative gap.
+     * @par Complexity O(1).
+     */
+    static double em_gap(const page_item<PAGE_CELL>& lhs,
+                         const page_item<PAGE_CELL>& rhs);
+
+    /**
+     * @brief Whether the seam between two cells touches a CJK character.
+     *
+     * Looks at the last code point of `lhs` and the first of `rhs`.
+     *
+     * @par Complexity O(length of the two texts).
+     */
+    static bool touches_cjk(const page_item<PAGE_CELL>& lhs,
+                            const page_item<PAGE_CELL>& rhs);
+
+    /**
+     * @brief Letter spacing and word-gap threshold of a run without space
+     * glyphs, in em.
+     *
+     * Letter-spaced headings and justified CJK text open every gap of the
+     * line by the same amount. That amount (`tracking`) is removed from each
+     * gap before the word-gap threshold is applied, so tracking does not
+     * read as word spacing. The estimate uses the em gaps of
+     * baseline-compatible seams and needs at least four of them:
+     *
+     * - when more than half of the seams touch a CJK character, the median
+     *   gap, at most 0.5 em (justification spreads every character);
+     * - otherwise the 20th-percentile gap, but only when fewer than a tenth
+     *   of the gaps are zero (letters that touch are not letter-spaced) and
+     *   the value lies in (0.03, 0.2] em. Wider tracking is not recognised,
+     *   because positioned mathematics reaches the same gaps.
+     *
+     * Ordinary lines have a tracking of 0. For them, the threshold
+     * (`word_gap`) starts at `unspaced_word_gap_em` and follows the line's
+     * own word spacing when that is tight: with at least two gaps above the
+     * threshold, it becomes `tight_line_word_gap_fraction` of their median,
+     * clamped to [`unspaced_word_gap_floor_em`, `unspaced_word_gap_em`].
+     *
+     * @param run One line of cells in source order, without space glyphs.
+     * @return Tracking and word-gap threshold for the run.
+     * @par Complexity O(n log n) for the sort.
+     */
+    static unspaced_gap_profile infer_unspaced_gap_profile(const line_run& run);
 
     /**
      * @brief Appends one cell to a text aggregate and expands its geometry.
@@ -412,10 +602,14 @@ namespace pdflib
      * @brief Constructs word and line cells in a single contraction pass.
      *
      * Builds line runs and treats explicit space cells as authoritative
-     * boundaries. Runs without them infer a line-local cursor-placement gap
-     * threshold. Both kinds of runs split unmarked gaps above 0.35 neighboring
-     * character advances. Words are then merged
-     * with normalized spaces into one line. Both levels retain maximum
+     * boundaries. In a run that carries them, an unmarked gap above 0.35
+     * neighboring character advances also starts a word, or above more on
+     * a letter-spaced line, see `infer_spaced_word_gap()`. A run without any
+     * space glyph (TeX output, most positioned headings) is judged in font
+     * size units instead: a gap starts a word when it exceeds the run's
+     * letter spacing by more than the run's word-gap threshold, see
+     * `infer_unspaced_gap_profile()`. Words are then
+     * merged with normalized spaces into one line. Both levels retain maximum
      * enclosing rotation-aligned bounding boxes.
      * Visible glyphs without a recoverable Unicode mapping retain their U+FFFD
      * replacement character, so their aggregates remain honest, non-empty
@@ -479,10 +673,27 @@ namespace pdflib
   {
     if(lhs.has_text_placement and rhs.has_text_placement)
       {
-        return (rhs.text_origin_x - lhs.text_advance_x) *
-                 lhs.writing_axis_x +
-               (rhs.text_origin_y - lhs.text_advance_y) *
-                 lhs.writing_axis_y;
+        const double gap =
+          (rhs.text_origin_x - lhs.text_advance_x) * lhs.writing_axis_x +
+          (rhs.text_origin_y - lhs.text_advance_y) * lhs.writing_axis_y;
+
+        // Right-to-left scripts are often emitted in logical order under a
+        // left-to-right text matrix, each glyph placed before the previous one
+        // by negative character spacing or TJ offsets. The gap is then the
+        // distance from the next glyph's advance end back to the previous
+        // origin.
+        const double progression =
+          (rhs.text_origin_x - lhs.text_origin_x) * lhs.writing_axis_x +
+          (rhs.text_origin_y - lhs.text_origin_y) * lhs.writing_axis_y;
+        if(not lhs.left_to_right and not rhs.left_to_right and
+           progression < 0.0)
+          {
+            return (lhs.text_origin_x - rhs.text_advance_x) *
+                     lhs.writing_axis_x +
+                   (lhs.text_origin_y - rhs.text_advance_y) *
+                     lhs.writing_axis_y;
+          }
+        return gap;
       }
 
     double ux = lhs.r_x1 - lhs.r_x0;
@@ -515,6 +726,113 @@ namespace pdflib
       ? 0.5 * (rhs.r_y0 + rhs.r_y3)
       : 0.5 * (rhs.r_y1 + rhs.r_y2);
     return (head_x - tail_x) * ux + (head_y - tail_y) * uy;
+  }
+
+  inline bool page_item_sanitator<PAGE_CELLS>::cut_by(
+      const page_item<PAGE_CELL>& cell,
+      const std::array<double, 4>& box)
+  {
+    double ux = cell.has_text_placement
+      ? cell.writing_axis_x : cell.r_x1 - cell.r_x0;
+    double uy = cell.has_text_placement
+      ? cell.writing_axis_y : cell.r_y1 - cell.r_y0;
+    const double norm = std::hypot(ux, uy);
+    if(norm <= 1.e-9)
+      {
+        return false;
+      }
+    ux /= norm;
+    uy /= norm;
+
+    auto extent = [&](const std::array<std::pair<double, double>, 4>& corners,
+                      double& lo, double& hi)
+    {
+      lo = std::numeric_limits<double>::infinity();
+      hi = -std::numeric_limits<double>::infinity();
+      for(const auto& corner : corners)
+        {
+          const double u = corner.first * ux + corner.second * uy;
+          lo = std::min(lo, u);
+          hi = std::max(hi, u);
+        }
+    };
+
+    double glyph_lo = 0.0, glyph_hi = 0.0;
+    extent({{{cell.r_x0, cell.r_y0}, {cell.r_x1, cell.r_y1},
+             {cell.r_x2, cell.r_y2}, {cell.r_x3, cell.r_y3}}},
+           glyph_lo, glyph_hi);
+
+    double box_lo = 0.0, box_hi = 0.0;
+    extent({{{box[0], box[1]}, {box[2], box[1]},
+             {box[2], box[3]}, {box[0], box[3]}}},
+           box_lo, box_hi);
+
+    // a box that cannot hold one glyph is not a cell
+    if(box_hi - box_lo < cell.nominal_text_height)
+      {
+        return false;
+      }
+
+    const double hidden = std::max(0.0, box_lo - glyph_lo) +
+                          std::max(0.0, glyph_hi - box_hi);
+    const double scale = std::max({1.e-6,
+                                   glyph_hi - glyph_lo,
+                                   cell.nominal_text_height});
+    return hidden > CLIP_HIDDEN_FRACTION * scale;
+  }
+
+  inline bool page_item_sanitator<PAGE_CELLS>::clip_hides(
+      const page_item<PAGE_CELL>& cell)
+  {
+    if(not cell.has_clip_bbox)
+      {
+        return false;
+      }
+    return cut_by(cell, {cell.clip_x0, cell.clip_y0,
+                         cell.clip_x1, cell.clip_y1});
+  }
+
+  inline bool page_item_sanitator<PAGE_CELLS>::clips_differ(
+      const page_item<PAGE_CELL>& lhs,
+      const page_item<PAGE_CELL>& rhs)
+  {
+    if(lhs.has_clip_bbox != rhs.has_clip_bbox)
+      {
+        return true;
+      }
+    if(not lhs.has_clip_bbox)
+      {
+        return false;
+      }
+    return std::abs(lhs.clip_x0 - rhs.clip_x0) > CLIP_BBOX_EPS or
+           std::abs(lhs.clip_y0 - rhs.clip_y0) > CLIP_BBOX_EPS or
+           std::abs(lhs.clip_x1 - rhs.clip_x1) > CLIP_BBOX_EPS or
+           std::abs(lhs.clip_y1 - rhs.clip_y1) > CLIP_BBOX_EPS;
+  }
+
+  inline bool page_item_sanitator<PAGE_CELLS>::clip_boundary(
+      const page_item<PAGE_CELL>& lhs,
+      const page_item<PAGE_CELL>& rhs)
+  {
+    if(lhs.has_clip_bbox and rhs.has_clip_bbox)
+      {
+        return clips_differ(lhs, rhs) and
+               (clip_hides(lhs) or clip_hides(rhs));
+      }
+    if(not lhs.has_clip_bbox and not rhs.has_clip_bbox)
+      {
+        return false;
+      }
+
+    // one clip box: the cut glyph and its box, and the glyph without a clip
+    const page_item<PAGE_CELL>& clipped = lhs.has_clip_bbox ? lhs : rhs;
+    const page_item<PAGE_CELL>& other = lhs.has_clip_bbox ? rhs : lhs;
+    if(not clip_hides(clipped))
+      {
+        return false;
+      }
+    return cut_by(other, {clipped.clip_x0, clipped.clip_y0,
+                          clipped.clip_x1, clipped.clip_y1});
   }
 
   inline bool page_item_sanitator<PAGE_CELLS>::word_baselines_compatible(
@@ -648,6 +966,11 @@ namespace pdflib
       const page_item<PAGE_CELL>& lhs,
       const page_item<PAGE_CELL>& rhs)
   {
+    if(clip_boundary(lhs, rhs))
+      {
+        return false;
+      }
+
     double lux = lhs.has_text_placement
       ? lhs.writing_axis_x : lhs.r_x1 - lhs.r_x0;
     double luy = lhs.has_text_placement
@@ -730,78 +1053,172 @@ namespace pdflib
     return runs;
   }
 
-  inline double page_item_sanitator<PAGE_CELLS>::infer_word_gap(
+  inline double page_item_sanitator<PAGE_CELLS>::advance_gap(
+      const page_item<PAGE_CELL>& lhs,
+      const page_item<PAGE_CELL>& rhs)
+  {
+    const double scale = 0.5 * (cell_advance_length(lhs) +
+                                cell_advance_length(rhs));
+    return std::max(0.0, forward_gap(lhs, rhs)) / std::max(1.e-6, scale);
+  }
+
+  inline double page_item_sanitator<PAGE_CELLS>::infer_spaced_word_gap(
       const line_run& run)
   {
-    std::vector<double> gaps;
+    // The unmarked gaps between the space glyphs, letters only: a gap next
+    // to a leader dot is a word gap whatever its size.
+    std::vector<double> letter_gaps;
     const page_item<PAGE_CELL>* previous = nullptr;
-    bool crossed_explicit_space = false;
+    for(const auto& cell : run.cells)
+      {
+        if(is_semantic_space(cell))
+          {
+            previous = nullptr;
+            continue;
+          }
+        if(previous != nullptr and previous->text != "." and cell.text != "." and
+           not clip_boundary(*previous, cell))
+          {
+            const double gap = advance_gap(*previous, cell);
+            if(gap <= spaced_word_gap_advances_max)
+              {
+                letter_gaps.push_back(gap);
+              }
+          }
+        previous = &cell;
+      }
+
+    if(letter_gaps.size() < 3)
+      {
+        return spaced_word_gap_advances;
+      }
+    auto median = letter_gaps.begin() + letter_gaps.size() / 2;
+    std::nth_element(letter_gaps.begin(), median, letter_gaps.end());
+    return std::min(spaced_word_gap_advances_max,
+                    std::max(spaced_word_gap_advances, 1.5 * (*median) + 0.20));
+  }
+
+  inline double page_item_sanitator<PAGE_CELLS>::em_gap(
+      const page_item<PAGE_CELL>& lhs,
+      const page_item<PAGE_CELL>& rhs)
+  {
+    double em = 0.5 * (lhs.nominal_text_height + rhs.nominal_text_height);
+    if(not std::isfinite(em) or em <= 1.e-6)
+      {
+        // Legacy or synthetic cells without placement metadata: the glyph
+        // box is about one em tall.
+        em = std::max(1.e-6, 0.5 * (cell_height(lhs) + cell_height(rhs)));
+      }
+    return std::max(0.0, forward_gap(lhs, rhs)) / em;
+  }
+
+  inline bool page_item_sanitator<PAGE_CELLS>::touches_cjk(
+      const page_item<PAGE_CELL>& lhs,
+      const page_item<PAGE_CELL>& rhs)
+  {
+    auto edge_is_cjk = [](const std::string& text, bool last) -> bool
+    {
+      if(text.empty() or not utf8::is_valid(text.begin(), text.end()))
+        {
+          return false;
+        }
+      std::vector<uint32_t> code_points;
+      utf8::utf8to32(text.begin(), text.end(),
+                     std::back_inserter(code_points));
+      if(code_points.empty())
+        {
+          return false;
+        }
+      return utils::string::is_cjk_char(last ? code_points.back()
+                                             : code_points.front());
+    };
+    return edge_is_cjk(lhs.text, true) or edge_is_cjk(rhs.text, false);
+  }
+
+  inline typename page_item_sanitator<PAGE_CELLS>::unspaced_gap_profile
+  page_item_sanitator<PAGE_CELLS>::infer_unspaced_gap_profile(
+      const line_run& run)
+  {
+    unspaced_gap_profile profile;
+    std::vector<double> gaps;
+    std::size_t seams = 0;
+    std::size_t cjk_seams = 0;
+    const page_item<PAGE_CELL>* previous = nullptr;
 
     for(const auto& cell : run.cells)
       {
         if(is_semantic_space(cell))
           {
-            crossed_explicit_space = true;
+            previous = nullptr;
             continue;
           }
-        if(previous != nullptr and not crossed_explicit_space)
+        if(previous != nullptr and not clip_boundary(*previous, cell))
           {
-            const double scale = 0.5 * (cell_advance_length(*previous) +
-                                        cell_advance_length(cell));
-            const double normalized = std::max(0.0, forward_gap(*previous, cell)) /
-                                      std::max(1.e-6, scale);
-            gaps.push_back(normalized);
+            ++seams;
+            if(touches_cjk(*previous, cell))
+              {
+                ++cjk_seams;
+              }
+            // Off-baseline components are placed, not spaced; they say
+            // nothing about the tracking of the line.
+            if(word_baselines_compatible(*previous, cell))
+              {
+                gaps.push_back(em_gap(*previous, cell));
+              }
           }
         previous = &cell;
-        crossed_explicit_space = false;
       }
 
-    if(gaps.size() < 2)
+    if(gaps.size() < 4)
       {
-        return 0.25;
+        return profile;
+      }
+    std::sort(gaps.begin(), gaps.end());
+    auto median_of = [](const std::vector<double>& sorted) -> double
+    {
+      const std::size_t half = sorted.size() / 2;
+      return sorted.size() % 2 == 1
+        ? sorted[half]
+        : 0.5 * (sorted[half - 1] + sorted[half]);
+    };
+
+    if(2 * cjk_seams > seams)
+      {
+        profile.tracking = std::min(0.5, median_of(gaps));
+        return profile;
       }
 
-    double low = *std::min_element(gaps.begin(), gaps.end());
-    double high = *std::max_element(gaps.begin(), gaps.end());
-    if(high < 0.18 or high - low < 0.08)
+    const std::size_t zeros = static_cast<std::size_t>(std::count_if(
+      gaps.begin(), gaps.end(), [](double gap) { return gap < 0.01; }));
+    const double low_quantile = gaps[gaps.size() / 5];
+    if(10 * zeros < gaps.size() and
+       low_quantile > 0.03 and low_quantile <= 0.2)
       {
-        return 0.25;
+        profile.tracking = low_quantile;
+        return profile;
       }
 
-    // Fixed-iteration 1-D k-means. Its cost is O(number of gaps), with a
-    // constant iteration count, and it discovers the local dilation between
-    // normal character placement and word spacing.
-    for(int iteration = 0; iteration < 8; ++iteration)
+    // Tightly justified lines in condensed faces have word gaps of 0.14 to
+    // 0.16 em, and pair kerning between the space and a capital `V`, `W`,
+    // `A` or a `w` takes up to 0.05 em off some of them (`undVerteilung`,
+    // `tut:Wir` in newspaper-00.pdf). The other word gaps of the line show
+    // where its word spacing sits.
+    std::vector<double> word_gaps;
+    for(double gap : gaps)
       {
-        double low_sum = 0.0, high_sum = 0.0;
-        std::size_t low_count = 0, high_count = 0;
-        const double midpoint = 0.5 * (low + high);
-        for(double gap : gaps)
+        if(gap > unspaced_word_gap_em)
           {
-            if(gap <= midpoint)
-              {
-                low_sum += gap;
-                ++low_count;
-              }
-            else
-              {
-                high_sum += gap;
-                ++high_count;
-              }
+            word_gaps.push_back(gap);
           }
-        if(low_count == 0 or high_count == 0)
-          {
-            return 0.25;
-          }
-        low = low_sum / static_cast<double>(low_count);
-        high = high_sum / static_cast<double>(high_count);
       }
-
-    if(high < 0.18 or high - low < 0.08)
+    if(word_gaps.size() >= 2)
       {
-        return 0.25;
+        profile.word_gap = std::min(
+          unspaced_word_gap_em,
+          std::max(unspaced_word_gap_floor_em,
+                   tight_line_word_gap_fraction * median_of(word_gaps)));
       }
-    return std::max(0.18, 0.5 * (low + high));
+    return profile;
   }
 
   inline void page_item_sanitator<PAGE_CELLS>::append_cell(
@@ -809,8 +1226,34 @@ namespace pdflib
       page_item<PAGE_CELL>& next,
       bool insert_space)
   {
+    // Right-to-left text is prepended when the stream paints it in visual
+    // order. A stream in logical order places each cell before the text
+    // gathered so far along the bbox axis; overlapping cells such as
+    // combining marks keep the visual-order default.
+    double rx = aggregate.r_x1 - aggregate.r_x0;
+    double ry = aggregate.r_y1 - aggregate.r_y0;
+    const double rn = std::hypot(rx, ry);
+    bool logical_order = false;
+    if(rn > 1.e-9)
+      {
+        rx /= rn;
+        ry /= rn;
+        auto extent = [rx, ry](const page_item<PAGE_CELL>& cell)
+        {
+          const std::array<double, 4> u = {{
+            cell.r_x0 * rx + cell.r_y0 * ry, cell.r_x1 * rx + cell.r_y1 * ry,
+            cell.r_x2 * rx + cell.r_y2 * ry, cell.r_x3 * rx + cell.r_y3 * ry}};
+          return std::make_pair(*std::min_element(u.begin(), u.end()),
+                                *std::max_element(u.begin(), u.end()));
+        };
+        const auto a = extent(aggregate);
+        const auto n = extent(next);
+        const double eps = 0.25 * std::max(1.e-6, n.second - n.first);
+        logical_order = n.first < a.first - eps and n.second < a.second - eps;
+      }
+
     const bool ltr = aggregate.left_to_right and next.left_to_right;
-    if(ltr)
+    if(ltr or logical_order)
       {
         if(insert_space) { aggregate.text.push_back(' '); }
         aggregate.text += next.text;
@@ -818,7 +1261,18 @@ namespace pdflib
     else
       {
         aggregate.text = next.text + (insert_space ? " " : "") + aggregate.text;
+      }
+    if(not ltr)
+      {
         aggregate.left_to_right = false;
+      }
+
+    // A word or line keeps the clip box all its glyphs share. Glyphs under
+    // different clips only join when none is cut, and then no single box
+    // describes the aggregate.
+    if(aggregate.has_clip_bbox and clips_differ(aggregate, next))
+      {
+        aggregate.has_clip_bbox = false;
       }
 
     // Compute the maximum bbox in the text's own coordinate frame. Merely
@@ -896,11 +1350,19 @@ namespace pdflib
     contraction_result result;
     for(auto& run : collect_line_runs(cells))
       {
-        // Explicit PDF spaces remain authoritative boundaries. Cap unmarked
-        // gaps as well: a large section-number gap can otherwise raise the
-        // inferred threshold past every word gap in a short heading.
-        const double word_gap = std::min(
-          0.35, run.has_semantic_spaces ? 1.0 : infer_word_gap(run));
+        // Explicit PDF spaces remain authoritative boundaries, and the
+        // unmarked gaps between them are judged in character advances,
+        // above a threshold that rises with the line's letter spacing. A
+        // run without any space glyph is judged in em, above its own letter
+        // spacing: the advance unit shrinks a word gap next to a wide glyph
+        // (`m`, `W`) below any fixed cap while a kern next to narrow glyphs
+        // rises above it, so no threshold in that unit separates the two.
+        const unspaced_gap_profile profile = run.has_semantic_spaces
+          ? unspaced_gap_profile{}
+          : infer_unspaced_gap_profile(run);
+        const double spaced_word_gap = run.has_semantic_spaces
+          ? infer_spaced_word_gap(run)
+          : spaced_word_gap_advances;
         std::vector<page_item<PAGE_CELL>> words;
         page_item<PAGE_CELL>* previous_visible = nullptr;
         bool explicit_boundary = false;
@@ -930,19 +1392,21 @@ namespace pdflib
               }
             if(not starts_word and previous_visible != nullptr)
               {
-                if(not word_baselines_compatible(*previous_visible, cell))
+                if(clip_boundary(*previous_visible, cell) or
+                   not word_baselines_compatible(*previous_visible, cell))
                   {
                     starts_word = true;
                   }
+                else if(run.has_semantic_spaces)
+                  {
+                    starts_word = advance_gap(*previous_visible, cell) >
+                                  spaced_word_gap;
+                  }
                 else
                   {
-                    const double scale =
-                      0.5 * (cell_advance_length(*previous_visible) +
-                             cell_advance_length(cell));
-                    const double normalized_gap =
-                      std::max(0.0, forward_gap(*previous_visible, cell)) /
-                      std::max(1.e-6, scale);
-                    starts_word = normalized_gap > word_gap;
+                    starts_word =
+                      em_gap(*previous_visible, cell) - profile.tracking >
+                      profile.word_gap;
                   }
               }
 
@@ -1121,7 +1585,8 @@ namespace pdflib
   }
 
   inline void page_item_sanitator<PAGE_CELLS>::sanitize_text(
-      page_item<PAGE_CELLS>& cells)
+      page_item<PAGE_CELLS>& cells,
+      bool do_char_normalization)
   {
     for(auto& cell : cells)
       {
@@ -1129,6 +1594,13 @@ namespace pdflib
         for(const auto& pair : text_constants::replacements)
           {
             utils::string::replace(cell.text, pair.first, pair.second);
+          }
+        if(do_char_normalization)
+          {
+            for(const auto& pair : text_constants::dash_replacements)
+              {
+                utils::string::replace(cell.text, pair.first, pair.second);
+              }
           }
       }
 
