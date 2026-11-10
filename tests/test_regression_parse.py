@@ -53,10 +53,12 @@ from tests.outline_fixtures import (
 
 def _delta_path(filename: str, unit: str) -> str:
     """Locate generated diagnostics outside the reference groundtruth tree."""
-    PARSER_GROUNDTRUTH_DELTA_DIR.mkdir(parents=True, exist_ok=True)
-    return os.fspath(
-        PARSER_GROUNDTRUTH_DELTA_DIR / f"{os.path.basename(filename)}.{unit}.delta.txt"
-    )
+    directory = PARSER_GROUNDTRUTH_DELTA_DIR
+    worker = os.getenv("PYTEST_XDIST_WORKER")
+    if worker:
+        directory = directory / worker
+    directory.mkdir(parents=True, exist_ok=True)
+    return os.fspath(directory / f"{os.path.basename(filename)}.{unit}.delta.txt")
 
 
 def write_textline_delta(lines: List[str], filename: str, separator: str) -> None:
