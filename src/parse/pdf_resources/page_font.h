@@ -225,6 +225,12 @@ namespace pdflib
     bool resolve_builtin_encoding(uint32_t c, std::string& text);
     void init_builtin_encoding();
 
+    // Whether a base font whose AFM says /FontSpecific is in fact a Latin text
+    // font laid out in WinAnsi order (Arial, Times New Roman, Georgia, ...),
+    // as opposed to a genuine symbol, dingbat or TeX font. See the use in
+    // get_correct_character().
+    bool font_specific_follows_winansi(pdflib::base_font& fm);
+
     void print_tables();
 
   private:
@@ -329,6 +335,9 @@ namespace pdflib
 
     bool builtin_encoding_initialized = false;
     std::unordered_map<uint32_t, std::string> builtin_numb_to_char;
+
+    // cache for font_specific_follows_winansi(): 0 = unknown, 1 = no, 2 = yes
+    int font_specific_winansi_state = 0;
   };
 
   font_glyphs    pdf_resource<PAGE_FONT>::glyphs = font_glyphs();
@@ -886,7 +895,23 @@ namespace pdflib
         // A known legacy symbol font may falsely declare WinAnsi while using
         // font-specific character codes. Its curated map is authoritative
         // after /ToUnicode and /Differences.
-        if(fm.is_font_specific() and fm.has(c))
+        //
+        // That does not hold for the Latin text fonts whose AFM merely carries
+        // the label /FontSpecific while laying the codes out in WinAnsi order
+        // (Arial, Times New Roman, ...). For those, the table is just the
+        // WinAnsi table: for a nonsymbolic TrueType font that explicitly
+        // declares /MacRomanEncoding (eg a Quartz-written Arial), that
+        // declared encoding gives the codes their meaning and has to win
+        // (PDF 32000-1 9.6.6.1), otherwise
+        // 0x9F (MacRoman u-umlaut) is read as WinAnsi Y-diaeresis.
+        const bool declared_non_winansi_base =
+          subtype == TRUE_TYPE and
+          not is_symbolic and
+          has_explicit_encoding and
+          encoding == MACROMAN;
+
+        if(fm.is_font_specific() and fm.has(c) and
+           not (declared_non_winansi_base and font_specific_follows_winansi(fm)))
           {
             return fm.to_utf8(c);
           }
@@ -998,6 +1023,40 @@ namespace pdflib
       }
 
     return get_character_from_encoding(c);
+  }
+
+  bool pdf_resource<PAGE_FONT>::font_specific_follows_winansi(pdflib::base_font& fm)
+  {
+    if(font_specific_winansi_state == 0)
+      {
+        // Compare the upper half (0xA0-0xFF), where Latin-1 accents live and
+        // where the legacy encodings disagree. A font that carries a WinAnsi
+        // layout agrees with the WinAnsi table on (nearly) all codes it has; a
+        // symbol, dingbat or TeX font does not.
+        auto& winansi = encodings.get(WINANSI).get_numb_to_utf8();
+
+        int matches=0, mismatches=0;
+        for(uint32_t c=0xA0; c<=0xFF; c++)
+          {
+            auto itr = winansi.find(c);
+            if(itr==winansi.end() or not fm.has(c))
+              {
+                continue;
+              }
+
+            if(fm.to_utf8(c)==itr->second) { matches += 1;    }
+            else                           { mismatches += 1; }
+          }
+
+        const bool follows = (matches>=32 and mismatches*8<=matches);
+        font_specific_winansi_state = follows? 2:1;
+
+        LOG_S(INFO) << "font-specific base font '" << matched_base_font().name << "': "
+                    << matches << " WinAnsi matches, " << mismatches
+                    << " mismatches => follows WinAnsi: " << follows;
+      }
+
+    return font_specific_winansi_state==2;
   }
 
   bool pdf_resource<PAGE_FONT>::uses_builtin_encoding() const
