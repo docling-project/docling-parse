@@ -504,7 +504,13 @@ PYBIND11_MODULE(pdf_parsers, m) {
     .def("get_crop_bbox", &pdflib::page_item<pdflib::PAGE_DIMENSION>::get_crop_bbox,
 	 "Get crop box as [x0, y0, x1, y1]")
     .def("get_media_bbox", &pdflib::page_item<pdflib::PAGE_DIMENSION>::get_media_bbox,
-	 "Get media box as [x0, y0, x1, y1]");
+	 "Get media box as [x0, y0, x1, y1]")
+    .def("get_bleed_bbox", &pdflib::page_item<pdflib::PAGE_DIMENSION>::get_bleed_bbox,
+	 "Get bleed box as [x0, y0, x1, y1]")
+    .def("get_trim_bbox", &pdflib::page_item<pdflib::PAGE_DIMENSION>::get_trim_bbox,
+	 "Get trim box as [x0, y0, x1, y1]")
+    .def("get_art_bbox", &pdflib::page_item<pdflib::PAGE_DIMENSION>::get_art_bbox,
+	 "Get art box as [x0, y0, x1, y1]");
 
   // PdfWidget - form field widget with bounding box and field info
   pybind11::class_<pdflib::page_item<pdflib::PAGE_WIDGET>>(m, "PdfWidget")

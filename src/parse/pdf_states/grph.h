@@ -633,6 +633,8 @@ namespace pdflib
     
     if(arr.isArray())
       {
+
+        dash_array.clear();
 	for(int l=0; l<arr.getArrayNItems(); l++)
 	  {
 	    QPDFObjectHandle item = arr.getArrayItem(l);

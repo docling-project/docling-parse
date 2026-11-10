@@ -2,11 +2,11 @@
 """Copy local regression PDFs and groundtruth into the Hugging Face dataset.
 
 Run with:
-    python scripts/tools/update_regression_dataset.py
-    python scripts/tools/update_regression_dataset.py --dry-run
+    python scripts/tools/update_regression_dataset.py                       # preview
+    python scripts/tools/update_regression_dataset.py --update-groundtruth  # apply
 
-Existing groundtruth changes require [y/n/a] approval. No files are deleted,
-and no changes are committed or pushed.
+Dry-run mode is the default. With --update-groundtruth, existing groundtruth
+changes require [y/n/a] approval. No files are deleted, committed, or pushed.
 """
 
 from __future__ import annotations
@@ -146,12 +146,20 @@ def selected_groundtruth(
     directory: Path, selection: dict[str, list[int]]
 ) -> dict[Path, Path]:
     selected = {}
+    checked_documents: set[str] = set()
     for relative, path in files_under(directory).items():
         match = re.fullmatch(r"(.+\.pdf)\.page_no_(\d+)\..+", path.name)
         if match is None:
             warn(f"Skipping unrecognized groundtruth filename: {path}")
             continue
         document, page = match.groups()
+        if document not in checked_documents:
+            checked_documents.add(document)
+            pdf = directory.parent / "regression" / document
+            if not pdf.is_file():
+                warn(
+                    f"Groundtruth has no corresponding PDF: {pdf}; referenced by {path}"
+                )
         pages = selection.get(document)
         if pages is None:
             warn(
@@ -202,10 +210,19 @@ def sync_groundtruth(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
         "--dry-run",
+        dest="dry_run",
         action="store_true",
-        help="Only warn about planned actions; do not modify files or prompt.",
+        default=True,
+        help="Preview planned actions without modifying files or prompting (default).",
+    )
+    mode.add_argument(
+        "--update-groundtruth",
+        dest="dry_run",
+        action="store_false",
+        help="Copy files into the dataset; prompt before replacing existing groundtruth.",
     )
     args = parser.parse_args()
     try:
