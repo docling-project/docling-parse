@@ -694,3 +694,21 @@ def test_image_cell_pattern_reports_one_image_over_the_fill():
     # and the tile itself is still painted from the image
     rendered = region_image(render_page(pdf), FILL_BOX)
     assert coverage_ratio(rendered) > 0.05, "the image cell must be painted"
+
+
+def test_dash_pattern_replaces_previous_pattern():
+    pdf = simple_page_pdf(
+        "[3 2] 0 d\n"
+        "10 10 m 100 10 l S\n"
+        "[5 1] 0 d\n"
+        "10 30 m 100 30 l S\n"
+        "[] 0 d\n"
+        "10 50 m 100 50 l S\n"
+    )
+
+    shapes = _parse_shapes(pdf)
+
+    assert len(shapes) == 3
+    assert list(shapes[0].dash_array) == [3.0, 2.0]
+    assert list(shapes[1].dash_array) == [5.0, 1.0]
+    assert list(shapes[2].dash_array) == []

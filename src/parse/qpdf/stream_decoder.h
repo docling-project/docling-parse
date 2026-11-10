@@ -38,6 +38,7 @@ namespace pdflib
     
   private:
 
+    void        decode_each_stream(QPDFObjectHandle& contents);
     void        decode_damaged_stream(QPDFObjectHandle& content);
     std::string inflate_prefix(QPDFObjectHandle& content);
 
@@ -87,13 +88,48 @@ namespace pdflib
         // through a damaged stream leaves nothing at all, although every
         // operator in front of the error inflated fine. A tokenizer error
         // instead arrives after the tokens before it, and those are kept.
-        if(stream.empty())
+        if(stream.empty() and content.isArray())
+          {
+            decode_each_stream(content);
+          }
+        else if(stream.empty())
           {
             decode_damaged_stream(content);
           }
       }
 
     LOG_S(WARNING) << "finished decoding content-stream!";
+  }
+
+  // QPDF runs every stream of an array through its filters before the first
+  // token, so one damaged stream would lose all of them. Tokenize the streams
+  // one by one instead: only a token that spans two streams is then lost.
+  void qpdf_stream_decoder::decode_each_stream(QPDFObjectHandle& contents)
+  {
+    for(int i=0; i<contents.getArrayNItems(); i++)
+      {
+        QPDFObjectHandle item = contents.getArrayItem(i);
+        if(not item.isStream())
+          {
+            continue;
+          }
+
+        std::size_t size_before = stream.size();
+        try
+          {
+            QPDFObjectHandle::parseContentStream(item, this);
+          }
+        catch(std::exception& e)
+          {
+            LOG_S(ERROR) << "QPDF encountered error (" << e.what()
+                         << ") during decoding of content stream " << i;
+
+            if(stream.size()==size_before)
+              {
+                decode_damaged_stream(item);
+              }
+          }
+      }
   }
 
   // Keep what inflated before the damage: the stream is repaired in place

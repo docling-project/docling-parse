@@ -450,6 +450,10 @@ class DecodeConfig(BaseModel):
     max_num_lines: int = -1
     max_num_bitmaps: int = -1
     min_visible_clip_extent: float = 1e-3
+    # Track clip paths so text cells carry the box of the clip they were
+    # painted under, also when shapes are skipped. Costs the path construction
+    # on pages that clip, not the shape output.
+    keep_clips: bool = True
     do_thread_safe: bool = True
     release_native_memory_every_n_pages: int = 0
     apply_actual_text: bool = True
@@ -482,6 +486,7 @@ def _compile_decode_config(
     cpp.max_num_lines = decode_config.max_num_lines
     cpp.max_num_bitmaps = decode_config.max_num_bitmaps
     cpp.min_visible_clip_extent = decode_config.min_visible_clip_extent
+    cpp.keep_clips = decode_config.keep_clips
     cpp.do_thread_safe = decode_config.do_thread_safe
     cpp.release_native_memory_every_n_pages = (
         decode_config.release_native_memory_every_n_pages
@@ -583,11 +588,11 @@ def _to_page_geometry_from_decoder(
         angle=page_dim.get_angle(),
         boundary_type=boundary_type,
         rect=_to_bounding_rectangle(boundary_bbox),
-        art_bbox=_to_bounding_box(crop_bbox),
+        art_bbox=_to_bounding_box(tuple(page_dim.get_art_bbox())),
         media_bbox=_to_bounding_box(media_bbox),
-        trim_bbox=_to_bounding_box(crop_bbox),
+        trim_bbox=_to_bounding_box(tuple(page_dim.get_trim_bbox())),
         crop_bbox=_to_bounding_box(crop_bbox),
-        bleed_bbox=_to_bounding_box(crop_bbox),
+        bleed_bbox=_to_bounding_box(tuple(page_dim.get_bleed_bbox())),
     )
 
 
@@ -601,6 +606,28 @@ def _to_page_geometry_from_decoder(
 _PDF_TEXT_CELL_RGBA_DEFAULT = PdfTextCell.model_fields["rgba"].get_default(
     call_default_factory=True
 )
+
+
+# The clip box of a text cell lands in docling-core's PdfTextCell.clip_bbox.
+# Releases before that field exist must not receive the keyword, and mypy
+# checks the call against whichever release the lockfile pins, so the keyword
+# travels in a mapping that stays empty unless the model can hold the field.
+# The check is on the model, once.
+_PDF_TEXT_CELL_HAS_CLIP_BBOX = "clip_bbox" in PdfTextCell.model_fields
+
+
+def _clip_bbox_fields_from_decoder(cell) -> Dict[str, Any]:
+    if not (_PDF_TEXT_CELL_HAS_CLIP_BBOX and cell.has_clip_bbox):
+        return {}
+    return {
+        "clip_bbox": BoundingBox(
+            l=cell.clip_x0,
+            b=cell.clip_y0,
+            r=cell.clip_x1,
+            t=cell.clip_y1,
+            coord_origin=CoordOrigin.BOTTOMLEFT,
+        )
+    }
 
 
 def _to_cells_from_decoder(cells_container) -> List[Union[PdfTextCell, TextCell]]:
@@ -633,6 +660,7 @@ def _to_cells_from_decoder(cells_container) -> List[Union[PdfTextCell, TextCell]
                 ),
                 index=ind,
                 rendering_mode=cell.rendering_mode,
+                **_clip_bbox_fields_from_decoder(cell),
             )
         )
 

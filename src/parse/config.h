@@ -21,6 +21,9 @@ namespace pdflib
     bool keep_char_cells = true;
     bool keep_shapes = true;
     bool keep_bitmaps = true;
+    // Track clip paths for the clip box of text cells even when shapes are
+    // not kept; costs the path construction, not the shape output.
+    bool keep_clips = true;
 
     int max_num_lines = -1;   // -1 means no cap
     int max_num_bitmaps = -1; // -1 means no cap
@@ -117,6 +120,7 @@ namespace pdflib
     j["keep_char_cells"] = keep_char_cells;
     j["keep_shapes"] = keep_shapes;
     j["keep_bitmaps"] = keep_bitmaps;
+    j["keep_clips"] = keep_clips;
 
     j["max_num_lines"] = max_num_lines;
     j["max_num_bitmaps"] = max_num_bitmaps;
@@ -157,6 +161,7 @@ namespace pdflib
     if(j.count("keep_char_cells")) { keep_char_cells = j["keep_char_cells"]; }
     if(j.count("keep_shapes")) { keep_shapes = j["keep_shapes"]; }
     if(j.count("keep_bitmaps")) { keep_bitmaps = j["keep_bitmaps"]; }
+    if(j.count("keep_clips")) { keep_clips = j["keep_clips"]; }
 
     if(j.count("max_num_lines")) { max_num_lines = j["max_num_lines"]; }
     if(j.count("max_num_bitmaps")) { max_num_bitmaps = j["max_num_bitmaps"]; }
@@ -225,6 +230,7 @@ namespace pdflib
        << std::setw(48) << "keep_char_cells" << (keep_char_cells ? "true" : "false") << "\n"
        << std::setw(48) << "keep_shapes" << (keep_shapes ? "true" : "false") << "\n"
        << std::setw(48) << "keep_bitmaps" << (keep_bitmaps ? "true" : "false") << "\n"
+       << std::setw(48) << "keep_clips" << (keep_clips ? "true" : "false") << "\n"
        << std::setw(48) << "extract_bitmap_pixels" << (extract_bitmap_pixels ? "true" : "false") << "\n"
        << std::setw(48) << "bitmap_target_pixels_per_unit" << bitmap_target_pixels_per_unit << "\n"
        << std::setw(48) << "max_num_lines" << max_num_lines << "\n"

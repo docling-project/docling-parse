@@ -23,6 +23,9 @@ namespace pdflib
 
     std::array<double, 4> get_crop_bbox() { return crop_bbox; }
     std::array<double, 4> get_media_bbox() { return media_bbox; }
+    std::array<double, 4> get_bleed_bbox() { return bleed_bbox; }
+    std::array<double, 4> get_trim_bbox() { return trim_bbox; }
+    std::array<double, 4> get_art_bbox() { return art_bbox; }
 
     void execute(QPDFObjectHandle qpdf_page);
 

@@ -122,6 +122,17 @@ page = pdf_doc.get_page(
 )
 ```
 
+### Clipped text
+
+Some producers fit long text into a table cell by clipping it to the cell's
+box (`q <cell> re W n ... Q`): the page shows the part that fits, the text
+layer keeps the whole string. Every char, word and line cell carries the
+bounding box of the clip it was painted under as `clip_bbox` (`None` when
+nothing clipped it), so a consumer can tell which cell a hidden tail belongs
+to. Two glyphs under different clips, of which one is cut by its clip, never
+join into one word or line. Clip paths are tracked even when shapes are
+skipped; `DecodeConfig(keep_clips=False)` turns that off.
+
 ### v6 -> v7 migration
 
 The main API break in v7 is that the old public `DecodePageConfig` selection

@@ -939,6 +939,22 @@ namespace pdflib
 	cell.line_width         = grph_state.get_line_width();
 	cell.rgb_stroking_ops   = grph_state.get_rgb_stroking_ops();
 	cell.rgb_filling_ops    = grph_state.get_rgb_filling_ops();
+
+	// The clip in force bounds what of this glyph is visible (8.5.4). The
+	// renderer gets the clip paths through the text instruction below; a
+	// consumer of cells only sees the glyph quad, and the quad of a glyph
+	// that a producer clipped to a table cell lies under the next column.
+	// The shape state keeps the box of the clip in force, so this costs
+	// no scan of the clip paths.
+	std::array<double, 4> clip_bbox = {0.0, 0.0, 0.0, 0.0};
+	if(shape_state.get_clip_bbox(clip_bbox))
+	  {
+	    cell.has_clip_bbox = true;
+	    cell.clip_x0 = clip_bbox[0];
+	    cell.clip_y0 = clip_bbox[1];
+	    cell.clip_x1 = clip_bbox[2];
+	    cell.clip_y1 = clip_bbox[3];
+	  }
       }
       
       if(need_base_text_cells)
