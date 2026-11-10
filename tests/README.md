@@ -38,6 +38,23 @@ Run only the self-contained tests (no corpus download, a few seconds):
 uv run pytest tests/test_unit_*.py -q
 ```
 
+CI runs regression tests in two pytest worker processes, grouping tests by
+file so each file stays on one worker:
+
+```bash
+uv run pytest -v -n 2 --dist loadfile tests/test_regression_*.py
+```
+
+The native parser thread counts inside those tests are independent of the
+pytest worker count. Parser diagnostics from parallel runs go under
+`tests/data/groundtruth_delta/parser/gw0/`, `gw1/`, and so on. Run groundtruth
+updates sequentially (without `-n 2`), since workers share the reference files.
+
+The regression workflow logs available logical CPUs, memory, process limits,
+and cgroup CPU/memory limits before setup. GNU `time -v` reports elapsed time
+and maximum resident set size for the test command; the latter is a peak for
+one process, not the sum of both workers' memory usage.
+
 The fixes are supplied by the versioned `PeterStaar-IBM/blend2d` fork release
 selected in `cmake/extlib_blend2d.cmake`; no CMake patch step is required.
 

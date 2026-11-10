@@ -442,6 +442,8 @@ class DecodeConfig(BaseModel):
     model_config = ConfigDict(validate_assignment=True)
 
     do_sanitization: bool = True
+    # Remove overprinted glyphs and nearly coincident copies of complete words/lines.
+    do_remove_duplicate_cells: bool = True
     enforce_same_font: bool = True
     horizontal_cell_tolerance: float = 1.0
     word_space_width_factor_for_merge: float = 0.33
@@ -472,6 +474,7 @@ def _compile_decode_config(
     cpp = _DecodePageConfig()
     cpp.page_boundary = page_boundary
     cpp.do_sanitization = decode_config.do_sanitization
+    cpp.do_remove_duplicate_cells = decode_config.do_remove_duplicate_cells
     cpp.enforce_same_font = decode_config.enforce_same_font
     cpp.horizontal_cell_tolerance = decode_config.horizontal_cell_tolerance
     cpp.word_space_width_factor_for_merge = (

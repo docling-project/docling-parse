@@ -13,6 +13,18 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
+      - name: Show runner resources
+        run: |
+          echo "Available logical CPUs: $(nproc)"
+          lscpu
+          free -h
+          ulimit -a
+          for resource in /sys/fs/cgroup/cpu.max /sys/fs/cgroup/memory.max; do
+            if [ -r "$resource" ]; then
+              echo "$resource"
+              cat "$resource"
+            fi
+          done
       - name: Install system fonts
         # See checks.yml for why these packages are pinned.
         run: |
@@ -62,4 +74,4 @@ jobs:
         env:
           DOCLING_PARSE_CJK_FALLBACK_FONT: /usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc
         run: |
-          uv run pytest -v tests/test_regression_*.py
+          /usr/bin/time -v uv run pytest -v -n 2 --dist loadfile tests/test_regression_*.py

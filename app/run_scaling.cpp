@@ -1211,6 +1211,7 @@ namespace
       ("loglevel", "Log level [fatal, error, warning, info]", cxxopts::value<std::string>()->default_value("fatal"))
       ("page-boundary", "Page boundary [crop_box, media_box]", cxxopts::value<std::string>())
       ("do-sanitization", "Run post-parse sanitization", cxxopts::value<std::string>())
+      ("do-remove-duplicate-cells", "Remove overprinted text cells (default: true)", cxxopts::value<std::string>())
       ("keep-char-cells", "Keep individual character cells", cxxopts::value<std::string>())
       ("keep-shapes", "Keep shape items", cxxopts::value<std::string>())
       ("keep-bitmaps", "Keep bitmap items", cxxopts::value<std::string>())
@@ -1305,6 +1306,7 @@ namespace
 
     if(result.count("page-boundary")) { decode_config.page_boundary = result["page-boundary"].as<std::string>(); }
     if(result.count("do-sanitization")) { decode_config.do_sanitization = parse_bool(result["do-sanitization"].as<std::string>()); }
+    if(result.count("do-remove-duplicate-cells")) { decode_config.do_remove_duplicate_cells = parse_bool(result["do-remove-duplicate-cells"].as<std::string>()); }
     if(result.count("keep-char-cells")) { decode_config.keep_char_cells = parse_bool(result["keep-char-cells"].as<std::string>()); }
     if(result.count("keep-shapes")) { decode_config.keep_shapes = parse_bool(result["keep-shapes"].as<std::string>()); }
     if(result.count("keep-bitmaps")) { decode_config.keep_bitmaps = parse_bool(result["keep-bitmaps"].as<std::string>()); }

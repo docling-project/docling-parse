@@ -131,6 +131,7 @@ int main(int argc, char* argv[]) {
       // ---- decode_config ----
       ("page-boundary",   "Page boundary [crop_box, media_box, ...] (default: crop_box)",        cxxopts::value<std::string>())
       ("do-sanitization", "Run post-parse sanitization (default: true)",                         cxxopts::value<bool>()->implicit_value("true"))
+      ("do-remove-duplicate-cells", "Remove overprinted text cells (default: true)",            cxxopts::value<bool>()->implicit_value("true"))
       ("keep-char-cells", "Keep individual character cells (default: true)",                     cxxopts::value<bool>()->implicit_value("true"))
       ("keep-shapes",     "Keep shape items (default: true)",                                    cxxopts::value<bool>()->implicit_value("true"))
       ("keep-bitmaps",    "Keep bitmap items (default: true)",                                   cxxopts::value<bool>()->implicit_value("true"))
@@ -179,6 +180,7 @@ int main(int argc, char* argv[]) {
     pdflib::decode_config page_config;
     if (result.count("page-boundary"))            { page_config.page_boundary             = result["page-boundary"].as<std::string>(); }
     if (result.count("do-sanitization"))          { page_config.do_sanitization            = result["do-sanitization"].as<bool>(); }
+    if (result.count("do-remove-duplicate-cells")){ page_config.do_remove_duplicate_cells  = result["do-remove-duplicate-cells"].as<bool>(); }
     if (result.count("keep-char-cells"))          { page_config.keep_char_cells            = result["keep-char-cells"].as<bool>(); }
     if (result.count("keep-shapes"))              { page_config.keep_shapes                = result["keep-shapes"].as<bool>(); }
     if (result.count("keep-bitmaps"))             { page_config.keep_bitmaps               = result["keep-bitmaps"].as<bool>(); }
