@@ -18,10 +18,10 @@ namespace pdflib
 
     bool do_sanitization = true;
 
-    // Preserve repeated text cells unless the caller requests overprint cleanup.
-    // This controls both exact and tolerant duplicate removal independently
-    // of word/line construction (do_sanitization).
-    bool do_remove_duplicate_cells = false;
+    // Remove overprinted text cells unless the caller requests drawing-pass fidelity.
+    // Controls glyph cleanup and the passes after word and line construction.
+    // False preserves repeated drawing passes at every cell level.
+    bool do_remove_duplicate_cells = true;
 
     bool keep_char_cells = true;
     bool keep_shapes = true;

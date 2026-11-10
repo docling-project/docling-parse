@@ -174,7 +174,7 @@ namespace pdflib
 
     bool can_reuse_sanitised_cells_for_line_cells(const decode_config& config) const;
 
-    void sanitise_contents(std::string page_boundary);
+    void sanitise_contents(const decode_config& config);
 
   private:
 
@@ -978,7 +978,7 @@ namespace pdflib
     if(config.do_sanitization)
       {
         local.reset();
-        sanitise_contents(config.page_boundary);
+        sanitise_contents(config);
         timings.add_timing(pdf_timings::KEY_SANITISE_CONTENTS, local.get_time());
       }
     else
@@ -2033,7 +2033,7 @@ namespace pdflib
     return sanitised_cells_created and config.do_sanitization;
   }
 
-  void pdf_decoder<PAGE>::sanitise_contents(std::string page_boundary)
+  void pdf_decoder<PAGE>::sanitise_contents(const decode_config& config)
   {
     LOG_S(INFO) << __FUNCTION__;
 
@@ -2061,8 +2061,7 @@ namespace pdflib
 
       {
         utils::timer step_timer;
-        decode_config default_config;
-        cells = sanitator.create_line_cells(cells, default_config);
+        cells = sanitator.create_line_cells(cells, config);
         timings.add_timing(pdf_timings::KEY_SANITISE_CONTENTS_SANITIZE_BBOX,
                            step_timer.get_time());
       }

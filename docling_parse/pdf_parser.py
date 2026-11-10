@@ -442,8 +442,8 @@ class DecodeConfig(BaseModel):
     model_config = ConfigDict(validate_assignment=True)
 
     do_sanitization: bool = True
-    # Remove exact overprints and nearby same-line copies before building words/lines.
-    do_remove_duplicate_cells: bool = False
+    # Remove overprinted glyphs and nearly coincident copies of complete words/lines.
+    do_remove_duplicate_cells: bool = True
     enforce_same_font: bool = True
     horizontal_cell_tolerance: float = 1.0
     word_space_width_factor_for_merge: float = 0.33

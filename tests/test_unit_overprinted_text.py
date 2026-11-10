@@ -1,10 +1,11 @@
 #!/usr/bin/env python
-"""Repeated text is preserved unless duplicate removal is requested.
+"""Duplicate removal preserves legitimate repeated letters and distinct text.
 
-Opting in removes exact copies even across intervening lines, plus nearby
-same-line copies handled by the tolerant scan. Controls preserve distinct text
-under both settings. Duplicate removal is independent of word/line creation
-and must behave the same in sequential, threaded and rendering workflows.
+The default removes exact copies even across intervening lines, plus nearby
+same-line glyph copies and nearly coincident complete words and lines.
+Opting out preserves drawing passes. Controls preserve distinct text under
+both settings. Cleanup behaves the same with and without cached lines, in
+sequential, threaded and rendering workflows.
 """
 
 from __future__ import annotations
@@ -110,8 +111,114 @@ def test_different_comparison_operators_are_both_kept(decode_config):
 
 
 @pytest.mark.parametrize("do_sanitization", [False, True])
+def test_shifted_line_is_deduplicated_after_contraction(decode_config, do_sanitization):
+    draws = [(72, 700, FIRST), (72, 660, SECOND), (72.01, 700.01, FIRST)]
+    config = decode_config.model_copy(update={"do_sanitization": do_sanitization})
+    page = _page(_pdf(draws), config)
+    # The intervening line prevents tolerant character cleanup, and no glyph
+    # is exactly repeated. Only the word/line passes can remove this copy.
+    assert "".join(c.text for c in page.char_cells) == FIRST + SECOND + FIRST
+    expected_lines = [FIRST, SECOND]
+    expected_words = FIRST.split() + SECOND.split()
+    if not config.do_remove_duplicate_cells:
+        expected_lines.append(FIRST)
+        expected_words.extend(FIRST.split())
+    assert [c.text for c in page.textline_cells] == expected_lines
+    assert [c.text for c in page.word_cells] == expected_words
+
+
+def test_word_deduplication_keeps_distinct_complete_lines(decode_config):
+    draws = [(72, 700, "TOKEN ALPHA"), (72, 660, SECOND), (72.01, 700.01, "TOKEN BETA")]
+    page = _page(_pdf(draws), decode_config)
+    assert [c.text for c in page.textline_cells] == [
+        "TOKEN ALPHA",
+        SECOND,
+        "TOKEN BETA",
+    ]
+    words = [c.text for c in page.word_cells]
+    assert words.count("TOKEN") == (1 if decode_config.do_remove_duplicate_cells else 2)
+    assert "ALPHA" in words and "BETA" in words
+
+
+def test_rotated_shifted_line_is_deduplicated(decode_config):
+    content = (
+        "BT /F1 12 Tf 0 1 -1 0 300 200 Tm (ALPHA BETA) Tj ET\n"
+        "BT /F1 12 Tf 0 1 -1 0 320 200 Tm (OTHER LINE) Tj ET\n"
+        "BT /F1 12 Tf 0 1 -1 0 300.01 200.01 Tm (ALPHA BETA) Tj ET\n"
+    )
+    pdf = simple_page_pdf(
+        content,
+        resources=HELVETICA,
+        media_box="[0 0 612 792]",
+        extra_objects=[FONT_OBJECT],
+    )
+    page = _page(pdf, decode_config)
+    expected = ["ALPHA BETA", "OTHER LINE"]
+    if not decode_config.do_remove_duplicate_cells:
+        expected.append("ALPHA BETA")
+    assert [c.text for c in page.textline_cells] == expected
+    assert [c.text for c in page.word_cells].count("ALPHA") == (
+        1 if decode_config.do_remove_duplicate_cells else 2
+    )
+
+
+def test_small_words_are_not_removed_for_partial_overlap(decode_config):
+    content = (
+        "BT /F1 1 Tf 72 700 Td (WORD) Tj ET\n"
+        "BT /F1 12 Tf 72 660 Td (OTHER LINE) Tj ET\n"
+        "BT /F1 1 Tf 72.25 700.25 Td (WORD) Tj ET\n"
+    )
+    pdf = simple_page_pdf(
+        content,
+        resources=HELVETICA,
+        media_box="[0 0 612 792]",
+        extra_objects=[FONT_OBJECT],
+    )
+    page = _page(pdf, decode_config)
+    assert [c.text for c in page.textline_cells] == ["WORD", "OTHER LINE", "WORD"]
+    assert [c.text for c in page.word_cells].count("WORD") == 2
+
+
+def test_different_clips_preserve_overlapping_text(decode_config):
+    content = (
+        "q 0 0 300 792 re W n BT /F1 12 Tf 72 700 Td (TOKEN) Tj ET Q\n"
+        "BT /F1 12 Tf 72 660 Td (OTHER LINE) Tj ET\n"
+        "q 0 0 400 792 re W n BT /F1 12 Tf 72.01 700.01 Td (TOKEN) Tj ET Q\n"
+    )
+    pdf = simple_page_pdf(
+        content,
+        resources=HELVETICA,
+        media_box="[0 0 612 792]",
+        extra_objects=[FONT_OBJECT],
+    )
+    page = _page(pdf, decode_config)
+    assert [c.text for c in page.textline_cells] == ["TOKEN", "OTHER LINE", "TOKEN"]
+    assert [c.text for c in page.word_cells].count("TOKEN") == 2
+
+
+def test_different_fonts_preserve_overlapping_text(decode_config):
+    content = (
+        "BT /F1 12 Tf 72 700 Td (.) Tj ET\n"
+        "BT /F1 12 Tf 72 660 Td (OTHER LINE) Tj ET\n"
+        "BT /F2 12 Tf 72.01 700.01 Td (.) Tj ET\n"
+    )
+    pdf = simple_page_pdf(
+        content,
+        resources="/Font << /F1 5 0 R /F2 6 0 R >>",
+        media_box="[0 0 612 792]",
+        extra_objects=[
+            FONT_OBJECT,
+            "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>",
+        ],
+    )
+    page = _page(pdf, decode_config)
+    assert [c.text for c in page.textline_cells] == [".", "OTHER LINE", "."]
+    assert [c.text for c in page.word_cells].count(".") == 2
+
+
+@pytest.mark.parametrize("do_sanitization", [False, True])
 @pytest.mark.parametrize("offset", [0.0, 0.3], ids=["exact", "nearby"])
-def test_default_preserves_copies(do_sanitization, offset):
+def test_default_removes_copies(do_sanitization, offset):
     single = _page(
         _pdf([(72, 700, FIRST)]), DecodeConfig(do_sanitization=do_sanitization)
     )
@@ -119,14 +226,32 @@ def test_default_preserves_copies(do_sanitization, offset):
         _pdf([(72, 700, FIRST), (72 + offset, 700, FIRST)]),
         DecodeConfig(do_sanitization=do_sanitization),
     )
-    assert [c.text for c in repeated.char_cells] == [
-        c.text for c in single.char_cells
-    ] * 2
+    assert [c.text for c in repeated.char_cells] == [c.text for c in single.char_cells]
 
 
-def test_omitted_decode_config_preserves_copies():
+def test_omitted_decode_config_removes_copies():
     page = _page(_pdf([(72, 700, FIRST)] * 2))
-    assert [c.text for c in page.textline_cells] == [FIRST, FIRST]
+    assert [c.text for c in page.textline_cells] == [FIRST]
+
+
+@pytest.mark.parametrize("size", [12, 2, 1, 0.8, 0.5])
+@pytest.mark.parametrize("copies", [1, 2], ids=["single-pass", "fake-bold"])
+def test_small_text_keeps_repeated_letters(size, copies):
+    text = "Committee Participant benefits illegible"
+    run = f"/F1 {size} Tf 50 400 Td ({text}) Tj"
+    content = f"BT 0 Tr {run} ET\n"
+    if copies == 2:
+        content = f"BT 1 Tr {run} ET\n" + content
+    pdf = simple_page_pdf(
+        content,
+        resources=HELVETICA,
+        media_box="[0 0 612 792]",
+        extra_objects=[
+            "<< /Type /Font /Subtype /Type1 /BaseFont /Times-Roman "
+            "/Encoding /WinAnsiEncoding >>"
+        ],
+    )
+    assert [c.text for c in _page(pdf).textline_cells] == [text]
 
 
 @pytest.mark.parametrize("do_sanitization", [False, True])
@@ -146,8 +271,14 @@ def test_explicit_setting_controls_both_scans(decode_config, do_sanitization, of
 @pytest.mark.parametrize("render", [False, True], ids=["parser", "renderer"])
 def test_threaded_workflows_honor_duplicate_setting(decode_config, render):
     block = [(72, 700, FIRST), (72, 660, SECOND)]
-    pdf = _pdf(block * 2)
+    shifted = [(x + 0.01, y + 0.01, text) for x, y, text in block]
+    pdf = _pdf(block + shifted)
     expected = _page(pdf, decode_config)
+    assert [c.text for c in expected.textline_cells] == (
+        [FIRST, SECOND]
+        if decode_config.do_remove_duplicate_cells
+        else [FIRST, SECOND] * 2
+    )
     parser = DoclingThreadedPdfParser(
         parser_config=ThreadedPdfParserConfig(
             loglevel="fatal",

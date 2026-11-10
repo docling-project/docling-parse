@@ -131,7 +131,7 @@ int main(int argc, char* argv[]) {
       // ---- decode_config ----
       ("page-boundary",   "Page boundary [crop_box, media_box, ...] (default: crop_box)",        cxxopts::value<std::string>())
       ("do-sanitization", "Run post-parse sanitization (default: true)",                         cxxopts::value<bool>()->implicit_value("true"))
-      ("do-remove-duplicate-cells", "Remove overprinted text cells (default: false)",           cxxopts::value<bool>()->implicit_value("true"))
+      ("do-remove-duplicate-cells", "Remove overprinted text cells (default: true)",            cxxopts::value<bool>()->implicit_value("true"))
       ("keep-char-cells", "Keep individual character cells (default: true)",                     cxxopts::value<bool>()->implicit_value("true"))
       ("keep-shapes",     "Keep shape items (default: true)",                                    cxxopts::value<bool>()->implicit_value("true"))
       ("keep-bitmaps",    "Keep bitmap items (default: true)",                                   cxxopts::value<bool>()->implicit_value("true"))

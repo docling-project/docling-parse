@@ -106,14 +106,22 @@ for page_no, page in pdf_doc.iterate_pages():
     image.show()
 ```
 
-Repeated text cells are preserved by default, including text painted several
-times at the same position. Set
-`DecodeConfig(do_remove_duplicate_cells=True)` to remove exact overprints
-across the page and nearby same-line copies before building words and lines.
+Duplicate removal is enabled by default. It removes exact overprints across
+the page and nearby same-line copies before building words and lines. The
+distance tolerance scales with glyph width so adjacent repeated letters in
+very small text survive. Set `DecodeConfig(do_remove_duplicate_cells=False)`
+to preserve repeated drawing passes at every cell level.
+
+After construction, repeated words and lines at nearly the same position are
+also removed. Full text and font must match, clipping must be compatible, and
+the corresponding rotated corners must be closer than 0.5 pt and 10% of the
+smaller box dimension. A partial text match or overlapping boxes alone do not
+qualify. These passes can remove shifted copies separated by other lines that
+the character pass leaves in place.
+
 This option is independent of `do_sanitization`. It changes extracted cells;
-the PDF's rendering instructions are preserved. It does not remove every
-slightly shifted copy separated by other lines in the content stream.
-The native CLI option is `--do-remove-duplicate-cells=true`.
+the PDF's rendering instructions are preserved.
+The native CLI option to preserve copies is `--do-remove-duplicate-cells=false`.
 
 If you open cheaply and later need richer output, request it per page. When the
 new `content_config` needs entities that were previously skipped, that page is

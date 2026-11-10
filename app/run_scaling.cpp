@@ -1211,7 +1211,7 @@ namespace
       ("loglevel", "Log level [fatal, error, warning, info]", cxxopts::value<std::string>()->default_value("fatal"))
       ("page-boundary", "Page boundary [crop_box, media_box]", cxxopts::value<std::string>())
       ("do-sanitization", "Run post-parse sanitization", cxxopts::value<std::string>())
-      ("do-remove-duplicate-cells", "Remove overprinted text cells (default: false)", cxxopts::value<std::string>())
+      ("do-remove-duplicate-cells", "Remove overprinted text cells (default: true)", cxxopts::value<std::string>())
       ("keep-char-cells", "Keep individual character cells", cxxopts::value<std::string>())
       ("keep-shapes", "Keep shape items", cxxopts::value<std::string>())
       ("keep-bitmaps", "Keep bitmap items", cxxopts::value<std::string>())

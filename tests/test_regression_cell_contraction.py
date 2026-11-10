@@ -14,7 +14,7 @@ DATA = Path(__file__).parent / "data" / "regression"
 @pytest.mark.parametrize(
     ("decode_config", "copies"),
     [
-        pytest.param(None, 2, id="default"),
+        pytest.param(None, 1, id="default"),
         pytest.param(DecodeConfig(do_remove_duplicate_cells=False), 2, id="preserve"),
         pytest.param(DecodeConfig(do_remove_duplicate_cells=True), 1, id="deduplicate"),
     ],
@@ -27,9 +27,29 @@ def test_coupon_overprinted_offer(decode_config, copies):
     try:
         lines = [cell.text for cell in document.get_page(1).textline_cells]
         assert lines.count("SAVE $1") == copies
-        assert "NOW!" in lines
+        assert lines.count("NOW!") == copies
+        words = [cell.text for cell in document.get_page(1).word_cells]
+        assert words.count("NOW!") == copies
     finally:
         document.unload()
+
+
+def test_small_glyphs_preserve_repeated_letters():
+    page = _page("ligatures_01.pdf", 1)
+    lines = [cell.text for cell in page.textline_cells]
+    assert any("pupils is the interpupillary distance." in line for line in lines)
+    assert any("oblique illuminator cap and remove" in line for line in lines)
+    assert any("follow the following" in line for line in lines)
+    assert "On/Off" in lines
+
+
+def test_fake_bold_is_read_once():
+    page = _page("duplicate_bold_text_01.pdf", 1)
+    lines = [cell.text for cell in page.textline_cells]
+    assert lines.count("Preface") == 1
+    assert len(page.char_cells) == 670
+    assert len(page.word_cells) == 112
+    assert len(lines) == 12
 
 
 def _pdf_with_code_32_period() -> BytesIO:

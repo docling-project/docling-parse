@@ -47,17 +47,17 @@ namespace pdflib
      * spacing. Each returned word receives the smallest rectangle, aligned
      * with its writing direction, that encloses all constituent cells.
      *
-     * The input cells are inspected but not modified. The current algorithm is
-     * geometry-driven and does not use contraction parameters from @p config;
-     * the argument is retained as part of the public decoder interface.
+     * The input cells are inspected but not modified. When duplicate removal
+     * is enabled, nearly coincident copies of a complete word are removed
+     * after contraction.
      *
      * @param cells Character-level cells in content/reading order.
-     * @param config Decoder configuration retained for API compatibility.
+     * @param config Controls duplicate removal after contraction.
      * @return Newly allocated cells containing one entry per inferred word.
      *
      * @par Complexity
-     * Linear in the number of input cells because gap clustering uses a fixed
-     * number of iterations.
+     * Contraction is linear in the input size. Optional duplicate removal
+     * indexes the resulting words by text, font and position.
      */
     page_item<PAGE_CELLS> create_word_cells(page_item<PAGE_CELLS>& cells,
                                              const decode_config& config);
@@ -70,15 +70,17 @@ namespace pdflib
      * ASCII space. The resulting bounding quadrilateral is the maximum
      * writing-direction-aligned envelope of every character in the line.
      *
-     * The input cells are inspected but not modified. The current algorithm
-     * does not use contraction parameters from @p config.
+     * The input cells are inspected but not modified. When duplicate removal
+     * is enabled, nearly coincident copies of a complete line are removed
+     * after contraction.
      *
      * @param cells Character-level cells in content/reading order.
-     * @param config Decoder configuration retained for API compatibility.
+     * @param config Controls duplicate removal after contraction.
      * @return Newly allocated cells containing one entry per inferred line.
      *
      * @par Complexity
-     * Linear in the number of input cells.
+     * Contraction is linear in the input size. Optional duplicate removal
+     * indexes the resulting lines by text, font and position.
      */
     page_item<PAGE_CELLS> create_line_cells(page_item<PAGE_CELLS>& cells,
                                              const decode_config& config);
@@ -113,6 +115,10 @@ namespace pdflib
      * the scan stops after the rotated y-coordinate differs by more than
      * @p eps; this assumes the input is ordered by line position.
      *
+     * Corner distances must also be less than half the earlier cell's width:
+     * on tiny text the next identical letter can be closer than @p eps.
+     * An exact match still counts when the glyph has zero width.
+     *
      * This compatibility cleanup is intentionally separate from word and line
      * construction so its quadratic worst-case cost is not paid by contraction.
      *
@@ -126,6 +132,22 @@ namespace pdflib
     void remove_duplicate_cells(page_item<PAGE_CELLS>& cells,
                                 double eps,
                                 bool same_line);
+
+    /**
+     * @brief Removes nearly coincident copies of complete words or lines.
+     *
+     * Full text, font, writing direction, widget state and clip boxes must
+     * match. Every corresponding rotated corner must be closer than @p eps
+     * and 10 percent of either cell's smaller dimension. Exact matches also
+     * count for zero-sized cells. The first occurrence and survivor order
+     * are retained; partial text matches and mere bbox intersections do not
+     * qualify. Character cells and render instructions are not modified.
+     *
+     * Candidates are indexed by text, font and a position grid, independently
+     * of content-stream order. Cost is O(n log n + k), where k is the number
+     * of candidates in neighboring buckets with the same text and font.
+     */
+    void remove_overlapping_text_cells(page_item<PAGE_CELLS>& cells, double eps);
 
     /**
      * @brief Normalizes extracted text stored in every cell.
@@ -1457,8 +1479,12 @@ namespace pdflib
       page_item<PAGE_CELLS>& cells,
       const decode_config& config)
   {
-    (void)config;
-    return contract(cells).words;
+    page_item<PAGE_CELLS> words = contract(cells).words;
+    if(config.do_remove_duplicate_cells)
+      {
+        remove_overlapping_text_cells(words, 0.5);
+      }
+    return words;
   }
 
   inline page_item<PAGE_CELLS>
@@ -1466,8 +1492,12 @@ namespace pdflib
       page_item<PAGE_CELLS>& cells,
       const decode_config& config)
   {
-    (void)config;
-    return contract(cells).lines;
+    page_item<PAGE_CELLS> lines = contract(cells).lines;
+    if(config.do_remove_duplicate_cells)
+      {
+        remove_overlapping_text_cells(lines, 0.5);
+      }
+    return lines;
   }
 
   inline void page_item_sanitator<PAGE_CELLS>::sanitize_bbox(
@@ -1563,6 +1593,11 @@ namespace pdflib
     for(std::size_t i = 0; i < cells.size(); ++i)
       {
         if(not cells[i].active) { continue; }
+        const double width = utils::values::distance(
+          cells[i].r_x0, cells[i].r_y0, cells[i].r_x1, cells[i].r_y1);
+        const double tol = std::min(eps, 0.5 * width);
+        auto overlaps = [tol](double distance)
+          { return distance < tol or distance == 0.0; };
         for(std::size_t j = i + 1; j < cells.size(); ++j)
           {
             if(same_line and std::abs(cells[i].r_y0 - cells[j].r_y0) > eps)
@@ -1572,13 +1607,89 @@ namespace pdflib
             if(not cells[j].active) { continue; }
             if(cells[i].font_name == cells[j].font_name and
                cells[i].text == cells[j].text and
-               utils::values::distance(cells[i].r_x0, cells[i].r_y0, cells[j].r_x0, cells[j].r_y0) < eps and
-               utils::values::distance(cells[i].r_x1, cells[i].r_y1, cells[j].r_x1, cells[j].r_y1) < eps and
-               utils::values::distance(cells[i].r_x2, cells[i].r_y2, cells[j].r_x2, cells[j].r_y2) < eps and
-               utils::values::distance(cells[i].r_x3, cells[i].r_y3, cells[j].r_x3, cells[j].r_y3) < eps)
+               overlaps(utils::values::distance(cells[i].r_x0, cells[i].r_y0, cells[j].r_x0, cells[j].r_y0)) and
+               overlaps(utils::values::distance(cells[i].r_x1, cells[i].r_y1, cells[j].r_x1, cells[j].r_y1)) and
+               overlaps(utils::values::distance(cells[i].r_x2, cells[i].r_y2, cells[j].r_x2, cells[j].r_y2)) and
+               overlaps(utils::values::distance(cells[i].r_x3, cells[i].r_y3, cells[j].r_x3, cells[j].r_y3)))
               {
                 cells[j].active = false;
               }
+          }
+      }
+    cells.remove_inactive_cells();
+  }
+
+  inline void page_item_sanitator<PAGE_CELLS>::remove_overlapping_text_cells(
+      page_item<PAGE_CELLS>& cells, double eps)
+  {
+    if(not std::isfinite(eps) or eps <= 0.0) { return; }
+
+    struct candidate
+    {
+      std::size_t index;
+      double width;
+      double height;
+    };
+    typedef std::tuple<std::string, std::string, double, double> bucket_key;
+    std::map<bucket_key, std::vector<candidate>> buckets;
+
+    for(std::size_t i = 0; i < cells.size(); ++i)
+      {
+        auto& cell = cells[i];
+        if(not cell.active or cell.text.empty()) { continue; }
+        const double column = std::floor(cell.r_x0 / eps);
+        const double row = std::floor(cell.r_y0 / eps);
+        const double width = utils::values::distance(
+          cell.r_x0, cell.r_y0, cell.r_x1, cell.r_y1);
+        const double height = utils::values::distance(
+          cell.r_x0, cell.r_y0, cell.r_x3, cell.r_y3);
+        if(not std::isfinite(column) or not std::isfinite(row) or
+           not std::isfinite(width) or not std::isfinite(height))
+          {
+            continue;
+          }
+
+        bool duplicate = false;
+        for(int dx = -1; dx <= 1 and not duplicate; ++dx)
+          {
+            for(int dy = -1; dy <= 1 and not duplicate; ++dy)
+              {
+                auto found = buckets.find(bucket_key(
+                  cell.text, cell.font_name, column + dx, row + dy));
+                if(found == buckets.end()) { continue; }
+                for(const auto& previous : found->second)
+                  {
+                    const auto& original = cells[previous.index];
+                    if(cell.left_to_right != original.left_to_right or
+                       cell.widget != original.widget or
+                       clips_differ(cell, original))
+                      {
+                        continue;
+                      }
+                    const double tol = std::min(
+                      eps, 0.1 * std::min({width, height,
+                                           previous.width, previous.height}));
+                    auto close = [tol](double distance)
+                      { return distance < tol or distance == 0.0; };
+                    if(close(utils::values::distance(cell.r_x0, cell.r_y0, original.r_x0, original.r_y0)) and
+                       close(utils::values::distance(cell.r_x1, cell.r_y1, original.r_x1, original.r_y1)) and
+                       close(utils::values::distance(cell.r_x2, cell.r_y2, original.r_x2, original.r_y2)) and
+                       close(utils::values::distance(cell.r_x3, cell.r_y3, original.r_x3, original.r_y3)))
+                      {
+                        duplicate = true;
+                        break;
+                      }
+                  }
+              }
+          }
+        if(duplicate)
+          {
+            cell.active = false;
+          }
+        else
+          {
+            buckets[bucket_key(cell.text, cell.font_name, column, row)]
+              .push_back({i, width, height});
           }
       }
     cells.remove_inactive_cells();
