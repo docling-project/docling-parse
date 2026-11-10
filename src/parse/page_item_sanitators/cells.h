@@ -1544,9 +1544,9 @@ namespace pdflib
     // A glyph painted again at exactly the same place, wherever its copy
     // falls in the sequence. Only an exact match counts here: a different
     // text overlapping this one can put an equal glyph within eps of it.
-    using painted_glyph = std::tuple<std::string, std::string,
-                                     double, double, double, double,
-                                     double, double, double, double>;
+    typedef std::tuple<std::string, std::string,
+                       double, double, double, double,
+                       double, double, double, double> painted_glyph;
     std::set<painted_glyph> painted;
     for(std::size_t i = 0; i < cells.size(); ++i)
       {

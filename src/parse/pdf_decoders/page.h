@@ -958,12 +958,13 @@ namespace pdflib
       local.reset();
       page_item_sanitator<PAGE_CELLS> sanitator;
 
-      {
-        utils::timer step_timer;
-        sanitator.remove_duplicate_cells(page_cells, 0.5, true);
-        timings.add_timing(pdf_timings::KEY_SANITIZE_CELLS_REMOVE_DUPLICATE_CELLS,
-                           step_timer.get_time());
-      }
+      if(config.do_remove_duplicate_cells)
+        {
+          utils::timer step_timer;
+          sanitator.remove_duplicate_cells(page_cells, 0.5, true);
+          timings.add_timing(pdf_timings::KEY_SANITIZE_CELLS_REMOVE_DUPLICATE_CELLS,
+                             step_timer.get_time());
+        }
 
       {
         utils::timer step_timer;

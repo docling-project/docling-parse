@@ -4,9 +4,32 @@
 from io import BytesIO
 from pathlib import Path
 
+import pytest
+
 from docling_parse.pdf_parser import DecodeConfig, DoclingPdfParser
 
 DATA = Path(__file__).parent / "data" / "regression"
+
+
+@pytest.mark.parametrize(
+    ("decode_config", "copies"),
+    [
+        pytest.param(None, 2, id="default"),
+        pytest.param(DecodeConfig(do_remove_duplicate_cells=False), 2, id="preserve"),
+        pytest.param(DecodeConfig(do_remove_duplicate_cells=True), 1, id="deduplicate"),
+    ],
+)
+def test_coupon_overprinted_offer(decode_config, copies):
+    """The coupon paints SAVE $1 twice at exactly the same position."""
+    document = DoclingPdfParser(loglevel="fatal").load(
+        DATA / "7143857365833452481-1.pdf", decode_config=decode_config
+    )
+    try:
+        lines = [cell.text for cell in document.get_page(1).textline_cells]
+        assert lines.count("SAVE $1") == copies
+        assert "NOW!" in lines
+    finally:
+        document.unload()
 
 
 def _pdf_with_code_32_period() -> BytesIO:

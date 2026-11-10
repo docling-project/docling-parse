@@ -106,6 +106,15 @@ for page_no, page in pdf_doc.iterate_pages():
     image.show()
 ```
 
+Repeated text cells are preserved by default, including text painted several
+times at the same position. Set
+`DecodeConfig(do_remove_duplicate_cells=True)` to remove exact overprints
+across the page and nearby same-line copies before building words and lines.
+This option is independent of `do_sanitization`. It changes extracted cells;
+the PDF's rendering instructions are preserved. It does not remove every
+slightly shifted copy separated by other lines in the content stream.
+The native CLI option is `--do-remove-duplicate-cells=true`.
+
 If you open cheaply and later need richer output, request it per page. When the
 new `content_config` needs entities that were previously skipped, that page is
 re-decoded automatically:

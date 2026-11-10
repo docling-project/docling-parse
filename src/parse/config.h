@@ -18,6 +18,11 @@ namespace pdflib
 
     bool do_sanitization = true;
 
+    // Preserve repeated text cells unless the caller requests overprint cleanup.
+    // This controls both exact and tolerant duplicate removal independently
+    // of word/line construction (do_sanitization).
+    bool do_remove_duplicate_cells = false;
+
     bool keep_char_cells = true;
     bool keep_shapes = true;
     bool keep_bitmaps = true;
@@ -116,6 +121,7 @@ namespace pdflib
     j["page_boundary"] = page_boundary;
 
     j["do_sanitization"] = do_sanitization;
+    j["do_remove_duplicate_cells"] = do_remove_duplicate_cells;
 
     j["keep_char_cells"] = keep_char_cells;
     j["keep_shapes"] = keep_shapes;
@@ -157,6 +163,7 @@ namespace pdflib
     if(j.count("page_boundary")) { page_boundary = j["page_boundary"]; }
 
     if(j.count("do_sanitization")) { do_sanitization = j["do_sanitization"]; }
+    if(j.count("do_remove_duplicate_cells")) { do_remove_duplicate_cells = j["do_remove_duplicate_cells"]; }
 
     if(j.count("keep_char_cells")) { keep_char_cells = j["keep_char_cells"]; }
     if(j.count("keep_shapes")) { keep_shapes = j["keep_shapes"]; }
@@ -227,6 +234,7 @@ namespace pdflib
        << std::string(64, '-') << "\n"
        << std::setw(48) << "page_boundary" << page_boundary << "\n"
        << std::setw(48) << "do_sanitization" << (do_sanitization ? "true" : "false") << "\n"
+       << std::setw(48) << "do_remove_duplicate_cells" << (do_remove_duplicate_cells ? "true" : "false") << "\n"
        << std::setw(48) << "keep_char_cells" << (keep_char_cells ? "true" : "false") << "\n"
        << std::setw(48) << "keep_shapes" << (keep_shapes ? "true" : "false") << "\n"
        << std::setw(48) << "keep_bitmaps" << (keep_bitmaps ? "true" : "false") << "\n"
