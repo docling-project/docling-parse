@@ -161,6 +161,15 @@ namespace pdflib
 
 	    itr->r_x3 -= page_bbox[0];
 	    itr->r_y3 -= page_bbox[1];	    	    
+
+	    if(itr->has_clip_bbox)
+	      {
+		itr->clip_x0 -= page_bbox[0];
+		itr->clip_y0 -= page_bbox[1];
+
+		itr->clip_x1 -= page_bbox[0];
+		itr->clip_y1 -= page_bbox[1];
+	      }
 	    
 	    itr++;
 	  }
