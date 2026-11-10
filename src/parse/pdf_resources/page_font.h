@@ -899,14 +899,16 @@ namespace pdflib
         // That does not hold for the Latin text fonts whose AFM merely carries
         // the label /FontSpecific while laying the codes out in WinAnsi order
         // (Arial, Times New Roman, ...). For those, the table is just the
-        // WinAnsi table: when the PDF explicitly declares another base
-        // encoding (eg a Quartz-written TrueType Arial with
-        // /MacRomanEncoding), the declared encoding is what gives the codes
-        // their meaning (PDF 32000-1 9.6.6.1) and has to win, otherwise
+        // WinAnsi table: for a nonsymbolic TrueType font that explicitly
+        // declares /MacRomanEncoding (eg a Quartz-written Arial), that
+        // declared encoding gives the codes their meaning and has to win
+        // (PDF 32000-1 9.6.6.1), otherwise
         // 0x9F (MacRoman u-umlaut) is read as WinAnsi Y-diaeresis.
         const bool declared_non_winansi_base =
+          subtype == TRUE_TYPE and
+          not is_symbolic and
           has_explicit_encoding and
-          (encoding == MACROMAN or encoding == MACEXPERT or encoding == STANDARD);
+          encoding == MACROMAN;
 
         if(fm.is_font_specific() and fm.has(c) and
            not (declared_non_winansi_base and font_specific_follows_winansi(fm)))
