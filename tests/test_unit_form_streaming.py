@@ -8,7 +8,9 @@ import pytest
 
 from tests.pdf_builder import parse_page, render_page, simple_page_pdf, stream_object
 
-FONT = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>"
+FONT = (
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>"
+)
 
 
 def test_repeated_nested_forms_keep_local_resources_and_restore_parent_state():
@@ -28,9 +30,7 @@ def test_repeated_nested_forms_keep_local_resources_and_restore_parent_state():
         b"/G1 gs 1 0 0 rg 0 0 10 10 re f 1 0 0 1 50 0 cm",
     )
     pdf = simple_page_pdf(
-        "/G1 gs 0 0 1 rg /Outer Do "
-        "q 1 0 0 1 80 0 cm /Outer Do Q "
-        "10 100 10 10 re f",
+        "/G1 gs 0 0 1 rg /Outer Do q 1 0 0 1 80 0 cm /Outer Do Q 10 100 10 10 re f",
         resources="/XObject << /Outer 5 0 R >> /ExtGState << /G1 << /ca 1 >> >>",
         extra_objects=[outer, leaf],
     )
@@ -76,8 +76,7 @@ def test_damaged_form_prefix_survives_repeated_invocation_and_parent_continues()
 def test_form_actual_text_scope_finishes_before_parent_suffix(close_scope: bool):
     content = (
         "/Span << /ActualText (replacement) >> BDC "
-        "BT /F1 12 Tf 20 120 Td (shown) Tj ET"
-        + (" EMC" if close_scope else "")
+        "BT /F1 12 Tf 20 120 Td (shown) Tj ET" + (" EMC" if close_scope else "")
     )
     form = stream_object(
         "/Type /XObject /Subtype /Form /BBox [0 0 200 200]",

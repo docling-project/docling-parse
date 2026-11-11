@@ -12,10 +12,12 @@
 // process-lifetime high-water mark.
 // Generation variants: solid, dash-each, dash-once, dash-q, empty-each,
 // pathstorm (the grid generator from docling#4058, with its rounded line count).
-// test_memory_on_lines_buffered buffers page, Form and appearance sources.
+// test_memory_on_lines_buffered buffers page, Form, appearance and Type3 sources.
 // test_memory_on_lines_buffered_forms streams pages and buffers Forms.
 // test_memory_on_lines_buffered_appearances buffers only annotation appearances.
+// test_memory_on_lines_buffered_type3 buffers only procedural CharProcs.
 // Generate pathstorm-appearance/pathstorm-widget N PDF [appearances=1].
+// Generate pathstorm-type3 N PDF [glyphs=1] for procedural CharProc delivery.
 // page_* fields cover /Contents only. form_* diagnostics aggregate Do calls
 // through that page's ordinary Form tree, not other buffered entry points.
 #include <parse.h>
@@ -57,6 +59,11 @@ constexpr const char* form_content_delivery = "callback";
 constexpr const char* appearance_content_delivery = "buffered";
 #else
 constexpr const char* appearance_content_delivery = "callback";
+#endif
+#ifdef DOCLING_PARSE_BUFFERED_TYPE3_CONTENTS
+constexpr const char* type3_content_delivery = "buffered";
+#else
+constexpr const char* type3_content_delivery = "callback";
 #endif
 
 void snapshot(const std::string& stage, int pause_seconds, json details = json::object())
@@ -131,6 +138,19 @@ QPDFObjectHandle selected_content(QPDFObjectHandle page, json& details)
   auto content = page.getKey("/Contents");
   details["measured_stream"] = "page";
   details["stream_executions"] = 1;
+  auto type3_repeats = page.getKey("/MemoryProbeType3Repeats");
+  if(not type3_repeats.isNull())
+    {
+      if(not type3_repeats.isInteger() or type3_repeats.getIntValue()<1)
+        { throw std::runtime_error("invalid generated Type3 repeat count"); }
+      auto font = page.getKey("/Resources").getKey("/Font").getKey("/T3");
+      auto charproc = font.getKey("/CharProcs").getKey("/g");
+      if(not charproc.isStream())
+        { throw std::runtime_error("generated CharProc is missing"); }
+      details["measured_stream"] = "type3_charproc";
+      details["page_type3_repeats"] = type3_repeats.getIntValue();
+      return charproc;
+    }
   auto appearance_count = page.getKey("/MemoryProbeAppearanceCount");
   if(not appearance_count.isNull())
     {
@@ -211,17 +231,18 @@ void generate(const std::string& variant, std::size_t requested,
   const bool form = variant=="pathstorm-form";
   const bool widget = variant=="pathstorm-widget";
   const bool appearance = variant=="pathstorm-appearance" or widget;
+  const bool type3 = variant=="pathstorm-type3";
   if(depth<1 or depth>32)
     { throw std::invalid_argument("Form depth must be 1..32"); }
-  if((not form and not appearance and repeats!=1) or (not form and depth!=1))
-    { throw std::invalid_argument("repeat arguments require Forms/appearances; depth requires Forms"); }
+  if((not form and not appearance and not type3 and repeats!=1) or (not form and depth!=1))
+    { throw std::invalid_argument("repeats require Forms/appearances/Type3; depth requires Forms"); }
   if(variant!="solid" and variant!="dash-each" and variant!="dash-once" and
-     variant!="dash-q" and variant!="empty-each" and variant!="pathstorm" and not form and not appearance)
+     variant!="dash-q" and variant!="empty-each" and variant!="pathstorm" and not form and not appearance and not type3)
     { throw std::invalid_argument("unknown PDF variant"); }
 
   std::ostringstream ops;
   std::size_t lines = 0;
-  const bool grid = variant=="pathstorm" or form or appearance;
+  const bool grid = variant=="pathstorm" or form or appearance or type3;
   if(grid)
     {
       // Match the published generator, including the rounding of each grid.
@@ -266,7 +287,9 @@ void generate(const std::string& variant, std::size_t requested,
         }
     }
 
-  const std::string content = ops.str();
+  // Strokes deliberately take the procedural fallback: the cached vector-mask
+  // analyzer does not rasterize S. Its first-use analysis still affects RSS.
+  const std::string content = (type3 ? "595 0 d0\n" : "") + ops.str();
   if(lines>std::numeric_limits<std::size_t>::max()/repeats)
     { throw std::overflow_error("total painted line count is out of range"); }
   const std::string bbox = grid ? "595 842" : "1190 842";
@@ -290,6 +313,15 @@ void generate(const std::string& variant, std::size_t requested,
       marker = " /MemoryProbeAppearanceCount " + std::to_string(repeats) +
                " /Annots [" + refs + "]";
       if(widget) { catalog_fields = " /AcroForm << /Fields [" + refs + "] >>"; }
+    }
+  if(type3)
+    {
+      resources = "<< /Font << /T3 5 0 R >> >>";
+      marker = " /MemoryProbeType3Repeats " + std::to_string(repeats);
+      page_content = "BT /T3 1 Tf\n";
+      for(std::size_t i=0; i<repeats; ++i)
+        { page_content += "1 0 0 1 0 0 Tm (a) Tj\n"; }
+      page_content += "ET\n";
     }
   std::vector<std::string> objects = {
     "<< /Type /Catalog /Pages 2 0 R" + catalog_fields + " >>",
@@ -322,6 +354,15 @@ void generate(const std::string& variant, std::size_t requested,
             (widget ? " /FT /Btn /T (probe" + std::to_string(i) + ")" : "") + " >>");
         }
     }
+  if(type3)
+    {
+      objects.push_back("<< /Type /Font /Subtype /Type3 /FontBBox [0 0 " + bbox +
+        "] /FontMatrix [1 0 0 1 0 0] /CharProcs 6 0 R"
+        " /Encoding << /Type /Encoding /Differences [97 /g] >>"
+        " /FirstChar 97 /LastChar 97 /Widths [595] /Resources << >> >>");
+      objects.push_back("<< /g 7 0 R >>");
+      objects.push_back(stream_object(content, true));
+    }
   std::ofstream out(filename, std::ios::binary);
   out.exceptions(std::ios::failbit | std::ios::badbit);
   out << "%PDF-1.4\n";
@@ -341,6 +382,8 @@ void generate(const std::string& variant, std::size_t requested,
                    {"form_repeats", form ? repeats : 1}, {"form_depth", form ? depth : 0},
                    {"appearance_count", appearance ? repeats : 0},
                    {"widget_count", widget ? repeats : 0},
+                   {"type3_repeats", type3 ? repeats : 0},
+                   {"page_content_bytes", page_content.size()},
                    {"content_bytes", content.size()}, {"pdf_bytes", std::filesystem::file_size(filename)}}.dump()
             << std::endl;
 }
@@ -358,6 +401,7 @@ void measure(std::string mode, std::string filename, int pause_seconds, const st
             {"page_content_delivery", page_content_delivery},
             {"form_content_delivery", form_content_delivery},
             {"appearance_content_delivery", appearance_content_delivery},
+            {"type3_content_delivery", type3_content_delivery},
             {"sizeof_token", sizeof(pdflib::qpdf_stream_instruction)},
             {"sizeof_page_shape", sizeof(pdflib::page_item<pdflib::PAGE_SHAPE>)},
             {"sizeof_shape_instruction", sizeof(pdflib::shape_instruction)},
@@ -479,7 +523,16 @@ void measure(std::string mode, std::string filename, int pause_seconds, const st
             {"appearance_source_bytes_observed", appearance_stats.source_bytes_observed},
             {"appearance_materialized_tokens", appearance_stats.materialized_tokens},
             {"appearance_max_buffered_token_capacity", appearance_stats.max_buffered_token_capacity},
-            {"appearance_max_pending_operands", appearance_stats.max_pending_operands}});
+            {"appearance_max_pending_operands", appearance_stats.max_pending_operands},
+            {"text_instructions", page->get_instructions().get_text_instructions().size()},
+            {"type3_content_delivery", type3_content_delivery},
+            {"type3_diagnostics", content_stats.operand_diagnostics_enabled},
+            {"type3_executions", content_stats.type3_executions},
+            {"type3_source_objects", content_stats.type3_source_objects},
+            {"type3_materialized_tokens", content_stats.type3_materialized_tokens},
+            {"type3_max_pending_operands", content_stats.type3_max_pending_operands},
+            {"type3_max_depth", content_stats.type3_max_depth},
+            {"type3_recursion_skips", content_stats.type3_recursion_skips}});
   if(mode=="render")
     {
       pdflib::render_config render_config;

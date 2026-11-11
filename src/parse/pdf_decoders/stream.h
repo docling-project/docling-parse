@@ -24,6 +24,13 @@ namespace pdflib
     std::size_t form_materialized_tokens = 0;
     std::size_t form_max_pending_operands = 0;
     std::size_t form_max_depth = 0;
+    // Procedural Type3 fallbacks only; cached glyph masks do not enter here.
+    std::size_t type3_executions = 0;
+    std::size_t type3_source_objects = 0;
+    std::size_t type3_materialized_tokens = 0;
+    std::size_t type3_max_pending_operands = 0;
+    std::size_t type3_max_depth = 0;
+    std::size_t type3_recursion_skips = 0;
 #ifdef DOCLING_PARSE_CONTENT_DIAGNOSTICS
     static constexpr bool operand_diagnostics_enabled = true;
 #else
@@ -2216,6 +2223,15 @@ namespace pdflib
           std::max(child_stats.max_pending_operands, child_stats.form_max_pending_operands));
         content_stats.form_max_depth = std::max(content_stats.form_max_depth,
                                               1 + child_stats.form_max_depth);
+        // A CharProc may call a Form which shows another Type3 glyph.
+        content_stats.type3_executions += child_stats.type3_executions;
+        content_stats.type3_source_objects += child_stats.type3_source_objects;
+        content_stats.type3_materialized_tokens += child_stats.type3_materialized_tokens;
+        content_stats.type3_max_pending_operands = std::max(
+          content_stats.type3_max_pending_operands, child_stats.type3_max_pending_operands);
+        content_stats.type3_max_depth = std::max(content_stats.type3_max_depth,
+                                               child_stats.type3_max_depth);
+        content_stats.type3_recursion_skips += child_stats.type3_recursion_skips;
 #endif
 
         if(updated_stack)
@@ -2273,23 +2289,32 @@ namespace pdflib
     static thread_local int depth = 0;
     if(depth >= max_depth)
       {
+#ifdef DOCLING_PARSE_CONTENT_DIAGNOSTICS
+        ++content_stats.type3_recursion_skips;
+#endif
         LOG_S(WARNING) << "Type3 glyph procedures nest deeper than " << max_depth
                        << " levels, the glyph is not painted";
         return;
       }
 
+    QPDFObjectHandle charproc = glyph.charproc;
+#ifdef DOCLING_PARSE_BUFFERED_TYPE3_CONTENTS
     std::vector<qpdf_stream_instruction> insts;
     try
       {
         qpdf_stream_decoder decoder(insts);
-        QPDFObjectHandle charproc = glyph.charproc;
         decoder.decode(charproc);
+      }
+    catch(const std::bad_alloc&)
+      {
+        throw;
       }
     catch(const std::exception& e)
       {
         LOG_S(WARNING) << "could not decode a Type3 glyph procedure: " << e.what();
         return;
       }
+#endif
 
     // 9.6.5: names in the CharProc resolve against the font's /Resources,
     // and against the page's when the font has none.
@@ -2343,53 +2368,83 @@ namespace pdflib
     page_item<PAGE_IMAGES> glyph_images;
 
     this->q();
-    current_global_state().cm(glyph.matrix);
-    current_bitmap_state().paints_type3_glyph = true;
-    {
-      pdf_decoder<STREAM> new_stream(config,
+    try
+      {
+        current_global_state().cm(glyph.matrix);
+        current_bitmap_state().paints_type3_glyph = true;
+        pdf_decoder<STREAM> new_stream(config,
 
-                                     page_dimension,
-                                     glyph_cells,
-                                     glyph_shapes,
-                                     glyph_images,
+                                       page_dimension,
+                                       glyph_cells,
+                                       glyph_shapes,
+                                       glyph_images,
 
-                                     page_fonts_,
-                                     page_grphs_,
-                                     page_colorspaces_,
-                                     page_shadings_,
-                                     page_patterns_,
-                                     page_xobjects_,
+                                       page_fonts_,
+                                       page_grphs_,
+                                       page_colorspaces_,
+                                       page_shadings_,
+                                       page_patterns_,
+                                       page_xobjects_,
 
-                                     instructions,
+                                       instructions,
 
-                                     timings);
+                                       timings);
 
-      bool updated_stack = new_stream.update_stack(stack, stack_count);
+        bool updated_stack = new_stream.update_stack(stack, stack_count);
 
-      std::vector<qpdf_stream_instruction> parameters;
+        std::vector<qpdf_stream_instruction> parameters;
 
-      depth += 1;
-      try
-        {
-          new_stream.interprete(insts, parameters);
-        }
-      catch(...)
-        {
-          depth -= 1;
-          throw;
-        }
-      depth -= 1;
+        depth += 1;
+        try
+          {
+#ifdef DOCLING_PARSE_BUFFERED_TYPE3_CONTENTS
+            new_stream.interprete(insts, parameters);
+#else
+            // Resources and glyph placement must be ready before the first
+            // QPDF callback executes. The handle/context live until decode ends.
+            new_stream.decode_and_interprete(charproc, parameters);
+#endif
+          }
+        catch(...)
+          {
+            depth -= 1;
+            throw;
+          }
+        depth -= 1;
 
-      if(updated_stack)
-        {
-          new_stream.Q();
-        }
+#ifdef DOCLING_PARSE_CONTENT_DIAGNOSTICS
+        const auto& child_stats = new_stream.get_content_statistics();
+        content_stats.type3_executions += 1 + child_stats.type3_executions;
+        content_stats.type3_source_objects += child_stats.source_objects + child_stats.type3_source_objects;
+        content_stats.type3_materialized_tokens += child_stats.buffered_tokens + child_stats.type3_materialized_tokens;
+#ifdef DOCLING_PARSE_BUFFERED_TYPE3_CONTENTS
+        content_stats.type3_materialized_tokens += insts.size();
+#endif
+        content_stats.type3_max_pending_operands = std::max(
+          content_stats.type3_max_pending_operands,
+          std::max(child_stats.max_pending_operands, child_stats.type3_max_pending_operands));
+        content_stats.type3_max_depth = std::max(content_stats.type3_max_depth,
+                                               1 + child_stats.type3_max_depth);
+        content_stats.type3_recursion_skips += child_stats.type3_recursion_skips;
+#endif
 
-      for(auto item:new_stream.get_unknown_operators())
-        {
-          unknown_operators.insert(item);
-        }
-    }
+        if(updated_stack)
+          {
+            new_stream.Q();
+          }
+
+        for(auto item:new_stream.get_unknown_operators())
+          {
+            unknown_operators.insert(item);
+          }
+      }
+    catch(...)
+      {
+        // Resource/interpreter failures must not leave the glyph's placement
+        // on the parent stack if operator-level recovery continues the page.
+        this->Q();
+        throw;
+      }
     this->Q();
   }
 

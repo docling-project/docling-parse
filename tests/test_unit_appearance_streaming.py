@@ -6,13 +6,23 @@ import zlib
 
 import pytest
 
-from tests.pdf_builder import build_pdf, content_stream, parse_page, render_page, stream_object
+from tests.pdf_builder import (
+    build_pdf,
+    content_stream,
+    parse_page,
+    render_page,
+    stream_object,
+)
 
-FONT = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>"
+FONT = (
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>"
+)
 
 
 @pytest.mark.parametrize("widget", [False, True])
-def test_transformed_appearance_can_invoke_a_form_with_local_graphics_state(widget: bool):
+def test_transformed_appearance_can_invoke_a_form_with_local_graphics_state(
+    widget: bool,
+):
     # The rotated BBox fits a 100x100 /Rect. Its nested Form must inherit the
     # appearance's half opacity rather than the page's opaque /G1 resource.
     catalog_fields = " /AcroForm << /Fields [5 0 R] >>" if widget else ""
@@ -47,10 +57,16 @@ def test_transformed_appearance_can_invoke_a_form_with_local_graphics_state(widg
 
 
 @pytest.mark.parametrize("font_scope", ["appearance", "acroform", "page"])
-def test_shared_selected_widget_appearance_uses_the_font_fallback_chain(font_scope: str):
+def test_shared_selected_widget_appearance_uses_the_font_fallback_chain(
+    font_scope: str,
+):
     dr = " /DR << /Font << /F1 9 0 R >> >>" if font_scope == "acroform" else ""
-    page_resources = " /Resources << /Font << /F1 9 0 R >> >>" if font_scope == "page" else ""
-    ap_resources = " /Resources << /Font << /F1 9 0 R >> >>" if font_scope == "appearance" else ""
+    page_resources = (
+        " /Resources << /Font << /F1 9 0 R >> >>" if font_scope == "page" else ""
+    )
+    ap_resources = (
+        " /Resources << /Font << /F1 9 0 R >> >>" if font_scope == "appearance" else ""
+    )
     pdf = build_pdf(
         [
             "<< /Type /Catalog /Pages 2 0 R /AcroForm "
@@ -76,14 +92,16 @@ def test_shared_selected_widget_appearance_uses_the_font_fallback_chain(font_sco
         ]
     )
 
-    assert [cell.text for cell in parse_page(pdf).textline_cells] == ["inside", "inside"]
+    assert [cell.text for cell in parse_page(pdf).textline_cells] == [
+        "inside",
+        "inside",
+    ]
 
 
 def test_damaged_appearance_prefix_does_not_capture_the_next_annotation():
     encoder = zlib.compressobj()
     content = (
-        b"/Span << /ActualText (wrong) >> BDC "
-        b"BT /F1 12 Tf 10 15 Td (before) Tj ET\n"
+        b"/Span << /ActualText (wrong) >> BDC BT /F1 12 Tf 10 15 Td (before) Tj ET\n"
     )
     damaged = encoder.compress(content) + encoder.flush(zlib.Z_SYNC_FLUSH) + b"\x07"
     pdf = build_pdf(

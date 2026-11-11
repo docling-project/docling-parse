@@ -1,11 +1,12 @@
 # Reduce the native parser's memory footprint
 
 Date: 2026-11-11.
-Status: step 4b appearance streaming source written; user compilation and validation pending.
+Status: step 4c native memory/runtime checkpoint passed; focused Type3 semantics and legacy font-token cleanup pending.
+MyPy/Ruff pass; step 4b appearance/widget streaming validated by native experiments and 171 focused tests.
 Step 4a Form streaming is validated by native experiments and 153 focused tests.
 Step 2 native recheck and carried-forward semantic coverage passed.
 Step 3 native smoke/scaling, Form timing recheck and focused semantic coverage passed.
-Step 1 core scaling is reviewed. Type 3, soft-mask, pattern-cache work and step 5 have not started.
+Step 1 core scaling is reviewed. Soft-mask/pattern work and broad step-5 validation remain pending; bo20 scaling observations are recorded below.
 The preliminary state-reset audit is in progress.
 Initial C++ reproduction and structural investigation are complete.
 
@@ -674,6 +675,10 @@ Audit and convert in bounded groups:
 - Soft-mask group streams.
 - Tiling-pattern parsing and replay.
 
+The Type3 audit also found eager init_charprocs() description-vector retention.
+Remove unnecessary storage/copies while preserving eager validation and damaged-
+stream repair before glyph analysis; see the ordered continuation below.
+
 Ordinary Form parse_stream() currently returns a newly built vector. Tiling
 patterns intentionally cache content and must be treated differently.
 
@@ -913,7 +918,9 @@ Suggested comparison rows:
 - [x] Write step 3 page callback implementation, boundedness diagnostics and recovery regressions; native user runs passed.
 - [x] Step 3 checkpoint: ordinary page memory gain verified; fresh Form callback timing within +5%; focused semantic suite passed.
 - [x] Step 4a checkpoint: Form-only callback implementation, native smoke/scaling/reuse and 153 focused semantic tests passed.
-- [x] Write step 4b appearance/widget callback implementation, native comparison fixtures and six semantic cases; user builds/tests/measurements pending.
+- [x] Step 4b checkpoint: appearance/widget callback implementation, native smoke/scaling and 171 focused semantic tests passed.
+- [x] Repair launcher typing; full MyPy (110 sources) and Ruff checks pass.
+- [x] Write step 4c procedural Type 3 callback path, native fixtures and three semantic cases; user runtime validation pending.
 - [ ] Step 4: Nested content and intentional-cache audit; results verified.
 - [ ] Step 5: Real-document, corpus and threaded validation; comparison path retired.
 
@@ -2538,9 +2545,9 @@ After reviewing those results, a bounded shared-AP reuse check can use
 | --- | --- |
 | Page/Form checkpoint from earlier cycles | Native measurements and 153 focused tests passed |
 | Appearance/widget source implementation | Written for this cycle |
-| New native/AP smoke and semantic checks | Awaiting user |
-| AP memory/runtime scaling | Awaiting user after the small gate |
-| Accept/revise AP patch | Pending joint review |
+| New native/AP smoke and semantic checks | Passed; six new AP cases and 171 focused tests total |
+| AP memory/runtime scaling | Passed two 54-measurement matrices; matching PNGs and no timing flags |
+| Accept/revise AP patch | Retain; native and focused semantic gates passed |
 | Type 3 and soft-mask source conversion | Not started |
 | Tiling-pattern cache/copy audit | Not started |
 | Broad corpus/threaded validation and fallback retirement | Step 5, not started |
@@ -2548,6 +2555,647 @@ After reviewing those results, a bounded shared-AP reuse check can use
 Codex performed source review, Python AST parsing and whitespace checks, and
 preserved/hashed the old native executable. Codex did not compile, run CTest or
 pytest, generate PDFs or collect new performance measurements in this cycle.
+
+### User results — Step 4b native and focused semantic checkpoint
+
+Date: 2026-11-11.
+The user reported both AP smoke matrices, both scaling matrices and the rebuilt
+extension's focused suite: 171 tests passed in 6.86 seconds. This completes the
+appearance/widget implementation checkpoint; retain the callback path.
+
+#### Native evidence
+
+Saved artifacts were inspected under:
+
+- /private/tmp/docling-memory-step4b-buffered-appearances-smoke
+- /private/tmp/docling-memory-step4b-smoke
+- /private/tmp/docling-memory-step4b-buffered-appearances-scaling
+- /private/tmp/docling-memory-step4b-scaling
+
+Both smoke matrices passed 25 measurements. All five baseline PNG pairs matched
+byte-for-byte, including four selected appearances sharing one source. Direct,
+single-Form, single-appearance and widget output PNGs also matched each other.
+The saved native callback/recovery regression passed.
+
+Both scaling matrices passed 54 measurements. All six baseline PNG pairs matched
+byte-for-byte, and direct/single-appearance/widget PNGs matched at both sizes.
+All 18 scaling comparisons satisfied the +5% runtime allowance; no timing flags
+were reported.
+
+At the 250k target (249,652 painted lines):
+
+| Layout | Mode | Buffered peak MiB | Callback peak MiB | Memory change % | Process-time change % |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Appearance | Decode | 730.44 | 437.38 | -40.12 | -4.09 |
+| Appearance | Shapes disabled | 445.38 | 35.36 | -92.06 | -5.40 |
+| Appearance | Render | 730.52 | 438.12 | -40.03 | -1.83 |
+| Widget | Decode | 730.61 | 437.62 | -40.10 | -4.68 |
+| Widget | Shapes disabled | 445.48 | 35.44 | -92.05 | -7.70 |
+| Widget | Render | 730.48 | 437.59 | -40.10 | -3.27 |
+
+Across both sizes, appearance/widget full-output peak memory fell approximately
+38–40%, shapes-disabled memory fell approximately 90–92%, and those process
+timings improved by 1.83–8.04%. The single-repetition smoke times remain
+diagnostic rather than runtime evidence.
+
+All 36 decoded appearance/widget scaling measurements had zero materialized
+appearance tokens, zero final source-vector capacity and a pending operand
+maximum of two. At 250k, each source consumed 1,747,566 normalized objects and
+emitted 249,652 shape instructions.
+
+Direct-page decode memory at 250k was 298.66 MiB, below the AP's 437.38 MiB.
+With shapes disabled the corresponding results were 35.25 and 35.36 MiB.
+This is consistent with remaining temporary appearance output containers and
+page-output copies contributing to the full-output gap. No allocation profile
+was collected to assign that gap exactly to individual representations.
+
+A large shared-AP reuse sweep was not run. The smoke fixture and shared selected
+appearance semantic cases cover repeated execution for this checkpoint. Further
+single-AP scaling is unnecessary unless a new change or failure justifies it.
+
+#### Focused semantic evidence
+
+The user reported 171 tests passing in 6.86 seconds:
+
+| Test module | Passed |
+| --- | ---: |
+| test_unit_appearance_streaming.py | 6 |
+| test_unit_widget_appearances.py | 3 |
+| test_unit_acroform_widgets.py | 12 |
+| test_unit_form_streaming.py | 4 |
+| test_unit_split_content_streams.py | 4 |
+| test_unit_damaged_content_streams.py | 6 |
+| test_unit_actual_text.py | 8 |
+| test_unit_image_decode.py | 42 |
+| test_unit_clipping.py | 12 |
+| test_unit_patterns.py | 35 |
+| test_unit_type3_fonts.py | 10 |
+| test_unit_soft_masks.py | 22 |
+| test_unit_transparency.py | 7 |
+
+This includes the six new AP cases and the previous 153-test coverage, plus
+12 existing AcroForm tests. It covers transformed appearance execution, AP-local
+state during nested Form execution, all three font fallback scopes, shared
+selected appearances, damaged-prefix recovery and isolation from the following
+annotation. Widget chrome filtering and AcroForm metadata coverage also pass.
+
+Codex reviewed the user-provided pytest report and saved native artifacts.
+Codex did not compile, rerun pytest or execute new measurements in this review.
+
+#### Decision and next bounded patch
+
+Retain streamed page, ordinary Form and annotation appearance sources.
+Their respective native checkpoints and the current 171-test focused suite
+pass. Overall step 4 remains open.
+
+The next proposed bounded conversion is Type 3 CharProc source delivery, with
+glyph transforms, font resources, procedure draining and recursion limits
+preserved. Soft-mask group sources follow separately. Pattern cache/copy
+handling requires a separate audit that preserves efficient replay.
+
+Real-document/corpus/threaded validation, the remaining state-lifetime audit and
+retirement of the native buffered comparison paths remain outstanding. Do not
+treat the focused suite as completion of step 5.
+
+## Cycle 6 handoff — MyPy repair and step 4c Type 3 CharProc streaming
+
+Date: 2026-11-11.
+Authorization: the user asked to correct the reported MyPy failures and then
+implement Type 3 CharProc streaming.
+Status: MyPy/Ruff checks pass; procedural Type 3 source conversion, probe and
+regressions are written. User compilation and runtime validation are pending.
+
+### MyPy repair and completed static checks
+
+The launcher had eight reported errors from three causes:
+
+1. Timeout stdout/stderr variables were inferred as bytes and then assigned
+   decoded strings, making string concatenation invalid to MyPy.
+2. A raw-source string expectation and a later numeric shape-count expectation
+   reused the same variable name.
+3. Empty fallback dictionaries and the raw-signature cache needed annotations.
+
+Timeout output now normalizes directly into string variables, handling bytes,
+text and missing output. Raw source selection uses expected_stream. Summary
+dictionaries and measurement/image/signature collections have explicit types.
+The signature cache also distinguishes ordinary grids from the metric-prefixed
+Type 3 source family.
+
+No type ignores were added and no MyPy settings were weakened. Existing
+formatter changes from the user's pre-commit run were preserved.
+
+After adding the Type 3 code and new typed regression module, Codex ran the
+project's installed tools directly from .venv/bin:
+
+| Check | Result |
+| --- | --- |
+| mypy docling_parse tests scripts | Success; 110 source files |
+| ruff check docling_parse tests scripts | All checks passed |
+| ruff format --check docling_parse tests scripts | 115 files already formatted |
+| git diff --check | Passed |
+
+Existing annotation-unchecked notes about other untyped functions remain
+informational. The complete pre-commit wrapper/uv-lock hook was not executed;
+the Ruff/MyPy checks above use the installed project tools and normal config.
+No build, CTest, pytest or benchmark was executed by Codex.
+
+### Production source conversion
+
+do_type3_glyph() previously decoded the CharProc into a local rich instruction
+vector and copied that vector into a child interpreter. The normal path now
+holds a QPDF handle and calls new_stream.decode_and_interprete(charproc, parameters)
+after establishing the same glyph resources and graphics state.
+
+Preserved behavior:
+
+- paint_type3_glyphs() swaps the pending queue into a local vector before glyph
+  execution. Each queued procedure is consumed once; inherited states do not
+  carry pending work back into themselves.
+- CharProc lookup uses the font's resources with existing parent fallback.
+- Glyph placement combines FontMatrix, font size/rise, text placement and the
+  inherited page CTM in the existing order.
+- The child stack is rebound to glyph resources before callbacks execute.
+- Glyph cells, shapes and images stay in private temporary containers; only
+  render instructions reach the page, alongside the already-created text cell.
+- Bitmap glyph classification, unknown-operator handling and the thread-local
+  recursion limit of eight remain in place.
+- The recursion counter is decremented on normal and exceptional source exits.
+- The parent q()/Q() boundary is now also restored if child setup or execution
+  throws, so operator-level recovery cannot continue with the glyph transform.
+- The old buffered source reference explicitly propagates std::bad_alloc rather
+  than warning/returning as though a glyph were merely unreadable.
+
+Cached image-mask/vector glyph rendering and font extraction are unchanged.
+Soft-mask source conversion and pattern cache/copy work remain separate patches.
+
+### Important independent Type 3 memory stage
+
+get_type3_glyph() first examines the decoded CharProc to decide whether it can
+cache a rasterized glyph. Its lightweight vector analyzer currently builds a
+temporary vector of strings and scans the source even when it eventually
+chooses procedural fallback.
+
+That first-use tokenization, source-buffer copies and any useful cached masks
+remain part of process-lifetime peak RSS. The new interpreter diagnostics do
+not measure that analyzer's temporary tokens.
+
+Therefore a streamed CharProc can report zero rich instruction materialization
+while peak RSS still scales with source size, particularly with shapes disabled.
+Do not promise a QPDF-discard-level memory floor or describe this patch as
+removing every Type 3 token list. Use returned measurements to decide whether
+the independent analyzer deserves a later bounded optimization.
+
+### Comparison targets and old binary
+
+The new test_memory_on_lines_buffered_type3 target streams page, Form and
+appearance sources but keeps the old two-vector procedural CharProc path.
+test_memory_on_lines streams all four converted source paths. The fully
+buffered native target now defines the Type 3 comparison macro as well.
+
+DOCLING_PARSE_BUFFERED_TYPE3_CONTENTS is restricted to standalone native
+comparison targets. There is no new public runtime/Python switch.
+
+The exact earlier executable is preserved at:
+
+- /private/tmp/docling-memory-before-step4c
+- SHA-256: 19bc36ff06cb57a931c8a5730bdc1ee8744fe5c05560b2d6efa4d5725ec84203
+
+Its hash matches the step-4b scaling metadata. It can recheck historical
+direct/Form/AP fixtures, but cannot generate or select the new Type 3 layouts.
+Use the new buffered-Type3 reference for the new source family.
+
+### Native Type 3 fixtures
+
+The C++ generator adds pathstorm-type3 N PDF [glyphs=1]. It embeds a Type 3
+font with identity FontMatrix and displays it at font size one with a fresh
+identity text matrix for each glyph invocation, mapping grid ink into the same
+page coordinates as the direct fixture.
+
+The CharProc contains a 595 0 d0 metrics prefix followed by the normal stroked
+grid. Strokes are unsupported by the lightweight cached-mask rasterizer, so the
+probe requires actual procedural executions. This detects accidentally
+benchmarking a cached glyph mask instead of the converted interpreter.
+
+New opt-in launcher layouts:
+
+- type3: one procedural glyph.
+- type3-repeat: four invocations by default, controlled by --type3-repeats.
+
+Repeated invocations reset their text placement and paint the same grid again.
+They produce repeated render geometry, while glyph outlines remain excluded
+from the public page-shape collection. This is intentional Type 3 semantics,
+not silently dropped output.
+
+Raw qpdf-discard/collect modes select the marked CharProc once and do not execute
+Tj or multiply source counts by glyph invocations. Their source has three extra
+objects and one extra operator for d0, so its raw signature is grouped separately
+from ordinary grids. Default layouts remain the existing four page/Form layouts.
+
+### Diagnostics and exact expectations
+
+The probes report type3_content_delivery, type3_diagnostics, type3_executions,
+type3_source_objects, type3_materialized_tokens, type3_max_pending_operands,
+type3_max_depth and type3_recursion_skips, plus text_instructions.
+
+Counters aggregate procedural fallback execution through the page/Form/Type3
+interpreter tree, including CharProcs invoked through Forms. They do not include
+cached mask draws or separate AP/soft-mask interpreter trees. Aggregation is
+compiled only for diagnostic native probes.
+
+For L unique grid lines and R procedural glyph invocations:
+
+- One CharProc source contains 7 * L + 5 objects and 3 * L + 2 operators.
+- Executed CharProc objects total R * (7 * L + 5).
+- Type 3 executions = R, maximum procedural depth = 1, recursion skips = 0.
+- CharProc pending operands peak at two.
+- The page source has 5 + 9 * R objects, known generated page_content_bytes,
+  and an operand maximum of six due to Tm.
+- Normal decode/render emits R * L shape instructions/subpaths/segments and
+  twice that many points, with R Type 3 text instructions.
+- Public page_shapes remains zero: the path marks are glyph ink.
+- Shapes-disabled runs emit zero shape instructions but still execute CharProcs.
+- Streamed interpreter materialization = zero.
+- Buffered interpreter materialization = twice the executed CharProc objects,
+  counting both legacy vectors cumulatively, not peak live bytes.
+
+These do not count the independent first-use glyph analyzer's token strings.
+The launcher validates counters, preserves matching-input/output checks, writes
+the fields to summary.csv and retains tabulate memory/runtime summaries.
+
+### New focused semantic coverage
+
+tests/test_unit_type3_streaming.py adds three cases:
+
+1. Two glyphs queued by one Tj share the font-local half-opacity graphics
+   resource. Pixel checks verify each stroke paints once, glyph transforms stay
+   local and the parent page retains its own blue/quarter-opacity stroke.
+2. The same behavior with a recoverable damaged Flate CharProc checks prefix
+   recovery and the second queued execution of the shared, repaired source.
+3. A self-recursive glyph paints eight quarter-opacity strokes, then a plain
+   glyph and parent suffix still paint. Pixel opacity tests the depth bound;
+   later marks check that the recursion counter and graphics state were restored.
+
+Strokes and recursive text force these cases through the procedural fallback.
+Existing Type 3 tests still cover cached vector/image-mask paths, image-XObject
+resources, orientation and artifact classification.
+
+These cases are formatted and type-checked but have not been run by Codex.
+
+### First user commands: configure/build and generic native recovery
+
+~~~sh
+cmake -S . -B build -DDOCLING_PARSE_BUILD_MEMORY_PROBE=ON
+
+cmake --build build --parallel 2 --target \
+  test_memory_on_lines \
+  test_memory_on_lines_buffered_type3 \
+  stream_callback_regression
+
+ctest --test-dir build --output-on-failure -R '^stream_callback_regression$'
+~~~
+
+The generic callback regression does not replace Type 3 fixture/semantic checks.
+
+### First user experiment: small Type 3 matrix
+
+~~~sh
+uv run python3 tests/cpp/run_memory_on_lines.py \
+  --exe build/test_memory_on_lines_buffered_type3 \
+  --output /private/tmp/docling-memory-step4c-buffered-type3-smoke \
+  --layouts direct,form,type3,type3-repeat --sizes 1000 --repeats 1
+
+uv run python3 tests/cpp/run_memory_on_lines.py \
+  --output /private/tmp/docling-memory-step4c-smoke \
+  --baseline /private/tmp/docling-memory-step4c-buffered-type3-smoke \
+  --layouts direct,form,type3,type3-repeat --sizes 1000 --repeats 1
+~~~
+
+Each matrix has 20 measurements. Require baseline/candidate PNG equality for
+all four layouts, equivalent direct/Form/single-Type3 pixels, correct glyph
+execution and ink counts, zero streamed rich-token materialization and bounded
+operands. A small single repetition is a structural gate, not runtime evidence.
+
+Return compilation, counter, image or runtime errors first. Do not relax the
+assertions or change ground truth to make a mismatch pass.
+
+### User semantic validation
+
+Rebuild the extension, then run the three new cases plus the established focused
+suite:
+
+~~~sh
+uv run --no-sync python local_build.py
+
+uv run --no-sync pytest \
+  tests/test_unit_type3_streaming.py \
+  tests/test_unit_type3_fonts.py \
+  tests/test_unit_appearance_streaming.py \
+  tests/test_unit_widget_appearances.py \
+  tests/test_unit_acroform_widgets.py \
+  tests/test_unit_form_streaming.py \
+  tests/test_unit_split_content_streams.py \
+  tests/test_unit_damaged_content_streams.py \
+  tests/test_unit_actual_text.py \
+  tests/test_unit_image_decode.py \
+  tests/test_unit_clipping.py \
+  tests/test_unit_patterns.py \
+  tests/test_unit_soft_masks.py \
+  tests/test_unit_transparency.py -q
+~~~
+
+The 171 earlier passing tests describe the previous compiled extension; they do
+not count as executing this Type 3 change. Report the new result explicitly.
+
+### Scaling after the small gate
+
+Start with a controlled same-source comparison at two sizes:
+
+~~~sh
+uv run python3 tests/cpp/run_memory_on_lines.py \
+  --exe build/test_memory_on_lines_buffered_type3 \
+  --output /private/tmp/docling-memory-step4c-buffered-type3-scaling \
+  --sizes 125000,250000 --layouts direct,type3 \
+  --modes decode,skip-shapes,render --repeats 3
+
+uv run python3 tests/cpp/run_memory_on_lines.py \
+  --output /private/tmp/docling-memory-step4c-scaling \
+  --baseline /private/tmp/docling-memory-step4c-buffered-type3-scaling \
+  --sizes 125000,250000 --layouts direct,type3 \
+  --modes decode,skip-shapes,render --repeats 3 --slowdown-limit-pct 5
+~~~
+
+Each scaling matrix has 36 measurements. Measure the combined first-use glyph
+analysis, procedural interpretation and retained output; do not infer the whole
+process peak from the interpreter counters alone.
+
+Expected hypotheses are lower peak RSS, equivalent output and process time
+within +5%. A shared analysis/output cost may limit observed gains. If that cost
+dominates, decide jointly whether to profile/optimize it later. Repeated-glyph
+scaling is available with --layouts type3-repeat at a bounded target after the
+first scaling result; it is not automatically launched.
+
+### Pending decision
+
+| Item | Status |
+| --- | --- |
+| Reported MyPy errors | Fixed; full 110-file MyPy check passes |
+| Ruff lint/format | Pass |
+| Procedural Type 3 conversion and three regressions | Written |
+| User native build/smoke and rebuilt-extension tests | Native smoke passed; focused Type3 test result pending |
+| Type 3 memory/runtime scaling | Two 36-measurement matrices passed; lower peak memory and all times within +5% |
+| Cached glyph analyzer/mask pipeline | Preserved; separate first-use memory cost documented |
+| Accept/revise Type 3 patch | Joint review after user results |
+| Soft-mask source conversion and pattern cache/copy audit | Not started |
+| Broad corpus/threaded validation and comparison retirement | Step 5, not started |
+
+Codex ran only source/static checks and copied/hashed the historical executable.
+No native build, PDF generation, benchmark, CTest or pytest was run by Codex.
+
+## Type 3 native results and remaining font-initialization retention
+
+Date: 2026-11-11.
+The user ran both step-4c smoke matrices and both scaling matrices.
+
+- Both smoke runs passed 20 measurements, all four baseline PNG comparisons
+  matched byte-for-byte, and direct/Form/single-Type3 PNGs matched.
+- Both scaling runs passed 36 measurements and all four baseline PNG comparisons
+  matched. Direct and Type3 PNGs matched at both sizes.
+- All 12 scaling comparisons meet the +5% allowance. The six Type3 comparisons
+  improve process time by 0.58–3.50%.
+- All 18 decoded Type3 scaling measurements have zero interpreter token
+  materialization, a maximum of two CharProc operands and no recursion skips.
+- The native callback/recovery regression also passed.
+
+At the 250k leaf target:
+
+| Type3 mode | Buffered peak MiB | Callback peak MiB | Memory change % | Process-time change % |
+| --- | ---: | ---: | ---: | ---: |
+| Decode | 980.14 | 791.47 | -19.25 | -0.58 |
+| Shapes disabled | 860.12 | 676.72 | -21.32 | -1.12 |
+| Render | 978.14 | 790.47 | -19.19 | -2.84 |
+
+The procedural interpreter's native goal is met, but focused rebuilt-extension
+test results for this patch have not yet been supplied. The bo20 benchmark
+refresh discussed below runs damaged-page tests, not the new Type3 semantic
+suite, so it does not close that gate.
+
+### Additional structural finding in font initialization
+
+The remaining shapes-disabled footprint prompted inspection beyond the
+lightweight first-use glyph analyzer:
+
+1. PAGE_FONT::set() calls init_charprocs().
+2. init_charprocs() eagerly decodes every CharProc into a complete vector of
+   qpdf_stream_instruction records.
+3. char_processor::parse(stream) copies that vector into char_description.
+   It is called twice: the first return value is discarded; the second is
+   assigned into name_to_descr.
+4. The only reader of name_to_descr found under src/, app/ and tests/ logs its
+   size. The retained instructions have no functional reader in this repository.
+
+At 250k the CharProc has 1,747,569 objects. With 64-byte instruction records,
+one size-only copied token array is about 106.66 MiB before referenced objects,
+strings and excess capacity. Additional eager vector/copy/cache work is thus a
+strong remaining memory candidate. Exact attribution of the 676.72 MiB peak
+still needs phase measurements or a controlled follow-up comparison.
+
+These vectors are outside the procedural interpreter counters. Zero
+type3_materialized_tokens does not mean the complete font pipeline has no
+retained token list.
+
+The eager decoder also has observable side effects: damaged CharProcs may be
+repaired in place before first-use glyph analysis, and invalid entries are
+checked during font initialization. Do not simply delete the eager call based
+on the unused map alone.
+
+The next bounded Type3 cleanup should preserve eager validation/recovery through
+the existing normalized discard-consumer path while removing the description
+vector copies/cache and its size-only debug dependency. Keep the independent
+cached glyph-mask analyzer separate. Preserve a pre-cleanup executable and
+compare the complete process footprint rather than only the callback counter.
+This belongs to step 4's existing unnecessary-retention audit.
+
+## Ordered continuation — finish parser plan, then benchmark memory reporting
+
+Date: 2026-11-11.
+The user requested this order:
+
+1. Finish the steps in this parser-memory plan.
+2. Update scripts/benchmarking/refresh_performance_benchmarks.sh so the benchmark
+   report shows memory evolution, especially peak RSS, with optional time-based
+   memory profiles.
+
+The second item is an explicitly requested follow-up. It does not authorize
+skipping the parser's remaining semantic/corpus gates. The user still compiles
+and runs experiments; Codex implements and analyzes.
+
+### Remaining parser sequence
+
+1. Obtain the focused Type3 semantic result for the rebuilt extension.
+2. Remove unnecessary eager Type3 description retention while preserving its
+   validation/recovery behavior; measure and validate that bounded patch.
+3. Convert soft-mask group source delivery, preserving group state, mask
+   semantics, recursion/budgets and useful decoded-mask reuse.
+4. Audit tiling-pattern token/cache copies and change only the representation
+   needed to remove redundant copies while preserving efficient replay.
+5. Finish the missing-reset/lifetime audit and record confirmed/non-defect
+   findings; do not clear legitimate clipping state to reduce one snapshot.
+6. Complete the existing step-5 self-contained tests, real-document output
+   comparisons, broader corpus and actual threaded-path validation.
+7. Retire temporary production comparison selectors/dead source paths after
+   acceptance, keeping useful native diagnostics and preserved measurement
+   artifacts. Supply final user-run checks for the cleaned-up result.
+
+The existing step-5 threaded-memory evidence can use the Python replay peaks
+already captured and bounded manual/native OS measurements. The permanent
+launcher/reporting extension follows parser acceptance; do not create a circular
+dependency that requires that extension before the parser plan can be finished.
+
+### New bo20 bundle: what it establishes now
+
+User command:
+
+~~~sh
+REPEATS=1 THREADS=1,4,8,12 RUN_COMPARISON=0 DATASET=bo20 \
+  ./scripts/benchmarking/refresh_performance_benchmarks.sh
+~~~
+
+Bundle: scratch-performance-refresh-20261111-161912-r7M86J.
+Report: report/summary.md.
+Dataset: performance-dataset-bo20 at
+65b9971b3fa939fe4ef89be678237e6928049b67, 20 PDFs / 496 pages.
+Report source revision: 04e31ded07866d6741efb99a059056f94ee8759b.
+The bundle also records working-tree and binary provenance; a revision label
+alone does not identify uncommitted source compiled into the binaries.
+
+This provides real-workload scaling observations for native render-only and
+render-with-text profiles and the Python backend-operation replay. It is one
+observation per case, not a variability estimate or a before/after comparison.
+The refresh's pre-test is test_unit_damaged_pages.py. Runtime/count validation
+does not substitute for pixel/content regression comparisons or the new Type3
+focused tests.
+
+### Peak RSS is already available for the Python replay
+
+run_performance_benchmarking_with_docling_settings.py already calls
+resource.getrusage(RUSAGE_SELF).ru_maxrss and records peak_rss_mib plus a
+process-lifetime scope in each runs[] entry.
+
+The launcher runs each backend/thread profile in a fresh process, making the
+following existing values usable for those individual runs:
+
+| Backend replay | Threads | Existing peak RSS MiB | Raw file under the bundle |
+| --- | ---: | ---: | --- |
+| pypdfium2 | 1 | 623.08 | replay/r1/pdfium/report.json |
+| docling-parse | 1 | 710.33 | replay/r1/t1/report.json |
+| docling-parse | 4 | 861.80 | replay/r1/t4/report.json |
+| docling-parse | 8 | 1,023.56 | replay/r1/t8/report.json |
+| docling-parse | 12 | 1,176.50 | replay/r1/t12/report.json |
+
+These are whole-process peaks, including Python/native libraries, startup,
+loading, processing and retained output. They are not parser-only heap sizes
+or sums of per-page peaks.
+
+run_performance_report.py currently omits these fields from its summary/runs
+view. app/run_scaling.cpp does not currently emit a corresponding peak RSS.
+There are no saved sampled RSS timelines to recover retroactively.
+
+### Benchmark follow-up A: default per-run peak RSS
+
+Implement only after the parser plan's acceptance gate:
+
+- Carry existing replay peak_rss_mib through report ingestion, runs.csv,
+  summary tables and machine-readable output.
+- Add native per-process OS peak capture, reusing the native probe's verified
+  platform/unit handling where appropriate.
+- Capture every repetition/backend/profile/thread combination separately.
+  Do not wrap the entire launcher and report its peak: build, downloads and
+  reporting processes are outside the requested benchmark measurement.
+- Track the actual benchmark process, including all its threads. Do not report
+  the RSS of uv, the logger or tee as the backend's memory.
+- Normalize native OS values to canonical bytes at collection boundaries and
+  display MiB. Darwin ru_maxrss is bytes; the Linux value is KiB, matching the
+  existing replay normalization.
+- Record method, units, process identity, scope, mode and configuration with
+  the existing source/binary/dataset provenance.
+- Label whole-process lifetime peaks explicitly. Native wall time excludes
+  document preload, while a lifetime peak includes it; do not imply matching
+  timing/memory boundaries or subtract two high-water values as phase memory.
+- Preserve current workload/profile separation and recorded result-queue,
+  output-consumption and native-memory-release policies.
+- For multiple repetitions show the median and observed min/max of per-run
+  peaks, plus the largest observed run peak for capacity planning.
+- Add peak-RSS-versus-thread-count figures alongside throughput/scaling figures.
+- Keep old bundles readable: missing native peak data displays as unavailable,
+  never zero or an estimate. Existing Python replay peaks can be surfaced in
+  a newly generated report without rerunning those measurements.
+- Avoid cumulative RUSAGE_CHILDREN or shared-process high-water reuse across
+  runs. Optional cross-package comparison currently runs multiple series in a
+  process; isolate them before claiming per-series peaks, or label memory
+  unavailable/shared-process there. The initial target is the native/replay
+  profiles used by RUN_COMPARISON=0.
+
+Peak capture should be enabled by default with low overhead; verify that
+overhead instead of promising it is free.
+
+### Benchmark follow-up B: optional sampled RSS timeline
+
+Proposed interface, preserving environment-based invocation and adding explicit
+CLI equivalents:
+
+~~~sh
+# Peak RSS in every normal report.
+MEMORY_MODE=peak REPEATS=3 THREADS=1,4,8,12 DATASET=bo20 \
+  ./scripts/benchmarking/refresh_performance_benchmarks.sh
+
+# Optional timeline; also retains the OS peak.
+REPEATS=3 THREADS=1,4,8,12 DATASET=bo20 \
+  ./scripts/benchmarking/refresh_performance_benchmarks.sh \
+  --memory-mode profile --memory-interval-ms 50
+~~~
+
+MEMORY_MODE values: off, peak (default), profile.
+MEMORY_INTERVAL_MS sets a positive sampling interval, proposed default 50 ms.
+CLI values override environment values. These options are proposed and not yet
+implemented; existing launcher commands still reject extra arguments.
+
+Requirements:
+
+- Sample current RSS against monotonic elapsed time for each actual benchmark
+  process. An external sampler should continue observing while native work or
+  the Python GIL is busy.
+- Write raw timestamp/RSS/PID samples and a per-run summary beside its existing
+  measurement artifacts; include interval/method/identity metadata.
+- Keep OS peak RSS and sampled maximum as distinct fields. Sampling may miss
+  brief spikes and cannot replace the OS high-water mark.
+- Record lifecycle/measurement boundaries when available, so plots distinguish
+  initialization/preload, measured processing and teardown.
+- Produce RSS-versus-elapsed-time plots by backend, profile, threads and
+  repetition without confusing independent clocks or averaging unrelated runs.
+- Record sampling as instrumentation. Check its effect on runtime and avoid
+  mixing sampled and unsampled runs in a performance claim.
+- Bound the monitor's own memory with streamed sample output. Ensure cleanup
+  and useful artifacts on child failure, timeout or interruption.
+- Preserve completed-series checkpoints and recovery provenance. A resumed
+  series must not silently claim a missing timeline or inherit another
+  process's high-water value.
+
+### Benchmark follow-up implementation and validation order
+
+1. Add a small collection/schema layer and meaningful unit coverage for unit
+   conversion, process isolation, missing/legacy data and invalid options.
+2. Surface existing replay peaks and add native per-run peaks; integrate the
+   normal launcher, report tables/CSV and memory-scaling plots.
+3. Add optional sampling and timeline figures after default peaks are correct.
+4. Validate recovery/backward compatibility and scoped failure artifacts.
+5. User runs a bounded bo20 smoke at one/four threads, then paired off/peak/
+   profile runs to assess capture overhead and peak agreement.
+6. User runs the requested one/four/eight/twelve-thread sweep with repeated
+   observations, preserving dataset/source/settings for comparison.
+
+Codex has not modified the benchmark launcher/report implementation or rerun the
+benchmark in this review. The immediate existing peak-RSS table above was read
+from saved JSON reports.
 
 ## Questions to answer from the intermediate results
 
