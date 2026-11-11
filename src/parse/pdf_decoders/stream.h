@@ -93,8 +93,21 @@ namespace pdflib
     void do_form(const std::string& xobj_name,
 		 const xobject_subtype_name& xobj_subtype);
 
+    // Runs the Type3 CharProcs that the last show-string queued, see
+    // pdf_state<TEXT>::type3_procedure.
+    void paint_type3_glyphs();
+    void do_type3_glyph(const pdf_state<TEXT>::type3_procedure& glyph);
+
     void do_postscript(const std::string& xobj_name,
        const xobject_subtype_name& xobj_subtype);
+
+    // Soft masks (11.6.5). A `gs` that installs one leaves its group
+    // undecoded on the graphics state; this decodes the group -- once per
+    // ExtGState entry and CTM -- into page-space instructions the renderer
+    // composites, and hands the result to the state.
+    void resolve_soft_mask();
+    std::shared_ptr<soft_mask_instruction>
+    decode_soft_mask(const soft_mask_spec& spec, const std::array<double, 9>& ctm);
 
     // `sh`: resolve the named /Shading resource and emit the paint
     // instruction that covers the current clip region.
@@ -103,7 +116,37 @@ namespace pdflib
     // `scn` naming a tiling pattern: replay the pattern cell across the page
     // box, clipped to the path being filled. `even_odd` is that path's fill
     // rule. Returns false when the pattern cannot be resolved or painted.
-    bool do_pattern_fill(const std::string& pattern_name, bool even_odd);
+    // `pattern_name` is taken by value: callers pass the fill pattern name
+    // held by the current graphics state, and painting the pattern pushes a
+    // new state (`q`), which can reallocate the state stack and leave a
+    // reference dangling.
+    bool do_pattern_fill(std::string pattern_name, bool even_odd);
+
+    // Nesting depth of tiling-cell decodes on this thread. A cell may paint
+    // with another pattern, and a cell's own /Resources may name the very
+    // pattern being decoded under a fresh resource object, so the per-object
+    // flag cannot see every cycle; a depth cap catches the rest.
+    static int& tiling_depth()
+    {
+      static thread_local int depth = 0;
+      return depth;
+    }
+    static constexpr int max_tiling_depth = 4;
+
+    // The renderer-side half of a tiling-pattern fill: the cell decoded once
+    // per pattern (and per colour for an uncoloured one) in pattern space,
+    // packaged with the pattern-space -> page-space matrix `pat`. Returns
+    // nullptr when the cell cannot be decoded or paints nothing.
+    // Reports the decoded cell's images once more at page level, over the
+    // bbox of the path being filled, so the region still counts as image
+    // content without the lattice of per-cell placements.
+    void report_tiling_cell_images(pdf_resource<PAGE_PATTERN>& pattern,
+                                   const std::string& paint_key);
+
+    std::shared_ptr<const tiling_paint> make_tiling_paint(const std::string& pattern_name,
+                                                          pdf_resource<PAGE_PATTERN>& pattern,
+                                                          const std::vector<qpdf_stream_instruction>& cell,
+                                                          const std::array<double, 9>& pat);
     bool do_coons_patch_pattern_fill(const std::string& pattern_name,
                                      pdf_resource<PAGE_PATTERN>& pattern,
                                      bool even_odd);
@@ -115,12 +158,24 @@ namespace pdflib
       bool        has_actual_text = false;
       std::string actual_text     = ""; // UTF-8
       std::size_t cells_begin     = 0;  // page_cells.size() at BDC/BMC
+
+      // tagged-PDF linkage (PDF 32000-2, 14.7.5 and 14.8.2.2.2)
+      int         mcid          = -1; // /MCID of the sequence, -1 when absent
+      std::shared_ptr<const marked_content_artifact> artifact;
     };
 
     void begin_marked_content(std::vector<qpdf_stream_instruction>& parameters);
     void end_marked_content();
 
     void apply_actual_text(const marked_content_entry& entry);
+    void apply_marked_content_tags(std::size_t begin);
+    marked_content_entry inherited_marked_content;
+    std::map<std::pair<std::string, std::string>,
+      std::shared_ptr<const marked_content_artifact>> artifact_types;
+    const marked_content_entry& active_marked_content() const
+    {
+      return marked_content_stack.empty() ? inherited_marked_content : marked_content_stack.back();
+    }
 
     struct inline_image_entry
     {
@@ -179,6 +234,40 @@ namespace pdflib
     int stack_count;
     int inline_image_count = 0;
     inline_image_entry inline_image;
+
+    // Decoded soft masks, shared by every decoder of one page (forms,
+    // patterns, appearance streams) so a mask installed at page level and
+    // painted under inside a form is decoded once. Keyed by the parsed
+    // entry's address and the CTM at the `gs`; the entry is held alongside
+    // so its address cannot be reused while the key is live. A failed decode
+    // is kept, as null, so it is not retried.
+    //
+    // A page can install a new mask with every `gs` for next to nothing, so
+    // the number of decodes is capped: past max_soft_mask_decodes the rest of
+    // the page paints unmasked, reported once.
+    struct soft_mask_cache_entry
+    {
+      std::shared_ptr<const soft_mask_spec>  spec;
+      std::shared_ptr<soft_mask_instruction> mask;
+    };
+    //
+    // A mask installed inside a transparency group painted under another
+    // mask is intersected with it; the intersections are kept here too, keyed
+    // by the two masks, so every paint under the same pair shares one.
+    struct soft_mask_page_cache
+    {
+      std::unordered_map<std::string, soft_mask_cache_entry> decoded;
+      std::map<std::pair<const soft_mask_instruction*, const soft_mask_instruction*>,
+               std::shared_ptr<soft_mask_instruction>> intersected;
+      bool budget_reported = false;
+    };
+    static constexpr std::size_t max_soft_mask_decodes = 512;
+    std::shared_ptr<soft_mask_page_cache> soft_mask_cache_ =
+      std::make_shared<soft_mask_page_cache>();
+
+    // Greater than zero while decoding a soft mask's own group. A mask set
+    // inside a mask is not composited; it is reported instead.
+    int soft_mask_depth_ = 0;
 
     // BDC/EMC pairs must balance within a single content stream (PDF 32000-1,
     // 14.6), so this stack is per-decoder; cells created by nested form
@@ -401,7 +490,26 @@ namespace pdflib
               }
             LOG_S(INFO) << " --> " << std::setw(12) << inst.key << " | " << inst.val;
 
-            execute_operator(inst, parameters);
+            // An operand of the wrong type, a resource that fails to load, a
+            // malformed inline image: in a damaged stream any of these can
+            // surface as an exception from one operator. That operator is
+            // lost either way; the ones after it need not be. Log it and go
+            // on, as mupdf does ("ignoring error during interpretation").
+            // Resource exhaustion (std::bad_alloc) is not caught here.
+            try
+              {
+                execute_operator(inst, parameters);
+              }
+            catch(const std::logic_error& e)
+              {
+                LOG_S(ERROR) << "operator " << inst.val << " failed (" << e.what()
+                             << ") => skipping the operator";
+              }
+            catch(const std::runtime_error& e)
+              {
+                LOG_S(ERROR) << "operator " << inst.val << " failed (" << e.what()
+                             << ") => skipping the operator";
+              }
 
             parameters.clear();
           }
@@ -424,11 +532,8 @@ namespace pdflib
   {
     if(stack.size()==0)
       {
-        std::stringstream message;
-        message << "stack-size is zero in " << __FILE__ << ":" << __LINE__;
-
-        LOG_S(ERROR) << message.str();
-        throw std::logic_error(message.str());
+        LOG_S(ERROR) << "graphics state stack is empty: starting from a fresh state";
+        ensure_stack();
       }
 
     pdf_state<GLOBAL>& state = stack.back();
@@ -504,14 +609,16 @@ namespace pdflib
 
   void pdf_decoder<STREAM>::Q()
   {
-    if(stack.size()>0)
+    // The bottom entry is the state the stream started in, not something a
+    // `q` pushed: a `Q` without its `q` (a truncated stream, a damaged one)
+    // must not pop it, or every operator after it has no state to run in.
+    if(stack.size()>1)
       {
         stack.pop_back();
       }
     else
       {
-        LOG_S(ERROR) << "invoking 'Q' on empty stack!";
-        //throw std::logic_error(__FILE__);
+        LOG_S(ERROR) << "invoking 'Q' without a matching 'q': keeping the base state";
       }
   }
 
@@ -997,6 +1104,7 @@ namespace pdflib
                               grph_state.get_fill_alpha(),
                               clip_state);
       instr.set_blend_mode(grph_state.get_blend_mode());
+      instr.set_soft_mask(grph_state.get_soft_mask_instruction());
       return instr;
     }
   }
@@ -1256,7 +1364,7 @@ namespace pdflib
   // 8.7.4.5: `sh` paints the named shading over the whole current clip
   // region, taking its colours from the shading's own colour space and
   // function rather than from the current fill colour.
-  bool pdf_decoder<STREAM>::do_pattern_fill(const std::string& pattern_name,
+  bool pdf_decoder<STREAM>::do_pattern_fill(std::string pattern_name,
                                             bool even_odd)
   {
     if(not page_patterns or page_patterns->count(pattern_name) == 0)
@@ -1317,6 +1425,7 @@ namespace pdflib
           current_graphic_state().get_fill_alpha(),
           std::move(clip_state));
         shinstr.set_blend_mode(current_graphic_state().get_blend_mode());
+        shinstr.set_soft_mask(current_graphic_state().get_soft_mask_instruction());
         instructions.add_shading_instruction(std::move(shinstr));
 
         this->Q();
@@ -1328,7 +1437,17 @@ namespace pdflib
         return false;
       }
 
-    std::vector<qpdf_stream_instruction> cell = pattern.parse_stream();
+    // Without shape tracking the cell's strokes and fills are dropped on the
+    // floor (every shape operator returns early), and the path being filled
+    // was never recorded, so the lattice falls back to the page box. Replaying
+    // up to 17x17 cells per fill then costs seconds per page on CAD hatching
+    // and paints nothing. Same rule as the shading-pattern branch above.
+    if(not config.keep_shapes)
+      {
+        return false;
+      }
+
+    const std::vector<qpdf_stream_instruction>& cell = pattern.parse_stream();
     if(cell.empty())
       {
         return false;
@@ -1379,6 +1498,57 @@ namespace pdflib
     // composes back to exactly that. Dropping the base placed the cell in raw
     // pattern coordinates and put it off the top of the page.
     const std::array<double, 9> to_pattern = mul(mul(want, base_ctm_), inv);
+
+    // The common case -- every hatch on a CAD sheet -- is a cell smaller than
+    // the page. It is decoded once and handed to the renderer, which fills
+    // the path with the repeated tile in one instruction. The lattice replay
+    // below is kept for cells larger than the page, where a tile would be
+    // bigger than what it fills and the replay is a handful of cells.
+    {
+      const std::array<double, 9> pat = mul(want, base_ctm_);
+      const double step_x = pattern.get_x_step();
+      const double step_y = pattern.get_y_step();
+      if(step_x > 0.0 and step_y > 0.0)
+        {
+          const double len_x = std::hypot(step_x * pat[0], step_x * pat[1]);
+          const double len_y = std::hypot(step_y * pat[3], step_y * pat[4]);
+          const std::array<double, 4> crop = page_dimension.get_crop_bbox();
+          const double crop_w = std::abs(crop[2] - crop[0]);
+          const double crop_h = std::abs(crop[3] - crop[1]);
+
+          if(std::isfinite(len_x) and std::isfinite(len_y) and
+             len_x > 0.0 and len_y > 0.0 and len_x <= crop_w and len_y <= crop_h)
+            {
+              if(pattern.is_decoding() or tiling_depth() >= max_tiling_depth)
+                {
+                  // A cell painting with its own pattern, directly or through
+                  // a chain: nothing sensible to paint, and replaying it would
+                  // recurse without end.
+                  LOG_S(WARNING) << "pattern " << pattern_name
+                                 << ": nested pattern cell at depth " << tiling_depth()
+                                 << ", fill skipped";
+                  return false;
+                }
+
+              std::shared_ptr<const tiling_paint> paint =
+                make_tiling_paint(pattern_name, pattern, cell, pat);
+              if(paint)
+                {
+                  current_shape_state().set_pending_tiling_paint(paint);
+                  report_tiling_cell_images(pattern, paint->get_key());
+                  return true;
+                }
+            }
+        }
+    }
+
+    if(tiling_depth() >= max_tiling_depth)
+      {
+        LOG_S(WARNING) << "pattern " << pattern_name
+                       << ": nested pattern replay at depth " << tiling_depth()
+                       << ", fill skipped";
+        return false;
+      }
 
     // How many cells to lay down: cover the filled path in pattern space.
     // Falling back to the page box keeps patterns usable when the path cannot
@@ -1477,6 +1647,7 @@ namespace pdflib
 
     bool painted = false;
 
+    tiling_depth() += 1;
     for(int iy = iy0; iy <= iy1; iy++)
       {
         for(int ix = ix0; ix <= ix1; ix++)
@@ -1513,6 +1684,9 @@ namespace pdflib
                                             instructions,
                                             timings);
 
+            cell_stream.soft_mask_cache_ = soft_mask_cache_;
+            cell_stream.soft_mask_depth_ = soft_mask_depth_;
+
             bool updated_stack = cell_stream.update_stack(stack, stack_count);
             cell_stream.current_graphic_state().materialize_pattern_fill_color();
 
@@ -1526,10 +1700,158 @@ namespace pdflib
             painted = true;
           }
       }
+    tiling_depth() -= 1;
 
     this->Q();
 
     return painted;
+  }
+
+  void pdf_decoder<STREAM>::report_tiling_cell_images(pdf_resource<PAGE_PATTERN>& pattern,
+                                                      const std::string& paint_key)
+  {
+    const std::string::size_type colon = paint_key.find(':');
+    const std::string color_key =
+      colon == std::string::npos ? std::string() : paint_key.substr(colon + 1);
+
+    std::shared_ptr<page_item<PAGE_IMAGES> > images = pattern.get_decoded_cell_images(color_key);
+    if(not images or images->size() == 0)
+      {
+        return;
+      }
+
+    std::array<double, 4> box = page_dimension.get_crop_bbox();
+    if(not current_shape_state().get_current_path_bbox(box))
+      {
+        return;
+      }
+
+    // One page image per cell image, over the region the fill covers: the
+    // lattice placed the cell's image hundreds of times inside that region,
+    // and what matters downstream is that the region is image content.
+    for(std::size_t i = 0; i < images->size(); i++)
+      {
+        page_item<PAGE_IMAGE> image = (*images)[i];
+
+        image.x0 = box[0];
+        image.y0 = box[1];
+        image.x1 = box[2];
+        image.y1 = box[3];
+
+        image.r_x0 = box[0]; image.r_y0 = box[1];
+        image.r_x1 = box[0]; image.r_y1 = box[3];
+        image.r_x2 = box[2]; image.r_y2 = box[3];
+        image.r_x3 = box[2]; image.r_y3 = box[1];
+
+        image.has_visible_bbox = false;
+
+        page_images.push_back(image);
+      }
+  }
+
+  std::shared_ptr<const tiling_paint> pdf_decoder<STREAM>::make_tiling_paint(
+    const std::string& pattern_name,
+    pdf_resource<PAGE_PATTERN>& pattern,
+    const std::vector<qpdf_stream_instruction>& cell,
+    const std::array<double, 9>& pat)
+  {
+    // An uncoloured cell (PaintType 2) is a stencil painted in the colour the
+    // scn operands gave, so its decoded form depends on that colour.
+    const std::array<int, 3> rgb = current_graphic_state().get_rgb_filling_ops();
+    std::string color_key;
+    if(pattern.get_paint_type() == 2)
+      {
+        color_key = std::to_string(rgb[0]) + "," + std::to_string(rgb[1]) + ","
+                  + std::to_string(rgb[2]);
+      }
+
+    std::shared_ptr<pdf_render_instructions> decoded = pattern.get_decoded_cell(color_key);
+    if(not decoded)
+      {
+        decoded = std::make_shared<pdf_render_instructions>();
+
+        // The cell's text and images are tile content, not page content, so
+        // the decode gets sinks of its own.
+        page_item<PAGE_CELLS>  cell_cells;
+        page_item<PAGE_SHAPES> cell_shapes;
+        page_item<PAGE_IMAGES> cell_images;
+
+        auto page_fonts_       = std::make_shared<pdf_resource<PAGE_FONTS>>(page_fonts);
+        auto page_grphs_       = std::make_shared<pdf_resource<PAGE_GRPHS>>(page_grphs);
+        auto page_colorspaces_ = std::make_shared<pdf_resource<PAGE_COLORSPACES>>(page_colorspaces);
+        auto page_shadings_    = std::make_shared<pdf_resource<PAGE_SHADINGS>>(page_shadings);
+        auto page_patterns_    = std::make_shared<pdf_resource<PAGE_PATTERNS>>(page_patterns);
+        auto page_xobjects_    = std::make_shared<pdf_resource<PAGE_XOBJECTS>>(page_xobjects);
+
+        if(pattern.has_resources())
+          {
+            QPDFObjectHandle res = pattern.get_resources();
+            if(res.hasKey("/Font"))      { QPDFObjectHandle o = res.getKey("/Font");      page_fonts_->set(o, timings); }
+            if(res.hasKey("/ExtGState")) { QPDFObjectHandle o = res.getKey("/ExtGState"); page_grphs_->set(o, timings); }
+            if(res.hasKey("/ColorSpace")){ QPDFObjectHandle o = res.getKey("/ColorSpace");page_colorspaces_->set(o); }
+            if(res.hasKey("/Shading"))   { QPDFObjectHandle o = res.getKey("/Shading");   page_shadings_->set(o); }
+            if(res.hasKey("/Pattern"))   { QPDFObjectHandle o = res.getKey("/Pattern");   page_patterns_->set(o); }
+            if(res.hasKey("/XObject"))   { QPDFObjectHandle o = res.getKey("/XObject");   page_xobjects_->set(o, timings); }
+          }
+
+        pdf_decoder<STREAM> cell_stream(config,
+                                        page_dimension,
+                                        cell_cells,
+                                        cell_shapes,
+                                        cell_images,
+                                        page_fonts_,
+                                        page_grphs_,
+                                        page_colorspaces_,
+                                        page_shadings_,
+                                        page_patterns_,
+                                        page_xobjects_,
+                                        *decoded,
+                                        timings);
+
+        // A fresh state, not a copy of the fill's: the identity CTM keeps the
+        // cell in pattern space, and no clip or path is inherited.
+        cell_stream.q();
+        if(pattern.get_paint_type() == 2)
+          {
+            cell_stream.current_graphic_state().set_uncolored_pattern_rgb(rgb);
+          }
+
+        pattern.set_decoding(true);
+        tiling_depth() += 1;
+        try
+          {
+            std::vector<qpdf_stream_instruction> parameters;
+            std::vector<qpdf_stream_instruction> insts = cell;
+            cell_stream.interprete(insts, parameters);
+          }
+        catch(const std::exception& e)
+          {
+            LOG_S(WARNING) << "pattern " << pattern_name << ": cell decode failed: " << e.what();
+            decoded = std::make_shared<pdf_render_instructions>();
+          }
+        tiling_depth() -= 1;
+        pattern.set_decoding(false);
+        cell_stream.Q();
+
+        pattern.set_decoded_cell(color_key, decoded,
+                                 std::make_shared<page_item<PAGE_IMAGES> >(cell_images));
+      }
+
+    if(decoded->empty())
+      {
+        return nullptr;
+      }
+
+    const double step_x = pattern.get_x_step();
+    const double step_y = pattern.get_y_step();
+    const std::array<double, 6> matrix = {pat[0], pat[1], pat[3], pat[4], pat[6], pat[7]};
+    const std::array<double, 4> bbox = pattern.has_bbox()
+      ? pattern.get_bbox()
+      : std::array<double, 4>{0.0, 0.0, step_x, step_y};
+
+    return std::make_shared<const tiling_paint>(
+      color_key.empty() ? pattern_name : pattern_name + ":" + color_key,
+      decoded, matrix, step_x, step_y, bbox);
   }
 
   void pdf_decoder<STREAM>::do_shading(const std::string& sh_name)
@@ -1614,6 +1936,7 @@ namespace pdflib
                                 std::move(clip_state));
 
     shinstr.set_blend_mode(current_graphic_state().get_blend_mode());
+    shinstr.set_soft_mask(current_graphic_state().get_soft_mask_instruction());
 
     instructions.add_shading_instruction(std::move(shinstr));
   }
@@ -1737,7 +2060,14 @@ namespace pdflib
 
                                        timings);
 
+        new_stream.soft_mask_cache_ = soft_mask_cache_;
+        new_stream.soft_mask_depth_ = soft_mask_depth_;
+
         bool updated_stack = new_stream.update_stack(stack, stack_count);
+        // Form content inherits the caller's effective linkage. Local BDC
+        // entries override it without copying the caller's ActualText spans.
+        new_stream.inherited_marked_content.mcid = active_marked_content().mcid;
+        new_stream.inherited_marked_content.artifact = active_marked_content().artifact;
 
         // copy the stack
         std::vector<qpdf_stream_instruction> parameters;
@@ -1773,6 +2103,326 @@ namespace pdflib
 
   }
 
+  void pdf_decoder<STREAM>::paint_type3_glyphs()
+  {
+    auto& pending = current_text_state().pending_type3_procedures;
+    if(pending.empty())
+      {
+        return;
+      }
+
+    // do_type3_glyph() pushes a copy of the current state, so take the queue
+    // out of it first.
+    std::vector<pdf_state<TEXT>::type3_procedure> glyphs;
+    glyphs.swap(pending);
+
+    for(const auto& glyph : glyphs)
+      {
+        do_type3_glyph(glyph);
+      }
+  }
+
+  void pdf_decoder<STREAM>::do_type3_glyph(const pdf_state<TEXT>::type3_procedure& glyph)
+  {
+    LOG_S(INFO) << __FUNCTION__;
+
+    // A CharProc can show text in a Type3 font whose CharProc leads back to
+    // it, directly or through a form XObject.
+    constexpr int max_depth = 8;
+    static thread_local int depth = 0;
+    if(depth >= max_depth)
+      {
+        LOG_S(WARNING) << "Type3 glyph procedures nest deeper than " << max_depth
+                       << " levels, the glyph is not painted";
+        return;
+      }
+
+    std::vector<qpdf_stream_instruction> insts;
+    try
+      {
+        qpdf_stream_decoder decoder(insts);
+        QPDFObjectHandle charproc = glyph.charproc;
+        decoder.decode(charproc);
+      }
+    catch(const std::exception& e)
+      {
+        LOG_S(WARNING) << "could not decode a Type3 glyph procedure: " << e.what();
+        return;
+      }
+
+    // 9.6.5: names in the CharProc resolve against the font's /Resources,
+    // and against the page's when the font has none.
+    auto page_fonts_       = std::make_shared<pdf_resource<PAGE_FONTS>>(page_fonts);
+    auto page_grphs_       = std::make_shared<pdf_resource<PAGE_GRPHS>>(page_grphs);
+    auto page_colorspaces_ = std::make_shared<pdf_resource<PAGE_COLORSPACES>>(page_colorspaces);
+    auto page_shadings_    = std::make_shared<pdf_resource<PAGE_SHADINGS>>(page_shadings);
+    auto page_patterns_    = std::make_shared<pdf_resource<PAGE_PATTERNS>>(page_patterns);
+    auto page_xobjects_    = std::make_shared<pdf_resource<PAGE_XOBJECTS>>(page_xobjects);
+
+    QPDFObjectHandle resources = glyph.resources;
+    if(resources.isDictionary())
+      {
+        if(resources.hasKey("/Font"))
+          {
+            QPDFObjectHandle fonts = resources.getKey("/Font");
+            page_fonts_->set(fonts, timings);
+          }
+        if(resources.hasKey("/ExtGState"))
+          {
+            QPDFObjectHandle grphs = resources.getKey("/ExtGState");
+            page_grphs_->set(grphs, timings);
+          }
+        if(resources.hasKey("/ColorSpace"))
+          {
+            QPDFObjectHandle colorspaces = resources.getKey("/ColorSpace");
+            page_colorspaces_->set(colorspaces);
+          }
+        if(resources.hasKey("/Shading"))
+          {
+            QPDFObjectHandle shadings = resources.getKey("/Shading");
+            page_shadings_->set(shadings);
+          }
+        if(resources.hasKey("/Pattern"))
+          {
+            QPDFObjectHandle patterns = resources.getKey("/Pattern");
+            page_patterns_->set(patterns);
+          }
+        if(resources.hasKey("/XObject"))
+          {
+            QPDFObjectHandle xobjects = resources.getKey("/XObject");
+            page_xobjects_->set(xobjects, timings);
+          }
+      }
+
+    // The glyph is not page content: its text cell already exists, and its
+    // paths and images are ink, not shapes or pictures. Only the render
+    // instructions are kept.
+    page_item<PAGE_CELLS>  glyph_cells;
+    page_item<PAGE_SHAPES> glyph_shapes;
+    page_item<PAGE_IMAGES> glyph_images;
+
+    this->q();
+    current_global_state().cm(glyph.matrix);
+    current_bitmap_state().paints_type3_glyph = true;
+    {
+      pdf_decoder<STREAM> new_stream(config,
+
+                                     page_dimension,
+                                     glyph_cells,
+                                     glyph_shapes,
+                                     glyph_images,
+
+                                     page_fonts_,
+                                     page_grphs_,
+                                     page_colorspaces_,
+                                     page_shadings_,
+                                     page_patterns_,
+                                     page_xobjects_,
+
+                                     instructions,
+
+                                     timings);
+
+      bool updated_stack = new_stream.update_stack(stack, stack_count);
+
+      std::vector<qpdf_stream_instruction> parameters;
+
+      depth += 1;
+      try
+        {
+          new_stream.interprete(insts, parameters);
+        }
+      catch(...)
+        {
+          depth -= 1;
+          throw;
+        }
+      depth -= 1;
+
+      if(updated_stack)
+        {
+          new_stream.Q();
+        }
+
+      for(auto item:new_stream.get_unknown_operators())
+        {
+          unknown_operators.insert(item);
+        }
+    }
+    this->Q();
+  }
+
+  void pdf_decoder<STREAM>::resolve_soft_mask()
+  {
+    if(not current_graphic_state().has_pending_soft_mask()) { return; }
+
+    // Copies: decoding pushes states of its own and may reallocate the stack.
+    const std::shared_ptr<const soft_mask_spec> spec =
+      current_graphic_state().get_soft_mask_spec();
+    const std::array<double, 9> ctm = current_graphic_state().get_soft_mask_ctm();
+
+    if(soft_mask_depth_ > 0)
+      {
+        LOG_S(WARNING) << "ExtGState " << spec->key
+                       << ": soft mask set inside a soft-mask group is not applied";
+        return;
+      }
+
+    // the CTM is quantised so that float noise between two `gs` of the same
+    // mask does not make two decodes
+    std::string cache_key = std::to_string(reinterpret_cast<std::uintptr_t>(spec.get()));
+    for(double v : ctm)
+      {
+        cache_key += ':' + std::to_string(std::round(v * 1000.0) / 1000.0);
+      }
+
+    std::shared_ptr<soft_mask_instruction> mask;
+
+    auto& decoded = soft_mask_cache_->decoded;
+    auto found = decoded.find(cache_key);
+    if(found != decoded.end())
+      {
+        mask = found->second.mask;
+      }
+    else if(decoded.size() >= max_soft_mask_decodes)
+      {
+        if(not soft_mask_cache_->budget_reported)
+          {
+            LOG_S(WARNING) << "ExtGState " << spec->key << ": " << decoded.size()
+                           << " soft masks decoded on this page already, the rest paint unmasked";
+            soft_mask_cache_->budget_reported = true;
+          }
+        return;
+      }
+    else
+      {
+        mask = decode_soft_mask(*spec, ctm);
+        decoded[cache_key] = soft_mask_cache_entry{spec, mask};
+      }
+
+    if(not mask) { return; }
+
+    std::shared_ptr<soft_mask_instruction> paint_mask = mask;
+
+    const std::shared_ptr<soft_mask_instruction>& outer =
+      current_graphic_state().get_group_soft_mask();
+    if(outer)
+      {
+        auto& intersected = soft_mask_cache_->intersected;
+        auto& both = intersected[{outer.get(), mask.get()}];
+        if(not both)
+          {
+            both = std::make_shared<soft_mask_instruction>(outer, mask);
+          }
+        paint_mask = both;
+      }
+
+    current_graphic_state().set_soft_mask_instruction(mask, paint_mask);
+  }
+
+  // The group is decoded the way `Do` decodes a form, with two differences:
+  // it lands in containers of its own, since what it paints is coverage and
+  // not page content (none of its cells, shapes or images may reach the
+  // page), and it starts from the CTM at the `gs` rather than the current one.
+  std::shared_ptr<soft_mask_instruction>
+  pdf_decoder<STREAM>::decode_soft_mask(const soft_mask_spec& spec,
+                                        const std::array<double, 9>& ctm)
+  {
+    LOG_S(INFO) << "decoding the soft mask of ExtGState " << spec.key;
+
+    try
+      {
+        pdf_resource<PAGE_XOBJECT_FORM> form;
+        form.set("SMask:" + spec.key, spec.group);
+
+        // the group's own resources, with the current ones as fallback
+        auto fonts_       = std::make_shared<pdf_resource<PAGE_FONTS>>(page_fonts);
+        auto grphs_       = std::make_shared<pdf_resource<PAGE_GRPHS>>(page_grphs);
+        auto colorspaces_ = std::make_shared<pdf_resource<PAGE_COLORSPACES>>(page_colorspaces);
+        auto shadings_    = std::make_shared<pdf_resource<PAGE_SHADINGS>>(page_shadings);
+        auto patterns_    = std::make_shared<pdf_resource<PAGE_PATTERNS>>(page_patterns);
+        auto xobjects_    = std::make_shared<pdf_resource<PAGE_XOBJECTS>>(page_xobjects);
+
+        if(form.has_fonts())       { QPDFObjectHandle r = form.get_fonts();       fonts_->set(r, timings); }
+        if(form.has_grphs())       { QPDFObjectHandle r = form.get_grphs();       grphs_->set(r, timings); }
+        if(form.has_colorspaces()) { QPDFObjectHandle r = form.get_colorspaces(); colorspaces_->set(r); }
+        if(form.has_shadings())    { QPDFObjectHandle r = form.get_shadings();    shadings_->set(r); }
+        if(form.has_patterns())    { QPDFObjectHandle r = form.get_patterns();    patterns_->set(r); }
+        if(form.has_xobjects())    { QPDFObjectHandle r = form.get_xobjects();    xobjects_->set(r, timings); }
+
+        // Mask space is the group's /Matrix composed with the CTM at the `gs`,
+        // in the order `cm` composes them (form first, then the CTM).
+        const std::array<double, 6> fm = form.get_matrix();
+        const std::array<double, 6> matrix = {
+          fm[0] * ctm[0] + fm[1] * ctm[3],
+          fm[0] * ctm[1] + fm[1] * ctm[4],
+          fm[2] * ctm[0] + fm[3] * ctm[3],
+          fm[2] * ctm[1] + fm[3] * ctm[4],
+          fm[4] * ctm[0] + fm[5] * ctm[3] + ctm[6],
+          fm[4] * ctm[1] + fm[5] * ctm[4] + ctm[7]};
+
+        // the /BBox corners in page space: outside them the backdrop shows
+        const std::array<double, 4> bbox = form.get_bbox();
+        const double xs[4] = {bbox[0], bbox[2], bbox[2], bbox[0]};
+        const double ys[4] = {bbox[1], bbox[1], bbox[3], bbox[3]};
+
+        std::array<double, 8> quad{};
+        for(int c = 0; c < 4; c++)
+          {
+            quad[2 * c]     = matrix[0] * xs[c] + matrix[2] * ys[c] + matrix[4];
+            quad[2 * c + 1] = matrix[1] * xs[c] + matrix[3] * ys[c] + matrix[5];
+          }
+
+        auto mask = std::make_shared<soft_mask_instruction>(spec.key,
+                                                            spec.luminosity,
+                                                            spec.backdrop_rgb,
+                                                            spec.transfer,
+                                                            quad);
+
+        page_item<PAGE_DIMENSION> mask_dimension;
+        page_item<PAGE_CELLS>     mask_cells;
+        page_item<PAGE_SHAPES>    mask_shapes;
+        page_item<PAGE_IMAGES>    mask_images;
+
+        pdf_decoder<STREAM> mask_decoder(config,
+                                         mask_dimension,
+                                         mask_cells,
+                                         mask_shapes,
+                                         mask_images,
+                                         fonts_,
+                                         grphs_,
+                                         colorspaces_,
+                                         shadings_,
+                                         patterns_,
+                                         xobjects_,
+                                         mask->get_group(),
+                                         timings);
+        mask_decoder.soft_mask_cache_ = soft_mask_cache_;
+        mask_decoder.soft_mask_depth_ = soft_mask_depth_ + 1;
+
+        QPDFObjectHandle group = spec.group;
+        mask_decoder.decode(group);
+        mask_decoder.set_base_matrix(matrix);
+
+        std::vector<qpdf_stream_instruction> parameters;
+        mask_decoder.interprete(parameters);
+
+        for(const auto& item : mask_decoder.get_unknown_operators())
+          {
+            unknown_operators.insert(item);
+          }
+
+        return mask;
+      }
+    catch(const std::exception& exc)
+      {
+        LOG_S(WARNING) << "ExtGState " << spec.key
+                       << ": soft mask group could not be decoded (" << exc.what()
+                       << "), paint stays unmasked";
+        return nullptr;
+      }
+  }
+
   void pdf_decoder<STREAM>::do_postscript(const std::string& xobj_name,
                                           const xobject_subtype_name& xobj_subtype)
   {
@@ -1788,6 +2438,35 @@ namespace pdflib
   {
     marked_content_entry entry;
     entry.cells_begin = page_cells.size();
+    entry.mcid = active_marked_content().mcid;
+    entry.artifact = active_marked_content().artifact;
+
+    // BDC tag (first operand) and inline property list: /MCID links the
+    // sequence to a structure element, /Artifact marks non-real content.
+    bool is_artifact = parameters.size()>=1 and parameters.front().obj.isName()
+      and parameters.front().obj.getName()=="/Artifact";
+    marked_content_artifact artifact{"/Artifact", ""};
+
+    if(parameters.size()>=2 and parameters.back().is_dict())
+      {
+        QPDFObjectHandle dict = parameters.back().obj;
+
+        if(dict.hasKey("/MCID") and dict.getKey("/MCID").isInteger())
+          {
+            int mcid = static_cast<int>(dict.getKey("/MCID").getIntValue());
+            if(mcid>=0) { entry.mcid = mcid; }
+          }
+
+        if(is_artifact and dict.hasKey("/Type") and dict.getKey("/Type").isName())
+          {
+            artifact.type = pdflib::name_to_utf8(dict.getKey("/Type"));
+          }
+
+        if(is_artifact and dict.hasKey("/Subtype") and dict.getKey("/Subtype").isName())
+          {
+            artifact.subtype = pdflib::name_to_utf8(dict.getKey("/Subtype"));
+          }
+      }
 
     if(config.apply_actual_text and parameters.size()>=2)
       {
@@ -1813,7 +2492,18 @@ namespace pdflib
           }
       }
 
-    marked_content_stack.push_back(entry);
+    if(is_artifact)
+      {
+        auto key = std::make_pair(artifact.type, artifact.subtype);
+        auto it = artifact_types.find(key);
+        if(it==artifact_types.end())
+          {
+            it = artifact_types.emplace(std::move(key),
+              std::make_shared<const marked_content_artifact>(std::move(artifact))).first;
+          }
+        entry.artifact = it->second;
+      }
+    marked_content_stack.push_back(std::move(entry));
   }
 
   void pdf_decoder<STREAM>::end_marked_content()
@@ -1824,12 +2514,39 @@ namespace pdflib
         return;
       }
 
-    marked_content_entry entry = marked_content_stack.back();
+    marked_content_entry entry = std::move(marked_content_stack.back());
     marked_content_stack.pop_back();
 
     if(entry.has_actual_text)
       {
         apply_actual_text(entry);
+      }
+  }
+
+  // Called after each text-showing operator, only for its newly emitted cells.
+  // Each cell is visited once, independent of enclosing BDC depth. Stamping
+  // precedes EMC/ActualText substitution, whose surviving cells retain tags.
+  void pdf_decoder<STREAM>::apply_marked_content_tags(std::size_t begin)
+  {
+    const auto& entry = active_marked_content();
+    if(entry.mcid<0 and not entry.artifact)
+      {
+        return;
+      }
+
+    std::size_t end   = page_cells.size();
+
+    if(begin>end)
+      {
+        return;
+      }
+
+    for(std::size_t i=begin; i<end; i++)
+      {
+        page_item<PAGE_CELL>& cell = page_cells[i];
+
+        cell.mcid = entry.mcid;
+        cell.artifact = entry.artifact;
       }
   }
 
@@ -1974,6 +2691,7 @@ namespace pdflib
                                              std::vector<qpdf_stream_instruction>& parameters)
   {
     pdf_operator::operator_name name = pdf_operator::to_name(op.val);
+    const auto cells_begin = page_cells.size();
 
     switch(name)
       {
@@ -2035,6 +2753,7 @@ namespace pdflib
         {
           LOG_S(INFO) << "executing " << to_string(name);
           current_graphic_state().gs(parameters);
+          resolve_soft_mask();
         }
         break;
 
@@ -2352,6 +3071,8 @@ namespace pdflib
         {
           LOG_S(INFO) << "executing " << to_string(name);
           current_text_state().Tj(parameters, stack_count);
+          apply_marked_content_tags(cells_begin);
+          paint_type3_glyphs();
         }
         break;
 
@@ -2359,6 +3080,8 @@ namespace pdflib
         {
           LOG_S(INFO) << "executing " << to_string(name);
           current_text_state().TJ(parameters, stack_count);
+          apply_marked_content_tags(cells_begin);
+          paint_type3_glyphs();
         }
         break;
 
@@ -2372,6 +3095,8 @@ namespace pdflib
 
           std::vector<qpdf_stream_instruction> Tj_params = {parameters[0]};
           current_text_state().Tj(Tj_params, stack_count);
+          apply_marked_content_tags(cells_begin);
+          paint_type3_glyphs();
         }
         break;
 
@@ -2391,6 +3116,8 @@ namespace pdflib
 
           std::vector<qpdf_stream_instruction> Tj_params = {parameters[2]};
           current_text_state().Tj(Tj_params, stack_count);
+          apply_marked_content_tags(cells_begin);
+          paint_type3_glyphs();
         }
         break;
 

@@ -112,6 +112,7 @@ namespace pdflib
     static const std::string KEY_QPDF_PROCESS;
     static const std::string KEY_QPDF_BUILD_THREAD_SAFE_BUFFER;
     static const std::string KEY_EXTRACT_DOC_ANNOTATIONS;
+    static const std::string KEY_EXTRACT_STRUCTURE;
     static const std::string KEY_DECODE_DOCUMENT;
     static const std::string KEY_PROCESS_DOCUMENT_COMPONENTS;
     
@@ -132,8 +133,13 @@ namespace pdflib
     static const std::string KEY_RENDER_TEXT_DRAW;
     static const std::string KEY_RENDER_TEXT_FONT_RESOLVE;
     static const std::string KEY_RENDER_BITMAP;
+    static const std::string KEY_RENDER_BITMAP_PREPARE;
+    static const std::string KEY_RENDER_BITMAP_CONVERT;
+    static const std::string KEY_RENDER_BITMAP_DOWNSAMPLE;
+    static const std::string KEY_RENDER_BITMAP_PAINT;
     static const std::string KEY_RENDER_SHAPE;
     static const std::string KEY_RENDER_SHADING;
+    static const std::string KEY_RENDER_SOFT_MASK;
     static const std::string KEY_RENDER_WIDGET;
     static const std::string KEY_RENDER_GET_CANVAS;
 
@@ -505,8 +511,15 @@ namespace pdflib
   const std::string pdf_timings::KEY_RENDER_TEXT_DRAW = "render_page.text.draw";
   const std::string pdf_timings::KEY_RENDER_TEXT_FONT_RESOLVE = "render_page.text.font_resolve";
   const std::string pdf_timings::KEY_RENDER_BITMAP = "render_page.bitmap";
+  const std::string pdf_timings::KEY_RENDER_BITMAP_PREPARE = "render_page.bitmap.prepare";
+  const std::string pdf_timings::KEY_RENDER_BITMAP_CONVERT = "render_page.bitmap.prepare.convert";
+  const std::string pdf_timings::KEY_RENDER_BITMAP_DOWNSAMPLE = "render_page.bitmap.prepare.downsample";
+  const std::string pdf_timings::KEY_RENDER_BITMAP_PAINT = "render_page.bitmap.paint";
   const std::string pdf_timings::KEY_RENDER_SHAPE = "render_page.shape";
   const std::string pdf_timings::KEY_RENDER_SHADING = "render_page.shading";
+  // painting through ExtGState soft masks: the mask raster plus the masked
+  // paint itself, which the per-kind keys above do not see
+  const std::string pdf_timings::KEY_RENDER_SOFT_MASK = "render_page.soft_mask";
   const std::string pdf_timings::KEY_RENDER_WIDGET = "render_page.widget";
   const std::string pdf_timings::KEY_RENDER_GET_CANVAS = "render_page.get_canvas";
 
@@ -515,6 +528,7 @@ namespace pdflib
   const std::string pdf_timings::KEY_QPDF_PROCESS = "qpdf_process";
   const std::string pdf_timings::KEY_QPDF_BUILD_THREAD_SAFE_BUFFER = "qpdf_build_thread_safe_buffer";
   const std::string pdf_timings::KEY_EXTRACT_DOC_ANNOTATIONS = "extract_doc_annotations";
+  const std::string pdf_timings::KEY_EXTRACT_STRUCTURE = "extract_structure";
   const std::string pdf_timings::KEY_DECODE_DOCUMENT = "decode_document";
   const std::string pdf_timings::KEY_PROCESS_DOCUMENT_COMPONENTS = "decode_document_components";
   
@@ -547,8 +561,13 @@ namespace pdflib
       KEY_RENDER_TEXT_DRAW,
       KEY_RENDER_TEXT_FONT_RESOLVE,
       KEY_RENDER_BITMAP,
+      KEY_RENDER_BITMAP_PREPARE,
+      KEY_RENDER_BITMAP_CONVERT,
+      KEY_RENDER_BITMAP_DOWNSAMPLE,
+      KEY_RENDER_BITMAP_PAINT,
       KEY_RENDER_SHAPE,
       KEY_RENDER_SHADING,
+      KEY_RENDER_SOFT_MASK,
       KEY_RENDER_WIDGET,
       KEY_RENDER_GET_CANVAS,
       KEY_DECODE_PAGE,
@@ -601,6 +620,7 @@ namespace pdflib
       KEY_QPDF_PROCESS,
       KEY_QPDF_BUILD_THREAD_SAFE_BUFFER,
       KEY_EXTRACT_DOC_ANNOTATIONS,
+      KEY_EXTRACT_STRUCTURE,
       KEY_DECODE_DOCUMENT
     };
     return static_keys;
@@ -677,8 +697,13 @@ namespace pdflib
       {KEY_RENDER_SET_SIZE,                KEY_RENDER_PAGE},
       {KEY_RENDER_TEXT,                    KEY_RENDER_PAGE},
       {KEY_RENDER_BITMAP,                  KEY_RENDER_PAGE},
+      {KEY_RENDER_BITMAP_PREPARE,          KEY_RENDER_BITMAP},
+      {KEY_RENDER_BITMAP_CONVERT,          KEY_RENDER_BITMAP_PREPARE},
+      {KEY_RENDER_BITMAP_DOWNSAMPLE,       KEY_RENDER_BITMAP_PREPARE},
+      {KEY_RENDER_BITMAP_PAINT,            KEY_RENDER_BITMAP},
       {KEY_RENDER_SHAPE,                   KEY_RENDER_PAGE},
       {KEY_RENDER_SHADING,                 KEY_RENDER_PAGE},
+      {KEY_RENDER_SOFT_MASK,               KEY_RENDER_PAGE},
       {KEY_RENDER_WIDGET,                  KEY_RENDER_PAGE},
       {KEY_RENDER_GET_CANVAS,              KEY_RENDER_PAGE},
       {KEY_RENDER_TEXT_FONT_RESOLVE,       KEY_RENDER_TEXT},

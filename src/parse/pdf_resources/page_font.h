@@ -21,8 +21,8 @@ namespace pdflib
     // One Type3 glyph, extracted from its /CharProcs procedure. The dominant
     // Type3 pattern (TeX / dvipdfm output) draws each glyph as a single inline
     // 1-bit image mask placed by a `cm`; this captures exactly that shape.
-    // Glyphs whose procedure does not match stay invalid and draw nothing --
-    // preferable to the black placeholder boxes they used to produce.
+    // Glyphs whose procedure does not match get no glyph here; the stream
+    // decoder runs their procedure instead (pdf_state<TEXT>::type3_procedure).
     struct type3_glyph
     {
       bool valid = false;
@@ -43,12 +43,31 @@ namespace pdflib
     const std::array<double, 6>& get_font_matrix();
 
     // Lazily extracts and caches the glyph for a character code; nullptr when
-    // the code has no procedure or the procedure is not the inline-mask form.
+    // the code has no procedure or the procedure paints in another way than an
+    // inline image mask or filled paths.
     std::shared_ptr<type3_glyph> get_type3_glyph(uint32_t code);
+
+    // The /CharProcs stream of a character code, or null when it has none.
+    QPDFObjectHandle get_type3_charproc(uint32_t code);
+
+    // The font's own /Resources (Type3 only), or null when it has none.
+    QPDFObjectHandle get_type3_resources();
 
 
 
     const static inline std::string RESOURCE_DIR_KEY = "pdf_resource_directory";
+
+    // ISO 32000-2, 9.8.1 gives /Ascent, /Descent, /CapHeight and /XHeight in
+    // glyph space: 1/1000 em for every font type except Type 3, whose
+    // /FontMatrix is folded in through type3_yscale. Real fonts keep these
+    // within a few em of the baseline (the regression corpus tops out at
+    // 3117). Beyond this bound the value is producer garbage, such as the
+    // packed bytes /Ascent 67306242 (0x04030302) of docling-parse#402. A
+    // cell built from such a value towers over the page, and the
+    // page-boundary sanitizer then deletes every glyph of the font. MuPDF
+    // stops trusting an ascent above 8 em (FZ_MAX_TRUSTWORTHY_ASCENT); the
+    // same bound covers all four metrics here.
+    static constexpr double MAX_PLAUSIBLE_VERTICAL_METRIC = 8000.0;
     
   public:
 
@@ -167,6 +186,7 @@ namespace pdflib
 
     embedded_font_format resolve_embedded_font_format() const;
     bool resolve_cid_to_gid_identity() const;
+    std::vector<uint16_t> resolve_code_to_gid_map() const;
     void build_embedded_font_blob();
     
     // Resolution of this font onto one of the built-in base fonts. See the
@@ -175,6 +195,7 @@ namespace pdflib
     const base_font_match& matched_base_font();
 
     void init_ascent_and_descent();
+    bool is_plausible_vertical_metric(double value) const;
 
     void init_default_width();
 
@@ -188,6 +209,7 @@ namespace pdflib
     void init_ws();
 
     void init_cmap(pdf_timings& timings);
+    void fold_symbol_font_private_use();
     void init_cmap_resource();
 
     void init_font_flags();
@@ -196,6 +218,18 @@ namespace pdflib
 
     void init_charprocs();
     void init_space_index();
+
+    // The embedded program's builtin encoding as the source of reading text
+    // (9.6.6.2 / 9.6.6.4); read lazily, on the first code that needs it.
+    bool uses_builtin_encoding() const;
+    bool resolve_builtin_encoding(uint32_t c, std::string& text);
+    void init_builtin_encoding();
+
+    // Whether a base font whose AFM says /FontSpecific is in fact a Latin text
+    // font laid out in WinAnsi order (Arial, Times New Roman, Georgia, ...),
+    // as opposed to a genuine symbol, dingbat or TeX font. See the use in
+    // get_correct_character().
+    bool font_specific_follows_winansi(pdflib::base_font& fm);
 
     void print_tables();
 
@@ -220,8 +254,9 @@ namespace pdflib
     // all of them with a substring test per entry, and the call sites below ask
     // per glyph. font_name and base_font are both fixed once init_font_name()
     // has run, so each resolution is computed at most once per font resource.
-    // matched_base_font_ backs the call sites that fall back to /BaseFont;
-    // matched_font_name_ backs get_character_from_encoding(), which must not.
+    // matched_base_font_ backs the call sites that fall back to /BaseFont,
+    // get_character_from_encoding() among them; matched_font_name_ backs the
+    // ones that must match the font name alone.
     bool            matched_font_name_resolved_ = false;
     base_font_match matched_font_name_;
     bool            matched_base_font_resolved_ = false;
@@ -236,6 +271,10 @@ namespace pdflib
     font_encoding_name encoding;
     bool               has_explicit_encoding; // true if encoding was found in PDF, false if defaulted
     bool               is_symbolic = false;   // /FontDescriptor /Flags bit 3 (PDF 32000-1 table 123)
+
+    // code -> CID of an embedded /Encoding CMap; left empty when the CMap
+    // inherits through usecmap, whose entries are not read
+    std::unordered_map<uint32_t, uint32_t> embedded_code_to_cid;
 
     font_subtype_name  subtype;
 
@@ -293,6 +332,12 @@ namespace pdflib
 
     bool font_blob_initialized = false;
     std::shared_ptr<const embedded_font_blob> font_blob;
+
+    bool builtin_encoding_initialized = false;
+    std::unordered_map<uint32_t, std::string> builtin_numb_to_char;
+
+    // cache for font_specific_follows_winansi(): 0 = unknown, 1 = no, 2 = yes
+    int font_specific_winansi_state = 0;
   };
 
   font_glyphs    pdf_resource<PAGE_FONT>::glyphs = font_glyphs();
@@ -817,6 +862,8 @@ namespace pdflib
     // first and only falls back to glyph-name based methods. For codes
     // not covered by /Differences, the cmap is consulted directly below.
 
+    std::string builtin_text;
+
     if(diff_initialized and diff_numb_to_char.count(c)>0)
       {
         return diff_numb_to_char.at(c);
@@ -825,24 +872,39 @@ namespace pdflib
       {
         return cmap_numb_to_char.at(c);
       }
-    else if(matched_font_name().font)
+    // A symbolic font without a declared base encoding maps its codes
+    // through the embedded program's builtin encoding (9.6.6.2 / 9.6.6.4).
+    // That is the producer's own statement of what each code draws, so it
+    // outranks a name-matched base-font table and the encoding fallback.
+    else if(uses_builtin_encoding() and resolve_builtin_encoding(c, builtin_text))
+      {
+        return builtin_text;
+      }
+    else if(matched_base_font().font)
       {
         // check if the font-name is registered as a 'special' font, eg
-        // the TeX mathematical fonts. Note this deliberately does not fall back
-        // to /BaseFont the way the metrics lookups do.
+        // the TeX mathematical fonts. The font-name alone is not enough:
+        // a font dict carrying the (obsolete) /Name entry reports it as
+        // font_name (eg '/F5'), so the base-font must be consulted too,
+        // as the width/bbox lookups above already do.
 
-        const std::string& fontname = matched_font_name().name;
+        const std::string& fontname = matched_base_font().name;
 
-        auto& fm = *(matched_font_name().font);
+        auto& fm = *(matched_base_font().font);
 
-        // A known legacy symbol font may falsely declare WinAnsi while using
-        // font-specific character codes. Its curated map is authoritative
-        // after /ToUnicode and /Differences, for the codes whose declared
-        // glyph the font does not have. Where it has that glyph, the declared
-        // encoding governs, as it does for the glyph drawn (see
-        // freetype_font_cache::resolve_glyph_indices): Symbol declared as
-        // WinAnsi paints `multiply` at 0xD7, not its own `dotmath`.
+        // Prefer the declared encoding when its glyph exists in the font,
+        // matching the renderer's glyph-name lookup. For example, Symbol
+        // declared as WinAnsi uses /multiply at 0xD7, not its own /dotmath.
+        // Otherwise retain the curated mapping for legacy symbol fonts.
+        // Preserve the MacRoman exception for nonsymbolic TrueType Latin fonts.
+        const bool declared_non_winansi_base =
+          subtype == TRUE_TYPE and
+          not is_symbolic and
+          has_explicit_encoding and
+          encoding == MACROMAN;
+
         if(fm.is_font_specific() and fm.has(c) and
+           not (declared_non_winansi_base and font_specific_follows_winansi(fm)) and
            not fm.has_glyph_name(get_glyph_name(c)))
           {
             return fm.to_utf8(c);
@@ -919,25 +981,121 @@ namespace pdflib
   {
     // Fallback for codes that none of the authoritative sources resolved
     // (/Encoding/Differences, the /ToUnicode or predefined CID cmap, or a
-    // known base-font table). When an explicit cmap exists but does not
-    // cover this code, and the code bears no relation to the standard
-    // Latin encodings (symbolic font, or composite font whose codes are
-    // CIDs), the encoding tables would fabricate unrelated text — e.g. an
-    // Arabic ligature glyph subsetted at code 0x23 coming out as '#'
-    // (docling#3802). Emit a glyph marker instead, so downstream consumers
-    // can detect the unresolved glyph.
-    if(cmap_initialized and (is_symbolic or subtype==TYPE_0))
+    // known base-font table). For a symbolic font, or a composite (Type0/CID)
+    // font, the standard Latin encoding tables bear no relation to the font's
+    // codes, so applying them here fabricates unrelated text — e.g. an Arabic
+    // ligature glyph subsetted at code 0x23 coming out as '#' (docling#3802).
+    // Emit a glyph marker instead, so downstream consumers can detect the
+    // unresolved glyph.
+    //
+    // Beyond the parsed-cmap-misses-the-code case (#299), this also covers a
+    // symbolic font with no usable cmap at all — a /ToUnicode that failed to
+    // parse ("could not find cmap in '/ToUnicode'"), or none present — but
+    // ONLY when the font also declares no simple encoding. Many producers set
+    // the symbolic flag on fonts that nonetheless declare /WinAnsiEncoding or
+    // an /Encoding dict with /Differences; for those, codes outside
+    // /Differences legitimately resolve through the declared base encoding
+    // (PDF 32000-1 9.6.6), so falling through is not fabrication
+    // (docling-parse#299 follow-up; #322 regression fix).
+    //
+    // By the time a code reaches this point the embedded program's builtin
+    // encoding has already been consulted (get_correct_character), so a
+    // marker here means the program itself carries no text for the glyph.
+    const bool has_declared_simple_encoding =
+      (has_explicit_encoding and encoding != CMAP_RESOURCES) or diff_initialized;
+
+    if(subtype==TYPE_0 or
+       (is_symbolic and (cmap_initialized or not has_declared_simple_encoding)))
       {
         unknown_numbs[c] += 1;
 
-        LOG_S(WARNING) << "Symbol not in the cmap of a symbolic or composite font: "
-                       << int(c) << "; font-name: " << font_name
+        LOG_S(WARNING) << "No authoritative mapping for code in a symbolic or "
+                       << "composite font: " << int(c) << "; font-name: " << font_name
                        << "; emitting glyph marker instead of encoding fallback";
 
         return "GLYPH<" + std::to_string(c) + ">";
       }
 
     return get_character_from_encoding(c);
+  }
+
+  bool pdf_resource<PAGE_FONT>::font_specific_follows_winansi(pdflib::base_font& fm)
+  {
+    if(font_specific_winansi_state == 0)
+      {
+        // Compare the upper half (0xA0-0xFF), where Latin-1 accents live and
+        // where the legacy encodings disagree. A font that carries a WinAnsi
+        // layout agrees with the WinAnsi table on (nearly) all codes it has; a
+        // symbol, dingbat or TeX font does not.
+        auto& winansi = encodings.get(WINANSI).get_numb_to_utf8();
+
+        int matches=0, mismatches=0;
+        for(uint32_t c=0xA0; c<=0xFF; c++)
+          {
+            auto itr = winansi.find(c);
+            if(itr==winansi.end() or not fm.has(c))
+              {
+                continue;
+              }
+
+            if(fm.to_utf8(c)==itr->second) { matches += 1;    }
+            else                           { mismatches += 1; }
+          }
+
+        const bool follows = (matches>=32 and mismatches*8<=matches);
+        font_specific_winansi_state = follows? 2:1;
+
+        LOG_S(INFO) << "font-specific base font '" << matched_base_font().name << "': "
+                    << matches << " WinAnsi matches, " << mismatches
+                    << " mismatches => follows WinAnsi: " << follows;
+      }
+
+    return font_specific_winansi_state==2;
+  }
+
+  bool pdf_resource<PAGE_FONT>::uses_builtin_encoding() const
+  {
+    // Type 0 codes are CIDs and Type 3 glyphs are content streams: neither
+    // has a builtin encoding to read. A declared base encoding (a name, or
+    // /BaseEncoding in an /Encoding dict) overrides the builtin one; a bare
+    // /Differences array only overrides the codes it lists (9.6.6.1).
+    const bool has_declared_base_encoding =
+      has_explicit_encoding and encoding != CMAP_RESOURCES;
+
+    return subtype != TYPE_0 and subtype != TYPE_3 and
+      is_symbolic and not has_declared_base_encoding;
+  }
+
+  bool pdf_resource<PAGE_FONT>::resolve_builtin_encoding(uint32_t c, std::string& text)
+  {
+    if(not builtin_encoding_initialized)
+      {
+        init_builtin_encoding();
+      }
+
+    auto itr = builtin_numb_to_char.find(c);
+    if(itr == builtin_numb_to_char.end())
+      {
+        return false;
+      }
+
+    text = itr->second;
+    return true;
+  }
+
+  void pdf_resource<PAGE_FONT>::init_builtin_encoding()
+  {
+    builtin_encoding_initialized = true;
+
+    auto blob = get_embedded_font_blob();
+    if(not blob or not blob->get_bytes())
+      {
+        LOG_S(INFO) << __FUNCTION__ << ": no embedded font program for " << font_name
+                    << "; builtin encoding unavailable";
+        return;
+      }
+
+    builtin_numb_to_char = builtin_font_encoding::decode(*(blob->get_bytes()), glyphs, font_name);
   }
 
   std::string pdf_resource<PAGE_FONT>::get_character_from_encoding(uint32_t c)
@@ -1181,8 +1339,10 @@ namespace pdflib
     // An embedded CMap may inherit from a predefined one. Only its name is
     // available here, so the inherited codespace is reported rather than
     // silently assumed.
-    auto report_usecmap = [](const std::string& parent)
+    bool inherits = false;
+    auto report_usecmap = [&inherits](const std::string& parent)
     {
+      inherits = true;
       LOG_S(WARNING) << "embedded cmap inherits from " << parent
                      << ": the inherited entries are not applied";
     };
@@ -1205,6 +1365,11 @@ namespace pdflib
 
     LOG_S(INFO) << "embedded cmap: " << cmap_codespaces.size() << " codespace-range(s), "
                 << tables.code_to_cid.size() << " code-to-cid entries";
+
+    if(not inherits)
+      {
+        embedded_code_to_cid = std::move(tables.code_to_cid);
+      }
   }
 
   void pdf_resource<PAGE_FONT>::init_subtype()
@@ -1572,8 +1737,8 @@ namespace pdflib
     font_program.base_font = base_font;
     font_program.font_name = font_name;
     font_program.from_descendant_font = from_descendant_font;
-    font_program.descriptor_json = to_json(descriptor_obj, {}, 0, 2);
-    font_program.stream_dict_json = to_json(stream_obj, {}, 0, 2);
+    font_program.descriptor_json = to_json(descriptor_obj, 0, 2);
+    font_program.stream_dict_json = to_json(stream_obj, 0, 2);
     // Disabled: dumping the full stream dictionary per font floods the logs.
     // LOG_S(INFO) << __FUNCTION__
     //             << ": stream-dict-json=\n"
@@ -1746,8 +1911,8 @@ namespace pdflib
         return false;
       }
 
-    // PDF spec: /CIDToGIDMap defaults to /Identity when absent. Any stream
-    // value means an explicit map that we do not resolve here.
+    // PDF spec: /CIDToGIDMap defaults to /Identity when absent. A stream is
+    // an explicit map, read by resolve_code_to_gid_map().
     QPDFObjectHandle value = qpdf_object::get_path(qpdf_desc_font, {"/CIDToGIDMap"});
     if(value.isNull())
       {
@@ -1756,6 +1921,83 @@ namespace pdflib
 
     std::string name;
     return qpdf_object::get_name_or_string(value, name) and name == "/Identity";
+  }
+
+  std::vector<uint16_t> pdf_resource<PAGE_FONT>::resolve_code_to_gid_map() const
+  {
+    std::vector<uint16_t> map;
+
+    // Only a CIDFontType2 (TrueType) program is addressed by GID through
+    // /CIDToGIDMap (ISO 32000-1, 9.7.4.2); CFF CIDFonts map through their
+    // own charset.
+    std::string desc_subtype;
+    QPDFObjectHandle value = qpdf_object::get_path(qpdf_desc_font, {"/CIDToGIDMap"});
+    if(subtype != TYPE_0 or not value.isStream() or
+       not qpdf_object::get_name_or_string(qpdf_desc_font, {"/Subtype"}, desc_subtype) or
+       desc_subtype != "/CIDFontType2")
+      {
+        return map;
+      }
+
+    try
+      {
+        auto buffer = value.getStreamData(qpdf_dl_all);
+        if(buffer)
+          {
+            // 2 bytes per CID, big-endian GID; CID n at bytes 2n..2n+1
+            const unsigned char* data = buffer->getBuffer();
+            map.resize(buffer->getSize() / 2);
+            for(size_t cid = 0; cid < map.size(); cid++)
+              {
+                map[cid] = static_cast<uint16_t>((data[2*cid] << 8) | data[2*cid + 1]);
+              }
+          }
+      }
+    catch(const std::exception& e)
+      {
+        LOG_S(WARNING) << "could not decode /CIDToGIDMap for font-key="
+                       << font_key << ": " << e.what();
+        map.clear();
+      }
+
+    // The renderer holds character codes, and the map is indexed by CID:
+    // compose it with the /Encoding CMap's code -> CID (9.7.6.2). Under
+    // Identity-H/V the code is the CID already.
+    if(map.empty() or encoding == IDENTITY_H or encoding == IDENTITY_V)
+      {
+        return map;
+      }
+
+    const std::unordered_map<uint32_t, uint32_t>* code_to_cid = nullptr;
+    if(encoding == CMAP_STREAM)
+      {
+        code_to_cid = &embedded_code_to_cid;
+      }
+    else if(encoding == CMAP_RESOURCES and cids.decode_cmap_resource(encoding_name))
+      {
+        code_to_cid = &cids.get(encoding_name).get_code_to_cid();
+      }
+
+    // Without a code -> CID table the map cannot be applied: an empty result
+    // keeps the Unicode-shaping path.
+    if(code_to_cid == nullptr)
+      {
+        return {};
+      }
+
+    // shortcut: codes above 0xFFFF (four-byte codespaces) are left unmapped
+    // and render through Unicode shaping; widen the table if one ever matters.
+    std::vector<uint16_t> code_to_gid;
+    for(const auto& [code, cid] : *code_to_cid)
+      {
+        if(code <= 0xFFFF and cid < map.size() and map[cid] != 0)
+          {
+            if(code >= code_to_gid.size()) { code_to_gid.resize(code + 1, 0); }
+            code_to_gid[code] = map[cid];
+          }
+      }
+
+    return code_to_gid;
   }
 
   void pdf_resource<PAGE_FONT>::build_embedded_font_blob()
@@ -1798,7 +2040,8 @@ namespace pdflib
       subtype == TYPE_0,
       resolve_cid_to_gid_identity(),
       uses_builtin_encoding,
-      std::move(bytes));
+      std::move(bytes),
+      resolve_code_to_gid_map());
 
     LOG_S(INFO) << __FUNCTION__
                 << ": font-key=" << font_key
@@ -1809,12 +2052,29 @@ namespace pdflib
                 << " cache-key=" << font_blob->get_cache_key()
                 << " cid=" << font_blob->get_is_cid_font()
                 << " cid-to-gid-identity=" << font_blob->get_cid_to_gid_identity()
+                << " has-code-to-gid=" << font_blob->has_code_to_gid()
                 << " uses-builtin-encoding=" << font_blob->get_uses_builtin_encoding();
+  }
+
+  bool pdf_resource<PAGE_FONT>::is_plausible_vertical_metric(double value) const
+  {
+    // type3_yscale folds the Type 3 /FontMatrix in, so the bound applies in
+    // the same 1/1000 em units for every font type.
+    return std::isfinite(value) and
+      std::abs(value * type3_yscale) <= MAX_PLAUSIBLE_VERTICAL_METRIC;
   }
 
   void pdf_resource<PAGE_FONT>::init_ascent_and_descent()
   {
     LOG_S(INFO) << __FUNCTION__;
+
+    // /FontBBox is the first fallback for a missing or unusable metric, but
+    // only where it is itself believable: the producer bug that packs garbage
+    // into /Ascent can do the same to the bounding box.
+    const bool font_bbox_top_usable =
+      std::abs(font_bbox[3])>1.e-3 and is_plausible_vertical_metric(font_bbox[3]);
+    const bool font_bbox_bottom_usable =
+      std::abs(font_bbox[1])>1.e-3 and is_plausible_vertical_metric(font_bbox[1]);
 
     ascent=0;
     {
@@ -1836,6 +2096,14 @@ namespace pdflib
           LOG_S(WARNING) << "'ascend' was not explicitely defined ...";
         }
 
+      if(ascent_defined and not is_plausible_vertical_metric(ascent))
+        {
+          LOG_S(WARNING) << "implausible ascent (=" << ascent << ") in the font descriptor of "
+                         << base_font << ": ignoring it";
+          ascent_defined=false;
+          invalid_vertical_metrics = true;
+        }
+
       if(not ascent_defined)
         {
           if(bfonts.has(base_font))
@@ -1843,7 +2111,7 @@ namespace pdflib
               ascent = bfonts[base_font]->get_ascend();
               LOG_S(WARNING) << " -> ascend (=" << ascent << ") retrieved from base-font (=" << base_font << ")";
             }
-          else if(std::abs(font_bbox[3])>1.e-3)
+          else if(font_bbox_top_usable)
             {
               ascent = font_bbox[3];
               LOG_S(WARNING) << " -> falling back on font-bbox for ascent (=" << ascent << ")";
@@ -1877,6 +2145,14 @@ namespace pdflib
           LOG_S(WARNING) << "'descend' was not explicitely defined ...";
         }
 
+      if(descent_defined and not is_plausible_vertical_metric(descent))
+        {
+          LOG_S(WARNING) << "implausible descent (=" << descent << ") in the font descriptor of "
+                         << base_font << ": ignoring it";
+          descent_defined=false;
+          invalid_vertical_metrics = true;
+        }
+
       if(not descent_defined)
         {
           if(bfonts.has(base_font))
@@ -1884,7 +2160,7 @@ namespace pdflib
               descent = bfonts[base_font]->get_descend();
               LOG_S(WARNING) << " -> descend (=" << descent << ") retrieved from base-font (=" << base_font << ")";
             }
-          else if(std::abs(font_bbox[1])>1.e-3)
+          else if(font_bbox_bottom_usable)
             {
               descent = font_bbox[1];
               LOG_S(WARNING) << " -> falling back on font-bbox for descent (=" << descent << ")";
@@ -1909,7 +2185,9 @@ namespace pdflib
         descent <= 0.0 and ascent >= 0.0 and descent < ascent;
       const bool font_bbox_is_valid =
         font_bbox[1] <= 0.0 and font_bbox[3] >= 0.0 and
-        font_bbox[1] < font_bbox[3];
+        font_bbox[1] < font_bbox[3] and
+        is_plausible_vertical_metric(font_bbox[1]) and
+        is_plausible_vertical_metric(font_bbox[3]);
 
       if(not descriptor_metrics_are_valid and font_bbox_is_valid)
         {
@@ -1929,13 +2207,13 @@ namespace pdflib
         LOG_S(ERROR) << "ascent (=" << ascent << ") and descent (=" << descent << ") are "
                      << "equal to zero. This might lead to weird representation!";
 
-	if(std::abs(font_bbox[1])>1.e-3)
+	if(font_bbox_bottom_usable)
 	  {
 	    descent = font_bbox[1];
 	    LOG_S(WARNING) << " -> falling back on font-bbox for descent (=" << descent << ")";
 	  }
 
-	if(std::abs(font_bbox[3])>1.e-3)
+	if(font_bbox_top_usable)
 	  {
 	    ascent = font_bbox[3];
 	    LOG_S(WARNING) << " -> falling back on font-bbox for ascent (=" << ascent << ")";
@@ -1944,22 +2222,33 @@ namespace pdflib
 
     capheight=0;
     {
-      //bool capheight_defined=false;
+      bool capheight_defined=false;
       if(qpdf_object::get_number(qpdf_font, {"/FontDescriptor", "/CapHeight"}, capheight))
         {
-          //capheight_defined=true;
+          capheight_defined=true;
 
           LOG_S(INFO) << "capheight: " << capheight;
         }
       else if(qpdf_object::get_number(qpdf_desc_font, {"/FontDescriptor", "/CapHeight"}, capheight))
         {
-          //capheight_defined=true;
+          capheight_defined=true;
 
           LOG_S(INFO) << "capheight: " << capheight;
         }
       else
         {
           LOG_S(WARNING) << "'capheight' was not explicitely defined ...";
+        }
+
+      if(capheight_defined and not is_plausible_vertical_metric(capheight))
+        {
+          LOG_S(WARNING) << "implausible capheight (=" << capheight << ") in the font descriptor of "
+                         << base_font << ": ignoring it";
+          capheight_defined=false;
+        }
+
+      if(not capheight_defined)
+        {
 	  if(bfonts.has(base_font))
 	    {
 	      capheight = bfonts[base_font]->get_capheight();
@@ -1975,22 +2264,34 @@ namespace pdflib
 
     xheight=0;
     {
-      //bool xheight_defined=false;
+      bool xheight_defined=false;
       if(qpdf_object::get_number(qpdf_font, {"/FontDescriptor", "/XHeight"}, xheight))
         {
-          //xheight_defined=true;
+          xheight_defined=true;
 
           LOG_S(INFO) << "xheight: " << xheight;
         }
       else if(qpdf_object::get_number(qpdf_desc_font, {"/FontDescriptor", "/XHeight"}, xheight))
         {
-          //xheight_defined=true;
+          xheight_defined=true;
 
           LOG_S(INFO) << "xheight: " << xheight;
         }
       else
         {
           LOG_S(WARNING) << "'xheight' was not explicitely defined ...";
+        }
+
+      if(xheight_defined and not is_plausible_vertical_metric(xheight))
+        {
+          LOG_S(WARNING) << "implausible xheight (=" << xheight << ") in the font descriptor of "
+                         << base_font << ": ignoring it";
+          xheight = 0;
+          xheight_defined=false;
+        }
+
+      if(not xheight_defined)
+        {
 	  if(bfonts.has(base_font))
 	    {
 	      xheight = bfonts[base_font]->get_xheight();
@@ -2400,6 +2701,8 @@ namespace pdflib
 
 	      cmap_numb_to_char = parser.get();
 	    }
+
+	    fold_symbol_font_private_use();
 	  }
 	else if(qpdf_obj.isString())
 	  {
@@ -2437,6 +2740,62 @@ namespace pdflib
     else
       {
 	cmap_initialized = false;
+      }
+  }
+
+  // Office exporters embed Symbol and ZapfDingbats with a /ToUnicode map that
+  // sends every glyph to the "symbol charset" private-use block, U+F000 plus
+  // the byte code, so bullets, operators, Greek letters and even parentheses
+  // would reach the text as invisible private-use characters. When the base
+  // font is one of these two core fonts, fold such values back through the
+  // font's own encoding (AFM glyph names via the glyph list); codes the
+  // encoding does not cover, and every other font, stay as they are, since
+  // CJK gaiji and Arabic presentation fonts use the same block for real text.
+  void pdf_resource<PAGE_FONT>::fold_symbol_font_private_use()
+  {
+    if(cmap_numb_to_char.is_identity() or cmap_numb_to_char.empty())
+      {
+        return;
+      }
+
+    const base_font_match& match = matched_base_font();
+    if(not match.font or
+       (match.name != "symbol" and match.name != "zapfdingbats"))
+      {
+        return;
+      }
+
+    std::unordered_map<uint32_t, std::string> folded;
+    std::size_t folded_count = 0;
+    for(auto itr = cmap_numb_to_char.begin(); itr != cmap_numb_to_char.end(); itr++)
+      {
+        const std::string& value = itr->second;
+
+        std::vector<uint32_t> code_points;
+        if(utf8::is_valid(value.begin(), value.end()))
+          {
+            utf8::utf8to32(value.begin(), value.end(),
+                           std::back_inserter(code_points));
+          }
+
+        if(code_points.size() == 1 and
+           0xF020 <= code_points.front() and code_points.front() <= 0xF0FF and
+           match.font->has(code_points.front() - 0xF000))
+          {
+            folded[itr->first] = match.font->to_utf8(code_points.front() - 0xF000);
+            folded_count += 1;
+          }
+        else
+          {
+            folded[itr->first] = value;
+          }
+      }
+
+    if(folded_count > 0)
+      {
+        LOG_S(INFO) << "folded " << folded_count << " private-use /ToUnicode values of "
+                    << base_font << " through the " << match.name << " encoding";
+        cmap_numb_to_char = cmap_value(std::move(folded));
       }
   }
 
@@ -2601,7 +2960,17 @@ namespace pdflib
     // mapping to this value means 'unknown character' and is treated as
     // no mapping at all, so the glyph-name based methods can still
     // recover the code (eg /bullet.003 mapped to U+FFFD by the cmap).
-    const std::string replacement_char = "\xEF\xBF\xBD";
+    const uint32_t replacement_char = 0xFFFD;
+
+    // Unicode noncharacters (U+FDD0..U+FDEF and the last two code points
+    // of every plane) are reserved for internal use and never stand for
+    // text, so a /ToUnicode mapping to one of them carries no information
+    // either (eg ligatures /f_f_i mapped to <ffff>, see
+    // docling-project/docling-parse#394).
+    auto is_noncharacter = [](uint32_t cp)
+    {
+      return (0xFDD0<=cp and cp<=0xFDEF) or (cp & 0xFFFE)==0xFFFE;
+    };
 
     // PDF 32000-1 (section 9.10.2) defines the /ToUnicode cmap as the
     // first and most authoritative method to map a character-code to
@@ -2609,20 +2978,38 @@ namespace pdflib
     // cmap entry exists for the code.
     auto has_to_unicode = [&](int numb)
     {
-      return cmap_initialized
-	and cmap_numb_to_char.count(numb)==1
-	and cmap_numb_to_char.at(numb).size()>0
-	and cmap_numb_to_char.at(numb)!=std::string(1, '\0')
-	and cmap_numb_to_char.at(numb)!=replacement_char;
+      if(not cmap_initialized or cmap_numb_to_char.count(numb)!=1)
+	{
+	  return false;
+	}
+
+      const std::string& value = cmap_numb_to_char.at(numb);
+      if(value.empty())
+	{
+	  return false;
+	}
+
+      // Only a mapping to a single unusable code point is discarded.
+      auto itr = value.begin();
+      utf8::utfchar32_t cp = 0;
+      if(utf8::internal::validate_next(itr, value.end(), cp)!=utf8::internal::UTF8_OK
+	 or itr!=value.end())
+	{
+	  return true;
+	}
+
+      return cp!=0 and cp!=replacement_char and not is_noncharacter(cp);
     };
 
     // Subset generators (FontForge, fontTools, mPDF, ...) name glyphs by
-    // bare index: /gid00043, /g43, /glyph43, /cid43, /index43. Such a name
+    // bare index: /gid00043, /g43, /glyph43, /cid43, /index43. Skia/PDF
+    // (Chrome print-to-PDF, Notion exports) writes `g%X`, so the index may
+    // carry hexadecimal digits: /g15C, /gA1. Such a name
     // identifies the glyph inside the embedded font program but carries no
     // reading text, so keeping it fabricates plausible-looking garbage
     // ('gid00043gid00049...') that downstream quality gates cannot detect
     // (docling-project/docling-parse#238).
-    std::regex re_gid(R"((gid|glyph|g|cid|index)\d+)", std::regex::icase);
+    std::regex re_gid(R"((gid|glyph|g|cid|index)[0-9A-Fa-f]+)", std::regex::icase);
 
     // A small family of PDF producers replaces every descriptive glyph name
     // with an uppercase `G<decimal Unicode>` name. Do not infer that convention
@@ -2993,21 +3380,14 @@ namespace pdflib
 
     try
       {
-        const std::string name = get_glyph_name(code);
-        if(not name.empty() and
-           qpdf_font.isDictionary() and qpdf_font.hasKey("/CharProcs") and
-           qpdf_font.getKey("/CharProcs").isDictionary())
+        QPDFObjectHandle charproc = get_type3_charproc(code);
+        if(charproc.isStream())
           {
-            QPDFObjectHandle procs = qpdf_font.getKey("/CharProcs");
-            const std::string key = "/" + name;
-            if(procs.hasKey(key) and procs.getKey(key).isStream())
+            auto buffer = charproc.getStreamData();
+            if(buffer and buffer->getSize() > 0)
               {
-                auto buffer = procs.getKey(key).getStreamData();
-                if(buffer and buffer->getSize() > 0)
-                  {
-                    const char* raw = reinterpret_cast<const char*>(buffer->getBuffer());
-                    result = parse_type3_charproc(std::string(raw, buffer->getSize()));
-                  }
+                const char* raw = reinterpret_cast<const char*>(buffer->getBuffer());
+                result = parse_type3_charproc(std::string(raw, buffer->getSize()));
               }
           }
       }
@@ -3020,6 +3400,42 @@ namespace pdflib
 
     type3_cache_.emplace(code, result);
     return result;
+  }
+
+  inline QPDFObjectHandle pdf_resource<PAGE_FONT>::get_type3_charproc(uint32_t code)
+  {
+    try
+      {
+        const std::string name = get_glyph_name(code);
+        if(not name.empty() and
+           qpdf_font.isDictionary() and qpdf_font.hasKey("/CharProcs") and
+           qpdf_font.getKey("/CharProcs").isDictionary())
+          {
+            QPDFObjectHandle procs = qpdf_font.getKey("/CharProcs");
+            const std::string key = "/" + name;
+            if(procs.hasKey(key) and procs.getKey(key).isStream())
+              {
+                return procs.getKey(key);
+              }
+          }
+      }
+    catch(const std::exception& e)
+      {
+        LOG_S(WARNING) << "type3: no charproc for code " << code << ": " << e.what();
+      }
+
+    return QPDFObjectHandle::newNull();
+  }
+
+  inline QPDFObjectHandle pdf_resource<PAGE_FONT>::get_type3_resources()
+  {
+    if(is_type3() and qpdf_font.isDictionary() and qpdf_font.hasKey("/Resources") and
+       qpdf_font.getKey("/Resources").isDictionary())
+      {
+        return qpdf_font.getKey("/Resources");
+      }
+
+    return QPDFObjectHandle::newNull();
   }
 
   inline std::shared_ptr<pdf_resource<PAGE_FONT>::type3_glyph>

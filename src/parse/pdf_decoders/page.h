@@ -4,6 +4,7 @@
 #define PDF_PAGE_DECODER_H
 
 #include <optional>
+#include <tuple>
 #include <qpdf/QPDF.hh>
 #include <qpdf/QPDFFormFieldObjectHelper.hh>
 #include <qpdf/QPDFPageDocumentHelper.hh>
@@ -52,6 +53,24 @@ namespace pdflib
     page_item<PAGE_CELLS>& get_word_cells() { return word_cells; }
     page_item<PAGE_CELLS>& get_line_cells() { return line_cells; }
 
+    using marked_content_record = std::tuple<std::size_t, std::string,
+      std::array<double, 8>, int, std::string, std::string>;
+    std::vector<marked_content_record> get_marked_content()
+    {
+      std::vector<marked_content_record> result;
+      if(not has_marked_content) { return result; }
+      for(std::size_t i=0; i<char_cells.size(); ++i)
+        {
+          const auto& cell = char_cells.at(i);
+          if(cell.mcid<0 and cell.get_artifact_type().empty()) { continue; }
+          result.emplace_back(i, cell.text, std::array<double, 8>{
+            cell.r_x0, cell.r_y0, cell.r_x1, cell.r_y1,
+            cell.r_x2, cell.r_y2, cell.r_x3, cell.r_y3},
+            cell.mcid, cell.get_artifact_type(), cell.get_artifact_subtype());
+        }
+      return result;
+    }
+
     bool has_word_cells() const { return word_cells_created; }
     bool has_line_cells() const { return line_cells_created; }
 
@@ -89,6 +108,8 @@ namespace pdflib
     std::pair<double, double> to_page_frame_point(double x, double y) const;
 
   private:
+
+    bool has_marked_content = false;
 
     void decode_dimensions();
 
@@ -153,7 +174,7 @@ namespace pdflib
 
     bool can_reuse_sanitised_cells_for_line_cells(const decode_config& config) const;
 
-    void sanitise_contents(std::string page_boundary);
+    void sanitise_contents(const decode_config& config);
 
   private:
 
@@ -920,6 +941,8 @@ namespace pdflib
       sanitator.sanitize(page_cells, config.page_boundary);
       sanitator.sanitize(page_shapes, config.page_boundary);
       sanitator.sanitize(page_images, config.page_boundary);
+      sanitator.translate(page_widgets, config.page_boundary);
+      sanitator.translate(page_hyperlinks, config.page_boundary);
 
       // the same boundary the sanitator subtracted from the cells, read after
       // rotate_contents() so it is already in the rotated space
@@ -935,16 +958,17 @@ namespace pdflib
       local.reset();
       page_item_sanitator<PAGE_CELLS> sanitator;
 
-      {
-        utils::timer step_timer;
-        sanitator.remove_duplicate_cells(page_cells, 0.5, true);
-        timings.add_timing(pdf_timings::KEY_SANITIZE_CELLS_REMOVE_DUPLICATE_CELLS,
-                           step_timer.get_time());
-      }
+      if(config.do_remove_duplicate_cells)
+        {
+          utils::timer step_timer;
+          sanitator.remove_duplicate_cells(page_cells, 0.5, true);
+          timings.add_timing(pdf_timings::KEY_SANITIZE_CELLS_REMOVE_DUPLICATE_CELLS,
+                             step_timer.get_time());
+        }
 
       {
         utils::timer step_timer;
-        sanitator.sanitize_text(page_cells);
+        sanitator.sanitize_text(page_cells, config.do_char_normalization);
         timings.add_timing(pdf_timings::KEY_SANITIZE_CELLS_SANITIZE_TEXT,
                            step_timer.get_time());
       }
@@ -954,7 +978,7 @@ namespace pdflib
     if(config.do_sanitization)
       {
         local.reset();
-        sanitise_contents(config.page_boundary);
+        sanitise_contents(config);
         timings.add_timing(pdf_timings::KEY_SANITISE_CONTENTS, local.get_time());
       }
     else
@@ -965,10 +989,14 @@ namespace pdflib
     if(config.keep_char_cells)
       {
         char_cells = page_cells;
+        has_marked_content = std::any_of(char_cells.begin(), char_cells.end(), [](const auto& cell) {
+          return cell.mcid>=0 or not cell.get_artifact_type().empty();
+        });
       }
     else
       {
         char_cells.clear();
+        has_marked_content = false;
       }
 
     timings.add_timing(pdf_timings::KEY_DECODE_PAGE, global.get_time());
@@ -1161,8 +1189,11 @@ namespace pdflib
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    QPDFPageObjectHelper          qpdf_page_object(qpdf_page);
-    std::vector<QPDFObjectHandle> contents = qpdf_page_object.getPageContents();
+    // The streams of a /Contents array are one content stream, divided at
+    // token boundaries (ISO 32000-1, 7.8.2): a token, such as the array of a
+    // `TJ`, can begin in one stream and end in the next. QPDF concatenates
+    // them (with a newline between), so they are tokenized as one.
+    QPDFObjectHandle contents = qpdf_page.getKey("/Contents");
 
     pdf_decoder<STREAM> stream_decoder(config,
 
@@ -1179,8 +1210,6 @@ namespace pdflib
                                        instructions,
                                        timings);
 
-    int cnt = 0;
-
     // Split decode_contents into: page content-stream tokenization
     // (content_decode_total) vs. operator-execution self-time
     // (interprete_ops_total). The latter is the interpretation wall time minus
@@ -1190,27 +1219,22 @@ namespace pdflib
     double attributed_before  = timings.attributed_total();
 
     std::vector<qpdf_stream_instruction> parameters;
-    for(auto content:contents)
+    {
+      utils::timer content_decode_timer;
+      stream_decoder.decode(contents);
+      timings.add_timing(pdf_timings::KEY_CONTENT_DECODE_TOTAL, content_decode_timer.get_time());
+    }
+    //stream_decoder.print();
+
+    {
+      utils::timer interprete_timer;
+      stream_decoder.interprete(parameters);
+      interprete_seconds += interprete_timer.get_time();
+    }
+
+    if(parameters.size()>0)
       {
-        LOG_S(INFO) << "--------------- start decoding content stream (" << (cnt++) << ")... ---------------";
-
-        {
-          utils::timer content_decode_timer;
-          stream_decoder.decode(content);
-          timings.add_timing(pdf_timings::KEY_CONTENT_DECODE_TOTAL, content_decode_timer.get_time());
-        }
-        //stream_decoder.print();
-
-        {
-          utils::timer interprete_timer;
-          stream_decoder.interprete(parameters);
-          interprete_seconds += interprete_timer.get_time();
-        }
-
-        if(parameters.size()>0)
-          {
-            LOG_S(WARNING) << "stream is ending with non-zero number of parameters";
-          }
+        LOG_S(WARNING) << "page content is ending with non-zero number of parameters";
       }
 
     double attributed_during = timings.attributed_total() - attributed_before;
@@ -1555,11 +1579,11 @@ namespace pdflib
     std::string text = "";
     QPDFObjectHandle value = field.getValue();
     if(value.isString()) { text = value.getUTF8Value(); }
-    else if(value.isName()) { text = value.getName(); }
+    else if(value.isName()) { text = name_to_utf8(value); }
 
     std::string appearance_state = "";
     QPDFObjectHandle appearance = annot.getKey("/AS");
-    if(appearance.isName()) { appearance_state = appearance.getName(); }
+    if(appearance.isName()) { appearance_state = name_to_utf8(appearance); }
 
     page_item<PAGE_WIDGET> widget;
     {
@@ -2009,7 +2033,7 @@ namespace pdflib
     return sanitised_cells_created and config.do_sanitization;
   }
 
-  void pdf_decoder<PAGE>::sanitise_contents(std::string page_boundary)
+  void pdf_decoder<PAGE>::sanitise_contents(const decode_config& config)
   {
     LOG_S(INFO) << __FUNCTION__;
 
@@ -2037,8 +2061,7 @@ namespace pdflib
 
       {
         utils::timer step_timer;
-        decode_config default_config;
-        cells = sanitator.create_line_cells(cells, default_config);
+        cells = sanitator.create_line_cells(cells, config);
         timings.add_timing(pdf_timings::KEY_SANITISE_CONTENTS_SANITIZE_BBOX,
                            step_timer.get_time());
       }

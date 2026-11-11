@@ -20,17 +20,18 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Install uv and set the python version
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v10.3.0
         with:
           python-version: ${{ matrix.python-version }}
+          activate-environment: true
       - name: Build sdist
         run: |
           uv build
           ls ./dist
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: python-package-distributions-sdist
           path: dist/
@@ -44,7 +45,7 @@ jobs:
       # list of github vm: https://docs.github.com/en/actions/using-github-hosted-runners/about-github-hosted-runners/about-github-hosted-runners#standard-github-hosted-runners-for-public-repositories
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14", "3.15"]
 
         os:
           - name: "ubuntu-24.04"
@@ -55,7 +56,7 @@ jobs:
             platform: "linux"
             platform_id: "manylinux_aarch64"
 
-          - name: "macos-14"
+          - name: "macos-15"
             platform: "macos"
             min_macos_version: "14"
             platform_id: "macosx_arm64"
@@ -70,13 +71,14 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install uv and set the python version
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v10.3.0
         id: py
         with:
           python-version: ${{ matrix.python-version }}
+          activate-environment: true
 
       - name: Set up custom PATH and set py version to cpXYZ [windows]
         if: ${{ matrix.os.platform == 'windows' }}
@@ -109,7 +111,7 @@ jobs:
           CIBW_ARCHS: x86_64
           CIBW_ARCHS_MACOS: x86_64
           CIBW_PLATFORM: macos
-          CIBW_SKIP: "pp* *-musllinux_* *_i686* *_s390* *arm64* *pypy*"
+          CIBW_SKIP: "*-musllinux_* *_i686* *_s390* *arm64*"
           CIBW_PROJECT_REQUIRES_PYTHON: "~=${{ matrix.python-version }}.0"
           CIBW_BUILD_VERBOSITY: 3
           CMAKE_OSX_ARCHITECTURES: x86_64
@@ -163,7 +165,7 @@ jobs:
           CIBW_ARCHS: arm64
           CIBW_ARCHS_MACOS: arm64
           CIBW_PLATFORM: macos
-          CIBW_SKIP: "pp* *-musllinux_* *_i686* *x86_64* *_s390* *pypy*"
+          CIBW_SKIP: "*-musllinux_* *_i686* *x86_64* *_s390*"
           CIBW_PROJECT_REQUIRES_PYTHON: "~=${{ matrix.python-version }}.0"
           CIBW_BUILD_VERBOSITY: 3
           CMAKE_OSX_ARCHITECTURES: arm64
@@ -210,7 +212,7 @@ jobs:
 
       - name: Set up QEMU [linux]
         if: startsWith(matrix.os.name, 'ubuntu')
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
         with:
             platforms: all
         
@@ -220,7 +222,7 @@ jobs:
           CIBW_BUILD: ${{ env.python_cp_version }}-${{ matrix.os.platform_id }}
           CIBW_ARCHS: auto x86_64 aarch64
           CIBW_PLATFORM: linux
-          CIBW_SKIP: "pp* *musllinux_* *_i686* *_s390* *pypy*"
+          CIBW_SKIP: "*musllinux_* *_i686* *_s390*"
           CIBW_PROJECT_REQUIRES_PYTHON: "~=${{ matrix.python-version }}.0"
           CIBW_BUILD_VERBOSITY: 3
           # Multi-threading: pass BUILD_THREADS into the cibuildwheel Docker container.
@@ -327,7 +329,8 @@ jobs:
         env:
           CIBW_PLATFORM: windows
           CIBW_BUILD_VERBOSITY: 3
-          CIBW_SKIP: "pp*"
+          CIBW_BUILD: ${{ env.python_cp_version }}-${{ matrix.os.platform_id }}
+          CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: ""  # cibuildwheel>=4 defaults to delvewheel; DLLs are bundled manually
           CIBW_PROJECT_REQUIRES_PYTHON: "~=${{ matrix.python-version }}.0"
           BUILD_THREADS: 4
           ASM_NASM: "C:/nasm/nasm.exe"
@@ -363,7 +366,7 @@ jobs:
           Copy-Item -Path .\wheelhouse\*.whl -Destination .\dist\
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: python-package-distributions-py${{ matrix.python-version }}-${{ matrix.os.platform_id }}
           path: dist/
@@ -384,7 +387,7 @@ jobs:
       contents: write  # IMPORTANT: mandatory for adding artifacts to GitHub Releases
     steps:
       - name: Download all the dists
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           merge-multiple: true
           path: dist/

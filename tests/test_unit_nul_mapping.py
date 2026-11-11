@@ -46,8 +46,31 @@ def test_nul_mapping_recovers_from_known_glyph_identity(glyph_name: str, expecte
     assert _extract_character(mapping="0000", glyph_name=glyph_name) == expected
 
 
+@pytest.mark.parametrize("mapping", ["FFFF", "FFFE", "FDD0"])
+@pytest.mark.parametrize(
+    ("glyph_name", "expected"), [("f_f_i", "ffi"), ("f_i", "fi"), ("minus", "-")]
+)
+def test_noncharacter_mapping_recovers_from_glyph_name(
+    mapping: str, glyph_name: str, expected: str
+):
+    # docling-project/docling-parse#394: LaTeX subsets map ligatures to <ffff>.
+    assert _extract_character(mapping=mapping, glyph_name=glyph_name) == expected
+
+
 def test_nul_mapping_with_unknown_identity_remains_unresolved():
     assert (
         _extract_character(mapping="0000", glyph_name="gid00043")
         == "GLYPH<name:gid00043>"
+    )
+
+
+@pytest.mark.parametrize("glyph_name", ["g15C", "g15c", "gA1", "GID00043"])
+def test_nul_mapping_with_hexadecimal_glyph_index_name_remains_unresolved(
+    glyph_name: str,
+):
+    # Skia/PDF names Type 3 glyphs `g%X` (hexadecimal gid), so a bare index
+    # may carry letters A-F; it still identifies no reading text.
+    assert (
+        _extract_character(mapping="0000", glyph_name=glyph_name)
+        == f"GLYPH<name:{glyph_name}>"
     )

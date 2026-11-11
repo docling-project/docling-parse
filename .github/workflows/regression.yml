@@ -12,7 +12,19 @@ jobs:
   run-regression:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+      - name: Show runner resources
+        run: |
+          echo "Available logical CPUs: $(nproc)"
+          lscpu
+          free -h
+          ulimit -a
+          for resource in /sys/fs/cgroup/cpu.max /sys/fs/cgroup/memory.max; do
+            if [ -r "$resource" ]; then
+              echo "$resource"
+              cat "$resource"
+            fi
+          done
       - name: Install system fonts
         # See checks.yml for why these packages are pinned.
         run: |
@@ -33,13 +45,15 @@ jobs:
           fi
           test -n "$(fc-list :lang=ko file)"
       - name: Install uv and set the python version
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v10.3.0
         with:
           python-version: '3.13'
-      - name: Cache HF regression corpus
+          activate-environment: true
+      - name: Restore HF regression corpus
+        id: hf-regression-cache
         # HF_DATASET_REVISION in tests/constants.py is a pinned commit hash, so
         # hashing that file gives us automatic invalidation on bumps.
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v6
         with:
           path: tests/data
           key: hf-regression-${{ hashFiles('tests/constants.py') }}
@@ -47,8 +61,17 @@ jobs:
         run: |
           uv sync --frozen --all-extras
           ls docling_parse/pdf_parsers*.so
+      - name: Ensure HF regression corpus is downloaded
+        run: uv run python -c "from tests.data_utils import ensure_test_data_downloaded; ensure_test_data_downloaded()"
+      - name: Save HF regression corpus
+        # Save before tests so failures cannot prevent caching the download.
+        if: steps.hf-regression-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: tests/data
+          key: ${{ steps.hf-regression-cache.outputs.cache-primary-key }}
       - name: Regression tests
         env:
           DOCLING_PARSE_CJK_FALLBACK_FONT: /usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc
         run: |
-          uv run pytest -v tests/test_regression_*.py
+          /usr/bin/time -v uv run pytest -v -n 2 --dist loadfile tests/test_regression_*.py

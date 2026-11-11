@@ -59,6 +59,10 @@ namespace pdflib
 
     utils::values::translate_inplace(delta, x0, y0);
     utils::values::translate_inplace(delta, x1, y1);
+
+    // the two corners rotate independently: restore bottom-left/top-right
+    if(x1 < x0) { std::swap(x0, x1); }
+    if(y1 < y0) { std::swap(y0, y1); }
   }
 
 }

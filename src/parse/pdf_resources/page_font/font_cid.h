@@ -313,6 +313,8 @@ namespace pdflib
     // resource declared none.
     const std::vector<cmap_codespace_range>& get_codespaces() const;
 
+    const std::unordered_map<uint32_t, uint32_t>& get_code_to_cid() const { return cmap2cid; }
+
     void decode_cmap_resource(std::string filename,
                               std::string cid2code,
                               std::vector<std::string> columns);

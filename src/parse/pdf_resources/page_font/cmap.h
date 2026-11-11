@@ -29,7 +29,7 @@ namespace pdflib
     static std::string to_utf8(QPDFObjectHandle handle,
                                size_t number_of_chars);
 
-    std::string get_source(QPDFObjectHandle my_handle);
+    uint32_t    get_source(QPDFObjectHandle my_handle);
     std::string get_target(QPDFObjectHandle my_handle);
 
     void parse_cmap_name(std::vector<qpdf_stream_instruction>& parameters);
@@ -44,16 +44,24 @@ namespace pdflib
     void parse_beginbfchar(std::vector<qpdf_stream_instruction>& parameters);
     void parse_endbfchar(std::vector<qpdf_stream_instruction>& parameters);
 
-    void set_mapping(const std::string src,
+    void set_mapping(uint32_t          c,
                      const std::string tgt);
 
-    void set_range(const std::string src_begin,
-                   const std::string src_end,
+    void set_range(uint32_t          begin,
+                   uint32_t          end,
                    const std::string tgt);
 
-    void set_range(const std::string              src_begin,
-                   const std::string              src_end,
+    void set_range(uint32_t                       begin,
+                   uint32_t                       end,
                    const std::vector<std::string> tgt);
+
+    // A bfrange is expanded code by code, so a corrupt bound (srcCode2 below
+    // srcCode1, or a span far wider than any code space) must be rejected
+    // before `end - begin + 1` wraps around and becomes a multi-gigabyte
+    // reservation. Same limit as the cidrange parser in font_cid.h.
+    static constexpr uint32_t max_range_length = 65536;
+
+    static bool is_valid_range(uint32_t begin, uint32_t end);
 
     // Helper to remove trailing null bytes from a string
     static void remove_trailing_nulls(std::string& str);
@@ -669,19 +677,13 @@ namespace pdflib
     LOG_S(INFO) << __FUNCTION__ << " bf_cnt: " << bf_cnt;
   }
   
-  // the source can be 1 or 2 byte
-  std::string cmap_parser::get_source(QPDFObjectHandle my_handle)
+  // The source is a character code of 1 to 4 bytes (PDF 32000-1, 9.10.3),
+  // read as a big-endian number like the codespacerange bounds. It is not
+  // text: decoding it as UTF-16 rejected every code in 0xD800-0xDFFF, and
+  // the fallback string that came back put the mapping on the wrong code.
+  uint32_t cmap_parser::get_source(QPDFObjectHandle my_handle)
   {
-    std::string source = my_handle.getStringValue();
-
-    std::string result="";
-    {
-      std::string tmp = my_handle.getStringValue();
-      result = to_utf8(my_handle, tmp.size());
-    }
-    //LOG_S(INFO) << __FUNCTION__ << my_handle.unparse() << "\t" << source << "\t'" << result << "'";
-
-    return result;
+    return to_uint32(my_handle);
   }
 
   // the target is always 2 byte
@@ -726,8 +728,8 @@ namespace pdflib
         LOG_S(WARNING) << "parameters.size(): " << parameters.size() << " > " << num_params;
       }
 
-    std::string source_start = "";
-    std::string source_end = "";
+    uint32_t source_start = 0;
+    uint32_t source_end = 0;
 
     QPDFObjectHandle target;
 
@@ -791,16 +793,10 @@ namespace pdflib
       }
   }
 
-  void cmap_parser::set_mapping(const std::string src,
+  void cmap_parser::set_mapping(uint32_t c,
                                 const std::string tgt)
   {
-    //LOG_S(INFO) << __FUNCTION__ << ": " << src << " -> " << tgt;
-
-    uint32_t c = 0;
-    {
-      auto itr = src.begin();
-      c = utf8::next(itr, src.end());
-    }
+    //LOG_S(INFO) << __FUNCTION__ << ": " << c << " -> " << tgt;
 
     if(not (csr_range.first<=c and c<=csr_range.second))
       {
@@ -812,32 +808,32 @@ namespace pdflib
         LOG_S(ERROR) << "overwriting number cmap[" << c << "]: " << _map.at(c) << " with " << tgt;
       }
 
-    LOG_S(INFO) << "orig: " << src << " -> cmap-ind:" << c << " -> target: " << tgt;
+    LOG_S(INFO) << "cmap-ind:" << c << " -> target: " << tgt;
     _map[c] = tgt;
   }
 
-  void cmap_parser::set_range(const std::string src_begin,
-                              const std::string src_end,
+  bool cmap_parser::is_valid_range(uint32_t begin, uint32_t end)
+  {
+    if(begin <= end and (end - begin) < max_range_length)
+      {
+        return true;
+      }
+
+    LOG_S(WARNING) << "ignoring malformed bfrange: begin=" << begin
+                   << ", end=" << end << " (end must be >= begin and the range at most "
+                   << max_range_length << " codes)";
+    return false;
+  }
+
+  void cmap_parser::set_range(uint32_t begin,
+                              uint32_t end,
                               const std::string tgt)
   {
     //LOG_S(INFO) << __FUNCTION__;
 
-    auto itr_beg = src_begin.begin();
-    uint32_t begin = utf8::next(itr_beg, src_begin.end());
-
-    if(itr_beg != src_begin.end())
+    if(not is_valid_range(begin, end))
       {
-        LOG_S(WARNING) << "itr_beg!=src_begin.end() --> errors might occur in the cmap: "
-                       << "'" << src_begin << "' -> " << begin;
-      }
-
-    auto itr_end = src_end.begin();
-    uint32_t end = utf8::next(itr_end, src_end.end());
-
-    if(itr_end != src_end.end())
-      {
-        LOG_S(WARNING) << "itr_end!=src_end.end() --> errors might occur in the cmap: "
-                       << "'" << src_end << "' -> " << end;
+        return;
       }
 
     //LOG_S(INFO) << __FUNCTION__ << "\t"
@@ -884,17 +880,16 @@ namespace pdflib
     //populate_range_mapping_legacy(begin, end, mapping, tgts, csr_range, _map);
   }
 
-  void cmap_parser::set_range(const std::string src_begin,
-                              const std::string src_end,
+  void cmap_parser::set_range(uint32_t begin,
+                              uint32_t end,
                               const std::vector<std::string> tgt)
   {
     //LOG_S(INFO) << __FUNCTION__;
 
-    auto itr_begin = src_begin.begin();
-    uint32_t begin = utf8::next(itr_begin, src_begin.end());
-
-    auto itr_end = src_end.begin();
-    uint32_t end = utf8::next(itr_end, src_end.end());
+    if(not is_valid_range(begin, end))
+      {
+        return;
+      }
 
     // Pre-reserve capacity to avoid rehashing during bulk insertions
     _map.reserve(_map.size() + (end - begin + 1));
@@ -968,7 +963,7 @@ namespace pdflib
         QPDFObjectHandle source_ = parameters[2*i+0].obj;
         QPDFObjectHandle target_ = parameters[2*i+1].obj;
 
-        std::string source = get_source(source_);
+        uint32_t    source = get_source(source_);
         std::string target = get_target(target_);
 
         target.erase(std::remove_if(target.begin(), target.end(), [] (char x) { return x == 0; }),

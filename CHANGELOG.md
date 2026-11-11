@@ -1,3 +1,93 @@
+## [v7.25.0](https://github.com/docling-project/docling-parse/releases/tag/v7.25.0) - 2026-11-09
+
+### Feature
+
+* Working on parallel efficiency ([#435](https://github.com/docling-project/docling-parse/issues/435)) ([`c2b39af`](https://github.com/docling-project/docling-parse/commit/c2b39afa59d95caabec4707f63fca2838c516ae1))
+* Consolidate Blend2D rendering prs according to #428 ([#433](https://github.com/docling-project/docling-parse/issues/433)) ([`ec1dfed`](https://github.com/docling-project/docling-parse/commit/ec1dfed0ba7b58b4436ee912cfaae00f295bc866))
+* Read the tagged-PDF structure tree and link text cells to marked content ([#337](https://github.com/docling-project/docling-parse/issues/337)) ([`7a920a5`](https://github.com/docling-project/docling-parse/commit/7a920a5ad5347aa8ed72c5dd2dff1f2d9e3cb20e))
+
+### Fix
+
+* Add better error messaging ([#442](https://github.com/docling-project/docling-parse/issues/442)) ([`1b7a5fe`](https://github.com/docling-project/docling-parse/commit/1b7a5fe5e411480edefe669b5a805e8f97c2192e))
+* **render:** Stroke clipping, tiling patterns and soft masks, consolidated per #428 ([#439](https://github.com/docling-project/docling-parse/issues/439)) ([`f4b12cf`](https://github.com/docling-project/docling-parse/commit/f4b12cf2d114397dd1601027c3b0b586d7f3a594))
+* **text:** Word and cell segmentation fixes, consolidated per #428 ([#437](https://github.com/docling-project/docling-parse/issues/437)) ([`01cd139`](https://github.com/docling-project/docling-parse/commit/01cd1393fb0e3dd414a60de215fc106fe837bb61))
+* Transcode PDF names that are not UTF-8 before they reach Python ([#438](https://github.com/docling-project/docling-parse/issues/438)) ([`fa338f7`](https://github.com/docling-project/docling-parse/commit/fa338f7fb3129081d4f46a5af07b6cf1e2c24276))
+* **fonts:** Font and ToUnicode decoding fixes, consolidated per #428 ([#431](https://github.com/docling-project/docling-parse/issues/431)) ([`8aa5cac`](https://github.com/docling-project/docling-parse/commit/8aa5cacc860fd802bdc02b43252a69f66808880e))
+* Keep the /AcroForm JSON export out of the document behind a signature ([#410](https://github.com/docling-project/docling-parse/issues/410)) ([`eb19698`](https://github.com/docling-project/docling-parse/commit/eb19698df62b682dcea9b762af805f7e641167e7))
+
+### Documentation
+
+* Add pull request submission guidelines ([#430](https://github.com/docling-project/docling-parse/issues/430)) ([`6dbd6a8`](https://github.com/docling-project/docling-parse/commit/6dbd6a83d93b720637fd80629961f14ee6bb3df9))
+
+## [v7.24.2](https://github.com/docling-project/docling-parse/releases/tag/v7.24.2) - 2026-10-29
+
+### Fix
+
+* Bind take_load_error for the threaded renderer ([#432](https://github.com/docling-project/docling-parse/issues/432)) ([`4ebbb8a`](https://github.com/docling-project/docling-parse/commit/4ebbb8afa3516e2aec1f3d37bf67568fb3deb9ed))
+* **render:** Draw images in /CalGray and /CalRGB colour spaces ([#411](https://github.com/docling-project/docling-parse/issues/411)) ([`4df810b`](https://github.com/docling-project/docling-parse/commit/4df810b4878603dbe64ae8ad2b7c13cb47299480))
+
+## [v7.24.1](https://github.com/docling-project/docling-parse/releases/tag/v7.24.1) - 2026-10-28
+
+### Fix
+
+* **render:** Decode reduced bitmaps again for a finer re-render ([#429](https://github.com/docling-project/docling-parse/issues/429)) ([`436ff5a`](https://github.com/docling-project/docling-parse/commit/436ff5ac0d09f9a994251fb41bc1ff04ceb2f6f4))
+
+## [v7.24.0](https://github.com/docling-project/docling-parse/releases/tag/v7.24.0) - 2026-10-27
+
+### Feature
+
+* Report why a document failed to load, so a password is told from a damaged file ([#414](https://github.com/docling-project/docling-parse/issues/414)) ([`3317576`](https://github.com/docling-project/docling-parse/commit/33175762f5324d987e4d8bb01f191900c96a5cc2))
+
+### Fix
+
+* Resolve /CIDToGIDMap streams for CIDFontType2 glyph lookup ([#426](https://github.com/docling-project/docling-parse/issues/426)) ([`8099e94`](https://github.com/docling-project/docling-parse/commit/8099e94fe9a872fe2ceb63618ecbda5beb91e9da))
+* Decode image XObject samples only when a page draws them ([#425](https://github.com/docling-project/docling-parse/issues/425)) ([`341aea5`](https://github.com/docling-project/docling-parse/commit/341aea52ce999d266bd62d5bde625502e7c13ea7))
+
+## [v7.23.1](https://github.com/docling-project/docling-parse/releases/tag/v7.23.1) - 2026-10-26
+
+### Fix
+
+* Transcode non-UTF-8 widget names instead of losing the page ([#392](https://github.com/docling-project/docling-parse/issues/392)) ([`15c3f6a`](https://github.com/docling-project/docling-parse/commit/15c3f6a9609b00271cf7551a1ea216b2f91d1e01))
+* Fail a page whose content the truncated file no longer contains ([#415](https://github.com/docling-project/docling-parse/issues/415)) ([`7b7b273`](https://github.com/docling-project/docling-parse/commit/7b7b273339722541a6576631e95996a295df052c))
+* Keep the page when a damaged content stream breaks one operator ([#418](https://github.com/docling-project/docling-parse/issues/418)) ([`1357898`](https://github.com/docling-project/docling-parse/commit/1357898b1d749f975841c055a5dd194cc3f56b00))
+* Fall back from noncharacter ToUnicode mappings ([#395](https://github.com/docling-project/docling-parse/issues/395)) ([`3c91d2b`](https://github.com/docling-project/docling-parse/commit/3c91d2b372c9554e38aba6c14fda2b60ba0deee5))
+* Treat a space glyph mapped to a control character as a space ([#408](https://github.com/docling-project/docling-parse/issues/408)) ([`6d41900`](https://github.com/docling-project/docling-parse/commit/6d419002e6d2b4fab40a40f5e0048a9f1a74e4f3))
+* Ignore implausible vertical metrics in a font descriptor ([#412](https://github.com/docling-project/docling-parse/issues/412)) ([`2a9a6f8`](https://github.com/docling-project/docling-parse/commit/2a9a6f8b3a1f0d286da57e83911204bc3073f044))
+* **render:** Paint Type3 glyphs whose CharProc draws an image ([#422](https://github.com/docling-project/docling-parse/issues/422)) ([`dc69024`](https://github.com/docling-project/docling-parse/commit/dc690243ef79104c835facc0d776f15d5b31eec9))
+* Update pinned third-party libraries with known CVEs ([#423](https://github.com/docling-project/docling-parse/issues/423)) ([`bbfae48`](https://github.com/docling-project/docling-parse/commit/bbfae4839e31396ba06c1ebbd46362a4447269b1))
+
+### Documentation
+
+* Adding performance numbers ([#353](https://github.com/docling-project/docling-parse/issues/353)) ([`f8512ab`](https://github.com/docling-project/docling-parse/commit/f8512ab517428eea2c1e70d9b8db141bdbfa9ab8))
+
+## [v7.23.0](https://github.com/docling-project/docling-parse/releases/tag/v7.23.0) - 2026-10-22
+
+### Feature
+
+* Support for py3.15 ([#421](https://github.com/docling-project/docling-parse/issues/421)) ([`101de10`](https://github.com/docling-project/docling-parse/commit/101de108f935af64d046a819445a1d2157766371))
+
+## [v7.22.4](https://github.com/docling-project/docling-parse/releases/tag/v7.22.4) - 2026-10-21
+
+### Fix
+
+* Allow Pillow 13 ([#420](https://github.com/docling-project/docling-parse/issues/420)) ([`fbe3190`](https://github.com/docling-project/docling-parse/commit/fbe31904e81093c4f4a4f2ea3f5d1f8d36b0962c))
+
+## [v7.22.3](https://github.com/docling-project/docling-parse/releases/tag/v7.22.3) - 2026-10-13
+
+### Fix
+
+* Unit stroke curves ([#407](https://github.com/docling-project/docling-parse/issues/407)) ([`30ae51f`](https://github.com/docling-project/docling-parse/commit/30ae51feb4ee4b4cc69c9e9aaee78eb74d4206fd))
+* **render:** Decode JBIG2 /Mask stencils ([#360](https://github.com/docling-project/docling-parse/issues/360)) ([`e0e678c`](https://github.com/docling-project/docling-parse/commit/e0e678ce182a8a9b1b143e50251b51048ad767e4))
+
+## [v7.22.2](https://github.com/docling-project/docling-parse/releases/tag/v7.22.2) - 2026-10-05
+
+### Fix
+
+* Ignore malformed ToUnicode bfranges instead of reserving ~4G map entries ([#381](https://github.com/docling-project/docling-parse/issues/381)) ([`6d7ccf2`](https://github.com/docling-project/docling-parse/commit/6d7ccf26d09a38a86a08a8fadaf46987766b53e0))
+* Take the pattern name by value in do_pattern_fill ([#382](https://github.com/docling-project/docling-parse/issues/382)) ([`92ee655`](https://github.com/docling-project/docling-parse/commit/92ee6553b102a7984998abbe4ddea646b45db6c8))
+* Read font directory env vars wide on Windows ([#364](https://github.com/docling-project/docling-parse/issues/364)) ([`0c0eff2`](https://github.com/docling-project/docling-parse/commit/0c0eff2def1b7a594bcb536e7b0dc546524ae5d9))
+* Translate widget and hyperlink rects to the page boundary ([#376](https://github.com/docling-project/docling-parse/issues/376)) ([`6b5b6fd`](https://github.com/docling-project/docling-parse/commit/6b5b6fd0c70fbcde43bc35d0dad004047fdee7a2))
+
 ## [v7.22.1](https://github.com/docling-project/docling-parse/releases/tag/v7.22.1) - 2026-09-28
 
 ### Fix

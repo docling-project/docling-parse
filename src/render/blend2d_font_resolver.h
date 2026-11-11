@@ -183,7 +183,9 @@ namespace pdflib
     static int stem_weight(const std::string& stem);
     static bool stem_is_italic(const std::string& stem);
 
-    static std::optional<std::string> getenv_string(const char* name);
+    // Read wide on Windows: narrow getenv() yields ANSI-codepage bytes, which
+    // libstdc++ re-decodes as UTF-8 and rejects non-ASCII (docling-parse#354).
+    static std::optional<std::filesystem::path> getenv_path(const char* name);
     static void append_env_path(std::vector<std::filesystem::path>& paths,
                                 const char* env_name,
                                 const std::filesystem::path& suffix = {});
@@ -616,11 +618,19 @@ namespace pdflib
     return static_cast<int>(std::lround(cutoff * 10000.0f));
   }
 
-  inline std::optional<std::string> blend2d_font_resolver::getenv_string(const char* name)
+  inline std::optional<std::filesystem::path> blend2d_font_resolver::getenv_path(const char* name)
   {
+#if defined(_WIN32)
+    // Variable names are ASCII; widen them without a codepage conversion.
+    const std::wstring wide_name(name, name + std::char_traits<char>::length(name));
+    const wchar_t* value = _wgetenv(wide_name.c_str());
+    if (value == nullptr or value[0] == L'\0') { return std::nullopt; }
+    return std::filesystem::path(value);
+#else
     const char* value = std::getenv(name);
     if (value == nullptr or value[0] == '\0') { return std::nullopt; }
-    return std::string(value);
+    return std::filesystem::path(value);
+#endif
   }
 
   inline void blend2d_font_resolver::append_env_path(
@@ -628,11 +638,10 @@ namespace pdflib
                                                      const char* env_name,
                                                      const std::filesystem::path& suffix)
   {
-    auto value = getenv_string(env_name);
-    if (not value.has_value()) { return; }
-    std::filesystem::path path(*value);
-    if (not suffix.empty()) { path /= suffix; }
-    paths.push_back(path);
+    auto path = getenv_path(env_name);
+    if (not path.has_value()) { return; }
+    if (not suffix.empty()) { *path /= suffix; }
+    paths.push_back(*path);
   }
 
   inline std::vector<std::filesystem::path> blend2d_font_resolver::system_font_directories()
@@ -677,9 +686,9 @@ namespace pdflib
     namespace fs = std::filesystem;
     std::vector<fs::path> paths;
 
-    if (auto override_path = getenv_string("DOCLING_PARSE_FALLBACK_FONT"))
+    if (auto override_path = getenv_path("DOCLING_PARSE_FALLBACK_FONT"))
       {
-        paths.emplace_back(*override_path);
+        paths.push_back(*override_path);
       }
 
     // Bundled fonts: sans before serif before mono (not alphabetical), so a
@@ -793,9 +802,9 @@ namespace pdflib
     namespace fs = std::filesystem;
     std::vector<fs::path> paths;
 
-    if (auto override_path = getenv_string("DOCLING_PARSE_ARABIC_FALLBACK_FONT"))
+    if (auto override_path = getenv_path("DOCLING_PARSE_ARABIC_FALLBACK_FONT"))
       {
-        paths.emplace_back(*override_path);
+        paths.push_back(*override_path);
       }
 
     // Filename stems of faces that carry Arabic, best first. The generic
@@ -1156,9 +1165,9 @@ namespace pdflib
     namespace fs = std::filesystem;
     std::vector<fs::path> paths;
 
-    if (auto override_path = getenv_string("DOCLING_PARSE_CJK_FALLBACK_FONT"))
+    if (auto override_path = getenv_path("DOCLING_PARSE_CJK_FALLBACK_FONT"))
       {
-        paths.emplace_back(*override_path);
+        paths.push_back(*override_path);
       }
 
     // Faces with CJK coverage, best first. Each entry is matched against both

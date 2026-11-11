@@ -4,9 +4,52 @@
 from io import BytesIO
 from pathlib import Path
 
+import pytest
+
 from docling_parse.pdf_parser import DecodeConfig, DoclingPdfParser
 
 DATA = Path(__file__).parent / "data" / "regression"
+
+
+@pytest.mark.parametrize(
+    ("decode_config", "copies"),
+    [
+        pytest.param(None, 1, id="default"),
+        pytest.param(DecodeConfig(do_remove_duplicate_cells=False), 2, id="preserve"),
+        pytest.param(DecodeConfig(do_remove_duplicate_cells=True), 1, id="deduplicate"),
+    ],
+)
+def test_coupon_overprinted_offer(decode_config, copies):
+    """The coupon paints SAVE $1 twice at exactly the same position."""
+    document = DoclingPdfParser(loglevel="fatal").load(
+        DATA / "7143857365833452481-1.pdf", decode_config=decode_config
+    )
+    try:
+        lines = [cell.text for cell in document.get_page(1).textline_cells]
+        assert lines.count("SAVE $1") == copies
+        assert lines.count("NOW!") == copies
+        words = [cell.text for cell in document.get_page(1).word_cells]
+        assert words.count("NOW!") == copies
+    finally:
+        document.unload()
+
+
+def test_small_glyphs_preserve_repeated_letters():
+    page = _page("ligatures_01.pdf", 1)
+    lines = [cell.text for cell in page.textline_cells]
+    assert any("pupils is the interpupillary distance." in line for line in lines)
+    assert any("oblique illuminator cap and remove" in line for line in lines)
+    assert any("follow the following" in line for line in lines)
+    assert "On/Off" in lines
+
+
+def test_fake_bold_is_read_once():
+    page = _page("duplicate_bold_text_01.pdf", 1)
+    lines = [cell.text for cell in page.textline_cells]
+    assert lines.count("Preface") == 1
+    assert len(page.char_cells) == 670
+    assert len(page.word_cells) == 112
+    assert len(lines) == 12
 
 
 def _pdf_with_code_32_period() -> BytesIO:
@@ -85,6 +128,13 @@ def test_short_headings_keep_inferred_word_boundaries():
 
     assert "5.1 Hyper Parameter Optimization" in lines
     assert "5.2 Quantitative Results" in lines
+
+
+def test_letter_spaced_text_with_space_glyphs_stays_whole():
+    # The Portuguese table is letter-spaced and its lines carry suppressed
+    # space glyphs: the opened letter gaps must not split its words.
+    table = _page("14289803404128846560-14.pdf", 14)
+    assert "Tinta" in [cell.text for cell in table.textline_cells]
 
 
 def test_positioned_prose_and_headers_keep_word_boundaries():

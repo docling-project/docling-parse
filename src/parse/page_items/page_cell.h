@@ -3,8 +3,19 @@
 #ifndef PAGE_ITEM_CELL_H
 #define PAGE_ITEM_CELL_H
 
+#include <memory>
+
 namespace pdflib
 {
+
+  // Shared by glyphs of an artifact span and their copied/contracted cells.
+  // Ordinary cells allocate nothing; ownership follows cells, not a document
+  // registry, so retained PdfCell objects remain valid after parser unload.
+  struct marked_content_artifact
+  {
+    std::string type;
+    std::string subtype;
+  };
 
   template<>
   class page_item<PAGE_CELL>
@@ -120,11 +131,41 @@ namespace pdflib
     double writing_axis_y = 0.0;
     double nominal_text_height = 0.0;
 
+    // tagged-PDF linkage (PDF 32000-2, 14.7.5): the /MCID of the innermost
+    // marked-content sequence the glyph was drawn in (-1 when untagged), and
+    // the artifact /Type when the glyph sits inside an /Artifact sequence.
+    int         mcid = -1;
+    std::shared_ptr<const marked_content_artifact> artifact;
+
+    const std::string& get_artifact_type() const
+    {
+      static const std::string empty;
+      return artifact ? artifact->type : empty;
+    }
+    const std::string& get_artifact_subtype() const
+    {
+      static const std::string empty;
+      return artifact ? artifact->subtype : empty;
+    }
+
     // graphics state properties
     bool                has_graphics_state = false;
     double              line_width = -1;
     std::array<int, 3>  rgb_stroking_ops = {0, 0, 0};
     std::array<int, 3>  rgb_filling_ops  = {0, 0, 0};
+
+    // Axis-aligned box, in page coordinates, of the clip region in force when
+    // the glyph was painted (ISO 32000-1, 8.5.4); unset when nothing clipped
+    // it. The quad above is the full glyph box, and the part of it outside
+    // this box is not visible on the page. A producer that fits long text
+    // into a table cell by clipping it to the cell leaves only this box to
+    // say which cell the text belongs to. A word or line cell carries the box
+    // when all of its glyphs share it. Not part of the positional JSON record.
+    bool   has_clip_bbox = false;
+    double clip_x0 = 0.0;
+    double clip_y0 = 0.0;
+    double clip_x1 = 0.0;
+    double clip_y1 = 0.0;
   };
 
   page_item<PAGE_CELL>::page_item():
@@ -182,7 +223,11 @@ namespace pdflib
     "has-graphics-state",
     "line-width",
     "rgb-stroking",
-    "rgb-filling"
+    "rgb-filling",
+
+    "mcid",
+    "artifact-type",
+    "artifact-subtype"
   };
 
   void page_item<PAGE_CELL>::rotate(int angle, std::pair<double, double> delta)
@@ -205,6 +250,26 @@ namespace pdflib
     utils::values::translate_inplace(delta, r_x1, r_y1);
     utils::values::translate_inplace(delta, r_x2, r_y2);
     utils::values::translate_inplace(delta, r_x3, r_y3);    
+
+    if(has_clip_bbox)
+      {
+        utils::values::rotate_inplace(angle, clip_x0, clip_y0);
+        utils::values::rotate_inplace(angle, clip_x1, clip_y1);
+
+        utils::values::translate_inplace(delta, clip_x0, clip_y0);
+        utils::values::translate_inplace(delta, clip_x1, clip_y1);
+
+        // the box stays min/max ordered after the rotation
+        const double clip_x_min = std::min(clip_x0, clip_x1);
+        const double clip_x_max = std::max(clip_x0, clip_x1);
+        clip_x0 = clip_x_min;
+        clip_x1 = clip_x_max;
+
+        const double clip_y_min = std::min(clip_y0, clip_y1);
+        const double clip_y_max = std::max(clip_y0, clip_y1);
+        clip_y0 = clip_y_min;
+        clip_y1 = clip_y_max;
+      }
   }
   
   nlohmann::json page_item<PAGE_CELL>::get()
@@ -244,6 +309,10 @@ namespace pdflib
       cell.push_back(utils::values::round(line_width)); // 22
       cell.push_back(rgb_stroking_ops); // 23
       cell.push_back(rgb_filling_ops);  // 24
+
+      cell.push_back(mcid);          // 25
+      cell.push_back(get_artifact_type()); // 26
+      cell.push_back(get_artifact_subtype()); // 27
     }
     assert(cell.size()==header.size());
 
@@ -288,6 +357,16 @@ namespace pdflib
 	if(data.size()>22) { line_width         = data.at(22).get<double>(); }
 	if(data.size()>23) { rgb_stroking_ops   = data.at(23).get<std::array<int, 3> >(); }
 	if(data.size()>24) { rgb_filling_ops    = data.at(24).get<std::array<int, 3> >(); }
+
+        mcid = data.size()>25 ? data.at(25).get<int>() : -1;
+        artifact.reset();
+        std::string artifact_type = data.size()>26 ? data.at(26).get<std::string>() : "";
+        std::string artifact_subtype = data.size()>27 ? data.at(27).get<std::string>() : "";
+        if(not artifact_type.empty() or not artifact_subtype.empty())
+          {
+            artifact = std::make_shared<const marked_content_artifact>(
+              marked_content_artifact{std::move(artifact_type), std::move(artifact_subtype)});
+          }
 
         return true;
       }
@@ -350,6 +429,8 @@ namespace pdflib
   
   bool page_item<PAGE_CELL>::merge_with(page_item<PAGE_CELL>& other, double delta)
   {
+    // Linkage describes the first source cell, as before the compact storage
+    // change. Mixed word/line spans do not synthesize a new MCID or artifact.
     if(not has_same_reading_orientation(other))
       {
 	LOG_S(ERROR) << "inconsistent merging of cells!";

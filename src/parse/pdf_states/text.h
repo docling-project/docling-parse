@@ -90,9 +90,27 @@ namespace pdflib
       const std::array<double, 6>& font_matrix,
       const std::array<double, 6>& glyph_matrix);
 
+    // Glyph space -> user space for the glyph at the current text position.
+    std::array<double, 6> compute_type3_matrix(
+      const std::array<double, 6>& font_matrix);
+
     std::array<double, 4> compute_bbox(std::array<double, 8>& rect);
 
   public:
+
+    // A Type3 glyph whose CharProc paints with operators that the glyph
+    // parser of pdf_resource<PAGE_FONT> does not rasterise, such as an image
+    // `Do`. The stream decoder runs the CharProc after the show-string.
+    struct type3_procedure
+    {
+      QPDFObjectHandle charproc;
+      QPDFObjectHandle resources;
+      std::array<double, 6> matrix;
+    };
+
+    // Filled by add_cell() and emptied by the stream decoder after each
+    // show-string, so operator= does not copy it.
+    std::vector<type3_procedure> pending_type3_procedures;
 
     static int block_count;
     static int instr_count;
@@ -233,17 +251,14 @@ namespace pdflib
         return true;
       }
 
-    if(instructions.size()<num_instr) // fatal ...
-      {
-        std::stringstream ss;
-        ss << "#-instructions " << instructions.size()
-           << " does not match expected value " << num_instr
-           << " for PDF operation: "
-           << name;
-
-        LOG_S(ERROR) << ss.str();
-        throw std::logic_error(ss.str());
-      }
+    // Too few operands: one damaged operator is not a reason to drop the
+    // rest of the page (a bit-flipped Flate stream leaves tokens such as
+    // `Tj41.749` behind, and the `Tw` that follows arrives with nothing).
+    // Skip the operator, as other readers do, and carry on.
+    LOG_S(ERROR) << "#-instructions " << instructions.size()
+                 << " does not match expected value " << num_instr
+                 << " for PDF operation: " << name
+                 << " => skipping the operator";
 
     return false;
   }
@@ -312,6 +327,14 @@ namespace pdflib
     //assert(instructions.size()==2);
     if(not verify(instructions, 2, __FUNCTION__) ) { return; }
 
+    if(not instructions[0].is_string() or not instructions[1].is_number())
+      {
+        LOG_S(ERROR) << "Tf operands are not a name and a number: "
+                     << instructions[0].val << " " << instructions[1].val
+                     << " => keeping the current font";
+        return;
+      }
+
     std::string prev_fontname = font_name;
     
     font_name = instructions[0].to_utf8_string();
@@ -358,6 +381,15 @@ namespace pdflib
   {
     //assert(instructions.size()==1);
     if(not verify(instructions, 1, __FUNCTION__) ) { return; }
+
+    // A damaged stream can leave a number where the string belongs
+    // (`3.34 Tj`): skip it, as TJ does for its array items.
+    if(not instructions[0].obj.isString())
+      {
+        LOG_S(ERROR) << "Tj operand is not a string: " << instructions[0].val
+                     << " [" << instructions[0].key << "] => skipping the operator";
+        return;
+      }
 
     instr_count += 1;
 
@@ -663,8 +695,14 @@ namespace pdflib
       bool embedded_glyph_resolved = false;
       bool embedded_glyph_has_ink = false;
       std::array<double, 4> embedded_glyph_bbox = {0.0, 0.0, 0.0, 0.0};
+      // Some producers map the space glyph to a control character (for
+      // example U+0008) in /ToUnicode. Whether such a word-space code is a
+      // space is decided by its glyph below, not by the mapped text.
+      const bool control_word_space =
+        is_pdf_word_space and utils::string::is_control(text);
       if(not font.is_type3() and
-         (font.needs_embedded_glyph_bbox() or text_is_suppressed_glyph) and
+         (font.needs_embedded_glyph_bbox() or text_is_suppressed_glyph or
+          control_word_space) and
          glyph_code >= 0)
         {
           if(glyph_metrics_cache == nullptr)
@@ -696,6 +734,14 @@ namespace pdflib
               font_descent = 0.0;
               font_ascent = 0.0;
               ratio = 1.0;
+            }
+          else if(control_word_space and
+                  ((embedded_glyph_resolved and not embedded_glyph_has_ink) or
+                   (font_blob == nullptr and glyph_name == "space")))
+            {
+              // The glyph paints nothing, so the control character is not
+              // text: expose the space it draws.
+              text = " ";
             }
           else if(has_embedded_glyph_bbox and
                   font.needs_embedded_glyph_bbox())
@@ -893,6 +939,22 @@ namespace pdflib
 	cell.line_width         = grph_state.get_line_width();
 	cell.rgb_stroking_ops   = grph_state.get_rgb_stroking_ops();
 	cell.rgb_filling_ops    = grph_state.get_rgb_filling_ops();
+
+	// The clip in force bounds what of this glyph is visible (8.5.4). The
+	// renderer gets the clip paths through the text instruction below; a
+	// consumer of cells only sees the glyph quad, and the quad of a glyph
+	// that a producer clipped to a table cell lies under the next column.
+	// The shape state keeps the box of the clip in force, so this costs
+	// no scan of the clip paths.
+	std::array<double, 4> clip_bbox = {0.0, 0.0, 0.0, 0.0};
+	if(shape_state.get_clip_bbox(clip_bbox))
+	  {
+	    cell.has_clip_bbox = true;
+	    cell.clip_x0 = clip_bbox[0];
+	    cell.clip_y0 = clip_bbox[1];
+	    cell.clip_x1 = clip_bbox[2];
+	    cell.clip_y1 = clip_bbox[3];
+	  }
       }
       
       if(need_base_text_cells)
@@ -977,6 +1039,7 @@ namespace pdflib
         tinstr.set_clip_state(shape_state.get_clip_state());
         tinstr.set_rendering_mode(rendering_mode);
         tinstr.set_blend_mode(grph_state.get_blend_mode());
+        tinstr.set_soft_mask(grph_state.get_soft_mask_instruction());
         tinstr.set_is_type3(font.is_type3());
 
         // A Type3 glyph is a content-stream procedure, not a font glyph, so
@@ -1031,6 +1094,17 @@ namespace pdflib
                   shape_state.get_clip_state());
 
                 instructions.add_bitmap_instruction(std::move(b3));
+              }
+            else if(not g3)
+              {
+                QPDFObjectHandle charproc =
+                  font.get_type3_charproc(static_cast<uint32_t>(glyph_code));
+                if(charproc.isStream())
+                  {
+                    pending_type3_procedures.push_back(
+                      {charproc, font.get_type3_resources(),
+                       compute_type3_matrix(font.get_font_matrix())});
+                  }
               }
           }
 
@@ -1382,6 +1456,28 @@ namespace pdflib
           trafo_matrix[1]*tx + trafo_matrix[4]*ty + trafo_matrix[7];
       }
     return rect;
+  }
+
+  std::array<double, 6> pdf_state<TEXT>::compute_type3_matrix(
+      const std::array<double, 6>& font_matrix)
+  {
+    // The same mapping as compute_type3_rect() without the CTM, which the
+    // stream decoder applies: /FontMatrix, font size and rise, text matrix.
+    const double a = font_matrix[0]*font_size;
+    const double b = font_matrix[1]*font_size;
+    const double c = font_matrix[2]*font_size;
+    const double d = font_matrix[3]*font_size;
+    const double e = font_matrix[4]*font_size;
+    const double f = font_matrix[5]*font_size + rise;
+
+    return {
+      a*text_matrix[0] + b*text_matrix[3],
+      a*text_matrix[1] + b*text_matrix[4],
+      c*text_matrix[0] + d*text_matrix[3],
+      c*text_matrix[1] + d*text_matrix[4],
+      e*text_matrix[0] + f*text_matrix[3] + text_matrix[6],
+      e*text_matrix[1] + f*text_matrix[4] + text_matrix[7]
+    };
   }
 
   std::array<double, 4> pdf_state<TEXT>::compute_bbox(std::array<double, 8>& rect)

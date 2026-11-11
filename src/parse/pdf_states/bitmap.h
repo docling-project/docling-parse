@@ -4,6 +4,7 @@
 #define PDF_BITMAP_STATE_H
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 
@@ -190,6 +191,10 @@ namespace pdflib
                          std::shared_ptr<std::vector<uint8_t>> indexed_rgb_palette,
                          clip_state_instruction clip_state = clip_state_instruction());
 
+    // Set while a Type3 CharProc runs: its images are the glyph's ink, so
+    // they are tagged as glyph bitmaps.
+    bool paints_type3_glyph = false;
+
   private:
 
     enum visible_bbox_state
@@ -202,6 +207,12 @@ namespace pdflib
     void add_bitmap_instruction(const page_item<PAGE_IMAGE>& image,
                                 clip_state_instruction clip_state,
                                 bitmap_source source);
+
+    // Decodes the image's samples, at 1/2^decode_reduction_shift of the
+    // stored resolution where the codec supports it. Depends on nothing but
+    // the image, so a bitmap_instruction can call it again at render time.
+    static bitmap_samples decode_samples(const page_item<PAGE_IMAGE>& image,
+                                         int decode_reduction_shift);
 
     void populate_geometry(page_item<PAGE_IMAGE>& image,
                            const clip_state_instruction& clip_state) const;
@@ -240,6 +251,7 @@ namespace pdflib
   {}
 
   pdf_state<BITMAP>::pdf_state(const pdf_state<BITMAP>& other):
+    paints_type3_glyph(other.paints_type3_glyph),
     config(other.config),
     grph_state(other.grph_state),
     trafo_matrix(other.trafo_matrix),
@@ -252,6 +264,8 @@ namespace pdflib
 
   pdf_state<BITMAP>& pdf_state<BITMAP>::operator=(const pdf_state<BITMAP>& other)
   {
+    this->paints_type3_glyph = other.paints_type3_glyph;
+
     return *this;
   }
 
@@ -413,7 +427,8 @@ namespace pdflib
 
     page_images.push_back(image);
 
-    add_bitmap_instruction(image, std::move(clip_state), BITMAP_SOURCE_XOBJECT);
+    add_bitmap_instruction(image, std::move(clip_state),
+                           paints_type3_glyph ? BITMAP_SOURCE_TYPE3_GLYPH : BITMAP_SOURCE_XOBJECT);
   }
 
   void pdf_state<BITMAP>::Do_inline_image(
@@ -500,7 +515,8 @@ namespace pdflib
     image.rgb_filling_ops    = grph_state.get_rgb_filling_ops();
 
     page_images.push_back(image);
-    add_bitmap_instruction(image, std::move(clip_state), BITMAP_SOURCE_INLINE);
+    add_bitmap_instruction(image, std::move(clip_state),
+                           paints_type3_glyph ? BITMAP_SOURCE_TYPE3_GLYPH : BITMAP_SOURCE_INLINE);
   }
 
   void pdf_state<BITMAP>::populate_geometry(
@@ -567,13 +583,6 @@ namespace pdflib
                                                  clip_state_instruction clip_state,
                                                  bitmap_source source)
   {
-    std::shared_ptr<std::vector<uint8_t>> pixel_data;
-    std::array<int, 3> pixel_shape = {0, 0, 0};
-    pixel_format fmt = PIXEL_FORMAT_UNKNOWN;
-    cmyk_convention cmyk_conv = CMYK_CONVENTION_UNKNOWN;
-
-    int channels = 0;
-
     // An oversampled image is decoded down to the resolution it is drawn at,
     // when the codec can do that natively. Three cases are held back:
     //
@@ -601,6 +610,74 @@ namespace pdflib
                                       image.image_height,
                                       config.bitmap_target_pixels_per_unit)
       : 0;
+
+    bitmap_samples samples = decode_samples(image, decode_reduction_shift);
+
+    bitmap_instruction binstr(image.xobject_key,
+                              std::move(samples.data),
+                              image.soft_mask_data,
+                              samples.cmyk_conv,
+                              samples.shape,
+                              samples.fmt,
+                              image.image_mask,
+                              image.rgb_filling_ops,
+                              grph_state.get_fill_alpha(),
+                              image.r_x0, image.r_y0,
+                              image.r_x1, image.r_y1,
+                              image.r_x2, image.r_y2,
+                              image.r_x3, image.r_y3,
+                              source,
+                              std::move(clip_state));
+    binstr.set_blend_mode(grph_state.get_blend_mode());
+    binstr.set_soft_mask(grph_state.get_soft_mask_instruction());
+    binstr.set_filters(image.filters);
+
+    // The reduced samples fit a render at the configured scale only. A later
+    // render at a finer scale (PageParseResult.get_image(scale=...)) decodes
+    // the image again from its encoded bytes, which the page keeps anyway.
+    //
+    // Only /DCTDecode and /JPXDecode honour the shift. Every other branch
+    // (Flate, raw, CCITT, JBIG2, or a stream QPDF already decoded) returns
+    // full-resolution samples, which a finer render would only decode again
+    // unchanged, so the re-decoder is kept for samples that really are reduced.
+    const auto& decoded_shape = binstr.get_shape();
+    const bool samples_reduced =
+      binstr.has_data()
+      and (decoded_shape[0] < image.image_height
+           or decoded_shape[1] < image.image_width);
+
+    if(decode_reduction_shift > 0 and samples_reduced)
+      {
+        binstr.set_redecoder(
+          config.bitmap_target_pixels_per_unit,
+          [image, decode_reduction_shift](double target_pixels_per_unit) -> bitmap_samples
+          {
+            const int shift = detail::codec_reduction_shift(image.x1 - image.x0,
+                                                            image.y1 - image.y0,
+                                                            image.image_width,
+                                                            image.image_height,
+                                                            target_pixels_per_unit);
+            if(shift >= decode_reduction_shift)
+              {
+                return {};
+              }
+            return decode_samples(image, shift);
+          });
+      }
+
+    instructions.add_bitmap_instruction(std::move(binstr));
+  }
+
+  bitmap_samples pdf_state<BITMAP>::decode_samples(const page_item<PAGE_IMAGE>& image,
+                                                   int decode_reduction_shift)
+  {
+    std::shared_ptr<std::vector<uint8_t>> pixel_data;
+    std::array<int, 3> pixel_shape = {0, 0, 0};
+    pixel_format fmt = PIXEL_FORMAT_UNKNOWN;
+    cmyk_convention cmyk_conv = CMYK_CONVENTION_UNKNOWN;
+
+    int channels = 0;
+
     auto has_default_adobe_cmyk_decode = [&](std::vector<double> const& decode_array) -> bool
       {
         static constexpr double expected_decode[8] = {
@@ -629,6 +706,28 @@ namespace pdflib
           }
 
         detail::image_phase_timer phase(&detail::image_phase_seconds::decode_array);
+
+        if(ncomps == 1)
+          {
+            const double dmin = image.decode_array[0];
+            const double dmax = image.decode_array[1];
+            if(dmin == 0.0 and dmax == 1.0) { return; }
+
+            // Amortize the table over at least one full byte alphabet; tiny
+            // images keep the scalar path. Use the existing mapping function
+            // so lookup preserves its floating-point rounding and clamping.
+            if(dst->size() >= 256)
+              {
+                std::array<uint8_t, 256> mapping;
+                for(size_t sample = 0; sample < mapping.size(); ++sample)
+                  {
+                    mapping[sample] = jpeg::apply_decode_component(
+                      static_cast<uint8_t>(sample), dmin, dmax);
+                  }
+                for(auto& sample : *dst) { sample = mapping[sample]; }
+                return;
+              }
+          }
 
         const int pair_count = static_cast<int>(image.decode_array.size() / 2);
         for(size_t i = 0; i < dst->size(); ++i)
@@ -1614,25 +1713,7 @@ namespace pdflib
           }
       }
 
-    bitmap_instruction binstr(image.xobject_key,
-                              std::move(pixel_data),
-                              image.soft_mask_data,
-                              cmyk_conv,
-                              pixel_shape,
-                              fmt,
-                              image.image_mask,
-                              image.rgb_filling_ops,
-                              grph_state.get_fill_alpha(),
-                              image.r_x0, image.r_y0,
-                              image.r_x1, image.r_y1,
-                              image.r_x2, image.r_y2,
-                              image.r_x3, image.r_y3,
-                              source,
-                              std::move(clip_state));
-    binstr.set_blend_mode(grph_state.get_blend_mode());
-    binstr.set_filters(image.filters);
-
-    instructions.add_bitmap_instruction(std::move(binstr));
+    return {std::move(pixel_data), pixel_shape, fmt, cmyk_conv};
   }
 
 }

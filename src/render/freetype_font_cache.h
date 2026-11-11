@@ -41,7 +41,7 @@ namespace pdflib
   //     those files, so they are drawn from here instead.
   //
   // Glyph identity is resolved in decreasing order of authority:
-  //   1. CID with identity CIDToGIDMap — the CID is the glyph index;
+  //   1. CID font: the code through /Encoding and /CIDToGIDMap — the glyph index;
   //   2. the glyph name assigned by /Encoding /Differences (FT_Get_Name_Index);
   //   3. the decoded PDF character code through the font's builtin encoding
   //      (Adobe custom / standard / Latin-1, and MS symbol with the 0xF000
@@ -603,13 +603,16 @@ namespace pdflib
   {
     glyph_indices.clear();
 
-    // CID-keyed font with identity CIDToGIDMap: the character code is the
-    // CID is the glyph index.
-    if(blob->get_is_cid_font() and blob->get_cid_to_gid_identity() and char_code >= 0)
+    // CID-keyed font with a /CIDToGIDMap (identity or stream): the
+    // character code selects a CID, which the map turns into the glyph index.
+    if(blob->has_code_to_gid() and char_code >= 0)
       {
-        if(char_code < entry.face->num_glyphs)
+        const uint32_t gid = blob->code_to_gid(char_code);
+        // An explicit map sends unused codes to GID 0 (.notdef): no glyph.
+        const bool mapped = blob->get_cid_to_gid_identity() or gid != 0;
+        if(mapped and gid < static_cast<uint32_t>(entry.face->num_glyphs))
           {
-            glyph_indices.push_back(static_cast<FT_UInt>(char_code));
+            glyph_indices.push_back(static_cast<FT_UInt>(gid));
             return true;
           }
         return false;

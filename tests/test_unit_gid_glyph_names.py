@@ -173,7 +173,7 @@ def test_symbol_follows_declared_winansi_where_it_has_the_glyph():
         base_font="XXXXXX+Symbol",
         text="a\xd7b",
     )
-    assert text == "α×β"
+    assert text == "\u03b1\u00d7\u03b2"
 
 
 def test_default_config_replaces_gid_markers():

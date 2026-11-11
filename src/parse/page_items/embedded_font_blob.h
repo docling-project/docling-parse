@@ -32,7 +32,8 @@ namespace pdflib
                        bool is_cid_font,
                        bool cid_to_gid_identity,
                        bool uses_builtin_encoding,
-                       std::shared_ptr<const std::vector<uint8_t> > bytes);
+                       std::shared_ptr<const std::vector<uint8_t> > bytes,
+                       std::vector<uint16_t> code_to_gid_map);
 
     // Content-derived identity (FNV-1a over the decoded bytes + size).
     // PDF object ids are NOT used: they are only unique within one document,
@@ -52,6 +53,24 @@ namespace pdflib
 
     // /CIDToGIDMap is /Identity or absent
     bool get_cid_to_gid_identity() const { return cid_to_gid_identity; }
+
+    // True when a CID font's character codes address glyphs directly: an
+    // identity /CIDToGIDMap, or a /CIDToGIDMap stream whose CIDs the
+    // /Encoding CMap resolves.
+    bool has_code_to_gid() const
+    {
+      return is_cid_font and (cid_to_gid_identity or not code_to_gid_map.empty());
+    }
+
+    // Glyph index of a PDF character code under has_code_to_gid(). An
+    // identity map takes the code itself, as before (exact for
+    // Identity-H/V); an unmapped code gives GID 0.
+    uint32_t code_to_gid(int64_t code) const
+    {
+      if(cid_to_gid_identity) { return static_cast<uint32_t>(code); }
+      return (code >= 0 and static_cast<size_t>(code) < code_to_gid_map.size())
+        ? code_to_gid_map[static_cast<size_t>(code)] : 0;
+    }
 
     // True for a simple font that is symbolic (/FontDescriptor /Flags bit 3)
     // and has no /Encoding override: its PDF character codes address the
@@ -83,6 +102,10 @@ namespace pdflib
     bool uses_builtin_encoding;
 
     std::shared_ptr<const std::vector<uint8_t> > bytes;
+
+    // /CIDToGIDMap stream composed with the /Encoding CMap (code -> GID);
+    // empty when the map is identity or absent, or its CIDs are unresolved
+    std::vector<uint16_t> code_to_gid_map;
   };
 
   inline embedded_font_blob::embedded_font_blob():
@@ -94,7 +117,8 @@ namespace pdflib
     is_cid_font(false),
     cid_to_gid_identity(false),
     uses_builtin_encoding(false),
-    bytes(nullptr)
+    bytes(nullptr),
+    code_to_gid_map()
   {}
 
   inline embedded_font_blob::embedded_font_blob(std::string cache_key_,
@@ -105,7 +129,8 @@ namespace pdflib
                                                 bool is_cid_font_,
                                                 bool cid_to_gid_identity_,
                                                 bool uses_builtin_encoding_,
-                                                std::shared_ptr<const std::vector<uint8_t> > bytes_):
+                                                std::shared_ptr<const std::vector<uint8_t> > bytes_,
+                                                std::vector<uint16_t> code_to_gid_map_):
     cache_key(std::move(cache_key_)),
     font_name(std::move(font_name_)),
     base_font(std::move(base_font_)),
@@ -114,7 +139,8 @@ namespace pdflib
     is_cid_font(is_cid_font_),
     cid_to_gid_identity(cid_to_gid_identity_),
     uses_builtin_encoding(uses_builtin_encoding_),
-    bytes(std::move(bytes_))
+    bytes(std::move(bytes_)),
+    code_to_gid_map(std::move(code_to_gid_map_))
   {}
 
   inline bool embedded_font_blob::has_bytes() const
