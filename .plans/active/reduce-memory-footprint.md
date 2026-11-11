@@ -1,10 +1,11 @@
 # Reduce the native parser's memory footprint
 
 Date: 2026-11-11.
-Status: step 4a Form streaming validated by native experiments and 153 focused tests.
+Status: step 4b appearance streaming source written; user compilation and validation pending.
+Step 4a Form streaming is validated by native experiments and 153 focused tests.
 Step 2 native recheck and carried-forward semantic coverage passed.
 Step 3 native smoke/scaling, Form timing recheck and focused semantic coverage passed.
-Step 1 core scaling is reviewed. Remaining step-4 entry points and step 5 have not started.
+Step 1 core scaling is reviewed. Type 3, soft-mask, pattern-cache work and step 5 have not started.
 The preliminary state-reset audit is in progress.
 Initial C++ reproduction and structural investigation are complete.
 
@@ -912,6 +913,7 @@ Suggested comparison rows:
 - [x] Write step 3 page callback implementation, boundedness diagnostics and recovery regressions; native user runs passed.
 - [x] Step 3 checkpoint: ordinary page memory gain verified; fresh Form callback timing within +5%; focused semantic suite passed.
 - [x] Step 4a checkpoint: Form-only callback implementation, native smoke/scaling/reuse and 153 focused semantic tests passed.
+- [x] Write step 4b appearance/widget callback implementation, native comparison fixtures and six semantic cases; user builds/tests/measurements pending.
 - [ ] Step 4: Nested content and intentional-cache audit; results verified.
 - [ ] Step 5: Real-document, corpus and threaded validation; comparison path retired.
 
@@ -2253,6 +2255,299 @@ Step 5 remains open for real-document, corpus and threaded/integration coverage
 and eventual removal of the temporary buffered comparison paths. The missing-
 reset audit also remains open for unexamined lifetimes. Do not infer a second
 missing-clear defect from legitimate clipping history or remaining output cost.
+
+## Cycle 5 handoff — Step 4b: stream annotation appearances
+
+Date: 2026-11-11.
+Authorization: after the Form checkpoint passed, Codex proposed appearance/widget
+streams as the next bounded patch and the user said "continue".
+Status: appearance-source conversion and validation harness written; compilation,
+semantic tests and measurements await the user.
+
+### Production change and ordering
+
+decode_ap_stream() formerly decoded its entire source into the STREAM decoder's
+token vector, installed the appearance matrix, and interpreted the vector.
+It now installs that same matrix first and calls decode_and_interprete().
+
+The matrix must be installed before decoding because a QPDF callback can execute
+the first drawing/text operator immediately. set_base_matrix() also establishes
+the existing pattern-space anchor; the callback lifecycle preserves that state.
+
+The existing shared decode_ap_stream() path covers widget and rendered markup
+annotation appearances. The patch preserves:
+
+- /AP/N stream selection and /AS lookup for appearance-state dictionaries.
+- AP-local font lookup followed by AcroForm /DR and page-font fallback.
+- Existing graphics-state, colorspace, shading, pattern and XObject resolution.
+- The composed /Matrix and transformed /BBox-to-/Rect fit.
+- Temporary appearance cells/shapes/images/render instructions and existing
+  merge order, widget cell tagging and widget-frame/background filtering.
+- Step-3 logical-stream finalization, damaged-source recovery and consumer/
+  allocation exception ownership.
+- The ordinary Form callback path when an appearance invokes a Form.
+
+No user-facing configuration switch is added. The buffered appearance path is
+retained only behind DOCLING_PARSE_BUFFERED_AP_CONTENTS in native comparison
+targets. This is one buffered vector in the old appearance decoder; unlike the
+old ordinary Form path, it does not add a second interpreter vector copy.
+
+The existing appearance resource/merge behavior is kept; this conversion does
+not expand supported annotation rendering or fix unrelated resource/merge gaps.
+Type 3 and soft-mask source entry points and cached pattern replay remain later
+step-4 work.
+
+### Ownership, output memory and timing
+
+decode_ap_stream() already receives its QPDF handle by value. The owning document,
+handle, local resources, interpreter and operand vector remain alive throughout
+synchronous callback decoding. The child output objects retain their values as
+before; no temporary source-token reference is cached.
+
+Appearance execution still builds temporary output containers and copies selected
+results into the page. Their lifetimes can overlap, and render instructions and
+page elements still consume memory. Removing the token list does not imply that
+appearance memory will equal direct-page memory or become independent of output.
+
+The existing decode_annots timing includes source decoding, execution and merging.
+No additional per-token clocks or artificial split between parsing and execution
+are introduced. Native process wall time and peak RSS remain the acceptance
+measurements, with a +5% slowdown allowance.
+
+### Native comparison targets
+
+| Executable | Page source | Ordinary Form source | Appearance source |
+| --- | --- | --- | --- |
+| test_memory_on_lines | Callback | Callback | Callback |
+| test_memory_on_lines_buffered_appearances | Callback | Callback | Buffered |
+| test_memory_on_lines_buffered_forms | Callback | Buffered | Callback |
+| test_memory_on_lines_buffered | Buffered | Buffered | Buffered |
+
+All probe targets enable the same diagnostic definition. Normal production
+builds use callback appearances without probe aggregation.
+
+The original step-4a executable is preserved at:
+
+- /private/tmp/docling-memory-before-step4b
+- SHA-256: 20193d8cace138734c51c32efe8488104f97131e8bf955717d845e17f76f6d72
+
+The hash matches the saved step-4 scaling metadata. It is useful for old-layout
+regression rechecks. That old executable cannot generate/select the new
+appearance fixtures, so the new same-source buffered-appearance target is the
+primary reference for this cycle. A snapshot of today's source while running
+an old executable must not be mistaken for that executable's compiled source.
+
+### Probe diagnostics and scope
+
+PAGE exposes scalar appearance statistics through a native-only getter.
+Aggregation is compiled only into diagnostic probes, after each appearance
+source returns. Counters reset when annotation decoding begins.
+
+The probe reports:
+
+- appearance_content_delivery and appearance_diagnostics.
+- appearance_executions and appearance_widget_executions.
+- appearance_source_objects and appearance_source_bytes_observed.
+- appearance_materialized_tokens: cumulative token records stored by all
+  top-level appearance decoders, not simultaneous live tokens or allocated bytes.
+- appearance_max_buffered_token_capacity: maximum final source-vector capacity
+  across those decoders; this is not a peak measure of every parser allocation.
+- appearance_max_pending_operands.
+
+These counters cover selected top-level annotation appearance sources. They do
+not roll Forms invoked inside an AP into its own source-object count. The
+existing page_* fields still cover page /Contents; form_* fields cover the
+ordinary page/Form invocation tree, excluding separate AP interpreter trees.
+
+For valid generated AP grids with L unique lines and R selected appearances:
+
+- Page /Contents is an empty stream: zero page source objects/bytes/operands.
+- AP executions = R; widget executions = R only for the widget layout.
+- AP source objects = R * (7 * L + 2).
+- AP observed source bytes = R * leaf content_bytes.
+- Callback AP materialization and final buffered capacity = zero.
+- Buffered AP materialization = the AP source-object count, with enough vector
+  capacity for one leaf's token list.
+- Pending AP operands peak at two; page-tree Form execution counters are zero.
+- keep_shapes=false yields no emitted shape output but still consumes the AP.
+
+The byte-count equality is for valid generated fixtures. Recovery can report
+source bytes across more than one attempt; do not treat it as unique bytes for
+arbitrary damaged PDFs.
+
+### New native fixtures and launcher behavior
+
+The C++ generator adds:
+
+- pathstorm-appearance N PDF [appearances=1]: a /Stamp AP with the grid.
+- pathstorm-widget N PDF [appearances=1]: a /Btn widget AP with the grid.
+
+The AP /BBox and annotation /Rect match the direct grid page, and its matrix is
+identity. The page source is empty. Repeated annotations share one AP stream
+but each selected appearance executes; generation stays in a separate process.
+
+The launcher offers these opt-in layouts:
+
+| Layout | Selected APs | Role |
+| --- | ---: | --- |
+| appearance | 1 | Markup annotation |
+| widget | 1 | Widget selection and frame-filter path |
+| appearance-repeat | 4 by default | Shared AP, repeatedly interpreted |
+
+--appearance-repeats controls the last layout. Existing default layouts remain
+direct/form/form-repeat/form-nested, so earlier commands retain their scope.
+
+Raw qpdf-discard/collect modes use the generated marker to select the first AP
+source once. They do not execute annotations or multiply token counts by AP
+invocations. All raw layouts should expose the same grid source signature.
+
+The launcher validates the new counters on every decoded run, stores them in
+summary.csv and keeps the tabulate memory/runtime tables. Metadata records the
+appearance repeat setting and snapshots the new regression source too. Older
+saved direct/Form baselines remain readable.
+
+The image checker compares direct versus single appearance/widget output when
+those layouts are in one matrix, as well as baseline/candidate images. Repeated
+appearance pixels are compared to the corresponding repeated baseline.
+
+### New focused semantic tests
+
+tests/test_unit_appearance_streaming.py adds six cases:
+
+1. A /Stamp AP with a rotated, nonzero BBox and an inherited page Form: the
+   fitted matrix must be active from the first callback, and the nested Form
+   must see the AP's local half-opacity resource.
+2. The corresponding /Widget case exercises the same transform and local-state
+   requirements through widget handling.
+3–5. Two widgets select the same /Yes appearance at distinct rectangles; only
+   the selected content is emitted twice. The font is supplied respectively by
+   AP /Resources, AcroForm /DR, or page resources.
+6. A recoverable Flate prefix with an unclosed ActualText scope keeps literal
+   text, then a following annotation still emits its own text exactly once.
+
+These supplement existing widget frame/background/mark tests and AcroForm
+metadata tests. They are written and syntax-checked, not executed by Codex.
+
+### First user commands: configure and build
+
+~~~sh
+cmake -S . -B build -DDOCLING_PARSE_BUILD_MEMORY_PROBE=ON
+
+cmake --build build --parallel 2 --target \
+  test_memory_on_lines \
+  test_memory_on_lines_buffered_appearances \
+  stream_callback_regression
+
+ctest --test-dir build --output-on-failure -R '^stream_callback_regression$'
+~~~
+
+The generic callback regression is still useful but does not replace the new
+AP fixtures and semantic tests.
+
+### First user experiment: small appearance matrix
+
+~~~sh
+uv run python3 tests/cpp/run_memory_on_lines.py \
+  --exe build/test_memory_on_lines_buffered_appearances \
+  --output /private/tmp/docling-memory-step4b-buffered-appearances-smoke \
+  --layouts direct,form,appearance,widget,appearance-repeat \
+  --sizes 1000 --repeats 1
+
+uv run python3 tests/cpp/run_memory_on_lines.py \
+  --output /private/tmp/docling-memory-step4b-smoke \
+  --baseline /private/tmp/docling-memory-step4b-buffered-appearances-smoke \
+  --layouts direct,form,appearance,widget,appearance-repeat \
+  --sizes 1000 --repeats 1
+~~~
+
+Each run has 25 measurements. Require matched counters and all five baseline
+PNGs, equivalent direct/single-Form/single-AP/widget images, correct AP selection
+counts, zero callback AP vector materialization/capacity, and bounded operands.
+
+One repetition at 1,000 lines is a structural/correctness gate. Return compile,
+counter or image failures first; do not interpret these short process times as
+a runtime regression or established speedup.
+
+### User semantic validation
+
+Rebuild the extension, then run the new cases and the established focused suite,
+adding AcroForm metadata coverage:
+
+~~~sh
+uv run --no-sync python local_build.py
+
+uv run --no-sync pytest \
+  tests/test_unit_appearance_streaming.py \
+  tests/test_unit_widget_appearances.py \
+  tests/test_unit_acroform_widgets.py \
+  tests/test_unit_form_streaming.py \
+  tests/test_unit_split_content_streams.py \
+  tests/test_unit_damaged_content_streams.py \
+  tests/test_unit_actual_text.py \
+  tests/test_unit_image_decode.py \
+  tests/test_unit_clipping.py \
+  tests/test_unit_patterns.py \
+  tests/test_unit_type3_fonts.py \
+  tests/test_unit_soft_masks.py \
+  tests/test_unit_transparency.py -q
+~~~
+
+Do not count the previous 153 passing tests as validation of this newly compiled
+appearance path. Return new failures without changing ground truth or weakening
+assertions.
+
+### Scaling after the small gate
+
+Use a fresh buffered-appearance reference with the same current source, since
+the earlier result matrices do not contain the new AP layouts:
+
+~~~sh
+uv run python3 tests/cpp/run_memory_on_lines.py \
+  --exe build/test_memory_on_lines_buffered_appearances \
+  --output /private/tmp/docling-memory-step4b-buffered-appearances-scaling \
+  --sizes 125000,250000 --layouts direct,appearance,widget \
+  --modes decode,skip-shapes,render --repeats 3
+
+uv run python3 tests/cpp/run_memory_on_lines.py \
+  --output /private/tmp/docling-memory-step4b-scaling \
+  --baseline /private/tmp/docling-memory-step4b-buffered-appearances-scaling \
+  --sizes 125000,250000 --layouts direct,appearance,widget \
+  --modes decode,skip-shapes,render --repeats 3 --slowdown-limit-pct 5
+~~~
+
+Each scaling matrix has 54 measurements. Start at these sizes because AP output
+temporaries and page-output copies may make its memory larger than a direct or
+ordinary Form case even after source token retention disappears.
+
+Hypotheses to measure, not claimed results:
+
+- Callback APs materialize no complete source-token vector.
+- Shapes-disabled APs show a clear memory reduction.
+- Full output peak memory falls, with remaining temporary/page copies explained.
+- Direct controls remain similar and interpretation/render time stays within +5%.
+- Counters, output order and PNGs remain equivalent.
+
+After reviewing those results, a bounded shared-AP reuse check can use
+--sizes 125000 --layouts appearance-repeat --modes decode,skip-shapes,render
+--repeats 3 in fresh baseline/candidate directories. Four APs then paint roughly
+500k lines. Agree on larger/reuse runs from the intermediate evidence.
+
+### Pending decision and remaining entry points
+
+| Item | Status |
+| --- | --- |
+| Page/Form checkpoint from earlier cycles | Native measurements and 153 focused tests passed |
+| Appearance/widget source implementation | Written for this cycle |
+| New native/AP smoke and semantic checks | Awaiting user |
+| AP memory/runtime scaling | Awaiting user after the small gate |
+| Accept/revise AP patch | Pending joint review |
+| Type 3 and soft-mask source conversion | Not started |
+| Tiling-pattern cache/copy audit | Not started |
+| Broad corpus/threaded validation and fallback retirement | Step 5, not started |
+
+Codex performed source review, Python AST parsing and whitespace checks, and
+preserved/hashed the old native executable. Codex did not compile, run CTest or
+pytest, generate PDFs or collect new performance measurements in this cycle.
 
 ## Questions to answer from the intermediate results
 

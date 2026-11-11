@@ -18,6 +18,19 @@
 namespace pdflib
 {
 
+  // Native probe diagnostics for top-level annotation appearance sources.
+  // Output containers and Forms invoked by an appearance have separate storage.
+  struct appearance_stream_statistics
+  {
+    std::size_t executions = 0;
+    std::size_t widget_executions = 0;
+    std::size_t source_objects = 0;
+    std::size_t source_bytes_observed = 0;
+    std::size_t materialized_tokens = 0;
+    std::size_t max_buffered_token_capacity = 0;
+    std::size_t max_pending_operands = 0;
+  };
+
   template<>
   class pdf_decoder<PAGE>
   {
@@ -101,6 +114,7 @@ namespace pdflib
     pdf_render_instructions& get_instructions() { return instructions; }
 
     const content_stream_statistics& get_content_statistics() const { return content_stats; }
+    const appearance_stream_statistics& get_appearance_statistics() const { return appearance_stats; }
 
     // Export this page as a standalone one-page PDF.
     void save_pdf_page(std::filesystem::path const& out_path) const;
@@ -205,6 +219,7 @@ namespace pdflib
 
     page_item<PAGE_DIMENSION> page_dimension;
     content_stream_statistics content_stats;
+    appearance_stream_statistics appearance_stats;
 
     page_item<PAGE_CELLS>  page_cells;
     page_item<PAGE_CELLS>  char_cells;
@@ -1301,6 +1316,8 @@ namespace pdflib
   {
     LOG_S(INFO) << __FUNCTION__;
 
+    appearance_stats = {};
+
     load_acroform_dr_fonts();
 
     if(not qpdf_page.isDictionary())
@@ -1877,9 +1894,29 @@ namespace pdflib
     const std::array<double, 6> ap_matrix = appearance_matrix(ap_stream, bbox);
 
     std::vector<qpdf_stream_instruction> parameters;
+#ifdef DOCLING_PARSE_BUFFERED_AP_CONTENTS
+    // Temporary native reference for isolating appearance-source retention.
     stream_decoder.decode(ap_stream);
     stream_decoder.set_base_matrix(ap_matrix);
     stream_decoder.interprete(parameters);
+#else
+    // Interpretation starts in the QPDF callback, so seed the transform first.
+    stream_decoder.set_base_matrix(ap_matrix);
+    stream_decoder.decode_and_interprete(ap_stream, parameters);
+#endif
+
+#ifdef DOCLING_PARSE_CONTENT_DIAGNOSTICS
+    const auto& source_stats = stream_decoder.get_content_statistics();
+    ++appearance_stats.executions;
+    appearance_stats.widget_executions += is_widget;
+    appearance_stats.source_objects += source_stats.source_objects;
+    appearance_stats.source_bytes_observed += source_stats.source_bytes_observed;
+    appearance_stats.materialized_tokens += source_stats.buffered_tokens;
+    appearance_stats.max_buffered_token_capacity = std::max(
+      appearance_stats.max_buffered_token_capacity, source_stats.buffered_token_capacity);
+    appearance_stats.max_pending_operands = std::max(
+      appearance_stats.max_pending_operands, source_stats.max_pending_operands);
+#endif
 
     // Shapes drawn by the appearance stream (field borders, backgrounds,
     // check marks drawn as paths, ...): keep them in the parsed output and

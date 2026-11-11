@@ -12,8 +12,10 @@
 // process-lifetime high-water mark.
 // Generation variants: solid, dash-each, dash-once, dash-q, empty-each,
 // pathstorm (the grid generator from docling#4058, with its rounded line count).
-// test_memory_on_lines_buffered buffers both page and Form content.
+// test_memory_on_lines_buffered buffers page, Form and appearance sources.
 // test_memory_on_lines_buffered_forms streams pages and buffers Forms.
+// test_memory_on_lines_buffered_appearances buffers only annotation appearances.
+// Generate pathstorm-appearance/pathstorm-widget N PDF [appearances=1].
 // page_* fields cover /Contents only. form_* diagnostics aggregate Do calls
 // through that page's ordinary Form tree, not other buffered entry points.
 #include <parse.h>
@@ -50,6 +52,11 @@ constexpr const char* page_content_delivery = "callback";
 constexpr const char* form_content_delivery = "buffered";
 #else
 constexpr const char* form_content_delivery = "callback";
+#endif
+#ifdef DOCLING_PARSE_BUFFERED_AP_CONTENTS
+constexpr const char* appearance_content_delivery = "buffered";
+#else
+constexpr const char* appearance_content_delivery = "callback";
 #endif
 
 void snapshot(const std::string& stage, int pause_seconds, json details = json::object())
@@ -117,13 +124,28 @@ private:
   bool eof_reached = false;
 };
 
-// Select only our explicitly marked generated Form chain. Arbitrary PDFs keep
-// the original first-page /Contents behavior; this is not a general Do executor.
+// Select only our marked generated Form chain or first appearance source.
+// Arbitrary PDFs keep first-page /Contents; this is not a general Do/AP executor.
 QPDFObjectHandle selected_content(QPDFObjectHandle page, json& details)
 {
   auto content = page.getKey("/Contents");
   details["measured_stream"] = "page";
   details["stream_executions"] = 1;
+  auto appearance_count = page.getKey("/MemoryProbeAppearanceCount");
+  if(not appearance_count.isNull())
+    {
+      if(not appearance_count.isInteger() or appearance_count.getIntValue()<1)
+        { throw std::runtime_error("invalid generated appearance count"); }
+      auto annots = page.getKey("/Annots");
+      if(not annots.isArray() or annots.getArrayNItems()!=appearance_count.getIntValue())
+        { throw std::runtime_error("generated annotation count differs"); }
+      auto appearance = annots.getArrayItem(0).getKey("/AP").getKey("/N");
+      if(not appearance.isStream())
+        { throw std::runtime_error("generated appearance source is missing"); }
+      details["measured_stream"] = "appearance";
+      details["page_appearance_count"] = appearance_count.getIntValue();
+      return appearance;
+    }
   auto depth_obj = page.getKey("/MemoryProbeFormDepth");
   if(depth_obj.isNull()) { return content; }
   if(not depth_obj.isInteger())
@@ -187,17 +209,19 @@ void generate(const std::string& variant, std::size_t requested,
   if(requested<10 or requested>static_cast<std::size_t>(std::numeric_limits<int>::max()))
     { throw std::invalid_argument("line count must be 10..INT_MAX"); }
   const bool form = variant=="pathstorm-form";
+  const bool widget = variant=="pathstorm-widget";
+  const bool appearance = variant=="pathstorm-appearance" or widget;
   if(depth<1 or depth>32)
     { throw std::invalid_argument("Form depth must be 1..32"); }
-  if(not form and (repeats!=1 or depth!=1))
-    { throw std::invalid_argument("repeat/depth arguments require pathstorm-form"); }
+  if((not form and not appearance and repeats!=1) or (not form and depth!=1))
+    { throw std::invalid_argument("repeat arguments require Forms/appearances; depth requires Forms"); }
   if(variant!="solid" and variant!="dash-each" and variant!="dash-once" and
-     variant!="dash-q" and variant!="empty-each" and variant!="pathstorm" and not form)
+     variant!="dash-q" and variant!="empty-each" and variant!="pathstorm" and not form and not appearance)
     { throw std::invalid_argument("unknown PDF variant"); }
 
   std::ostringstream ops;
   std::size_t lines = 0;
-  const bool grid = variant=="pathstorm" or form;
+  const bool grid = variant=="pathstorm" or form or appearance;
   if(grid)
     {
       // Match the published generator, including the rounding of each grid.
@@ -247,6 +271,7 @@ void generate(const std::string& variant, std::size_t requested,
     { throw std::overflow_error("total painted line count is out of range"); }
   const std::string bbox = grid ? "595 842" : "1190 842";
   std::string resources = "<< >>", marker;
+  std::string catalog_fields;
   std::string page_content = content;
   if(form)
     {
@@ -256,8 +281,18 @@ void generate(const std::string& variant, std::size_t requested,
       page_content.clear();
       for(std::size_t i=0; i<repeats; ++i) { page_content += "q /Fm0 Do Q\n"; }
     }
+  if(appearance)
+    {
+      page_content.clear();
+      std::string refs;
+      for(std::size_t i=0; i<repeats; ++i)
+        { refs += std::to_string(6+i) + " 0 R "; }
+      marker = " /MemoryProbeAppearanceCount " + std::to_string(repeats) +
+               " /Annots [" + refs + "]";
+      if(widget) { catalog_fields = " /AcroForm << /Fields [" + refs + "] >>"; }
+    }
   std::vector<std::string> objects = {
-    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Catalog /Pages 2 0 R" + catalog_fields + " >>",
     "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
     "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 " + bbox +
       "] /Resources " + resources + marker + " /Contents 4 0 R >>",
@@ -273,6 +308,18 @@ void generate(const std::string& variant, std::size_t requested,
           const std::string extra = " /Type /XObject /Subtype /Form /FormType 1"
             " /BBox [0 0 " + bbox + "] /Matrix [1 0 0 1 0 0] /Resources " + local_resources;
           objects.push_back(stream_object(leaf ? content : "q /Fm0 Do Q\n", true, extra));
+        }
+    }
+  if(appearance)
+    {
+      objects.push_back(stream_object(content, true,
+        " /Type /XObject /Subtype /Form /BBox [0 0 " + bbox +
+        "] /Matrix [1 0 0 1 0 0] /Resources << >>"));
+      for(std::size_t i=0; i<repeats; ++i)
+        {
+          objects.push_back("<< /Type /Annot /Subtype " + std::string(widget ? "/Widget" : "/Stamp") +
+            " /Rect [0 0 " + bbox + "] /F 4 /AP << /N 5 0 R >>" +
+            (widget ? " /FT /Btn /T (probe" + std::to_string(i) + ")" : "") + " >>");
         }
     }
   std::ofstream out(filename, std::ios::binary);
@@ -291,7 +338,9 @@ void generate(const std::string& variant, std::size_t requested,
   out.close();
   std::cout << json{{"variant", variant}, {"requested_lines", requested},
                    {"unique_lines", lines}, {"lines", lines*repeats},
-                   {"form_repeats", repeats}, {"form_depth", form ? depth : 0},
+                   {"form_repeats", form ? repeats : 1}, {"form_depth", form ? depth : 0},
+                   {"appearance_count", appearance ? repeats : 0},
+                   {"widget_count", widget ? repeats : 0},
                    {"content_bytes", content.size()}, {"pdf_bytes", std::filesystem::file_size(filename)}}.dump()
             << std::endl;
 }
@@ -308,6 +357,7 @@ void measure(std::string mode, std::string filename, int pause_seconds, const st
             {"qpdf_version", QPDF::QPDFVersion()},
             {"page_content_delivery", page_content_delivery},
             {"form_content_delivery", form_content_delivery},
+            {"appearance_content_delivery", appearance_content_delivery},
             {"sizeof_token", sizeof(pdflib::qpdf_stream_instruction)},
             {"sizeof_page_shape", sizeof(pdflib::page_item<pdflib::PAGE_SHAPE>)},
             {"sizeof_shape_instruction", sizeof(pdflib::shape_instruction)},
@@ -367,6 +417,7 @@ void measure(std::string mode, std::string filename, int pause_seconds, const st
   auto page = document.decode_page(0, config);
   if(not page) { throw std::runtime_error("page decode failed"); }
   const auto& content_stats = page->get_content_statistics();
+  const auto& appearance_stats = page->get_appearance_statistics();
   const auto& shapes = page->get_instructions().get_shape_instructions();
   std::size_t dash_entries = 0, max_dash = 0, points = 0, subpaths = 0, segments = 0;
   std::size_t geometry_bytes = 0, page_dash_entries = 0;
@@ -419,7 +470,16 @@ void measure(std::string mode, std::string filename, int pause_seconds, const st
             {"form_source_objects", content_stats.form_source_objects},
             {"form_materialized_tokens", content_stats.form_materialized_tokens},
             {"form_max_pending_operands", content_stats.form_max_pending_operands},
-            {"form_max_depth", content_stats.form_max_depth}});
+            {"form_max_depth", content_stats.form_max_depth},
+            {"appearance_content_delivery", appearance_content_delivery},
+            {"appearance_diagnostics", content_stats.operand_diagnostics_enabled},
+            {"appearance_executions", appearance_stats.executions},
+            {"appearance_widget_executions", appearance_stats.widget_executions},
+            {"appearance_source_objects", appearance_stats.source_objects},
+            {"appearance_source_bytes_observed", appearance_stats.source_bytes_observed},
+            {"appearance_materialized_tokens", appearance_stats.materialized_tokens},
+            {"appearance_max_buffered_token_capacity", appearance_stats.max_buffered_token_capacity},
+            {"appearance_max_pending_operands", appearance_stats.max_pending_operands}});
   if(mode=="render")
     {
       pdflib::render_config render_config;
@@ -444,8 +504,8 @@ int main(int argc, char** argv)
           const auto count = positive_count(argv[3]);
           const auto repeats = argc>=6 ? positive_count(argv[5]) : 1;
           const auto depth = argc>=7 ? positive_count(argv[6]) : 1;
-          if(argc>5 and std::string(argv[2])!="pathstorm-form")
-            { throw std::invalid_argument("repeat/depth arguments require pathstorm-form"); }
+          if(argc>6 and std::string(argv[2])!="pathstorm-form")
+            { throw std::invalid_argument("depth argument requires pathstorm-form"); }
           generate(argv[2], count, argv[4], repeats, depth);
         }
       else if(argc>=4 and argc<=6 and std::string(argv[1])=="measure")
@@ -459,7 +519,7 @@ int main(int argc, char** argv)
         }
       else
         {
-          std::cerr << "Usage: " << argv[0] << " generate VARIANT N PDF [form_repeats] [form_depth]\n"
+          std::cerr << "Usage: " << argv[0] << " generate VARIANT N PDF [repeats] [form_depth]\n"
                     << "       " << argv[0] << " measure {qpdf-discard|collect|tokens|decode|render|skip-shapes} PDF [pause_seconds] [out.png]\n";
           return 2;
         }
