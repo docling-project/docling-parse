@@ -236,6 +236,25 @@ if(DOCLING_PARSE_BUILD_STRUCTURE_TESTS)
     target_link_libraries(structure_concurrency PRIVATE ${DEPENDENCIES} ${LIB_LINK})
 endif()
 
+option(DOCLING_PARSE_BUILD_MEMORY_PROBE "Build the native line-memory probe" OFF)
+if(DOCLING_PARSE_BUILD_MEMORY_PROBE)
+    foreach(probe_target test_memory_on_lines test_memory_on_lines_buffered)
+        add_executable(${probe_target} tests/cpp/test_memory_on_lines.cpp)
+        add_dependencies(${probe_target} ${DEPENDENCIES})
+        target_link_libraries(${probe_target} PRIVATE ${DEPENDENCIES} ${LIB_LINK})
+        target_compile_definitions(${probe_target} PRIVATE DOCLING_PARSE_CONTENT_DIAGNOSTICS=1)
+    endforeach()
+    # Temporary comparison path, restricted to this standalone executable.
+    target_compile_definitions(test_memory_on_lines_buffered PRIVATE DOCLING_PARSE_BUFFERED_PAGE_CONTENTS=1)
+
+    add_executable(stream_callback_regression tests/cpp/test_stream_callbacks.cpp)
+    add_dependencies(stream_callback_regression ${DEPENDENCIES})
+    target_link_libraries(stream_callback_regression PRIVATE ${DEPENDENCIES} ${LIB_LINK})
+    enable_testing()
+    add_test(NAME stream_callback_regression COMMAND stream_callback_regression)
+    set_tests_properties(stream_callback_regression PROPERTIES TIMEOUT 30)
+endif()
+
 # Test the native library directly: the renderer's curve-flattening workaround
 # (#407) otherwise bypasses the stroker routines patched for #396/#400/#401.
 option(DOCLING_PARSE_BUILD_BLEND2D_TESTS "Build native Blend2D patch regression tests" OFF)

@@ -5,6 +5,8 @@
 
 #include <cstring>
 #include <exception>
+#include <new>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -20,7 +22,13 @@ namespace pdflib
   {
   public:
 
+    using instruction_consumer = void (*)(void*, qpdf_stream_instruction&);
+
     qpdf_stream_decoder(std::vector<qpdf_stream_instruction>& stream_);
+    qpdf_stream_decoder(instruction_consumer consumer_, void* context_);
+
+    std::size_t get_objects_delivered() const { return objects_delivered; }
+    std::size_t get_source_bytes_observed() const { return source_bytes_observed; }
     ~qpdf_stream_decoder();
 
     void print();
@@ -38,11 +46,21 @@ namespace pdflib
     
   private:
 
+    qpdf_stream_decoder();
+
     void        decode_each_stream(QPDFObjectHandle& contents);
     void        decode_damaged_stream(QPDFObjectHandle& content);
     std::string inflate_prefix(QPDFObjectHandle& content);
 
-    std::vector<qpdf_stream_instruction>& stream;
+    // Buffered delivery and immediate consumption share token normalization
+    // and damaged-stream recovery. The consumer/context are borrowed only for
+    // the synchronous decode call; no token reference escapes that call.
+    std::vector<qpdf_stream_instruction>* stream = nullptr;
+    instruction_consumer consumer = nullptr;
+    void* context = nullptr;
+    std::exception_ptr consumer_failure;
+    std::size_t objects_delivered = 0;
+    std::size_t source_bytes_observed = 0;
 
     std::regex value_pattern_0;
     std::regex value_pattern_1;
@@ -50,8 +68,21 @@ namespace pdflib
   };
 
   qpdf_stream_decoder::qpdf_stream_decoder(std::vector<qpdf_stream_instruction>& stream_):
+    qpdf_stream_decoder()
+  {
+    stream = &stream_;
+  }
+
+  qpdf_stream_decoder::qpdf_stream_decoder(instruction_consumer consumer_, void* context_):
+    qpdf_stream_decoder()
+  {
+    if(not consumer_) { throw std::invalid_argument("missing content instruction consumer"); }
+    consumer = consumer_;
+    context = context_;
+  }
+
+  qpdf_stream_decoder::qpdf_stream_decoder():
     QPDFObjectHandle::ParserCallbacks(),
-    stream(stream_),
 
     value_pattern_0(R"(^(\d\.\d+)(\-\d+)$)"),
     value_pattern_1(R"(^((\-)?\d+\.\d*)(\-)(\d*)$)"), // need to deal with numbers that have random `-` in the middle 
@@ -63,7 +94,8 @@ namespace pdflib
 
   void qpdf_stream_decoder::print()
   {
-    for(auto row:stream)
+    if(not stream) { return; }
+    for(auto row:*stream)
       {
         LOG_S(INFO) << std::setw(12) << row.key << " | " << row.val;
       }
@@ -73,14 +105,23 @@ namespace pdflib
   {
     LOG_S(INFO) << "start decoding content-stream: " << content.getTypeName() << " -> " << content.unparse();
 
-    stream.clear();
+    if(stream) { stream->clear(); }
+    objects_delivered = 0;
+    source_bytes_observed = 0;
+    consumer_failure = nullptr;
 
     try
       {
         QPDFObjectHandle::parseContentStream(content, this);
       }
+    catch(const std::bad_alloc&)
+      {
+        throw;
+      }
     catch(std::exception& e)
       {
+        // Interpreter failures are not source corruption and must never retry.
+        if(consumer_failure) { std::rethrow_exception(consumer_failure); }
         LOG_S(ERROR) << "QPDF encountered error (" << e.what() << ") during decoding";
 
         // QPDF runs the whole stream through its filters before it hands
@@ -88,11 +129,11 @@ namespace pdflib
         // through a damaged stream leaves nothing at all, although every
         // operator in front of the error inflated fine. A tokenizer error
         // instead arrives after the tokens before it, and those are kept.
-        if(stream.empty() and content.isArray())
+        if(objects_delivered==0 and content.isArray())
           {
             decode_each_stream(content);
           }
-        else if(stream.empty())
+        else if(objects_delivered==0)
           {
             decode_damaged_stream(content);
           }
@@ -114,17 +155,23 @@ namespace pdflib
             continue;
           }
 
-        std::size_t size_before = stream.size();
+        std::size_t delivered_before = objects_delivered;
         try
           {
             QPDFObjectHandle::parseContentStream(item, this);
           }
+        catch(const std::bad_alloc&)
+          {
+            throw;
+          }
         catch(std::exception& e)
           {
+            // Interpreter failures are not source corruption and must never retry.
+            if(consumer_failure) { std::rethrow_exception(consumer_failure); }
             LOG_S(ERROR) << "QPDF encountered error (" << e.what()
                          << ") during decoding of content stream " << i;
 
-            if(stream.size()==size_before)
+            if(objects_delivered==delivered_before)
               {
                 decode_damaged_stream(item);
               }
@@ -170,8 +217,14 @@ namespace pdflib
 
         QPDFObjectHandle::parseContentStream(content, this);
       }
+    catch(const std::bad_alloc&)
+      {
+        throw;
+      }
     catch(std::exception& e)
       {
+        // Interpreter failures are not source corruption and must never retry.
+        if(consumer_failure) { std::rethrow_exception(consumer_failure); }
         LOG_S(ERROR) << "QPDF encountered error (" << e.what()
                      << ") while decoding the recovered content";
       }
@@ -356,12 +409,30 @@ namespace pdflib
 	  }
       }
     
-    stream.push_back(row);
+    if(stream)
+      {
+        stream->push_back(row);
+      }
+    else
+      {
+        try
+          {
+            consumer(context, row);
+          }
+        catch(...)
+          {
+            consumer_failure = std::current_exception();
+            throw;
+          }
+      }
+    ++objects_delivered;
   }
 
   void qpdf_stream_decoder::contentSize(size_t len)
   {
-    //LOG_S(INFO) << __FUNCTION__ << ": " << len;
+    // QPDF can notify again during damaged-stream fallback; this is observed
+    // source bytes across attempts, not a claim of unique input bytes.
+    source_bytes_observed += len;
   }
 
   void qpdf_stream_decoder::handleEOF()

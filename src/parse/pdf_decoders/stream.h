@@ -6,6 +6,23 @@
 namespace pdflib
 {
 
+  // Diagnostics for this decoder's own source stream, not its nested Forms.
+  // Operand high-water tracking is enabled only in the optional native probes.
+  struct content_stream_statistics
+  {
+    bool callback_delivery = false;
+    std::size_t source_objects = 0;
+    std::size_t source_bytes_observed = 0;
+    std::size_t buffered_tokens = 0;
+    std::size_t buffered_token_capacity = 0;
+    std::size_t max_pending_operands = 0;
+#ifdef DOCLING_PARSE_CONTENT_DIAGNOSTICS
+    static constexpr bool operand_diagnostics_enabled = true;
+#else
+    static constexpr bool operand_diagnostics_enabled = false;
+#endif
+  };
+
   template<>
   class pdf_decoder<STREAM>
   {
@@ -39,6 +56,12 @@ namespace pdflib
     // decode the qpdf-stream
     void decode(QPDFObjectHandle& content);
 
+    // Interpret ordinary page content as normalized QPDF objects arrive.
+    void decode_and_interprete(QPDFObjectHandle& content,
+                               std::vector<qpdf_stream_instruction>& parameters);
+
+    const content_stream_statistics& get_content_statistics() const { return content_stats; }
+
     // methods used to interprete the stream
     void interprete(std::vector<qpdf_stream_instruction>& parameters);
 
@@ -58,6 +81,13 @@ namespace pdflib
 
 
     void interprete_stream(std::vector<qpdf_stream_instruction>& parameters);
+
+    // Stream lifecycle is separate from delivery. Callers establish/rebase the
+    // graphics stack before beginning; pending operands stay with the caller.
+    void begin_interpretation();
+    inline void consume_instruction(qpdf_stream_instruction& inst,
+                                    std::vector<qpdf_stream_instruction>& parameters);
+    void finish_interpretation();
 
     pdf_state<GLOBAL>&  current_global_state(); // get current global state
     pdf_state<TEXT>&    current_text_state(); // get current text state
@@ -229,6 +259,7 @@ namespace pdflib
     std::unordered_set<std::string> unknown_operators;
 
     std::vector<qpdf_stream_instruction> stream;
+    content_stream_statistics content_stats;
     std::vector<pdf_state<GLOBAL> > stack;
 
     int stack_count;
@@ -356,6 +387,46 @@ namespace pdflib
 
     qpdf_stream_decoder decoder(stream);
     decoder.decode(qpdf_content);
+    content_stats = {};
+    content_stats.source_objects = decoder.get_objects_delivered();
+    content_stats.source_bytes_observed = decoder.get_source_bytes_observed();
+    content_stats.buffered_tokens = stream.size();
+    content_stats.buffered_token_capacity = stream.capacity();
+  }
+
+  void pdf_decoder<STREAM>::decode_and_interprete(
+    QPDFObjectHandle& content,
+    std::vector<qpdf_stream_instruction>& parameters)
+  {
+    content_stats = {};
+    content_stats.callback_delivery = true;
+    // This entry point does not retain a previously buffered source either.
+    std::vector<qpdf_stream_instruction>().swap(stream);
+    ensure_stack();
+    begin_interpretation();
+
+    struct consumer_context
+    {
+      pdf_decoder<STREAM>* decoder;
+      std::vector<qpdf_stream_instruction>* parameters;
+    };
+    consumer_context context{this, &parameters};
+    const auto consumer = [](void* opaque, qpdf_stream_instruction& inst)
+      {
+        auto& state = *static_cast<consumer_context*>(opaque);
+        state.decoder->consume_instruction(inst, *state.parameters);
+      };
+
+    // No std::function allocation and no accumulated vector of source tokens.
+    // A consumer failure propagates through decode(), not damaged-PDF recovery.
+    qpdf_stream_decoder decoder(consumer, &context);
+    decoder.decode(content);
+    content_stats.source_objects = decoder.get_objects_delivered();
+    content_stats.source_bytes_observed = decoder.get_source_bytes_observed();
+
+    // QPDF may report EOF for each fallback component. Finalize exactly once
+    // here, after the entire logical /Contents has been consumed successfully.
+    finish_interpretation();
   }
 
   void pdf_decoder<STREAM>::ensure_stack()
@@ -443,6 +514,10 @@ namespace pdflib
     LOG_S(INFO) << __FUNCTION__;
 
     stream = stream_;
+    content_stats = {};
+    content_stats.source_objects = stream.size();
+    content_stats.buffered_tokens = stream.size();
+    content_stats.buffered_token_capacity = stream.capacity();
 
     interprete_stream(parameters_);
 
@@ -456,6 +531,20 @@ namespace pdflib
   {
     LOG_S(INFO) << __FUNCTION__;
 
+    begin_interpretation();
+
+    // Nested entry points and the native comparison target retain buffered
+    // delivery through the same instruction consumer as ordinary page callbacks.
+    for(int l=0; l<stream.size(); l++)
+      {
+        consume_instruction(stream[l], parameters);
+      }
+
+    finish_interpretation();
+  }
+
+  void pdf_decoder<STREAM>::begin_interpretation()
+  {
     // Pattern space is anchored to the space in effect at the START of this
     // content stream, not to whatever the CTM happens to be when a pattern is
     // painted (ISO 32000-1, 8.7.3.1): for a page that is the default user
@@ -464,61 +553,68 @@ namespace pdflib
     // one of the interprete() overloads only left the other one, the one pages
     // go through, with nothing to anchor to.
     capture_base_ctm();
+  }
 
-    for(int l=0; l<stream.size(); l++)
+  inline void pdf_decoder<STREAM>::consume_instruction(
+    qpdf_stream_instruction& inst,
+    std::vector<qpdf_stream_instruction>& parameters)
+  {
+    if(inst.obj.isInlineImage())
       {
-        qpdf_stream_instruction& inst = stream[l];
-
-        if(inst.obj.isInlineImage())
-          {
-            read_inline_image_data(inst);
-          }
-        else if(inst.key=="operator")
-          {
-            for(auto itr=parameters.begin(); itr!=parameters.end(); )
-              {
-                if(itr->key=="null" and itr->val=="null") // this can happen if you have an empty array/dict
-                  {
-                    LOG_S(ERROR) << "\t" << std::setw(12) << itr->key << " | " << itr->val << " => erasing ...";
-                    itr = parameters.erase(itr);
-                  }
-                else
-                  {
-                    LOG_S(INFO) << "\t" << std::setw(12) << itr->key << " | " << itr->val;
-                    itr++;
-                  }
-              }
-            LOG_S(INFO) << " --> " << std::setw(12) << inst.key << " | " << inst.val;
-
-            // An operand of the wrong type, a resource that fails to load, a
-            // malformed inline image: in a damaged stream any of these can
-            // surface as an exception from one operator. That operator is
-            // lost either way; the ones after it need not be. Log it and go
-            // on, as mupdf does ("ignoring error during interpretation").
-            // Resource exhaustion (std::bad_alloc) is not caught here.
-            try
-              {
-                execute_operator(inst, parameters);
-              }
-            catch(const std::logic_error& e)
-              {
-                LOG_S(ERROR) << "operator " << inst.val << " failed (" << e.what()
-                             << ") => skipping the operator";
-              }
-            catch(const std::runtime_error& e)
-              {
-                LOG_S(ERROR) << "operator " << inst.val << " failed (" << e.what()
-                             << ") => skipping the operator";
-              }
-
-            parameters.clear();
-          }
-        else
-          {
-            parameters.push_back(inst);
-          }
+        read_inline_image_data(inst);
       }
+    else if(inst.key=="operator")
+      {
+        for(auto itr=parameters.begin(); itr!=parameters.end(); )
+          {
+            if(itr->key=="null" and itr->val=="null") // this can happen if you have an empty array/dict
+              {
+                LOG_S(ERROR) << "\t" << std::setw(12) << itr->key << " | " << itr->val << " => erasing ...";
+                itr = parameters.erase(itr);
+              }
+            else
+              {
+                LOG_S(INFO) << "\t" << std::setw(12) << itr->key << " | " << itr->val;
+                itr++;
+              }
+          }
+        LOG_S(INFO) << " --> " << std::setw(12) << inst.key << " | " << inst.val;
 
+        // An operand of the wrong type, a resource that fails to load, a
+        // malformed inline image: in a damaged stream any of these can
+        // surface as an exception from one operator. That operator is
+        // lost either way; the ones after it need not be. Log it and go
+        // on, as mupdf does ("ignoring error during interpretation").
+        // Resource exhaustion (std::bad_alloc) is not caught here.
+        try
+          {
+            execute_operator(inst, parameters);
+          }
+        catch(const std::logic_error& e)
+          {
+            LOG_S(ERROR) << "operator " << inst.val << " failed (" << e.what()
+                         << ") => skipping the operator";
+          }
+        catch(const std::runtime_error& e)
+          {
+            LOG_S(ERROR) << "operator " << inst.val << " failed (" << e.what()
+                         << ") => skipping the operator";
+          }
+
+        parameters.clear();
+      }
+    else
+      {
+        parameters.push_back(inst);
+      }
+#ifdef DOCLING_PARSE_CONTENT_DIAGNOSTICS
+    content_stats.max_pending_operands = std::max(content_stats.max_pending_operands,
+                                                parameters.size());
+#endif
+  }
+
+  void pdf_decoder<STREAM>::finish_interpretation()
+  {
     if(marked_content_stack.size()>0)
       {
         LOG_S(WARNING) << "content stream ended with " << marked_content_stack.size()

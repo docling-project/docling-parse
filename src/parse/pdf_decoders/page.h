@@ -100,6 +100,8 @@ namespace pdflib
     // Get render instructions collected during decode
     pdf_render_instructions& get_instructions() { return instructions; }
 
+    const content_stream_statistics& get_content_statistics() const { return content_stats; }
+
     // Export this page as a standalone one-page PDF.
     void save_pdf_page(std::filesystem::path const& out_path) const;
 
@@ -202,6 +204,7 @@ namespace pdflib
     nlohmann::json json_annots;
 
     page_item<PAGE_DIMENSION> page_dimension;
+    content_stream_statistics content_stats;
 
     page_item<PAGE_CELLS>  page_cells;
     page_item<PAGE_CELLS>  char_cells;
@@ -1210,36 +1213,44 @@ namespace pdflib
                                        instructions,
                                        timings);
 
-    // Split decode_contents into: page content-stream tokenization
-    // (content_decode_total) vs. operator-execution self-time
-    // (interprete_ops_total). The latter is the interpretation wall time minus
-    // the sub-work attributed to other buckets (resource set(), parse_stream,
-    // do_image, do_form machinery) while interpreting -- see note_attributed().
-    double interprete_seconds = 0.0;
-    double attributed_before  = timings.attributed_total();
-
+    const double attributed_before = timings.attributed_total();
     std::vector<qpdf_stream_instruction> parameters;
+
+#ifdef DOCLING_PARSE_BUFFERED_PAGE_CONTENTS
+    // Temporary native comparison build: preserve the two-stage baseline.
+    double interprete_seconds = 0.0;
     {
       utils::timer content_decode_timer;
       stream_decoder.decode(contents);
       timings.add_timing(pdf_timings::KEY_CONTENT_DECODE_TOTAL, content_decode_timer.get_time());
     }
-    //stream_decoder.print();
-
     {
       utils::timer interprete_timer;
       stream_decoder.interprete(parameters);
-      interprete_seconds += interprete_timer.get_time();
+      interprete_seconds = interprete_timer.get_time();
     }
+    const double attributed_during = timings.attributed_total() - attributed_before;
+    timings.add_timing(pdf_timings::KEY_INTERPRETE_OPS_TOTAL,
+                       interprete_seconds - attributed_during);
+#else
+    // QPDF parsing and interpretation are interleaved. Report their combined
+    // self-time, excluding already-attributed nested work. Timing every token
+    // to reconstruct the old split would add overhead to the production path.
+    {
+      utils::timer content_timer;
+      stream_decoder.decode_and_interprete(contents, parameters);
+      const double elapsed = content_timer.get_time();
+      const double attributed_during = timings.attributed_total() - attributed_before;
+      timings.add_timing(pdf_timings::KEY_CONTENT_PARSE_INTERPRETE_TOTAL,
+                         std::max(0.0, elapsed - attributed_during));
+    }
+#endif
+    content_stats = stream_decoder.get_content_statistics();
 
     if(parameters.size()>0)
       {
         LOG_S(WARNING) << "page content is ending with non-zero number of parameters";
       }
-
-    double attributed_during = timings.attributed_total() - attributed_before;
-    timings.add_timing(pdf_timings::KEY_INTERPRETE_OPS_TOTAL,
-                       interprete_seconds - attributed_during);
   }
 
   void pdf_decoder<PAGE>::load_acroform_dr_fonts()
