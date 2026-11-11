@@ -12,12 +12,16 @@
 // process-lifetime high-water mark.
 // Generation variants: solid, dash-each, dash-once, dash-q, empty-each,
 // pathstorm (the grid generator from docling#4058, with its rounded line count).
-// test_memory_on_lines_buffered buffers page, Form, appearance and Type3 sources.
+// test_memory_on_lines_buffered buffers page, Form, appearance, Type3 and mask sources.
 // test_memory_on_lines_buffered_forms streams pages and buffers Forms.
 // test_memory_on_lines_buffered_appearances buffers only annotation appearances.
 // test_memory_on_lines_buffered_type3 buffers only procedural CharProcs.
+// test_memory_on_lines_buffered_soft_masks buffers only soft-mask groups.
+// test_memory_on_lines_copied_patterns copies only pattern replay sources.
 // Generate pathstorm-appearance/pathstorm-widget N PDF [appearances=1].
 // Generate pathstorm-type3 N PDF [glyphs=1] for procedural CharProc delivery.
+// Generate pathstorm-soft-mask N PDF [paints=1] for one cached mask group.
+// Generate pathstorm-pattern[-lattice] N PDF [fills=1] for pattern replay.
 // page_* fields cover /Contents only. form_* diagnostics aggregate Do calls
 // through that page's ordinary Form tree, not other buffered entry points.
 #include <parse.h>
@@ -64,6 +68,16 @@ constexpr const char* appearance_content_delivery = "callback";
 constexpr const char* type3_content_delivery = "buffered";
 #else
 constexpr const char* type3_content_delivery = "callback";
+#endif
+#ifdef DOCLING_PARSE_BUFFERED_SOFT_MASK_CONTENTS
+constexpr const char* soft_mask_content_delivery = "buffered";
+#else
+constexpr const char* soft_mask_content_delivery = "callback";
+#endif
+#ifdef DOCLING_PARSE_COPY_PATTERN_CONTENTS
+constexpr const char* pattern_content_delivery = "copied";
+#else
+constexpr const char* pattern_content_delivery = "borrowed";
 #endif
 
 void snapshot(const std::string& stage, int pause_seconds, json details = json::object())
@@ -138,6 +152,31 @@ QPDFObjectHandle selected_content(QPDFObjectHandle page, json& details)
   auto content = page.getKey("/Contents");
   details["measured_stream"] = "page";
   details["stream_executions"] = 1;
+  auto pattern_fills = page.getKey("/MemoryProbePatternFills");
+  if(not pattern_fills.isNull())
+    {
+      if(not pattern_fills.isInteger() or pattern_fills.getIntValue()<1)
+        { throw std::runtime_error("invalid generated pattern fill count"); }
+      auto cell = page.getKey("/Resources").getKey("/Pattern").getKey("/P0");
+      if(not cell.isStream())
+        { throw std::runtime_error("generated pattern cell is missing"); }
+      details["measured_stream"] = "pattern_cell";
+      details["page_pattern_fills"] = pattern_fills.getIntValue();
+      return cell;
+    }
+  auto mask_paints = page.getKey("/MemoryProbeSoftMaskPaints");
+  if(not mask_paints.isNull())
+    {
+      if(not mask_paints.isInteger() or mask_paints.getIntValue()<1)
+        { throw std::runtime_error("invalid generated soft-mask paint count"); }
+      auto group = page.getKey("/Resources").getKey("/ExtGState")
+        .getKey("/GS").getKey("/SMask").getKey("/G");
+      if(not group.isStream())
+        { throw std::runtime_error("generated soft-mask group is missing"); }
+      details["measured_stream"] = "soft_mask_group";
+      details["page_soft_mask_paints"] = mask_paints.getIntValue();
+      return group;
+    }
   auto type3_repeats = page.getKey("/MemoryProbeType3Repeats");
   if(not type3_repeats.isNull())
     {
@@ -232,17 +271,20 @@ void generate(const std::string& variant, std::size_t requested,
   const bool widget = variant=="pathstorm-widget";
   const bool appearance = variant=="pathstorm-appearance" or widget;
   const bool type3 = variant=="pathstorm-type3";
+  const bool soft_mask = variant=="pathstorm-soft-mask";
+  const bool lattice = variant=="pathstorm-pattern-lattice";
+  const bool pattern = variant=="pathstorm-pattern" or lattice;
   if(depth<1 or depth>32)
     { throw std::invalid_argument("Form depth must be 1..32"); }
-  if((not form and not appearance and not type3 and repeats!=1) or (not form and depth!=1))
-    { throw std::invalid_argument("repeats require Forms/appearances/Type3; depth requires Forms"); }
+  if((not form and not appearance and not type3 and not soft_mask and not pattern and repeats!=1) or (not form and depth!=1))
+    { throw std::invalid_argument("repeats require Forms/appearances/Type3/masks/patterns; depth requires Forms"); }
   if(variant!="solid" and variant!="dash-each" and variant!="dash-once" and
-     variant!="dash-q" and variant!="empty-each" and variant!="pathstorm" and not form and not appearance and not type3)
+     variant!="dash-q" and variant!="empty-each" and variant!="pathstorm" and not form and not appearance and not type3 and not soft_mask and not pattern)
     { throw std::invalid_argument("unknown PDF variant"); }
 
   std::ostringstream ops;
   std::size_t lines = 0;
-  const bool grid = variant=="pathstorm" or form or appearance or type3;
+  const bool grid = variant=="pathstorm" or form or appearance or type3 or soft_mask or pattern;
   if(grid)
     {
       // Match the published generator, including the rounding of each grid.
@@ -323,6 +365,24 @@ void generate(const std::string& variant, std::size_t requested,
         { page_content += "1 0 0 1 0 0 Tm (a) Tj\n"; }
       page_content += "ET\n";
     }
+  if(soft_mask)
+    {
+      resources = "<< /ExtGState << /GS << /SMask << /S /Alpha /G 5 0 R >> >> >> >>";
+      marker = " /MemoryProbeSoftMaskPaints " + std::to_string(repeats);
+      page_content.clear();
+      // Every gs installs the same entry at the same CTM. Only one mask group
+      // should be decoded; its N strokes cover each of these black rectangles.
+      for(std::size_t i=0; i<repeats; ++i)
+        { page_content += "/GS gs 0 0 595 842 re f\n"; }
+    }
+  if(pattern)
+    {
+      resources = "<< /Pattern << /P0 5 0 R >> >>";
+      marker = " /MemoryProbePatternFills " + std::to_string(repeats);
+      page_content = "/Pattern cs /P0 scn\n";
+      for(std::size_t i=0; i<repeats; ++i)
+        { page_content += "0 0 595 842 re f\n"; }
+    }
   std::vector<std::string> objects = {
     "<< /Type /Catalog /Pages 2 0 R" + catalog_fields + " >>",
     "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
@@ -363,6 +423,22 @@ void generate(const std::string& variant, std::size_t requested,
       objects.push_back("<< /g 7 0 R >>");
       objects.push_back(stream_object(content, true));
     }
+  if(soft_mask)
+    {
+      objects.push_back(stream_object(content, true,
+        " /Type /XObject /Subtype /Form /BBox [0 0 " + bbox +
+        "] /Resources << >> /Group << /S /Transparency /CS /DeviceGray >>"));
+    }
+  if(pattern)
+    {
+      // A page-sized step uses the decoded-tile cache. Doubling both steps
+      // selects lattice replay at indices [0,1] x [0,1]: four executions.
+      const std::string pattern_box = lattice ? "1190 1684" : "595 842";
+      objects.push_back(stream_object(content, true,
+        " /Type /Pattern /PatternType 1 /PaintType 1 /TilingType 1"
+        " /BBox [0 0 " + pattern_box + "] /XStep " + (lattice ? "1190" : "595") +
+        " /YStep " + (lattice ? "1684" : "842") + " /Resources << >>"));
+    }
   std::ofstream out(filename, std::ios::binary);
   out.exceptions(std::ios::failbit | std::ios::badbit);
   out << "%PDF-1.4\n";
@@ -383,6 +459,9 @@ void generate(const std::string& variant, std::size_t requested,
                    {"appearance_count", appearance ? repeats : 0},
                    {"widget_count", widget ? repeats : 0},
                    {"type3_repeats", type3 ? repeats : 0},
+                   {"soft_mask_paints", soft_mask ? repeats : 0},
+                   {"pattern_fills", pattern ? repeats : 0},
+                   {"pattern_lattice_cells_per_fill", lattice ? 4 : 0},
                    {"page_content_bytes", page_content.size()},
                    {"content_bytes", content.size()}, {"pdf_bytes", std::filesystem::file_size(filename)}}.dump()
             << std::endl;
@@ -402,6 +481,8 @@ void measure(std::string mode, std::string filename, int pause_seconds, const st
             {"form_content_delivery", form_content_delivery},
             {"appearance_content_delivery", appearance_content_delivery},
             {"type3_content_delivery", type3_content_delivery},
+            {"soft_mask_content_delivery", soft_mask_content_delivery},
+            {"pattern_content_delivery", pattern_content_delivery},
             {"sizeof_token", sizeof(pdflib::qpdf_stream_instruction)},
             {"sizeof_page_shape", sizeof(pdflib::page_item<pdflib::PAGE_SHAPE>)},
             {"sizeof_shape_instruction", sizeof(pdflib::shape_instruction)},
@@ -462,6 +543,8 @@ void measure(std::string mode, std::string filename, int pause_seconds, const st
   if(not page) { throw std::runtime_error("page decode failed"); }
   const auto& content_stats = page->get_content_statistics();
   const auto& appearance_stats = page->get_appearance_statistics();
+  const auto& soft_mask_stats = page->get_soft_mask_statistics();
+  const auto& pattern_stats = page->get_pattern_statistics();
   const auto& shapes = page->get_instructions().get_shape_instructions();
   std::size_t dash_entries = 0, max_dash = 0, points = 0, subpaths = 0, segments = 0;
   std::size_t geometry_bytes = 0, page_dash_entries = 0;
@@ -532,7 +615,31 @@ void measure(std::string mode, std::string filename, int pause_seconds, const st
             {"type3_materialized_tokens", content_stats.type3_materialized_tokens},
             {"type3_max_pending_operands", content_stats.type3_max_pending_operands},
             {"type3_max_depth", content_stats.type3_max_depth},
-            {"type3_recursion_skips", content_stats.type3_recursion_skips}});
+            {"type3_recursion_skips", content_stats.type3_recursion_skips},
+            {"soft_mask_content_delivery", soft_mask_content_delivery},
+            {"soft_mask_diagnostics", content_stats.operand_diagnostics_enabled},
+            {"soft_mask_executions", soft_mask_stats.executions},
+            {"soft_mask_cache_hits", soft_mask_stats.cache_hits},
+            {"soft_mask_source_objects", soft_mask_stats.source_objects},
+            {"soft_mask_source_bytes_observed", soft_mask_stats.source_bytes_observed},
+            {"soft_mask_materialized_tokens", soft_mask_stats.materialized_tokens},
+            {"soft_mask_max_buffered_token_capacity", soft_mask_stats.max_buffered_token_capacity},
+            {"soft_mask_max_pending_operands", soft_mask_stats.max_pending_operands},
+            {"soft_mask_shape_instructions", soft_mask_stats.shape_instructions},
+            {"pattern_content_delivery", pattern_content_delivery},
+            {"pattern_diagnostics", content_stats.operand_diagnostics_enabled},
+            {"pattern_source_parses", pattern_stats.source_parses},
+            {"pattern_source_cache_hits", pattern_stats.source_cache_hits},
+            {"pattern_cached_tokens", pattern_stats.cached_tokens},
+            {"pattern_cached_token_capacity", pattern_stats.cached_token_capacity},
+            {"pattern_decoded_cells", pattern_stats.decoded_cells},
+            {"pattern_decoded_cache_hits", pattern_stats.decoded_cache_hits},
+            {"pattern_decoded_shape_instructions", pattern_stats.decoded_shape_instructions},
+            {"pattern_lattice_executions", pattern_stats.lattice_executions},
+            {"pattern_replay_source_objects", pattern_stats.replay_source_objects},
+            {"pattern_replay_materialized_tokens", pattern_stats.replay_materialized_tokens},
+            {"pattern_max_replay_token_capacity", pattern_stats.max_replay_token_capacity},
+            {"pattern_max_pending_operands", pattern_stats.max_pending_operands}});
   if(mode=="render")
     {
       pdflib::render_config render_config;

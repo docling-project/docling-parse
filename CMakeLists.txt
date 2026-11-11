@@ -243,7 +243,9 @@ if(DOCLING_PARSE_BUILD_MEMORY_PROBE)
             test_memory_on_lines_buffered
             test_memory_on_lines_buffered_forms
             test_memory_on_lines_buffered_appearances
-            test_memory_on_lines_buffered_type3)
+            test_memory_on_lines_buffered_type3
+            test_memory_on_lines_buffered_soft_masks
+            test_memory_on_lines_copied_patterns)
         add_executable(${probe_target} tests/cpp/test_memory_on_lines.cpp)
         add_dependencies(${probe_target} ${DEPENDENCIES})
         target_link_libraries(${probe_target} PRIVATE ${DEPENDENCIES} ${LIB_LINK})
@@ -252,10 +254,13 @@ if(DOCLING_PARSE_BUILD_MEMORY_PROBE)
     # Temporary references isolate source buffering in each converted path.
     target_compile_definitions(test_memory_on_lines_buffered PRIVATE
         DOCLING_PARSE_BUFFERED_PAGE_CONTENTS=1 DOCLING_PARSE_BUFFERED_FORM_CONTENTS=1
-        DOCLING_PARSE_BUFFERED_AP_CONTENTS=1 DOCLING_PARSE_BUFFERED_TYPE3_CONTENTS=1)
+        DOCLING_PARSE_BUFFERED_AP_CONTENTS=1 DOCLING_PARSE_BUFFERED_TYPE3_CONTENTS=1
+        DOCLING_PARSE_BUFFERED_SOFT_MASK_CONTENTS=1 DOCLING_PARSE_COPY_PATTERN_CONTENTS=1)
     target_compile_definitions(test_memory_on_lines_buffered_forms PRIVATE DOCLING_PARSE_BUFFERED_FORM_CONTENTS=1)
     target_compile_definitions(test_memory_on_lines_buffered_appearances PRIVATE DOCLING_PARSE_BUFFERED_AP_CONTENTS=1)
     target_compile_definitions(test_memory_on_lines_buffered_type3 PRIVATE DOCLING_PARSE_BUFFERED_TYPE3_CONTENTS=1)
+    target_compile_definitions(test_memory_on_lines_buffered_soft_masks PRIVATE DOCLING_PARSE_BUFFERED_SOFT_MASK_CONTENTS=1)
+    target_compile_definitions(test_memory_on_lines_copied_patterns PRIVATE DOCLING_PARSE_COPY_PATTERN_CONTENTS=1)
 
     add_executable(stream_callback_regression tests/cpp/test_stream_callbacks.cpp)
     add_dependencies(stream_callback_regression ${DEPENDENCIES})

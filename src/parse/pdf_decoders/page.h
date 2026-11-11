@@ -115,6 +115,8 @@ namespace pdflib
 
     const content_stream_statistics& get_content_statistics() const { return content_stats; }
     const appearance_stream_statistics& get_appearance_statistics() const { return appearance_stats; }
+    const soft_mask_stream_statistics& get_soft_mask_statistics() const { return soft_mask_stats; }
+    const pattern_stream_statistics& get_pattern_statistics() const { return pattern_stats; }
 
     // Export this page as a standalone one-page PDF.
     void save_pdf_page(std::filesystem::path const& out_path) const;
@@ -220,6 +222,8 @@ namespace pdflib
     page_item<PAGE_DIMENSION> page_dimension;
     content_stream_statistics content_stats;
     appearance_stream_statistics appearance_stats;
+    soft_mask_stream_statistics soft_mask_stats;
+    pattern_stream_statistics pattern_stats;
 
     page_item<PAGE_CELLS>  page_cells;
     page_item<PAGE_CELLS>  char_cells;
@@ -1261,6 +1265,8 @@ namespace pdflib
     }
 #endif
     content_stats = stream_decoder.get_content_statistics();
+    soft_mask_stats = stream_decoder.get_soft_mask_statistics();
+    pattern_stats = stream_decoder.get_pattern_statistics();
 
     if(parameters.size()>0)
       {

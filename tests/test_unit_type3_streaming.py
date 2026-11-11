@@ -5,8 +5,15 @@ from __future__ import annotations
 import zlib
 
 import pytest
+from docling_core.types.doc.page import TextCellUnit
 
-from tests.pdf_builder import build_pdf, content_stream, render_page, stream_object
+from tests.pdf_builder import (
+    build_pdf,
+    content_stream,
+    parse_page,
+    render_page,
+    stream_object,
+)
 
 
 @pytest.mark.parametrize("damaged", [False, True])
@@ -44,6 +51,35 @@ def test_queued_charprocs_keep_font_resources_and_restore_parent_state(
     for x in (40, 80):
         assert image.getpixel((x, 149)) == pytest.approx((255, 128, 128), abs=2)
     assert image.getpixel((160, 159)) == pytest.approx((191, 191, 255), abs=2)
+
+
+def test_eager_repair_preserves_damaged_cached_glyph_bounds() -> None:
+    # The font's declared box is deliberately loose. Eager validation must
+    # repair the usable prefix before lazy mask analysis computes ink bounds;
+    # otherwise analysis fails and the text cell falls back to the wrong box.
+    source = b"1 0 -10 -10 10 10 d1\n0 -0.2 0.6 1 re f\n"
+    encoder = zlib.compressobj()
+    damaged = encoder.compress(source) + encoder.flush(zlib.Z_SYNC_FLUSH) + b"\x07"
+    pdf = build_pdf(
+        [
+            "<< /Type /Catalog /Pages 2 0 R >>",
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] "
+            "/Resources << /Font << /T3 5 0 R >> >> /Contents 4 0 R >>",
+            content_stream("BT /T3 100 Tf 50 50 Td (a) Tj ET"),
+            "<< /Type /Font /Subtype /Type3 /FontBBox [-10 -10 10 10] "
+            "/FontMatrix [1 0 0 1 0 0] /CharProcs 6 0 R "
+            "/Encoding << /Type /Encoding /Differences [97 /a] >> "
+            "/FirstChar 97 /LastChar 97 /Widths [1] /Resources << >> >>",
+            "<< /a 7 0 R >>",
+            stream_object("/Filter /FlateDecode", damaged),
+        ]
+    )
+    cells = list(parse_page(pdf).iterate_cells(TextCellUnit.CHAR))
+    assert len(cells) == 1
+    box = cells[0].rect.to_bounding_box()
+    assert box.width == pytest.approx(60.0, abs=0.1)
+    assert box.height == pytest.approx(100.0, abs=0.1)
 
 
 def test_recursive_charproc_stops_at_eight_and_the_next_glyph_still_paints() -> None:

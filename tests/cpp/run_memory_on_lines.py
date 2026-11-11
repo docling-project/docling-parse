@@ -12,6 +12,8 @@ Use --baseline RESULT_DIRECTORY to compare memory, process wall time and images.
 The default 5% slowdown threshold reflects the user's accepted runtime budget.
 Appearance fixtures are opt-in with --layouts appearance,widget,appearance-repeat.
 Procedural Type3 fixtures are opt-in with --layouts type3,type3-repeat.
+Soft-mask fixtures are opt-in with --layouts soft-mask,soft-mask-repeat.
+Pattern fixtures are opt-in with --layouts pattern,pattern-repeat,pattern-lattice.
 """
 
 from __future__ import annotations
@@ -36,7 +38,15 @@ MODES = ("qpdf-discard", "collect", "decode", "skip-shapes", "render")
 DEFAULT_LAYOUTS = ("direct", "form", "form-repeat", "form-nested")
 APPEARANCE_LAYOUTS = ("appearance", "widget", "appearance-repeat")
 TYPE3_LAYOUTS = ("type3", "type3-repeat")
-LAYOUTS = DEFAULT_LAYOUTS + APPEARANCE_LAYOUTS + TYPE3_LAYOUTS
+SOFT_MASK_LAYOUTS = ("soft-mask", "soft-mask-repeat")
+PATTERN_LAYOUTS = ("pattern", "pattern-repeat", "pattern-lattice")
+LAYOUTS = (
+    DEFAULT_LAYOUTS
+    + APPEARANCE_LAYOUTS
+    + TYPE3_LAYOUTS
+    + SOFT_MASK_LAYOUTS
+    + PATTERN_LAYOUTS
+)
 
 
 def require(condition: bool, message: str) -> None:
@@ -134,7 +144,11 @@ def validate(stages: list[dict], info: dict, mode: str, layout: str) -> dict:
         )
         require(counts["eof_reached"], "QPDF did not report EOF")
         require(counts["content_size_calls"] == 1, "expected one selected stream")
-        if layout in TYPE3_LAYOUTS:
+        if layout in PATTERN_LAYOUTS:
+            expected_stream = "pattern_cell"
+        elif layout in SOFT_MASK_LAYOUTS:
+            expected_stream = "soft_mask_group"
+        elif layout in TYPE3_LAYOUTS:
             expected_stream = "type3_charproc"
         elif layout in APPEARANCE_LAYOUTS:
             expected_stream = "appearance"
@@ -156,20 +170,49 @@ def validate(stages: list[dict], info: dict, mode: str, layout: str) -> dict:
         return counts
 
     decoded = by_stage["decoded"]
-    expected = 0 if mode == "skip-shapes" else info["lines"]
+    soft_mask = layout in SOFT_MASK_LAYOUTS
+    pattern = layout in PATTERN_LAYOUTS
+    paints = info.get("soft_mask_paints", 0)
+    fills = info.get("pattern_fills", 0)
+    lattice_cells = info.get("pattern_lattice_cells_per_fill", 0)
+    # A mask's grid lives in its private instruction group. Page output is
+    # one filled rectangle per paint, with the decoded mask shared by all.
+    rectangles = soft_mask or (pattern and not lattice_cells)
+    expected = paints if soft_mask else fills if rectangles else info["lines"]
+    if lattice_cells:
+        expected *= lattice_cells
+    if mode == "skip-shapes":
+        expected = 0
     expected_page_shapes = 0 if layout in TYPE3_LAYOUTS else expected
+    if lattice_cells and mode != "skip-shapes":
+        # The unresolved outline is retained as a page shape but does not
+        # become a render instruction; the lattice already supplied the ink.
+        expected_page_shapes += fills
     require(
         decoded["page_shapes"] == expected_page_shapes, "unexpected page-shape count"
     )
-    for field in ("shape_instructions", "subpaths", "segments"):
+    for field in ("shape_instructions", "subpaths"):
         require(
             decoded[field] == expected,
             f"{field}: expected {expected}, got {decoded[field]}",
         )
-    require(decoded["points"] == 2 * expected, "unexpected path point count")
+    require(
+        decoded["segments"] == (3 if rectangles else 1) * expected,
+        "unexpected path segment count",
+    )
+    require(
+        decoded["points"] == (4 if rectangles else 2) * expected,
+        "unexpected path point count",
+    )
     require(decoded["stored_dash_bytes"] == 0, "solid grid retained dash data")
     if "page_content_delivery" in decoded:
-        if layout in TYPE3_LAYOUTS:
+        if pattern:
+            expected_objects = 4 + 6 * fills
+            expected_bytes, expected_pending = info["page_content_bytes"], 4
+        elif soft_mask:
+            expected_objects = 8 * paints
+            expected_bytes, expected_pending = info["page_content_bytes"], 4
+        elif layout in TYPE3_LAYOUTS:
             expected_objects = 5 + 9 * info["type3_repeats"]
             expected_bytes, expected_pending = info["page_content_bytes"], 6
         elif layout in APPEARANCE_LAYOUTS:
@@ -312,6 +355,84 @@ def validate(stages: list[dict], info: dict, mode: str, layout: str) -> dict:
                 decoded["text_instructions"] == repeats,
                 "unexpected Type3 text-instruction count",
             )
+    if decoded.get("soft_mask_diagnostics"):
+        require(
+            decoded["soft_mask_executions"] == (1 if paints else 0),
+            "soft-mask group must decode once per cache entry/CTM",
+        )
+        require(
+            decoded["soft_mask_cache_hits"] == max(0, paints - 1),
+            "unexpected soft-mask cache reuse",
+        )
+        objects = 7 * info["unique_lines"] + 2 if paints else 0
+        require(
+            decoded["soft_mask_source_objects"] == objects,
+            "wrong soft-mask source-object count",
+        )
+        require(
+            decoded["soft_mask_source_bytes_observed"]
+            == (info["content_bytes"] if paints else 0),
+            "wrong soft-mask source bytes",
+        )
+        require(
+            decoded["soft_mask_shape_instructions"]
+            == (info["unique_lines"] if paints and mode != "skip-shapes" else 0),
+            "unexpected private mask geometry count",
+        )
+        require(
+            decoded["soft_mask_max_pending_operands"] == (2 if paints else 0),
+            "unexpected soft-mask operand high-water mark",
+        )
+        delivery = decoded["soft_mask_content_delivery"]
+        require(delivery in ("callback", "buffered"), "unknown soft-mask delivery mode")
+        require(
+            decoded["soft_mask_materialized_tokens"]
+            == (objects if delivery == "buffered" else 0),
+            "unexpected soft-mask token materialization",
+        )
+        capacity = decoded["soft_mask_max_buffered_token_capacity"]
+        if delivery == "callback" or not paints:
+            require(capacity == 0, "unused soft-mask vector retained capacity")
+        else:
+            require(capacity >= objects, "buffered soft-mask capacity too small")
+    if decoded.get("pattern_diagnostics"):
+        active = pattern and mode != "skip-shapes"
+        source_objects = 7 * info["unique_lines"] + 2 if active else 0
+        executions = (lattice_cells * fills if lattice_cells else 1) if active else 0
+        checks = {
+            "source_parses": 1 if active else 0,
+            "source_cache_hits": fills - 1 if active else 0,
+            "cached_tokens": source_objects,
+            "decoded_cells": 1 if active and not lattice_cells else 0,
+            "decoded_cache_hits": fills - 1 if active and not lattice_cells else 0,
+            "decoded_shape_instructions": info["unique_lines"]
+            if active and not lattice_cells
+            else 0,
+            "lattice_executions": executions if lattice_cells else 0,
+            "replay_source_objects": executions * source_objects,
+            "max_pending_operands": 2 if active else 0,
+        }
+        for field, value in checks.items():
+            require(decoded["pattern_" + field] == value, f"wrong pattern {field}")
+        delivery = decoded["pattern_content_delivery"]
+        require(delivery in ("borrowed", "copied"), "unknown pattern delivery mode")
+        require(
+            decoded["pattern_replay_materialized_tokens"]
+            == (2 * executions * source_objects if delivery == "copied" else 0),
+            "unexpected pattern replay vector materialization",
+        )
+        cached_capacity = decoded["pattern_cached_token_capacity"]
+        require(
+            cached_capacity >= source_objects if active else cached_capacity == 0,
+            "unexpected pattern source-cache capacity",
+        )
+        replay_capacity = decoded["pattern_max_replay_token_capacity"]
+        require(
+            replay_capacity >= source_objects
+            if active and delivery == "copied"
+            else replay_capacity == 0,
+            "unexpected pattern replay vector capacity",
+        )
     if mode == "render":
         require("rendered" in by_stage, "missing render snapshot")
     return decoded
@@ -394,6 +515,38 @@ def summarize(records: list[dict], output: Path) -> None:
                 "appearance_max_pending_operands": decoded.get(
                     "appearance_max_pending_operands"
                 ),
+                **{
+                    "soft_mask_" + field: decoded.get("soft_mask_" + field)
+                    for field in (
+                        "content_delivery",
+                        "executions",
+                        "cache_hits",
+                        "source_objects",
+                        "source_bytes_observed",
+                        "materialized_tokens",
+                        "max_buffered_token_capacity",
+                        "max_pending_operands",
+                        "shape_instructions",
+                    )
+                },
+                **{
+                    "pattern_" + field: decoded.get("pattern_" + field)
+                    for field in (
+                        "content_delivery",
+                        "source_parses",
+                        "source_cache_hits",
+                        "cached_tokens",
+                        "cached_token_capacity",
+                        "decoded_cells",
+                        "decoded_cache_hits",
+                        "decoded_shape_instructions",
+                        "lattice_executions",
+                        "replay_source_objects",
+                        "replay_materialized_tokens",
+                        "max_replay_token_capacity",
+                        "max_pending_operands",
+                    )
+                },
             }
         )
     with (output / "summary.csv").open("w", newline="") as stream:
@@ -508,6 +661,37 @@ def compare_baseline(
                 ),
                 f"baseline/candidate output counters differ for {layout}-{requested}-{mode}",
             )
+            if layout in SOFT_MASK_LAYOUTS:
+                require(
+                    all(
+                        old_output[field] == new_output[field]
+                        for field in (
+                            "soft_mask_executions",
+                            "soft_mask_cache_hits",
+                            "soft_mask_source_objects",
+                            "soft_mask_shape_instructions",
+                        )
+                    ),
+                    "baseline/candidate soft-mask source, geometry or reuse differs",
+                )
+            if layout in PATTERN_LAYOUTS:
+                require(
+                    all(
+                        old_output["pattern_" + field] == new_output["pattern_" + field]
+                        for field in (
+                            "source_parses",
+                            "source_cache_hits",
+                            "cached_tokens",
+                            "cached_token_capacity",
+                            "decoded_cells",
+                            "decoded_cache_hits",
+                            "decoded_shape_instructions",
+                            "lattice_executions",
+                            "replay_source_objects",
+                        )
+                    ),
+                    "baseline/candidate pattern source, geometry or reuse differs",
+                )
         if mode == "render":
             filename = f"{layout}-{requested}.png"
             same_image = sha256(baseline["directory"] / filename) == sha256(
@@ -639,6 +823,8 @@ def arguments() -> argparse.Namespace:
     parser.add_argument("--form-depth", type=positive_int, default=3)
     parser.add_argument("--appearance-repeats", type=positive_int, default=4)
     parser.add_argument("--type3-repeats", type=positive_int, default=4)
+    parser.add_argument("--soft-mask-repeats", type=positive_int, default=4)
+    parser.add_argument("--pattern-repeats", type=positive_int, default=4)
     parser.add_argument("--timeout", type=positive_int, default=180)
     parser.add_argument(
         "--baseline", type=Path, help="compare with a previous result directory"
@@ -670,6 +856,10 @@ def arguments() -> argparse.Namespace:
         parser.error("--appearance-repeats must be at least 2 for appearance-repeat")
     if "type3-repeat" in args.layouts and args.type3_repeats < 2:
         parser.error("--type3-repeats must be at least 2 for type3-repeat")
+    if "soft-mask-repeat" in args.layouts and args.soft_mask_repeats < 2:
+        parser.error("--soft-mask-repeats must be at least 2 for soft-mask-repeat")
+    if "pattern-repeat" in args.layouts and args.pattern_repeats < 2:
+        parser.error("--pattern-repeats must be at least 2 for pattern-repeat")
     args.sizes = sizes
     return args
 
@@ -692,10 +882,14 @@ def main() -> None:
         "src/parse/pdf_decoders/page.h",
         "src/parse/pdf_decoders/stream.h",
         "src/parse/pdf_resources/page_xobject_form.h",
+        "src/parse/pdf_resources/page_font.h",
+        "src/parse/pdf_resources/page_pattern.h",
         "src/parse/qpdf/stream_decoder.h",
         "src/parse/utils/pdf_timings.h",
         "tests/test_unit_appearance_streaming.py",
         "tests/test_unit_type3_streaming.py",
+        "tests/test_unit_soft_mask_streaming.py",
+        "tests/test_unit_pattern_replay.py",
     ):
         path = ROOT / relative
         source_hashes[relative] = sha256(path)
@@ -743,10 +937,12 @@ def main() -> None:
         "form_depth": args.form_depth,
         "appearance_repeats": args.appearance_repeats,
         "type3_repeats": args.type3_repeats,
+        "soft_mask_repeats": args.soft_mask_repeats,
+        "pattern_repeats": args.pattern_repeats,
         "baseline": str(args.baseline.resolve()) if args.baseline else None,
         "slowdown_review_limit_pct": args.slowdown_limit_pct,
         "probe": {"do_thread_safe": False, "render_scale": 1.0, "pause_seconds": 0},
-        "raw_token_scope": "one page, Form leaf, appearance or CharProc source; not execution",
+        "raw_token_scope": "one page, Form leaf, appearance, CharProc, mask or pattern source; not execution",
         "note": "No compilation or PDF Python bindings; each child is a fresh process.",
     }
     (output / "metadata.json").write_text(json.dumps(metadata, indent=2) + "\n")
@@ -760,7 +956,15 @@ def main() -> None:
                 for layout in args.layouts:
                     stem = f"{layout}-{size}"
                     pdf = output / f"{stem}.pdf"
-                    if layout in TYPE3_LAYOUTS:
+                    if layout in PATTERN_LAYOUTS:
+                        variant = (
+                            "pathstorm-pattern-lattice"
+                            if layout == "pattern-lattice"
+                            else "pathstorm-pattern"
+                        )
+                    elif layout in SOFT_MASK_LAYOUTS:
+                        variant = "pathstorm-soft-mask"
+                    elif layout in TYPE3_LAYOUTS:
                         variant = "pathstorm-type3"
                     elif layout in APPEARANCE_LAYOUTS:
                         variant = (
@@ -773,7 +977,22 @@ def main() -> None:
                             "pathstorm" if layout == "direct" else "pathstorm-form"
                         )
                     argv = [str(exe), "generate", variant, str(size), str(pdf)]
-                    if layout in TYPE3_LAYOUTS:
+                    if layout in PATTERN_LAYOUTS:
+                        argv += [
+                            str(
+                                args.pattern_repeats
+                                if layout == "pattern-repeat"
+                                else 1
+                            )
+                        ]
+                    elif layout in SOFT_MASK_LAYOUTS:
+                        repeat = (
+                            args.soft_mask_repeats
+                            if layout == "soft-mask-repeat"
+                            else 1
+                        )
+                        argv += [str(repeat)]
+                    elif layout in TYPE3_LAYOUTS:
                         argv += [
                             str(args.type3_repeats if layout == "type3-repeat" else 1)
                         ]

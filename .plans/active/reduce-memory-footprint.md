@@ -1,12 +1,14 @@
 # Reduce the native parser's memory footprint
 
 Date: 2026-11-11.
-Status: step 4c native memory/runtime checkpoint passed; focused Type3 semantics and legacy font-token cleanup pending.
+Status: soft-mask streaming passed native scaling and the user's 86-test semantic suite; pattern replay borrowing is implemented and awaits user validation.
+The legacy Type3 cleanup regression passed in that suite; its controlled performance comparison remains pending.
+The Type3-cleanup smoke completed 20 measurements but its comparison was rejected because nine dependency archives changed; no controlled cleanup result is established.
 MyPy/Ruff pass; step 4b appearance/widget streaming validated by native experiments and 171 focused tests.
 Step 4a Form streaming is validated by native experiments and 153 focused tests.
 Step 2 native recheck and carried-forward semantic coverage passed.
 Step 3 native smoke/scaling, Form timing recheck and focused semantic coverage passed.
-Step 1 core scaling is reviewed. Soft-mask/pattern work and broad step-5 validation remain pending; bo20 scaling observations are recorded below.
+Step 1 core scaling is reviewed. Pattern validation and broad step-5 validation remain pending; bo20 scaling observations are recorded below.
 The preliminary state-reset audit is in progress.
 Initial C++ reproduction and structural investigation are complete.
 
@@ -24,6 +26,9 @@ Related issues:
 
 The user explicitly wants **Codex to write the code, the user to compile and run
 the experiments, and both to strategize together from the intermediate results**.
+
+The user reaffirmed "Keep builds and experiments with me" during the six-item
+completion pass. The earlier delegated 174-test run does not change that rule.
 
 This is an iterative collaboration, not authorization to implement all five
 steps in one pass.
@@ -920,7 +925,8 @@ Suggested comparison rows:
 - [x] Step 4a checkpoint: Form-only callback implementation, native smoke/scaling/reuse and 153 focused semantic tests passed.
 - [x] Step 4b checkpoint: appearance/widget callback implementation, native smoke/scaling and 171 focused semantic tests passed.
 - [x] Repair launcher typing; full MyPy (110 sources) and Ruff checks pass.
-- [x] Write step 4c procedural Type 3 callback path, native fixtures and three semantic cases; user runtime validation pending.
+- [x] Step 4c procedural Type3 checkpoint: native smoke/scaling and 174 focused semantic tests passed.
+- [x] Write legacy Type3 font-token cleanup and eager-repair bounds regression; user build/measurements/tests pending.
 - [ ] Step 4: Nested content and intentional-cache audit; results verified.
 - [ ] Step 5: Real-document, corpus and threaded validation; comparison path retired.
 
@@ -2941,7 +2947,7 @@ first scaling result; it is not automatically launched.
 | Reported MyPy errors | Fixed; full 110-file MyPy check passes |
 | Ruff lint/format | Pass |
 | Procedural Type 3 conversion and three regressions | Written |
-| User native build/smoke and rebuilt-extension tests | Native smoke passed; focused Type3 test result pending |
+| User native build/smoke and rebuilt-extension tests | Native smoke/scaling passed; 174 focused tests passed in 5.93s at the user's request |
 | Type 3 memory/runtime scaling | Two 36-measurement matrices passed; lower peak memory and all times within +5% |
 | Cached glyph analyzer/mask pipeline | Preserved; separate first-use memory cost documented |
 | Accept/revise Type 3 patch | Joint review after user results |
@@ -3196,6 +3202,587 @@ Requirements:
 Codex has not modified the benchmark launcher/report implementation or rerun the
 benchmark in this review. The immediate existing peak-RSS table above was read
 from saved JSON reports.
+
+## Completion pass — item 1: discard eager Type 3 validation tokens
+
+Date: 2026-11-11.
+Authorization: the user said "ok, finish step 1 to 6", referring to the six
+remaining parser items, then explicitly confirmed:
+"Keep builds and experiments with me."
+
+All six items are authorized for continuation. Do not ask for source-change
+approval again for those listed items. Keep the established measurement and
+acceptance gates: Codex writes/reviews code and runs static checks; the user
+compiles and runs experiments. Retire comparison paths after broad validation,
+not merely because their replacement code has been written.
+
+### Prior Type 3 semantic gate is complete
+
+At the user's explicit request, Codex ran the full focused suite against the
+then-current extension: 174 tests passed in 5.93 seconds. That includes the
+three procedural Type 3 cases and closes the semantic gate for step 4c.
+This one delegated test run does not authorize subsequent native builds or
+experiments; the user has reaffirmed the original division of work.
+
+### Item 1 source change
+
+PAGE_FONT now calls validate_charprocs() at the same point in font setup.
+It still visits every CharProc, checks that it is a stream, and uses the same
+qpdf_stream_decoder normalization and damaged-stream recovery, but delivers
+objects to a no-op synchronous consumer.
+
+The unused name_to_descr map, discarded char_processor::parse() call, second
+description copy and logging of the map size are removed. Validation retains
+no complete rich-token vector.
+
+The independent lazy glyph-mask/vector analyzer remains unchanged. It still
+has its own first-use temporary storage, so total RSS is not expected to become
+constant or equal to QPDF-discard memory.
+
+The old char_description/char_processor helper definitions remain temporarily
+included but have no functional callers. Retire their dead includes/files with
+the final source-path cleanup after validation; they do not retain objects now.
+
+### Recovery regression added
+
+test_eager_repair_preserves_damaged_cached_glyph_bounds() supplies a damaged
+Flate CharProc with a usable filled-rectangle prefix and a deliberately loose
+FontBBox. It expects actual ink dimensions (60 by 100 points).
+
+This checks an observable side effect of the old eager decoder: repair must
+happen before lazy glyph analysis computes the text-cell bounds. Simply
+removing eager decoding could preserve rendered ink while changing extraction
+geometry, so the regression checks the parsed cell rather than only pixels.
+
+The previously passing focused suite gains one case. The new case and updated
+source have not been built or executed by Codex.
+
+### Exact before-change reference
+
+Preserved executable:
+
+- /private/tmp/docling-memory-before-type3-font-cleanup
+- SHA-256: 24459b9fb6b9450e7d60ae774412d36cea15e03ebf49510b151672aa8b3aa2aa
+
+Its hash matches the user's step-4c scaling metadata. Both the preserved binary
+and existing step-4c data have callback CharProc interpretation plus the old
+eager description retention. This isolates the new cleanup from the earlier
+streaming patch.
+
+The launcher now also snapshots page_font.h, so subsequent result bundles
+capture the changed source explicitly.
+
+### Static checks
+
+- MyPy: no issues in 110 source files.
+- Ruff lint: passed.
+- Ruff format check: 115 files already formatted.
+- git diff --check: passed.
+
+These are source/static checks, not C++ compilation or runtime validation.
+
+### User native build and recovery check
+
+The optional targets already exist; an incremental build suffices:
+
+~~~sh
+cmake --build build --parallel 2 --target \
+  test_memory_on_lines stream_callback_regression
+
+ctest --test-dir build --output-on-failure -R '^stream_callback_regression$'
+~~~
+
+If using a new build directory, configure first with
+`cmake -S . -B build -DDOCLING_PARSE_BUILD_MEMORY_PROBE=ON`.
+
+### User small comparison
+
+Compare to the saved callback-Type3 smoke, not the buffered-Type3 reference:
+
+~~~sh
+uv run python3 tests/cpp/run_memory_on_lines.py \
+  --output /private/tmp/docling-memory-type3-font-cleanup-smoke \
+  --baseline /private/tmp/docling-memory-step4c-smoke \
+  --layouts direct,form,type3,type3-repeat \
+  --sizes 1000 --repeats 1
+~~~
+
+Require matching source hashes, geometry counters and all four PNG pairs.
+The existing Type3 interpreter materialization counter is already zero on both
+sides; it does not count eager font initialization. Source inspection plus
+process peak measurements establish this cleanup's effect.
+
+### User scaling comparison after the small gate
+
+~~~sh
+uv run python3 tests/cpp/run_memory_on_lines.py \
+  --output /private/tmp/docling-memory-type3-font-cleanup-scaling \
+  --baseline /private/tmp/docling-memory-step4c-scaling \
+  --sizes 125000,250000 --layouts direct,type3 \
+  --modes decode,skip-shapes,render --repeats 3 \
+  --slowdown-limit-pct 5
+~~~
+
+This has 36 measurements. Assess memory and runtime against the old eager
+retention, with direct pages as controls. The earlier 250k Type3 callback
+baseline was 791.47 MiB decode and 676.72 MiB with shapes disabled.
+
+If dependency hashes/configuration differ, the historical binary cannot provide
+a controlled reference against newly rebuilt dependencies. Rebuild the
+pre-cleanup source against the same current dependencies and compiler settings
+as the candidate, in an isolated reference build, before collecting a new pair.
+Do not bypass comparison safeguards or relabel an old executable with current
+archive hashes. Preserve its known hash and original metadata.
+
+### User rebuilt-extension semantic checks
+
+~~~sh
+uv run --no-sync python local_build.py
+
+uv run --no-sync pytest \
+  tests/test_unit_type3_streaming.py \
+  tests/test_unit_type3_fonts.py \
+  tests/test_unit_appearance_streaming.py \
+  tests/test_unit_widget_appearances.py \
+  tests/test_unit_acroform_widgets.py \
+  tests/test_unit_form_streaming.py \
+  tests/test_unit_split_content_streams.py \
+  tests/test_unit_damaged_content_streams.py \
+  tests/test_unit_actual_text.py \
+  tests/test_unit_image_decode.py \
+  tests/test_unit_clipping.py \
+  tests/test_unit_patterns.py \
+  tests/test_unit_soft_masks.py \
+  tests/test_unit_transparency.py -q
+~~~
+
+The added bounds regression must run against the rebuilt extension. Keep
+existing assertions and ground truth unchanged when reporting failures.
+
+### Remaining six-item completion status
+
+| Item | Status / next gate |
+| --- | --- |
+| 1. Legacy Type3 token cleanup | Semantic regression passed in the user's 86-test suite; historical performance comparison rejected on changed dependencies; controlled comparison pending |
+| 2. Soft-mask group source streaming | Complete: native smoke/scaling, cache reuse, PNG equivalence and 86 focused semantic tests passed |
+| 3. Pattern cache/replay copies | Borrowed replay, native reference/fixtures and four semantic cases written; user build and experiments pending |
+| 4. State-lifetime/reset audit | In progress; conclude from source and targeted evidence |
+| 5. Broader corpus and threaded validation | Pending; user runs builds/tests/experiments |
+| 6. Comparison-path/dead-API retirement | Pending acceptance of broader validation |
+
+The subsequent permanent benchmark peak-RSS/timeline work remains after these
+parser items, as requested. This checkpoint does not mark all six complete.
+
+## Completion pass — item 2: stream soft-mask group sources
+
+Date: 2026-11-11.
+The user explicitly requested starting item 2 after the Type3-cleanup smoke.
+The unresolved item-1 comparison does not block this authorized implementation;
+it remains a separate acceptance gate.
+
+### Item-1 intermediate result and comparison limitation
+
+The bundle `/private/tmp/docling-memory-type3-font-cleanup-smoke` contains all
+20 requested measurements, but status.json reports `failed`: the baseline and
+candidate dependency_sha256 maps differ. The comparison stops before accepting
+cross-run output or memory equivalence. Single-repeat timing remains diagnostic.
+
+Changed archives relative to the step-4c smoke are:
+
+- libblend2d.a, libloguru.a and libpdfium_jbig2.a;
+- libfreetype.a, libjpeg.a, liblcms2.a and libopenjp2.a;
+- libqpdf.a and libturbojpeg.a.
+
+The numbers are useful as a smoke observation but do not isolate the Type3
+cleanup's memory or runtime effect. Do not mark item 1 accepted, bypass hashes,
+or use this failed comparison bundle as a baseline. Its native executable has
+been rebuilt, but the new Type3 bounds regression still needs user execution.
+The reference-build instruction above supersedes the earlier suggestion that
+simply rerunning the preserved historical executable would suffice.
+
+### Source change and retained ownership
+
+decode_soft_mask() establishes local resources, its own output containers, the
+shared page mask cache, recursion depth and the composed mask-space/gs matrix
+before invoking decode_and_interprete(). It no longer accumulates a complete
+group-source token vector in the normal path.
+
+The useful decoded soft_mask_instruction remains cached by spec and CTM. Its
+private render group is retained for reuse by page paint instructions. This
+change removes source-token retention, not the geometry needed to render a
+mask. Alpha/luminosity selection, backdrop/transfer handling, intersections,
+the nested-mask guard and the existing 512-entry limit stay in force.
+
+std::bad_alloc propagates rather than being reported as an unreadable mask and
+silently continuing unmasked. Existing malformed-source recovery still uses
+the same qpdf_stream_decoder normalization and prefix-repair path.
+
+### Native reference and diagnostics
+
+New temporary target: `test_memory_on_lines_buffered_soft_masks`.
+It enables only DOCLING_PARSE_BUFFERED_SOFT_MASK_CONTENTS; pages, Forms,
+appearances, Type3 interpretation and font validation match the candidate.
+Build this reference and the candidate together against the current archives.
+The existing fully buffered target also enables the new mask selector.
+
+New opt-in layouts:
+
+- `soft-mask`: one N-line stroked grid used as an alpha-mask group; the page
+  paints one filled rectangle under it.
+- `soft-mask-repeat`: four installations/paints of the same entry at the same
+  CTM by default (`--soft-mask-repeats` changes the count). The mask source must
+  decode once, with three cache hits. Page output has four rectangles, while
+  the private decoded mask contains N strokes, not 4N.
+
+The native generator marks the selected group, so QPDF-discard/collect visit
+that source once. It has exactly 7N+2 objects and 3N+1 operators, matching the
+direct/Form grid controls. `unique_lines` is N; the generic `lines` field is
+N times the number of mask applications and does not describe stored geometry.
+
+Probe-only counters follow the shared /Contents/ordinary-Form mask cache:
+executions, cache hits, source objects/bytes, materialized tokens, maximum
+buffered capacity, pending operands and private mask shape instructions.
+They do not claim to cover separate appearance-decoder caches or replace a
+process RSS measurement. Source counts describe each decoded group's own
+source, not token counts in nested Form sources.
+
+For these fixtures, normal delivery must report zero mask materialized tokens
+and capacity, with at most two pending operands. The reference reports 7N+2
+materialized tokens for its one decode. Shapes-disabled still executes gs and
+decodes the source, but emits no mask shapes. Both paths must preserve source
+counts, geometry, cache reuse and PNG bytes.
+
+### Semantic regression
+
+`tests/test_unit_soft_mask_streaming.py` adds four cases: alpha/luminosity,
+each with intact/damaged Flate group content. A group matrix composes with the
+CTM at gs; a nested Form uses group-local resources; two gs applications share
+coverage; parent paint resumes with its original color and transform.
+
+Half-opacity mask content makes duplicate delivery during damaged-prefix
+recovery observable in the rendered pixels. Points outside the group box and
+inside its unpainted portion must retain the red background. The existing
+soft-mask suite supplies transfer, clipping, cache-limit and nested-mask cases.
+
+### User build and native smoke
+
+Static validation of this implementation passed: MyPy (111 source files),
+Ruff lint, Ruff formatting (116 files) and git diff --check. These do not
+establish C++ compilation, rendered equivalence or a memory/runtime improvement.
+
+Codex has not compiled or executed these paths. Keep builds and experiments
+with the user. Regenerate the existing build directory to register the new
+reference target, retaining its other cached compiler/dependency options:
+
+~~~sh
+cmake -S . -B build -DDOCLING_PARSE_BUILD_MEMORY_PROBE=ON
+
+cmake --build build --parallel 2 --target \
+  test_memory_on_lines test_memory_on_lines_buffered_soft_masks \
+  stream_callback_regression
+
+ctest --test-dir build --output-on-failure -R '^stream_callback_regression$'
+
+uv run python3 tests/cpp/run_memory_on_lines.py \
+  --exe build/test_memory_on_lines_buffered_soft_masks \
+  --output /private/tmp/docling-memory-soft-mask-buffered-smoke \
+  --layouts direct,form,soft-mask,soft-mask-repeat \
+  --sizes 1000 --repeats 1
+
+uv run python3 tests/cpp/run_memory_on_lines.py \
+  --output /private/tmp/docling-memory-soft-mask-smoke \
+  --baseline /private/tmp/docling-memory-soft-mask-buffered-smoke \
+  --layouts direct,form,soft-mask,soft-mask-repeat \
+  --sizes 1000 --repeats 1
+~~~
+
+Each smoke run has 20 measurements. Use fresh directories, and require both
+status.json files to pass. Preserve the compiler flags, exact binary hashes,
+archives, inputs and source snapshots in these bundles. Do not reuse the old
+Type3 reference for this experiment.
+
+### User scaling after the small gate
+
+~~~sh
+uv run python3 tests/cpp/run_memory_on_lines.py \
+  --exe build/test_memory_on_lines_buffered_soft_masks \
+  --output /private/tmp/docling-memory-soft-mask-buffered-scaling \
+  --sizes 125000,250000 --layouts direct,soft-mask,soft-mask-repeat \
+  --modes decode,skip-shapes,render --repeats 3
+
+uv run python3 tests/cpp/run_memory_on_lines.py \
+  --output /private/tmp/docling-memory-soft-mask-scaling \
+  --baseline /private/tmp/docling-memory-soft-mask-buffered-scaling \
+  --sizes 125000,250000 --layouts direct,soft-mask,soft-mask-repeat \
+  --modes decode,skip-shapes,render --repeats 3 \
+  --slowdown-limit-pct 5
+~~~
+
+Each side has 54 measurements. Seek reduced mask memory and no meaningful
+slowdown beyond the accepted 5%. Direct pages are controls. Repeated mask
+applications must preserve cache hits and avoid multiplying private geometry.
+Do not predict the RSS reduction from token-record sizes alone: temporary
+page-shape containers, output geometry, allocator behavior and rasterization
+also contribute to the peak.
+
+### User rebuilt-extension semantic gate
+
+~~~sh
+uv run --no-sync python local_build.py
+
+uv run --no-sync pytest \
+  tests/test_unit_soft_mask_streaming.py \
+  tests/test_unit_soft_masks.py \
+  tests/test_unit_transparency.py \
+  tests/test_unit_form_streaming.py \
+  tests/test_unit_patterns.py \
+  tests/test_unit_type3_streaming.py \
+  tests/test_unit_type3_fonts.py -q
+~~~
+
+This also exercises the pending Type3 bounds regression against the rebuilt
+extension. Broad corpus/threaded validation and comparison-path retirement
+remain later gates. Await these results before accepting item 2 or changing
+the next pattern-cache ownership path.
+
+## Completion pass — item 2 accepted results
+
+The user completed the paired soft-mask smoke (20 measurements per executable)
+and scaling (54 measurements per executable). Both candidate bundles passed
+the dependency/input checks, geometry assertions, cache diagnostics and PNG
+comparisons. All six scaling PNG pairs were byte-identical; no timing case
+exceeded the accepted 5% review threshold.
+
+At a 250,000-line target:
+
+| Layout / mode | Before MiB | After MiB | Memory change | Process-time change |
+| --- | ---: | ---: | ---: | ---: |
+| soft-mask / decode | 566.91 | 245.84 | -56.63% | -4.65% |
+| soft-mask / skip-shapes | 445.55 | 35.36 | -92.06% | -7.43% |
+| soft-mask / render | 566.91 | 245.75 | -56.65% | -5.36% |
+| soft-mask-repeat / decode | 566.86 | 245.88 | -56.63% | -4.98% |
+| soft-mask-repeat / skip-shapes | 445.47 | 35.38 | -92.06% | -11.33% |
+| soft-mask-repeat / render | 566.86 | 245.89 | -56.62% | -6.10% |
+
+At 125,000, decode/render memory fell about 46–49%, and shapes-disabled memory
+about 90%. The direct-page controls stayed within the runtime budget.
+
+The repeated layouts decoded once with three cache hits, retained zero source
+tokens/capacity and reached only two pending operands. Private mask geometry
+was 124,861 and 249,652 strokes at the two targets, shared by four page paints.
+The corresponding source counts were 874,029 and 1,747,566 objects.
+
+The user then rebuilt the extension and ran the seven-file focused semantic
+suite: **86 passed in 4.55 seconds**, including all four soft-mask callback
+cases and the Type3 eager-repair bounds regression. This closes item 2 and the
+item-1 semantic gate; item-1 performance attribution remains unresolved.
+
+## Completion pass — item 3: borrow cached pattern source during replay
+
+The user approved this bounded change with "do it" after reviewing the
+two-copy finding. Builds and experiments remain with the user.
+
+### Source and ownership change
+
+Both the direct lattice path and cached tile creation previously copied the
+entire pattern source into a local `insts` vector, then copied it again into
+the child decoder's `stream`. The normal path now calls interprete_cached(),
+which borrows the resource-owned const vector for the synchronous call.
+
+The helper runs the same begin/consume/finish lifecycle. It copies one current
+instruction because QPDF accessors and the consumer take mutable objects;
+cached instruction records remain untouched. Pending operands still use the
+existing bounded-per-operator vector. It does not retain a view after return.
+
+The resource's parsed-token cache remains owned by PAGE_PATTERN, including
+its referenced QPDF objects. Its decoded render-cell cache and uncoloured
+paint-colour keys also remain. No token cache is cleared or reparsed on each
+tile, and no decoded cell is intentionally duplicated by this change.
+
+The pattern resource remains alive through the parent-linked resource maps
+of these synchronous child decoders. Nested replay receives an already parsed
+cache; normal interpretation does not replace or resize its source vector.
+Normal replay also drops any previous child-owned source buffer before use.
+
+### Native reference and instrumentation
+
+New temporary target: `test_memory_on_lines_copied_patterns`, enabling only
+DOCLING_PARSE_COPY_PATTERN_CONTENTS. Its two original vector copies and their
+call-site lifetimes are preserved. The candidate and reference otherwise use
+the same current code and dependencies, including accepted soft-mask streaming
+and the Type3 font cleanup. The fully buffered reference also enables this
+selector until final comparison-path retirement.
+
+Probe-only shared counters cover the /Contents decoder tree, including its
+ordinary Forms, procedural CharProcs, mask groups and pattern child decoders.
+They do not aggregate separate appearance decoder roots. The shared statistics
+allocation and updates are absent in production builds.
+
+Counters distinguish:
+
+- Source parses/cache hits and retained cached token count/capacity.
+- Decoded-cell construction/cache hits and its private shape count.
+- Direct lattice executions and cumulative source objects interpreted.
+- Cumulative tokens materialized in complete replay vectors, maximum capacity
+  of a child replay vector, and maximum pending operands.
+
+The vector materialization count excludes the useful resource cache, the
+single working instruction and pending operands. It measures copying work,
+not simultaneous peak live memory. The intentional cache remains linear in
+source size in both executables. Source/copy counters cannot substitute for
+measured process RSS or runtime.
+
+### Native fixtures and invariants
+
+All fixtures reuse the same generated grid source, with N actual strokes,
+7N+2 QPDF objects and 3N+1 operators. Raw modes select the marked pattern stream
+once. New opt-in layouts are:
+
+- `pattern`: one fill using a page-sized tile. One source parse, one decoded
+  cell containing N strokes, and one page rectangle.
+- `pattern-repeat`: four fills by default (`--pattern-repeats` changes this).
+  One source parse and one decoded cell, three source-cache hits and three
+  decoded-cell-cache hits. The private geometry stays N; page output is four
+  rectangles.
+- `pattern-lattice`: both cell steps are twice the page extent, selecting
+  direct replay at [0,1] by [0,1]. Four executions share one parsed source.
+  Render output contains 4N stroke instructions, although only the first
+  placement contributes on-page ink. The outline is retained as an additional
+  page shape and does not become an unresolved solid-fill render instruction.
+
+For E actual cell interpretations and T=7N+2 cached objects, the reference
+reports 2ET materialized replay tokens; the candidate reports zero. Cached
+tokens/capacity, source/replay counts, page/private geometry and PNG bytes
+must match. These grid cells reach at most two pending operands.
+
+With shapes disabled, all three layouts must skip pattern parsing and replay:
+zero caches, executions, replay copies and pattern geometry. This preserves
+the existing CAD/text-extraction performance behavior.
+
+### Added semantic coverage
+
+`tests/test_unit_pattern_replay.py` has four cases: cached tile/direct lattice,
+each using intact/damaged Flate source. An uncoloured stencil paints successive
+regions red, blue and red, exercising colour-specific decoded-cell ownership
+and reuse. Local half-opacity resources shadow an opaque parent resource.
+
+The source leaves a translation active; each subsequent replay and the parent
+suffix must retain their own placement/state. Half-opacity pixels expose
+duplicate recovered-prefix execution. The existing pattern suite continues
+to cover pattern/base matrices, clipping, nested resources, shape skipping,
+overlapping cells and image reporting.
+
+### Static review and checks
+
+- MyPy: no issues in 112 source files.
+- Ruff lint: passed.
+- Ruff format check: 117 files already formatted.
+- git diff --check: passed.
+
+Codex has not compiled these C++ paths or run the new semantic cases/native
+experiments. Four source cases are added to the previously passing 86-test
+suite; no 90-test result is claimed.
+
+The lifetime audit still needs to address exception restoration in existing
+pattern code: lattice depth/q-Q scopes and cached-cell decoding flags are
+restored manually, and an allocation or nonstandard exception can bypass
+restoration. This source finding is carried to item 4; it is not evidence of
+a new measured quadratic-memory defect. This patch isolates token borrowing
+from that separate state-restoration change.
+
+### User build and smoke gate
+
+Regenerate the existing build directory to register the reference target while
+retaining its other cached compiler/dependency settings:
+
+~~~sh
+cmake -S . -B build -DDOCLING_PARSE_BUILD_MEMORY_PROBE=ON
+
+cmake --build build --parallel 2 --target \
+  test_memory_on_lines test_memory_on_lines_copied_patterns
+
+uv run python3 tests/cpp/run_memory_on_lines.py \
+  --exe build/test_memory_on_lines_copied_patterns \
+  --output /private/tmp/docling-memory-pattern-copied-smoke \
+  --layouts direct,pattern,pattern-repeat,pattern-lattice \
+  --sizes 1000 --repeats 1
+
+uv run python3 tests/cpp/run_memory_on_lines.py \
+  --output /private/tmp/docling-memory-pattern-smoke \
+  --baseline /private/tmp/docling-memory-pattern-copied-smoke \
+  --layouts direct,pattern,pattern-repeat,pattern-lattice \
+  --sizes 1000 --repeats 1
+~~~
+
+Each run has 20 measurements. Require passing status.json, unchanged cached
+source counts, expected reuse, zero candidate replay vectors and four identical
+PNG pairs. Single-repeat timing remains diagnostic.
+
+### User cached-tile scaling after the small gate
+
+~~~sh
+uv run python3 tests/cpp/run_memory_on_lines.py \
+  --exe build/test_memory_on_lines_copied_patterns \
+  --output /private/tmp/docling-memory-pattern-copied-scaling \
+  --sizes 125000,250000 --layouts direct,pattern,pattern-repeat \
+  --modes decode,skip-shapes,render --repeats 3
+
+uv run python3 tests/cpp/run_memory_on_lines.py \
+  --output /private/tmp/docling-memory-pattern-scaling \
+  --baseline /private/tmp/docling-memory-pattern-copied-scaling \
+  --sizes 125000,250000 --layouts direct,pattern,pattern-repeat \
+  --modes decode,skip-shapes,render --repeats 3 \
+  --slowdown-limit-pct 5
+~~~
+
+Each executable contributes 54 measurements. Seek lower RSS for cell decoding
+and no meaningful slowdown beyond 5%; decoded-cell reuse must remain intact.
+The source cache remains, so do not expect page/soft-mask streaming percentages.
+
+### User bounded direct-lattice scaling
+
+This path emits four placements of every grid stroke. Use smaller source
+sizes to keep output geometry and runtime bounded:
+
+~~~sh
+uv run python3 tests/cpp/run_memory_on_lines.py \
+  --exe build/test_memory_on_lines_copied_patterns \
+  --output /private/tmp/docling-memory-pattern-lattice-copied-scaling \
+  --sizes 32000,64000 --layouts direct,pattern-lattice \
+  --modes decode,skip-shapes,render --repeats 3
+
+uv run python3 tests/cpp/run_memory_on_lines.py \
+  --output /private/tmp/docling-memory-pattern-lattice-scaling \
+  --baseline /private/tmp/docling-memory-pattern-lattice-copied-scaling \
+  --sizes 32000,64000 --layouts direct,pattern-lattice \
+  --modes decode,skip-shapes,render --repeats 3 \
+  --slowdown-limit-pct 5
+~~~
+
+Each side has 36 measurements. Compare cumulative copying, RSS and process wall
+time together; the four executions are sequential and their allocation totals
+must not be reported as simultaneous live memory.
+
+### User rebuilt-extension semantic gate
+
+~~~sh
+uv run --no-sync python local_build.py
+
+uv run --no-sync pytest \
+  tests/test_unit_pattern_replay.py \
+  tests/test_unit_patterns.py \
+  tests/test_unit_soft_mask_streaming.py \
+  tests/test_unit_soft_masks.py \
+  tests/test_unit_transparency.py \
+  tests/test_unit_form_streaming.py \
+  tests/test_unit_type3_streaming.py \
+  tests/test_unit_type3_fonts.py
+~~~
+
+Review the native and semantic results together before accepting item 3.
+Item 4 then closes the state/reset audit and any separately reproduced fixes;
+items 5–6 cover broader corpus/threaded validation and source-path retirement.
+The permanent benchmark peak-RSS/timeline work still follows parser acceptance.
 
 ## Questions to answer from the intermediate results
 
