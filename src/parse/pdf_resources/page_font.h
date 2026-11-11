@@ -892,18 +892,11 @@ namespace pdflib
 
         auto& fm = *(matched_base_font().font);
 
-        // A known legacy symbol font may falsely declare WinAnsi while using
-        // font-specific character codes. Its curated map is authoritative
-        // after /ToUnicode and /Differences.
-        //
-        // That does not hold for the Latin text fonts whose AFM merely carries
-        // the label /FontSpecific while laying the codes out in WinAnsi order
-        // (Arial, Times New Roman, ...). For those, the table is just the
-        // WinAnsi table: for a nonsymbolic TrueType font that explicitly
-        // declares /MacRomanEncoding (eg a Quartz-written Arial), that
-        // declared encoding gives the codes their meaning and has to win
-        // (PDF 32000-1 9.6.6.1), otherwise
-        // 0x9F (MacRoman u-umlaut) is read as WinAnsi Y-diaeresis.
+        // Prefer the declared encoding when its glyph exists in the font,
+        // matching the renderer's glyph-name lookup. For example, Symbol
+        // declared as WinAnsi uses /multiply at 0xD7, not its own /dotmath.
+        // Otherwise retain the curated mapping for legacy symbol fonts.
+        // Preserve the MacRoman exception for nonsymbolic TrueType Latin fonts.
         const bool declared_non_winansi_base =
           subtype == TRUE_TYPE and
           not is_symbolic and
@@ -911,7 +904,8 @@ namespace pdflib
           encoding == MACROMAN;
 
         if(fm.is_font_specific() and fm.has(c) and
-           not (declared_non_winansi_base and font_specific_follows_winansi(fm)))
+           not (declared_non_winansi_base and font_specific_follows_winansi(fm)) and
+           not fm.has_glyph_name(get_glyph_name(c)))
           {
             return fm.to_utf8(c);
           }

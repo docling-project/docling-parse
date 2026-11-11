@@ -26,6 +26,7 @@ namespace pdflib
 
     bool has(uint32_t numb);
     bool has(const std::string& c);
+    bool has_glyph_name(const std::string& name);
 
     double get_width(uint32_t numb);
     double get_width(const std::string& c);
@@ -110,6 +111,13 @@ namespace pdflib
   {
     initialise();
     return (utf8_to_numb.count(c)==1);
+  }
+
+  bool base_font::has_glyph_name(const std::string& name)
+  {
+    initialise();
+    // Include named glyphs without a built-in code (AFM C -1), such as fi/fl.
+    return (name_to_width.count(name)==1);
   }
 
   double base_font::get_width(uint32_t numb)
@@ -394,6 +402,12 @@ namespace pdflib
                   }
               }
 
+            // Named glyphs may exist without a built-in character code.
+            if(not name.empty())
+              {
+                name_to_width[name] = wval;
+              }
+
             if(numb>=0 and name!="")
               {
                 uint32_t uc = static_cast<uint32_t>(numb);
@@ -403,7 +417,6 @@ namespace pdflib
                 utf8_to_numb[numb_to_utf8[uc]] = uc;
 
                 numb_to_width[uc] = wval;
-                name_to_width[name] = wval;
                 if(have_bbox)
                   {
                     numb_to_bbox[uc] = bbox;

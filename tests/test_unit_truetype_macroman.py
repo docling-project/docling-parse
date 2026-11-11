@@ -9,10 +9,11 @@ order. That label made the curated table win over the declared encoding, so
 the MacRoman code 0x9F (u-umlaut) was read as WinAnsi Y-diaeresis and "Buero"
 came out as "BYro" (docling-parse#449, a regression of #187).
 
-The exception is limited to nonsymbolic TrueType fonts with an explicit
-MacRoman encoding. Other subtypes, encodings and symbolic fonts keep their
-existing mappings, and /ToUnicode and /Differences retain precedence.
-Genuinely font-specific fonts (Symbol, ZapfDingbats, TeX) keep their own tables.
+Declared glyph names also govern other simple fonts where the metrics contain
+the named glyph, including glyphs without a built-in code. Legacy symbol fonts
+keep their own mappings where the declared glyph is absent. /ToUnicode and
+/Differences retain precedence, and the MacRoman TrueType exception still
+applies when a Latin font's metrics lack the declared glyph.
 """
 
 from __future__ import annotations
@@ -147,39 +148,40 @@ def test_differences_override_only_listed_macroman_codes() -> None:
 
 
 @pytest.mark.parametrize(
-    ("subtype", "encoding"),
+    ("subtype", "encoding", "expected"),
     [
-        pytest.param("/Type1", "/MacRomanEncoding", id="type1-macroman"),
-        pytest.param("/MMType1", "/MacRomanEncoding", id="mmtype1-macroman"),
-        pytest.param("/TrueType", "/MacExpertEncoding", id="truetype-macexpert"),
-        pytest.param("/TrueType", "/StandardEncoding", id="truetype-standard"),
-        pytest.param("/TrueType", "/WinAnsiEncoding", id="truetype-winansi"),
+        pytest.param("/Type1", "/MacRomanEncoding", "üö", id="type1-macroman"),
+        pytest.param("/MMType1", "/MacRomanEncoding", "üö", id="mmtype1-macroman"),
+        pytest.param("/TrueType", "/MacExpertEncoding", "Ÿš", id="truetype-macexpert"),
+        pytest.param("/TrueType", "/StandardEncoding", "Ÿš", id="truetype-standard"),
+        pytest.param("/TrueType", "/WinAnsiEncoding", "Ÿš", id="truetype-winansi"),
     ],
 )
-def test_other_subtypes_and_encodings_keep_existing_mapping(
-    subtype: str, encoding: str
+def test_other_subtypes_and_encodings_follow_available_glyphs(
+    subtype: str, encoding: str, expected: str
 ) -> None:
-    # Outside the MacRoman TrueType fix, preserve the existing Arial metrics
-    # mapping: these bytes are Y-diaeresis/s-caron, not u-/o-umlaut.
+    # MacRoman names udieresis/odieresis, both present in Arial. The MacExpert
+    # small-cap glyphs and the undefined Standard codes are absent, so those
+    # retain the curated Y-diaeresis/s-caron mapping.
     font = (
         f"<< /Type /Font /Subtype {subtype} /BaseFont /ArialMT "
         f"/FirstChar 32 /LastChar 255 /Encoding {encoding} >>"
     )
-    assert _page_text(font, b"\x9f\x9a") == "Ÿš"
+    assert _page_text(font, b"\x9f\x9a") == expected
 
 
 @pytest.mark.parametrize(
-    ("flags", "expected"),
+    "flags",
     [
-        pytest.param(32, "üö", id="nonsymbolic"),
-        pytest.param(96, "üö", id="nonsymbolic-italic"),
-        pytest.param(4, "Ÿš", id="symbolic"),
-        pytest.param(68, "Ÿš", id="symbolic-italic"),
+        pytest.param(32, id="nonsymbolic"),
+        pytest.param(96, id="nonsymbolic-italic"),
+        pytest.param(4, id="symbolic"),
+        pytest.param(68, id="symbolic-italic"),
     ],
 )
-def test_macroman_truetype_respects_symbolic_flag(flags: int, expected: str) -> None:
-    # Use the same Latin font name for both flags, so the symbolic boundary
-    # is exercised independently of the legacy Symbol font's curated table.
+def test_macroman_truetype_uses_available_glyphs_with_either_flag(flags: int) -> None:
+    # An explicitly named glyph that exists in the font takes precedence
+    # regardless of the descriptor's Symbolic/Nonsymbolic flag.
     font = (
         "<< /Type /Font /Subtype /TrueType /BaseFont /ArialMT "
         "/FirstChar 32 /LastChar 255 /Encoding /MacRomanEncoding "
@@ -187,4 +189,58 @@ def test_macroman_truetype_respects_symbolic_flag(flags: int, expected: str) -> 
         "/FontBBox [0 -200 1000 900] /ItalicAngle 0 /Ascent 900 /Descent -200 "
         "/CapHeight 700 /StemV 80 >> >>"
     )
-    assert _page_text(font, b"\x9f\x9a") == expected
+    assert _page_text(font, b"\x9f\x9a") == "üö"
+
+
+@pytest.mark.parametrize(
+    ("subtype", "encoding", "codes"),
+    [
+        pytest.param("/Type1", "/MacRomanEncoding", b"\xde\xdf", id="type1-macroman"),
+        pytest.param(
+            "/MMType1", "/MacRomanEncoding", b"\xde\xdf", id="mmtype1-macroman"
+        ),
+        pytest.param(
+            "/TrueType", "/MacRomanEncoding", b"\xde\xdf", id="truetype-macroman"
+        ),
+        pytest.param("/Type1", "/StandardEncoding", b"\xae\xaf", id="type1-standard"),
+        pytest.param("/Type1", "/MacExpertEncoding", b"WX", id="type1-macexpert"),
+    ],
+)
+def test_declared_encoding_finds_glyphs_without_builtin_codes(
+    subtype: str, encoding: str, codes: bytes
+) -> None:
+    # Arial's AFM contains fi/fl with C -1. Their presence must be checked by
+    # name, independently of whether the metrics assign a built-in code.
+    font = (
+        f"<< /Type /Font /Subtype {subtype} /BaseFont /ArialMT "
+        f"/FirstChar 32 /LastChar 255 /Encoding {encoding} >>"
+    )
+    assert _page_text(font, codes) == "fifl"
+
+
+def test_symbol_without_declared_encoding_keeps_builtin_mapping() -> None:
+    font = "<< /Type /Font /Subtype /Type1 /BaseFont /Symbol >>"
+    assert _page_text(font, b"a\xd7b") == "\u03b1\u22c5\u03b2"
+
+
+@pytest.mark.parametrize(
+    ("flags", "expected"),
+    [
+        pytest.param(32, "ƒ\u2044·", id="nonsymbolic-macroman-exception"),
+        pytest.param(4, "ÄÚá", id="symbolic-curated-fallback"),
+    ],
+)
+def test_macroman_exception_preserved_when_declared_glyph_is_absent(
+    flags: int, expected: str
+) -> None:
+    # LucidaConsole's WinAnsi-style AFM lacks florin/fraction/periodcentered.
+    # Retain #453's declared-encoding exception for nonsymbolic TrueType,
+    # independently of the new glyph-name lookup.
+    font = (
+        "<< /Type /Font /Subtype /TrueType /BaseFont /LucidaConsole "
+        "/FirstChar 32 /LastChar 255 /Encoding /MacRomanEncoding "
+        f"/FontDescriptor << /Type /FontDescriptor /FontName /LucidaConsole /Flags {flags} "
+        "/FontBBox [0 -211 1000 789] /ItalicAngle 0 /Ascent 789 /Descent -211 "
+        "/CapHeight 700 /StemV 80 >> >>"
+    )
+    assert _page_text(font, b"\xc4\xda\xe1") == expected
