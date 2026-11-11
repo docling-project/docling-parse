@@ -52,6 +52,9 @@ namespace pdflib
     QPDFObjectHandle get_patterns() const;
     QPDFObjectHandle get_xobjects() const;
 
+    // Copy the handle; the owning QPDF document must outlive parsing.
+    QPDFObjectHandle get_stream() const;
+
     std::vector<qpdf_stream_instruction> parse_stream() const;
 
   private:
@@ -258,6 +261,11 @@ namespace pdflib
     return QPDFObjectHandle::newNull();
   }
 
+  QPDFObjectHandle pdf_resource<PAGE_XOBJECT_FORM>::get_stream() const
+  {
+    return qpdf_xobject;
+  }
+
   std::vector<qpdf_stream_instruction> pdf_resource<PAGE_XOBJECT_FORM>::parse_stream() const
   {
     std::vector<qpdf_stream_instruction> stream;
@@ -270,6 +278,10 @@ namespace pdflib
         decoder.decode(qpdf_xobject_);
 
         decoder.print();
+      }
+    catch(const std::bad_alloc&)
+      {
+        throw;
       }
     catch(const std::exception& exc)
       {

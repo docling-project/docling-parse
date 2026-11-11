@@ -12,8 +12,10 @@
 // process-lifetime high-water mark.
 // Generation variants: solid, dash-each, dash-once, dash-q, empty-each,
 // pathstorm (the grid generator from docling#4058, with its rounded line count).
-// test_memory_on_lines_buffered keeps buffered page delivery for comparison.
-// Diagnostic page_* fields cover /Contents only, excluding nested Form tokens.
+// test_memory_on_lines_buffered buffers both page and Form content.
+// test_memory_on_lines_buffered_forms streams pages and buffers Forms.
+// page_* fields cover /Contents only. form_* diagnostics aggregate Do calls
+// through that page's ordinary Form tree, not other buffered entry points.
 #include <parse.h>
 #include <render.h>
 
@@ -43,6 +45,11 @@ const auto started = clock_type::now();
 constexpr const char* page_content_delivery = "buffered";
 #else
 constexpr const char* page_content_delivery = "callback";
+#endif
+#ifdef DOCLING_PARSE_BUFFERED_FORM_CONTENTS
+constexpr const char* form_content_delivery = "buffered";
+#else
+constexpr const char* form_content_delivery = "callback";
 #endif
 
 void snapshot(const std::string& stage, int pause_seconds, json details = json::object())
@@ -300,6 +307,7 @@ void measure(std::string mode, std::string filename, int pause_seconds, const st
            {{"mode", mode}, {"requested_mode", requested_mode}, {"file", filename},
             {"qpdf_version", QPDF::QPDFVersion()},
             {"page_content_delivery", page_content_delivery},
+            {"form_content_delivery", form_content_delivery},
             {"sizeof_token", sizeof(pdflib::qpdf_stream_instruction)},
             {"sizeof_page_shape", sizeof(pdflib::page_item<pdflib::PAGE_SHAPE>)},
             {"sizeof_shape_instruction", sizeof(pdflib::shape_instruction)},
@@ -404,7 +412,14 @@ void measure(std::string mode, std::string filename, int pause_seconds, const st
             {"page_buffered_tokens", content_stats.buffered_tokens},
             {"page_buffered_token_capacity", content_stats.buffered_token_capacity},
             {"page_operand_diagnostics", content_stats.operand_diagnostics_enabled},
-            {"page_max_pending_operands", content_stats.max_pending_operands}});
+            {"page_max_pending_operands", content_stats.max_pending_operands},
+            {"form_content_delivery", form_content_delivery},
+            {"form_diagnostics", content_stats.operand_diagnostics_enabled},
+            {"form_executions", content_stats.form_executions},
+            {"form_source_objects", content_stats.form_source_objects},
+            {"form_materialized_tokens", content_stats.form_materialized_tokens},
+            {"form_max_pending_operands", content_stats.form_max_pending_operands},
+            {"form_max_depth", content_stats.form_max_depth}});
   if(mode=="render")
     {
       pdflib::render_config render_config;

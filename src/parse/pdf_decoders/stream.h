@@ -16,6 +16,14 @@ namespace pdflib
     std::size_t buffered_tokens = 0;
     std::size_t buffered_token_capacity = 0;
     std::size_t max_pending_operands = 0;
+    // Probe-only aggregation over Do calls in this stream and its Form children.
+    // Materialized tokens count both legacy vectors across all invocations;
+    // this is cumulative work, not a simultaneous-live-memory measurement.
+    std::size_t form_executions = 0;
+    std::size_t form_source_objects = 0;
+    std::size_t form_materialized_tokens = 0;
+    std::size_t form_max_pending_operands = 0;
+    std::size_t form_max_depth = 0;
 #ifdef DOCLING_PARSE_CONTENT_DIAGNOSTICS
     static constexpr bool operand_diagnostics_enabled = true;
 #else
@@ -425,7 +433,7 @@ namespace pdflib
     content_stats.source_bytes_observed = decoder.get_source_bytes_observed();
 
     // QPDF may report EOF for each fallback component. Finalize exactly once
-    // here, after the entire logical /Contents has been consumed successfully.
+    // here, after the entire logical page/Form stream has been consumed.
     finish_interpretation();
   }
 
@@ -533,8 +541,8 @@ namespace pdflib
 
     begin_interpretation();
 
-    // Nested entry points and the native comparison target retain buffered
-    // delivery through the same instruction consumer as ordinary page callbacks.
+    // Remaining buffered entry points and native comparison targets use the
+    // same instruction consumer as ordinary page and Form callbacks.
     for(int l=0; l<stream.size(); l++)
       {
         consume_instruction(stream[l], parameters);
@@ -2044,9 +2052,8 @@ namespace pdflib
 
     // Time the whole call; the "machinery" cost (child-resource allocation,
     // graphics-state copies via q()/Q(), stack copy in update_stack(), ...) is
-    // derived as: total - set() - parse_stream() - nested interprete(). The
-    // subtracted parts are bucketed under their own keys, so this residual is
-    // disjoint from them.
+    // derived as total - resource setup - source parsing/interpretation. The
+    // callback path reports combined Form self-time without per-token clocks.
     utils::timer do_form_timer;
     double set_seconds          = 0.0;
     double parse_stream_seconds = 0.0;
@@ -2132,11 +2139,15 @@ namespace pdflib
       current_global_state().cm(xobj.get_matrix());
 
       {
+#ifdef DOCLING_PARSE_BUFFERED_FORM_CONTENTS
+        // Temporary native reference: the page can stream while Forms retain
+        // the old local vector and the interpreter's copy of that vector.
         utils::timer parse_stream_timer;
         std::vector<qpdf_stream_instruction> insts = xobj.parse_stream();
         parse_stream_seconds = parse_stream_timer.get_time();
         timings.add_timing(pdf_timings::KEY_PARSE_STREAM_TOTAL, parse_stream_seconds);
         timings.note_attributed(parse_stream_seconds);
+#endif
 
         pdf_decoder<STREAM> new_stream(config,
 
@@ -2165,13 +2176,47 @@ namespace pdflib
         new_stream.inherited_marked_content.mcid = active_marked_content().mcid;
         new_stream.inherited_marked_content.artifact = active_marked_content().artifact;
 
-        // copy the stack
         std::vector<qpdf_stream_instruction> parameters;
         {
+#ifdef DOCLING_PARSE_BUFFERED_FORM_CONTENTS
           utils::timer interprete_timer;
           new_stream.interprete(insts, parameters);
           interprete_seconds = interprete_timer.get_time();
+#else
+          // Hold our own QPDF handle until the synchronous nested parse returns.
+          // update_stack() has already rebound state to the child resources;
+          // begin_interpretation() captures the transformed Form base CTM.
+          QPDFObjectHandle content = xobj.get_stream();
+          const double attributed_before = timings.attributed_total();
+          utils::timer content_timer;
+          new_stream.decode_and_interprete(content, parameters);
+          interprete_seconds = content_timer.get_time();
+          const double attributed_during = timings.attributed_total() - attributed_before;
+          const double self_seconds = std::max(0.0, interprete_seconds - attributed_during);
+          timings.add_timing(pdf_timings::KEY_FORM_PARSE_INTERPRETE_TOTAL, self_seconds);
+          timings.note_attributed(self_seconds);
+
+          if(not parameters.empty())
+            {
+              LOG_S(ERROR) << "Finishing a `Do` with nonzero number of parameters!";
+            }
+#endif
         }
+
+#ifdef DOCLING_PARSE_CONTENT_DIAGNOSTICS
+        const auto& child_stats = new_stream.get_content_statistics();
+        content_stats.form_executions += 1 + child_stats.form_executions;
+        content_stats.form_source_objects += child_stats.source_objects + child_stats.form_source_objects;
+        content_stats.form_materialized_tokens += child_stats.buffered_tokens + child_stats.form_materialized_tokens;
+#ifdef DOCLING_PARSE_BUFFERED_FORM_CONTENTS
+        content_stats.form_materialized_tokens += insts.size();
+#endif
+        content_stats.form_max_pending_operands = std::max(
+          content_stats.form_max_pending_operands,
+          std::max(child_stats.max_pending_operands, child_stats.form_max_pending_operands));
+        content_stats.form_max_depth = std::max(content_stats.form_max_depth,
+                                              1 + child_stats.form_max_depth);
+#endif
 
         if(updated_stack)
           {
