@@ -353,15 +353,26 @@ class ReportInputs:
     def replay(self, path: Path) -> list[Measurement]:
         report = json.loads(path.read_text())
         replay_git = report["provenance"]["parse_git"]
-        if replay_git["revision"] == self.metadata["source_revision"]:
+        source_metadata = self.metadata.get("recovered_replay_provenance", {}).get(
+            str(path.relative_to(self.root)), self.metadata
+        )
+        if source_metadata is not self.metadata:
             require(
-                replay_git["diff_sha256"] == self.metadata["source_diff_sha256"],
+                report["provenance"]["script_sha256"]
+                == source_metadata["script_sha256"][
+                    "run_performance_benchmarking_with_docling_settings.py"
+                ],
+                f"Recovered replay script hash changed: {path}",
+            )
+        if replay_git["revision"] == source_metadata["source_revision"]:
+            require(
+                replay_git["diff_sha256"] == source_metadata["source_diff_sha256"],
                 f"Replay tracked source diff changed during the run: {path}",
             )
         else:
             require(
                 committed_source_matches(
-                    self.metadata,
+                    source_metadata,
                     report["provenance"],
                     Path(__file__).resolve().parents[2],
                 ),
@@ -1035,7 +1046,8 @@ def write_report(
     if meta.get("recovery"):
         lines += [
             f"Core measurements reused from `{meta['recovery']['source_bundle']}`. "
-            "Comparisons were recollected with their own recorded source/package provenance.",
+            "Missing core configurations were resumed where needed; recovered replay source identities "
+            "are recorded per artifact in metadata. Comparisons, when requested, retain separate provenance.",
             "",
         ]
     if meta.get("comparison_provenance") and not core_only:

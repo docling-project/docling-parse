@@ -16,7 +16,7 @@ Environment:
   DATASET=bo767               Select bo20, bo767 or bo10k
   DATASET_REVISION=<revision>  Override the selected dataset's pinned revision
   OUT=<new directory>         Default: a unique scratch-performance-refresh-* path
-  RECOVER_FROM=<bundle>        Reuse validated native/replay results; recollect comparisons in a new bundle
+  RECOVER_FROM=<bundle>        Resume missing configurations in a new bundle; inherit original settings
   MEMORY_MODE=off              off, independent OS peak, or peak plus sampled RSS (profile)
   MEMORY_INTERVAL_MS=50        Positive sampling interval; CLI overrides environment
 
@@ -40,13 +40,19 @@ Full corpus sweeps can take hours, especially with RUN_COMPARISON=1 or REPEATS=3
 HELP
   exit 0
 fi
+memory_mode_explicit=${MEMORY_MODE+x}
+memory_interval_explicit=${MEMORY_INTERVAL_MS+x}
 MEMORY_MODE=${MEMORY_MODE:-off}
 MEMORY_INTERVAL_MS=${MEMORY_INTERVAL_MS:-50}
 while [[ $# != 0 ]]; do
   case "$1" in
     --memory-mode|--memory-interval-ms)
       if [[ $# -lt 2 ]]; then echo "Missing value for $1" >&2; exit 2; fi
-      if [[ $1 == --memory-mode ]]; then MEMORY_MODE=$2; else MEMORY_INTERVAL_MS=$2; fi
+      if [[ $1 == --memory-mode ]]; then
+        MEMORY_MODE=$2; memory_mode_explicit=x
+      else
+        MEMORY_INTERVAL_MS=$2; memory_interval_explicit=x
+      fi
       shift 2 ;;
     *) echo "Unexpected argument: $1; use --help." >&2; exit 2 ;;
   esac
@@ -55,7 +61,6 @@ case "$MEMORY_MODE" in off|peak|profile) ;; *) echo "Invalid memory mode." >&2; 
 if [[ ! $MEMORY_INTERVAL_MS =~ ^[1-9][0-9]*$ ]]; then
   echo "MEMORY_INTERVAL_MS must be a positive integer." >&2; exit 2
 fi
-export MEMORY_MODE MEMORY_INTERVAL_MS
 
 REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 cd "$REPO_ROOT"
@@ -66,8 +71,11 @@ if [[ -n ${RECOVER_FROM:-} ]]; then
   fi
   recovery=(uv run --no-sync python scripts/benchmarking/recover_performance_benchmarks.py "$RECOVER_FROM")
   if [[ -n ${OUT:-} ]]; then recovery+=(--output-dir "$OUT"); fi
+  if [[ -n $memory_mode_explicit ]]; then recovery+=(--memory-mode "$MEMORY_MODE"); fi
+  if [[ -n $memory_interval_explicit ]]; then recovery+=(--memory-interval-ms "$MEMORY_INTERVAL_MS"); fi
   exec "${recovery[@]}"
 fi
+export MEMORY_MODE MEMORY_INTERVAL_MS
 REPEATS=${REPEATS:-1}
 THREADS=${THREADS:-1,4,8,12}
 RUN_COMPARISON=${RUN_COMPARISON:-0}

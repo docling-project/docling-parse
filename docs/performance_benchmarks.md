@@ -8,7 +8,7 @@ A publication updates only its dataset/setup; results from other setups remain a
 | Dataset | Setup | Run | Workloads |
 |---|---|---|---|
 | bo20 | [Apple M3 Max / 64 GiB / macOS-26.6.2-arm64-arm-64bit](performance_benchmarks/bo20/apple-m3-max-64gib-macos-26-6-2-arm64-arm-64bit/index.md) | scratch-performance-refresh-20261112-123829-Q21HfP | native, replay |
-| bo767 | [Apple M3 Max / 64 GiB / macOS-26.6.2-arm64-arm-64bit](performance_benchmarks/bo767/apple-m3-max-64gib-macos-26-6-2-arm64-arm-64bit/index.md) | scratch-performance-recovery-c2rz8gq0 | native, replay, comparison |
+| bo767 | [Apple M3 Max / 64 GiB / macOS-26.6.2-arm64-arm-64bit](performance_benchmarks/bo767/apple-m3-max-64gib-macos-26-6-2-arm64-arm-64bit/index.md) | scratch-performance-recovery-8vumw3sy | native, replay |
 <!-- performance:availability:end -->
 
 ## Workloads and timing boundaries

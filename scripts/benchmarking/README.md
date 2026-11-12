@@ -18,7 +18,7 @@ It does not update the documentation. Full runs can take hours.
 |---|---|---|---|
 | `refresh_performance_benchmarks.sh` | Build and run the publication workflow | Pinned HF dataset; environment settings shown by `--help` | Raw measurements, provenance, generated report and PNGs |
 | `run_performance_report.py` | Validate and summarize a launcher bundle | Bundle containing `metadata.json` | `report/summary.md`, CSV tables, PNGs |
-| `recover_performance_benchmarks.py` | Reuse completed core results and recollect comparisons | Existing bundle; normally invoked through `RECOVER_FROM` | New bundle with original core artifacts and separate comparison provenance |
+| `recover_performance_benchmarks.py` | Resume missing configurations and reuse validated results | Existing bundle; normally invoked through `RECOVER_FROM` | New bundle with linked completed artifacts and resumed results |
 | `run_performance_benchmarking_with_docling_settings.py` | Standalone backend replay | PDFs or pinned HF revision | `report.json` and page metadata JSONL |
 | `run_performance_benchmarking.py` | Python API scaling and cross-package measurement | PDFs or HF dataset | Console tables and per-page CSV |
 | `run_performance_eval.py` | Explore Python comparison page timings | Comparison per-page CSV | Histograms, scaling/correlation PNGs, document statistics |
@@ -229,27 +229,43 @@ RECOVER_FROM=/absolute/path/to/scratch-performance-refresh-RUN \
   bash scripts/benchmarking/refresh_performance_benchmarks.sh
 ```
 
-Recovery creates a **new** bundle using the dataset, repetitions and thread
-counts from the source bundle. It synchronizes the pinned dependencies while
-retaining the installed local project, checks the recorded machine, Python, core
-packages, native binary/extension hashes and QPDF version, then validates the
-complete core results and dataset hashes. It links the original native/replay
-artifacts, so **keep the original bundle**. It does not rebuild native targets.
-If scripts were committed during collection, replay provenance is accepted only
-when the commit patch exactly matches the recorded build diff and the replay
-script hash matches that commit. The report explains this equivalence.
+Recovery creates a **new** bundle using the source dataset/revision, repetitions,
+thread counts, workload settings and comparison enablement. `REPEATS`, `THREADS`,
+`DATASET` and `RUN_COMPARISON` environment settings do not override the source.
+Memory mode and sampling interval are inherited too; you do not need to repeat
+`--memory-mode profile --memory-interval-ms 50` for an originally profiled run.
 
-Both comparison modes are recollected under the current reference versions.
-Compatible checkpoints from a previous recovery are copied and reused; a
-reference-version or source change prevents checkpoint reuse. The original
-metadata is retained as `original-metadata.json`. `comparison_provenance` records
-the new environment separately, and report tables show package versions. The
-completed original parse comparison remains in its original bundle.
+Each native profile/thread/repetition and each replay backend/thread/repetition
+is validated independently. Completed configurations are linked unchanged;
+missing or incomplete configurations restart from their beginning. Partial
+page-level timings are never combined with a fresh measurement. The original
+bundle is untouched: **keep it**, including any earlier bundles it links to.
+Recovery prints which configurations it will reuse and which it must run.
 
-If recovery is interrupted, use the newly printed recovery directory as
-`RECOVER_FROM` to retain compatible completed comparison checkpoints.
-`OUT` may select a new output directory; `BUILD_MODE=clean` is incompatible with
-recovery because the recorded core binaries must remain unchanged.
+Recovery synchronizes dependencies while retaining the installed local project;
+it does not rebuild native targets. Machine, Python, core packages, native
+binary/extension hashes, QPDF and dataset hashes must match. Resuming core work
+also requires unchanged measurement/monitor scripts and recorded runtime
+settings (including fallback fonts). Explicit memory flags must match original
+core instrumentation while core work remains incomplete. Once core work is
+complete, explicit memory flags may change comparison instrumentation.
+
+The original source/build identity remains intact. Resumed replay measurements
+have artifact-specific source provenance in `recovered_replay_provenance`, so
+unrelated documentation/tooling edits do not invalidate resumed measurements.
+Changed measurement scripts still require a new full run. Mid-run commits of
+original changes retain the report's exact-patch equivalence validation.
+
+Cross-package comparisons run only if the source requested them. When enabled,
+compatible completed checkpoints are reused; changed source/reference versions
+or memory settings cause affected comparisons to be recollected. Original
+metadata is retained as `original-metadata.json`, and `comparison_provenance`
+records the environment for recovered comparisons separately.
+
+If recovery is interrupted, use its newly printed recovery directory as
+`RECOVER_FROM` so completed resumed work is retained. `OUT` may select a new output
+directory; `BUILD_MODE=clean` is incompatible with recovery because recorded core
+binaries must remain unchanged.
 
 You can also inspect the completed core results independently:
 

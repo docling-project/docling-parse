@@ -199,6 +199,7 @@ def provenance(
         "comparison_memory",
         "comparison_provenance",
         "recovery",
+        "recovered_replay_provenance",
     )
     result = {k: meta[k] for k in keys if k in meta}
     result.update(

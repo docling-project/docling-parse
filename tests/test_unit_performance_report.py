@@ -1598,3 +1598,223 @@ def test_launcher_recovery_dispatch_keeps_existing_builds(tmp_path: Path, clean)
         assert str(source) in result.stdout.splitlines()
         assert str(output) in result.stdout.splitlines()
         assert "scripts/benchmarking/recover_performance_benchmarks.py" in result.stdout
+
+
+def _recovery_module():
+    spec = importlib.util.spec_from_file_location(
+        "performance_recovery_tests",
+        Path(__file__).parents[1]
+        / "scripts/benchmarking/recover_performance_benchmarks.py",
+    )
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    sys.path.insert(0, str(Path(__file__).parents[1] / "scripts/benchmarking"))
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.path.pop(0)
+    return module
+
+
+def _recovery_fixture(tmp_path, monkeypatch):
+    recovery = _recovery_module()
+    source = tmp_path / "source"
+    source.mkdir()
+    inputs = _profiled_bundle(source)
+    meta = inputs.metadata
+    pdf = tmp_path / "doc.pdf"
+    pdf.write_bytes(b"fixture PDF identity")
+    meta["dataset"]["files"][0].update(path=str(pdf), sha256=recovery.digest(pdf))
+    meta["script_sha256"] = {
+        "scripts/benchmarking/" + name: recovery.digest(
+            recovery.ROOT / "scripts/benchmarking" / name
+        )
+        for name in (
+            "run_performance_benchmarking_with_docling_settings.py",
+            "_performance_memory.py",
+        )
+    }
+    meta["memory_collection"] = {"mode": "off", "interval_ms": None}
+    meta["comparison_memory"] = dict(meta["memory_collection"])
+    (source / "metadata.json").write_text(json.dumps(meta))
+    provenance = {
+        "source_revision": "recovery-revision",
+        "source_diff_sha256": "recovery-diff",
+        "script_sha256": {Path(k).name: v for k, v in meta["script_sha256"].items()},
+    }
+    monkeypatch.setattr(recovery, "validate_environment", lambda *args: None)
+    monkeypatch.setattr(
+        recovery,
+        "reference_preflight",
+        lambda *args: pytest.fail("Comparisons were not requested"),
+    )
+    return recovery, source, meta, provenance
+
+
+@pytest.mark.parametrize("partial_row", [False, True])
+def test_recovery_resumes_only_partial_or_missing_core_results(
+    tmp_path, monkeypatch, partial_row
+):
+    recovery, source, meta, provenance = _recovery_fixture(tmp_path, monkeypatch)
+    baseline = tmp_path / "baseline"
+    shutil.copytree(source, baseline)
+    missing = Path("replay/r1/pdfium/report.json")
+    (source / missing).unlink()
+    partial = Path("native/render-only/r1/t1.csv")
+    if partial_row:
+        lines = (source / partial).read_text().splitlines()
+        (source / partial).write_text(
+            lines[0] + "\n" + ",".join(lines[1].split(",")[:8]) + "\n"
+        )
+    else:
+        (source / partial).write_text("schema_version,mode\n")
+    original = {
+        p.relative_to(source): p.read_bytes() for p in source.rglob("*") if p.is_file()
+    }
+    output = tmp_path / "recovered"
+    output.mkdir()
+    resumed = recovery.prepare_recovery(source, output, provenance)
+    assert set(resumed["recovery"]["pending_core"]) == {str(missing), str(partial)}
+    assert resumed["comparison"] is False
+    assert resumed["threads"] == meta["threads"]
+    assert resumed["repeats"] == meta["repeats"]
+    assert resumed["memory_collection"] == meta["memory_collection"]
+    assert (output / "replay/r1/t1").is_symlink()
+    assert not (output / "native").is_symlink()
+    executed = []
+
+    def execute(command, log, commands_path=None):
+        executed.append(command)
+        if "--timing-csv" in command:
+            artifact = Path(command[command.index("--timing-csv") + 1])
+            shutil.copy2(baseline / partial, artifact)
+            shutil.copy2((baseline / partial).with_suffix(".log"), log)
+        else:
+            directory = Path(command[command.index("--output-dir") + 1])
+            shutil.copytree(baseline / missing.parent, directory)
+            report = json.loads((directory / "report.json").read_text())
+            report["provenance"] = {
+                "parse_git": {
+                    "revision": provenance["source_revision"],
+                    "diff_sha256": provenance["source_diff_sha256"],
+                },
+                "script_sha256": provenance["script_sha256"][
+                    "run_performance_benchmarking_with_docling_settings.py"
+                ],
+            }
+            (directory / "report.json").write_text(json.dumps(report))
+
+    monkeypatch.setattr(recovery, "run_logged", execute)
+    recovery.resume_core(resumed, output, True)
+    assert len(executed) == 2
+    assert len(recovery.ReportInputs(output).load()) == 4
+    assert original == {
+        p.relative_to(source): p.read_bytes() for p in source.rglob("*") if p.is_file()
+    }
+    # A second interruption/recovery can reuse results collected in the first recovery.
+    next_output = tmp_path / "recovered-again"
+    next_output.mkdir()
+    again = recovery.prepare_recovery(output, next_output, provenance)
+    assert again["recovery"]["pending_core"] == []
+    assert len(recovery.ReportInputs(next_output).load()) == 4
+
+
+def test_recovery_rejects_changed_replay_provenance(tmp_path, monkeypatch):
+    recovery, source, _, provenance = _recovery_fixture(tmp_path, monkeypatch)
+    report_path = source / "replay/r1/t1/report.json"
+    report = json.loads(report_path.read_text())
+    report["provenance"]["parse_git"]["diff_sha256"] = "changed"
+    report_path.write_text(json.dumps(report))
+    output = tmp_path / "out"
+    output.mkdir()
+    with pytest.raises(ValueError, match="source diff changed"):
+        recovery.prepare_recovery(source, output, provenance)
+    assert not (output / "metadata.json").exists()
+
+
+def test_recovery_rejects_dataset_changes(tmp_path, monkeypatch):
+    recovery, source, meta, provenance = _recovery_fixture(tmp_path, monkeypatch)
+    Path(meta["dataset"]["files"][0]["path"]).write_bytes(b"changed PDF")
+    output = tmp_path / "out"
+    output.mkdir()
+    with pytest.raises(ValueError, match="dataset differs"):
+        recovery.prepare_recovery(source, output, provenance)
+
+
+@pytest.mark.parametrize("change", ["script", "memory", "environment"])
+def test_incomplete_recovery_rejects_incompatible_resume_settings(
+    tmp_path, monkeypatch, change
+):
+    recovery, source, meta, provenance = _recovery_fixture(tmp_path, monkeypatch)
+    (source / "replay/r1/pdfium/report.json").unlink()
+    override = None
+    if change == "script":
+        meta["script_sha256"][
+            "scripts/benchmarking/run_performance_benchmarking_with_docling_settings.py"
+        ] = "changed"
+    elif change == "memory":
+        override = {"mode": "profile", "interval_ms": 50}
+    else:
+        meta["environment"] = {"DOCLING_PARSE_FALLBACK_FONT": "original-font.ttf"}
+        monkeypatch.delenv("DOCLING_PARSE_FALLBACK_FONT", raising=False)
+    (source / "metadata.json").write_text(json.dumps(meta))
+    output = tmp_path / "out"
+    output.mkdir()
+    with pytest.raises(ValueError, match=r"changed|memory settings"):
+        recovery.prepare_recovery(source, output, provenance, override)
+    assert not (output / "metadata.json").exists()
+
+
+def test_resume_command_preserves_original_profile_instrumentation(
+    tmp_path, monkeypatch
+):
+    recovery, _, meta, _ = _recovery_fixture(tmp_path, monkeypatch)
+    meta["memory_collection"] = {"mode": "profile", "interval_ms": 75}
+    for job in recovery.core_jobs(meta):
+        command, log = recovery.core_command(meta, job, tmp_path, True)
+        assert command[command.index("--memory-mode") + 1] == "profile"
+        assert command[command.index("--memory-interval-ms") + 1] == "75"
+        assert command[command.index("--output") + 1] == str(
+            log.with_suffix(".memory.json")
+        )
+        if job.workload == "native":
+            assert (
+                f"--create-word-cells={str(job.profile != 'render-only').lower()}"
+                in command
+            )
+        else:
+            assert command[command.index("--backend") + 1] == job.profile
+
+
+@pytest.mark.skipif(os.name == "nt", reason="Bash launcher")
+@pytest.mark.parametrize("explicit", [False, True])
+def test_recovery_launcher_preserves_inherited_memory_defaults(tmp_path, explicit):
+    _, launcher = _copy_launcher(tmp_path)
+    binaries = tmp_path / "bin"
+    binaries.mkdir()
+    uv = binaries / "uv"
+    uv.write_text(
+        '#!/bin/sh\nprintf "%s\\n" "$@"\nprintf "memory_env=%s\\n" "${MEMORY_MODE-unset}"\n'
+    )
+    uv.chmod(0o755)
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if k not in ("MEMORY_MODE", "MEMORY_INTERVAL_MS", "BUILD_MODE", "OUT")
+    }
+    env.update(
+        PATH=str(binaries) + os.pathsep + os.environ["PATH"], RECOVER_FROM="source"
+    )
+    arguments = (
+        ["--memory-mode", "profile", "--memory-interval-ms", "75"] if explicit else []
+    )
+    result = subprocess.run(
+        ["bash", str(launcher), *arguments], env=env, text=True, capture_output=True
+    )
+    assert result.returncode == 0, result.stderr
+    assert "memory_env=unset" in result.stdout
+    if explicit:
+        assert "--memory-mode\nprofile\n--memory-interval-ms\n75" in result.stdout
+    else:
+        assert "--memory-mode" not in result.stdout

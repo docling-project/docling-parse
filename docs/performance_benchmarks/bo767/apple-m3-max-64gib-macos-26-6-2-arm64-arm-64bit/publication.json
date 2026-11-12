@@ -1,0 +1,37 @@
+{
+  "dataset": "bo767",
+  "files": {
+    "assets/memory_native_render-only.png": "727cd0e5c255088d4f7788bbba996ea4b7dc13b7abcbe4e151e3ae284511834f",
+    "assets/memory_native_render-with-text.png": "3788553be67df5aeb06f8b3b62e0d78afca2933703b816bf24d56cc1283a855c",
+    "assets/memory_replay_render.png": "b0a42d975fa22ecfb01687fe7f12c356e3b10515f6ef718320030143a9e17c76",
+    "assets/native_render_only_distribution.png": "2143aa241f0a8e20a154dbe5e59d54d8a1fcace79a2c871d4db902051d01afca",
+    "assets/native_render_only_phases.png": "591429a3415ccf6eb10e1f72cbc9ccef7ca6c0065851da3e36f06f4b2a8ee93a",
+    "assets/native_render_only_runtime.png": "a8a8eff3a505d8e92e016c2ebd4c208c1790a0b862112e1e7c3e47e354719bb6",
+    "assets/native_render_only_scaling.png": "c19c5b1d47377942e8f44e36d4ef4e5e395bc260fad9ad4b9f6b45334402d04d",
+    "assets/native_render_with_text_distribution.png": "ca34e463667a025c2a2f0c2866846ce4519470c5dcd08919335e4d7bb7e6e8f6",
+    "assets/native_render_with_text_phases.png": "2e31ab3c7be361aa93ec7f95cf408886535494ad7428fd3ad1a75cb3b39c50a0",
+    "assets/native_render_with_text_runtime.png": "2a580698eb56b8ce002ee3c359472bd4810f284334a02cf6eb261bfb88aa2a91",
+    "assets/native_render_with_text_scaling.png": "cb08e34a9607dfff09acab41dd0abf6e0f0d801d56d00d6878f46ffefa68b30f",
+    "assets/replay_distribution.png": "eb40864259df2846f5a810f0a2fdf1a560712b1be08f4099138390de90b35c5f",
+    "assets/replay_phases.png": "ba4adb80210fb9d2ec038ad3bdfa41d84a8604324b18d79c38e83c1878552744",
+    "assets/replay_runtime.png": "8dd25e7fee121dea880de7c88e7e0de4b77bf2a768f03907c9a95c9ab38265ce",
+    "assets/replay_scaling.png": "bbf5dd7f680bc0d5bae4907513d93504c08d9f38b2899f78110b098ded2ba7e7",
+    "index.md": "04597489181ca49724fd27d2391bc49f0b519e38632a67024698348ebaca3f31",
+    "provenance.json": "0c988a60b222e0ea6291c78617f079851549e20fb45023ac1965b26be861b6c8"
+  },
+  "label": "Apple M3 Max / 64 GiB / macOS-26.6.2-arm64-arm-64bit",
+  "machine": {
+    "cpu": "Apple M3 Max",
+    "machine": "arm64",
+    "memory_bytes": 68719476736,
+    "platform": "macOS-26.6.2-arm64-arm-64bit"
+  },
+  "measured_at": "2026-11-12T17:27:10.253402",
+  "run": "scratch-performance-recovery-8vumw3sy",
+  "schema_version": 1,
+  "setup": "apple-m3-max-64gib-macos-26-6-2-arm64-arm-64bit",
+  "workloads": [
+    "native",
+    "replay"
+  ]
+}

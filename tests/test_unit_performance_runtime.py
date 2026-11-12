@@ -156,6 +156,11 @@ def test_recovery_forks_core_without_relabeling_versions(tmp_path: Path, monkeyp
             ]
         },
     }
+    metadata.update(repeats=1, threads=[1], comparison=True)
+    for job in _RECOVERY.core_jobs(metadata):
+        artifact = source / job.artifact
+        artifact.parent.mkdir(parents=True, exist_ok=True)
+        artifact.write_text("unchanged measurements")
     (source / "metadata.json").write_text(json.dumps(metadata))
     original = (source / "metadata.json").read_bytes()
     provenance = {
@@ -175,6 +180,7 @@ def test_recovery_forks_core_without_relabeling_versions(tmp_path: Path, monkeyp
             return ["validated core"]
 
     monkeypatch.setattr(_RECOVERY, "ReportInputs", Inputs)
+    monkeypatch.setattr(_RECOVERY, "inspect_job", lambda *_: True)
     monkeypatch.setattr(_RECOVERY, "validate_environment", lambda meta, prov: None)
     monkeypatch.setattr(
         _RECOVERY, "reference_preflight", lambda meta: {"status": "passed"}
@@ -184,9 +190,11 @@ def test_recovery_forks_core_without_relabeling_versions(tmp_path: Path, monkeyp
     assert result["comparison_provenance"]["packages"]["pymupdf"] == "1.27.2.3"
     assert (source / "metadata.json").read_bytes() == original
     assert (output / "original-metadata.json").read_bytes() == original
-    for name in ("native", "replay"):
-        assert (output / name).is_symlink()
-        assert (output / name / "raw").read_text() == "unchanged measurements"
+    for job in _RECOVERY.core_jobs(metadata):
+        artifact = output / job.artifact
+        assert artifact.resolve() == (source / job.artifact).resolve()
+        assert artifact.read_text() == "unchanged measurements"
+    assert not (output / "native").is_symlink()
 
 
 @pytest.mark.skipif(os.name == "nt", reason="Recovery uses Unix symlinks")
@@ -206,6 +214,8 @@ def test_recovery_copies_memory_with_compatible_checkpoints(
     (series / "memory/run.memory.rss.csv").write_text("original samples")
     provenance = {"packages": {"pymupdf": "fixture"}}
     metadata = {
+        "repeats": 1,
+        "comparison": True,
         "dataset": {"files": [], "root": "/pdf"},
         "threads": [1, 4],
         "scale": 1,
@@ -223,6 +233,7 @@ def test_recovery_copies_memory_with_compatible_checkpoints(
         ),
     )
     monkeypatch.setattr(_RECOVERY, "validate_environment", lambda *_: None)
+    monkeypatch.setattr(_RECOVERY, "core_jobs", lambda _: [])
     monkeypatch.setattr(
         _RECOVERY, "reference_preflight", lambda _: {"status": "passed"}
     )
