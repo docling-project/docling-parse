@@ -1517,12 +1517,8 @@ namespace pdflib
                                                      double dx, double dy)
   {
     const bool shifted = (dx != 0.0 or dy != 0.0);
-#ifdef DOCLING_PARSE_COPY_CLIP_SNAPSHOTS
-    clip_translation_cache* translation_cache = nullptr;
-#else
     clip_translation_cache clip_translations;
     clip_translation_cache* translation_cache = &clip_translations;
-#endif
 
     for(const auto& instr : instructions)
       {

@@ -1235,23 +1235,6 @@ namespace pdflib
     const double attributed_before = timings.attributed_total();
     std::vector<qpdf_stream_instruction> parameters;
 
-#ifdef DOCLING_PARSE_BUFFERED_PAGE_CONTENTS
-    // Temporary native comparison build: preserve the two-stage baseline.
-    double interprete_seconds = 0.0;
-    {
-      utils::timer content_decode_timer;
-      stream_decoder.decode(contents);
-      timings.add_timing(pdf_timings::KEY_CONTENT_DECODE_TOTAL, content_decode_timer.get_time());
-    }
-    {
-      utils::timer interprete_timer;
-      stream_decoder.interprete(parameters);
-      interprete_seconds = interprete_timer.get_time();
-    }
-    const double attributed_during = timings.attributed_total() - attributed_before;
-    timings.add_timing(pdf_timings::KEY_INTERPRETE_OPS_TOTAL,
-                       interprete_seconds - attributed_during);
-#else
     // QPDF parsing and interpretation are interleaved. Report their combined
     // self-time, excluding already-attributed nested work. Timing every token
     // to reconstruct the old split would add overhead to the production path.
@@ -1263,7 +1246,6 @@ namespace pdflib
       timings.add_timing(pdf_timings::KEY_CONTENT_PARSE_INTERPRETE_TOTAL,
                          std::max(0.0, elapsed - attributed_during));
     }
-#endif
     content_stats = stream_decoder.get_content_statistics();
     soft_mask_stats = stream_decoder.get_soft_mask_statistics();
     pattern_stats = stream_decoder.get_pattern_statistics();
@@ -1900,16 +1882,9 @@ namespace pdflib
     const std::array<double, 6> ap_matrix = appearance_matrix(ap_stream, bbox);
 
     std::vector<qpdf_stream_instruction> parameters;
-#ifdef DOCLING_PARSE_BUFFERED_AP_CONTENTS
-    // Temporary native reference for isolating appearance-source retention.
-    stream_decoder.decode(ap_stream);
-    stream_decoder.set_base_matrix(ap_matrix);
-    stream_decoder.interprete(parameters);
-#else
     // Interpretation starts in the QPDF callback, so seed the transform first.
     stream_decoder.set_base_matrix(ap_matrix);
     stream_decoder.decode_and_interprete(ap_stream, parameters);
-#endif
 
 #ifdef DOCLING_PARSE_CONTENT_DIAGNOSTICS
     const auto& source_stats = stream_decoder.get_content_statistics();

@@ -1,15 +1,15 @@
 # Reduce the native parser's memory footprint
 
 Date: 2026-11-11.
-Status: pattern replay and the state/reset/shared-clip changes passed focused validation: 131 semantic tests passed, the native clip-history regression passed, and ordinary-page controls passed with the user accepting the small overlapping timing flag as noise.
-Shared immutable clip history removes the measured quadratic retained geometry. The renderer cursor resolves the chain's render-only slowdown; at 1,000 clips, rendering is 33.85% faster than the shared-history implementation without the cursor. Broader corpus/threaded validation and final comparison-path retirement remain open.
-The legacy Type3 cleanup regression passed in that suite; its controlled performance comparison remains pending.
-The Type3-cleanup smoke completed 20 measurements but its comparison was rejected because nine dependency archives changed; no controlled cleanup result is established.
+Status: COMPLETE. The user reports all final tests passing after comparison-code cleanup; the saved final smoke passed 80 measurements and all six intended PNG-equivalence checks. The controlled Type3 comparison, post-merge workload validation and comparison/dead-code retirement are complete. The optional benchmark memory-reporting feature is subsequent work.
+Shared immutable clip history removes the measured quadratic retained geometry. The renderer cursor resolves the chain's render-only slowdown; at 1,000 clips, rendering is 33.85% faster than the shared-history implementation without the cursor. Post-merge workload scaling/replay memory validation and final rebuilt-source verification passed.
+The legacy Type3 cleanup is now quantified with a current-library reference: 54 measurements per side, matching logical output and six identical PNG pairs. At 250,000 lines, Type3 decode/render peaks fall about 72%, and shapes-disabled peaks about 81%; every Type3 case is faster.
+The earlier Type3 comparison rejected on changed dependencies is superseded by this controlled pair; it is retained below as investigation history.
 MyPy/Ruff pass; step 4b appearance/widget streaming validated by native experiments and 171 focused tests.
 Step 4a Form streaming is validated by native experiments and 153 focused tests.
 Step 2 native recheck and carried-forward semantic coverage passed.
 Step 3 native smoke/scaling, Form timing recheck and focused semantic coverage passed.
-Step 1 core scaling is reviewed. Full unit/corpus/threaded validation and final cleanup remain pending; the new focused acceptance checkpoint and next user commands are recorded below. Earlier bo20 observations do not validate the later patches.
+Step 1 core scaling is reviewed. The user completed final build/native/unit/corpus verification and the 80-case cleanup smoke. The three-repeat bo20 bundle validates the merged implementation before mechanical cleanup; earlier Nov-11 observations remain historical context.
 Initial C++ reproduction and structural investigation are complete.
 
 Related issues:
@@ -916,7 +916,7 @@ Suggested comparison rows:
 - [x] Measure current direct-page dense-grid memory and inspect structural origins.
 - [x] Agree on the five-step strategy and document the user/Codex working loop.
 - [x] Write the first measurement patch and user-run launcher; native smoke/scaling passed.
-- [ ] Preliminary audit: classify state accumulation and reset lifetimes; reproduce suspected defects; jointly review measured candidates.
+- [x] Preliminary audit: state/reset lifetimes reviewed; quadratic clip snapshot retention reproduced, fixed and validated.
 - [x] Step 1 core checkpoint: QPDF-discard/collect scaling and single-Form overhead measured and reviewed; broader Form reuse sweeps remain optional follow-ups.
 - [x] Step 2 checkpoint: buffered refactor, matching grid outputs, scaling and targeted timing recheck accepted; carried-forward semantic suite passed.
 - [x] Write step 2's buffered refactor and baseline comparison.
@@ -926,9 +926,9 @@ Suggested comparison rows:
 - [x] Step 4b checkpoint: appearance/widget callback implementation, native smoke/scaling and 171 focused semantic tests passed.
 - [x] Repair launcher typing; full MyPy (110 sources) and Ruff checks pass.
 - [x] Step 4c procedural Type3 checkpoint: native smoke/scaling and 174 focused semantic tests passed.
-- [x] Write legacy Type3 font-token cleanup and eager-repair bounds regression; user build/measurements/tests pending.
-- [ ] Step 4: Nested content and intentional-cache audit; results verified.
-- [ ] Step 5: Real-document, corpus and threaded validation; comparison path retired.
+- [x] Legacy Type3 font-token cleanup and eager-repair bounds regression: controlled measurements and semantic tests accepted.
+- [x] Step 4: Nested content and intentional-cache audit; results verified.
+- [x] Step 5: Real-document, corpus and threaded validation; comparison path retired and final checks passed.
 
 ## Cycle 1 handoff — Step 1 measurement implementation
 
@@ -3363,12 +3363,12 @@ existing assertions and ground truth unchanged when reporting failures.
 
 | Item | Status / next gate |
 | --- | --- |
-| 1. Legacy Type3 token cleanup | Semantic regression passed in the user's 86-test suite; historical performance comparison rejected on changed dependencies; controlled comparison pending |
+| 1. Legacy Type3 token cleanup | Complete: semantic regression, controlled smoke/scaling, six identical scaling PNG pairs and timing budget passed; current-library reference isolates eager font storage |
 | 2. Soft-mask group source streaming | Complete: native smoke/scaling, cache reuse, PNG equivalence and 86 focused semantic tests passed |
 | 3. Pattern cache/replay copies | Focused validation complete: native smoke/scaling, PNG/cache checks, control recheck and the user's 131-test semantic suite passed |
 | 4. State-lifetime/reset audit | Focused validation complete: native exception/clip-history checks, shared-clip memory/pixel scaling, renderer cursor comparison, ordinary-page controls and 131 semantic tests passed; small timing variations remain recorded for broad validation |
-| 5. Broader corpus and threaded validation | Pending; user runs builds/tests/experiments |
-| 6. Comparison-path/dead-API retirement | Pending acceptance of broader validation |
+| 5. Broader corpus and threaded validation | Accepted before cleanup: post-merge font/corpus failures resolved; three-repeat bo20 at 1/4/8/12 threads completed all pages without errors; native/replay scaling and replay process peaks reviewed |
+| 6. Comparison-path/dead-API retirement | Complete: temporary targets/selectors, unused stream storage/APIs, Form token API and CharProc helpers removed; user reports all final tests passing and 80-case smoke passed |
 
 The subsequent permanent benchmark peak-RSS/timeline work remains after these
 parser items, as requested. This checkpoint does not mark all six complete.
@@ -4493,6 +4493,272 @@ historical reference had changed dependencies. Item 5 still needs the broad
 results above and any remaining controlled real-document evidence. Item 6
 retires comparison selectors/dead APIs after that acceptance. The requested
 permanent benchmark peak-RSS/timeline implementation follows parser completion.
+
+## Finish parser acceptance before benchmark tooling changes
+
+The user reaffirmed this order explicitly: finish comparison-code cleanup,
+post-merge workload scaling/memory validation and isolated Type3 cleanup
+attribution first. Do not modify recover_performance_benchmarks.py or the
+permanent benchmark memory-reporting implementation during this completion pass.
+The original authorization to finish items 1–6 remains in effect; the user
+continues to compile and execute all tests/experiments.
+
+### Post-merge correctness result
+
+The branch includes main through merge 852d6b6. The extension initially still
+predated the merged font headers. After the user rebuilt it, the 38 tests in
+test_unit_truetype_macroman.py and test_unit_gid_glyph_names.py passed in 0.89 s.
+The following corpus tests all passed in 795.71 s:
+
+- test_regression_parse.py::test_reference_documents_from_filenames
+- test_regression_threaded_parse.py::test_threaded_reference_documents_from_filenames
+- test_regression_threaded_render.py::test_render_reference_documents_from_filenames
+
+This resolves the reported degree/upsilon and bullet/infinity failures on the
+merged build. Codex made no font-decoding or regression-dataset changes in that
+investigation. The pre-merge ground-truth hash observations do not describe the
+newly downloaded post-merge snapshot. Do not use them to explain the new run.
+
+### Close item 1 with a matching current-library reference
+
+The old preserved executable still cannot isolate the cleanup against changed
+libraries. A final temporary target, test_memory_on_lines_eager_type3_fonts,
+now uses the current interpreter, font-decoding fixes, clip representation and
+dependency archives. Its generated include overlay restores only the old eager
+CharProc initializer and the retained name_to_descr member. Historical source
+comes from pinned commit 56341b17c22fb6b579171bc0dfd443ea485944f6; it does not
+replace the whole current font implementation.
+
+tests/cpp/prepare_type3_cleanup_reference.py creates the overlay during the
+user's build. It records original/current/generated header hashes and historical
+helper hashes in build/type3-font-reference/manifest.json. A compile-time marker
+rejects a reference build that accidentally selects the normal font header.
+The runner saves this manifest, generated header and historical helpers with
+the result bundle and checks them before accepting measurements. Existing PDF,
+pixel, geometry and dependency comparison guards remain enabled.
+
+The generated change was reviewed in memory. MyPy, Ruff lint and formatting
+passed for the two changed Python files; git diff --check passed too.
+Codex has not configured CMake, compiled or run the new reference.
+
+User build and small paired comparison (nine measurements on each side):
+
+~~~sh
+cmake -S . -B build -DDOCLING_PARSE_BUILD_MEMORY_PROBE=ON
+cmake --build build --parallel 2 --target \
+  test_memory_on_lines test_memory_on_lines_eager_type3_fonts
+
+uv run python3 tests/cpp/run_memory_on_lines.py \
+  --exe build/test_memory_on_lines_eager_type3_fonts \
+  --output /private/tmp/docling-memory-type3-cleanup-controlled-before-smoke \
+  --layouts direct,type3,type3-repeat --sizes 1000 \
+  --modes decode,skip-shapes,render --repeats 1
+
+uv run python3 tests/cpp/run_memory_on_lines.py \
+  --output /private/tmp/docling-memory-type3-cleanup-controlled-after-smoke \
+  --baseline /private/tmp/docling-memory-type3-cleanup-controlled-before-smoke \
+  --layouts direct,type3,type3-repeat --sizes 1000 \
+  --modes decode,skip-shapes,render --repeats 1
+~~~
+
+After the smoke passes, collect 54 measurements on each side:
+
+~~~sh
+uv run python3 tests/cpp/run_memory_on_lines.py \
+  --exe build/test_memory_on_lines_eager_type3_fonts \
+  --output /private/tmp/docling-memory-type3-cleanup-controlled-before \
+  --layouts direct,type3,type3-repeat --sizes 125000,250000 \
+  --modes decode,skip-shapes,render --repeats 3
+
+uv run python3 tests/cpp/run_memory_on_lines.py \
+  --output /private/tmp/docling-memory-type3-cleanup-controlled-after \
+  --baseline /private/tmp/docling-memory-type3-cleanup-controlled-before \
+  --layouts direct,type3,type3-repeat --sizes 125000,250000 \
+  --modes decode,skip-shapes,render --repeats 3 --slowdown-limit-pct 5
+~~~
+
+Require matching PNGs and logical output counters. Compare peak RSS and process
+time, with direct pages as the control. Both sides already use callback Type3
+interpretation: this pair isolates eager font initialization/retention only.
+The repeated layout paints the same glyph four times; retain that interpretation
+when assessing memory attributable to one font versus painted output.
+
+### Item 1 accepted — controlled eager-font attribution
+
+The user compiled the reference and candidate and returned both smoke and
+scaling results. The smoke passed nine measurements on each side, with three
+identical PNG pairs. Scaling passed 54 measurements on each side, with matching
+dependency/settings identities, matching logical output counters, six identical
+PNG pairs and no timing-review cases. Both bundles record source HEAD 852d6b6
+and their working-tree/source/reference provenance:
+
+- `/private/tmp/docling-memory-type3-cleanup-controlled-before`
+- `/private/tmp/docling-memory-type3-cleanup-controlled-after`
+
+Representative medians at target 250,000 lines:
+
+| Layout / mode | Before MiB | After MiB | Memory change | Process-time change |
+| --- | ---: | ---: | ---: | ---: |
+| Type3 / decode | 794.92 | 219.72 | -72.36% | -9.75% |
+| Type3 / skip shapes | 672.39 | 126.41 | -81.20% | -10.88% |
+| Type3 / render | 793.70 | 222.23 | -72.00% | -9.26% |
+| Type3 repeated / decode | 849.48 | 553.80 | -34.81% | -4.51% |
+| Type3 repeated / skip shapes | 672.41 | 126.48 | -81.19% | -4.35% |
+| Type3 repeated / render | 853.06 | 523.42 | -38.64% | -2.44% |
+
+All twelve Type3 scaling cases are faster. Across the six direct controls,
+process changes range from -1.31% to +2.39%, within the accepted 5% allowance;
+peak differences are small. The shapes-disabled savings are approximately
+546 MiB for both single and repeated painting. That supports the expected
+font-level retention effect: the repeated layout executes the glyph four times
+and retains more painted output, but eager font initialization occurs once.
+
+This closes completion item 1's isolated performance gap. The old mismatched-
+dependency comparison is not used to claim these gains. Keep the current
+discard-callback validation and its damaged-CharProc semantic regression.
+Remaining gates are the current workload evidence below and reference/dead-code
+retirement followed by final verification. Benchmark-reporting changes wait.
+
+### Close item 5 with current workload results
+
+Use the existing launcher unchanged to collect current native throughput/counts
+and Python-backend process peak RSS at one, two and four threads:
+
+~~~sh
+REPEATS=3 THREADS=1,2,4 RUN_COMPARISON=0 DATASET=bo20 \
+  ./scripts/benchmarking/refresh_performance_benchmarks.sh
+~~~
+
+Return the new bundle path. Codex will inspect all repetitions, failure/page
+counts, settings and source/binary/dependency provenance; assess scaling and
+runtime spread; and extract existing peak_rss_mib from replay/r*/pdfium/report.json
+and replay/r*/t*/report.json. These measure the actual backend processes,
+including their native threads and retained outputs. They do not supply native
+run_scaling.exe peaks or sampled timelines. This is sufficient to perform the
+existing plan's threaded integration memory check without implementing the
+later benchmark-tooling feature first.
+
+The old Nov-11 bundle is historical context, not a controlled attribution pair
+for changes across the subsequent main merge and dependency changes. Do not
+claim post-merge performance or memory gains before reviewing the new results.
+
+### Then close item 6 and verify the final source
+
+After the two measurements above are accepted, Codex will remove:
+
+- The temporary buffered/copy comparison targets and all corresponding source
+  selectors, including the final eager-font overlay target and generator.
+- Dead vector-taking APIs whose last callers were comparison branches, after
+  checking all callers. Keep parsed pattern caching and useful native diagnostics.
+- The unused char_description/char_processor headers and their parse.h includes.
+
+Keep the memory fixture runner, QPDF discard/collect measurements, callback and
+state-lifetime regressions, clip-history tests and semantic coverage. Preserve
+accepted experiment bundles and explicitly identify the final source revision.
+
+Codex will then supply the user a final build/native-regression/full-unit/corpus
+verification set and a bounded memory comparison against the accepted candidate.
+Only after those results pass can this parser plan be marked complete and the
+requested permanent benchmark peak-RSS/timeline implementation begin.
+
+## Post-merge workload accepted; final comparison-code cleanup
+
+The user returned `scratch-performance-refresh-20261112-104813-yVM2JG`.
+The report records the merged source 852d6b6 plus its working-tree/build
+provenance, QPDF 12.4.2, docling-parse 7.25.0 and pypdfium2 5.14.0 on the
+Apple M3 Max. Dataset: pinned bo20 65b9971b3fa939fe4ef89be678237e6928049b67,
+20 PDFs / 496 pages. Actual thread counts are **1, 4, 8, 12**, with three
+repetitions. This differs from the earlier proposed 1/2/4 sweep; do not report
+a two-thread workload measurement that was not collected. Two-thread
+correctness is exercised by the existing threading tests.
+
+All 39 native/replay runs completed all 496 pages with zero errors. Native
+render-only medians are 6.641, 1.746, 0.904 and 0.642 seconds, giving 10.35x
+speedup at twelve threads. Native render-with-text medians are 6.710, 1.779,
+0.924 and 0.652 seconds (10.30x at twelve threads). Replay docling-parse
+medians are 7.793, 3.012, 2.283 and 2.111 seconds, versus PDFium 11.822
+seconds. Workloads and timing boundaries remain distinct as documented.
+
+The existing replay report.json files provide per-process lifetime peak RSS:
+
+| Replay backend | Threads | Median MiB | Observed min–max MiB |
+| --- | ---: | ---: | ---: |
+| PDFium | 1 | 628.92 | 628.39–630.36 |
+| docling-parse | 1 | 692.44 | 680.84–703.55 |
+| docling-parse | 4 | 850.00 | 839.00–881.19 |
+| docling-parse | 8 | 1,035.56 | 1,025.12–1,058.02 |
+| docling-parse | 12 | 1,171.45 | 1,131.00–1,181.53 |
+
+These observations close the post-merge workload scaling/integration-memory
+gate. They do not establish a controlled before/after delta against the old
+Nov-11 bundle, native-only process peaks, or sampled memory timelines.
+
+### Retired comparison code
+
+The final source cleanup removes all seven buffered/copy comparison selectors,
+their temporary executable targets and the eager-Type3 overlay target/generator.
+Only test_memory_on_lines and the three native regression targets remain in
+the optional memory-probe CMake block.
+
+Removed unused STREAM decode/interpret-vector/print entry points, its owned
+token vector, the unused Form parse_stream() token API, and the unused
+char_description/char_processor headers and includes. Kept callback execution,
+borrowed pattern replay, useful parsed pattern caches, QPDF discard/collect
+diagnostics, fixture counters and callback/state/clip regression coverage.
+Production branches are the same branches selected by the previous normal
+build; Form residual timing no longer subtracts an always-zero buffered-parse
+variable. Legacy timing keys and old experiment bundles remain readable.
+
+The measured run_scaling executable and Python extension were preserved under
+`/private/tmp/docling-before-comparison-cleanup`, with verified hashes matching
+the new workload metadata. provenance.json includes the original metadata and
+archive hashes observed after that run. Those archive observations are not
+retroactive proof of an older binary's link inputs.
+
+The old Type3 probe executable still matches its accepted experiment hash, but
+all nine archive hashes now differ from that experiment. Do not compare the
+final rebuilt probe to that bundle as if dependencies matched, and do not
+bypass the existing guard. Accepted Type3 before/after attribution remains
+valid within its original controlled pair.
+
+### Final user verification before closing the plan
+
+Codex reviewed the cleanup diff and searched callers/selectors. MyPy, Ruff lint
+and formatting pass for the remaining Python runner; git diff --check passes.
+Codex has not configured, built or executed the cleaned implementation.
+
+~~~sh
+cmake -S . -B build -DDOCLING_PARSE_BUILD_MEMORY_PROBE=ON
+cmake --build build --parallel 2 --target \
+  test_memory_on_lines stream_callback_regression \
+  stream_state_lifetime_regression clip_history_regression
+
+ctest --test-dir build --output-on-failure \
+  -R '^(stream_callback|stream_state_lifetime|clip_history)_regression$'
+
+uv run --no-sync python local_build.py
+uv run --no-sync pytest tests/test_unit_*.py -q
+uv run --no-sync pytest -n 2 --dist loadfile tests/test_regression_*.py
+
+uv run python3 tests/cpp/run_memory_on_lines.py \
+  --output /private/tmp/docling-memory-final-cleanup-smoke \
+  --layouts direct,form,form-repeat,form-nested,appearance,widget,appearance-repeat,type3,type3-repeat,soft-mask,soft-mask-repeat,pattern,pattern-repeat,pattern-lattice,clip-chain,clip-scoped \
+  --sizes 1000 --repeats 1
+~~~
+
+The final native smoke has 80 fresh-process measurements, preserving all source
+and clip/pattern invariants checked by the runner. It is a correctness/retention
+sanity check, not a one-repeat speed comparison. No mismatched-library baseline
+is supplied. Existing pixel/content regression references remain unchanged.
+
+The user returned passing final checks. The saved final-cleanup smoke records
+status passed, 80 measurements, and six byte-identical PNG equivalence checks
+(direct versus Form/nested Form/appearance/widget/Type3, and chain versus scoped
+clipping). This closes the final acceptance gate. The one-repeat smoke is not
+a new speed claim, and no mismatched dependency comparison was used.
+
+All parser-plan work is complete. The requested optional benchmark peak/sampled
+memory feature can now proceed separately; its validation remains with the user.
 
 ## Questions to answer from the intermediate results
 

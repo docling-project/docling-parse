@@ -492,12 +492,7 @@ namespace pdflib
         rule = CLIP_RULE_EVEN_ODD;
       }
 
-#ifdef DOCLING_PARSE_COPY_CLIP_SNAPSHOTS
-    // Temporary native reference: materialize every complete paint snapshot.
-    return clip_state_instruction(rule, clipping_state.get_paths().to_vector());
-#else
     return clipping_state.with_rule(rule);
-#endif
   }
 
   bool pdf_state<SHAPE>::get_clip_bbox(std::array<double, 4>& bbox) const

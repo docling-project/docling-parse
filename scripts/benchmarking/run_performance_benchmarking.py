@@ -46,6 +46,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import json
 import os
 import platform
 import re
@@ -68,6 +69,7 @@ from _common import (
     series_label,
     write_page_rows,
 )
+from _performance_memory import add_memory_arguments, run_measured
 from _performance_runtime import BenchmarkCheckpoints, digest, runtime_provenance
 from tabulate import tabulate
 
@@ -920,6 +922,7 @@ class BackendRun:
     per_page_source: str
     samples: List[PageRow] = field(default_factory=list)
     doc_errors: int = 0
+    memory: dict | None = None
 
     @property
     def durations(self) -> List[float]:
@@ -2140,6 +2143,9 @@ def _run_one_mode(
     collected_runs: List[BackendRun],
     checkpoints: BenchmarkCheckpoints | None = None,
     resume: bool = False,
+    memory_mode: str = "off",
+    memory_interval_ms: int = 50,
+    memory_directory: Path | None = None,
 ) -> Tuple[List[Tuple[str, float]], List[Tuple[int, float]]]:
     baselines: List[Tuple[str, float]] = []
 
@@ -2168,7 +2174,70 @@ def _run_one_mode(
                     f"  Reusing completed checkpoint: {backend}, {task}, {threads} thread(s)"
                 )
                 return BackendRun(**cached)
-        run = measure()
+        if memory_mode == "off":
+            run = measure()
+        else:
+            assert memory_directory is not None
+            memory_directory.mkdir(parents=True, exist_ok=True)
+            prefix = memory_directory / f"{backend}-{task}-{threads}"
+            request = Path(str(prefix) + ".request.json")
+            response = Path(str(prefix) + ".result.json")
+            artifact = Path(str(prefix) + ".memory.json")
+            # Missing/corrupt checkpoints may be recollected. Keep their old
+            # artifacts, and never associate them with this fresh process.
+            if artifact.exists() or request.exists() or response.exists():
+                import tempfile
+
+                prefix = (
+                    Path(
+                        tempfile.mkdtemp(prefix=prefix.name + "-", dir=memory_directory)
+                    )
+                    / "run"
+                )
+                request = prefix.with_suffix(".request.json")
+                response = prefix.with_suffix(".result.json")
+                artifact = prefix.with_suffix(".memory.json")
+            request.write_text(
+                json.dumps(
+                    {
+                        "backend": backend,
+                        "pdf_schedule": [(str(p), pages) for p, pages in pdf_schedule],
+                        "total_pages": total_pages,
+                        "render": render,
+                        "scale": scale,
+                        "threads": threads,
+                        "max_concurrent_results": max_concurrent_results,
+                        "decode_options": decode_options,
+                        "materialization_options": materialization_options,
+                        "bytesio": bytesio,
+                    }
+                )
+                + "\n"
+            )
+            memory = run_measured(
+                [
+                    sys.executable,
+                    str(Path(__file__).with_name("_performance_worker.py")),
+                    str(request.resolve()),
+                    str(response.resolve()),
+                ],
+                artifact,
+                mode=memory_mode,
+                interval_ms=memory_interval_ms,
+            )
+            if memory["returncode"] == 5:
+                raise ImportError(f"Backend {backend} could not import in its worker")
+            if memory["returncode"]:
+                raise RuntimeError(f"Backend worker failed; inspect {artifact}")
+            data = json.loads(response.read_text())
+            data["samples"] = [PageRow(**row) for row in data["samples"]]
+            run = BackendRun(**data)
+            base = (
+                checkpoints.directory.parent if checkpoints else memory_directory.parent
+            )
+            memory["artifact"] = str(artifact.relative_to(base))
+            memory["artifact_sha256"] = digest(artifact)
+            run.memory = memory
         if checkpoints is not None:
             checkpoints.save(run)
         return run
@@ -2417,6 +2486,7 @@ def main(argv: List[str]) -> int:
         ),
     )
 
+    add_memory_arguments(ap)
     args = ap.parse_args(argv)
     if args.resume and args.checkpoint_dir is None:
         ap.error("--resume requires --checkpoint-dir")
@@ -2538,6 +2608,12 @@ def main(argv: List[str]) -> int:
                     "bytesio": args.bytesio,
                     "decode": decode_options,
                     "materialization": mode_materialization_options,
+                    "memory": {
+                        "mode": args.memory_mode,
+                        "interval_ms": args.memory_interval_ms
+                        if args.memory_mode == "profile"
+                        else None,
+                    },
                 },
                 checkpoint_provenance,
                 total_pages,
@@ -2557,6 +2633,13 @@ def main(argv: List[str]) -> int:
             collected_runs=collected_runs,
             checkpoints=checkpoints,
             resume=args.resume,
+            memory_mode=args.memory_mode,
+            memory_interval_ms=args.memory_interval_ms,
+            memory_directory=(
+                args.checkpoint_dir.parent / "memory"
+                if args.checkpoint_dir
+                else args.output_dir / "memory" / m
+            ),
         )
         _print_table(title, baselines, threaded_results, total_pages)
 

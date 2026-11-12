@@ -94,12 +94,7 @@ namespace pdflib
 
     ~pdf_decoder();
 
-    void print();
-
     std::unordered_set<std::string> get_unknown_operators();
-
-    // decode the qpdf-stream
-    void decode(QPDFObjectHandle& content);
 
     // Interpret ordinary page content as normalized QPDF objects arrive.
     void decode_and_interprete(QPDFObjectHandle& content,
@@ -117,13 +112,10 @@ namespace pdflib
 #endif
     }
 
-    // methods used to interprete the stream
-    void interprete(std::vector<qpdf_stream_instruction>& parameters);
-
     // Establishes the matrix this stream is interpreted under, so that a
     // stream living in its own space -- an annotation appearance -- emits
     // instructions already in page coordinates. Must be called before
-    // interprete().
+    // content delivery.
     void set_base_matrix(const std::array<double, 6>& matrix);
 
   private:
@@ -183,17 +175,12 @@ namespace pdflib
     bool update_stack(std::vector<pdf_state<GLOBAL> >& stack_,
                       int                              stack_count_);
 
-    void interprete(std::vector<qpdf_stream_instruction>& stream_,
-                    std::vector<qpdf_stream_instruction>& parameters_);
-
     // The resource owns the immutable cache for this synchronous replay.
     void interprete_cached(const std::vector<qpdf_stream_instruction>& cached,
                            std::vector<qpdf_stream_instruction>& parameters);
 #ifdef DOCLING_PARSE_CONTENT_DIAGNOSTICS
     void note_pattern_replay(const pdf_decoder<STREAM>& child, bool lattice);
 #endif
-
-    void interprete_stream(std::vector<qpdf_stream_instruction>& parameters);
 
     // Stream lifecycle is separate from delivery. Callers establish/rebase the
     // graphics stack before beginning; pending operands stay with the caller.
@@ -371,7 +358,6 @@ namespace pdflib
 
     std::unordered_set<std::string> unknown_operators;
 
-    std::vector<qpdf_stream_instruction> stream;
     content_stream_statistics content_stats;
 #ifdef DOCLING_PARSE_CONTENT_DIAGNOSTICS
     // Shared only by native probes; no allocation/counter work in production.
@@ -464,7 +450,6 @@ namespace pdflib
     timings(timings),
 
     unknown_operators({}),
-    stream({}),
     stack({}),
 
     stack_count(0)
@@ -491,36 +476,12 @@ namespace pdflib
     return unknown_operators;
   }
 
-  void pdf_decoder<STREAM>::print()
-  {
-    LOG_S(INFO) << __FUNCTION__;
-    for(auto row:stream)
-      {
-        LOG_S(INFO) << std::setw(12) << row.key << " | " << row.val;
-      }
-  }
-
-  void pdf_decoder<STREAM>::decode(QPDFObjectHandle& qpdf_content)
-  {
-    LOG_S(INFO) << __FUNCTION__;
-
-    qpdf_stream_decoder decoder(stream);
-    decoder.decode(qpdf_content);
-    content_stats = {};
-    content_stats.source_objects = decoder.get_objects_delivered();
-    content_stats.source_bytes_observed = decoder.get_source_bytes_observed();
-    content_stats.buffered_tokens = stream.size();
-    content_stats.buffered_token_capacity = stream.capacity();
-  }
-
   void pdf_decoder<STREAM>::decode_and_interprete(
     QPDFObjectHandle& content,
     std::vector<qpdf_stream_instruction>& parameters)
   {
     content_stats = {};
     content_stats.callback_delivery = true;
-    // This entry point does not retain a previously buffered source either.
-    std::vector<qpdf_stream_instruction>().swap(stream);
     ensure_stack();
     begin_interpretation();
 
@@ -576,15 +537,6 @@ namespace pdflib
     base_ctm_valid_ = true;
   }
 
-  void pdf_decoder<STREAM>::interprete(std::vector<qpdf_stream_instruction>& parameters)
-  {
-    LOG_S(INFO) << __FUNCTION__;
-
-    ensure_stack();
-
-    interprete_stream(parameters);
-  }
-
   // A form XObject establishes its own resource scope (PDF 32000-1, 8.10.2):
   // `Tf`, `gs`, `cs`/`CS` and `Do` inside it resolve against the form's
   // /Resources first and only then against the inherited ones. The child
@@ -627,32 +579,12 @@ namespace pdflib
     return true;
   }
 
-  void pdf_decoder<STREAM>::interprete(std::vector<qpdf_stream_instruction>& stream_,
-                                       std::vector<qpdf_stream_instruction>& parameters_)
-  {
-    LOG_S(INFO) << __FUNCTION__;
-
-    stream = stream_;
-    content_stats = {};
-    content_stats.source_objects = stream.size();
-    content_stats.buffered_tokens = stream.size();
-    content_stats.buffered_token_capacity = stream.capacity();
-
-    interprete_stream(parameters_);
-
-    if(parameters_.size()!=0)
-      {
-        LOG_S(ERROR) << "Finishing a `Do` with nonzero number of parameters!";
-      }
-  }
-
   void pdf_decoder<STREAM>::interprete_cached(
     const std::vector<qpdf_stream_instruction>& cached,
     std::vector<qpdf_stream_instruction>& parameters)
   {
     content_stats = {};
     content_stats.source_objects = cached.size();
-    std::vector<qpdf_stream_instruction>().swap(stream);
     ensure_stack();
     begin_interpretation();
     for(const auto& cached_instruction : cached)
@@ -687,22 +619,6 @@ namespace pdflib
   }
 #endif
 
-  void pdf_decoder<STREAM>::interprete_stream(std::vector<qpdf_stream_instruction>& parameters)
-  {
-    LOG_S(INFO) << __FUNCTION__;
-
-    begin_interpretation();
-
-    // Remaining buffered entry points and native comparison targets use the
-    // same instruction consumer as ordinary page and Form callbacks.
-    for(int l=0; l<stream.size(); l++)
-      {
-        consume_instruction(stream[l], parameters);
-      }
-
-    finish_interpretation();
-  }
-
   void pdf_decoder<STREAM>::begin_interpretation()
   {
 #ifdef DOCLING_PARSE_STATE_LIFETIME_TESTING
@@ -712,9 +628,8 @@ namespace pdflib
     // content stream, not to whatever the CTM happens to be when a pattern is
     // painted (ISO 32000-1, 8.7.3.1): for a page that is the default user
     // space, for a form XObject the space the form was invoked in. Every entry
-    // point lands here, so this is where it gets recorded -- capturing it in
-    // one of the interprete() overloads only left the other one, the one pages
-    // go through, with nothing to anchor to.
+    // point lands here, so callback interpretation and cached pattern replay
+    // capture the same initial space.
     capture_base_ctm();
   }
 
@@ -1965,14 +1880,7 @@ namespace pdflib
             cell_stream.current_graphic_state().materialize_pattern_fill_color();
 
             std::vector<qpdf_stream_instruction> parameters;
-#ifdef DOCLING_PARSE_COPY_PATTERN_CONTENTS
-            // Temporary native reference: retain both original replay copies
-            // and their lifetimes through the cell's state restoration.
-            std::vector<qpdf_stream_instruction> insts = cell;
-            cell_stream.interprete(insts, parameters);
-#else
             cell_stream.interprete_cached(cell, parameters);
-#endif
 #ifdef DOCLING_PARSE_CONTENT_DIAGNOSTICS
             note_pattern_replay(cell_stream, true);
 #endif
@@ -2105,12 +2013,7 @@ namespace pdflib
           try
             {
               std::vector<qpdf_stream_instruction> parameters;
-#ifdef DOCLING_PARSE_COPY_PATTERN_CONTENTS
-              std::vector<qpdf_stream_instruction> insts = cell;
-              cell_stream.interprete(insts, parameters);
-#else
               cell_stream.interprete_cached(cell, parameters);
-#endif
 #ifdef DOCLING_PARSE_CONTENT_DIAGNOSTICS
               note_pattern_replay(cell_stream, false);
               pattern_stats->decoded_shape_instructions += decoded->get_shape_instructions().size();
@@ -2250,7 +2153,6 @@ namespace pdflib
     // callback path reports combined Form self-time without per-token clocks.
     utils::timer do_form_timer;
     double set_seconds          = 0.0;
-    double parse_stream_seconds = 0.0;
     double interprete_seconds   = 0.0;
 
     const pdf_resource<PAGE_XOBJECT_FORM>& xobj = page_xobjects->get_form(xobj_name);
@@ -2333,16 +2235,6 @@ namespace pdflib
       current_global_state().cm(xobj.get_matrix());
 
       {
-#ifdef DOCLING_PARSE_BUFFERED_FORM_CONTENTS
-        // Temporary native reference: the page can stream while Forms retain
-        // the old local vector and the interpreter's copy of that vector.
-        utils::timer parse_stream_timer;
-        std::vector<qpdf_stream_instruction> insts = xobj.parse_stream();
-        parse_stream_seconds = parse_stream_timer.get_time();
-        timings.add_timing(pdf_timings::KEY_PARSE_STREAM_TOTAL, parse_stream_seconds);
-        timings.note_attributed(parse_stream_seconds);
-#endif
-
         pdf_decoder<STREAM> new_stream(config,
 
                                        page_dimension,
@@ -2375,11 +2267,6 @@ namespace pdflib
 
         std::vector<qpdf_stream_instruction> parameters;
         {
-#ifdef DOCLING_PARSE_BUFFERED_FORM_CONTENTS
-          utils::timer interprete_timer;
-          new_stream.interprete(insts, parameters);
-          interprete_seconds = interprete_timer.get_time();
-#else
           // Hold our own QPDF handle until the synchronous nested parse returns.
           // update_stack() has already rebound state to the child resources;
           // begin_interpretation() captures the transformed Form base CTM.
@@ -2397,7 +2284,6 @@ namespace pdflib
             {
               LOG_S(ERROR) << "Finishing a `Do` with nonzero number of parameters!";
             }
-#endif
         }
 
 #ifdef DOCLING_PARSE_CONTENT_DIAGNOSTICS
@@ -2405,9 +2291,6 @@ namespace pdflib
         content_stats.form_executions += 1 + child_stats.form_executions;
         content_stats.form_source_objects += child_stats.source_objects + child_stats.form_source_objects;
         content_stats.form_materialized_tokens += child_stats.buffered_tokens + child_stats.form_materialized_tokens;
-#ifdef DOCLING_PARSE_BUFFERED_FORM_CONTENTS
-        content_stats.form_materialized_tokens += insts.size();
-#endif
         content_stats.form_max_pending_operands = std::max(
           content_stats.form_max_pending_operands,
           std::max(child_stats.max_pending_operands, child_stats.form_max_pending_operands));
@@ -2442,7 +2325,7 @@ namespace pdflib
 
     // residual = state copies, child-resource allocation, stack handling, ...
     double machinery_seconds = do_form_timer.get_time()
-                             - set_seconds - parse_stream_seconds - interprete_seconds;
+                             - set_seconds - interprete_seconds;
     timings.add_timing(pdf_timings::KEY_DO_FORM_MACHINERY, machinery_seconds);
     timings.note_attributed(machinery_seconds);
 
@@ -2488,23 +2371,6 @@ namespace pdflib
       }
 
     QPDFObjectHandle charproc = glyph.charproc;
-#ifdef DOCLING_PARSE_BUFFERED_TYPE3_CONTENTS
-    std::vector<qpdf_stream_instruction> insts;
-    try
-      {
-        qpdf_stream_decoder decoder(insts);
-        decoder.decode(charproc);
-      }
-    catch(const std::bad_alloc&)
-      {
-        throw;
-      }
-    catch(const std::exception& e)
-      {
-        LOG_S(WARNING) << "could not decode a Type3 glyph procedure: " << e.what();
-        return;
-      }
-#endif
 
     // 9.6.5: names in the CharProc resolve against the font's /Resources,
     // and against the page's when the font has none.
@@ -2588,13 +2454,9 @@ namespace pdflib
 
         {
           nesting_scope glyph_depth(depth);
-#ifdef DOCLING_PARSE_BUFFERED_TYPE3_CONTENTS
-          new_stream.interprete(insts, parameters);
-#else
           // Resources and glyph placement must be ready before the first
           // QPDF callback executes. The handle/context live until decode ends.
           new_stream.decode_and_interprete(charproc, parameters);
-#endif
         }
 
 #ifdef DOCLING_PARSE_CONTENT_DIAGNOSTICS
@@ -2602,9 +2464,6 @@ namespace pdflib
         content_stats.type3_executions += 1 + child_stats.type3_executions;
         content_stats.type3_source_objects += child_stats.source_objects + child_stats.type3_source_objects;
         content_stats.type3_materialized_tokens += child_stats.buffered_tokens + child_stats.type3_materialized_tokens;
-#ifdef DOCLING_PARSE_BUFFERED_TYPE3_CONTENTS
-        content_stats.type3_materialized_tokens += insts.size();
-#endif
         content_stats.type3_max_pending_operands = std::max(
           content_stats.type3_max_pending_operands,
           std::max(child_stats.max_pending_operands, child_stats.type3_max_pending_operands));
@@ -2781,18 +2640,11 @@ namespace pdflib
 #endif
 
         QPDFObjectHandle group = spec.group;
-#ifdef DOCLING_PARSE_BUFFERED_SOFT_MASK_CONTENTS
-        mask_decoder.decode(group);
-#endif
         // The first callback must see the composed mask-space/gs matrix.
         mask_decoder.set_base_matrix(matrix);
 
         std::vector<qpdf_stream_instruction> parameters;
-#ifdef DOCLING_PARSE_BUFFERED_SOFT_MASK_CONTENTS
-        mask_decoder.interprete(parameters);
-#else
         mask_decoder.decode_and_interprete(group, parameters);
-#endif
 
 #ifdef DOCLING_PARSE_CONTENT_DIAGNOSTICS
         const auto& child_stats = mask_decoder.get_content_statistics();

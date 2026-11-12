@@ -22,7 +22,11 @@ _SPEC = importlib.util.spec_from_file_location(
 assert _SPEC is not None and _SPEC.loader is not None
 _REPORT = importlib.util.module_from_spec(_SPEC)
 sys.modules[_SPEC.name] = _REPORT
-_SPEC.loader.exec_module(_REPORT)
+sys.path.insert(0, str(Path(__file__).parents[1] / "scripts/benchmarking"))
+try:
+    _SPEC.loader.exec_module(_REPORT)
+finally:
+    sys.path.pop(0)
 
 _DATASET_PINS = {
     "bo20": "65b9971b3fa939fe4ef89be678237e6928049b67",
@@ -63,6 +67,40 @@ def _inputs(tmp_path: Path):
     }
     (tmp_path / "metadata.json").write_text(json.dumps(metadata))
     return _REPORT.ReportInputs(tmp_path)
+
+
+def test_memory_does_not_invent_historical_observations(tmp_path: Path):
+    inputs = _inputs(tmp_path)
+    path = tmp_path / "missing.memory.json"
+    assert inputs.memory(path) is None
+    existing = inputs.memory(path, {"peak_rss_mib": 12.5})
+    assert existing["mode"] == "existing"
+    assert existing["peak_rss_bytes"] == int(12.5 * 2**20)
+    inputs.metadata["memory_collection"] = {"mode": "profile", "interval_ms": 50}
+    with pytest.raises(ValueError, match="missing"):
+        inputs.memory(path, {"peak_rss_mib": 12.5})
+    # Recovery can reuse uninstrumented core results while measuring new references.
+    inputs.metadata["memory_collection"] = {"mode": "off"}
+    inputs.metadata["comparison_memory"] = {"mode": "peak"}
+    assert inputs.memory(path) is None
+    with pytest.raises(ValueError, match="missing"):
+        inputs.memory(path, comparison=True)
+
+
+@pytest.mark.parametrize(
+    "workload,task",
+    [("native", "render-only"), ("replay", "render"), ("comparison", "parse+render")],
+)
+def test_reproduction_preserves_memory_settings(tmp_path: Path, workload, task):
+    inputs = _profiled_bundle(tmp_path)
+    inputs.metadata["memory_collection"] = {"mode": "profile", "interval_ms": 25}
+    command = "\n".join(_REPORT.reproduction_commands(inputs.metadata, workload, task))
+    assert "--memory-mode profile --memory-interval-ms 25" in command
+    if workload == "comparison":
+        assert "observe()" not in command
+    else:
+        assert "observe()" in command
+        assert "_performance_memory.py" in command
 
 
 def _native(tmp_path: Path, profile=None) -> Path:
@@ -356,9 +394,16 @@ def test_comparison_checkpoint_provenance_controls_version_labels(
         assert measurement.package_version == "1.27.2.3"
 
 
-def test_profiled_report_figures_captions_and_phase_exports(tmp_path: Path):
+@pytest.mark.parametrize("with_rss_timelines", [False, True])
+def test_profiled_report_figures_captions_and_phase_exports(
+    tmp_path: Path, with_rss_timelines
+):
     pytest.importorskip("matplotlib")
     inputs = _profiled_bundle(tmp_path)
+    if with_rss_timelines:
+        for profile in _REPORT.NATIVE_PROFILES:
+            timeline = tmp_path / "native" / profile / "r1/t1.memory.rss.csv"
+            timeline.write_text("elapsed_s,rss_bytes,pid\n0.05,1048576,123\n")
     output = tmp_path / "report"
     _REPORT.write_report(inputs, inputs.load(), output)
     expected = {
@@ -368,7 +413,38 @@ def test_profiled_report_figures_captions_and_phase_exports(tmp_path: Path):
     }
     assert {p.name for p in output.glob("*.png")} == expected
     assert all((output / name).stat().st_size > 0 for name in expected)
-    text = (output / "summary.md").read_text().split("## Figures\n", 1)[1]
+    tables, text = (output / "summary.md").read_text().split("## Figures\n", 1)
+    assert [line for line in tables.splitlines() if line.startswith("##")] == [
+        "## Parallel Scaling",
+        "### Native C++ scaling",
+        "### Python scaling with Docling settings",
+        "## Process Memory",
+    ]
+    assert "[Elapsed-time memory traces](memory_traces.md)" in tables
+    timing_rows = [
+        line
+        for line in tables.splitlines()
+        if line.startswith(("| docling-parse |", "| pypdfium2 |"))
+    ]
+    assert [line.split("|")[3].strip() for line in timing_rows] == [
+        "Render",
+        "Render + text",
+        "Backend replay",
+        "Backend replay",
+    ]
+    assert "- **Render**: Render page-images." in tables
+    assert (
+        "- **Render + text**: Render page-images and construct word/line text geometry."
+        in tables
+    )
+    assert (
+        "- **Backend replay**: Page-images, word/line text geometry and bitmap bounding boxes."
+        in tables
+    )
+    assert (
+        "No sampled RSS traces are available"
+        in (output / "memory_traces.md").read_text()
+    )
     assert text.index("### Native C++ scaling") < text.index(
         "### Python scaling with Docling settings"
     )
@@ -389,6 +465,64 @@ def test_profiled_report_figures_captions_and_phase_exports(tmp_path: Path):
     assert set(rows) == {"render-only", "render-with-text"}
     assert float(rows["render-only"]["create_word_cells_s"]) == 0
     assert float(rows["render-with-text"]["create_word_cells_s"]) == 0.2
+
+
+@pytest.mark.parametrize("has_one_thread", [True, False])
+def test_ideal_throughput_uses_one_thread_baseline_and_zero_origin(
+    tmp_path: Path, monkeypatch, has_one_thread
+):
+    figure_class = pytest.importorskip("matplotlib.figure").Figure
+    figures = {}
+
+    def capture(figure, path, **_kwargs):
+        figures[Path(path).name] = figure
+
+    monkeypatch.setattr(figure_class, "savefig", capture)
+    summary = []
+    for backend, threads, throughput in (
+        ("threaded", 1, 10),
+        ("threaded", 4, 33),
+        ("threaded", 8, 50),
+        ("pdfium", 1, 8),
+    ):
+        if backend == "threaded" and threads == 1 and not has_one_thread:
+            continue
+        wall = 800 / throughput
+        summary.append(
+            {
+                "workload": "replay",
+                "backend": backend,
+                "task": "render",
+                "threads": threads,
+                "median_wall_s": wall,
+                "min_wall_s": wall,
+                "max_wall_s": wall,
+                "pages_per_s": throughput,
+                "speedup_vs_docling_1t": throughput / 10,
+                "efficiency_pct": 100 * throughput / (10 * threads)
+                if backend == "threaded"
+                else None,
+            }
+        )
+    _REPORT.plot([], summary, tmp_path)
+    throughput_ax = figures["replay_runtime.png"].axes[1]
+    assert throughput_ax.get_xlim()[0] == 0
+    assert throughput_ax.get_ylim()[0] == 0
+    assert 0 in throughput_ax.get_xticks()
+    curves = {line.get_label(): line for line in throughput_ax.lines}
+    assert list(curves["docling-parse"].get_ydata()) == (
+        [10, 33, 50] if has_one_thread else [33, 50]
+    )
+    assert list(curves["pypdfium2"].get_ydata()) == [8]
+    assert "pypdfium2 ideal" not in curves
+    assert not any("linear fit" in label for label in curves)
+    if has_one_thread:
+        ideal = curves["docling-parse ideal"]
+        assert ideal.get_linestyle() == "--"
+        assert list(ideal.get_xdata()) == [0, 8]
+        assert list(ideal.get_ydata()) == [0, 80]
+    else:
+        assert "docling-parse ideal" not in curves
 
 
 def _checkpointed_comparison(
@@ -580,7 +714,7 @@ def test_report_preserves_failed_reference_audit_without_performance_metrics(
     assert "fixture page error" in text
     assert "## Understanding the two Python experiments" in text
     assert text.index("## Understanding the two Python experiments") < text.index(
-        "## Python scaling with Docling settings"
+        "### Python scaling with Docling settings"
     )
     assert "Text and geometry via package APIs" in text
     assert "Images plus character text and bounding boxes" not in text

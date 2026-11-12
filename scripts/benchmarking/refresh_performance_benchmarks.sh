@@ -4,7 +4,7 @@ set -Eeuo pipefail
 
 if [[ ${1:-} == --help ]]; then
   cat <<'HELP'
-Usage: bash scripts/benchmarking/refresh_performance_benchmarks.sh
+Usage: bash scripts/benchmarking/refresh_performance_benchmarks.sh [--memory-mode off|peak|profile] [--memory-interval-ms 50]
 
 Environment:
   REPEATS=1                  Fresh-process repetitions (use 3 for publication)
@@ -17,6 +17,8 @@ Environment:
   DATASET_REVISION=<revision>  Override the selected dataset's pinned revision
   OUT=<new directory>         Default: a unique scratch-performance-refresh-* path
   RECOVER_FROM=<bundle>        Reuse validated native/replay results; recollect comparisons in a new bundle
+  MEMORY_MODE=off              off, independent OS peak, or peak plus sampled RSS (profile)
+  MEMORY_INTERVAL_MS=50        Positive sampling interval; CLI overrides environment
 
 Default dataset pins (PDFs / pages):
   bo20   65b9971b3fa939fe4ef89be678237e6928049b67      20 / 496
@@ -38,10 +40,22 @@ Full corpus sweeps can take hours, especially with RUN_COMPARISON=1 or REPEATS=3
 HELP
   exit 0
 fi
-if [[ $# != 0 ]]; then
-  echo "Unexpected argument; use --help." >&2
-  exit 2
+MEMORY_MODE=${MEMORY_MODE:-off}
+MEMORY_INTERVAL_MS=${MEMORY_INTERVAL_MS:-50}
+while [[ $# != 0 ]]; do
+  case "$1" in
+    --memory-mode|--memory-interval-ms)
+      if [[ $# -lt 2 ]]; then echo "Missing value for $1" >&2; exit 2; fi
+      if [[ $1 == --memory-mode ]]; then MEMORY_MODE=$2; else MEMORY_INTERVAL_MS=$2; fi
+      shift 2 ;;
+    *) echo "Unexpected argument: $1; use --help." >&2; exit 2 ;;
+  esac
+done
+case "$MEMORY_MODE" in off|peak|profile) ;; *) echo "Invalid memory mode." >&2; exit 2 ;; esac
+if [[ ! $MEMORY_INTERVAL_MS =~ ^[1-9][0-9]*$ ]]; then
+  echo "MEMORY_INTERVAL_MS must be a positive integer." >&2; exit 2
 fi
+export MEMORY_MODE MEMORY_INTERVAL_MS
 
 REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 cd "$REPO_ROOT"
@@ -128,6 +142,7 @@ echo "Repetitions: $REPEATS; threads: $THREADS; cross-package suite: $RUN_COMPAR
 echo "Dataset: $DATASET_REPOSITORY at $DATASET_REVISION"
 echo "Benchmark output: $BENCHMARK_OUTPUT"
 echo "Build mode: $BUILD_MODE"
+echo "Memory collection: $MEMORY_MODE; sampling interval: $MEMORY_INTERVAL_MS ms"
 echo "Full corpus measurements can take hours. Progress and commands are saved below this directory."
 trap 'echo "Stopped. Inspect the latest log under $OUT; completed measurements are preserved." >&2' ERR
 
@@ -340,7 +355,10 @@ metadata = {
                   "pymupdf", "pdfplumber", "pdfminer.six", "pypdf", "matplotlib"]},
     "script_sha256": {str(p): digest(p) for p in Path("scripts/benchmarking").glob("*.py")},
     "launcher_sha256": digest("scripts/benchmarking/refresh_performance_benchmarks.sh"),
+    "memory_collection": {"mode": os.environ.get("MEMORY_MODE", "off"),
+        "interval_ms": int(os.environ.get("MEMORY_INTERVAL_MS", "50")) if os.environ.get("MEMORY_MODE") == "profile" else None},
 }
+metadata["comparison_memory"] = dict(metadata["memory_collection"])
 for command, key in [(["sysctl", "-n", "machdep.cpu.brand_string"], "cpu"),
                      (["sysctl", "-n", "hw.memsize"], "memory_bytes")]:
     if sys.platform == "darwin":
@@ -381,7 +399,22 @@ run_experiment() {
   local description=$2
   shift 2
   experiment=$((experiment + 1))
-  run_logged "$log" "Experiment $experiment/$total_experiments | $description" "$@"
+  local command=("$@")
+  if [[ $MEMORY_MODE != off ]]; then
+    if [[ $log == */comparison/*/run.log ]]; then
+      # The comparison runner isolates its backend/thread series internally.
+      command+=(--memory-mode "$MEMORY_MODE" --memory-interval-ms "$MEMORY_INTERVAL_MS")
+    else
+      # Observe the actual Python process, not uv and its child together.
+      if [[ ${command[0]} == uv ]]; then
+        command=("$REPO_ROOT/.venv/bin/python" "${command[@]:4}")
+      fi
+      command=("$REPO_ROOT/.venv/bin/python" scripts/benchmarking/_performance_memory.py
+        --memory-mode "$MEMORY_MODE" --memory-interval-ms "$MEMORY_INTERVAL_MS"
+        --output "${log%.log}.memory.json" -- "${command[@]}")
+    fi
+  fi
+  run_logged "$log" "Experiment $experiment/$total_experiments | $description" "${command[@]}"
 }
 
 for (( repetition=1; repetition<=REPEATS; repetition++ )); do

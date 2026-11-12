@@ -189,6 +189,57 @@ def test_recovery_forks_core_without_relabeling_versions(tmp_path: Path, monkeyp
         assert (output / name / "raw").read_text() == "unchanged measurements"
 
 
+@pytest.mark.skipif(os.name == "nt", reason="Recovery uses Unix symlinks")
+@pytest.mark.parametrize("same_settings", [True, False])
+def test_recovery_copies_memory_with_compatible_checkpoints(
+    tmp_path: Path, monkeypatch, same_settings
+):
+    source, output = tmp_path / "source", tmp_path / "output"
+    source.mkdir()
+    output.mkdir()
+    for name in ("native", "replay"):
+        (source / name).mkdir()
+    series = source / "comparison/r1/render"
+    (series / "checkpoints").mkdir(parents=True)
+    (series / "memory").mkdir()
+    (series / "checkpoints/run.json").write_text("original checkpoint")
+    (series / "memory/run.memory.rss.csv").write_text("original samples")
+    provenance = {"packages": {"pymupdf": "fixture"}}
+    metadata = {
+        "dataset": {"files": [], "root": "/pdf"},
+        "threads": [1, 4],
+        "scale": 1,
+        "max_concurrent_results": 32,
+        "memory_collection": {"mode": "peak", "interval_ms": None},
+        "comparison_memory": {"mode": "profile", "interval_ms": 50},
+        "comparison_provenance": provenance,
+    }
+    (source / "metadata.json").write_text(json.dumps(metadata))
+    monkeypatch.setattr(
+        _RECOVERY,
+        "ReportInputs",
+        lambda _: SimpleNamespace(
+            metadata=metadata, load=lambda **_: ["existing core"]
+        ),
+    )
+    monkeypatch.setattr(_RECOVERY, "validate_environment", lambda *_: None)
+    monkeypatch.setattr(
+        _RECOVERY, "reference_preflight", lambda _: {"status": "passed"}
+    )
+    requested = {"mode": "profile", "interval_ms": 50 if same_settings else 25}
+    result = _RECOVERY.prepare_recovery(source, output, provenance, requested)
+    assert result["memory_collection"] == metadata["memory_collection"]
+    assert result["comparison_memory"] == requested
+    target = output / "comparison/r1/render"
+    assert (target / "checkpoints/run.json").exists() == same_settings
+    assert (target / "memory/run.memory.rss.csv").exists() == same_settings
+    command = _RECOVERY.comparison_command(result, target, "render", False)
+    assert command[command.index("--memory-mode") + 1] == "profile"
+    assert command[command.index("--memory-interval-ms") + 1] == str(
+        requested["interval_ms"]
+    )
+
+
 @pytest.mark.parametrize(
     "changed",
     [

@@ -12,20 +12,13 @@
 // process-lifetime high-water mark.
 // Generation variants: solid, dash-each, dash-once, dash-q, empty-each,
 // pathstorm (the grid generator from docling#4058, with its rounded line count).
-// test_memory_on_lines_buffered buffers page, Form, appearance, Type3 and mask sources.
-// test_memory_on_lines_buffered_forms streams pages and buffers Forms.
-// test_memory_on_lines_buffered_appearances buffers only annotation appearances.
-// test_memory_on_lines_buffered_type3 buffers only procedural CharProcs.
-// test_memory_on_lines_buffered_soft_masks buffers only soft-mask groups.
-// test_memory_on_lines_copied_patterns copies only pattern replay sources.
 // Generate pathstorm-appearance/pathstorm-widget N PDF [appearances=1].
 // Generate pathstorm-type3 N PDF [glyphs=1] for procedural CharProc delivery.
 // Generate pathstorm-soft-mask N PDF [paints=1] for one cached mask group.
 // Generate pathstorm-pattern[-lattice] N PDF [fills=1] for pattern replay.
 // Generate clip-chain/clip-scoped N PDF (10..4000) for clip snapshot growth.
-// test_memory_on_lines_copied_clips materializes full snapshots as a reference.
 // page_* fields cover /Contents only. form_* diagnostics aggregate Do calls
-// through that page's ordinary Form tree, not other buffered entry points.
+// through that page's ordinary Form tree; appearances have separate counters.
 #include <parse.h>
 #include <render.h>
 
@@ -51,41 +44,13 @@ namespace
 using json = nlohmann::json;
 using clock_type = std::chrono::steady_clock;
 const auto started = clock_type::now();
-#ifdef DOCLING_PARSE_BUFFERED_PAGE_CONTENTS
-constexpr const char* page_content_delivery = "buffered";
-#else
 constexpr const char* page_content_delivery = "callback";
-#endif
-#ifdef DOCLING_PARSE_BUFFERED_FORM_CONTENTS
-constexpr const char* form_content_delivery = "buffered";
-#else
 constexpr const char* form_content_delivery = "callback";
-#endif
-#ifdef DOCLING_PARSE_BUFFERED_AP_CONTENTS
-constexpr const char* appearance_content_delivery = "buffered";
-#else
 constexpr const char* appearance_content_delivery = "callback";
-#endif
-#ifdef DOCLING_PARSE_BUFFERED_TYPE3_CONTENTS
-constexpr const char* type3_content_delivery = "buffered";
-#else
 constexpr const char* type3_content_delivery = "callback";
-#endif
-#ifdef DOCLING_PARSE_BUFFERED_SOFT_MASK_CONTENTS
-constexpr const char* soft_mask_content_delivery = "buffered";
-#else
 constexpr const char* soft_mask_content_delivery = "callback";
-#endif
-#ifdef DOCLING_PARSE_COPY_PATTERN_CONTENTS
-constexpr const char* pattern_content_delivery = "copied";
-#else
 constexpr const char* pattern_content_delivery = "borrowed";
-#endif
-#ifdef DOCLING_PARSE_COPY_CLIP_SNAPSHOTS
-constexpr const char* clip_history_storage = "copied";
-#else
 constexpr const char* clip_history_storage = "shared";
-#endif
 
 void snapshot(const std::string& stage, int pause_seconds, json details = json::object())
 {

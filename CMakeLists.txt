@@ -238,32 +238,10 @@ endif()
 
 option(DOCLING_PARSE_BUILD_MEMORY_PROBE "Build the native line-memory probe" OFF)
 if(DOCLING_PARSE_BUILD_MEMORY_PROBE)
-    foreach(probe_target
-            test_memory_on_lines
-            test_memory_on_lines_buffered
-            test_memory_on_lines_buffered_forms
-            test_memory_on_lines_buffered_appearances
-            test_memory_on_lines_buffered_type3
-            test_memory_on_lines_buffered_soft_masks
-            test_memory_on_lines_copied_patterns
-            test_memory_on_lines_copied_clips)
-        add_executable(${probe_target} tests/cpp/test_memory_on_lines.cpp)
-        add_dependencies(${probe_target} ${DEPENDENCIES})
-        target_link_libraries(${probe_target} PRIVATE ${DEPENDENCIES} ${LIB_LINK})
-        target_compile_definitions(${probe_target} PRIVATE DOCLING_PARSE_CONTENT_DIAGNOSTICS=1)
-    endforeach()
-    # Temporary references isolate source buffering in each converted path.
-    target_compile_definitions(test_memory_on_lines_buffered PRIVATE
-        DOCLING_PARSE_BUFFERED_PAGE_CONTENTS=1 DOCLING_PARSE_BUFFERED_FORM_CONTENTS=1
-        DOCLING_PARSE_BUFFERED_AP_CONTENTS=1 DOCLING_PARSE_BUFFERED_TYPE3_CONTENTS=1
-        DOCLING_PARSE_BUFFERED_SOFT_MASK_CONTENTS=1 DOCLING_PARSE_COPY_PATTERN_CONTENTS=1
-        DOCLING_PARSE_COPY_CLIP_SNAPSHOTS=1)
-    target_compile_definitions(test_memory_on_lines_buffered_forms PRIVATE DOCLING_PARSE_BUFFERED_FORM_CONTENTS=1)
-    target_compile_definitions(test_memory_on_lines_buffered_appearances PRIVATE DOCLING_PARSE_BUFFERED_AP_CONTENTS=1)
-    target_compile_definitions(test_memory_on_lines_buffered_type3 PRIVATE DOCLING_PARSE_BUFFERED_TYPE3_CONTENTS=1)
-    target_compile_definitions(test_memory_on_lines_buffered_soft_masks PRIVATE DOCLING_PARSE_BUFFERED_SOFT_MASK_CONTENTS=1)
-    target_compile_definitions(test_memory_on_lines_copied_patterns PRIVATE DOCLING_PARSE_COPY_PATTERN_CONTENTS=1)
-    target_compile_definitions(test_memory_on_lines_copied_clips PRIVATE DOCLING_PARSE_COPY_CLIP_SNAPSHOTS=1)
+    add_executable(test_memory_on_lines tests/cpp/test_memory_on_lines.cpp)
+    add_dependencies(test_memory_on_lines ${DEPENDENCIES})
+    target_link_libraries(test_memory_on_lines PRIVATE ${DEPENDENCIES} ${LIB_LINK})
+    target_compile_definitions(test_memory_on_lines PRIVATE DOCLING_PARSE_CONTENT_DIAGNOSTICS=1)
 
     add_executable(stream_callback_regression tests/cpp/test_stream_callbacks.cpp)
     add_dependencies(stream_callback_regression ${DEPENDENCIES})

@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from _performance_memory import add_memory_arguments
 from _performance_runtime import (
     ROOT,
     atomic_json,
@@ -74,7 +75,10 @@ def validate_environment(metadata: dict[str, Any], provenance: dict[str, Any]) -
 
 
 def prepare_recovery(
-    source: Path, output: Path, provenance: dict[str, Any]
+    source: Path,
+    output: Path,
+    provenance: dict[str, Any],
+    memory: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     inputs = ReportInputs(source)
     metadata = copy.deepcopy(inputs.metadata)
@@ -96,11 +100,15 @@ def prepare_recovery(
         if (source / name).is_file():
             shutil.copy2(source / name, output / name)
     old_provenance = metadata.get("comparison_provenance")
-    if old_provenance == provenance:
+    compatible_memory = memory is None or metadata.get("comparison_memory") == memory
+    if old_provenance == provenance and compatible_memory:
         for directory in sorted((source / "comparison").glob("r*/*/checkpoints")):
             target = output / directory.relative_to(source)
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copytree(directory, target)
+            memory_source = directory.parent / "memory"
+            if memory_source.is_dir():
+                shutil.copytree(memory_source, target.parent / "memory")
         print(
             "Compatible comparison checkpoints copied; failed/missing series will be measured.",
             flush=True,
@@ -111,6 +119,8 @@ def prepare_recovery(
             flush=True,
         )
     metadata["comparison"] = True
+    if memory is not None:
+        metadata["comparison_memory"] = memory
     metadata["comparison_provenance"] = provenance
     metadata["reference_preflight"] = preflight
     metadata["recovery"] = {
@@ -161,6 +171,10 @@ def comparison_command(
     ]
     if compact:
         command.append("--suppress-config")
+    if memory := metadata.get("comparison_memory"):
+        command += ["--memory-mode", memory["mode"]]
+        if memory["mode"] == "profile":
+            command += ["--memory-interval-ms", str(memory["interval_ms"])]
     return command
 
 
@@ -168,6 +182,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("source", type=Path)
     parser.add_argument("--output-dir", type=Path)
+    add_memory_arguments(parser)
     args = parser.parse_args()
     source = args.source.resolve()
     output_mode = os.environ.get("BENCHMARK_OUTPUT", "compact")
@@ -217,7 +232,17 @@ def main() -> None:
             output / "dependencies.log",
         )
         provenance = runtime_provenance()
-        metadata = prepare_recovery(source, output, provenance)
+        metadata = prepare_recovery(
+            source,
+            output,
+            provenance,
+            {
+                "mode": args.memory_mode,
+                "interval_ms": args.memory_interval_ms
+                if args.memory_mode == "profile"
+                else None,
+            },
+        )
         for repetition in range(1, metadata["repeats"] + 1):
             for mode in ("parse-without-bitmap", "render"):
                 directory = output / "comparison" / f"r{repetition}" / mode

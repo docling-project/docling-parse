@@ -23,6 +23,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from _performance_memory import read_memory
+from _performance_memory_report import write_memory_report
+
 WORKLOAD_LABELS = {
     "native": "Native C++ scaling",
     "replay": "Python scaling with Docling settings",
@@ -86,6 +89,14 @@ def task_title(workload: str, task: str) -> str:
     )
 
 
+def task_label(workload: str, task: str) -> str:
+    if workload == "native":
+        return "Render" if task == "render-only" else "Render + text"
+    if workload == "replay":
+        return "Backend replay"
+    return "Extract" if task == "parse" else "Render + extract"
+
+
 def plot_title(workload: str, task: str) -> str:
     return f"{WORKLOAD_LABELS[workload]}\n{textwrap.fill(task_title(workload, task), width=70)}"
 
@@ -131,6 +142,7 @@ class Measurement:
     phases: dict[str, float] = field(default_factory=dict)
     durations: list[float] = field(default_factory=list)
     package_version: str = ""
+    memory: dict[str, Any] | None = None
 
     @property
     def group(self) -> tuple[str, str, str, int]:
@@ -165,6 +177,39 @@ class ReportInputs:
         self.committed_replay_sources: set[str] = set()
         self.excluded_comparisons: list[dict[str, Any]] = []
         self.comparison_errors: list[dict[str, Any]] = []
+
+    def memory(
+        self,
+        path: Path,
+        legacy: dict[str, Any] | None = None,
+        *,
+        comparison: bool = False,
+    ) -> dict[str, Any] | None:
+        collection = self.metadata.get("memory_collection", {"mode": "off"})
+        if comparison:
+            collection = self.metadata.get("comparison_memory", collection)
+        value = read_memory(path, collection)
+        if value is None:
+            if collection["mode"] != "off":
+                raise ValueError(f"Requested memory measurement is missing: {path}")
+            if legacy is None or legacy.get("peak_rss_mib") is None:
+                return None
+            peak = float(legacy["peak_rss_mib"])
+            require(
+                math.isfinite(peak) and peak >= 0, f"Invalid legacy replay RSS: {path}"
+            )
+            return {
+                "mode": "existing",
+                "peak_rss_bytes": round(peak * 2**20),
+                "scope": legacy.get("rss_scope", "process lifetime"),
+                "method": "resource.getrusage(RUSAGE_SELF)",
+                "sample_count": 0,
+                "_source": "existing replay report",
+            }
+        value["_source"] = str(path.relative_to(self.root))
+        if value.get("timeline"):
+            value["_timeline_path"] = str(path.parent / value["timeline"])
+        return value
 
     def package_version(self, backend: str, workload: str) -> str:
         package = {"threaded": "docling-parse", "pdfium": "pypdfium2"}.get(
@@ -300,6 +345,7 @@ class ReportInputs:
                     stages,
                     durations[t],
                     package_version=self.package_version("docling-parse", "native"),
+                    memory=self.memory(path.with_suffix(".memory.json")),
                 )
             )
         return result
@@ -403,6 +449,7 @@ class ReportInputs:
                     dict(phases),
                     durations,
                     package_version=self.package_version(settings["backend"], "replay"),
+                    memory=self.memory(path.parent.with_suffix(".memory.json"), run),
                 )
             )
         return result
@@ -436,6 +483,29 @@ class ReportInputs:
                     f"Comparison checkpoint CSV changed: {csv_path}",
                 )
                 group = state["run"]["backend"], int(state["run"]["threads"])
+                memory = state["run"].get("memory")
+                if (
+                    self.metadata.get(
+                        "comparison_memory", self.metadata.get("memory_collection", {})
+                    ).get("mode", "off")
+                    != "off"
+                ):
+                    require(
+                        memory is not None, f"Missing comparison memory: {checkpoint}"
+                    )
+                if memory is not None:
+                    relative = Path(memory["artifact"])
+                    require(
+                        not relative.is_absolute() and ".." not in relative.parts,
+                        f"Invalid comparison memory path: {checkpoint}",
+                    )
+                    artifact = path.parent / relative
+                    require(
+                        artifact.is_file()
+                        and hashlib.sha256(artifact.read_bytes()).hexdigest()
+                        == memory["artifact_sha256"],
+                        f"Comparison memory changed: {artifact}",
+                    )
                 require(
                     group not in checkpoints,
                     f"Duplicate comparison checkpoint: {checkpoint}",
@@ -568,6 +638,16 @@ class ReportInputs:
                     ),
                     durations=durations[backend, t],
                     package_version=self.package_version(backend, "comparison"),
+                    memory=(
+                        self.memory(
+                            path.parent
+                            / checkpoints[backend, t]["run"]["memory"]["artifact"],
+                            comparison=True,
+                        )
+                        if provenance is not None
+                        and checkpoints[backend, t]["run"].get("memory")
+                        else None
+                    ),
                 )
             )
             if sizes and (backend, t) in sizes and not errors["pypdfium2", 1]:
@@ -599,6 +679,8 @@ class ReportInputs:
         self.comparison_errors.clear()
         measurements = []
         for path in sorted((self.root / "native").rglob("*.csv")):
+            if path.name.endswith(".memory.rss.csv"):
+                continue
             measurements.extend(self.native(path))
         for path in sorted((self.root / "replay").glob("r*/*/report.json")):
             measurements.extend(self.replay(path))
@@ -909,6 +991,7 @@ def write_report(
         write_csv(output / "excluded_comparisons.csv", inputs.excluded_comparisons)
         write_csv(output / "comparison_errors.csv", inputs.comparison_errors)
     meta = inputs.metadata
+    memory_lines = write_memory_report(measurements, output)
     lines = [
         "# Performance measurement report",
         "",
@@ -971,18 +1054,21 @@ def write_report(
                 f"| {package} | {meta.get('packages', {}).get(package, '—')} | {version} |"
             )
         lines += [""]
+    lines += python_experiment_explanation(summary)
+    sections: dict[str, list[str]] = {}
     for workload in ("native", "replay", "comparison"):
         rows = [row for row in summary if row["workload"] == workload]
         if not rows:
             continue
-        if workload == "replay":
-            lines += python_experiment_explanation(summary)
-        lines += [
-            f"## {WORKLOAD_LABELS[workload]}",
+        section: list[str] = []
+        sections[workload] = section
+        level = "##" if workload == "comparison" else "###"
+        section += [
+            f"{level} {WORKLOAD_LABELS[workload]}",
             "",
         ]
         if workload == "replay":
-            lines += [
+            section += [
                 "This standalone backend-operation replay creates page-images and text, and requests bitmap "
                 "bounding boxes and separator geometry, including coordinate normalization and text "
                 "cleanup. Docling materializes word/line models; PDFium builds merged textline models "
@@ -991,7 +1077,7 @@ def write_report(
                 "",
             ]
         elif workload == "comparison":
-            lines += [
+            section += [
                 "This experiment measures package-specific text and geometry APIs, optionally with page "
                 "page-images. Docling materializes character models, PDFium returns rectangle text, and other "
                 "packages expose their own geometry granularity. Word/line construction and separate "
@@ -999,7 +1085,7 @@ def write_report(
                 "comparisons, with different outputs from the Docling-settings replay.",
                 "",
             ]
-        lines += [
+        section += [
             rows[0]["timing_basis"] + ".",
             "",
             "| Backend | Version | Task | Threads | Runs | Wall median (s) | Min-max (s) | Pages/s | "
@@ -1025,16 +1111,29 @@ def write_report(
                 if row["efficiency_pct"] is not None
                 else "—"
             )
-            lines.append(
+            section.append(
                 f"| {BACKEND_LABELS.get(row['backend'], row['backend'])} "
                 f"| {row['package_version'] or '—'} "
-                f"| {task_title(workload, row['task'])} | {row['threads']} | {row['repetitions']} "
+                f"| {task_label(workload, row['task'])} | {row['threads']} | {row['repetitions']} "
                 f"| {row['median_wall_s']:.3f} | {row['min_wall_s']:.3f}-{row['max_wall_s']:.3f} "
                 f"| {row['pages_per_s']:.1f} | "
                 + (f"{pdfium_speedup} | " if workload != "native" else "")
                 + f"{speedup} | {efficiency} |"
             )
-        lines += [""]
+        section += [""]
+        for task in sorted({row["task"] for row in rows}):
+            section.append(
+                f"- **{task_label(workload, task)}**: {task_title(workload, task)}."
+            )
+        section += [""]
+    lines += [
+        "## Parallel Scaling",
+        "",
+        *sections.get("native", []),
+        *sections.get("replay", []),
+        *memory_lines,
+        *sections.get("comparison", []),
+    ]
     if inputs.excluded_comparisons and not core_only:
         lines += [
             "## Excluded reference comparisons",
@@ -1101,19 +1200,37 @@ def reproduction_commands(meta: dict[str, Any], workload: str, task: str) -> lis
     revision = shlex.quote(meta["dataset"]["revision"])
     scale = str(float(meta["scale"]))
     queue = str(int(meta["max_concurrent_results"]))
+    memory = meta.get("memory_collection", {"mode": "off"})
+    if workload == "comparison":
+        memory = meta.get("comparison_memory", memory)
+    memory_flags = (
+        f"--memory-mode {shlex.quote(memory['mode'])} "
+        f"--memory-interval-ms {int(memory.get('interval_ms') or 50)}"
+        if memory["mode"] != "off"
+        else ""
+    )
     lines = [
         "set -euo pipefail",
         f"PDF_ROOT={shlex.quote(root)}",
         'REPRO_OUT=$(mktemp -d "$PWD/scratch-performance-reproduce-XXXXXX")',
-        f"for ((r=1; r<={int(meta['repeats'])}; r++)); do",
     ]
+    if memory_flags and workload != "comparison":
+        lines += [
+            "observe() {",
+            "  local memory_output=$1; shift",
+            f"  .venv/bin/python scripts/benchmarking/_performance_memory.py {memory_flags} \\",
+            '    --output "${memory_output}.memory.json" -- "$@"',
+            "}",
+        ]
+    lines.append(f"for ((r=1; r<={int(meta['repeats'])}; r++)); do")
     if workload == "native":
         flags = NATIVE_PROFILES.get(task, NATIVE_PROFILES["render-with-text"])
         words = str(flags["create_word_cells"]).lower()
         line_cells = str(flags["create_line_cells"]).lower()
+        observe = 'observe "$REPRO_OUT/r${r}-t${t}" ' if memory_flags else ""
         lines += [
             f"  for t in {threads}; do",
-            '    ./build/run_scaling.exe "$PDF_ROOT" -v WARNING --recursive --mode render \\',
+            f'    {observe}./build/run_scaling.exe "$PDF_ROOT" -v WARNING --recursive --mode render \\',
             f'      --threads "$t" --max-concurrent-results {queue} --scale {scale} \\',
             f"      --create-word-cells={words} --create-line-cells={line_cells} \\",
             '      --enable-timing --timing-csv "$REPRO_OUT/r${r}-t${t}.csv" \\',
@@ -1122,12 +1239,17 @@ def reproduction_commands(meta: dict[str, Any], workload: str, task: str) -> lis
         ]
     elif workload == "replay":
         command = "uv run --no-sync python scripts/benchmarking/run_performance_benchmarking_with_docling_settings.py"
+        pdfium_command = threaded_command = command
+        if memory_flags:
+            command = ".venv/bin/python scripts/benchmarking/run_performance_benchmarking_with_docling_settings.py"
+            pdfium_command = f'observe "$REPRO_OUT/r${{r}}-pdfium" {command}'
+            threaded_command = f'observe "$REPRO_OUT/r${{r}}-t${{t}}" {command}'
         lines += [
-            f'  {command} "$PDF_ROOT" \\',
+            f'  {pdfium_command} "$PDF_ROOT" \\',
             f"    --backend pdfium --dataset-revision {revision} \\",
             '    --output-dir "$REPRO_OUT/r${r}-pdfium" 2>&1 | tee "$REPRO_OUT/r${r}-pdfium.log"',
             f"  for t in {threads}; do",
-            f'    {command} "$PDF_ROOT" \\',
+            f'    {threaded_command} "$PDF_ROOT" \\',
             f'      --backend threaded --threads "$t" --dataset-revision {revision} \\',
             '      --output-dir "$REPRO_OUT/r${r}-t${t}" 2>&1 | tee "$REPRO_OUT/r${r}-t${t}.log"',
             "  done",
@@ -1140,7 +1262,7 @@ def reproduction_commands(meta: dict[str, Any], workload: str, task: str) -> lis
         lines += [
             '  uv run --no-sync python scripts/benchmarking/run_performance_benchmarking.py "$PDF_ROOT" \\',
             f"    --recursive --mode {mode} --threads {thread_csv} --scale {scale} --max-concurrent-results {queue} \\",
-            "    --3rd-party-backends all --only-threaded \\",
+            f"    --3rd-party-backends all --only-threaded {memory_flags} \\",
             "    --keep-char-cells=true --create-word-cells=false --create-line-cells=false \\",
             f"    --keep-shapes={scene} --keep-bitmaps={scene} \\",
             "    --materialize-char-cells=true --materialize-word-cells=false \\",
@@ -1160,7 +1282,7 @@ def figure_sections(
         "Each profile has its own one-thread baseline; speedup and efficiency never mix profiles.",
         "",
         "Run the commands from the repository root with the source revision, native build and "
-        "Python packages recorded above. Each reproduction block below covers all plots in its "
+        "Python packages recorded above. Each reproduction block below collects timing for its "
         "profile, uses the recorded thread counts and repetitions, and creates fresh output paths. "
         "The native and replay sweeps use a fresh process per thread count, as in the launcher.",
         "",
@@ -1171,10 +1293,20 @@ def figure_sections(
         f"DATASET_REVISION={shlex.quote(meta['dataset']['revision'])} \\",
         f"  REPEATS={int(meta['repeats'])} THREADS={','.join(str(int(t)) for t in meta['threads'])} "
         f"RUN_COMPARISON={int(meta['comparison'])} \\",
+        f"  MEMORY_MODE={meta.get('memory_collection', {}).get('mode', 'off')} "
+        f"MEMORY_INTERVAL_MS={meta.get('memory_collection', {}).get('interval_ms') or 50} \\",
         "  bash scripts/benchmarking/refresh_performance_benchmarks.sh",
         "```",
         "",
     ]
+    if meta.get("recovery"):
+        lines += [
+            "Recovery may combine original core memory settings with different comparison settings. "
+            "Use `recover_performance_benchmarks.py --memory-mode ... --memory-interval-ms ...` "
+            "to reproduce that combination against the retained source bundle; the fresh launcher "
+            "command above applies its memory settings to every workload.",
+            "",
+        ]
     names = {figure.name for figure in figures}
     for workload in ("native", "replay", "comparison"):
         tasks = sorted({m.task for m in measurements if m.workload == workload})
@@ -1235,7 +1367,10 @@ def figure_sections(
                 "runtime": (
                     "Wall time and throughput",
                     "The left panel shows corpus wall time; the right shows pages per second. "
-                    "Points are medians, and wall-time bars show the observed minimum and maximum across repetitions.",
+                    "Points are medians, and wall-time bars show the observed minimum and maximum across repetitions. "
+                    "Dashed throughput lines show ideal scaling: measured one-thread throughput "
+                    "multiplied by the thread count. They are shown for backends measured at one "
+                    "thread and additional thread counts.",
                 ),
                 "scaling": (
                     "Speedup and parallel efficiency",
@@ -1322,20 +1457,36 @@ def plot(
                     capsize=3,
                     label=BACKEND_LABELS.get(backend, backend),
                 )
-                axes[1].plot(
+                throughput = [r["pages_per_s"] for r in group]
+                (measured,) = axes[1].plot(
                     x,
-                    [r["pages_per_s"] for r in group],
+                    throughput,
                     "o-",
                     label=BACKEND_LABELS.get(backend, backend),
                 )
+                one_thread = next(
+                    (r["pages_per_s"] for r in group if r["threads"] == 1), None
+                )
+                if one_thread is not None and len(set(x)) >= 2:
+                    axes[1].plot(
+                        [0, max(x)],
+                        [0, one_thread * max(x)],
+                        linestyle="--",
+                        color=measured.get_color(),
+                        label=f"{BACKEND_LABELS.get(backend, backend)} ideal",
+                    )
+            axes[1].set_xlim(left=0)
+            axes[1].set_ylim(bottom=0)
+            thread_ticks = sorted({r["threads"] for r in rows})
             for ax, ylabel in zip(axes, ("Corpus wall time (s)", "Pages per second")):
                 ax.set(
                     xlabel="Threads",
                     ylabel=ylabel,
-                    xticks=sorted({r["threads"] for r in rows}),
+                    xticks=thread_ticks,
                 )
                 ax.grid(alpha=0.25)
                 ax.legend()
+            axes[1].set_xticks([0, *thread_ticks])
             fig.suptitle(plot_title(workload, task), fontsize=12)
             save(fig, suffix + "_runtime")
             scalable = [r for r in rows if r["efficiency_pct"] is not None]
