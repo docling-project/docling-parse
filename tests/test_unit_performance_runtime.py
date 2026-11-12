@@ -8,6 +8,7 @@ import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
@@ -141,7 +142,7 @@ def test_recovery_forks_core_without_relabeling_versions(tmp_path: Path, monkeyp
     packages = dict.fromkeys(
         ("docling-parse", "docling-core", "pypdfium2", "pillow", "rtree"), "fixture"
     )
-    metadata = {
+    metadata: dict[str, Any] = {
         "extension_sha256": "extension",
         "native_sha256": "native",
         "python": "python",
