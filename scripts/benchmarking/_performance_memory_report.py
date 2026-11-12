@@ -41,7 +41,9 @@ def timeline_rows(path: Path, memory: dict[str, Any]) -> list[tuple[float, int]]
     return result
 
 
-def write_memory_report(measurements: list[Any], output: Path) -> list[str]:
+def write_memory_report(
+    measurements: list[Any], output: Path, *, include_traces: bool = True
+) -> list[str]:
     groups: dict[tuple, list[Any]] = defaultdict(list)
     runs = []
     for m in measurements:
@@ -214,6 +216,15 @@ def write_memory_report(measurements: list[Any], output: Path) -> list[str]:
             f"memory_{workload}_{task.replace('+', '_')}.png",
             "Process peak RSS; median and observed range",
         )
+    if not include_traces:
+        return [
+            line.replace(
+                "See memory_runs.csv for methods and scopes.",
+                "Methods and scopes are recorded in publication provenance.",
+            )
+            for line in lines
+            if "memory_traces.md" not in line
+        ]
     for (workload, backend, task, threads), values in sorted(groups.items()):
         profiled = [m for m in values if m.memory and m.memory.get("_timeline_path")]
         if not profiled:

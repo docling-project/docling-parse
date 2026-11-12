@@ -429,3 +429,51 @@ Outputs include `render_quality.csv`, `text_quality.csv`, render comparison
 panels and quality-distribution plots. Quality evidence is separate from the
 performance refresh; the launcher's damaged-page preflight is not a complete
 render-quality regression run.
+
+## Publish performance documentation
+
+Publish a completed launcher/recovery bundle without rerunning measurements:
+
+```sh
+uv run python scripts/tools/update_performance_docs.py --performance-run-dir scratch-performance-refresh-RUN
+uv run python scripts/tools/update_performance_docs.py --performance-run-dir scratch-performance-refresh-RUN --apply
+python3 scripts/tools/update_performance_docs.py --check
+```
+
+Preview is the default: it prints Markdown diffs, file byte sizes and total/net size.
+The publisher validates raw results through `ReportInputs`, then stages summary
+plots and tables through the report generator's structured publication interface.
+It does not copy or parse an existing `report/summary.md`. A bundle's original
+linked recovery artifacts and dataset files must remain available as required by
+report validation. No builds, benchmark reruns or downloads occur.
+
+Results live at `docs/performance_benchmarks/<dataset>/<setup>/index.md`. The setup
+is inferred from CPU, architecture, RAM and OS. Use `--setup-id lowercase-slug` for
+older bundles with missing machine metadata. An explicit ID cannot overwrite a
+publication recording a different machine. `--allow-older` explicitly permits an
+older run to replace a newer one; collection order uses the launcher timestamp in
+the directory name, falling back to metadata file modification time for custom names.
+Thread sweep, dataset revision, workload settings and package versions are recorded
+in each publication rather than silently merged with prior measurements.
+
+New pages use `scripts/tools/update_performance_docs_artifacts/performance_page_template.md`. Sections between
+`<!-- performance:NAME:start -->` and `<!-- performance:NAME:end -->` are generated;
+text outside markers is retained. Supported slots are `title`, `setup`, `interpretation`,
+`native`, `replay`, `comparison`, `memory` and `provenance`; the entry page uses
+`availability`. Absent slots are skipped with a message; malformed/duplicate markers
+fail. Omitted comparisons/memory are labeled not collected; an incomplete expected
+suite fails validation. Updating a migrated historical snapshot replaces it with
+the current template because it predates placeholders.
+
+Only images referenced by a result page enter the publication. Peak-memory summaries
+are included; diagnostic RSS timelines, raw CSV/JSONL and logs remain local.
+`publication.json` records owned files and hashes; obsolete owned assets are removed
+on replacement, and unowned files are preserved. Compact provenance records input
+identity, source/build hashes, packages, workload settings and memory methods.
+
+Hard limits live in `scripts/tools/update_performance_docs_artifacts/performance_docs_limits.json`: 100 KiB per
+Markdown/JSON, 500 KiB per image, 5 MiB per publication and 25 MiB across the entire
+performance tree plus entry page. All limits and links are checked against staged
+output before writing. `--check` requires only the Python standard library and
+runs in CI; it also detects modified or missing generated files. Limits have no
+CLI bypass: change the reviewed configuration when policy needs to change.

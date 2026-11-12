@@ -1591,6 +1591,125 @@ def plot(
     return figures
 
 
+def publication_sections(
+    inputs: ReportInputs, measurements: list[Measurement], output: Path
+) -> dict[str, str]:
+    """Render validated measurements for marked documentation slots.
+
+    Only summary figures are published. CSVs and detailed RSS traces stay local.
+    This interface deliberately does not parse the standalone Markdown report.
+    """
+    from tabulate import tabulate
+
+    output.mkdir(parents=True, exist_ok=True)
+    summary = summarize(measurements)
+    figures = plot(measurements, summary, output)
+    sections = {}
+    for workload, label in WORKLOAD_LABELS.items():
+        rows = [r for r in summary if r["workload"] == workload]
+        lines = [f"## {label}", ""]
+        if not rows:
+            sections[workload] = "\n".join([*lines, "Not collected in this run.", ""])
+            continue
+        lines += [
+            tabulate(
+                [
+                    [
+                        BACKEND_LABELS.get(r["backend"], r["backend"]),
+                        r["package_version"],
+                        r["task"],
+                        r["threads"],
+                        r["repetitions"],
+                        f"{r['median_wall_s']:.3f}",
+                        f"{r['min_wall_s']:.3f}-{r['max_wall_s']:.3f}",
+                        f"{r['pages_per_s']:.1f}",
+                        "—"
+                        if r["speedup_vs_docling_1t"] is None
+                        else f"{r['speedup_vs_docling_1t']:.2f}x",
+                        "—"
+                        if r["efficiency_pct"] is None
+                        else f"{r['efficiency_pct']:.1f}%",
+                    ]
+                    for r in rows
+                ],
+                headers=[
+                    "Backend",
+                    "Version",
+                    "Task",
+                    "Threads",
+                    "Runs",
+                    "Wall median (s)",
+                    "Min-max (s)",
+                    "Pages/s",
+                    "Speedup vs Docling 1t",
+                    "Efficiency",
+                ],
+                tablefmt="github",
+                disable_numparse=True,
+            ),
+            "",
+        ]
+        for task in sorted({r["task"] for r in rows}):
+            prefix = figure_prefix(workload, task)
+            lines += [
+                f"### {task_title(workload, task)}",
+                "",
+                "Timing: "
+                + next(r["timing_basis"] for r in rows if r["task"] == task)
+                + ".",
+                "",
+            ]
+            for figure in figures:
+                if figure.stem in {
+                    prefix + "_" + kind
+                    for kind in ("runtime", "scaling", "phases", "distribution")
+                }:
+                    lines += [
+                        f"![{figure.stem.replace('_', ' ')}](assets/{figure.name})",
+                        "",
+                    ]
+            lines += [
+                "Stage totals sum overlapping worker elapsed time, not corpus wall or CPU time. "
+                "Distributions describe native page-worker or replay document durations, not end-to-end page latency.",
+                "",
+                "<details>",
+                "<summary>Reproduce these measurements</summary>",
+                "",
+                "```bash",
+                *reproduction_commands(inputs.metadata, workload, task),
+                "```",
+                "",
+                "</details>",
+                "",
+            ]
+        if workload == "comparison" and inputs.excluded_comparisons:
+            lines += [
+                "Affected reference series are excluded across all repetitions:",
+                "",
+                tabulate(
+                    [
+                        [r["backend"], r["task"], r["threads"], r["repetition"]]
+                        for r in inputs.excluded_comparisons
+                    ],
+                    headers=["Backend", "Task", "Threads", "Repetition"],
+                    tablefmt="github",
+                ),
+                "",
+            ]
+        sections[workload] = "\n".join(lines)
+    if any(m.memory is not None for m in measurements):
+        memory = "\n".join(
+            write_memory_report(measurements, output, include_traces=False)
+        )
+        sections["memory"] = re.sub(
+            r"\]\((memory_[^)]+\.png)\)", r"](assets/\1)", memory
+        )
+    else:
+        sections["memory"] = "## Process memory\n\nNot collected in this run.\n"
+    sections["interpretation"] = "\n".join(python_experiment_explanation(summary))
+    return sections
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
