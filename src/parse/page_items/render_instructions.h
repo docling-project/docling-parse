@@ -160,6 +160,7 @@ namespace pdflib
   class clip_path_range
   {
     friend class clip_state_instruction;
+    friend class clip_path_cursor;
     using node = detail::clip_history_node;
     std::shared_ptr<node> head;
 
@@ -243,6 +244,107 @@ namespace pdflib
                           p->point_count - prior_points, storage_bytes)) { break; }
         }
     }
+  };
+
+  // One active renderer traversal, not a cache in every snapshot. Geometry
+  // stays in the immutable history; this keeps ordered references and group
+  // counts ready for repeated helper passes over the same clip.
+  class clip_path_cursor
+  {
+    using node = detail::clip_history_node;
+    using storage = std::vector<const clip_path_instruction*>;
+    std::shared_ptr<node> head;
+    storage ordered;
+    std::unordered_map<int, std::size_t> groups;
+    bool valid = false;
+
+    void append_capture(const node& capture)
+    {
+      for(const auto& path : capture.paths)
+        {
+          ordered.push_back(&path);
+          ++groups[path.get_clip_group()];
+        }
+    }
+
+  public:
+    class const_iterator
+    {
+      storage::const_iterator position;
+    public:
+      using iterator_category = std::forward_iterator_tag;
+      using value_type = clip_path_instruction;
+      using difference_type = std::ptrdiff_t;
+      using pointer = const value_type*;
+      using reference = const value_type&;
+      const_iterator() = default;
+      explicit const_iterator(storage::const_iterator position): position(position) {}
+      reference operator*() const { return **position; }
+      pointer operator->() const { return *position; }
+      const_iterator& operator++() { ++position; return *this; }
+      const_iterator operator++(int) { auto copy = *this; ++*this; return copy; }
+      bool operator==(const const_iterator& other) const { return position == other.position; }
+      bool operator!=(const const_iterator& other) const { return not (*this == other); }
+    };
+
+    void prepare(const clip_path_range& paths)
+    {
+      if(valid and head == paths.head) { return; }
+      const bool can_extend = valid;
+      valid = false;
+      try
+        {
+          if(can_extend and paths.head and paths.head->previous == head)
+            {
+              // The common clip-chain case adds exactly one capture.
+              append_capture(*paths.head);
+            }
+          else
+            {
+              std::vector<const node*> suffix;
+              auto next = paths.head.get();
+              while(next and (not can_extend or next != head.get()))
+                {
+                  suffix.push_back(next);
+                  next = next->previous.get();
+                }
+              if(not can_extend or next != head.get())
+                {
+                  // A restored prefix, sibling, translation or independent
+                  // history must not inherit counts/references from a branch.
+                  ordered.clear();
+                  groups.clear();
+                }
+              for(auto it = suffix.rbegin(); it != suffix.rend(); ++it) { append_capture(**it); }
+            }
+          head = paths.head;
+          valid = true;
+        }
+      catch(...)
+        {
+          // A partially appended pointer list must never be reused after a
+          // failed allocation; reset does not dereference any stored pointer.
+          reset();
+          throw;
+        }
+    }
+
+    void reset() noexcept
+    {
+      valid = false;
+      storage().swap(ordered);
+      std::unordered_map<int, std::size_t>().swap(groups);
+      head.reset();
+    }
+    std::size_t size() const { return ordered.size(); }
+    bool empty() const { return ordered.empty(); }
+    std::size_t group_size(int group) const
+    {
+      const auto found = groups.find(group);
+      return found == groups.end() ? 0 : found->second;
+    }
+    const_iterator begin() const { return const_iterator(ordered.begin()); }
+    const_iterator end() const { return const_iterator(ordered.end()); }
   };
 
   class clip_translation_cache

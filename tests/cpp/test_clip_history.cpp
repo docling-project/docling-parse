@@ -95,6 +95,110 @@ void linear_storage_and_forward_iterator()
   require(expected==1000, "history traversal omitted a capture");
 }
 
+void require_cursor_matches(const clip_path_cursor& cursor,
+                            const clip_state_instruction& state)
+{
+  const auto& paths = state.get_paths();
+  require(cursor.size()==paths.size(), "cursor retained the wrong number of paths");
+  auto expected = paths.begin();
+  for(const auto& path : cursor)
+    {
+      require(expected!=paths.end() and &path==&*expected,
+              "cursor copied, reordered or retained stale geometry");
+      ++expected;
+    }
+  require(expected==paths.end(), "cursor omitted a clip path");
+}
+
+void cursor_extends_history_and_reuses_geometry()
+{
+  clip_path_cursor cursor;
+  clip_state_instruction empty;
+  const auto first = empty.appended(CLIP_RULE_NONZERO, {rectangle(0)});
+  const auto second = first.appended(CLIP_RULE_NONZERO, {rectangle(1,20), rectangle(1,30)});
+  const auto third = second.appended(CLIP_RULE_NONZERO, {rectangle(2,40)});
+  // A later capture can reuse an existing group (for example a shading BBox).
+  const auto fourth = third.appended(CLIP_RULE_NONZERO, {rectangle(0,50)});
+
+  cursor.prepare(empty.get_paths());
+  require(cursor.empty() and cursor.group_size(0)==0, "empty cursor has geometry/counts");
+  cursor.prepare(first.get_paths());
+  require_cursor_matches(cursor, first);
+  cursor.prepare(second.get_paths());
+  require_cursor_matches(cursor, second);
+  require(cursor.group_size(0)==1 and cursor.group_size(1)==2,
+          "single-capture extension lost subpath groups");
+  // Skip the third snapshot: replay need not paint after every capture.
+  cursor.prepare(fourth.get_paths());
+  require_cursor_matches(cursor, fourth);
+  require(cursor.group_size(0)==2 and cursor.group_size(1)==2 and cursor.group_size(2)==1,
+          "multi-capture extension did not update existing/new groups");
+
+  auto copy = cursor.begin();
+  auto advanced = copy;
+  ++advanced;
+  require(copy->get_x()[0]==0 and advanced->get_x()[0]==20,
+          "cursor iterator copies are not independent");
+  const auto rule_change = fourth.with_rule(CLIP_RULE_EVEN_ODD);
+  cursor.prepare(rule_change.get_paths());
+  require_cursor_matches(cursor, fourth);
+  require(cursor.group_size(0)==2, "rule-only change invalidated geometry groups");
+}
+
+void cursor_restores_branches_and_handles_translation()
+{
+  clip_path_cursor cursor;
+  clip_state_instruction empty;
+  const auto root = empty.appended(CLIP_RULE_NONZERO, {rectangle(0)});
+  const auto left = root.appended(CLIP_RULE_NONZERO, {rectangle(1,20)});
+  const auto right = root.appended(CLIP_RULE_NONZERO, {rectangle(0,40), rectangle(0,60)});
+  cursor.prepare(left.get_paths());
+  require_cursor_matches(cursor, left);
+  cursor.prepare(root.get_paths());
+  require_cursor_matches(cursor, root);
+  require(cursor.group_size(0)==1 and cursor.group_size(1)==0,
+          "restoring an ancestor retained child groups");
+  cursor.prepare(left.get_paths());
+  cursor.prepare(right.get_paths());
+  require_cursor_matches(cursor, right);
+  require(cursor.group_size(0)==3 and cursor.group_size(1)==0,
+          "switching siblings retained the previous branch's groups");
+
+  const auto shifted = right.translated(10,20);
+  cursor.prepare(shifted.get_paths());
+  require_cursor_matches(cursor, shifted);
+  require(cursor.begin()->get_x()[0]==10 and cursor.begin()->get_y()[0]==20,
+          "translated history reused unshifted coordinates");
+  const clip_state_instruction independent(CLIP_RULE_NONZERO, {rectangle(9,100)});
+  cursor.prepare(independent.get_paths());
+  require_cursor_matches(cursor, independent);
+  require(cursor.group_size(9)==1 and cursor.group_size(0)==0,
+          "independent history retained old groups");
+  cursor.prepare(empty.get_paths());
+  require_cursor_matches(cursor, empty);
+  require(cursor.group_size(9)==0, "returning to an empty history retained group counts");
+  cursor.prepare(right.get_paths());
+  cursor.reset();
+  require(cursor.empty() and cursor.group_size(0)==0, "page reset retained cursor state");
+  cursor.prepare(left.get_paths());
+  require_cursor_matches(cursor, left);
+}
+
+void cursor_owns_referenced_history()
+{
+  clip_path_cursor cursor;
+  const clip_path_instruction* original = nullptr;
+  {
+    const clip_state_instruction temporary(CLIP_RULE_NONZERO, {rectangle(7,70)});
+    original = &*temporary.get_paths().begin();
+    cursor.prepare(temporary.get_paths());
+  }
+  require(cursor.size()==1 and &*cursor.begin()==original and cursor.begin()->get_x()[0]==70,
+          "cursor references outlived their history owner");
+  cursor.reset();
+  require(cursor.empty() and cursor.begin()==cursor.end(), "reset left a traversable history");
+}
+
 void translated_prefixes_stay_shared()
 {
   const auto source = snapshots(64);
@@ -161,6 +265,9 @@ int main()
     {
       snapshot_and_branch_isolation();
       linear_storage_and_forward_iterator();
+      cursor_extends_history_and_reuses_geometry();
+      cursor_restores_branches_and_handles_translation();
+      cursor_owns_referenced_history();
       translated_prefixes_stay_shared();
       shifted_instruction_replay_uses_one_translation_cache();
       deep_unique_suffix_destroys_iteratively();

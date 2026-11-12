@@ -1,15 +1,15 @@
 # Reduce the native parser's memory footprint
 
 Date: 2026-11-11.
-Status: pattern replay passed native scaling and the seven-repeat control recheck; its rebuilt-extension semantic result has not been reported. The user authorized continuing item 4.
-The targeted state/reset audit's native regressions and normal-path comparison passed. Clip-chain scaling confirmed quadratic snapshot retention; shared immutable clip history is now implemented and awaits user validation.
+Status: pattern replay and the state/reset/shared-clip changes passed focused validation: 131 semantic tests passed, the native clip-history regression passed, and ordinary-page controls passed with the user accepting the small overlapping timing flag as noise.
+Shared immutable clip history removes the measured quadratic retained geometry. The renderer cursor resolves the chain's render-only slowdown; at 1,000 clips, rendering is 33.85% faster than the shared-history implementation without the cursor. Broader corpus/threaded validation and final comparison-path retirement remain open.
 The legacy Type3 cleanup regression passed in that suite; its controlled performance comparison remains pending.
 The Type3-cleanup smoke completed 20 measurements but its comparison was rejected because nine dependency archives changed; no controlled cleanup result is established.
 MyPy/Ruff pass; step 4b appearance/widget streaming validated by native experiments and 171 focused tests.
 Step 4a Form streaming is validated by native experiments and 153 focused tests.
 Step 2 native recheck and carried-forward semantic coverage passed.
 Step 3 native smoke/scaling, Form timing recheck and focused semantic coverage passed.
-Step 1 core scaling is reviewed. Pattern semantic validation, state-audit runtime checks and broad step-5 validation remain pending; bo20 scaling observations are recorded below.
+Step 1 core scaling is reviewed. Full unit/corpus/threaded validation and final cleanup remain pending; the new focused acceptance checkpoint and next user commands are recorded below. Earlier bo20 observations do not validate the later patches.
 Initial C++ reproduction and structural investigation are complete.
 
 Related issues:
@@ -3365,8 +3365,8 @@ existing assertions and ground truth unchanged when reporting failures.
 | --- | --- |
 | 1. Legacy Type3 token cleanup | Semantic regression passed in the user's 86-test suite; historical performance comparison rejected on changed dependencies; controlled comparison pending |
 | 2. Soft-mask group source streaming | Complete: native smoke/scaling, cache reuse, PNG equivalence and 86 focused semantic tests passed |
-| 3. Pattern cache/replay copies | Native smoke/scaling, PNG/cache checks and seven-repeat control recheck passed; rebuilt-extension semantic result pending |
-| 4. State-lifetime/reset audit | Native exception checks and normal-path overhead comparison passed; clip scaling confirmed quadratic payload; shared-history follow-up implemented, user validation pending; semantic suite still unreported |
+| 3. Pattern cache/replay copies | Focused validation complete: native smoke/scaling, PNG/cache checks, control recheck and the user's 131-test semantic suite passed |
+| 4. State-lifetime/reset audit | Focused validation complete: native exception/clip-history checks, shared-clip memory/pixel scaling, renderer cursor comparison, ordinary-page controls and 131 semantic tests passed; small timing variations remain recorded for broad validation |
 | 5. Broader corpus and threaded validation | Pending; user runs builds/tests/experiments |
 | 6. Comparison-path/dead-API retirement | Pending acceptance of broader validation |
 
@@ -4255,6 +4255,244 @@ The prior item-3/item-4 semantic result still has not been reported. This suite
 must run against the rebuilt extension before accepting the shared-history
 patch. Broader corpus/threaded validation, comparison-path retirement and the
 permanent benchmark peak-RSS/timeline enhancement remain subsequent work.
+
+## Shared clip history — measured result and renderer traversal follow-up
+
+Date: 2026-11-12. Continuation of the authorized item-4 shared-history change.
+Builds, native tests, Python semantic tests and experiments remain with the user.
+
+### Native memory and pixel evidence
+
+The paired smoke bundles each passed 15 measurements:
+
+- `/private/tmp/docling-memory-shared-clips-copied-smoke`
+- `/private/tmp/docling-memory-shared-clips-smoke`
+
+All three baseline PNG pairs matched. At 100 clips, both representations expose
+5,050 logical clip paths; unique retained paths drop from 5,050 to 100.
+
+The paired scaling bundles each passed 54 measurements:
+
+- `/private/tmp/docling-memory-shared-clips-copied-scaling`
+- `/private/tmp/docling-memory-shared-clips-scaling`
+
+All six baseline PNG pairs matched. At 1,000 clips, chain decode peak RSS fell
+from 93.92 to 12.19 MiB (-87.02%), and render peak from 104.20 to 22.88 MiB
+(-78.05%). The scoped control stayed near 12 MiB decode and 22 MiB render.
+The chain still exposes 500,500 logical paths, but retains 1,000 unique paths;
+accounted unique node/vector/coordinate storage drops from 72,144,000 to
+216,000 bytes. These accounted bytes exclude allocator/control-block overhead.
+This confirms the intended linear retained geometry on this fixture. It does
+not establish linear rasterization work.
+
+### Seven-repeat recheck: process gate passes, render-phase gate remains open
+
+The new bundles each passed 28 measurements, with all four baseline PNG pairs
+and both chain/scoped PNG equivalence checks matching:
+
+- `/private/tmp/docling-memory-shared-clips-render-recheck-before`
+- `/private/tmp/docling-memory-shared-clips-render-recheck-after`
+
+| Layout / clips | Peak MiB before → after | Process ms before → after | Render work ms before → after | Render work change |
+| --- | ---: | ---: | ---: | ---: |
+| Chain / 500 | 42.00 → 22.00 | 83.94 → 74.55 | 56.47 → 53.03 | -6.10% |
+| Scoped / 500 | 21.75 → 21.78 | 68.55 → 66.23 | 46.52 → 46.06 | -1.00% |
+| Chain / 1,000 | 104.06 → 22.95 | 137.44 → 110.59 | 80.56 → 86.10 | +6.88% |
+| Scoped / 1,000 | 22.42 → 22.48 | 69.41 → 69.11 | 45.01 → 43.26 | -3.90% |
+
+At 1,000 chain clips, native decode work falls from 23.35 to 5.27 ms (-77.44%).
+The render work ranges do not overlap: 77.72–82.28 ms before and 84.70–90.82 ms
+after. The earlier three-repeat matrix showed the same direction (+7.06%).
+Treat this as a remaining regression to address, despite the 19.54% process
+improvement and 77.94% peak reduction. A passed process-wall comparison is not
+a passed render-work gate; the runner currently flags process time only.
+
+### Hypothesis and bounded source change
+
+The immutable forward range reconstructs a temporary stack of predecessor
+pointers for each traversal. Renderer helpers also rebuild clip-group counts
+several times for a shape. This is a source-based performance hypothesis;
+profiling has not established how much each operation contributes.
+
+`clip_path_cursor` keeps one active traversal per renderer:
+
+1. Ordered pointers refer to immutable path geometry. A shared head owner keeps
+   the referenced history alive; path coordinates are not copied.
+2. The same head reuses the traversal. A direct successor appends just its new
+   capture. A skipped sequence appends its suffix in capture order.
+3. A restored ancestor, sibling, independent history or translation rebuilds
+   the ordered references and group counts from the requested history.
+4. Group counts include repeated group IDs across captures, as shading BBox
+   paths can reuse a group. Rule changes still use the instruction's rule.
+5. A failed allocation clears partially updated state and rethrows. No partial
+   pointer list can be reused as a valid traversal.
+6. `renderer::set_size()` releases the cursor before its invalid-size early
+   return. Space is proportional to one active history, not every snapshot.
+
+The rectangular clipping, non-rectangle detection, mask building, clip bounds
+and shading helpers use this traversal. The geometry operations, capture order
+and fill-rule selection remain the same. Helpers do not hold cursor iterators
+across nested rendering calls; each helper prepares the requested history.
+The independent comparison of two clip states keeps its existing iterators.
+
+The existing `clip_history_regression` adds checks for one/multiple-capture
+extensions, address/order preservation, repeated group IDs, ancestor/sibling
+restoration, translations, unrelated/empty histories, reset/reuse and source
+owner release. These are written but have not been compiled or executed by Codex.
+
+### Preserved executable and next controlled user run
+
+Codex preserved the measured shared-history executable before rebuilding:
+
+- `/private/tmp/docling-memory-before-clip-cursor`
+- SHA-256: `60e3984699ed1e23e72efc680412f6281f6a2d8015a72094d00cbf2f31fdf596`
+
+Its binary hash matches the recheck-after metadata. All nine dependency archive
+hashes matched at preservation. The original compiled-source provenance stays
+in the recheck-after bundle; a new runner snapshot does not relabel that binary.
+
+~~~sh
+cmake --build build --parallel 2 --target \
+  test_memory_on_lines clip_history_regression
+
+ctest --test-dir build --output-on-failure -R '^clip_history_regression$'
+
+uv run python3 tests/cpp/run_memory_on_lines.py \
+  --exe /private/tmp/docling-memory-before-clip-cursor \
+  --output /private/tmp/docling-memory-clip-cursor-before \
+  --layouts clip-chain,clip-scoped --sizes 500,1000 \
+  --modes render --repeats 7
+
+uv run python3 tests/cpp/run_memory_on_lines.py \
+  --output /private/tmp/docling-memory-clip-cursor-after \
+  --baseline /private/tmp/docling-memory-clip-cursor-before \
+  --layouts clip-chain,clip-scoped --sizes 500,1000 \
+  --modes render --repeats 7 --slowdown-limit-pct 5
+~~~
+
+Inspect both process-wall and `median_render_work_s` from summary.csv/raw JSON.
+The fresh pair isolates the cursor, since both sides share clip geometry.
+Also compare candidate render work against the original copied-history recheck;
+keep the original +5% allowance. If dependencies change, rebuild a matching
+reference instead of bypassing identity checks. Require matching PNGs/logical
+counts and retained linear unique geometry, with no material new peak cost.
+
+At this handoff, the ordinary-page controls, semantic suite and new native
+clip-history CTest were awaiting results. The checkpoint below records those
+results. Broad corpus/threaded acceptance, comparison-path retirement and
+permanent benchmark memory reporting remain subsequent work.
+
+## Focused acceptance checkpoint — cursor, ordinary-page controls and semantics
+
+Date: 2026-11-12. The user returned the cursor comparison, ordinary-page
+controls and the rebuilt-extension semantic results, and explicitly accepted
+the control table's overlapping timing recheck as a fluke.
+
+### Renderer cursor result
+
+Both bundles contain 28 successful measurements:
+
+- `/private/tmp/docling-memory-clip-cursor-before`
+- `/private/tmp/docling-memory-clip-cursor-after`
+
+All four baseline PNG pairs and both chain/scoped equivalence checks match.
+Dependencies and probe settings match the original copied-history recheck too.
+
+| Layout / clips | Peak MiB before → after | Process change | Render work ms before → after | Render work change |
+| --- | ---: | ---: | ---: | ---: |
+| Chain / 500 | 22.08 → 21.75 | -14.80% | 55.60 → 46.04 | -17.20% |
+| Scoped / 500 | 21.72 → 21.89 | +1.66% | 45.44 → 45.55 | +0.24% |
+| Chain / 1,000 | 22.86 → 22.52 | -25.98% | 86.04 → 56.92 | -33.85% |
+| Scoped / 1,000 | 22.47 → 22.66 | +1.56% | 44.77 → 47.61 | +6.34% |
+
+For the 1,000-clip chain, the render-work ranges no longer overlap in the
+direction of improvement: 83.96–88.95 ms before versus 55.66–63.93 ms after.
+Compared with the original copied-history recheck, peak RSS is 78.36% lower,
+process time is 40.78% lower and render work is 29.35% lower.
+
+The scoped 1,000-clip render-work change is 2.84 ms, with overlapping ranges
+(40.39–47.79 ms versus 44.18–48.69 ms) and only +1.56% process time. Preserve
+that observation rather than claiming every individual phase median is within
+5%. No further focused timing recheck is scheduled at this checkpoint; broad
+workload performance remains part of item 5.
+
+The saved `build/Testing/Temporary/LastTest.log` records
+`clip_history_regression` passing in 0.50 seconds on Nov 12 at 07:06 CET.
+Codex read that log; Codex did not launch the native regression.
+
+### Ordinary-page controls
+
+Bundle: `/private/tmp/docling-memory-shared-clips-controls`.
+Reference: `/private/tmp/docling-memory-state-lifetimes-after`.
+All 36 measurements completed, with matching dependencies/settings, unchanged
+logical output counters, and four byte-identical PNG pairs.
+
+Direct, Form and pattern peaks stay close to their references. Type3 decode
+peak falls from 175.22 to 134.81 MiB (-23.06%), and render peak from 180.34
+to 140.11 MiB (-22.31%). Both sides have zero instruction clip paths on that
+Type3 control: do not attribute this observation to sharing nonempty retained
+clip geometry or use it to claim an isolated eager-font-cleanup measurement.
+
+All process comparisons are within the configured +5% budget except pattern
+with shapes disabled: approximately 19 to 20 ms, +5.86%, with overlapping
+ranges. The user explicitly accepted that recheck as noise. No further
+repetitions are requested for that case.
+
+### Focused semantic acceptance
+
+The user reported **131 passed in 5.83 seconds**, covering:
+
+- Clipping, including both new W/W* snapshot/branch pixel cases.
+- Pattern replay and the existing pattern suite.
+- Soft-mask streaming, masks and transparency.
+- Form streaming and procedural Type3 streaming/fonts.
+- Damaged/split content streams and ActualText.
+- Appearance streaming and widget appearances.
+
+This closes the previously unreported semantic gates for completion items 3
+and 4. Keep the accepted code and its focused regression coverage. This does
+not mark the full parser plan complete or authorize retiring references before
+broader validation.
+
+### Item 5 handoff — existing broad validation first
+
+No new production change is needed to run the next checks. The user keeps
+execution; use the existing extension built for the 131-test suite:
+
+~~~sh
+uv run --no-sync pytest tests/test_unit_*.py -q
+
+uv run --no-sync pytest -n 2 --dist loadfile tests/test_regression_*.py
+~~~
+
+The second command is the repository's documented CI-style regression command.
+It includes sequential corpus parsing, threaded parsing/rendering, real-page
+image checks, embedded fonts and locale coverage. The tests use the pinned
+regression snapshot and selected corpus pages; native parser thread counts
+inside those tests are independent of pytest's two workers. Existing threading
+tests cover one, two and four parser threads plus backpressure and unloading.
+Keep the existing ground truth and tolerances when assessing failures.
+
+After correctness passes, collect current real-workload scaling with the
+existing launcher, before changing its memory reporting:
+
+~~~sh
+REPEATS=3 THREADS=1,2,4 RUN_COMPARISON=0 DATASET=bo20 \
+  ./scripts/benchmarking/refresh_performance_benchmarks.sh
+~~~
+
+This supplies current native throughput/counts and fresh-process backend replay
+peak RSS. The replay already records process peaks in each report.json. Native
+peak RSS and sampled timelines are not yet implemented in that launcher.
+The older Nov-11 bundle is historical context, not a matched before/after pair
+for all later source/dependency changes. Assess any historical comparison only
+after checking settings, libraries, inputs and compiled-source provenance.
+
+Item 1's isolated performance attribution remains unresolved because the
+historical reference had changed dependencies. Item 5 still needs the broad
+results above and any remaining controlled real-document evidence. Item 6
+retires comparison selectors/dead APIs after that acceptance. The requested
+permanent benchmark peak-RSS/timeline implementation follows parser completion.
 
 ## Questions to answer from the intermediate results
 
