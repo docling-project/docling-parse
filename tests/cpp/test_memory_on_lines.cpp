@@ -22,6 +22,8 @@
 // Generate pathstorm-type3 N PDF [glyphs=1] for procedural CharProc delivery.
 // Generate pathstorm-soft-mask N PDF [paints=1] for one cached mask group.
 // Generate pathstorm-pattern[-lattice] N PDF [fills=1] for pattern replay.
+// Generate clip-chain/clip-scoped N PDF (10..4000) for clip snapshot growth.
+// test_memory_on_lines_copied_clips materializes full snapshots as a reference.
 // page_* fields cover /Contents only. form_* diagnostics aggregate Do calls
 // through that page's ordinary Form tree, not other buffered entry points.
 #include <parse.h>
@@ -78,6 +80,11 @@ constexpr const char* soft_mask_content_delivery = "callback";
 constexpr const char* pattern_content_delivery = "copied";
 #else
 constexpr const char* pattern_content_delivery = "borrowed";
+#endif
+#ifdef DOCLING_PARSE_COPY_CLIP_SNAPSHOTS
+constexpr const char* clip_history_storage = "copied";
+#else
+constexpr const char* clip_history_storage = "shared";
 #endif
 
 void snapshot(const std::string& stage, int pause_seconds, json details = json::object())
@@ -274,12 +281,17 @@ void generate(const std::string& variant, std::size_t requested,
   const bool soft_mask = variant=="pathstorm-soft-mask";
   const bool lattice = variant=="pathstorm-pattern-lattice";
   const bool pattern = variant=="pathstorm-pattern" or lattice;
+  const bool clip_chain = variant=="clip-chain";
+  const bool clip_scoped = variant=="clip-scoped";
+  const bool clipping = clip_chain or clip_scoped;
+  if(clipping and requested>4000)
+    { throw std::invalid_argument("clip fixtures require at most 4000 lines"); }
   if(depth<1 or depth>32)
     { throw std::invalid_argument("Form depth must be 1..32"); }
   if((not form and not appearance and not type3 and not soft_mask and not pattern and repeats!=1) or (not form and depth!=1))
     { throw std::invalid_argument("repeats require Forms/appearances/Type3/masks/patterns; depth requires Forms"); }
   if(variant!="solid" and variant!="dash-each" and variant!="dash-once" and
-     variant!="dash-q" and variant!="empty-each" and variant!="pathstorm" and not form and not appearance and not type3 and not soft_mask and not pattern)
+     variant!="dash-q" and variant!="empty-each" and variant!="pathstorm" and not form and not appearance and not type3 and not soft_mask and not pattern and not clipping)
     { throw std::invalid_argument("unknown PDF variant"); }
 
   std::ostringstream ops;
@@ -318,13 +330,14 @@ void generate(const std::string& variant, std::size_t requested,
       // Match #448's coordinates, pattern and independent stroke operators.
       for(std::size_t i=0; i<requested; ++i)
         {
-          if(variant=="dash-q") { ops << "q\n"; }
+          if(variant=="dash-q" or clip_scoped) { ops << "q\n"; }
+          if(clipping) { ops << "0 0 1190 842 re W n\n"; }
           if(variant=="dash-each" or variant=="dash-q" or (variant=="dash-once" and i==0))
             { ops << "[18 2 3 2] 0 d\n"; }
           if(variant=="empty-each") { ops << "[] 0 d\n"; }
           auto x = i%1000, y = (i/10)%800;
           ops << x << " " << y << " m " << x+1 << " " << y << " l S\n";
-          if(variant=="dash-q") { ops << "Q\n"; }
+          if(variant=="dash-q" or clip_scoped) { ops << "Q\n"; }
           ++lines;
         }
     }
@@ -462,6 +475,7 @@ void generate(const std::string& variant, std::size_t requested,
                    {"soft_mask_paints", soft_mask ? repeats : 0},
                    {"pattern_fills", pattern ? repeats : 0},
                    {"pattern_lattice_cells_per_fill", lattice ? 4 : 0},
+                   {"clip_mode", clipping ? (clip_chain ? "chain" : "scoped") : "none"},
                    {"page_content_bytes", page_content.size()},
                    {"content_bytes", content.size()}, {"pdf_bytes", std::filesystem::file_size(filename)}}.dump()
             << std::endl;
@@ -483,6 +497,7 @@ void measure(std::string mode, std::string filename, int pause_seconds, const st
             {"type3_content_delivery", type3_content_delivery},
             {"soft_mask_content_delivery", soft_mask_content_delivery},
             {"pattern_content_delivery", pattern_content_delivery},
+            {"clip_history_storage", clip_history_storage},
             {"sizeof_token", sizeof(pdflib::qpdf_stream_instruction)},
             {"sizeof_page_shape", sizeof(pdflib::page_item<pdflib::PAGE_SHAPE>)},
             {"sizeof_shape_instruction", sizeof(pdflib::shape_instruction)},
@@ -539,7 +554,9 @@ void measure(std::string mode, std::string filename, int pause_seconds, const st
   config.do_thread_safe = false;
   config.keep_shapes = mode!="skip-shapes";
   // Preserve other defaults, including sanitization. There are no text/images.
+  const auto decode_started = clock_type::now();
   auto page = document.decode_page(0, config);
+  const double decode_work_s = std::chrono::duration<double>(clock_type::now()-decode_started).count();
   if(not page) { throw std::runtime_error("page decode failed"); }
   const auto& content_stats = page->get_content_statistics();
   const auto& appearance_stats = page->get_appearance_statistics();
@@ -549,6 +566,11 @@ void measure(std::string mode, std::string filename, int pause_seconds, const st
   std::size_t dash_entries = 0, max_dash = 0, points = 0, subpaths = 0, segments = 0;
   std::size_t geometry_bytes = 0, page_dash_entries = 0;
   std::size_t clip_paths = 0, max_clip_paths = 0, clip_points = 0, clip_bytes = 0;
+  // Physical accounting deduplicates history nodes and their geometry; it
+  // excludes allocator overhead and shared_ptr control blocks. Logical totals
+  // still count each path occurrence visible to each instruction.
+  std::size_t logical_clip_bytes = 0, unique_clip_paths = 0, unique_clip_points = 0;
+  std::unordered_set<const void*> clip_nodes;
   for(const auto& shape : shapes)
     {
       dash_entries += shape.get_dash_array().size();
@@ -556,12 +578,17 @@ void measure(std::string mode, std::string filename, int pause_seconds, const st
       const auto& clips = shape.get_clip_state().get_paths();
       clip_paths += clips.size();
       max_clip_paths = std::max(max_clip_paths, clips.size());
-      clip_bytes += clips.capacity()*sizeof(pdflib::clip_path_instruction);
-      for(const auto& clip : clips)
+      clip_points += clips.point_count();
+      logical_clip_bytes += clips.logical_bytes();
+      clips.visit_storage([&](const void* identity, std::size_t path_count,
+                              std::size_t point_count, std::size_t storage_bytes)
         {
-          clip_points += clip.size();
-          clip_bytes += (clip.get_x().capacity()+clip.get_y().capacity())*sizeof(double);
-        }
+          if(not clip_nodes.insert(identity).second) { return false; }
+          clip_bytes += storage_bytes;
+          unique_clip_paths += path_count;
+          unique_clip_points += point_count;
+          return true;
+        });
       points += shape.size();
       subpaths += shape.get_subpaths().size();
       geometry_bytes += shape.get_subpaths().capacity()*sizeof(pdflib::shape_subpath);
@@ -574,7 +601,8 @@ void measure(std::string mode, std::string filename, int pause_seconds, const st
     }
   for(const auto& shape : page->get_page_shapes()) { page_dash_entries += shape.get_dash_array().size(); }
   snapshot("decoded", pause_seconds,
-           {{"page_shapes", page->get_page_shapes().size()}, {"shape_instructions", shapes.size()},
+           {{"decode_work_s", decode_work_s},
+            {"page_shapes", page->get_page_shapes().size()}, {"shape_instructions", shapes.size()},
             {"instruction_capacity", shapes.capacity()}, {"subpaths", subpaths},
             {"points", points}, {"segments", segments},
             {"instruction_inline_bytes", shapes.capacity()*sizeof(pdflib::shape_instruction)},
@@ -584,6 +612,11 @@ void measure(std::string mode, std::string filename, int pause_seconds, const st
             {"stored_dash_bytes", (dash_entries+page_dash_entries)*sizeof(double)},
             {"instruction_clip_paths", clip_paths}, {"max_clip_paths", max_clip_paths},
             {"instruction_clip_points", clip_points}, {"instruction_clip_bytes", clip_bytes},
+            {"clip_history_storage", clip_history_storage},
+            {"instruction_clip_logical_bytes", logical_clip_bytes},
+            {"instruction_clip_history_nodes", clip_nodes.size()},
+            {"instruction_clip_unique_paths", unique_clip_paths},
+            {"instruction_clip_unique_points", unique_clip_points},
             {"page_content_delivery", content_stats.callback_delivery ? "callback" : "buffered"},
             {"page_source_objects", content_stats.source_objects},
             {"page_source_bytes_observed", content_stats.source_bytes_observed},
@@ -642,13 +675,15 @@ void measure(std::string mode, std::string filename, int pause_seconds, const st
             {"pattern_max_pending_operands", pattern_stats.max_pending_operands}});
   if(mode=="render")
     {
+      const auto render_started = clock_type::now();
       pdflib::render_config render_config;
       render_config.scale = 1.0;
       pdflib::renderer<pdflib::BLEND2D> renderer(render_config);
       page->get_instructions().iterate_over_instructions(renderer);
       // get_canvas flushes pending work and retrieves an independent pixel buffer.
       const auto canvas = renderer.get_canvas();
-      snapshot("rendered", pause_seconds);
+      const double render_work_s = std::chrono::duration<double>(clock_type::now()-render_started).count();
+      snapshot("rendered", pause_seconds, {{"render_work_s", render_work_s}});
       if(not png.empty()) { renderer.save(png); }
     }
 }

@@ -128,6 +128,58 @@ namespace pdflib
 
   private:
 
+    // Internal save/restore scopes cannot depend on normal return: a nested
+    // interpreter may fail and operator-level recovery then resumes the page.
+    class graphics_state_scope
+    {
+    public:
+      explicit graphics_state_scope(pdf_decoder<STREAM>& owner):
+        owner(owner), original_size(owner.stack.size()) { owner.q(); }
+      ~graphics_state_scope() noexcept { restore(); }
+      graphics_state_scope(const graphics_state_scope&) = delete;
+      graphics_state_scope& operator=(const graphics_state_scope&) = delete;
+      void restore() noexcept
+      {
+        if(not active) { return; }
+        while(owner.stack.size() > original_size) { owner.stack.pop_back(); }
+        active = false;
+      }
+    private:
+      pdf_decoder<STREAM>& owner;
+      std::size_t original_size;
+      bool active = true;
+    };
+
+    class nesting_scope
+    {
+    public:
+      explicit nesting_scope(int& depth, pdf_resource<PAGE_PATTERN>* pattern = nullptr):
+        depth(depth), original_depth(depth), pattern(pattern),
+        original_decoding(pattern ? pattern->is_decoding() : false)
+      {
+        ++depth;
+        if(pattern) { pattern->set_decoding(true); }
+      }
+      ~nesting_scope() noexcept
+      {
+        depth = original_depth;
+        if(pattern) { pattern->set_decoding(original_decoding); }
+      }
+      nesting_scope(const nesting_scope&) = delete;
+      nesting_scope& operator=(const nesting_scope&) = delete;
+    private:
+      int& depth;
+      int original_depth;
+      pdf_resource<PAGE_PATTERN>* pattern;
+      bool original_decoding;
+    };
+
+#ifdef DOCLING_PARSE_STATE_LIFETIME_TESTING
+    friend struct stream_state_lifetime_test_access;
+    // Only the dedicated native regression target has this fault checkpoint.
+    inline static thread_local void (*interpretation_test_hook)(pdf_decoder<STREAM>&) = nullptr;
+#endif
+
     bool update_stack(std::vector<pdf_state<GLOBAL> >& stack_,
                       int                              stack_count_);
 
@@ -653,6 +705,9 @@ namespace pdflib
 
   void pdf_decoder<STREAM>::begin_interpretation()
   {
+#ifdef DOCLING_PARSE_STATE_LIFETIME_TESTING
+    if(interpretation_test_hook) { interpretation_test_hook(*this); }
+#endif
     // Pattern space is anchored to the space in effect at the START of this
     // content stream, not to whatever the CTM happens to be when a pattern is
     // painted (ISO 32000-1, 8.7.3.1): for a page that is the default user
@@ -1505,7 +1560,7 @@ namespace pdflib
         return false;
       }
 
-    this->q();
+    graphics_state_scope saved_state(*this);
     {
       std::vector<qpdf_stream_instruction> no_parameters;
       if(even_odd) { current_shape_state().WStar(no_parameters); }
@@ -1557,7 +1612,7 @@ namespace pdflib
           }
       }
 
-    this->Q();
+    saved_state.restore();
 
     LOG_S(INFO) << "pattern " << pattern_name
                 << ": rendered Type 6 Coons mesh as " << triangle_count
@@ -1604,7 +1659,7 @@ namespace pdflib
             return false;
           }
 
-        this->q();
+        graphics_state_scope saved_state(*this);
         {
           std::vector<qpdf_stream_instruction> no_parameters;
           if(even_odd) { current_shape_state().WStar(no_parameters); }
@@ -1632,7 +1687,7 @@ namespace pdflib
         shinstr.set_soft_mask(current_graphic_state().get_soft_mask_instruction());
         instructions.add_shading_instruction(std::move(shinstr));
 
-        this->Q();
+        saved_state.restore();
         return true;
       }
 
@@ -1853,7 +1908,7 @@ namespace pdflib
     // clips are transformed by the matrix current when they are captured, and
     // after the `cm` below that is pattern space, not the space the path was
     // built in.
-    this->q();
+    graphics_state_scope saved_state(*this);
     {
       std::vector<qpdf_stream_instruction> no_parameters;
       if(even_odd) { current_shape_state().WStar(no_parameters); }
@@ -1863,7 +1918,7 @@ namespace pdflib
 
     bool painted = false;
 
-    tiling_depth() += 1;
+    nesting_scope replay_depth(tiling_depth());
     for(int iy = iy0; iy <= iy1; iy++)
       {
         for(int ix = ix0; ix <= ix1; ix++)
@@ -1872,7 +1927,7 @@ namespace pdflib
                                           ix * xs, iy * ys, 1};
             std::array<double, 9> place = mul(step, to_pattern);
 
-            this->q();
+            graphics_state_scope cell_state(*this);
             const std::array<double, 6> place6 = {place[0], place[1],
                                                   place[3], place[4],
                                                   place[6], place[7]};
@@ -1924,13 +1979,11 @@ namespace pdflib
 
             if(updated_stack) { cell_stream.Q(); }
 
-            this->Q();
+            cell_state.restore();
             painted = true;
           }
       }
-    tiling_depth() -= 1;
-
-    this->Q();
+    saved_state.restore();
 
     return painted;
   }
@@ -2047,29 +2100,32 @@ namespace pdflib
             cell_stream.current_graphic_state().set_uncolored_pattern_rgb(rgb);
           }
 
-        pattern.set_decoding(true);
-        tiling_depth() += 1;
-        try
-          {
-            std::vector<qpdf_stream_instruction> parameters;
+        {
+          nesting_scope decoding(tiling_depth(), &pattern);
+          try
+            {
+              std::vector<qpdf_stream_instruction> parameters;
 #ifdef DOCLING_PARSE_COPY_PATTERN_CONTENTS
-            std::vector<qpdf_stream_instruction> insts = cell;
-            cell_stream.interprete(insts, parameters);
+              std::vector<qpdf_stream_instruction> insts = cell;
+              cell_stream.interprete(insts, parameters);
 #else
-            cell_stream.interprete_cached(cell, parameters);
+              cell_stream.interprete_cached(cell, parameters);
 #endif
 #ifdef DOCLING_PARSE_CONTENT_DIAGNOSTICS
-            note_pattern_replay(cell_stream, false);
-            pattern_stats->decoded_shape_instructions += decoded->get_shape_instructions().size();
+              note_pattern_replay(cell_stream, false);
+              pattern_stats->decoded_shape_instructions += decoded->get_shape_instructions().size();
 #endif
-          }
-        catch(const std::exception& e)
-          {
-            LOG_S(WARNING) << "pattern " << pattern_name << ": cell decode failed: " << e.what();
-            decoded = std::make_shared<pdf_render_instructions>();
-          }
-        tiling_depth() -= 1;
-        pattern.set_decoding(false);
+            }
+          catch(const std::bad_alloc&)
+            {
+              throw;
+            }
+          catch(const std::exception& e)
+            {
+              LOG_S(WARNING) << "pattern " << pattern_name << ": cell decode failed: " << e.what();
+              decoded = std::make_shared<pdf_render_instructions>();
+            }
+        }
         cell_stream.Q();
 
         pattern.set_decoded_cell(color_key, decoded,
@@ -2148,13 +2204,13 @@ namespace pdflib
             py.push_back(matrix[1]*xs[c] + matrix[3]*ys[c] + matrix[5]);
           }
 
-        std::vector<clip_path_instruction> paths = clip_state.get_paths();
-        paths.emplace_back(std::move(px), std::move(py), CLOSED, RECTANGLE);
+        std::vector<clip_path_instruction> capture;
+        capture.emplace_back(std::move(px), std::move(py), CLOSED, RECTANGLE);
 
         // the /BBox always bounds, so an unclipped shading becomes clipped
         clip_rule rule = clip_state.has_clip() ? clip_state.get_rule()
                                                : CLIP_RULE_NONZERO;
-        clip_state = clip_state_instruction(rule, std::move(paths));
+        clip_state = clip_state.appended(rule, std::move(capture));
       }
 
     LOG_S(INFO) << "sh " << sh_name << ": " << to_string(shading->get_shading_type())
@@ -2263,7 +2319,7 @@ namespace pdflib
 
     {
       // push-back the stack
-      this->q();
+      graphics_state_scope saved_state(*this);
 
       // A transparency group is composited as a unit, so what is in force at
       // the `Do` applies to the group's result rather than to each operator
@@ -2381,7 +2437,7 @@ namespace pdflib
       }
 
       // pop-back the stack
-      this->Q();
+      saved_state.restore();
     }
 
     // residual = state copies, child-resource allocation, stack handling, ...
@@ -2501,8 +2557,7 @@ namespace pdflib
     page_item<PAGE_SHAPES> glyph_shapes;
     page_item<PAGE_IMAGES> glyph_images;
 
-    this->q();
-    try
+    graphics_state_scope saved_state(*this);
       {
         current_global_state().cm(glyph.matrix);
         current_bitmap_state().paints_type3_glyph = true;
@@ -2531,23 +2586,16 @@ namespace pdflib
 
         std::vector<qpdf_stream_instruction> parameters;
 
-        depth += 1;
-        try
-          {
+        {
+          nesting_scope glyph_depth(depth);
 #ifdef DOCLING_PARSE_BUFFERED_TYPE3_CONTENTS
-            new_stream.interprete(insts, parameters);
+          new_stream.interprete(insts, parameters);
 #else
-            // Resources and glyph placement must be ready before the first
-            // QPDF callback executes. The handle/context live until decode ends.
-            new_stream.decode_and_interprete(charproc, parameters);
+          // Resources and glyph placement must be ready before the first
+          // QPDF callback executes. The handle/context live until decode ends.
+          new_stream.decode_and_interprete(charproc, parameters);
 #endif
-          }
-        catch(...)
-          {
-            depth -= 1;
-            throw;
-          }
-        depth -= 1;
+        }
 
 #ifdef DOCLING_PARSE_CONTENT_DIAGNOSTICS
         const auto& child_stats = new_stream.get_content_statistics();
@@ -2575,14 +2623,7 @@ namespace pdflib
             unknown_operators.insert(item);
           }
       }
-    catch(...)
-      {
-        // Resource/interpreter failures must not leave the glyph's placement
-        // on the parent stack if operator-level recovery continues the page.
-        this->Q();
-        throw;
-      }
-    this->Q();
+    saved_state.restore();
   }
 
   void pdf_decoder<STREAM>::resolve_soft_mask()

@@ -4,6 +4,7 @@
 #define PAGE_ITEM_RENDER_INSTRUCTION_H
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <optional>
@@ -11,6 +12,8 @@
 #include <vector>
 #include <array>
 #include <memory>
+#include <iterator>
+#include <unordered_map>
 #include <utility>
 
 #include <parse/enums.h>
@@ -110,6 +113,153 @@ namespace pdflib
     clip_group(clip_group_)
   {}
 
+  namespace detail
+  {
+    // One immutable capture, shared by every later snapshot of its history.
+    // Only destruction can detach the predecessor of a uniquely owned node.
+    struct clip_history_node
+    {
+      std::shared_ptr<clip_history_node> previous;
+      const std::vector<clip_path_instruction> paths;
+      const std::size_t depth;
+      const std::size_t path_count;
+      std::size_t point_count;
+      std::size_t logical_bytes;
+
+      clip_history_node(std::shared_ptr<clip_history_node> previous_,
+                        std::vector<clip_path_instruction> paths_):
+        previous(std::move(previous_)), paths(std::move(paths_)),
+        depth(previous ? previous->depth + 1 : 1),
+        path_count(paths.size() + (previous ? previous->path_count : 0)),
+        point_count(previous ? previous->point_count : 0),
+        logical_bytes((previous ? previous->logical_bytes : 0) +
+                       paths.size() * sizeof(clip_path_instruction))
+      {
+        for(const auto& path : paths)
+          {
+            point_count += path.size();
+            logical_bytes += (path.get_x().capacity() + path.get_y().capacity()) * sizeof(double);
+          }
+      }
+
+      ~clip_history_node() noexcept
+      {
+        // A long unique suffix must not recursively destroy thousands of
+        // shared_ptr predecessors on the native stack.
+        auto tail = std::move(previous);
+        while(tail and tail.use_count() == 1)
+          {
+            auto next = std::move(tail->previous);
+            tail.reset();
+            tail = std::move(next);
+          }
+      }
+    };
+  }
+
+  class clip_path_range
+  {
+    friend class clip_state_instruction;
+    using node = detail::clip_history_node;
+    std::shared_ptr<node> head;
+
+  public:
+    class const_iterator
+    {
+    public:
+      using iterator_category = std::forward_iterator_tag;
+      using value_type = clip_path_instruction;
+      using difference_type = std::ptrdiff_t;
+      using pointer = const value_type*;
+      using reference = const value_type&;
+
+      const_iterator() = default;
+      explicit const_iterator(const node* head): origin(head), remaining(head ? head->depth : 0)
+      {
+        if(remaining > inline_nodes.size())
+          {
+            overflow.reserve(remaining);
+            for(auto p = head; p; p = p->previous.get()) { overflow.push_back(p); }
+          }
+        else
+          {
+            std::size_t i = 0;
+            for(auto p = head; p; p = p->previous.get()) { inline_nodes[i++] = p; }
+          }
+      }
+      reference operator*() const { return current()->paths[offset]; }
+      pointer operator->() const { return &**this; }
+      const_iterator& operator++()
+      {
+        if(++offset == current()->paths.size()) { offset = 0; --remaining; }
+        return *this;
+      }
+      const_iterator operator++(int) { auto copy = *this; ++*this; return copy; }
+      bool operator==(const const_iterator& other) const
+      {
+        if(remaining == 0 or other.remaining == 0)
+          { return remaining == other.remaining; }
+        return origin == other.origin and remaining == other.remaining and offset == other.offset;
+      }
+      bool operator!=(const const_iterator& other) const { return not (*this == other); }
+
+    private:
+      const node* current() const
+      { return overflow.empty() ? inline_nodes[remaining - 1] : overflow[remaining - 1]; }
+      const node* origin = nullptr;
+      std::size_t remaining = 0, offset = 0;
+      std::array<const node*, 16> inline_nodes{};
+      std::vector<const node*> overflow;
+    };
+
+    std::size_t size() const { return head ? head->path_count : 0; }
+    bool empty() const { return not head; }
+    std::size_t point_count() const { return head ? head->point_count : 0; }
+    std::size_t logical_bytes() const { return head ? head->logical_bytes : 0; }
+    const_iterator begin() const { return const_iterator(head.get()); }
+    const_iterator end() const { return const_iterator(); }
+
+    std::vector<clip_path_instruction> to_vector() const
+    {
+      std::vector<clip_path_instruction> result;
+      result.reserve(size());
+      for(const auto& path : *this) { result.push_back(path); }
+      return result;
+    }
+
+    // The visitor returns false at an already-accounted prefix. This lets a
+    // probe count unique retained allocations across all instruction snapshots
+    // without materializing or repeatedly walking every logical occurrence.
+    template<class Visitor>
+    void visit_storage(Visitor&& visitor) const
+    {
+      for(auto p = head.get(); p; p = p->previous.get())
+        {
+          const std::size_t prior_points = p->previous ? p->previous->point_count : 0;
+          const std::size_t prior_bytes = p->previous ? p->previous->logical_bytes : 0;
+          const std::size_t storage_bytes = sizeof(node) + p->logical_bytes - prior_bytes +
+            (p->paths.capacity() - p->paths.size()) * sizeof(clip_path_instruction);
+          if(not visitor(static_cast<const void*>(p), p->paths.size(),
+                          p->point_count - prior_points, storage_bytes)) { break; }
+        }
+    }
+  };
+
+  class clip_translation_cache
+  {
+    friend class clip_state_instruction;
+    using node = detail::clip_history_node;
+    struct entry
+    {
+      // Retain the source too: its address cannot be reused as a cache key.
+      std::shared_ptr<node> source;
+      std::shared_ptr<node> translated;
+    };
+    std::unordered_map<const node*, entry> entries;
+    bool initialized = false;
+    double dx = 0.0, dy = 0.0;
+  };
+
   class clip_state_instruction
   {
   public:
@@ -118,27 +268,72 @@ namespace pdflib
                            std::vector<clip_path_instruction> paths);
 
     clip_rule get_rule() const { return rule; }
-    const std::vector<clip_path_instruction>& get_paths() const { return paths; }
+    const clip_path_range& get_paths() const { return paths; }
+    bool shares_history(const clip_state_instruction& other) const
+    { return paths.head == other.paths.head; }
+
+    clip_state_instruction with_rule(clip_rule rule_) const
+    {
+      auto result = *this;
+      result.rule = rule_;
+      return result;
+    }
+
+    clip_state_instruction appended(clip_rule rule_, std::vector<clip_path_instruction> capture) const
+    {
+      auto result = with_rule(rule_);
+      if(not capture.empty())
+        {
+          result.paths.head = std::make_shared<detail::clip_history_node>(paths.head, std::move(capture));
+        }
+      return result;
+    }
 
     bool has_clip() const
     {
       return rule != CLIP_RULE_NONE and not paths.empty();
     }
 
-    clip_state_instruction translated(double dx, double dy) const
+    clip_state_instruction translated(double dx, double dy,
+                                       clip_translation_cache* shared_cache = nullptr) const
     {
-      std::vector<clip_path_instruction> paths_;
-      paths_.reserve(paths.size());
-      for(const auto& path : paths)
+      if(paths.empty() or (dx == 0.0 and dy == 0.0)) { return *this; }
+      clip_translation_cache local_cache;
+      auto& cache = shared_cache ? *shared_cache : local_cache;
+      if(not cache.initialized or cache.dx != dx or cache.dy != dy)
         {
-          paths_.push_back(path.translated(dx, dy));
+          cache.entries.clear();
+          cache.initialized = true;
+          cache.dx = dx;
+          cache.dy = dy;
         }
-      return clip_state_instruction(rule, std::move(paths_));
+      std::vector<std::shared_ptr<detail::clip_history_node>> pending;
+      auto source = paths.head;
+      std::shared_ptr<detail::clip_history_node> translated;
+      while(source)
+        {
+          auto found = cache.entries.find(source.get());
+          if(found != cache.entries.end()) { translated = found->second.translated; break; }
+          pending.push_back(source);
+          source = source->previous;
+        }
+      for(auto it = pending.rbegin(); it != pending.rend(); ++it)
+        {
+          std::vector<clip_path_instruction> capture;
+          capture.reserve((*it)->paths.size());
+          for(const auto& path : (*it)->paths) { capture.push_back(path.translated(dx, dy)); }
+          translated = std::make_shared<detail::clip_history_node>(translated, std::move(capture));
+          cache.entries.emplace(it->get(), clip_translation_cache::entry{*it, translated});
+        }
+      clip_state_instruction result;
+      result.rule = rule;
+      result.paths.head = std::move(translated);
+      return result;
     }
 
   private:
     clip_rule rule;
-    std::vector<clip_path_instruction> paths;
+    clip_path_range paths;
   };
 
   inline clip_state_instruction::clip_state_instruction():
@@ -149,9 +344,11 @@ namespace pdflib
   inline clip_state_instruction::clip_state_instruction(
     clip_rule rule_,
     std::vector<clip_path_instruction> paths_):
-    rule(rule_),
-    paths(std::move(paths_))
-  {}
+    rule(rule_)
+  {
+    if(not paths_.empty())
+      { paths.head = std::make_shared<detail::clip_history_node>(nullptr, std::move(paths_)); }
+  }
 
   enum RENDER_INSTRUCTION_NAME {
     SIZE_INSTRUCTION, // set the size of the canvas on which we render
@@ -358,7 +555,7 @@ namespace pdflib
     // Copy shifted by (dx, dy); used to lift widget appearance-stream text
     // from AP-local into page coordinates. The glyph bbox (g_*) lives in
     // font units and is copied unshifted.
-    text_instruction translated(double dx, double dy) const
+    text_instruction translated(double dx, double dy, clip_translation_cache* cache = nullptr) const
     {
       text_instruction copy(text, font_enc, font_key, font_name,
                             encoding_name, base_font, font_size,
@@ -376,7 +573,7 @@ namespace pdflib
       copy.glyph_name_     = glyph_name_;
       copy.rgb_filling_    = rgb_filling_;
       copy.fill_alpha_     = fill_alpha_;
-      copy.clip_state_     = clip_state_.translated(dx, dy);
+      copy.clip_state_     = clip_state_.translated(dx, dy, cache);
       copy.blend_mode_     = blend_mode_;
       copy.rendering_mode_ = rendering_mode_;
 
@@ -592,7 +789,7 @@ namespace pdflib
     const clip_state_instruction& get_clip_state() const { return clip_state; }
     bool has_clip_state() const { return clip_state.has_clip(); }
 
-    bitmap_instruction translated(double dx, double dy) const
+    bitmap_instruction translated(double dx, double dy, clip_translation_cache* cache = nullptr) const
     {
       bitmap_instruction copy(xobject_key, data, alpha_data, cmyk_conv, shape,
                               fmt, image_mask, rgb_filling, fill_alpha,
@@ -600,7 +797,7 @@ namespace pdflib
                               r_x1 + dx, r_y1 + dy,
                               r_x2 + dx, r_y2 + dy,
                               r_x3 + dx, r_y3 + dy,
-                              source, clip_state.translated(dx, dy));
+                              source, clip_state.translated(dx, dy, cache));
       copy.blend_mode_ = blend_mode_;
       copy.filters_ = filters_;
       return copy;
@@ -913,7 +1110,7 @@ namespace pdflib
     bool has_tiling_paint() const { return static_cast<bool>(tiling_paint_); }
     const tiling_paint& get_tiling_paint() const { return *tiling_paint_; }
 
-    shape_instruction translated(double dx, double dy) const
+    shape_instruction translated(double dx, double dy, clip_translation_cache* cache = nullptr) const
     {
       std::vector<shape_subpath> subpaths_;
       subpaths_.reserve(subpaths.size());
@@ -926,7 +1123,7 @@ namespace pdflib
                              dash_array, dash_phase,
                              rgb_stroking, rgb_filling,
                              stroke_alpha, fill_alpha,
-                             clip_state.translated(dx, dy));
+                             clip_state.translated(dx, dy, cache));
       copy.blend_mode_ = blend_mode_;
       // the mask is anchored in page space, so a moved copy keeps it as is
       copy.soft_mask_ = soft_mask_;
@@ -1033,7 +1230,7 @@ namespace pdflib
     const clip_state_instruction& get_clip_state() const { return clip_state; }
     bool has_clip_state() const { return clip_state.has_clip(); }
 
-    shading_instruction translated(double dx, double dy) const
+    shading_instruction translated(double dx, double dy, clip_translation_cache* cache = nullptr) const
     {
       // The shading coordinates live in shading space, so a page-space shift
       // belongs in the translation part of the matrix.
@@ -1043,7 +1240,7 @@ namespace pdflib
 
       shading_instruction copy(shading_key, geometry, coords, matrix_, stops,
                                extend_start, extend_end, fill_alpha,
-                               clip_state.translated(dx, dy));
+                               clip_state.translated(dx, dy, cache));
       copy.blend_mode_ = blend_mode_;
       // the mask is anchored in page space, so a moved copy keeps it as is
       copy.soft_mask_ = soft_mask_;
@@ -1218,6 +1415,12 @@ namespace pdflib
                                                      double dx, double dy)
   {
     const bool shifted = (dx != 0.0 or dy != 0.0);
+#ifdef DOCLING_PARSE_COPY_CLIP_SNAPSHOTS
+    clip_translation_cache* translation_cache = nullptr;
+#else
+    clip_translation_cache clip_translations;
+    clip_translation_cache* translation_cache = &clip_translations;
+#endif
 
     for(const auto& instr : instructions)
       {
@@ -1227,28 +1430,28 @@ namespace pdflib
               {
               case TEXT_RENDER_INSTRUCTION:
                 {
-                  text_instruction_type copy = text_instructions.at(instr.index).translated(dx, dy);
+                  text_instruction_type copy = text_instructions.at(instr.index).translated(dx, dy, translation_cache);
                   renderer.render_text(copy);
                 }
                 break;
 
               case BITMAP_RENDER_INSTRUCTION:
                 {
-                  bitmap_instruction_type copy = bitmap_instructions.at(instr.index).translated(dx, dy);
+                  bitmap_instruction_type copy = bitmap_instructions.at(instr.index).translated(dx, dy, translation_cache);
                   renderer.render_bitmap(copy);
                 }
                 break;
 
               case SHAPE_RENDER_INSTRUCTION:
                 {
-                  shape_instruction_type copy = shape_instructions.at(instr.index).translated(dx, dy);
+                  shape_instruction_type copy = shape_instructions.at(instr.index).translated(dx, dy, translation_cache);
                   renderer.render_shape(copy);
                 }
                 break;
 
               case SHADING_RENDER_INSTRUCTION:
                 {
-                  shading_instruction_type copy = shading_instructions.at(instr.index).translated(dx, dy);
+                  shading_instruction_type copy = shading_instructions.at(instr.index).translated(dx, dy, translation_cache);
                   renderer.render_shading(copy);
                 }
                 break;

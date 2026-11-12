@@ -94,6 +94,11 @@ namespace pdflib
 
   private:
 
+#ifdef DOCLING_PARSE_STATE_LIFETIME_TESTING
+    friend struct stream_state_lifetime_test_access;
+    inline static thread_local void (*parse_test_hook)(std::vector<qpdf_stream_instruction>&) = nullptr;
+#endif
+
     std::string key_;
     int type_ = 0;
     int paint_type_ = 1;
@@ -200,27 +205,40 @@ namespace pdflib
       {
         return stream_cache_;
       }
-    stream_parsed_ = true;
-
     std::vector<qpdf_stream_instruction>& insts = stream_cache_;
 
     QPDFObjectHandle stream = qpdf_pattern_;
     if(not stream.isStream())
       {
+        stream_parsed_ = true;
         return insts;
       }
 
     try
       {
+#ifdef DOCLING_PARSE_STATE_LIFETIME_TESTING
+        if(parse_test_hook) { parse_test_hook(insts); }
+#endif
         qpdf_stream_decoder decoder(insts);
         decoder.decode(stream);
       }
+    catch(const std::bad_alloc&)
+      {
+        std::vector<qpdf_stream_instruction>().swap(insts);
+        throw;
+      }
     catch(const std::exception& e)
       {
+        std::vector<qpdf_stream_instruction>().swap(insts);
         LOG_S(WARNING) << "pattern " << key_ << ": content stream unreadable: " << e.what();
-        insts.clear();
+      }
+    catch(...)
+      {
+        std::vector<qpdf_stream_instruction>().swap(insts);
+        throw;
       }
 
+    stream_parsed_ = true;
     return insts;
   }
 

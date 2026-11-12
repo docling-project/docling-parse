@@ -1,15 +1,15 @@
 # Reduce the native parser's memory footprint
 
 Date: 2026-11-11.
-Status: soft-mask streaming passed native scaling and the user's 86-test semantic suite; pattern replay borrowing is implemented and awaits user validation.
+Status: pattern replay passed native scaling and the seven-repeat control recheck; its rebuilt-extension semantic result has not been reported. The user authorized continuing item 4.
+The targeted state/reset audit's native regressions and normal-path comparison passed. Clip-chain scaling confirmed quadratic snapshot retention; shared immutable clip history is now implemented and awaits user validation.
 The legacy Type3 cleanup regression passed in that suite; its controlled performance comparison remains pending.
 The Type3-cleanup smoke completed 20 measurements but its comparison was rejected because nine dependency archives changed; no controlled cleanup result is established.
 MyPy/Ruff pass; step 4b appearance/widget streaming validated by native experiments and 171 focused tests.
 Step 4a Form streaming is validated by native experiments and 153 focused tests.
 Step 2 native recheck and carried-forward semantic coverage passed.
 Step 3 native smoke/scaling, Form timing recheck and focused semantic coverage passed.
-Step 1 core scaling is reviewed. Pattern validation and broad step-5 validation remain pending; bo20 scaling observations are recorded below.
-The preliminary state-reset audit is in progress.
+Step 1 core scaling is reviewed. Pattern semantic validation, state-audit runtime checks and broad step-5 validation remain pending; bo20 scaling observations are recorded below.
 Initial C++ reproduction and structural investigation are complete.
 
 Related issues:
@@ -3365,8 +3365,8 @@ existing assertions and ground truth unchanged when reporting failures.
 | --- | --- |
 | 1. Legacy Type3 token cleanup | Semantic regression passed in the user's 86-test suite; historical performance comparison rejected on changed dependencies; controlled comparison pending |
 | 2. Soft-mask group source streaming | Complete: native smoke/scaling, cache reuse, PNG equivalence and 86 focused semantic tests passed |
-| 3. Pattern cache/replay copies | Borrowed replay, native reference/fixtures and four semantic cases written; user build and experiments pending |
-| 4. State-lifetime/reset audit | In progress; conclude from source and targeted evidence |
+| 3. Pattern cache/replay copies | Native smoke/scaling, PNG/cache checks and seven-repeat control recheck passed; rebuilt-extension semantic result pending |
+| 4. State-lifetime/reset audit | Native exception checks and normal-path overhead comparison passed; clip scaling confirmed quadratic payload; shared-history follow-up implemented, user validation pending; semantic suite still unreported |
 | 5. Broader corpus and threaded validation | Pending; user runs builds/tests/experiments |
 | 6. Comparison-path/dead-API retirement | Pending acceptance of broader validation |
 
@@ -3783,6 +3783,478 @@ Review the native and semantic results together before accepting item 3.
 Item 4 then closes the state/reset audit and any separately reproduced fixes;
 items 5–6 cover broader corpus/threaded validation and source-path retirement.
 The permanent benchmark peak-RSS/timeline work still follows parser acceptance.
+
+## Completion pass — item 3 native scaling accepted
+
+The user completed cached-tile scaling (54 measurements per executable) and
+direct-lattice scaling (36 per executable). All dependency/input and structural
+checks passed. All ten scaling PNG pairs were byte-identical.
+
+Cached-tile decode/render memory fell 26–28%, with 3–7% faster process times.
+At 250k, pattern decode fell 780.30 to 566.94 MiB, and repeated-pattern decode
+782.27 to 566.97 MiB. The source contains 1,747,566 64-byte token records:
+two size-only vector copies predict 213.33 MiB, closely matching the observed
+213.36 MiB reduction for one fill. This does not account for every allocator
+effect or generalize that exact percentage to other content.
+
+Lattice decode/render memory fell 11–12%, with 3–6% faster process times.
+At 64k, decode fell 467.44 to 413.06 MiB and rendering 476.48 to 420.36 MiB.
+Both executables retained the same source cache. The candidate materialized
+zero replay vectors; repeated cached tiles decoded once with three cache hits,
+and the lattice still executed four placements.
+
+The cached-tile matrix flagged direct/125k/skip-shapes at +6.26% and the roughly
+20 ms pattern-repeat/250k/skip-shapes case at +7.82% with overlapping ranges.
+Both bypass pattern replay. The user rechecked the direct control seven times
+per executable: 0.274 to 0.276 seconds (+0.77%), with 23.02 to 23.08 MiB
+(+0.27%). The earlier direct slowdown did not reproduce. The very short
+skipped-pattern timing remains inconclusive; no replay-path slowdown was found.
+
+The user then said "continue to item 4". This authorizes the audit without
+asserting that the pending 90-case semantic suite has passed.
+
+## Completion pass — item 4: state/reset lifetime audit
+
+This is a targeted source audit of the parser state, nested content lifetimes,
+resource reuse and output ownership relevant to this memory investigation.
+It is not a claim that every C++ subsystem has been exhaustively verified.
+Codex has not compiled or executed this iteration.
+
+Static checks passed: MyPy (112 source files), Ruff lint, Ruff formatting
+(117 files) and git diff --check. These do not establish native compilation,
+exception-test success, output equivalence or runtime overhead.
+
+### Audit findings and classification
+
+| Area | Verified reset/ownership or finding | Classification / action |
+| --- | --- | --- |
+| Direct dash replacement | d clears the array before replacement; null/error assigns an empty array. | Existing #452 fix is retained; no new normal-path append defect. |
+| ExtGState dash parsing | A fresh local array is assigned to the supplied /D field. Missing ExtGState fields preserve existing properties. | Correct replacement/partial-update behavior in inspected paths. |
+| Current paths | register_paths, n and discard_paths clear scratch paths after their prescribed painting/clipping work. | Existing resets retained. |
+| Clip history | capture_pending_clip appends successive intersections; get_clip_state copies the current history into each painted instruction. | Intentional state with a structural quadratic snapshot case; bounded native fixtures added below. No history clear introduced. |
+| Graphics-state copies | GLOBAL copy construction rebinds state references to the new frame; assignment preserves destination resources. SHAPE copies current paths/clip history. | Required scoped state copying; retain resource and q/Q semantics. |
+| Internal graphics saves | Form and pattern/shading paths restored manually only on normal return. | Confirmed exception-restoration gaps; scope guards added. |
+| Pattern recursion bookkeeping | Lattice depth had no exceptional cleanup. Cached-cell flags/depth could survive a nonstandard exception or a failure while logging/allocating fallback output. | Confirmed exceptional state lifetime defects; scope guards added. |
+| Pattern source-cache completion | stream_parsed_ was set before parsing. Allocation failure was caught as unreadable input and could leave a failed attempt treated as complete. | Commit the flag after completion; release partial tokens and propagate allocation/nonstandard failures. |
+| Type3 recursion and placement | Existing catch-all cleanup already restored the glyph depth and parent frame. | Moved to the same scope guards; no newly discovered normal-path defect claimed. Native regression preserves that guarantee. |
+| Pending Type3 procedures | paint_type3_glyphs swaps work into a local vector before nested state copies. TEXT assignment omits the transient queue; actual child rebase starts with a fresh state. | No independent successful-show accumulation found. Partial text-generation failures are not claimed exhaustively covered. |
+| Inline-image scratch | BI replaces the entry; completed/incomplete EI replaces it again. A throwing bitmap decode can retain one entry until the next BI/decoder destruction. | Bounded scratch retention, without a confirmed per-image accumulation or quadratic copy defect. |
+| Marked content and operands | EMC pops scopes; logical-stream finish clears unbalanced marked content. Handled operators clear pending operands. | Existing logical stream boundaries retained. Large explicit operands still require their own storage. |
+| Resource setters | Inspected collection setters construct fresh resources before map replacement; parent-linked maps preserve inherited ownership. | A missing reset in a hypothetical reused individual resource is not established on these production callers. |
+| Shape JSON initialization | PAGE_SHAPES clears/resizes fresh destination entries before optional fields are read. | Optional member reuse was not reproduced on this inspected path. |
+| stack_count | Historical cumulative q counter is also emitted as text-cell metadata; Q does not decrement it. | Not treated as live stack depth; unchanged to preserve extracted metadata. Scope guards restore actual frames. |
+| Page/document ownership | Page decoders are intentionally cached; unload_page/unload_pages erase those owners. Threaded document unload removes document/schedule owners; held results can retain instructions. | No missing-clear defect established by these ownership paths. Multi-page/threaded RSS remains item 5 validation. |
+| Font, mask and pattern caches | Glyph data, decoded masks, parsed pattern tokens and decoded tiles have explicit reuse owners. Unused eager Type3 descriptions were removed in item 1. | Intentional caches retained; token-copy costs are measured separately from cache residency. |
+
+No second normal-path setter bug equivalent to dash_array's old missing clear
+was confirmed. The exception defects above and the clip snapshot structure are
+separate findings with separate evidence/validation requirements.
+
+### Implemented exception-restoration patch
+
+An internal graphics_state_scope records the current frame count, calls q,
+and removes the frames it owns on normal or exceptional exit. Its destructor
+performs no allocation, logging, state copying or Q call. Explicit restore()
+retains the old normal-return lifetime at each site. The historical stack_count
+behavior and actual PDF q/Q operator implementation remain unchanged.
+
+The guard now covers ordinary Forms, lattice parent/placement scopes, shading
+and Coons pattern scopes, and procedural Type3 parent placement. Child decoder
+stacks remain independently owned and die with their decoder.
+
+A nesting_scope saves/restores the prior thread-local depth and, for cached
+tiles, the prior resource decoding flag. It protects lattice, cached-tile and
+Type3 interpretation even if a later catch block itself throws.
+
+Cached tile interpretation now propagates std::bad_alloc. Pattern source
+parsing commits stream_parsed_ after completion or handled unreadable input;
+allocation/nonstandard failures discard partial cache records/capacity and
+leave parsing retryable. Ordinary unreadable-input behavior is retained.
+
+These fixes protect recovery/state ownership. They do not promise lower peak
+RSS for normal documents or an additional normal-path quadratic-memory fix.
+
+### Native failure-injection regression
+
+New optional target/CTest: `stream_state_lifetime_regression`, source
+`tests/cpp/test_stream_state_lifetimes.cpp`.
+
+It has 14 scenario groups, covering recoverable runtime errors, allocation
+failure and a nonstandard exception during cached tiles, direct lattice,
+ordinary Forms and Type3 procedures, plus failed source-cache parsing/retry.
+Glyph scenarios repeat failures beyond the recursion cap before trying again.
+
+Assertions check parent frame count, matrix, clip isolation, bitmap glyph mode,
+rendered suffix coordinates, pattern depth/flags and preserved exception types.
+Source parse failures seed a partial record, then require an empty/uncommitted
+cache and a successful retry with the original source.
+
+Private fault checkpoints are compiled only with
+DOCLING_PARSE_STATE_LIFETIME_TESTING in this dedicated target. They are absent
+from production and every memory-probe executable. Failures are deterministic;
+the tests do not exhaust actual memory. Assertions remain active in Release.
+No runtime pass is claimed until the user compiles and executes it.
+
+### Clip snapshot experiment
+
+New opt-in layouts `clip-chain` and `clip-scoped` use N independent strokes and
+the same full-page rectangular clip before every stroke:
+
+- clip-chain leaves all intersections active. The instruction count is N,
+  but retained clip-path occurrences total N(N+1)/2, with 5N(N+1)/2 points.
+- clip-scoped saves/restores each clip-and-paint with q/Q. Each instruction
+  retains one clip, so totals are N paths and 5N points.
+
+Both layouts should have identical pixels. The harness checks those PNG pairs,
+the exact geometry/source counters and the clip totals. Source object counts
+are 14N versus 16N (the scoped version adds q/Q); these are linear. The fixture
+target is capped at 4000 lines to keep a diagnostic run bounded.
+
+This demonstrates the distinction between a linear instruction count and a
+quadratic copied payload. Generic clipping intersections cannot simply be
+cleared. A future shared/persistent clip representation or semantic clip
+canonicalization would be a separate optimization, informed by the measured
+importance of this case in real documents. No clip representation change is
+included here. Actual RSS/timing curves remain to be measured by the user.
+
+### Preserved reference and normal-path comparison
+
+Before modifying the executable, Codex preserved the existing probe:
+
+- `/private/tmp/docling-memory-before-state-lifetimes`
+- SHA-256: 959dbf38567d8d6873f50e27111ec2e6f088d4ee54db7876d35bc21fbe0c1994
+
+It exactly matches the executable in the successful pattern control-after
+bundle. Current dependency archives were also checked against that bundle:
+none had changed. The original bundle retains its compiled-source provenance;
+the current source snapshots recorded by a run of the preserved executable
+are not a claim about that old binary's source.
+
+Before rebuilding, collect the normal-path reference while those dependencies
+still match:
+
+~~~sh
+uv run python3 tests/cpp/run_memory_on_lines.py \
+  --exe /private/tmp/docling-memory-before-state-lifetimes \
+  --output /private/tmp/docling-memory-state-lifetimes-before \
+  --sizes 125000 --layouts direct,form,type3,pattern \
+  --modes decode,skip-shapes,render --repeats 3
+~~~
+
+This has 36 measurements. The existing dependency checks remain mandatory.
+If rebuilding changes archives, do not relabel the preserved binary or bypass
+the hashes: rebuild an isolated pre-audit reference against the candidate's
+dependencies before comparing again.
+
+### User build and focused native gate
+
+~~~sh
+cmake -S . -B build -DDOCLING_PARSE_BUILD_MEMORY_PROBE=ON
+
+cmake --build build --parallel 2 --target \
+  test_memory_on_lines stream_callback_regression stream_state_lifetime_regression
+
+ctest --test-dir build --output-on-failure \
+  -R '^stream_(callback|state_lifetime)_regression$'
+~~~
+
+After the tests pass, compare normal-path memory/runtime and images:
+
+~~~sh
+uv run python3 tests/cpp/run_memory_on_lines.py \
+  --output /private/tmp/docling-memory-state-lifetimes-after \
+  --baseline /private/tmp/docling-memory-state-lifetimes-before \
+  --sizes 125000 --layouts direct,form,type3,pattern \
+  --modes decode,skip-shapes,render --repeats 3 \
+  --slowdown-limit-pct 5
+~~~
+
+Require unchanged geometry/PNGs, ordinary memory behavior and runtime within
+the accepted budget. This comparison isolates item 4, not the older Type3
+eager-cache cleanup whose historical dependency mismatch remains unresolved.
+
+### User clipping smoke and bounded scaling
+
+~~~sh
+uv run python3 tests/cpp/run_memory_on_lines.py \
+  --output /private/tmp/docling-memory-clip-history-smoke \
+  --layouts clip-chain,clip-scoped --sizes 100 --repeats 1
+
+uv run python3 tests/cpp/run_memory_on_lines.py \
+  --output /private/tmp/docling-memory-clip-history-scaling \
+  --layouts clip-chain,clip-scoped --sizes 250,500,1000 \
+  --modes decode,skip-shapes,render --repeats 3
+~~~
+
+The smoke has ten measurements and one equivalent-layout PNG pair. Scaling
+has 54 measurements and three equivalent-layout PNG pairs. Inspect retained
+clip paths/points/bytes alongside process peak RSS, not instruction count alone.
+The shapes-disabled cases must retain no render-instruction clip snapshots.
+
+### User rebuilt-extension semantic gate
+
+The item-3 semantic result was not supplied before item 4 was authorized.
+Run its existing eight-file suite after rebuilding this version, and include
+clipping, damaged-stream and pattern-related coverage:
+
+~~~sh
+uv run --no-sync python local_build.py
+
+uv run --no-sync pytest \
+  tests/test_unit_pattern_replay.py tests/test_unit_patterns.py \
+  tests/test_unit_soft_mask_streaming.py tests/test_unit_soft_masks.py \
+  tests/test_unit_transparency.py tests/test_unit_form_streaming.py \
+  tests/test_unit_type3_streaming.py tests/test_unit_type3_fonts.py \
+  tests/test_unit_clipping.py tests/test_unit_damaged_content_streams.py \
+  tests/test_unit_split_content_streams.py tests/test_unit_actual_text.py \
+  tests/test_unit_appearance_streaming.py tests/test_unit_widget_appearances.py
+~~~
+
+This closes the pending item-3 semantics and checks the revised state lifetimes
+against existing outputs. Native compilation/tests, clipping measurements and
+these semantic results are user gates before accepting item 4. Broader corpus
+and actual threaded ownership/memory validation remain item 5.
+
+## Item-4 native results and clipping growth confirmation
+
+The user supplied passing CTest results for stream_callback_regression and
+stream_state_lifetime_regression (0.81 seconds total). The paired normal-path
+comparison completed 36 measurements per executable and passed all structural,
+dependency and PNG checks. All four PNG pairs were identical, with no timing
+review flags. The largest reported positive runtime change was +3.94%; positive
+peak changes were below 0.8 MiB. This accepts native overhead for the scope
+guards, without claiming a rebuilt-extension semantic result.
+
+The clip-history scaling bundle completed 54 measurements and passed all three
+equivalent-layout PNG comparisons. Its results confirm the structural case:
+
+| N | Instructions | Chain clip occurrences | Scoped occurrences | Chain minus scoped decode MiB |
+| ---: | ---: | ---: | ---: | ---: |
+| 250 | 250 | 31,375 | 250 | 5.89 |
+| 500 | 500 | 125,250 | 500 | 23.15 |
+| 1,000 | 1,000 | 500,500 | 1,000 | 91.56 |
+
+Decoded chain peaks were 16.81, 34.42 and 103.64 MiB; scoped peaks 10.92, 11.27
+and 12.08 MiB. Render peaks followed the same growth (26.97, 44.42, 113.73 MiB
+versus 21.17, 21.56, 22.25 MiB). Shapes-disabled peaks stayed about 10–11 MiB.
+The chain's accounted clip payload was 4,518,000, 18,036,000 and 72,072,000
+bytes, with 156,875, 626,250 and 2,502,500 point occurrences.
+
+Source objects remain linear (14N for chain, 16N for scoped). Render instruction
+counts are N; full copied histories account for N(N+1)/2 path occurrences.
+Subtracting the scoped control gives approximately fourfold extra decode RSS
+on each doubling, consistent with that exact structural count. This is a
+specific native snapshot-retention finding, not a general attribution of all
+high-memory PDFs to clipping.
+
+## Clipping follow-up — share immutable history
+
+The user approved proceeding after reviewing the clipping results. Codex
+implements; builds, experiments and runtime correctness checks remain with
+the user. This follow-up is separate from the already measured scope guards.
+
+### Representation and ownership
+
+Each nonempty clip capture becomes one immutable node containing its subpaths
+and a shared predecessor. A paint snapshot and a q/Q state save retain the
+relevant history head. Appending creates a new node; earlier snapshots and
+restored branches keep their existing heads. Capture geometry is owned once
+per node, independent of the number of later paints.
+
+SHAPE now owns this shared history instead of deep-copying a page-shape clip
+list and a parallel group-id list. The clip bbox/intersection calculations,
+capture order, per-subpath group ids and existing snapshot rule value remain.
+get_clip_state() returns the shared prefix with the current rule. No clipping
+intersection is cleared or deduplicated by this change.
+
+get_paths() exposes a read-only forward range rather than a vector. Existing
+repository consumers were adapted: iteration, size and empty queries do not
+retain flattened geometry. Explicit to_vector() is available for intentional
+materialization and the temporary native reference. Code requiring a concrete
+vector must request that copy explicitly; Python-facing APIs are unchanged.
+
+Traversal preserves oldest-capture and within-capture subpath order. Its
+iterator uses inline storage for up to 16 capture pointers and transient
+pointer storage for longer histories. No flattened cache lives in a snapshot.
+Long uniquely owned suffixes are destroyed iteratively to avoid recursive
+shared_ptr teardown exhausting the native stack.
+
+Shifted instruction replay shares a translation cache for that replay. A
+prefix is translated once for a given offset; the cache retains source owners
+as well as translated nodes so source addresses cannot be reused as keys.
+Changing the offset clears that cache. Independently retained translated
+snapshots remain valid. Translation does not mutate original coordinates.
+
+Renderer readers retain their existing clipping/rasterization algorithms.
+Clip equality first checks shared-history identity, then compares ordered paths
+when needed. The existing group-size map replaces a redundant nested scan
+for same-group subpaths. No new rectangle-intersection simplification or
+clip-mask representation is introduced.
+
+Storage for a simple N-capture chain is now N nodes/N unique paths, while all
+N paints still logically see N(N+1)/2 path occurrences. Rasterization may
+still traverse growing histories; this patch does not claim linear render
+runtime. Memory and the accepted runtime budget require measurement.
+
+### Controlled reference and diagnostics
+
+New optional executable: `test_memory_on_lines_copied_clips`, with only
+DOCLING_PARSE_COPY_CLIP_SNAPSHOTS enabled. It materializes a complete history
+for each paint and uses per-instruction translated snapshots. All source-token
+delivery, scope guards and renderer readers otherwise match the candidate.
+The fully buffered reference also enables this selector until final retirement.
+
+Use a fresh paired reference/candidate run against matching current libraries.
+This target isolates snapshot copying; it does not reproduce every historical
+internal allocation of the old mutable clip-state representation.
+
+The probe now distinguishes:
+
+- instruction_clip_paths / instruction_clip_points: logical occurrences seen
+  by all instructions, preserving the earlier semantic counters.
+- instruction_clip_logical_bytes: cumulative path-record/coordinate payload
+  corresponding to those logical occurrences.
+- instruction_clip_unique_paths / instruction_clip_unique_points: geometry
+  retained in distinct history nodes, counted once across snapshots.
+- instruction_clip_history_nodes: distinct retained history nodes.
+- instruction_clip_bytes: accounted unique node/vector/coordinate storage.
+  This excludes shared_ptr control blocks and allocator overhead and is not
+  process peak RSS. Earlier bundles used this field for copied vector payload;
+  use clip_history_storage and the new fields to interpret the schema.
+
+Accounting visits each distinct node once, stopping at already counted prefixes.
+Per-node cumulative totals avoid walking every logical occurrence during
+diagnostics. Thus the probe itself does not flatten or recreate a quadratic
+history while measuring the shared representation.
+
+decode_work_s and render_work_s isolate native page decoding and rendering
+(including canvas flush) from the later diagnostics/JSON/image save work.
+Their medians are added to summary.csv. The existing process-wall comparison
+continues unchanged; inspect both focused work and process timing before
+attributing a change to production execution.
+
+### Added regression coverage and static checks
+
+New CTest target `clip_history_regression`, source tests/cpp/test_clip_history.cpp:
+
+1. Earlier snapshots and independent branches retain their own geometry/rule.
+2. Forward traversal preserves capture and same-group subpath order, including
+   a copied iterator on a history longer than its inline pointer buffer.
+3. One thousand prefix snapshots expose 500,500 logical paths but retain only
+   1,000 nodes and 1,000 unique paths.
+4. Translation preserves originals, shares translated prefixes, and handles
+   offset changes without reusing stale coordinates. Shifted instruction replay
+   exercises the shared cache through the real dispatch path.
+5. A 50,000-capture unique suffix can be released without recursive teardown.
+
+tests/test_unit_clipping.py adds W/W* pixel cases: an early paint sees a broad
+clip; a q/Q child branches left; the restored parent branches right. These
+check snapshot immutability and restored-branch isolation. Existing curved,
+multi-subpath, image, shading, mask and appearance suites remain necessary.
+
+MyPy passes for 112 source files; Ruff lint and formatting pass for 117 files.
+Codex has not built or run these native/semantic tests or the new experiments.
+
+### User build and native regression gate
+
+~~~sh
+cmake -S . -B build -DDOCLING_PARSE_BUILD_MEMORY_PROBE=ON
+
+cmake --build build --parallel 2 --target \
+  test_memory_on_lines test_memory_on_lines_copied_clips \
+  clip_history_regression stream_callback_regression stream_state_lifetime_regression
+
+ctest --test-dir build --output-on-failure \
+  -R '^(clip_history|stream_callback|stream_state_lifetime)_regression$'
+~~~
+
+### User paired smoke
+
+~~~sh
+uv run python3 tests/cpp/run_memory_on_lines.py \
+  --exe build/test_memory_on_lines_copied_clips \
+  --output /private/tmp/docling-memory-shared-clips-copied-smoke \
+  --layouts direct,clip-chain,clip-scoped --sizes 100 --repeats 1
+
+uv run python3 tests/cpp/run_memory_on_lines.py \
+  --output /private/tmp/docling-memory-shared-clips-smoke \
+  --baseline /private/tmp/docling-memory-shared-clips-copied-smoke \
+  --layouts direct,clip-chain,clip-scoped --sizes 100 --repeats 1
+~~~
+
+Each side has 15 measurements. Require matching PDFs/PNGs/logical counts.
+For N=100, the chain must retain 5,050 unique paths in the copied reference
+and 100 in the shared candidate. Both expose 5,050 logical occurrences and
+100 render instructions. The scoped layout has 100 unique paths on both sides.
+
+### User paired clipping scaling after smoke
+
+~~~sh
+uv run python3 tests/cpp/run_memory_on_lines.py \
+  --exe build/test_memory_on_lines_copied_clips \
+  --output /private/tmp/docling-memory-shared-clips-copied-scaling \
+  --layouts clip-chain,clip-scoped --sizes 250,500,1000 \
+  --modes decode,skip-shapes,render --repeats 3
+
+uv run python3 tests/cpp/run_memory_on_lines.py \
+  --output /private/tmp/docling-memory-shared-clips-scaling \
+  --baseline /private/tmp/docling-memory-shared-clips-copied-scaling \
+  --layouts clip-chain,clip-scoped --sizes 250,500,1000 \
+  --modes decode,skip-shapes,render --repeats 3 \
+  --slowdown-limit-pct 5
+~~~
+
+Each side has 54 measurements. At N=1000, logical clip paths remain 500,500,
+but unique retained paths should drop to 1,000. Seek linear unique storage and
+lower measured RSS, with unchanged pixels and runtime within the accepted 5%.
+Inspect decode/render work medians as well as process-wall results. Do not
+raise the existing fixture cap while the copied reference remains quadratic.
+
+### Ordinary-page overhead reference
+
+Codex preserved the executable used for the successful state-lifetime comparison:
+
+- `/private/tmp/docling-memory-before-shared-clips`
+- SHA-256: ca7fb602142ff954be45493930a3b09b854262d3f1728060fe3f3389294eeae6
+
+Its binary hash matches /private/tmp/docling-memory-state-lifetimes-after, and
+the dependency archive hashes were unchanged at preservation. Original compiled
+source provenance remains in that bundle; later current-source snapshots do
+not relabel the old executable. Compare ordinary pages after rebuilding:
+
+~~~sh
+uv run python3 tests/cpp/run_memory_on_lines.py \
+  --output /private/tmp/docling-memory-shared-clips-controls \
+  --baseline /private/tmp/docling-memory-state-lifetimes-after \
+  --sizes 125000 --layouts direct,form,type3,pattern \
+  --modes decode,skip-shapes,render --repeats 3 \
+  --slowdown-limit-pct 5
+~~~
+
+This supplies 36 measurements. Retain the normal dependency safeguards. If
+libraries change, obtain a reference built against matching libraries; do not
+bypass hashes or treat this as the older unresolved Type3 cleanup comparison.
+The preserved executable is available for focused timing rechecks if needed.
+
+### User rebuilt-extension semantic gate
+
+~~~sh
+uv run --no-sync python local_build.py
+
+uv run --no-sync pytest \
+  tests/test_unit_clipping.py tests/test_unit_pattern_replay.py \
+  tests/test_unit_patterns.py tests/test_unit_soft_mask_streaming.py \
+  tests/test_unit_soft_masks.py tests/test_unit_transparency.py \
+  tests/test_unit_form_streaming.py tests/test_unit_type3_streaming.py \
+  tests/test_unit_type3_fonts.py tests/test_unit_damaged_content_streams.py \
+  tests/test_unit_split_content_streams.py tests/test_unit_actual_text.py \
+  tests/test_unit_appearance_streaming.py tests/test_unit_widget_appearances.py
+~~~
+
+The prior item-3/item-4 semantic result still has not been reported. This suite
+must run against the rebuilt extension before accepting the shared-history
+patch. Broader corpus/threaded validation, comparison-path retirement and the
+permanent benchmark peak-RSS/timeline enhancement remain subsequent work.
 
 ## Questions to answer from the intermediate results
 

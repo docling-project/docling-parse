@@ -56,6 +56,32 @@ def circle_path(cx: float, cy: float, r: float) -> str:
     )
 
 
+@pytest.mark.parametrize("operator", ["W", "W*"])
+def test_clip_snapshots_keep_earlier_paints_and_q_restore_branches(operator: str):
+    # The child branches left; after Q the parent branches right. The first
+    # paint retains the broad prefix, and each later paint keeps its own clip.
+    content = (
+        f"20 20 160 160 re {operator} n "
+        "1 0 0 rg 0 140 200 20 re f "
+        f"q 20 20 60 160 re {operator} n "
+        "0 0 1 rg 0 80 200 20 re f Q "
+        f"110 20 70 160 re {operator} n "
+        "0 1 0 rg 0 40 200 20 re f"
+    )
+    image = render_page(simple_page_pdf(content), scale=1.0).get_image().convert("RGB")
+
+    def pixel(x: int, y: int):
+        return image.getpixel((x, image.height - 1 - y))
+
+    for x in (40, 150):
+        assert pixel(x, 150) == (255, 0, 0)
+    assert pixel(40, 90) == (0, 0, 255)
+    assert pixel(150, 90) == (255, 255, 255)
+    assert pixel(150, 50) == (0, 255, 0)
+    assert pixel(40, 50) == (255, 255, 255)
+    assert pixel(10, 150) == (255, 255, 255)
+
+
 def _red_image_object() -> bytes:
     return stream_object(
         "/Type /XObject /Subtype /Image /Width 4 /Height 4 "

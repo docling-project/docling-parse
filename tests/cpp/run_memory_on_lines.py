@@ -14,6 +14,7 @@ Appearance fixtures are opt-in with --layouts appearance,widget,appearance-repea
 Procedural Type3 fixtures are opt-in with --layouts type3,type3-repeat.
 Soft-mask fixtures are opt-in with --layouts soft-mask,soft-mask-repeat.
 Pattern fixtures are opt-in with --layouts pattern,pattern-repeat,pattern-lattice.
+Clip-history fixtures are opt-in with --layouts clip-chain,clip-scoped (max 4000).
 """
 
 from __future__ import annotations
@@ -40,12 +41,14 @@ APPEARANCE_LAYOUTS = ("appearance", "widget", "appearance-repeat")
 TYPE3_LAYOUTS = ("type3", "type3-repeat")
 SOFT_MASK_LAYOUTS = ("soft-mask", "soft-mask-repeat")
 PATTERN_LAYOUTS = ("pattern", "pattern-repeat", "pattern-lattice")
+CLIP_LAYOUTS = ("clip-chain", "clip-scoped")
 LAYOUTS = (
     DEFAULT_LAYOUTS
     + APPEARANCE_LAYOUTS
     + TYPE3_LAYOUTS
     + SOFT_MASK_LAYOUTS
     + PATTERN_LAYOUTS
+    + CLIP_LAYOUTS
 )
 
 
@@ -124,6 +127,36 @@ def command(argv: list[str], log: Path, timeout: int) -> tuple[list[dict], float
     return records, elapsed
 
 
+def validate_clip_snapshots(decoded: dict, info: dict, mode: str, layout: str) -> None:
+    if layout not in CLIP_LAYOUTS:
+        return
+    count = info["unique_lines"] if mode != "skip-shapes" else 0
+    total = count * (count + 1) // 2 if layout == "clip-chain" else count
+    require(decoded["instruction_clip_paths"] == total, "wrong clip snapshot count")
+    require(
+        decoded["max_clip_paths"]
+        == (count if layout == "clip-chain" else min(count, 1)),
+        "wrong clip-history high-water mark",
+    )
+    require(decoded["instruction_clip_points"] == 5 * total, "wrong clip point count")
+    if "clip_history_storage" in decoded:
+        storage = decoded["clip_history_storage"]
+        require(storage in ("shared", "copied"), "unknown clip history representation")
+        unique = count if storage == "shared" else total
+        require(
+            decoded["instruction_clip_unique_paths"] == unique,
+            "wrong unique clip path count",
+        )
+        require(
+            decoded["instruction_clip_unique_points"] == 5 * unique,
+            "wrong unique clip points",
+        )
+        require(
+            decoded["instruction_clip_history_nodes"] == count,
+            "wrong retained clip node count",
+        )
+
+
 def validate(stages: list[dict], info: dict, mode: str, layout: str) -> dict:
     by_stage = {stage["stage"]: stage for stage in stages}
     require("baseline" in by_stage and "loaded" in by_stage, "missing memory snapshots")
@@ -131,12 +164,23 @@ def validate(stages: list[dict], info: dict, mode: str, layout: str) -> dict:
         counts = by_stage["tokenized"]
         unique = info["unique_lines"]
         type3 = layout in TYPE3_LAYOUTS
+        clipping = layout in CLIP_LAYOUTS
+        expected_tokens = (
+            (16 if layout == "clip-scoped" else 14) * unique
+            if clipping
+            else 7 * unique + (5 if type3 else 2)
+        )
+        expected_operators = (
+            (8 if layout == "clip-scoped" else 6) * unique
+            if clipping
+            else 3 * unique + (2 if type3 else 1)
+        )
         require(
-            counts["tokens"] == 7 * unique + (5 if type3 else 2),
+            counts["tokens"] == expected_tokens,
             "unexpected source token count",
         )
         require(
-            counts["operators"] == 3 * unique + (2 if type3 else 1),
+            counts["operators"] == expected_operators,
             "unexpected source operator count",
         )
         require(
@@ -153,7 +197,7 @@ def validate(stages: list[dict], info: dict, mode: str, layout: str) -> dict:
         elif layout in APPEARANCE_LAYOUTS:
             expected_stream = "appearance"
         else:
-            expected_stream = "page" if layout == "direct" else "form_leaf"
+            expected_stream = "page" if layout == "direct" or clipping else "form_leaf"
         require(counts["measured_stream"] == expected_stream, "wrong stream selected")
         require(
             counts["stream_executions"] == 1, "raw parsing must visit leaf only once"
@@ -172,6 +216,7 @@ def validate(stages: list[dict], info: dict, mode: str, layout: str) -> dict:
     decoded = by_stage["decoded"]
     soft_mask = layout in SOFT_MASK_LAYOUTS
     pattern = layout in PATTERN_LAYOUTS
+    clipping = layout in CLIP_LAYOUTS
     paints = info.get("soft_mask_paints", 0)
     fills = info.get("pattern_fills", 0)
     lattice_cells = info.get("pattern_lattice_cells_per_fill", 0)
@@ -205,8 +250,14 @@ def validate(stages: list[dict], info: dict, mode: str, layout: str) -> dict:
         "unexpected path point count",
     )
     require(decoded["stored_dash_bytes"] == 0, "solid grid retained dash data")
+    validate_clip_snapshots(decoded, info, mode, layout)
     if "page_content_delivery" in decoded:
-        if pattern:
+        if clipping:
+            expected_objects = (16 if layout == "clip-scoped" else 14) * info[
+                "unique_lines"
+            ]
+            expected_bytes, expected_pending = info["page_content_bytes"], 4
+        elif pattern:
             expected_objects = 4 + 6 * fills
             expected_bytes, expected_pending = info["page_content_bytes"], 4
         elif soft_mask:
@@ -438,6 +489,16 @@ def validate(stages: list[dict], info: dict, mode: str, layout: str) -> dict:
     return decoded
 
 
+def stage_median(group: list[dict], stage: str, field: str) -> float | None:
+    values = [
+        s[field]
+        for r in group
+        for s in r["stages"]
+        if s["stage"] == stage and field in s
+    ]
+    return statistics.median(values) if values else None
+
+
 def summarize(records: list[dict], output: Path) -> None:
     grouped = defaultdict(list)
     for record in records:
@@ -478,6 +539,23 @@ def summarize(records: list[dict], output: Path) -> None:
                 "shape_instructions": decoded.get("shape_instructions"),
                 "instruction_clip_paths": decoded.get("instruction_clip_paths"),
                 "instruction_clip_bytes": decoded.get("instruction_clip_bytes"),
+                "instruction_clip_logical_bytes": decoded.get(
+                    "instruction_clip_logical_bytes"
+                ),
+                "instruction_clip_unique_paths": decoded.get(
+                    "instruction_clip_unique_paths"
+                ),
+                "instruction_clip_unique_points": decoded.get(
+                    "instruction_clip_unique_points"
+                ),
+                "instruction_clip_history_nodes": decoded.get(
+                    "instruction_clip_history_nodes"
+                ),
+                "clip_history_storage": decoded.get("clip_history_storage"),
+                "median_decode_work_s": stage_median(group, "decoded", "decode_work_s"),
+                "median_render_work_s": stage_median(
+                    group, "rendered", "render_work_s"
+                ),
                 "page_content_delivery": decoded.get("page_content_delivery"),
                 "page_source_objects": decoded.get("page_source_objects"),
                 "page_buffered_tokens": decoded.get("page_buffered_tokens"),
@@ -860,8 +938,35 @@ def arguments() -> argparse.Namespace:
         parser.error("--soft-mask-repeats must be at least 2 for soft-mask-repeat")
     if "pattern-repeat" in args.layouts and args.pattern_repeats < 2:
         parser.error("--pattern-repeats must be at least 2 for pattern-repeat")
+    if any(layout in CLIP_LAYOUTS for layout in args.layouts) and max(sizes) > 4000:
+        parser.error("clip-history fixtures require line targets of at most 4000")
     args.sizes = sizes
     return args
+
+
+def compare_layout_images(
+    image_hashes: dict[tuple[str, int], str], sizes: list[int]
+) -> list[dict]:
+    pairs = [
+        ("direct", name)
+        for name in ("form", "form-nested", "appearance", "widget", "type3")
+    ]
+    pairs.append(("clip-chain", "clip-scoped"))
+    comparisons = []
+    for size in sizes:
+        for reference, layout in pairs:
+            first = image_hashes.get((reference, size))
+            other = image_hashes.get((layout, size))
+            if first and other:
+                comparisons.append(
+                    {
+                        "requested_lines": size,
+                        "reference_layout": reference,
+                        "layout": layout,
+                        "identical_png_bytes": first == other,
+                    }
+                )
+    return comparisons
 
 
 def main() -> None:
@@ -884,12 +989,18 @@ def main() -> None:
         "src/parse/pdf_resources/page_xobject_form.h",
         "src/parse/pdf_resources/page_font.h",
         "src/parse/pdf_resources/page_pattern.h",
+        "src/parse/pdf_states/shape.h",
+        "src/parse/page_items/render_instructions.h",
+        "src/render/blend2d_renderer.h",
         "src/parse/qpdf/stream_decoder.h",
         "src/parse/utils/pdf_timings.h",
         "tests/test_unit_appearance_streaming.py",
         "tests/test_unit_type3_streaming.py",
         "tests/test_unit_soft_mask_streaming.py",
         "tests/test_unit_pattern_replay.py",
+        "tests/cpp/test_stream_state_lifetimes.cpp",
+        "tests/cpp/test_clip_history.cpp",
+        "tests/test_unit_clipping.py",
     ):
         path = ROOT / relative
         source_hashes[relative] = sha256(path)
@@ -956,7 +1067,9 @@ def main() -> None:
                 for layout in args.layouts:
                     stem = f"{layout}-{size}"
                     pdf = output / f"{stem}.pdf"
-                    if layout in PATTERN_LAYOUTS:
+                    if layout in CLIP_LAYOUTS:
+                        variant = layout
+                    elif layout in PATTERN_LAYOUTS:
                         variant = (
                             "pathstorm-pattern-lattice"
                             if layout == "pattern-lattice"
@@ -1003,7 +1116,7 @@ def main() -> None:
                             else 1
                         )
                         argv += [str(repeat)]
-                    elif layout != "direct":
+                    elif layout != "direct" and layout not in CLIP_LAYOUTS:
                         repeat = args.form_repeats if layout == "form-repeat" else 1
                         depth = args.form_depth if layout == "form-nested" else 1
                         argv += [str(repeat), str(depth)]
@@ -1035,7 +1148,11 @@ def main() -> None:
                                 )
                                 signature_key = (
                                     size,
-                                    "type3" if layout in TYPE3_LAYOUTS else "grid",
+                                    "type3"
+                                    if layout in TYPE3_LAYOUTS
+                                    else layout
+                                    if layout in CLIP_LAYOUTS
+                                    else "grid",
                                 )
                                 require(
                                     raw_signatures.setdefault(signature_key, signature)
@@ -1063,18 +1180,7 @@ def main() -> None:
                                 flush=True,
                             )
         summarize(records, output)
-        for size in sizes:
-            direct = image_hashes.get(("direct", size))
-            for layout in ("form", "form-nested", "appearance", "widget", "type3"):
-                other = image_hashes.get((layout, size))
-                if direct and other:
-                    comparisons.append(
-                        {
-                            "requested_lines": size,
-                            "layout": layout,
-                            "identical_png_bytes": direct == other,
-                        }
-                    )
+        comparisons = compare_layout_images(image_hashes, sizes)
         (output / "image-comparisons.json").write_text(
             json.dumps(comparisons, indent=2) + "\n"
         )

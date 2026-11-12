@@ -1124,17 +1124,20 @@ namespace pdflib
                                 const clip_state_instruction& b)
     {
       if(a.get_rule() != b.get_rule()) { return false; }
+      if(a.shares_history(b)) { return true; }
       const auto& pa = a.get_paths();
       const auto& pb = b.get_paths();
       if(pa.size() != pb.size()) { return false; }
-      for(size_t i = 0; i < pa.size(); i++)
+      auto ia = pa.begin();
+      for(const auto& path : pb)
         {
-          if(pa[i].get_clip_group() != pb[i].get_clip_group() or
-             pa[i].get_x() != pb[i].get_x() or
-             pa[i].get_y() != pb[i].get_y())
+          if(ia->get_clip_group() != path.get_clip_group() or
+             ia->get_x() != path.get_x() or
+             ia->get_y() != path.get_y())
             {
               return false;
             }
+          ++ia;
         }
       return true;
     }
@@ -1300,16 +1303,7 @@ namespace pdflib
 
           // rect paths that are alone in their group were already applied
           // through the context clip
-          bool grouped = false;
-          for(const auto& other : clip_state.get_paths())
-            {
-              if(&other != &clip_path and
-                 other.get_clip_group() == clip_path.get_clip_group())
-                {
-                  grouped = true;
-                  break;
-                }
-            }
+          const bool grouped = group_sizes[clip_path.get_clip_group()] > 1;
           if(is_rect and not grouped)
             {
               // LOG_S(INFO) << "build_clip_mask: path " << clip_index
