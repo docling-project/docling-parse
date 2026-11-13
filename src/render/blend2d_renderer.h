@@ -57,14 +57,17 @@ namespace pdflib
     // programs loaded natively by Blend2D) and a FreeType cache (Type 1 /
     // bare CFF programs rendered as outline paths), so embedded font programs
     // are loaded once per document instead of once per page renderer.
-    // Passing nullptr for either creates a private cache.
+    // Passing nullptr for either creates a private cache. `canvas_pool` is the
+    // spare canvas handed between the successive renderers of one render
+    // worker (see set_size()); nullptr gives this renderer its own.
     explicit renderer(render_config config,
                       std::shared_ptr<blend2d_font_resolver> font_resolver,
                       std::shared_ptr<blend2d_embedded_font_cache> embedded_font_cache,
                       std::shared_ptr<freetype_font_cache> embedded_freetype_cache = nullptr,
-                      std::shared_ptr<glyph_bbox_cache> glyph_bbox_cache = nullptr);
+                      std::shared_ptr<glyph_bbox_cache> glyph_bbox_cache = nullptr,
+                      std::shared_ptr<BLImage> canvas_pool = nullptr);
 
-    // Returns the page canvas to the per-thread pool. See set_size().
+    // Returns the page canvas to the canvas pool. See set_size().
     ~renderer();
 
     // Per-phase rasterisation timings for the page just rendered. The threaded
@@ -282,14 +285,12 @@ namespace pdflib
     // its lock again for every text instruction on this page.
     std::unordered_map<std::string, BLFontFace> local_embedded_face_cache_;
 
-    // One spare canvas per thread, handed between the successive per-page
-    // renderers that a render worker creates. Function-local so it is
-    // initialised on first use and destroyed at thread exit.
-    static BLImage& canvas_pool()
-    {
-      thread_local BLImage pooled;
-      return pooled;
-    }
+    // One spare canvas, handed between the successive per-page renderers that
+    // a render worker creates. The worker owns it rather than a thread_local:
+    // with MinGW's emulated TLS, thread_local destructors run after the
+    // thread's TLS block has been freed, and destroying a BLImage there
+    // corrupted the heap on every worker exit (docling-parse#357).
+    std::shared_ptr<BLImage> canvas_pool_;
 
     // Returns the active Blend2D context for the page, starting it lazily if
     // necessary. Throws when called before a non-empty canvas has been created.
@@ -1630,7 +1631,11 @@ namespace pdflib
     // recomputing would, which is why this cannot change a rendered pixel.
     //
     // Direct-mapped and thread_local: no synchronisation, no sharing between
-    // render workers, and a fixed 48 KB per thread that stays inside L2. Flat
+    // render workers, and a fixed 48 KB per thread that stays inside L2. The
+    // tables are plain zero-initialised arrays rather than std::vectors, so
+    // there is no thread_local destructor: with MinGW's emulated TLS those
+    // run after the thread's TLS block has been freed (docling-parse#357).
+    // A slot stores key + 1, so 0 marks an empty slot. Flat
     // regions and limited palettes (the common case in print PDFs) hit almost
     // always; fully photographic CMYK falls back to the arithmetic at no
     // measurable extra cost.
@@ -1639,11 +1644,9 @@ namespace pdflib
                                                 cmyk_convention convention)
     {
       constexpr uint32_t CACHE_SIZE = 1u << 12;
-      // no real key can collide with this: the payload is only 33 bits wide
-      constexpr uint64_t CACHE_EMPTY = ~uint64_t(0);
 
-      thread_local std::vector<uint64_t> memo_key(CACHE_SIZE, CACHE_EMPTY);
-      thread_local std::vector<uint32_t> memo_rgb(CACHE_SIZE, 0);
+      thread_local uint64_t memo_key[CACHE_SIZE];
+      thread_local uint32_t memo_rgb[CACHE_SIZE];
 
       const uint64_t key =
         (uint64_t(convention == CMYK_CONVENTION_ADOBE_INVERTED) << 32) |
@@ -1653,7 +1656,8 @@ namespace pdflib
       uint32_t slot = static_cast<uint32_t>((key * 0x9E3779B97F4A7C15ull) >> 40)
                       & (CACHE_SIZE - 1);
 
-      if (memo_key[slot] == key)
+      // the payload is only 33 bits wide, so key + 1 never wraps to 0
+      if (memo_key[slot] == key + 1)
         {
           const uint32_t v = memo_rgb[slot];
           return {int((v >> 16) & 0xFFu), int((v >> 8) & 0xFFu), int(v & 0xFFu)};
@@ -1673,7 +1677,7 @@ namespace pdflib
 
       if (storable)
         {
-          memo_key[slot] = key;
+          memo_key[slot] = key + 1;
           memo_rgb[slot] = (uint32_t(rgb[0]) << 16) |
                            (uint32_t(rgb[1]) <<  8) |
                             uint32_t(rgb[2]);
@@ -1919,7 +1923,8 @@ namespace pdflib
       font_resolver_(blend2d_font_resolver::default_resolver()),
       embedded_font_cache_(std::make_shared<blend2d_embedded_font_cache>()),
       freetype_font_cache_(std::make_shared<freetype_font_cache>()),
-      glyph_bbox_cache_(std::make_shared<glyph_bbox_cache>(config_.glyph_bbox_cache_capacity))
+      glyph_bbox_cache_(std::make_shared<glyph_bbox_cache>(config_.glyph_bbox_cache_capacity)),
+      canvas_pool_(std::make_shared<BLImage>())
   {}
 
   inline renderer<BLEND2D>::renderer(render_config config)
@@ -1928,7 +1933,8 @@ namespace pdflib
       font_resolver_(blend2d_font_resolver::default_resolver()),
       embedded_font_cache_(std::make_shared<blend2d_embedded_font_cache>()),
       freetype_font_cache_(std::make_shared<freetype_font_cache>()),
-      glyph_bbox_cache_(std::make_shared<glyph_bbox_cache>(config_.glyph_bbox_cache_capacity))
+      glyph_bbox_cache_(std::make_shared<glyph_bbox_cache>(config_.glyph_bbox_cache_capacity)),
+      canvas_pool_(std::make_shared<BLImage>())
   {}
 
   inline renderer<BLEND2D>::renderer(render_config config,
@@ -1939,14 +1945,16 @@ namespace pdflib
                                    : blend2d_font_resolver::default_resolver()),
       embedded_font_cache_(std::make_shared<blend2d_embedded_font_cache>()),
       freetype_font_cache_(std::make_shared<freetype_font_cache>()),
-      glyph_bbox_cache_(std::make_shared<glyph_bbox_cache>(config_.glyph_bbox_cache_capacity))
+      glyph_bbox_cache_(std::make_shared<glyph_bbox_cache>(config_.glyph_bbox_cache_capacity)),
+      canvas_pool_(std::make_shared<BLImage>())
   {}
 
   inline renderer<BLEND2D>::renderer(render_config config,
                                      std::shared_ptr<blend2d_font_resolver> font_resolver,
                                      std::shared_ptr<blend2d_embedded_font_cache> embedded_font_cache,
                                      std::shared_ptr<freetype_font_cache> embedded_freetype_cache,
-                                     std::shared_ptr<glyph_bbox_cache> glyph_bbox_cache)
+                                     std::shared_ptr<glyph_bbox_cache> glyph_bbox_cache,
+                                     std::shared_ptr<BLImage> canvas_pool)
     : config_(config),
       shape_({0, 0, 4}),
       font_resolver_(font_resolver ? std::move(font_resolver)
@@ -1960,12 +1968,14 @@ namespace pdflib
       glyph_bbox_cache_(glyph_bbox_cache
                           ? std::move(glyph_bbox_cache)
                           : std::make_shared<pdflib::glyph_bbox_cache>(
-                              config_.glyph_bbox_cache_capacity))
+                              config_.glyph_bbox_cache_capacity)),
+      canvas_pool_(canvas_pool ? std::move(canvas_pool)
+                               : std::make_shared<BLImage>())
   {}
 
   inline renderer<BLEND2D>::~renderer()
   {
-    // Hand the page canvas back for the next renderer on this thread. The
+    // Hand the page canvas back for the next renderer of this worker. The
     // context must be closed first, or Blend2D would still hold a reference
     // and the buffer would be copied instead of reused.
     if (context_active_)
@@ -1976,7 +1986,7 @@ namespace pdflib
 
     if (image_.width() > 0 and image_.height() > 0)
       {
-        canvas_pool() = std::move(image_);
+        *canvas_pool_ = std::move(image_);
         image_.reset();
       }
   }
@@ -2196,20 +2206,20 @@ namespace pdflib
     // single process-wide lock (_xzm_malloc_large_huge ->
     // xzm_segment_group_alloc_chunk -> os_unfair_lock). Allocating one per page
     // therefore turns into a scaling bottleneck: profiling at 12 render threads
-    // put 23% of all thread time in that lock. Keep the buffer per thread
-    // instead, and hand it back in ~renderer(). Reuse cannot leak anything from
+    // put 23% of all thread time in that lock. Keep the buffer per render
+    // worker instead, and hand it back in ~renderer(). Reuse cannot leak anything from
     // the previous page: the fill_all() below rewrites every pixel with
     // SRC_COPY.
     //
     // The image is *moved* out of the pool so this renderer holds the only
     // reference; Blend2D copies on write, and a shared buffer would defeat the
     // reuse it is here to provide.
-    if (canvas_pool().width() == width and
-        canvas_pool().height() == height and
-        canvas_pool().format() == BL_FORMAT_PRGB32)
+    if (canvas_pool_->width() == width and
+        canvas_pool_->height() == height and
+        canvas_pool_->format() == BL_FORMAT_PRGB32)
       {
-        image_ = std::move(canvas_pool());
-        canvas_pool().reset();
+        image_ = std::move(*canvas_pool_);
+        canvas_pool_->reset();
       }
     else
       {

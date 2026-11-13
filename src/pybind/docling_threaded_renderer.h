@@ -84,6 +84,10 @@ namespace docling
     auto freetype_font_cache = std::make_shared<pdflib::freetype_font_cache>();
     auto glyph_bbox_cache = std::make_shared<pdflib::glyph_bbox_cache>(
       render_cfg.glyph_bbox_cache_capacity);
+    // Spare page canvas reused across this worker's pages. Owned here, not by
+    // a thread_local, so it is destroyed before the thread exits
+    // (docling-parse#357).
+    auto canvas_pool = std::make_shared<BLImage>();
 
     while(true)
       {
@@ -155,7 +159,8 @@ namespace docling
                                                         font_resolver_,
                                                         embedded_font_cache_,
                                                         freetype_font_cache,
-                                                        glyph_bbox_cache);
+                                                        glyph_bbox_cache,
+                                                        canvas_pool);
                   page_decoder->get_instructions().iterate_over_instructions(rnd);
                   result.timings.render_page_s
                     = std::chrono::duration<double>(clock_type::now() - stage_start).count();
