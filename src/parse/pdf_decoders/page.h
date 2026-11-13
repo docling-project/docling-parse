@@ -18,6 +18,19 @@
 namespace pdflib
 {
 
+  // Native probe diagnostics for top-level annotation appearance sources.
+  // Output containers and Forms invoked by an appearance have separate storage.
+  struct appearance_stream_statistics
+  {
+    std::size_t executions = 0;
+    std::size_t widget_executions = 0;
+    std::size_t source_objects = 0;
+    std::size_t source_bytes_observed = 0;
+    std::size_t materialized_tokens = 0;
+    std::size_t max_buffered_token_capacity = 0;
+    std::size_t max_pending_operands = 0;
+  };
+
   template<>
   class pdf_decoder<PAGE>
   {
@@ -99,6 +112,11 @@ namespace pdflib
 
     // Get render instructions collected during decode
     pdf_render_instructions& get_instructions() { return instructions; }
+
+    const content_stream_statistics& get_content_statistics() const { return content_stats; }
+    const appearance_stream_statistics& get_appearance_statistics() const { return appearance_stats; }
+    const soft_mask_stream_statistics& get_soft_mask_statistics() const { return soft_mask_stats; }
+    const pattern_stream_statistics& get_pattern_statistics() const { return pattern_stats; }
 
     // Export this page as a standalone one-page PDF.
     void save_pdf_page(std::filesystem::path const& out_path) const;
@@ -202,6 +220,10 @@ namespace pdflib
     nlohmann::json json_annots;
 
     page_item<PAGE_DIMENSION> page_dimension;
+    content_stream_statistics content_stats;
+    appearance_stream_statistics appearance_stats;
+    soft_mask_stream_statistics soft_mask_stats;
+    pattern_stream_statistics pattern_stats;
 
     page_item<PAGE_CELLS>  page_cells;
     page_item<PAGE_CELLS>  char_cells;
@@ -1210,36 +1232,28 @@ namespace pdflib
                                        instructions,
                                        timings);
 
-    // Split decode_contents into: page content-stream tokenization
-    // (content_decode_total) vs. operator-execution self-time
-    // (interprete_ops_total). The latter is the interpretation wall time minus
-    // the sub-work attributed to other buckets (resource set(), parse_stream,
-    // do_image, do_form machinery) while interpreting -- see note_attributed().
-    double interprete_seconds = 0.0;
-    double attributed_before  = timings.attributed_total();
-
+    const double attributed_before = timings.attributed_total();
     std::vector<qpdf_stream_instruction> parameters;
-    {
-      utils::timer content_decode_timer;
-      stream_decoder.decode(contents);
-      timings.add_timing(pdf_timings::KEY_CONTENT_DECODE_TOTAL, content_decode_timer.get_time());
-    }
-    //stream_decoder.print();
 
+    // QPDF parsing and interpretation are interleaved. Report their combined
+    // self-time, excluding already-attributed nested work. Timing every token
+    // to reconstruct the old split would add overhead to the production path.
     {
-      utils::timer interprete_timer;
-      stream_decoder.interprete(parameters);
-      interprete_seconds += interprete_timer.get_time();
+      utils::timer content_timer;
+      stream_decoder.decode_and_interprete(contents, parameters);
+      const double elapsed = content_timer.get_time();
+      const double attributed_during = timings.attributed_total() - attributed_before;
+      timings.add_timing(pdf_timings::KEY_CONTENT_PARSE_INTERPRETE_TOTAL,
+                         std::max(0.0, elapsed - attributed_during));
     }
+    content_stats = stream_decoder.get_content_statistics();
+    soft_mask_stats = stream_decoder.get_soft_mask_statistics();
+    pattern_stats = stream_decoder.get_pattern_statistics();
 
     if(parameters.size()>0)
       {
         LOG_S(WARNING) << "page content is ending with non-zero number of parameters";
       }
-
-    double attributed_during = timings.attributed_total() - attributed_before;
-    timings.add_timing(pdf_timings::KEY_INTERPRETE_OPS_TOTAL,
-                       interprete_seconds - attributed_during);
   }
 
   void pdf_decoder<PAGE>::load_acroform_dr_fonts()
@@ -1289,6 +1303,8 @@ namespace pdflib
   void pdf_decoder<PAGE>::decode_annots_from_qpdf()
   {
     LOG_S(INFO) << __FUNCTION__;
+
+    appearance_stats = {};
 
     load_acroform_dr_fonts();
 
@@ -1866,9 +1882,22 @@ namespace pdflib
     const std::array<double, 6> ap_matrix = appearance_matrix(ap_stream, bbox);
 
     std::vector<qpdf_stream_instruction> parameters;
-    stream_decoder.decode(ap_stream);
+    // Interpretation starts in the QPDF callback, so seed the transform first.
     stream_decoder.set_base_matrix(ap_matrix);
-    stream_decoder.interprete(parameters);
+    stream_decoder.decode_and_interprete(ap_stream, parameters);
+
+#ifdef DOCLING_PARSE_CONTENT_DIAGNOSTICS
+    const auto& source_stats = stream_decoder.get_content_statistics();
+    ++appearance_stats.executions;
+    appearance_stats.widget_executions += is_widget;
+    appearance_stats.source_objects += source_stats.source_objects;
+    appearance_stats.source_bytes_observed += source_stats.source_bytes_observed;
+    appearance_stats.materialized_tokens += source_stats.buffered_tokens;
+    appearance_stats.max_buffered_token_capacity = std::max(
+      appearance_stats.max_buffered_token_capacity, source_stats.buffered_token_capacity);
+    appearance_stats.max_pending_operands = std::max(
+      appearance_stats.max_pending_operands, source_stats.max_pending_operands);
+#endif
 
     // Shapes drawn by the appearance stream (field borders, backgrounds,
     // check marks drawn as paths, ...): keep them in the parsed output and

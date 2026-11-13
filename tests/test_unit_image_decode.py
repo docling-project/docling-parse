@@ -61,3 +61,44 @@ def test_single_component_decode_samples(
     assert bytes(artifacts[0]["raw_data"]) == bytes(
         expected_mapping[value] for value in samples
     )
+
+
+@pytest.mark.parametrize("height", [1, 2])
+@pytest.mark.parametrize("filter_chain", ["single", "array", "hex-flate"])
+def test_inline_rgb_png_predictors_restore_samples(height: int, filter_chain: str):
+    # These tiny predictor-encoded RGB strips make up the gradient bullets in
+    # 7413869934284023443-1.pdf. Ignoring /DP leaves deltas as pixel samples.
+    rows = [
+        bytes([0, 0, 255, 32, 48, 255, 96, 112, 255, 192, 224, 255]),
+        bytes([8, 16, 240, 40, 64, 240, 104, 128, 240, 200, 240, 240]),
+    ][:height]
+    # PNG Sub on the first row, Up on the second; /Predictor 15 uses the
+    # leading per-row filter byte to choose the reconstruction operation.
+    predicted = bytes([1]) + bytes(
+        (value - (rows[0][i - 3] if i >= 3 else 0)) % 256
+        for i, value in enumerate(rows[0])
+    )
+    if height == 2:
+        predicted += bytes([2]) + bytes(
+            (value - rows[0][i]) % 256 for i, value in enumerate(rows[1])
+        )
+    payload = zlib.compress(predicted)
+    parms = "<< /Predictor 15 /Columns 4 /Colors 3 /BitsPerComponent 8 >>"
+    if filter_chain == "single":
+        filters = f"/F /Fl /DP {parms}"
+    elif filter_chain == "array":
+        filters = f"/F [/Fl] /DP [{parms}]"
+    else:
+        filters = f"/F [/AHx /Fl] /DP [null {parms}]"
+        payload = payload.hex().encode("ascii") + b">"
+    content = (
+        (
+            f"q 100 0 0 100 50 50 cm BI /W 4 /H {height} /BPC 8 /CS /RGB {filters} ID\n"
+        ).encode("ascii")
+        + payload
+        + b"\nEI Q\n"
+    )
+    result = render_page(simple_page_pdf(content.decode("latin-1")))
+    artifacts = result._export_bitmap_artifacts()
+    assert len(artifacts) == 1
+    assert bytes(artifacts[0]["raw_data"]) == b"".join(rows)

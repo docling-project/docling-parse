@@ -63,6 +63,46 @@ def test_latin_text_without_an_embedded_font_is_drawn():
     )
 
 
+@pytest.mark.parametrize(
+    "base_font",
+    [
+        "Helvetica",
+        "Helvetica-Bold",
+        "Helvetica-Oblique",
+        "Helvetica-BoldOblique",
+        "Times-Roman",
+        "Times-Bold",
+        "Times-Italic",
+        "Times-BoldItalic",
+        "Courier",
+        "Courier-Bold",
+        "Courier-Oblique",
+        "Courier-BoldOblique",
+    ],
+)
+@pytest.mark.parametrize("text", ["\\200", " "], ids=["euro", "space"])
+def test_empty_afm_bounds_do_not_hide_euro_or_paint_spaces(base_font: str, text: str):
+    # Core-14 AFMs give Euro and space the same empty bounds. A Euro must
+    # still draw using the font's vertical metrics; a space stays blank.
+    pdf = _non_embedded_font_pdf(
+        f"BT /F1 36 Tf 20 100 Td ({text}) Tj ET",
+        f"<< /Type /Font /Subtype /Type1 /BaseFont /{base_font} "
+        "/Encoding /WinAnsiEncoding >>",
+    )
+    result = render_page(pdf)
+    instructions = result._export_render_instructions_json()["instructions"]
+    glyph = next(item for item in instructions if item["type"] == "text")
+    coverage = coverage_ratio(region_image(result, TEXT_BOX))
+    if text == " ":
+        assert glyph["text"] == " "
+        assert glyph["quad"]["r_y2"] == glyph["quad"]["r_y0"]
+        assert coverage == 0
+    else:
+        assert glyph["text"] == "€"
+        assert glyph["quad"]["r_y2"] > glyph["quad"]["r_y0"]
+        assert coverage > 0.001
+
+
 def test_arabic_text_without_an_embedded_font_is_drawn():
     """An Arabic run needs a face chosen for its script, not for its name.
 

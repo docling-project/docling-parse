@@ -129,6 +129,19 @@ CITED_PAGES = [
         ),
         id="soft-masked-drop-shadow",
     ),
+    # #403: Helvetica-Bold without /Widths, whose /Differences maps 193 to Aacute.
+    # The width came from the AFM's Standard encoding, where 193 is grave, so the
+    # heading's "Á" was squeezed to less than half its width (mean_abs_error 3.92,
+    # changed_pixels_ratio 0.083 before the fix; 3.25 and 0.079 after).
+    pytest.param(
+        "7413869934284023443-1.pdf",
+        2,
+        PYPDFIUM_RENDER_SCALE,
+        ImageTolerance(
+            pixel_threshold=12, mean_abs_error=3.6, changed_pixels_ratio=0.081
+        ),
+        id="standard-font-differences-width",
+    ),
 ]
 
 

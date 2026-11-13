@@ -8,6 +8,7 @@ import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
@@ -141,7 +142,7 @@ def test_recovery_forks_core_without_relabeling_versions(tmp_path: Path, monkeyp
     packages = dict.fromkeys(
         ("docling-parse", "docling-core", "pypdfium2", "pillow", "rtree"), "fixture"
     )
-    metadata = {
+    metadata: dict[str, Any] = {
         "extension_sha256": "extension",
         "native_sha256": "native",
         "python": "python",
@@ -156,6 +157,11 @@ def test_recovery_forks_core_without_relabeling_versions(tmp_path: Path, monkeyp
             ]
         },
     }
+    metadata.update(repeats=1, threads=[1], comparison=True)
+    for job in _RECOVERY.core_jobs(metadata):
+        artifact = source / job.artifact
+        artifact.parent.mkdir(parents=True, exist_ok=True)
+        artifact.write_text("unchanged measurements")
     (source / "metadata.json").write_text(json.dumps(metadata))
     original = (source / "metadata.json").read_bytes()
     provenance = {
@@ -175,6 +181,7 @@ def test_recovery_forks_core_without_relabeling_versions(tmp_path: Path, monkeyp
             return ["validated core"]
 
     monkeypatch.setattr(_RECOVERY, "ReportInputs", Inputs)
+    monkeypatch.setattr(_RECOVERY, "inspect_job", lambda *_: True)
     monkeypatch.setattr(_RECOVERY, "validate_environment", lambda meta, prov: None)
     monkeypatch.setattr(
         _RECOVERY, "reference_preflight", lambda meta: {"status": "passed"}
@@ -184,9 +191,65 @@ def test_recovery_forks_core_without_relabeling_versions(tmp_path: Path, monkeyp
     assert result["comparison_provenance"]["packages"]["pymupdf"] == "1.27.2.3"
     assert (source / "metadata.json").read_bytes() == original
     assert (output / "original-metadata.json").read_bytes() == original
+    for job in _RECOVERY.core_jobs(metadata):
+        artifact = output / job.artifact
+        assert artifact.resolve() == (source / job.artifact).resolve()
+        assert artifact.read_text() == "unchanged measurements"
+    assert not (output / "native").is_symlink()
+
+
+@pytest.mark.skipif(os.name == "nt", reason="Recovery uses Unix symlinks")
+@pytest.mark.parametrize("same_settings", [True, False])
+def test_recovery_copies_memory_with_compatible_checkpoints(
+    tmp_path: Path, monkeypatch, same_settings
+):
+    source, output = tmp_path / "source", tmp_path / "output"
+    source.mkdir()
+    output.mkdir()
     for name in ("native", "replay"):
-        assert (output / name).is_symlink()
-        assert (output / name / "raw").read_text() == "unchanged measurements"
+        (source / name).mkdir()
+    series = source / "comparison/r1/render"
+    (series / "checkpoints").mkdir(parents=True)
+    (series / "memory").mkdir()
+    (series / "checkpoints/run.json").write_text("original checkpoint")
+    (series / "memory/run.memory.rss.csv").write_text("original samples")
+    provenance = {"packages": {"pymupdf": "fixture"}}
+    metadata = {
+        "repeats": 1,
+        "comparison": True,
+        "dataset": {"files": [], "root": "/pdf"},
+        "threads": [1, 4],
+        "scale": 1,
+        "max_concurrent_results": 32,
+        "memory_collection": {"mode": "peak", "interval_ms": None},
+        "comparison_memory": {"mode": "profile", "interval_ms": 50},
+        "comparison_provenance": provenance,
+    }
+    (source / "metadata.json").write_text(json.dumps(metadata))
+    monkeypatch.setattr(
+        _RECOVERY,
+        "ReportInputs",
+        lambda _: SimpleNamespace(
+            metadata=metadata, load=lambda **_: ["existing core"]
+        ),
+    )
+    monkeypatch.setattr(_RECOVERY, "validate_environment", lambda *_: None)
+    monkeypatch.setattr(_RECOVERY, "core_jobs", lambda _: [])
+    monkeypatch.setattr(
+        _RECOVERY, "reference_preflight", lambda _: {"status": "passed"}
+    )
+    requested = {"mode": "profile", "interval_ms": 50 if same_settings else 25}
+    result = _RECOVERY.prepare_recovery(source, output, provenance, requested)
+    assert result["memory_collection"] == metadata["memory_collection"]
+    assert result["comparison_memory"] == requested
+    target = output / "comparison/r1/render"
+    assert (target / "checkpoints/run.json").exists() == same_settings
+    assert (target / "memory/run.memory.rss.csv").exists() == same_settings
+    command = _RECOVERY.comparison_command(result, target, "render", False)
+    assert command[command.index("--memory-mode") + 1] == "profile"
+    assert command[command.index("--memory-interval-ms") + 1] == str(
+        requested["interval_ms"]
+    )
 
 
 @pytest.mark.parametrize(

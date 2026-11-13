@@ -216,7 +216,7 @@ namespace pdflib
 
     void init_differences();
 
-    void init_charprocs();
+    void validate_charprocs();
     void init_space_index();
 
     // The embedded program's builtin encoding as the source of reading text
@@ -313,8 +313,6 @@ namespace pdflib
     // 1 = every declared width is zero, -1 = at least one is non-zero.
     int widths_all_zero_state = 0;
     std::unordered_map<std::string, double> name_to_widths;
-
-    std::unordered_map<std::string, char_description> name_to_descr;
 
     bool cmap_initialized;
     bool diff_initialized;
@@ -535,7 +533,15 @@ namespace pdflib
 
         auto& bfont = *(matched_base_font().font);
 
-        if(bfont.has(c))
+        // AFM metrics are numbered in the font's built-in encoding, so a
+        // font that declares an /Encoding (or /Differences) is looked up by
+        // the glyph name that encoding gives the code (docling-parse#403).
+        const std::string glyph_name = get_glyph_name(c);
+        if(not glyph_name.empty() and bfont.has_glyph_name(glyph_name))
+          {
+            return bfont.get_glyph_width(glyph_name);
+          }
+        else if(bfont.has(c))
           {
             return bfont.get_width(c);
           }
@@ -657,7 +663,13 @@ namespace pdflib
       {
         auto& bfont = *(matched_base_font().font);
 
-        if(bfont.has(c) and bfont.get_width(c)>0)
+        const std::string glyph_name = get_glyph_name(c);
+        if(not glyph_name.empty() and bfont.has_glyph_name(glyph_name) and
+           bfont.get_glyph_width(glyph_name)>0)
+          {
+            return bfont.get_glyph_width(glyph_name);
+          }
+        else if(bfont.has(c) and bfont.get_width(c)>0)
           {
             return bfont.get_width(c);
           }
@@ -727,7 +739,20 @@ namespace pdflib
   {
     if(matched_base_font().font)
       {
-        return matched_base_font().font->has_char_bbox(c);
+        auto& bfont = *(matched_base_font().font);
+
+        const std::string glyph_name = get_glyph_name(c);
+        if(not glyph_name.empty() and bfont.has_glyph_bbox(glyph_name))
+          {
+            // Some AFM entries, including Euro, have placeholder bounds.
+            // Preserve blank spaces; use font metrics for other empty bounds.
+            const auto bbox = bfont.get_glyph_bbox(glyph_name);
+            return glyph_name == "space" or bbox[3] > bbox[1];
+          }
+
+        // Builtin subset codes do not identify standard-font characters:
+        // code 32, for example, may draw "m" rather than a space.
+        return not uses_builtin_encoding() and bfont.has_char_bbox(c);
       }
 
     return false;
@@ -742,7 +767,15 @@ namespace pdflib
         return bfonts.get("Unknown")->get_char_bbox(c);
       }
 
-    return matched_base_font().font->get_char_bbox(c);
+    auto& bfont = *(matched_base_font().font);
+
+    const std::string glyph_name = get_glyph_name(c);
+    if(not glyph_name.empty() and bfont.has_glyph_bbox(glyph_name))
+      {
+        return bfont.get_glyph_bbox(glyph_name);
+      }
+
+    return bfont.get_char_bbox(c);
   }
 
   bool pdf_resource<PAGE_FONT>::has_char_bbox(const std::string& c)
@@ -1226,7 +1259,7 @@ namespace pdflib
     {
       utils::timer font_timer;
       
-      init_charprocs();
+      validate_charprocs();
       
       init_differences();
       
@@ -3135,7 +3168,7 @@ namespace pdflib
 			diff_numb_to_name[numb] = name.substr(1);
 		      }
 
-		    LOG_S(INFO) << name << ", in cmap: " << cmap_numb_to_char.count(numb) << ", #-names: " << name_to_descr.size() << ", type: " << subtype;
+		    LOG_S(INFO) << name << ", in cmap: " << cmap_numb_to_char.count(numb) << ", type: " << subtype;
 		    
                     // Resolution order following PDF 32000-1 section 9.10.2:
                     // the /ToUnicode cmap first, then glyph-name based methods
@@ -3800,72 +3833,35 @@ namespace pdflib
     return glyph;
   }
 
-  void pdf_resource<PAGE_FONT>::init_charprocs()
+  void pdf_resource<PAGE_FONT>::validate_charprocs()
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    QPDFObjectHandle qpdf_char_procs = qpdf_object::get_path(qpdf_font, {"/CharProcs"});
-
-    if(not qpdf_char_procs.isNull())
+    QPDFObjectHandle procs = qpdf_object::get_path(qpdf_font, {"/CharProcs"});
+    if(procs.isNull()) { return; }
+    if(not procs.isDictionary())
       {
-        //assert(subtype==TYPE_3);
+        LOG_S(WARNING) << "/CharProcs is not a dictionary";
+        return;
+      }
 
-        LOG_S(WARNING) << "found CharProcs: " << qpdf_char_procs.getTypeName();        
-
-        if(not qpdf_char_procs.isDictionary())
+    // Validation can repair a damaged stream before lazy glyph analysis reads
+    // it. Keep that ordering, but no unused description needs a token vector.
+    const auto discard_instruction = [](void*, qpdf_stream_instruction&) {};
+    for(const auto& key : procs.getKeys())
+      {
+        QPDFObjectHandle proc = procs.getKey(key);
+        if(not proc.isStream())
           {
-            LOG_S(WARNING) << "/CharProcs is not a dictionary";
-            return;
+            LOG_S(ERROR) << "not qpdf_obj.isStream()";
+            throw std::logic_error("not qpdf_obj.isStream()");
           }
 
-        for(auto& key : qpdf_char_procs.getKeys())
-          {
-            if(qpdf_char_procs.hasKey(key))
-              {
-                QPDFObjectHandle qpdf_char_proc = qpdf_char_procs.getKey(key);
-                //LOG_S(INFO) << "decoding: " << key << " -> " << qpdf_char_proc.getTypeName();
-
-                //assert(qpdf_char_proc.isStream());
-		if(not qpdf_char_proc.isStream())
-		  {
-		    std::string message = "not qpdf_obj.isStream()";
-		    LOG_S(ERROR) << message;
-		    throw std::logic_error(message);
-		  }
-		
-                std::vector<qpdf_stream_instruction> stream={};
-
-                // decode the stream
-                {
-                  qpdf_stream_decoder decoder(stream);
-                  decoder.decode(qpdf_char_proc);                  
-                  decoder.print();
-                }
-
-		LOG_S(INFO) << "key: " << key << " => #-streams: " << stream.size();
-		
-                // interprete the stream
-                {
-                  char_processor parser;
-                  parser.parse(stream);
-
-                  name_to_descr[key] = parser.parse(stream);
-		  //LOG_S(INFO) << key << ": " << name_to_descr.at(key);
-
-                  //parser.print();          
-                  //cmap_numb_to_char = parser.get();
-
-                  // FIXME: place-holder for now
-                  //char_description desc;
-                  //name_to_descr[key] = desc; 
-                }
-              }
-            else
-              {
-                LOG_S(WARNING) << "could not find key: " << key;
-              }            
-          }
-      }    
+        qpdf_stream_decoder decoder(discard_instruction, nullptr);
+        decoder.decode(proc);
+        LOG_S(INFO) << "CharProc " << key << ": "
+                    << decoder.get_objects_delivered() << " objects validated";
+      }
   }
 
   void pdf_resource<PAGE_FONT>::init_space_index()

@@ -111,11 +111,13 @@ TIMING_CHILDREN = {
     ],
     "decode_contents": [
         "content_decode_total",
+        "content_parse_interprete_total",
         "interprete_ops_total",
         "decode_xobjects_total",
         "decode_grphs_total",
         "decode_fonts_total",
         "parse_stream_total",
+        "form_parse_interprete_total",
         "do_form_machinery_total",
         "do_image_total",
     ],

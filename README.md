@@ -284,6 +284,10 @@ host. Run with `loglevel="info"` to see which file was chosen for each font.
 
 The tooling behind it lives under [`scripts/benchmarking/`](./scripts/benchmarking/README.md):
 
+Publish an existing run with `uv run python scripts/tools/update_performance_docs.py --performance-run-dir RUN`
+(preview), then add `--apply` after review. Results are organized by dataset and CPU/setup;
+publication enforces documentation and image size budgets before writing files.
+
 - [`scripts/benchmarking/run_performance_benchmarking.py`](./scripts/benchmarking/run_performance_benchmarking.py): measure — thread-scaling sweeps and the cross-package comparison
 - [`scripts/benchmarking/run_performance_eval.py`](./scripts/benchmarking/run_performance_eval.py): plot — per-page distributions, thread scaling, and per-package correlations
 - [`scripts/benchmarking/run_performance_analysis.py`](./scripts/benchmarking/run_performance_analysis.py): drill down — replay the slowest pages with C++ stage timings

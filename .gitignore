@@ -29,8 +29,10 @@ scratch*
 docs/performance_benchmarks/*.csv
 
 # Published benchmark figures and compact provenance.
-!docs/performance_benchmarks/2026-11-bo767-m3-max/*.png
-!docs/performance_benchmarks/2026-11-bo767-m3-max/provenance.json
+!docs/performance_benchmarks/*/*/assets/*.png
+!docs/performance_benchmarks/*/*/provenance.json
+!docs/performance_benchmarks/*/*/publication.json
+!scripts/tools/update_performance_docs_artifacts/performance_docs_limits.json
 
 # Created by https://www.toptal.com/developers/gitignore/api/python,macos,emacs,cmake,virtualenv
 # Edit at https://www.toptal.com/developers/gitignore?templates=python,macos,emacs,cmake,virtualenv

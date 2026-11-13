@@ -146,6 +146,7 @@ class BenchmarkCheckpoints:
         total_pages: int,
     ):
         self.directory = directory
+        self.identity = identity
         directory.mkdir(parents=True, exist_ok=True)
         self.provenance = provenance
         self.total_pages = total_pages
@@ -176,15 +177,22 @@ class BenchmarkCheckpoints:
                 and len(run.samples) == self.total_pages
                 and all(row.success for row in run.samples),
                 "run": {
-                    key: getattr(run, key)
-                    for key in (
-                        "backend",
-                        "task",
-                        "threads",
-                        "wall_s",
-                        "per_page_source",
-                        "doc_errors",
-                    )
+                    **{
+                        key: getattr(run, key)
+                        for key in (
+                            "backend",
+                            "task",
+                            "threads",
+                            "wall_s",
+                            "per_page_source",
+                            "doc_errors",
+                        )
+                    },
+                    **(
+                        {"memory": run.memory}
+                        if getattr(run, "memory", None) is not None
+                        else {}
+                    ),
                 },
             },
         )
@@ -204,6 +212,24 @@ class BenchmarkCheckpoints:
                 f"Checkpoint inputs, settings, source or packages changed: {json_path}; use a fresh output directory"
             )
         run = state["run"]
+        memory = run.get("memory")
+        requested = self.identity.get("memory", {"mode": "off"})
+        if requested["mode"] != "off" and memory is None:
+            return None
+        if memory is not None:
+            from _performance_memory import read_memory
+
+            relative = Path(memory["artifact"])
+            if relative.is_absolute() or ".." in relative.parts:
+                raise ValueError(f"Invalid checkpoint memory path: {json_path}")
+            artifact = self.directory.parent / relative
+            if not artifact.is_file() or digest(artifact) != memory["artifact_sha256"]:
+                return None
+            try:
+                if read_memory(artifact, requested) is None:
+                    return None
+            except (OSError, ValueError):
+                return None
         rows = read_page_rows(csv_path)
         if (run["backend"], run["task"], run["threads"]) != (backend, task, threads):
             raise ValueError(f"Checkpoint series identity mismatch: {json_path}")

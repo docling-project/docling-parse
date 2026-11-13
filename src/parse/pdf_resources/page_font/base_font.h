@@ -35,6 +35,12 @@ namespace pdflib
     std::array<double, 4> get_char_bbox(const uint32_t& numb);
     std::array<double, 4> get_char_bbox(const std::string& c);
 
+    // Lookups by glyph name, covering encoded and unencoded (`C -1`) glyphs;
+    // has_glyph_name() above guards get_glyph_width().
+    double get_glyph_width(const std::string& glyph_name);
+    bool has_glyph_bbox(const std::string& glyph_name);
+    std::array<double, 4> get_glyph_bbox(const std::string& glyph_name);
+
     std::string get_string(uint32_t numb);
 
     std::string to_utf8(uint32_t numb);
@@ -143,6 +149,24 @@ namespace pdflib
     LOG_S(ERROR) << "could not find width for '" << c << "'";
 
     return 500;
+  }
+
+  double base_font::get_glyph_width(const std::string& glyph_name)
+  {
+    initialise();
+    return name_to_width.at(glyph_name);
+  }
+
+  bool base_font::has_glyph_bbox(const std::string& glyph_name)
+  {
+    initialise();
+    return (name_to_bbox.count(glyph_name)==1);
+  }
+
+  std::array<double, 4> base_font::get_glyph_bbox(const std::string& glyph_name)
+  {
+    initialise();
+    return name_to_bbox.at(glyph_name);
   }
 
   bool base_font::has_char_bbox(const uint32_t& numb)
@@ -406,6 +430,10 @@ namespace pdflib
             if(not name.empty())
               {
                 name_to_width[name] = wval;
+                if(have_bbox)
+                  {
+                    name_to_bbox[name] = bbox;
+                  }
               }
 
             if(numb>=0 and name!="")
@@ -420,7 +448,6 @@ namespace pdflib
                 if(have_bbox)
                   {
                     numb_to_bbox[uc] = bbox;
-                    name_to_bbox[name] = bbox;
                     LOG_S(INFO) << "char-bbox: "
                                 << uc << "\t" << name << "\t["
                                 << bbox[0] << ", " << bbox[1] << ", "
