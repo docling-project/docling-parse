@@ -317,6 +317,7 @@ namespace pdflib
       int bits_per_component = 1;
       std::string color_space = "";
       std::vector<std::string> filters;
+      QPDFObjectHandle decode_parms = QPDFObjectHandle::newNull();
       bool decode_present = false;
       std::vector<double> decode_array;
       bool image_mask = false;
@@ -955,10 +956,10 @@ namespace pdflib
           }
         else if(key == "/DecodeParms")
           {
-            // Only /CCITTFaxDecode carries parameters we act on here. Written
-            // as an array they line up with the filters; the first dictionary
-            // is the one that can hold them, since every filter that may
-            // precede the codec takes none.
+            // Preserve the complete filter-aligned parameters for transport
+            // decoding, including Flate/LZW predictors. Extract CCITT's
+            // codec-specific settings separately below.
+            inline_image.decode_parms = value;
             QPDFObjectHandle parms = value;
             if(parms.isArray())
               {
@@ -1104,6 +1105,7 @@ namespace pdflib
       inline_image.bits_per_component,
       inline_image.color_space,
       inline_image.filters,
+      inline_image.decode_parms,
       inline_image.decode_present,
       inline_image.decode_array,
       inline_image.image_mask,
