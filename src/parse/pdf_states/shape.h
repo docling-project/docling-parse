@@ -119,7 +119,7 @@ namespace pdflib
     void register_paths(shape_paint_mode paint_mode, shape_fill_rule fill_rule);
 
     // Consumes a pending W/W* clip by capturing the current path into
-    // `clippings`. Called from n() (shapes still in user space) and from
+    // shared history. Called from n() (shapes still in user space) and from
     // register_paths() (shapes already transformed to page space) — the
     // flag prevents double application of the CTM on the `W f`/`W S` path.
     void capture_pending_clip(bool already_transformed);
@@ -167,9 +167,7 @@ namespace pdflib
     pdf_render_instructions& instructions;
     
     page_item<PAGE_SHAPES> curr_shapes;
-    page_item<PAGE_SHAPES> clippings;
-    // group id of each entry in `clippings`: one W/W* capture = one group
-    std::vector<int> clipping_groups;
+    clip_state_instruction clipping_state;
     int next_clip_group = 0;
 
     // Box of the region the clip in force admits. Every W/W* capture (a clip
@@ -202,7 +200,7 @@ namespace pdflib
     instructions(instructions_),
     
     curr_shapes(),
-    clippings(),
+    clipping_state(),
 
     clipping_path_mode(NO_CLIPPING_PATH_RULE),
     clipping_path_pending(false)
@@ -235,8 +233,7 @@ namespace pdflib
   pdf_state<SHAPE>& pdf_state<SHAPE>::operator=(const pdf_state<SHAPE>& other)
   {
     this->curr_shapes = other.curr_shapes;
-    this->clippings  = other.clippings;
-    this->clipping_groups = other.clipping_groups;
+    this->clipping_state = other.clipping_state;
     this->next_clip_group = other.next_clip_group;
     this->has_clip_bbox = other.has_clip_bbox;
     this->clip_bbox = other.clip_bbox;
@@ -480,7 +477,7 @@ namespace pdflib
         return clip_state_instruction();
       }
 
-    if(clipping_path_mode == NO_CLIPPING_PATH_RULE or clippings.size() == 0)
+    if(clipping_path_mode == NO_CLIPPING_PATH_RULE or clipping_state.get_paths().empty())
       {
         return clip_state_instruction();
       }
@@ -495,19 +492,7 @@ namespace pdflib
         rule = CLIP_RULE_EVEN_ODD;
       }
 
-    std::vector<clip_path_instruction> paths;
-    for(int l = 0; l < clippings.size(); l++)
-      {
-        const auto& shape = clippings[l];
-        paths.emplace_back(shape.get_x(),
-                           shape.get_y(),
-                           shape.get_closing_type(),
-                           shape.get_shape_type(),
-                           l < static_cast<int>(clipping_groups.size())
-                             ? clipping_groups[l] : 0);
-      }
-
-    return clip_state_instruction(rule, std::move(paths));
+    return clipping_state.with_rule(rule);
   }
 
   bool pdf_state<SHAPE>::get_clip_bbox(std::array<double, 4>& bbox) const
@@ -584,6 +569,7 @@ namespace pdflib
 
     // Every subpath of this capture belongs to one clip operation.
     const int group_id = next_clip_group++;
+    std::vector<clip_path_instruction> capture;
 
     // The capture admits the union of its subpaths: one box over all their
     // points.
@@ -626,11 +612,18 @@ namespace pdflib
                 group_box[3] = std::max(group_box[3], ys[i]);
               }
 
-            clippings.push_back(shape);
-            clipping_groups.push_back(group_id);
+            capture.emplace_back(shape.get_x(), shape.get_y(),
+                                 shape.get_closing_type(), shape.get_shape_type(), group_id);
           }
         // 0/1-point subpaths are the expected continuation left behind by
         // the `h` operator and are dropped silently
+      }
+
+    if(not capture.empty())
+      {
+        const clip_rule rule = clipping_path_mode == EVEN_ODD_RULE
+          ? CLIP_RULE_EVEN_ODD : CLIP_RULE_NONZERO;
+        clipping_state = clipping_state.appended(rule, std::move(capture));
       }
 
     if(has_group_box)
@@ -797,7 +790,7 @@ namespace pdflib
   void pdf_state<SHAPE>::register_paths(shape_paint_mode paint_mode,
                                         shape_fill_rule fill_rule)
   {
-    // NOTE: the clip paths in `clippings` are already in page space (they
+    // NOTE: the captured clip paths are already in page space (they
     // are transformed once when captured); only the current path gets the
     // CTM applied here.
 
