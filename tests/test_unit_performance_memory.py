@@ -8,6 +8,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from textwrap import dedent
 from types import SimpleNamespace
 
 import pytest
@@ -47,14 +48,33 @@ def test_invalid_environment_is_rejected(monkeypatch, variable, value):
 
 @pytest.mark.skipif(not _SUPPORTED, reason="OS RSS collection supports macOS/Linux")
 def test_peak_belongs_to_each_fresh_child(tmp_path: Path):
+    # Linux can retain pre-exec RSS inherited from the spawning process. Keep
+    # pytest's imports out of the measured children's startup high-water mark.
+    # Both children still share one monitor so a cumulative RUSAGE_CHILDREN
+    # measurement would incorrectly retain the large child's peak for the small.
+    monitor = dedent("""\
+        import os
+        import sys
+        from pathlib import Path
+
+        sys.path.insert(0, sys.argv[1])
+        from _performance_memory import run_measured
+
+        output = Path(sys.argv[2])
+        command = [sys.executable, "-c", "import sys; b=bytearray(int(sys.argv[1]))"]
+        for name, size in (("large", 64 * 2**20), ("small", 1024)):
+            run_measured([*command, str(size)], output / (name + ".json"), mode="peak")
+        print(os.getpid())
+        """)
+    monitor_pid = int(
+        subprocess.check_output(
+            [sys.executable, "-c", monitor, str(_SCRIPTS), str(tmp_path)], text=True
+        )
+    )
+    large = _MEMORY.read_memory(tmp_path / "large.json")
+    small = _MEMORY.read_memory(tmp_path / "small.json")
+    assert len({large["pid"], small["pid"], monitor_pid, os.getpid()}) == 4
     command = [sys.executable, "-c", "import sys; b=bytearray(int(sys.argv[1]))"]
-    large = _MEMORY.run_measured(
-        [*command, str(64 * 2**20)], tmp_path / "large.json", mode="peak"
-    )
-    small = _MEMORY.run_measured(
-        [*command, "1024"], tmp_path / "small.json", mode="peak"
-    )
-    assert large["pid"] != small["pid"] != os.getpid()
     assert large["peak_rss_bytes"] > small["peak_rss_bytes"] + 32 * 2**20
     assert _MEMORY.read_memory(tmp_path / "small.json") == small
     with pytest.raises(ValueError, match="exists"):
