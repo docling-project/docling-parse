@@ -247,6 +247,14 @@ namespace pdflib
     bool shape_clip_empty_ = false;
     bool shape_clip_valid_ = false;
 
+    mutable clip_path_cursor clip_cursor_;
+
+    const clip_path_cursor& prepared_clip_paths(const clip_state_instruction& state) const
+    {
+      clip_cursor_.prepare(state.get_paths());
+      return clip_cursor_;
+    }
+
     // Guards the one-shot canvas rotation, so that repeated canvas access
     // (get_canvas() followed by save(), for instance) rotates only once.
     mutable bool rotation_applied_ = false;
@@ -1085,7 +1093,7 @@ namespace pdflib
                                 BLRect& rect) const
     {
       std::unordered_map<int, BLRect> group_bboxes;
-      for(const auto& clip_path : clip_state.get_paths())
+      for(const auto& clip_path : prepared_clip_paths(clip_state))
         {
           BLRect bbox;
           if(not clip_path_canvas_bbox(clip_path, bbox)) { continue; }
@@ -1124,17 +1132,20 @@ namespace pdflib
                                 const clip_state_instruction& b)
     {
       if(a.get_rule() != b.get_rule()) { return false; }
+      if(a.shares_history(b)) { return true; }
       const auto& pa = a.get_paths();
       const auto& pb = b.get_paths();
       if(pa.size() != pb.size()) { return false; }
-      for(size_t i = 0; i < pa.size(); i++)
+      auto ia = pa.begin();
+      for(const auto& path : pb)
         {
-          if(pa[i].get_clip_group() != pb[i].get_clip_group() or
-             pa[i].get_x() != pb[i].get_x() or
-             pa[i].get_y() != pb[i].get_y())
+          if(ia->get_clip_group() != path.get_clip_group() or
+             ia->get_x() != path.get_x() or
+             ia->get_y() != path.get_y())
             {
               return false;
             }
+          ++ia;
         }
       return true;
     }
@@ -1146,18 +1157,13 @@ namespace pdflib
     {
       if(not clip_state.has_clip()) { return false; }
 
-      std::unordered_map<int, int> group_sizes;
-      for(const auto& clip_path : clip_state.get_paths())
-        {
-          group_sizes[clip_path.get_clip_group()]++;
-        }
-
-      for(const auto& clip_path : clip_state.get_paths())
+      const auto& paths = prepared_clip_paths(clip_state);
+      for(const auto& clip_path : paths)
         {
           // Subpaths of one W/W* operation only mean anything together (one
           // path under the clip's fill rule), which clip_to_rect cannot
           // express even when each subpath happens to be rectangular.
-          if(group_sizes[clip_path.get_clip_group()] > 1) { return true; }
+          if(paths.group_size(clip_path.get_clip_group()) > 1) { return true; }
 
           BLRect unused;
           if(not get_axis_aligned_clip_rect(clip_path, unused)) { return true; }
@@ -1236,11 +1242,7 @@ namespace pdflib
       // art, a text-shaped clip). Only DIFFERENT captures intersect.
       // Intersecting the subpaths individually made any such stencil empty,
       // and everything filled through it vanished.
-      std::unordered_map<int, int> group_sizes;
-      for(const auto& clip_path : clip_state.get_paths())
-        {
-          group_sizes[clip_path.get_clip_group()]++;
-        }
+      const auto& paths = prepared_clip_paths(clip_state);
 
       // A group goes through the mask when it has a curved path or more than
       // one subpath (a union of rectangles is not a context clip either).
@@ -1249,12 +1251,12 @@ namespace pdflib
       // caller painted the shape unclipped.
       std::unordered_map<int, BLRect> group_bboxes;
       std::unordered_map<int, bool> group_needs_mask;
-      for(const auto& clip_path : clip_state.get_paths())
+      for(const auto& clip_path : paths)
         {
           BLRect rect;
           const bool is_rect = get_axis_aligned_clip_rect(clip_path, rect);
           const int group = clip_path.get_clip_group();
-          if(not is_rect or group_sizes[group] > 1) { group_needs_mask[group] = true; }
+          if(not is_rect or paths.group_size(group) > 1) { group_needs_mask[group] = true; }
 
           BLRect bbox;
           if(clip_path_canvas_bbox(clip_path, bbox))
@@ -1289,7 +1291,7 @@ namespace pdflib
 
       std::vector<std::pair<int, BLPath> > group_paths;
       [[maybe_unused]] size_t clip_index = 0;
-      for(const auto& clip_path : clip_state.get_paths())
+      for(const auto& clip_path : paths)
         {
           BLRect unused;
           const bool is_rect = get_axis_aligned_clip_rect(clip_path, unused);
@@ -1300,16 +1302,7 @@ namespace pdflib
 
           // rect paths that are alone in their group were already applied
           // through the context clip
-          bool grouped = false;
-          for(const auto& other : clip_state.get_paths())
-            {
-              if(&other != &clip_path and
-                 other.get_clip_group() == clip_path.get_clip_group())
-                {
-                  grouped = true;
-                  break;
-                }
-            }
+          const bool grouped = paths.group_size(clip_path.get_clip_group()) > 1;
           if(is_rect and not grouped)
             {
               // LOG_S(INFO) << "build_clip_mask: path " << clip_index
@@ -1463,18 +1456,14 @@ namespace pdflib
           return CLIP_NONE;
         }
 
-      std::unordered_map<int, int> group_sizes;
-      for(const auto& clip_path : clip_state.get_paths())
-        {
-          group_sizes[clip_path.get_clip_group()]++;
-        }
+      const auto& paths = prepared_clip_paths(clip_state);
 
       bool applied_clip = false;
-      for(const auto& clip_path : clip_state.get_paths())
+      for(const auto& clip_path : paths)
         {
           // A subpath that shares its W/W* capture with others is not a clip
           // on its own; the whole group is handled through the coverage mask.
-          if(group_sizes[clip_path.get_clip_group()] > 1) { continue; }
+          if(paths.group_size(clip_path.get_clip_group()) > 1) { continue; }
 
           BLRect clip_rect;
           if(get_axis_aligned_clip_rect(clip_path, clip_rect))
@@ -1554,7 +1543,7 @@ namespace pdflib
     {
       shading_clip result;
 
-      for(const auto& clip_path : clip_state.get_paths())
+      for(const auto& clip_path : prepared_clip_paths(clip_state))
         {
           BLRect clip_rect;
           if(get_axis_aligned_clip_rect(clip_path, clip_rect))
@@ -2156,6 +2145,8 @@ namespace pdflib
     utils::scoped_timer phase_timer(timings_, pdf_timings::KEY_RENDER_SET_SIZE);
 
     finish_page_context();
+
+    clip_cursor_.reset();
 
     const auto& bbox = instr.crop_bbox;
     const double pdf_w = bbox[2] - bbox[0];

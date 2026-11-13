@@ -53,3 +53,30 @@ def test_damaged_stream_does_not_lose_the_intact_one():
     )
 
     assert lines == ["intact"]
+
+
+def test_operands_split_across_streams_reach_their_operator():
+    lines = _lines(
+        content_stream("BT /F1 12 Tf 20 250 Td (before) Tj 0 -20"),
+        content_stream("Td (after) Tj ET"),
+    )
+
+    assert lines == ["before", "after"]
+
+
+def test_damaged_middle_stream_keeps_prefix_and_suffix_exactly_once():
+    pdf = build_pdf(
+        [
+            "<< /Type /Catalog /Pages 2 0 R >>",
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300]"
+            " /Resources << /Font << /F1 7 0 R >> >>"
+            " /Contents [4 0 R 5 0 R 6 0 R] >>",
+            content_stream("BT /F1 12 Tf 20 250 Td (before) Tj ET"),
+            stream_object("/Filter /FlateDecode", b"this is not zlib data"),
+            content_stream("BT /F1 12 Tf 20 200 Td (after) Tj ET"),
+            FONT,
+        ]
+    )
+
+    assert [cell.text for cell in parse_page(pdf).textline_cells] == ["before", "after"]

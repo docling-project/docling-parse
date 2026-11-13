@@ -1,3 +1,20 @@
+## [v7.26.0](https://github.com/docling-project/docling-parse/releases/tag/v7.26.0) - 2026-11-13
+
+### Feature
+
+* Improving memory footprint of docling ([#459](https://github.com/docling-project/docling-parse/issues/459)) ([`2f687d8`](https://github.com/docling-project/docling-parse/commit/2f687d82b946dfff9c8b2bd93de0ddae1ad5315b))
+* **cells:** Keep text clipped to a table cell in its cell ([#443](https://github.com/docling-project/docling-parse/issues/443)) ([`286f2d0`](https://github.com/docling-project/docling-parse/commit/286f2d0b70f1f618a143794498184ceba76580ef))
+
+### Fix
+
+* Follow a declared base encoding where a font-specific font has its glyph ([#370](https://github.com/docling-project/docling-parse/issues/370)) ([`7cf06e6`](https://github.com/docling-project/docling-parse/commit/7cf06e6bc01daffa4b80e92a92ca428b32d8ebbc))
+* Remove overprinted cells that are not adjacent in the content stream ([#367](https://github.com/docling-project/docling-parse/issues/367)) ([`511c57a`](https://github.com/docling-project/docling-parse/commit/511c57a87e4cc72a25d6ac613a095839288ba34e))
+* Honour declared MacRomanEncoding for FontSpecific Latin text fonts ([#453](https://github.com/docling-project/docling-parse/issues/453)) ([`56341b1`](https://github.com/docling-project/docling-parse/commit/56341b17c22fb6b579171bc0dfd443ea485944f6))
+* Tokenize the content streams of a page as one stream ([#451](https://github.com/docling-project/docling-parse/issues/451)) ([`fb80c34`](https://github.com/docling-project/docling-parse/commit/fb80c341bd0104b02c7f21283de6e2d4f20ea3be))
+* Dash pattern replacement ([#452](https://github.com/docling-project/docling-parse/issues/452)) ([`9b09a05`](https://github.com/docling-project/docling-parse/commit/9b09a057722edb56ad55bd9a6767a3ae4960eebd))
+* **jbig2:** Restore pdfium's Group 4 decoder for MMR-coded regions ([#444](https://github.com/docling-project/docling-parse/issues/444)) ([`4c941bc`](https://github.com/docling-project/docling-parse/commit/4c941bc9df4a6fdb179b993408a97e85bdfd9c93))
+* Report the page's own trim, bleed and art boxes in the page geometry ([#446](https://github.com/docling-project/docling-parse/issues/446)) ([`054b1b9`](https://github.com/docling-project/docling-parse/commit/054b1b95d9f5dd62a3e330642c5f4774bdd5c9aa))
+
 ## [v7.25.0](https://github.com/docling-project/docling-parse/releases/tag/v7.25.0) - 2026-11-09
 
 ### Feature

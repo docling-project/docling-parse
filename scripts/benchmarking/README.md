@@ -18,7 +18,7 @@ It does not update the documentation. Full runs can take hours.
 |---|---|---|---|
 | `refresh_performance_benchmarks.sh` | Build and run the publication workflow | Pinned HF dataset; environment settings shown by `--help` | Raw measurements, provenance, generated report and PNGs |
 | `run_performance_report.py` | Validate and summarize a launcher bundle | Bundle containing `metadata.json` | `report/summary.md`, CSV tables, PNGs |
-| `recover_performance_benchmarks.py` | Reuse completed core results and recollect comparisons | Existing bundle; normally invoked through `RECOVER_FROM` | New bundle with original core artifacts and separate comparison provenance |
+| `recover_performance_benchmarks.py` | Resume missing configurations and reuse validated results | Existing bundle; normally invoked through `RECOVER_FROM` | New bundle with linked completed artifacts and resumed results |
 | `run_performance_benchmarking_with_docling_settings.py` | Standalone backend replay | PDFs or pinned HF revision | `report.json` and page metadata JSONL |
 | `run_performance_benchmarking.py` | Python API scaling and cross-package measurement | PDFs or HF dataset | Console tables and per-page CSV |
 | `run_performance_eval.py` | Explore Python comparison page timings | Comparison per-page CSV | Histograms, scaling/correlation PNGs, document statistics |
@@ -114,6 +114,96 @@ The historical Bo767 snapshot `c684df54de2081a6de1192cee12713b54759c6bb`
 contained 753 PDFs / 54,584 pages; its existing reports retain those inputs.
 Compare runs with matching corpus revisions and file identities.
 
+## Optional process memory measurements
+
+Memory collection is opt-in on macOS and Linux. `off` retains the existing
+execution path; `peak` adds each backend process's OS RSS high-water mark;
+`profile` also samples current RSS from a separate monitor. Both modes work for
+native scaling, PDFium/Docling settings replay, and cross-package comparisons.
+
+```sh
+# OS peaks, without polling for an RSS timeline.
+REPEATS=3 THREADS=1,4,8,12 RUN_COMPARISON=0 DATASET=bo20 \
+  bash scripts/benchmarking/refresh_performance_benchmarks.sh --memory-mode peak
+
+# OS peaks plus current RSS samples, nominally every 50 ms.
+REPEATS=3 THREADS=1,4,8,12 RUN_COMPARISON=0 DATASET=bo20 \
+  bash scripts/benchmarking/refresh_performance_benchmarks.sh \
+    --memory-mode profile --memory-interval-ms 50
+```
+
+`MEMORY_MODE=peak|profile|off` and `MEMORY_INTERVAL_MS=50` are equivalent
+environment settings; explicit CLI values take precedence. The interval must
+be a positive integer. Shorter intervals add monitoring work. Collection is
+optional because its overhead should be measured on the actual workload.
+Use matching settings and several repetitions for timing comparisons.
+
+Peaks cover one process and all its threads over its entire lifetime, including
+imports, PDF loading, result collection and teardown. They exclude the monitor,
+`uv`, and log piping. They are RSS, not allocator/heap usage or the sum of a
+process tree. macOS uses `wait4.ru_maxrss` in bytes; Linux uses the same field
+converted from KiB. Existing backend timing boundaries are preserved, so the
+peak's lifetime is broader than the reported native processing timer. The
+monitor's elapsed time is recorded separately and includes polling delay.
+
+Current RSS comes from macOS `proc_pidinfo` or Linux `/proc/PID/statm` in the
+external monitor, so native code holding Python's GIL does not stop sampling.
+Samples use a monotonic process clock; they include startup and are not aligned
+to page events. The OS peak and sampled maximum are separate values: polling
+can miss short spikes. A sufficiently short run may produce no samples while
+still producing an OS peak. Repeated traces are plotted independently.
+
+With memory enabled, comparison backend/thread series each run in a fresh
+Python process. With memory off, comparisons retain their historical shared
+process. This changes cache isolation as well as enabling meaningful individual
+peaks; do not attribute timing differences between these modes solely to the
+sampler. The standalone comparison runner accepts the same two flags. Its
+optional sequential parse baseline is timing-only; the measured series are
+the registered reference backends and threaded Docling configurations.
+
+Outputs include:
+
+- Native/replay `*.memory.json` sidecars with PID, executed command, OS peak,
+  measurement scope, completion status, method and sample metadata.
+- Profile `*.memory.rss.csv` files with elapsed seconds, RSS bytes and PID.
+- Comparison `memory/` artifacts alongside series checkpoints, including
+  worker requests/results and the corresponding memory sidecars.
+- `report/memory_runs.csv`, `memory_summary.csv`, peak-versus-threads figures,
+  and per-series RSS timeline figures. In `report/summary.md`, the `Parallel
+  Scaling` section contains native and Python scaling tables, followed by
+  `Process Memory` with peak-memory tables and figures. Elapsed-time RSS plots
+  are in `report/memory_traces.md`, linked from the summary with a return link.
+
+Timing tables use compact task labels, with full descriptions listed once below
+each table. Peak-RSS and throughput axes start at `(0, 0)`. Throughput plots
+retain measured points and add dashed ideal-scaling guides: measured one-thread
+throughput multiplied by thread count. Guides run from the origin to the largest
+measured thread count for backends measured at one thread and additional counts.
+
+Missing observations are reported as unavailable. Older replay results already
+contain a process peak; reports expose it as `existing`, even with collection
+off. This does not manufacture peaks for native/other historical runs or create
+a historical timeline. OS peaks remain available in failed-run artifacts for
+diagnosis, but failed measurements cannot become successful report rows.
+Checkpoint reuse checks memory settings and hashes of sidecars and timelines.
+
+Recovery accepts the same flags:
+
+```sh
+uv run --no-sync python scripts/benchmarking/recover_performance_benchmarks.py \
+  /absolute/path/to/completed-or-interrupted-bundle \
+  --memory-mode profile --memory-interval-ms 50
+```
+
+Recovery retains the original native/replay results and their original memory
+settings; it measures only new comparison series with the requested settings.
+It cannot add memory observations to earlier core runs. Compatible checkpoints
+and their memory artifacts are copied together. Changed settings or missing
+artifacts cause affected comparisons to be recollected. Existing strict
+core-binary/package provenance checks still apply; use a fresh refresh to
+measure a newly rebuilt extension. Report regeneration reads saved artifacts
+and does not rerun benchmarks.
+
 ## Reference preflight, checkpoints and recovery
 
 The perf dependency group pins **PyMuPDF 1.27.2.3**. Version 1.28.2 aborts in
@@ -139,27 +229,43 @@ RECOVER_FROM=/absolute/path/to/scratch-performance-refresh-RUN \
   bash scripts/benchmarking/refresh_performance_benchmarks.sh
 ```
 
-Recovery creates a **new** bundle using the dataset, repetitions and thread
-counts from the source bundle. It synchronizes the pinned dependencies while
-retaining the installed local project, checks the recorded machine, Python, core
-packages, native binary/extension hashes and QPDF version, then validates the
-complete core results and dataset hashes. It links the original native/replay
-artifacts, so **keep the original bundle**. It does not rebuild native targets.
-If scripts were committed during collection, replay provenance is accepted only
-when the commit patch exactly matches the recorded build diff and the replay
-script hash matches that commit. The report explains this equivalence.
+Recovery creates a **new** bundle using the source dataset/revision, repetitions,
+thread counts, workload settings and comparison enablement. `REPEATS`, `THREADS`,
+`DATASET` and `RUN_COMPARISON` environment settings do not override the source.
+Memory mode and sampling interval are inherited too; you do not need to repeat
+`--memory-mode profile --memory-interval-ms 50` for an originally profiled run.
 
-Both comparison modes are recollected under the current reference versions.
-Compatible checkpoints from a previous recovery are copied and reused; a
-reference-version or source change prevents checkpoint reuse. The original
-metadata is retained as `original-metadata.json`. `comparison_provenance` records
-the new environment separately, and report tables show package versions. The
-completed original parse comparison remains in its original bundle.
+Each native profile/thread/repetition and each replay backend/thread/repetition
+is validated independently. Completed configurations are linked unchanged;
+missing or incomplete configurations restart from their beginning. Partial
+page-level timings are never combined with a fresh measurement. The original
+bundle is untouched: **keep it**, including any earlier bundles it links to.
+Recovery prints which configurations it will reuse and which it must run.
 
-If recovery is interrupted, use the newly printed recovery directory as
-`RECOVER_FROM` to retain compatible completed comparison checkpoints.
-`OUT` may select a new output directory; `BUILD_MODE=clean` is incompatible with
-recovery because the recorded core binaries must remain unchanged.
+Recovery synchronizes dependencies while retaining the installed local project;
+it does not rebuild native targets. Machine, Python, core packages, native
+binary/extension hashes, QPDF and dataset hashes must match. Resuming core work
+also requires unchanged measurement/monitor scripts and recorded runtime
+settings (including fallback fonts). Explicit memory flags must match original
+core instrumentation while core work remains incomplete. Once core work is
+complete, explicit memory flags may change comparison instrumentation.
+
+The original source/build identity remains intact. Resumed replay measurements
+have artifact-specific source provenance in `recovered_replay_provenance`, so
+unrelated documentation/tooling edits do not invalidate resumed measurements.
+Changed measurement scripts still require a new full run. Mid-run commits of
+original changes retain the report's exact-patch equivalence validation.
+
+Cross-package comparisons run only if the source requested them. When enabled,
+compatible completed checkpoints are reused; changed source/reference versions
+or memory settings cause affected comparisons to be recollected. Original
+metadata is retained as `original-metadata.json`, and `comparison_provenance`
+records the environment for recovered comparisons separately.
+
+If recovery is interrupted, use its newly printed recovery directory as
+`RECOVER_FROM` so completed resumed work is retained. `OUT` may select a new output
+directory; `BUILD_MODE=clean` is incompatible with recovery because recorded core
+binaries must remain unchanged.
 
 You can also inspect the completed core results independently:
 
@@ -339,3 +445,51 @@ Outputs include `render_quality.csv`, `text_quality.csv`, render comparison
 panels and quality-distribution plots. Quality evidence is separate from the
 performance refresh; the launcher's damaged-page preflight is not a complete
 render-quality regression run.
+
+## Publish performance documentation
+
+Publish a completed launcher/recovery bundle without rerunning measurements:
+
+```sh
+uv run python scripts/tools/update_performance_docs.py --performance-run-dir scratch-performance-refresh-RUN
+uv run python scripts/tools/update_performance_docs.py --performance-run-dir scratch-performance-refresh-RUN --apply
+python3 scripts/tools/update_performance_docs.py --check
+```
+
+Preview is the default: it prints Markdown diffs, file byte sizes and total/net size.
+The publisher validates raw results through `ReportInputs`, then stages summary
+plots and tables through the report generator's structured publication interface.
+It does not copy or parse an existing `report/summary.md`. A bundle's original
+linked recovery artifacts and dataset files must remain available as required by
+report validation. No builds, benchmark reruns or downloads occur.
+
+Results live at `docs/performance_benchmarks/<dataset>/<setup>/index.md`. The setup
+is inferred from CPU, architecture, RAM and OS. Use `--setup-id lowercase-slug` for
+older bundles with missing machine metadata. An explicit ID cannot overwrite a
+publication recording a different machine. `--allow-older` explicitly permits an
+older run to replace a newer one; collection order uses the launcher timestamp in
+the directory name, falling back to metadata file modification time for custom names.
+Thread sweep, dataset revision, workload settings and package versions are recorded
+in each publication rather than silently merged with prior measurements.
+
+New pages use `scripts/tools/update_performance_docs_artifacts/performance_page_template.md`. Sections between
+`<!-- performance:NAME:start -->` and `<!-- performance:NAME:end -->` are generated;
+text outside markers is retained. Supported slots are `title`, `setup`, `interpretation`,
+`native`, `replay`, `comparison`, `memory` and `provenance`; the entry page uses
+`availability`. Absent slots are skipped with a message; malformed/duplicate markers
+fail. Omitted comparisons/memory are labeled not collected; an incomplete expected
+suite fails validation. Updating a migrated historical snapshot replaces it with
+the current template because it predates placeholders.
+
+Only images referenced by a result page enter the publication. Peak-memory summaries
+are included; diagnostic RSS timelines, raw CSV/JSONL and logs remain local.
+`publication.json` records owned files and hashes; obsolete owned assets are removed
+on replacement, and unowned files are preserved. Compact provenance records input
+identity, source/build hashes, packages, workload settings and memory methods.
+
+Hard limits live in `scripts/tools/update_performance_docs_artifacts/performance_docs_limits.json`: 100 KiB per
+Markdown/JSON, 500 KiB per image, 5 MiB per publication and 25 MiB across the entire
+performance tree plus entry page. All limits and links are checked against staged
+output before writing. `--check` requires only the Python standard library and
+runs in CI; it also detects modified or missing generated files. Limits have no
+CLI bypass: change the reviewed configuration when policy needs to change.

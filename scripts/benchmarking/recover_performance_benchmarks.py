@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reuse validated core results and recollect comparisons with explicit provenance."""
+"""Resume missing configurations, reusing validated results in a new bundle."""
 
 from __future__ import annotations
 
@@ -13,10 +13,12 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from _performance_memory import add_memory_arguments
 from _performance_runtime import (
     ROOT,
     atomic_json,
@@ -73,54 +75,275 @@ def validate_environment(metadata: dict[str, Any], provenance: dict[str, Any]) -
             )
 
 
+@dataclass(frozen=True)
+class CoreJob:
+    workload: str
+    profile: str
+    threads: int
+    repetition: int
+    artifact: Path
+
+    @property
+    def key(self) -> tuple:
+        backend = (
+            "docling-parse"
+            if self.workload == "native"
+            else ("pdfium" if self.profile == "pdfium" else "threaded")
+        )
+        task = self.profile if self.workload == "native" else "render"
+        return ((self.workload, backend, task, self.threads), self.repetition)
+
+
+def core_jobs(metadata: dict[str, Any]) -> list[CoreJob]:
+    jobs = []
+    for repetition in range(1, metadata["repeats"] + 1):
+        for profile in metadata.get("native_profiles", {"render": {}}):
+            for threads in metadata["threads"]:
+                parent = (
+                    Path("native") / profile if profile != "render" else Path("native")
+                )
+                jobs.append(
+                    CoreJob(
+                        "native",
+                        profile,
+                        threads,
+                        repetition,
+                        parent / f"r{repetition}/t{threads}.csv",
+                    )
+                )
+        for backend, threads in [
+            ("pdfium", 1),
+            *(("threaded", t) for t in metadata["threads"]),
+        ]:
+            name = "pdfium" if backend == "pdfium" else f"t{threads}"
+            jobs.append(
+                CoreJob(
+                    "replay",
+                    backend,
+                    threads,
+                    repetition,
+                    Path(f"replay/r{repetition}/{name}/report.json"),
+                )
+            )
+    return jobs
+
+
+def inspect_job(inputs: ReportInputs, job: CoreJob) -> bool:
+    path = inputs.root / job.artifact
+    if not path.is_file():
+        print(f"Pending: {job.artifact} (no completed artifact)", flush=True)
+        return False
+    try:
+        values = (
+            inputs.native(path) if job.workload == "native" else inputs.replay(path)
+        )
+        if [(m.group, m.repetition) for m in values] != [job.key] or any(
+            m.wall_s <= 0 for m in values
+        ):
+            raise ValueError("Unexpected configuration or nonpositive wall time")
+    except (ValueError, KeyError, OSError, TypeError) as exc:
+        # Source changes are a provenance violation, not an interrupted measurement.
+        if any(
+            word in str(exc)
+            for word in ("source revision", "source diff", "script hash")
+        ):
+            raise
+        print(f"Pending: {job.artifact} (incomplete/invalid: {exc})", flush=True)
+        return False
+    print(f"Reuse: {job.artifact}", flush=True)
+    return True
+
+
+def link_job(source: Path, output: Path, job: CoreJob) -> None:
+    artifact = source / job.artifact
+    if job.workload == "replay":
+        candidates = [
+            artifact.parent,
+            *artifact.parent.parent.glob(artifact.parent.name + ".memory.*"),
+        ]
+    else:
+        candidates = list(artifact.parent.glob(artifact.stem + ".*"))
+    for path in candidates:
+        dest = output / path.relative_to(source)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.symlink_to(path.resolve(), target_is_directory=path.is_dir())
+
+
+def validate_resume_scripts(metadata: dict[str, Any], jobs: list[CoreJob]) -> None:
+    names = set()
+    if any(j.workload == "replay" for j in jobs):
+        names.add("run_performance_benchmarking_with_docling_settings.py")
+    if jobs and metadata.get("memory_collection", {}).get("mode", "off") != "off":
+        names.add("_performance_memory.py")
+    for name in names:
+        recorded = metadata.get("script_sha256", {}).get("scripts/benchmarking/" + name)
+        if recorded is None or digest(ROOT / "scripts/benchmarking" / name) != recorded:
+            raise ValueError(
+                f"Cannot resume core measurements: runner {name} changed or its original hash is unavailable"
+            )
+    for key, value in metadata.get("environment", {}).items():
+        if key != "SDKROOT" and os.environ.get(key) != value:
+            raise ValueError(
+                f"Cannot resume core measurements: environment {key} changed"
+            )
+
+
 def prepare_recovery(
-    source: Path, output: Path, provenance: dict[str, Any]
+    source: Path,
+    output: Path,
+    provenance: dict[str, Any],
+    memory: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     inputs = ReportInputs(source)
     metadata = copy.deepcopy(inputs.metadata)
     validate_environment(metadata, provenance)
-    print("Validating completed native and Python replay results ...", flush=True)
-    measurements = inputs.load(include_comparison=False)
-    print(f"Validated {len(measurements)} reusable core measurements.", flush=True)
+    jobs = core_jobs(metadata)
+    print("Inspecting native and Python replay configurations ...", flush=True)
+    complete = [job for job in jobs if inspect_job(inputs, job)]
+    pending = [job for job in jobs if job not in complete]
+    if pending:
+        validate_resume_scripts(metadata, pending)
+        if memory is not None and memory != metadata.get(
+            "memory_collection", {"mode": "off", "interval_ms": None}
+        ):
+            raise ValueError(
+                "Cannot change memory settings while resuming core measurements; omit flags to inherit the original settings"
+            )
+    print(
+        f"Recovery plan: {len(complete)} core configurations reused, {len(pending)} to run.",
+        flush=True,
+    )
     print("Verifying original dataset hashes ...", flush=True)
     for item in metadata["dataset"]["files"]:
         if digest(Path(item["path"])) != item["sha256"]:
             raise ValueError(
                 f"Recovery dataset differs from original manifest: {item['name']}"
             )
-    preflight = reference_preflight(metadata)
-    for name in ("native", "replay"):
-        (output / name).symlink_to((source / name).resolve(), target_is_directory=True)
+    if metadata["comparison"]:
+        metadata["reference_preflight"] = reference_preflight(metadata)
     shutil.copy2(source / "metadata.json", output / "original-metadata.json")
     for name in ("CMakeCache.txt", "native-flags.make"):
         if (source / name).is_file():
             shutil.copy2(source / name, output / name)
-    old_provenance = metadata.get("comparison_provenance")
-    if old_provenance == provenance:
+    for job in complete:
+        link_job(source, output, job)
+    # Artifact-specific provenance keeps old replay source identities intact.
+    recovered = metadata.setdefault("recovered_replay_provenance", {})
+    for job in pending:
+        if job.workload == "replay":
+            recovered[str(job.artifact)] = provenance
+    compatible_memory = memory is None or metadata.get("comparison_memory") == memory
+    if (
+        metadata["comparison"]
+        and metadata.get("comparison_provenance") == provenance
+        and compatible_memory
+    ):
         for directory in sorted((source / "comparison").glob("r*/*/checkpoints")):
             target = output / directory.relative_to(source)
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copytree(directory, target)
-        print(
-            "Compatible comparison checkpoints copied; failed/missing series will be measured.",
-            flush=True,
-        )
-    else:
-        print(
-            "Comparisons will be recollected with the current source/package versions.",
-            flush=True,
-        )
-    metadata["comparison"] = True
-    metadata["comparison_provenance"] = provenance
-    metadata["reference_preflight"] = preflight
+            memory_source = directory.parent / "memory"
+            if memory_source.is_dir():
+                shutil.copytree(memory_source, target.parent / "memory")
+    if metadata["comparison"]:
+        if memory is not None:
+            metadata["comparison_memory"] = memory
+        metadata["comparison_provenance"] = provenance
     metadata["recovery"] = {
         "source_bundle": str(source),
         "created_at": datetime.now(timezone.utc).isoformat(),
-        "core_results": "reused unchanged",
-        "comparisons": "current provenance; compatible checkpoints only",
+        "core_results": "completed configurations reused; missing/incomplete configurations resumed",
+        "pending_core": [str(j.artifact) for j in pending],
+        "comparisons": "current provenance; compatible checkpoints only"
+        if metadata["comparison"]
+        else "not requested",
     }
     atomic_json(output / "metadata.json", metadata)
     return metadata
+
+
+def core_command(
+    metadata: dict[str, Any], job: CoreJob, output: Path, compact: bool
+) -> tuple[list[str], Path]:
+    artifact = output / job.artifact
+    if job.workload == "native":
+        log = artifact.with_suffix(".log")
+        command = [
+            str(ROOT / "build/run_scaling.exe"),
+            metadata["dataset"]["root"],
+            "--recursive",
+            "--mode",
+            "render",
+            "--threads",
+            str(job.threads),
+            "--max-concurrent-results",
+            str(metadata["max_concurrent_results"]),
+            "--scale",
+            str(metadata["scale"]),
+            "--enable-timing",
+            "--timing-csv",
+            str(artifact),
+        ]
+        settings = metadata.get("native_profiles", {}).get(
+            job.profile, {"create_word_cells": True, "create_line_cells": True}
+        )
+        command += [
+            f"--{name.replace('_', '-')}={str(value).lower()}"
+            for name, value in settings.items()
+        ]
+        if compact:
+            command += ["-v", "WARNING", "--suppress-config", "--suppress-timings"]
+    else:
+        log = artifact.parent.with_suffix(".log")
+        command = [
+            sys.executable,
+            str(
+                ROOT
+                / "scripts/benchmarking/run_performance_benchmarking_with_docling_settings.py"
+            ),
+            metadata["dataset"]["root"],
+            "--backend",
+            job.profile,
+            "--dataset-revision",
+            metadata["dataset"]["revision"],
+            "--output-dir",
+            str(artifact.parent),
+        ]
+        if job.profile == "threaded":
+            command += ["--threads", str(job.threads)]
+        if compact:
+            command.append("--suppress-config")
+    memory = metadata.get("memory_collection", {"mode": "off"})
+    if memory["mode"] != "off":
+        command = [
+            sys.executable,
+            str(ROOT / "scripts/benchmarking/_performance_memory.py"),
+            "--memory-mode",
+            memory["mode"],
+            "--memory-interval-ms",
+            str(memory.get("interval_ms") or 50),
+            "--output",
+            str(log.with_suffix(".memory.json")),
+            "--",
+            *command,
+        ]
+    return command, log
+
+
+def resume_core(metadata: dict[str, Any], output: Path, compact: bool) -> None:
+    pending = set(metadata["recovery"]["pending_core"])
+    for job in core_jobs(metadata):
+        if str(job.artifact) not in pending:
+            continue
+        command, log = core_command(metadata, job, output, compact)
+        log.parent.mkdir(parents=True, exist_ok=True)
+        print(
+            f"Resume: repetition {job.repetition}/{metadata['repeats']}, {job.workload}, {job.profile}, {job.threads} thread(s)",
+            flush=True,
+        )
+        run_logged(command, log, output / "commands.log")
+        if not inspect_job(ReportInputs(output), job):
+            raise ValueError(f"Resumed configuration failed validation: {job.artifact}")
 
 
 def comparison_command(
@@ -161,6 +384,10 @@ def comparison_command(
     ]
     if compact:
         command.append("--suppress-config")
+    if memory := metadata.get("comparison_memory"):
+        command += ["--memory-mode", memory["mode"]]
+        if memory["mode"] == "profile":
+            command += ["--memory-interval-ms", str(memory["interval_ms"])]
     return command
 
 
@@ -168,6 +395,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("source", type=Path)
     parser.add_argument("--output-dir", type=Path)
+    add_memory_arguments(parser)
+    # None means inherit the source bundle, rather than silently switching to off.
+    parser.set_defaults(
+        memory_mode=os.environ.get("MEMORY_MODE"),
+        memory_interval_ms=os.environ.get("MEMORY_INTERVAL_MS"),
+    )
     args = parser.parse_args()
     source = args.source.resolve()
     output_mode = os.environ.get("BENCHMARK_OUTPUT", "compact")
@@ -217,18 +450,35 @@ def main() -> None:
             output / "dependencies.log",
         )
         provenance = runtime_provenance()
-        metadata = prepare_recovery(source, output, provenance)
-        for repetition in range(1, metadata["repeats"] + 1):
-            for mode in ("parse-without-bitmap", "render"):
-                directory = output / "comparison" / f"r{repetition}" / mode
-                directory.mkdir(parents=True, exist_ok=True)
-                run_logged(
-                    comparison_command(
-                        metadata, directory, mode, output_mode == "compact"
-                    ),
-                    directory / "run.log",
-                    output / "commands.log",
+        original = json.loads((source / "metadata.json").read_text())
+        memory = None
+        if args.memory_mode is not None or args.memory_interval_ms is not None:
+            saved = original.get(
+                "memory_collection", {"mode": "off", "interval_ms": None}
+            )
+            mode = args.memory_mode or saved["mode"]
+            memory = {
+                "mode": mode,
+                "interval_ms": (
+                    args.memory_interval_ms or saved.get("interval_ms") or 50
                 )
+                if mode == "profile"
+                else None,
+            }
+        metadata = prepare_recovery(source, output, provenance, memory)
+        resume_core(metadata, output, output_mode == "compact")
+        if metadata["comparison"]:
+            for repetition in range(1, metadata["repeats"] + 1):
+                for mode in ("parse-without-bitmap", "render"):
+                    directory = output / "comparison" / f"r{repetition}" / mode
+                    directory.mkdir(parents=True, exist_ok=True)
+                    run_logged(
+                        comparison_command(
+                            metadata, directory, mode, output_mode == "compact"
+                        ),
+                        directory / "run.log",
+                        output / "commands.log",
+                    )
         inputs = ReportInputs(output)
         write_report(inputs, inputs.load(), output / "report")
     except (

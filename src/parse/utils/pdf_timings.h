@@ -73,8 +73,11 @@ namespace pdflib
     // XObject timing keys
     static const std::string KEY_DECODE_XOBJECTS_TOTAL;
 
-    // Form xobject stream decompression + tokenization (do_form -> parse_stream)
+    // Buffered Form stream decompression + tokenization (native comparison).
     static const std::string KEY_PARSE_STREAM_TOTAL;
+
+    // Streamed Form parsing/operator self-time, excluding attributed nested work.
+    static const std::string KEY_FORM_PARSE_INTERPRETE_TOTAL;
 
     // Form xobject machinery: child-resource allocation, graphics-state copies
     // (q()/Q()), stack copy (update_stack) -- i.e. do_form cost that is NOT
@@ -97,6 +100,11 @@ namespace pdflib
 
     // Top-level page content-stream tokenization (decode_contents -> decode)
     static const std::string KEY_CONTENT_DECODE_TOTAL;
+
+    // Callback delivery interleaves page-source parsing and operator execution.
+    // Combined self-time excludes work already attributed to nested buckets;
+    // it replaces the separate two keys for ordinary streamed page content.
+    static const std::string KEY_CONTENT_PARSE_INTERPRETE_TOTAL;
 
     // Operator-execution self-time: time spent interpreting operators across
     // all (recursion) levels, excluding the sub-work bucketed under the keys
@@ -484,6 +492,8 @@ namespace pdflib
   const std::string pdf_timings::KEY_DO_FORM_MACHINERY = "do_form_machinery_total";
   const std::string pdf_timings::KEY_DO_IMAGE_TOTAL = "do_image_total";
   const std::string pdf_timings::KEY_CONTENT_DECODE_TOTAL = "content_decode_total";
+  const std::string pdf_timings::KEY_CONTENT_PARSE_INTERPRETE_TOTAL = "content_parse_interprete_total";
+  const std::string pdf_timings::KEY_FORM_PARSE_INTERPRETE_TOTAL = "form_parse_interprete_total";
   const std::string pdf_timings::KEY_INTERPRETE_OPS_TOTAL = "interprete_ops_total";
   const std::string pdf_timings::KEY_DECODE_GRPHS_TOTAL = "decode_grphs_total";
 
@@ -603,9 +613,11 @@ namespace pdflib
       KEY_CMAP_PARSE_ENDCODESPACERANGE,
       KEY_DECODE_XOBJECTS_TOTAL,
       KEY_PARSE_STREAM_TOTAL,
+      KEY_FORM_PARSE_INTERPRETE_TOTAL,
       KEY_DO_FORM_MACHINERY,
       KEY_DO_IMAGE_TOTAL,
       KEY_CONTENT_DECODE_TOTAL,
+      KEY_CONTENT_PARSE_INTERPRETE_TOTAL,
       KEY_INTERPRETE_OPS_TOTAL,
       KEY_DECODE_GRPHS_TOTAL,
       KEY_TO_JSON_PAGE,
@@ -712,11 +724,13 @@ namespace pdflib
 
       // --- decode_contents sub-timings ---
       {KEY_CONTENT_DECODE_TOTAL,           KEY_DECODE_CONTENTS},
+      {KEY_CONTENT_PARSE_INTERPRETE_TOTAL, KEY_DECODE_CONTENTS},
       {KEY_INTERPRETE_OPS_TOTAL,           KEY_DECODE_CONTENTS},
       {KEY_DECODE_XOBJECTS_TOTAL,          KEY_DECODE_CONTENTS},
       {KEY_DECODE_GRPHS_TOTAL,             KEY_DECODE_CONTENTS},
       {KEY_DECODE_FONTS_TOTAL,             KEY_DECODE_CONTENTS},
       {KEY_PARSE_STREAM_TOTAL,             KEY_DECODE_CONTENTS},
+      {KEY_FORM_PARSE_INTERPRETE_TOTAL,     KEY_DECODE_CONTENTS},
       {KEY_DO_FORM_MACHINERY,              KEY_DECODE_CONTENTS},
       {KEY_DO_IMAGE_TOTAL,                 KEY_DECODE_CONTENTS},
 
