@@ -744,7 +744,10 @@ namespace pdflib
         const std::string glyph_name = get_glyph_name(c);
         if(not glyph_name.empty() and bfont.has_glyph_bbox(glyph_name))
           {
-            return true;
+            // Some AFM entries, including Euro, have placeholder bounds.
+            // Preserve blank spaces; use font metrics for other empty bounds.
+            const auto bbox = bfont.get_glyph_bbox(glyph_name);
+            return glyph_name == "space" or bbox[3] > bbox[1];
           }
 
         // Builtin subset codes do not identify standard-font characters:
