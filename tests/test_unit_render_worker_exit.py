@@ -80,6 +80,10 @@ def test_render_workers_exit_without_access_violation() -> None:
     )
     stderr = result.stderr.decode(errors="replace")
     faults = stderr.count("access violation")
-    assert result.returncode == 0, f"worker process died (exit {result.returncode}):\n{stderr[-2000:]}"
-    assert faults == 0, f"{faults} access violation(s) while render workers exited:\n{stderr[-2000:]}"
+    assert result.returncode == 0, (
+        f"worker process died (exit {result.returncode}):\n{stderr[-2000:]}"
+    )
+    assert faults == 0, (
+        f"{faults} access violation(s) while render workers exited:\n{stderr[-2000:]}"
+    )
     assert result.stdout.decode().strip().endswith("done")
