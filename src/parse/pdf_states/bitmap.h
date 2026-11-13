@@ -182,6 +182,7 @@ namespace pdflib
                          int bits_per_component,
                          const std::string& color_space,
                          const std::vector<std::string>& filters,
+                         QPDFObjectHandle decode_parms,
                          bool decode_present,
                          const std::vector<double>& decode_array,
                          bool image_mask,
@@ -438,6 +439,7 @@ namespace pdflib
       int bits_per_component,
       const std::string& color_space,
       const std::vector<std::string>& filters,
+      QPDFObjectHandle decode_parms,
       bool decode_present,
       const std::vector<double>& decode_array,
       bool image_mask,
@@ -485,7 +487,7 @@ namespace pdflib
       auto encoded = stream_filters::apply_filters(stream_data,
                                                    filters,
                                                    codec_index,
-                                                   QPDFObjectHandle::newNull());
+                                                   decode_parms);
       if(not encoded)
         {
           LOG_S(WARNING) << "failed to undo the transport filters of inline image "

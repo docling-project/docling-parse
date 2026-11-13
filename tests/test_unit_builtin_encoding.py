@@ -20,7 +20,8 @@ from io import BytesIO
 
 import pytest
 
-from tests.pdf_builder import parse_page, simple_page_pdf, stream_object
+from tests.pdf_builder import parse_page, render_page, simple_page_pdf, stream_object
+from tests.rendering_regression import coverage_ratio, region_image
 
 pytest.importorskip("fontTools", reason="building the test fonts needs fontTools")
 
@@ -227,6 +228,32 @@ def test_builtin_encoding_outranks_a_core_14_alias():
     # Helvetica metrics table, which fabricates '#' for a symbol-coded glyph.
     text = _text(_truetype_page("#2", base_font="/ABCDEF+Arial"))
     assert text == "Č2"
+
+
+@pytest.mark.parametrize("base_font", ["/ABCDEF+ArialNarrow,Bold", "/ABCDEF+Helvetica"])
+def test_visible_glyph_at_space_code_keeps_its_render_height(base_font: str):
+    # The reported ArialNarrow subset places "m" at code 32. A base-font
+    # space bbox collapses its height and makes the renderer discard it.
+    from fontTools.ttLib import TTFont
+
+    font = TTFont(BytesIO(_symbol_truetype(glyph_names=True)))
+    font["cmap"].tables[0].cmap[0xF020] = "two"
+    program = BytesIO()
+    font.save(program)
+    pdf = _page(
+        program.getvalue(),
+        " ",
+        subtype="/TrueType",
+        font_file="/FontFile2",
+        base_font=base_font,
+    )
+    result = render_page(pdf)
+    instructions = result._export_render_instructions_json()["instructions"]
+    text = [item for item in instructions if item["type"] == "text"]
+    assert len(text) == 1
+    assert text[0]["text"] == "2"
+    assert text[0]["quad"]["r_y2"] > text[0]["quad"]["r_y0"]
+    assert coverage_ratio(region_image(result, (20, 83, 32, 100))) > 0.2
 
 
 def test_declared_base_encoding_still_wins():

@@ -747,7 +747,9 @@ namespace pdflib
             return true;
           }
 
-        return bfont.has_char_bbox(c);
+        // Builtin subset codes do not identify standard-font characters:
+        // code 32, for example, may draw "m" rather than a space.
+        return not uses_builtin_encoding() and bfont.has_char_bbox(c);
       }
 
     return false;
