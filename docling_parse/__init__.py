@@ -40,3 +40,23 @@ def _ensure_safe_numeric_locale() -> None:
 
 
 _ensure_safe_numeric_locale()
+
+# PdfReader, PdfWriter and PdfEditor are importable from the package, but only
+# loaded on first use: `import docling_parse` stays as cheap as before.
+_LAZY_EXPORTS = {
+    "PdfReader": "docling_parse.pdf_reader",
+    "PdfWriter": "docling_parse.pdf_writer",
+    "PdfEditor": "docling_parse.pdf_editor",
+}
+
+
+def __getattr__(name: str):
+    module_name = _LAZY_EXPORTS.get(name)
+    if module_name is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+    import importlib
+
+    value = getattr(importlib.import_module(module_name), name)
+    globals()[name] = value
+    return value

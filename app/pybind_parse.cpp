@@ -18,6 +18,10 @@
 // Include edit headers for the lightweight, document-less helpers
 #include <edit.h>
 
+// pdf_reader, pdf_writer and pdf_editor: all of their bindings live in this
+// header, so this file only has to register them
+#include <pybind/edit_bindings.h>
+
 namespace
 {
   const char* pixel_format_name(pdflib::pixel_format fmt)
@@ -1565,4 +1569,8 @@ PYBIND11_MODULE(pdf_parsers, m) {
 
     Returns:
         _PageRenderResult: The result of a page rendering task.)");
+
+  // ============= PDF Reader / Writer / Editor =============
+
+  docling::register_edit_bindings(m);
 }

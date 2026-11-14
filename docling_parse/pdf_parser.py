@@ -3,7 +3,7 @@
 import hashlib
 import logging
 import math
-from enum import Enum, IntEnum
+from enum import IntEnum
 from io import BytesIO
 from pathlib import Path
 from typing import (
@@ -41,6 +41,11 @@ from docling_core.types.doc.page import (
 from PIL import Image as PILImage
 from pydantic import BaseModel, ConfigDict, Field
 
+from docling_parse.pdf_errors import (
+    PdfLoadError,
+    PdfLoadErrorCategory,
+    PdfPasswordError,
+)
 from docling_parse.pdf_parsers import (  # type: ignore[import]
     TIMING_KEY_CREATE_LINE_CELLS,
     TIMING_KEY_CREATE_WORD_CELLS,
@@ -86,67 +91,6 @@ from docling_parse.pdf_parsers import (  # type: ignore[import]
 
 # Configure logging
 _log = logging.getLogger(__name__)
-
-
-class PdfLoadErrorCategory(str, Enum):
-    """Why docling-parse could not load a document.
-
-    The values are the categories the native loader reports, see
-    `src/parse/qpdf/load_error.h`.
-    """
-
-    PASSWORD = "password"
-    """The document is encrypted and the password is missing or wrong."""
-    DAMAGED = "damaged"
-    """qpdf could not repair the file."""
-    UNSUPPORTED = "unsupported"
-    """The file uses a feature qpdf does not implement."""
-    IO = "io"
-    """The file is missing or unreadable."""
-    UNKNOWN = "unknown"
-
-
-class PdfLoadError(RuntimeError):
-    """docling-parse could not load a document.
-
-    A RuntimeError, so handlers written for the former generic error keep
-    working, and the message keeps its former prefix. `category` says what
-    went wrong; `detail` is the message of the underlying (qpdf) failure.
-    """
-
-    def __init__(
-        self,
-        key: str,
-        category: PdfLoadErrorCategory,
-        detail: str,
-        *,
-        reason: str | None = None,
-    ):
-        self.key = key
-        self.category = category
-        self.detail = detail
-
-        message = f"Failed to load document with key {key}"
-        description = reason or detail
-        if description:
-            message = f"{message}: {description}"
-        super().__init__(message)
-
-
-class PdfPasswordError(PdfLoadError):
-    """The document is encrypted and was opened without a valid password.
-
-    `password_supplied` tells whether the caller gave a (wrong) password or
-    none at all: qpdf reports both as the same invalid-password error.
-    """
-
-    def __init__(self, key: str, detail: str, *, password_supplied: bool):
-        self.password_supplied = password_supplied
-        if password_supplied:
-            reason = "the supplied password is incorrect"
-        else:
-            reason = "the document is encrypted and requires a password"
-        super().__init__(key, PdfLoadErrorCategory.PASSWORD, detail, reason=reason)
 
 
 def _load_error(native_parser, key: str, password: str | None) -> PdfLoadError:
