@@ -36,6 +36,19 @@ namespace pdflib
 
     std::string get_filename() { return filename; }
 
+    // The bytes this document was parsed from and the password it was opened
+    // with. Both are set once at load time and never change afterwards, so a
+    // second QPDF can be parsed from the same bytes without copying them
+    // (the editor clones and imports documents this way).
+    std::shared_ptr<std::string> get_source_buffer() { return buffer; }
+    std::optional<std::string> get_password() { return password; }
+
+    // Run function(QPDF&) on the parsed document while holding the document
+    // mutex, which is what serializes every other use of that QPDF. The
+    // callable must not keep a QPDFObjectHandle beyond its own return.
+    template<typename function_type>
+    decltype(auto) with_qpdf(function_type&& function);
+
     // Why the last process_document_* call returned false: a category
     // from load_error and the message of the underlying failure. Both
     // are empty while no load has failed.
@@ -185,6 +198,13 @@ namespace pdflib
 
   pdf_decoder<DOCUMENT>::~pdf_decoder()
   {}
+
+  template<typename function_type>
+  decltype(auto) pdf_decoder<DOCUMENT>::with_qpdf(function_type&& function)
+  {
+    std::lock_guard<std::mutex> lock(thread_safe_buffer_mutex);
+    return function(qpdf_document);
+  }
 
   void pdf_decoder<DOCUMENT>::ensure_annots_loaded()
   {

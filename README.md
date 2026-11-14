@@ -243,6 +243,35 @@ options:
   -p PDF, --pdf PDF  Path to the PDF file
 ```
 
+## PDF reading and editing
+
+`PdfReader`, `PdfWriter` and `PdfEditor` read, assemble and change PDF files,
+with an interface modelled on pypdf.
+
+```python
+from docling_parse import PdfEditor, PdfReader, PdfWriter
+
+# read
+with PdfReader("document.pdf") as reader:
+    print(len(reader.pages), reader.metadata.get("Title"))
+    text = reader.pages[0].extract_text()
+
+# merge
+writer = PdfWriter()
+writer.append("file1.pdf")
+writer.append("file2.pdf", pages=[0, 2])
+writer.write("merged.pdf")
+
+# edit and save
+with PdfEditor("document.pdf") as editor:
+    editor.pages[0].rotate(90)
+    del editor.pages[3]
+    editor.write("changed.pdf")
+```
+
+See [docs/pdf_editor.md](./docs/pdf_editor.md) for the full guide, including
+how to move from pypdf's `PdfReader` and `PdfWriter`.
+
 ## System fonts
 
 A PDF may name a font without embedding it. There is then nothing in the file

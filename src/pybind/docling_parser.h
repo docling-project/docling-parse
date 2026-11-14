@@ -6,6 +6,7 @@
 #include <atomic>
 #include <list>
 #include <map>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -48,6 +49,13 @@ namespace docling
 				    std::optional<std::string> password,
                                     bool keep_qpdf_warnings = false);
 
+    // Load from bytes already owned by native code. Needs no Python object,
+    // so it may be called with the GIL released.
+    bool load_document_from_buffer(std::string key,
+                                   std::shared_ptr<std::string> buffer,
+                                   std::optional<std::string> password,
+                                   bool keep_qpdf_warnings = false);
+
     bool unload_document(std::string key);
     bool unload_document_pages(std::string key);
     bool unload_document_page(std::string key, int page_num);
@@ -65,11 +73,7 @@ namespace docling
     // Snapshot ownership while Python holds the GIL, before a binding releases
     // it for immutable/lazy document reads. Unload can then remove the map entry
     // without destroying an in-flight decoder.
-    doc_decoder_ptr_type get_document_decoder(const std::string& key)
-    {
-      auto it = doc_decoders.find(key);
-      return it == doc_decoders.end() ? nullptr : it->second;
-    }
+    doc_decoder_ptr_type get_document_decoder(const std::string& key);
 
     nlohmann::json get_meta_xml(std::string key);
     nlohmann::json get_table_of_contents(std::string key);
@@ -98,7 +102,14 @@ namespace docling
     void remove_page_decoder(const std::string& key, int page);
     void trim_page_decoders();
 
-  private:
+  protected:
+
+    // Thread safety: every public method takes parser_mutex around its access
+    // to the members below, so one parser may be shared between threads. The
+    // mutex is recursive because docling_editor calls these methods while it
+    // already holds it. docling_parser itself never holds it across a page
+    // decode, and nothing may wait for the Python GIL while holding it.
+    mutable std::recursive_mutex parser_mutex;
 
     std::string pdf_resources_dir;
 
@@ -156,8 +167,18 @@ namespace docling
       }
   }
 
+  docling_parser::doc_decoder_ptr_type docling_parser::get_document_decoder(const std::string& key)
+  {
+    std::lock_guard<std::recursive_mutex> lock(parser_mutex);
+
+    auto it = doc_decoders.find(key);
+    return it == doc_decoders.end() ? nullptr : it->second;
+  }
+
   std::vector<std::string> docling_parser::list_loaded_keys()
   {
+    std::lock_guard<std::recursive_mutex> lock(parser_mutex);
+
     std::vector<std::string> keys={};
 
     // Add the key (which is the first element of the pair)
@@ -171,11 +192,15 @@ namespace docling
 
   bool docling_parser::is_loaded(std::string key)
   {
+    std::lock_guard<std::recursive_mutex> lock(parser_mutex);
+
     return (doc_decoders.count(key)==1);
   }
 
   std::map<std::string, std::string> docling_parser::take_load_error(std::string key)
   {
+    std::lock_guard<std::recursive_mutex> lock(parser_mutex);
+
     std::map<std::string, std::string> result;
 
     auto itr = load_errors.find(key);
@@ -192,6 +217,8 @@ namespace docling
                                          const std::string& category,
                                          const std::string& message)
   {
+    std::lock_guard<std::recursive_mutex> lock(parser_mutex);
+
     load_errors[key] = {{"category", category}, {"message", message}};
   }
 
@@ -200,7 +227,10 @@ namespace docling
 				     std::optional<std::string> password,
                                      bool keep_qpdf_warnings)
   {
-    load_errors.erase(key);
+    {
+      std::lock_guard<std::recursive_mutex> lock(parser_mutex);
+      load_errors.erase(key);
+    }
 
 #ifdef _WIN32
     // Convert UTF-8 string to UTF-16 wstring
@@ -213,24 +243,30 @@ namespace docling
 
     if (std::filesystem::exists(path_filename))
       {
+        // Read and parse outside parser_mutex: the new decoder is not visible
+        // to any other thread until it is registered below.
+        auto doc_decoder = std::make_shared<doc_decoder_type>();
+        bool success = doc_decoder->process_document_from_file(filename,
+                                                               password,
+                                                               keep_qpdf_warnings);
+
+        std::lock_guard<std::recursive_mutex> lock(parser_mutex);
+
         remove_page_decoders(key);
 
-        doc_decoders[key] = std::make_shared<doc_decoder_type>();
-        bool success = doc_decoders.at(key)->process_document_from_file(filename,
-                                                                        password,
-                                                                        keep_qpdf_warnings);
         if(not success)
           {
             // do not keep a decoder that never parsed the document: it would
             // report is_loaded()=true and a number_of_pages of -1
             record_load_error(key,
-                              doc_decoders.at(key)->get_load_error_category(),
-                              doc_decoders.at(key)->get_load_error_message());
+                              doc_decoder->get_load_error_category(),
+                              doc_decoder->get_load_error_message());
             doc_decoders.erase(key);
             LOG_S(ERROR) << "could not process document for key=" << key;
             return false;
           }
 
+        doc_decoders[key] = doc_decoder;
         return true;
       }
 
@@ -253,7 +289,8 @@ namespace docling
       throw std::runtime_error("Expected a BytesIO object");
     }
 
-    load_errors.erase(key);
+    // The Python calls below need the GIL, so they run before parser_mutex is
+    // taken: a thread must never wait for the GIL while holding that mutex.
 
     // Seek to the beginning of the BytesIO stream
     bytes_io.attr("seek")(0);
@@ -264,32 +301,60 @@ namespace docling
     // Get the data into a shared buffer
     auto data_buffer = std::make_shared<std::string>(data.cast<std::string>());
 
+    return load_document_from_buffer(key, data_buffer, password, keep_qpdf_warnings);
+  }
+
+  bool docling_parser::load_document_from_buffer(std::string key,
+                                                 std::shared_ptr<std::string> buffer,
+                                                 std::optional<std::string> password,
+                                                 bool keep_qpdf_warnings)
+  {
+    {
+      std::lock_guard<std::recursive_mutex> lock(parser_mutex);
+      load_errors.erase(key);
+    }
+
+    if(buffer == nullptr)
+      {
+        record_load_error(key, pdflib::load_error::IO, "no buffer provided");
+        return false;
+      }
+
+    auto doc_decoder = std::make_shared<doc_decoder_type>();
+
     try
       {
+        // Parse outside parser_mutex: the new decoder is not visible to any
+        // other thread until it is registered below.
+        std::string description = "parsing of " + key + " from bytesio";
+        bool success = doc_decoder->process_document_from_bytesio(buffer,
+                                                                  password,
+                                                                  description,
+                                                                  keep_qpdf_warnings);
+
+        std::lock_guard<std::recursive_mutex> lock(parser_mutex);
+
         remove_page_decoders(key);
 
-        doc_decoders[key] = std::make_shared<doc_decoder_type>();
-        std::string description = "parsing of " + key + " from bytesio";
-        bool success = doc_decoders.at(key)->process_document_from_bytesio(data_buffer,
-                                                                           password,
-                                                                           description,
-                                                                           keep_qpdf_warnings);
         if(not success)
           {
             // do not keep a decoder that never parsed the document: it would
             // report is_loaded()=true and a number_of_pages of -1
             record_load_error(key,
-                              doc_decoders.at(key)->get_load_error_category(),
-                              doc_decoders.at(key)->get_load_error_message());
+                              doc_decoder->get_load_error_category(),
+                              doc_decoder->get_load_error_message());
             doc_decoders.erase(key);
             LOG_S(ERROR) << "could not decode bytesio object for key="<<key;
             return false;
           }
 
+        doc_decoders[key] = doc_decoder;
         return true;
       }
     catch(const std::exception& exc)
       {
+        std::lock_guard<std::recursive_mutex> lock(parser_mutex);
+
         record_load_error(key, pdflib::load_error::UNKNOWN, exc.what());
         doc_decoders.erase(key);
         LOG_S(ERROR) << "could not decode bytesio object for key="<<key;
@@ -301,6 +366,8 @@ namespace docling
 
   bool docling_parser::unload_document(std::string key)
   {
+    std::lock_guard<std::recursive_mutex> lock(parser_mutex);
+
     if(doc_decoders.count(key)==1)
       {
         doc_decoders.erase(key);
@@ -321,6 +388,8 @@ namespace docling
 
   bool docling_parser::unload_document_page(std::string key, int page_num)
   {
+    std::lock_guard<std::recursive_mutex> lock(parser_mutex);
+
     auto itr = doc_decoders.find(key);
 
     if(itr!=doc_decoders.end())
@@ -339,6 +408,8 @@ namespace docling
 
   bool docling_parser::unload_document_pages(std::string key)
   {
+    std::lock_guard<std::recursive_mutex> lock(parser_mutex);
+
     auto itr = doc_decoders.find(key);
 
     if(itr!=doc_decoders.end())
@@ -357,6 +428,8 @@ namespace docling
 
   void docling_parser::unload_documents()
   {
+    std::lock_guard<std::recursive_mutex> lock(parser_mutex);
+
     doc_decoders.clear();
     page_decoders.clear();
     total_processed_pages.store(0);
@@ -426,6 +499,8 @@ namespace docling
 
   int docling_parser::number_of_pages(std::string key)
   {
+    std::lock_guard<std::recursive_mutex> lock(parser_mutex);
+
     auto itr = doc_decoders.find(key);
 
     if(itr!=doc_decoders.end())
@@ -444,45 +519,51 @@ namespace docling
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    auto itr = doc_decoders.find(key);
+    // The decoder serializes its own lazy reads, so parser_mutex only covers
+    // the lookup.
+    doc_decoder_ptr_type doc_decoder = get_document_decoder(key);
 
-    if(itr==doc_decoders.end())
+    if(doc_decoder==nullptr)
       {
         LOG_S(ERROR) << "key not found: " << key;
         return nlohmann::json::value_t::null;
       }
 
-    return (itr->second)->get_annotations();
+    return doc_decoder->get_annotations();
   }
 
   nlohmann::json docling_parser::get_meta_xml(std::string key)
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    auto itr = doc_decoders.find(key);
+    // The decoder serializes its own lazy reads, so parser_mutex only covers
+    // the lookup.
+    doc_decoder_ptr_type doc_decoder = get_document_decoder(key);
 
-    if(itr==doc_decoders.end())
+    if(doc_decoder==nullptr)
       {
         LOG_S(ERROR) << "key not found: " << key;
         return nlohmann::json::value_t::null;
       }
 
-    return (itr->second)->get_meta_xml();
+    return doc_decoder->get_meta_xml();
   }
 
   nlohmann::json docling_parser::get_table_of_contents(std::string key)
   {
     LOG_S(INFO) << __FUNCTION__;
 
-    auto itr = doc_decoders.find(key);
+    // The decoder serializes its own lazy reads, so parser_mutex only covers
+    // the lookup.
+    doc_decoder_ptr_type doc_decoder = get_document_decoder(key);
 
-    if(itr==doc_decoders.end())
+    if(doc_decoder==nullptr)
       {
         LOG_S(ERROR) << "key not found: " << key;
         return nlohmann::json::value_t::null;
       }
 
-    return (itr->second)->get_table_of_contents();
+    return doc_decoder->get_table_of_contents();
   }
 
   std::shared_ptr<pdflib::pdf_decoder<pdflib::PAGE>> docling_parser::get_page_decoder(std::string key,
@@ -491,20 +572,29 @@ namespace docling
   {
     LOG_S(INFO) << __FUNCTION__ << " for key: " << key << " and page: " << page;
 
-    auto itr = doc_decoders.find(key);
-    if(itr == doc_decoders.end())
-      {
-        LOG_S(ERROR) << "key not found: " << key;
-        return nullptr;
-      }
+    doc_decoder_ptr_type doc_decoder = nullptr;
+    {
+      std::lock_guard<std::recursive_mutex> lock(parser_mutex);
 
-    auto cached_page_decoder = find_page_decoder(key, page);
-    if(cached_page_decoder != nullptr)
-      {
-        return cached_page_decoder;
-      }
+      auto itr = doc_decoders.find(key);
+      if(itr == doc_decoders.end())
+        {
+          LOG_S(ERROR) << "key not found: " << key;
+          return nullptr;
+        }
 
-    auto& doc_decoder = itr->second;
+      auto cached_page_decoder = find_page_decoder(key, page);
+      if(cached_page_decoder != nullptr)
+        {
+          return cached_page_decoder;
+        }
+
+      doc_decoder = itr->second;
+    }
+
+    // The decode runs without parser_mutex: it works on a standalone one-page
+    // copy that the document decoder hands out under its own mutex, so threads
+    // sharing this parser still decode different pages in parallel.
     auto page_decoder = doc_decoder->make_thread_safe_page_decoder(
       page,
       config.keep_qpdf_warnings);
@@ -520,7 +610,28 @@ namespace docling
         page_decoder->create_line_cells(config);
       }
 
-    add_page_decoder(key, page, page_decoder);
+    {
+      std::lock_guard<std::recursive_mutex> lock(parser_mutex);
+
+      auto itr = doc_decoders.find(key);
+      if(itr != doc_decoders.end() and itr->second == doc_decoder)
+        {
+          // Another thread may have decoded the same page meanwhile; its
+          // result is already shared, so ours is dropped.
+          auto cached_page_decoder = find_page_decoder(key, page);
+          if(cached_page_decoder != nullptr)
+            {
+              page_decoder = cached_page_decoder;
+            }
+          else
+            {
+              add_page_decoder(key, page, page_decoder);
+            }
+        }
+      // else: the document was unloaded or replaced during the decode; the
+      // result is returned to this caller but not cached under the key.
+    }
+
     maybe_release_native_memory(config);
     return page_decoder;
   }
