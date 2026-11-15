@@ -68,6 +68,27 @@ class PdfEditor(_PdfEditing):
         """True once the editor works on its own copy of the document."""
         return self._native.is_editing()
 
+    def get_object(self, object_id: int, depth: int = 3) -> Any:
+        """A read-only view of the PDF object with this object number, as
+        nested dicts and lists down to `depth` levels. Names keep their
+        slash; a stream is shown as its dictionary."""
+        if object_id < 1:
+            raise ValueError("object numbers start at 1")
+        with _native_errors():
+            return self._native.object_json(object_id, depth)
+
+    @property
+    def trailer(self) -> Any:
+        """A read-only view of the file trailer."""
+        with _native_errors():
+            return self._native.object_json(0, 2)
+
+    @property
+    def root_object(self) -> Any:
+        """A read-only view of the document catalog."""
+        with _native_errors():
+            return self._native.object_json(-1, 3)
+
     @property
     def annotations(self) -> Any:
         """Form, language, XMP, outline and structure tree of the document

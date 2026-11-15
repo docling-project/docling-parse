@@ -147,6 +147,17 @@ reading order of the docling-parse page decoder. The text is not guaranteed to
 be character for character what pypdf returns: the two libraries group
 characters into lines differently.
 
+Layout mode keeps the page's columns, indentation and vertical spacing by
+placing the words on a character grid. Use it for tables and forms that you
+want to read as fixed-width text:
+
+```python
+text = page.extract_text(extraction_mode="layout")
+```
+
+Visitor functions and the other `extract_text` options of pypdf are not
+available.
+
 ### Page geometry
 
 ```python
@@ -173,7 +184,7 @@ reader.xmp_metadata      # the XMP packet as a string, or None
 reader.pdf_header        # "%PDF-1.7"
 reader.is_encrypted
 reader.encryption        # None, or the encryption parameters
-reader.outline           # bookmarks, with resolved destinations
+reader.permissions       # None, or {"print": True, "extract": False, ...}
 ```
 
 Differences from pypdf:
@@ -181,7 +192,72 @@ Differences from pypdf:
 - `metadata` is a plain dictionary keyed by the PDF names without their slash
   (`metadata["Title"]`, not `metadata.title`).
 - `xmp_metadata` is the raw packet, not a parsed object.
-- `outline` is a nested list of dictionaries, not pypdf `Destination` objects.
+- `permissions` is a dictionary of booleans; pypdf's
+  `user_access_permissions` is a flag enumeration.
+
+### Navigation
+
+```python
+reader.outline               # bookmarks, as a tree
+reader.page_labels           # ["i", "ii", "1", "2", ...]
+reader.named_destinations    # {"chapter-2": {"page": 4, "kind": "/Fit", ...}}
+reader.open_destination      # where the document opens, or None
+reader.page_layout           # "/TwoColumnLeft", ... or None
+reader.page_mode             # "/UseOutlines", ... or None
+reader.viewer_preferences    # {"/HideToolbar": True, ...} or None
+```
+
+Every place in the document is given as a zero-based page index, already
+resolved: there are no destination objects to look up.
+
+```python
+def show(items, depth=0):
+    for item in items:
+        print("  " * depth, item["title"], "-> page", item["page"])
+        show(item["children"], depth + 1)
+
+show(reader.outline)
+```
+
+This replaces pypdf's nested lists of `Destination` objects and its
+`get_destination_page_number()`.
+
+### Forms
+
+```python
+reader.get_fields()              # every field, by fully qualified name
+reader.get_form_text_fields()    # {"name": "Ada Lovelace", ...}
+reader.has_form, reader.has_xfa
+
+for name, field in reader.get_fields().items():
+    print(name, field["kind"], field["value"])
+```
+
+A field is a dictionary with `kind` (`text`, `checkbox`, `radio`, `choice`,
+`pushbutton`, `signature`), `value`, `default_value`, `choices`, `states`
+(what a checkbox or radio group can be set to), `read_only` and `pages`.
+`reader.get_pages_showing_field(name)` returns the pages a field appears on.
+
+### Annotations
+
+```python
+for annotation in reader.pages[0].annotations:
+    print(annotation["/Subtype"], annotation["/Rect"], annotation.get("/Contents"))
+```
+
+Each annotation is a dictionary keyed by PDF name. A link that points into
+the document also has `"page"`, the index of its target.
+
+### Attachments
+
+```python
+reader.attachments                    # {"notes.txt": [b"..."]}, as in pypdf
+reader.get_attachment("notes.txt")    # b"..."
+reader.attachment_info                # name, size, MIME type, dates
+```
+
+`reader.javascript` lists the document's scripts by name. Scripts are data:
+docling-parse never runs them.
 
 ### Images
 
@@ -196,11 +272,12 @@ Each image carries `name`, `bbox` (where it sits on the page), `width`,
 `data`. `image.to_pil()` returns a Pillow image; Pillow is imported only when
 that method is called.
 
-### Not available on the reader yet
+### Not available on the reader
 
-Form fields, attachments, named destinations, page labels, viewer preferences
-and access to raw PDF objects. See
-[Coverage of the pypdf interface](#coverage-of-the-pypdf-interface).
+Visitor functions for text extraction, article threads, the XFA form data,
+and pypdf's object model (`get_object`, `IndirectObject`, `DictionaryObject`).
+`PdfEditor` offers a read-only view of raw objects; see
+[below](#pdfeditor-reading-and-writing-in-one-object).
 
 ## Replacing pypdf's PdfWriter
 
@@ -235,6 +312,11 @@ for index, page in enumerate(reader.pages):
 
 `pages` accepts a list of zero-based indices (which may repeat or reorder
 pages) or a slice. `append` also takes `index=` to choose where the pages go.
+
+Bookmarks come along: the bookmarks of the source that lead to a copied page
+are added to the outline, pointing at the copies. Pass `import_outline=False`
+to leave them behind. Bookmarks to pages that were not copied are dropped,
+not left dangling.
 
 ### Changing an existing document
 
@@ -299,6 +381,128 @@ page.merge_page(stamp, fit=True)                      # centered, scaled to fill
 `fit=True` has no pypdf counterpart. The annotations and form fields of the
 merged page are not copied.
 
+### Metadata
+
+```python
+writer.add_metadata({"/Title": "Annual report", "/Author": "Finance"})
+writer.add_metadata({"/Subject": None})      # removes the entry
+writer.set_xmp_metadata(xmp_packet)          # or None to remove it
+```
+
+Keys may be written with or without their slash. Text outside ASCII is
+stored correctly; no encoding step is needed.
+
+### Bookmarks, page labels and destinations
+
+```python
+chapter = writer.add_outline_item("Chapter 1", 0)
+writer.add_outline_item("Section 1.1", 2, parent=chapter)
+writer.add_outline_item("Appendix", None)        # a heading without a target
+
+writer.set_page_label(0, 3, "/r")                # i, ii, iii, iv
+writer.set_page_label(4, 19, "/D")               # 1, 2, 3, ...
+writer.set_page_label(20, 24, "/D", prefix="A-") # A-1, A-2, ...
+
+writer.add_named_destination("summary", 5)
+writer.set_open_destination(1)                   # open at the second page
+```
+
+`add_outline_item` returns the item's id, which is what `parent` takes.
+
+When a page is removed, bookmarks that led to it stay as headings without a
+target, and bookmarks to the pages behind it keep pointing at those pages.
+
+### How the document opens
+
+```python
+writer.set_page_layout("/TwoColumnLeft")
+writer.set_page_mode("/UseOutlines")
+writer.set_viewer_preferences({"/HideToolbar": True, "/FitWindow": True})
+```
+
+Each takes `None` to remove the setting. In pypdf these are the `page_layout`
+and `page_mode` properties and `create_viewer_preferences()`.
+
+### Filling in forms
+
+```python
+writer = PdfWriter(clone_from="form.pdf")
+
+writer.update_form_field_values({
+    "name": "Ada Lovelace",       # a text field
+    "country": "United Kingdom",  # a choice field
+    "newsletter": True,           # a checkbox
+    "plan": "/Premium",           # a radio group: the state to select
+})
+writer.write("filled.pdf")
+```
+
+- Fields are addressed by fully qualified name (`"address.street"`); a
+  partial name works when only one field has it.
+- The appearance of each field is rebuilt, so the values show in every
+  viewer, not only in those that redraw forms themselves.
+- A name the form does not have, or a state a button does not have, raises
+  `PdfEditError`. Nothing is skipped silently.
+- `writer.get_fields()` shows the fields, with `states` listing what each
+  checkbox and radio group accepts.
+
+Unlike pypdf's `update_page_form_field_values(page, fields)`, there is no
+page argument: fields are set wherever they appear.
+
+To turn a filled form into plain page content:
+
+```python
+writer.update_form_field_values(values, flatten=True)
+# or, at any time
+writer.flatten_annotations()
+```
+
+The values stay visible and the document is no longer interactive.
+`flatten_annotations()` flattens the other visible annotations as well.
+
+### Annotations and links
+
+```python
+writer.add_uri(0, "https://example.org", (72, 700, 200, 720))
+writer.add_link(0, (72, 660, 200, 680), 4)       # jump to page 5
+
+writer.add_annotation(0, {
+    "/Subtype": "/Text",
+    "/Rect": [300, 700, 320, 720],
+    "/Contents": "Please check this figure",
+})
+
+writer.remove_links()
+writer.remove_annotations("/Highlight")
+writer.remove_annotations()                      # all, except form fields
+```
+
+An annotation is given as a plain dictionary: a string starting with `/` is a
+PDF name, any other string is text. Rectangles are
+`(left, bottom, right, top)` in points. `remove_annotations("/Widget")`
+removes form fields.
+
+### Attachments
+
+```python
+writer.add_attachment("data.csv", csv_bytes)
+writer.add_attachment("notes.txt", "plain text",
+                      description="Reviewer notes", mime_type="text/plain")
+writer.remove_attachment("data.csv")
+```
+
+### Scripts
+
+```python
+writer.add_js("this.print({bUI: true});")
+writer.remove_javascript()
+```
+
+`remove_javascript()` strips the document's scripts, a scripted open action
+and its additional actions: use it on files from sources you do not control.
+Scripts, links and embedded files of a source are carried along by
+`clone_from` and by `append`.
+
 ### Encryption
 
 ```python
@@ -308,7 +512,24 @@ writer.write("protected.pdf")
 ```
 
 Output is encrypted with AES-256; older, weaker algorithms are not offered,
-and there is no `algorithm` argument. All permissions are granted.
+and there is no `algorithm` argument.
+
+What the user password allows is set by keyword; everything is allowed unless
+turned off:
+
+```python
+writer.encrypt(
+    "user-password",
+    "owner-password",
+    allow_print="low",        # True, False or "low" (low resolution only)
+    allow_extract=False,
+    allow_modify=False,
+    # allow_annotate, allow_fill_forms, allow_assemble, allow_accessibility
+)
+```
+
+Viewers honor these flags; they are not access control.
+`writer.remove_encryption()` undoes `encrypt()`.
 
 Output is unencrypted unless `encrypt()` was called, also when the source was
 encrypted.
@@ -321,10 +542,28 @@ writer.write(stream)            # a binary stream; not closed
 data = writer.to_bytes()        # the file as bytes
 ```
 
-### Not available on the writer yet
+File size and structure are chosen with `set_output_options`:
 
-Writing metadata, creating or editing outlines, filling forms, adding
-annotations or attachments, and the compression and content-removal options.
+```python
+writer.set_output_options(object_streams="generate")   # smallest files
+writer.set_output_options(linearize=True)              # fast web view
+writer.set_output_options(compress_streams=False,
+                          object_streams="disable")    # readable in a text editor
+```
+
+Streams are compressed by default. `object_streams` is `"preserve"` (the
+default), `"generate"` or `"disable"`.
+
+### Not available on the writer
+
+- Removing images or text from page content (`remove_images`, `remove_text`),
+  replacing images, and merging identical objects
+  (`compress_identical_objects`).
+- Incremental writing: every write is a full rewrite, so signatures of the
+  source do not stay valid.
+- Editing existing bookmarks, and article threads.
+- pypdf's object model. Annotations and viewer preferences are given as
+  plain dictionaries instead.
 
 ## PdfEditor: reading and writing in one object
 
@@ -353,6 +592,8 @@ It has everything `PdfReader` and `PdfWriter` have, and:
 |---|---|
 | `editor.is_modified` | whether anything has been changed yet |
 | `editor.annotations` | form, language, outline and structure tree of the document as it currently is |
+| `editor.get_object(n)` | a read-only view of PDF object number `n`, as nested dicts and lists |
+| `editor.trailer`, `editor.root_object` | the same view of the file trailer and the document catalog |
 | `editor.duplicate_page(index, to=None)` | add a copy of a page that can be edited separately |
 | `editor.move_page(from_index, to_index)` | reorder pages |
 | `page.merge_page(other, fit=True)` | overlay centered and scaled to the page |
@@ -360,6 +601,13 @@ It has everything `PdfReader` and `PdfWriter` have, and:
 
 `duplicate_page`, `move_page`, `merge_page(fit=True)` and `remove_encryption`
 are available on `PdfWriter` as well.
+
+The object views are for looking inside a file, not for changing it:
+
+```python
+editor.root_object["/Pages"]["/Count"]
+editor.get_object(12, depth=2)
+```
 
 ## Behavior to know about
 
@@ -386,7 +634,14 @@ document costs at least its file size.
 signatures in the source do not stay valid.
 
 **Permissions.** The permission flags of an encrypted document are reported
-(`reader.encryption["permissions"]`) and not enforced.
+(`reader.permissions`) and not enforced.
+
+**Scripts and actions.** JavaScript in a document is stored, listed and
+removed. It is never run.
+
+**XFA forms.** `has_xfa` tells you a form carries an XFA definition. Values
+set with `update_form_field_values` go to the AcroForm fields, not into the
+XFA data.
 
 **Errors.** All in `docling_parse.pdf_errors`:
 
@@ -406,16 +661,23 @@ What works today, by task:
 |---|---|
 | Open from path, bytes or stream; encrypted input | supported |
 | Page count, indexing, slicing, iteration | supported |
-| Text extraction | plain text; no layout mode or visitor functions |
+| Text extraction | plain and layout mode; no visitor functions |
 | Page boxes, rotation, user unit | supported |
-| Metadata, XMP, outline | read only |
+| Metadata and XMP | read and write; XMP as a raw packet |
+| Outline | read; add bookmarks; carried over by `append`; no editing of existing bookmarks |
+| Page labels, named destinations, open destination | read and write |
+| Page layout, page mode, viewer preferences | read and write |
 | Images | export; no replacement |
 | Merge, split, append, insert, delete, reorder, blank pages | supported |
 | Rotate, crop, scale, transform | supported |
 | Stamps and watermarks | supported; annotations of the merged page are not copied |
-| Encrypt output | AES-256; no permission settings |
-| Write metadata, outlines, page labels | not yet |
-| Forms: read, fill, flatten | not yet |
-| Annotations and attachments | not yet |
-| Compression and content removal | not yet |
-| Incremental writing | not yet |
+| Forms | read, fill, flatten; XFA is reported only |
+| Annotations and links | read, add, remove, flatten |
+| Attachments | read, add, replace, remove |
+| JavaScript | read, add, remove; never run |
+| Encrypt output | AES-256 with permission flags |
+| Output options | stream compression, object streams, linearization |
+| Raw objects | read-only view on `PdfEditor` |
+| Removing images or text, replacing images, merging identical objects | not available |
+| Incremental writing | not available |
+| Article threads | not available |

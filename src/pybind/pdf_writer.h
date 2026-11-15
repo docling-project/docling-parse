@@ -35,6 +35,15 @@ namespace docling
     using docling_editor::page_images;
     using docling_editor::outline;
     using docling_editor::get_source;
+    using docling_editor::document_settings;
+    using docling_editor::page_labels;
+    using docling_editor::named_destinations;
+    using docling_editor::outline_tree;
+    using docling_editor::form;
+    using docling_editor::page_annotations;
+    using docling_editor::attachments;
+    using docling_editor::attachment_data;
+    using docling_editor::javascript;
 
     using docling_editor::remove_page;
     using docling_editor::move_page;
@@ -48,6 +57,26 @@ namespace docling
     using docling_editor::insert_blank_page;
     using docling_editor::append_pages;
 
+    using docling_editor::set_info;
+    using docling_editor::set_xmp;
+    using docling_editor::set_page_layout;
+    using docling_editor::set_page_mode;
+    using docling_editor::set_viewer_preferences;
+    using docling_editor::set_open_destination;
+    using docling_editor::set_page_label;
+    using docling_editor::add_named_destination;
+    using docling_editor::add_outline_item;
+    using docling_editor::set_form_values;
+    using docling_editor::set_need_appearances;
+    using docling_editor::flatten_annotations;
+    using docling_editor::add_annotation;
+    using docling_editor::add_page_link;
+    using docling_editor::remove_annotations;
+    using docling_editor::add_attachment;
+    using docling_editor::remove_attachment;
+    using docling_editor::add_javascript;
+    using docling_editor::remove_javascript;
+    using docling_editor::set_output_options;
     using docling_editor::set_encryption;
     using docling_editor::clear_encryption;
     using docling_editor::write_to_memory;

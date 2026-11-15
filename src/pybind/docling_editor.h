@@ -12,6 +12,7 @@
 #include <mutex>
 #include <optional>
 #include <random>
+#include <set>
 #include <sstream>
 #include <string>
 #include <tuple>
@@ -98,14 +99,33 @@ namespace docling
     pdflib::pdf_document_info document_info();
     pdflib::pdf_page_info page_info(int page, std::int64_t expected_generation);
 
-    // The page's line cells in the order the parser emits them, joined by "\n".
-    std::string extract_text(int page, std::int64_t expected_generation);
+    // The page's line cells in the order the parser emits them, joined by
+    // "\n"; or, with layout, placed on a character grid that keeps the page's
+    // columns, indentation and vertical spacing (pdf_text_layout).
+    std::string extract_text(int page, std::int64_t expected_generation, bool layout);
+
+    // A bounded JSON view of one object, for inspection: `id` is its object
+    // number, 0 the trailer, -1 the catalog.
+    nlohmann::json object_json(int id, int depth);
 
     // The images the page draws, in drawing order, with their encoded bytes.
     std::vector<pdflib::pdf_exported_image> page_images(int page, std::int64_t expected_generation);
 
     nlohmann::json outline();
     nlohmann::json annotations();
+
+    // Document-level content, read from the document as it currently is.
+    // The JSON shapes are documented on the pdf_*_ops functions they come
+    // from (src/edit).
+    nlohmann::json document_settings();   // pdf_catalog_ops::read_settings
+    std::vector<std::string> page_labels();
+    nlohmann::json named_destinations();
+    nlohmann::json outline_tree();        // pdf_outline_ops::read
+    nlohmann::json form();                // pdf_form_ops::read
+    nlohmann::json page_annotations(int page, std::int64_t expected_generation);
+    nlohmann::json attachments();         // pdf_attachment_ops::read
+    std::string attachment_data(std::string name);
+    nlohmann::json javascript();
 
     // The bytes this document can be re-parsed from: the opened source while
     // reading, the serialized current state while editing.
@@ -153,18 +173,76 @@ namespace docling
     // All three return the index of the first new page.
     int duplicate_page(int page, std::int64_t expected_generation, int at);
     int insert_blank_page(int at, double width, double height);
+    // With import_outline, the other document's bookmarks that lead to a
+    // copied page are recreated at the top level of this document's outline.
     int append_pages(const pdflib::pdf_source& other,
                      std::optional<std::vector<int> > pages,
-                     int at);
+                     int at,
+                     bool import_outline);
+
+    // ---- document-level editing ----
+
+    // Entries of /Info; a key without a value is removed.
+    void set_info(std::map<std::string, std::optional<std::string> > entries);
+    void set_xmp(std::optional<std::string> packet);
+
+    // Empty name removes the entry.
+    void set_page_layout(std::string name);
+    void set_page_mode(std::string name);
+
+    // The new /ViewerPreferences dictionary in PDF syntax; empty removes it.
+    void set_viewer_preferences(std::string dictionary);
+
+    // Page to show when the document is opened; -1 removes the open action.
+    void set_open_destination(int page);
+
+    void set_page_label(int from, int to, std::string style, std::string prefix, int start);
+    void add_named_destination(std::string name, int page);
+
+    // Returns the id of the new item, usable as `parent` of later items.
+    int add_outline_item(std::string title, int page, int parent);
+
+    // ---- forms, annotations, attachments, scripts ----
+
+    int set_form_values(std::map<std::string, std::string> values);
+    void set_need_appearances(bool value);
+    void flatten_annotations();
+
+    // `dictionary` is the annotation in PDF syntax.
+    void add_annotation(int page, std::int64_t expected_generation, std::string dictionary);
+    void add_page_link(int page,
+                       std::int64_t expected_generation,
+                       std::array<double, 4> rectangle,
+                       int target);
+    int remove_annotations(int page,
+                           std::int64_t expected_generation,
+                           std::set<std::string> subtypes);
+
+    void add_attachment(std::string name,
+                        std::string bytes,
+                        std::string description,
+                        std::string mime_type);
+    bool remove_attachment(std::string name);
+
+    void add_javascript(std::string name, std::string script);
+    int remove_javascript();
 
     // ---- output ----
 
     // Encrypt everything written from now on with AES-256 (ISO 32000-2,
     // revision 6), the one password scheme PDF 2.0 retains. The user password
     // opens the document; an empty one lets anyone open it. The owner
-    // password defaults to the user password. All permissions are granted.
-    void set_encryption(std::string user_password, std::string owner_password);
+    // password defaults to the user password.
+    void set_encryption(std::string user_password,
+                        std::string owner_password,
+                        pdflib::pdf_permissions permissions);
     void clear_encryption();
+
+    // How the file is written. compress_streams: Flate-compress streams that
+    // are not compressed. object_streams: "preserve", "generate" (smaller
+    // files) or "disable". linearize: order the file for page-at-a-time
+    // loading over a network.
+    void set_output_options(bool compress_streams, std::string object_streams, bool linearize);
 
     // Full rewrite of the current state; unencrypted unless set_encryption
     // was called, whatever the source was. The returned buffer is immutable
@@ -186,6 +264,18 @@ namespace docling
     decltype(auto) with_document(function_type&& function);
 
     void reset_state();
+
+    // The three shapes almost every operation has. Each takes the lock and
+    // translates errors; the editing ones also make sure there is a
+    // destination and mark the document as changed.
+    template<typename function_type>
+    decltype(auto) read_document(function_type&& function);
+
+    template<typename function_type>
+    decltype(auto) edit_document(function_type&& function);
+
+    template<typename function_type>
+    decltype(auto) edit_page(int page, std::int64_t expected_generation, function_type&& function);
 
     void require_open();
     void check_generation(std::int64_t expected_generation);
@@ -263,6 +353,11 @@ namespace docling
     bool output_encrypted;
     std::string output_user_password;
     std::string output_owner_password;
+    pdflib::pdf_permissions output_permissions;
+
+    bool output_compress_streams;
+    qpdf_object_stream_e output_object_streams;
+    bool output_linearize;
   };
 
   inline docling_editor::docling_editor(std::string loglevel):
@@ -279,7 +374,11 @@ namespace docling
     snapshot_loaded(false),
     output_encrypted(false),
     output_user_password(""),
-    output_owner_password("")
+    output_owner_password(""),
+    output_permissions(),
+    output_compress_streams(true),
+    output_object_streams(qpdf_o_preserve),
+    output_linearize(false)
   {}
 
   inline docling_editor::~docling_editor()
@@ -323,6 +422,51 @@ namespace docling
     return require_source_decoder()->with_qpdf(function);
   }
 
+  template<typename function_type>
+  decltype(auto) docling_editor::read_document(function_type&& function)
+  {
+    std::lock_guard<std::recursive_mutex> lock(parser_mutex);
+
+    return guarded([this, &function]() {
+      return with_document(function);
+    });
+  }
+
+  template<typename function_type>
+  decltype(auto) docling_editor::edit_document(function_type&& function)
+  {
+    std::lock_guard<std::recursive_mutex> lock(parser_mutex);
+
+    return guarded([this, &function]() {
+      ensure_destination();
+
+      // before the change: a failure half way still invalidates the snapshot
+      touch(false);
+
+      return function(*destination);
+    });
+  }
+
+  template<typename function_type>
+  decltype(auto) docling_editor::edit_page(int page,
+                                           std::int64_t expected_generation,
+                                           function_type&& function)
+  {
+    std::lock_guard<std::recursive_mutex> lock(parser_mutex);
+
+    return guarded([this, page, expected_generation, &function]() {
+      check_generation(expected_generation);
+      ensure_destination();
+
+      std::vector<QPDFPageObjectHelper> pages = destination_pages();
+      check_page(page, static_cast<int>(pages.size()));
+
+      touch(false);
+
+      return function(*destination, pages.at(page));
+    });
+  }
+
   inline void docling_editor::reset_state()
   {
     source = pdflib::pdf_source();
@@ -340,6 +484,11 @@ namespace docling
     output_encrypted = false;
     output_user_password.clear();
     output_owner_password.clear();
+    output_permissions = pdflib::pdf_permissions();
+
+    output_compress_streams = true;
+    output_object_streams = qpdf_o_preserve;
+    output_linearize = false;
 
     // A reopened editor is a different document: outstanding page handles
     // must not match it.
@@ -461,17 +610,25 @@ namespace docling
         QPDFWriter writer(*destination);
         writer.setOutputMemory();
 
+        writer.setCompressStreams(output_compress_streams);
+        writer.setObjectStreamMode(output_object_streams);
+        writer.setLinearization(output_linearize);
+
         if(output_encrypted)
           {
+            qpdf_r3_print_e print = qpdf_r3p_full;
+            if(output_permissions.get_print() == 1) { print = qpdf_r3p_low; }
+            if(output_permissions.get_print() >= 2) { print = qpdf_r3p_none; }
+
             writer.setR6EncryptionParameters(output_user_password.c_str(),
                                              output_owner_password.c_str(),
-                                             true,  // allow_accessibility
-                                             true,  // allow_extract
-                                             true,  // allow_assemble
-                                             true,  // allow_annotate_and_form
-                                             true,  // allow_form_filling
-                                             true,  // allow_modify_other
-                                             qpdf_r3p_full,
+                                             output_permissions.get_accessibility(),
+                                             output_permissions.get_extract(),
+                                             output_permissions.get_assemble(),
+                                             output_permissions.get_annotate(),
+                                             output_permissions.get_fill_forms(),
+                                             output_permissions.get_modify(),
+                                             print,
                                              true); // encrypt_metadata_aes
           }
         else
@@ -710,14 +867,40 @@ namespace docling
     });
   }
 
-  inline std::string docling_editor::extract_text(int page, std::int64_t expected_generation)
+  inline nlohmann::json docling_editor::object_json(int id, int depth)
+  {
+    return read_document([id, depth](QPDF& qpdf) {
+      if(depth < 1 or depth > 32)
+        {
+          throw pdflib::pdf_edit_error(pdflib::edit_error::INVALID_EDIT,
+                                       "the depth of an object view is between 1 and 32");
+        }
+
+      QPDFObjectHandle object = QPDFObjectHandle::newNull();
+      if(id == 0)       { object = qpdf.getTrailer(); }
+      else if(id == -1) { object = qpdf.getRoot(); }
+      else if(id > 0)   { object = qpdf.getObjectByID(id, 0); }
+
+      if(object.isNull())
+        {
+          throw pdflib::pdf_edit_error(pdflib::edit_error::INVALID_EDIT,
+                                       "the document has no object " + std::to_string(id));
+        }
+
+      return pdflib::pdf_object_json::to_json(object, depth);
+    });
+  }
+
+  inline std::string docling_editor::extract_text(int page,
+                                                  std::int64_t expected_generation,
+                                                  bool layout)
   {
     // Held across the decode, unlike docling_parser::get_page_decoder on its
     // own: the page index and the snapshot must stay the ones that were
     // checked. Calls on one editor are serialized by contract.
     std::lock_guard<std::recursive_mutex> lock(parser_mutex);
 
-    return guarded([this, page, expected_generation]() {
+    return guarded([this, page, expected_generation, layout]() {
       check_generation(expected_generation);
       check_page(page, page_count());
 
@@ -725,14 +908,37 @@ namespace docling
       pdflib::decode_config config;
       config.keep_shapes = false;
       config.keep_bitmaps = false;
-      config.create_word_cells = false;
+      config.create_word_cells = layout;
       config.create_line_cells = true;
 
       auto page_decoder = decode_page(page, config);
 
-      std::string text;
+      if(layout)
+        {
+          // Words, not lines: a line cell may already join runs that sit far
+          // apart on the page, and the distance between them is exactly
+          // what the grid is meant to keep.
+          auto& word_cells = page_decoder->get_word_cells();
+
+          std::vector<std::string> texts;
+          std::vector<pdflib::pdf_text_layout::box_type> boxes;
+          std::vector<int> lengths;
+
+          for(auto itr = word_cells.begin(); itr != word_cells.end(); ++itr)
+            {
+              texts.push_back(itr->text);
+              boxes.push_back({std::min(itr->x0, itr->x1), std::min(itr->y0, itr->y1),
+                               std::max(itr->x0, itr->x1), std::max(itr->y0, itr->y1)});
+              lengths.push_back(itr->number_of_chars());
+            }
+
+          return pdflib::pdf_text_layout::render(texts, boxes, lengths);
+        }
 
       auto& line_cells = page_decoder->get_line_cells();
+
+      std::string text;
+
       for(auto itr = line_cells.begin(); itr != line_cells.end(); ++itr)
         {
           if(not text.empty())
@@ -1041,6 +1247,11 @@ namespace docling
       check_page(page, static_cast<int>(pages.size()));
 
       touch(true);
+      // Bookmarks and an open action leading to the page would otherwise
+      // keep it in the file, unreachable and unlisted.
+      pdflib::pdf_outline_ops::drop_destinations_to(*destination,
+                                                    pages.at(page).getObjectHandle().getObjGen());
+
       QPDFPageDocumentHelper(*destination).removePage(pages.at(page));
     });
   }
@@ -1157,11 +1368,12 @@ namespace docling
 
   inline int docling_editor::append_pages(const pdflib::pdf_source& other,
                                           std::optional<std::vector<int> > pages,
-                                          int at)
+                                          int at,
+                                          bool import_outline)
   {
     std::lock_guard<std::recursive_mutex> lock(parser_mutex);
 
-    return guarded([this, &other, &pages, at]() -> int {
+    return guarded([this, &other, &pages, at, import_outline]() -> int {
       if(not other.is_valid())
         {
           throw pdflib::pdf_edit_error(pdflib::edit_error::INVALID_EDIT,
@@ -1211,10 +1423,16 @@ namespace docling
       // constructor walks every form field of the destination.
       std::unique_ptr<QPDFAcroFormDocumentHelper> destination_acroform = nullptr;
 
+      std::map<QPDFObjGen, int> page_map;
+
       int position = first;
       for(int index : selection)
         {
           QPDFPageObjectHelper import_page = import_pages.at(index);
+
+          // where this page of the other document ends up here; a page
+          // copied twice is found at its first copy
+          page_map.emplace(import_page.getObjectHandle().getObjGen(), position);
 
           // qpdf copies a page of another QPDF into this one, and makes a
           // shallow copy when the same page is added a second time.
@@ -1248,6 +1466,11 @@ namespace docling
           position += 1;
         }
 
+      if(import_outline)
+        {
+          pdflib::pdf_outline_ops::import(*destination, import->get_qpdf(), page_map, 0);
+        }
+
       return first;
     });
   }
@@ -1262,11 +1485,19 @@ namespace docling
     return std::nullopt;
   }
 
-  inline void docling_editor::set_encryption(std::string user_password, std::string owner_password)
+  inline void docling_editor::set_encryption(std::string user_password,
+                                             std::string owner_password,
+                                             pdflib::pdf_permissions permissions)
   {
     std::lock_guard<std::recursive_mutex> lock(parser_mutex);
 
-    guarded([this, &user_password, &owner_password]() {
+    guarded([this, &user_password, &owner_password, &permissions]() {
+      if(permissions.get_print() < 0 or permissions.get_print() > 2)
+        {
+          throw pdflib::pdf_edit_error(pdflib::edit_error::INVALID_EDIT,
+                                       "the print permission is 0 (full), 1 (low resolution) or 2 (none)");
+        }
+
       if(user_password.empty() and owner_password.empty())
         {
           throw pdflib::pdf_edit_error(pdflib::edit_error::INVALID_EDIT,
@@ -1278,6 +1509,7 @@ namespace docling
       output_encrypted = true;
       output_user_password = user_password;
       output_owner_password = owner_password.empty() ? user_password : owner_password;
+      output_permissions = permissions;
 
       touch(false);
     });
@@ -1344,6 +1576,255 @@ namespace docling
 
         throw pdflib::pdf_edit_error(pdflib::edit_error::WRITE, exc.what());
       }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Document-level content: thin, locked entry points over src/edit/*_ops.h
+  // ---------------------------------------------------------------------------
+
+  inline nlohmann::json docling_editor::document_settings()
+  {
+    return read_document([](QPDF& qpdf) {
+      return pdflib::pdf_catalog_ops::read_settings(qpdf);
+    });
+  }
+
+  inline std::vector<std::string> docling_editor::page_labels()
+  {
+    return read_document([](QPDF& qpdf) {
+      return pdflib::pdf_catalog_ops::page_labels(qpdf);
+    });
+  }
+
+  inline nlohmann::json docling_editor::named_destinations()
+  {
+    return read_document([](QPDF& qpdf) {
+      return pdflib::pdf_catalog_ops::named_destinations(qpdf);
+    });
+  }
+
+  inline nlohmann::json docling_editor::outline_tree()
+  {
+    return read_document([](QPDF& qpdf) {
+      return pdflib::pdf_outline_ops::read(qpdf);
+    });
+  }
+
+  inline nlohmann::json docling_editor::form()
+  {
+    return read_document([](QPDF& qpdf) {
+      return pdflib::pdf_form_ops::read(qpdf);
+    });
+  }
+
+  inline nlohmann::json docling_editor::page_annotations(int page, std::int64_t expected_generation)
+  {
+    std::lock_guard<std::recursive_mutex> lock(parser_mutex);
+
+    return guarded([this, page, expected_generation]() {
+      check_generation(expected_generation);
+
+      return with_document([this, page](QPDF& qpdf) {
+        std::vector<QPDFPageObjectHelper> pages = QPDFPageDocumentHelper(qpdf).getAllPages();
+        check_page(page, static_cast<int>(pages.size()));
+
+        return pdflib::pdf_annotation_ops::read(qpdf, pages.at(page));
+      });
+    });
+  }
+
+  inline nlohmann::json docling_editor::attachments()
+  {
+    return read_document([](QPDF& qpdf) {
+      return pdflib::pdf_attachment_ops::read(qpdf);
+    });
+  }
+
+  inline std::string docling_editor::attachment_data(std::string name)
+  {
+    return read_document([&name](QPDF& qpdf) {
+      return pdflib::pdf_attachment_ops::data(qpdf, name);
+    });
+  }
+
+  inline nlohmann::json docling_editor::javascript()
+  {
+    return read_document([](QPDF& qpdf) {
+      return pdflib::pdf_attachment_ops::javascript(qpdf);
+    });
+  }
+
+  inline void docling_editor::set_info(std::map<std::string, std::optional<std::string> > entries)
+  {
+    edit_document([&entries](QPDF& qpdf) {
+      pdflib::pdf_catalog_ops::set_info(qpdf, entries);
+    });
+  }
+
+  inline void docling_editor::set_xmp(std::optional<std::string> packet)
+  {
+    edit_document([&packet](QPDF& qpdf) {
+      pdflib::pdf_catalog_ops::set_xmp(qpdf, packet);
+    });
+  }
+
+  inline void docling_editor::set_page_layout(std::string name)
+  {
+    edit_document([&name](QPDF& qpdf) {
+      pdflib::pdf_catalog_ops::set_page_layout(qpdf, name);
+    });
+  }
+
+  inline void docling_editor::set_page_mode(std::string name)
+  {
+    edit_document([&name](QPDF& qpdf) {
+      pdflib::pdf_catalog_ops::set_page_mode(qpdf, name);
+    });
+  }
+
+  inline void docling_editor::set_viewer_preferences(std::string dictionary)
+  {
+    edit_document([&dictionary](QPDF& qpdf) {
+      pdflib::pdf_catalog_ops::set_viewer_preferences(qpdf, dictionary);
+    });
+  }
+
+  inline void docling_editor::set_open_destination(int page)
+  {
+    edit_document([page](QPDF& qpdf) {
+      pdflib::pdf_catalog_ops::set_open_destination(qpdf, page);
+    });
+  }
+
+  inline void docling_editor::set_page_label(int from,
+                                             int to,
+                                             std::string style,
+                                             std::string prefix,
+                                             int start)
+  {
+    edit_document([from, to, &style, &prefix, start](QPDF& qpdf) {
+      pdflib::pdf_catalog_ops::set_page_label(qpdf, from, to, style, prefix, start);
+    });
+  }
+
+  inline void docling_editor::add_named_destination(std::string name, int page)
+  {
+    edit_document([&name, page](QPDF& qpdf) {
+      pdflib::pdf_catalog_ops::add_named_destination(qpdf, name, page);
+    });
+  }
+
+  inline int docling_editor::add_outline_item(std::string title, int page, int parent)
+  {
+    return edit_document([&title, page, parent](QPDF& qpdf) {
+      return pdflib::pdf_outline_ops::add_item(qpdf, title, page, parent);
+    });
+  }
+
+  inline int docling_editor::set_form_values(std::map<std::string, std::string> values)
+  {
+    return edit_document([&values](QPDF& qpdf) {
+      return pdflib::pdf_form_ops::set_values(qpdf, values);
+    });
+  }
+
+  inline void docling_editor::set_need_appearances(bool value)
+  {
+    edit_document([value](QPDF& qpdf) {
+      pdflib::pdf_form_ops::set_need_appearances(qpdf, value);
+    });
+  }
+
+  inline void docling_editor::flatten_annotations()
+  {
+    edit_document([](QPDF& qpdf) {
+      pdflib::pdf_form_ops::flatten(qpdf);
+    });
+  }
+
+  inline void docling_editor::add_annotation(int page,
+                                             std::int64_t expected_generation,
+                                             std::string dictionary)
+  {
+    edit_page(page, expected_generation, [&dictionary](QPDF& qpdf, QPDFPageObjectHelper target) {
+      pdflib::pdf_annotation_ops::add(qpdf, target, dictionary);
+    });
+  }
+
+  inline void docling_editor::add_page_link(int page,
+                                            std::int64_t expected_generation,
+                                            std::array<double, 4> rectangle,
+                                            int target)
+  {
+    edit_page(page, expected_generation, [&rectangle, target](QPDF& qpdf, QPDFPageObjectHelper source) {
+      pdflib::pdf_annotation_ops::add_page_link(qpdf, source, rectangle, target);
+    });
+  }
+
+  inline int docling_editor::remove_annotations(int page,
+                                                std::int64_t expected_generation,
+                                                std::set<std::string> subtypes)
+  {
+    return edit_page(page, expected_generation, [&subtypes](QPDF& qpdf, QPDFPageObjectHelper target) {
+      return pdflib::pdf_annotation_ops::remove(qpdf, target, subtypes);
+    });
+  }
+
+  inline void docling_editor::add_attachment(std::string name,
+                                             std::string bytes,
+                                             std::string description,
+                                             std::string mime_type)
+  {
+    edit_document([&name, &bytes, &description, &mime_type](QPDF& qpdf) {
+      pdflib::pdf_attachment_ops::add(qpdf, name, bytes, description, mime_type);
+    });
+  }
+
+  inline bool docling_editor::remove_attachment(std::string name)
+  {
+    return edit_document([&name](QPDF& qpdf) {
+      return pdflib::pdf_attachment_ops::remove(qpdf, name);
+    });
+  }
+
+  inline void docling_editor::add_javascript(std::string name, std::string script)
+  {
+    edit_document([&name, &script](QPDF& qpdf) {
+      pdflib::pdf_attachment_ops::add_javascript(qpdf, name, script);
+    });
+  }
+
+  inline int docling_editor::remove_javascript()
+  {
+    return edit_document([](QPDF& qpdf) {
+      return pdflib::pdf_attachment_ops::remove_javascript(qpdf);
+    });
+  }
+
+  inline void docling_editor::set_output_options(bool compress_streams,
+                                                 std::string object_streams,
+                                                 bool linearize)
+  {
+    std::lock_guard<std::recursive_mutex> lock(parser_mutex);
+
+    guarded([this, compress_streams, &object_streams, linearize]() {
+      qpdf_object_stream_e mode = qpdf_o_preserve;
+      if(object_streams == "generate")     { mode = qpdf_o_generate; }
+      else if(object_streams == "disable") { mode = qpdf_o_disable; }
+      else if(object_streams != "preserve")
+        {
+          throw pdflib::pdf_edit_error(pdflib::edit_error::INVALID_EDIT,
+                                       "object_streams is 'preserve', 'generate' or 'disable'");
+        }
+
+      ensure_destination();
+
+      output_compress_streams = compress_streams;
+      output_object_streams = mode;
+      output_linearize = linearize;
+
+      touch(false);
+    });
   }
 
 }

@@ -26,8 +26,7 @@ namespace pdflib
                        const std::string& mode_,
                        std::vector<unsigned char>&& data_);
 
-    // The /XObject resource name the page draws the image under; empty for
-    // an inline image.
+    // The /XObject resource name the page draws the image under.
     const std::string& get_name() const;
 
     // [x0, y0, x1, y1] of the image on the page, in the page's coordinates.

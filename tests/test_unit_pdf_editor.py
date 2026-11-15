@@ -224,6 +224,43 @@ def test_reader_extracts_text_per_page():
         ]
 
 
+def test_layout_text_keeps_columns_and_spacing():
+    content = (
+        "BT /F1 12 Tf 20 250 Td (left) Tj ET "
+        "BT /F1 12 Tf 150 250 Td (right) Tj ET "
+        "BT /F1 12 Tf 100 150 Td (indented) Tj ET"
+    )
+    pdf = simple_page_pdf(
+        content,
+        resources="/Font << /F1 5 0 R >>",
+        media_box="[0 0 300 300]",
+        extra_objects=["<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"],
+    )
+
+    with PdfReader(pdf) as reader:
+        page = reader.pages[0]
+        plain = page.extract_text()
+        layout = page.extract_text(extraction_mode="layout")
+
+        with pytest.raises(ValueError):
+            page.extract_text(extraction_mode="fancy")
+
+    assert {"left", "right", "indented"} <= set(plain.split())
+
+    rows = layout.split("\n")
+    first, last = rows[0], rows[-1]
+
+    # one row for the two runs that share a baseline, the gap between them kept
+    assert first.startswith("left")
+    assert first.rstrip().endswith("right")
+    assert first.index("right") - len("left") >= 5
+
+    # the lower run keeps its indentation and its distance from the first row
+    assert last.strip() == "indented"
+    assert last.startswith("     ")
+    assert len(rows) >= 3 and all(row == "" for row in rows[1:-1])
+
+
 @pytest.mark.parametrize("kind", ["bytes", "stream", "path", "reader"])
 def test_reader_sources(kind, tmp_path):
     if kind == "bytes":
@@ -659,6 +696,607 @@ def test_write_over_the_source_path(tmp_path):
     assert written_widths(path.read_bytes()) == [210.0, 220.0]
 
 
+# ---------------------------------------------------------------- document level
+
+
+def reread(document):
+    """What a fresh reader sees in the document as written."""
+    return PdfReader(document.to_bytes())
+
+
+@pytest.mark.parametrize("cls", EDITING_CLASSES)
+def test_write_metadata(cls):
+    document = cls(THREE)
+    document.add_metadata(
+        {"/Title": "New title", "Subject": "Ünïcode ✓", "Author": None}
+    )
+
+    expected = {"Title": "New title", "Subject": "Ünïcode ✓"}
+    assert document.metadata == expected
+    with reread(document) as reader:
+        assert reader.metadata == expected
+
+    if pypdf is not None:
+        info = pypdf.PdfReader(BytesIO(document.to_bytes())).metadata
+        assert info.title == "New title"
+        assert info.subject == "Ünïcode ✓"
+        assert info.author is None
+
+    with pytest.raises(PdfEditError):
+        document.add_metadata({"": "nameless"})
+
+
+@pytest.mark.parametrize("cls", EDITING_CLASSES)
+def test_write_xmp_metadata(cls):
+    packet = '<x:xmpmeta xmlns:x="adobe:ns:meta/">é</x:xmpmeta>'
+
+    document = cls(THREE)
+    assert document.xmp_metadata is None
+
+    document.set_xmp_metadata(packet)
+    with reread(document) as reader:
+        assert reader.xmp_metadata == packet
+
+    document.set_xmp_metadata(None)
+    with reread(document) as reader:
+        assert reader.xmp_metadata is None
+
+
+@pytest.mark.parametrize("cls", EDITING_CLASSES)
+def test_viewer_settings(cls):
+    document = cls(THREE)
+    assert document.page_layout is None
+    assert document.page_mode is None
+    assert document.viewer_preferences is None
+    assert document.open_destination is None
+
+    document.set_page_layout("/TwoColumnLeft")
+    document.set_page_mode("UseOutlines")
+    document.set_viewer_preferences({"/HideToolbar": True, "Direction": "/R2L"})
+    document.set_open_destination(2)
+
+    with reread(document) as reader:
+        assert reader.page_layout == "/TwoColumnLeft"
+        assert reader.page_mode == "/UseOutlines"
+        assert reader.viewer_preferences == {"/HideToolbar": True, "/Direction": "/R2L"}
+        assert reader.open_destination == {"page": 2, "kind": "/Fit", "arguments": []}
+
+    with pytest.raises(PdfEditError) as excinfo:
+        document.set_page_layout("/Sideways")
+    assert excinfo.value.category is PdfEditErrorCategory.INVALID_EDIT
+
+    document.set_page_layout(None)
+    document.set_page_mode(None)
+    document.set_viewer_preferences(None)
+    document.set_open_destination(None)
+
+    with reread(document) as reader:
+        assert reader.page_layout is None
+        assert reader.page_mode is None
+        assert reader.viewer_preferences is None
+        assert reader.open_destination is None
+
+
+@pytest.mark.parametrize("cls", EDITING_CLASSES)
+def test_page_labels(cls):
+    document = cls(make_pdf([f"p{i}" for i in range(6)]))
+    assert document.page_labels == ["1", "2", "3", "4", "5", "6"]
+
+    # front matter in roman numerals; the rest keeps counting 3, 4, ...
+    document.set_page_label(0, 1, "/r")
+    assert document.page_labels == ["i", "ii", "3", "4", "5", "6"]
+
+    document.set_page_label(2, 3, "/D", prefix="A-", start=5)
+    assert document.page_labels == ["i", "ii", "A-5", "A-6", "5", "6"]
+
+    document.set_page_label(5, 5, "/A", start=27)
+    expected = ["i", "ii", "A-5", "A-6", "5", "AA"]
+    assert document.page_labels == expected
+
+    data = document.to_bytes()
+    with PdfReader(data) as reader:
+        assert reader.page_labels == expected
+    if pypdf is not None:
+        assert pypdf.PdfReader(BytesIO(data)).page_labels == expected
+
+    with pytest.raises(PdfEditError):
+        document.set_page_label(0, 1, "/X")
+    with pytest.raises(IndexError):
+        document.set_page_label(0, 9, "/D")
+
+
+@pytest.mark.parametrize("cls", EDITING_CLASSES)
+def test_named_destinations(cls):
+    document = cls(THREE)
+    assert document.named_destinations == {}
+
+    document.add_named_destination("chapter two", 1)
+    document.add_named_destination("end", -1)
+
+    with reread(document) as reader:
+        destinations = reader.named_destinations
+    assert destinations == {
+        "chapter two": {"page": 1, "kind": "/Fit", "arguments": []},
+        "end": {"page": 2, "kind": "/Fit", "arguments": []},
+    }
+
+
+def flat_outline(items, depth: int = 0) -> list[tuple[int, str, int | None]]:
+    """(depth, title, page) of every outline item, in reading order."""
+    result = []
+    for item in items:
+        result.append((depth, item["title"], item["page"]))
+        result.extend(flat_outline(item["children"], depth + 1))
+    return result
+
+
+def pypdf_flat_outline(data: bytes) -> list[tuple[int, str, int | None]]:
+    reader = pypdf.PdfReader(BytesIO(data))
+
+    def walk(items, depth):
+        result = []
+        for item in items:
+            if isinstance(item, list):
+                result.extend(walk(item, depth + 1))
+            else:
+                result.append(
+                    (depth, item.title, reader.get_destination_page_number(item))
+                )
+        return result
+
+    return walk(reader.outline, 0)
+
+
+@pytest.mark.parametrize("cls", EDITING_CLASSES)
+def test_build_an_outline(cls):
+    document = cls(THREE)
+    assert document.outline == []
+
+    one = document.add_outline_item("One", 0)
+    document.add_outline_item("Sub ö", 1, parent=one)
+    document.add_outline_item("Sub two", 2, parent=one)
+    document.add_outline_item("Two", 2)
+
+    expected = [(0, "One", 0), (1, "Sub ö", 1), (1, "Sub two", 2), (0, "Two", 2)]
+    assert flat_outline(document.outline) == expected
+
+    data = document.to_bytes()
+    with PdfReader(data) as reader:
+        assert flat_outline(reader.outline) == expected
+    if pypdf is not None:
+        assert pypdf_flat_outline(data) == expected
+
+    with pytest.raises(PdfEditError):
+        document.add_outline_item("orphan", 0, parent=987654)
+
+
+@pytest.mark.parametrize("cls", EDITING_CLASSES)
+def test_removing_a_page_unhooks_its_bookmarks(cls):
+    document = cls(THREE)
+    document.add_outline_item("One", 0)
+    document.add_outline_item("Two", 1)
+    document.add_outline_item("Three", 2)
+    document.set_open_destination(1)
+
+    del document.pages[1]
+
+    # the bookmark stays as a heading; the ones behind it follow their pages
+    expected = [(0, "One", 0), (0, "Two", None), (0, "Three", 1)]
+    with reread(document) as reader:
+        assert flat_outline(reader.outline) == expected
+        assert reader.open_destination is None
+        assert len(reader.pages) == 2
+
+
+@pytest.mark.parametrize("cls", EDITING_CLASSES)
+def test_append_brings_the_outline_of_copied_pages(cls):
+    """build_destination_kinds: three pages, twelve bookmarks, eleven of them
+    on the first page and one without a destination."""
+    source = build_destination_kinds()
+    with PdfReader(source) as reader:
+        titles = [item["title"] for item in reader.outline]
+        pages = [item["page"] for item in reader.outline]
+    assert len(titles) == 12
+    assert pages == [0] * 11 + [None]
+
+    document = cls(THREE)
+    document.append(source, pages=[1, 0])
+
+    # the first page of the source is now page 4 of the document
+    assert flat_outline(document.outline) == [(0, title, 4) for title in titles[:11]]
+
+    without = cls(THREE)
+    without.append(source, pages=[1, 2])
+    assert without.outline == []
+
+    declined = cls(THREE)
+    declined.append(source, import_outline=False)
+    assert declined.outline == []
+
+
+# ---------------------------------------------------------------- forms
+
+
+def make_form_pdf() -> bytes:
+    """One 200x200 page with a text field "name" (value "Ada") and a
+    checkbox "agree" whose on state is /Yes, drawn as a black square."""
+    on = "0 g 2 2 16 16 re f"
+    objects: list[str] = [
+        "<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [5 0 R 6 0 R] "
+        "/DA (/Helv 12 Tf 0 g) /DR << /Font << /Helv 3 0 R >> >> >> >>",
+        "<< /Type /Pages /Kids [4 0 R] /Count 1 >>",
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica "
+        "/Encoding /WinAnsiEncoding >>",
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] "
+        "/Resources << /Font << /Helv 3 0 R >> >> /Contents 9 0 R "
+        "/Annots [5 0 R 6 0 R] >>",
+        "<< /Type /Annot /Subtype /Widget /FT /Tx /T (name) /V (Ada) "
+        "/Rect [20 150 180 170] /P 4 0 R /F 4 /DA (/Helv 12 Tf 0 g) >>",
+        "<< /Type /Annot /Subtype /Widget /FT /Btn /T (agree) /V /Off /AS /Off "
+        "/Rect [20 100 40 120] /P 4 0 R /F 4 "
+        "/AP << /N << /Yes 7 0 R /Off 8 0 R >> >> >>",
+        f"<< /Type /XObject /Subtype /Form /BBox [0 0 20 20] /Length {len(on)} >>"
+        f"\nstream\n{on}\nendstream",
+        "<< /Type /XObject /Subtype /Form /BBox [0 0 20 20] /Length 0 >>"
+        "\nstream\n\nendstream",
+        "<< /Length 0 >>\nstream\n\nendstream",
+    ]
+
+    out = b"%PDF-1.7\n"
+    offsets = []
+    for index, obj in enumerate(objects, start=1):
+        offsets.append(len(out))
+        out += f"{index} 0 obj\n{obj}\nendobj\n".encode("latin-1")
+
+    startxref = len(out)
+    out += f"xref\n0 {len(objects) + 1}\n".encode("latin-1")
+    out += b"0000000000 65535 f \n"
+    for offset in offsets:
+        out += f"{offset:010d} 00000 n \n".encode("latin-1")
+    out += (
+        f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\n"
+        f"startxref\n{startxref}\n%%EOF"
+    ).encode("latin-1")
+    return out
+
+
+FORM = make_form_pdf()
+
+
+def test_reader_lists_form_fields():
+    with PdfReader(FORM) as reader:
+        assert reader.has_form is True
+        assert reader.has_xfa is False
+
+        fields = reader.get_fields()
+        assert set(fields) == {"name", "agree"}
+
+        name = fields["name"]
+        assert (name["kind"], name["type"], name["value"]) == ("text", "/Tx", "Ada")
+        assert name["pages"] == [0]
+        assert name["read_only"] is False
+
+        agree = fields["agree"]
+        assert (agree["kind"], agree["value"]) == ("checkbox", "/Off")
+        assert agree["states"] == ["/Yes"]
+
+        assert reader.get_form_text_fields() == {"name": "Ada"}
+
+    with PdfReader(THREE) as reader:
+        assert reader.has_form is False
+        assert reader.get_fields() == {}
+
+
+@pytest.mark.parametrize("cls", EDITING_CLASSES)
+def test_fill_form_fields(cls):
+    document = cls(FORM)
+    assert (
+        document.update_form_field_values({"name": "Grace Hopper", "agree": True}) == 2
+    )
+
+    data = document.to_bytes()
+    with PdfReader(data) as reader:
+        fields = reader.get_fields()
+        assert fields["name"]["value"] == "Grace Hopper"
+        assert fields["agree"]["value"] == "/Yes"
+        # the widget shows the state its field has
+        widgets = [a for a in reader.pages[0].annotations if a["/Subtype"] == "/Widget"]
+        assert [w.get("/AS") for w in widgets if w.get("/T") == "agree"] == ["/Yes"]
+
+    if pypdf is not None:
+        assert pypdf.PdfReader(BytesIO(data)).get_form_text_fields() == {
+            "name": "Grace Hopper"
+        }
+
+    assert document.update_form_field_values({"agree": False}) == 1
+    with reread(document) as reader:
+        assert reader.get_fields()["agree"]["value"] == "/Off"
+
+
+@pytest.mark.parametrize("cls", EDITING_CLASSES)
+def test_fill_form_rejects_what_it_cannot_set(cls):
+    document = cls(FORM)
+
+    with pytest.raises(PdfEditError) as excinfo:
+        document.update_form_field_values({"no such field": "x"})
+    assert excinfo.value.category is PdfEditErrorCategory.INVALID_EDIT
+
+    with pytest.raises(PdfEditError):
+        document.update_form_field_values({"agree": "/Maybe"})
+
+    with pytest.raises(PdfEditError):
+        cls(THREE).update_form_field_values({"name": "x"})
+
+    # nothing was changed by the rejected calls
+    with reread(document) as reader:
+        assert reader.get_form_text_fields() == {"name": "Ada"}
+
+
+@pytest.mark.parametrize("cls", EDITING_CLASSES)
+def test_flatten_form_into_page_content(cls):
+    document = cls(FORM)
+    document.update_form_field_values(
+        {"name": "Grace Hopper", "agree": True}, flatten=True
+    )
+
+    data = document.to_bytes()
+    with PdfReader(data) as reader:
+        assert reader.has_form is False
+        assert reader.pages[0].annotations == []
+        # the value is ordinary page text now
+        assert "Grace Hopper" in reader.pages[0].extract_text()
+
+    # the checkbox's on appearance fills [22 38] x [102 118] of the page
+    image = rendered(data)
+    assert color_at(image, 30, 110) == (0, 0, 0)
+    assert color_at(image, 100, 60) == WHITE
+
+
+# ---------------------------------------------------------------- annotations
+
+
+@pytest.mark.parametrize("cls", EDITING_CLASSES)
+def test_add_read_and_remove_annotations(cls):
+    document = cls(THREE)
+    assert document.pages[0].annotations == []
+
+    document.add_uri(0, "https://example.org/a b", (10, 10, 60, 30))
+    document.add_link(0, (10, 40, 60, 60), 2)
+    document.add_annotation(
+        1,
+        {"/Subtype": "/Text", "/Rect": [50, 200, 70, 220], "/Contents": "Nöte ✓"},
+    )
+
+    data = document.to_bytes()
+    with PdfReader(data) as reader:
+        first, second = reader.pages[0].annotations
+        assert first["/Subtype"] == "/Link"
+        assert first["/Rect"] == [10, 10, 60, 30]
+        assert first["/A"]["/URI"] == "https://example.org/a b"
+        assert "page" not in first
+
+        assert second["/Subtype"] == "/Link"
+        assert second["page"] == 2
+
+        (note,) = reader.pages[1].annotations
+        assert note["/Subtype"] == "/Text"
+        assert note["/Contents"] == "Nöte ✓"
+        assert note["/Type"] == "/Annot"
+
+        assert reader.pages[2].annotations == []
+
+    if pypdf is not None:
+        page = pypdf.PdfReader(BytesIO(data)).pages[0]
+        assert [a.get_object()["/Subtype"] for a in page["/Annots"]] == [
+            "/Link",
+            "/Link",
+        ]
+
+    assert document.remove_links() == 2
+    assert document.pages[0].annotations == []
+    assert len(document.pages[1].annotations) == 1
+
+    assert document.remove_annotations() == 1
+    assert document.pages[1].annotations == []
+
+
+@pytest.mark.parametrize("cls", EDITING_CLASSES)
+def test_add_annotation_validates_its_input(cls):
+    document = cls(THREE)
+
+    with pytest.raises(PdfEditError):
+        document.add_annotation(0, {"/Rect": [0, 0, 10, 10]})
+    with pytest.raises(PdfEditError):
+        document.add_annotation(0, {"/Subtype": "/Text"})
+    with pytest.raises(IndexError):
+        document.add_annotation(7, {"/Subtype": "/Text", "/Rect": [0, 0, 1, 1]})
+    with pytest.raises(TypeError):
+        document.add_annotation(0, {"/Subtype": "/Text", "/Rect": object()})
+
+    assert document.pages[0].annotations == []
+
+
+@pytest.mark.parametrize("cls", EDITING_CLASSES)
+def test_removing_widgets_removes_their_fields(cls):
+    document = cls(FORM)
+
+    # form fields are kept unless they are asked for by name
+    assert document.remove_annotations() == 0
+    assert set(document.get_fields()) == {"name", "agree"}
+
+    assert document.remove_annotations("/Widget") == 2
+    with reread(document) as reader:
+        assert reader.get_fields() == {}
+        assert reader.pages[0].annotations == []
+
+
+# ---------------------------------------------------------------- attachments
+
+
+@pytest.mark.parametrize("cls", EDITING_CLASSES)
+def test_attachments(cls):
+    document = cls(THREE)
+    assert document.attachments == {}
+
+    document.add_attachment(
+        "notes.txt", b"hello", description="a note", mime_type="text/plain"
+    )
+    document.add_attachment("data ü.bin", bytes(range(256)))
+    document.add_attachment("notes.txt", "replaced")
+
+    data = document.to_bytes()
+    with PdfReader(data) as reader:
+        assert reader.attachments == {
+            "data ü.bin": [bytes(range(256))],
+            "notes.txt": [b"replaced"],
+        }
+        assert reader.get_attachment("notes.txt") == b"replaced"
+
+        info = {item["name"]: item for item in reader.attachment_info}
+        assert info["data ü.bin"]["size"] == 256
+        assert info["notes.txt"]["size"] == len(b"replaced")
+
+        with pytest.raises(PdfEditError):
+            reader.get_attachment("missing")
+
+    if pypdf is not None:
+        assert pypdf.PdfReader(BytesIO(data)).attachments == {
+            "data ü.bin": [bytes(range(256))],
+            "notes.txt": [b"replaced"],
+        }
+
+    assert document.remove_attachment("notes.txt") is True
+    assert document.remove_attachment("notes.txt") is False
+    with reread(document) as reader:
+        assert set(reader.attachments) == {"data ü.bin"}
+
+
+@pytest.mark.parametrize("cls", EDITING_CLASSES)
+def test_attachment_metadata(cls):
+    document = cls(THREE)
+    document.add_attachment(
+        "notes.txt", b"hello", description="a note", mime_type="text/plain"
+    )
+
+    with reread(document) as reader:
+        (info,) = reader.attachment_info
+    assert info["filename"] == "notes.txt"
+    assert info["description"] == "a note"
+    assert info["mime_type"] == "text/plain"
+    assert info["creation_date"].startswith("D:")
+
+
+@pytest.mark.parametrize("cls", EDITING_CLASSES)
+def test_document_scripts_are_stored_and_can_be_stripped(cls):
+    document = cls(THREE)
+    assert document.javascript == {}
+
+    document.add_js("app.alert('one');")
+    document.add_js("app.alert('zwei ü');", name="second")
+
+    with reread(document) as reader:
+        assert reader.javascript == {
+            "script-1": "app.alert('one');",
+            "second": "app.alert('zwei ü');",
+        }
+
+    assert document.remove_javascript() == 2
+    with reread(document) as reader:
+        assert reader.javascript == {}
+
+
+# ---------------------------------------------------------------- output options
+
+
+@pytest.mark.parametrize("cls", EDITING_CLASSES)
+def test_encrypt_with_permissions(cls):
+    document = cls(THREE)
+    document.encrypt(
+        "user",
+        "owner",
+        allow_print=False,
+        allow_extract=False,
+        allow_modify=False,
+    )
+    data = document.to_bytes()
+
+    with PdfReader(data, password="user") as reader:
+        permissions = reader.permissions
+        assert permissions is not None
+        assert permissions["print"] is False
+        assert permissions["extract"] is False
+        assert permissions["modify"] is False
+        assert permissions["annotate"] is True
+        assert permissions["fill_forms"] is True
+        assert permissions["assemble"] is True
+        # reported, not enforced
+        assert reader.pages[0].extract_text() == "alpha"
+
+    with PdfReader(THREE) as reader:
+        assert reader.permissions is None
+
+    document.encrypt("user", allow_print="low")
+    with PdfReader(document.to_bytes(), password="user") as reader:
+        assert reader.permissions["print"] is True
+        assert reader.permissions["print_high_quality"] is False
+
+    with pytest.raises(ValueError):
+        document.encrypt("user", allow_print="sometimes")
+
+
+@pytest.mark.parametrize("cls", EDITING_CLASSES)
+def test_output_options(cls):
+    document = cls(THREE)
+    plain = document.to_bytes()
+    assert b"/Linearized" not in plain
+
+    document.set_output_options(linearize=True)
+    linearized = document.to_bytes()
+    assert b"/Linearized" in linearized
+    assert written_widths(linearized) == [200.0, 210.0, 220.0]
+
+    document.set_output_options(object_streams="generate")
+    packed = document.to_bytes()
+    assert b"/ObjStm" in packed
+    assert written_widths(packed) == [200.0, 210.0, 220.0]
+
+    document.set_output_options(object_streams="disable", compress_streams=False)
+    loose = document.to_bytes()
+    assert b"/ObjStm" not in loose
+    # the page content is stored as written
+    assert b"(alpha) Tj" in loose
+    with PdfReader(loose) as reader:
+        assert reader.pages[0].extract_text() == "alpha"
+
+    with pytest.raises(PdfEditError):
+        document.set_output_options(object_streams="sometimes")
+
+
+def test_reader_has_no_document_level_editing():
+    with PdfReader(FORM) as reader:
+        for name in (
+            "add_metadata",
+            "set_page_label",
+            "add_outline_item",
+            "update_form_field_values",
+            "flatten_annotations",
+            "add_annotation",
+            "add_attachment",
+            "add_js",
+            "encrypt",
+            "set_output_options",
+        ):
+            assert not hasattr(reader, name)
+        for name in (
+            "set_info",
+            "set_form_values",
+            "add_annotation",
+            "add_attachment",
+            "set_encryption",
+        ):
+            assert not hasattr(reader._native, name)
+
+
 # ---------------------------------------------------------------- rendering
 
 RED = (255, 0, 0)
@@ -984,6 +1622,43 @@ def test_encrypt_with_owner_password_only(cls):
     with pytest.raises(PdfEditError) as excinfo:
         document.encrypt("")
     assert excinfo.value.category is PdfEditErrorCategory.INVALID_EDIT
+
+
+def test_editor_shows_raw_objects():
+    with PdfEditor(THREE) as editor:
+        trailer = editor.trailer
+        assert trailer["/Size"] > 0
+        assert "/Root" in trailer
+
+        catalog = editor.root_object
+        assert catalog["/Type"] == "/Catalog"
+        assert catalog["/Pages"]["/Count"] == 3
+
+        # object 3 of the fixture is its font
+        assert editor.get_object(3) == {
+            "/Type": "/Font",
+            "/Subtype": "/Type1",
+            "/BaseFont": "/Helvetica",
+        }
+
+        with pytest.raises(PdfEditError):
+            editor.get_object(9999)
+        with pytest.raises(ValueError):
+            editor.get_object(0)
+
+        # reading objects is not an edit
+        assert editor.is_modified is False
+
+
+def test_page_lookups():
+    with PdfReader(FORM) as reader:
+        page = reader.pages[0]
+        assert reader.get_page_number(page) == 0
+        assert [p.index for p in reader.get_pages_showing_field("agree")] == [0]
+        with pytest.raises(KeyError):
+            reader.get_pages_showing_field("missing")
+        with pytest.raises(ValueError):
+            reader.get_page_number(PdfReader(THREE).pages[0])
 
 
 def test_writer_does_not_expose_editor_only_operations():

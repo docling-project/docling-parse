@@ -52,6 +52,49 @@ namespace pdflib
     std::string file_method;
   };
 
+  // What the holder of the user password may do with an encrypted document
+  // (ISO 32000-1, table 22). Everything is allowed unless turned off. A
+  // conforming viewer honors these; they are not access control.
+  class pdf_permissions
+  {
+  public:
+
+    pdf_permissions();
+
+    // 0: full-quality printing, 1: low resolution only, 2: no printing
+    int get_print() const;
+    void set_print(int level);
+
+    bool get_modify() const;        // change the document's content
+    void set_modify(bool allowed);
+
+    bool get_extract() const;       // copy text and graphics out
+    void set_extract(bool allowed);
+
+    bool get_annotate() const;      // add or change annotations and form fields
+    void set_annotate(bool allowed);
+
+    bool get_fill_forms() const;    // fill in existing form fields
+    void set_fill_forms(bool allowed);
+
+    bool get_accessibility() const; // extract for assistive technology
+    void set_accessibility(bool allowed);
+
+    bool get_assemble() const;      // insert, rotate and delete pages
+    void set_assemble(bool allowed);
+
+  private:
+
+    int print;
+
+    bool modify;
+    bool extract;
+    bool annotate;
+    bool fill_forms;
+    bool accessibility;
+    bool assemble;
+  };
+
   // Document-scoped facts that belong to no page: header version, the trailer
   // /Info dictionary (ISO 32000-1, 14.3.3), the XMP packet (14.3.2) and the
   // encryption parameters. Typed, self-contained and detached from the QPDF it
@@ -96,6 +139,44 @@ namespace pdflib
 
     pdf_encryption_info encryption;
   };
+
+  inline pdf_permissions::pdf_permissions():
+    print(0),
+    modify(true),
+    extract(true),
+    annotate(true),
+    fill_forms(true),
+    accessibility(true),
+    assemble(true)
+  {}
+
+  inline int pdf_permissions::get_print() const { return print; }
+
+  inline void pdf_permissions::set_print(int level) { print = level; }
+
+  inline bool pdf_permissions::get_modify() const { return modify; }
+
+  inline void pdf_permissions::set_modify(bool allowed) { modify = allowed; }
+
+  inline bool pdf_permissions::get_extract() const { return extract; }
+
+  inline void pdf_permissions::set_extract(bool allowed) { extract = allowed; }
+
+  inline bool pdf_permissions::get_annotate() const { return annotate; }
+
+  inline void pdf_permissions::set_annotate(bool allowed) { annotate = allowed; }
+
+  inline bool pdf_permissions::get_fill_forms() const { return fill_forms; }
+
+  inline void pdf_permissions::set_fill_forms(bool allowed) { fill_forms = allowed; }
+
+  inline bool pdf_permissions::get_accessibility() const { return accessibility; }
+
+  inline void pdf_permissions::set_accessibility(bool allowed) { accessibility = allowed; }
+
+  inline bool pdf_permissions::get_assemble() const { return assemble; }
+
+  inline void pdf_permissions::set_assemble(bool allowed) { assemble = allowed; }
 
   inline pdf_encryption_info::pdf_encryption_info():
     encrypted(false),

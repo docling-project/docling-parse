@@ -17,6 +17,7 @@
 #include <qpdf/QPDFMatrix.hh>
 #include <qpdf/QPDFObjectHandle.hh>
 #include <qpdf/QPDFPageObjectHelper.hh>
+#include <qpdf/QUtil.hh>
 
 #include <edit/edit_error.h>
 
@@ -109,6 +110,63 @@ namespace pdflib
                         bool under,
                         bool fit,
                         const std::array<double, 6>& matrix);
+
+    // ---- new content ----
+
+    // Add `content` (content stream operators) on top of what the page
+    // shows. The existing content is closed off first, so the new operators
+    // start from the default graphics state.
+    static void append_content(QPDF& qpdf, QPDFPageObjectHelper page, const std::string& content);
+
+    // A font dictionary for one of the standard 14 fonts that take Latin
+    // text (ISO 32000-1, 9.6.2.2), with WinAnsiEncoding. These need no
+    // embedded font program: every viewer supplies them.
+    static QPDFObjectHandle make_standard_font(QPDF& qpdf, const std::string& base_font);
+
+    // Register `resource` (an indirect object) in the page's own resources
+    // under a new name of the given kind ("/Font", "/XObject") and return
+    // that name. A resource already registered is reused.
+    static std::string add_resource(QPDFPageObjectHelper page,
+                                    const std::string& kind,
+                                    const std::string& prefix,
+                                    QPDFObjectHandle resource);
+
+    // Draw `text` (UTF-8) with its baseline starting at (x, y), in `font`
+    // (from make_standard_font) at `size` points, filled with `color`
+    // (red, green, blue in 0..1). A line feed starts a new line 1.2 x size
+    // below. Text outside WinAnsiEncoding is an UNSUPPORTED error.
+    static void draw_text(QPDF& qpdf,
+                          QPDFPageObjectHelper page,
+                          QPDFObjectHandle font,
+                          const std::string& text,
+                          double x,
+                          double y,
+                          double size,
+                          const std::array<double, 3>& color);
+
+    // The text as a PDF literal string in WinAnsiEncoding, parentheses
+    // included.
+    static std::string win_ansi_literal(const std::string& text);
+
+    // A page of page_width x page_height points showing one image in the
+    // rectangle `placement` (x, y, width, height). `data` is either a JPEG
+    // file (is_jpeg) or width x height x components 8-bit samples, row by
+    // row; `colorspace` is "gray", "rgb" or "cmyk". `alpha`, when not empty,
+    // is width x height 8-bit opacity samples. The page is not yet in the
+    // page tree.
+    static QPDFObjectHandle make_image_page(QPDF& qpdf,
+                                            int width,
+                                            int height,
+                                            const std::string& colorspace,
+                                            const std::string& data,
+                                            bool is_jpeg,
+                                            const std::string& alpha,
+                                            double page_width,
+                                            double page_height,
+                                            const std::array<double, 4>& placement);
+
+    // A number as written in a content stream.
+    static std::string number(double value);
 
     // Replace the page's /Rotate by an equivalent rotation of its content,
     // boxes and annotations, so the page displays the same with /Rotate 0.
@@ -430,6 +488,296 @@ namespace pdflib
         page.addPageContents(qpdf.newStream(std::string("q\n")), true);
         page.addPageContents(qpdf.newStream(std::string("\nQ\n") + content), false);
       }
+  }
+
+  inline std::string pdf_page_ops::number(double value)
+  {
+    if(not std::isfinite(value))
+      {
+        throw pdf_edit_error(edit_error::INVALID_EDIT, "a coordinate must be a finite number");
+      }
+
+    return QUtil::double_to_string(value, 4, true);
+  }
+
+  inline void pdf_page_ops::append_content(QPDF& qpdf,
+                                           QPDFPageObjectHelper page,
+                                           const std::string& content)
+  {
+    // q ... Q around what is there, then the new operators: same isolation
+    // as an overlay.
+    page.addPageContents(qpdf.newStream(std::string("q\n")), true);
+    page.addPageContents(qpdf.newStream(std::string("\nQ\n") + content), false);
+  }
+
+  inline QPDFObjectHandle pdf_page_ops::make_standard_font(QPDF& qpdf, const std::string& base_font)
+  {
+    static const std::set<std::string> fonts = {
+      "Helvetica", "Helvetica-Bold", "Helvetica-Oblique", "Helvetica-BoldOblique",
+      "Times-Roman", "Times-Bold", "Times-Italic", "Times-BoldItalic",
+      "Courier", "Courier-Bold", "Courier-Oblique", "Courier-BoldOblique"};
+
+    if(fonts.count(base_font) == 0)
+      {
+        std::string choices;
+        for(const std::string& choice : fonts)
+          {
+            choices += (choices.empty() ? "" : ", ") + choice;
+          }
+        throw pdf_edit_error(edit_error::INVALID_EDIT,
+                             "'" + base_font + "' is not an available font: expected one of " + choices);
+      }
+
+    QPDFObjectHandle font = QPDFObjectHandle::newDictionary();
+    font.replaceKey("/Type", QPDFObjectHandle::newName("/Font"));
+    font.replaceKey("/Subtype", QPDFObjectHandle::newName("/Type1"));
+    font.replaceKey("/BaseFont", QPDFObjectHandle::newName("/" + base_font));
+    font.replaceKey("/Encoding", QPDFObjectHandle::newName("/WinAnsiEncoding"));
+
+    return qpdf.makeIndirectObject(font);
+  }
+
+  inline std::string pdf_page_ops::add_resource(QPDFPageObjectHelper page,
+                                                const std::string& kind,
+                                                const std::string& prefix,
+                                                QPDFObjectHandle resource)
+  {
+    // A dictionary of the page's own, as in overlay().
+    QPDFObjectHandle resources = page.getAttribute("/Resources", true);
+    if(not resources.isDictionary())
+      {
+        resources = QPDFObjectHandle::newDictionary();
+        page.getObjectHandle().replaceKey("/Resources", resources);
+      }
+
+    resources.mergeResources(QPDFObjectHandle::parse("<< " + kind + " << >> >>"));
+    QPDFObjectHandle entries = resources.getKey(kind);
+    if(not entries.isDictionary())
+      {
+        throw pdf_edit_error(edit_error::INVALID_EDIT,
+                             "the page's " + kind + " resources are not a dictionary");
+      }
+
+    for(const std::string& name : entries.getKeys())
+      {
+        QPDFObjectHandle existing = entries.getKey(name);
+        if(existing.isIndirect() and existing.getObjGen() == resource.getObjGen())
+          {
+            return name;
+          }
+      }
+
+    int min_suffix = 1;
+    std::string name = resources.getUniqueResourceName(prefix, min_suffix);
+    entries.replaceKey(name, resource);
+
+    return name;
+  }
+
+  inline std::string pdf_page_ops::win_ansi_literal(const std::string& text)
+  {
+    std::string encoded;
+    if(not QUtil::utf8_to_win_ansi(text, encoded))
+      {
+        throw pdf_edit_error(load_error::UNSUPPORTED,
+                             "the text has characters outside WinAnsiEncoding (Latin-1 and a few more), "
+                             "which is all the built-in fonts can show");
+      }
+
+    std::string literal = "(";
+    for(char character : encoded)
+      {
+        // the three characters with a meaning inside a literal string
+        if(character == '(' or character == ')' or character == '\\')
+          {
+            literal += '\\';
+          }
+        literal += character;
+      }
+    literal += ")";
+
+    return literal;
+  }
+
+  inline void pdf_page_ops::draw_text(QPDF& qpdf,
+                                      QPDFPageObjectHelper page,
+                                      QPDFObjectHandle font,
+                                      const std::string& text,
+                                      double x,
+                                      double y,
+                                      double size,
+                                      const std::array<double, 3>& color)
+  {
+    if(not (size > 0.0 and std::isfinite(size)))
+      {
+        throw pdf_edit_error(edit_error::INVALID_EDIT, "the font size must be positive");
+      }
+    for(double component : color)
+      {
+        if(not (component >= 0.0 and component <= 1.0))
+          {
+            throw pdf_edit_error(edit_error::INVALID_EDIT,
+                                 "a color is three numbers between 0 and 1");
+          }
+      }
+
+    // Encode every line before touching the page: a line that cannot be
+    // shown must leave the page as it was.
+    std::vector<std::string> lines;
+    std::string::size_type start = 0;
+    while(true)
+      {
+        std::string::size_type end = text.find('\n', start);
+        std::string line = text.substr(start, end == std::string::npos ? std::string::npos : end - start);
+        if(not line.empty() and line.back() == '\r')
+          {
+            line.pop_back();
+          }
+        lines.push_back(win_ansi_literal(line));
+
+        if(end == std::string::npos)
+          {
+            break;
+          }
+        start = end + 1;
+      }
+
+    std::string font_name = add_resource(page, "/Font", "/F", font);
+
+    std::string content = "q\nBT\n";
+    content += font_name + " " + number(size) + " Tf\n";
+    content += number(color[0]) + " " + number(color[1]) + " " + number(color[2]) + " rg\n";
+    content += number(1.2 * size) + " TL\n";
+    content += number(x) + " " + number(y) + " Td\n";
+    for(std::size_t index = 0; index < lines.size(); index++)
+      {
+        if(index > 0)
+          {
+            content += "T*\n";
+          }
+        content += lines[index] + " Tj\n";
+      }
+    content += "ET\nQ\n";
+
+    append_content(qpdf, page, content);
+  }
+
+  inline QPDFObjectHandle pdf_page_ops::make_image_page(QPDF& qpdf,
+                                                        int width,
+                                                        int height,
+                                                        const std::string& colorspace,
+                                                        const std::string& data,
+                                                        bool is_jpeg,
+                                                        const std::string& alpha,
+                                                        double page_width,
+                                                        double page_height,
+                                                        const std::array<double, 4>& placement)
+  {
+    if(width <= 0 or height <= 0)
+      {
+        throw pdf_edit_error(edit_error::INVALID_EDIT, "an image needs a positive width and height");
+      }
+    if(not (page_width > 0.0 and page_height > 0.0))
+      {
+        throw pdf_edit_error(edit_error::INVALID_EDIT, "a page needs a positive width and height");
+      }
+    if(not (placement[2] > 0.0 and placement[3] > 0.0))
+      {
+        throw pdf_edit_error(edit_error::INVALID_EDIT,
+                             "an image must be placed with a positive width and height");
+      }
+
+    std::size_t components = 0;
+    std::string device;
+    if(colorspace == "gray")      { components = 1; device = "/DeviceGray"; }
+    else if(colorspace == "rgb")  { components = 3; device = "/DeviceRGB"; }
+    else if(colorspace == "cmyk") { components = 4; device = "/DeviceCMYK"; }
+    else
+      {
+        throw pdf_edit_error(edit_error::INVALID_EDIT,
+                             "an image colorspace is 'gray', 'rgb' or 'cmyk'");
+      }
+
+    std::size_t pixels = static_cast<std::size_t>(width) * static_cast<std::size_t>(height);
+
+    if(data.empty())
+      {
+        throw pdf_edit_error(edit_error::INVALID_EDIT, "the image has no data");
+      }
+    if(not is_jpeg and data.size() != pixels * components)
+      {
+        throw pdf_edit_error(edit_error::INVALID_EDIT,
+                             "the image data does not match its size: expected "
+                             + std::to_string(pixels * components) + " bytes, got "
+                             + std::to_string(data.size()));
+      }
+    if(not alpha.empty() and alpha.size() != pixels)
+      {
+        throw pdf_edit_error(edit_error::INVALID_EDIT,
+                             "the image's opacity samples do not match its size");
+      }
+
+    QPDFObjectHandle image = qpdf.newStream();
+    if(is_jpeg)
+      {
+        // A JPEG file is the /DCTDecode stream data as it is: stored, not
+        // re-encoded.
+        image.replaceStreamData(data,
+                                QPDFObjectHandle::newName("/DCTDecode"),
+                                QPDFObjectHandle::newNull());
+      }
+    else
+      {
+        // Raw samples; the writer compresses them.
+        image.replaceStreamData(data, QPDFObjectHandle::newNull(), QPDFObjectHandle::newNull());
+      }
+
+    QPDFObjectHandle image_dict = image.getDict();
+    image_dict.replaceKey("/Type", QPDFObjectHandle::newName("/XObject"));
+    image_dict.replaceKey("/Subtype", QPDFObjectHandle::newName("/Image"));
+    image_dict.replaceKey("/Width", QPDFObjectHandle::newInteger(width));
+    image_dict.replaceKey("/Height", QPDFObjectHandle::newInteger(height));
+    image_dict.replaceKey("/ColorSpace", QPDFObjectHandle::newName(device));
+    image_dict.replaceKey("/BitsPerComponent", QPDFObjectHandle::newInteger(8));
+
+    if(not alpha.empty())
+      {
+        // Opacity is a second, grayscale image (ISO 32000-1, 11.6.5.3).
+        QPDFObjectHandle mask = qpdf.newStream();
+        mask.replaceStreamData(alpha, QPDFObjectHandle::newNull(), QPDFObjectHandle::newNull());
+
+        QPDFObjectHandle mask_dict = mask.getDict();
+        mask_dict.replaceKey("/Type", QPDFObjectHandle::newName("/XObject"));
+        mask_dict.replaceKey("/Subtype", QPDFObjectHandle::newName("/Image"));
+        mask_dict.replaceKey("/Width", QPDFObjectHandle::newInteger(width));
+        mask_dict.replaceKey("/Height", QPDFObjectHandle::newInteger(height));
+        mask_dict.replaceKey("/ColorSpace", QPDFObjectHandle::newName("/DeviceGray"));
+        mask_dict.replaceKey("/BitsPerComponent", QPDFObjectHandle::newInteger(8));
+
+        image_dict.replaceKey("/SMask", mask);
+      }
+
+    // An image fills the unit square; the matrix maps that square onto the
+    // placement rectangle (ISO 32000-1, 8.9.4).
+    std::string content = "q\n";
+    content += number(placement[2]) + " 0 0 " + number(placement[3]) + " "
+      + number(placement[0]) + " " + number(placement[1]) + " cm\n";
+    content += "/Im0 Do\nQ\n";
+
+    QPDFObjectHandle xobjects = QPDFObjectHandle::newDictionary();
+    xobjects.replaceKey("/Im0", image);
+
+    QPDFObjectHandle resources = QPDFObjectHandle::newDictionary();
+    resources.replaceKey("/XObject", xobjects);
+
+    QPDFObjectHandle page = QPDFObjectHandle::newDictionary();
+    page.replaceKey("/Type", QPDFObjectHandle::newName("/Page"));
+    page.replaceKey("/MediaBox",
+                    QPDFObjectHandle::newArray(QPDFObjectHandle::Rectangle(0.0, 0.0, page_width, page_height)));
+    page.replaceKey("/Resources", resources);
+    page.replaceKey("/Contents", qpdf.newStream(content));
+
+    return qpdf.makeIndirectObject(page);
   }
 
 }
