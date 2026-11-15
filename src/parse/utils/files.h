@@ -1,7 +1,10 @@
 //-*-C++-*-
+// SPDX-License-Identifier: MIT
 
 #ifndef PDF_UTILS_FILES_H
 #define PDF_UTILS_FILES_H
+
+#include "utf8_path.h"
 
 //#include <fstream>
 //#include <algorithm>
@@ -25,7 +28,7 @@ namespace utils
       }
     */
     bool is_dir(const std::string& file_name) {
-      return std::filesystem::is_directory(file_name);
+      return std::filesystem::is_directory(from_utf8(file_name));
     }
 
     /*
@@ -87,17 +90,17 @@ namespace utils
 
       try
 	{
-	  for (const auto& entry : std::filesystem::directory_iterator(directory))
+	  for (const auto& entry : std::filesystem::directory_iterator(from_utf8(directory)))
 	    {
 	      if (std::filesystem::is_regular_file(entry.path()))
 		{
 		  if (basename)
 		    {
-		      files.push_back(entry.path().filename().string());  // Get the file name only
+		      files.push_back(to_utf8(entry.path().filename()));  // Get the file name only
 		    }
 		  else
 		    {
-		      files.push_back(entry.path().string());  // Full path
+		      files.push_back(to_utf8(entry.path()));  // Full path
 		    }
 		}
 	    }

@@ -1,7 +1,8 @@
 #!/usr/bin/env python
+# SPDX-License-Identifier: MIT
 """Paths that contain non-ASCII characters.
 
-Two routes carry such paths into the native code, and on Windows both go wrong
+Three routes carry such paths into the native code, and on Windows they go wrong
 in the ANSI codepage while POSIX passes the bytes through unchanged -- so these
 tests guard intent everywhere but only bite on Windows runners.
 
@@ -13,9 +14,13 @@ fails to load (docling-parse#324).
 The renderer's font resolver takes its scan directories from the environment
 (LOCALAPPDATA, DOCLING_PARSE_*_FALLBACK_FONT); a narrow getenv() there broke
 every threaded render under a non-ASCII user profile (docling-parse#354).
+
+The installed package can also live under a non-ASCII directory. Its glyph,
+encoding, font metric and CMap resources must open there (docling-parse#115).
 """
 
 import os
+import shutil
 import subprocess
 import sys
 import textwrap
@@ -34,6 +39,51 @@ CONTENT = "BT /F1 12 Tf 72 720 Td (Title Case Workers) Tj ET"
 # least one of them into bytes that are not valid UTF-8. Hangul alone becomes
 # '?' under cp1252, the codepage of GitHub's Windows runners, and would pass.
 NON_ASCII_DIR_NAME = "docling_é_한글_Привет"
+
+_PARSE_WITH_RELOCATED_PACKAGE = textwrap.dedent(
+    """
+    import sys
+    from io import BytesIO
+    from pathlib import Path
+
+    import docling_parse
+    from docling_parse.pdf_parser import (
+        DoclingPdfParser,
+        DoclingThreadedPdfParser,
+        RenderConfig,
+        ThreadedPdfParserConfig,
+    )
+
+    assert Path(docling_parse.__file__).resolve().parent.parent == Path(sys.argv[1]).resolve()
+    source = BytesIO(sys.stdin.buffer.read())
+    if sys.argv[2] == "serial":
+        parser = DoclingPdfParser(loglevel="fatal")
+        doc = parser.load(source)
+        assert doc.number_of_pages() == 1
+        page = doc.get_page(1)
+    else:
+        parser = DoclingThreadedPdfParser(
+            parser_config=ThreadedPdfParserConfig(
+                loglevel="fatal", threads=1,
+                render_config=RenderConfig() if sys.argv[2] == "rendered" else None,
+            )
+        )
+        parser.load(source)
+        results = list(parser.iterate_results())
+        assert len(results) == 1
+        assert results[0].success, results[0].error_message
+        page = results[0].get_page()
+        if sys.argv[2] == "rendered":
+            assert results[0].get_image().width > 0
+    text = "".join(cell.text for cell in page.textline_cells)
+    assert "Title Case Workers" in text, repr(text)
+    assert "\\u4e2d\\u6587" in text, repr(text)
+    if sys.argv[2] == "serial":
+        doc.unload()
+    else:
+        parser.unload_all()
+    """
+)
 
 _RENDER_ONE_PAGE = textwrap.dedent(
     """
@@ -92,6 +142,64 @@ def test_load_from_bytesio_is_path_independent():
     doc = parser.load(path_or_stream=BytesIO(_tiny_pdf()))
 
     assert doc.number_of_pages() == 1
+
+
+def _package_resource_pdf() -> bytes:
+    """Latin base-font metrics and a predefined CJK CMap both read resources."""
+    content = CONTENT + "\nBT /F2 12 Tf 72 700 Td <D6D0CEC4> Tj ET"
+    return build_pdf(
+        [
+            "<< /Type /Catalog /Pages 2 0 R >>",
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
+            "/Resources << /Font << /F1 4 0 R /F2 6 0 R >> >> /Contents 5 0 R >>",
+            "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+            f"<< /Length {len(content)} >>\nstream\n{content}\nendstream",
+            "<< /Type /Font /Subtype /Type0 /BaseFont /SimSun "
+            "/Encoding /GBK-EUC-H /DescendantFonts [7 0 R] >>",
+            "<< /Type /Font /Subtype /CIDFontType2 /BaseFont /SimSun "
+            "/CIDSystemInfo << /Registry (Adobe) /Ordering (GB1) /Supplement 2 >> "
+            "/FontDescriptor 8 0 R /DW 1000 >>",
+            "<< /Type /FontDescriptor /FontName /SimSun /Flags 4 "
+            "/FontBBox [0 0 1000 1000] /ItalicAngle 0 /Ascent 859 /Descent -141 "
+            "/CapHeight 674 /StemV 91 >>",
+        ]
+    )
+
+
+@pytest.mark.parametrize("parser_kind", ["serial", "threaded", "rendered"])
+@pytest.mark.parametrize("dir_name", ["ascii_install", "安装目录", NON_ASCII_DIR_NAME])
+def test_parse_from_non_ascii_package_directory(
+    tmp_path: Path, dir_name: str, parser_kind: str
+) -> None:
+    """An ordinary installation path must not prevent reading bundled resources."""
+    package_root = tmp_path / dir_name
+    package_dir = Path(docling_parse.__file__).resolve().parent
+    shutil.copytree(
+        package_dir,
+        package_root / "docling_parse",
+        ignore=shutil.ignore_patterns("__pycache__"),
+    )
+    # A fresh process avoids reusing the original extension's global resources.
+    # Its cwd and first import directory both select the relocated installation.
+    env = {**os.environ, "PYTHONPATH": str(package_root)}
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-X",
+            "utf8",
+            "-c",
+            _PARSE_WITH_RELOCATED_PACKAGE,
+            str(package_root),
+            parser_kind,
+        ],
+        input=_package_resource_pdf(),
+        env=env,
+        cwd=tmp_path,
+        capture_output=True,
+        timeout=300,
+    )
+    assert proc.returncode == 0, proc.stderr.decode("utf-8", "replace")
 
 
 def _render_in_fresh_process(

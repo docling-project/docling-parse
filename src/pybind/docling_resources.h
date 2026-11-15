@@ -1,4 +1,5 @@
 //-*-C++-*-
+// SPDX-License-Identifier: MIT
 
 #ifndef PYBIND_DOCLING_RESOURCES_H
 #define PYBIND_DOCLING_RESOURCES_H
@@ -6,6 +7,7 @@
 #include <Python.h>
 
 #include <resources.h>
+#include <parse/utils/utf8_path.h>
 
 namespace docling
 {
@@ -30,7 +32,7 @@ namespace docling
 
   std::string docling_resources::get_resources_path()
   {
-    return resource_utils::get_resources_dir(true).string();
+    return utils::filesystem::to_utf8(resource_utils::get_resources_dir(true));
   }
 
   bool docling_resources::set_resources_path()
@@ -44,7 +46,7 @@ namespace docling
     // Extract the string value of the filename
     const char* filename = PyUnicode_AsUTF8(filenameObj);
 	
-    std::filesystem::path __init__path(filename);
+    std::filesystem::path __init__path = utils::filesystem::from_utf8(filename);
 
     std::filesystem::path package_path = __init__path.parent_path();
     std::filesystem::path resources_path = package_path / resource_utils::resources_relative_path;

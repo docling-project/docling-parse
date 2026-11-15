@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Run against a multipage tagged PDF, optionally compiled with ThreadSanitizer.
 // This exercises parser-owned synchronization; linked third-party libraries
 // must also be instrumented for a complete audit of their internals.
@@ -12,7 +13,7 @@ int main(int argc, char** argv)
   loguru::g_stderr_verbosity = loguru::Verbosity_FATAL;
   nlohmann::json font_config = {{
     pdflib::pdf_resource<pdflib::PAGE_FONT>::RESOURCE_DIR_KEY,
-    resource_utils::get_resources_dir(true).string()}};
+    utils::filesystem::to_utf8(resource_utils::get_resources_dir(true))}};
   std::unordered_map<std::string, double> font_timings;
   pdflib::pdf_resource<pdflib::PAGE_FONT>::initialise(font_config, font_timings);
   pdflib::pdf_decoder<pdflib::DOCUMENT> document;

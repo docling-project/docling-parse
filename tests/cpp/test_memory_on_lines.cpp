@@ -507,7 +507,7 @@ void measure(std::string mode, std::string filename, int pause_seconds, const st
     }
 
   json font_config = {{pdflib::pdf_resource<pdflib::PAGE_FONT>::RESOURCE_DIR_KEY,
-                        resource_utils::get_resources_dir(true).string()}};
+                        utils::filesystem::to_utf8(resource_utils::get_resources_dir(true))}};
   std::unordered_map<std::string, double> font_timings;
   pdflib::pdf_resource<pdflib::PAGE_FONT>::initialise(font_config, font_timings);
   pdflib::pdf_decoder<pdflib::DOCUMENT> document;

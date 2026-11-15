@@ -1,4 +1,5 @@
 //-*-C++-*-
+// SPDX-License-Identifier: MIT
 
 #ifndef PYBIND_THREADED_PDF_BASE_H
 #define PYBIND_THREADED_PDF_BASE_H
@@ -174,7 +175,7 @@ namespace docling
     // Force thread-safe mode since we're doing parallel decoding
     this->config.do_thread_safe = true;
 
-    std::string pdf_resources_dir = resource_utils::get_resources_dir(true).string();
+    std::string pdf_resources_dir = utils::filesystem::to_utf8(resource_utils::get_resources_dir(true));
     LOG_S(WARNING) << "pdf_resources_dir: " << pdf_resources_dir;
 
     auto RESOURCE_DIR_KEY = pdflib::pdf_resource<pdflib::PAGE_FONT>::RESOURCE_DIR_KEY;

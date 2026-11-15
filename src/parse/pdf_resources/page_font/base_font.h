@@ -1,4 +1,5 @@
 //-*-C++-*-
+// SPDX-License-Identifier: MIT
 
 #ifndef PDF_PAGE_FONT_BASE_FONT_H
 #define PDF_PAGE_FONT_BASE_FONT_H
@@ -357,7 +358,7 @@ namespace pdflib
 
     LOG_S(WARNING) << "initialising base-font: " << filename;
     
-    std::ifstream file(filename.c_str());
+    std::ifstream file(utils::filesystem::from_utf8(filename));
 
     std::string line;
     while (std::getline(file, line))

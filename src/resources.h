@@ -1,10 +1,12 @@
 //-*-C++-*-
+// SPDX-License-Identifier: MIT
 
 #ifndef RESOURCE_UTILS_H_
 #define RESOURCE_UTILS_H_
 
 #define LOGURU_WITH_STREAMS 1
 #include <loguru.hpp>
+#include <parse/utils/utf8_path.h>
 
 class resource_utils
 {
@@ -21,8 +23,9 @@ public:
 
 private:
 
-  static inline std::filesystem::path ROOT_DIR = ROOT_PATH; // ROOT_PATH is the default provided during compilation
-  static inline std::filesystem::path PACKAGE_DIR = ROOT_PATH / package_name;
+  // ROOT_PATH is a UTF-8 source literal supplied by the build.
+  static inline std::filesystem::path ROOT_DIR = utils::filesystem::from_utf8(ROOT_PATH);
+  static inline std::filesystem::path PACKAGE_DIR = ROOT_DIR / package_name;
   static inline std::filesystem::path RESOURCES_DIR = PACKAGE_DIR / resources_relative_path;
 };
 

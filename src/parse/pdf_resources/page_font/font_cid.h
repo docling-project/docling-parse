@@ -1,4 +1,5 @@
 //-*-C++-*-
+// SPDX-License-Identifier: MIT
 
 #ifndef PDF_PAGE_FONT_CID_H
 #define PDF_PAGE_FONT_CID_H
@@ -460,7 +461,7 @@ namespace pdflib
       }
     visited.insert(filename);
 
-    std::ifstream file(filename.c_str());
+    std::ifstream file(utils::filesystem::from_utf8(filename));
 
     if(file.fail())
       {
@@ -505,7 +506,7 @@ namespace pdflib
   {
     LOG_S(INFO) << __FUNCTION__ << "\t filename: " << filename;
 
-    std::ifstream file(filename.c_str());
+    std::ifstream file(utils::filesystem::from_utf8(filename));
 
     if(file.fail())
       {
