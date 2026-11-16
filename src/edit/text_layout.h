@@ -30,7 +30,7 @@ namespace pdflib
 
     // More blank lines than this between two rows say nothing more about the
     // layout and only pad the output.
-    static const int MAX_BLANK_LINES = 3;
+    static constexpr int MAX_BLANK_LINES = 3;
 
     static double median(std::vector<double> values, double fallback);
   };

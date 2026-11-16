@@ -147,13 +147,13 @@ namespace pdflib
 
     static void append_widget(QPDFPageObjectHelper page, QPDFObjectHandle widget);
 
-    static const long long FLAG_READ_ONLY = 1LL << 0;
-    static const long long FLAG_REQUIRED = 1LL << 1;
-    static const long long FLAG_MULTILINE = 1LL << 12;
-    static const long long FLAG_NO_TOGGLE_TO_OFF = 1LL << 14;
-    static const long long FLAG_RADIO = 1LL << 15;
-    static const long long FLAG_COMBO = 1LL << 17;
-    static const long long FLAG_EDIT = 1LL << 18;
+    static constexpr long long FLAG_READ_ONLY = 1LL << 0;
+    static constexpr long long FLAG_REQUIRED = 1LL << 1;
+    static constexpr long long FLAG_MULTILINE = 1LL << 12;
+    static constexpr long long FLAG_NO_TOGGLE_TO_OFF = 1LL << 14;
+    static constexpr long long FLAG_RADIO = 1LL << 15;
+    static constexpr long long FLAG_COMBO = 1LL << 17;
+    static constexpr long long FLAG_EDIT = 1LL << 18;
   };
 
   inline std::string pdf_form_ops::with_slash(const std::string& name)
