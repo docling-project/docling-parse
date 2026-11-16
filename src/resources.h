@@ -6,7 +6,6 @@
 
 #define LOGURU_WITH_STREAMS 1
 #include <loguru.hpp>
-#include <parse/utils/utf8_path.h>
 
 class resource_utils
 {

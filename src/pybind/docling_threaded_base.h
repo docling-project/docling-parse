@@ -24,11 +24,11 @@
 #include <codecvt>
 #endif
 
+#include <parse.h>
+
 #include <pybind/native_memory.h>
 #include <pybind/docling_resources.h>
 #include <pybind/docling_threaded_results.h>
-
-#include <parse.h>
 
 namespace docling
 {

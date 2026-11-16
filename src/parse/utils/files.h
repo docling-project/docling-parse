@@ -4,8 +4,6 @@
 #ifndef PDF_UTILS_FILES_H
 #define PDF_UTILS_FILES_H
 
-#include "utf8_path.h"
-
 //#include <fstream>
 //#include <algorithm>
 //#include <dirent.h>

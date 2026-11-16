@@ -7,7 +7,6 @@
 #include <Python.h>
 
 #include <resources.h>
-#include <parse/utils/utf8_path.h>
 
 namespace docling
 {
