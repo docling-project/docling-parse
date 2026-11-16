@@ -245,8 +245,9 @@ options:
 
 ## PDF reading and editing
 
-`PdfReader`, `PdfWriter` and `PdfEditor` read, assemble and change PDF files,
-with an interface modelled on pypdf.
+`PdfReader`, `PdfWriter` and `PdfEditor` read, assemble and change PDF files.
+Reader and Writer adapt the implemented pypdf workflows; Editor provides named
+arguments, one-based page numbers and rendering.
 
 ```python
 from docling_parse import PdfEditor, PdfReader, PdfWriter
@@ -263,14 +264,16 @@ writer.append("file2.pdf", pages=[0, 2])
 writer.write("merged.pdf")
 
 # edit and save
-with PdfEditor("document.pdf") as editor:
-    editor.pages[0].rotate(90)
-    del editor.pages[3]
-    editor.write("changed.pdf")
+with PdfEditor(source="document.pdf") as editor:
+    editor.get_page(page_no=1).rotate(angle=90)
+    editor.remove_page(page_no=4)
+    editor.render_page(page_no=1, scale=2.0).save("preview.png")
+    editor.write(target="changed.pdf")
 ```
 
-See [docs/pdf_editor.md](./docs/pdf_editor.md) for the full guide, including
-how to move from pypdf's `PdfReader` and `PdfWriter`.
+See [the editing guide](./docs/editing.md) for API coverage, numbering rules and
+pypdf migration differences, with recipes for [pages](./docs/editing/pages.md),
+[forms](./docs/editing/forms.md) and [rendering](./docs/editing/rendering.md).
 
 ## System fonts
 
