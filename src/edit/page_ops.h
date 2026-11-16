@@ -152,18 +152,21 @@ namespace pdflib
     // rectangle `placement` (x, y, width, height). `data` is either a JPEG
     // file (is_jpeg) or width x height x components 8-bit samples, row by
     // row; `colorspace` is "gray", "rgb" or "cmyk". `alpha`, when not empty,
-    // is width x height 8-bit opacity samples. The page is not yet in the
-    // page tree.
+    // is width x height 8-bit opacity samples. `invert` marks samples stored
+    // inverted, as Adobe applications write CMYK JPEGs. `rotate` becomes the
+    // page's /Rotate. The page is not yet in the page tree.
     static QPDFObjectHandle make_image_page(QPDF& qpdf,
                                             int width,
                                             int height,
                                             const std::string& colorspace,
                                             const std::string& data,
                                             bool is_jpeg,
+                                            bool invert,
                                             const std::string& alpha,
                                             double page_width,
                                             double page_height,
-                                            const std::array<double, 4>& placement);
+                                            const std::array<double, 4>& placement,
+                                            int rotate);
 
     // A number as written in a content stream.
     static std::string number(double value);
@@ -668,11 +671,19 @@ namespace pdflib
                                                         const std::string& colorspace,
                                                         const std::string& data,
                                                         bool is_jpeg,
+                                                        bool invert,
                                                         const std::string& alpha,
                                                         double page_width,
                                                         double page_height,
-                                                        const std::array<double, 4>& placement)
+                                                        const std::array<double, 4>& placement,
+                                                        int rotate)
   {
+    if((rotate % 90) != 0)
+      {
+        throw pdf_edit_error(edit_error::INVALID_EDIT,
+                             "page rotation must be a multiple of 90 degrees");
+      }
+
     if(width <= 0 or height <= 0)
       {
         throw pdf_edit_error(edit_error::INVALID_EDIT, "an image needs a positive width and height");
@@ -740,6 +751,19 @@ namespace pdflib
     image_dict.replaceKey("/ColorSpace", QPDFObjectHandle::newName(device));
     image_dict.replaceKey("/BitsPerComponent", QPDFObjectHandle::newInteger(8));
 
+    if(invert)
+      {
+        // one [1 0] pair per component maps each sample to its inverse
+        // (ISO 32000-1, 8.9.5.2)
+        QPDFObjectHandle decode = QPDFObjectHandle::newArray();
+        for(std::size_t component = 0; component < components; component++)
+          {
+            decode.appendItem(QPDFObjectHandle::newInteger(1));
+            decode.appendItem(QPDFObjectHandle::newInteger(0));
+          }
+        image_dict.replaceKey("/Decode", decode);
+      }
+
     if(not alpha.empty())
       {
         // Opacity is a second, grayscale image (ISO 32000-1, 11.6.5.3).
@@ -776,6 +800,12 @@ namespace pdflib
                     QPDFObjectHandle::newArray(QPDFObjectHandle::Rectangle(0.0, 0.0, page_width, page_height)));
     page.replaceKey("/Resources", resources);
     page.replaceKey("/Contents", qpdf.newStream(content));
+
+    int normalized = ((rotate % 360) + 360) % 360;
+    if(normalized != 0)
+      {
+        page.replaceKey("/Rotate", QPDFObjectHandle::newInteger(normalized));
+      }
 
     return qpdf.makeIndirectObject(page);
   }

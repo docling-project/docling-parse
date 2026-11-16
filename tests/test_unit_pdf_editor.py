@@ -19,6 +19,7 @@ import subprocess
 import sys
 import threading
 from io import BytesIO
+from types import ModuleType
 
 import pytest
 
@@ -29,6 +30,7 @@ from docling_parse.pdf_errors import (
     PdfLoadError,
     PdfPasswordError,
     PdfStaleHandleError,
+    PdfUnsupportedError,
     PdfWriteError,
 )
 from docling_parse.pdf_reader import PdfReader
@@ -38,6 +40,7 @@ from tests.pdf_builder import simple_page_pdf
 from tests.test_unit_acroform_widgets import _form_pdf
 from tests.test_unit_structure_tree import _tagged_pdf
 
+pypdf: ModuleType | None
 try:
     import pypdf
 except ImportError:  # pragma: no cover - depends on the installed groups
@@ -831,6 +834,7 @@ def flat_outline(items, depth: int = 0) -> list[tuple[int, str, int | None]]:
 
 
 def pypdf_flat_outline(data: bytes) -> list[tuple[int, str, int | None]]:
+    assert pypdf is not None
     reader = pypdf.PdfReader(BytesIO(data))
 
     def walk(items, depth):
@@ -1446,6 +1450,554 @@ def test_rotation_and_crop_as_rendered(cls):
     assert image.size == (100, 150)
 
 
+# ---------------------------------------------------------------- bookmark editing
+
+
+def pypdf_titles(data: bytes) -> list[str]:
+    """The outline titles as pypdf reads them, depth first."""
+    assert pypdf is not None
+
+    def walk(items):
+        titles = []
+        for item in items:
+            titles.extend(walk(item) if isinstance(item, list) else [item.title])
+        return titles
+
+    return walk(pypdf.PdfReader(BytesIO(data)).outline)
+
+
+@pytest.mark.parametrize("cls", EDITING_CLASSES)
+def test_edit_bookmarks(cls):
+    document = cls(make_pdf([f"p{i}" for i in range(5)]))
+
+    one = document.add_outline_item("One", 0)
+    two = document.add_outline_item("Two", 1)
+    sub = document.add_outline_item("Sub", 2, parent=one)
+    web = document.add_outline_item("Web", None, url="https://example.org")
+
+    document.update_outline_item(two, title="Second", page_number=3)
+    document.move_outline_item(sub, parent=two)
+    document.move_outline_item(web, index=0)
+
+    expected = [(0, "Web", None), (0, "One", 0), (0, "Second", 3), (1, "Sub", 2)]
+    assert flat_outline(document.outline) == expected
+
+    data = document.to_bytes()
+    with PdfReader(data) as reader:
+        assert flat_outline(reader.outline) == expected
+        assert reader.outline[0]["url"] == "https://example.org"
+        assert reader.outline[1]["url"] is None
+    if pypdf is not None:
+        assert pypdf_titles(data) == ["Web", "One", "Second", "Sub"]
+
+    # an item cannot go below itself or below its own children
+    with pytest.raises(PdfEditError):
+        document.move_outline_item(two, parent=sub)
+    with pytest.raises(PdfEditError):
+        document.move_outline_item(two, parent=two)
+
+    document.remove_outline_item(one)
+    assert flat_outline(document.outline) == [
+        (0, "Web", None),
+        (0, "Second", 3),
+        (1, "Sub", 2),
+    ]
+
+    # removing the target leaves a heading
+    document.update_outline_item(two, page_number=None)
+    assert flat_outline(document.outline)[1] == (0, "Second", None)
+
+    with pytest.raises(PdfEditError):
+        document.remove_outline_item(987654)
+
+    document.clear_outline()
+    assert document.outline == []
+    with reread(document) as reader:
+        assert reader.outline == []
+
+
+@pytest.mark.parametrize("cls", EDITING_CLASSES)
+def test_bookmark_style_and_position(cls):
+    document = cls(THREE)
+    item = document.add_outline_item(
+        "Styled", 1, color="#ff0000", bold=True, italic=True, top=200, zoom=2
+    )
+    document.add_outline_item("Child", 2, parent=item)
+    document.update_outline_item(item, is_open=False)
+
+    with PdfEditor(document.to_bytes()) as editor:
+        (entry,) = editor.outline
+        assert entry["open"] is False
+        assert entry["page"] == 1
+
+        raw = editor.get_object(entry["id"])
+        assert raw["/C"] == [1, 0, 0]
+        assert raw["/F"] == 3  # italic and bold
+        assert raw["/Dest"][1:] == ["/XYZ", None, 200, 2]
+        # one child, folded away
+        assert raw["/Count"] == -1
+
+    document.update_outline_item(item, color=None, bold=False, italic=False)
+    with PdfEditor(document.to_bytes()) as editor:
+        raw = editor.get_object(editor.outline[0]["id"])
+        assert "/C" not in raw
+        assert "/F" not in raw
+
+    with pytest.raises(ValueError):
+        document.add_outline_item("both", 0, url="https://example.org")
+    with pytest.raises(ValueError):
+        document.add_outline_item("position without page", None, top=10)
+    with pytest.raises(ValueError):
+        document.add_outline_item("bad color", 0, color=(2, 0, 0))
+
+
+# ---------------------------------------------------------------- creating form fields
+
+
+@pytest.mark.parametrize("cls", EDITING_CLASSES)
+def test_create_form_fields(cls):
+    document = cls(THREE)
+    document.add_text_field(0, "name", (20, 250, 180, 270), "Ada", tooltip="Your name")
+    document.add_text_field(0, "notes", (20, 180, 180, 240), multiline=True)
+    document.add_checkbox(0, "agree", (20, 150, 36, 166), checked=True)
+    document.add_choice_field(
+        0, "country", (20, 120, 180, 140), ["Belgium", "Switzerland"], "Switzerland"
+    )
+    document.add_radio_group(
+        1,
+        "plan",
+        {"basic": (20, 250, 36, 266), "premium": (60, 250, 76, 266)},
+        selected="premium",
+    )
+    document.add_signature_field(2, "signature", (20, 20, 180, 60))
+
+    data = document.to_bytes()
+    with PdfReader(data) as reader:
+        fields = reader.get_fields()
+        assert {name: field["kind"] for name, field in fields.items()} == {
+            "name": "text",
+            "notes": "text",
+            "agree": "checkbox",
+            "country": "choice",
+            "plan": "radio",
+            "signature": "signature",
+        }
+        assert fields["name"]["value"] == "Ada"
+        assert fields["name"]["alternate_name"] == "Your name"
+        assert fields["name"]["rects"] == [[20, 250, 180, 270]]
+        assert fields["agree"]["value"] == "/Yes"
+        assert fields["country"]["value"] == "Switzerland"
+        assert fields["country"]["choices"] == ["Belgium", "Switzerland"]
+        assert fields["plan"]["value"] == "/premium"
+        assert fields["plan"]["states"] == ["/basic", "/premium"]
+        assert fields["plan"]["rects"] == [
+            [20, 250, 36, 266],
+            [60, 250, 76, 266],
+        ]
+        assert fields["plan"]["pages"] == [1]
+        assert fields["signature"]["pages"] == [2]
+
+    if pypdf is not None:
+        reader = pypdf.PdfReader(BytesIO(data))
+        assert set(reader.get_fields()) == set(fields)
+        assert reader.get_form_text_fields()["name"] == "Ada"
+
+    # the new fields are filled like any other
+    document.update_form_field_values(
+        {"name": "Grace", "agree": False, "country": "Belgium", "plan": "/basic"}
+    )
+    with reread(document) as reader:
+        values = {name: field["value"] for name, field in reader.get_fields().items()}
+    assert values["name"] == "Grace"
+    assert values["agree"] == "/Off"
+    assert values["country"] == "Belgium"
+    assert values["plan"] == "/basic"
+
+
+@pytest.mark.parametrize("cls", EDITING_CLASSES)
+def test_radio_group_update_and_remove(cls):
+    document = cls(THREE)
+    document.add_radio_group(
+        1,
+        "plan",
+        {"basic": (20, 250, 36, 266), "premium": (60, 250, 76, 266)},
+    )
+    document.add_text_field(1, "keep", (20, 200, 180, 220), "Still here")
+
+    for selected in ("premium", "basic", "Off", "premium"):
+        assert document.update_form_field_values({"plan": selected}) == 1
+        with reread(document) as reader:
+            assert reader.get_fields()["plan"]["value"] == f"/{selected}"
+            widgets = [
+                a
+                for a in reader.pages[1].annotations
+                if a["/Subtype"] == "/Widget" and "/AS" in a
+            ]
+            assert [a["/AS"] for a in widgets] == [
+                "/basic" if selected == "basic" else "/Off",
+                "/premium" if selected == "premium" else "/Off",
+            ]
+
+    # A group has two widgets, so a single replacement rectangle is invalid.
+    with pytest.raises(PdfEditError):
+        document.update_form_field("plan", rect=(20, 200, 36, 216))
+
+    document.update_form_field(
+        "plan", new_name="subscription", read_only=True, tooltip="Choose a plan"
+    )
+    with reread(document) as reader:
+        fields = reader.get_fields()
+        assert set(fields) == {"subscription", "keep"}
+        assert fields["subscription"]["states"] == ["/basic", "/premium"]
+        assert fields["subscription"]["read_only"] is True
+        assert fields["subscription"]["alternate_name"] == "Choose a plan"
+
+    document.remove_form_field("subscription")
+    with reread(document) as reader:
+        assert set(reader.get_fields()) == {"keep"}
+        widgets = [a for a in reader.pages[1].annotations if a["/Subtype"] == "/Widget"]
+        assert len(widgets) == 1
+
+
+@pytest.mark.parametrize("cls", EDITING_CLASSES)
+def test_created_fields_render_and_flatten(cls):
+    document = cls(THREE)
+    document.add_text_field(0, "name", (20, 250, 180, 270), "Visible value")
+    document.add_radio_group(
+        0,
+        "plan",
+        {"basic": (20, 200, 36, 216), "premium": (60, 200, 76, 216)},
+        selected="premium",
+    )
+    document.flatten_annotations()
+
+    data = document.to_bytes()
+    with PdfReader(data) as reader:
+        assert reader.has_form is False
+        assert "Visible value" in reader.pages[0].extract_text()
+
+    image = rendered(data)
+    # the dot of the selected button, and none in the other one
+    assert color_at(image, 68, 208) == (0, 0, 0)
+    assert color_at(image, 28, 208) == WHITE
+
+
+@pytest.mark.parametrize("cls", EDITING_CLASSES)
+def test_create_form_fields_rejects_bad_input(cls):
+    document = cls(FORM)
+
+    # the existing form keeps its fields when new ones are added to it
+    document.add_text_field(0, "city", (20, 60, 180, 80))
+    assert {"name", "agree", "city"} <= set(document.get_fields())
+
+    with pytest.raises(PdfEditError):
+        document.add_text_field(0, "city", (20, 30, 180, 50))  # taken
+    with pytest.raises(PdfEditError):
+        document.add_text_field(0, "a.b", (20, 30, 180, 50))  # a period
+    with pytest.raises(PdfEditError):
+        document.add_text_field(0, "flat", (20, 30, 20, 50))  # no width
+    with pytest.raises(PdfEditError):
+        document.add_choice_field(0, "pick", (20, 30, 180, 50), ["a", "b"], "c")
+    with pytest.raises(PdfEditError):
+        document.add_radio_group(0, "group", {"a": (0, 0, 10, 10)}, selected="z")
+    with pytest.raises(PdfEditError):
+        document.add_radio_group(0, "group", {"Off": (0, 0, 10, 10)})
+    with pytest.raises(IndexError):
+        document.add_checkbox(9, "box", (0, 0, 10, 10))
+
+    # nothing half-made was left behind
+    assert set(document.get_fields()) == {"name", "agree", "city"}
+
+    # a choice field that can be typed into takes other values
+    document.add_choice_field(
+        0, "pick", (20, 30, 180, 50), ["a", "b"], "c", editable=True
+    )
+    assert document.get_fields()["pick"]["value"] == "c"
+
+
+@pytest.mark.parametrize("cls", EDITING_CLASSES)
+def test_update_and_remove_form_fields(cls):
+    document = cls(THREE)
+    document.add_text_field(0, "name", (20, 250, 180, 270), "Ada")
+    document.add_checkbox(0, "agree", (20, 150, 36, 166))
+    document.add_choice_field(0, "country", (20, 120, 180, 140), ["Belgium"])
+
+    document.update_form_field(
+        "name",
+        new_name="full_name",
+        rect=(20, 200, 200, 230),
+        read_only=True,
+        required=True,
+        tooltip="Full name",
+    )
+    document.update_form_field("country", options=["Belgium", "Italy"])
+
+    with reread(document) as reader:
+        fields = reader.get_fields()
+    assert "name" not in fields
+    renamed = fields["full_name"]
+    assert renamed["value"] == "Ada"
+    assert renamed["read_only"] is True
+    assert renamed["flags"] & 2  # required
+    assert renamed["rects"] == [[20, 200, 200, 230]]
+    assert renamed["alternate_name"] == "Full name"
+    assert fields["country"]["choices"] == ["Belgium", "Italy"]
+
+    document.update_form_field("full_name", tooltip=None, read_only=False)
+    renamed = document.get_fields()["full_name"]
+    assert renamed["alternate_name"] == "full_name"
+    assert renamed["read_only"] is False
+
+    with pytest.raises(PdfEditError):
+        document.update_form_field("full_name", options=["a"])  # not a choice field
+    with pytest.raises(PdfEditError):
+        document.update_form_field("agree", new_name="full_name")  # taken
+    with pytest.raises(PdfEditError):
+        document.update_form_field("missing", read_only=True)
+
+    document.remove_form_field("agree")
+    with reread(document) as reader:
+        assert set(reader.get_fields()) == {"full_name", "country"}
+        widgets = [a for a in reader.pages[0].annotations if a["/Subtype"] == "/Widget"]
+        assert len(widgets) == 2
+
+    with pytest.raises(PdfEditError):
+        document.remove_form_field("agree")
+
+
+# ---------------------------------------------------------------- drawing text
+
+
+@pytest.mark.parametrize("cls", EDITING_CLASSES)
+def test_draw_text(cls):
+    document = cls(THREE)
+    page = document.pages[1]
+
+    page.draw_text("Stamped (1) \\ ok", 20, 50, size=14, font="Times-Bold")
+    page.draw_text("Größe € one\nline two", 20, 100)
+
+    with reread(document) as reader:
+        text = reader.pages[1].extract_text()
+    for expected in ("beta", "Stamped (1) \\ ok", "Größe € one", "line two"):
+        assert expected in text
+
+    with pytest.raises(PdfUnsupportedError):
+        page.draw_text("日本語", 20, 20)
+    with pytest.raises(PdfEditError):
+        page.draw_text("x", 20, 20, font="Comic Sans")
+    with pytest.raises(PdfEditError):
+        page.draw_text("x", 20, 20, size=0)
+
+    # the rejected calls left the page as it was
+    with reread(document) as reader:
+        assert "日本語" not in reader.pages[1].extract_text()
+
+
+@pytest.mark.parametrize("cls", EDITING_CLASSES)
+def test_draw_text_color_as_rendered(cls):
+    document = cls()
+    page = document.add_blank_page(200, 200)
+    page.draw_text("MM", 10, 40, size=120, font="Helvetica-Bold", color="#0000ff")
+
+    image = rendered(document.to_bytes())
+    # get_flattened_data() requires Pillow 12.1.0; we still support Pillow 10.
+    # Remove the hasattr check and getdata() fallback when the minimum is >=12.1.0.
+    pixels = (
+        image.get_flattened_data()
+        if hasattr(image, "get_flattened_data")
+        else image.getdata()
+    )
+    blue = [p for p in pixels if p[2] > 200 and p[0] < 60 and p[1] < 60]
+    assert len(blue) > 1000
+
+
+# ---------------------------------------------------------------- contents pages
+
+
+@pytest.mark.parametrize("cls", EDITING_CLASSES)
+def test_table_of_contents_page(cls):
+    document = cls(make_pdf([f"p{i}" for i in range(4)]))
+    one = document.add_outline_item("Introduction", 0)
+    document.add_outline_item("Scope", 1, parent=one)
+    document.add_outline_item("Results", 3)
+
+    pages = document.add_table_of_contents(page_size="A4")
+    assert [page.index for page in pages] == [0]
+    assert len(document.pages) == 5
+
+    # the bookmarks follow their pages behind the new one
+    assert flat_outline(document.outline) == [
+        (0, "Introduction", 1),
+        (1, "Scope", 2),
+        (0, "Results", 4),
+    ]
+
+    with reread(document) as reader:
+        contents = reader.pages[0]
+        assert contents.mediabox == pytest.approx((0, 0, 595.28, 841.89))
+        text = contents.extract_text()
+        for expected in ("Contents", "Introduction", "Scope", "Results"):
+            assert expected in text
+        assert [a["page"] for a in contents.annotations] == [1, 2, 4]
+
+    assert cls(THREE).add_table_of_contents() == []
+
+
+@pytest.mark.parametrize("cls", EDITING_CLASSES)
+def test_table_of_contents_spans_pages_and_depth(cls):
+    document = cls(make_pdf([f"p{i}" for i in range(3)]))
+    for number in range(60):
+        parent = document.add_outline_item(f"Chapter {number}", number % 3)
+        document.add_outline_item(f"Section {number}.1", number % 3, parent=parent)
+
+    pages = document.add_table_of_contents(page_size="A5", max_depth=0)
+    assert len(pages) > 1
+
+    links = []
+    with reread(document) as reader:
+        for page in pages:
+            links.extend(a["page"] for a in reader.pages[page.index].annotations)
+    # one link per top-level bookmark, to the pages behind the contents
+    assert len(links) == 60
+    assert set(links) == {len(pages), len(pages) + 1, len(pages) + 2}
+
+
+# ---------------------------------------------------------------- pages from images
+
+
+def image_bytes(mode: str, size, color, fmt: str, **options) -> bytes:
+    from PIL import Image
+
+    out = BytesIO()
+    Image.new(mode, size, color).save(out, fmt, **options)
+    return out.getvalue()
+
+
+def test_pdf_from_images(tmp_path):
+    jpeg = image_bytes("RGB", (300, 200), (200, 30, 30), "JPEG", dpi=(150, 150))
+    png = image_bytes("RGBA", (100, 50), (0, 0, 255, 128), "PNG")
+    gray = tmp_path / "gray.png"
+    gray.write_bytes(image_bytes("L", (40, 40), 128, "PNG"))
+
+    writer = PdfWriter.from_images([jpeg, BytesIO(png), gray])
+    data = writer.to_bytes()
+
+    with PdfReader(data) as reader:
+        boxes = [page.mediabox for page in reader.pages]
+        assert boxes[0] == pytest.approx((0, 0, 144, 96))  # 300 x 200 px at 150 dpi
+        assert boxes[1] == pytest.approx((0, 0, 100, 50))  # no resolution: 1 px = 1 pt
+        assert boxes[2] == pytest.approx((0, 0, 40, 40))
+
+        (photo,) = reader.pages[0].images
+        # the JPEG file is stored as it is
+        assert photo.format == "jpeg"
+        assert photo.data == jpeg
+        assert photo.bbox == pytest.approx((0, 0, 144, 96))
+
+        (shade,) = reader.pages[2].images
+        assert (shade.width, shade.height, shade.mode) == (40, 40, "L")
+
+    # half-transparent blue over the white page
+    red, green, blue = color_at(rendered(data, 1), 50, 25)
+    assert blue > 200 and 100 < red < 160 and 100 < green < 160
+
+    if pypdf is not None:
+        assert len(pypdf.PdfReader(BytesIO(data)).pages) == 3
+
+
+@pytest.mark.parametrize("cls", EDITING_CLASSES)
+def test_image_on_a_fixed_page_size(cls):
+    jpeg = image_bytes("RGB", (300, 200), (30, 200, 30), "JPEG")
+
+    document = cls(THREE)
+    (page,) = document.add_image(jpeg, page_size="A4", margin=36, index=1)
+    assert page.index == 1
+    assert len(document.pages) == 4
+
+    assert page.mediabox == pytest.approx((0, 0, 595.28, 841.89))
+    (image,) = page.images
+    # 300 x 200 scaled to the 523.28 pt between the margins, centered
+    height = 523.28 * 200 / 300
+    bottom = (841.89 - height) / 2
+    assert image.bbox == pytest.approx((36, bottom, 559.28, bottom + height), abs=0.01)
+
+    (landscape,) = document.add_image(jpeg, page_size=(842, 595))
+    assert landscape.mediabox == pytest.approx((0, 0, 842, 595))
+
+    with pytest.raises(ValueError):
+        document.add_image(jpeg, page_size="B7")
+    with pytest.raises(ValueError):
+        document.add_image(jpeg, page_size="A4", margin=400)
+
+
+def test_image_orientation_frames_and_cmyk():
+    from PIL import Image
+
+    exif = Image.Exif()
+    exif[0x0112] = 6  # stored turned: show it rotated a quarter clockwise
+    turned = image_bytes("RGB", (300, 200), (200, 30, 30), "JPEG", exif=exif.tobytes())
+
+    first = Image.new("RGB", (60, 40), (255, 0, 0))
+    second = Image.new("RGB", (60, 40), (0, 0, 255))
+    frames = BytesIO()
+    first.save(frames, "TIFF", save_all=True, append_images=[second])
+
+    cmyk = image_bytes("CMYK", (50, 50), (0, 255, 255, 0), "JPEG")
+
+    writer = PdfWriter()
+    assert len(writer.add_image(turned)) == 1
+    # one page per frame
+    assert len(writer.add_image(frames.getvalue())) == 2
+    writer.add_image(cmyk)
+
+    data = writer.to_bytes()
+    with PdfReader(data) as reader:
+        assert reader.pages[0].rotation == 90
+        assert reader.pages[0].mediabox == pytest.approx((0, 0, 300, 200))
+        assert len(reader.pages) == 4
+
+    # shown portrait, as the camera meant it
+    assert rendered(data, 0).size == (200, 300)
+    assert color_at(rendered(data, 1), 30, 20) == pytest.approx(RED, abs=8)
+    assert color_at(rendered(data, 2), 30, 20) == pytest.approx(BLUE, abs=8)
+    # a CMYK JPEG keeps its colors: no magenta-and-yellow cast inverted to cyan
+    red, green, blue = color_at(rendered(data, 3), 25, 25)
+    assert red > 180 and green < 90 and blue < 90
+
+
+def test_image_errors():
+    writer = PdfWriter()
+    with pytest.raises(OSError):
+        writer.add_image(b"not an image")
+    with pytest.raises(TypeError):
+        writer.add_image(12345)
+    assert len(writer.pages) == 0
+
+
+def test_reader_cannot_create_content():
+    with PdfReader(THREE) as reader:
+        for name in (
+            "add_text_field",
+            "add_checkbox",
+            "update_form_field",
+            "remove_form_field",
+            "update_outline_item",
+            "remove_outline_item",
+            "add_table_of_contents",
+            "add_image",
+            "from_images",
+        ):
+            assert not hasattr(reader, name)
+        assert not hasattr(reader.pages[0], "draw_text")
+        for name in (
+            "add_form_field",
+            "draw_text",
+            "insert_image_page",
+            "clear_outline",
+        ):
+            assert not hasattr(reader._native, name)
+
+
 # ---------------------------------------------------------------- editor only
 
 
@@ -1521,7 +2073,7 @@ def test_clone_keeps_document_level_content(build, marker):
 
 
 def encrypted_pdf(password: str) -> bytes:
-    pytest.importorskip("pypdf", reason="pypdf writes the encrypted fixture")
+    pypdf = pytest.importorskip("pypdf", reason="pypdf writes the encrypted fixture")
 
     writer = pypdf.PdfWriter(clone_from=BytesIO(THREE))
     writer.encrypt(password)

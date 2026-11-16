@@ -66,6 +66,15 @@ with PdfEditor("document.pdf") as editor:
     editor.write("changed.pdf")
 ```
 
+Turn scans or photos into a PDF:
+
+```python
+from docling_parse import PdfWriter
+
+writer = PdfWriter.from_images(["scan-1.jpg", "scan-2.png"], page_size="A4")
+writer.write("scans.pdf")
+```
+
 ## Why use it
 
 **Performance.** Parsing, page assembly, text extraction and serialization
@@ -218,6 +227,12 @@ def show(items, depth=0):
 
 show(reader.outline)
 ```
+
+A bookmark is a dictionary with `title`, `page` (or None), `url` (for a
+bookmark that opens a web address, else None), `open` (whether its children
+are shown) and `children`. Its `id` identifies it to the writer's outline
+methods; it is valid for the object that returned it and changes when the
+file is written and opened again.
 
 This replaces pypdf's nested lists of `Destination` objects and its
 `get_destination_page_number()`.
@@ -392,13 +407,66 @@ writer.set_xmp_metadata(xmp_packet)          # or None to remove it
 Keys may be written with or without their slash. Text outside ASCII is
 stored correctly; no encoding step is needed.
 
-### Bookmarks, page labels and destinations
+### Bookmarks
 
 ```python
 chapter = writer.add_outline_item("Chapter 1", 0)
 writer.add_outline_item("Section 1.1", 2, parent=chapter)
-writer.add_outline_item("Appendix", None)        # a heading without a target
+writer.add_outline_item("Appendix", None)                  # a heading without a target
+writer.add_outline_item("Project site", None, url="https://example.org")
 
+# open at a position and magnification instead of the whole page
+writer.add_outline_item("Figure 3", 7, top=400, zoom=1.5)
+
+# styled, and folded until clicked
+writer.add_outline_item("Notes", 9, color="#c00000", bold=True, is_open=False)
+```
+
+`add_outline_item` returns the bookmark's id, which `parent` and the editing
+methods take. `left`, `top` and `zoom` give a position in points and a
+magnification; any of them left at None keeps what the viewer has.
+
+Existing bookmarks, including those of the opened file, are changed through
+their ids from `writer.outline`:
+
+```python
+item = writer.outline[0]["id"]
+
+writer.update_outline_item(item, title="1 Introduction", page_number=2)
+writer.update_outline_item(item, bold=False, color=None)   # default style
+writer.update_outline_item(item, page_number=None)         # no target
+writer.move_outline_item(item, parent=None, index=0)       # first, top level
+writer.remove_outline_item(item)                           # with its children
+writer.clear_outline()                                     # all of them
+```
+
+An item cannot be moved below itself or its own children.
+
+When a page is removed, bookmarks that led to it stay as headings without a
+target, and bookmarks to the pages behind it keep pointing at those pages.
+
+### A contents page
+
+```python
+writer.add_table_of_contents()                      # in front of page 1
+writer.add_table_of_contents(index=1, title="Inhalt", max_depth=1,
+                             page_size="A4", font="Times-Roman", size=12)
+```
+
+This inserts as many pages as the outline needs. Every bookmark becomes a
+line, indented by its depth, with the label of the page it opens on the
+right, and the whole line is a link to that page. Bookmarks that open a web
+address or nothing are listed without a page and without a link.
+
+The pages are drawn with one of the standard fonts (see
+[Drawing text](#drawing-text)). A character those fonts cannot show is
+replaced by "?", and a title that does not fit is shortened, by an estimate
+of the font's character width. For a designed contents page, make it
+elsewhere, add it with `append`, and lay links over it with `add_link`.
+
+### Page labels and destinations
+
+```python
 writer.set_page_label(0, 3, "/r")                # i, ii, iii, iv
 writer.set_page_label(4, 19, "/D")               # 1, 2, 3, ...
 writer.set_page_label(20, 24, "/D", prefix="A-") # A-1, A-2, ...
@@ -406,11 +474,6 @@ writer.set_page_label(20, 24, "/D", prefix="A-") # A-1, A-2, ...
 writer.add_named_destination("summary", 5)
 writer.set_open_destination(1)                   # open at the second page
 ```
-
-`add_outline_item` returns the item's id, which is what `parent` takes.
-
-When a page is removed, bookmarks that led to it stay as headings without a
-target, and bookmarks to the pages behind it keep pointing at those pages.
 
 ### How the document opens
 
@@ -460,6 +523,51 @@ writer.flatten_annotations()
 The values stay visible and the document is no longer interactive.
 `flatten_annotations()` flattens the other visible annotations as well.
 
+### Creating form fields
+
+```python
+writer.add_text_field(0, "name", (72, 700, 300, 720), "Ada Lovelace",
+                      tooltip="Your full name")
+writer.add_text_field(0, "notes", (72, 600, 300, 690), multiline=True)
+writer.add_checkbox(0, "newsletter", (72, 570, 86, 584), checked=True)
+writer.add_choice_field(0, "country", (72, 540, 300, 560),
+                        ["Belgium", "Italy", "Switzerland"], "Italy")
+writer.add_radio_group(0, "plan", {
+    "basic": (72, 510, 86, 524),
+    "premium": (120, 510, 134, 524),
+}, selected="premium")
+writer.add_signature_field(0, "signature", (72, 420, 300, 480))
+```
+
+- The first two arguments are the page and the field name; the name must be
+  new in the form and contain no period. Rectangles are
+  `(left, bottom, right, top)` in points.
+- Every field kind takes `read_only`, `required` and `tooltip`; text and
+  choice fields also take `font_size`.
+- A choice field is a drop-down list. Its value must be one of the options,
+  unless `editable=True` lets the user type their own.
+- A radio group's buttons are named by their state; filling the form selects
+  one by that name: `update_form_field_values({"plan": "/basic"})`.
+- A signature field is an empty frame for a signing application to fill.
+  docling-parse does not sign.
+- Each field is drawn: text in Helvetica inside a thin frame, a check mark,
+  a filled circle. The form shows in every viewer and can be flattened.
+
+Existing fields, of the opened file or newly added, are changed and removed by
+name:
+
+```python
+writer.update_form_field("name", new_name="full_name",
+                         rect=(72, 690, 400, 720), read_only=True)
+writer.update_form_field("country", options=["Belgium", "France"])
+writer.update_form_field("full_name", tooltip=None)
+writer.remove_form_field("newsletter")
+```
+
+`update_form_field` changes only what it is given. `rect` works for a field
+with one widget; `options` for a choice field. `remove_form_field` takes the
+field's widgets off their pages too.
+
 ### Annotations and links
 
 ```python
@@ -502,6 +610,60 @@ writer.remove_javascript()
 and its additional actions: use it on files from sources you do not control.
 Scripts, links and embedded files of a source are carried along by
 `clone_from` and by `append`.
+
+### Drawing text
+
+```python
+page = writer.pages[0]
+page.draw_text("CONFIDENTIAL", 72, 800, size=24, font="Helvetica-Bold",
+               color="#c00000")
+page.draw_text("Approved by:\nDate:", 72, 120)    # two lines
+```
+
+`(x, y)` is where the first line's baseline starts, in points from the
+bottom-left corner. A newline starts a new line 1.2 x `size` lower. `color`
+is `(r, g, b)` with values from 0 to 1, or `"#rrggbb"`.
+
+`font` is one of the twelve Latin standard fonts every PDF viewer has
+(`STANDARD_FONTS`: Helvetica, Times and Courier, each regular, bold, italic
+and bold italic), so nothing is embedded. They show the Western European
+character set (WinAnsiEncoding: Latin-1 plus a few such as € and smart
+quotes); other characters, such as Greek, Cyrillic or CJK, raise
+`PdfUnsupportedError`. The text is real text: it can be selected, searched
+and extracted.
+
+This has no pypdf counterpart; pypdf users draw text with another library
+and merge the page.
+
+### Pages from images
+
+```python
+writer = PdfWriter.from_images(["page-1.jpg", "page-2.png", "page-3.tif"])
+
+writer.add_image("photo.jpg")                         # at the end
+writer.add_image(png_bytes, index=0)                  # in front
+writer.add_image("scan.png", page_size="A4", margin=36)
+writer.add_image(pil_image, dpi=300)
+```
+
+- An image is a path, bytes, a binary stream or a PIL image, in any format
+  Pillow reads: JPEG, PNG, TIFF, GIF, BMP, WebP, ...
+- JPEG files are stored as they are: no loss and no re-encoding. Other
+  formats are stored losslessly, and transparency is kept.
+- A multi-page TIFF or an animated GIF gives one page per frame. `add_image`
+  returns the pages it added.
+- Without `page_size`, a page is the size of its image at the image's
+  resolution: `dpi`, or the resolution the file declares, or 72 (one pixel
+  per point). `margin` adds a border.
+- With `page_size` (`"A4"`, `"Letter"`, `"A3"`, `"A5"`, `"Legal"` or
+  `(width, height)` in points) the image is centered and scaled to fill the
+  page inside the margin, keeping its proportions.
+- A photo stored sideways with an EXIF orientation shows upright.
+- CMYK JPEGs keep their colors.
+
+A file Pillow cannot read raises `PIL.UnidentifiedImageError` (an `OSError`).
+
+`from_images` exists on `PdfEditor` as well. pypdf has no counterpart.
 
 ### Encryption
 
@@ -561,7 +723,9 @@ default), `"generate"` or `"disable"`.
   (`compress_identical_objects`).
 - Incremental writing: every write is a full rewrite, so signatures of the
   source do not stay valid.
-- Editing existing bookmarks, and article threads.
+- Article threads.
+- Text in fonts other than the standard fonts, so no text outside the
+  Western European character set; and no images placed on existing pages.
 - pypdf's object model. Annotations and viewer preferences are given as
   plain dictionaries instead.
 
@@ -664,19 +828,22 @@ What works today, by task:
 | Text extraction | plain and layout mode; no visitor functions |
 | Page boxes, rotation, user unit | supported |
 | Metadata and XMP | read and write; XMP as a raw packet |
-| Outline | read; add bookmarks; carried over by `append`; no editing of existing bookmarks |
+| Outline | read, add, edit, move, remove; positions, zoom, URLs, color and style; carried over by `append` |
+| Contents pages | generated from the outline, with links |
 | Page labels, named destinations, open destination | read and write |
 | Page layout, page mode, viewer preferences | read and write |
 | Images | export; no replacement |
 | Merge, split, append, insert, delete, reorder, blank pages | supported |
 | Rotate, crop, scale, transform | supported |
 | Stamps and watermarks | supported; annotations of the merged page are not copied |
-| Forms | read, fill, flatten; XFA is reported only |
+| Forms | read, fill, flatten; create text, checkbox, radio, choice and signature fields; rename, move, change flags and options, remove; XFA is reported only |
 | Annotations and links | read, add, remove, flatten |
 | Attachments | read, add, replace, remove |
 | JavaScript | read, add, remove; never run |
 | Encrypt output | AES-256 with permission flags |
 | Output options | stream compression, object streams, linearization |
+| Drawing text | standard fonts, Western European characters |
+| PDF from images | JPEG without re-encoding; PNG, TIFF, GIF and others losslessly; transparency, EXIF orientation, multi-frame files |
 | Raw objects | read-only view on `PdfEditor` |
 | Removing images or text, replacing images, merging identical objects | not available |
 | Incremental writing | not available |

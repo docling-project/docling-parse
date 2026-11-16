@@ -373,7 +373,9 @@ namespace pdflib
         if(item.isIndirect() and opened.count(item.getObjGen()) > 0) { is_closed = false; }
       }
 
-    if(shown == 0 and not is_root)
+    // without visible entries there is no /Count, for an item and for the
+    // outline root alike (ISO 32000-1, tables 152 and 153)
+    if(shown == 0 and (is_root or not is_closed))
       {
         item.removeKey("/Count");
         return 0;

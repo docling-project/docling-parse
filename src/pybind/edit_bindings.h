@@ -584,6 +584,141 @@ namespace docling
              pybind11::arg("page"),
              "Add or replace a named destination.")
 
+        .def("add_outline_entry",
+             [](class_type& self, pybind11::dict spec) -> int {
+               nlohmann::json value = pyjson::to_json(spec);
+
+               pybind11::gil_scoped_release release;
+               return self.add_outline_entry(value);
+             },
+             pybind11::arg("spec"),
+             "Add a bookmark described by a dict; returns its id.")
+
+        .def("update_outline_item",
+             [](class_type& self, int id, pybind11::dict changes) -> void {
+               nlohmann::json value = pyjson::to_json(changes);
+
+               pybind11::gil_scoped_release release;
+               self.update_outline_item(id, value);
+             },
+             pybind11::arg("id"),
+             pybind11::arg("changes"),
+             "Change a bookmark.")
+
+        .def("remove_outline_item",
+             [](class_type& self, int id) -> void {
+               pybind11::gil_scoped_release release;
+               self.remove_outline_item(id);
+             },
+             pybind11::arg("id"),
+             "Remove a bookmark and everything below it.")
+
+        .def("move_outline_item",
+             [](class_type& self, int id, int parent, int index) -> void {
+               pybind11::gil_scoped_release release;
+               self.move_outline_item(id, parent, index);
+             },
+             pybind11::arg("id"),
+             pybind11::arg("parent") = 0,
+             pybind11::arg("index") = -1,
+             "Move a bookmark below another one, or to the top level.")
+
+        .def("clear_outline",
+             [](class_type& self) -> void {
+               pybind11::gil_scoped_release release;
+               self.clear_outline();
+             },
+             "Remove the whole outline.")
+
+        .def("add_form_field",
+             [](class_type& self, int page, pybind11::dict spec, std::int64_t generation) -> void {
+               nlohmann::json value = pyjson::to_json(spec);
+
+               pybind11::gil_scoped_release release;
+               self.add_form_field(page, generation, value);
+             },
+             pybind11::arg("page"),
+             pybind11::arg("spec"),
+             pybind11::arg("generation") = class_type::ANY_GENERATION,
+             "Create a form field on a page.")
+
+        .def("update_form_field",
+             [](class_type& self, const std::string& name, pybind11::dict changes) -> void {
+               nlohmann::json value = pyjson::to_json(changes);
+
+               pybind11::gil_scoped_release release;
+               self.update_form_field(name, value);
+             },
+             pybind11::arg("name"),
+             pybind11::arg("changes"),
+             "Change a form field's name, rectangle, flags, tooltip or options.")
+
+        .def("remove_form_field",
+             [](class_type& self, const std::string& name) -> void {
+               pybind11::gil_scoped_release release;
+               self.remove_form_field(name);
+             },
+             pybind11::arg("name"),
+             "Remove a form field and its widgets.")
+
+        .def("insert_image_page",
+             [](class_type& self,
+                int width,
+                int height,
+                const std::string& colorspace,
+                pybind11::bytes data,
+                bool is_jpeg,
+                double page_width,
+                double page_height,
+                std::array<double, 4> placement,
+                bool invert,
+                std::optional<pybind11::bytes> alpha,
+                int rotate,
+                int at) -> int {
+               std::string samples = data.cast<std::string>();
+               std::string opacity = alpha.has_value() ? alpha.value().cast<std::string>() : std::string();
+
+               pybind11::gil_scoped_release release;
+               return self.insert_image_page(at, width, height, colorspace, samples, is_jpeg, invert,
+                                             opacity, page_width, page_height, placement, rotate);
+             },
+             pybind11::arg("width"),
+             pybind11::arg("height"),
+             pybind11::arg("colorspace"),
+             pybind11::arg("data"),
+             pybind11::arg("is_jpeg"),
+             pybind11::arg("page_width"),
+             pybind11::arg("page_height"),
+             pybind11::arg("placement"),
+             pybind11::arg("invert") = false,
+             pybind11::arg("alpha") = pybind11::none(),
+             pybind11::arg("rotate") = 0,
+             pybind11::arg("at") = -1,
+             "Add a page that shows one image. Returns its index.")
+
+        .def("draw_text",
+             [](class_type& self,
+                int page,
+                const std::string& text,
+                double x,
+                double y,
+                double size,
+                const std::string& font,
+                std::array<double, 3> color,
+                std::int64_t generation) -> void {
+               pybind11::gil_scoped_release release;
+               self.draw_text(page, generation, text, x, y, size, font, color);
+             },
+             pybind11::arg("page"),
+             pybind11::arg("text"),
+             pybind11::arg("x"),
+             pybind11::arg("y"),
+             pybind11::arg("size") = 12.0,
+             pybind11::arg("font") = "Helvetica",
+             pybind11::arg("color") = std::array<double, 3>{0.0, 0.0, 0.0},
+             pybind11::arg("generation") = class_type::ANY_GENERATION,
+             "Draw text on a page in a standard font.")
+
         .def("add_outline_item",
              [](class_type& self, const std::string& title, int page, int parent) -> int {
                pybind11::gil_scoped_release release;

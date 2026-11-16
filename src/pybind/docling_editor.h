@@ -173,6 +173,31 @@ namespace docling
     // All three return the index of the first new page.
     int duplicate_page(int page, std::int64_t expected_generation, int at);
     int insert_blank_page(int at, double width, double height);
+
+    // A page showing one image; see pdf_page_ops::make_image_page.
+    int insert_image_page(int at,
+                          int width,
+                          int height,
+                          std::string colorspace,
+                          std::string data,
+                          bool is_jpeg,
+                          bool invert,
+                          std::string alpha,
+                          double page_width,
+                          double page_height,
+                          std::array<double, 4> placement,
+                          int rotate);
+
+    // Draw text on a page in one of the standard fonts; see
+    // pdf_page_ops::draw_text.
+    void draw_text(int page,
+                   std::int64_t expected_generation,
+                   std::string text,
+                   double x,
+                   double y,
+                   double size,
+                   std::string font,
+                   std::array<double, 3> color);
     // With import_outline, the other document's bookmarks that lead to a
     // copied page are recreated at the top level of this document's outline.
     int append_pages(const pdflib::pdf_source& other,
@@ -202,11 +227,25 @@ namespace docling
     // Returns the id of the new item, usable as `parent` of later items.
     int add_outline_item(std::string title, int page, int parent);
 
+    // Outline editing; the JSON entries are documented on
+    // pdf_outline_ops::add_item and update_item.
+    int add_outline_entry(nlohmann::json spec);
+    void update_outline_item(int id, nlohmann::json changes);
+    void remove_outline_item(int id);
+    void move_outline_item(int id, int parent, int index);
+    void clear_outline();
+
     // ---- forms, annotations, attachments, scripts ----
 
     int set_form_values(std::map<std::string, std::string> values);
     void set_need_appearances(bool value);
     void flatten_annotations();
+
+    // Form fields; the JSON entries are documented on pdf_form_ops::add_field
+    // and update_field.
+    void add_form_field(int page, std::int64_t expected_generation, nlohmann::json spec);
+    void update_form_field(std::string name, nlohmann::json changes);
+    void remove_form_field(std::string name);
 
     // `dictionary` is the annotation in PDF syntax.
     void add_annotation(int page, std::int64_t expected_generation, std::string dictionary);
@@ -339,6 +378,10 @@ namespace docling
     typedef std::tuple<const std::string*, int, bool> overlay_key_type;
     std::map<overlay_key_type, QPDFObjectHandle> overlay_forms;
 
+    // Standard font dictionaries already added to the destination, by name,
+    // so that text drawn on many pages shares one font object.
+    std::map<std::string, QPDFObjectHandle> standard_fonts;
+
     std::int64_t current_generation; // page-list identity, for page handles
     std::int64_t current_revision;   // any change, for the snapshot
 
@@ -367,6 +410,7 @@ namespace docling
     imports({}),
     destination(nullptr),
     overlay_forms({}),
+    standard_fonts({}),
     current_generation(0),
     current_revision(0),
     snapshot(nullptr),
@@ -473,6 +517,7 @@ namespace docling
 
     // destination before what it reads from, as in the destructor
     overlay_forms.clear();
+    standard_fonts.clear();
     destination.reset();
     imports.clear();
     destination_buffer.reset();
@@ -1824,6 +1869,138 @@ namespace docling
       output_linearize = linearize;
 
       touch(false);
+    });
+  }
+
+  inline int docling_editor::insert_image_page(int at,
+                                               int width,
+                                               int height,
+                                               std::string colorspace,
+                                               std::string data,
+                                               bool is_jpeg,
+                                               bool invert,
+                                               std::string alpha,
+                                               double page_width,
+                                               double page_height,
+                                               std::array<double, 4> placement,
+                                               int rotate)
+  {
+    std::lock_guard<std::recursive_mutex> lock(parser_mutex);
+
+    return guarded([&]() -> int {
+      ensure_destination();
+
+      QPDFPageDocumentHelper helper(*destination);
+      std::vector<QPDFPageObjectHelper> pages = helper.getAllPages();
+      int number_of_pages = static_cast<int>(pages.size());
+
+      bool at_end = false;
+      int position = insertion_position(at, number_of_pages, at_end);
+
+      // built, and so checked, before the page list changes
+      QPDFPageObjectHelper page(pdflib::pdf_page_ops::make_image_page(*destination,
+                                                                      width,
+                                                                      height,
+                                                                      colorspace,
+                                                                      data,
+                                                                      is_jpeg,
+                                                                      invert,
+                                                                      alpha,
+                                                                      page_width,
+                                                                      page_height,
+                                                                      placement,
+                                                                      rotate));
+
+      touch(not at_end);
+
+      if(at_end)
+        {
+          helper.addPage(page, false);
+        }
+      else
+        {
+          helper.addPageAt(page, true, pages.at(position));
+        }
+
+      return position;
+    });
+  }
+
+  inline void docling_editor::draw_text(int page,
+                                        std::int64_t expected_generation,
+                                        std::string text,
+                                        double x,
+                                        double y,
+                                        double size,
+                                        std::string font,
+                                        std::array<double, 3> color)
+  {
+    edit_page(page, expected_generation, [&](QPDF& qpdf, QPDFPageObjectHelper target) {
+      auto itr = standard_fonts.find(font);
+      if(itr == standard_fonts.end())
+        {
+          itr = standard_fonts.emplace(font, pdflib::pdf_page_ops::make_standard_font(qpdf, font)).first;
+        }
+
+      pdflib::pdf_page_ops::draw_text(qpdf, target, itr->second, text, x, y, size, color);
+    });
+  }
+
+  inline int docling_editor::add_outline_entry(nlohmann::json spec)
+  {
+    return edit_document([&spec](QPDF& qpdf) {
+      return pdflib::pdf_outline_ops::add_item(qpdf, spec);
+    });
+  }
+
+  inline void docling_editor::update_outline_item(int id, nlohmann::json changes)
+  {
+    edit_document([id, &changes](QPDF& qpdf) {
+      pdflib::pdf_outline_ops::update_item(qpdf, id, changes);
+    });
+  }
+
+  inline void docling_editor::remove_outline_item(int id)
+  {
+    edit_document([id](QPDF& qpdf) {
+      pdflib::pdf_outline_ops::remove_item(qpdf, id);
+    });
+  }
+
+  inline void docling_editor::move_outline_item(int id, int parent, int index)
+  {
+    edit_document([id, parent, index](QPDF& qpdf) {
+      pdflib::pdf_outline_ops::move_item(qpdf, id, parent, index);
+    });
+  }
+
+  inline void docling_editor::clear_outline()
+  {
+    edit_document([](QPDF& qpdf) {
+      pdflib::pdf_outline_ops::clear(qpdf);
+    });
+  }
+
+  inline void docling_editor::add_form_field(int page,
+                                             std::int64_t expected_generation,
+                                             nlohmann::json spec)
+  {
+    edit_page(page, expected_generation, [&spec](QPDF& qpdf, QPDFPageObjectHelper target) {
+      pdflib::pdf_form_ops::add_field(qpdf, target, spec);
+    });
+  }
+
+  inline void docling_editor::update_form_field(std::string name, nlohmann::json changes)
+  {
+    edit_document([&name, &changes](QPDF& qpdf) {
+      pdflib::pdf_form_ops::update_field(qpdf, name, changes);
+    });
+  }
+
+  inline void docling_editor::remove_form_field(std::string name)
+  {
+    edit_document([&name](QPDF& qpdf) {
+      pdflib::pdf_form_ops::remove_field(qpdf, name);
     });
   }
 

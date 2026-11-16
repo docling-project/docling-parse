@@ -17,7 +17,10 @@ from collections.abc import Iterable, Iterator, Sequence
 from contextlib import contextmanager
 from typing import Any, BinaryIO, NamedTuple, Union, overload
 
-from docling_parse import pdf_parsers as _native  # type: ignore[attr-defined]
+from docling_parse import (
+    _pdf_images,
+    pdf_parsers as _native,  # type: ignore[attr-defined]
+)
 from docling_parse.pdf_errors import (
     PdfEditError,
     PdfEditErrorCategory,
@@ -30,6 +33,58 @@ from docling_parse.pdf_errors import (
 )
 
 PdfSource = Union[str, "os.PathLike[str]", bytes, bytearray, memoryview, BinaryIO]
+
+# A sentinel for "not given", where None is a value (it removes something).
+_UNSET: Any = object()
+
+# The fonts text can be drawn in: the standard 14 fonts that hold Latin text,
+# which every PDF viewer provides without embedding.
+STANDARD_FONTS = (
+    "Helvetica",
+    "Helvetica-Bold",
+    "Helvetica-Oblique",
+    "Helvetica-BoldOblique",
+    "Times-Roman",
+    "Times-Bold",
+    "Times-Italic",
+    "Times-BoldItalic",
+    "Courier",
+    "Courier-Bold",
+    "Courier-Oblique",
+    "Courier-BoldOblique",
+)
+
+
+def _color(value: Sequence[float] | str | None) -> list[float] | None:
+    """An RGB color as three numbers in 0..1, from a tuple or "#rrggbb"."""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        text = value.lstrip("#")
+        if len(text) != 6:
+            raise ValueError(f"a color is (r, g, b) or '#rrggbb', not {value!r}")
+        return [int(text[i : i + 2], 16) / 255 for i in (0, 2, 4)]
+    components = [float(component) for component in value]
+    if len(components) != 3 or not all(0 <= c <= 1 for c in components):
+        raise ValueError("a color is three numbers between 0 and 1")
+    return components
+
+
+def _rect(value: Sequence[float]) -> list[float]:
+    numbers = [float(v) for v in value]
+    if len(numbers) != 4:
+        raise ValueError("a rectangle is (left, bottom, right, top)")
+    return numbers
+
+
+def _win_ansi(text: str) -> str:
+    """`text` with every character the standard fonts cannot show replaced
+    by "?". cp1252 is WinAnsiEncoding up to five unassigned codes."""
+    return "".join(
+        character if character.encode("cp1252", errors="ignore") else "?"
+        for character in text
+    )
+
 
 _ERROR_TYPES: dict[PdfEditErrorCategory, type[PdfEditError]] = {
     PdfEditErrorCategory.STALE_HANDLE: PdfStaleHandleError,
@@ -366,6 +421,36 @@ class PdfEditablePage(PdfPage):
         angle = math.radians(rotation)
         cos, sin = math.cos(angle), math.sin(angle)
         return self._overlay(page, over, False, (cos, sin, -sin, cos, 0.0, 0.0))
+
+    def draw_text(
+        self,
+        text: str,
+        x: float,
+        y: float,
+        *,
+        size: float = 12,
+        font: str = "Helvetica",
+        color: Sequence[float] | str = (0, 0, 0),
+    ) -> PdfEditablePage:
+        """Draw `text` on the page, its first baseline starting at (x, y).
+
+        `font` is one of `STANDARD_FONTS`, which every viewer has, so nothing
+        is embedded. Those fonts hold Latin text (WinAnsiEncoding); other
+        characters raise `PdfUnsupportedError`. A newline starts a new line
+        1.2 x `size` lower. `color` is (r, g, b) in 0..1, or "#rrggbb".
+        """
+        with _native_errors():
+            self._owner._native.draw_text(
+                self._index,
+                text,
+                float(x),
+                float(y),
+                size=float(size),
+                font=font,
+                color=_color(color),
+                generation=self._generation,
+            )
+        return self
 
     def transfer_rotation_to_content(self) -> PdfEditablePage:
         """Turn the page's rotation into a rotation of its content, boxes and
@@ -867,6 +952,74 @@ class _PdfEditing(_PdfDocument):
             )
         return self.pages[position]  # type: ignore[return-value]
 
+    def add_image(
+        self,
+        image: _pdf_images.ImageSource,
+        *,
+        index: int | None = None,
+        page_size: str | Sequence[float] | None = None,
+        margin: float = 0,
+        dpi: float | None = None,
+    ) -> list[PdfEditablePage]:
+        """Add pages showing an image: one page, or one per frame of a
+        multi-page TIFF or animated GIF. Returns the pages added.
+
+        `image` is a path, bytes, a binary stream, or a PIL image, in any
+        format Pillow reads: PNG, JPEG, TIFF, GIF, BMP, WebP, ... JPEG files
+        are stored as they are, without re-encoding; other formats are
+        stored losslessly, transparency included.
+
+        Without `page_size` each page is the size of its image at the
+        image's resolution (`dpi`, or the resolution the file declares, or
+        72: one pixel per point), plus `margin` on every side. With
+        `page_size` ("A4", "Letter", "A3", "A5", "Legal", or (width, height)
+        in points) the image is centered and scaled to fill the page inside
+        the margin. Pages turned by the image's EXIF orientation show it
+        upright.
+        """
+        size = _pdf_images.page_size_of(page_size)
+        position = len(self.pages) if index is None else self._position(index)
+
+        added: list[int] = []
+        for picture in _pdf_images.pictures(image):
+            geometry = _pdf_images.layout(picture, size, dpi, float(margin))
+            with _native_errors():
+                added.append(
+                    self._native.insert_image_page(
+                        picture.width,
+                        picture.height,
+                        picture.colorspace,
+                        picture.data,
+                        picture.is_jpeg,
+                        geometry.page_width,
+                        geometry.page_height,
+                        list(geometry.placement),
+                        invert=picture.invert,
+                        alpha=picture.alpha,
+                        rotate=picture.rotate,
+                        at=position,
+                    )
+                )
+            position += 1
+
+        return [self.pages[i] for i in added]  # type: ignore[misc]
+
+    @classmethod
+    def from_images(
+        cls,
+        images: Iterable[_pdf_images.ImageSource],
+        *,
+        page_size: str | Sequence[float] | None = None,
+        margin: float = 0,
+        dpi: float | None = None,
+    ) -> Any:
+        """A new document with one page per image, in order. The arguments
+        are those of `add_image`."""
+        document = cls()
+        for image in images:
+            document.add_image(image, page_size=page_size, margin=margin, dpi=dpi)
+        return document
+
     def duplicate_page(self, index: int, to: int | None = None) -> PdfEditablePage:
         """Add a copy of the page at `index`, at position `to` or, by
         default, at the end. The copy can be edited independently."""
@@ -976,18 +1129,238 @@ class _PdfEditing(_PdfDocument):
             self._native.add_named_destination(title, self._page_index(page_number))
 
     def add_outline_item(
-        self, title: str, page_number: int | None, parent: int | None = None
+        self,
+        title: str,
+        page_number: int | None,
+        parent: int | None = None,
+        *,
+        url: str | None = None,
+        left: float | None = None,
+        top: float | None = None,
+        zoom: float | None = None,
+        color: Sequence[float] | str | None = None,
+        bold: bool = False,
+        italic: bool = False,
+        is_open: bool = True,
     ) -> int:
-        """Add a bookmark that opens a page; `page_number=None` makes a
-        heading without a target. It becomes the last child of `parent`, or
-        the last top-level item. Returns the item's id, to use as `parent`.
+        """Add a bookmark. Returns its id, which `parent` and the other
+        outline methods take.
+
+        The bookmark opens `page_number`, fitted to the window; with `left`,
+        `top` or `zoom` it opens at that position and magnification instead
+        (None keeps what the viewer has). With `url` it opens a web address;
+        with neither it is a heading without a target. It becomes the last
+        child of `parent`, or the last top-level item.
+
+        `color` is (r, g, b) in 0..1 or "#rrggbb"; `is_open=False` shows the
+        bookmark with its children folded away.
         """
+        spec: dict[str, Any] = {"title": title, "parent": parent or 0}
+        spec.update(self._outline_target(page_number, url, left, top, zoom))
+        if color is not None:
+            spec["color"] = _color(color)
+        if bold:
+            spec["bold"] = True
+        if italic:
+            spec["italic"] = True
+        if not is_open:
+            spec["open"] = False
+
         with _native_errors():
-            return self._native.add_outline_item(
-                title,
-                -1 if page_number is None else self._page_index(page_number),
-                parent or 0,
+            return self._native.add_outline_entry(spec)
+
+    def _outline_target(
+        self,
+        page_number: Any,
+        url: Any,
+        left: Any,
+        top: Any,
+        zoom: Any,
+    ) -> dict[str, Any]:
+        """The target entries of an outline spec. A page or a URL becomes the
+        target; when either was given as None, the target is removed."""
+        positioned = any(value not in (None, _UNSET) for value in (left, top, zoom))
+
+        if url not in (None, _UNSET) and page_number not in (None, _UNSET):
+            raise ValueError("a bookmark opens a page or a URL, not both")
+        if positioned and page_number in (None, _UNSET):
+            raise ValueError("left, top and zoom need a page_number")
+
+        target: dict[str, Any] = {}
+        if url not in (None, _UNSET):
+            target["url"] = url
+        elif page_number not in (None, _UNSET):
+            target["page"] = self._page_index(page_number)
+            if positioned:
+                for key, value in (("left", left), ("top", top), ("zoom", zoom)):
+                    target[key] = None if value is _UNSET else value
+        elif page_number is not _UNSET or url is not _UNSET:
+            target["page"] = None
+        return target
+
+    def update_outline_item(
+        self,
+        item_id: int,
+        *,
+        title: str = _UNSET,
+        page_number: int | None = _UNSET,
+        url: str | None = _UNSET,
+        left: float | None = _UNSET,
+        top: float | None = _UNSET,
+        zoom: float | None = _UNSET,
+        color: Sequence[float] | str | None = _UNSET,
+        bold: bool = _UNSET,
+        italic: bool = _UNSET,
+        is_open: bool = _UNSET,
+    ) -> None:
+        """Change a bookmark. Only the arguments given change; `page_number`
+        or `url` replaces the target, and None for both removes it. `color`
+        None goes back to the viewer's default."""
+        changes: dict[str, Any] = {}
+        if title is not _UNSET:
+            changes["title"] = title
+        if page_number is not _UNSET or url is not _UNSET:
+            changes.update(self._outline_target(page_number, url, left, top, zoom))
+        elif any(value is not _UNSET for value in (left, top, zoom)):
+            raise ValueError("left, top and zoom need a page_number")
+        if color is not _UNSET:
+            changes["color"] = _color(color)
+        if bold is not _UNSET:
+            changes["bold"] = bool(bold)
+        if italic is not _UNSET:
+            changes["italic"] = bool(italic)
+        if is_open is not _UNSET:
+            changes["open"] = bool(is_open)
+
+        with _native_errors():
+            self._native.update_outline_item(item_id, changes)
+
+    def remove_outline_item(self, item_id: int) -> None:
+        """Remove a bookmark and every bookmark below it."""
+        with _native_errors():
+            self._native.remove_outline_item(item_id)
+
+    def move_outline_item(
+        self, item_id: int, parent: int | None = None, index: int | None = None
+    ) -> None:
+        """Move a bookmark below `parent` (None: the top level), at position
+        `index` among its new siblings (None: last). Its children move with
+        it."""
+        with _native_errors():
+            self._native.move_outline_item(
+                item_id, parent or 0, -1 if index is None else index
             )
+
+    def clear_outline(self) -> None:
+        """Remove every bookmark."""
+        with _native_errors():
+            self._native.clear_outline()
+
+    def add_table_of_contents(
+        self,
+        index: int = 0,
+        *,
+        title: str = "Contents",
+        font: str = "Helvetica",
+        size: float = 11,
+        max_depth: int | None = None,
+        page_size: str | Sequence[float] | None = None,
+    ) -> list[PdfEditablePage]:
+        """Insert contents pages, made from the outline, at `index`.
+
+        Every bookmark becomes a line, indented by its depth, with the label
+        of the page it opens on the right; the whole line is a link to that
+        page. Bookmarks deeper than `max_depth` (0: top level only) are left
+        out. The pages take the size of the page they are inserted in front
+        of, or `page_size` ("A4", "Letter", or (width, height) in points).
+        Returns the pages added; none when the document has no outline.
+
+        Text is drawn in a standard font; characters it cannot show become
+        "?". Long titles are shortened to fit, by an estimate of the font's
+        average character width.
+        """
+        entries = [
+            entry
+            for entry in self._outline_entries(self.outline, 0)
+            if max_depth is None or entry[0] <= max_depth
+        ]
+        if not entries:
+            return []
+
+        count = len(self.pages)
+        position = self._position(index)
+        size_given = _pdf_images.page_size_of(page_size)
+        if size_given is not None:
+            width, height = size_given
+        elif count > 0:
+            box = self.pages[min(position, count - 1)].mediabox
+            width, height = box.width, box.height
+        else:
+            width, height = _pdf_images.PAGE_SIZES["a4"]
+
+        margin = 72.0
+        line_height = 1.6 * size
+        title_height = 3.0 * size
+        per_page = max(1, int((height - 2 * margin - title_height) // line_height))
+        number_of_pages = -(-len(entries) // per_page)
+
+        added = [
+            self.insert_blank_page(position + offset, width, height)
+            for offset in range(number_of_pages)
+        ]
+
+        # Read again: the targets moved behind the new pages.
+        entries = [
+            entry
+            for entry in self._outline_entries(self.outline, 0)
+            if max_depth is None or entry[0] <= max_depth
+        ]
+        labels = self.page_labels
+
+        number_column = width - margin - 4 * size
+        for page_offset in range(number_of_pages):
+            page: PdfEditablePage = self.pages[position + page_offset]  # type: ignore[assignment]
+            page_number = position + page_offset
+            y = height - margin - size
+            if page_offset == 0:
+                page.draw_text(_win_ansi(title), margin, y, size=1.6 * size, font=font)
+            y -= title_height
+
+            for depth, text, target in entries[
+                page_offset * per_page : (page_offset + 1) * per_page
+            ]:
+                x = margin + 1.5 * size * depth
+                # Helvetica and Times average about half an em per
+                # character; Courier is exactly 0.6 em.
+                ratio = 0.6 if font.startswith("Courier") else 0.5
+                room = int((number_column - x - size) / (ratio * size))
+                line = _win_ansi(text)
+                if len(line) > room:
+                    line = line[: max(room - 1, 1)] + "\u2026"
+                page.draw_text(line, x, y, size=size, font=font)
+
+                if target is not None:
+                    page.draw_text(
+                        labels[target], number_column, y, size=size, font=font
+                    )
+                    self.add_link(
+                        page_number,
+                        (x, y - 0.3 * size, width - margin, y + size),
+                        target,
+                    )
+                y -= line_height
+
+        return [self.pages[page.index] for page in added]  # type: ignore[misc]
+
+    @staticmethod
+    def _outline_entries(
+        items: list[dict[str, Any]], depth: int
+    ) -> list[tuple[int, str, int | None]]:
+        result: list[tuple[int, str, int | None]] = []
+        for item in items:
+            result.append((depth, item["title"], item["page"]))
+            result.extend(_PdfEditing._outline_entries(item["children"], depth + 1))
+        return result
 
     # ---- forms ----
 
@@ -1016,6 +1389,175 @@ class _PdfEditing(_PdfDocument):
         if flatten:
             self.flatten_annotations()
         return updated
+
+    def _add_field(
+        self,
+        page_number: int,
+        spec: dict[str, Any],
+        read_only: bool,
+        required: bool,
+        tooltip: str | None,
+    ) -> None:
+        spec["read_only"] = bool(read_only)
+        spec["required"] = bool(required)
+        if tooltip is not None:
+            spec["tooltip"] = tooltip
+        with _native_errors():
+            self._native.add_form_field(self._page_index(page_number), spec)
+
+    def add_text_field(
+        self,
+        page_number: int,
+        name: str,
+        rect: Sequence[float],
+        value: str | None = None,
+        *,
+        multiline: bool = False,
+        font_size: float = 12,
+        read_only: bool = False,
+        required: bool = False,
+        tooltip: str | None = None,
+    ) -> None:
+        """Add a text field over `rect` (left, bottom, right, top) on a page.
+
+        `name` must be new in the form and contain no period. The field is
+        drawn with a thin frame and its value in Helvetica, so it shows in
+        every viewer.
+        """
+        spec: dict[str, Any] = {
+            "kind": "text",
+            "name": name,
+            "rect": _rect(rect),
+            "multiline": bool(multiline),
+            "font_size": float(font_size),
+        }
+        if value is not None:
+            spec["value"] = value
+        self._add_field(page_number, spec, read_only, required, tooltip)
+
+    def add_checkbox(
+        self,
+        page_number: int,
+        name: str,
+        rect: Sequence[float],
+        checked: bool = False,
+        *,
+        read_only: bool = False,
+        required: bool = False,
+        tooltip: str | None = None,
+    ) -> None:
+        """Add a checkbox over `rect`. Its on state is "/Yes"."""
+        spec = {
+            "kind": "checkbox",
+            "name": name,
+            "rect": _rect(rect),
+            "checked": bool(checked),
+        }
+        self._add_field(page_number, spec, read_only, required, tooltip)
+
+    def add_choice_field(
+        self,
+        page_number: int,
+        name: str,
+        rect: Sequence[float],
+        options: Sequence[str],
+        value: str | None = None,
+        *,
+        editable: bool = False,
+        font_size: float = 12,
+        read_only: bool = False,
+        required: bool = False,
+        tooltip: str | None = None,
+    ) -> None:
+        """Add a drop-down list over `rect`. `value` must be one of `options`
+        unless `editable` lets the user type a value of their own."""
+        spec: dict[str, Any] = {
+            "kind": "choice",
+            "name": name,
+            "rect": _rect(rect),
+            "options": list(options),
+            "editable": bool(editable),
+            "font_size": float(font_size),
+        }
+        if value is not None:
+            spec["value"] = value
+        self._add_field(page_number, spec, read_only, required, tooltip)
+
+    def add_radio_group(
+        self,
+        page_number: int,
+        name: str,
+        buttons: dict[str, Sequence[float]],
+        selected: str | None = None,
+        *,
+        read_only: bool = False,
+        required: bool = False,
+        tooltip: str | None = None,
+    ) -> None:
+        """Add a group of radio buttons: `buttons` maps each button's state
+        name to its rectangle. At most one button is on; `selected` names it.
+        """
+        spec: dict[str, Any] = {
+            "kind": "radio",
+            "name": name,
+            "options": [
+                {"state": state, "rect": _rect(rect)} for state, rect in buttons.items()
+            ],
+            "selected": selected,
+        }
+        self._add_field(page_number, spec, read_only, required, tooltip)
+
+    def add_signature_field(
+        self,
+        page_number: int,
+        name: str,
+        rect: Sequence[float],
+        *,
+        required: bool = False,
+        tooltip: str | None = None,
+    ) -> None:
+        """Add an empty signature field over `rect`, for a signing
+        application to fill. docling-parse does not sign."""
+        spec = {"kind": "signature", "name": name, "rect": _rect(rect)}
+        self._add_field(page_number, spec, False, required, tooltip)
+
+    def update_form_field(
+        self,
+        name: str,
+        *,
+        new_name: str = _UNSET,
+        rect: Sequence[float] = _UNSET,
+        read_only: bool = _UNSET,
+        required: bool = _UNSET,
+        tooltip: str | None = _UNSET,
+        options: Sequence[str] = _UNSET,
+    ) -> None:
+        """Change a form field. Only the arguments given change.
+
+        `new_name` renames the field (its last name part). `rect` moves or
+        resizes a field that has one widget. `tooltip` None removes it.
+        `options` replaces the entries of a choice field.
+        """
+        changes: dict[str, Any] = {}
+        if new_name is not _UNSET:
+            changes["name"] = new_name
+        if rect is not _UNSET:
+            changes["rect"] = _rect(rect)
+        if read_only is not _UNSET:
+            changes["read_only"] = bool(read_only)
+        if required is not _UNSET:
+            changes["required"] = bool(required)
+        if tooltip is not _UNSET:
+            changes["tooltip"] = tooltip
+        if options is not _UNSET:
+            changes["options"] = list(options)
+        with _native_errors():
+            self._native.update_form_field(name, changes)
+
+    def remove_form_field(self, name: str) -> None:
+        """Remove a form field, and its widgets from the pages."""
+        with _native_errors():
+            self._native.remove_form_field(name)
 
     def set_need_appearances_writer(self, state: bool = True) -> None:
         """Set the form's NeedAppearances flag, which asks a viewer to build

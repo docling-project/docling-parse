@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from docling_parse import pdf_parsers as _native  # type: ignore[attr-defined]
 from docling_parse._pdf_document import (
+    STANDARD_FONTS,
     PdfBox,
     PdfEditablePage,
     PdfImage,
@@ -28,7 +29,14 @@ from docling_parse._pdf_document import (
     _PdfEditing,
 )
 
-__all__ = ["PdfBox", "PdfEditablePage", "PdfImage", "PdfPages", "PdfWriter"]
+__all__ = [
+    "STANDARD_FONTS",
+    "PdfBox",
+    "PdfEditablePage",
+    "PdfImage",
+    "PdfPages",
+    "PdfWriter",
+]
 
 
 class PdfWriter(_PdfEditing):

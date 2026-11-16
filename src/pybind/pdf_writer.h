@@ -55,6 +55,8 @@ namespace docling
     using docling_editor::flatten_page_rotation;
     using docling_editor::duplicate_page;
     using docling_editor::insert_blank_page;
+    using docling_editor::insert_image_page;
+    using docling_editor::draw_text;
     using docling_editor::append_pages;
 
     using docling_editor::set_info;
@@ -66,9 +68,17 @@ namespace docling
     using docling_editor::set_page_label;
     using docling_editor::add_named_destination;
     using docling_editor::add_outline_item;
+    using docling_editor::add_outline_entry;
+    using docling_editor::update_outline_item;
+    using docling_editor::remove_outline_item;
+    using docling_editor::move_outline_item;
+    using docling_editor::clear_outline;
     using docling_editor::set_form_values;
     using docling_editor::set_need_appearances;
     using docling_editor::flatten_annotations;
+    using docling_editor::add_form_field;
+    using docling_editor::update_form_field;
+    using docling_editor::remove_form_field;
     using docling_editor::add_annotation;
     using docling_editor::add_page_link;
     using docling_editor::remove_annotations;
