@@ -48,7 +48,29 @@ except ImportError:  # pragma: no cover - depends on the installed groups
 
 GARBAGE = b"%PDF-1.4\nthis is not a valid pdf at all"
 
-EDITING_CLASSES = [PdfWriter, PdfEditor]
+
+class _WriterEditor(PdfEditor):
+    """Run shared editor workflows against the restricted native writer too."""
+
+    _native_class = PdfWriter._native_class
+
+
+EDITING_CLASSES = [pytest.param(_WriterEditor, id="PdfWriter-native"), PdfEditor]
+
+
+def _test_page_no(index, document):
+    if index is None:
+        return None
+    return index + len(document.pages) + 1 if index < 0 else index + 1
+
+
+def _source_page_nos(source, selection):
+    with PdfReader(source) as reader:
+        count = len(reader.pages)
+    indices = (
+        range(*selection.indices(count)) if isinstance(selection, slice) else selection
+    )
+    return [index + count + 1 if index < 0 else index + 1 for index in indices]
 
 
 def make_pdf(
@@ -353,7 +375,7 @@ def test_text_and_images_of_one_page_do_not_shadow_each_other():
 
 @pytest.mark.parametrize("cls", EDITING_CLASSES)
 def test_clone_round_trips_unchanged(cls):
-    document = cls(THREE)
+    document = cls(source=THREE)
     data = document.to_bytes()
 
     assert written_widths(data) == [200.0, 210.0, 220.0]
@@ -368,12 +390,14 @@ def test_clone_round_trips_unchanged(cls):
 
 @pytest.mark.parametrize("cls", EDITING_CLASSES)
 def test_remove_reorder_rotate(cls):
-    document = cls(THREE)
+    document = cls(source=THREE)
 
     document.pages[0].rotate(90)
     document.pages[0].rotate(90)
     del document.pages[1]
-    document.move_page(0, 1)
+    document.move_page(
+        page_no=_test_page_no(0, document), to_page_no=_test_page_no(1, document)
+    )
 
     assert widths(document) == [220.0, 200.0]
     assert [page.rotation for page in document.pages] == [0, 180]
@@ -389,7 +413,7 @@ def test_remove_reorder_rotate(cls):
 
 @pytest.mark.parametrize("cls", EDITING_CLASSES)
 def test_page_boxes_and_absolute_rotation(cls):
-    document = cls(THREE)
+    document = cls(source=THREE)
     page = document.pages[2]
 
     page.cropbox = (10, 20, 110, 220)
@@ -414,12 +438,20 @@ def test_assemble_from_several_sources(cls):
     document = cls()
     assert len(document.pages) == 0
 
-    document.append(THREE)
-    document.append(PdfReader(TWO), pages=[1, 0])
-    document.append(BytesIO(THREE), pages=slice(0, 1), index=0)
-    blank = document.add_blank_page(100, 150)
+    document.append(source=THREE)
+    document.append(
+        source=PdfReader(TWO), page_nos=_source_page_nos(PdfReader(TWO), [1, 0])
+    )
+    document.append(
+        source=BytesIO(THREE),
+        page_nos=_source_page_nos(BytesIO(THREE), slice(0, 1)),
+        before_page_no=_test_page_no(0, document),
+    )
+    blank = document.add_blank_page(width=100, height=150)
     assert blank.mediabox == (0.0, 0.0, 100.0, 150.0)
-    document.insert_blank_page(1, 50, 60)
+    document.insert_blank_page(
+        before_page_no=_test_page_no(1, document), width=50, height=60
+    )
 
     expected = [200.0, 50.0, 200.0, 210.0, 220.0, 210.0, 200.0, 100.0]
     assert widths(document) == expected
@@ -438,28 +470,34 @@ def test_pypdf_style_page_by_page_assembly(cls):
 
     document = cls()
     for page in reader.pages:
-        added = document.add_page(page)
+        added = document.add_page(page=page)
         assert added.page_number == len(document.pages) - 1
-    document.insert_page(PdfReader(TWO).pages[1], 0)
-    document.merge(1, TWO, pages=[0])
+    document.insert_page(
+        page=PdfReader(TWO).pages[1], before_page_no=_test_page_no(0, document)
+    )
+    document.merge(
+        before_page_no=_test_page_no(1, document),
+        fileobj=TWO,
+        page_nos=_source_page_nos(TWO, [0]),
+    )
 
     assert document.get_num_pages() == 5
     assert widths(document) == [210.0, 200.0, 200.0, 210.0, 220.0]
-    assert document.get_page(4).mediabox.width == 220.0
+    assert document.get_page(page_no=_test_page_no(4, document)).mediabox.width == 220.0
     assert reader.pdf_header == "%PDF-1.7"
 
-    other = cls(TWO)
+    other = cls(source=TWO)
     stale = other.pages[1]
     del other.pages[0]
     with pytest.raises(PdfStaleHandleError):
-        document.add_page(stale)
+        document.add_page(page=stale)
 
     assert written_widths(document.to_bytes()) == [210.0, 200.0, 200.0, 210.0, 220.0]
 
 
 @pytest.mark.parametrize("cls", EDITING_CLASSES)
 def test_scale_to(cls):
-    document = cls(THREE)
+    document = cls(source=THREE)
     document.pages[1].scale_to(105, 600)
 
     assert document.pages[1].mediabox == pytest.approx((0.0, 0.0, 105.0, 600.0))
@@ -469,7 +507,7 @@ def test_scale_to(cls):
 @pytest.mark.parametrize("cls", EDITING_CLASSES)
 def test_append_same_page_twice_gives_independent_pages(cls):
     document = cls()
-    document.append(THREE, pages=[0, 0])
+    document.append(source=THREE, page_nos=_source_page_nos(THREE, [0, 0]))
     document.pages[1].rotate(90)
 
     assert [page.rotation for page in document.pages] == [0, 90]
@@ -479,21 +517,21 @@ def test_append_same_page_twice_gives_independent_pages(cls):
 
 @pytest.mark.parametrize("cls", EDITING_CLASSES)
 def test_append_from_edited_document_and_from_itself(cls):
-    other = cls(TWO)
+    other = cls(source=TWO)
     del other.pages[0]
 
-    document = cls(THREE)
-    document.append(other)
-    document.append(document, pages=[0])
+    document = cls(source=THREE)
+    document.append(source=other)
+    document.append(source=document, page_nos=_source_page_nos(document, [0]))
 
     assert widths(document) == [200.0, 210.0, 220.0, 210.0, 200.0]
 
 
 @pytest.mark.parametrize("cls", EDITING_CLASSES)
 def test_text_of_edited_document(cls):
-    document = cls(THREE)
+    document = cls(source=THREE)
     del document.pages[0]
-    document.append(TWO, pages=[0])
+    document.append(source=TWO, page_nos=_source_page_nos(TWO, [0]))
 
     assert [page.extract_text() for page in document.pages] == [
         "beta",
@@ -504,13 +542,15 @@ def test_text_of_edited_document(cls):
 
 @pytest.mark.parametrize("cls", EDITING_CLASSES)
 def test_duplicate_page(cls):
-    document = cls(THREE)
+    document = cls(source=THREE)
 
-    copy = document.duplicate_page(0)
+    copy = document.duplicate_page(page_no=_test_page_no(0, document))
     assert copy.index == 3
     copy.rotate(90)
 
-    front = document.duplicate_page(2, to=0)
+    front = document.duplicate_page(
+        page_no=_test_page_no(2, document), before_page_no=_test_page_no(0, document)
+    )
     assert front.index == 0
 
     assert widths(document) == [220.0, 200.0, 210.0, 220.0, 200.0]
@@ -529,7 +569,7 @@ def test_duplicate_page(cls):
 def test_merge_page_draws_both_pages(cls, over):
     stamp = PdfReader(STAMP).pages[0]
 
-    document = cls(THREE)
+    document = cls(source=THREE)
     result = document.pages[0].merge_page(stamp, over=over)
     assert result.index == 0
 
@@ -548,7 +588,7 @@ def test_merge_page_draws_both_pages(cls, over):
 def test_watermark_every_page(cls):
     stamp = PdfReader(STAMP).pages[0]
 
-    document = cls(THREE)
+    document = cls(source=THREE)
     for page in document.pages:
         page.merge_page(stamp, over=False)
 
@@ -565,7 +605,7 @@ def test_merge_page_fit_scales_into_the_page(cls):
     """The 2x2 image fills [20 30 120 130] of a 200x300 page. Fitted onto a
     400x600 page, that page is drawn at twice the size."""
     document = cls()
-    document.add_blank_page(400, 600)
+    document.add_blank_page(width=400, height=600)
     document.pages[0].merge_page(PdfReader(IMAGE).pages[0], fit=True)
 
     image = document.pages[0].images[0]
@@ -574,7 +614,7 @@ def test_merge_page_fit_scales_into_the_page(cls):
 
 @pytest.mark.parametrize("cls", EDITING_CLASSES)
 def test_merge_page_from_own_document_and_twice(cls):
-    document = cls(THREE)
+    document = cls(source=THREE)
     document.pages[0].merge_page(PdfReader(STAMP).pages[0])
     document.pages[0].merge_page(PdfReader(TWO).pages[1])
     document.pages[2].merge_page(document.pages[1])
@@ -586,11 +626,11 @@ def test_merge_page_from_own_document_and_twice(cls):
 
 @pytest.mark.parametrize("cls", EDITING_CLASSES)
 def test_merge_page_rejects_stale_and_closed_sources(cls):
-    other = cls(TWO)
+    other = cls(source=TWO)
     handle = other.pages[1]
     del other.pages[0]
 
-    document = cls(THREE)
+    document = cls(source=THREE)
     with pytest.raises(PdfStaleHandleError):
         document.pages[0].merge_page(handle)
 
@@ -606,7 +646,7 @@ def test_merge_page_rejects_stale_and_closed_sources(cls):
 
 @pytest.mark.parametrize("cls", EDITING_CLASSES)
 def test_scale_page(cls):
-    document = cls(IMAGE)
+    document = cls(source=IMAGE)
     page = document.pages[0]
 
     page.scale(2, 0.5)
@@ -629,7 +669,7 @@ def test_scale_page(cls):
 
 @pytest.mark.parametrize("cls", EDITING_CLASSES)
 def test_add_transformation(cls):
-    document = cls(IMAGE)
+    document = cls(source=IMAGE)
     page = document.pages[0]
 
     page.add_transformation((1, 0, 0, 1, 10, 5))
@@ -647,13 +687,13 @@ def test_add_transformation(cls):
 
 @pytest.mark.parametrize("cls", EDITING_CLASSES)
 def test_stale_page_handle(cls):
-    document = cls(THREE)
+    document = cls(source=THREE)
     first = document.pages[0]
     last = document.pages[2]
 
     # in-place edits and appending at the end keep indices meaningful
     first.rotate(90)
-    document.add_blank_page(10, 10)
+    document.add_blank_page(width=10, height=10)
     assert last.mediabox.width == 220.0
 
     del document.pages[1]
@@ -670,31 +710,31 @@ def test_stale_page_handle(cls):
 
 @pytest.mark.parametrize("cls", EDITING_CLASSES)
 def test_write_to_path_and_stream(cls, tmp_path):
-    document = cls(THREE)
+    document = cls(source=THREE)
     del document.pages[0]
 
     target = tmp_path / "out.pdf"
     target.write_bytes(b"previous content")
-    document.write(target)
+    document.write(target=target)
     assert written_widths(target.read_bytes()) == [210.0, 220.0]
     assert [p.name for p in tmp_path.iterdir()] == ["out.pdf"]
 
     stream = BytesIO()
-    document.write(stream)
+    document.write(target=stream)
     assert not stream.closed
     assert stream.getvalue() == target.read_bytes()
 
     with pytest.raises(PdfWriteError):
-        document.write(tmp_path / "no-such-directory" / "out.pdf")
+        document.write(target=tmp_path / "no-such-directory" / "out.pdf")
 
 
 def test_write_over_the_source_path(tmp_path):
     path = tmp_path / "document.pdf"
     path.write_bytes(THREE)
 
-    with PdfEditor(path) as editor:
+    with PdfEditor(source=path) as editor:
         del editor.pages[0]
-        editor.write(path)
+        editor.write(target=path)
 
     assert written_widths(path.read_bytes()) == [210.0, 220.0]
 
@@ -709,9 +749,9 @@ def reread(document):
 
 @pytest.mark.parametrize("cls", EDITING_CLASSES)
 def test_write_metadata(cls):
-    document = cls(THREE)
+    document = cls(source=THREE)
     document.add_metadata(
-        {"/Title": "New title", "Subject": "Ünïcode ✓", "Author": None}
+        infos={"/Title": "New title", "Subject": "Ünïcode ✓", "Author": None}
     )
 
     expected = {"Title": "New title", "Subject": "Ünïcode ✓"}
@@ -726,37 +766,39 @@ def test_write_metadata(cls):
         assert info.author is None
 
     with pytest.raises(PdfEditError):
-        document.add_metadata({"": "nameless"})
+        document.add_metadata(infos={"": "nameless"})
 
 
 @pytest.mark.parametrize("cls", EDITING_CLASSES)
 def test_write_xmp_metadata(cls):
     packet = '<x:xmpmeta xmlns:x="adobe:ns:meta/">é</x:xmpmeta>'
 
-    document = cls(THREE)
+    document = cls(source=THREE)
     assert document.xmp_metadata is None
 
-    document.set_xmp_metadata(packet)
+    document.set_xmp_metadata(packet=packet)
     with reread(document) as reader:
         assert reader.xmp_metadata == packet
 
-    document.set_xmp_metadata(None)
+    document.set_xmp_metadata(packet=None)
     with reread(document) as reader:
         assert reader.xmp_metadata is None
 
 
 @pytest.mark.parametrize("cls", EDITING_CLASSES)
 def test_viewer_settings(cls):
-    document = cls(THREE)
+    document = cls(source=THREE)
     assert document.page_layout is None
     assert document.page_mode is None
     assert document.viewer_preferences is None
     assert document.open_destination is None
 
-    document.set_page_layout("/TwoColumnLeft")
-    document.set_page_mode("UseOutlines")
-    document.set_viewer_preferences({"/HideToolbar": True, "Direction": "/R2L"})
-    document.set_open_destination(2)
+    document.set_page_layout(layout="/TwoColumnLeft")
+    document.set_page_mode(mode="UseOutlines")
+    document.set_viewer_preferences(
+        preferences={"/HideToolbar": True, "Direction": "/R2L"}
+    )
+    document.set_open_destination(page_no=_test_page_no(2, document))
 
     with reread(document) as reader:
         assert reader.page_layout == "/TwoColumnLeft"
@@ -765,13 +807,13 @@ def test_viewer_settings(cls):
         assert reader.open_destination == {"page": 2, "kind": "/Fit", "arguments": []}
 
     with pytest.raises(PdfEditError) as excinfo:
-        document.set_page_layout("/Sideways")
+        document.set_page_layout(layout="/Sideways")
     assert excinfo.value.category is PdfEditErrorCategory.INVALID_EDIT
 
-    document.set_page_layout(None)
-    document.set_page_mode(None)
-    document.set_viewer_preferences(None)
-    document.set_open_destination(None)
+    document.set_page_layout(layout=None)
+    document.set_page_mode(mode=None)
+    document.set_viewer_preferences(preferences=None)
+    document.set_open_destination(page_no=_test_page_no(None, document))
 
     with reread(document) as reader:
         assert reader.page_layout is None
@@ -782,17 +824,32 @@ def test_viewer_settings(cls):
 
 @pytest.mark.parametrize("cls", EDITING_CLASSES)
 def test_page_labels(cls):
-    document = cls(make_pdf([f"p{i}" for i in range(6)]))
+    document = cls(source=make_pdf([f"p{i}" for i in range(6)]))
     assert document.page_labels == ["1", "2", "3", "4", "5", "6"]
 
     # front matter in roman numerals; the rest keeps counting 3, 4, ...
-    document.set_page_label(0, 1, "/r")
+    document.set_page_label(
+        first_page_no=_test_page_no(0, document),
+        last_page_no=_test_page_no(1, document),
+        style="/r",
+    )
     assert document.page_labels == ["i", "ii", "3", "4", "5", "6"]
 
-    document.set_page_label(2, 3, "/D", prefix="A-", start=5)
+    document.set_page_label(
+        first_page_no=_test_page_no(2, document),
+        last_page_no=_test_page_no(3, document),
+        style="/D",
+        prefix="A-",
+        start=5,
+    )
     assert document.page_labels == ["i", "ii", "A-5", "A-6", "5", "6"]
 
-    document.set_page_label(5, 5, "/A", start=27)
+    document.set_page_label(
+        first_page_no=_test_page_no(5, document),
+        last_page_no=_test_page_no(5, document),
+        style="/A",
+        start=27,
+    )
     expected = ["i", "ii", "A-5", "A-6", "5", "AA"]
     assert document.page_labels == expected
 
@@ -803,18 +860,28 @@ def test_page_labels(cls):
         assert pypdf.PdfReader(BytesIO(data)).page_labels == expected
 
     with pytest.raises(PdfEditError):
-        document.set_page_label(0, 1, "/X")
+        document.set_page_label(
+            first_page_no=_test_page_no(0, document),
+            last_page_no=_test_page_no(1, document),
+            style="/X",
+        )
     with pytest.raises(IndexError):
-        document.set_page_label(0, 9, "/D")
+        document.set_page_label(
+            first_page_no=_test_page_no(0, document),
+            last_page_no=_test_page_no(9, document),
+            style="/D",
+        )
 
 
 @pytest.mark.parametrize("cls", EDITING_CLASSES)
 def test_named_destinations(cls):
-    document = cls(THREE)
+    document = cls(source=THREE)
     assert document.named_destinations == {}
 
-    document.add_named_destination("chapter two", 1)
-    document.add_named_destination("end", -1)
+    document.add_named_destination(
+        title="chapter two", page_no=_test_page_no(1, document)
+    )
+    document.add_named_destination(title="end", page_no=_test_page_no(-1, document))
 
     with reread(document) as reader:
         destinations = reader.named_destinations
@@ -853,13 +920,17 @@ def pypdf_flat_outline(data: bytes) -> list[tuple[int, str, int | None]]:
 
 @pytest.mark.parametrize("cls", EDITING_CLASSES)
 def test_build_an_outline(cls):
-    document = cls(THREE)
+    document = cls(source=THREE)
     assert document.outline == []
 
-    one = document.add_outline_item("One", 0)
-    document.add_outline_item("Sub ö", 1, parent=one)
-    document.add_outline_item("Sub two", 2, parent=one)
-    document.add_outline_item("Two", 2)
+    one = document.add_outline_item(title="One", page_no=_test_page_no(0, document))
+    document.add_outline_item(
+        title="Sub ö", page_no=_test_page_no(1, document), parent=one
+    )
+    document.add_outline_item(
+        title="Sub two", page_no=_test_page_no(2, document), parent=one
+    )
+    document.add_outline_item(title="Two", page_no=_test_page_no(2, document))
 
     expected = [(0, "One", 0), (1, "Sub ö", 1), (1, "Sub two", 2), (0, "Two", 2)]
     assert flat_outline(document.outline) == expected
@@ -871,16 +942,18 @@ def test_build_an_outline(cls):
         assert pypdf_flat_outline(data) == expected
 
     with pytest.raises(PdfEditError):
-        document.add_outline_item("orphan", 0, parent=987654)
+        document.add_outline_item(
+            title="orphan", page_no=_test_page_no(0, document), parent=987654
+        )
 
 
 @pytest.mark.parametrize("cls", EDITING_CLASSES)
 def test_removing_a_page_unhooks_its_bookmarks(cls):
-    document = cls(THREE)
-    document.add_outline_item("One", 0)
-    document.add_outline_item("Two", 1)
-    document.add_outline_item("Three", 2)
-    document.set_open_destination(1)
+    document = cls(source=THREE)
+    document.add_outline_item(title="One", page_no=_test_page_no(0, document))
+    document.add_outline_item(title="Two", page_no=_test_page_no(1, document))
+    document.add_outline_item(title="Three", page_no=_test_page_no(2, document))
+    document.set_open_destination(page_no=_test_page_no(1, document))
 
     del document.pages[1]
 
@@ -903,18 +976,18 @@ def test_append_brings_the_outline_of_copied_pages(cls):
     assert len(titles) == 12
     assert pages == [0] * 11 + [None]
 
-    document = cls(THREE)
-    document.append(source, pages=[1, 0])
+    document = cls(source=THREE)
+    document.append(source=source, page_nos=_source_page_nos(source, [1, 0]))
 
     # the first page of the source is now page 4 of the document
     assert flat_outline(document.outline) == [(0, title, 4) for title in titles[:11]]
 
-    without = cls(THREE)
-    without.append(source, pages=[1, 2])
+    without = cls(source=THREE)
+    without.append(source=source, page_nos=_source_page_nos(source, [1, 2]))
     assert without.outline == []
 
-    declined = cls(THREE)
-    declined.append(source, import_outline=False)
+    declined = cls(source=THREE)
+    declined.append(source=source, import_outline=False)
     assert declined.outline == []
 
 
@@ -993,9 +1066,12 @@ def test_reader_lists_form_fields():
 
 @pytest.mark.parametrize("cls", EDITING_CLASSES)
 def test_fill_form_fields(cls):
-    document = cls(FORM)
+    document = cls(source=FORM)
     assert (
-        document.update_form_field_values({"name": "Grace Hopper", "agree": True}) == 2
+        document.update_form_field_values(
+            fields={"name": "Grace Hopper", "agree": True}
+        )
+        == 2
     )
 
     data = document.to_bytes()
@@ -1012,24 +1088,24 @@ def test_fill_form_fields(cls):
             "name": "Grace Hopper"
         }
 
-    assert document.update_form_field_values({"agree": False}) == 1
+    assert document.update_form_field_values(fields={"agree": False}) == 1
     with reread(document) as reader:
         assert reader.get_fields()["agree"]["value"] == "/Off"
 
 
 @pytest.mark.parametrize("cls", EDITING_CLASSES)
 def test_fill_form_rejects_what_it_cannot_set(cls):
-    document = cls(FORM)
+    document = cls(source=FORM)
 
     with pytest.raises(PdfEditError) as excinfo:
-        document.update_form_field_values({"no such field": "x"})
+        document.update_form_field_values(fields={"no such field": "x"})
     assert excinfo.value.category is PdfEditErrorCategory.INVALID_EDIT
 
     with pytest.raises(PdfEditError):
-        document.update_form_field_values({"agree": "/Maybe"})
+        document.update_form_field_values(fields={"agree": "/Maybe"})
 
     with pytest.raises(PdfEditError):
-        cls(THREE).update_form_field_values({"name": "x"})
+        cls(source=THREE).update_form_field_values(fields={"name": "x"})
 
     # nothing was changed by the rejected calls
     with reread(document) as reader:
@@ -1038,9 +1114,9 @@ def test_fill_form_rejects_what_it_cannot_set(cls):
 
 @pytest.mark.parametrize("cls", EDITING_CLASSES)
 def test_flatten_form_into_page_content(cls):
-    document = cls(FORM)
+    document = cls(source=FORM)
     document.update_form_field_values(
-        {"name": "Grace Hopper", "agree": True}, flatten=True
+        fields={"name": "Grace Hopper", "agree": True}, flatten=True
     )
 
     data = document.to_bytes()
@@ -1061,14 +1137,26 @@ def test_flatten_form_into_page_content(cls):
 
 @pytest.mark.parametrize("cls", EDITING_CLASSES)
 def test_add_read_and_remove_annotations(cls):
-    document = cls(THREE)
+    document = cls(source=THREE)
     assert document.pages[0].annotations == []
 
-    document.add_uri(0, "https://example.org/a b", (10, 10, 60, 30))
-    document.add_link(0, (10, 40, 60, 60), 2)
+    document.add_uri(
+        page_no=_test_page_no(0, document),
+        uri="https://example.org/a b",
+        rect=(10, 10, 60, 30),
+    )
+    document.add_link(
+        page_no=_test_page_no(0, document),
+        rect=(10, 40, 60, 60),
+        target_page_no=_test_page_no(2, document),
+    )
     document.add_annotation(
-        1,
-        {"/Subtype": "/Text", "/Rect": [50, 200, 70, 220], "/Contents": "Nöte ✓"},
+        page_no=_test_page_no(1, document),
+        annotation={
+            "/Subtype": "/Text",
+            "/Rect": [50, 200, 70, 220],
+            "/Contents": "Nöte ✓",
+        },
     )
 
     data = document.to_bytes()
@@ -1106,29 +1194,39 @@ def test_add_read_and_remove_annotations(cls):
 
 @pytest.mark.parametrize("cls", EDITING_CLASSES)
 def test_add_annotation_validates_its_input(cls):
-    document = cls(THREE)
+    document = cls(source=THREE)
 
     with pytest.raises(PdfEditError):
-        document.add_annotation(0, {"/Rect": [0, 0, 10, 10]})
+        document.add_annotation(
+            page_no=_test_page_no(0, document), annotation={"/Rect": [0, 0, 10, 10]}
+        )
     with pytest.raises(PdfEditError):
-        document.add_annotation(0, {"/Subtype": "/Text"})
+        document.add_annotation(
+            page_no=_test_page_no(0, document), annotation={"/Subtype": "/Text"}
+        )
     with pytest.raises(IndexError):
-        document.add_annotation(7, {"/Subtype": "/Text", "/Rect": [0, 0, 1, 1]})
+        document.add_annotation(
+            page_no=_test_page_no(7, document),
+            annotation={"/Subtype": "/Text", "/Rect": [0, 0, 1, 1]},
+        )
     with pytest.raises(TypeError):
-        document.add_annotation(0, {"/Subtype": "/Text", "/Rect": object()})
+        document.add_annotation(
+            page_no=_test_page_no(0, document),
+            annotation={"/Subtype": "/Text", "/Rect": object()},
+        )
 
     assert document.pages[0].annotations == []
 
 
 @pytest.mark.parametrize("cls", EDITING_CLASSES)
 def test_removing_widgets_removes_their_fields(cls):
-    document = cls(FORM)
+    document = cls(source=FORM)
 
     # form fields are kept unless they are asked for by name
     assert document.remove_annotations() == 0
     assert set(document.get_fields()) == {"name", "agree"}
 
-    assert document.remove_annotations("/Widget") == 2
+    assert document.remove_annotations(subtypes="/Widget") == 2
     with reread(document) as reader:
         assert reader.get_fields() == {}
         assert reader.pages[0].annotations == []
@@ -1139,14 +1237,17 @@ def test_removing_widgets_removes_their_fields(cls):
 
 @pytest.mark.parametrize("cls", EDITING_CLASSES)
 def test_attachments(cls):
-    document = cls(THREE)
+    document = cls(source=THREE)
     assert document.attachments == {}
 
     document.add_attachment(
-        "notes.txt", b"hello", description="a note", mime_type="text/plain"
+        filename="notes.txt",
+        data=b"hello",
+        description="a note",
+        mime_type="text/plain",
     )
-    document.add_attachment("data ü.bin", bytes(range(256)))
-    document.add_attachment("notes.txt", "replaced")
+    document.add_attachment(filename="data ü.bin", data=bytes(range(256)))
+    document.add_attachment(filename="notes.txt", data="replaced")
 
     data = document.to_bytes()
     with PdfReader(data) as reader:
@@ -1169,17 +1270,20 @@ def test_attachments(cls):
             "notes.txt": [b"replaced"],
         }
 
-    assert document.remove_attachment("notes.txt") is True
-    assert document.remove_attachment("notes.txt") is False
+    assert document.remove_attachment(name="notes.txt") is True
+    assert document.remove_attachment(name="notes.txt") is False
     with reread(document) as reader:
         assert set(reader.attachments) == {"data ü.bin"}
 
 
 @pytest.mark.parametrize("cls", EDITING_CLASSES)
 def test_attachment_metadata(cls):
-    document = cls(THREE)
+    document = cls(source=THREE)
     document.add_attachment(
-        "notes.txt", b"hello", description="a note", mime_type="text/plain"
+        filename="notes.txt",
+        data=b"hello",
+        description="a note",
+        mime_type="text/plain",
     )
 
     with reread(document) as reader:
@@ -1192,11 +1296,11 @@ def test_attachment_metadata(cls):
 
 @pytest.mark.parametrize("cls", EDITING_CLASSES)
 def test_document_scripts_are_stored_and_can_be_stripped(cls):
-    document = cls(THREE)
+    document = cls(source=THREE)
     assert document.javascript == {}
 
-    document.add_js("app.alert('one');")
-    document.add_js("app.alert('zwei ü');", name="second")
+    document.add_js(javascript="app.alert('one');")
+    document.add_js(javascript="app.alert('zwei ü');", name="second")
 
     with reread(document) as reader:
         assert reader.javascript == {
@@ -1214,10 +1318,10 @@ def test_document_scripts_are_stored_and_can_be_stripped(cls):
 
 @pytest.mark.parametrize("cls", EDITING_CLASSES)
 def test_encrypt_with_permissions(cls):
-    document = cls(THREE)
+    document = cls(source=THREE)
     document.encrypt(
-        "user",
-        "owner",
+        user_password="user",
+        owner_password="owner",
         allow_print=False,
         allow_extract=False,
         allow_modify=False,
@@ -1239,18 +1343,18 @@ def test_encrypt_with_permissions(cls):
     with PdfReader(THREE) as reader:
         assert reader.permissions is None
 
-    document.encrypt("user", allow_print="low")
+    document.encrypt(user_password="user", allow_print="low")
     with PdfReader(document.to_bytes(), password="user") as reader:
         assert reader.permissions["print"] is True
         assert reader.permissions["print_high_quality"] is False
 
     with pytest.raises(ValueError):
-        document.encrypt("user", allow_print="sometimes")
+        document.encrypt(user_password="user", allow_print="sometimes")
 
 
 @pytest.mark.parametrize("cls", EDITING_CLASSES)
 def test_output_options(cls):
-    document = cls(THREE)
+    document = cls(source=THREE)
     plain = document.to_bytes()
     assert b"/Linearized" not in plain
 
@@ -1333,7 +1437,7 @@ def color_at(image, x: float, y: float) -> tuple[int, int, int]:
 @pytest.mark.parametrize("cls", EDITING_CLASSES)
 @pytest.mark.parametrize(("over", "overlap"), [(True, BLUE), (False, RED)])
 def test_merge_page_stacking_order_as_rendered(cls, over, overlap):
-    document = cls(RED_SQUARE)
+    document = cls(source=RED_SQUARE)
     document.pages[0].merge_page(PdfReader(BLUE_SQUARE).pages[0], over=over)
 
     image = rendered(document.to_bytes())
@@ -1352,7 +1456,7 @@ def test_overlay_does_not_inherit_the_page_s_graphics_state(cls):
     overlay drawn after it must not be scaled or recolored by them."""
     base = simple_page_pdf("0.5 0 0 0.5 0 0 cm 0 1 0 rg")
 
-    document = cls(base)
+    document = cls(source=base)
     document.pages[0].merge_page(PdfReader(BLUE_SQUARE).pages[0])
 
     image = rendered(document.to_bytes())
@@ -1368,7 +1472,7 @@ def test_merge_transformed_pages_as_rendered(cls):
 
     document = cls()
     for _ in range(4):
-        document.add_blank_page(200, 200)
+        document.add_blank_page(width=200, height=200)
 
     # halved about the origin: [50 90]^2
     document.pages[0].merge_scaled_page(blue, 0.5)
@@ -1400,7 +1504,7 @@ def test_merge_transformed_pages_as_rendered(cls):
 
 @pytest.mark.parametrize("cls", EDITING_CLASSES)
 def test_transfer_rotation_to_content_keeps_the_picture(cls):
-    document = cls(RED_SQUARE)
+    document = cls(source=RED_SQUARE)
     page = document.pages[0]
     page.cropbox = (50, 50, 200, 150)
     page.rotate(90)
@@ -1420,7 +1524,7 @@ def test_transfer_rotation_to_content_keeps_the_picture(cls):
 
 @pytest.mark.parametrize("cls", EDITING_CLASSES)
 def test_scale_and_transformation_as_rendered(cls):
-    document = cls(RED_SQUARE)
+    document = cls(source=RED_SQUARE)
     document.pages[0].scale_by(0.5)
 
     image = rendered(document.to_bytes())
@@ -1429,7 +1533,7 @@ def test_scale_and_transformation_as_rendered(cls):
     assert color_at(image, 10, 10) == WHITE
     assert color_at(image, 90, 90) == WHITE
 
-    document = cls(RED_SQUARE)
+    document = cls(source=RED_SQUARE)
     document.pages[0].add_transformation((1, 0, 0, 1, 40, 0))
 
     image = rendered(document.to_bytes())
@@ -1440,7 +1544,7 @@ def test_scale_and_transformation_as_rendered(cls):
 
 @pytest.mark.parametrize("cls", EDITING_CLASSES)
 def test_rotation_and_crop_as_rendered(cls):
-    document = cls(RED_SQUARE)
+    document = cls(source=RED_SQUARE)
     page = document.pages[0]
     page.cropbox = (50, 50, 200, 150)
     page.rotate(90)
@@ -1468,16 +1572,22 @@ def pypdf_titles(data: bytes) -> list[str]:
 
 @pytest.mark.parametrize("cls", EDITING_CLASSES)
 def test_edit_bookmarks(cls):
-    document = cls(make_pdf([f"p{i}" for i in range(5)]))
+    document = cls(source=make_pdf([f"p{i}" for i in range(5)]))
 
-    one = document.add_outline_item("One", 0)
-    two = document.add_outline_item("Two", 1)
-    sub = document.add_outline_item("Sub", 2, parent=one)
-    web = document.add_outline_item("Web", None, url="https://example.org")
+    one = document.add_outline_item(title="One", page_no=_test_page_no(0, document))
+    two = document.add_outline_item(title="Two", page_no=_test_page_no(1, document))
+    sub = document.add_outline_item(
+        title="Sub", page_no=_test_page_no(2, document), parent=one
+    )
+    web = document.add_outline_item(
+        title="Web", page_no=_test_page_no(None, document), url="https://example.org"
+    )
 
-    document.update_outline_item(two, title="Second", page_number=3)
-    document.move_outline_item(sub, parent=two)
-    document.move_outline_item(web, index=0)
+    document.update_outline_item(
+        item_id=two, title="Second", page_no=_test_page_no(3, document)
+    )
+    document.move_outline_item(item_id=sub, parent=two)
+    document.move_outline_item(item_id=web, index=0)
 
     expected = [(0, "Web", None), (0, "One", 0), (0, "Second", 3), (1, "Sub", 2)]
     assert flat_outline(document.outline) == expected
@@ -1492,11 +1602,11 @@ def test_edit_bookmarks(cls):
 
     # an item cannot go below itself or below its own children
     with pytest.raises(PdfEditError):
-        document.move_outline_item(two, parent=sub)
+        document.move_outline_item(item_id=two, parent=sub)
     with pytest.raises(PdfEditError):
-        document.move_outline_item(two, parent=two)
+        document.move_outline_item(item_id=two, parent=two)
 
-    document.remove_outline_item(one)
+    document.remove_outline_item(item_id=one)
     assert flat_outline(document.outline) == [
         (0, "Web", None),
         (0, "Second", 3),
@@ -1504,11 +1614,11 @@ def test_edit_bookmarks(cls):
     ]
 
     # removing the target leaves a heading
-    document.update_outline_item(two, page_number=None)
+    document.update_outline_item(item_id=two, page_no=_test_page_no(None, document))
     assert flat_outline(document.outline)[1] == (0, "Second", None)
 
     with pytest.raises(PdfEditError):
-        document.remove_outline_item(987654)
+        document.remove_outline_item(item_id=987654)
 
     document.clear_outline()
     assert document.outline == []
@@ -1518,37 +1628,51 @@ def test_edit_bookmarks(cls):
 
 @pytest.mark.parametrize("cls", EDITING_CLASSES)
 def test_bookmark_style_and_position(cls):
-    document = cls(THREE)
+    document = cls(source=THREE)
     item = document.add_outline_item(
-        "Styled", 1, color="#ff0000", bold=True, italic=True, top=200, zoom=2
+        title="Styled",
+        page_no=_test_page_no(1, document),
+        color="#ff0000",
+        bold=True,
+        italic=True,
+        top=200,
+        zoom=2,
     )
-    document.add_outline_item("Child", 2, parent=item)
-    document.update_outline_item(item, is_open=False)
+    document.add_outline_item(
+        title="Child", page_no=_test_page_no(2, document), parent=item
+    )
+    document.update_outline_item(item_id=item, is_open=False)
 
-    with PdfEditor(document.to_bytes()) as editor:
+    with PdfEditor(source=document.to_bytes()) as editor:
         (entry,) = editor.outline
         assert entry["open"] is False
         assert entry["page"] == 1
 
-        raw = editor.get_object(entry["id"])
+        raw = editor.get_object(object_id=entry["id"])
         assert raw["/C"] == [1, 0, 0]
         assert raw["/F"] == 3  # italic and bold
         assert raw["/Dest"][1:] == ["/XYZ", None, 200, 2]
         # one child, folded away
         assert raw["/Count"] == -1
 
-    document.update_outline_item(item, color=None, bold=False, italic=False)
-    with PdfEditor(document.to_bytes()) as editor:
-        raw = editor.get_object(editor.outline[0]["id"])
+    document.update_outline_item(item_id=item, color=None, bold=False, italic=False)
+    with PdfEditor(source=document.to_bytes()) as editor:
+        raw = editor.get_object(object_id=editor.outline[0]["id"])
         assert "/C" not in raw
         assert "/F" not in raw
 
     with pytest.raises(ValueError):
-        document.add_outline_item("both", 0, url="https://example.org")
+        document.add_outline_item(
+            title="both", page_no=_test_page_no(0, document), url="https://example.org"
+        )
     with pytest.raises(ValueError):
-        document.add_outline_item("position without page", None, top=10)
+        document.add_outline_item(
+            title="position without page", page_no=_test_page_no(None, document), top=10
+        )
     with pytest.raises(ValueError):
-        document.add_outline_item("bad color", 0, color=(2, 0, 0))
+        document.add_outline_item(
+            title="bad color", page_no=_test_page_no(0, document), color=(2, 0, 0)
+        )
 
 
 # ---------------------------------------------------------------- creating form fields
@@ -1556,20 +1680,42 @@ def test_bookmark_style_and_position(cls):
 
 @pytest.mark.parametrize("cls", EDITING_CLASSES)
 def test_create_form_fields(cls):
-    document = cls(THREE)
-    document.add_text_field(0, "name", (20, 250, 180, 270), "Ada", tooltip="Your name")
-    document.add_text_field(0, "notes", (20, 180, 180, 240), multiline=True)
-    document.add_checkbox(0, "agree", (20, 150, 36, 166), checked=True)
+    document = cls(source=THREE)
+    document.add_text_field(
+        page_no=_test_page_no(0, document),
+        name="name",
+        rect=(20, 250, 180, 270),
+        value="Ada",
+        tooltip="Your name",
+    )
+    document.add_text_field(
+        page_no=_test_page_no(0, document),
+        name="notes",
+        rect=(20, 180, 180, 240),
+        multiline=True,
+    )
+    document.add_checkbox(
+        page_no=_test_page_no(0, document),
+        name="agree",
+        rect=(20, 150, 36, 166),
+        checked=True,
+    )
     document.add_choice_field(
-        0, "country", (20, 120, 180, 140), ["Belgium", "Switzerland"], "Switzerland"
+        page_no=_test_page_no(0, document),
+        name="country",
+        rect=(20, 120, 180, 140),
+        options=["Belgium", "Switzerland"],
+        value="Switzerland",
     )
     document.add_radio_group(
-        1,
-        "plan",
-        {"basic": (20, 250, 36, 266), "premium": (60, 250, 76, 266)},
+        page_no=_test_page_no(1, document),
+        name="plan",
+        buttons={"basic": (20, 250, 36, 266), "premium": (60, 250, 76, 266)},
         selected="premium",
     )
-    document.add_signature_field(2, "signature", (20, 20, 180, 60))
+    document.add_signature_field(
+        page_no=_test_page_no(2, document), name="signature", rect=(20, 20, 180, 60)
+    )
 
     data = document.to_bytes()
     with PdfReader(data) as reader:
@@ -1604,7 +1750,7 @@ def test_create_form_fields(cls):
 
     # the new fields are filled like any other
     document.update_form_field_values(
-        {"name": "Grace", "agree": False, "country": "Belgium", "plan": "/basic"}
+        fields={"name": "Grace", "agree": False, "country": "Belgium", "plan": "/basic"}
     )
     with reread(document) as reader:
         values = {name: field["value"] for name, field in reader.get_fields().items()}
@@ -1616,16 +1762,21 @@ def test_create_form_fields(cls):
 
 @pytest.mark.parametrize("cls", EDITING_CLASSES)
 def test_radio_group_update_and_remove(cls):
-    document = cls(THREE)
+    document = cls(source=THREE)
     document.add_radio_group(
-        1,
-        "plan",
-        {"basic": (20, 250, 36, 266), "premium": (60, 250, 76, 266)},
+        page_no=_test_page_no(1, document),
+        name="plan",
+        buttons={"basic": (20, 250, 36, 266), "premium": (60, 250, 76, 266)},
     )
-    document.add_text_field(1, "keep", (20, 200, 180, 220), "Still here")
+    document.add_text_field(
+        page_no=_test_page_no(1, document),
+        name="keep",
+        rect=(20, 200, 180, 220),
+        value="Still here",
+    )
 
     for selected in ("premium", "basic", "Off", "premium"):
-        assert document.update_form_field_values({"plan": selected}) == 1
+        assert document.update_form_field_values(fields={"plan": selected}) == 1
         with reread(document) as reader:
             assert reader.get_fields()["plan"]["value"] == f"/{selected}"
             widgets = [
@@ -1640,10 +1791,10 @@ def test_radio_group_update_and_remove(cls):
 
     # A group has two widgets, so a single replacement rectangle is invalid.
     with pytest.raises(PdfEditError):
-        document.update_form_field("plan", rect=(20, 200, 36, 216))
+        document.update_form_field(name="plan", rect=(20, 200, 36, 216))
 
     document.update_form_field(
-        "plan", new_name="subscription", read_only=True, tooltip="Choose a plan"
+        name="plan", new_name="subscription", read_only=True, tooltip="Choose a plan"
     )
     with reread(document) as reader:
         fields = reader.get_fields()
@@ -1652,7 +1803,7 @@ def test_radio_group_update_and_remove(cls):
         assert fields["subscription"]["read_only"] is True
         assert fields["subscription"]["alternate_name"] == "Choose a plan"
 
-    document.remove_form_field("subscription")
+    document.remove_form_field(name="subscription")
     with reread(document) as reader:
         assert set(reader.get_fields()) == {"keep"}
         widgets = [a for a in reader.pages[1].annotations if a["/Subtype"] == "/Widget"]
@@ -1661,12 +1812,17 @@ def test_radio_group_update_and_remove(cls):
 
 @pytest.mark.parametrize("cls", EDITING_CLASSES)
 def test_created_fields_render_and_flatten(cls):
-    document = cls(THREE)
-    document.add_text_field(0, "name", (20, 250, 180, 270), "Visible value")
+    document = cls(source=THREE)
+    document.add_text_field(
+        page_no=_test_page_no(0, document),
+        name="name",
+        rect=(20, 250, 180, 270),
+        value="Visible value",
+    )
     document.add_radio_group(
-        0,
-        "plan",
-        {"basic": (20, 200, 36, 216), "premium": (60, 200, 76, 216)},
+        page_no=_test_page_no(0, document),
+        name="plan",
+        buttons={"basic": (20, 200, 36, 216), "premium": (60, 200, 76, 216)},
         selected="premium",
     )
     document.flatten_annotations()
@@ -1684,53 +1840,95 @@ def test_created_fields_render_and_flatten(cls):
 
 @pytest.mark.parametrize("cls", EDITING_CLASSES)
 def test_create_form_fields_rejects_bad_input(cls):
-    document = cls(FORM)
+    document = cls(source=FORM)
 
     # the existing form keeps its fields when new ones are added to it
-    document.add_text_field(0, "city", (20, 60, 180, 80))
+    document.add_text_field(
+        page_no=_test_page_no(0, document), name="city", rect=(20, 60, 180, 80)
+    )
     assert {"name", "agree", "city"} <= set(document.get_fields())
 
     with pytest.raises(PdfEditError):
-        document.add_text_field(0, "city", (20, 30, 180, 50))  # taken
+        document.add_text_field(
+            page_no=_test_page_no(0, document), name="city", rect=(20, 30, 180, 50)
+        )  # taken
     with pytest.raises(PdfEditError):
-        document.add_text_field(0, "a.b", (20, 30, 180, 50))  # a period
+        document.add_text_field(
+            page_no=_test_page_no(0, document), name="a.b", rect=(20, 30, 180, 50)
+        )  # a period
     with pytest.raises(PdfEditError):
-        document.add_text_field(0, "flat", (20, 30, 20, 50))  # no width
+        document.add_text_field(
+            page_no=_test_page_no(0, document), name="flat", rect=(20, 30, 20, 50)
+        )  # no width
     with pytest.raises(PdfEditError):
-        document.add_choice_field(0, "pick", (20, 30, 180, 50), ["a", "b"], "c")
+        document.add_choice_field(
+            page_no=_test_page_no(0, document),
+            name="pick",
+            rect=(20, 30, 180, 50),
+            options=["a", "b"],
+            value="c",
+        )
     with pytest.raises(PdfEditError):
-        document.add_radio_group(0, "group", {"a": (0, 0, 10, 10)}, selected="z")
+        document.add_radio_group(
+            page_no=_test_page_no(0, document),
+            name="group",
+            buttons={"a": (0, 0, 10, 10)},
+            selected="z",
+        )
     with pytest.raises(PdfEditError):
-        document.add_radio_group(0, "group", {"Off": (0, 0, 10, 10)})
+        document.add_radio_group(
+            page_no=_test_page_no(0, document),
+            name="group",
+            buttons={"Off": (0, 0, 10, 10)},
+        )
     with pytest.raises(IndexError):
-        document.add_checkbox(9, "box", (0, 0, 10, 10))
+        document.add_checkbox(
+            page_no=_test_page_no(9, document), name="box", rect=(0, 0, 10, 10)
+        )
 
     # nothing half-made was left behind
     assert set(document.get_fields()) == {"name", "agree", "city"}
 
     # a choice field that can be typed into takes other values
     document.add_choice_field(
-        0, "pick", (20, 30, 180, 50), ["a", "b"], "c", editable=True
+        page_no=_test_page_no(0, document),
+        name="pick",
+        rect=(20, 30, 180, 50),
+        options=["a", "b"],
+        value="c",
+        editable=True,
     )
     assert document.get_fields()["pick"]["value"] == "c"
 
 
 @pytest.mark.parametrize("cls", EDITING_CLASSES)
 def test_update_and_remove_form_fields(cls):
-    document = cls(THREE)
-    document.add_text_field(0, "name", (20, 250, 180, 270), "Ada")
-    document.add_checkbox(0, "agree", (20, 150, 36, 166))
-    document.add_choice_field(0, "country", (20, 120, 180, 140), ["Belgium"])
+    document = cls(source=THREE)
+    document.add_text_field(
+        page_no=_test_page_no(0, document),
+        name="name",
+        rect=(20, 250, 180, 270),
+        value="Ada",
+    )
+    document.add_checkbox(
+        page_no=_test_page_no(0, document), name="agree", rect=(20, 150, 36, 166)
+    )
+    document.add_choice_field(
+        page_no=_test_page_no(0, document),
+        name="country",
+        rect=(20, 120, 180, 140),
+        options=["Belgium"],
+    )
 
     document.update_form_field(
-        "name",
+        name="name",
         new_name="full_name",
         rect=(20, 200, 200, 230),
         read_only=True,
         required=True,
         tooltip="Full name",
     )
-    document.update_form_field("country", options=["Belgium", "Italy"])
+    document.update_form_field(name="country", options=["Belgium", "Italy"])
 
     with reread(document) as reader:
         fields = reader.get_fields()
@@ -1743,26 +1941,28 @@ def test_update_and_remove_form_fields(cls):
     assert renamed["alternate_name"] == "Full name"
     assert fields["country"]["choices"] == ["Belgium", "Italy"]
 
-    document.update_form_field("full_name", tooltip=None, read_only=False)
+    document.update_form_field(name="full_name", tooltip=None, read_only=False)
     renamed = document.get_fields()["full_name"]
     assert renamed["alternate_name"] == "full_name"
     assert renamed["read_only"] is False
 
     with pytest.raises(PdfEditError):
-        document.update_form_field("full_name", options=["a"])  # not a choice field
+        document.update_form_field(
+            name="full_name", options=["a"]
+        )  # not a choice field
     with pytest.raises(PdfEditError):
-        document.update_form_field("agree", new_name="full_name")  # taken
+        document.update_form_field(name="agree", new_name="full_name")  # taken
     with pytest.raises(PdfEditError):
-        document.update_form_field("missing", read_only=True)
+        document.update_form_field(name="missing", read_only=True)
 
-    document.remove_form_field("agree")
+    document.remove_form_field(name="agree")
     with reread(document) as reader:
         assert set(reader.get_fields()) == {"full_name", "country"}
         widgets = [a for a in reader.pages[0].annotations if a["/Subtype"] == "/Widget"]
         assert len(widgets) == 2
 
     with pytest.raises(PdfEditError):
-        document.remove_form_field("agree")
+        document.remove_form_field(name="agree")
 
 
 # ---------------------------------------------------------------- drawing text
@@ -1770,7 +1970,7 @@ def test_update_and_remove_form_fields(cls):
 
 @pytest.mark.parametrize("cls", EDITING_CLASSES)
 def test_draw_text(cls):
-    document = cls(THREE)
+    document = cls(source=THREE)
     page = document.pages[1]
 
     page.draw_text("Stamped (1) \\ ok", 20, 50, size=14, font="Times-Bold")
@@ -1796,7 +1996,7 @@ def test_draw_text(cls):
 @pytest.mark.parametrize("cls", EDITING_CLASSES)
 def test_draw_text_color_as_rendered(cls):
     document = cls()
-    page = document.add_blank_page(200, 200)
+    page = document.add_blank_page(width=200, height=200)
     page.draw_text("MM", 10, 40, size=120, font="Helvetica-Bold", color="#0000ff")
 
     image = rendered(document.to_bytes())
@@ -1816,10 +2016,14 @@ def test_draw_text_color_as_rendered(cls):
 
 @pytest.mark.parametrize("cls", EDITING_CLASSES)
 def test_table_of_contents_page(cls):
-    document = cls(make_pdf([f"p{i}" for i in range(4)]))
-    one = document.add_outline_item("Introduction", 0)
-    document.add_outline_item("Scope", 1, parent=one)
-    document.add_outline_item("Results", 3)
+    document = cls(source=make_pdf([f"p{i}" for i in range(4)]))
+    one = document.add_outline_item(
+        title="Introduction", page_no=_test_page_no(0, document)
+    )
+    document.add_outline_item(
+        title="Scope", page_no=_test_page_no(1, document), parent=one
+    )
+    document.add_outline_item(title="Results", page_no=_test_page_no(3, document))
 
     pages = document.add_table_of_contents(page_size="A4")
     assert [page.index for page in pages] == [0]
@@ -1840,15 +2044,21 @@ def test_table_of_contents_page(cls):
             assert expected in text
         assert [a["page"] for a in contents.annotations] == [1, 2, 4]
 
-    assert cls(THREE).add_table_of_contents() == []
+    assert cls(source=THREE).add_table_of_contents() == []
 
 
 @pytest.mark.parametrize("cls", EDITING_CLASSES)
 def test_table_of_contents_spans_pages_and_depth(cls):
-    document = cls(make_pdf([f"p{i}" for i in range(3)]))
+    document = cls(source=make_pdf([f"p{i}" for i in range(3)]))
     for number in range(60):
-        parent = document.add_outline_item(f"Chapter {number}", number % 3)
-        document.add_outline_item(f"Section {number}.1", number % 3, parent=parent)
+        parent = document.add_outline_item(
+            title=f"Chapter {number}", page_no=_test_page_no(number % 3, document)
+        )
+        document.add_outline_item(
+            title=f"Section {number}.1",
+            page_no=_test_page_no(number % 3, document),
+            parent=parent,
+        )
 
     pages = document.add_table_of_contents(page_size="A5", max_depth=0)
     assert len(pages) > 1
@@ -1909,8 +2119,10 @@ def test_pdf_from_images(tmp_path):
 def test_image_on_a_fixed_page_size(cls):
     jpeg = image_bytes("RGB", (300, 200), (30, 200, 30), "JPEG")
 
-    document = cls(THREE)
-    (page,) = document.add_image(jpeg, page_size="A4", margin=36, index=1)
+    document = cls(source=THREE)
+    (page,) = document.add_image(
+        image=jpeg, page_size="A4", margin=36, before_page_no=_test_page_no(1, document)
+    )
     assert page.index == 1
     assert len(document.pages) == 4
 
@@ -1921,13 +2133,13 @@ def test_image_on_a_fixed_page_size(cls):
     bottom = (841.89 - height) / 2
     assert image.bbox == pytest.approx((36, bottom, 559.28, bottom + height), abs=0.01)
 
-    (landscape,) = document.add_image(jpeg, page_size=(842, 595))
+    (landscape,) = document.add_image(image=jpeg, page_size=(842, 595))
     assert landscape.mediabox == pytest.approx((0, 0, 842, 595))
 
     with pytest.raises(ValueError):
-        document.add_image(jpeg, page_size="B7")
+        document.add_image(image=jpeg, page_size="B7")
     with pytest.raises(ValueError):
-        document.add_image(jpeg, page_size="A4", margin=400)
+        document.add_image(image=jpeg, page_size="A4", margin=400)
 
 
 def test_image_orientation_frames_and_cmyk():
@@ -2002,7 +2214,7 @@ def test_reader_cannot_create_content():
 
 
 def test_editor_reads_until_first_change():
-    with PdfEditor(THREE) as editor:
+    with PdfEditor(source=THREE) as editor:
         assert editor.is_modified is False
         assert editor.pages[0].extract_text() == "alpha"
         assert editor.is_modified is False
@@ -2055,7 +2267,7 @@ def test_clone_keeps_document_level_content(build, marker):
     form and the outline survive an edit and a rewrite without remapping."""
     source = build()
 
-    with PdfEditor(source) as editor:
+    with PdfEditor(source=source) as editor:
         before = text_leaves(editor.annotations)
         assert marker in before
         assert editor.is_modified is False
@@ -2068,7 +2280,7 @@ def test_clone_keeps_document_level_content(build, marker):
         assert text_leaves(editor.annotations) == before
         data = editor.to_bytes()
 
-    with PdfEditor(data) as reopened:
+    with PdfEditor(source=data) as reopened:
         assert text_leaves(reopened.annotations) == before
 
 
@@ -2106,7 +2318,7 @@ def test_encrypted_source_needs_its_password():
 @pytest.mark.parametrize("cls", EDITING_CLASSES)
 def test_encrypted_source_is_written_in_the_clear(cls):
     """The documented default: output is unencrypted unless asked otherwise."""
-    document = cls(encrypted_pdf("secret"), password="secret")
+    document = cls(source=encrypted_pdf("secret"), password="secret")
     del document.pages[0]
 
     with PdfReader(document.to_bytes()) as reader:
@@ -2117,7 +2329,11 @@ def test_encrypted_source_is_written_in_the_clear(cls):
 @pytest.mark.parametrize("cls", EDITING_CLASSES)
 def test_pages_of_an_encrypted_document_can_be_imported(cls):
     document = cls()
-    document.append(encrypted_pdf("secret"), pages=[2], password="secret")
+    document.append(
+        source=encrypted_pdf("secret"),
+        page_nos=[3],
+        password="secret",
+    )
     stamp = PdfReader(STAMP).pages[0]
     document.pages[0].merge_page(stamp)
 
@@ -2129,8 +2345,8 @@ def test_pages_of_an_encrypted_document_can_be_imported(cls):
 
 @pytest.mark.parametrize("cls", EDITING_CLASSES)
 def test_encrypt_output(cls):
-    document = cls(THREE)
-    document.encrypt("secret")
+    document = cls(source=THREE)
+    document.encrypt(user_password="secret")
     data = document.to_bytes()
 
     with pytest.raises(PdfPasswordError):
@@ -2152,7 +2368,7 @@ def test_encrypt_output(cls):
     assert document.pages[2].extract_text() == "gamma"
     assert document.is_encrypted is True
     other = cls()
-    other.append(document, pages=[1])
+    other.append(source=document, page_nos=_source_page_nos(document, [1]))
     assert other.pages[0].extract_text() == "beta"
     assert other.is_encrypted is False
 
@@ -2163,8 +2379,8 @@ def test_encrypt_output(cls):
 
 @pytest.mark.parametrize("cls", EDITING_CLASSES)
 def test_encrypt_with_owner_password_only(cls):
-    document = cls(THREE)
-    document.encrypt("", owner_password="owner")
+    document = cls(source=THREE)
+    document.encrypt(user_password="", owner_password="owner")
 
     # no user password: anyone can open it, and it is still encrypted
     with PdfReader(document.to_bytes()) as reader:
@@ -2172,12 +2388,12 @@ def test_encrypt_with_owner_password_only(cls):
         assert reader.pages[0].extract_text() == "alpha"
 
     with pytest.raises(PdfEditError) as excinfo:
-        document.encrypt("")
+        document.encrypt(user_password="")
     assert excinfo.value.category is PdfEditErrorCategory.INVALID_EDIT
 
 
 def test_editor_shows_raw_objects():
-    with PdfEditor(THREE) as editor:
+    with PdfEditor(source=THREE) as editor:
         trailer = editor.trailer
         assert trailer["/Size"] > 0
         assert "/Root" in trailer
@@ -2187,16 +2403,16 @@ def test_editor_shows_raw_objects():
         assert catalog["/Pages"]["/Count"] == 3
 
         # object 3 of the fixture is its font
-        assert editor.get_object(3) == {
+        assert editor.get_object(object_id=3) == {
             "/Type": "/Font",
             "/Subtype": "/Type1",
             "/BaseFont": "/Helvetica",
         }
 
         with pytest.raises(PdfEditError):
-            editor.get_object(9999)
+            editor.get_object(object_id=9999)
         with pytest.raises(ValueError):
-            editor.get_object(0)
+            editor.get_object(object_id=0)
 
         # reading objects is not an edit
         assert editor.is_modified is False
@@ -2225,7 +2441,7 @@ def test_writer_does_not_expose_editor_only_operations():
 def test_one_editor_shared_between_threads():
     """Thread safe, not parallel: mixed calls on one instance are serialized
     and leave a document that still writes and reads back."""
-    editor = PdfEditor(make_pdf([f"page{i}" for i in range(12)]))
+    editor = PdfEditor(source=make_pdf([f"page{i}" for i in range(12)]))
     errors: list[BaseException] = []
 
     def work(seed: int) -> None:
@@ -2234,7 +2450,7 @@ def test_one_editor_shared_between_threads():
                 kind = (seed + step) % 5
                 try:
                     if kind == 0:
-                        editor.add_blank_page(50 + seed, 50)
+                        editor.add_blank_page(width=50 + seed, height=50)
                     elif kind == 1:
                         editor.pages[0].rotate(90)
                     elif kind == 2:
@@ -2242,7 +2458,11 @@ def test_one_editor_shared_between_threads():
                     elif kind == 3:
                         editor.to_bytes()
                     else:
-                        editor.append(TWO, pages=[0], index=0)
+                        editor.append(
+                            source=TWO,
+                            page_nos=_source_page_nos(TWO, [0]),
+                            before_page_no=_test_page_no(0, editor),
+                        )
                 except PdfStaleHandleError:
                     # another thread changed the page list between taking the
                     # handle and using it: the documented outcome

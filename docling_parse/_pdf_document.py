@@ -595,13 +595,14 @@ class PdfPages(Sequence[PdfPage]):
     def __delitem__(self, index: int) -> None:
         if not isinstance(self._owner, _PdfEditing):
             raise TypeError(f"{type(self._owner).__name__} is read-only")
-        self._owner.remove_page(index)
+        self._owner._remove_page(index)
 
 
 class _PdfDocument:
     """Opening, closing and inspection: common to reader, writer and editor."""
 
     _native_class: type
+    _page_owner: _PdfDocument
     _page_class: type[PdfPage] = PdfPage
 
     def __init__(self, loglevel: str = "fatal"):
@@ -663,25 +664,25 @@ class _PdfDocument:
 
     @property
     def pages(self) -> PdfPages:
-        return PdfPages(self)
+        return PdfPages(getattr(self, "_page_owner", self))
 
     def get_num_pages(self) -> int:
         """The number of pages; same as `len(self.pages)`."""
         return len(self.pages)
 
-    def get_page(self, page_number: int) -> PdfPage:
+    def _get_page(self, page_number: int) -> PdfPage:
         """The page at a zero-based position; same as `self.pages[page_number]`."""
         return self.pages[page_number]
 
-    def get_page_number(self, page: PdfPage) -> int:
+    def _get_page_number(self, page: PdfPage) -> int:
         """The zero-based position of a page of this document."""
-        if page._owner is not self:
+        if page._owner is not getattr(self, "_page_owner", self):
             raise ValueError("the page belongs to another document")
         return page.index
 
-    def get_pages_showing_field(self, name: str) -> list[PdfPage]:
+    def _get_pages_showing_field(self, name: str) -> list[PdfPage]:
         """The pages that show the form field with this fully qualified name."""
-        fields = self.get_fields()
+        fields = self._get_fields()
         if name not in fields:
             raise KeyError(name)
         return [self.pages[index] for index in fields[name]["pages"]]
@@ -784,14 +785,14 @@ class _PdfDocument:
         with _native_errors():
             return self._native.form()
 
-    def get_fields(self) -> dict[str, dict[str, Any]]:
+    def _get_fields(self) -> dict[str, dict[str, Any]]:
         """The form fields by fully qualified name. Each field has "kind"
         (text, checkbox, radio, choice, pushbutton, signature), "value",
         "default_value", "choices", "states", "read_only", "pages", and the
         raw "type" and "flags"."""
         return {field["name"]: field for field in self._form()["fields"]}
 
-    def get_form_text_fields(self) -> dict[str, str]:
+    def _get_form_text_fields(self) -> dict[str, str]:
         """The value of every text field, by fully qualified name."""
         return {
             field["name"]: field["value"]
@@ -816,7 +817,7 @@ class _PdfDocument:
         with _native_errors():
             return self._native.attachments()
 
-    def get_attachment(self, name: str) -> bytes:
+    def _get_attachment(self, name: str) -> bytes:
         """The content of the embedded file registered under `name`."""
         with _native_errors():
             return self._native.attachment_data(name)
@@ -826,7 +827,7 @@ class _PdfDocument:
         """The embedded files by name; each value is a list with the file's
         content, the shape pypdf uses."""
         return {
-            item["name"]: [self.get_attachment(item["name"])]
+            item["name"]: [self._get_attachment(item["name"])]
             for item in self.attachment_info
         }
 
@@ -855,7 +856,7 @@ class _PdfEditing(_PdfDocument):
         temporary._open(source, password)
         return temporary._native, temporary
 
-    def append(
+    def _append(
         self,
         source: Any,
         pages: Iterable[int] | slice | None = None,
@@ -895,7 +896,7 @@ class _PdfEditing(_PdfDocument):
             if temporary is not None:
                 temporary.close()
 
-    def merge(
+    def _merge(
         self,
         position: int | None,
         fileobj: Any,
@@ -906,7 +907,7 @@ class _PdfEditing(_PdfDocument):
     ) -> None:
         """Copy pages of another PDF into this document at `position`
         (None for the end). Same as `append(fileobj, pages, index=position)`."""
-        self.append(
+        self._append(
             fileobj,
             pages,
             index=position,
@@ -914,11 +915,11 @@ class _PdfEditing(_PdfDocument):
             import_outline=import_outline,
         )
 
-    def add_page(self, page: PdfPage) -> PdfEditablePage:
+    def _add_page(self, page: PdfPage) -> PdfEditablePage:
         """Append a copy of a page of any reader, writer or editor."""
-        return self.insert_page(page, len(self.pages))
+        return self._insert_page(page, len(self.pages))
 
-    def insert_page(self, page: PdfPage, index: int = 0) -> PdfEditablePage:
+    def _insert_page(self, page: PdfPage, index: int = 0) -> PdfEditablePage:
         """Insert a copy of a page of any reader, writer or editor so that it
         becomes page `index`."""
         with _native_errors():
@@ -938,11 +939,11 @@ class _PdfEditing(_PdfDocument):
             raise IndexError(f"position {index} out of range for {count} pages")
         return position
 
-    def add_blank_page(self, width: float, height: float) -> PdfEditablePage:
+    def _add_blank_page(self, width: float, height: float) -> PdfEditablePage:
         """Add an empty page at the end. Sizes are in points (1/72 inch)."""
-        return self.insert_blank_page(len(self.pages), width, height)
+        return self._insert_blank_page(len(self.pages), width, height)
 
-    def insert_blank_page(
+    def _insert_blank_page(
         self, index: int, width: float, height: float
     ) -> PdfEditablePage:
         """Insert an empty page so that it becomes page `index`."""
@@ -952,7 +953,7 @@ class _PdfEditing(_PdfDocument):
             )
         return self.pages[position]  # type: ignore[return-value]
 
-    def add_image(
+    def _add_image(
         self,
         image: _pdf_images.ImageSource,
         *,
@@ -1005,7 +1006,7 @@ class _PdfEditing(_PdfDocument):
         return [self.pages[i] for i in added]  # type: ignore[misc]
 
     @classmethod
-    def from_images(
+    def _from_images(
         cls,
         images: Iterable[_pdf_images.ImageSource],
         *,
@@ -1017,10 +1018,10 @@ class _PdfEditing(_PdfDocument):
         are those of `add_image`."""
         document = cls()
         for image in images:
-            document.add_image(image, page_size=page_size, margin=margin, dpi=dpi)
+            document._add_image(image, page_size=page_size, margin=margin, dpi=dpi)
         return document
 
-    def duplicate_page(self, index: int, to: int | None = None) -> PdfEditablePage:
+    def _duplicate_page(self, index: int, to: int | None = None) -> PdfEditablePage:
         """Add a copy of the page at `index`, at position `to` or, by
         default, at the end. The copy can be edited independently."""
         count = len(self.pages)
@@ -1031,14 +1032,14 @@ class _PdfEditing(_PdfDocument):
             )
         return self.pages[position]  # type: ignore[return-value]
 
-    def remove_page(self, index: int) -> None:
+    def _remove_page(self, index: int, clean: bool = False) -> None:
         """Remove the page at `index`. Existing page handles become stale."""
         count = len(self.pages)
         resolved = index + count if index < 0 else index
         with _native_errors():
-            self._native.remove_page(resolved)
+            self._native.remove_page(resolved, clean=clean)
 
-    def move_page(self, from_index: int, to_index: int) -> None:
+    def _move_page(self, from_index: int, to_index: int) -> None:
         """Move a page so that it ends up at `to_index`."""
         count = len(self.pages)
         source = from_index + count if from_index < 0 else from_index
@@ -1048,40 +1049,40 @@ class _PdfEditing(_PdfDocument):
 
     # ---- document information ----
 
-    def add_metadata(self, infos: dict[str, str | None]) -> None:
+    def _add_metadata(self, infos: dict[str, str | None]) -> None:
         """Set entries of the document information dictionary. Keys may be
         written "Title" or "/Title"; a value of None removes the entry."""
         with _native_errors():
             self._native.set_info(dict(infos))
 
-    def set_xmp_metadata(self, packet: str | bytes | None) -> None:
+    def _set_xmp_metadata(self, packet: str | bytes | None) -> None:
         """Replace the XMP metadata packet, or remove it with None."""
         data = packet.encode("utf-8") if isinstance(packet, str) else packet
         with _native_errors():
             self._native.set_xmp(data)
 
-    def set_page_layout(self, layout: str | None) -> None:
+    def _set_page_layout(self, layout: str | None) -> None:
         """Set how pages are laid out when the document opens: "/SinglePage",
         "/OneColumn", "/TwoColumnLeft", "/TwoColumnRight", "/TwoPageLeft" or
         "/TwoPageRight". None removes the setting."""
         with _native_errors():
             self._native.set_page_layout(layout or "")
 
-    def set_page_mode(self, mode: str | None) -> None:
+    def _set_page_mode(self, mode: str | None) -> None:
         """Set what a viewer shows beside the pages: "/UseNone",
         "/UseOutlines", "/UseThumbs", "/FullScreen", "/UseOC" or
         "/UseAttachments". None removes the setting."""
         with _native_errors():
             self._native.set_page_mode(mode or "")
 
-    def set_viewer_preferences(self, preferences: dict[str, Any] | None) -> None:
+    def _set_viewer_preferences(self, preferences: dict[str, Any] | None) -> None:
         """Replace the viewer preferences, for example
         `{"/HideToolbar": True, "/Direction": "/R2L"}`. None removes them."""
         text = "" if preferences is None else _pdf_syntax(dict(preferences))
         with _native_errors():
             self._native.set_viewer_preferences(text)
 
-    def set_open_destination(self, page_number: int | None) -> None:
+    def _set_open_destination(self, page_number: int | None) -> None:
         """Open the document at this page, fitted to the window. None removes
         the open action."""
         with _native_errors():
@@ -1099,7 +1100,7 @@ class _PdfEditing(_PdfDocument):
 
     # ---- navigation ----
 
-    def set_page_label(
+    def _set_page_label(
         self,
         page_index_from: int,
         page_index_to: int,
@@ -1123,12 +1124,12 @@ class _PdfEditing(_PdfDocument):
                 start or 1,
             )
 
-    def add_named_destination(self, title: str, page_number: int) -> None:
+    def _add_named_destination(self, title: str, page_number: int) -> None:
         """Add, or replace, a named destination that opens a page."""
         with _native_errors():
             self._native.add_named_destination(title, self._page_index(page_number))
 
-    def add_outline_item(
+    def _add_outline_item(
         self,
         title: str,
         page_number: int | None,
@@ -1198,7 +1199,7 @@ class _PdfEditing(_PdfDocument):
             target["page"] = None
         return target
 
-    def update_outline_item(
+    def _update_outline_item(
         self,
         item_id: int,
         *,
@@ -1235,12 +1236,12 @@ class _PdfEditing(_PdfDocument):
         with _native_errors():
             self._native.update_outline_item(item_id, changes)
 
-    def remove_outline_item(self, item_id: int) -> None:
+    def _remove_outline_item(self, item_id: int) -> None:
         """Remove a bookmark and every bookmark below it."""
         with _native_errors():
             self._native.remove_outline_item(item_id)
 
-    def move_outline_item(
+    def _move_outline_item(
         self, item_id: int, parent: int | None = None, index: int | None = None
     ) -> None:
         """Move a bookmark below `parent` (None: the top level), at position
@@ -1251,12 +1252,12 @@ class _PdfEditing(_PdfDocument):
                 item_id, parent or 0, -1 if index is None else index
             )
 
-    def clear_outline(self) -> None:
+    def _clear_outline(self) -> None:
         """Remove every bookmark."""
         with _native_errors():
             self._native.clear_outline()
 
-    def add_table_of_contents(
+    def _add_table_of_contents(
         self,
         index: int = 0,
         *,
@@ -1305,7 +1306,7 @@ class _PdfEditing(_PdfDocument):
         number_of_pages = -(-len(entries) // per_page)
 
         added = [
-            self.insert_blank_page(position + offset, width, height)
+            self._insert_blank_page(position + offset, width, height)
             for offset in range(number_of_pages)
         ]
 
@@ -1343,7 +1344,7 @@ class _PdfEditing(_PdfDocument):
                     page.draw_text(
                         labels[target], number_column, y, size=size, font=font
                     )
-                    self.add_link(
+                    self._add_link(
                         page_number,
                         (x, y - 0.3 * size, width - margin, y + size),
                         target,
@@ -1364,7 +1365,7 @@ class _PdfEditing(_PdfDocument):
 
     # ---- forms ----
 
-    def update_form_field_values(
+    def _update_form_field_values(
         self, fields: dict[str, str | bool], *, flatten: bool = False
     ) -> int:
         """Fill in form fields, by fully qualified name; a partial name works
@@ -1387,7 +1388,7 @@ class _PdfEditing(_PdfDocument):
         with _native_errors():
             updated = self._native.set_form_values(values)
         if flatten:
-            self.flatten_annotations()
+            self._flatten_annotations()
         return updated
 
     def _add_field(
@@ -1405,7 +1406,7 @@ class _PdfEditing(_PdfDocument):
         with _native_errors():
             self._native.add_form_field(self._page_index(page_number), spec)
 
-    def add_text_field(
+    def _add_text_field(
         self,
         page_number: int,
         name: str,
@@ -1435,7 +1436,7 @@ class _PdfEditing(_PdfDocument):
             spec["value"] = value
         self._add_field(page_number, spec, read_only, required, tooltip)
 
-    def add_checkbox(
+    def _add_checkbox(
         self,
         page_number: int,
         name: str,
@@ -1455,7 +1456,7 @@ class _PdfEditing(_PdfDocument):
         }
         self._add_field(page_number, spec, read_only, required, tooltip)
 
-    def add_choice_field(
+    def _add_choice_field(
         self,
         page_number: int,
         name: str,
@@ -1483,7 +1484,7 @@ class _PdfEditing(_PdfDocument):
             spec["value"] = value
         self._add_field(page_number, spec, read_only, required, tooltip)
 
-    def add_radio_group(
+    def _add_radio_group(
         self,
         page_number: int,
         name: str,
@@ -1507,7 +1508,7 @@ class _PdfEditing(_PdfDocument):
         }
         self._add_field(page_number, spec, read_only, required, tooltip)
 
-    def add_signature_field(
+    def _add_signature_field(
         self,
         page_number: int,
         name: str,
@@ -1521,7 +1522,7 @@ class _PdfEditing(_PdfDocument):
         spec = {"kind": "signature", "name": name, "rect": _rect(rect)}
         self._add_field(page_number, spec, False, required, tooltip)
 
-    def update_form_field(
+    def _update_form_field(
         self,
         name: str,
         *,
@@ -1554,18 +1555,18 @@ class _PdfEditing(_PdfDocument):
         with _native_errors():
             self._native.update_form_field(name, changes)
 
-    def remove_form_field(self, name: str) -> None:
+    def _remove_form_field(self, name: str) -> None:
         """Remove a form field, and its widgets from the pages."""
         with _native_errors():
             self._native.remove_form_field(name)
 
-    def set_need_appearances_writer(self, state: bool = True) -> None:
+    def _set_need_appearances_writer(self, state: bool = True) -> None:
         """Set the form's NeedAppearances flag, which asks a viewer to build
         the field appearances itself."""
         with _native_errors():
             self._native.set_need_appearances(bool(state))
 
-    def flatten_annotations(self) -> None:
+    def _flatten_annotations(self) -> None:
         """Draw every visible annotation, form fields included, into its
         page and remove the annotations. Values stay visible; the document
         is no longer interactive."""
@@ -1574,7 +1575,7 @@ class _PdfEditing(_PdfDocument):
 
     # ---- annotations ----
 
-    def add_annotation(self, page_number: int, annotation: dict[str, Any]) -> None:
+    def _add_annotation(self, page_number: int, annotation: dict[str, Any]) -> None:
         """Add an annotation to a page, given as a dictionary keyed by PDF
         name, for example
         `{"/Subtype": "/Text", "/Rect": [50, 700, 70, 720], "/Contents": "Note"}`.
@@ -1584,7 +1585,7 @@ class _PdfEditing(_PdfDocument):
                 self._page_index(page_number), _pdf_syntax(dict(annotation))
             )
 
-    def add_uri(
+    def _add_uri(
         self,
         page_number: int,
         uri: str,
@@ -1593,7 +1594,7 @@ class _PdfEditing(_PdfDocument):
     ) -> None:
         """Add a link over `rect` (left, bottom, right, top) that opens a
         URL. Without `border` the link has no visible frame."""
-        self.add_annotation(
+        self._add_annotation(
             page_number,
             {
                 "/Subtype": "/Link",
@@ -1603,7 +1604,7 @@ class _PdfEditing(_PdfDocument):
             },
         )
 
-    def add_link(
+    def _add_link(
         self, page_number: int, rect: Sequence[float], target_page_number: int
     ) -> None:
         """Add a link over `rect` that jumps to another page of this
@@ -1615,7 +1616,7 @@ class _PdfEditing(_PdfDocument):
                 self._page_index(target_page_number),
             )
 
-    def remove_annotations(self, subtypes: Iterable[str] | str | None = None) -> int:
+    def _remove_annotations(self, subtypes: Iterable[str] | str | None = None) -> int:
         """Remove annotations from every page: those of the given subtypes
         ("/Link", "/Highlight", ...), or with None all of them except form
         fields. Naming "/Widget" removes form fields too. Returns the number
@@ -1630,13 +1631,13 @@ class _PdfEditing(_PdfDocument):
                 removed += self._native.remove_annotations(index, selected)
         return removed
 
-    def remove_links(self) -> int:
+    def _remove_links(self) -> int:
         """Remove every link annotation. Returns the number removed."""
-        return self.remove_annotations("/Link")
+        return self._remove_annotations("/Link")
 
     # ---- attachments and scripts ----
 
-    def add_attachment(
+    def _add_attachment(
         self,
         filename: str,
         data: str | bytes,
@@ -1652,12 +1653,12 @@ class _PdfEditing(_PdfDocument):
                 filename, content, description or "", mime_type or ""
             )
 
-    def remove_attachment(self, name: str) -> bool:
+    def _remove_attachment(self, name: str) -> bool:
         """Remove an embedded file. Returns False if there was none."""
         with _native_errors():
             return self._native.remove_attachment(name)
 
-    def add_js(self, javascript: str, name: str | None = None) -> None:
+    def _add_js(self, javascript: str, name: str | None = None) -> None:
         """Add a document-level script, which a viewer runs when it opens
         the document. docling-parse stores the script and never runs it."""
         if name is None:
@@ -1665,7 +1666,7 @@ class _PdfEditing(_PdfDocument):
         with _native_errors():
             self._native.add_javascript(name, javascript)
 
-    def remove_javascript(self) -> int:
+    def _remove_javascript(self) -> int:
         """Remove the document-level scripts and scripted document actions.
         Returns the number of entries removed."""
         with _native_errors():
@@ -1673,11 +1674,12 @@ class _PdfEditing(_PdfDocument):
 
     # ---- output ----
 
-    def encrypt(
+    def _encrypt(
         self,
         user_password: str,
         owner_password: str | None = None,
         *,
+        algorithm: str = "AES-256",
         allow_print: bool | str = True,
         allow_modify: bool = True,
         allow_extract: bool = True,
@@ -1720,9 +1722,10 @@ class _PdfEditing(_PdfDocument):
                 fill_forms=allow_fill_forms,
                 accessibility=allow_accessibility,
                 assemble=allow_assemble,
+                algorithm=algorithm,
             )
 
-    def set_output_options(
+    def _set_output_options(
         self,
         *,
         compress_streams: bool = True,
@@ -1740,17 +1743,17 @@ class _PdfEditing(_PdfDocument):
         with _native_errors():
             self._native.set_output_options(compress_streams, object_streams, linearize)
 
-    def remove_encryption(self) -> None:
+    def _remove_encryption(self) -> None:
         """Undo `encrypt`: write unencrypted output again."""
         with _native_errors():
             self._native.clear_encryption()
 
-    def to_bytes(self) -> bytes:
+    def _to_bytes(self) -> bytes:
         """The document serialized as a complete PDF file."""
         with _native_errors():
             return self._native.write_to_bytes()
 
-    def write(self, target: str | os.PathLike[str] | BinaryIO) -> None:
+    def _write(self, target: str | os.PathLike[str] | BinaryIO) -> None:
         """Write the document to a path or a binary stream.
 
         A path is written through a temporary sibling file that replaces the
@@ -1761,7 +1764,7 @@ class _PdfEditing(_PdfDocument):
             with _native_errors():
                 self._native.write_to_file(os.fspath(target))
         elif hasattr(target, "write"):
-            target.write(self.to_bytes())
+            target.write(self._to_bytes())
         else:
             raise TypeError(
                 f"cannot write a PDF to {type(target).__name__}: "

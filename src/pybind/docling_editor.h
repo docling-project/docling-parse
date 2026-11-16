@@ -4,10 +4,12 @@
 #define PYBIND_PDF_EDITOR_H
 
 #include <array>
+#include <cmath>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <map>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -16,6 +18,7 @@
 #include <sstream>
 #include <string>
 #include <tuple>
+#include <utility>
 #include <vector>
 
 #include <qpdf/QPDFExc.hh>
@@ -26,6 +29,7 @@
 #include <pybind/docling_parser.h>
 
 #include <edit.h>
+#include <render/blend2d_renderer.h>
 
 namespace docling
 {
@@ -97,12 +101,18 @@ namespace docling
     std::int64_t generation();
 
     pdflib::pdf_document_info document_info();
+    void validate_strict();
     pdflib::pdf_page_info page_info(int page, std::int64_t expected_generation);
 
     // The page's line cells in the order the parser emits them, joined by
     // "\n"; or, with layout, placed on a character grid that keeps the page's
     // columns, indentation and vertical spacing (pdf_text_layout).
     std::string extract_text(int page, std::int64_t expected_generation, bool layout);
+
+    // One-based page number, unlike the internal page indices used by the
+    // pypdf-compatible surfaces. Returns owned RGBA pixels and {height, width, 4}.
+    std::pair<std::shared_ptr<std::vector<std::uint8_t>>, std::array<int, 3>>
+    render_page(int page_no, double scale);
 
     // A bounded JSON view of one object, for inspection: `id` is its object
     // number, 0 the trailer, -1 the catalog.
@@ -138,7 +148,7 @@ namespace docling
 
     // ---- editing ----
 
-    void remove_page(int page, std::int64_t expected_generation);
+    void remove_page(int page, std::int64_t expected_generation, bool clean = false);
     void move_page(int from, int to, std::int64_t expected_generation);
 
     void rotate_page(int page, std::int64_t expected_generation, int angle, bool relative);
@@ -274,7 +284,8 @@ namespace docling
     // password defaults to the user password.
     void set_encryption(std::string user_password,
                         std::string owner_password,
-                        pdflib::pdf_permissions permissions);
+                        pdflib::pdf_permissions permissions,
+                        std::string algorithm = "AES-256");
     void clear_encryption();
 
     // How the file is written. compress_streams: Flate-compress streams that
@@ -394,6 +405,7 @@ namespace docling
     // Output encryption, off by default. The snapshot is the output, so it is
     // encrypted too and read back with the user password.
     bool output_encrypted;
+    std::string output_algorithm = "AES-256";
     std::string output_user_password;
     std::string output_owner_password;
     pdflib::pdf_permissions output_permissions;
@@ -665,7 +677,40 @@ namespace docling
             if(output_permissions.get_print() == 1) { print = qpdf_r3p_low; }
             if(output_permissions.get_print() >= 2) { print = qpdf_r3p_none; }
 
-            writer.setR6EncryptionParameters(output_user_password.c_str(),
+            if(output_algorithm == "RC4-40")
+              {
+                writer.setR2EncryptionParametersInsecure(output_user_password.c_str(),
+                  output_owner_password.c_str(), output_permissions.get_print() != 2,
+                  output_permissions.get_modify(), output_permissions.get_extract(),
+                  output_permissions.get_annotate());
+              }
+            else if(output_algorithm == "RC4-128")
+              {
+                writer.setR3EncryptionParametersInsecure(output_user_password.c_str(),
+                  output_owner_password.c_str(), output_permissions.get_accessibility(),
+                  output_permissions.get_extract(), output_permissions.get_assemble(),
+                  output_permissions.get_annotate(), output_permissions.get_fill_forms(),
+                  output_permissions.get_modify(), print);
+              }
+            else if(output_algorithm == "AES-128")
+              {
+                writer.setR4EncryptionParametersInsecure(output_user_password.c_str(),
+                  output_owner_password.c_str(), output_permissions.get_accessibility(),
+                  output_permissions.get_extract(), output_permissions.get_assemble(),
+                  output_permissions.get_annotate(), output_permissions.get_fill_forms(),
+                  output_permissions.get_modify(), print, true, true);
+              }
+            else if(output_algorithm == "AES-256-R5")
+              {
+                writer.setR5EncryptionParameters(output_user_password.c_str(),
+                  output_owner_password.c_str(), output_permissions.get_accessibility(),
+                  output_permissions.get_extract(), output_permissions.get_assemble(),
+                  output_permissions.get_annotate(), output_permissions.get_fill_forms(),
+                  output_permissions.get_modify(), print, true);
+              }
+            else
+              {
+                writer.setR6EncryptionParameters(output_user_password.c_str(),
                                              output_owner_password.c_str(),
                                              output_permissions.get_accessibility(),
                                              output_permissions.get_extract(),
@@ -675,6 +720,7 @@ namespace docling
                                              output_permissions.get_modify(),
                                              print,
                                              true); // encrypt_metadata_aes
+              }
           }
         else
           {
@@ -896,6 +942,16 @@ namespace docling
     });
   }
 
+  inline void docling_editor::validate_strict()
+  {
+    read_document([](QPDF& qpdf) {
+      if(qpdf.anyWarnings())
+        {
+          throw pdflib::pdf_edit_error(pdflib::load_error::DAMAGED, "strict mode rejects a PDF that required repairs or produced structural warnings");
+        }
+    });
+  }
+
   inline pdflib::pdf_page_info docling_editor::page_info(int page, std::int64_t expected_generation)
   {
     std::lock_guard<std::recursive_mutex> lock(parser_mutex);
@@ -994,6 +1050,43 @@ namespace docling
         }
 
       return text;
+    });
+  }
+
+  inline std::pair<std::shared_ptr<std::vector<std::uint8_t>>, std::array<int, 3>>
+  docling_editor::render_page(int page_no, double scale)
+  {
+    std::lock_guard<std::recursive_mutex> lock(parser_mutex);
+
+    return guarded([this, page_no, scale]() {
+      if(page_no < 1 or page_no > page_count())
+        {
+          throw pdflib::pdf_edit_error(pdflib::edit_error::INVALID_EDIT,
+                                       "page_no must be between 1 and the number of pages");
+        }
+      if(not std::isfinite(scale) or scale <= 0.0 or scale > std::numeric_limits<float>::max())
+        {
+          throw pdflib::pdf_edit_error(pdflib::edit_error::INVALID_EDIT,
+                                       "scale must be finite and positive");
+        }
+
+      pdflib::render_config render_config;
+      render_config.scale = static_cast<float>(scale);
+      pdflib::validate_render_config(render_config);
+
+      pdflib::decode_config decode_config;
+      decode_config.extract_font_programs = true;
+      decode_config.extract_bitmap_pixels = true;
+      decode_config.keep_shapes = true;
+      decode_config.keep_bitmaps = true;
+      decode_config.create_word_cells = false;
+      decode_config.create_line_cells = false;
+      decode_config.bitmap_target_pixels_per_unit = render_config.scale;
+
+      auto page_decoder = decode_page(page_no - 1, decode_config);
+      pdflib::renderer<pdflib::BLEND2D> renderer(render_config);
+      page_decoder->get_instructions().iterate_over_instructions(renderer);
+      return std::make_pair(renderer.get_canvas(), renderer.get_shape());
     });
   }
 
@@ -1280,11 +1373,11 @@ namespace docling
     });
   }
 
-  inline void docling_editor::remove_page(int page, std::int64_t expected_generation)
+  inline void docling_editor::remove_page(int page, std::int64_t expected_generation, bool clean)
   {
     std::lock_guard<std::recursive_mutex> lock(parser_mutex);
 
-    guarded([this, page, expected_generation]() {
+    guarded([this, page, expected_generation, clean]() {
       check_generation(expected_generation);
       ensure_destination();
 
@@ -1292,12 +1385,18 @@ namespace docling
       check_page(page, static_cast<int>(pages.size()));
 
       touch(true);
+      pdflib::pdf_navigation_ops::drop_destinations_to(*destination,
+                                                       pages.at(page).getObjectHandle().getObjGen());
       // Bookmarks and an open action leading to the page would otherwise
       // keep it in the file, unreachable and unlisted.
       pdflib::pdf_outline_ops::drop_destinations_to(*destination,
                                                     pages.at(page).getObjectHandle().getObjGen());
 
       QPDFPageDocumentHelper(*destination).removePage(pages.at(page));
+      if(clean)
+        {
+          destination->replaceObject(pages.at(page).getObjectHandle().getObjGen(), QPDFObjectHandle::newNull());
+        }
     });
   }
 
@@ -1532,11 +1631,17 @@ namespace docling
 
   inline void docling_editor::set_encryption(std::string user_password,
                                              std::string owner_password,
-                                             pdflib::pdf_permissions permissions)
+                                             pdflib::pdf_permissions permissions,
+                                             std::string algorithm)
   {
     std::lock_guard<std::recursive_mutex> lock(parser_mutex);
 
-    guarded([this, &user_password, &owner_password, &permissions]() {
+    guarded([this, &user_password, &owner_password, &permissions, &algorithm]() {
+      const std::set<std::string> algorithms = {"RC4-40", "RC4-128", "AES-128", "AES-256-R5", "AES-256"};
+      if(algorithms.count(algorithm) == 0)
+        {
+          throw pdflib::pdf_edit_error(pdflib::edit_error::INVALID_EDIT, "unknown encryption algorithm: " + algorithm);
+        }
       if(permissions.get_print() < 0 or permissions.get_print() > 2)
         {
           throw pdflib::pdf_edit_error(pdflib::edit_error::INVALID_EDIT,
@@ -1552,6 +1657,7 @@ namespace docling
       ensure_destination();
 
       output_encrypted = true;
+      output_algorithm = algorithm;
       output_user_password = user_password;
       output_owner_password = owner_password.empty() ? user_password : owner_password;
       output_permissions = permissions;

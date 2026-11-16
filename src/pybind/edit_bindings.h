@@ -200,6 +200,11 @@ namespace docling
              pybind11::arg("page"),
              pybind11::arg("generation") = class_type::ANY_GENERATION)
 
+        .def("validate_strict", [](class_type& self) {
+          pybind11::gil_scoped_release release;
+          self.validate_strict();
+        })
+
         .def("extract_text",
              [](class_type& self, int page, std::int64_t generation, bool layout) -> std::string {
                pybind11::gil_scoped_release release;
@@ -417,12 +422,13 @@ namespace docling
              "Start an empty document with no pages.")
 
         .def("remove_page",
-             [](class_type& self, int page, std::int64_t generation) -> void {
+             [](class_type& self, int page, std::int64_t generation, bool clean) -> void {
                pybind11::gil_scoped_release release;
-               self.remove_page(page, generation);
+               self.remove_page(page, generation, clean);
              },
              pybind11::arg("page"),
-             pybind11::arg("generation") = class_type::ANY_GENERATION)
+             pybind11::arg("generation") = class_type::ANY_GENERATION,
+             pybind11::arg("clean") = false)
 
         .def("move_page",
              [](class_type& self, int from, int to, std::int64_t generation) -> void {
@@ -844,7 +850,8 @@ namespace docling
                 bool annotate,
                 bool fill_forms,
                 bool accessibility,
-                bool assemble) -> void {
+                bool assemble,
+                const std::string& algorithm) -> void {
                pdflib::pdf_permissions permissions;
                permissions.set_print(print);
                permissions.set_modify(modify);
@@ -855,7 +862,7 @@ namespace docling
                permissions.set_assemble(assemble);
 
                pybind11::gil_scoped_release release;
-               self.set_encryption(user_password, owner_password, permissions);
+               self.set_encryption(user_password, owner_password, permissions, algorithm);
              },
              pybind11::arg("user_password"),
              pybind11::arg("owner_password") = "",
@@ -866,7 +873,8 @@ namespace docling
              pybind11::arg("fill_forms") = true,
              pybind11::arg("accessibility") = true,
              pybind11::arg("assemble") = true,
-             "Encrypt everything written from now on with AES-256.")
+             pybind11::arg("algorithm") = "AES-256",
+             "Encrypt output with the requested PDF password algorithm.")
 
         .def("clear_encryption",
              [](class_type& self) -> void {
@@ -897,6 +905,23 @@ namespace docling
     inline void bind_editor_only(pybind11::class_<docling_editor>& cls)
     {
       cls
+        .def("render_page",
+             [](docling_editor& self, int page_no, double scale) -> pybind11::tuple {
+               std::pair<std::shared_ptr<std::vector<std::uint8_t>>, std::array<int, 3>> result;
+               {
+                 pybind11::gil_scoped_release release;
+                 result = self.render_page(page_no, scale);
+               }
+               const auto& pixels = result.first;
+               pybind11::bytes data = pixels ? pybind11::bytes(
+                 reinterpret_cast<const char*>(pixels->data()), pixels->size()) : pybind11::bytes("");
+               return pybind11::make_tuple(data, result.second);
+             },
+             pybind11::kw_only(),
+             pybind11::arg("page_no"),
+             pybind11::arg("scale") = 1.0,
+             "Render the current page to RGBA bytes and shape; page_no starts at 1.")
+
         .def("is_editing", [](docling_editor& self) -> bool { return self.is_editing(); },
              "True once the editor works on its own copy of the document.")
 

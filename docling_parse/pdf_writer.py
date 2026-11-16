@@ -18,6 +18,7 @@ writer.write("changed.pdf")
 from __future__ import annotations
 
 from docling_parse import pdf_parsers as _native  # type: ignore[attr-defined]
+from docling_parse._pdf_compat import _PdfWriterCompat
 from docling_parse._pdf_document import (
     STANDARD_FONTS,
     PdfBox,
@@ -26,7 +27,6 @@ from docling_parse._pdf_document import (
     PdfPages,
     PdfSource,
     _PdfDocument,
-    _PdfEditing,
 )
 
 __all__ = [
@@ -39,7 +39,7 @@ __all__ = [
 ]
 
 
-class PdfWriter(_PdfEditing):
+class PdfWriter(_PdfWriterCompat):
     """A PDF document being written.
 
     `PdfWriter()` starts empty; pages are added with `append` and
@@ -57,13 +57,24 @@ class PdfWriter(_PdfEditing):
 
     def __init__(
         self,
+        fileobj: PdfSource | _PdfDocument | None = "",
         clone_from: PdfSource | _PdfDocument | None = None,
-        password: str | None = None,
+        incremental: bool = False,
+        full: bool = False,
+        strict: bool = False,
         *,
-        loglevel: str = "fatal",
+        keep_initial_header: bool = False,
+        incremental_clone_object_count_limit: int | None = 500000,
+        incremental_clone_object_id_limit: int | None = 1000000,
     ):
-        super().__init__(loglevel)
-        if clone_from is None:
-            self._native.create_empty()
-        else:
-            self._open(clone_from, password)
+        super().__init__()
+        self._editor._compat_init_writer(
+            fileobj=fileobj,
+            clone_from=clone_from,
+            incremental=incremental,
+            full=full,
+            strict=strict,
+            keep_initial_header=keep_initial_header,
+            incremental_clone_object_count_limit=incremental_clone_object_count_limit,
+            incremental_clone_object_id_limit=incremental_clone_object_id_limit,
+        )

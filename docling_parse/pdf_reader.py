@@ -13,6 +13,7 @@ with PdfReader("document.pdf") as reader:
 from __future__ import annotations
 
 from docling_parse import pdf_parsers as _native  # type: ignore[attr-defined]
+from docling_parse._pdf_compat import _PdfReaderCompat
 from docling_parse._pdf_document import (
     PdfBox,
     PdfImage,
@@ -25,7 +26,7 @@ from docling_parse._pdf_document import (
 __all__ = ["PdfBox", "PdfImage", "PdfPage", "PdfPages", "PdfReader"]
 
 
-class PdfReader(_PdfDocument):
+class PdfReader(_PdfReaderCompat):
     """A read-only PDF document.
 
     `source` is a path, bytes, a binary stream (read, never closed), or
@@ -39,10 +40,16 @@ class PdfReader(_PdfDocument):
 
     def __init__(
         self,
-        source: PdfSource | _PdfDocument,
-        password: str | None = None,
+        stream: PdfSource | _PdfDocument,
+        strict: bool = False,
+        password: str | bytes | None = None,
         *,
-        loglevel: str = "fatal",
+        root_object_recovery_limit: int | None = 10000,
     ):
-        super().__init__(loglevel)
-        self._open(source, password)
+        super().__init__()
+        self._editor._compat_open(
+            stream=stream,
+            strict=strict,
+            password=password,
+            root_object_recovery_limit=root_object_recovery_limit,
+        )

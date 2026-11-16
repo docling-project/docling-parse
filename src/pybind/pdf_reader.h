@@ -29,6 +29,7 @@ namespace docling
     using docling_editor::page_count;
     using docling_editor::generation;
     using docling_editor::document_info;
+    using docling_editor::validate_strict;
     using docling_editor::page_info;
     using docling_editor::extract_text;
     using docling_editor::page_images;
