@@ -1,4 +1,5 @@
 //-*-C++-*-
+// SPDX-License-Identifier: MIT
 
 #ifndef PDF_PAGE_FONT_GLYPHS_H
 #define PDF_PAGE_FONT_GLYPHS_H
@@ -163,7 +164,7 @@ namespace pdflib
   {
     LOG_S(INFO) << __FUNCTION__ << ": " << filename;
 
-    std::ifstream file(filename.c_str());
+    std::ifstream file(utils::filesystem::from_utf8(filename));
 
     if(file.fail())
       {
@@ -258,7 +259,7 @@ namespace pdflib
   {
     LOG_S(WARNING) << __FUNCTION__ << ": " << filename;
 
-    std::ifstream file(filename.c_str());
+    std::ifstream file(utils::filesystem::from_utf8(filename));
 
     if(file.fail())
       {

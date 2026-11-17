@@ -1,4 +1,5 @@
 //-*-C++-*-
+// SPDX-License-Identifier: MIT
 
 #ifndef PDF_PAGE_FONT_ENCODING_H
 #define PDF_PAGE_FONT_ENCODING_H
@@ -63,7 +64,7 @@ namespace pdflib
 
     name = name_;
 
-    std::ifstream file(file_name.c_str());
+    std::ifstream file(utils::filesystem::from_utf8(file_name));
     
     std::string line;
     while (std::getline(file, line))
