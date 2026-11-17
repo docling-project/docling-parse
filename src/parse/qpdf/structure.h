@@ -1,5 +1,8 @@
 //-*-C++-*-
 
+// SPDX-FileCopyrightText: The Docling Contributors
+// SPDX-License-Identifier: MIT
+
 #ifndef QPDF_STRUCTURE_H
 #define QPDF_STRUCTURE_H
 
@@ -59,6 +62,10 @@ namespace pdflib
 
     nlohmann::json get_attributes(QPDFObjectHandle attrs);
 
+    nlohmann::json get_class_attributes(QPDFObjectHandle classes);
+
+    static void merge_attributes(nlohmann::json& target, const nlohmann::json& source);
+
     nlohmann::json get_bbox(nlohmann::json& attributes, int page_no);
 
     const page_frame& get_page_frame(int page_no);
@@ -76,6 +83,9 @@ namespace pdflib
     std::map<QPDFObjGen, int> page_numbers;  // page object -> 1-based page number
     std::map<int, page_frame> page_frames;
 
+    QPDFObjectHandle class_map;
+    std::map<std::string, nlohmann::json> class_attributes;
+
     std::set<QPDFObjGen> visited;
     int order;
   };
@@ -87,6 +97,9 @@ namespace pdflib
 
     page_numbers({}),
     page_frames({}),
+
+    class_map(QPDFObjectHandle::newNull()),
+    class_attributes({}),
 
     visited({}),
     order(0)
@@ -111,6 +124,7 @@ namespace pdflib
       }
 
     QPDFObjectHandle tree = root.getKey("/StructTreeRoot");
+    class_map = tree.getKey("/ClassMap");
     for(std::size_t ind=0; ind<qpdf_pages.size(); ind++)
       {
         page_numbers.emplace(qpdf_pages.at(ind).getObjGen(), static_cast<int>(ind)+1);
@@ -241,9 +255,11 @@ namespace pdflib
         if(page_no>=1) { result["page_no"] = page_no; }
       }
 
-    if(elem.hasKey("/A"))
+    if(elem.hasKey("/C") or elem.hasKey("/A"))
       {
-        nlohmann::json attributes = get_attributes(elem.getKey("/A"));
+        nlohmann::json attributes = get_class_attributes(elem.getKey("/C"));
+        // Direct attributes take precedence over class attributes (14.7.6.2).
+        merge_attributes(attributes, get_attributes(elem.getKey("/A")));
 
         nlohmann::json bbox = get_bbox(attributes, page_no);
         if(not bbox.is_null()) { result["bbox"] = std::move(bbox); }
@@ -414,10 +430,67 @@ namespace pdflib
             // Depth alone cannot bound repeated expansion of a wide DAG.
             values[pdflib::name_to_utf8(key)] = pdflib::to_json(dict.getKey(key), 1, 5, 4096);
           }
-        result[owner] = std::move(values);
+        // Later objects override individual attributes, not the entire
+        // owner's dictionary (14.7.6.1).
+        merge_attributes(result, nlohmann::json::object({{owner, std::move(values)}}));
       }
 
     return result;
+  }
+
+  nlohmann::json pdf_structure::get_class_attributes(QPDFObjectHandle classes)
+  {
+    nlohmann::json result = nlohmann::json::object({});
+    if(not class_map.isDictionary()) { return result; }
+
+    auto append_class = [&](QPDFObjectHandle name) {
+      if(not name.isName()) { return; } // includes interleaved revision numbers
+      // Look up the authored name bytes before transcoding attribute keys.
+      const std::string key = name.getName();
+      if(not class_map.hasKey(key)) { return; } // an unknown class is empty
+
+      auto itr = class_attributes.find(key);
+      if(itr==class_attributes.end())
+        {
+          // A class can be shared by thousands of elements. Decode it only on
+          // its first use, and do not expand unused ClassMap entries.
+          itr = class_attributes.emplace(key, get_attributes(class_map.getKey(key))).first;
+        }
+      merge_attributes(result, itr->second);
+    };
+
+    if(classes.isArray())
+      {
+        for(int i=0; i<classes.getArrayNItems(); i++) { append_class(classes.getArrayItem(i)); }
+      }
+    else
+      {
+        append_class(classes);
+      }
+    return result;
+  }
+
+  void pdf_structure::merge_attributes(nlohmann::json& target, const nlohmann::json& source)
+  {
+    for(auto itr=source.begin(); itr!=source.end(); ++itr)
+      {
+        if(not target.contains(itr.key()) or
+           (itr.key()=="/NSO" and
+            target[itr.key()].value("/NS", nlohmann::json(nullptr)) !=
+            itr.value().value("/NS", nlohmann::json(nullptr))))
+          {
+            // The owner-keyed public view cannot represent multiple /NSO
+            // namespaces. Keep its last-owner behavior for distinct namespaces
+            // instead of combining attributes that belong to different ones.
+            target[itr.key()] = itr.value();
+          }
+        else
+          {
+            // Merge only at the attribute-key level. Dictionary-valued
+            // attributes are replaced as a whole, just like arrays/scalars.
+            target[itr.key()].update(itr.value());
+          }
+      }
   }
 
   // The Layout /BBox (14.8.5.4.3) of an element on a known page, as a bottom-left
