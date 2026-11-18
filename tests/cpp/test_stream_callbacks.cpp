@@ -105,7 +105,6 @@ void compare_deliveries(QPDF& pdf, const std::string& content, bool has_inline_i
               "normalized token/order differs");
     }
   require(immediate.get_objects_delivered()==observed.values.size(), "wrong progress count");
-  require(immediate.get_source_bytes_observed()==content.size(), "wrong source-byte count");
   require((observed.inline_images>0)==has_inline_image, "inline image token was lost");
 }
 

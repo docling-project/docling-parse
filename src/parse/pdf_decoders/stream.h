@@ -6,68 +6,6 @@
 namespace pdflib
 {
 
-  // Diagnostics for this decoder's own source stream, not its nested Forms.
-  // Operand high-water tracking is enabled only in the optional native probes.
-  struct content_stream_statistics
-  {
-    bool callback_delivery = false;
-    std::size_t source_objects = 0;
-    std::size_t source_bytes_observed = 0;
-    std::size_t buffered_tokens = 0;
-    std::size_t buffered_token_capacity = 0;
-    std::size_t max_pending_operands = 0;
-    // Probe-only aggregation over Do calls in this stream and its Form children.
-    // Materialized tokens count both legacy vectors across all invocations;
-    // this is cumulative work, not a simultaneous-live-memory measurement.
-    std::size_t form_executions = 0;
-    std::size_t form_source_objects = 0;
-    std::size_t form_materialized_tokens = 0;
-    std::size_t form_max_pending_operands = 0;
-    std::size_t form_max_depth = 0;
-    // Procedural Type3 fallbacks only; cached glyph masks do not enter here.
-    std::size_t type3_executions = 0;
-    std::size_t type3_source_objects = 0;
-    std::size_t type3_materialized_tokens = 0;
-    std::size_t type3_max_pending_operands = 0;
-    std::size_t type3_max_depth = 0;
-    std::size_t type3_recursion_skips = 0;
-#ifdef DOCLING_PARSE_CONTENT_DIAGNOSTICS
-    static constexpr bool operand_diagnostics_enabled = true;
-#else
-    static constexpr bool operand_diagnostics_enabled = false;
-#endif
-  };
-
-  // Probe-only counters follow the shared mask cache, so a reused group is
-  // counted once even when multiple ordinary Form decoders refer to it.
-  struct soft_mask_stream_statistics
-  {
-    std::size_t executions = 0;
-    std::size_t cache_hits = 0;
-    std::size_t source_objects = 0;
-    std::size_t source_bytes_observed = 0;
-    std::size_t materialized_tokens = 0;
-    std::size_t max_buffered_token_capacity = 0;
-    std::size_t max_pending_operands = 0;
-    std::size_t shape_instructions = 0;
-  };
-
-  struct pattern_stream_statistics
-  {
-    std::size_t source_parses = 0;
-    std::size_t source_cache_hits = 0;
-    std::size_t cached_tokens = 0;
-    std::size_t cached_token_capacity = 0;
-    std::size_t decoded_cells = 0;
-    std::size_t decoded_cache_hits = 0;
-    std::size_t decoded_shape_instructions = 0;
-    std::size_t lattice_executions = 0;
-    std::size_t replay_source_objects = 0;
-    std::size_t replay_materialized_tokens = 0;
-    std::size_t max_replay_token_capacity = 0;
-    std::size_t max_pending_operands = 0;
-  };
-
   template<>
   class pdf_decoder<STREAM>
   {
@@ -99,18 +37,6 @@ namespace pdflib
     // Interpret ordinary page content as normalized QPDF objects arrive.
     void decode_and_interprete(QPDFObjectHandle& content,
                                std::vector<qpdf_stream_instruction>& parameters);
-
-    const content_stream_statistics& get_content_statistics() const { return content_stats; }
-    const soft_mask_stream_statistics& get_soft_mask_statistics() const { return soft_mask_cache_->statistics; }
-    const pattern_stream_statistics& get_pattern_statistics() const
-    {
-#ifdef DOCLING_PARSE_CONTENT_DIAGNOSTICS
-      return *pattern_stats;
-#else
-      static const pattern_stream_statistics empty;
-      return empty;
-#endif
-    }
 
     // Establishes the matrix this stream is interpreted under, so that a
     // stream living in its own space -- an annotation appearance -- emits
@@ -178,9 +104,6 @@ namespace pdflib
     // The resource owns the immutable cache for this synchronous replay.
     void interprete_cached(const std::vector<qpdf_stream_instruction>& cached,
                            std::vector<qpdf_stream_instruction>& parameters);
-#ifdef DOCLING_PARSE_CONTENT_DIAGNOSTICS
-    void note_pattern_replay(const pdf_decoder<STREAM>& child, bool lattice);
-#endif
 
     // Stream lifecycle is separate from delivery. Callers establish/rebase the
     // graphics stack before beginning; pending operands stay with the caller.
@@ -359,12 +282,6 @@ namespace pdflib
 
     std::unordered_set<std::string> unknown_operators;
 
-    content_stream_statistics content_stats;
-#ifdef DOCLING_PARSE_CONTENT_DIAGNOSTICS
-    // Shared only by native probes; no allocation/counter work in production.
-    std::shared_ptr<pattern_stream_statistics> pattern_stats =
-      std::make_shared<pattern_stream_statistics>();
-#endif
     std::vector<pdf_state<GLOBAL> > stack;
 
     int stack_count;
@@ -392,7 +309,6 @@ namespace pdflib
     // by the two masks, so every paint under the same pair shares one.
     struct soft_mask_page_cache
     {
-      soft_mask_stream_statistics statistics;
       std::unordered_map<std::string, soft_mask_cache_entry> decoded;
       std::map<std::pair<const soft_mask_instruction*, const soft_mask_instruction*>,
                std::shared_ptr<soft_mask_instruction>> intersected;
@@ -481,8 +397,6 @@ namespace pdflib
     QPDFObjectHandle& content,
     std::vector<qpdf_stream_instruction>& parameters)
   {
-    content_stats = {};
-    content_stats.callback_delivery = true;
     ensure_stack();
     begin_interpretation();
 
@@ -502,8 +416,6 @@ namespace pdflib
     // A consumer failure propagates through decode(), not damaged-PDF recovery.
     qpdf_stream_decoder decoder(consumer, &context);
     decoder.decode(content);
-    content_stats.source_objects = decoder.get_objects_delivered();
-    content_stats.source_bytes_observed = decoder.get_source_bytes_observed();
 
     // QPDF may report EOF for each fallback component. Finalize exactly once
     // here, after the entire logical page/Form stream has been consumed.
@@ -584,8 +496,6 @@ namespace pdflib
     const std::vector<qpdf_stream_instruction>& cached,
     std::vector<qpdf_stream_instruction>& parameters)
   {
-    content_stats = {};
-    content_stats.source_objects = cached.size();
     ensure_stack();
     begin_interpretation();
     for(const auto& cached_instruction : cached)
@@ -601,24 +511,6 @@ namespace pdflib
         LOG_S(ERROR) << "Finishing a pattern replay with nonzero number of parameters!";
       }
   }
-
-#ifdef DOCLING_PARSE_CONTENT_DIAGNOSTICS
-  void pdf_decoder<STREAM>::note_pattern_replay(const pdf_decoder<STREAM>& child,
-                                                bool lattice)
-  {
-    const auto& child_stats = child.get_content_statistics();
-    if(lattice) { ++pattern_stats->lattice_executions; }
-    else        { ++pattern_stats->decoded_cells; }
-    pattern_stats->replay_source_objects += child_stats.source_objects;
-    // Count complete replay vectors, not the intentional resource cache or
-    // the single working instruction/pending operands of borrowed delivery.
-    pattern_stats->replay_materialized_tokens += 2 * child_stats.buffered_tokens;
-    pattern_stats->max_replay_token_capacity = std::max(
-      pattern_stats->max_replay_token_capacity, child_stats.buffered_token_capacity);
-    pattern_stats->max_pending_operands = std::max(
-      pattern_stats->max_pending_operands, child_stats.max_pending_operands);
-  }
-#endif
 
   void pdf_decoder<STREAM>::begin_interpretation()
   {
@@ -686,10 +578,6 @@ namespace pdflib
       {
         parameters.push_back(inst);
       }
-#ifdef DOCLING_PARSE_CONTENT_DIAGNOSTICS
-    content_stats.max_pending_operands = std::max(content_stats.max_pending_operands,
-                                                parameters.size());
-#endif
   }
 
   void pdf_decoder<STREAM>::finish_interpretation()
@@ -1623,19 +1511,7 @@ namespace pdflib
         return false;
       }
 
-#ifdef DOCLING_PARSE_CONTENT_DIAGNOSTICS
-    const bool source_cached = pattern.has_parsed_stream();
-#endif
     const std::vector<qpdf_stream_instruction>& cell = pattern.parse_stream();
-#ifdef DOCLING_PARSE_CONTENT_DIAGNOSTICS
-    if(source_cached) { ++pattern_stats->source_cache_hits; }
-    else
-      {
-        ++pattern_stats->source_parses;
-        pattern_stats->cached_tokens += cell.size();
-        pattern_stats->cached_token_capacity += cell.capacity();
-      }
-#endif
     if(cell.empty())
       {
         return false;
@@ -1874,18 +1750,12 @@ namespace pdflib
 
             cell_stream.soft_mask_cache_ = soft_mask_cache_;
             cell_stream.soft_mask_depth_ = soft_mask_depth_;
-#ifdef DOCLING_PARSE_CONTENT_DIAGNOSTICS
-            cell_stream.pattern_stats = pattern_stats;
-#endif
 
             bool updated_stack = cell_stream.update_stack(stack, stack_count);
             cell_stream.current_graphic_state().materialize_pattern_fill_color();
 
             std::vector<qpdf_stream_instruction> parameters;
             cell_stream.interprete_cached(cell, parameters);
-#ifdef DOCLING_PARSE_CONTENT_DIAGNOSTICS
-            note_pattern_replay(cell_stream, true);
-#endif
 
             if(updated_stack) { cell_stream.Q(); }
 
@@ -1998,9 +1868,6 @@ namespace pdflib
                                         page_xobjects_,
                                         *decoded,
                                         timings);
-#ifdef DOCLING_PARSE_CONTENT_DIAGNOSTICS
-        cell_stream.pattern_stats = pattern_stats;
-#endif
 
         // A fresh state, not a copy of the fill's: the identity CTM keeps the
         // cell in pattern space, and no clip or path is inherited.
@@ -2016,10 +1883,6 @@ namespace pdflib
             {
               std::vector<qpdf_stream_instruction> parameters;
               cell_stream.interprete_cached(cell, parameters);
-#ifdef DOCLING_PARSE_CONTENT_DIAGNOSTICS
-              note_pattern_replay(cell_stream, false);
-              pattern_stats->decoded_shape_instructions += decoded->get_shape_instructions().size();
-#endif
             }
           catch(const std::bad_alloc&)
             {
@@ -2036,9 +1899,6 @@ namespace pdflib
         pattern.set_decoded_cell(color_key, decoded,
                                  std::make_shared<page_item<PAGE_IMAGES> >(cell_images));
       }
-#ifdef DOCLING_PARSE_CONTENT_DIAGNOSTICS
-    else { ++pattern_stats->decoded_cache_hits; }
-#endif
 
     if(decoded->empty())
       {
@@ -2257,9 +2117,6 @@ namespace pdflib
 
         new_stream.soft_mask_cache_ = soft_mask_cache_;
         new_stream.soft_mask_depth_ = soft_mask_depth_;
-#ifdef DOCLING_PARSE_CONTENT_DIAGNOSTICS
-        new_stream.pattern_stats = pattern_stats;
-#endif
 
         bool updated_stack = new_stream.update_stack(stack, stack_count);
         // Form content inherits the caller's effective linkage. Local BDC
@@ -2287,27 +2144,6 @@ namespace pdflib
               LOG_S(ERROR) << "Finishing a `Do` with nonzero number of parameters!";
             }
         }
-
-#ifdef DOCLING_PARSE_CONTENT_DIAGNOSTICS
-        const auto& child_stats = new_stream.get_content_statistics();
-        content_stats.form_executions += 1 + child_stats.form_executions;
-        content_stats.form_source_objects += child_stats.source_objects + child_stats.form_source_objects;
-        content_stats.form_materialized_tokens += child_stats.buffered_tokens + child_stats.form_materialized_tokens;
-        content_stats.form_max_pending_operands = std::max(
-          content_stats.form_max_pending_operands,
-          std::max(child_stats.max_pending_operands, child_stats.form_max_pending_operands));
-        content_stats.form_max_depth = std::max(content_stats.form_max_depth,
-                                              1 + child_stats.form_max_depth);
-        // A CharProc may call a Form which shows another Type3 glyph.
-        content_stats.type3_executions += child_stats.type3_executions;
-        content_stats.type3_source_objects += child_stats.type3_source_objects;
-        content_stats.type3_materialized_tokens += child_stats.type3_materialized_tokens;
-        content_stats.type3_max_pending_operands = std::max(
-          content_stats.type3_max_pending_operands, child_stats.type3_max_pending_operands);
-        content_stats.type3_max_depth = std::max(content_stats.type3_max_depth,
-                                               child_stats.type3_max_depth);
-        content_stats.type3_recursion_skips += child_stats.type3_recursion_skips;
-#endif
 
         if(updated_stack)
           {
@@ -2364,9 +2200,6 @@ namespace pdflib
     static thread_local int depth = 0;
     if(depth >= max_depth)
       {
-#ifdef DOCLING_PARSE_CONTENT_DIAGNOSTICS
-        ++content_stats.type3_recursion_skips;
-#endif
         LOG_S(WARNING) << "Type3 glyph procedures nest deeper than " << max_depth
                        << " levels, the glyph is not painted";
         return;
@@ -2446,9 +2279,6 @@ namespace pdflib
                                        instructions,
 
                                        timings);
-#ifdef DOCLING_PARSE_CONTENT_DIAGNOSTICS
-        new_stream.pattern_stats = pattern_stats;
-#endif
 
         bool updated_stack = new_stream.update_stack(stack, stack_count);
 
@@ -2460,19 +2290,6 @@ namespace pdflib
           // QPDF callback executes. The handle/context live until decode ends.
           new_stream.decode_and_interprete(charproc, parameters);
         }
-
-#ifdef DOCLING_PARSE_CONTENT_DIAGNOSTICS
-        const auto& child_stats = new_stream.get_content_statistics();
-        content_stats.type3_executions += 1 + child_stats.type3_executions;
-        content_stats.type3_source_objects += child_stats.source_objects + child_stats.type3_source_objects;
-        content_stats.type3_materialized_tokens += child_stats.buffered_tokens + child_stats.type3_materialized_tokens;
-        content_stats.type3_max_pending_operands = std::max(
-          content_stats.type3_max_pending_operands,
-          std::max(child_stats.max_pending_operands, child_stats.type3_max_pending_operands));
-        content_stats.type3_max_depth = std::max(content_stats.type3_max_depth,
-                                               1 + child_stats.type3_max_depth);
-        content_stats.type3_recursion_skips += child_stats.type3_recursion_skips;
-#endif
 
         if(updated_stack)
           {
@@ -2517,9 +2334,6 @@ namespace pdflib
     auto found = decoded.find(cache_key);
     if(found != decoded.end())
       {
-#ifdef DOCLING_PARSE_CONTENT_DIAGNOSTICS
-        ++soft_mask_cache_->statistics.cache_hits;
-#endif
         mask = found->second.mask;
       }
     else if(decoded.size() >= max_soft_mask_decodes)
@@ -2637,9 +2451,6 @@ namespace pdflib
                                          timings);
         mask_decoder.soft_mask_cache_ = soft_mask_cache_;
         mask_decoder.soft_mask_depth_ = soft_mask_depth_ + 1;
-#ifdef DOCLING_PARSE_CONTENT_DIAGNOSTICS
-        mask_decoder.pattern_stats = pattern_stats;
-#endif
 
         QPDFObjectHandle group = spec.group;
         // The first callback must see the composed mask-space/gs matrix.
@@ -2647,20 +2458,6 @@ namespace pdflib
 
         std::vector<qpdf_stream_instruction> parameters;
         mask_decoder.decode_and_interprete(group, parameters);
-
-#ifdef DOCLING_PARSE_CONTENT_DIAGNOSTICS
-        const auto& child_stats = mask_decoder.get_content_statistics();
-        auto& stats = soft_mask_cache_->statistics;
-        ++stats.executions;
-        stats.source_objects += child_stats.source_objects;
-        stats.source_bytes_observed += child_stats.source_bytes_observed;
-        stats.materialized_tokens += child_stats.buffered_tokens;
-        stats.max_buffered_token_capacity = std::max(stats.max_buffered_token_capacity,
-                                                     child_stats.buffered_token_capacity);
-        stats.max_pending_operands = std::max(stats.max_pending_operands,
-                                              child_stats.max_pending_operands);
-        stats.shape_instructions += mask->get_group().get_shape_instructions().size();
-#endif
 
         for(const auto& item : mask_decoder.get_unknown_operators())
           {

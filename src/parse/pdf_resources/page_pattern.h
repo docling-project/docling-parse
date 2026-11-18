@@ -85,7 +85,7 @@ namespace pdflib
     // Parsed once and cached: a hatch pattern is painted once per filled
     // region, and a CAD sheet has thousands of them.
     const std::vector<qpdf_stream_instruction>& parse_stream() const;
-#ifdef DOCLING_PARSE_CONTENT_DIAGNOSTICS
+#ifdef DOCLING_PARSE_STATE_LIFETIME_TESTING
     bool has_parsed_stream() const { return stream_parsed_; }
 #endif
 
