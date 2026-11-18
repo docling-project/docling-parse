@@ -62,9 +62,9 @@ published run; it never combines missing sections with measurements from an olde
 ## Reading the results
 
 Throughput is pages divided by corpus wall time. Amortized milliseconds/page are
-`1000 * wall / pages`, not individual-page latency. Speedup uses the one-thread
-baseline from the same workload/backend/task; efficiency is `100 * speedup / threads`.
-Missing baselines produce unavailable ratios. Repeated runs report median wall
+`1000 * wall / pages`, not individual-page latency. For each workload and task,
+the lowest measured Docling thread count is the speedup baseline. Efficiency is
+`100 * speedup * baseline_threads / threads`. Repeated runs report median wall
 time and observed min–max ranges; these ranges are not confidence intervals.
 A single observation provides no empirical variability estimate.
 

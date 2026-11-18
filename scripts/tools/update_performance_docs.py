@@ -280,7 +280,7 @@ def plan(
                 f"queue capacity: {meta['max_concurrent_results']}.",
                 "",
                 "Values are medians with observed min-max ranges. One repetition provides no variability estimate. "
-                "Speedup and efficiency use the same workload/task one-thread baseline.",
+                "Speedup and efficiency use the lowest measured Docling thread count for each workload and task.",
                 "",
             ]
         )

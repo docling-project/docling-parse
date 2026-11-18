@@ -1705,17 +1705,13 @@ def _run_label(run: BackendRun) -> str:
 
 
 def _speedup_baselines(runs: List[BackendRun]) -> List[BackendRun]:
-    """Reference runs every row is divided by: the single-threaded ones.
-
-    That is docling-parse at threads=1 plus each third-party backend, which is
-    what makes "how many threads until we overtake pypdfium2" readable straight
-    off the table.
-    """
-    baselines = [
-        run
-        for run in runs
-        if run.backend in THREADED_COMPARISON_BACKENDS and run.threads == 1
-    ]
+    """Use the lowest measured Docling thread count and each third-party run."""
+    threaded_baseline = min(
+        (run for run in runs if run.backend in THREADED_COMPARISON_BACKENDS),
+        key=lambda run: run.threads,
+        default=None,
+    )
+    baselines = [threaded_baseline] if threaded_baseline is not None else []
     baselines.extend(
         run for run in runs if run.backend not in THREADED_COMPARISON_BACKENDS
     )
@@ -1749,7 +1745,7 @@ def _speedup_rows(runs: List[BackendRun]) -> Tuple[List[str], List[List[object]]
 
 
 def print_speedup_table(runs: List[BackendRun]) -> None:
-    """Wall-time speedup of every run against each single-threaded reference."""
+    """Wall-time speedup against the Docling baseline and third-party runs."""
     for task in (TASK_PARSE, TASK_RENDER):
         task_runs = [run for run in runs if run.task == task]
         if not task_runs:
@@ -2060,23 +2056,21 @@ def _print_table(
     `threaded_results` is a list of (num_threads, wall_time) for the docling
     threaded scaling sweep.
 
-    Columns: backend, threads, wall_time, vs threaded(1), efficiency, one
+    Columns: backend, threads, wall_time, speedup vs the threaded baseline, efficiency, one
     `vs <baseline>` column per baseline (sequential docling and each selected
     `--other`), then pages/sec and ms/page.  All `vs X` values are
     `X_time / row_time`, so higher means the row is faster than X.
 
-    `efficiency` is `vs threaded(1) / threads`: the fraction of a perfect
-    linear speedup this thread count achieves.  It is only meaningful for the
-    threaded rows, so the single-threaded reference backends leave it blank,
-    and it is left blank entirely when the sweep does not include a 1-thread
-    run to measure against.
+    The lowest measured thread count is the baseline for the threaded sweep.
+    Efficiency divides speedup by the ratio of thread counts.
     """
-    threaded_1 = threaded_results[0][1] if threaded_results else float("nan")
-    # without a threads=1 row there is no baseline, and `vs threaded(1)` is
-    # measured against whatever the lowest thread count happened to be
-    has_baseline = bool(threaded_results) and threaded_results[0][0] == 1
-
-    headers = ["backend", "threads", "wall_time (s)", "vs threaded(1)", "efficiency"]
+    baseline_threads, baseline_wall = min(
+        threaded_results, key=lambda result: result[0], default=(0, float("nan"))
+    )
+    baseline_label = (
+        f"vs threaded({baseline_threads})" if baseline_threads else "speedup"
+    )
+    headers = ["backend", "threads", "wall_time (s)", baseline_label, "efficiency"]
     for label, _ in baselines:
         headers.append(f"vs {label}")
     headers.extend(["pages/sec", "ms/page"])
@@ -2091,15 +2085,12 @@ def _print_table(
                 + ["n/a", "n/a"]
             )
         cells: List[str] = [name, str(threads), f"{t:.3f}"]
-        vs_t1 = threaded_1 / t if t > 0 and not _isnan(threaded_1) else float("nan")
-        cells.append(_fmt_speedup(vs_t1))
+        speedup = baseline_wall / t if t > 0 else float("nan")
+        cells.append(_fmt_speedup(speedup))
         # parallel efficiency, only defined for the threaded sweep
         cells.append(
-            f"{100.0 * vs_t1 / threads:.0f}%"
-            if has_baseline
-            and isinstance(threads, int)
-            and threads > 0
-            and not _isnan(vs_t1)
+            f"{100.0 * speedup * baseline_threads / threads:.0f}%"
+            if isinstance(threads, int) and threads > 0 and not _isnan(speedup)
             else ""
         )
         for _, bt in baselines:

@@ -762,6 +762,12 @@ def summarize(measurements: list[Measurement]) -> list[dict[str, Any]]:
         key: statistics.median(m.wall_s for m in values)
         for key, values in groups.items()
     }
+    baseline_counts: dict[tuple[str, str], int] = {}
+    for workload, backend, task, threads in sorted(medians):
+        docling_backend = "threaded" if workload == "replay" else "docling-parse"
+        if backend == docling_backend:
+            baseline_counts.setdefault((workload, task), threads)
+
     result = []
     for key, values in sorted(groups.items()):
         require(
@@ -771,7 +777,12 @@ def summarize(measurements: list[Measurement]) -> list[dict[str, Any]]:
         workload, backend, task, threads = key
         wall = medians[key]
         docling_backend = "threaded" if workload == "replay" else "docling-parse"
-        baseline = medians.get((workload, docling_backend, task, 1))
+        baseline_threads = baseline_counts.get((workload, task))
+        baseline = (
+            medians[(workload, docling_backend, task, baseline_threads)]
+            if baseline_threads is not None
+            else None
+        )
         speedup = baseline / wall if baseline is not None else None
         pdfium_backend = "pdfium" if workload == "replay" else "pypdfium2"
         pdfium_baseline = medians.get((workload, pdfium_backend, task, 1))
@@ -790,18 +801,31 @@ def summarize(measurements: list[Measurement]) -> list[dict[str, Any]]:
                 "max_wall_s": max(m.wall_s for m in values),
                 "pages_per_s": values[0].pages / wall,
                 "amortized_ms_per_page": 1000 * wall / values[0].pages,
-                "speedup_vs_docling_1t": speedup,
+                "speedup_vs_docling_1t": speedup if baseline_threads == 1 else None,
+                "docling_baseline_threads": baseline_threads,
+                "speedup_vs_docling_baseline": speedup,
                 "speedup_vs_pypdfium2": pdfium_baseline / wall
                 if pdfium_baseline is not None
                 else None,
-                "efficiency_pct": 100 * speedup / threads
-                if speedup is not None and backend in ("docling-parse", "threaded")
+                "efficiency_pct": 100 * speedup * baseline_threads / threads
+                if speedup is not None
+                and baseline_threads is not None
+                and backend == docling_backend
                 else None,
                 "errors": 0,
                 "timing_basis": values[0].timing_basis,
             }
         )
     return result
+
+
+def format_docling_speedup(row: dict[str, Any]) -> str:
+    speedup = row["speedup_vs_docling_baseline"]
+    return (
+        f"{speedup:.2f}x ({row['docling_baseline_threads']}t)"
+        if speedup is not None
+        else "—"
+    )
 
 
 def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
@@ -933,11 +957,11 @@ def python_experiment_explanation(summary: list[dict[str, Any]]) -> list[str]:
         ),
         key=lambda row: row["threads"],
     )
-    if len(parse) > 1 and parse[0]["threads"] == 1:
+    if len(parse) > 1:
         first, last = parse[0], parse[-1]
         lines += [
             f"In this run, cross-package Docling parse-only throughput is {first['pages_per_s']:.1f} "
-            f"pages/s at one thread and {last['pages_per_s']:.1f} pages/s at {last['threads']} threads. "
+            f"pages/s at {first['threads']}t and {last['pages_per_s']:.1f} pages/s at {last['threads']}t. "
             "These observations help assess scaling for the character-output workload.",
             "",
         ]
@@ -948,7 +972,7 @@ def python_experiment_explanation(summary: list[dict[str, Any]]) -> list[str]:
         "comes from either. Document scheduling, memory policy and process/cache state also differ: "
         "the launcher uses a fresh process per replay profile/thread count, while each cross-package "
         "mode runs its references and Docling thread sweep in one process. Use each experiment's "
-        "own one-thread baseline when interpreting speedup and parallel efficiency.",
+        "own lowest measured thread count when interpreting speedup and parallel efficiency.",
         "",
     ]
 
@@ -1018,8 +1042,9 @@ def write_report(
         "Values are medians across repetitions, with observed minimum-maximum ranges. "
         "One repetition is a single observation, not a variability estimate. "
         "Speedup vs pypdfium2 uses its one-worker median wall time divided by the row's wall time. "
-        "Speedup vs docling-parse uses its one-thread median divided by the row's wall time. "
-        "References never cross workloads or tasks; efficiency uses the docling-parse baseline.",
+        "Speedup vs docling-parse uses its median at the lowest measured thread count "
+        "for that workload and task. Efficiency divides the speedup by the ratio "
+        "of the row's thread count to that baseline.",
         "",
     ]
     if core_only:
@@ -1102,17 +1127,13 @@ def write_report(
             "",
             "| Backend | Version | Task | Threads | Runs | Wall median (s) | Min-max (s) | Pages/s | "
             + ("Speedup vs pypdfium2 (1t) | " if workload != "native" else "")
-            + "Speedup vs docling-parse (1t) | Efficiency |",
+            + "Speedup vs docling-parse baseline | Efficiency |",
             "|---|---|---|---:|---:|---:|---:|---:|"
             + ("---:|" if workload != "native" else "")
             + "---:|---:|",
         ]
         for row in rows:
-            speedup = (
-                f"{row['speedup_vs_docling_1t']:.2f}x"
-                if row["speedup_vs_docling_1t"] is not None
-                else "—"
-            )
+            speedup = format_docling_speedup(row)
             pdfium_speedup = (
                 f"{row['speedup_vs_pypdfium2']:.2f}x"
                 if row["speedup_vs_pypdfium2"] is not None
@@ -1291,7 +1312,7 @@ def figure_sections(
         "## Figures",
         "",
         "These plots separate native rendering from Python output construction. "
-        "Each profile has its own one-thread baseline; speedup and efficiency never mix profiles.",
+        "Each profile uses its lowest measured Docling thread count as the baseline.",
         "",
         "Run the commands from the repository root with the source revision, native build and "
         "Python packages recorded above. Each reproduction block below collects timing for its "
@@ -1380,14 +1401,13 @@ def figure_sections(
                     "Wall time and throughput",
                     "The left panel shows corpus wall time; the right shows pages per second. "
                     "Points are medians, and wall-time bars show the observed minimum and maximum across repetitions. "
-                    "Dashed throughput lines show ideal scaling: measured one-thread throughput "
-                    "multiplied by the thread count. They are shown for backends measured at one "
-                    "thread and additional thread counts.",
+                    "Dashed throughput lines show ideal scaling from each backend's lowest "
+                    "measured thread count when additional counts are available.",
                 ),
                 "scaling": (
                     "Speedup and parallel efficiency",
-                    "Speedup divides this profile's one-thread median by its median at each thread count. "
-                    "Efficiency divides that speedup by the thread count. Dashed lines show ideal scaling.",
+                    "Speedup divides this profile's baseline median by its median at each thread count. "
+                    "Efficiency divides speedup by the ratio of thread counts. Dashed lines show ideal scaling.",
                 ),
                 "phases": (
                     "Where the time goes",
@@ -1476,13 +1496,10 @@ def plot(
                     "o-",
                     label=BACKEND_LABELS.get(backend, backend),
                 )
-                one_thread = next(
-                    (r["pages_per_s"] for r in group if r["threads"] == 1), None
-                )
-                if one_thread is not None and len(set(x)) >= 2:
+                if len(x) >= 2:
                     axes[1].plot(
-                        [0, max(x)],
-                        [0, one_thread * max(x)],
+                        [0, x[-1]],
+                        [0, throughput[0] * x[-1] / x[0]],
                         linestyle="--",
                         color=measured.get_color(),
                         label=f"{BACKEND_LABELS.get(backend, backend)} ideal",
@@ -1511,7 +1528,7 @@ def plot(
                 x = [r["threads"] for r in group]
                 axes[0].plot(
                     x,
-                    [r["speedup_vs_docling_1t"] for r in group],
+                    [r["speedup_vs_docling_baseline"] for r in group],
                     "o-",
                     label=BACKEND_LABELS.get(backend, backend),
                 )
@@ -1522,11 +1539,19 @@ def plot(
                     label=BACKEND_LABELS.get(backend, backend),
                 )
             ticks = sorted({r["threads"] for r in scalable})
-            axes[0].plot(ticks, ticks, "--", color="gray", label="Ideal")
+            speedup_label = "Speedup relative to baseline"
+            if scalable:
+                baseline_threads = scalable[0]["docling_baseline_threads"]
+                axes[0].plot(
+                    ticks,
+                    [t / baseline_threads for t in ticks],
+                    "--",
+                    color="gray",
+                    label="Ideal",
+                )
+                speedup_label = f"Speedup relative to {baseline_threads}t"
             axes[1].axhline(100, linestyle="--", color="gray")
-            for ax, ylabel in zip(
-                axes, ("Speedup relative to 1 thread", "Parallel efficiency (%)")
-            ):
+            for ax, ylabel in zip(axes, (speedup_label, "Parallel efficiency (%)")):
                 ax.set(xlabel="Threads", ylabel=ylabel, xticks=ticks)
                 ax.grid(alpha=0.25)
                 ax.legend()
@@ -1635,9 +1660,7 @@ def publication_sections(
                         f"{r['median_wall_s']:.3f}",
                         f"{r['min_wall_s']:.3f}-{r['max_wall_s']:.3f}",
                         f"{r['pages_per_s']:.1f}",
-                        "—"
-                        if r["speedup_vs_docling_1t"] is None
-                        else f"{r['speedup_vs_docling_1t']:.2f}x",
+                        format_docling_speedup(r),
                         "—"
                         if r["efficiency_pct"] is None
                         else f"{r['efficiency_pct']:.1f}%",
@@ -1653,7 +1676,7 @@ def publication_sections(
                     "Wall median (s)",
                     "Min-max (s)",
                     "Pages/s",
-                    "Speedup vs Docling 1t",
+                    "Speedup vs Docling baseline",
                     "Efficiency",
                 ],
                 tablefmt="github",

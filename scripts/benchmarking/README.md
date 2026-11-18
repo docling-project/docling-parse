@@ -99,8 +99,8 @@ Choose the corpus with `DATASET=bo20`, `DATASET=bo767` (default), or
 | `bo10k` | `f85e203f95879e2f5d77059a6bfeffe667cd359e` | 10,000 | 213,538 |
 
 ```sh
-# Smaller corpus and thread sweep; builds incrementally by default.
-DATASET=bo20 THREADS=1,4 \
+# Smaller corpus and a 12-thread-only run; builds incrementally by default.
+DATASET=bo20 THREADS=12 \
   bash scripts/benchmarking/refresh_performance_benchmarks.sh
 
 DATASET=bo10k \
@@ -176,9 +176,10 @@ Outputs include:
 
 Timing tables use compact task labels, with full descriptions listed once below
 each table. Peak-RSS and throughput axes start at `(0, 0)`. Throughput plots
-retain measured points and add dashed ideal-scaling guides: measured one-thread
-throughput multiplied by thread count. Guides run from the origin to the largest
-measured thread count for backends measured at one thread and additional counts.
+retain measured points and add dashed ideal-scaling guides. For each backend
+with multiple counts, the guide starts at the origin and passes through its
+lowest measured thread count and throughput. That count is the baseline for
+Docling's speedup and parallel efficiency, where it has 100% efficiency.
 
 Missing observations are reported as unavailable. Older replay results already
 contain a process peak; reports expose it as `existing`, even with collection

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Build as needed, measure a pinned corpus, and generate a report without editing docs.
+[ -n "${BASH_VERSION:-}" ] || exec bash "$0" "$@"
 set -Eeuo pipefail
 
 if [[ ${1:-} == --help ]]; then
@@ -8,7 +9,7 @@ Usage: bash scripts/benchmarking/refresh_performance_benchmarks.sh [--memory-mod
 
 Environment:
   REPEATS=1                  Fresh-process repetitions (use 3 for publication)
-  THREADS=1,4,8,12            Unique positive thread counts; must include 1
+  THREADS=1,4,8,12            Unique positive thread counts; lowest count anchors scaling
   RUN_COMPARISON=0            Set to 1 to also measure the five reference packages
   BENCHMARK_OUTPUT=compact    compact: progress/results; full: include configs/timings
   BUILD_MODE=incremental      Reuse build/externals; clean archives and rebuilds them
@@ -109,10 +110,6 @@ if [[ $RUN_COMPARISON != 0 && $RUN_COMPARISON != 1 ]]; then
   echo "RUN_COMPARISON must be 0 or 1." >&2
   exit 2
 fi
-case ",$THREADS," in
-  *,1,*) ;;
-  *) echo "THREADS must include 1 for a measured scaling baseline." >&2; exit 2 ;;
-esac
 IFS=, read -r -a thread_counts <<< "$THREADS"
 seen_threads=,
 for count in "${thread_counts[@]}"; do
