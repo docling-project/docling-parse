@@ -236,12 +236,11 @@ if(DOCLING_PARSE_BUILD_STRUCTURE_TESTS)
     target_link_libraries(structure_concurrency PRIVATE ${DEPENDENCIES} ${LIB_LINK})
 endif()
 
-option(DOCLING_PARSE_BUILD_MEMORY_PROBE "Build the native line-memory probe" OFF)
+option(DOCLING_PARSE_BUILD_MEMORY_PROBE "Build the native line-memory probe and regression tests" OFF)
 if(DOCLING_PARSE_BUILD_MEMORY_PROBE)
     add_executable(test_memory_on_lines tests/cpp/test_memory_on_lines.cpp)
     add_dependencies(test_memory_on_lines ${DEPENDENCIES})
     target_link_libraries(test_memory_on_lines PRIVATE ${DEPENDENCIES} ${LIB_LINK})
-    target_compile_definitions(test_memory_on_lines PRIVATE DOCLING_PARSE_CONTENT_DIAGNOSTICS=1)
 
     add_executable(stream_callback_regression tests/cpp/test_stream_callbacks.cpp)
     add_dependencies(stream_callback_regression ${DEPENDENCIES})
@@ -253,8 +252,7 @@ if(DOCLING_PARSE_BUILD_MEMORY_PROBE)
     add_executable(stream_state_lifetime_regression tests/cpp/test_stream_state_lifetimes.cpp)
     add_dependencies(stream_state_lifetime_regression ${DEPENDENCIES})
     target_link_libraries(stream_state_lifetime_regression PRIVATE ${DEPENDENCIES} ${LIB_LINK})
-    target_compile_definitions(stream_state_lifetime_regression PRIVATE
-        DOCLING_PARSE_CONTENT_DIAGNOSTICS=1 DOCLING_PARSE_STATE_LIFETIME_TESTING=1)
+    target_compile_definitions(stream_state_lifetime_regression PRIVATE DOCLING_PARSE_STATE_LIFETIME_TESTING=1)
     add_test(NAME stream_state_lifetime_regression COMMAND stream_state_lifetime_regression)
     set_tests_properties(stream_state_lifetime_regression PROPERTIES TIMEOUT 30)
 
