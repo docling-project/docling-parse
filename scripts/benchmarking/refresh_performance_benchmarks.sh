@@ -5,7 +5,10 @@ set -Eeuo pipefail
 
 if [[ ${1:-} == --help ]]; then
   cat <<'HELP'
-Usage: bash scripts/benchmarking/refresh_performance_benchmarks.sh [--memory-mode off|peak|profile] [--memory-interval-ms 50]
+Usage: bash scripts/benchmarking/refresh_performance_benchmarks.sh [--memory-mode off|peak|profile] [--memory-interval-ms 50] [--native-render-only]
+
+  --native-render-only       Measure native rendering without word/line cells.
+                             Save raw timings and skip replays, comparisons and the publication report.
 
 Environment:
   REPEATS=1                  Fresh-process repetitions (use 3 for publication)
@@ -45,8 +48,12 @@ memory_mode_explicit=${MEMORY_MODE+x}
 memory_interval_explicit=${MEMORY_INTERVAL_MS+x}
 MEMORY_MODE=${MEMORY_MODE:-off}
 MEMORY_INTERVAL_MS=${MEMORY_INTERVAL_MS:-50}
+native_render_only=0
 while [[ $# != 0 ]]; do
   case "$1" in
+    --native-render-only)
+      native_render_only=1
+      shift ;;
     --memory-mode|--memory-interval-ms)
       if [[ $# -lt 2 ]]; then echo "Missing value for $1" >&2; exit 2; fi
       if [[ $1 == --memory-mode ]]; then
@@ -66,6 +73,10 @@ fi
 REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 cd "$REPO_ROOT"
 if [[ -n ${RECOVER_FROM:-} ]]; then
+  if [[ $native_render_only == 1 ]]; then
+    echo "--native-render-only cannot be combined with RECOVER_FROM." >&2
+    exit 2
+  fi
   if [[ ${BUILD_MODE:-incremental} != incremental ]]; then
     echo "Recovery reuses recorded native binaries; BUILD_MODE must be incremental." >&2
     exit 2
@@ -109,6 +120,9 @@ done
 if [[ $RUN_COMPARISON != 0 && $RUN_COMPARISON != 1 ]]; then
   echo "RUN_COMPARISON must be 0 or 1." >&2
   exit 2
+fi
+if [[ $native_render_only == 1 ]]; then
+  RUN_COMPARISON=0
 fi
 IFS=, read -r -a thread_counts <<< "$THREADS"
 seen_threads=,
@@ -279,7 +293,7 @@ run_logged "$OUT/tests.log" "Setup 4/5: validate damaged-page handling" \
 # counts and hashes before timing; download/hash/page-count work is excluded.
 printf '\nSetup 5/5: resolve %s, verify PDF hashes and count pages\n' "$DATASET_REPOSITORY"
 uv run --no-sync python - "$OUT" "$DATASET_REVISION" "$REPEATS" "$THREADS" "$RUN_COMPARISON" \
-  "$DATASET_REPOSITORY" "$dataset_default_revision" <<'PY'
+  "$DATASET_REPOSITORY" "$dataset_default_revision" "$native_render_only" <<'PY'
 import hashlib
 import importlib.metadata
 import importlib.util
@@ -363,6 +377,9 @@ metadata = {
     "memory_collection": {"mode": os.environ.get("MEMORY_MODE", "off"),
         "interval_ms": int(os.environ.get("MEMORY_INTERVAL_MS", "50")) if os.environ.get("MEMORY_MODE") == "profile" else None},
 }
+if sys.argv[8] == "1":
+    metadata["native_render_only"] = True
+    del metadata["native_profiles"]["render-with-text"]
 metadata["comparison_memory"] = dict(metadata["memory_collection"])
 for command, key in [(["sysctl", "-n", "machdep.cpu.brand_string"], "cpu"),
                      (["sysctl", "-n", "hw.memsize"], "memory_bytes")]:
@@ -398,7 +415,13 @@ if [[ $BENCHMARK_OUTPUT == compact ]]; then
 fi
 
 experiment=0
-total_experiments=$((REPEATS * (3 * ${#thread_counts[@]} + 1 + 2 * RUN_COMPARISON)))
+native_profiles=(render-only)
+if [[ $native_render_only == 1 ]]; then
+  total_experiments=$((REPEATS * ${#thread_counts[@]}))
+else
+  native_profiles+=(render-with-text)
+  total_experiments=$((REPEATS * (3 * ${#thread_counts[@]} + 1 + 2 * RUN_COMPARISON)))
+fi
 run_experiment() {
   local log=$1
   local description=$2
@@ -423,9 +446,7 @@ run_experiment() {
 }
 
 for (( repetition=1; repetition<=REPEATS; repetition++ )); do
-  replay_dir="$OUT/replay/r$repetition"
-  mkdir -p "$replay_dir"
-  for profile in render-only render-with-text; do
+  for profile in "${native_profiles[@]}"; do
     native_dir="$OUT/native/$profile/r$repetition"
     mkdir -p "$native_dir"
     create_text=false
@@ -443,6 +464,11 @@ for (( repetition=1; repetition<=REPEATS; repetition++ )); do
         --enable-timing --timing-csv "$native_dir/t$count.csv"
     done
   done
+  if [[ $native_render_only == 1 ]]; then
+    continue
+  fi
+  replay_dir="$OUT/replay/r$repetition"
+  mkdir -p "$replay_dir"
   run_experiment "$replay_dir/pdfium.log" \
     "Repetition $repetition/$REPEATS: Python backend replay, PDFium, 1 worker" \
     "${replay_runner[@]}" \
@@ -475,6 +501,11 @@ for (( repetition=1; repetition<=REPEATS; repetition++ )); do
     done
   fi
 done
+
+if [[ $native_render_only == 1 ]]; then
+  printf '\nComplete. Native render logs and timings: %s/native/render-only/\n' "$OUT"
+  exit 0
+fi
 
 run_logged "$OUT/report.log" "Reporting: validate all measurements and generate tables and figures" \
   uv run --no-sync python \

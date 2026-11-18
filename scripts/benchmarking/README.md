@@ -79,6 +79,17 @@ reference packages, Matplotlib, PDFium and R-tree support. Selected comparison
 backends that cannot import are skipped by the old measurement runner; the new
 bundle report rejects the resulting incomplete suite.
 
+## Native rendering quick check
+
+```sh
+BUILD_MODE=clean THREADS=12 sh ./scripts/benchmarking/refresh_performance_benchmarks.sh --native-render-only
+```
+
+The quick check runs native C++ rendering without word or line cell creation.
+It uses the default pinned `bo767` corpus and saves metadata, logs, and timing
+CSVs under `OUT`. The flag takes precedence over `RUN_COMPARISON` and skips
+both Python replays and full-suite reporting.
+
 ## Publication bundle and plots
 
 ```sh

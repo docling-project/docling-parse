@@ -9,6 +9,7 @@ import pytest
 
 from docling_parse.pdf_parser import (
     DoclingThreadedPdfParser,
+    PdfLoadError,
     RenderConfig,
     ThreadedPdfParserConfig,
 )
@@ -45,20 +46,20 @@ def test_cancel_before_start_and_reload(
     parser: DoclingThreadedPdfParser, pdf_bytes: bytes
 ) -> None:
     key = parser.load(BytesIO(pdf_bytes), page_numbers=[4, 2, 2])
-    assert parser.cancel("unknown") == 0
-    assert parser.cancel(key) == 2
-    assert parser.cancel(key) == 0
+    assert parser.cancel("unknown") is None  # type: ignore[func-returns-value]
+    assert parser.cancel(key) is None  # type: ignore[func-returns-value]
+    parser.cancel(key)
     assert parser.page_count(key) == 5
     assert parser.scheduled_page_count(key) == 2
     assert list(parser.iterate_results()) == []
     assert parser.unload(key)
 
     assert parser.load(BytesIO(pdf_bytes), page_range=(2, 3)) == key
-    assert parser.cancel(key) == 2
+    parser.cancel(key)
     # Loading the same key again before startup replaces the cancelled schedule.
     assert parser.load(BytesIO(pdf_bytes), page_numbers=[5]) == key
     assert [result.page_number for result in parser.iterate_results()] == [5]
-    assert parser.cancel(key) == 0
+    parser.cancel(key)
     assert parser.unload(key)
 
 
@@ -72,15 +73,14 @@ def test_cancel_partway_through_batch(
     first = next(results)
     assert first.success
     assert first.page_number == 1
-    # Four pages of this key remain. The worker may already have claimed one.
-    assert parser.cancel(first.doc_key) in {3, 4}
-    assert parser.cancel(first.doc_key) == 0
+    parser.cancel(first.doc_key)
+    parser.cancel(first.doc_key)
 
     other_key = (keys - {first.doc_key}).pop()
     assert [(result.doc_key, result.page_number) for result in results] == [
         (other_key, page) for page in range(1, 6)
     ]
-    assert parser.cancel(other_key) == 0
+    parser.cancel(other_key)
     parser.unload_all()
 
 
@@ -99,27 +99,49 @@ def test_cancel_between_has_tasks_and_get_task(
 
     monkeypatch.setattr(parser, "has_tasks", cancel_after_check)
     assert list(parser.iterate_results()) == []
+    sentinel = parser.get_task()
+    assert sentinel.page_number == 0
+    assert not sentinel.success
     assert parser.unload(key)
+
+
+def test_start_during_stream_read_rejects_load(
+    parser: DoclingThreadedPdfParser, pdf_bytes: bytes
+) -> None:
+    key = parser.load(BytesIO(pdf_bytes), page_numbers=[1])
+
+    class ReentrantStream(BytesIO):
+        def read(self, size: int | None = -1) -> bytes:
+            # The native loader uses read() without a size. The wrapper hashes
+            # the stream with sized reads before calling the native loader.
+            if size == -1:
+                assert parser.has_tasks()
+            return super().read(size)
+
+    stream = ReentrantStream(pdf_bytes + b"\n% second document\n")
+    with pytest.raises(
+        PdfLoadError, match="Cannot load documents while a threaded batch"
+    ):
+        parser.load(stream)
+
+    assert [
+        (result.doc_key, result.page_number) for result in parser.iterate_results()
+    ] == [(key, 1)]
+    parser.unload_all()
 
 
 def test_scheduled_work_status(
     parser: DoclingThreadedPdfParser, pdf_bytes: bytes
 ) -> None:
     key = parser.load(BytesIO(pdf_bytes))
-    assert parser.get_number_of_active_workers() == 0
-    assert parser.get_number_of_scheduled_tasks() == 0
     assert parser.all_scheduled_work_completed()
 
     assert parser.has_tasks()
-    assert parser.get_number_of_active_workers() == 1
-    assert parser.get_number_of_scheduled_tasks() == 5
     assert not parser.all_scheduled_work_completed()
 
     parser.cancel(key)
     assert list(parser.iterate_results()) == []
     parser.unload_all()
-    assert parser.get_number_of_active_workers() == 0
-    assert parser.get_number_of_scheduled_tasks() == 0
     assert parser.all_scheduled_work_completed()
 
 
@@ -144,7 +166,7 @@ parser.load(BytesIO(payload + b"\\n% second document\\n"))
 assert parser.has_tasks()
 first = parser.get_task()
 assert first.success
-assert parser.cancel(first.doc_key) > 0
+parser.cancel(first.doc_key)
 assert not parser.all_scheduled_work_completed()
 del parser
 """

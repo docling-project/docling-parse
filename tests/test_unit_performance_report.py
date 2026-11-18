@@ -1187,8 +1187,9 @@ def test_launcher_rejects_invalid_settings_before_archiving(
 
 @pytest.mark.parametrize("dataset", ["bo20", "bo767", "bo10k"])
 @pytest.mark.parametrize("default_snapshot", [False, True])
+@pytest.mark.parametrize("native_render_only", [False, True])
 def test_launcher_downloads_selected_repository_and_checks_snapshot_counts(
-    tmp_path: Path, monkeypatch, dataset, default_snapshot
+    tmp_path: Path, monkeypatch, dataset, default_snapshot, native_render_only
 ):
     # Execute the launcher's actual metadata block with tiny synthetic inputs;
     # mock downloads, page counting and build provenance, never a real benchmark.
@@ -1265,6 +1266,7 @@ def test_launcher_downloads_selected_repository_and_checks_snapshot_counts(
             "0",
             repository,
             _DATASET_PINS[dataset],
+            "1" if native_render_only else "0",
         ],
     )
     if default_snapshot:
@@ -1274,6 +1276,13 @@ def test_launcher_downloads_selected_repository_and_checks_snapshot_counts(
     else:
         exec(compile(source, str(launcher), "exec"), {})
         metadata = json.loads((out / "metadata.json").read_text())
+        expected_profiles = (
+            {"render-only"}
+            if native_render_only
+            else {"render-only", "render-with-text"}
+        )
+        assert set(metadata["native_profiles"]) == expected_profiles
+        assert metadata.get("native_render_only", False) == native_render_only
         assert metadata["dataset"]["repository"] == repository
         assert metadata["dataset"]["requested_revision"] == "fixture-branch"
         assert metadata["dataset"]["revision"] == revision
@@ -1357,8 +1366,9 @@ def test_replay_config_suppression_preserves_parser_initialization(suppress, cap
 @pytest.mark.skipif(os.name == "nt", reason="The Bash launcher targets macOS and Linux")
 @pytest.mark.parametrize("output_mode", ["", "full"])
 @pytest.mark.parametrize("build_mode", ["", "clean"])
+@pytest.mark.parametrize("native_render_only", [False, True])
 def test_launcher_routes_output_options_to_all_runners(
-    tmp_path: Path, output_mode, build_mode
+    tmp_path: Path, output_mode, build_mode, native_render_only
 ):
     # Exercise the complete launcher with fake commands. No real build, PDF
     # processing, network access or report generation takes place.
@@ -1404,9 +1414,12 @@ esac
         executable.write_text(body)
         executable.chmod(0o755)
     out = tmp_path / "results"
-    thread_count = "1" if build_mode == "clean" else "12"
+    thread_count = "1" if build_mode == "clean" and not native_render_only else "12"
+    command = ["sh", str(launcher)]
+    if native_render_only:
+        command.append("--native-render-only")
     result = subprocess.run(
-        ["sh", str(launcher)],
+        command,
         env={
             **os.environ,
             "PATH": str(binaries) + os.pathsep + os.environ["PATH"],
@@ -1426,13 +1439,38 @@ esac
         capture_output=True,
     )
     assert result.returncode == 0, result.stderr + result.stdout
-    assert "Complete. Tables:" in result.stdout
     assert "fixture progress: [##] 2/2" in result.stdout
     compact = output_mode != "full"
     native_log = (out / f"native/render-only/r1/t{thread_count}.log").read_text()
     assert f"--threads {thread_count}" in native_log
     assert ("--suppress-timings" in native_log) == compact
     assert ("-v WARNING" in native_log) == compact
+    for directory in ("build", "externals"):
+        if build_mode == "clean":
+            assert (
+                out / f"previous-{directory}/keep-me"
+            ).read_text() == "existing output"
+            assert not (repo / directory / "keep-me").exists()
+        else:
+            assert (repo / directory / "keep-me").read_text() == "existing output"
+            assert not (out / f"previous-{directory}").exists()
+    if native_render_only:
+        assert "Complete. Native render logs and timings:" in result.stdout
+        assert "Experiment 1/1" in result.stdout
+        assert "--create-word-cells=false" in native_log
+        assert "--create-line-cells=false" in native_log
+        assert ("--suppress-config" in native_log) == compact
+        for path in (
+            "native/render-with-text",
+            "replay",
+            "comparison",
+            "reference-preflight.log",
+            "report.log",
+        ):
+            assert not (out / path).exists()
+        return
+
+    assert "Complete. Tables:" in result.stdout
     logs = [
         out / f"native/render-only/r1/t{thread_count}.log",
         out / f"native/render-with-text/r1/t{thread_count}.log",
@@ -1451,15 +1489,6 @@ esac
     assert result.stdout.index("Reference preflight passed") < result.stdout.index(
         "Experiment 1/6"
     )
-    for directory in ("build", "externals"):
-        if build_mode == "clean":
-            assert (
-                out / f"previous-{directory}/keep-me"
-            ).read_text() == "existing output"
-            assert not (repo / directory / "keep-me").exists()
-        else:
-            assert (repo / directory / "keep-me").read_text() == "existing output"
-            assert not (out / f"previous-{directory}").exists()
 
 
 @pytest.mark.skipif(os.name == "nt", reason="The Bash launcher targets macOS and Linux")
