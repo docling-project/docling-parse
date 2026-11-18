@@ -1,4 +1,5 @@
 //-*-C++-*-
+// SPDX-License-Identifier: MIT
 
 #ifndef PDF_PAGE_FONT_RESOURCE_H
 #define PDF_PAGE_FONT_RESOURCE_H
@@ -750,9 +751,11 @@ namespace pdflib
             return glyph_name == "space" or bbox[3] > bbox[1];
           }
 
-        // Builtin subset codes do not identify standard-font characters:
-        // code 32, for example, may draw "m" rather than a space.
-        return not uses_builtin_encoding() and bfont.has_char_bbox(c);
+        // Composite-font codes address CIDs, not AFM character slots. A
+        // subset CID 32 may draw a letter rather than the standard space.
+        // The same applies to simple fonts using their builtin encoding.
+        return subtype != TYPE_0 and not uses_builtin_encoding() and
+               bfont.has_char_bbox(c);
       }
 
     return false;

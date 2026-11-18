@@ -441,6 +441,7 @@ REGRESSION_PAGE_SELECTION: Dict[str, List[int]] = {
     "font_10.pdf": [1],
     "font_11.pdf": [1, 2],
     "form_fields.pdf": [1, 2, 3, 4, 5],
+    "ga-drivers-manual-2023-2024.pdf": [10],  # Missing CID-keyed CFF glyphs (#466).
     "indexed_device_n.pdf": [1],
     "indexed_iccbased.pdf": [1],
     "inflate_jpeg.pdf": [1],
