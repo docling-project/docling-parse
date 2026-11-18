@@ -44,6 +44,7 @@ namespace docling
   //
   // Derived must provide:
   //   void worker_loop();
+  // Its destructor must call shutdown_workers() before destroying worker state.
   // ---------------------------------------------------------------------------
 
   template<typename Derived, typename ResultType>
@@ -97,6 +98,10 @@ namespace docling
     void unload_all_documents();
     int cancel_document(const std::string& key);
 
+    int get_number_of_active_workers() const;
+    int get_number_of_scheduled_tasks() const;
+    bool all_scheduled_work_completed() const;
+
     bool has_tasks();
 
     ResultType get_task();
@@ -117,6 +122,8 @@ namespace docling
                            const std::string& category,
                            const std::string& message);
     void reset_after_completion();
+    void join_workers();
+    void finish_worker();
 
     void build_task_queue();
 
@@ -127,7 +134,7 @@ namespace docling
     void maybe_release_native_memory();
     std::optional<std::pair<std::string, int>> take_task();
     void publish_result(ResultType result);
-    void finish_worker();
+    void shutdown_workers();
 
     pdflib::decode_config config;
     int num_threads;
@@ -145,7 +152,8 @@ namespace docling
     bool started = false;
 
     // Queue changes and condition-variable predicates share this mutex.
-    std::mutex queue_mutex;
+    mutable std::mutex queue_mutex;
+    bool shutdown_requested = false;
     std::deque<std::pair<std::string, int>> task_queue;
     std::deque<ResultType> results_queue;
     std::unordered_set<std::string> cancelled_keys;
@@ -197,6 +205,32 @@ namespace docling
   template<typename Derived, typename ResultType>
   docling_threaded_base<Derived, ResultType>::~docling_threaded_base()
   {
+    shutdown_workers();
+  }
+
+  template<typename Derived, typename ResultType>
+  void docling_threaded_base<Derived, ResultType>::shutdown_workers()
+  {
+    {
+      std::lock_guard<std::mutex> lock(queue_mutex);
+      if(shutdown_requested)
+        {
+          return;
+        }
+      shutdown_requested = true;
+      tasks_remaining -= static_cast<int>(task_queue.size() + results_queue.size());
+      task_queue.clear();
+      results_queue.clear();
+    }
+
+    cv_results_consumed.notify_all();
+    cv_results_available.notify_all();
+    join_workers();
+  }
+
+  template<typename Derived, typename ResultType>
+  void docling_threaded_base<Derived, ResultType>::join_workers()
+  {
     for(auto& worker : workers)
       {
         if(worker.joinable())
@@ -204,6 +238,7 @@ namespace docling
             worker.join();
           }
       }
+    workers.clear();
   }
 
   template<typename Derived, typename ResultType>
@@ -624,14 +659,7 @@ namespace docling
   template<typename Derived, typename ResultType>
   void docling_threaded_base<Derived, ResultType>::reset_after_completion()
   {
-    for(auto& worker : workers)
-      {
-        if(worker.joinable())
-          {
-            worker.join();
-          }
-      }
-    workers.clear();
+    join_workers();
 
     std::lock_guard<std::mutex> lock(queue_mutex);
     task_queue.clear();
@@ -667,7 +695,10 @@ namespace docling
     int num_workers = std::min(num_threads, static_cast<int>(task_queue.size()));
     for(int i = 0; i < num_workers; i++)
       {
-        workers.emplace_back(&Derived::worker_loop, static_cast<Derived*>(this));
+        workers.emplace_back([this]() {
+          static_cast<Derived*>(this)->worker_loop();
+          finish_worker();
+        });
         ++active_workers;
       }
   }
@@ -689,9 +720,34 @@ namespace docling
   }
 
   template<typename Derived, typename ResultType>
+  int docling_threaded_base<Derived, ResultType>::get_number_of_active_workers() const
+  {
+    std::lock_guard<std::mutex> lock(queue_mutex);
+    return active_workers;
+  }
+
+  template<typename Derived, typename ResultType>
+  int docling_threaded_base<Derived, ResultType>::get_number_of_scheduled_tasks() const
+  {
+    std::lock_guard<std::mutex> lock(queue_mutex);
+    return tasks_remaining;
+  }
+
+  template<typename Derived, typename ResultType>
+  bool docling_threaded_base<Derived, ResultType>::all_scheduled_work_completed() const
+  {
+    std::lock_guard<std::mutex> lock(queue_mutex);
+    return active_workers == 0 and tasks_remaining == 0;
+  }
+
+  template<typename Derived, typename ResultType>
   bool docling_threaded_base<Derived, ResultType>::has_tasks()
   {
     std::lock_guard<std::mutex> lock(queue_mutex);
+    if(shutdown_requested)
+      {
+        return false;
+      }
     if(not started)
       {
         build_task_queue();
@@ -722,11 +778,11 @@ namespace docling
   {
     std::unique_lock<std::mutex> lock(queue_mutex);
     cv_results_consumed.wait(lock, [this, &result]() {
-      return cancelled_keys.contains(result.doc_key)
+      return shutdown_requested or cancelled_keys.contains(result.doc_key)
         or static_cast<int>(results_queue.size()) < max_concurrent_results;
     });
 
-    if(cancelled_keys.contains(result.doc_key))
+    if(shutdown_requested or cancelled_keys.contains(result.doc_key))
       {
         --tasks_remaining;
         lock.unlock();
@@ -755,7 +811,8 @@ namespace docling
     std::unique_lock<std::mutex> lock(queue_mutex);
 
     cv_results_available.wait(lock, [this]() {
-      return not results_queue.empty() or tasks_remaining == 0 or active_workers == 0;
+      return shutdown_requested or not results_queue.empty()
+        or tasks_remaining == 0 or active_workers == 0;
     });
 
     if(results_queue.empty())

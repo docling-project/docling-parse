@@ -5,6 +5,7 @@
 #include <functional>
 #include <future>
 #include <iostream>
+#include <memory>
 #include <semaphore>
 
 #include <pybind11/embed.h>
@@ -30,6 +31,11 @@ namespace
 
     explicit gated_parser(int capacity): docling_threaded_base("fatal", 1, capacity, {}) {}
 
+    ~gated_parser()
+    {
+      shutdown_workers();
+    }
+
     void add_schedule(const std::string& key, std::vector<int> pages)
     {
       key2doc.emplace(key, nullptr);
@@ -54,7 +60,6 @@ namespace
           publish_result(std::move(result));
           after_publish(key, page);
         }
-      finish_worker();
     }
 
     std::function<void(const std::string&, int)> before_publish = [](const auto&, int) {};
@@ -65,6 +70,8 @@ namespace
   {
     std::binary_semaphore claimed{0};
     std::binary_semaphore finish{0};
+    std::binary_semaphore discarded{0};
+    std::binary_semaphore retire{0};
     gated_parser parser(2);
     parser.add_schedule("cancelled", {0, 1, 2, 3, 4});
     parser.before_publish = [&](const std::string&, int page) {
@@ -74,9 +81,19 @@ namespace
           finish.acquire();
         }
     };
+    parser.after_publish = [&](const std::string&, int page) {
+      if(page == 2)
+        {
+          discarded.release();
+          retire.acquire();
+        }
+    };
 
+    require(parser.all_scheduled_work_completed(), "the schedule should be lazy");
     require(parser.has_tasks(), "the document should have scheduled work");
     require(claimed.try_acquire_for(5s), "the worker did not claim the third page");
+    require(parser.get_number_of_active_workers() == 1, "expected one active worker");
+    require(parser.get_number_of_scheduled_tasks() == 5, "expected pending, buffered and in-flight work");
     require(parser.cancel_document("cancelled") == 4, "expected two pending pages and two buffered results");
     require(parser.cancel_document("cancelled") == 0, "repeat cancellation removed work");
 
@@ -92,7 +109,12 @@ namespace
     require(consumer.wait_for(5s) == std::future_status::ready, "the consumer did not wake at completion");
     require(consumer.get().page_number == -1, "a cancelled page reached the consumer");
     require(not parser.has_tasks(), "cancelled work is still counted");
+    require(discarded.try_acquire_for(5s), "the worker did not discard the result");
+    require(parser.get_number_of_scheduled_tasks() == 0, "the discarded result is still counted");
+    require(not parser.all_scheduled_work_completed(), "the worker is still retiring");
+    retire.release();
     parser.unload_all_documents();
+    require(parser.all_scheduled_work_completed(), "all workers and tasks should be finished");
   }
 
   void discard_without_waiting_for_result_capacity()
@@ -122,6 +144,36 @@ namespace
     require(not parser.has_tasks(), "the discarded result still counts as outstanding");
     parser.unload_all_documents();
   }
+
+  void destroy_with_full_result_queue()
+  {
+    std::binary_semaphore publishing{0};
+    std::binary_semaphore finish{0};
+    auto parser = std::make_unique<gated_parser>(1);
+    parser->add_schedule("document", {0, 1, 2});
+    parser->before_publish = [&](const std::string&, int page) {
+      require(page < 2, "the worker claimed a page during shutdown");
+      if(page == 1)
+        {
+          publishing.release();
+          finish.acquire();
+        }
+    };
+
+    require(parser->has_tasks(), "the document should have scheduled work");
+    require(publishing.try_acquire_for(5s), "the worker did not reach the full result queue");
+
+    std::binary_semaphore destroying{0};
+    auto destruction = std::async(std::launch::async, [parser = std::move(parser), &destroying]() mutable {
+      destroying.release();
+      parser.reset();
+    });
+    require(destroying.try_acquire_for(5s), "destruction did not start");
+    require(destruction.wait_for(0s) == std::future_status::timeout, "destruction did not wait for the worker");
+    finish.release();
+    require(destruction.wait_for(5s) == std::future_status::ready, "destruction stalled with unread results");
+    destruction.get();
+  }
 }
 
 int main(int argc, char** argv)
@@ -134,4 +186,5 @@ int main(int argc, char** argv)
   pybind11::scoped_interpreter interpreter(&config);
   evict_buffered_results_and_end_iteration();
   discard_without_waiting_for_result_capacity();
+  destroy_with_full_result_queue();
 }

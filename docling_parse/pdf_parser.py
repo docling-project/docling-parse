@@ -2053,6 +2053,21 @@ class DoclingThreadedPdfParser:
         self._annotations.clear()
         self._scheduled_page_counts.clear()
 
+    def get_number_of_active_workers(self) -> int:
+        """Return the number of running workers, including those waiting to publish."""
+        return self._parser.get_number_of_active_workers()
+
+    def get_number_of_scheduled_tasks(self) -> int:
+        """Count queued pages, in-flight pages and unread results in the current batch.
+
+        This returns zero before the first call to `has_tasks()`.
+        """
+        return self._parser.get_number_of_scheduled_tasks()
+
+    def all_scheduled_work_completed(self) -> bool:
+        """Check in one snapshot whether workers and outstanding tasks are both zero."""
+        return self._parser.all_scheduled_work_completed()
+
     def has_tasks(self) -> bool:
         """Check if there are remaining tasks to consume.
 

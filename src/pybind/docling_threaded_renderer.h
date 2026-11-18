@@ -23,6 +23,11 @@ namespace docling
                               pdflib::decode_config decode_config,
                               pdflib::render_config render_config);
 
+    ~docling_threaded_renderer()
+    {
+      shutdown_workers();
+    }
+
     void worker_loop();
 
   private:
@@ -185,8 +190,6 @@ namespace docling
         publish_result(std::move(result));
         maybe_release_native_memory();
       }
-
-    finish_worker();
   }
 
 }

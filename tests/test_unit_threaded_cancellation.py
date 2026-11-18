@@ -1,5 +1,7 @@
 """Document-key cancellation through the threaded Python API."""
 
+import subprocess
+import sys
 from io import BytesIO
 from pathlib import Path
 
@@ -98,3 +100,54 @@ def test_cancel_between_has_tasks_and_get_task(
     monkeypatch.setattr(parser, "has_tasks", cancel_after_check)
     assert list(parser.iterate_results()) == []
     assert parser.unload(key)
+
+
+def test_scheduled_work_status(
+    parser: DoclingThreadedPdfParser, pdf_bytes: bytes
+) -> None:
+    key = parser.load(BytesIO(pdf_bytes))
+    assert parser.get_number_of_active_workers() == 0
+    assert parser.get_number_of_scheduled_tasks() == 0
+    assert parser.all_scheduled_work_completed()
+
+    assert parser.has_tasks()
+    assert parser.get_number_of_active_workers() == 1
+    assert parser.get_number_of_scheduled_tasks() == 5
+    assert not parser.all_scheduled_work_completed()
+
+    parser.cancel(key)
+    assert list(parser.iterate_results()) == []
+    parser.unload_all()
+    assert parser.get_number_of_active_workers() == 0
+    assert parser.get_number_of_scheduled_tasks() == 0
+    assert parser.all_scheduled_work_completed()
+
+
+@pytest.mark.parametrize("mode", ["parse", "render"])
+def test_destroy_after_cancelling_one_document(pdf_bytes: bytes, mode: str) -> None:
+    # Use a child process so a shutdown regression fails with a bounded wait.
+    code = """
+import sys
+from io import BytesIO
+from docling_parse.pdf_parser import (
+    DoclingThreadedPdfParser, RenderConfig, ThreadedPdfParserConfig,
+)
+
+payload = sys.stdin.buffer.read()
+parser = DoclingThreadedPdfParser(ThreadedPdfParserConfig(
+    threads=1,
+    max_concurrent_results=1,
+    render_config=RenderConfig() if sys.argv[1] == "render" else None,
+))
+parser.load(BytesIO(payload))
+parser.load(BytesIO(payload + b"\\n% second document\\n"))
+assert parser.has_tasks()
+first = parser.get_task()
+assert first.success
+assert parser.cancel(first.doc_key) > 0
+assert not parser.all_scheduled_work_completed()
+del parser
+"""
+    subprocess.run(
+        [sys.executable, "-c", code, mode], input=pdf_bytes, check=True, timeout=15
+    )

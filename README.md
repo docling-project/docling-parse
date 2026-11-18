@@ -236,6 +236,11 @@ entries it removed. Pages already claimed by a worker finish in the background,
 and their results are discarded. You can unload the document once the batch
 finishes.
 
+Use `parser.all_scheduled_work_completed()` to check whether the current batch
+has zero outstanding pages and all worker loops have exited. The check leaves
+batch startup to `has_tasks()`. Destroying the parser drops queued work and
+unread results across the batch and waits for any claimed pages to finish.
+
 Use the CLI
 
 ```sh

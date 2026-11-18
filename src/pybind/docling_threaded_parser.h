@@ -24,6 +24,11 @@ namespace docling
                                                                          config)
     {}
 
+    ~docling_threaded_parser()
+    {
+      shutdown_workers();
+    }
+
     void worker_loop();
   };
 
@@ -97,8 +102,6 @@ namespace docling
         publish_result(std::move(result));
         maybe_release_native_memory();
       }
-
-    finish_worker();
   }
 
 }

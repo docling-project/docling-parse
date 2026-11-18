@@ -1301,6 +1301,12 @@ PYBIND11_MODULE(pdf_parsers, m) {
          R"(
     Unload all documents after threaded processing is complete.)")
 
+    .def("get_number_of_active_workers",
+         &docling::docling_threaded_parser::get_number_of_active_workers)
+    .def("get_number_of_scheduled_tasks",
+         &docling::docling_threaded_parser::get_number_of_scheduled_tasks)
+    .def("all_scheduled_work_completed",
+         &docling::docling_threaded_parser::all_scheduled_work_completed)
     .def("has_tasks",
          [](docling::docling_threaded_parser& self) -> bool {
            return self.has_tasks();
@@ -1560,6 +1566,12 @@ PYBIND11_MODULE(pdf_parsers, m) {
            self.unload_all_documents();
          })
 
+    .def("get_number_of_active_workers",
+         &docling::docling_threaded_renderer::get_number_of_active_workers)
+    .def("get_number_of_scheduled_tasks",
+         &docling::docling_threaded_renderer::get_number_of_scheduled_tasks)
+    .def("all_scheduled_work_completed",
+         &docling::docling_threaded_renderer::all_scheduled_work_completed)
     .def("has_tasks",
          [](docling::docling_threaded_renderer& self) -> bool {
            return self.has_tasks();
