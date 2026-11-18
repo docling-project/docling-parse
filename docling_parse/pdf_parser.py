@@ -211,7 +211,8 @@ class PdfStructureElement(BaseModel):
         bbox: the Layout /BBox attribute on that page, in the frame the page's cells are
             reported in (rotation normalised, crop-box origin, bottom-left); None when the
             element has no /BBox or no resolvable page.
-        attributes: attribute objects keyed by owner (/O), as authored, e.g.
+        attributes: attribute objects keyed by owner (/O), resolved from /C
+            classes and overridden by direct /A attributes, e.g.
             {"/Layout": {"/Placement": "/Block"}}. A raw /BBox here is in default user space.
         ref: ids of elements referenced through /Ref.
         kids: children in order: marked-content refs, object refs, or nested elements.
