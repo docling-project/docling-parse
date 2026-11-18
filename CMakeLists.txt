@@ -301,6 +301,20 @@ target_compile_definitions(pdf_parsers PRIVATE VERSION_INFO=${CMAKE_PROJECT_VERS
 #target_link_libraries(docling_parse PRIVATE parse)
 target_link_libraries(pdf_parsers PRIVATE parse)
 
+option(DOCLING_PARSE_BUILD_THREADED_TESTS "Build native threaded parser tests" OFF)
+if(DOCLING_PARSE_BUILD_THREADED_TESTS)
+    add_executable(threaded_cancellation tests/cpp/test_threaded_cancellation.cpp)
+    target_link_libraries(threaded_cancellation PRIVATE parse pybind11::embed)
+    set(threaded_test_python "${Python_EXECUTABLE}")
+    if(NOT threaded_test_python)
+        set(threaded_test_python "${PYTHON_EXECUTABLE}")
+    endif()
+    enable_testing()
+    add_test(NAME threaded_cancellation COMMAND threaded_cancellation "${threaded_test_python}")
+    set_tests_properties(threaded_cancellation PROPERTIES
+        TIMEOUT 30 WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+endif()
+
 # *****************
 # ***  Install  ***
 # *****************

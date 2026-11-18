@@ -89,23 +89,9 @@ namespace docling
     // (docling-parse#357).
     auto canvas_pool = std::make_shared<BLImage>();
 
-    while(true)
+    while(auto task = take_task())
       {
-        std::pair<std::string, int> task;
-        {
-          std::lock_guard<std::mutex> lock(task_mutex);
-
-          if(task_queue.empty())
-            {
-              break;
-            }
-
-          task = task_queue.front();
-          task_queue.pop();
-        }
-
-        const std::string& doc_key = task.first;
-        int page_number = task.second;
+        const auto& [doc_key, page_number] = *task;
 
         page_render_result result;
         result.doc_key = doc_key;
@@ -196,23 +182,11 @@ namespace docling
               + " of " + doc_key + ": " + exc.what();
           }
 
-        {
-          std::unique_lock<std::mutex> lock(results_mutex);
-
-          cv_results_consumed.wait(lock, [this]() {
-            return static_cast<int>(results_queue.size()) < max_concurrent_results;
-          });
-
-          results_queue.push(std::move(result));
-          cv_results_available.notify_one();
-        }
-
+        publish_result(std::move(result));
         maybe_release_native_memory();
       }
 
-    active_workers.fetch_sub(1);
-
-    cv_results_available.notify_all();
+    finish_worker();
   }
 
 }

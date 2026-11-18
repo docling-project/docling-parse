@@ -230,6 +230,12 @@ For threaded parse-and-render workloads, set
 `ThreadedPdfParserConfig.render_config` and use `result.get_image()`,
 `result.get_image(scale=...)`, or `result.get_image(canvas_size=...)`.
 
+Call `parser.cancel(doc_key)` before or during iteration to remove that
+document's pending pages and unread results. The call returns the number of
+entries it removed. Pages already claimed by a worker finish in the background,
+and their results are discarded. You can unload the document once the batch
+finishes.
+
 Use the CLI
 
 ```sh

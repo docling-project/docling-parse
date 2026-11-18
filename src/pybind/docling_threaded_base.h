@@ -8,14 +8,15 @@
 #include <atomic>
 #include <condition_variable>
 #include <cstdint>
+#include <deque>
 #include <map>
 #include <mutex>
 #include <optional>
-#include <queue>
 #include <stdexcept>
 #include <string>
 #include <thread>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -94,6 +95,7 @@ namespace docling
 
     bool unload_document(std::string key);
     void unload_all_documents();
+    int cancel_document(const std::string& key);
 
     bool has_tasks();
 
@@ -110,7 +112,7 @@ namespace docling
         int num_pages,
         std::optional<std::vector<int>> page_numbers,
         std::optional<std::pair<std::int64_t, std::int64_t>> page_range) const;
-    void validate_unload_state() const;
+    void validate_unload_state();
     void record_load_error(const std::string& key,
                            const std::string& category,
                            const std::string& message);
@@ -123,6 +125,9 @@ namespace docling
   protected:
 
     void maybe_release_native_memory();
+    std::optional<std::pair<std::string, int>> take_task();
+    void publish_result(ResultType result);
+    void finish_worker();
 
     pdflib::decode_config config;
     int num_threads;
@@ -134,20 +139,22 @@ namespace docling
     // Failed loads by key, until Python collects the reason.
     std::unordered_map<std::string, std::map<std::string, std::string>> load_errors;
 
-    // Task queue: (doc_key, page_number) pairs
-    std::queue<std::pair<std::string, int>> task_queue;
-    std::mutex task_mutex;
+  private:
 
-    // Results queue with bounded capacity
-    std::queue<ResultType> results_queue;
-    std::mutex results_mutex;
+    // The GIL serializes Python load, unload, cancel and startup calls.
+    bool started = false;
+
+    // Queue changes and condition-variable predicates share this mutex.
+    std::mutex queue_mutex;
+    std::deque<std::pair<std::string, int>> task_queue;
+    std::deque<ResultType> results_queue;
+    std::unordered_set<std::string> cancelled_keys;
     std::condition_variable cv_results_available;
     std::condition_variable cv_results_consumed;
 
-    // State tracking
-    std::atomic<int> tasks_remaining{0};
-    std::atomic<bool> started{false};
-    std::atomic<int> active_workers{0};
+    // Pending, in-flight and buffered pages count until consumed or discarded.
+    int tasks_remaining = 0;
+    int active_workers = 0;
     std::atomic<int> total_processed_pages{0};
 
     std::vector<std::thread> workers;
@@ -232,7 +239,7 @@ namespace docling
       std::optional<std::vector<int>> page_numbers,
       std::optional<std::pair<std::int64_t, std::int64_t>> page_range)
   {
-    if(started.load())
+    if(started)
       {
         LOG_S(ERROR) << "Cannot load documents after processing has started";
         return false;
@@ -290,6 +297,7 @@ namespace docling
             key2scheduled_pages.erase(key);
             throw;
           }
+        cancelled_keys.erase(key);
         return true;
       }
 
@@ -306,7 +314,7 @@ namespace docling
       std::optional<std::vector<int>> page_numbers,
       std::optional<std::pair<std::int64_t, std::int64_t>> page_range)
   {
-    if(started.load())
+    if(started)
       {
         LOG_S(ERROR) << "Cannot load documents after processing has started";
         return false;
@@ -371,6 +379,7 @@ namespace docling
         key2scheduled_pages.erase(key);
         throw;
       }
+    cancelled_keys.erase(key);
     return true;
   }
 
@@ -442,6 +451,10 @@ namespace docling
 
     bool removed_doc = key2doc.erase(key) > 0;
     bool removed_schedule = key2scheduled_pages.erase(key) > 0;
+    {
+      std::lock_guard<std::mutex> lock(queue_mutex);
+      cancelled_keys.erase(key);
+    }
 
     if(key2doc.empty())
       {
@@ -458,6 +471,60 @@ namespace docling
     key2doc.clear();
     key2scheduled_pages.clear();
     reset_after_completion();
+  }
+
+  template<typename Derived, typename ResultType>
+  int docling_threaded_base<Derived, ResultType>::cancel_document(const std::string& key)
+  {
+    const auto schedule = key2scheduled_pages.find(key);
+    if(schedule == key2scheduled_pages.end() or not key2doc.contains(key))
+      {
+        return 0;
+      }
+
+    // Keep evicted payloads alive until after the queue lock is released.
+    std::vector<ResultType> evicted;
+    std::unique_lock<std::mutex> lock(queue_mutex);
+    if(cancelled_keys.contains(key))
+      {
+        return 0;
+      }
+    if(not started)
+      {
+        cancelled_keys.insert(key);
+        return static_cast<int>(schedule->second.size());
+      }
+
+    evicted.reserve(results_queue.size());
+    cancelled_keys.insert(key);
+    const auto removed_tasks = std::erase_if(task_queue, [&key](const auto& task) {
+      return task.first == key;
+    });
+
+    auto kept = results_queue.begin();
+    for(auto it = results_queue.begin(); it != results_queue.end(); ++it)
+      {
+        if(it->doc_key == key)
+          {
+            evicted.push_back(std::move(*it));
+          }
+        else
+          {
+            if(kept != it)
+              {
+                *kept = std::move(*it);
+              }
+            ++kept;
+          }
+      }
+    results_queue.erase(kept, results_queue.end());
+
+    const int removed = static_cast<int>(removed_tasks + evicted.size());
+    tasks_remaining -= removed;
+    lock.unlock();
+    cv_results_consumed.notify_all();
+    cv_results_available.notify_all();
+    return removed;
   }
 
   template<typename Derived, typename ResultType>
@@ -545,9 +612,10 @@ namespace docling
   }
 
   template<typename Derived, typename ResultType>
-  void docling_threaded_base<Derived, ResultType>::validate_unload_state() const
+  void docling_threaded_base<Derived, ResultType>::validate_unload_state()
   {
-    if(tasks_remaining.load() > 0)
+    std::lock_guard<std::mutex> lock(queue_mutex);
+    if(tasks_remaining > 0)
       {
         throw std::runtime_error("Cannot unload documents while threaded iteration is active");
       }
@@ -556,16 +624,6 @@ namespace docling
   template<typename Derived, typename ResultType>
   void docling_threaded_base<Derived, ResultType>::reset_after_completion()
   {
-    while(not task_queue.empty())
-      {
-        task_queue.pop();
-      }
-
-    while(not results_queue.empty())
-      {
-        results_queue.pop();
-      }
-
     for(auto& worker : workers)
       {
         if(worker.joinable())
@@ -575,10 +633,14 @@ namespace docling
       }
     workers.clear();
 
-    tasks_remaining.store(0);
-    active_workers.store(0);
+    std::lock_guard<std::mutex> lock(queue_mutex);
+    task_queue.clear();
+    results_queue.clear();
+    cancelled_keys.clear();
+    tasks_remaining = 0;
+    active_workers = 0;
     total_processed_pages.store(0);
-    started.store(false);
+    started = false;
   }
 
   template<typename Derived, typename ResultType>
@@ -586,24 +648,27 @@ namespace docling
   {
     for(const auto& pair : key2scheduled_pages)
       {
+        if(cancelled_keys.contains(pair.first))
+          {
+            continue;
+          }
         for(int page : pair.second)
           {
-            task_queue.push(std::make_pair(pair.first, page));
+            task_queue.emplace_back(pair.first, page);
           }
       }
 
-    tasks_remaining.store(static_cast<int>(task_queue.size()));
+    tasks_remaining = static_cast<int>(task_queue.size());
   }
 
   template<typename Derived, typename ResultType>
   void docling_threaded_base<Derived, ResultType>::start_workers()
   {
     int num_workers = std::min(num_threads, static_cast<int>(task_queue.size()));
-    active_workers.store(num_workers);
-
     for(int i = 0; i < num_workers; i++)
       {
         workers.emplace_back(&Derived::worker_loop, static_cast<Derived*>(this));
+        ++active_workers;
       }
   }
 
@@ -626,23 +691,71 @@ namespace docling
   template<typename Derived, typename ResultType>
   bool docling_threaded_base<Derived, ResultType>::has_tasks()
   {
-    if(not started.load())
+    std::lock_guard<std::mutex> lock(queue_mutex);
+    if(not started)
       {
         build_task_queue();
+        started = true;
         start_workers();
-        started.store(true);
       }
 
-    return tasks_remaining.load() > 0;
+    return tasks_remaining > 0;
+  }
+
+  template<typename Derived, typename ResultType>
+  std::optional<std::pair<std::string, int>>
+  docling_threaded_base<Derived, ResultType>::take_task()
+  {
+    std::lock_guard<std::mutex> lock(queue_mutex);
+    if(task_queue.empty())
+      {
+        return std::nullopt;
+      }
+
+    auto task = std::move(task_queue.front());
+    task_queue.pop_front();
+    return task;
+  }
+
+  template<typename Derived, typename ResultType>
+  void docling_threaded_base<Derived, ResultType>::publish_result(ResultType result)
+  {
+    std::unique_lock<std::mutex> lock(queue_mutex);
+    cv_results_consumed.wait(lock, [this, &result]() {
+      return cancelled_keys.contains(result.doc_key)
+        or static_cast<int>(results_queue.size()) < max_concurrent_results;
+    });
+
+    if(cancelled_keys.contains(result.doc_key))
+      {
+        --tasks_remaining;
+        lock.unlock();
+        cv_results_available.notify_all();
+        return;
+      }
+
+    results_queue.push_back(std::move(result));
+    lock.unlock();
+    cv_results_available.notify_one();
+  }
+
+  template<typename Derived, typename ResultType>
+  void docling_threaded_base<Derived, ResultType>::finish_worker()
+  {
+    {
+      std::lock_guard<std::mutex> lock(queue_mutex);
+      --active_workers;
+    }
+    cv_results_available.notify_all();
   }
 
   template<typename Derived, typename ResultType>
   ResultType docling_threaded_base<Derived, ResultType>::get_task()
   {
-    std::unique_lock<std::mutex> lock(results_mutex);
+    std::unique_lock<std::mutex> lock(queue_mutex);
 
     cv_results_available.wait(lock, [this]() {
-      return not results_queue.empty() or active_workers.load() == 0;
+      return not results_queue.empty() or tasks_remaining == 0 or active_workers == 0;
     });
 
     if(results_queue.empty())
@@ -656,12 +769,16 @@ namespace docling
       }
 
     ResultType result = std::move(results_queue.front());
-    results_queue.pop();
-    tasks_remaining.fetch_sub(1);
+    results_queue.pop_front();
+    const bool completed = --tasks_remaining == 0;
 
     lock.unlock();
 
     cv_results_consumed.notify_one();
+    if(completed)
+      {
+        cv_results_available.notify_all();
+      }
 
     return result;
   }

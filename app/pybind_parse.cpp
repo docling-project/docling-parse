@@ -1278,6 +1278,12 @@ PYBIND11_MODULE(pdf_parsers, m) {
 
     Returns:
         dict: A JSON object containing the annotations for the document.)")
+    .def("cancel_document",
+         [](docling::docling_threaded_parser& self, const std::string& key) -> int {
+           return self.cancel_document(key);
+         },
+         pybind11::arg("key"),
+         "Cancel pending pages and discard unread results for a document key.")
     .def("unload_document",
          [](docling::docling_threaded_parser& self, const std::string& key) -> bool {
            return self.unload_document(key);
@@ -1538,6 +1544,12 @@ PYBIND11_MODULE(pdf_parsers, m) {
            return document->get_annotations();
          },
          pybind11::arg("key"))
+    .def("cancel_document",
+         [](docling::docling_threaded_renderer& self, const std::string& key) -> int {
+           return self.cancel_document(key);
+         },
+         pybind11::arg("key"),
+         "Cancel pending pages and discard unread results for a document key.")
     .def("unload_document",
          [](docling::docling_threaded_renderer& self, const std::string& key) -> bool {
            return self.unload_document(key);

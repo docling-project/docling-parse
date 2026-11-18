@@ -2026,6 +2026,18 @@ class DoclingThreadedPdfParser:
             )
         return self._annotations[doc_key]
 
+    def cancel(self, doc_key: str) -> int:
+        """Cancel pending pages and discard unread results for a loaded document.
+
+        The key comes from `load()`. Workers finish any pages they have already
+        claimed and discard their results. Cancellation does not wait for those
+        workers. The document stays loaded until `unload()` or `unload_all()`.
+
+        Returns the number of pending pages and buffered results removed
+        during this call. Unknown keys and repeated calls return zero.
+        """
+        return self._parser.cancel_document(doc_key)
+
     def unload(self, doc_key: str) -> bool:
         """Unload one document after threaded processing has completed."""
         unloaded = self._parser.unload_document(doc_key)
@@ -2054,7 +2066,10 @@ class DoclingThreadedPdfParser:
     def iterate_results(self) -> Iterator["PageParseResult"]:
         """Yield page results in completion order."""
         while self.has_tasks():
-            yield self.get_task()
+            result = self.get_task()
+            if result.page_number == 0:  # Native end-of-stream sentinel (-1).
+                return
+            yield result
 
     def get_task(self) -> "PageParseResult":
         """Get the next completed page decode result.
