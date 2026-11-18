@@ -28,7 +28,6 @@ namespace pdflib
     qpdf_stream_decoder(instruction_consumer consumer_, void* context_);
 
     std::size_t get_objects_delivered() const { return objects_delivered; }
-    std::size_t get_source_bytes_observed() const { return source_bytes_observed; }
     ~qpdf_stream_decoder();
 
     void print();
@@ -40,8 +39,6 @@ namespace pdflib
 
     void handleObject(QPDFObjectHandle obj, size_t offset, size_t len) override;
     
-    void contentSize(size_t len) override;
-
     void handleEOF() override;
     
   private:
@@ -60,7 +57,6 @@ namespace pdflib
     void* context = nullptr;
     std::exception_ptr consumer_failure;
     std::size_t objects_delivered = 0;
-    std::size_t source_bytes_observed = 0;
 
     std::regex value_pattern_0;
     std::regex value_pattern_1;
@@ -107,7 +103,6 @@ namespace pdflib
 
     if(stream) { stream->clear(); }
     objects_delivered = 0;
-    source_bytes_observed = 0;
     consumer_failure = nullptr;
 
     try
@@ -426,13 +421,6 @@ namespace pdflib
           }
       }
     ++objects_delivered;
-  }
-
-  void qpdf_stream_decoder::contentSize(size_t len)
-  {
-    // QPDF can notify again during damaged-stream fallback; this is observed
-    // source bytes across attempts, not a claim of unique input bytes.
-    source_bytes_observed += len;
   }
 
   void qpdf_stream_decoder::handleEOF()
