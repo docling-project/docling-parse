@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# SPDX-License-Identifier: MIT
 """A CIDFontType2 draws the glyph its /CIDToGIDMap stream names (9.7.4.2).
 
 Subset TrueType programs embedded under a /Type0 font often carry no `cmap`
@@ -23,6 +24,7 @@ from __future__ import annotations
 from io import BytesIO
 
 import pytest
+from PIL import ImageChops
 
 from tests.pdf_builder import render_page, simple_page_pdf, stream_object
 from tests.rendering_regression import flatten_on_white
@@ -128,6 +130,7 @@ def _page(
     code: int = 1,
     cid_to_gid: bytes = bytes([0, 0, 0, 2, 0, 1]),  # CID 1 -> GID 2, CID 2 -> GID 1
     encoding_cmap: bytes | None = None,
+    base_font: str = "AAAAAA+DoclingCidMapped",
 ) -> bytes:
     if program is None:
         program = _cmapless_font()
@@ -147,14 +150,14 @@ def _page(
 
     objects: list[str | bytes] = [
         # 5: the Type0 font
-        "<< /Type /Font /Subtype /Type0 /BaseFont /AAAAAA+DoclingCidMapped "
+        f"<< /Type /Font /Subtype /Type0 /BaseFont /{base_font} "
         f"/Encoding {encoding} /DescendantFonts [6 0 R] /ToUnicode 10 0 R >>",
         # 6: its CIDFontType2 descendant
-        "<< /Type /Font /Subtype /CIDFontType2 /BaseFont /AAAAAA+DoclingCidMapped "
+        f"<< /Type /Font /Subtype /CIDFontType2 /BaseFont /{base_font} "
         "/CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> "
         "/FontDescriptor 7 0 R /DW 1000 /CIDToGIDMap 9 0 R >>",
         # 7
-        "<< /Type /FontDescriptor /FontName /AAAAAA+DoclingCidMapped /Flags 4 "
+        f"<< /Type /FontDescriptor /FontName /{base_font} /Flags 4 "
         "/FontBBox [0 -200 1000 800] /ItalicAngle 0 /Ascent 800 /Descent -200 "
         "/CapHeight 700 /StemV 80 /FontFile2 8 0 R >>",
         # 8
@@ -199,6 +202,33 @@ def _assert_draws(pdf: bytes, glyph) -> None:
 def test_cid_to_gid_map_stream_selects_the_glyph():
     """CID 1 draws GID 2 from the embedded program, not a box or a substitute."""
     _assert_draws(_page(), BIG)
+
+
+@pytest.mark.parametrize("base_font", ["Helvetica", "Times-Roman", "Courier", "Symbol"])
+@pytest.mark.parametrize("complete", [False, True], ids=["freetype", "blend2d"])
+def test_composite_code_32_keeps_its_visible_glyph(
+    base_font: str, complete: bool
+) -> None:
+    """A subset code 32 draws its mapped glyph, not the AFM space (issue #466)."""
+    pdfium = pytest.importorskip("pypdfium2")
+    cid_to_gid = bytes(2 * 32) + bytes([0, 1])
+    pdf = _page(
+        _complete_font() if complete else _cmapless_font(),
+        code=32,
+        cid_to_gid=cid_to_gid,
+        base_font=base_font,
+    )
+    actual = flatten_on_white(render_page(pdf, scale=MEASURE_SCALE).get_image())
+    with pdfium.PdfDocument(pdf) as document:
+        expected = flatten_on_white(document[0].render(scale=MEASURE_SCALE).to_pil())
+
+    assert actual.size == expected.size
+    actual_mask = actual.convert("L").point(lambda value: 255 if value < 128 else 0)
+    expected_mask = expected.convert("L").point(lambda value: 255 if value < 128 else 0)
+    intersection = ImageChops.darker(actual_mask, expected_mask).histogram()[255]
+    union = ImageChops.lighter(actual_mask, expected_mask).histogram()[255]
+    assert union > 0, "the reference glyph must have ink"
+    assert intersection / union > 0.95, "the composite glyph does not match PDFium"
 
 
 # CID 34 -> GID 1 (small), and CID 65 -> GID 2 (big), where code 0x41 read

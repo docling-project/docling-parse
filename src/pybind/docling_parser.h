@@ -1,4 +1,5 @@
 //-*-C++-*-
+// SPDX-License-Identifier: MIT
 
 #ifndef PYBIND_PDF_PARSER_H
 #define PYBIND_PDF_PARSER_H
@@ -15,10 +16,10 @@
 #include <codecvt>
 #endif
 
+#include <parse.h>
+
 #include <pybind/native_memory.h>
 #include <pybind/docling_resources.h>
-
-#include <parse.h>
 
 namespace docling
 {
@@ -125,7 +126,7 @@ namespace docling
 
   docling_parser::docling_parser(std::string level, int max_concurrent_results):
     docling_resources(),
-    pdf_resources_dir(resource_utils::get_resources_dir(true).string()),
+    pdf_resources_dir(utils::filesystem::to_utf8(resource_utils::get_resources_dir(true))),
     doc_decoders({}),
     page_decoders({}),
     max_concurrent_results(max_concurrent_results)

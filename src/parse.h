@@ -1,4 +1,5 @@
 //-*-C++-*-
+// SPDX-License-Identifier: MIT
 
 // std libraries
 #include <set>
@@ -39,6 +40,7 @@
 #include <qpdf/Buffer.hh>
 
 // code to locate pdf-resources (eg fonts)
+#include <parse/utils/utf8_path.h>
 #include <resources.h>
 
 // third-party includes

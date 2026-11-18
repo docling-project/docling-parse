@@ -1,4 +1,5 @@
 //-*-C++-*-
+// SPDX-License-Identifier: MIT
 
 #include "parse.h"
 #include "render.h"
@@ -1183,7 +1184,7 @@ namespace
 
   void initialise_fonts()
   {
-    std::string resource_dir = resource_utils::get_resources_dir(false).string();
+    std::string resource_dir = utils::filesystem::to_utf8(resource_utils::get_resources_dir(false));
     nlohmann::json data = nlohmann::json::object({});
     data[pdflib::pdf_resource<pdflib::PAGE_FONT>::RESOURCE_DIR_KEY] = resource_dir;
     std::unordered_map<std::string, double> font_timings;
