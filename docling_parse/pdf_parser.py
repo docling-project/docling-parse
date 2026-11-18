@@ -203,7 +203,7 @@ class PdfStructureElement(BaseModel):
     Attributes:
         id: "<num> <gen>" identity of the element object; empty for direct objects.
         order: depth-first position in the tree, the logical content order (14.8.2.5).
-        type: raw structure type (/S) before role mapping; apply PdfStructure.role_map to resolve.
+        type: raw structure type (/S) before role mapping. Use PdfStructure.resolve_role to resolve it.
         namespace: PDF 2.0 namespace URI (/NS) when present.
         title, lang, alt, actual_text, expansion: the /T, /Lang, /Alt, /ActualText and /E entries.
         element_id: the /ID entry.
@@ -243,13 +243,23 @@ class PdfStructureElement(BaseModel):
     ] = []
 
     def resolved_type(self, role_map: Dict[str, str]) -> str:
-        """Structure type after following /RoleMap (bounded, cycles tolerated)."""
+        """Structure type after following the root /RoleMap, with cycle detection."""
         seen = set()
         current = self.type
         while current in role_map and current not in seen:
             seen.add(current)
             current = role_map[current]
         return current
+
+
+_DEFAULT_STRUCTURE_NAMESPACE = "http://iso.org/pdf/ssn"
+_STANDARD_STRUCTURE_NAMESPACES = frozenset(
+    (
+        _DEFAULT_STRUCTURE_NAMESPACE,
+        "http://iso.org/pdf2/ssn",
+        "http://www.w3.org/1998/Math/MathML",
+    )
+)
 
 
 class PdfStructure(BaseModel):
@@ -259,6 +269,9 @@ class PdfStructure(BaseModel):
         marked: the /MarkInfo /Marked flag (the file declares itself tagged).
         role_map: /RoleMap of the structure tree root, custom type -> standard type.
         namespaces: URIs of the /Namespaces array (PDF 2.0).
+        role_map_ns: /RoleMapNS entries keyed by namespace URI, then by type.
+            Each target is a (type, namespace URI) pair. None denotes the
+            default standard structure namespace.
         elements: the root-level structure elements, in order.
     """
 
@@ -267,7 +280,32 @@ class PdfStructure(BaseModel):
     marked: bool = False
     role_map: Dict[str, str] = {}
     namespaces: List[str] = []
+    role_map_ns: Dict[str, Dict[str, tuple[str, str | None]]] = {}
     elements: List[PdfStructureElement] = []
+
+    def resolve_role(self, element: PdfStructureElement) -> tuple[str, str]:
+        """Return the mapped type and namespace URI (ISO 32000-2, 14.8.6.2).
+
+        Elements without an explicit namespace follow the root /RoleMap.
+        Namespaced elements follow /RoleMapNS across custom namespaces until
+        reaching a standard namespace, a missing mapping, or a cycle.
+        """
+        if element.namespace is None:
+            return element.resolved_type(self.role_map), _DEFAULT_STRUCTURE_NAMESPACE
+
+        current = element.type, element.namespace
+        seen = set()
+        while current[1] not in _STANDARD_STRUCTURE_NAMESPACES and current not in seen:
+            seen.add(current)
+            role, namespace = current
+            target = self.role_map_ns.get(namespace, {}).get(role)
+            if target is None:
+                break
+            mapped_role, mapped_namespace = target
+            if mapped_namespace is None:
+                mapped_namespace = _DEFAULT_STRUCTURE_NAMESPACE
+            current = mapped_role, mapped_namespace
+        return current
 
     def iter_elements(self) -> Iterator[PdfStructureElement]:
         """Depth-first traversal of every element."""
