@@ -1,0 +1,90 @@
+{
+  "build_mode": "incremental",
+  "canvas_checks": [],
+  "comparison_memory": {
+    "interval_ms": null,
+    "mode": "off"
+  },
+  "dataset": {
+    "repository": "docling-project/performance-dataset-bo767",
+    "requested_revision": "221c19e716d6ede5d18fd1560bc938ab19cc1a70",
+    "revision": "221c19e716d6ede5d18fd1560bc938ab19cc1a70"
+  },
+  "documents": 767,
+  "excluded_comparisons": [],
+  "extension_sha256": "d91be4c1601ea36d054419540afe5617285333181e982d431180e300bd042761",
+  "identity_serialization": "UTF-8 JSON list in dataset order; name/pages/sha256; sort_keys=True; separators=(comma,colon)",
+  "launcher_sha256": "77e2ce36889637b90c385537b93f6b13169bc3906740c479ba4d4b79bd8f7cbf",
+  "machine": {
+    "cpu": null,
+    "machine": "x86_64",
+    "memory_bytes": null,
+    "platform": "Linux-7.2.15-100.fc43.x86_64-x86_64-with-glibc2.42"
+  },
+  "max_concurrent_results": 32,
+  "measured_at": "2026-11-19T11:44:23",
+  "memory_collection": {
+    "interval_ms": null,
+    "mode": "off"
+  },
+  "memory_methods": [
+    [
+      "existing",
+      "resource.getrusage(RUSAGE_SELF)",
+      "process lifetime; use fresh process for each profile"
+    ]
+  ],
+  "native_profiles": {
+    "render-only": {
+      "create_line_cells": false,
+      "create_word_cells": false
+    },
+    "render-with-text": {
+      "create_line_cells": true,
+      "create_word_cells": true
+    }
+  },
+  "native_sha256": "c2f8e4e69ebd5454fe7a56104b79ffd253ac49106346cd93711bd788ac655e47",
+  "ordered_file_identity_sha256": "2599f474f8475ac9e51c14c22e2b6d946e99fc57d84fa3ce690e52942f0d601a",
+  "packages": {
+    "docling-core": "2.103.1",
+    "docling-parse": "7.26.0",
+    "matplotlib": "3.11.2",
+    "pdfminer.six": "20260107",
+    "pdfplumber": "0.11.10",
+    "pillow": "12.3.0",
+    "pymupdf": "1.27.2.3",
+    "pypdf": "6.21.1",
+    "pypdfium2": "5.14.0",
+    "rtree": "1.4.1"
+  },
+  "pages": 54730,
+  "python": "3.12.16 (main, Oct 29 2026, 00:00:00) [GCC 15.3.1 20260722 (Red Hat 15.3.1-1)]",
+  "qpdf": "12.4.2",
+  "repeats": 1,
+  "run": "scratch-performance-refresh-20261119-114423-ofpV75",
+  "scale": 1.0,
+  "schema_version": 1,
+  "script_sha256": {
+    "scripts/benchmarking/_common.py": "56c2fcf9e53c4d0ae7def5253030e63242dbbc9169f1c0385c9c0812302ab1eb",
+    "scripts/benchmarking/_performance_memory.py": "1b9b2cfe76d44872916470c40999940782e7ea35ce7f4e165c6365130ce33baa",
+    "scripts/benchmarking/_performance_memory_report.py": "c426c404042658333201900081cd5525ebe1d45e2e41ae6ab3fe5510c005a65f",
+    "scripts/benchmarking/_performance_runtime.py": "50abe947f1cc1223da7dffc9da6f2bd03a4fe9d54db739a3caf613e167a28fc1",
+    "scripts/benchmarking/_performance_worker.py": "a3e272eaca78b35b68839a32d3b049cb63d0c3afdd7484a9f228aff87f0d2453",
+    "scripts/benchmarking/recover_performance_benchmarks.py": "514f35937d765eea1a1e29322a3e526c862bf9317952df9690f479992ba87a22",
+    "scripts/benchmarking/run_performance_analysis.py": "96453dc08db69ec4a90e5da506c31fb0c08194470d8fea3a15043fcce99da5a2",
+    "scripts/benchmarking/run_performance_benchmarking.py": "50fa611d51193d151b5454d5e8f9258f06b6016e7bf7951eb6e9bd7b4515ca38",
+    "scripts/benchmarking/run_performance_benchmarking_with_docling_settings.py": "71c743fab5c6737d034853f35c493fd6a1f831352c9eb3b3a5e81d5dffde361a",
+    "scripts/benchmarking/run_performance_eval.py": "92d3fb6341ce8fbb4c8c53a17bde03cc550a8ddb756bfc2618bc2ba8e0a9926a",
+    "scripts/benchmarking/run_performance_report.py": "c9c4b4dfa1d324168ee39f5801b042f10f3caf3de293a57afeb9e112a70d4736",
+    "scripts/benchmarking/run_quality_benchmarking.py": "20fdedee0694cc5a5af1d1cbe7087465a9004534e68b98dccaa89e7bdf35c1f2"
+  },
+  "source_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "source_revision": "a738a810b970b12cf01deb9ebe6bc42994aa07f5",
+  "threads": [
+    1,
+    4,
+    8,
+    12
+  ]
+}
