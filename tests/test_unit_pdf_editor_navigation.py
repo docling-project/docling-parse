@@ -3,29 +3,28 @@
 from io import BytesIO
 
 import pypdf
-import pytest
 
-from tests.test_unit_pdf_editor import EDITING_CLASSES, THREE, _test_page_no
+from docling_parse import PdfEditor
+from tests.test_unit_pdf_editor import THREE
 
 
-@pytest.mark.parametrize("cls", EDITING_CLASSES)
-def test_remove_page_clears_explicit_and_named_destinations(cls):
-    document = cls(source=THREE)
-    document.add_named_destination(title="gone", page_no=_test_page_no(1, document))
-    document.add_named_destination(title="keep", page_no=_test_page_no(2, document))
-    document.add_outline_item(title="Gone", page_no=_test_page_no(1, document))
-    document.set_open_destination(page_no=_test_page_no(1, document))
+def test_remove_page_clears_explicit_and_named_destinations():
+    document = PdfEditor(source=THREE)
+    document.add_named_destination(title="gone", page_no=2)
+    document.add_named_destination(title="keep", page_no=3)
+    document.add_outline_item(title="Gone", page_no=2)
+    document.set_open_destination(page_no=2)
     document.add_link(
-        page_no=_test_page_no(0, document),
+        page_no=1,
         rect=(10, 10, 20, 20),
-        target_page_no=_test_page_no(1, document),
+        target_page_no=2,
     )
     document.add_annotation(
-        page_no=_test_page_no(0, document),
+        page_no=1,
         annotation={"/Subtype": "/Link", "/Rect": [30, 10, 40, 20], "/Dest": "gone"},
     )
     document.add_annotation(
-        page_no=_test_page_no(0, document),
+        page_no=1,
         annotation={
             "/Subtype": "/Link",
             "/Rect": [50, 10, 60, 20],
@@ -33,11 +32,11 @@ def test_remove_page_clears_explicit_and_named_destinations(cls):
         },
     )
     document.add_link(
-        page_no=_test_page_no(0, document),
+        page_no=1,
         rect=(70, 10, 80, 20),
-        target_page_no=_test_page_no(2, document),
+        target_page_no=3,
     )
-    document.remove_page(page_no=_test_page_no(1, document))
+    document.remove_page(page_no=2)
     reader = pypdf.PdfReader(BytesIO(document.to_bytes()))
     assert set(reader.named_destinations) == {"keep"}
     assert reader.get_destination_page_number(reader.named_destinations["keep"]) == 1

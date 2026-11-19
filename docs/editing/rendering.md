@@ -24,9 +24,9 @@ one pixel per PDF point, or 72 dpi at the usual `UserUnit=1`.
 from docling_parse import PdfEditor
 
 with PdfEditor(source="document.pdf") as editor:
-    editor.get_page(page_no=1).rotate(angle=90)
-    editor.get_page(page_no=1).draw_text(
-        text="DRAFT", x=72, y=120, size=32, color="#c00000"
+    editor.rotate_page(page_no=1, angle=90)
+    editor.draw_text(
+        page_no=1, text="DRAFT", x=72, y=120, size=32, color="#c00000"
     )
     modified = editor.is_modified
     preview = editor.render_page(page_no=1, scale=2.0)

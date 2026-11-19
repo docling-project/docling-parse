@@ -1,15 +1,28 @@
 # PDF reading and editing
 
-Use `PdfReader` to inspect a PDF, `PdfWriter` for the implemented pypdf-style
-workflows, and `PdfEditor` for the full editing API and page rendering. The
-three classes share one native implementation; Reader and Writer adapt their
-calls to the editor.
+`PdfEditor` is the preferred docling-parse API for reading, extracting text
+from, editing and writing PDFs. Use `PdfReader` and `PdfWriter` when migrating
+existing pypdf code that uses the [supported workflows](#migrate-from-pypdf).
 
-The compatibility reference is **pypdf 6.21.1**, pinned in the development
-dependencies. Signatures of the implemented Reader/Writer methods are checked
-against that version. This is a supported subset, with different result types
-and unsupported options; it is not a drop-in replacement for all pypdf code.
-See [API coverage](#api-coverage) before migrating a workflow.
+## Quick start
+
+Open a PDF, count its pages, extract layout text, rotate the first page,
+and preview and save the result.
+
+```python
+from docling_parse import PdfEditor, PdfExtractionMode
+
+with PdfEditor(source="document.pdf") as editor:
+    print(editor.page_count(), editor.metadata.get("Title"))
+    print(editor.extract_text(page_no=1, extraction_mode=PdfExtractionMode.LAYOUT))
+    editor.rotate_page(page_no=1, angle=90)
+    editor.render_page(page_no=1, scale=2.0).save("preview.png")
+    editor.write(target="changed.pdf")
+```
+
+`PdfExtractionMode.PLAIN` is the default. It returns reading-order lines.
+`PdfExtractionMode.LAYOUT` retains line and column spacing in fixed-width
+text. Both modes include unsaved edits.
 
 ## Guides
 
@@ -23,97 +36,25 @@ See [API coverage](#api-coverage) before migrating a workflow.
 | [Rendering](editing/rendering.md) | Render a selected page, including unsaved edits |
 | [Output and encryption](editing/output-and-encryption.md) | Paths, streams, passwords, permissions and serialization |
 
-## Which class to use
+## Page numbers and page views
 
-| Class | Purpose | Can edit |
-|---|---|---|
-| `PdfReader` | Inspect pages, text, images and document information | No |
-| `PdfWriter` | Assemble or clone documents through pypdf-style methods | Yes |
-| `PdfEditor` | Inspect, edit, render and write through named methods | Yes |
+Pass Editor arguments by keyword. Use one-based numbers for `page_no`,
+`before_page_no` and the source pages in `page_nos`. The same numbering
+applies to destination, bookmark, form and link results from the Editor.
+Bookmark sibling positions such as `move_outline_item(index=0)` use
+zero-based positions within their parent.
 
-`PdfReader` exposes read-only page handles. `PdfWriter` and `PdfEditor` expose
-editable ones. Import all three from the package:
-
-```python
-from docling_parse import PdfEditor, PdfReader, PdfWriter
-```
-
-## Arguments and page numbering
-
-**All public PdfEditor method parameters, including its constructor, are
-keyword-only.** Arguments such as `page_no` and `before_page_no` start at 1.
-`page_nos` selects one-based source pages. Zero and negative page numbers are
-rejected.
-
-Reader/Writer compatibility methods keep the pypdf argument names, order and
-zero-based page indices. Every `pages` sequence is a Python sequence, including
-`editor.pages`: indexing starts at 0, negative indices count from the end, and
-slices are half-open.
-
-| Expression | Meaning |
+| Task | Editor call |
 |---|---|
-| `editor.get_page(page_no=1)` | First page |
-| `editor.render_page(page_no=1, scale=2.0)` | Render the first page |
-| `editor.remove_page(page_no=1)` | Remove the first page |
-| `editor.append(source=other, page_nos=[1, 3])` | Copy the first and third source pages |
-| `reader.get_page(0)` or `reader.pages[0]` | First page |
-| `writer.remove_page(0)` | Remove the first page |
-| `writer.append(other, pages=[0, 2])` | Copy the first and third source pages |
+| Count pages | `editor.page_count()` |
+| Inspect first-page geometry, annotations or images | `editor.get_page(page_no=1)` |
+| Extract text from the first page | `editor.extract_text(page_no=1)` |
+| Remove the first page | `editor.remove_page(page_no=1)` |
+| Copy the first and third source pages | `editor.append(source=other, page_nos=[1, 3])` |
 
-Page handles keep zero-based `index` and `page_number` properties.
-`editor.get_page_no(page=page)` returns a one-based number;
-`reader.get_page_number(page)` returns a zero-based index. Inspection
-dictionaries also retain zero-based `page` and `pages` values on all three
-classes. Convert such a value with `index + 1` when passing it to an editor
-page-number argument. Bookmark sibling positions, such as
-`move_outline_item(index=0)`, are ordinary zero-based positions, not page numbers.
-
-## Quick start
-
-Read text and metadata:
-
-```python
-from docling_parse import PdfReader
-
-with PdfReader("document.pdf") as reader:
-    print(len(reader.pages), reader.metadata.get("Title"))
-    for page in reader.pages:
-        print(page.extract_text())
-```
-
-Merge selected pages through the compatibility API:
-
-```python
-from docling_parse import PdfWriter
-
-with PdfWriter() as writer:
-    writer.append("document.pdf")
-    writer.append("appendix.pdf", pages=[0, 2])
-    writer.write("merged.pdf")
-```
-
-Edit and render before saving (this example assumes at least four pages):
-
-```python
-from docling_parse import PdfEditor
-
-with PdfEditor(source="document.pdf") as editor:
-    editor.get_page(page_no=1).rotate(angle=90)
-    editor.remove_page(page_no=4)
-    editor.render_page(page_no=1, scale=2.0).save("preview.png")
-    editor.write(target="changed.pdf")
-```
-
-Make a PDF from image files:
-
-```python
-from docling_parse import PdfEditor
-
-with PdfEditor.from_images(
-    images=["scan-1.jpg", "scan-2.png"], page_size="A4"
-) as editor:
-    editor.write(target="scans.pdf")
-```
+`get_page` returns a read-only view with a one-based `page_no`. Use the
+Editor methods to change pages. Iterate over page numbers with
+`range(1, editor.page_count() + 1)`.
 
 ## Document information
 
@@ -126,7 +67,7 @@ These properties are available on Reader, Writer and Editor:
 | `pdf_header`, `pdf_version` | Header such as `"%PDF-1.7"`, and version such as `"1.7"` |
 | `is_encrypted`, `encryption` | Encryption status and parameters |
 | `permissions` | Permission booleans, or `None` for an unencrypted document |
-| `outline` | Bookmark dictionaries with resolved page indices |
+| `outline` | Bookmark dictionaries with resolved page targets |
 | `named_destinations`, `open_destination` | Resolved destinations |
 | `page_labels` | Display labels, one per page |
 | `page_layout`, `page_mode`, `viewer_preferences` | Viewer settings |
@@ -178,8 +119,8 @@ Python argument and stream operations can also raise `TypeError`,
 
 | Workflow | Current support and limits |
 |---|---|
-| Input and pages | Paths, bytes, binary streams, passwords; lazy page sequence |
-| Text extraction | Plain and layout modes; no visitors or other pypdf extraction options |
+| Input and pages | Paths, bytes, binary streams, passwords, and read-only page views |
+| Text extraction | `PdfExtractionMode.PLAIN` and `PdfExtractionMode.LAYOUT` |
 | Assembly | Clone, append, insert, delete, reorder, duplicate and blank pages |
 | Geometry and composition | Boxes, rotation, scale, affine transforms, vector overlays and underlays |
 | Navigation | Read/add/edit/move/remove bookmarks; contents pages; read/add named destinations; page labels and viewer settings |
@@ -193,18 +134,41 @@ Python argument and stream operations can also raise `TypeError`,
 | Raw PDF objects | Read-only JSON-like views on Editor; no editable object/stream model |
 | Missing workflows | Incremental writing, text/image removal, deduplication, image recompression, article threads and signing |
 
-Matching a method signature does not imply that every pypdf option is
-implemented. In particular, nonempty `excluded_fields`/`excluded_keys`,
+## Migrate from pypdf
+
+The compatibility reference is pypdf 6.21.1. For code that uses the
+workflows below, start by switching the import and running the application's
+tests against its PDFs.
+
+```python
+# Replace: from pypdf import PdfReader, PdfWriter
+from docling_parse import PdfReader, PdfWriter
+
+with PdfReader("document.pdf") as reader, PdfWriter() as writer:
+    print(reader.pages[0].extract_text(extraction_mode="layout"))
+    writer.add_page(reader.pages[0])
+    writer.append("appendix.pdf", pages=[0, 2])
+    writer.write("assembled.pdf")
+```
+
+| Workflow | Compatibility calls covered by tests | Contract |
+|---|---|---|
+| Open, count and select pages | `PdfReader(source)`, `get_num_pages()`, `get_page(0)`, `pages[-1]`, `pages[:2]` | Reader and Writer page indices and page numbers are zero-based. |
+| Extract text | `page.extract_text()`, `page.extract_text(extraction_mode="layout")` | Returns docling-parse text in the selected mode. |
+| Assemble and write | `add_page`, `insert_page`, `append`, `merge`, `add_blank_page`, `insert_blank_page`, `remove_page`, `write` | Call `write` explicitly. It returns `(opened_by_writer, stream)`. |
+| Compose pages | `writer.pages[i].merge_page(page2, expand=False, over=True)` | Positional arguments follow pypdf. Expansion is unsupported. |
+| Inspect forms | `get_fields`, `get_form_text_fields`, `get_pages_showing_field` | Fields are detached Python dictionaries. |
+| Encrypt output | `writer.encrypt(..., algorithm=...)` | Accepts pypdf's algorithm and permission flags. |
+
+Metadata, outlines, destinations and annotations return docling-parse's
+inspection data. `add_attachment` and `add_named_destination` return
+`None`. Use the Editor for form authoring, TOC generation, image import,
+text drawing and output options.
+
+The compatibility adapters raise `PdfUnsupportedError` for cases including
+text visitors and custom extraction options, `expand=True` for page merges
+or transformations, nonempty `excluded_fields` or `excluded_keys`,
 non-default root-object recovery limits, subtree form traversal, and fit modes
-other than `/Fit` (plus `/XYZ` for bookmarks) raise `PdfUnsupportedError`.
-`PdfWriter(incremental=True)` also raises that error.
-
-`PdfWriter.write(stream)` returns `(opened_by_writer, stream)`, following pypdf;
-`PdfEditor.write(target=...)` returns `None`. Writer methods that resemble
-pypdf object factories do not provide its live object model; for example,
-`add_attachment` and `add_named_destination` currently return `None`.
-
-The topic guides document these implemented workflows and their limits.
-The unsupported capabilities listed above remain unfinished work; signature
-compatibility alone is not evidence of full feature parity.
-
+other than `/Fit` (plus `/XYZ` for bookmarks). Writer constructor options
+`incremental=True`, `full=True`, `keep_initial_header=True` and custom
+incremental clone limits also raise that error.

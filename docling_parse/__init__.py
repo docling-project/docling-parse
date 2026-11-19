@@ -2,6 +2,7 @@
 
 import locale as _locale
 import logging as _logging
+from typing import TYPE_CHECKING
 
 _log = _logging.getLogger(__name__)
 
@@ -41,12 +42,20 @@ def _ensure_safe_numeric_locale() -> None:
 
 _ensure_safe_numeric_locale()
 
-# PdfReader, PdfWriter and PdfEditor are importable from the package, but only
-# loaded on first use: `import docling_parse` stays as cheap as before.
+if TYPE_CHECKING:
+    from docling_parse.pdf_editor import (
+        PdfEditor as PdfEditor,
+        PdfExtractionMode as PdfExtractionMode,
+    )
+    from docling_parse.pdf_reader import PdfReader as PdfReader
+    from docling_parse.pdf_writer import PdfWriter as PdfWriter
+
+# Load the PDF editing API only when it is first used.
 _LAZY_EXPORTS = {
     "PdfReader": "docling_parse.pdf_reader",
     "PdfWriter": "docling_parse.pdf_writer",
     "PdfEditor": "docling_parse.pdf_editor",
+    "PdfExtractionMode": "docling_parse.pdf_editor",
 }
 
 

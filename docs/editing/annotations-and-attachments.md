@@ -5,15 +5,16 @@
 ## Inspect annotations
 
 ```python
-from docling_parse import PdfReader
+from docling_parse import PdfEditor
 
-with PdfReader("document.pdf") as reader:
-    for annotation in reader.pages[0].annotations:
+with PdfEditor(source="document.pdf") as editor:
+    for annotation in editor.get_page(page_no=1).annotations:
         print(annotation["/Subtype"], annotation["/Rect"], annotation.get("/Contents"))
 ```
 
 Annotations are detached dictionaries keyed by PDF names, such as `/Subtype`
-and `/Contents`. A local link also reports a resolved zero-based `page` index.
+and `/Contents`. A resolved local link reports a one-based `page` number on
+an Editor view and a zero-based index on Reader and Writer pages.
 Appearance streams and back-references such as `/P` are omitted from this
 inspection view. Changing the dictionary does not change the document.
 

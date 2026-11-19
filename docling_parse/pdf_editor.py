@@ -1,15 +1,13 @@
-"""PdfEditor: the complete docling-parse PDF surface in one object.
+"""PdfEditor: the preferred docling-parse API for working with PDFs.
 
-PdfReader and PdfWriter offer the subset of these operations that matches
-pypdf. PdfEditor offers all of them, and is where functionality without a
-pypdf counterpart appears first.
+PdfReader and PdfWriter support migration from pypdf.
 
 ```python
 from docling_parse.pdf_editor import PdfEditor
 
 with PdfEditor(source="document.pdf") as editor:
-    print(editor.metadata, editor.pages[0].extract_text())
-    editor.pages[0].rotate(angle=90)
+    print(editor.metadata, editor.extract_text(page_no=1))
+    editor.rotate_page(page_no=1, angle=90)
     editor.append(source="appendix.pdf")
     editor.write(target="out.pdf")
 ```
@@ -21,7 +19,8 @@ import math
 import operator
 import os
 from collections.abc import Iterable, Sequence
-from typing import Any, BinaryIO
+from enum import Enum
+from typing import Any, BinaryIO, Literal
 
 from docling_parse import pdf_parsers as _native  # type: ignore[attr-defined]
 from docling_parse._pdf_document import (
@@ -31,9 +30,9 @@ from docling_parse._pdf_document import (
     PdfEditablePage,
     PdfImage,
     PdfPage,
-    PdfPages,
     PdfSource,
     _native_errors,
+    _PageView,
     _pdf_images,
     _PdfDocument,
     _PdfEditing,
@@ -49,11 +48,49 @@ from docling_parse.pdf_errors import (
 __all__ = [
     "STANDARD_FONTS",
     "PdfBox",
-    "PdfEditablePage",
     "PdfEditor",
+    "PdfEditorPage",
+    "PdfExtractionMode",
     "PdfImage",
-    "PdfPages",
 ]
+
+
+class PdfExtractionMode(Enum):
+    """Select reading-order text or fixed-width layout text."""
+
+    PLAIN = "plain"
+    LAYOUT = "layout"
+
+
+def _one_based_target(target: dict[str, Any]) -> dict[str, Any]:
+    page = target.get("page")
+    return {**target, "page": page + 1} if page is not None else target
+
+
+def _one_based_outline(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {**_one_based_target(item), "children": _one_based_outline(item["children"])}
+        for item in items
+    ]
+
+
+class PdfEditorPage(_PageView):
+    """A read-only view of an Editor page, addressed by its one-based number."""
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}(page_no={self.page_no})"
+
+    @property
+    def page_no(self) -> int:
+        """The one-based page number."""
+        return self._index + 1
+
+    @property
+    def annotations(self) -> list[dict[str, Any]]:
+        """Page annotations with one-based local link targets."""
+        return [_one_based_target(item) for item in super().annotations]
 
 
 class PdfEditor(_PdfEditing):
@@ -89,6 +126,27 @@ class PdfEditor(_PdfEditing):
     def is_modified(self) -> bool:
         """True once the editor works on its own copy of the document."""
         return self._native.is_editing()
+
+    def page_count(self) -> int:
+        """Return the number of pages in the current document."""
+        with _native_errors():
+            return self._native.page_count()
+
+    def extract_text(
+        self,
+        *,
+        page_no: int,
+        extraction_mode: PdfExtractionMode = PdfExtractionMode.PLAIN,
+    ) -> str:
+        """Extract text from a one-based page, including unsaved edits.
+
+        PLAIN returns reading-order lines. LAYOUT preserves column and line
+        spacing in a fixed-width representation.
+        """
+        if not isinstance(extraction_mode, PdfExtractionMode):
+            raise TypeError("extraction_mode must be a PdfExtractionMode")
+        page = self._get_page(self._page_no_index(page_no=page_no))
+        return page._extract_text(layout=extraction_mode is PdfExtractionMode.LAYOUT)
 
     def render_page(self, *, page_no: int, scale: float = 1.0) -> Any:
         """Render a page of the current document as a PIL RGBA image.
@@ -150,7 +208,7 @@ class PdfEditor(_PdfEditing):
         if isinstance(page_no, bool):
             raise TypeError("page_no must be an integer, starting at 1")
         value = operator.index(page_no)
-        maximum = len(self.pages) + int(insertion)
+        maximum = self.page_count() + int(insertion)
         if not 1 <= value <= maximum:
             raise IndexError(f"page_no {value} out of range; expected 1..{maximum}")
         return value - 1
@@ -168,24 +226,119 @@ class PdfEditor(_PdfEditing):
             result.append(value - 1)
         return result
 
-    def get_page(self, *, page_no: int) -> PdfPage:
-        "Get page. Page numbers start at 1."
-        return _PdfDocument._get_page(
-            self, page_number=self._page_no_index(page_no=page_no, insertion=False)
-        )
+    @staticmethod
+    def _page_view(page: _PageView) -> PdfEditorPage:
+        return PdfEditorPage(page._owner, page._index, page._generation)
 
-    def get_page_no(self, *, page: PdfPage) -> int:
+    def get_page(self, *, page_no: int) -> PdfEditorPage:
+        """Inspect the page with the given one-based number."""
+        return self._page_view(self._get_page(self._page_no_index(page_no=page_no)))
+
+    def get_page_no(self, *, page: _PageView) -> int:
         """The one-based number of a page belonging to this document."""
-        return _PdfDocument._get_page_number(self, page=page) + 1
+        return self._get_page_number(page) + 1
 
-    def get_pages_showing_field(self, *, name: str) -> list[PdfPage]:
-        "The pages that show the form field with this fully qualified name."
-        return _PdfDocument._get_pages_showing_field(self, name=name)
+    def get_pages_showing_field(self, *, name: str) -> list[PdfEditorPage]:
+        """Inspect pages showing the field with the given fully qualified name."""
+        return [self._page_view(page) for page in self._get_pages_showing_field(name)]
+
+    @property
+    def outline(self) -> list[dict[str, Any]]:
+        """Bookmarks with one-based destination page numbers."""
+        return _one_based_outline(self._outline())
+
+    @property
+    def named_destinations(self) -> dict[str, dict[str, Any]]:
+        """Named destinations with one-based page numbers."""
+        return {
+            name: _one_based_target(target)
+            for name, target in super().named_destinations.items()
+        }
+
+    @property
+    def open_destination(self) -> dict[str, Any] | None:
+        """The document's open destination with a one-based page number."""
+        target = super().open_destination
+        return None if target is None else _one_based_target(target)
 
     def get_fields(self) -> dict[str, dict[str, Any]]:
-        'The form fields by fully qualified name. Each field has "kind"\n(text, checkbox, radio, choice, pushbutton, signature), "value",\n"default_value", "choices", "states", "read_only", "pages", and the\nraw "type" and "flags".'
-        return _PdfDocument._get_fields(
-            self,
+        """Form fields by fully qualified name, with one-based page lists."""
+        return {
+            name: {**field, "pages": [index + 1 for index in field["pages"]]}
+            for name, field in self._get_fields().items()
+        }
+
+    def _editable_page(self, page_no: int) -> PdfEditablePage:
+        page = self._get_page(self._page_no_index(page_no=page_no))
+        assert isinstance(page, PdfEditablePage)
+        return page
+
+    def rotate_page(self, *, page_no: int, angle: int) -> None:
+        """Add clockwise display rotation in multiples of 90 degrees."""
+        self._editable_page(page_no).rotate(angle)
+
+    def set_page_rotation(self, *, page_no: int, angle: int) -> None:
+        """Set clockwise display rotation in multiples of 90 degrees."""
+        self._editable_page(page_no).rotation = angle
+
+    def set_page_box(
+        self,
+        *,
+        page_no: int,
+        box: Literal["media", "crop", "bleed", "trim", "art"],
+        bounds: Sequence[float],
+    ) -> None:
+        """Set a page boundary in left, bottom, right, top order."""
+        self._editable_page(page_no)._set_box(box, bounds)
+
+    def scale_page(self, *, page_no: int, sx: float, sy: float) -> None:
+        """Scale page content, annotations and boxes by the given factors."""
+        self._editable_page(page_no).scale(sx, sy)
+
+    def scale_page_to(self, *, page_no: int, width: float, height: float) -> None:
+        """Scale a page to the given media box size in points."""
+        self._editable_page(page_no).scale_to(width, height)
+
+    def transform_page(self, *, page_no: int, ctm: Sequence[float]) -> None:
+        """Apply an affine transform to the page content and annotations."""
+        self._editable_page(page_no).add_transformation(ctm)
+
+    def transfer_page_rotation_to_content(self, *, page_no: int) -> None:
+        """Apply display rotation to the content, geometry and boxes."""
+        self._editable_page(page_no).transfer_rotation_to_content()
+
+    def overlay_page(
+        self,
+        *,
+        page_no: int,
+        source_page: _PageView,
+        over: bool = True,
+        fit: bool = False,
+        ctm: Sequence[float] | None = None,
+    ) -> None:
+        """Draw another page as vector content, above or below this page.
+
+        Use `fit` to center and scale the source or `ctm` to place it.
+        """
+        if fit and ctm is not None:
+            raise ValueError("choose either fit or ctm for overlay placement")
+        matrix = (1.0, 0.0, 0.0, 1.0, 0.0, 0.0) if ctm is None else ctm
+        self._editable_page(page_no)._overlay(source_page, over, fit, matrix)
+
+    def draw_text(
+        self,
+        *,
+        page_no: int,
+        text: str,
+        x: float,
+        y: float,
+        size: float = 12,
+        font: str = "Helvetica",
+        color: Sequence[float] | str = (0, 0, 0),
+    ) -> None:
+        """Draw text starting at the given baseline in PDF coordinates."""
+        self._editable_page(page_no)._draw_text(
+            text, x, y, size=size, font=font, color=color
         )
 
     def get_form_text_fields(self) -> dict[str, str]:
@@ -244,31 +397,32 @@ class PdfEditor(_PdfEditing):
             import_outline=import_outline,
         )
 
-    def add_page(self, *, page: PdfPage) -> PdfEditablePage:
+    def add_page(self, *, page: _PageView) -> PdfEditorPage:
         "Append a copy of a page of any reader, writer or editor."
-        return _PdfEditing._add_page(self, page=page)
+        return self._page_view(self._add_page(page))
 
-    def insert_page(self, *, page: PdfPage, before_page_no: int = 1) -> PdfEditablePage:
+    def insert_page(self, *, page: _PageView, before_page_no: int = 1) -> PdfEditorPage:
         "Insert page. Page numbers start at 1."
-        return _PdfEditing._insert_page(
-            self,
-            page=page,
-            index=self._page_no_index(page_no=before_page_no, insertion=True),
+        return self._page_view(
+            self._insert_page(
+                page, self._page_no_index(page_no=before_page_no, insertion=True)
+            )
         )
 
-    def add_blank_page(self, *, width: float, height: float) -> PdfEditablePage:
+    def add_blank_page(self, *, width: float, height: float) -> PdfEditorPage:
         "Add an empty page at the end. Sizes are in points (1/72 inch)."
-        return _PdfEditing._add_blank_page(self, width=width, height=height)
+        return self._page_view(self._add_blank_page(width, height))
 
     def insert_blank_page(
         self, *, before_page_no: int, width: float, height: float
-    ) -> PdfEditablePage:
+    ) -> PdfEditorPage:
         "Insert blank page. Page numbers start at 1."
-        return _PdfEditing._insert_blank_page(
-            self,
-            index=self._page_no_index(page_no=before_page_no, insertion=True),
-            width=width,
-            height=height,
+        return self._page_view(
+            self._insert_blank_page(
+                self._page_no_index(page_no=before_page_no, insertion=True),
+                width,
+                height,
+            )
         )
 
     def add_image(
@@ -279,9 +433,9 @@ class PdfEditor(_PdfEditing):
         page_size: str | Sequence[float] | None = None,
         margin: float = 0,
         dpi: float | None = None,
-    ) -> list[PdfEditablePage]:
+    ) -> list[PdfEditorPage]:
         "Add image. Page numbers start at 1."
-        return _PdfEditing._add_image(
+        pages = _PdfEditing._add_image(
             self,
             image=image,
             index=(
@@ -293,6 +447,7 @@ class PdfEditor(_PdfEditing):
             margin=margin,
             dpi=dpi,
         )
+        return [self._page_view(page) for page in pages]
 
     @classmethod
     def from_images(
@@ -310,9 +465,9 @@ class PdfEditor(_PdfEditing):
 
     def duplicate_page(
         self, *, page_no: int, before_page_no: int | None = None
-    ) -> PdfEditablePage:
+    ) -> PdfEditorPage:
         "Duplicate page. Page numbers start at 1."
-        return _PdfEditing._duplicate_page(
+        page = _PdfEditing._duplicate_page(
             self,
             index=self._page_no_index(page_no=page_no, insertion=False),
             to=(
@@ -321,6 +476,7 @@ class PdfEditor(_PdfEditing):
                 else self._page_no_index(page_no=before_page_no, insertion=True)
             ),
         )
+        return self._page_view(page)
 
     def remove_page(self, *, page_no: int, clean: bool = False) -> None:
         "Remove page. Page numbers start at 1."
@@ -497,9 +653,9 @@ class PdfEditor(_PdfEditing):
         size: float = 11,
         max_depth: int | None = None,
         page_size: str | Sequence[float] | None = None,
-    ) -> list[PdfEditablePage]:
+    ) -> list[PdfEditorPage]:
         "Add table of contents. Page numbers start at 1."
-        return _PdfEditing._add_table_of_contents(
+        pages = _PdfEditing._add_table_of_contents(
             self,
             index=self._page_no_index(page_no=before_page_no, insertion=True),
             title=title,
@@ -508,6 +664,7 @@ class PdfEditor(_PdfEditing):
             max_depth=max_depth,
             page_size=page_size,
         )
+        return [self._page_view(page) for page in pages]
 
     def update_form_field_values(
         self, *, fields: dict[str, str | bool], flatten: bool = False
@@ -857,10 +1014,19 @@ class PdfEditor(_PdfEditing):
         incremental_clone_object_count_limit: int | None,
         incremental_clone_object_id_limit: int | None,
     ) -> None:
-        if incremental:
+        if incremental or full:
             raise PdfUnsupportedError(
                 PdfEditErrorCategory.UNSUPPORTED,
                 "incremental output requires the incremental serializer",
+            )
+        if (
+            keep_initial_header
+            or incremental_clone_object_count_limit != 500_000
+            or incremental_clone_object_id_limit != 1_000_000
+        ):
+            raise PdfUnsupportedError(
+                PdfEditErrorCategory.UNSUPPORTED,
+                "header preservation and custom incremental clone limits are unsupported",
             )
         source = clone_from
         if source is None and fileobj is not None and fileobj != "":
@@ -892,6 +1058,7 @@ class PdfEditor(_PdfEditing):
     ) -> dict[str, Any]:
         if (
             tree is not None
+            or stack is not _UNSET
             or visited is not None
             or depth
             or traversal_state is not None
@@ -900,7 +1067,7 @@ class PdfEditor(_PdfEditing):
                 PdfEditErrorCategory.UNSUPPORTED,
                 "subtree traversal requires the PDF object editing API",
             )
-        fields = self.get_fields()
+        fields = self._get_fields()
         if retval is not None:
             retval.update(fields)
             fields = retval
@@ -928,7 +1095,7 @@ class PdfEditor(_PdfEditing):
             name = field
         else:
             name = field.get("name", field.get("/T", ""))
-        return self.get_pages_showing_field(name=str(name))
+        return self._get_pages_showing_field(str(name))
 
     def _compat_append(
         self,
@@ -969,7 +1136,7 @@ class PdfEditor(_PdfEditing):
             if any(p < 0 or p >= count for p in selected):
                 raise IndexError("source page index out of range")
             insertion = (
-                len(self.pages) if position is None else self._position(position)
+                self.page_count() if position is None else self._position(position)
             )
             # Reuse an already-open source and keep it alive until copying ends.
             source = temporary if temporary is not None else fileobj
@@ -986,27 +1153,26 @@ class PdfEditor(_PdfEditing):
                 temporary.close()
 
     def _compat_insert_page(
-        self, *, page: PdfPage, index: int, excluded_keys: Iterable[str]
+        self, *, page: _PageView, index: int, excluded_keys: Iterable[str]
     ) -> PdfEditablePage:
         if tuple(excluded_keys):
             raise PdfUnsupportedError(
                 PdfEditErrorCategory.UNSUPPORTED,
                 "excluding page keys requires the PDF object editing API",
             )
-        return self.insert_page(page=page, before_page_no=self._position(index) + 1)
+        return self._insert_page(page, index)
 
     def _compat_blank_page(
         self, *, width: float | None, height: float | None, index: int
     ) -> PdfEditablePage:
         if width is None or height is None:
-            if not self.pages:
+            count = self.page_count()
+            if not count:
                 raise ValueError("width and height are required for the first page")
-            box = self.pages[min(index, len(self.pages) - 1)].mediabox
+            box = self._get_page(min(index, count - 1)).mediabox
             width = box.width if width is None else width
             height = box.height if height is None else height
-        return self.insert_blank_page(
-            before_page_no=self._position(index) + 1, width=width, height=height
-        )
+        return self._insert_blank_page(index, width, height)
 
     def _compat_add_annotation(
         self, *, page_number: int | PdfPage, annotation: dict[str, Any]
@@ -1017,7 +1183,7 @@ class PdfEditor(_PdfEditing):
             else self._page_index(page_number)
         )
         self.add_annotation(page_no=index + 1, annotation=annotation)
-        return self.pages[index].annotations[-1]
+        return self._get_page(index).annotations[-1]
 
     def _compat_named_destination(self, *, title: str, page_no: int, fit: Any) -> Any:
         if fit is not None and getattr(fit, "fit_type", "/Fit") != "/Fit":
@@ -1070,7 +1236,7 @@ class PdfEditor(_PdfEditing):
             **options,
         )
         if before is not None:
-            siblings = self.outline
+            siblings = self._outline()
             if parent is not None:
                 pending = list(siblings)
                 while pending:

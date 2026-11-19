@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import math
 import os
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Callable, Iterable, Iterator, Sequence
 from contextlib import contextmanager
 from typing import Any, BinaryIO, NamedTuple, Union, overload
 
@@ -241,7 +241,7 @@ class PdfImage(NamedTuple):
         )
 
 
-class PdfPage:
+class _PageView:
     """A page of a document, by position. Nothing is decoded until asked for.
 
     The handle belongs to the page list it was taken from: once pages are
@@ -258,16 +258,6 @@ class PdfPage:
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(index={self._index})"
-
-    @property
-    def index(self) -> int:
-        """Zero-based position of the page in its document."""
-        return self._index
-
-    @property
-    def page_number(self) -> int:
-        """Same as `index`: the zero-based position, under pypdf's name."""
-        return self._index
 
     def _info(self) -> dict[str, Any]:
         with _native_errors():
@@ -303,19 +293,10 @@ class PdfPage:
         """Size of one user space unit in 1/72 inch; 1.0 unless the page says otherwise."""
         return self._info()["user_unit"]
 
-    def extract_text(self, extraction_mode: str = "plain") -> str:
-        """The text of the page.
-
-        "plain" returns the text lines in the parser's reading order, joined
-        by newlines. "layout" places the text on a character grid, so
-        columns, indentation and vertical spacing of the page survive in the
-        string; it suits tables and forms read as fixed-width text.
-        """
-        if extraction_mode not in ("plain", "layout"):
-            raise ValueError('extraction_mode is "plain" or "layout"')
+    def _extract_text(self, *, layout: bool) -> str:
         with _native_errors():
             return self._owner._native.extract_text(
-                self._index, self._generation, layout=extraction_mode == "layout"
+                self._index, self._generation, layout=layout
             )
 
     @property
@@ -345,8 +326,67 @@ class PdfPage:
         ]
 
 
+class PdfPage(_PageView):
+    """A read-only page on the pypdf migration API."""
+
+    __slots__ = ()
+
+    @property
+    def index(self) -> int:
+        """Zero-based position of the page in its document."""
+        return self._index
+
+    @property
+    def page_number(self) -> int:
+        """Same as `index`: the zero-based position, under pypdf's name."""
+        return self._index
+
+    def extract_text(
+        self,
+        *args: Any,
+        orientations: int | tuple[int, ...] = (0, 90, 180, 270),
+        space_width: float = 200.0,
+        visitor_operand_before: Callable[..., None] | None = None,
+        visitor_operand_after: Callable[..., None] | None = None,
+        visitor_text: Callable[..., None] | None = None,
+        extraction_mode: str = "plain",
+        **kwargs: Any,
+    ) -> str:
+        """Return reading-order lines or fixed-width layout text."""
+        if (
+            args
+            or orientations != (0, 90, 180, 270)
+            or space_width != 200.0
+            or visitor_operand_before is not None
+            or visitor_operand_after is not None
+            or visitor_text is not None
+            or kwargs
+        ):
+            raise PdfUnsupportedError(
+                PdfEditErrorCategory.UNSUPPORTED,
+                "only the extraction_mode option is supported for text extraction",
+            )
+        if extraction_mode not in ("plain", "layout"):
+            raise ValueError('extraction_mode is "plain" or "layout"')
+        return self._extract_text(layout=extraction_mode == "layout")
+
+
+def _check_expand(expand: bool) -> None:
+    if expand:
+        raise PdfUnsupportedError(
+            PdfEditErrorCategory.UNSUPPORTED, "expanding the page is unsupported"
+        )
+
+
+def _transformation_matrix(ctm: Sequence[float]) -> list[float]:
+    matrix = [float(value) for value in getattr(ctm, "ctm", ctm)]
+    if len(matrix) != 6:
+        raise ValueError("a transformation matrix has six entries")
+    return matrix
+
+
 class PdfEditablePage(PdfPage):
-    """A page of a writer or editor: `PdfPage` plus in-place changes."""
+    """A page of a writer that supports pypdf-style in-place changes."""
 
     __slots__ = ()
 
@@ -360,27 +400,16 @@ class PdfEditablePage(PdfPage):
         return self
 
     def merge_page(
-        self, page: PdfPage, over: bool = True, *, fit: bool = False
-    ) -> PdfEditablePage:
-        """Draw another page on this one as vector content: a stamp or
-        overlay with `over=True`, a watermark or underlay with `over=False`.
-
-        By default the two pages are superimposed at their own coordinates,
-        unscaled. With `fit=True` the other page is centered on this one and
-        scaled to fill it, upright with respect to this page's rotation.
-
-        `page` may belong to any reader, writer or editor, including this
-        one. Its text and graphics are drawn; its annotations and form
-        fields are not copied.
-        """
-        return self._overlay(page, over, fit, (1.0, 0.0, 0.0, 1.0, 0.0, 0.0))
+        self, page2: _PageView, expand: bool = False, over: bool = True
+    ) -> None:
+        """Overlay another page, or underlay it with `over=False`."""
+        _check_expand(expand)
+        self._overlay(page2, over, False, (1.0, 0.0, 0.0, 1.0, 0.0, 0.0))
 
     def _overlay(
-        self, page: PdfPage, over: bool, fit: bool, ctm: Sequence[float]
-    ) -> PdfEditablePage:
-        matrix = [float(value) for value in ctm]
-        if len(matrix) != 6:
-            raise ValueError("a transformation matrix has six entries")
+        self, page: _PageView, over: bool, fit: bool, ctm: Sequence[float]
+    ) -> None:
+        matrix = _transformation_matrix(ctm)
         with _native_errors():
             self._owner._native.overlay_page(
                 self._index,
@@ -392,37 +421,48 @@ class PdfEditablePage(PdfPage):
                 generation=self._generation,
                 other_generation=page._generation,
             )
-        return self
 
     def merge_transformed_page(
-        self, page: PdfPage, ctm: Sequence[float], over: bool = True
-    ) -> PdfEditablePage:
-        """`merge_page`, with the other page transformed by the matrix
-        `(a, b, c, d, e, f)` before it is drawn."""
-        return self._overlay(page, over, False, ctm)
+        self,
+        page2: _PageView,
+        ctm: Sequence[float],
+        over: bool = True,
+        expand: bool = False,
+    ) -> None:
+        """Merge a page after applying the given affine transformation."""
+        _check_expand(expand)
+        self._overlay(page2, over, False, ctm)
 
     def merge_scaled_page(
-        self, page: PdfPage, scale: float, over: bool = True
-    ) -> PdfEditablePage:
-        """`merge_page`, with the other page scaled about the origin."""
-        return self._overlay(page, over, False, (scale, 0.0, 0.0, scale, 0.0, 0.0))
+        self, page2: _PageView, scale: float, over: bool = True, expand: bool = False
+    ) -> None:
+        """Merge a page after scaling it about the origin."""
+        self.merge_transformed_page(
+            page2, (scale, 0.0, 0.0, scale, 0.0, 0.0), over, expand
+        )
 
     def merge_translated_page(
-        self, page: PdfPage, tx: float, ty: float, over: bool = True
-    ) -> PdfEditablePage:
-        """`merge_page`, with the other page moved by `(tx, ty)`."""
-        return self._overlay(page, over, False, (1.0, 0.0, 0.0, 1.0, tx, ty))
+        self,
+        page2: _PageView,
+        tx: float,
+        ty: float,
+        over: bool = True,
+        expand: bool = False,
+    ) -> None:
+        """Merge a page after moving it by `(tx, ty)`."""
+        self.merge_transformed_page(page2, (1.0, 0.0, 0.0, 1.0, tx, ty), over, expand)
 
     def merge_rotated_page(
-        self, page: PdfPage, rotation: float, over: bool = True
-    ) -> PdfEditablePage:
-        """`merge_page`, with the other page turned counter-clockwise by
-        `rotation` degrees about the origin."""
+        self, page2: _PageView, rotation: float, over: bool = True, expand: bool = False
+    ) -> None:
+        """Merge a page after turning it counter-clockwise about the origin."""
         angle = math.radians(rotation)
         cos, sin = math.cos(angle), math.sin(angle)
-        return self._overlay(page, over, False, (cos, sin, -sin, cos, 0.0, 0.0))
+        self.merge_transformed_page(
+            page2, (cos, sin, -sin, cos, 0.0, 0.0), over, expand
+        )
 
-    def draw_text(
+    def _draw_text(
         self,
         text: str,
         x: float,
@@ -452,44 +492,40 @@ class PdfEditablePage(PdfPage):
             )
         return self
 
-    def transfer_rotation_to_content(self) -> PdfEditablePage:
+    def transfer_rotation_to_content(self) -> None:
         """Turn the page's rotation into a rotation of its content, boxes and
         annotations. The page looks the same and `rotation` becomes 0."""
         with _native_errors():
             self._owner._native.flatten_page_rotation(self._index, self._generation)
-        return self
 
-    def add_transformation(self, ctm: Sequence[float]) -> PdfEditablePage:
+    def add_transformation(self, ctm: Sequence[float], expand: bool = False) -> None:
         """Apply the matrix `(a, b, c, d, e, f)` to the page's content and
         annotations. The page boundaries are not changed."""
-        matrix = [float(value) for value in ctm]
-        if len(matrix) != 6:
-            raise ValueError("a transformation matrix has six entries")
+        _check_expand(expand)
+        matrix = _transformation_matrix(ctm)
         with _native_errors():
             self._owner._native.transform_page(self._index, matrix, self._generation)
-        return self
 
-    def scale(self, sx: float, sy: float) -> PdfEditablePage:
+    def scale(self, sx: float, sy: float) -> None:
         """Scale the page by `sx` horizontally and `sy` vertically: its
         content, its annotations and all of its boundaries."""
         with _native_errors():
             self._owner._native.scale_page(
                 self._index, float(sx), float(sy), self._generation
             )
-        return self
 
-    def scale_by(self, factor: float) -> PdfEditablePage:
+    def scale_by(self, factor: float) -> None:
         """Scale the page by the same factor in both directions."""
-        return self.scale(factor, factor)
+        self.scale(factor, factor)
 
-    def scale_to(self, width: float, height: float) -> PdfEditablePage:
+    def scale_to(self, width: float, height: float) -> None:
         """Scale the page so that its media box gets the given size."""
         box = self.mediabox
         if not (box.width > 0 and box.height > 0):
             raise PdfEditError(
                 PdfEditErrorCategory.INVALID_EDIT, "the page has an empty media box"
             )
-        return self.scale(width / box.width, height / box.height)
+        self.scale(width / box.width, height / box.height)
 
     def _set_box(self, name: str, box: Sequence[float]) -> None:
         left, bottom, right, top = (float(value) for value in box)
@@ -556,7 +592,7 @@ class PdfEditablePage(PdfPage):
 class PdfPages(Sequence[PdfPage]):
     """The pages of a document: zero-based, with negative indices and slices.
 
-    On a writer or editor, `del pages[i]` removes a page.
+    On a writer, `del pages[i]` removes a page.
     """
 
     def __init__(self, owner: _PdfDocument):
@@ -663,29 +699,25 @@ class _PdfDocument:
             return self._native.document_info()
 
     @property
-    def pages(self) -> PdfPages:
+    def _pages(self) -> PdfPages:
         return PdfPages(getattr(self, "_page_owner", self))
 
-    def get_num_pages(self) -> int:
-        """The number of pages; same as `len(self.pages)`."""
-        return len(self.pages)
-
     def _get_page(self, page_number: int) -> PdfPage:
-        """The page at a zero-based position; same as `self.pages[page_number]`."""
-        return self.pages[page_number]
+        """The page at a zero-based position; same as `self._pages[page_number]`."""
+        return self._pages[page_number]
 
-    def _get_page_number(self, page: PdfPage) -> int:
+    def _get_page_number(self, page: _PageView) -> int:
         """The zero-based position of a page of this document."""
         if page._owner is not getattr(self, "_page_owner", self):
             raise ValueError("the page belongs to another document")
-        return page.index
+        return page._index
 
     def _get_pages_showing_field(self, name: str) -> list[PdfPage]:
         """The pages that show the form field with this fully qualified name."""
         fields = self._get_fields()
         if name not in fields:
             raise KeyError(name)
-        return [self.pages[index] for index in fields[name]["pages"]]
+        return [self._pages[index] for index in fields[name]["pages"]]
 
     @property
     def pdf_header(self) -> str:
@@ -738,6 +770,9 @@ class _PdfDocument:
     def outline(self) -> list[dict[str, Any]]:
         """The document outline (bookmarks) as a tree: each item has "title",
         "page" (zero-based index, or None), "children" and "id"."""
+        return self._outline()
+
+    def _outline(self) -> list[dict[str, Any]]:
         with _native_errors():
             return self._native.outline_tree()
 
@@ -915,11 +950,11 @@ class _PdfEditing(_PdfDocument):
             import_outline=import_outline,
         )
 
-    def _add_page(self, page: PdfPage) -> PdfEditablePage:
+    def _add_page(self, page: _PageView) -> PdfEditablePage:
         """Append a copy of a page of any reader, writer or editor."""
-        return self._insert_page(page, len(self.pages))
+        return self._insert_page(page, len(self._pages))
 
-    def _insert_page(self, page: PdfPage, index: int = 0) -> PdfEditablePage:
+    def _insert_page(self, page: _PageView, index: int = 0) -> PdfEditablePage:
         """Insert a copy of a page of any reader, writer or editor so that it
         becomes page `index`."""
         with _native_errors():
@@ -929,11 +964,11 @@ class _PdfEditing(_PdfDocument):
                 self._position(index),
                 other_generation=page._generation,
             )
-        return self.pages[position]  # type: ignore[return-value]
+        return self._pages[position]  # type: ignore[return-value]
 
     def _position(self, index: int) -> int:
         """An insertion position: 0..len, negative counted from the end."""
-        count = len(self.pages)
+        count = len(self._pages)
         position = index + count if index < 0 else index
         if not 0 <= position <= count:
             raise IndexError(f"position {index} out of range for {count} pages")
@@ -941,7 +976,7 @@ class _PdfEditing(_PdfDocument):
 
     def _add_blank_page(self, width: float, height: float) -> PdfEditablePage:
         """Add an empty page at the end. Sizes are in points (1/72 inch)."""
-        return self._insert_blank_page(len(self.pages), width, height)
+        return self._insert_blank_page(len(self._pages), width, height)
 
     def _insert_blank_page(
         self, index: int, width: float, height: float
@@ -951,7 +986,7 @@ class _PdfEditing(_PdfDocument):
             position = self._native.insert_blank_page(
                 float(width), float(height), self._position(index)
             )
-        return self.pages[position]  # type: ignore[return-value]
+        return self._pages[position]  # type: ignore[return-value]
 
     def _add_image(
         self,
@@ -979,7 +1014,7 @@ class _PdfEditing(_PdfDocument):
         upright.
         """
         size = _pdf_images.page_size_of(page_size)
-        position = len(self.pages) if index is None else self._position(index)
+        position = len(self._pages) if index is None else self._position(index)
 
         added: list[int] = []
         for picture in _pdf_images.pictures(image):
@@ -1003,7 +1038,7 @@ class _PdfEditing(_PdfDocument):
                 )
             position += 1
 
-        return [self.pages[i] for i in added]  # type: ignore[misc]
+        return [self._pages[i] for i in added]  # type: ignore[misc]
 
     @classmethod
     def _from_images(
@@ -1024,24 +1059,24 @@ class _PdfEditing(_PdfDocument):
     def _duplicate_page(self, index: int, to: int | None = None) -> PdfEditablePage:
         """Add a copy of the page at `index`, at position `to` or, by
         default, at the end. The copy can be edited independently."""
-        count = len(self.pages)
+        count = len(self._pages)
         resolved = index + count if index < 0 else index
         with _native_errors():
             position = self._native.duplicate_page(
                 resolved, -1 if to is None else self._position(to)
             )
-        return self.pages[position]  # type: ignore[return-value]
+        return self._pages[position]  # type: ignore[return-value]
 
     def _remove_page(self, index: int, clean: bool = False) -> None:
         """Remove the page at `index`. Existing page handles become stale."""
-        count = len(self.pages)
+        count = len(self._pages)
         resolved = index + count if index < 0 else index
         with _native_errors():
             self._native.remove_page(resolved, clean=clean)
 
     def _move_page(self, from_index: int, to_index: int) -> None:
         """Move a page so that it ends up at `to_index`."""
-        count = len(self.pages)
+        count = len(self._pages)
         source = from_index + count if from_index < 0 else from_index
         target = to_index + count if to_index < 0 else to_index
         with _native_errors():
@@ -1092,7 +1127,7 @@ class _PdfEditing(_PdfDocument):
 
     def _page_index(self, index: int) -> int:
         """An existing page: 0..len-1, negative counted from the end."""
-        count = len(self.pages)
+        count = len(self._pages)
         resolved = index + count if index < 0 else index
         if not 0 <= resolved < count:
             raise IndexError(f"page index {index} out of range for {count} pages")
@@ -1282,19 +1317,19 @@ class _PdfEditing(_PdfDocument):
         """
         entries = [
             entry
-            for entry in self._outline_entries(self.outline, 0)
+            for entry in self._outline_entries(self._outline(), 0)
             if max_depth is None or entry[0] <= max_depth
         ]
         if not entries:
             return []
 
-        count = len(self.pages)
+        count = len(self._pages)
         position = self._position(index)
         size_given = _pdf_images.page_size_of(page_size)
         if size_given is not None:
             width, height = size_given
         elif count > 0:
-            box = self.pages[min(position, count - 1)].mediabox
+            box = self._pages[min(position, count - 1)].mediabox
             width, height = box.width, box.height
         else:
             width, height = _pdf_images.PAGE_SIZES["a4"]
@@ -1313,18 +1348,18 @@ class _PdfEditing(_PdfDocument):
         # Read again: the targets moved behind the new pages.
         entries = [
             entry
-            for entry in self._outline_entries(self.outline, 0)
+            for entry in self._outline_entries(self._outline(), 0)
             if max_depth is None or entry[0] <= max_depth
         ]
         labels = self.page_labels
 
         number_column = width - margin - 4 * size
         for page_offset in range(number_of_pages):
-            page: PdfEditablePage = self.pages[position + page_offset]  # type: ignore[assignment]
+            page: PdfEditablePage = self._pages[position + page_offset]  # type: ignore[assignment]
             page_number = position + page_offset
             y = height - margin - size
             if page_offset == 0:
-                page.draw_text(_win_ansi(title), margin, y, size=1.6 * size, font=font)
+                page._draw_text(_win_ansi(title), margin, y, size=1.6 * size, font=font)
             y -= title_height
 
             for depth, text, target in entries[
@@ -1338,10 +1373,10 @@ class _PdfEditing(_PdfDocument):
                 line = _win_ansi(text)
                 if len(line) > room:
                     line = line[: max(room - 1, 1)] + "\u2026"
-                page.draw_text(line, x, y, size=size, font=font)
+                page._draw_text(line, x, y, size=size, font=font)
 
                 if target is not None:
-                    page.draw_text(
+                    page._draw_text(
                         labels[target], number_column, y, size=size, font=font
                     )
                     self._add_link(
@@ -1351,7 +1386,7 @@ class _PdfEditing(_PdfDocument):
                     )
                 y -= line_height
 
-        return [self.pages[page.index] for page in added]  # type: ignore[misc]
+        return [self._pages[page.index] for page in added]  # type: ignore[misc]
 
     @staticmethod
     def _outline_entries(
@@ -1627,7 +1662,7 @@ class _PdfEditing(_PdfDocument):
 
         removed = 0
         with _native_errors():
-            for index in range(len(self.pages)):
+            for index in range(len(self._pages)):
                 removed += self._native.remove_annotations(index, selected)
         return removed
 

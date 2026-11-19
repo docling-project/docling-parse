@@ -7,26 +7,27 @@
 The inspection example assumes the form has a field named `name`.
 
 ```python
-from docling_parse import PdfReader
+from docling_parse import PdfEditor
 
-with PdfReader("form.pdf") as reader:
-    fields = reader.get_fields()
+with PdfEditor(source="form.pdf") as editor:
+    fields = editor.get_fields()
     for name, field in fields.items():
         print(name, field["kind"], field["value"], field["states"], field["pages"])
-    print(reader.get_form_text_fields(full_qualified_name=True))
-    print(reader.get_pages_showing_field(fields["name"]))
-    print(reader.has_form, reader.has_xfa)
+    print(editor.get_form_text_fields())
+    print(editor.get_pages_showing_field(name="name"))
+    print(editor.has_form, editor.has_xfa)
 ```
 
 `get_fields()` returns a dictionary keyed by fully qualified field name.
 Each field reports `kind`, `value`, `default_value`, `choices`, `states`,
-`flags`, `read_only`, `rects`, `pages` and its names. `pages` contains
-zero-based page indices, even when reading through `PdfEditor`.
+`flags`, `read_only`, `rects`, `pages` and its names. Editor `pages` results
+contain one-based page numbers. Reader and Writer results contain zero-based
+indices.
 Radio groups report their combined selectable states and all widget rectangles.
 
-Reader/Writer accept a field dictionary or a name in
-`get_pages_showing_field(field)`. Editor uses
-`get_pages_showing_field(name="name")`. The returned values are page handles.
+Editor `get_pages_showing_field(name="name")` returns read-only page views.
+Reader and Writer accept a field dictionary or a name in
+`get_pages_showing_field(field)`.
 
 Kinds include text, checkbox, radio, choice, pushbutton and signature.
 XFA presence is reported; XFA data is not parsed or updated.

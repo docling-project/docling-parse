@@ -2,8 +2,8 @@
 
 [Editing overview](../editing.md) · [Navigation and preservation](navigation.md)
 
-Editor examples use named arguments and one-based page numbers. Reader/Writer
-examples keep zero-based indices; all `pages[...]` sequences are zero-based.
+Editor methods take named arguments and one-based page numbers.
+Reader and Writer keep zero-based indices for pypdf migration.
 
 ## Open and inspect
 
@@ -12,19 +12,14 @@ Editor. Streams you provide are read and remain open. Passwords are supplied
 when opening; there is no separate `decrypt()` step.
 
 ```python
-from docling_parse import PdfEditor, PdfReader
+from docling_parse import PdfEditor, PdfExtractionMode
 
 with PdfEditor(source="document.pdf") as editor:
     first = editor.get_page(page_no=1)
-    print(editor.get_page_no(page=first))  # 1
-    print(first.index, first.page_number)  # 0, 0
-    print(first.extract_text())
-    print(first.extract_text(extraction_mode="layout"))
+    print(editor.page_count(), first.page_no)
+    print(editor.extract_text(page_no=1))
+    print(editor.extract_text(page_no=1, extraction_mode=PdfExtractionMode.LAYOUT))
     print(first.mediabox, first.cropbox, first.rotation, first.user_unit)
-
-with PdfReader("protected.pdf", password="secret") as reader:
-    print(reader.get_page(0).extract_text())
-    print(len(reader.pages), reader.pages[-1].mediabox)
 ```
 
 Plain extraction joins the decoder's line cells with newlines. Layout mode
@@ -52,7 +47,7 @@ with PdfEditor() as editor:
 
 Omit `page_nos` to copy all source pages. A list can reorder or repeat pages.
 Omit `before_page_no` to append at the end; insertion accepts 1 through
-`len(editor.pages) + 1`.
+`editor.page_count() + 1`.
 
 The compatibility methods use pypdf's argument order:
 
@@ -82,8 +77,8 @@ Nonempty pypdf `excluded_fields` and `excluded_keys` arguments are unsupported.
 from docling_parse import PdfEditor
 
 with PdfEditor(source="document.pdf") as editor:
-    editor.get_page(page_no=1).rotate(angle=90)
-    editor.get_page(page_no=2).cropbox = (20, 20, 180, 280)
+    editor.rotate_page(page_no=1, angle=90)
+    editor.set_page_box(page_no=2, box="crop", bounds=(20, 20, 180, 280))
     editor.duplicate_page(page_no=1)
     editor.move_page(page_no=3, to_page_no=1)
     editor.remove_page(page_no=4)
@@ -109,22 +104,21 @@ This does not provide general structure-tree repair.
 from docling_parse import PdfEditor
 
 with PdfEditor(source="document.pdf") as editor:
-    page = editor.get_page(page_no=1)
-    page.scale_by(factor=0.5)
-    page.scale_to(width=300, height=400)
-    page.add_transformation(ctm=(1, 0, 0, 1, 20, 30))
-    page.rotation = 180
-    page.transfer_rotation_to_content()
+    editor.scale_page(page_no=1, sx=0.5, sy=0.5)
+    editor.scale_page_to(page_no=1, width=300, height=400)
+    editor.transform_page(page_no=1, ctm=(1, 0, 0, 1, 20, 30))
+    editor.set_page_rotation(page_no=1, angle=180)
+    editor.transfer_page_rotation_to_content(page_no=1)
     editor.write(target="transformed.pdf")
 ```
 
-`scale(sx=..., sy=...)`, `scale_by` and `scale_to` scale content, annotations
-and all five page boxes. `add_transformation` transforms content and annotation
+`scale_page` and `scale_page_to` scale content, annotations and all five page
+boxes. `transform_page` transforms content and annotation
 geometry but leaves the boxes alone. A matrix is `(a, b, c, d, e, f)`.
 
-`rotate(angle=90)` adds clockwise display rotation; setting `rotation` sets
-the absolute value. Both require multiples of 90. Flattening rotation moves
-it into content and annotation coordinates and adjusts page boxes.
+`rotate_page` adds clockwise display rotation. `set_page_rotation` sets the
+absolute value. Both require multiples of 90. Transferring rotation to the
+content adjusts text and graphics, annotation coordinates and page boxes.
 
 After insertion, removal or reordering, reacquire page handles. Old handles
 raise `PdfStaleHandleError`; they do not silently follow a different page.
@@ -132,23 +126,21 @@ raise `PdfStaleHandleError`; they do not silently follow a different page.
 ## Stamps and watermarks
 
 ```python
-from docling_parse import PdfEditor, PdfReader
+from docling_parse import PdfEditor
 
-with PdfReader("stamp.pdf") as stamp, PdfEditor(source="document.pdf") as editor:
-    overlay = stamp.pages[0]
-    editor.get_page(page_no=1).merge_page(page=overlay, over=True)
-    editor.get_page(page_no=2).merge_page(page=overlay, over=False)
-    editor.get_page(page_no=3).merge_page(page=overlay, fit=True)
-    editor.get_page(page_no=4).merge_translated_page(page=overlay, tx=40, ty=60)
+with PdfEditor(source="stamp.pdf") as stamp, PdfEditor(source="document.pdf") as editor:
+    overlay = stamp.get_page(page_no=1)
+    editor.overlay_page(page_no=1, source_page=overlay)
+    editor.overlay_page(page_no=2, source_page=overlay, over=False)
+    editor.overlay_page(page_no=3, source_page=overlay, fit=True)
+    editor.overlay_page(page_no=4, source_page=overlay, ctm=(1, 0, 0, 1, 40, 60))
     editor.write(target="stamped.pdf")
 ```
 
 Composition uses vector Form XObjects. The default keeps the other page at
 its own coordinates. `fit=True` centers and fits it within the target trim
-box, accounting for display rotation. Explicit placement is available through
-`merge_transformed_page(page=..., ctm=...)`, `merge_scaled_page(page=..., scale=...)`
-and `merge_rotated_page(page=..., rotation=...)`. The latter rotates content
-counter-clockwise about the origin.
+box, accounting for display rotation. Pass a transformation matrix with
+`ctm` for explicit placement.
 
 The overlaid page's annotations and form widgets are not copied. Its text
 and graphics are drawn; interactive links and controls require separate edits.

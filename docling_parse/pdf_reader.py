@@ -1,4 +1,4 @@
-"""PdfReader: open a PDF and inspect it without changing it.
+"""PdfReader: read-only PDF inspection for pypdf migration.
 
 ```python
 from docling_parse.pdf_reader import PdfReader
@@ -27,7 +27,7 @@ __all__ = ["PdfBox", "PdfImage", "PdfPage", "PdfPages", "PdfReader"]
 
 
 class PdfReader(_PdfReaderCompat):
-    """A read-only PDF document.
+    """A read-only PDF document with a zero-based pypdf-style page sequence.
 
     `source` is a path, bytes, a binary stream (read, never closed), or
     another PdfReader, PdfWriter or PdfEditor. Opening parses the document

@@ -22,7 +22,7 @@ def test_render_page_includes_unsaved_changes_and_owns_its_pixels():
     with PdfEditor(source=source) as editor:
         before = editor.render_page(page_no=1)
         assert before.getpixel((30, 170)) == (255, 0, 0, 255)
-        editor.pages[0].rotate(90)
+        editor.rotate_page(page_no=1, angle=90)
         after = editor.render_page(page_no=1)
         assert after.getpixel((30, 30)) == (255, 0, 0, 255)
         assert after.getpixel((30, 170)) == (255, 255, 255, 255)

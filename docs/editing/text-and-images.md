@@ -8,12 +8,11 @@
 from docling_parse import PdfEditor
 
 with PdfEditor(source="document.pdf") as editor:
-    page = editor.get_page(page_no=1)
-    page.draw_text(
-        text="CONFIDENTIAL", x=72, y=780, size=24,
+    editor.draw_text(
+        page_no=1, text="CONFIDENTIAL", x=72, y=780, size=24,
         font="Helvetica-Bold", color="#c00000"
     )
-    page.draw_text(text="Approved by:\nDate:", x=72, y=120)
+    editor.draw_text(page_no=1, text="Approved by:\nDate:", x=72, y=120)
     editor.write(target="labelled.pdf")
 ```
 
@@ -42,10 +41,10 @@ replacement and truncation policy for unsupported or long titles.
 ## Export existing page images
 
 ```python
-from docling_parse import PdfReader
+from docling_parse import PdfEditor
 
-with PdfReader("document.pdf") as reader:
-    for index, image in enumerate(reader.pages[0].images):
+with PdfEditor(source="document.pdf") as editor:
+    for index, image in enumerate(editor.get_page(page_no=1).images):
         print(image.name, image.bbox, image.width, image.height, image.format)
         if image.format == "raw":
             image.to_pil().save(f"extracted-{index}.png")
@@ -103,9 +102,6 @@ Page sizes are `"A3"`, `"A4"`, `"A5"`, `"Letter"`, `"Legal"` or
 `(width, height)` in points. Image input failures can raise Pillow's
 `UnidentifiedImageError`, an `OSError`.
 
-The Writer convenience API also offers
-`PdfWriter.from_images(images, page_size=...)` and
-`writer.add_image(image, index=...)`, with zero-based insertion positions.
 Creating an image page does not place an image onto an existing page:
 replacement, recompression and drawing new images on existing pages are not
 currently exposed.

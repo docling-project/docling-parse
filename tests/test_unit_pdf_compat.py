@@ -1,4 +1,4 @@
-"""The compatibility adapters preserve the pinned pypdf call signatures."""
+"""The public migration API implements a tested subset of pypdf 6.21.1."""
 
 import inspect
 import re
@@ -7,23 +7,82 @@ from io import BytesIO
 import pypdf
 import pytest
 
-from docling_parse import PdfEditor, PdfReader, PdfWriter
-from docling_parse.pdf_errors import PdfLoadError
-from tests.test_unit_pdf_editor import FORM, THREE, TWO
+from docling_parse import PdfEditor, PdfExtractionMode, PdfReader, PdfWriter
+from docling_parse._pdf_document import PdfEditablePage, PdfPage
+from docling_parse.pdf_errors import PdfLoadError, PdfUnsupportedError
+from tests.test_unit_pdf_editor import (
+    BLUE,
+    BLUE_SQUARE,
+    FORM,
+    RED,
+    RED_SQUARE,
+    THREE,
+    TWO,
+    color_at,
+    rendered,
+)
+
+READER_API = """
+    attachments close get_fields get_form_text_fields get_num_pages get_page
+    get_page_number get_pages_showing_field is_encrypted metadata
+    named_destinations open_destination outline page_labels page_layout
+    page_mode pages pdf_header viewer_preferences xmp_metadata
+""".split()
+WRITER_API = (
+    READER_API
+    + """
+    add_annotation add_attachment add_blank_page add_js add_metadata
+    add_named_destination add_outline_item add_page add_uri append encrypt
+    insert_blank_page insert_page merge remove_annotations remove_links
+    remove_page set_need_appearances_writer set_page_label set_page_layout write
+""".split()
+)
+PAGE_API = """
+    annotations artbox bleedbox cropbox extract_text images mediabox
+    page_number rotation trimbox user_unit
+""".split()
+EDITABLE_PAGE_API = (
+    PAGE_API
+    + """
+    add_transformation merge_page merge_rotated_page merge_scaled_page
+    merge_transformed_page merge_translated_page rotate scale scale_by
+    scale_to transfer_rotation_to_content
+""".split()
+)
+
+
+def writer_bytes(writer):
+    stream = BytesIO()
+    writer.write(stream)
+    return stream.getvalue()
 
 
 @pytest.mark.parametrize(
-    ("ours", "reference"), [(PdfReader, pypdf.PdfReader), (PdfWriter, pypdf.PdfWriter)]
+    ("ours", "reference", "names", "constructor"),
+    [
+        (PdfReader, pypdf.PdfReader, READER_API, True),
+        (PdfWriter, pypdf.PdfWriter, WRITER_API, True),
+        (PdfPage, pypdf.PageObject, PAGE_API, False),
+        (PdfEditablePage, pypdf.PageObject, EDITABLE_PAGE_API, False),
+    ],
 )
-def test_compatibility_method_signatures(ours, reference):
-    names = ["__init__"] + [
+def test_compatibility_method_signatures(ours, reference, names, constructor):
+    assert set(names) == {
         name
-        for name, method in inspect.getmembers(ours, inspect.isfunction)
-        if not name.startswith("_") and callable(getattr(reference, name, None))
-    ]
+        for name in dir(ours)
+        if not name.startswith("_") and hasattr(reference, name)
+    }
+    if constructor:
+        names = ["__init__", *names]
     for name in names:
-        actual = inspect.signature(getattr(ours, name)).parameters
-        expected = inspect.signature(getattr(reference, name)).parameters
+        actual_member = getattr(ours, name)
+        expected_member = getattr(reference, name)
+        if isinstance(expected_member, property):
+            assert isinstance(actual_member, property), name
+            continue
+        assert callable(actual_member) and callable(expected_member), name
+        actual = inspect.signature(actual_member).parameters
+        expected = inspect.signature(expected_member).parameters
         assert list(actual) == list(expected), name
         for key, parameter in expected.items():
             other = actual[key]
@@ -59,10 +118,13 @@ def test_editor_rejects_positional_and_zero_page_arguments():
     with pytest.raises(TypeError):
         getattr(PdfEditor, "__call__")(THREE)
     with PdfEditor(source=THREE) as editor:
-        assert editor.get_page(page_no=1).extract_text() == "alpha"
-        assert editor.get_page_no(page=editor.pages[0]) == 1
-        assert editor.pages[0].extract_text() == "alpha"
-        assert editor.get_page(page_no=3).extract_text() == "gamma"
+        first = editor.get_page(page_no=1)
+        assert not hasattr(editor, "pages")
+        assert not hasattr(first, "rotate")
+        assert first.page_no == editor.get_page_no(page=first) == 1
+        assert editor.page_count() == 3
+        assert editor.extract_text(page_no=1) == "alpha"
+        assert editor.extract_text(page_no=3) == "gamma"
         for page_no in (0, -1, 4):
             with pytest.raises(IndexError):
                 editor.get_page(page_no=page_no)
@@ -70,19 +132,114 @@ def test_editor_rejects_positional_and_zero_page_arguments():
             getattr(editor, "remove_page")(1)
 
 
-def test_adapters_forward_named_editor_calls(monkeypatch):
+def test_compatibility_page_sequence():
     with PdfReader(THREE) as reader, PdfWriter(THREE) as writer:
-        calls = []
-        sentinel = object()
+        for document in (reader, writer):
+            assert document.get_num_pages() == len(document.pages) == 3
+            assert document.get_page_number(document.get_page(1)) == 1
+            assert document.pages[-1].page_number == 2
+            assert [page.page_number for page in document.pages[:2]] == [0, 1]
+            assert document.pages[0].extract_text() == "alpha"
+            assert document.pages[0].extract_text(extraction_mode="layout") == "alpha"
 
-        def get_page(self, *, page_no):
-            calls.append((self._native, page_no))
-            return sentinel
 
-        monkeypatch.setattr(PdfEditor, "get_page", get_page)
-        assert reader.get_page(1) is sentinel
-        assert writer.get_page(0) is sentinel
-        assert calls == [(reader._native, 2), (writer._native, 1)]
+def test_editor_extraction_uses_enum_and_includes_edits():
+    with PdfEditor(source=THREE) as editor:
+        assert editor.extract_text(page_no=1) == editor.extract_text(
+            page_no=1, extraction_mode=PdfExtractionMode.PLAIN
+        )
+        with pytest.raises(TypeError, match="PdfExtractionMode"):
+            editor.extract_text(page_no=1, extraction_mode="layout")
+        editor.draw_text(page_no=1, text="unsaved", x=50, y=90)
+        for mode in PdfExtractionMode:
+            assert "unsaved" in editor.extract_text(page_no=1, extraction_mode=mode)
+
+
+def test_editor_inspection_uses_one_based_targets():
+    with PdfEditor(source=FORM) as editor:
+        parent = editor.add_outline_item(title="Form", page_no=1)
+        editor.add_outline_item(
+            title="External", page_no=None, parent=parent, url="https://example.org"
+        )
+        editor.add_named_destination(title="First", page_no=1)
+        editor.set_open_destination(page_no=1)
+        editor.add_link(page_no=1, rect=(20, 10, 50, 20), target_page_no=1)
+        assert editor.outline[0]["page"] == 1
+        assert editor.outline[0]["children"][0]["page"] is None
+        assert editor.named_destinations["First"]["page"] == 1
+        assert editor.open_destination["page"] == 1
+        assert editor.get_fields()["agree"]["pages"] == [1]
+        assert [
+            page.page_no for page in editor.get_pages_showing_field(name="agree")
+        ] == [1]
+        assert editor.get_page(page_no=1).annotations[-1]["page"] == 1
+        assert editor.root_object["/OpenAction"][1] == "/Fit"
+
+        with PdfReader(editor.to_bytes()) as reader:
+            assert reader.outline[0]["page"] == 0
+            assert reader.named_destinations["First"]["page"] == 0
+            assert reader.open_destination["page"] == 0
+            assert reader.get_fields()["agree"]["pages"] == [0]
+            assert reader.pages[0].annotations[-1]["page"] == 0
+
+
+@pytest.mark.parametrize("over, expected", [(True, BLUE), (False, RED)])
+def test_public_writer_page_merge_positional_arguments(over, expected):
+    args = (False,) if over else (False, False)
+    with PdfReader(BLUE_SQUARE) as stamp, PdfWriter(RED_SQUARE) as writer:
+        assert writer.pages[0].merge_page(stamp.pages[0], *args) is None
+        assert color_at(rendered(writer_bytes(writer)), 125, 125) == expected
+    writer = pypdf.PdfWriter(clone_from=BytesIO(RED_SQUARE))
+    stamp = pypdf.PdfReader(BytesIO(BLUE_SQUARE))
+    writer.pages[0].merge_page(stamp.pages[0], *args)
+    assert color_at(rendered(writer_bytes(writer)), 125, 125) == expected
+
+
+def test_migration_options_fail_explicitly():
+    with PdfReader(THREE) as reader, PdfWriter(TWO) as writer:
+        with pytest.raises(PdfUnsupportedError, match="extraction_mode"):
+            reader.pages[0].extract_text(visitor_text=lambda *_: None)
+        with pytest.raises(PdfUnsupportedError, match="extraction_mode"):
+            reader.pages[0].extract_text(layout_mode_space_vertically=False)
+        with pytest.raises(PdfUnsupportedError, match="expanding"):
+            writer.pages[0].merge_page(reader.pages[0], True)
+        with pytest.raises(PdfUnsupportedError, match="expanding"):
+            writer.pages[0].add_transformation((1, 0, 0, 1, 0, 0), expand=True)
+        with pytest.raises(PdfUnsupportedError, match="excluding"):
+            writer.insert_page(reader.pages[0], excluded_keys=("/Annots",))
+        assert writer.get_num_pages() == 2
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"incremental": True},
+        {"full": True},
+        {"keep_initial_header": True},
+        {"incremental_clone_object_count_limit": 10},
+    ],
+)
+def test_unsupported_writer_constructor_options(kwargs):
+    with pytest.raises(PdfUnsupportedError):
+        PdfWriter(**kwargs)
+
+
+@pytest.mark.parametrize(
+    "reader_class, writer_class",
+    [(PdfReader, PdfWriter), (pypdf.PdfReader, pypdf.PdfWriter)],
+)
+def test_public_writer_copies_and_edits_pages(reader_class, writer_class):
+    reader = reader_class(BytesIO(THREE))
+    writer = writer_class()
+    added = writer.add_page(reader.pages[0])
+    assert added.rotate(90) is added
+    assert writer.insert_page(reader.pages[2], 0).mediabox.width == 220
+    assert writer.pages[1].rotation == 90
+    writer.remove_page(0)
+    output = pypdf.PdfReader(BytesIO(writer_bytes(writer)))
+    assert len(output.pages) == 1
+    assert output.pages[0].rotation == 90
+    assert output.pages[0].extract_text() == "alpha"
 
 
 @pytest.mark.parametrize("writer_class", [PdfWriter, pypdf.PdfWriter])
@@ -123,7 +280,7 @@ def test_writer_write_path_result(tmp_path):
 def test_compatibility_encryption_algorithms(algorithm, revision):
     writer = PdfWriter(THREE)
     writer.encrypt("secret", algorithm=algorithm)
-    data = writer.to_bytes()
+    data = writer_bytes(writer)
     reader = pypdf.PdfReader(BytesIO(data), password="secret")
     assert reader.trailer["/Encrypt"]["/R"] == revision
     assert len(reader.pages) == 3
@@ -132,7 +289,7 @@ def test_compatibility_encryption_algorithms(algorithm, revision):
 def test_encryption_defaults_differ_at_the_api_boundary():
     writer = PdfWriter(THREE)
     writer.encrypt("secret")
-    with PdfReader(writer.to_bytes(), password="secret") as reader:
+    with PdfReader(writer_bytes(writer), password="secret") as reader:
         assert reader.encryption["revision"] == 3
     with PdfEditor(source=THREE) as editor:
         editor.encrypt(user_password="secret")
@@ -163,7 +320,7 @@ def test_remove_page_clean_controls_stray_references(clean):
     source.write(data)
     writer = PdfWriter(data)
     writer.remove_page(1, clean=clean)
-    reader = pypdf.PdfReader(BytesIO(writer.to_bytes()))
+    reader = pypdf.PdfReader(BytesIO(writer_bytes(writer)))
     target = (
         reader.trailer["/Root"]
         .get("/CustomPage", pypdf.generic.NullObject())

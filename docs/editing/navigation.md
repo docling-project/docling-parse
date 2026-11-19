@@ -5,21 +5,21 @@
 ## Inspect navigation
 
 ```python
-from docling_parse import PdfReader
+from docling_parse import PdfEditor
 
-with PdfReader("document.pdf") as reader:
-    print(reader.outline)
-    print(reader.named_destinations)
-    print(reader.page_labels)
-    print(reader.open_destination)
-    print(reader.page_layout, reader.page_mode, reader.viewer_preferences)
+with PdfEditor(source="document.pdf") as editor:
+    print(editor.outline)
+    print(editor.named_destinations)
+    print(editor.page_labels)
+    print(editor.open_destination)
+    print(editor.page_layout, editor.page_mode, editor.viewer_preferences)
 ```
 
 Bookmarks are dictionaries containing `id`, `title`, `page`, `url`, `open`,
 `children`, destination details and styling. Destination dictionaries contain
-`page`, `kind` and `arguments`. Their `page` values are zero-based indices, or
-`None` when no surviving page is resolved, on all three classes. Add 1 when
-passing an inspected index into an editor `page_no` argument.
+`page`, `kind` and `arguments`. Editor destinations report one-based page
+numbers, so you can pass a resolved `page` to an Editor `page_no` argument.
+Reader and Writer report zero-based indices. Unresolved targets are `None`.
 
 Bookmark IDs are PDF object numbers valid within the object that returned
 them. Reopen a written file and retrieve its IDs again; serialization can

@@ -258,35 +258,23 @@ options:
 
 ## PDF reading and editing
 
-`PdfReader`, `PdfWriter` and `PdfEditor` read, assemble and change PDF files.
-Reader and Writer adapt the implemented pypdf workflows; Editor provides named
-arguments, one-based page numbers and rendering.
+Use `PdfEditor` for PDF inspection, text extraction, editing and output.
+Its methods take named arguments and one-based page numbers.
 
 ```python
-from docling_parse import PdfEditor, PdfReader, PdfWriter
+from docling_parse import PdfEditor, PdfExtractionMode
 
-# read
-with PdfReader("document.pdf") as reader:
-    print(len(reader.pages), reader.metadata.get("Title"))
-    text = reader.pages[0].extract_text()
-
-# merge
-writer = PdfWriter()
-writer.append("file1.pdf")
-writer.append("file2.pdf", pages=[0, 2])
-writer.write("merged.pdf")
-
-# edit and save
 with PdfEditor(source="document.pdf") as editor:
-    editor.get_page(page_no=1).rotate(angle=90)
-    editor.remove_page(page_no=4)
-    editor.render_page(page_no=1, scale=2.0).save("preview.png")
+    print(editor.page_count(), editor.metadata.get("Title"))
+    print(editor.extract_text(page_no=1, extraction_mode=PdfExtractionMode.LAYOUT))
+    editor.rotate_page(page_no=1, angle=90)
     editor.write(target="changed.pdf")
 ```
 
-See [the editing guide](./docs/editing.md) for API coverage, numbering rules and
-pypdf migration differences, with recipes for [pages](./docs/editing/pages.md),
-[forms](./docs/editing/forms.md) and [rendering](./docs/editing/rendering.md).
+For existing pypdf applications, `PdfReader` and `PdfWriter` support a subset
+of pypdf workflows, including zero-based `pages` sequences. See the
+[editing guide](./docs/editing.md) and its
+[pypdf migration section](./docs/editing.md#migrate-from-pypdf).
 
 ## System fonts
 

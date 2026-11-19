@@ -1,4 +1,4 @@
-"""PdfWriter: assemble, change and write PDF documents.
+"""PdfWriter: PDF assembly and output for pypdf migration.
 
 ```python
 from docling_parse.pdf_writer import PdfWriter
@@ -40,7 +40,7 @@ __all__ = [
 
 
 class PdfWriter(_PdfWriterCompat):
-    """A PDF document being written.
+    """A writable PDF document with pypdf-style assembly and output methods.
 
     `PdfWriter()` starts empty; pages are added with `append` and
     `add_blank_page`. `PdfWriter(clone_from=...)` starts from a complete copy
