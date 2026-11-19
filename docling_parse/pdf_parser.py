@@ -79,7 +79,9 @@ from docling_parse.pdf_parsers import (  # type: ignore[import]
     DecodePageConfig as _DecodePageConfig,  # type: ignore[import]  # internal C++ struct; not public
     PdfPageDecoder,  # type: ignore[import]
     RenderConfig,  # type: ignore[import]
+    _PageDecodeResult,  # type: ignore[import]
     _PageDecodeTimings,  # type: ignore[import]
+    _PageRenderResult,  # type: ignore[import]
     _PageRenderTimings,  # type: ignore[import]
     _threaded_pdf_parser,  # type: ignore[import]
     _threaded_pdf_renderer,  # type: ignore[import]
@@ -147,7 +149,7 @@ class PdfStructureElement(BaseModel):
     Attributes:
         id: "<num> <gen>" identity of the element object; empty for direct objects.
         order: depth-first position in the tree, the logical content order (14.8.2.5).
-        type: raw structure type (/S) before role mapping; apply PdfStructure.role_map to resolve.
+        type: raw structure type (/S) before role mapping. Use PdfStructure.resolve_role to resolve it.
         namespace: PDF 2.0 namespace URI (/NS) when present.
         title, lang, alt, actual_text, expansion: the /T, /Lang, /Alt, /ActualText and /E entries.
         element_id: the /ID entry.
@@ -187,13 +189,23 @@ class PdfStructureElement(BaseModel):
     ] = []
 
     def resolved_type(self, role_map: Dict[str, str]) -> str:
-        """Structure type after following /RoleMap (bounded, cycles tolerated)."""
+        """Structure type after following the root /RoleMap, with cycle detection."""
         seen = set()
         current = self.type
         while current in role_map and current not in seen:
             seen.add(current)
             current = role_map[current]
         return current
+
+
+_DEFAULT_STRUCTURE_NAMESPACE = "http://iso.org/pdf/ssn"
+_STANDARD_STRUCTURE_NAMESPACES = frozenset(
+    (
+        _DEFAULT_STRUCTURE_NAMESPACE,
+        "http://iso.org/pdf2/ssn",
+        "http://www.w3.org/1998/Math/MathML",
+    )
+)
 
 
 class PdfStructure(BaseModel):
@@ -203,6 +215,9 @@ class PdfStructure(BaseModel):
         marked: the /MarkInfo /Marked flag (the file declares itself tagged).
         role_map: /RoleMap of the structure tree root, custom type -> standard type.
         namespaces: URIs of the /Namespaces array (PDF 2.0).
+        role_map_ns: /RoleMapNS entries keyed by namespace URI, then by type.
+            Each target is a (type, namespace URI) pair. None denotes the
+            default standard structure namespace.
         elements: the root-level structure elements, in order.
     """
 
@@ -211,7 +226,32 @@ class PdfStructure(BaseModel):
     marked: bool = False
     role_map: Dict[str, str] = {}
     namespaces: List[str] = []
+    role_map_ns: Dict[str, Dict[str, tuple[str, str | None]]] = {}
     elements: List[PdfStructureElement] = []
+
+    def resolve_role(self, element: PdfStructureElement) -> tuple[str, str]:
+        """Return the mapped type and namespace URI (ISO 32000-2, 14.8.6.2).
+
+        Elements without an explicit namespace follow the root /RoleMap.
+        Namespaced elements follow /RoleMapNS across custom namespaces until
+        reaching a standard namespace, a missing mapping, or a cycle.
+        """
+        if element.namespace is None:
+            return element.resolved_type(self.role_map), _DEFAULT_STRUCTURE_NAMESPACE
+
+        current = element.type, element.namespace
+        seen = set()
+        while current[1] not in _STANDARD_STRUCTURE_NAMESPACES and current not in seen:
+            seen.add(current)
+            role, namespace = current
+            target = self.role_map_ns.get(namespace, {}).get(role)
+            if target is None:
+                break
+            mapped_role, mapped_namespace = target
+            if mapped_namespace is None:
+                mapped_namespace = _DEFAULT_STRUCTURE_NAMESPACE
+            current = mapped_role, mapped_namespace
+        return current
 
     def iter_elements(self) -> Iterator[PdfStructureElement]:
         """Depth-first traversal of every element."""
@@ -1970,8 +2010,20 @@ class DoclingThreadedPdfParser:
             )
         return self._annotations[doc_key]
 
+    def cancel(self, doc_key: str) -> None:
+        """Cancel work and discard unread results for a loaded document.
+
+        The key comes from `load()`. Workers finish claimed pages in the
+        background and discard their results. The document stays loaded until
+        `unload()` or `unload_all()`. Unknown keys and repeated calls are no-ops.
+        """
+        self._parser.cancel_document(doc_key)
+
     def unload(self, doc_key: str) -> bool:
-        """Unload one document after threaded processing has completed."""
+        """Unload one document after all remaining results have been consumed.
+
+        Waits for running workers while other Python threads can continue.
+        """
         unloaded = self._parser.unload_document(doc_key)
         self._page_counts.pop(doc_key, None)
         self._annotations.pop(doc_key, None)
@@ -1979,11 +2031,21 @@ class DoclingThreadedPdfParser:
         return unloaded
 
     def unload_all(self) -> None:
-        """Unload all documents after threaded processing has completed."""
+        """Unload all documents after all remaining results have been consumed.
+
+        Waits for running workers while other Python threads can continue.
+        """
         self._parser.unload_all_documents()
         self._page_counts.clear()
         self._annotations.clear()
         self._scheduled_page_counts.clear()
+
+    def all_scheduled_work_completed(self) -> bool:
+        """Check whether all results are consumed or discarded and workers have exited.
+
+        This check leaves batch startup to `has_tasks()`.
+        """
+        return self._parser.all_scheduled_work_completed()
 
     def has_tasks(self) -> bool:
         """Check if there are remaining tasks to consume.
@@ -1998,18 +2060,24 @@ class DoclingThreadedPdfParser:
     def iterate_results(self) -> Iterator["PageParseResult"]:
         """Yield page results in completion order."""
         while self.has_tasks():
-            yield self.get_task()
+            raw_result = self._parser.get_task()
+            if raw_result.page_number < 0:
+                return
+            yield self._to_result(raw_result)
 
     def get_task(self) -> "PageParseResult":
-        """Get the next completed page decode result.
+        """Wait for the next page result or the end of the stream.
 
-        Blocks until a result is available.
-
-        Returns:
-            PageParseResult: Parsed page result with lazy page conversion and optional image access.
+        If no results remain, including after concurrent cancellation, returns
+        an end-of-stream result with `page_number == 0` and `success == False`.
         """
+        return self._to_result(self._parser.get_task())
+
+    def _to_result(
+        self, raw_result: _PageDecodeResult | _PageRenderResult
+    ) -> PageParseResult:
         return PageParseResult(
-            self._parser.get_task(),
+            raw_result,
             boundary_type=self._parser_config.boundary_type,
             render_config=self._parser_config.render_config,
             content_config=self._content_config,

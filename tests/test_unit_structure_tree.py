@@ -309,3 +309,63 @@ def test_names_in_pdfdoc_encoding_are_transcoded():
     }
     assert artifacts == {("/Paginationé", "/Fußzeile")}
     doc.unload()
+
+
+def test_pdf2_structure_resolves_roles_with_their_namespaces():
+    pdf17 = "http://iso.org/pdf/ssn"
+    pdf20 = "http://iso.org/pdf2/ssn"
+    report = "https://example.org/report"
+    shared = "https://example.org/shared"
+    objects: list[Object] = [
+        # 1-4 catalog, pages, page and contents
+        "<< /Type /Catalog /Version /2.0 /Pages 2 0 R /StructTreeRoot 5 0 R "
+        "/MarkInfo << /Marked true >> >>",
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 4 0 R >>",
+        content_stream(""),
+        # 5-6 structure tree and its document element
+        "<< /Type /StructTreeRoot /K 6 0 R /Namespaces [7 0 R 8 0 R 9 0 R] "
+        "/RoleMap << /Tag /Note /Em /Span /LegacyHeading /H1 >> >>",
+        "<< /Type /StructElem /S /Document /NS 9 0 R /P 5 0 R "
+        "/K [10 0 R 11 0 R 12 0 R 13 0 R 14 0 R 15 0 R 16 0 R] >>",
+        # 7-9 two custom namespaces and the standard PDF 2.0 namespace
+        f"<< /Type /Namespace /NS ({report}) /RoleMapNS << /Tag [/Alias 8 0 R] "
+        "/CaptionText /Caption /Cycle [/Cycle 8 0 R] /Broken [/P 3 0 R] >> >>",
+        f"<< /Type /Namespace /NS ({shared}) /RoleMapNS << /Alias [/FENote 9 0 R] "
+        "/Tag [/Aside 9 0 R] /Cycle [/Cycle 7 0 R] >> >>",
+        f"<< /Type /Namespace /NS ({pdf20}) /RoleMapNS << /Em /Span >> >>",
+        # 10-16 structure elements exercising each mapping path
+        "<< /Type /StructElem /S /Tag /NS 7 0 R /P 6 0 R >>",
+        "<< /Type /StructElem /S /Tag /NS 8 0 R /P 6 0 R >>",
+        "<< /Type /StructElem /S /CaptionText /NS 7 0 R /P 6 0 R >>",
+        "<< /Type /StructElem /S /Em /NS 9 0 R /P 6 0 R >>",
+        "<< /Type /StructElem /S /LegacyHeading /P 6 0 R >>",
+        "<< /Type /StructElem /S /Cycle /NS 7 0 R /P 6 0 R >>",
+        "<< /Type /StructElem /S /Broken /NS 7 0 R /P 6 0 R >>",
+    ]
+    doc = DoclingPdfParser(loglevel="fatal").load(BytesIO(build_pdf(objects)))
+    structure = doc.get_structure()
+    assert structure is not None
+    assert structure.namespaces == [report, shared, pdf20]
+    assert structure.role_map_ns[report] == {
+        "/Tag": ("/Alias", shared),
+        "/CaptionText": ("/Caption", None),
+        "/Cycle": ("/Cycle", shared),
+    }
+    children = [
+        kid
+        for kid in structure.elements[0].kids
+        if isinstance(kid, PdfStructureElement)
+    ]
+    assert (children[0].type, children[0].namespace) == ("/Tag", report)
+    assert children[0].resolved_type(structure.role_map) == "/Note"
+    assert [structure.resolve_role(kid) for kid in children] == [
+        ("/FENote", pdf20),
+        ("/Aside", pdf20),
+        ("/Caption", pdf17),
+        ("/Em", pdf20),
+        ("/H1", pdf17),
+        ("/Cycle", report),
+        ("/Broken", report),
+    ]
+    doc.unload()

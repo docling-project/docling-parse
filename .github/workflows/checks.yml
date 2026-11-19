@@ -80,5 +80,14 @@ jobs:
           DOCLING_PARSE_CJK_FALLBACK_FONT: /usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc
         run: |
           uv run pytest -v tests/test_unit_*.py
+      - name: Test native threaded cancellation
+        if: matrix.python-version == '3.12'
+        run: |
+          uv run --no-sync cmake -S . -B build \
+            -DDOCLING_PARSE_BUILD_THREADED_TESTS=ON -DPYBIND11_FINDPYTHON=ON \
+            "-DPython_EXECUTABLE=$(uv run --no-sync python -c 'import sys; print(sys.executable)')" \
+            "-Dpybind11_DIR=$(uv run --no-sync python -m pybind11 --cmakedir)"
+          uv run --no-sync cmake --build build --target threaded_cancellation --parallel 2
+          uv run --no-sync ctest --test-dir build -R '^threaded_cancellation$' --no-tests=error --output-on-failure
       - name: Build with uv
         run: uv build

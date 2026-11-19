@@ -1,3 +1,19 @@
+## [v7.27.0](https://github.com/docling-project/docling-parse/releases/tag/v7.27.0) - 2026-11-19
+
+### Feature
+
+* Add interruption for threaded parse and render ([#474](https://github.com/docling-project/docling-parse/issues/474)) ([`a738a81`](https://github.com/docling-project/docling-parse/commit/a738a810b970b12cf01deb9ebe6bc42994aa07f5))
+
+### Fix
+
+* Resolve tagged PDF roles across namespaces ([#476](https://github.com/docling-project/docling-parse/issues/476)) ([`cdac067`](https://github.com/docling-project/docling-parse/commit/cdac067ed762b92a7e21eaf724ee534844c1b8b9))
+* Draw tricky TrueType fonts through FreeType with their hinting program ([#478](https://github.com/docling-project/docling-parse/issues/478)) ([`2f48210`](https://github.com/docling-project/docling-parse/commit/2f4821076771a4899576e6a9b6306041934b68eb))
+* Resolve ClassMap attributes in tagged PDF structure trees ([#472](https://github.com/docling-project/docling-parse/issues/472)) ([`98ea75c`](https://github.com/docling-project/docling-parse/commit/98ea75c26a556ce3f6d0daa0c99b32d365961832))
+* Avoid numeric AFM bounds for composite fonts ([#469](https://github.com/docling-project/docling-parse/issues/469)) ([`0f5ef62`](https://github.com/docling-project/docling-parse/commit/0f5ef62ff9f29b68520701527a00f4589a54d9dc))
+* Load bundled PDF resources from non-ASCII Windows paths ([#468](https://github.com/docling-project/docling-parse/issues/468)) ([`b16da41`](https://github.com/docling-project/docling-parse/commit/b16da415ae8fc78ee0fcd08d0d29d9a362bc3c42))
+* Keep render buffers out of thread_local storage on Windows ([#462](https://github.com/docling-project/docling-parse/issues/462)) ([`88f1c38`](https://github.com/docling-project/docling-parse/commit/88f1c3886edea018499f3385619909b96ad06837))
+* Look up standard-font metrics by the declared encoding's glyph name ([#461](https://github.com/docling-project/docling-parse/issues/461)) ([`3be81ff`](https://github.com/docling-project/docling-parse/commit/3be81ff817a9d8133f1be2cdb7aec3df658d96e0))
+
 ## [v7.26.0](https://github.com/docling-project/docling-parse/releases/tag/v7.26.0) - 2026-11-13
 
 ### Feature

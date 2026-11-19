@@ -230,6 +230,19 @@ For threaded parse-and-render workloads, set
 `ThreadedPdfParserConfig.render_config` and use `result.get_image()`,
 `result.get_image(scale=...)`, or `result.get_image(canvas_size=...)`.
 
+Call `parser.cancel(doc_key)` before or during iteration to discard that
+document's pending pages and unread results. The call returns `None` immediately
+after removing work from the queue. Workers finish pages they already claimed in
+the background and discard their results. Iteration ends as soon as the batch
+has no results left to deliver.
+
+After consuming any remaining results, call `unload()` or `unload_all()`.
+These calls wait for running workers while other Python threads can continue.
+Use `all_scheduled_work_completed()` to check whether all results have been
+consumed or discarded and the workers have already exited. The check leaves
+batch startup to `has_tasks()`. Destroying the parser discards queued work and
+unread results across the batch and joins the workers.
+
 Use the CLI
 
 ```sh

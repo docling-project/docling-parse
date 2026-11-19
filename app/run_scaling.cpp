@@ -1125,12 +1125,13 @@ namespace
                    const std::vector<benchmark_result>& results,
                    int total_pages)
   {
-    const auto baseline = std::find_if(
+    const auto baseline = std::min_element(
       results.begin(), results.end(),
-      [](const benchmark_result& result) { return result.threads == 1; });
+      [](const benchmark_result& a, const benchmark_result& b) { return a.threads < b.threads; });
     const bool has_baseline = baseline != results.end()
       && baseline->wall_time_s > 0.0;
-    const double t1 = has_baseline ? baseline->wall_time_s : 0.0;
+    const auto baseline_label = has_baseline
+      ? "vs threaded(" + std::to_string(baseline->threads) + ")" : "speedup";
 
     std::cout << "\n=== " << title << " ===\n";
     std::cout << std::left
@@ -1138,7 +1139,7 @@ namespace
               << std::right
               << std::setw(10) << "threads"
               << std::setw(18) << "wall_time (s)"
-              << std::setw(18) << "vs threaded(1)"
+              << std::setw(18) << baseline_label
               << std::setw(14) << "efficiency"
               << std::setw(14) << "pages/sec"
               << std::setw(12) << "ms/page"
@@ -1149,7 +1150,7 @@ namespace
     for(const auto& result : results)
       {
         const double speedup = has_baseline && result.wall_time_s > 0.0
-          ? t1 / result.wall_time_s : 0.0;
+          ? baseline->wall_time_s / result.wall_time_s : 0.0;
         const double pages_per_sec = result.wall_time_s > 0.0
           ? static_cast<double>(total_pages) / result.wall_time_s : 0.0;
         const double ms_per_page = total_pages > 0
@@ -1161,7 +1162,7 @@ namespace
         if(has_baseline && result.threads > 0 && result.wall_time_s > 0.0)
           {
             efficiency_ss << std::fixed << std::setprecision(0)
-                          << (100.0 * speedup / result.threads) << "%";
+                          << (100.0 * speedup * baseline->threads / result.threads) << "%";
           }
         else
           {

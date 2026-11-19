@@ -8,6 +8,7 @@
 
 #include <array>
 #include <map>
+#include <optional>
 #include <set>
 #include <string>
 #include <utility>
@@ -70,6 +71,8 @@ namespace pdflib
 
     const page_frame& get_page_frame(int page_no);
 
+    static std::optional<std::string> get_namespace_uri(QPDFObjectHandle ns);
+    static nlohmann::json get_namespace_role_map(QPDFObjectHandle role_map);
     static std::string get_id(QPDFObjectHandle obj);
 
     static void get_string(QPDFObjectHandle& elem, const std::string& key,
@@ -159,16 +162,20 @@ namespace pdflib
     if(tree.hasKey("/Namespaces") and tree.getKey("/Namespaces").isArray())
       {
         nlohmann::json namespaces = nlohmann::json::array({});
+        nlohmann::json role_map_ns = nlohmann::json::object();
         QPDFObjectHandle nss = tree.getKey("/Namespaces");
         for(int i=0; i<nss.getArrayNItems(); i++)
           {
             QPDFObjectHandle ns = nss.getArrayItem(i);
-            if(ns.isDictionary() and ns.hasKey("/NS") and ns.getKey("/NS").isString())
+            if(auto uri = get_namespace_uri(ns))
               {
-                namespaces.push_back(ns.getKey("/NS").getUTF8Value());
+                namespaces.push_back(*uri);
+                auto roles = get_namespace_role_map(ns.getKey("/RoleMapNS"));
+                if(not roles.empty()) { role_map_ns[*uri] = std::move(roles); }
               }
           }
         structure["namespaces"] = std::move(namespaces);
+        if(not role_map_ns.empty()) { structure["role_map_ns"] = std::move(role_map_ns); }
       }
 
     nlohmann::json elements = nlohmann::json::array();
@@ -193,6 +200,39 @@ namespace pdflib
 
     LOG_S(INFO) << "structure tree: " << order << " element(s), marked=" << marked;
     return structure;
+  }
+
+  std::optional<std::string> pdf_structure::get_namespace_uri(QPDFObjectHandle ns)
+  {
+    if(not ns.isDictionary()) { return std::nullopt; }
+    auto uri = ns.getKey("/NS");
+    if(not uri.isString()) { return std::nullopt; }
+    return uri.getUTF8Value();
+  }
+
+  nlohmann::json pdf_structure::get_namespace_role_map(QPDFObjectHandle role_map)
+  {
+    auto roles = nlohmann::json::object();
+    if(not role_map.isDictionary()) { return roles; }
+    for(const auto& key : role_map.getKeys())
+      {
+        auto target = role_map.getKey(key);
+        if(target.isName())
+          {
+            // A bare name belongs to the default standard structure namespace.
+            roles[pdflib::name_to_utf8(key)] = nlohmann::json::array({pdflib::name_to_utf8(target), nullptr});
+          }
+        else if(target.isArray() and target.getArrayNItems()==2)
+          {
+            auto type = target.getArrayItem(0);
+            auto uri = get_namespace_uri(target.getArrayItem(1));
+            if(type.isName() and uri)
+              {
+                roles[pdflib::name_to_utf8(key)] = nlohmann::json::array({pdflib::name_to_utf8(type), *uri});
+              }
+          }
+      }
+    return roles;
   }
 
   nlohmann::json pdf_structure::to_json(QPDFObjectHandle elem, int level)
@@ -228,13 +268,9 @@ namespace pdflib
       }
 
     // PDF 2.0 namespace (14.7.4): /NS is a namespace dictionary with a /NS string
-    if(elem.hasKey("/NS") and elem.getKey("/NS").isDictionary())
+    if(auto uri = get_namespace_uri(elem.getKey("/NS")))
       {
-        QPDFObjectHandle ns = elem.getKey("/NS");
-        if(ns.hasKey("/NS") and ns.getKey("/NS").isString())
-          {
-            result["namespace"] = ns.getKey("/NS").getUTF8Value();
-          }
+        result["namespace"] = *uri;
       }
 
     get_string(elem, "/T",          "title",       result);

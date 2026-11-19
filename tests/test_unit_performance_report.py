@@ -240,23 +240,43 @@ def test_render_only_rejects_word_line_work(tmp_path: Path):
         inputs.native(path)
 
 
-def test_native_profile_speedups_use_their_own_baselines():
+@pytest.mark.parametrize("baseline_threads,thread_count", [(1, 4), (4, 16)])
+def test_native_profile_speedups_use_their_own_baselines(
+    baseline_threads, thread_count
+):
     measurements = [
         _REPORT.Measurement(
             "native", "docling-parse", profile, threads, 1, wall, 2, 1, "log", "wall"
         )
         for profile, threads, wall in [
-            ("render-only", 1, 20),
-            ("render-only", 4, 5),
-            ("render-with-text", 1, 40),
-            ("render-with-text", 4, 20),
+            ("render-only", thread_count, 5),
+            ("render-only", baseline_threads, 20),
+            ("render-with-text", thread_count, 20),
+            ("render-with-text", baseline_threads, 40),
         ]
     ]
     rows = {(r["task"], r["threads"]): r for r in _REPORT.summarize(measurements)}
-    assert rows["render-only", 4]["speedup_vs_docling_1t"] == 4
-    assert rows["render-with-text", 4]["speedup_vs_docling_1t"] == 2
-    assert rows["render-only", 4]["efficiency_pct"] == 100
-    assert rows["render-with-text", 4]["efficiency_pct"] == 50
+    render = rows["render-only", thread_count]
+    text = rows["render-with-text", thread_count]
+    assert render["docling_baseline_threads"] == baseline_threads
+    assert render["speedup_vs_docling_baseline"] == 4
+    assert render["speedup_vs_docling_1t"] == (4 if baseline_threads == 1 else None)
+    assert text["speedup_vs_docling_baseline"] == 2
+    assert render["efficiency_pct"] == 100
+    assert text["efficiency_pct"] == 50
+    assert rows["render-with-text", baseline_threads]["efficiency_pct"] == 100
+
+
+def test_single_thread_count_is_its_own_baseline():
+    (row,) = _REPORT.summarize(
+        [
+            _REPORT.Measurement(
+                "replay", "threaded", "render", 12, 1, 20, 2, 1, "json", "wall"
+            )
+        ]
+    )
+    assert _REPORT.format_docling_speedup(row) == "1.00x (12t)"
+    assert row["efficiency_pct"] == 100
 
 
 def test_core_only_report_explicitly_excludes_incomplete_comparison(
@@ -468,7 +488,7 @@ def test_profiled_report_figures_captions_and_phase_exports(
 
 
 @pytest.mark.parametrize("has_one_thread", [True, False])
-def test_ideal_throughput_uses_one_thread_baseline_and_zero_origin(
+def test_ideal_throughput_uses_lowest_thread_baseline_and_zero_origin(
     tmp_path: Path, monkeypatch, has_one_thread
 ):
     figure_class = pytest.importorskip("matplotlib.figure").Figure
@@ -478,7 +498,7 @@ def test_ideal_throughput_uses_one_thread_baseline_and_zero_origin(
         figures[Path(path).name] = figure
 
     monkeypatch.setattr(figure_class, "savefig", capture)
-    summary = []
+    measurements = []
     for backend, threads, throughput in (
         ("threaded", 1, 10),
         ("threaded", 4, 33),
@@ -487,24 +507,21 @@ def test_ideal_throughput_uses_one_thread_baseline_and_zero_origin(
     ):
         if backend == "threaded" and threads == 1 and not has_one_thread:
             continue
-        wall = 800 / throughput
-        summary.append(
-            {
-                "workload": "replay",
-                "backend": backend,
-                "task": "render",
-                "threads": threads,
-                "median_wall_s": wall,
-                "min_wall_s": wall,
-                "max_wall_s": wall,
-                "pages_per_s": throughput,
-                "speedup_vs_docling_1t": throughput / 10,
-                "efficiency_pct": 100 * throughput / (10 * threads)
-                if backend == "threaded"
-                else None,
-            }
+        measurements.append(
+            _REPORT.Measurement(
+                "replay",
+                backend,
+                "render",
+                threads,
+                1,
+                800 / throughput,
+                800,
+                1,
+                "json",
+                "wall",
+            )
         )
-    _REPORT.plot([], summary, tmp_path)
+    _REPORT.plot([], _REPORT.summarize(measurements), tmp_path)
     throughput_ax = figures["replay_runtime.png"].axes[1]
     assert throughput_ax.get_xlim()[0] == 0
     assert throughput_ax.get_ylim()[0] == 0
@@ -516,13 +533,16 @@ def test_ideal_throughput_uses_one_thread_baseline_and_zero_origin(
     assert list(curves["pypdfium2"].get_ydata()) == [8]
     assert "pypdfium2 ideal" not in curves
     assert not any("linear fit" in label for label in curves)
-    if has_one_thread:
-        ideal = curves["docling-parse ideal"]
-        assert ideal.get_linestyle() == "--"
-        assert list(ideal.get_xdata()) == [0, 8]
-        assert list(ideal.get_ydata()) == [0, 80]
-    else:
-        assert "docling-parse ideal" not in curves
+    ideal = curves["docling-parse ideal"]
+    assert ideal.get_linestyle() == "--"
+    assert list(ideal.get_xdata()) == [0, 8]
+    assert list(ideal.get_ydata()) == pytest.approx([0, 80 if has_one_thread else 66])
+    speedup_ax, efficiency_ax = figures["replay_scaling.png"].axes
+    ideal_speedup = next(
+        line for line in speedup_ax.lines if line.get_label() == "Ideal"
+    )
+    assert list(ideal_speedup.get_ydata()) == ([1, 4, 8] if has_one_thread else [1, 2])
+    assert efficiency_ax.lines[0].get_ydata()[0] == 100
 
 
 def _checkpointed_comparison(
@@ -1167,8 +1187,9 @@ def test_launcher_rejects_invalid_settings_before_archiving(
 
 @pytest.mark.parametrize("dataset", ["bo20", "bo767", "bo10k"])
 @pytest.mark.parametrize("default_snapshot", [False, True])
+@pytest.mark.parametrize("native_render_only", [False, True])
 def test_launcher_downloads_selected_repository_and_checks_snapshot_counts(
-    tmp_path: Path, monkeypatch, dataset, default_snapshot
+    tmp_path: Path, monkeypatch, dataset, default_snapshot, native_render_only
 ):
     # Execute the launcher's actual metadata block with tiny synthetic inputs;
     # mock downloads, page counting and build provenance, never a real benchmark.
@@ -1245,6 +1266,7 @@ def test_launcher_downloads_selected_repository_and_checks_snapshot_counts(
             "0",
             repository,
             _DATASET_PINS[dataset],
+            "1" if native_render_only else "0",
         ],
     )
     if default_snapshot:
@@ -1254,6 +1276,13 @@ def test_launcher_downloads_selected_repository_and_checks_snapshot_counts(
     else:
         exec(compile(source, str(launcher), "exec"), {})
         metadata = json.loads((out / "metadata.json").read_text())
+        expected_profiles = (
+            {"render-only"}
+            if native_render_only
+            else {"render-only", "render-with-text"}
+        )
+        assert set(metadata["native_profiles"]) == expected_profiles
+        assert metadata.get("native_render_only", False) == native_render_only
         assert metadata["dataset"]["repository"] == repository
         assert metadata["dataset"]["requested_revision"] == "fixture-branch"
         assert metadata["dataset"]["revision"] == revision
@@ -1337,8 +1366,9 @@ def test_replay_config_suppression_preserves_parser_initialization(suppress, cap
 @pytest.mark.skipif(os.name == "nt", reason="The Bash launcher targets macOS and Linux")
 @pytest.mark.parametrize("output_mode", ["", "full"])
 @pytest.mark.parametrize("build_mode", ["", "clean"])
+@pytest.mark.parametrize("native_render_only", [False, True])
 def test_launcher_routes_output_options_to_all_runners(
-    tmp_path: Path, output_mode, build_mode
+    tmp_path: Path, output_mode, build_mode, native_render_only
 ):
     # Exercise the complete launcher with fake commands. No real build, PDF
     # processing, network access or report generation takes place.
@@ -1384,8 +1414,12 @@ esac
         executable.write_text(body)
         executable.chmod(0o755)
     out = tmp_path / "results"
+    thread_count = "1" if build_mode == "clean" and not native_render_only else "12"
+    command = ["sh", str(launcher)]
+    if native_render_only:
+        command.append("--native-render-only")
     result = subprocess.run(
-        ["bash", str(launcher)],
+        command,
         env={
             **os.environ,
             "PATH": str(binaries) + os.pathsep + os.environ["PATH"],
@@ -1393,7 +1427,7 @@ esac
             "FIXTURE_NATIVE": str(native),
             "FIXTURE_PDFS": str(tmp_path / "pdf"),
             "REPEATS": "1",
-            "THREADS": "1",
+            "THREADS": thread_count,
             "RUN_COMPARISON": "1",
             "BUILD_THREADS": "1",
             "BUILD_MODE": build_mode,
@@ -1405,30 +1439,12 @@ esac
         capture_output=True,
     )
     assert result.returncode == 0, result.stderr + result.stdout
-    assert "Complete. Tables:" in result.stdout
     assert "fixture progress: [##] 2/2" in result.stdout
     compact = output_mode != "full"
-    native_log = (out / "native/render-only/r1/t1.log").read_text()
+    native_log = (out / f"native/render-only/r1/t{thread_count}.log").read_text()
+    assert f"--threads {thread_count}" in native_log
     assert ("--suppress-timings" in native_log) == compact
     assert ("-v WARNING" in native_log) == compact
-    logs = [
-        out / "native/render-only/r1/t1.log",
-        out / "native/render-with-text/r1/t1.log",
-        out / "replay/r1/pdfium.log",
-        out / "replay/r1/t1.log",
-        out / "comparison/r1/render/run.log",
-        out / "comparison/r1/parse-without-bitmap/run.log",
-    ]
-    for log in logs:
-        assert ("--suppress-config" in log.read_text()) == compact
-    for profile, value in (("render-only", "false"), ("render-with-text", "true")):
-        profile_log = (out / f"native/{profile}/r1/t1.log").read_text()
-        assert f"--create-word-cells={value}" in profile_log
-        assert f"--create-line-cells={value}" in profile_log
-    assert "Experiment 6/6" in result.stdout
-    assert result.stdout.index("Reference preflight passed") < result.stdout.index(
-        "Experiment 1/6"
-    )
     for directory in ("build", "externals"):
         if build_mode == "clean":
             assert (
@@ -1438,6 +1454,41 @@ esac
         else:
             assert (repo / directory / "keep-me").read_text() == "existing output"
             assert not (out / f"previous-{directory}").exists()
+    if native_render_only:
+        assert "Complete. Native render logs and timings:" in result.stdout
+        assert "Experiment 1/1" in result.stdout
+        assert "--create-word-cells=false" in native_log
+        assert "--create-line-cells=false" in native_log
+        assert ("--suppress-config" in native_log) == compact
+        for path in (
+            "native/render-with-text",
+            "replay",
+            "comparison",
+            "reference-preflight.log",
+            "report.log",
+        ):
+            assert not (out / path).exists()
+        return
+
+    assert "Complete. Tables:" in result.stdout
+    logs = [
+        out / f"native/render-only/r1/t{thread_count}.log",
+        out / f"native/render-with-text/r1/t{thread_count}.log",
+        out / "replay/r1/pdfium.log",
+        out / f"replay/r1/t{thread_count}.log",
+        out / "comparison/r1/render/run.log",
+        out / "comparison/r1/parse-without-bitmap/run.log",
+    ]
+    for log in logs:
+        assert ("--suppress-config" in log.read_text()) == compact
+    for profile, value in (("render-only", "false"), ("render-with-text", "true")):
+        profile_log = (out / f"native/{profile}/r1/t{thread_count}.log").read_text()
+        assert f"--create-word-cells={value}" in profile_log
+        assert f"--create-line-cells={value}" in profile_log
+    assert "Experiment 6/6" in result.stdout
+    assert result.stdout.index("Reference preflight passed") < result.stdout.index(
+        "Experiment 1/6"
+    )
 
 
 @pytest.mark.skipif(os.name == "nt", reason="The Bash launcher targets macOS and Linux")

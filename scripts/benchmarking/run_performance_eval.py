@@ -382,9 +382,6 @@ def plot_thread_scaling(
             by_task[rows[0].task][rows[0].threads] = rows
 
     for task, by_threads in sorted(by_task.items()):
-        if len(by_threads) < 2:
-            continue
-
         threads: List[int] = []
         sec_per_page: List[float] = []
         pages_per_sec: List[float] = []
@@ -396,7 +393,7 @@ def plot_thread_scaling(
             threads.append(count)
             sec_per_page.append(total / len(ok))
             pages_per_sec.append(len(ok) / total)
-        if len(threads) < 2:
+        if not threads:
             continue
 
         for yscale, suffix in (("log", "logy"), ("linear", "linear")):
@@ -442,12 +439,10 @@ def plot_thread_scaling(
             fig.savefig(viz_dir / f"scaling_{safe_name(task)}_{suffix}.png", dpi=150)
             plt.close(fig)
 
-        if 1 not in threads:
-            print(f"  no docling-parse (1t) series for {task}; no efficiency plot")
-            continue
-        baseline = sec_per_page[threads.index(1)]
+        baseline_threads = threads[0]
+        baseline = sec_per_page[0]
         efficiency = [
-            100.0 * baseline / (count * elapsed)
+            100.0 * baseline * baseline_threads / (count * elapsed)
             for count, elapsed in zip(threads, sec_per_page)
         ]
         fig, ax = plt.subplots(figsize=(8, 5))
@@ -455,7 +450,9 @@ def plot_thread_scaling(
         ax.axhline(100.0, color="gray", linestyle="--", linewidth=1)
         ax.set_xlabel("docling-parse threads")
         ax.set_ylabel("Parallel efficiency (%)")
-        ax.set_title(f"Parallel efficiency — docling-parse, {task}")
+        ax.set_title(
+            f"Parallel efficiency — docling-parse, {task} (vs {baseline_threads}t)"
+        )
         ax.set_xticks(threads)
         ax.set_ylim(bottom=0, top=max(105.0, max(efficiency) * 1.1))
         ax.grid(True, alpha=0.3)
