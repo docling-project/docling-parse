@@ -75,6 +75,11 @@ namespace pdflib
     // returns false.
     bool available() const;
 
+    // True when FreeType flags the embedded program as a "tricky" font, whose
+    // glyphs need its TrueType hinting program to be assembled. Blend2D does
+    // not run that program, so such a face has to be drawn from here.
+    bool is_tricky(const std::shared_ptr<const embedded_font_blob>& blob);
+
     // Builds the filled outline path of one text cell in Blend2D text space:
     // baseline at the origin, y pointing down, units equal to pixels at em
     // size `size`. Returns true when every character of the cell was mapped
@@ -238,6 +243,20 @@ namespace pdflib
   inline bool freetype_font_cache::available() const
   {
     return library_ != nullptr;
+  }
+
+  inline bool freetype_font_cache::is_tricky(
+      const std::shared_ptr<const embedded_font_blob>& blob)
+  {
+    if(library_ == nullptr or blob == nullptr or not blob->has_bytes())
+      {
+        return false;
+      }
+
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    const face_entry& entry = get_face_entry(blob);
+    return not entry.failed and entry.face != nullptr and FT_IS_TRICKY(entry.face);
   }
 
   inline bool freetype_font_cache::build_text_path(
@@ -733,9 +752,28 @@ namespace pdflib
 
     glyph_entry glyph;
 
-    const FT_Error error = FT_Load_Glyph(entry.face,
-                                         glyph_index,
-                                         FT_LOAD_NO_SCALE | FT_LOAD_NO_BITMAP);
+    // A "tricky" TrueType font (DFKai-SB, MingLiU and others FreeType lists)
+    // builds its glyphs from components that only its hinting program puts
+    // in place, so FT_LOAD_NO_SCALE returns scrambled outlines for them. As
+    // FreeType documents, load such a face at one pixel per font unit with
+    // hinting instead; its outline is then in 26.6 font units.
+    const bool tricky = FT_IS_TRICKY(entry.face);
+    FT_Error error = 0;
+    if(tricky and entry.face->size != nullptr and
+       entry.face->size->metrics.y_ppem != entry.face->units_per_EM)
+      {
+        error = FT_Set_Char_Size(entry.face, 0,
+                                 static_cast<FT_F26Dot6>(entry.face->units_per_EM) * 64,
+                                 72, 72);
+      }
+    if(error == 0)
+      {
+        error = FT_Load_Glyph(entry.face,
+                              glyph_index,
+                              tricky ? FT_LOAD_NO_BITMAP : (FT_LOAD_NO_SCALE | FT_LOAD_NO_BITMAP));
+      }
+    const double to_font_units = tricky ? 1.0 / 64.0 : 1.0;
+
     if(error != 0 or entry.face->glyph == nullptr)
       {
         LOG_S(INFO) << "freetype font cache: FT_Load_Glyph failed"
@@ -745,21 +783,28 @@ namespace pdflib
       }
     else
       {
-        // With FT_LOAD_NO_SCALE all metrics are in font units.
-        glyph.advance = static_cast<double>(entry.face->glyph->advance.x);
+        // In font units: directly with FT_LOAD_NO_SCALE, and for a tricky
+        // face the unhinted advance in 16.16 pixels, one pixel per unit.
+        glyph.advance = tricky ?
+          static_cast<double>(entry.face->glyph->linearHoriAdvance) / 65536.0 :
+          static_cast<double>(entry.face->glyph->advance.x);
 
         if(entry.face->glyph->format == FT_GLYPH_FORMAT_OUTLINE)
           {
             FT_BBox box;
             FT_Outline_Get_CBox(&entry.face->glyph->outline, &box);
             glyph.bbox = {
-              static_cast<double>(box.xMin),
-              static_cast<double>(box.yMin),
-              static_cast<double>(box.xMax),
-              static_cast<double>(box.yMax)
+              box.xMin * to_font_units,
+              box.yMin * to_font_units,
+              box.xMax * to_font_units,
+              box.yMax * to_font_units
             };
             glyph.has_bbox = box.xMin < box.xMax and box.yMin < box.yMax;
             glyph.failed = not decompose_outline(entry.face->glyph->outline, glyph.path);
+            if(tricky and not glyph.failed)
+              {
+                glyph.path.transform(BLMatrix2D::make_scaling(to_font_units));
+              }
           }
       }
 
