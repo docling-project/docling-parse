@@ -74,7 +74,9 @@ from docling_parse.pdf_parsers import (  # type: ignore[import]
     DecodePageConfig as _DecodePageConfig,  # type: ignore[import]  # internal C++ struct; not public
     PdfPageDecoder,  # type: ignore[import]
     RenderConfig,  # type: ignore[import]
+    _PageDecodeResult,  # type: ignore[import]
     _PageDecodeTimings,  # type: ignore[import]
+    _PageRenderResult,  # type: ignore[import]
     _PageRenderTimings,  # type: ignore[import]
     _threaded_pdf_parser,  # type: ignore[import]
     _threaded_pdf_renderer,  # type: ignore[import]
@@ -2064,8 +2066,20 @@ class DoclingThreadedPdfParser:
             )
         return self._annotations[doc_key]
 
+    def cancel(self, doc_key: str) -> None:
+        """Cancel work and discard unread results for a loaded document.
+
+        The key comes from `load()`. Workers finish claimed pages in the
+        background and discard their results. The document stays loaded until
+        `unload()` or `unload_all()`. Unknown keys and repeated calls are no-ops.
+        """
+        self._parser.cancel_document(doc_key)
+
     def unload(self, doc_key: str) -> bool:
-        """Unload one document after threaded processing has completed."""
+        """Unload one document after all remaining results have been consumed.
+
+        Waits for running workers while other Python threads can continue.
+        """
         unloaded = self._parser.unload_document(doc_key)
         self._page_counts.pop(doc_key, None)
         self._annotations.pop(doc_key, None)
@@ -2073,11 +2087,21 @@ class DoclingThreadedPdfParser:
         return unloaded
 
     def unload_all(self) -> None:
-        """Unload all documents after threaded processing has completed."""
+        """Unload all documents after all remaining results have been consumed.
+
+        Waits for running workers while other Python threads can continue.
+        """
         self._parser.unload_all_documents()
         self._page_counts.clear()
         self._annotations.clear()
         self._scheduled_page_counts.clear()
+
+    def all_scheduled_work_completed(self) -> bool:
+        """Check whether all results are consumed or discarded and workers have exited.
+
+        This check leaves batch startup to `has_tasks()`.
+        """
+        return self._parser.all_scheduled_work_completed()
 
     def has_tasks(self) -> bool:
         """Check if there are remaining tasks to consume.
@@ -2092,18 +2116,24 @@ class DoclingThreadedPdfParser:
     def iterate_results(self) -> Iterator["PageParseResult"]:
         """Yield page results in completion order."""
         while self.has_tasks():
-            yield self.get_task()
+            raw_result = self._parser.get_task()
+            if raw_result.page_number < 0:
+                return
+            yield self._to_result(raw_result)
 
     def get_task(self) -> "PageParseResult":
-        """Get the next completed page decode result.
+        """Wait for the next page result or the end of the stream.
 
-        Blocks until a result is available.
-
-        Returns:
-            PageParseResult: Parsed page result with lazy page conversion and optional image access.
+        If no results remain, including after concurrent cancellation, returns
+        an end-of-stream result with `page_number == 0` and `success == False`.
         """
+        return self._to_result(self._parser.get_task())
+
+    def _to_result(
+        self, raw_result: _PageDecodeResult | _PageRenderResult
+    ) -> PageParseResult:
         return PageParseResult(
-            self._parser.get_task(),
+            raw_result,
             boundary_type=self._parser_config.boundary_type,
             render_config=self._parser_config.render_config,
             content_config=self._content_config,

@@ -1258,8 +1258,7 @@ PYBIND11_MODULE(pdf_parsers, m) {
     }, pybind11::arg("key"))
     .def("get_annotations",
          [](docling::docling_threaded_parser& self, const std::string& key) -> nlohmann::json {
-           // The lookup runs under the GIL, like unload_document; the pointer
-           // keeps the document alive once the GIL is released.
+           // Hold the document across the GIL release and any concurrent unload.
            auto document = self.find_document(key);
 
            pybind11::gil_scoped_release release;
@@ -1278,6 +1277,12 @@ PYBIND11_MODULE(pdf_parsers, m) {
 
     Returns:
         dict: A JSON object containing the annotations for the document.)")
+    .def("cancel_document",
+         [](docling::docling_threaded_parser& self, const std::string& key) {
+           self.cancel_document(key);
+         },
+         pybind11::arg("key"),
+         "Cancel pending pages and discard unread results for a document key.")
     .def("unload_document",
          [](docling::docling_threaded_parser& self, const std::string& key) -> bool {
            return self.unload_document(key);
@@ -1295,6 +1300,8 @@ PYBIND11_MODULE(pdf_parsers, m) {
          R"(
     Unload all documents after threaded processing is complete.)")
 
+    .def("all_scheduled_work_completed",
+         &docling::docling_threaded_parser::all_scheduled_work_completed)
     .def("has_tasks",
          [](docling::docling_threaded_parser& self) -> bool {
            return self.has_tasks();
@@ -1315,10 +1322,11 @@ PYBIND11_MODULE(pdf_parsers, m) {
          R"(
     Get the next completed page decode result.
 
-    Blocks until a result is available. Releases the GIL while waiting.
+    Releases the GIL while waiting. If no results remain, including after
+    concurrent cancellation, returns a sentinel with page_number=-1 and success=False.
 
     Returns:
-        _PageDecodeResult: The result of a page decoding task.)");
+        _PageDecodeResult: A page result or the end-of-stream sentinel.)");
 
   // ============= Threaded PDF Renderer =============
 
@@ -1538,6 +1546,12 @@ PYBIND11_MODULE(pdf_parsers, m) {
            return document->get_annotations();
          },
          pybind11::arg("key"))
+    .def("cancel_document",
+         [](docling::docling_threaded_renderer& self, const std::string& key) {
+           self.cancel_document(key);
+         },
+         pybind11::arg("key"),
+         "Cancel pending pages and discard unread results for a document key.")
     .def("unload_document",
          [](docling::docling_threaded_renderer& self, const std::string& key) -> bool {
            return self.unload_document(key);
@@ -1548,6 +1562,8 @@ PYBIND11_MODULE(pdf_parsers, m) {
            self.unload_all_documents();
          })
 
+    .def("all_scheduled_work_completed",
+         &docling::docling_threaded_renderer::all_scheduled_work_completed)
     .def("has_tasks",
          [](docling::docling_threaded_renderer& self) -> bool {
            return self.has_tasks();
@@ -1561,8 +1577,9 @@ PYBIND11_MODULE(pdf_parsers, m) {
          R"(
     Get the next completed page render result.
 
-    Blocks until a result is available. Releases the GIL while waiting.
+    Releases the GIL while waiting. If no results remain, including after
+    concurrent cancellation, returns a sentinel with page_number=-1 and success=False.
 
     Returns:
-        _PageRenderResult: The result of a page rendering task.)");
+        _PageRenderResult: A page result or the end-of-stream sentinel.)");
 }

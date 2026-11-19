@@ -1,0 +1,207 @@
+// SPDX-License-Identifier: MIT
+
+#include <chrono>
+#include <cstdlib>
+#include <functional>
+#include <future>
+#include <iostream>
+#include <memory>
+#include <semaphore>
+
+#include <pybind11/embed.h>
+#include <pybind/docling_threaded_base.h>
+
+namespace
+{
+  using namespace std::chrono_literals;
+
+  void require(bool condition, const char* message)
+  {
+    if(not condition)
+      {
+        std::cerr << message << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+  }
+
+  class gated_parser :
+    public docling::docling_threaded_base<gated_parser, docling::page_decode_result>
+  {
+  public:
+
+    explicit gated_parser(int capacity): docling_threaded_base("fatal", 1, capacity, {}) {}
+
+    ~gated_parser()
+    {
+      shutdown_workers();
+    }
+
+    void add_schedule(const std::string& key, std::vector<int> pages)
+    {
+      key2doc.emplace(key, nullptr);
+      key2scheduled_pages.emplace(key, std::move(pages));
+    }
+
+    std::string first_key() const
+    {
+      return key2scheduled_pages.begin()->first;
+    }
+
+    void worker_loop()
+    {
+      while(auto task = take_task())
+        {
+          const auto& [key, page] = *task;
+          docling::page_decode_result result;
+          result.doc_key = key;
+          result.page_number = page;
+          result.success = true;
+          before_publish(key, page);
+          publish_result(std::move(result));
+          after_publish(key, page);
+        }
+    }
+
+    std::function<void(const std::string&, int)> before_publish = [](const auto&, int) {};
+    std::function<void(const std::string&, int)> after_publish = [](const auto&, int) {};
+  };
+
+  void evict_buffered_results_and_end_iteration()
+  {
+    std::binary_semaphore claimed{0};
+    std::binary_semaphore finish{0};
+    gated_parser parser(2);
+    parser.add_schedule("cancelled", {0, 1, 2, 3, 4});
+    parser.before_publish = [&](const std::string&, int page) {
+      if(page == 2)
+        {
+          claimed.release();
+          require(finish.try_acquire_for(5s), "the third page was never released");
+        }
+    };
+
+    require(parser.all_scheduled_work_completed(), "the schedule should be lazy");
+    require(parser.has_tasks(), "the document should have scheduled work");
+    require(claimed.try_acquire_for(5s), "the worker did not claim the third page");
+    parser.cancel_document("cancelled");
+    parser.cancel_document("cancelled");
+    require(not parser.has_tasks(), "cancelled queued, buffered or claimed pages are still counted");
+    require(parser.get_task().page_number == -1, "a buffered result survived cancellation");
+    finish.release();
+    parser.unload_all_documents();
+    require(parser.all_scheduled_work_completed(), "all workers and tasks should be finished");
+  }
+
+  void cancel_wakes_reader_and_unload_releases_gil()
+  {
+    std::binary_semaphore claimed{0};
+    std::binary_semaphore finish{0};
+    gated_parser parser(1);
+    parser.add_schedule("cancelled", {0});
+    parser.before_publish = [&](const std::string&, int) {
+      claimed.release();
+      require(finish.try_acquire_for(5s), "unload did not let the Python helper thread run");
+    };
+
+    require(parser.has_tasks(), "there should be a page to claim");
+    require(claimed.try_acquire_for(5s), "the worker did not claim the page");
+    std::binary_semaphore consuming{0};
+    auto consumer = std::async(std::launch::async, [&] {
+      consuming.release();
+      return parser.get_task();
+    });
+    require(consuming.try_acquire_for(5s), "the consumer did not start");
+    require(consumer.wait_for(20ms) == std::future_status::timeout, "the reader should wait before cancellation");
+    parser.cancel_document("cancelled");
+    require(consumer.wait_for(2s) == std::future_status::ready, "cancellation did not wake the reader");
+    require(consumer.get().page_number == -1, "a cancelled page reached the reader");
+    require(not parser.all_scheduled_work_completed(), "the cancelled worker is still active");
+
+    auto python_thread = std::async(std::launch::async, [&] {
+      pybind11::gil_scoped_acquire gil;
+      require(parser.scheduled_number_of_pages("cancelled") == 1, "unload erased the schedule before joining");
+      require(not parser.has_tasks(), "startup overlapped unload");
+      try
+        {
+          parser.unload_all_documents();
+          require(false, "a second unload overlapped the join");
+        }
+      catch(const std::runtime_error&)
+        {}
+      finish.release();
+    });
+    require(parser.unload_document("cancelled"), "the document was not removed after joining");
+    python_thread.get();
+    require(parser.all_scheduled_work_completed(), "all workers and tasks should be finished");
+  }
+
+  void discard_without_waiting_for_result_capacity()
+  {
+    std::binary_semaphore publishing{0};
+    std::binary_semaphore published{0};
+    gated_parser parser(1);
+    parser.add_schedule("a", {0});
+    parser.add_schedule("b", {0});
+    const auto keep = parser.first_key();
+    const std::string cancel = keep == "a" ? "b" : "a";
+
+    // By the time the second document's page is claimed, the only result
+    // slot holds the first document's page. Leave it there during cancellation.
+    parser.before_publish = [&](const std::string& key, int) {
+      if(key == cancel) { publishing.release(); }
+    };
+    parser.after_publish = [&](const std::string& key, int) {
+      if(key == cancel) { published.release(); }
+    };
+
+    require(parser.has_tasks(), "both documents should have scheduled work");
+    require(publishing.try_acquire_for(5s), "the worker did not reach publication");
+    parser.cancel_document(cancel);
+    require(published.try_acquire_for(5s), "the cancelled page is still waiting for result capacity");
+    require(parser.has_tasks(), "cancellation affected the other document's result count");
+    require(parser.get_task().doc_key == keep, "cancellation evicted another document's result");
+    require(not parser.has_tasks(), "the discarded result still counts as outstanding");
+    parser.unload_all_documents();
+    require(parser.all_scheduled_work_completed(), "a discarded result was counted twice");
+  }
+
+  void destroy_with_full_result_queue()
+  {
+    std::binary_semaphore publishing{0};
+    std::binary_semaphore finish{0};
+    auto parser = std::make_unique<gated_parser>(1);
+    parser->add_schedule("document", {0, 1, 2});
+    parser->before_publish = [&](const std::string&, int page) {
+      require(page < 2, "the worker claimed a page during shutdown");
+      if(page == 1)
+        {
+          publishing.release();
+          require(finish.try_acquire_for(5s), "destruction did not let the Python helper thread run");
+        }
+    };
+
+    require(parser->has_tasks(), "the document should have scheduled work");
+    require(publishing.try_acquire_for(5s), "the worker did not reach the full result queue");
+
+    auto python_thread = std::async(std::launch::async, [&] {
+      pybind11::gil_scoped_acquire gil;
+      finish.release();
+    });
+    parser.reset();
+    python_thread.get();
+  }
+}
+
+int main(int argc, char** argv)
+{
+  require(argc == 2, "expected the path to the Python executable");
+  PyConfig config;
+  PyConfig_InitPythonConfig(&config);
+  const auto status = PyConfig_SetBytesString(&config, &config.program_name, argv[1]);
+  require(not PyStatus_Exception(status), "could not set the Python program name");
+  pybind11::scoped_interpreter interpreter(&config);
+  evict_buffered_results_and_end_iteration();
+  cancel_wakes_reader_and_unload_releases_gil();
+  discard_without_waiting_for_result_capacity();
+  destroy_with_full_result_queue();
+}
