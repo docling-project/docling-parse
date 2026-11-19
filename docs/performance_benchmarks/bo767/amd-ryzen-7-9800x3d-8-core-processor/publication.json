@@ -1,0 +1,35 @@
+{
+  "dataset": "bo767",
+  "files": {
+    "assets/memory_replay_render.png": "b0e853737a89fb14b3109ac79b3fc0d88880a0516afa77313883ed268e3f9ebe",
+    "assets/native_render_only_distribution.png": "06ecb9fbef6f10c06d4282d4284a69b10f67121eebcc1f004a41facb42e38e0c",
+    "assets/native_render_only_phases.png": "427410b9b8a11c8cd33a92a7325c929967297546b6424cb420a7eb5d74457440",
+    "assets/native_render_only_runtime.png": "2bd912ca299d64efe02fbdd09097fcf7d01dcc9cd980d316cd2cf9157e14d91d",
+    "assets/native_render_only_scaling.png": "f393872d4f72949bd372e6b7ecdec3dbfa654a170022e3e5847c70aff0c35ece",
+    "assets/native_render_with_text_distribution.png": "b274751984bfa6436a19a5b012c00923fdbed281dfb5c292c4a1d0161f262d4f",
+    "assets/native_render_with_text_phases.png": "ca2a1b43ca8d0b5f46134768978dda546b0c71c4d3940a1e26764358afa5adf7",
+    "assets/native_render_with_text_runtime.png": "b6d6a5873a6d855f2a6ee8055f9c9cf0a194db17fb5ba7e58b8d5cd78d1e5c96",
+    "assets/native_render_with_text_scaling.png": "10d7de28dee30edce5da13966322b5ef7018fa1af5fc17b113693e6cf7fda103",
+    "assets/replay_distribution.png": "45c9491326c76c388bc644350a8314a3d1cfa03ad77cc428b3ca8d9c280b2d4d",
+    "assets/replay_phases.png": "76c8217877a21fd909b6394e17fbc21ab2ccc7fd9e6c598ca334265998eea70d",
+    "assets/replay_runtime.png": "694717da7130c92127fcf96254f7dccefe2190689f201c96d33e5024b3d57949",
+    "assets/replay_scaling.png": "7873ca84d5b05e688e902e07f85a46a2ea3dd0dbe07f04afa054c3f12eab393f",
+    "index.md": "00e6a3bbc3ad7c7d085d70478865fc9be8d6f73b2c147633dd118385353d2b34",
+    "provenance.json": "5c085dd3c4bce39cd4f7f41a36ff0e0ce159e522d4a3b8c595fe6f727b6dc26f"
+  },
+  "label": "amd-ryzen-7-9800x3d-8-core-processor / unknown RAM / Linux-7.2.15-100.fc43.x86_64-x86_64-with-glibc2.42",
+  "machine": {
+    "cpu": null,
+    "machine": "x86_64",
+    "memory_bytes": null,
+    "platform": "Linux-7.2.15-100.fc43.x86_64-x86_64-with-glibc2.42"
+  },
+  "measured_at": "2026-11-19T11:44:23",
+  "run": "scratch-performance-refresh-20261119-114423-ofpV75",
+  "schema_version": 1,
+  "setup": "amd-ryzen-7-9800x3d-8-core-processor",
+  "workloads": [
+    "native",
+    "replay"
+  ]
+}

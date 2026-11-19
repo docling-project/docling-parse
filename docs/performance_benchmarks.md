@@ -8,6 +8,7 @@ A publication updates only its dataset/setup; results from other setups remain a
 | Dataset | Setup | Run | Workloads |
 |---|---|---|---|
 | bo20 | [Apple M3 Max / 64 GiB / macOS-26.6.2-arm64-arm-64bit](performance_benchmarks/bo20/apple-m3-max-64gib-macos-26-6-2-arm64-arm-64bit/index.md) | scratch-performance-refresh-20261112-123829-Q21HfP | native, replay |
+| bo767 | [amd-ryzen-7-9800x3d-8-core-processor / unknown RAM / Linux-7.2.15-100.fc43.x86_64-x86_64-with-glibc2.42](performance_benchmarks/bo767/amd-ryzen-7-9800x3d-8-core-processor/index.md) | scratch-performance-refresh-20261119-114423-ofpV75 | native, replay |
 | bo767 | [Apple M3 Max / 64 GiB / macOS-26.6.2-arm64-arm-64bit](performance_benchmarks/bo767/apple-m3-max-64gib-macos-26-6-2-arm64-arm-64bit/index.md) | scratch-performance-recovery-8vumw3sy | native, replay |
 <!-- performance:availability:end -->
 
