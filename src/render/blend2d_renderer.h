@@ -3134,6 +3134,17 @@ namespace pdflib
           }
         face = cached->second;
         using_embedded_font = face.is_valid();
+
+        // Blend2D loads a tricky TrueType font (DFKai-SB, MingLiU, ...) but
+        // runs no hinting program, and without it those glyphs come out as
+        // scattered strokes. FreeType assembles them, so draw them from there.
+        if (using_embedded_font and freetype_font_cache_ != nullptr and
+            freetype_font_cache_->is_tricky(blob) and
+            render_text_freetype(instr, geom, bbox_path))
+          {
+            return;
+          }
+
         if (not using_embedded_font)
           {
             if (render_text_freetype(instr, geom, bbox_path))

@@ -142,6 +142,20 @@ CITED_PAGES = [
         ),
         id="standard-font-differences-width",
     ),
+    # A Taiwanese bank form set in DFKai-SB and PMingLiU, embedded TrueType
+    # subsets that FreeType flags as "tricky": their glyphs are assembled by the
+    # fonts' hinting programs. Blend2D runs none, so the Chinese text was drawn
+    # as scattered strokes (mean_abs_error 10.33, changed_pixels_ratio 0.156
+    # before the fix; 4.83 and 0.136 after).
+    pytest.param(
+        "1530ae26884967ac_0004.pdf",
+        1,
+        PYPDFIUM_RENDER_SCALE,
+        ImageTolerance(
+            pixel_threshold=12, mean_abs_error=6.0, changed_pixels_ratio=0.145
+        ),
+        id="tricky-truetype-cjk",
+    ),
 ]
 
 
