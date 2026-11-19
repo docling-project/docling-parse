@@ -62,7 +62,8 @@ namespace pdflib
 
     // The label of every page, as a viewer shows it; "1", "2", ... for a
     // document without /PageLabels.
-    static std::vector<std::string> page_labels(QPDF& qpdf);
+    static std::vector<std::string> page_labels(
+      QPDF& qpdf, std::optional<std::size_t> projected_count = std::nullopt);
 
     // Label pages from..to (inclusive). `style` is "/D", "/R", "/r", "/A",
     // "/a" or empty for a prefix-only label; `start` is the number of the
@@ -354,9 +355,10 @@ namespace pdflib
     return prefix + numeric;
   }
 
-  inline std::vector<std::string> pdf_catalog_ops::page_labels(QPDF& qpdf)
+  inline std::vector<std::string> pdf_catalog_ops::page_labels(
+    QPDF& qpdf, std::optional<std::size_t> projected_count)
   {
-    std::size_t number_of_pages = qpdf.getAllPages().size();
+    std::size_t number_of_pages = projected_count.value_or(qpdf.getAllPages().size());
 
     std::vector<std::string> labels;
     labels.reserve(number_of_pages);

@@ -18,6 +18,7 @@
 #include <sstream>
 #include <string>
 #include <tuple>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -72,6 +73,7 @@ namespace docling
   public:
 
     static constexpr std::int64_t ANY_GENERATION = -1;
+    using page_handle = std::pair<int, std::int64_t>;
 
     docling_editor(std::string loglevel = "fatal");
     ~docling_editor();
@@ -96,6 +98,8 @@ namespace docling
     // ---- inspection ----
 
     int page_count();
+    std::pair<int, std::int64_t> page_list_state();
+    void validate_page_handle(int page, std::int64_t expected_generation);
 
     // Changes whenever existing page indices may have changed meaning.
     std::int64_t generation();
@@ -132,6 +136,7 @@ namespace docling
     nlohmann::json named_destinations();
     nlohmann::json outline_tree();        // pdf_outline_ops::read
     nlohmann::json form();                // pdf_form_ops::read
+    std::pair<nlohmann::json, std::int64_t> form_state();
     nlohmann::json page_annotations(int page, std::int64_t expected_generation);
     nlohmann::json attachments();         // pdf_attachment_ops::read
     std::string attachment_data(std::string name);
@@ -148,7 +153,7 @@ namespace docling
 
     // ---- editing ----
 
-    void remove_page(int page, std::int64_t expected_generation, bool clean = false);
+    void remove_page(int page, std::int64_t expected_generation, bool clean, bool detach_references);
     void move_page(int from, int to, std::int64_t expected_generation);
 
     void rotate_page(int page, std::int64_t expected_generation, int angle, bool relative);
@@ -180,23 +185,25 @@ namespace docling
     void flatten_page_rotation(int page, std::int64_t expected_generation);
 
     // `at` is the index the first new page gets; negative appends at the end.
-    // All three return the index of the first new page.
-    int duplicate_page(int page, std::int64_t expected_generation, int at);
-    int insert_blank_page(int at, double width, double height);
+    // Return the first new page and its generation under the same lock.
+    page_handle duplicate_page(int page, std::int64_t expected_generation, int at);
+    page_handle insert_blank_page(int at, double width, double height);
 
-    // A page showing one image; see pdf_page_ops::make_image_page.
-    int insert_image_page(int at,
-                          int width,
-                          int height,
-                          std::string colorspace,
-                          std::string data,
-                          bool is_jpeg,
-                          bool invert,
-                          std::string alpha,
-                          double page_width,
-                          double page_height,
-                          std::array<double, 4> placement,
-                          int rotate);
+    // Matches the input to pdf_page_ops::make_image_page.
+    using image_page = std::tuple<int, int, std::string, std::string, bool, bool,
+                                  std::string, double, double, std::array<double, 4>, int>;
+    page_handle insert_image_pages(int at, const std::vector<image_page>& images);
+
+    // Text, baseline (x, y), font size and optional original page index.
+    using contents_line = std::tuple<std::string, double, double, double, std::optional<int> >;
+    page_handle insert_contents_pages(int at,
+                                      std::int64_t expected_generation,
+                                      double width,
+                                      double height,
+                                      const std::string& font,
+                                      double label_x,
+                                      double link_right,
+                                      const std::vector<std::vector<contents_line> >& lines);
 
     // Draw text on a page in one of the standard fonts; see
     // pdf_page_ops::draw_text.
@@ -210,10 +217,11 @@ namespace docling
                    std::array<double, 3> color);
     // With import_outline, the other document's bookmarks that lead to a
     // copied page are recreated at the top level of this document's outline.
-    int append_pages(const pdflib::pdf_source& other,
+    page_handle append_pages(const pdflib::pdf_source& other,
                      std::optional<std::vector<int> > pages,
                      int at,
-                     bool import_outline);
+                     bool import_outline,
+                     const std::optional<std::string>& outline_item);
 
     // ---- document-level editing ----
 
@@ -239,7 +247,7 @@ namespace docling
 
     // Outline editing; the JSON entries are documented on
     // pdf_outline_ops::add_item and update_item.
-    int add_outline_entry(nlohmann::json spec);
+    int add_outline_entry(nlohmann::json spec, std::int64_t expected_generation);
     void update_outline_item(int id, nlohmann::json changes);
     void remove_outline_item(int id);
     void move_outline_item(int id, int parent, int index);
@@ -258,7 +266,10 @@ namespace docling
     void remove_form_field(std::string name);
 
     // `dictionary` is the annotation in PDF syntax.
-    void add_annotation(int page, std::int64_t expected_generation, std::string dictionary);
+    nlohmann::json add_annotation(int page,
+                                  std::int64_t expected_generation,
+                                  std::string dictionary,
+                                  bool report_annotation);
     void add_page_link(int page,
                        std::int64_t expected_generation,
                        std::array<double, 4> rectangle,
@@ -324,6 +335,11 @@ namespace docling
     template<typename function_type>
     decltype(auto) edit_document(function_type&& function);
 
+    // For operations that validate and prepare everything before changing
+    // the live graph. Keep the source decoder until the first edit succeeds.
+    template<typename function_type>
+    decltype(auto) stage_edit(function_type&& function);
+
     template<typename function_type>
     decltype(auto) edit_page(int page, std::int64_t expected_generation, function_type&& function);
 
@@ -334,7 +350,7 @@ namespace docling
     document_decoder_ptr_type require_source_decoder();
 
     // Clone the opened source into a destination, if there is none yet.
-    void ensure_destination();
+    void ensure_destination(bool keep_source_decoder = false);
     std::vector<QPDFPageObjectHelper> destination_pages();
 
     void touch(bool page_list_changed);
@@ -351,6 +367,7 @@ namespace docling
 
     // Resolve an insertion index: returns the position, sets at_end.
     int insertion_position(int at, int number_of_pages, bool& at_end);
+    page_handle insert_prepared_pages(int at, const std::vector<QPDFPageObjectHelper>& pages);
 
     import_document_ptr_type find_or_create_import(const pdflib::pdf_source& other);
 
@@ -504,6 +521,47 @@ namespace docling
   }
 
   template<typename function_type>
+  decltype(auto) docling_editor::stage_edit(function_type&& function)
+  {
+    std::lock_guard<std::recursive_mutex> lock(parser_mutex);
+
+    return guarded([&]() {
+      bool first_edit = (destination == nullptr);
+      ensure_destination(true);
+      auto finish = [&]() {
+        if(first_edit)
+          {
+            unload_document(SOURCE_KEY);
+          }
+      };
+      try
+        {
+          if constexpr(std::is_void_v<std::invoke_result_t<function_type, QPDF&> >)
+            {
+              function(*destination);
+              finish();
+            }
+          else
+            {
+              auto result = function(*destination);
+              finish();
+              return result;
+            }
+        }
+      catch(...)
+        {
+          if(first_edit)
+            {
+              standard_fonts.clear();
+              destination.reset();
+              destination_buffer.reset();
+            }
+          throw;
+        }
+    });
+  }
+
+  template<typename function_type>
   decltype(auto) docling_editor::edit_page(int page,
                                            std::int64_t expected_generation,
                                            function_type&& function)
@@ -598,7 +656,7 @@ namespace docling
     return decoder;
   }
 
-  inline void docling_editor::ensure_destination()
+  inline void docling_editor::ensure_destination(bool keep_source_decoder)
   {
     if(destination != nullptr)
       {
@@ -632,7 +690,7 @@ namespace docling
 
     // The page list is the same, so page handles stay valid; from here on the
     // destination is the document and the source decoder is not needed.
-    if(is_loaded(SOURCE_KEY))
+    if(not keep_source_decoder and is_loaded(SOURCE_KEY))
       {
         unload_document(SOURCE_KEY);
       }
@@ -908,6 +966,19 @@ namespace docling
     std::lock_guard<std::recursive_mutex> lock(parser_mutex);
 
     return current_generation;
+  }
+
+  inline std::pair<int, std::int64_t> docling_editor::page_list_state()
+  {
+    std::lock_guard<std::recursive_mutex> lock(parser_mutex);
+    return {page_count(), current_generation};
+  }
+
+  inline void docling_editor::validate_page_handle(int page, std::int64_t expected_generation)
+  {
+    std::lock_guard<std::recursive_mutex> lock(parser_mutex);
+    check_generation(expected_generation);
+    check_page(page, page_count());
   }
 
   inline pdflib::pdf_document_info docling_editor::document_info()
@@ -1240,17 +1311,13 @@ namespace docling
                                              std::int64_t expected_generation,
                                              std::array<double, 6> matrix)
   {
-    std::lock_guard<std::recursive_mutex> lock(parser_mutex);
-
-    guarded([this, page, expected_generation, &matrix]() {
+    stage_edit([&](QPDF& qpdf) {
       check_generation(expected_generation);
-      ensure_destination();
-
       std::vector<QPDFPageObjectHelper> pages = destination_pages();
       check_page(page, static_cast<int>(pages.size()));
 
+      pdflib::pdf_page_ops::transform(qpdf, pages.at(page), matrix);
       touch(false);
-      pdflib::pdf_page_ops::transform(*destination, pages.at(page), matrix);
     });
   }
 
@@ -1259,20 +1326,18 @@ namespace docling
                                          double sx,
                                          double sy)
   {
-    std::lock_guard<std::recursive_mutex> lock(parser_mutex);
-
-    guarded([this, page, expected_generation, sx, sy]() {
+    stage_edit([&](QPDF& qpdf) {
       check_generation(expected_generation);
-      ensure_destination();
-
       std::vector<QPDFPageObjectHelper> pages = destination_pages();
       check_page(page, static_cast<int>(pages.size()));
 
+      if(not (sx > 0.0 and sy > 0.0))
+        {
+          throw pdflib::pdf_edit_error(pdflib::edit_error::INVALID_EDIT,
+                                       "page scale factors must be positive");
+        }
+      pdflib::pdf_page_ops::transform(qpdf, pages.at(page), {sx, 0, 0, sy, 0, 0}, true);
       touch(false);
-
-      // Boxes first: it validates the factors before anything is changed.
-      pdflib::pdf_page_ops::scale_boxes(pages.at(page), sx, sy);
-      pdflib::pdf_page_ops::transform(*destination, pages.at(page), {sx, 0.0, 0.0, sy, 0.0, 0.0});
     });
   }
 
@@ -1309,25 +1374,21 @@ namespace docling
 
   inline void docling_editor::flatten_page_rotation(int page, std::int64_t expected_generation)
   {
-    std::lock_guard<std::recursive_mutex> lock(parser_mutex);
-
-    guarded([this, page, expected_generation]() {
+    stage_edit([&](QPDF& qpdf) {
       check_generation(expected_generation);
-      ensure_destination();
-
       std::vector<QPDFPageObjectHelper> pages = destination_pages();
       check_page(page, static_cast<int>(pages.size()));
 
+      pdflib::pdf_page_ops::flatten_rotation(qpdf, pages.at(page));
       touch(false);
-      pdflib::pdf_page_ops::flatten_rotation(*destination, pages.at(page));
     });
   }
 
-  inline int docling_editor::duplicate_page(int page, std::int64_t expected_generation, int at)
+  inline docling_editor::page_handle docling_editor::duplicate_page(int page, std::int64_t expected_generation, int at)
   {
     std::lock_guard<std::recursive_mutex> lock(parser_mutex);
 
-    return guarded([this, page, expected_generation, at]() -> int {
+    return guarded([this, page, expected_generation, at]() -> page_handle {
       check_generation(expected_generation);
       ensure_destination();
 
@@ -1369,33 +1430,43 @@ namespace docling
                                         acroform);
         }
 
-      return position;
+      return {position, current_generation};
     });
   }
 
-  inline void docling_editor::remove_page(int page, std::int64_t expected_generation, bool clean)
+  inline void docling_editor::remove_page(int page,
+                                         std::int64_t expected_generation,
+                                         bool clean,
+                                         bool detach_references)
   {
     std::lock_guard<std::recursive_mutex> lock(parser_mutex);
 
-    guarded([this, page, expected_generation, clean]() {
+    guarded([this, page, expected_generation, clean, detach_references]() {
       check_generation(expected_generation);
       ensure_destination();
 
       std::vector<QPDFPageObjectHelper> pages = destination_pages();
       check_page(page, static_cast<int>(pages.size()));
 
+      auto removed_page = pages.at(page);
+      auto removed_id = removed_page.getObjectHandle().getObjGen();
       touch(true);
+      if(detach_references)
+        {
+          pdflib::pdf_structure_ops::detach_page(*destination, removed_page.getObjectHandle());
+          pdflib::pdf_annotation_ops::remove(*destination, removed_page, {"/Widget"});
+        }
       pdflib::pdf_navigation_ops::drop_destinations_to(*destination,
-                                                       pages.at(page).getObjectHandle().getObjGen());
+                                                       removed_id);
       // Bookmarks and an open action leading to the page would otherwise
       // keep it in the file, unreachable and unlisted.
       pdflib::pdf_outline_ops::drop_destinations_to(*destination,
-                                                    pages.at(page).getObjectHandle().getObjGen());
+                                                    removed_id);
 
-      QPDFPageDocumentHelper(*destination).removePage(pages.at(page));
+      QPDFPageDocumentHelper(*destination).removePage(removed_page);
       if(clean)
         {
-          destination->replaceObject(pages.at(page).getObjectHandle().getObjGen(), QPDFObjectHandle::newNull());
+          destination->replaceObject(removed_id, QPDFObjectHandle::newNull());
         }
     });
   }
@@ -1464,12 +1535,8 @@ namespace docling
                                            std::string box,
                                            std::array<double, 4> rectangle)
   {
-    std::lock_guard<std::recursive_mutex> lock(parser_mutex);
-
-    guarded([this, page, expected_generation, &box, &rectangle]() {
+    stage_edit([&](QPDF&) {
       check_generation(expected_generation);
-      ensure_destination();
-
       std::vector<QPDFPageObjectHelper> pages = destination_pages();
       check_page(page, static_cast<int>(pages.size()));
 
@@ -1478,46 +1545,23 @@ namespace docling
     });
   }
 
-  inline int docling_editor::insert_blank_page(int at, double width, double height)
+  inline docling_editor::page_handle docling_editor::insert_blank_page(int at, double width, double height)
   {
-    std::lock_guard<std::recursive_mutex> lock(parser_mutex);
-
-    return guarded([this, at, width, height]() -> int {
-      ensure_destination();
-
-      QPDFPageDocumentHelper helper(*destination);
-      std::vector<QPDFPageObjectHelper> pages = helper.getAllPages();
-      int number_of_pages = static_cast<int>(pages.size());
-
-      bool at_end = false;
-      int position = insertion_position(at, number_of_pages, at_end);
-
-      QPDFPageObjectHelper page(pdflib::pdf_page_ops::make_blank_page(*destination, width, height));
-
-      // Appending leaves every existing index as it was; inserting does not.
-      touch(not at_end);
-
-      if(at_end)
-        {
-          helper.addPage(page, false);
-        }
-      else
-        {
-          helper.addPageAt(page, true, pages.at(position));
-        }
-
-      return position;
+    return stage_edit([&](QPDF& qpdf) {
+      QPDFPageObjectHelper page(pdflib::pdf_page_ops::make_blank_page(qpdf, width, height));
+      return insert_prepared_pages(at, {page});
     });
   }
 
-  inline int docling_editor::append_pages(const pdflib::pdf_source& other,
+  inline docling_editor::page_handle docling_editor::append_pages(const pdflib::pdf_source& other,
                                           std::optional<std::vector<int> > pages,
                                           int at,
-                                          bool import_outline)
+                                          bool import_outline,
+                                          const std::optional<std::string>& outline_item)
   {
     std::lock_guard<std::recursive_mutex> lock(parser_mutex);
 
-    return guarded([this, &other, &pages, at, import_outline]() -> int {
+    return guarded([&]() -> page_handle {
       if(not other.is_valid())
         {
           throw pdflib::pdf_edit_error(pdflib::edit_error::INVALID_EDIT,
@@ -1556,7 +1600,7 @@ namespace docling
 
       if(selection.empty())
         {
-          return first;
+          return {first, current_generation};
         }
 
       // Before the first change: a failure half way must still invalidate
@@ -1615,7 +1659,11 @@ namespace docling
           pdflib::pdf_outline_ops::import(*destination, import->get_qpdf(), page_map, 0);
         }
 
-      return first;
+      if(outline_item)
+        {
+          pdflib::pdf_outline_ops::add_item(*destination, *outline_item, first, 0);
+        }
+      return {first, current_generation};
     });
   }
 
@@ -1768,6 +1816,12 @@ namespace docling
     });
   }
 
+  inline std::pair<nlohmann::json, std::int64_t> docling_editor::form_state()
+  {
+    std::lock_guard<std::recursive_mutex> lock(parser_mutex);
+    return {form(), current_generation};
+  }
+
   inline nlohmann::json docling_editor::page_annotations(int page, std::int64_t expected_generation)
   {
     std::lock_guard<std::recursive_mutex> lock(parser_mutex);
@@ -1874,8 +1928,10 @@ namespace docling
 
   inline int docling_editor::set_form_values(std::map<std::string, std::string> values)
   {
-    return edit_document([&values](QPDF& qpdf) {
-      return pdflib::pdf_form_ops::set_values(qpdf, values);
+    return stage_edit([&](QPDF& qpdf) {
+      int updated = pdflib::pdf_form_ops::set_values(qpdf, values);
+      touch(false);
+      return updated;
     });
   }
 
@@ -1893,12 +1949,15 @@ namespace docling
     });
   }
 
-  inline void docling_editor::add_annotation(int page,
-                                             std::int64_t expected_generation,
-                                             std::string dictionary)
+  inline nlohmann::json docling_editor::add_annotation(int page,
+                                                      std::int64_t expected_generation,
+                                                      std::string dictionary,
+                                                      bool report_annotation)
   {
-    edit_page(page, expected_generation, [&dictionary](QPDF& qpdf, QPDFPageObjectHelper target) {
+    return edit_page(page, expected_generation, [&](QPDF& qpdf, QPDFPageObjectHelper target) {
       pdflib::pdf_annotation_ops::add(qpdf, target, dictionary);
+      return report_annotation ? pdflib::pdf_annotation_ops::read(qpdf, target).back()
+                               : nlohmann::json(nullptr);
     });
   }
 
@@ -1978,57 +2037,107 @@ namespace docling
     });
   }
 
-  inline int docling_editor::insert_image_page(int at,
-                                               int width,
-                                               int height,
-                                               std::string colorspace,
-                                               std::string data,
-                                               bool is_jpeg,
-                                               bool invert,
-                                               std::string alpha,
-                                               double page_width,
-                                               double page_height,
-                                               std::array<double, 4> placement,
-                                               int rotate)
+  inline docling_editor::page_handle
+  docling_editor::insert_prepared_pages(int at, const std::vector<QPDFPageObjectHelper>& pages)
+  {
+    QPDFPageDocumentHelper helper(*destination);
+    const auto& existing = helper.getAllPages();
+    bool at_end = false;
+    int position = insertion_position(at, static_cast<int>(existing.size()), at_end);
+    if(pages.empty())
+      {
+        return {position, current_generation};
+      }
+
+    QPDFPageObjectHelper anchor(at_end ? QPDFObjectHandle::newNull()
+                                       : existing.at(position).getObjectHandle());
+    std::size_t inserted = 0;
+    try
+      {
+        for(auto page : pages)
+          {
+            if(at_end)
+              {
+                helper.addPage(page, false);
+              }
+            else
+              {
+                helper.addPageAt(page, true, anchor);
+              }
+            ++inserted;
+          }
+      }
+    catch(...)
+      {
+        while(inserted > 0)
+          {
+            helper.removePage(pages.at(--inserted));
+          }
+        throw;
+      }
+
+    touch(not at_end);
+    return {position, current_generation};
+  }
+
+  inline docling_editor::page_handle
+  docling_editor::insert_image_pages(int at, const std::vector<image_page>& images)
+  {
+    return stage_edit([&](QPDF& qpdf) {
+      std::vector<QPDFPageObjectHelper> pages;
+      pages.reserve(images.size());
+      for(const auto& [width, height, colorspace, data, jpeg, invert, alpha,
+                       page_width, page_height, placement, rotate] : images)
+        {
+          pages.emplace_back(pdflib::pdf_page_ops::make_image_page(
+            qpdf, width, height, colorspace, data, jpeg, invert, alpha,
+            page_width, page_height, placement, rotate));
+        }
+      return insert_prepared_pages(at, pages);
+    });
+  }
+
+  inline docling_editor::page_handle
+  docling_editor::insert_contents_pages(int at,
+                                       std::int64_t expected_generation,
+                                       double width,
+                                       double height,
+                                       const std::string& font,
+                                       double label_x,
+                                       double link_right,
+                                       const std::vector<std::vector<contents_line> >& lines)
   {
     std::lock_guard<std::recursive_mutex> lock(parser_mutex);
+    check_generation(expected_generation);
 
-    return guarded([&]() -> int {
-      ensure_destination();
-
-      QPDFPageDocumentHelper helper(*destination);
-      std::vector<QPDFPageObjectHelper> pages = helper.getAllPages();
-      int number_of_pages = static_cast<int>(pages.size());
-
+    return stage_edit([&](QPDF& qpdf) {
+      int page_count = static_cast<int>(qpdf.getAllPages().size());
       bool at_end = false;
-      int position = insertion_position(at, number_of_pages, at_end);
+      int position = insertion_position(at, page_count, at_end);
+      auto labels = pdflib::pdf_catalog_ops::page_labels(qpdf, page_count + lines.size());
+      auto font_object = pdflib::pdf_page_ops::make_standard_font(qpdf, font);
+      const std::array<double, 3> black = {0.0, 0.0, 0.0};
 
-      // built, and so checked, before the page list changes
-      QPDFPageObjectHelper page(pdflib::pdf_page_ops::make_image_page(*destination,
-                                                                      width,
-                                                                      height,
-                                                                      colorspace,
-                                                                      data,
-                                                                      is_jpeg,
-                                                                      invert,
-                                                                      alpha,
-                                                                      page_width,
-                                                                      page_height,
-                                                                      placement,
-                                                                      rotate));
-
-      touch(not at_end);
-
-      if(at_end)
+      std::vector<QPDFPageObjectHelper> pages;
+      pages.reserve(lines.size());
+      for(const auto& page_lines : lines)
         {
-          helper.addPage(page, false);
+          auto& page = pages.emplace_back(pdflib::pdf_page_ops::make_blank_page(qpdf, width, height));
+          for(const auto& [text, x, y, size, target] : page_lines)
+            {
+              pdflib::pdf_page_ops::draw_text(qpdf, page, font_object, text, x, y, size, black);
+              if(target)
+                {
+                  check_page(*target, page_count);
+                  std::size_t label_index = *target >= position ? *target + lines.size() : *target;
+                  pdflib::pdf_page_ops::draw_text(
+                    qpdf, page, font_object, labels.at(label_index), label_x, y, size, black);
+                  pdflib::pdf_annotation_ops::add_page_link(
+                    qpdf, page, {x, y - 0.3 * size, link_right, y + size}, *target);
+                }
+            }
         }
-      else
-        {
-          helper.addPageAt(page, true, pages.at(position));
-        }
-
-      return position;
+      return insert_prepared_pages(position, pages);
     });
   }
 
@@ -2052,17 +2161,22 @@ namespace docling
     });
   }
 
-  inline int docling_editor::add_outline_entry(nlohmann::json spec)
+  inline int docling_editor::add_outline_entry(nlohmann::json spec, std::int64_t expected_generation)
   {
-    return edit_document([&spec](QPDF& qpdf) {
-      return pdflib::pdf_outline_ops::add_item(qpdf, spec);
+    std::lock_guard<std::recursive_mutex> lock(parser_mutex);
+    check_generation(expected_generation);
+    return stage_edit([&](QPDF& qpdf) {
+      int id = pdflib::pdf_outline_ops::add_item(qpdf, spec);
+      touch(false);
+      return id;
     });
   }
 
   inline void docling_editor::update_outline_item(int id, nlohmann::json changes)
   {
-    edit_document([id, &changes](QPDF& qpdf) {
+    stage_edit([&](QPDF& qpdf) {
       pdflib::pdf_outline_ops::update_item(qpdf, id, changes);
+      touch(false);
     });
   }
 
@@ -2098,8 +2212,9 @@ namespace docling
 
   inline void docling_editor::update_form_field(std::string name, nlohmann::json changes)
   {
-    edit_document([&name, &changes](QPDF& qpdf) {
+    stage_edit([&](QPDF& qpdf) {
       pdflib::pdf_form_ops::update_field(qpdf, name, changes);
+      touch(false);
     });
   }
 

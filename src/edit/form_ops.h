@@ -3,6 +3,7 @@
 #ifndef PDF_FORM_OPS_H
 #define PDF_FORM_OPS_H
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <map>
@@ -89,8 +90,17 @@ namespace pdflib
     // Remove a field and its widgets from the form and from their pages.
     static void remove_field(QPDF& qpdf, const std::string& name);
 
+    // Remove just these widgets from /Fields and /Kids, pruning containers
+    // that became empty. Other widgets of a shared field keep their field.
+    static void detach_widgets(QPDF& qpdf, const std::vector<QPDFObjectHandle>& widgets);
+
   private:
 
+    static bool prune_widgets(QPDFObjectHandle fields,
+                              const std::vector<QPDFObjectHandle>& widgets,
+                              std::vector<QPDFObjectHandle>& pruned,
+                              std::set<QPDFObjGen>& active,
+                              int depth);
     static std::string kind_of(QPDFFormFieldObjectHelper& field);
 
     // qpdf may expose unnamed widgets as terminal fields. Resolve them to
@@ -366,68 +376,61 @@ namespace pdflib
 
     std::vector<QPDFFormFieldObjectHelper> fields = fields_of(acroform);
 
-    int updated = 0;
+    std::vector<std::pair<QPDFFormFieldObjectHelper, QPDFObjectHandle> > prepared;
+    prepared.reserve(values.size());
 
-    for(const auto& entry : values)
+    for(const auto& [name, value] : values)
       {
-        const std::string& name = entry.first;
-        const std::string& value = entry.second;
-
-        std::vector<QPDFFormFieldObjectHelper> matches = {find_field(fields, name)};
-
-        for(QPDFFormFieldObjectHelper& field : matches)
+        QPDFFormFieldObjectHelper field = find_field(fields, name);
+        QPDFObjectHandle field_value;
+        if(field.isCheckbox() or field.isRadioButton())
           {
-            if(field.isCheckbox() or field.isRadioButton())
+            std::set<std::string> states = states_of(acroform, field);
+            std::string state = with_slash(value);
+            if(field.isCheckbox() and (value == "true" or value == "True"))
               {
-                std::set<std::string> states = states_of(acroform, field);
-
-                std::string state = with_slash(value);
-                if(field.isCheckbox() and (value == "true" or value == "True"))
-                  {
-                    // a checkbox has one on state, whatever it is called
-                    state = states.empty() ? "/Yes" : *states.begin();
-                  }
-                else if(field.isCheckbox() and (value == "false" or value == "False" or value.empty()))
-                  {
-                    state = "/Off";
-                  }
-
-                // A widget without appearance streams declares no states;
-                // there is then nothing to check the name against.
-                if(state != "/Off" and not states.empty() and states.count(state) == 0)
-                  {
-                    std::string choices = "/Off";
-                    for(const std::string& choice : states)
-                      {
-                        choices += ", " + choice;
-                      }
-                    throw pdf_edit_error(edit_error::INVALID_EDIT,
-                                         "'" + value + "' is not a state of form field '" + name
-                                         + "': expected one of " + choices);
-                  }
-
-                // qpdf sets /V and each widget's /AS for a name value.
-                field.setV(QPDFObjectHandle::newName(state), true);
+                state = states.empty() ? "/Yes" : *states.begin();
               }
-            else if(field.isPushbutton() or field.getFieldType() == "/Sig")
+            else if(field.isCheckbox() and (value == "false" or value == "False" or value.empty()))
               {
+                state = "/Off";
+              }
+
+            // A widget without appearance streams declares no states.
+            if(state != "/Off" and not states.empty() and states.count(state) == 0)
+              {
+                std::string choices = "/Off";
+                for(const std::string& choice : states)
+                  {
+                    choices += ", " + choice;
+                  }
                 throw pdf_edit_error(edit_error::INVALID_EDIT,
-                                     "form field '" + name + "' has no value that can be set");
+                                     "'" + value + "' is not a state of form field '" + name
+                                     + "': expected one of " + choices);
               }
-            else
-              {
-                field.setV(value, true);
-              }
-
-            updated += 1;
+            field_value = QPDFObjectHandle::newName(state);
           }
+        else if(field.isPushbutton() or field.getFieldType() == "/Sig")
+          {
+            throw pdf_edit_error(edit_error::INVALID_EDIT,
+                                 "form field '" + name + "' has no value that can be set");
+          }
+        else
+          {
+            field_value = QPDFObjectHandle::newUnicodeString(value);
+          }
+
+        prepared.emplace_back(field, field_value);
       }
 
-    // setV flagged the form as needing appearances; build them now, so the
-    // values show in viewers that do not regenerate appearances themselves.
+    for(auto& [field, value] : prepared)
+      {
+        field.setV(value, true);
+      }
+
     acroform.generateAppearancesIfNeeded();
 
-    return updated;
+    return static_cast<int>(prepared.size());
   }
 
   inline void pdf_form_ops::set_need_appearances(QPDF& qpdf, bool value)
@@ -575,6 +578,7 @@ namespace pdflib
         rect = {value[0].get<double>(), value[1].get<double>(),
                 value[2].get<double>(), value[3].get<double>()};
         valid = (std::isfinite(rect[0]) and std::isfinite(rect[1]) and
+                 std::isfinite(rect[2]) and std::isfinite(rect[3]) and
                  rect[0] < rect[2] and rect[1] < rect[3]);
       }
 
@@ -1117,17 +1121,85 @@ namespace pdflib
         widget.replaceKey("/Rect",
                           QPDFObjectHandle::newArray(QPDFObjectHandle::Rectangle(rect[0], rect[1], rect[2], rect[3])));
 
-        // A viewer scales an appearance to the rectangle, which is right
-        // for a check mark and wrong for text: text is laid out again.
-        if(field.isText() or field.isChoice())
-          {
-            set_text_appearance(qpdf, widget, rect, ensure_form_font(qpdf, acroform));
-          }
+        // Viewers map the existing appearance into the new rectangle.
       }
 
     if(changes.contains("name") and new_name != field.getPartialName())
       {
         acroform.setFormFieldName(field, new_name);
+      }
+  }
+
+  inline bool pdf_form_ops::prune_widgets(QPDFObjectHandle fields,
+                                         const std::vector<QPDFObjectHandle>& widgets,
+                                         std::vector<QPDFObjectHandle>& pruned,
+                                         std::set<QPDFObjGen>& active,
+                                         int depth)
+  {
+    if(not fields.isArray() or depth >= 256)
+      {
+        return false;
+      }
+
+    bool changed = false;
+    for(int index = fields.getArrayNItems() - 1; index >= 0; --index)
+      {
+        auto field = fields.getArrayItem(index);
+        auto matches = [&](const QPDFObjectHandle& widget) { return field.isSameObjectAs(widget); };
+        bool remove = std::any_of(widgets.begin(), widgets.end(), matches);
+        if(not remove and field.isDictionary())
+          {
+            auto id = field.getObjGen();
+            if(not field.isIndirect() or active.insert(id).second)
+              {
+                auto children = field.getKey("/Kids");
+                remove = prune_widgets(children, widgets, pruned, active, depth + 1) and
+                         children.getArrayNItems() == 0 and
+                         not field.getKey("/Subtype").isNameAndEquals("/Widget");
+                if(field.isIndirect())
+                  {
+                    active.erase(id);
+                  }
+              }
+          }
+        if(remove)
+          {
+            fields.eraseItem(index);
+            pruned.push_back(field);
+            changed = true;
+          }
+      }
+    return changed;
+  }
+
+  inline void pdf_form_ops::detach_widgets(QPDF& qpdf, const std::vector<QPDFObjectHandle>& widgets)
+  {
+    auto acroform = qpdf.getRoot().getKey("/AcroForm");
+    if(acroform.isDictionary())
+      {
+        std::vector<QPDFObjectHandle> pruned;
+        std::set<QPDFObjGen> active;
+        prune_widgets(acroform.getKey("/Fields"), widgets, pruned, active, 0);
+
+        auto order = acroform.getKey("/CO");
+        if(order.isArray())
+          {
+            for(int index = order.getArrayNItems() - 1; index >= 0; --index)
+              {
+                auto field = order.getArrayItem(index);
+                if(std::any_of(pruned.begin(), pruned.end(), [&](const QPDFObjectHandle& removed) {
+                     return field.isSameObjectAs(removed);
+                   }))
+                  {
+                    order.eraseItem(index);
+                  }
+              }
+          }
+      }
+    for(auto widget : widgets)
+      {
+        widget.removeKey("/P");
+        widget.removeKey("/Parent");
       }
   }
 

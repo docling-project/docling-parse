@@ -107,7 +107,7 @@ class PdfEditError(RuntimeError):
 
 
 class PdfStaleHandleError(PdfEditError):
-    """A page handle was used after pages were inserted, removed or moved."""
+    """A page handle belongs to an earlier page list or a different document."""
 
 
 class PdfWriteError(PdfEditError):

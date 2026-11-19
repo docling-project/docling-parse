@@ -13,5 +13,6 @@
 #include <edit/outline_ops.h>
 #include <edit/form_ops.h>
 #include <edit/annotation_ops.h>
+#include <edit/structure_ops.h>
 #include <edit/attachment_ops.h>
 #include <edit/text_layout.h>

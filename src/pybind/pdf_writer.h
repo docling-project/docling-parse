@@ -29,6 +29,8 @@ namespace docling
 
     using docling_editor::page_count;
     using docling_editor::generation;
+    using docling_editor::page_list_state;
+    using docling_editor::validate_page_handle;
     using docling_editor::document_info;
     using docling_editor::validate_strict;
     using docling_editor::page_info;
@@ -41,6 +43,7 @@ namespace docling
     using docling_editor::named_destinations;
     using docling_editor::outline_tree;
     using docling_editor::form;
+    using docling_editor::form_state;
     using docling_editor::page_annotations;
     using docling_editor::attachments;
     using docling_editor::attachment_data;
@@ -56,7 +59,8 @@ namespace docling
     using docling_editor::flatten_page_rotation;
     using docling_editor::duplicate_page;
     using docling_editor::insert_blank_page;
-    using docling_editor::insert_image_page;
+    using docling_editor::insert_image_pages;
+    using docling_editor::insert_contents_pages;
     using docling_editor::draw_text;
     using docling_editor::append_pages;
 

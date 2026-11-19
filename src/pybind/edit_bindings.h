@@ -175,8 +175,23 @@ namespace docling
              })
 
         .def("generation",
-             [](class_type& self) -> std::int64_t { return self.generation(); },
+             [](class_type& self) -> std::int64_t {
+               pybind11::gil_scoped_release release;
+               return self.generation();
+             },
              "Changes whenever existing page indices may have changed meaning.")
+
+        .def("page_list_state",
+             [](class_type& self) {
+               pybind11::gil_scoped_release release;
+               return self.page_list_state();
+             })
+
+        .def("validate_page_handle",
+             [](class_type& self, int page, std::int64_t generation) {
+               pybind11::gil_scoped_release release;
+               self.validate_page_handle(page, generation);
+             })
 
         .def("document_info",
              [](class_type& self) -> pybind11::dict {
@@ -278,6 +293,16 @@ namespace docling
              },
              "The interactive form: flags and fields.")
 
+        .def("form_state",
+             [](class_type& self) {
+               std::pair<nlohmann::json, std::int64_t> state;
+               {
+                 pybind11::gil_scoped_release release;
+                 state = self.form_state();
+               }
+               return pybind11::make_tuple(pyjson::from_json(state.first), state.second);
+             })
+
         .def("page_annotations",
              [](class_type& self, int page, std::int64_t generation) -> pybind11::object {
                nlohmann::json result;
@@ -359,19 +384,21 @@ namespace docling
                  std::optional<std::vector<int> > pages,
                  int at,
                  std::int64_t other_generation,
-                 bool import_outline) -> int {
+                 bool import_outline,
+                 const std::optional<std::string>& outline_item) {
                 pybind11::gil_scoped_release release;
                 return self.append_pages(other.get_source(other_generation),
                                          pages,
                                          at,
-                                         import_outline);
+                                         import_outline, outline_item);
               },
               pybind11::arg("other"),
               pybind11::arg("pages") = pybind11::none(),
               pybind11::arg("at") = -1,
               pybind11::arg("other_generation") = other_type::ANY_GENERATION,
               pybind11::arg("import_outline") = false,
-              "Copy pages of another document into this one. Returns the index of the first new page.");
+              pybind11::arg("outline_item") = pybind11::none(),
+              "Copy pages and return the first new index and generation.");
     }
 
     // overlay_page(page, other, other_page, ...): one overload per kind of
@@ -422,13 +449,15 @@ namespace docling
              "Start an empty document with no pages.")
 
         .def("remove_page",
-             [](class_type& self, int page, std::int64_t generation, bool clean) -> void {
+             [](class_type& self, int page, std::int64_t generation, bool clean,
+                bool detach_references) -> void {
                pybind11::gil_scoped_release release;
-               self.remove_page(page, generation, clean);
+               self.remove_page(page, generation, clean, detach_references);
              },
              pybind11::arg("page"),
              pybind11::arg("generation") = class_type::ANY_GENERATION,
-             pybind11::arg("clean") = false)
+             pybind11::arg("clean") = false,
+             pybind11::arg("detach_references") = true)
 
         .def("move_page",
              [](class_type& self, int from, int to, std::int64_t generation) -> void {
@@ -497,17 +526,17 @@ namespace docling
              "Turn the page's /Rotate into a rotation of its content.")
 
         .def("duplicate_page",
-             [](class_type& self, int page, int at, std::int64_t generation) -> int {
+             [](class_type& self, int page, int at, std::int64_t generation) {
                pybind11::gil_scoped_release release;
                return self.duplicate_page(page, generation, at);
              },
              pybind11::arg("page"),
              pybind11::arg("at") = -1,
              pybind11::arg("generation") = class_type::ANY_GENERATION,
-             "Add a copy of a page. Returns the index of the copy.")
+             "Add a copy of a page and return its index and generation.")
 
         .def("insert_blank_page",
-             [](class_type& self, double width, double height, int at) -> int {
+             [](class_type& self, double width, double height, int at) {
                pybind11::gil_scoped_release release;
                return self.insert_blank_page(at, width, height);
              },
@@ -591,13 +620,14 @@ namespace docling
              "Add or replace a named destination.")
 
         .def("add_outline_entry",
-             [](class_type& self, pybind11::dict spec) -> int {
+             [](class_type& self, pybind11::dict spec, std::int64_t generation) -> int {
                nlohmann::json value = pyjson::to_json(spec);
 
                pybind11::gil_scoped_release release;
-               return self.add_outline_entry(value);
+               return self.add_outline_entry(value, generation);
              },
              pybind11::arg("spec"),
+             pybind11::arg("generation") = class_type::ANY_GENERATION,
              "Add a bookmark described by a dict; returns its id.")
 
         .def("update_outline_item",
@@ -667,40 +697,30 @@ namespace docling
              pybind11::arg("name"),
              "Remove a form field and its widgets.")
 
-        .def("insert_image_page",
-             [](class_type& self,
-                int width,
-                int height,
-                const std::string& colorspace,
-                pybind11::bytes data,
-                bool is_jpeg,
-                double page_width,
-                double page_height,
-                std::array<double, 4> placement,
-                bool invert,
-                std::optional<pybind11::bytes> alpha,
-                int rotate,
-                int at) -> int {
-               std::string samples = data.cast<std::string>();
-               std::string opacity = alpha.has_value() ? alpha.value().cast<std::string>() : std::string();
-
+        .def("insert_image_pages",
+             [](class_type& self, int at, const std::vector<docling_editor::image_page>& images) {
                pybind11::gil_scoped_release release;
-               return self.insert_image_page(at, width, height, colorspace, samples, is_jpeg, invert,
-                                             opacity, page_width, page_height, placement, rotate);
+               return self.insert_image_pages(at, images);
              },
+             pybind11::arg("at"),
+             pybind11::arg("images"))
+
+        .def("insert_contents_pages",
+             [](class_type& self, int at, std::int64_t generation, double width, double height,
+                const std::string& font, double label_x, double link_right,
+                const std::vector<std::vector<docling_editor::contents_line> >& lines) {
+               pybind11::gil_scoped_release release;
+               return self.insert_contents_pages(at, generation, width, height, font, label_x,
+                                                 link_right, lines);
+             },
+             pybind11::arg("at"),
+             pybind11::arg("generation"),
              pybind11::arg("width"),
              pybind11::arg("height"),
-             pybind11::arg("colorspace"),
-             pybind11::arg("data"),
-             pybind11::arg("is_jpeg"),
-             pybind11::arg("page_width"),
-             pybind11::arg("page_height"),
-             pybind11::arg("placement"),
-             pybind11::arg("invert") = false,
-             pybind11::arg("alpha") = pybind11::none(),
-             pybind11::arg("rotate") = 0,
-             pybind11::arg("at") = -1,
-             "Add a page that shows one image. Returns its index.")
+             pybind11::arg("font"),
+             pybind11::arg("label_x"),
+             pybind11::arg("link_right"),
+             pybind11::arg("lines"))
 
         .def("draw_text",
              [](class_type& self,
@@ -759,13 +779,19 @@ namespace docling
              "Draw annotations and form fields into the page content and remove them.")
 
         .def("add_annotation",
-             [](class_type& self, int page, const std::string& dictionary, std::int64_t generation) -> void {
-               pybind11::gil_scoped_release release;
-               self.add_annotation(page, generation, dictionary);
+             [](class_type& self, int page, const std::string& dictionary,
+                std::int64_t generation, bool report_annotation) {
+               nlohmann::json annotation;
+               {
+                 pybind11::gil_scoped_release release;
+                 annotation = self.add_annotation(page, generation, dictionary, report_annotation);
+               }
+               return pyjson::from_json(annotation);
              },
              pybind11::arg("page"),
              pybind11::arg("dictionary"),
              pybind11::arg("generation") = class_type::ANY_GENERATION,
+             pybind11::arg("report_annotation") = false,
              "Add an annotation given as a dictionary in PDF syntax.")
 
         .def("add_page_link",

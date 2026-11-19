@@ -4,6 +4,7 @@
 #define PDF_ANNOTATION_OPS_H
 
 #include <array>
+#include <cmath>
 #include <map>
 #include <set>
 #include <string>
@@ -13,13 +14,12 @@
 
 #define POINTERHOLDER_TRANSITION 0 // eliminate warnings from QPDF
 #include <qpdf/QPDF.hh>
-#include <qpdf/QPDFAcroFormDocumentHelper.hh>
-#include <qpdf/QPDFAnnotationObjectHelper.hh>
 #include <qpdf/QPDFObjectHandle.hh>
 #include <qpdf/QPDFPageObjectHelper.hh>
 
 #include <edit/catalog_ops.h>
 #include <edit/edit_error.h>
+#include <edit/form_ops.h>
 #include <edit/object_json.h>
 
 namespace pdflib
@@ -152,10 +152,12 @@ namespace pdflib
                                                 const std::array<double, 4>& rectangle,
                                                 int target)
   {
-    if(not (rectangle[0] < rectangle[2] and rectangle[1] < rectangle[3]))
+    if(not (std::isfinite(rectangle[0]) and std::isfinite(rectangle[1]) and
+            std::isfinite(rectangle[2]) and std::isfinite(rectangle[3]) and
+            rectangle[0] < rectangle[2] and rectangle[1] < rectangle[3]))
       {
         throw pdf_edit_error(edit_error::INVALID_EDIT,
-                             "a link rectangle must have a positive width and height");
+                             "a link rectangle must be finite and have a positive width and height");
       }
 
     QPDFObjectHandle link = QPDFObjectHandle::newDictionary();
@@ -218,19 +220,7 @@ namespace pdflib
     // would stay in the form with nothing to show it.
     if(not removed_widgets.empty())
       {
-        QPDFAcroFormDocumentHelper acroform(qpdf);
-
-        std::set<QPDFObjGen> fields;
-        for(QPDFObjectHandle& widget : removed_widgets)
-          {
-            QPDFFormFieldObjectHelper field =
-              acroform.getFieldForAnnotation(QPDFAnnotationObjectHelper(widget));
-            if(not field.isNull())
-              {
-                fields.insert(field.getObjectHandle().getObjGen());
-              }
-          }
-        acroform.removeFormFields(fields);
+        pdf_form_ops::detach_widgets(qpdf, removed_widgets);
       }
 
     if(kept.empty())

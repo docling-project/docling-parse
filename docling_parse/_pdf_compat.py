@@ -130,7 +130,7 @@ class _PdfWriterCompat(_PdfReaderCompat, _PdfEditing):
         self, page: _PageView, excluded_keys: Iterable[str] = ()
     ) -> PdfEditablePage:
         return self._editor._compat_insert_page(
-            page=page, index=len(self.pages), excluded_keys=excluded_keys
+            page=page, index=None, excluded_keys=excluded_keys
         )
 
     def insert_page(
@@ -143,9 +143,7 @@ class _PdfWriterCompat(_PdfReaderCompat, _PdfEditing):
     def add_blank_page(
         self, width: float | None = None, height: float | None = None
     ) -> PdfEditablePage:
-        return self._editor._compat_blank_page(
-            width=width, height=height, index=len(self.pages)
-        )
+        return self._editor._compat_blank_page(width=width, height=height, index=None)
 
     def insert_blank_page(
         self, width: float | None = None, height: float | None = None, index: int = 0
@@ -153,12 +151,7 @@ class _PdfWriterCompat(_PdfReaderCompat, _PdfEditing):
         return self._editor._compat_blank_page(width=width, height=height, index=index)
 
     def remove_page(self, page: Any, clean: bool = False) -> None:
-        return self._editor.remove_page(
-            page_no=self._compat_page_no(
-                page.index if isinstance(page, PdfPage) else page
-            ),
-            clean=clean,
-        )
+        self._remove_page(page, clean=clean, detach_references=clean)
 
     def add_metadata(self, infos: dict[str, str | None]) -> None:
         return self._editor.add_metadata(infos=infos)

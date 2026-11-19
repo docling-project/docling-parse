@@ -94,9 +94,16 @@ same starting point through the compatibility API.
 For a page handle from any Reader, Writer or Editor, use
 `editor.add_page(page=page)` or `editor.insert_page(page=page, before_page_no=1)`.
 
-`remove_page(page_no=..., clean=True)` additionally replaces the detached
-page object with PDF null so stray references cannot keep it as a page.
-This does not provide general structure-tree repair.
+`PdfEditor.remove_page` detaches the removed page's widgets and tagged
+structure references. Fields shared with surviving widgets keep their values.
+`clean=True` also replaces the detached page object with PDF null, so custom
+references cannot retain that page object. Shared resources and content copies
+can remain elsewhere in the document.
+
+`PdfWriter.remove_page(page, clean=False)` and `del writer.pages[index]`
+retain form and structure references for pypdf compatibility.
+`PdfWriter.remove_page(page, clean=True)` also detaches those references
+and nulls the removed page object.
 
 ## Transform pages
 
@@ -113,8 +120,10 @@ with PdfEditor(source="document.pdf") as editor:
 ```
 
 `scale_page` and `scale_page_to` scale content, annotations and all five page
-boxes. `transform_page` transforms content and annotation
-geometry but leaves the boxes alone. A matrix is `(a, b, c, d, e, f)`.
+boxes. `transform_page` leaves page boxes in place. A matrix is
+`(a, b, c, d, e, f)`. Annotation geometry includes rectangles, quad points,
+vertices, line and callout points, and ink paths. Widgets keep their field
+identity, including when a field is shared across pages.
 
 `rotate_page` adds clockwise display rotation. `set_page_rotation` sets the
 absolute value. Both require multiples of 90. Transferring rotation to the

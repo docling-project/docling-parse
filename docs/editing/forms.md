@@ -29,6 +29,10 @@ Editor `get_pages_showing_field(name="name")` returns read-only page views.
 Reader and Writer accept a field dictionary or a name in
 `get_pages_showing_field(field)`.
 
+Removing a widget through `PdfEditor.remove_annotations(subtypes="/Widget")`
+prunes its field only when the field has no remaining widgets. Moving a
+single widget with `update_form_field(rect=...)` preserves its appearance.
+
 Kinds include text, checkbox, radio, choice, pushbutton and signature.
 XFA presence is reported; XFA data is not parsed or updated.
 The compatibility `get_fields` signature accepts pypdf's traversal arguments,

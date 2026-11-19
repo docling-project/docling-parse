@@ -39,7 +39,7 @@ _SOF_MARKERS |= {0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF}
 
 
 class Picture(NamedTuple):
-    """One image, ready for docling_editor::insert_image_page."""
+    """One image prepared for insertion as a PDF page."""
 
     width: int
     height: int
@@ -253,8 +253,10 @@ def page_size_of(page_size: str | Sequence[float] | None) -> tuple[float, float]
             )
         return size
     width, height = (float(value) for value in page_size)
-    if not (width > 0 and height > 0):
-        raise ValueError("a page size has a positive width and height")
+    if not (
+        width > 0 and height > 0 and math.isfinite(width) and math.isfinite(height)
+    ):
+        raise ValueError("a page size has a finite positive width and height")
     return (width, height)
 
 
@@ -271,12 +273,12 @@ def layout(
     page size the image is centered and scaled to fill the page inside the
     margin, keeping its proportions.
     """
-    if margin < 0:
-        raise ValueError("the margin cannot be negative")
+    if not (margin >= 0 and math.isfinite(margin)):
+        raise ValueError("the margin must be finite and nonnegative")
 
     if dpi is not None:
-        if not dpi > 0:
-            raise ValueError("dpi must be positive")
+        if not (dpi > 0 and math.isfinite(dpi)):
+            raise ValueError("dpi must be finite and positive")
         x_dpi = y_dpi = float(dpi)
     else:
         x_dpi, y_dpi = picture.dpi or (72.0, 72.0)

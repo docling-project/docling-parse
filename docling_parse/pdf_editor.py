@@ -24,6 +24,7 @@ from typing import Any, BinaryIO, Literal
 
 from docling_parse import pdf_parsers as _native  # type: ignore[attr-defined]
 from docling_parse._pdf_document import (
+    _ANY_GENERATION,
     _UNSET,
     STANDARD_FONTS,
     PdfBox,
@@ -42,6 +43,7 @@ from docling_parse.pdf_errors import (
     PdfEditErrorCategory,
     PdfLoadError,
     PdfLoadErrorCategory,
+    PdfStaleHandleError,
     PdfUnsupportedError,
 )
 
@@ -80,12 +82,12 @@ class PdfEditorPage(_PageView):
     __slots__ = ()
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}(page_no={self.page_no})"
+        return f"{type(self).__name__}(page_no={self._index + 1})"
 
     @property
     def page_no(self) -> int:
         """The one-based page number."""
-        return self._index + 1
+        return self._checked_index() + 1
 
     @property
     def annotations(self) -> list[dict[str, Any]]:
@@ -834,7 +836,7 @@ class PdfEditor(_PdfEditing):
 
     def add_annotation(self, *, page_no: int, annotation: dict[str, Any]) -> None:
         "Add annotation. Page numbers start at 1."
-        return _PdfEditing._add_annotation(
+        _PdfEditing._add_annotation(
             self,
             page_number=self._page_no_index(page_no=page_no, insertion=False),
             annotation=annotation,
@@ -1118,7 +1120,9 @@ class PdfEditor(_PdfEditing):
             )
         native, temporary = self._import_source(fileobj, None)
         try:
-            count = native.page_count()
+            source = temporary if temporary is not None else fileobj
+            with _native_errors():
+                count, generation = native.page_list_state()
             if pages is None:
                 selected = list(range(count))
             elif isinstance(pages, slice):
@@ -1128,32 +1132,37 @@ class PdfEditor(_PdfEditing):
             elif hasattr(pages, "indices"):
                 selected = list(range(*pages.indices(count)))
             else:
-                selected = [
-                    p.index if isinstance(p, PdfPage) else operator.index(p)
-                    for p in pages
-                ]
+                selected = []
+                for page in pages:
+                    if isinstance(page, _PageView):
+                        index, expected = source._page_handle(page)
+                        if expected != generation:
+                            raise PdfStaleHandleError(
+                                PdfEditErrorCategory.STALE_HANDLE,
+                                "the source page list changed since this handle was obtained",
+                            )
+                    else:
+                        index = operator.index(page)
+                    selected.append(index)
             selected = [p + count if p < 0 else p for p in selected]
             if any(p < 0 or p >= count for p in selected):
                 raise IndexError("source page index out of range")
-            insertion = (
-                self.page_count() if position is None else self._position(position)
-            )
-            # Reuse an already-open source and keep it alive until copying ends.
-            source = temporary if temporary is not None else fileobj
-            self.append(
-                source=source,
-                page_nos=[p + 1 for p in selected],
-                before_page_no=insertion + 1,
-                import_outline=import_outline,
-            )
-            if outline_item is not None and selected:
-                self.add_outline_item(title=outline_item, page_no=insertion + 1)
+            at = -1 if position is None else self._position(position)
+            with _native_errors():
+                self._native.append_pages(
+                    native,
+                    selected,
+                    at,
+                    other_generation=generation,
+                    import_outline=import_outline,
+                    outline_item=outline_item,
+                )
         finally:
             if temporary is not None:
                 temporary.close()
 
     def _compat_insert_page(
-        self, *, page: _PageView, index: int, excluded_keys: Iterable[str]
+        self, *, page: _PageView, index: int | None, excluded_keys: Iterable[str]
     ) -> PdfEditablePage:
         if tuple(excluded_keys):
             raise PdfUnsupportedError(
@@ -1163,27 +1172,24 @@ class PdfEditor(_PdfEditing):
         return self._insert_page(page, index)
 
     def _compat_blank_page(
-        self, *, width: float | None, height: float | None, index: int
+        self, *, width: float | None, height: float | None, index: int | None
     ) -> PdfEditablePage:
         if width is None or height is None:
             count = self.page_count()
             if not count:
                 raise ValueError("width and height are required for the first page")
-            box = self._get_page(min(index, count - 1)).mediabox
+            position = count - 1 if index is None else min(index, count - 1)
+            box = self._get_page(position).mediabox
             width = box.width if width is None else width
             height = box.height if height is None else height
         return self._insert_blank_page(index, width, height)
 
     def _compat_add_annotation(
-        self, *, page_number: int | PdfPage, annotation: dict[str, Any]
+        self, *, page_number: int | _PageView, annotation: dict[str, Any]
     ) -> dict[str, Any]:
-        index = (
-            page_number.index
-            if isinstance(page_number, PdfPage)
-            else self._page_index(page_number)
-        )
-        self.add_annotation(page_no=index + 1, annotation=annotation)
-        return self._get_page(index).annotations[-1]
+        result = self._add_annotation(page_number, annotation, report_annotation=True)
+        assert result is not None
+        return result
 
     def _compat_named_destination(self, *, title: str, page_no: int, fit: Any) -> Any:
         if fit is not None and getattr(fit, "fit_type", "/Fit") != "/Fit":
@@ -1206,15 +1212,6 @@ class PdfEditor(_PdfEditing):
         fit: Any,
         is_open: bool,
     ) -> int:
-        page_no = (
-            None
-            if page_number is None
-            else (
-                page_number.index + 1
-                if isinstance(page_number, PdfPage)
-                else self._page_index(page_number) + 1
-            )
-        )
         options: dict[str, Any] = {}
         if fit is not None:
             kind = getattr(fit, "fit_type", "/Fit")
@@ -1225,32 +1222,17 @@ class PdfEditor(_PdfEditing):
                     PdfEditErrorCategory.UNSUPPORTED,
                     "this outline fit mode is not supported",
                 )
-        item = self.add_outline_item(
+        return self._add_outline_item(
             title=title,
-            page_no=page_no,
+            page_number=page_number,
             parent=parent,
+            before=before,
             color=color,
             bold=bold,
             italic=italic,
             is_open=is_open,
             **options,
         )
-        if before is not None:
-            siblings = self._outline()
-            if parent is not None:
-                pending = list(siblings)
-                while pending:
-                    entry = pending.pop()
-                    if entry["id"] == parent:
-                        siblings = entry["children"]
-                        break
-                    pending.extend(entry["children"])
-            indices = [i for i, entry in enumerate(siblings) if entry["id"] == before]
-            if not indices:
-                self.remove_outline_item(item_id=item)
-                raise ValueError("before must be a bookmark with the same parent")
-            self.move_outline_item(item_id=item, parent=parent, index=indices[0])
-        return item
 
     def _compat_encrypt(
         self,

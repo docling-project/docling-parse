@@ -3,6 +3,7 @@
 #ifndef PDF_OUTLINE_OPS_H
 #define PDF_OUTLINE_OPS_H
 
+#include <cmath>
 #include <map>
 #include <optional>
 #include <set>
@@ -115,6 +116,7 @@ namespace pdflib
 
     static void apply(QPDF& qpdf,
                       QPDFObjectHandle item,
+                      QPDFObjGen item_id,
                       const nlohmann::json& changes,
                       std::set<QPDFObjGen>& closed,
                       std::set<QPDFObjGen>& opened);
@@ -408,7 +410,7 @@ namespace pdflib
       {
         return std::nullopt;
       }
-    if(not itr->is_number())
+    if(not itr->is_number() or not std::isfinite(itr->get<double>()))
       {
         throw pdf_edit_error(edit_error::INVALID_EDIT,
                              std::string("outline item '") + key + "' must be a number");
@@ -419,6 +421,7 @@ namespace pdflib
 
   inline void pdf_outline_ops::apply(QPDF& qpdf,
                                      QPDFObjectHandle item,
+                                     QPDFObjGen item_id,
                                      const nlohmann::json& changes,
                                      std::set<QPDFObjGen>& closed,
                                      std::set<QPDFObjGen>& opened)
@@ -516,7 +519,8 @@ namespace pdflib
             QPDFObjectHandle components = QPDFObjectHandle::newArray();
             for(const nlohmann::json& component : color)
               {
-                if(not component.is_number() or component.get<double>() < 0.0 or component.get<double>() > 1.0)
+                if(not component.is_number() or
+                   not (component.get<double>() >= 0.0 and component.get<double>() <= 1.0))
                   {
                     throw pdf_edit_error(edit_error::INVALID_EDIT,
                                          "an outline item color is three numbers between 0 and 1");
@@ -563,7 +567,7 @@ namespace pdflib
             throw pdf_edit_error(edit_error::INVALID_EDIT, "outline item 'open' must be true or false");
           }
 
-        (changes["open"].get<bool>() ? opened : closed).insert(item.getObjGen());
+        (changes["open"].get<bool>() ? opened : closed).insert(item_id);
       }
   }
 
@@ -584,16 +588,39 @@ namespace pdflib
         parent = spec["parent"].get<int>();
       }
 
-    QPDFObjectHandle parent_object = resolve_parent(qpdf, parent);
+    int position = -1;
+    if(spec.contains("before"))
+      {
+        int before = spec["before"].get<int>();
+        QPDFObjectHandle siblings = parent == 0 ? qpdf.getRoot().getKey("/Outlines")
+                                               : resolve_parent(qpdf, parent);
+        QPDFObjectHandle sibling = siblings.isDictionary() ? siblings.getKey("/First")
+                                                          : QPDFObjectHandle::newNull();
+        std::set<QPDFObjGen> visited;
+        for(int index = 0; sibling.isDictionary() and visited.insert(sibling.getObjGen()).second;
+            index++, sibling = sibling.getKey("/Next"))
+          {
+            if(sibling.getObjectID() == before)
+              {
+                position = index;
+                break;
+              }
+          }
+        if(position < 0)
+          {
+            throw pdf_edit_error(edit_error::INVALID_EDIT,
+                                 "before must be a bookmark with the same parent");
+          }
+      }
 
     QPDFObjectHandle item = qpdf.makeIndirectObject(QPDFObjectHandle::newDictionary());
 
     // Everything that can be refused is checked before the item is linked in.
     std::set<QPDFObjGen> closed;
     std::set<QPDFObjGen> opened;
-    apply(qpdf, item, spec, closed, opened);
+    apply(qpdf, item, item.getObjGen(), spec, closed, opened);
 
-    link(parent_object, item, -1);
+    link(resolve_parent(qpdf, parent), item, position);
 
     std::set<QPDFObjGen> visited;
     recount(qpdf.getRoot().getKey("/Outlines"), true, closed, opened, visited, 0);
@@ -620,7 +647,12 @@ namespace pdflib
 
     std::set<QPDFObjGen> closed;
     std::set<QPDFObjGen> opened;
-    apply(qpdf, item, changes, closed, opened);
+    QPDFObjectHandle prepared = item.shallowCopy();
+    apply(qpdf, prepared, item.getObjGen(), changes, closed, opened);
+    for(const char* key : {"/Title", "/Dest", "/A", "/C", "/F"})
+      {
+        item.replaceKey(key, prepared.getKey(key));
+      }
 
     std::set<QPDFObjGen> visited;
     recount(qpdf.getRoot().getKey("/Outlines"), true, closed, opened, visited, 0);

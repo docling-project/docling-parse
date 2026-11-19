@@ -12,7 +12,6 @@
 
 #define POINTERHOLDER_TRANSITION 0 // eliminate warnings from QPDF
 #include <qpdf/QPDF.hh>
-#include <qpdf/QPDFAcroFormDocumentHelper.hh>
 #include <qpdf/QPDFFormFieldObjectHelper.hh>
 #include <qpdf/QPDFMatrix.hh>
 #include <qpdf/QPDFObjectHandle.hh>
@@ -86,14 +85,12 @@ namespace pdflib
     // Apply the matrix [a b c d e f] to everything the page shows: its
     // content, by concatenating the matrix to the CTM in front of it (ISO
     // 32000-1, 8.3.4), and its annotations, whose rectangles and appearances
-    // are not part of the content stream. The page boxes are left alone.
+    // are not part of the content stream. Transform the page boxes only
+    // for scaling or transferring the display rotation into the content.
     static void transform(QPDF& qpdf,
                           QPDFPageObjectHelper page,
-                          const std::array<double, 6>& matrix);
-
-    // Multiply every page boundary by (sx, sy), so the page changes size
-    // together with content transformed by the same scale.
-    static void scale_boxes(QPDFPageObjectHelper page, double sx, double sy);
+                          const std::array<double, 6>& matrix,
+                          bool transform_boxes = false);
 
     // Draw the form XObject `form` (already owned by `qpdf`) on the page,
     // above its content or, with under, below it.
@@ -179,6 +176,10 @@ namespace pdflib
 
     // Finite entries and a non-zero determinant, or INVALID_EDIT.
     static void check_matrix(const std::array<double, 6>& matrix);
+    static QPDFObjectHandle transform_rectangle(QPDFObjectHandle rectangle, const QPDFMatrix& matrix);
+    static QPDFObjectHandle transform_points(QPDFObjectHandle points, const QPDFMatrix& matrix);
+    static QPDFObjectHandle transform_appearance(QPDFObjectHandle appearance, const QPDFMatrix& matrix);
+    static QPDFObjectHandle transform_annotation(QPDFObjectHandle annotation, const QPDFMatrix& matrix);
   };
 
   inline pdf_page_info::pdf_page_info():
@@ -271,10 +272,12 @@ namespace pdflib
   {
     std::string key = box_key(name);
 
-    if(not (box[0] < box[2] and box[1] < box[3]))
+    if(not (std::isfinite(box[0]) and std::isfinite(box[1]) and
+            std::isfinite(box[2]) and std::isfinite(box[3]) and
+            box[0] < box[2] and box[1] < box[3]))
       {
         throw pdf_edit_error(edit_error::INVALID_EDIT,
-                             "page box must have a positive width and height");
+                             "page box must be finite and have a positive width and height");
       }
 
     // Written on the page itself, never on a shared /Pages node: an inherited
@@ -297,10 +300,10 @@ namespace pdflib
 
   inline QPDFObjectHandle pdf_page_ops::make_blank_page(QPDF& qpdf, double width, double height)
   {
-    if(not (width > 0.0 and height > 0.0))
+    if(not (std::isfinite(width) and std::isfinite(height) and width > 0.0 and height > 0.0))
       {
         throw pdf_edit_error(edit_error::INVALID_EDIT,
-                             "a blank page needs a positive width and height");
+                             "a blank page needs a finite positive width and height");
       }
 
     // /Contents is optional (ISO 32000-1, table 30), but an empty content
@@ -329,85 +332,219 @@ namespace pdflib
 
     // A singular matrix collapses the page onto a line or a point.
     double determinant = matrix[0]*matrix[3] - matrix[1]*matrix[2];
-    if(std::abs(determinant) < 1.e-12)
+    if(not std::isfinite(determinant) or std::abs(determinant) < 1.e-12)
       {
         throw pdf_edit_error(edit_error::INVALID_EDIT,
                              "a transformation matrix must be invertible");
       }
   }
 
+  inline QPDFObjectHandle
+  pdf_page_ops::transform_rectangle(QPDFObjectHandle rectangle, const QPDFMatrix& matrix)
+  {
+    auto rect = matrix.transformRectangle(rectangle.getArrayAsRectangle());
+    if(not (std::isfinite(rect.llx) and std::isfinite(rect.lly) and
+            std::isfinite(rect.urx) and std::isfinite(rect.ury)))
+      {
+        throw pdf_edit_error(edit_error::INVALID_EDIT, "a transformed rectangle must be finite");
+      }
+    return QPDFObjectHandle::newFromRectangle(rect);
+  }
+
+  inline QPDFObjectHandle
+  pdf_page_ops::transform_points(QPDFObjectHandle points, const QPDFMatrix& matrix)
+  {
+    if(not points.isArray() or points.getArrayNItems() % 2 != 0)
+      {
+        return points;
+      }
+    auto result = QPDFObjectHandle::newArray();
+    for(int index = 0; index < points.getArrayNItems(); index += 2)
+      {
+        auto x = points.getArrayItem(index);
+        auto y = points.getArrayItem(index + 1);
+        if(not (x.isNumber() and y.isNumber()))
+          {
+            return points;
+          }
+        double tx, ty;
+        matrix.transform(x.getNumericValue(), y.getNumericValue(), tx, ty);
+        result.appendItem(QPDFObjectHandle::newReal(number(tx)));
+        result.appendItem(QPDFObjectHandle::newReal(number(ty)));
+      }
+    return result;
+  }
+
+  inline QPDFObjectHandle
+  pdf_page_ops::transform_appearance(QPDFObjectHandle appearance, const QPDFMatrix& matrix)
+  {
+    // An appearance stream may be shared by other widgets. Copy the stream
+    // and its dictionaries while preserving the identities of the widgets.
+    auto transform_stream = [&](QPDFObjectHandle stream) {
+      auto transformed = stream.copyStream();
+      auto dict = transformed.getDict();
+      auto original = dict.getKey("/Matrix");
+      auto cm = original.isArray() ? QPDFMatrix(original.getArrayAsMatrix()) : QPDFMatrix();
+      cm.concat(matrix);
+      for(double value : {cm.a, cm.b, cm.c, cm.d, cm.e, cm.f})
+        {
+          if(not std::isfinite(value))
+            {
+              throw pdf_edit_error(edit_error::INVALID_EDIT, "a transformed appearance must be finite");
+            }
+        }
+      dict.replaceKey("/Matrix", QPDFObjectHandle::newFromMatrix(cm));
+      return transformed;
+    };
+
+    auto result = QPDFObjectHandle::newDictionary();
+    for(const auto& [key, value] : appearance.getDictAsMap())
+      {
+        auto entry = value;
+        if(entry.isStream())
+          {
+            entry = transform_stream(entry);
+          }
+        else if(entry.isDictionary())
+          {
+            auto states = QPDFObjectHandle::newDictionary();
+            for(const auto& [state, stream] : entry.getDictAsMap())
+              {
+                auto appearance_stream = stream;
+                states.replaceKey(state, appearance_stream.isStream()
+                                          ? transform_stream(appearance_stream) : appearance_stream);
+              }
+            entry = states;
+          }
+        result.replaceKey(key, entry);
+      }
+    return result;
+  }
+
+  inline QPDFObjectHandle
+  pdf_page_ops::transform_annotation(QPDFObjectHandle annotation, const QPDFMatrix& matrix)
+  {
+    auto changes = QPDFObjectHandle::newDictionary();
+    auto rect = annotation.getKey("/Rect");
+    if(rect.isRectangle())
+      {
+        changes.replaceKey("/Rect", transform_rectangle(rect, matrix));
+      }
+    for(const char* key : {"/QuadPoints", "/Vertices", "/L", "/CL"})
+      {
+        auto points = annotation.getKey(key);
+        if(points.isArray())
+          {
+            changes.replaceKey(key, transform_points(points, matrix));
+          }
+      }
+    for(const char* key : {"/InkList", "/Path"})
+      {
+        auto paths = annotation.getKey(key);
+        if(paths.isArray())
+          {
+            auto transformed = QPDFObjectHandle::newArray();
+            for(auto points : paths.getArrayAsVector())
+              {
+                transformed.appendItem(transform_points(points, matrix));
+              }
+            changes.replaceKey(key, transformed);
+          }
+      }
+    auto appearance = annotation.getKey("/AP");
+    if(appearance.isDictionary())
+      {
+        changes.replaceKey("/AP", transform_appearance(appearance, matrix));
+      }
+    return changes;
+  }
+
   inline void pdf_page_ops::flatten_rotation(QPDF& qpdf, QPDFPageObjectHelper page)
   {
-    // qpdf rewrites the content, the boxes and, given the helper, the
-    // annotations and their form fields.
-    QPDFAcroFormDocumentHelper acroform(qpdf);
-    page.flattenRotation(&acroform);
+    auto rotate = page.getAttribute("/Rotate", false);
+    int angle = rotate.isInteger() ? static_cast<int>((rotate.getIntValue() % 360 + 360) % 360) : 0;
+    auto mediabox = page.getAttribute("/MediaBox", false);
+    if(angle == 0 or angle % 90 != 0 or not mediabox.isRectangle())
+      {
+        return;
+      }
+
+    auto rect = mediabox.getArrayAsRectangle();
+    const double x = rect.llx + rect.urx;
+    const double y = rect.lly + rect.ury;
+    // Use the same coordinate changes that qpdf applies to page content.
+    if(angle == 90)
+      {
+        transform(qpdf, page, {0, -1, 1, 0, 0, x}, true);
+      }
+    else if(angle == 180)
+      {
+        transform(qpdf, page, {-1, 0, 0, -1, x, y}, true);
+      }
+    else
+      {
+        transform(qpdf, page, {0, 1, -1, 0, y, 0}, true);
+      }
+
+    auto page_object = page.getObjectHandle();
+    page_object.removeKey("/Rotate");
+    if(not page.getAttribute("/Rotate", false).isNull())
+      {
+        page_object.replaceKey("/Rotate", QPDFObjectHandle::newInteger(0));
+      }
   }
 
   inline void pdf_page_ops::transform(QPDF& qpdf,
                                       QPDFPageObjectHelper page,
-                                      const std::array<double, 6>& matrix)
+                                      const std::array<double, 6>& matrix,
+                                      bool transform_boxes)
   {
     check_matrix(matrix);
-
     QPDFMatrix cm(matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5]);
+    auto page_object = page.getObjectHandle();
 
-    // q ... Q around the existing content: the matrix applies to all of it
-    // and to nothing drawn after it. Same construction as qpdf's
-    // QPDFPageObjectHelper::flattenRotation.
-    page.addPageContents(qpdf.newStream(std::string("q\n") + cm.unparse() + " cm\n"), true);
-    page.addPageContents(qpdf.newStream(std::string("\nQ\n")), false);
-
-    QPDFObjectHandle page_object = page.getObjectHandle();
-    QPDFObjectHandle annots = page_object.getKey("/Annots");
-    if(annots.isArray() and annots.getArrayNItems() > 0)
+    // Prepare the replacements before changing any live page objects.
+    auto boxes = QPDFObjectHandle::newDictionary();
+    if(transform_boxes)
       {
-        std::vector<QPDFObjectHandle> new_annots;
-        std::vector<QPDFObjectHandle> new_fields;
-        std::set<QPDFObjGen> old_fields;
-
-        // transformAnnotations returns transformed copies; the page then
-        // refers to the copies and the form to their fields, in place of
-        // the originals.
-        QPDFAcroFormDocumentHelper acroform(qpdf);
-        acroform.transformAnnotations(annots, new_annots, new_fields, old_fields, cm);
-        acroform.removeFormFields(old_fields);
-        for(const QPDFObjectHandle& field : new_fields)
+        for(const std::string name : {"/MediaBox", "/CropBox", "/BleedBox", "/TrimBox", "/ArtBox"})
           {
-            acroform.addFormField(QPDFFormFieldObjectHelper(field));
+            bool inheritable = (name == "/MediaBox" or name == "/CropBox");
+            auto box = inheritable ? page.getAttribute(name, false) : page_object.getKey(name);
+            if(box.isRectangle())
+              {
+                boxes.replaceKey(name, transform_rectangle(box, cm));
+              }
           }
-
-        page_object.replaceKey("/Annots", QPDFObjectHandle::newArray(new_annots));
-      }
-  }
-
-  inline void pdf_page_ops::scale_boxes(QPDFPageObjectHelper page, double sx, double sy)
-  {
-    if(not (sx > 0.0 and sy > 0.0 and std::isfinite(sx) and std::isfinite(sy)))
-      {
-        throw pdf_edit_error(edit_error::INVALID_EDIT,
-                             "page scale factors must be positive");
       }
 
-    QPDFObjectHandle page_object = page.getObjectHandle();
-
-    for(const char* key : {"/MediaBox", "/CropBox", "/BleedBox", "/TrimBox", "/ArtBox"})
+    std::vector<std::pair<QPDFObjectHandle, QPDFObjectHandle> > annotations;
+    auto annots = page_object.getKey("/Annots");
+    if(annots.isArray())
       {
-        // /MediaBox and /CropBox may be inherited: the scaled value is
-        // written on this page, so sibling pages keep theirs.
-        std::string name(key);
-        bool inheritable = (name == "/MediaBox" or name == "/CropBox");
-
-        QPDFObjectHandle box = inheritable ? page.getAttribute(name, false) : page_object.getKey(name);
-        if(not box.isRectangle())
+        for(auto annotation : annots.getArrayAsVector())
           {
-            continue;
+            if(annotation.isDictionary())
+              {
+                annotations.emplace_back(annotation, transform_annotation(annotation, cm));
+              }
           }
+      }
 
-        QPDFObjectHandle::Rectangle rect = box.getArrayAsRectangle();
-        QPDFObjectHandle::Rectangle scaled(rect.llx*sx, rect.lly*sy, rect.urx*sx, rect.ury*sy);
-
-        page_object.replaceKey(name, QPDFObjectHandle::newArray(scaled));
+    auto prefix = qpdf.newStream(std::string("q\n") + cm.unparse() + " cm\n");
+    auto suffix = qpdf.newStream(std::string("\nQ\n"));
+    page.addPageContents(prefix, true);
+    page.addPageContents(suffix, false);
+    for(const auto& [key, value] : boxes.getDictAsMap())
+      {
+        page_object.replaceKey(key, value);
+      }
+    for(auto& [annotation, changes] : annotations)
+      {
+        for(const auto& [key, value] : changes.getDictAsMap())
+          {
+            annotation.replaceKey(key, value);
+          }
       }
   }
 
@@ -688,14 +825,17 @@ namespace pdflib
       {
         throw pdf_edit_error(edit_error::INVALID_EDIT, "an image needs a positive width and height");
       }
-    if(not (page_width > 0.0 and page_height > 0.0))
+    if(not (std::isfinite(page_width) and std::isfinite(page_height) and
+            page_width > 0.0 and page_height > 0.0))
       {
-        throw pdf_edit_error(edit_error::INVALID_EDIT, "a page needs a positive width and height");
+        throw pdf_edit_error(edit_error::INVALID_EDIT, "a page needs a finite positive width and height");
       }
-    if(not (placement[2] > 0.0 and placement[3] > 0.0))
+    if(not (std::isfinite(placement[0]) and std::isfinite(placement[1]) and
+            std::isfinite(placement[2]) and std::isfinite(placement[3]) and
+            placement[2] > 0.0 and placement[3] > 0.0))
       {
         throw pdf_edit_error(edit_error::INVALID_EDIT,
-                             "an image must be placed with a positive width and height");
+                             "an image must have finite placement and a positive width and height");
       }
 
     std::size_t components = 0;
