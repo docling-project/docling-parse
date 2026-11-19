@@ -17,8 +17,6 @@
 // Generate pathstorm-soft-mask N PDF [paints=1] for one cached mask group.
 // Generate pathstorm-pattern[-lattice] N PDF [fills=1] for pattern replay.
 // Generate clip-chain/clip-scoped N PDF (10..4000) for clip snapshot growth.
-// page_* fields cover /Contents only. form_* diagnostics aggregate Do calls
-// through that page's ordinary Form tree; appearances have separate counters.
 #include <parse.h>
 #include <render.h>
 
@@ -44,12 +42,6 @@ namespace
 using json = nlohmann::json;
 using clock_type = std::chrono::steady_clock;
 const auto started = clock_type::now();
-constexpr const char* page_content_delivery = "callback";
-constexpr const char* form_content_delivery = "callback";
-constexpr const char* appearance_content_delivery = "callback";
-constexpr const char* type3_content_delivery = "callback";
-constexpr const char* soft_mask_content_delivery = "callback";
-constexpr const char* pattern_content_delivery = "borrowed";
 constexpr const char* clip_history_storage = "shared";
 
 void snapshot(const std::string& stage, int pause_seconds, json details = json::object())
@@ -456,12 +448,6 @@ void measure(std::string mode, std::string filename, int pause_seconds, const st
   snapshot("baseline", pause_seconds,
            {{"mode", mode}, {"requested_mode", requested_mode}, {"file", filename},
             {"qpdf_version", QPDF::QPDFVersion()},
-            {"page_content_delivery", page_content_delivery},
-            {"form_content_delivery", form_content_delivery},
-            {"appearance_content_delivery", appearance_content_delivery},
-            {"type3_content_delivery", type3_content_delivery},
-            {"soft_mask_content_delivery", soft_mask_content_delivery},
-            {"pattern_content_delivery", pattern_content_delivery},
             {"clip_history_storage", clip_history_storage},
             {"sizeof_token", sizeof(pdflib::qpdf_stream_instruction)},
             {"sizeof_page_shape", sizeof(pdflib::page_item<pdflib::PAGE_SHAPE>)},
@@ -523,10 +509,6 @@ void measure(std::string mode, std::string filename, int pause_seconds, const st
   auto page = document.decode_page(0, config);
   const double decode_work_s = std::chrono::duration<double>(clock_type::now()-decode_started).count();
   if(not page) { throw std::runtime_error("page decode failed"); }
-  const auto& content_stats = page->get_content_statistics();
-  const auto& appearance_stats = page->get_appearance_statistics();
-  const auto& soft_mask_stats = page->get_soft_mask_statistics();
-  const auto& pattern_stats = page->get_pattern_statistics();
   const auto& shapes = page->get_instructions().get_shape_instructions();
   std::size_t dash_entries = 0, max_dash = 0, points = 0, subpaths = 0, segments = 0;
   std::size_t geometry_bytes = 0, page_dash_entries = 0;
@@ -582,62 +564,7 @@ void measure(std::string mode, std::string filename, int pause_seconds, const st
             {"instruction_clip_history_nodes", clip_nodes.size()},
             {"instruction_clip_unique_paths", unique_clip_paths},
             {"instruction_clip_unique_points", unique_clip_points},
-            {"page_content_delivery", content_stats.callback_delivery ? "callback" : "buffered"},
-            {"page_source_objects", content_stats.source_objects},
-            {"page_source_bytes_observed", content_stats.source_bytes_observed},
-            {"page_buffered_tokens", content_stats.buffered_tokens},
-            {"page_buffered_token_capacity", content_stats.buffered_token_capacity},
-            {"page_operand_diagnostics", content_stats.operand_diagnostics_enabled},
-            {"page_max_pending_operands", content_stats.max_pending_operands},
-            {"form_content_delivery", form_content_delivery},
-            {"form_diagnostics", content_stats.operand_diagnostics_enabled},
-            {"form_executions", content_stats.form_executions},
-            {"form_source_objects", content_stats.form_source_objects},
-            {"form_materialized_tokens", content_stats.form_materialized_tokens},
-            {"form_max_pending_operands", content_stats.form_max_pending_operands},
-            {"form_max_depth", content_stats.form_max_depth},
-            {"appearance_content_delivery", appearance_content_delivery},
-            {"appearance_diagnostics", content_stats.operand_diagnostics_enabled},
-            {"appearance_executions", appearance_stats.executions},
-            {"appearance_widget_executions", appearance_stats.widget_executions},
-            {"appearance_source_objects", appearance_stats.source_objects},
-            {"appearance_source_bytes_observed", appearance_stats.source_bytes_observed},
-            {"appearance_materialized_tokens", appearance_stats.materialized_tokens},
-            {"appearance_max_buffered_token_capacity", appearance_stats.max_buffered_token_capacity},
-            {"appearance_max_pending_operands", appearance_stats.max_pending_operands},
-            {"text_instructions", page->get_instructions().get_text_instructions().size()},
-            {"type3_content_delivery", type3_content_delivery},
-            {"type3_diagnostics", content_stats.operand_diagnostics_enabled},
-            {"type3_executions", content_stats.type3_executions},
-            {"type3_source_objects", content_stats.type3_source_objects},
-            {"type3_materialized_tokens", content_stats.type3_materialized_tokens},
-            {"type3_max_pending_operands", content_stats.type3_max_pending_operands},
-            {"type3_max_depth", content_stats.type3_max_depth},
-            {"type3_recursion_skips", content_stats.type3_recursion_skips},
-            {"soft_mask_content_delivery", soft_mask_content_delivery},
-            {"soft_mask_diagnostics", content_stats.operand_diagnostics_enabled},
-            {"soft_mask_executions", soft_mask_stats.executions},
-            {"soft_mask_cache_hits", soft_mask_stats.cache_hits},
-            {"soft_mask_source_objects", soft_mask_stats.source_objects},
-            {"soft_mask_source_bytes_observed", soft_mask_stats.source_bytes_observed},
-            {"soft_mask_materialized_tokens", soft_mask_stats.materialized_tokens},
-            {"soft_mask_max_buffered_token_capacity", soft_mask_stats.max_buffered_token_capacity},
-            {"soft_mask_max_pending_operands", soft_mask_stats.max_pending_operands},
-            {"soft_mask_shape_instructions", soft_mask_stats.shape_instructions},
-            {"pattern_content_delivery", pattern_content_delivery},
-            {"pattern_diagnostics", content_stats.operand_diagnostics_enabled},
-            {"pattern_source_parses", pattern_stats.source_parses},
-            {"pattern_source_cache_hits", pattern_stats.source_cache_hits},
-            {"pattern_cached_tokens", pattern_stats.cached_tokens},
-            {"pattern_cached_token_capacity", pattern_stats.cached_token_capacity},
-            {"pattern_decoded_cells", pattern_stats.decoded_cells},
-            {"pattern_decoded_cache_hits", pattern_stats.decoded_cache_hits},
-            {"pattern_decoded_shape_instructions", pattern_stats.decoded_shape_instructions},
-            {"pattern_lattice_executions", pattern_stats.lattice_executions},
-            {"pattern_replay_source_objects", pattern_stats.replay_source_objects},
-            {"pattern_replay_materialized_tokens", pattern_stats.replay_materialized_tokens},
-            {"pattern_max_replay_token_capacity", pattern_stats.max_replay_token_capacity},
-            {"pattern_max_pending_operands", pattern_stats.max_pending_operands}});
+            {"text_instructions", page->get_instructions().get_text_instructions().size()}});
   if(mode=="render")
     {
       const auto render_started = clock_type::now();
