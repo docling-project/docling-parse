@@ -415,7 +415,9 @@ namespace docling
                  bool fit,
                  std::array<double, 6> matrix,
                  std::int64_t generation,
-                 std::int64_t other_generation) -> void {
+                 std::int64_t other_generation,
+                 bool crop,
+                 bool expand) -> void {
                 pybind11::gil_scoped_release release;
                 self.overlay_page(page,
                                   generation,
@@ -423,7 +425,9 @@ namespace docling
                                   other_page,
                                   under,
                                   fit,
-                                  matrix);
+                                  matrix,
+                                  crop,
+                                  expand);
               },
               pybind11::arg("page"),
               pybind11::arg("other"),
@@ -433,6 +437,8 @@ namespace docling
               pybind11::arg("matrix") = std::array<double, 6>{1.0, 0.0, 0.0, 1.0, 0.0, 0.0},
               pybind11::arg("generation") = class_type::ANY_GENERATION,
               pybind11::arg("other_generation") = other_type::ANY_GENERATION,
+              pybind11::arg("crop") = false,
+              pybind11::arg("expand") = false,
               "Draw a page of another document on this page, above or below its content.");
     }
 

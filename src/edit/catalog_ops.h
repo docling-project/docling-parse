@@ -75,6 +75,9 @@ namespace pdflib
                                const std::string& prefix,
                                int start);
 
+    // After a page-tree change, carry existing labels across a splice.
+    static void splice_page_labels(QPDF& qpdf, int at, int removed, int inserted);
+
     // ---- named destinations (ISO 32000-1, 12.3.2.3) ----
 
     // {name: {"page", "kind", "arguments"}} from the /Dests dictionary and
@@ -97,6 +100,7 @@ namespace pdflib
                               const std::set<std::string>& allowed);
 
     static std::string format_label(QPDFObjectHandle label);
+    static void write_page_labels(QPDF& qpdf, std::map<long long, QPDFObjectHandle>& ranges);
     static std::string to_roman(long long number);
     static std::string to_letters(long long number);
   };
@@ -173,10 +177,10 @@ namespace pdflib
     result["viewer_preferences"] = preferences.isDictionary() ?
       pdf_object_json::to_json(preferences, 3) : nlohmann::json(nullptr);
 
-    // An open action is a destination or an action; only the first is a
-    // place in the document.
-    result["open_destination"] = pdf_object_json::destination_to_json(root.getKey("/OpenAction"),
-                                                                      pdf_object_json::page_indices(qpdf));
+    QPDFOutlineDocumentHelper resolver(qpdf);
+    result["open_destination"] = pdf_object_json::destination_to_json(
+      pdf_object_json::resolve_destination(root.getKey("/OpenAction"), resolver),
+      pdf_object_json::page_indices(qpdf));
 
     return result;
   }
@@ -469,6 +473,64 @@ namespace pdflib
         ranges[static_cast<long long>(to) + 1] = following;
       }
 
+    write_page_labels(qpdf, ranges);
+  }
+
+  inline void pdf_catalog_ops::splice_page_labels(QPDF& qpdf, int at, int removed, int inserted)
+  {
+    auto root = qpdf.getRoot();
+    auto existing = root.getKey("/PageLabels");
+    if(not existing.isDictionary() or removed + inserted == 0)
+      {
+        return;
+      }
+
+    const auto new_count = static_cast<long long>(qpdf.getAllPages().size());
+    const auto old_count = new_count + removed - inserted;
+    if(at == old_count)
+      {
+        return; // Appended pages continue the last numbering range.
+      }
+    if(new_count == 0)
+      {
+        root.removeKey("/PageLabels");
+        return;
+      }
+
+    QPDFPageLabelDocumentHelper helper(qpdf);
+    QPDFNumberTreeObjectHelper tree(existing, qpdf);
+    std::map<long long, QPDFObjectHandle> ranges;
+    const long long following = static_cast<long long>(at) + removed;
+    for(auto entry = tree.begin(); entry != tree.end(); ++entry)
+      {
+        const auto index = entry->first;
+        if(index >= 0 and index < at)
+          {
+            ranges[index] = entry->second;
+          }
+        else if(index > following and index < old_count)
+          {
+            ranges[index + inserted - removed] = entry->second;
+          }
+      }
+
+    if(inserted > 0)
+      {
+        ranges[at] = QPDFPageLabelDocumentHelper::pageLabelDict(pl_digits, at + 1, "");
+      }
+    if(following < old_count)
+      {
+        auto label = helper.getLabelForPage(following);
+        ranges[at + inserted] = label.isDictionary() ? label
+          : QPDFPageLabelDocumentHelper::pageLabelDict(pl_digits, following + 1, "");
+      }
+
+    write_page_labels(qpdf, ranges);
+  }
+
+  inline void pdf_catalog_ops::write_page_labels(
+    QPDF& qpdf, std::map<long long, QPDFObjectHandle>& ranges)
+  {
     // The number tree shall have an entry for page 0 (ISO 32000-1, 12.4.2).
     if(ranges.count(0) == 0)
       {
@@ -485,7 +547,7 @@ namespace pdflib
     QPDFObjectHandle labels = QPDFObjectHandle::newDictionary();
     labels.replaceKey("/Nums", numbers);
 
-    root.replaceKey("/PageLabels", labels);
+    qpdf.getRoot().replaceKey("/PageLabels", labels);
   }
 
   inline nlohmann::json pdf_catalog_ops::named_destinations(QPDF& qpdf)
@@ -493,6 +555,7 @@ namespace pdflib
     nlohmann::json result = nlohmann::json::object();
 
     std::map<QPDFObjGen, int> indices = pdf_object_json::page_indices(qpdf);
+    QPDFOutlineDocumentHelper resolver(qpdf);
     QPDFObjectHandle root = qpdf.getRoot();
 
     // PDF 1.1: a dictionary of names in the catalog.
@@ -502,7 +565,8 @@ namespace pdflib
         for(const std::string& key : dictionary.getKeys())
           {
             nlohmann::json destination =
-              pdf_object_json::destination_to_json(dictionary.getKey(key), indices);
+              pdf_object_json::destination_to_json(
+                pdf_object_json::resolve_destination(dictionary.getKey(key), resolver), indices);
             if(not destination.is_null())
               {
                 result[strip_slash(key)] = destination;
@@ -518,7 +582,8 @@ namespace pdflib
         for(auto itr = tree.begin(); itr != tree.end(); ++itr)
           {
             nlohmann::json destination =
-              pdf_object_json::destination_to_json(itr->second, indices);
+              pdf_object_json::destination_to_json(
+                pdf_object_json::resolve_destination(itr->second, resolver), indices);
             if(not destination.is_null())
               {
                 result[itr->first] = destination;

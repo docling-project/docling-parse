@@ -10,6 +10,8 @@
 #include <qpdf/QPDFNameTreeObjectHelper.hh>
 #include <qpdf/QPDFOutlineDocumentHelper.hh>
 
+#include <edit/object_json.h>
+
 namespace pdflib
 {
   // Maintain local destinations when a page leaves the page tree. Resolve
@@ -29,14 +31,7 @@ namespace pdflib
                                              QPDFObjGen page,
                                              QPDFOutlineDocumentHelper& resolver)
   {
-    if(destination.isName() or destination.isString())
-      {
-        destination = resolver.resolveNamedDest(destination);
-      }
-    if(destination.isDictionary())
-      {
-        destination = destination.getKey("/D");
-      }
+    destination = pdf_object_json::resolve_destination(destination, resolver);
     return destination.isArray() and destination.getArrayNItems() > 0 and
       destination.getArrayItem(0).isIndirect() and
       destination.getArrayItem(0).getObjGen() == page;
@@ -46,31 +41,50 @@ namespace pdflib
   {
     QPDFOutlineDocumentHelper resolver(qpdf);
 
-    // Links, bookmarks and the document open action can all use names.
-    // Inspect indirect dictionaries without decoding any content streams.
-    for(QPDFObjectHandle object : qpdf.getAllObjects())
-      {
-        if(not object.isDictionary())
-          {
-            continue;
-          }
+    auto drop_target = [&](QPDFObjectHandle object) {
         if(points_at(object.getKey("/Dest"), page, resolver))
           {
             object.removeKey("/Dest");
           }
-        for(const std::string key : {"/A", "/OpenAction"})
+        auto action = object.getKey("/A");
+        if(action.isDictionary() and action.getKey("/S").isNameAndEquals("/GoTo") and
+           points_at(action, page, resolver))
           {
-            QPDFObjectHandle action = object.getKey(key);
-            if((key == "/OpenAction" and points_at(action, page, resolver)) or
-               (action.isDictionary() and action.getKey("/S").isNameAndEquals("/GoTo") and
-                points_at(action.getKey("/D"), page, resolver)))
+            object.removeKey("/A");
+          }
+      };
+
+    // Resolve references before their named destination definitions are removed.
+    for(auto object : qpdf.getAllPages())
+      {
+        auto annotations = object.getKey("/Annots");
+        if(annotations.isArray())
+          {
+            for(auto annotation : annotations.getArrayAsVector())
               {
-                object.removeKey(key);
+                if(annotation.isDictionary())
+                  {
+                    drop_target(annotation);
+                  }
               }
           }
       }
 
+    auto outlines = resolver.getTopLevelOutlines();
+    while(not outlines.empty())
+      {
+        auto item = outlines.back();
+        outlines.pop_back();
+        drop_target(item.getObjectHandle());
+        auto children = item.getKids();
+        outlines.insert(outlines.end(), children.begin(), children.end());
+      }
+
     QPDFObjectHandle root = qpdf.getRoot();
+    if(points_at(root.getKey("/OpenAction"), page, resolver))
+      {
+        root.removeKey("/OpenAction");
+      }
     QPDFObjectHandle legacy = root.getKey("/Dests");
     if(legacy.isDictionary())
       {

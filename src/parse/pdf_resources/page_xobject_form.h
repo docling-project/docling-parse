@@ -33,6 +33,7 @@ namespace pdflib
     // Form-specific API
     std::array<double, 6> get_matrix() const;
     std::array<double, 4> get_bbox() const;
+    bool has_bbox() const { return valid_bbox; }
 
     bool has_fonts() const;
     bool has_grphs() const;
@@ -73,6 +74,7 @@ namespace pdflib
 
     std::array<double, 6> matrix;
     std::array<double, 4> bbox;
+    bool valid_bbox = false;
   };
 
   pdf_resource<PAGE_XOBJECT_FORM>::pdf_resource()
@@ -317,6 +319,7 @@ namespace pdflib
     // LOG_S(INFO) << __FUNCTION__;
     
     bbox = {0., 0., 0., 0.};
+    valid_bbox = false;
 
     // Read the '/BBox' array directly off the qpdf dict instead of going
     // through a full recursive to_json of the xobject dict.
@@ -331,6 +334,7 @@ namespace pdflib
             throw std::logic_error(message);
           }
 
+        valid_bbox = true;
         for(int l=0; l<bbox.size(); l++)
           {
             QPDFObjectHandle num = qpdf_bbox.getArrayItem(l);
@@ -340,6 +344,7 @@ namespace pdflib
               }
             else
               {
+                valid_bbox = false;
                 LOG_S(ERROR) << "'/BBox'[" << l << "] is not a number (type: "
                              << num.getTypeName() << "), keeping default "
                              << bbox[l] << " (bbox is required!)";

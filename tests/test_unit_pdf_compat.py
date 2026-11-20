@@ -10,6 +10,7 @@ import pytest
 from docling_parse import PdfEditor, PdfExtractionMode, PdfReader, PdfWriter
 from docling_parse._pdf_document import PdfEditablePage, PdfPage
 from docling_parse.pdf_errors import PdfLoadError, PdfUnsupportedError
+from tests.pdf_builder import simple_page_pdf
 from tests.test_unit_pdf_editor import (
     BLUE,
     BLUE_SQUARE,
@@ -18,6 +19,7 @@ from tests.test_unit_pdf_editor import (
     RED_SQUARE,
     THREE,
     TWO,
+    WHITE,
     color_at,
     rendered,
 )
@@ -195,14 +197,51 @@ def test_public_writer_page_merge_positional_arguments(over, expected):
     assert color_at(rendered(writer_bytes(writer)), 125, 125) == expected
 
 
+def test_writer_merge_expands_transformed_media_box():
+    base = simple_page_pdf("")
+    matrix = (0, 1, -1, 0, 100, 80)
+    with PdfReader(BLUE_SQUARE) as stamp, PdfWriter(base) as writer:
+        writer.pages[0].merge_transformed_page(stamp.pages[0], matrix, False, True)
+        ours = writer.pages[0].mediabox
+        output = writer_bytes(writer)
+
+    reference = pypdf.PdfWriter(clone_from=BytesIO(base))
+    stamp = pypdf.PdfReader(BytesIO(BLUE_SQUARE))
+    reference.pages[0].merge_transformed_page(stamp.pages[0], matrix, False, True)
+    assert ours == tuple(reference.pages[0].mediabox) == (-100, 0, 200, 280)
+    assert rendered(output).size == rendered(writer_bytes(reference)).size == (300, 280)
+
+    with PdfReader(BLUE_SQUARE) as stamp, PdfWriter(base) as writer:
+        writer.pages[0].merge_translated_page(stamp.pages[0], 35, -5, True, True)
+        assert writer.pages[0].mediabox == (0, -5, 235, 200)
+
+
+def test_writer_merge_clips_to_transformed_crop_box():
+    base = simple_page_pdf("")
+    with PdfEditor(source=simple_page_pdf("0 0 1 rg 0 0 200 200 re f")) as stamp:
+        stamp.set_page_box(page_no=1, box="crop", bounds=(60, 60, 150, 150))
+        stamp.set_page_box(page_no=1, box="trim", bounds=(100, 100, 125, 125))
+        source = stamp.to_bytes()
+
+    for reader_class, writer_class in (
+        (PdfReader, PdfWriter),
+        (pypdf.PdfReader, pypdf.PdfWriter),
+    ):
+        stamp = reader_class(BytesIO(source))
+        writer = writer_class(clone_from=BytesIO(base))
+        writer.pages[0].merge_translated_page(stamp.pages[0], 35, -5)
+        image = rendered(writer_bytes(writer))
+        assert color_at(image, 105, 70) == BLUE
+        assert color_at(image, 80, 65) == WHITE
+        assert color_at(image, 192, 80) == WHITE
+
+
 def test_migration_options_fail_explicitly():
     with PdfReader(THREE) as reader, PdfWriter(TWO) as writer:
         with pytest.raises(PdfUnsupportedError, match="extraction_mode"):
             reader.pages[0].extract_text(visitor_text=lambda *_: None)
         with pytest.raises(PdfUnsupportedError, match="extraction_mode"):
             reader.pages[0].extract_text(layout_mode_space_vertically=False)
-        with pytest.raises(PdfUnsupportedError, match="expanding"):
-            writer.pages[0].merge_page(reader.pages[0], True)
         with pytest.raises(PdfUnsupportedError, match="expanding"):
             writer.pages[0].add_transformation((1, 0, 0, 1, 0, 0), expand=True)
         with pytest.raises(PdfUnsupportedError, match="excluding"):

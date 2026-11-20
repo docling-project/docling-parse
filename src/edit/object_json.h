@@ -14,6 +14,7 @@
 #include <qpdf/QPDF.hh>
 #include <qpdf/QPDFObjGen.hh>
 #include <qpdf/QPDFObjectHandle.hh>
+#include <qpdf/QPDFOutlineDocumentHelper.hh>
 
 namespace pdflib
 {
@@ -34,6 +35,13 @@ namespace pdflib
 
     // Zero-based index of every page of `qpdf`, by the page object's id.
     static std::map<QPDFObjGen, int> page_indices(QPDF& qpdf);
+
+    // Accept an explicit destination, a named destination, or a local GoTo action.
+    static QPDFObjectHandle resolve_destination(QPDFObjectHandle destination,
+                                                QPDFOutlineDocumentHelper& resolver);
+
+    static QPDFObjectHandle item_destination(QPDFObjectHandle item,
+                                             QPDFOutlineDocumentHelper& resolver);
 
     // The page a destination array [page /Kind ...] points at, or -1.
     static int destination_page(QPDFObjectHandle destination,
@@ -161,16 +169,36 @@ namespace pdflib
     return itr == indices.end() ? -1 : itr->second;
   }
 
+  inline QPDFObjectHandle pdf_object_json::resolve_destination(
+    QPDFObjectHandle destination, QPDFOutlineDocumentHelper& resolver)
+  {
+    if(destination.isDictionary())
+      {
+        auto type = destination.getKey("/S");
+        if(not type.isNull() and not type.isNameAndEquals("/GoTo"))
+          {
+            return QPDFObjectHandle::newNull();
+          }
+        destination = destination.getKey("/D");
+      }
+    if(destination.isName() or destination.isString())
+      {
+        destination = resolver.resolveNamedDest(destination);
+      }
+    return destination.isArray() ? destination : QPDFObjectHandle::newNull();
+  }
+
+  inline QPDFObjectHandle pdf_object_json::item_destination(
+    QPDFObjectHandle item, QPDFOutlineDocumentHelper& resolver)
+  {
+    auto explicit_target = item.getKey("/Dest");
+    return resolve_destination(explicit_target.isNull() ? item.getKey("/A") : explicit_target,
+                               resolver);
+  }
+
   inline nlohmann::json pdf_object_json::destination_to_json(QPDFObjectHandle destination,
                                                              const std::map<QPDFObjGen, int>& indices)
   {
-    // A named destination's value is the array itself or a dictionary
-    // holding it under /D (ISO 32000-1, 12.3.2.3).
-    if(destination.isDictionary() and destination.hasKey("/D"))
-      {
-        destination = destination.getKey("/D");
-      }
-
     if(not destination.isArray() or destination.getArrayNItems() == 0)
       {
         return nullptr;

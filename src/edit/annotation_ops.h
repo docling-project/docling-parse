@@ -68,6 +68,7 @@ namespace pdflib
       }
 
     std::map<QPDFObjGen, int> indices = pdf_object_json::page_indices(qpdf);
+    QPDFOutlineDocumentHelper resolver(qpdf);
     const std::set<std::string> skipped = {"/P", "/Parent", "/Popup", "/AP", "/IRT"};
 
     for(QPDFObjectHandle& annotation : annotations.getArrayAsVector())
@@ -84,20 +85,15 @@ namespace pdflib
 
         nlohmann::json entry = pdf_object_json::to_json(annotation, 4, skipped_here);
 
-        QPDFObjectHandle destination = annotation.getKey("/Dest");
         QPDFObjectHandle action = annotation.getKey("/A");
-        if(not destination.isArray() and
-           action.isDictionary() and
-           action.getKey("/S").isNameAndEquals("/GoTo"))
+        if(action.isDictionary() and action.getKey("/S").isNameAndEquals("/GoTo") and
+           entry.contains("/A") and entry["/A"].is_object())
           {
-            destination = action.getKey("/D");
-            if(entry.contains("/A") and entry["/A"].is_object())
-              {
-                entry["/A"].erase("/D");
-              }
+            entry["/A"].erase("/D");
           }
 
-        int target = pdf_object_json::destination_page(destination, indices);
+        int target = pdf_object_json::destination_page(
+          pdf_object_json::item_destination(annotation, resolver), indices);
         if(target >= 0)
           {
             entry["page"] = target;

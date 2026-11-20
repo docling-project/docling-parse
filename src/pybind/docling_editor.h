@@ -75,7 +75,7 @@ namespace docling
     static constexpr std::int64_t ANY_GENERATION = -1;
     using page_handle = std::pair<int, std::int64_t>;
 
-    docling_editor(std::string loglevel = "fatal");
+    docling_editor(std::string loglevel = "fatal", bool preserve_page_labels = true);
     ~docling_editor();
 
     // ---- lifecycle ----
@@ -179,7 +179,9 @@ namespace docling
                       int other_page,
                       bool under,
                       bool fit,
-                      std::array<double, 6> matrix);
+                      std::array<double, 6> matrix,
+                      bool crop,
+                      bool expand);
 
     // Turn the page's /Rotate into a rotation of its content.
     void flatten_page_rotation(int page, std::int64_t expected_generation);
@@ -373,7 +375,9 @@ namespace docling
 
     QPDFObjectHandle find_or_create_overlay_form(const pdflib::pdf_source& other,
                                                  int other_page,
-                                                 bool fit);
+                                                 QPDFPageObjectHelper source_page,
+                                                 bool fit,
+                                                 bool crop);
 
     static std::filesystem::path to_path(const std::string& filename);
     static std::string random_suffix();
@@ -400,16 +404,17 @@ namespace docling
     std::unique_ptr<QPDF> destination;
 
     // Pages of imported documents already turned into form XObjects of the
-    // destination, by (source bytes, page, fit): a watermark stamped on every
+    // destination, by (source bytes, page, fit, crop): a watermark stamped on every
     // page is copied once. The handles point into the destination, so they
     // are declared after it and released before it.
-    typedef std::tuple<const std::string*, int, bool> overlay_key_type;
+    typedef std::tuple<const std::string*, int, bool, bool> overlay_key_type;
     std::map<overlay_key_type, QPDFObjectHandle> overlay_forms;
 
     // Standard font dictionaries already added to the destination, by name,
     // so that text drawn on many pages shares one font object.
     std::map<std::string, QPDFObjectHandle> standard_fonts;
 
+    const bool preserve_page_labels;
     std::int64_t current_generation; // page-list identity, for page handles
     std::int64_t current_revision;   // any change, for the snapshot
 
@@ -432,7 +437,7 @@ namespace docling
     bool output_linearize;
   };
 
-  inline docling_editor::docling_editor(std::string loglevel):
+  inline docling_editor::docling_editor(std::string loglevel, bool preserve_page_labels):
     docling_parser(loglevel, PAGE_CACHE_SIZE),
     source(),
     destination_buffer(nullptr),
@@ -440,6 +445,7 @@ namespace docling
     destination(nullptr),
     overlay_forms({}),
     standard_fonts({}),
+    preserve_page_labels(preserve_page_labels),
     current_generation(0),
     current_revision(0),
     snapshot(nullptr),
@@ -1282,9 +1288,11 @@ namespace docling
 
   inline QPDFObjectHandle docling_editor::find_or_create_overlay_form(const pdflib::pdf_source& other,
                                                                       int other_page,
-                                                                      bool fit)
+                                                                      QPDFPageObjectHelper source_page,
+                                                                      bool fit,
+                                                                      bool crop)
   {
-    overlay_key_type key(other.get_buffer().get(), other_page, fit);
+    overlay_key_type key(other.get_buffer().get(), other_page, fit, crop);
 
     auto itr = overlay_forms.find(key);
     if(itr != overlay_forms.end())
@@ -1292,15 +1300,15 @@ namespace docling
         return itr->second;
       }
 
-    import_document_ptr_type import = find_or_create_import(other);
-    std::vector<QPDFPageObjectHelper> import_pages = import->get_pages();
-    check_page(other_page, static_cast<int>(import_pages.size()));
-
     // With fit, the form carries the other page's /Rotate and /UserUnit so it
     // is placed the way that page is displayed; without, it is the page's
     // content exactly as written.
-    QPDFObjectHandle form =
-      destination->copyForeignObject(import_pages.at(other_page).getFormXObjectForPage(fit));
+    QPDFObjectHandle source_form = source_page.getFormXObjectForPage(fit);
+    if(crop)
+      {
+        source_form.getDict().replaceKey("/BBox", source_page.getCropBox().shallowCopy());
+      }
+    QPDFObjectHandle form = destination->copyForeignObject(source_form);
 
     overlay_forms[key] = form;
 
@@ -1347,11 +1355,13 @@ namespace docling
                                            int other_page,
                                            bool under,
                                            bool fit,
-                                           std::array<double, 6> matrix)
+                                           std::array<double, 6> matrix,
+                                           bool crop,
+                                           bool expand)
   {
     std::lock_guard<std::recursive_mutex> lock(parser_mutex);
 
-    guarded([this, page, expected_generation, &other, other_page, under, fit, &matrix]() {
+    guarded([&]() {
       check_generation(expected_generation);
 
       if(not other.is_valid())
@@ -1365,10 +1375,15 @@ namespace docling
       std::vector<QPDFPageObjectHelper> pages = destination_pages();
       check_page(page, static_cast<int>(pages.size()));
 
-      QPDFObjectHandle form = find_or_create_overlay_form(other, other_page, fit);
+      auto import = find_or_create_import(other);
+      const auto& import_pages = import->get_qpdf().getAllPages();
+      check_page(other_page, static_cast<int>(import_pages.size()));
+      QPDFPageObjectHelper source_page(import_pages.at(other_page));
+      QPDFObjectHandle form = find_or_create_overlay_form(other, other_page, source_page, fit, crop);
+      QPDFObjectHandle media_box = expand ? source_page.getMediaBox() : QPDFObjectHandle::newNull();
 
       touch(false);
-      pdflib::pdf_page_ops::overlay(*destination, pages.at(page), form, under, fit, matrix);
+      pdflib::pdf_page_ops::overlay(*destination, pages.at(page), form, under, fit, matrix, media_box);
     });
   }
 
@@ -1416,6 +1431,10 @@ namespace docling
       else
         {
           helper.addPageAt(copy, true, pages.at(position));
+          if(preserve_page_labels)
+            {
+              pdflib::pdf_catalog_ops::splice_page_labels(*destination, position, 0, 1);
+            }
         }
 
       // The copy's /Annots still lists the original's annotation objects.
@@ -1458,12 +1477,12 @@ namespace docling
         }
       pdflib::pdf_navigation_ops::drop_destinations_to(*destination,
                                                        removed_id);
-      // Bookmarks and an open action leading to the page would otherwise
-      // keep it in the file, unreachable and unlisted.
-      pdflib::pdf_outline_ops::drop_destinations_to(*destination,
-                                                    removed_id);
 
       QPDFPageDocumentHelper(*destination).removePage(removed_page);
+      if(preserve_page_labels)
+        {
+          pdflib::pdf_catalog_ops::splice_page_labels(*destination, page, 1, 0);
+        }
       if(clean)
         {
           destination->replaceObject(removed_id, QPDFObjectHandle::newNull());
@@ -1613,55 +1632,71 @@ namespace docling
 
       std::map<QPDFObjGen, int> page_map;
 
+      auto shift_labels = [&]() {
+        if(preserve_page_labels and not at_end)
+          {
+            int inserted = static_cast<int>(helper.getAllPages().size()) - number_of_pages;
+            pdflib::pdf_catalog_ops::splice_page_labels(*destination, first, 0, inserted);
+          }
+      };
       int position = first;
-      for(int index : selection)
+      try
         {
-          QPDFPageObjectHelper import_page = import_pages.at(index);
-
-          // where this page of the other document ends up here; a page
-          // copied twice is found at its first copy
-          page_map.emplace(import_page.getObjectHandle().getObjGen(), position);
-
-          // qpdf copies a page of another QPDF into this one, and makes a
-          // shallow copy when the same page is added a second time.
-          std::vector<QPDFPageObjectHelper> current = helper.getAllPages();
-          if(position >= static_cast<int>(current.size()))
+          for(int index : selection)
             {
-              helper.addPage(import_page, false);
-            }
-          else
-            {
-              helper.addPageAt(import_page, true, current.at(position));
-            }
+              QPDFPageObjectHelper import_page = import_pages.at(index);
 
-          // Widgets were copied with the page, but their fields still belong
-          // to the other document's /AcroForm. Same repair, and same guard,
-          // as pdf_decoder<DOCUMENT>::get_thread_safe_page_buffer.
-          QPDFObjectHandle annots = import_page.getObjectHandle().getKey("/Annots");
-          if(annots.isArray() and annots.getArrayNItems() > 0)
-            {
-              if(destination_acroform == nullptr)
+              // where this page of the other document ends up here; a page
+              // copied twice is found at its first copy
+              page_map.emplace(import_page.getObjectHandle().getObjGen(), position);
+
+              // qpdf copies a page of another QPDF into this one, and makes a
+              // shallow copy when the same page is added a second time.
+              std::vector<QPDFPageObjectHelper> current = helper.getAllPages();
+              if(position >= static_cast<int>(current.size()))
                 {
-                  destination_acroform = std::make_unique<QPDFAcroFormDocumentHelper>(*destination);
+                  helper.addPage(import_page, false);
+                }
+              else
+                {
+                  helper.addPageAt(import_page, true, current.at(position));
                 }
 
-              QPDFPageObjectHelper new_page = helper.getAllPages().at(position);
-              destination_acroform->fixCopiedAnnotations(new_page.getObjectHandle(),
-                                                         import_page.getObjectHandle(),
-                                                         import->get_acroform());
+              // Widgets were copied with the page, but their fields still belong
+              // to the other document's /AcroForm. Same repair, and same guard,
+              // as pdf_decoder<DOCUMENT>::get_thread_safe_page_buffer.
+              QPDFObjectHandle annots = import_page.getObjectHandle().getKey("/Annots");
+              if(annots.isArray() and annots.getArrayNItems() > 0)
+                {
+                  if(destination_acroform == nullptr)
+                    {
+                      destination_acroform = std::make_unique<QPDFAcroFormDocumentHelper>(*destination);
+                    }
+
+                  QPDFPageObjectHelper new_page = helper.getAllPages().at(position);
+                  destination_acroform->fixCopiedAnnotations(new_page.getObjectHandle(),
+                                                             import_page.getObjectHandle(),
+                                                             import->get_acroform());
+                }
+
+              position += 1;
             }
-
-          position += 1;
         }
-
-      if(import_outline)
+      catch(...)
         {
-          pdflib::pdf_outline_ops::import(*destination, import->get_qpdf(), page_map, 0);
+          shift_labels();
+          throw;
         }
+      shift_labels();
 
+      int parent = 0;
       if(outline_item)
         {
-          pdflib::pdf_outline_ops::add_item(*destination, *outline_item, first, 0);
+          parent = pdflib::pdf_outline_ops::add_item(*destination, *outline_item, first, 0);
+        }
+      if(import_outline)
+        {
+          pdflib::pdf_outline_ops::import(*destination, import->get_qpdf(), page_map, parent);
         }
       return {first, current_generation};
     });
@@ -2067,6 +2102,10 @@ namespace docling
               }
             ++inserted;
           }
+        if(preserve_page_labels and not at_end)
+          {
+            pdflib::pdf_catalog_ops::splice_page_labels(*destination, position, 0, inserted);
+          }
       }
     catch(...)
       {
@@ -2115,7 +2154,9 @@ namespace docling
       int page_count = static_cast<int>(qpdf.getAllPages().size());
       bool at_end = false;
       int position = insertion_position(at, page_count, at_end);
-      auto labels = pdflib::pdf_catalog_ops::page_labels(qpdf, page_count + lines.size());
+      const bool retain_labels =
+        preserve_page_labels and qpdf.getRoot().getKey("/PageLabels").isDictionary();
+      const auto labels = pdflib::pdf_catalog_ops::page_labels(qpdf, page_count + lines.size());
       auto font_object = pdflib::pdf_page_ops::make_standard_font(qpdf, font);
       const std::array<double, 3> black = {0.0, 0.0, 0.0};
 
@@ -2130,7 +2171,8 @@ namespace docling
               if(target)
                 {
                   check_page(*target, page_count);
-                  std::size_t label_index = *target >= position ? *target + lines.size() : *target;
+                  std::size_t label_index =
+                    not retain_labels and *target >= position ? *target + lines.size() : *target;
                   pdflib::pdf_page_ops::draw_text(
                     qpdf, page, font_object, labels.at(label_index), label_x, y, size, black);
                   pdflib::pdf_annotation_ops::add_page_link(

@@ -409,11 +409,17 @@ class PdfEditablePage(PdfPage):
         self, page2: _PageView, expand: bool = False, over: bool = True
     ) -> None:
         """Overlay another page, or underlay it with `over=False`."""
-        _check_expand(expand)
-        self._overlay(page2, over, False, (1.0, 0.0, 0.0, 1.0, 0.0, 0.0))
+        self.merge_transformed_page(page2, (1.0, 0.0, 0.0, 1.0, 0.0, 0.0), over, expand)
 
     def _overlay(
-        self, page: _PageView, over: bool, fit: bool, ctm: Sequence[float]
+        self,
+        page: _PageView,
+        over: bool,
+        fit: bool,
+        ctm: Sequence[float],
+        *,
+        crop: bool = False,
+        expand: bool = False,
     ) -> None:
         matrix = _transformation_matrix(ctm)
         with _native_errors():
@@ -426,6 +432,8 @@ class PdfEditablePage(PdfPage):
                 matrix=matrix,
                 generation=self._generation,
                 other_generation=page._generation,
+                crop=crop,
+                expand=expand,
             )
 
     def merge_transformed_page(
@@ -436,8 +444,7 @@ class PdfEditablePage(PdfPage):
         expand: bool = False,
     ) -> None:
         """Merge a page after applying the given affine transformation."""
-        _check_expand(expand)
-        self._overlay(page2, over, False, ctm)
+        self._overlay(page2, over, False, ctm, crop=True, expand=expand)
 
     def merge_scaled_page(
         self, page2: _PageView, scale: float, over: bool = True, expand: bool = False

@@ -99,7 +99,7 @@ namespace docling
   };
 
   inline pdf_writer::pdf_writer(std::string loglevel):
-    docling_editor(loglevel)
+    docling_editor(loglevel, false)
   {}
 
 }

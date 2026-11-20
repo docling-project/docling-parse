@@ -64,8 +64,8 @@ with PdfWriter() as writer:
 Writer page selection also accepts half-open range tuples such as `(0, 3)`
 and `(0, 6, 2)`, slices, and objects with pypdf PageRange-style `indices()`.
 Use a list such as `[0, 3]` to select individual pages rather than a range.
-A second positional argument to `append` can be an outline heading; use the
-`pages` keyword for clarity.
+Pass an optional `outline_item` to `append` or `merge` to place imported
+bookmarks below a heading that points to the first copied page.
 
 Page-local content, annotations and form widgets are copied. Document-level
 preservation differs from cloning: see [the preservation table](navigation.md#what-assembly-preserves).
@@ -153,4 +153,8 @@ box, accounting for display rotation. Pass a transformation matrix with
 
 The overlaid page's annotations and form widgets are not copied. Its text
 and graphics are drawn; interactive links and controls require separate edits.
+
+`PdfWriter` page merges clip the source content to its effective CropBox
+before applying the placement transform. `expand=True` grows the destination
+MediaBox to include the transformed source MediaBox.
 

@@ -106,7 +106,8 @@ namespace pdflib
                         QPDFObjectHandle form,
                         bool under,
                         bool fit,
-                        const std::array<double, 6>& matrix);
+                        const std::array<double, 6>& matrix,
+                        QPDFObjectHandle expand_to);
 
     // ---- new content ----
 
@@ -553,7 +554,8 @@ namespace pdflib
                                     QPDFObjectHandle form,
                                     bool under,
                                     bool fit,
-                                    const std::array<double, 6>& matrix)
+                                    const std::array<double, 6>& matrix,
+                                    QPDFObjectHandle expand_to)
   {
     check_matrix(matrix);
 
@@ -562,6 +564,17 @@ namespace pdflib
       {
         throw pdf_edit_error(edit_error::INVALID_EDIT,
                              "an overlay is either fitted to the page or placed with a matrix, not both");
+      }
+
+    QPDFMatrix cm(matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5]);
+    QPDFObjectHandle expanded_box = QPDFObjectHandle::newNull();
+    if(not expand_to.isNull())
+      {
+        auto bounds = transform_rectangle(expand_to, cm).getArrayAsRectangle();
+        auto original = page.getMediaBox().getArrayAsRectangle();
+        expanded_box = QPDFObjectHandle::newFromRectangle({
+          std::min(original.llx, bounds.llx), std::min(original.lly, bounds.lly),
+          std::max(original.urx, bounds.urx), std::max(original.ury, bounds.ury)});
       }
 
     // The page gets a /Resources dictionary of its own: adding a name to one
@@ -601,7 +614,6 @@ namespace pdflib
       }
     else
       {
-        QPDFMatrix cm(matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5]);
         content = "q\n" + cm.unparse() + " cm\n" + name + " Do\nQ\n";
       }
 
@@ -627,6 +639,10 @@ namespace pdflib
         // off before drawing on top.
         page.addPageContents(qpdf.newStream(std::string("q\n")), true);
         page.addPageContents(qpdf.newStream(std::string("\nQ\n") + content), false);
+      }
+    if(not expanded_box.isNull())
+      {
+        page.getObjectHandle().replaceKey("/MediaBox", expanded_box);
       }
   }
 

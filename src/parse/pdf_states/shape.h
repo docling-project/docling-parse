@@ -86,6 +86,9 @@ namespace pdflib
 
     void n(std::vector<qpdf_stream_instruction>& instructions);
 
+    // Begin a Form XObject with an empty path and its bounding box clip.
+    void clip_form_bbox(const std::array<double, 4>& bbox);
+
     // The clip paths for a render instruction. Without shapes the paths are
     // tracked for the box of text cells only (keep_clips) and the render
     // instructions get the same empty clip state as before, so this is empty
@@ -561,6 +564,18 @@ namespace pdflib
 
     page_item<PAGE_SHAPE> shape;
     curr_shapes.push_back(shape);
+  }
+
+  void pdf_state<SHAPE>::clip_form_bbox(const std::array<double, 4>& bbox)
+  {
+    if(not track_paths()) { return; }
+
+    curr_shapes.clear();
+    re(bbox[0], bbox[1], bbox[2] - bbox[0], bbox[3] - bbox[1]);
+    std::vector<qpdf_stream_instruction> no_parameters;
+    if(clipping_path_mode == EVEN_ODD_RULE) { WStar(no_parameters); }
+    else                                   { W(no_parameters);     }
+    n(no_parameters);
   }
 
   void pdf_state<SHAPE>::capture_pending_clip(bool already_transformed)

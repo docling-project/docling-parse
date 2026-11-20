@@ -51,6 +51,8 @@ with PdfEditor(source="document.pdf") as editor:
 the viewer's corresponding setting. `page_no=None` makes a heading without a
 page target. `url` selects a URI action. `color=None` restores default color.
 Only arguments supplied to `update_outline_item` are changed.
+Set `is_open=False` on a leaf to start with its children collapsed when
+the first child is added. Edits accept IDs of bookmarks in the current outline.
 
 `move_outline_item` moves children with their parent. Its `index` is a
 zero-based sibling position; `None` appends. An item cannot move beneath
@@ -110,9 +112,15 @@ Label ranges are inclusive. Named destinations are added or replaced by name
 and currently target a fitted page.
 
 Pass `None` to the open destination, layout, mode or preference setter to
-remove that setting. Labels are stored by page position; reapply them after
-inserting, deleting or reordering pages if the intended labels should follow
-the original pages.
+remove that setting.
+
+When a PDF has explicit label ranges, Editor insertion and deletion preserve
+the labels of surviving pages. Pages inserted before existing pages receive
+decimal labels from their new positions. Appended pages continue the final
+range. The TOC shows the resulting labels of its targets.
+
+Moving pages leaves label ranges at their existing positions. Writer page
+insertion and removal also keep ranges at their positions, as pypdf does.
 
 ## What assembly preserves
 
@@ -133,9 +141,11 @@ into the destination and have narrower preservation behavior:
 | Viewer settings and open action | Retained | Source settings are not imported |
 | Tagged structure | Retained initially | Structure trees are not merged |
 
-Set `import_outline=False` to omit source bookmarks. Bookmarks to omitted
-source pages are excluded. When a source page is imported more than once,
-imported bookmarks target its first copy.
+Set `import_outline=False` to omit source bookmarks. Imported bookmarks
+preserve hierarchy, style, color, and destination fit settings. An ancestor
+whose own page was omitted becomes a heading if any descendant has a copied
+target. When a source page is imported more than once, its bookmarks target
+its first copy.
 
 Moving an existing page preserves destinations that reference that page
 object. Removing a page clears local links and named destinations resolved

@@ -3,6 +3,7 @@
 #ifndef PDF_OUTLINE_OPS_H
 #define PDF_OUTLINE_OPS_H
 
+#include <algorithm>
 #include <cmath>
 #include <map>
 #include <optional>
@@ -81,22 +82,22 @@ namespace pdflib
                       const std::map<QPDFObjGen, int>& page_map,
                       int parent);
 
-    // Remove every outline destination, and the open action, that points at
-    // this page: it is about to leave the page tree, and a destination that
-    // refers to it would keep the page alive in the file and lead nowhere.
-    static void drop_destinations_to(QPDF& qpdf, QPDFObjGen page);
-
   private:
 
     static const int MAX_DEPTH = 64;
 
     static nlohmann::json read_items(std::vector<QPDFOutlineObjectHelper> items,
                                      const std::map<QPDFObjGen, int>& indices,
+                                     QPDFOutlineDocumentHelper& resolver,
                                      int depth);
 
+    static bool is_open(QPDFObjectHandle item);
     static QPDFObjectHandle outline_root(QPDF& qpdf);
     static QPDFObjectHandle resolve_parent(QPDF& qpdf, int parent);
     static QPDFObjectHandle resolve_item(QPDF& qpdf, int id);
+    static QPDFObjectHandle find_item(std::vector<QPDFOutlineObjectHelper> items,
+                                      int id,
+                                      int depth);
 
     // The sibling list of `parent`: take `item` out of it, or put it in at
     // `index` (negative: last).
@@ -125,20 +126,15 @@ namespace pdflib
 
     static int import_items(QPDF& destination,
                             std::vector<QPDFOutlineObjectHelper> items,
+                            QPDFOutlineDocumentHelper& resolver,
                             const std::map<QPDFObjGen, int>& page_map,
-                            int parent,
+                            QPDFObjectHandle parent,
                             int depth);
 
     static bool has_copied_page(QPDFOutlineObjectHelper& item,
+                                QPDFOutlineDocumentHelper& resolver,
                                 const std::map<QPDFObjGen, int>& page_map,
                                 int depth);
-
-    static void drop_in_items(QPDFObjectHandle first,
-                              QPDFObjGen page,
-                              std::set<QPDFObjGen>& visited,
-                              int depth);
-
-    static bool points_at(QPDFObjectHandle destination, QPDFObjGen page);
   };
 
   inline nlohmann::json pdf_outline_ops::read(QPDF& qpdf)
@@ -149,11 +145,12 @@ namespace pdflib
         return nlohmann::json::array();
       }
 
-    return read_items(helper.getTopLevelOutlines(), pdf_object_json::page_indices(qpdf), 0);
+    return read_items(helper.getTopLevelOutlines(), pdf_object_json::page_indices(qpdf), helper, 0);
   }
 
   inline nlohmann::json pdf_outline_ops::read_items(std::vector<QPDFOutlineObjectHelper> items,
                                                     const std::map<QPDFObjGen, int>& indices,
+                                                    QPDFOutlineDocumentHelper& resolver,
                                                     int depth)
   {
     nlohmann::json result = nlohmann::json::array();
@@ -165,19 +162,10 @@ namespace pdflib
         entry["id"] = item.getObjectHandle().getObjectID();
         entry["title"] = item.getTitle();
 
-        // getDestPage resolves /Dest, a /GoTo action and named destinations.
-        entry["page"] = nullptr;
-        QPDFObjectHandle page = item.getDestPage();
-        if(page.isIndirect())
-          {
-            auto itr = indices.find(page.getObjGen());
-            if(itr != indices.end())
-              {
-                entry["page"] = itr->second;
-              }
-          }
-
         QPDFObjectHandle dictionary = item.getObjectHandle();
+        int index = pdf_object_json::destination_page(
+          pdf_object_json::item_destination(dictionary, resolver), indices);
+        entry["page"] = index >= 0 ? nlohmann::json(index) : nlohmann::json(nullptr);
 
         entry["url"] = nullptr;
         QPDFObjectHandle action = dictionary.getKey("/A");
@@ -188,12 +176,10 @@ namespace pdflib
             entry["url"] = action.getKey("/URI").getUTF8Value();
           }
 
-        // a negative /Count is an item whose children are hidden
-        QPDFObjectHandle count = dictionary.getKey("/Count");
-        entry["open"] = not (count.isInteger() and count.getIntValue() < 0);
+        entry["open"] = is_open(dictionary);
 
         entry["children"] = (depth < MAX_DEPTH) ?
-          read_items(item.getKids(), indices, depth + 1) : nlohmann::json::array();
+          read_items(item.getKids(), indices, resolver, depth + 1) : nlohmann::json::array();
 
         result.push_back(entry);
       }
@@ -230,28 +216,57 @@ namespace pdflib
         return outline_root(qpdf);
       }
 
-    QPDFObjectHandle item = qpdf.getObjectByID(parent, 0);
-    if(not (item.isDictionary() and item.hasKey("/Title")))
-      {
-        throw pdf_edit_error(edit_error::INVALID_EDIT,
-                             "outline item " + std::to_string(parent) + " does not exist");
-      }
-
-    return item;
+    return resolve_item(qpdf, parent);
   }
 
   inline QPDFObjectHandle pdf_outline_ops::resolve_item(QPDF& qpdf, int id)
   {
-    QPDFObjectHandle item = (id > 0) ? qpdf.getObjectByID(id, 0) : QPDFObjectHandle::newNull();
-
-    // an outline item has a title and hangs below a parent
-    if(not (item.isDictionary() and item.hasKey("/Title") and item.getKey("/Parent").isDictionary()))
+    if(id > 0)
       {
-        throw pdf_edit_error(edit_error::INVALID_EDIT,
-                             "outline item " + std::to_string(id) + " does not exist");
+        QPDFOutlineDocumentHelper outlines(qpdf);
+        auto item = find_item(outlines.getTopLevelOutlines(), id, 0);
+        if(item.isDictionary())
+          {
+            return item;
+          }
       }
+    throw pdf_edit_error(edit_error::INVALID_EDIT,
+                         "outline item " + std::to_string(id) + " does not exist");
+  }
 
-    return item;
+  inline QPDFObjectHandle pdf_outline_ops::find_item(
+    std::vector<QPDFOutlineObjectHelper> items, int id, int depth)
+  {
+    for(auto& item : items)
+      {
+        auto object = item.getObjectHandle();
+        if(object.getObjectID() == id)
+          {
+            return object;
+          }
+        if(depth < MAX_DEPTH)
+          {
+            auto child = find_item(item.getKids(), id, depth + 1);
+            if(child.isDictionary())
+              {
+                return child;
+              }
+          }
+      }
+    return QPDFObjectHandle::newNull();
+  }
+
+  inline bool pdf_outline_ops::is_open(QPDFObjectHandle item)
+  {
+    auto count = item.getKey("/Count");
+    if(count.isInteger() and count.getIntValue() != 0)
+      {
+        return count.getIntValue() > 0;
+      }
+    // A leaf has no /Count. Use pypdf's open-state entry to remember its
+    // requested state until it gains children.
+    auto state = item.getKey("/%is_open%");
+    return not state.isBool() or state.getBoolValue();
   }
 
   inline void pdf_outline_ops::unlink(QPDFObjectHandle item)
@@ -368,8 +383,7 @@ namespace pdflib
     bool is_closed = false;
     if(not is_root)
       {
-        QPDFObjectHandle count = item.getKey("/Count");
-        is_closed = (count.isInteger() and count.getIntValue() < 0);
+        is_closed = not is_open(item);
 
         if(item.isIndirect() and closed.count(item.getObjGen()) > 0) { is_closed = true; }
         if(item.isIndirect() and opened.count(item.getObjGen()) > 0) { is_closed = false; }
@@ -377,12 +391,21 @@ namespace pdflib
 
     // without visible entries there is no /Count, for an item and for the
     // outline root alike (ISO 32000-1, tables 152 and 153)
-    if(shown == 0 and (is_root or not is_closed))
+    if(shown == 0)
       {
         item.removeKey("/Count");
+        if(is_closed)
+          {
+            item.replaceKey("/%is_open%", QPDFObjectHandle::newBool(false));
+          }
+        else
+          {
+            item.removeKey("/%is_open%");
+          }
         return 0;
       }
 
+    item.removeKey("/%is_open%");
     item.replaceKey("/Count", QPDFObjectHandle::newInteger(is_closed ? -shown : shown));
 
     // what a closed item holds is not visible further up
@@ -701,11 +724,12 @@ namespace pdflib
   }
 
   inline bool pdf_outline_ops::has_copied_page(QPDFOutlineObjectHelper& item,
+                                               QPDFOutlineDocumentHelper& resolver,
                                                const std::map<QPDFObjGen, int>& page_map,
                                                int depth)
   {
-    QPDFObjectHandle page = item.getDestPage();
-    if(page.isIndirect() and page_map.count(page.getObjGen()) > 0)
+    auto target = pdf_object_json::item_destination(item.getObjectHandle(), resolver);
+    if(pdf_object_json::destination_page(target, page_map) >= 0)
       {
         return true;
       }
@@ -717,7 +741,7 @@ namespace pdflib
 
     for(QPDFOutlineObjectHelper& kid : item.getKids())
       {
-        if(has_copied_page(kid, page_map, depth + 1))
+        if(has_copied_page(kid, resolver, page_map, depth + 1))
           {
             return true;
           }
@@ -728,36 +752,70 @@ namespace pdflib
 
   inline int pdf_outline_ops::import_items(QPDF& destination,
                                            std::vector<QPDFOutlineObjectHelper> items,
+                                           QPDFOutlineDocumentHelper& resolver,
                                            const std::map<QPDFObjGen, int>& page_map,
-                                           int parent,
+                                           QPDFObjectHandle parent,
                                            int depth)
   {
     int created = 0;
 
     for(QPDFOutlineObjectHelper& item : items)
       {
-        if(not has_copied_page(item, page_map, depth))
+        if(not has_copied_page(item, resolver, page_map, depth))
           {
             continue;
           }
 
-        int page = -1;
-        QPDFObjectHandle source_page = item.getDestPage();
-        if(source_page.isIndirect())
+        auto original = item.getObjectHandle();
+        auto copy = destination.makeIndirectObject(QPDFObjectHandle::newDictionary());
+        copy.replaceKey("/Title", QPDFObjectHandle::newUnicodeString(item.getTitle()));
+
+        auto target = pdf_object_json::item_destination(original, resolver);
+        int page = pdf_object_json::destination_page(target, page_map);
+        if(page >= 0)
           {
-            auto itr = page_map.find(source_page.getObjGen());
-            if(itr != page_map.end())
+            auto remapped = QPDFObjectHandle::newArray();
+            remapped.appendItem(destination.getAllPages().at(page));
+            for(int index = 1; index < target.getArrayNItems(); ++index)
               {
-                page = itr->second;
+                auto operand = target.getArrayItem(index);
+                // Destination operands are a name, followed by numbers and nulls.
+                remapped.appendItem(operand.isName() or operand.isNumber()
+                                    ? operand.shallowCopy() : QPDFObjectHandle::newNull());
               }
+            copy.replaceKey("/Dest", remapped);
           }
 
-        int id = add_item(destination, item.getTitle(), page, parent);
+        auto flags = original.getKey("/F");
+        if(flags.isInteger())
+          {
+            copy.replaceKey("/F", flags.shallowCopy());
+          }
+        auto color = original.getKey("/C");
+        if(color.isArray() and color.getArrayNItems() == 3)
+          {
+            auto components = color.getArrayAsVector();
+            if(std::all_of(components.begin(), components.end(), [](auto value) { return value.isNumber(); }))
+              {
+                auto rgb = QPDFObjectHandle::newArray();
+                for(auto& component : components)
+                  {
+                    rgb.appendItem(component.shallowCopy());
+                  }
+                copy.replaceKey("/C", rgb);
+              }
+          }
+        if(not is_open(original))
+          {
+            copy.replaceKey("/%is_open%", QPDFObjectHandle::newBool(false));
+          }
+
+        link(parent, copy, -1);
         created += 1;
 
         if(depth < MAX_DEPTH)
           {
-            import_items(destination, item.getKids(), page_map, id, depth + 1);
+            created += import_items(destination, item.getKids(), resolver, page_map, copy, depth + 1);
           }
       }
 
@@ -775,84 +833,18 @@ namespace pdflib
         return 0;
       }
 
-    return import_items(destination, helper.getTopLevelOutlines(), page_map, parent, 0);
-  }
-
-  inline bool pdf_outline_ops::points_at(QPDFObjectHandle destination, QPDFObjGen page)
-  {
-    if(destination.isDictionary() and destination.hasKey("/D"))
+    auto items = helper.getTopLevelOutlines();
+    for(auto& item : items)
       {
-        destination = destination.getKey("/D");
-      }
-
-    if(not destination.isArray() or destination.getArrayNItems() == 0)
-      {
-        return false;
-      }
-
-    QPDFObjectHandle target = destination.getArrayItem(0);
-    return (target.isIndirect() and target.getObjGen() == page);
-  }
-
-  inline void pdf_outline_ops::drop_in_items(QPDFObjectHandle first,
-                                             QPDFObjGen page,
-                                             std::set<QPDFObjGen>& visited,
-                                             int depth)
-  {
-    QPDFObjectHandle item = first;
-
-    while(item.isDictionary())
-      {
-        // a damaged list may loop back on itself
-        if(item.isIndirect() and not visited.insert(item.getObjGen()).second)
+        if(has_copied_page(item, helper, page_map, 0))
           {
-            break;
+            auto target = resolve_parent(destination, parent);
+            int created = import_items(destination, items, helper, page_map, target, 0);
+            recount(destination);
+            return created;
           }
-
-        if(points_at(item.getKey("/Dest"), page))
-          {
-            item.removeKey("/Dest");
-          }
-
-        QPDFObjectHandle action = item.getKey("/A");
-        if(action.isDictionary() and
-           action.getKey("/S").isNameAndEquals("/GoTo") and
-           points_at(action.getKey("/D"), page))
-          {
-            item.removeKey("/A");
-          }
-
-        if(depth < MAX_DEPTH)
-          {
-            drop_in_items(item.getKey("/First"), page, visited, depth + 1);
-          }
-
-        item = item.getKey("/Next");
       }
-  }
-
-  inline void pdf_outline_ops::drop_destinations_to(QPDF& qpdf, QPDFObjGen page)
-  {
-    QPDFObjectHandle root = qpdf.getRoot();
-
-    QPDFObjectHandle outlines = root.getKey("/Outlines");
-    if(outlines.isDictionary())
-      {
-        std::set<QPDFObjGen> visited;
-        drop_in_items(outlines.getKey("/First"), page, visited, 0);
-      }
-
-    QPDFObjectHandle open_action = root.getKey("/OpenAction");
-    if(points_at(open_action, page))
-      {
-        root.removeKey("/OpenAction");
-      }
-    else if(open_action.isDictionary() and
-            open_action.getKey("/S").isNameAndEquals("/GoTo") and
-            points_at(open_action.getKey("/D"), page))
-      {
-        root.removeKey("/OpenAction");
-      }
+    return 0;
   }
 
 }
