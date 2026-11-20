@@ -756,11 +756,12 @@ namespace docling
              "Add a bookmark; returns its id.")
 
         .def("set_form_values",
-             [](class_type& self, std::map<std::string, std::string> values) -> int {
+             [](class_type& self, std::map<std::string, std::string> values, bool flatten) -> int {
                pybind11::gil_scoped_release release;
-               return self.set_form_values(values);
+               return self.set_form_values(values, flatten);
              },
              pybind11::arg("values"),
+             pybind11::arg("flatten") = false,
              "Set form field values by name; returns the number of fields set.")
 
         .def("set_need_appearances",

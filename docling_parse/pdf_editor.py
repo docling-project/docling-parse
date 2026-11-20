@@ -263,10 +263,29 @@ class PdfEditor(_PdfEditing):
         target = super().open_destination
         return None if target is None else _one_based_target(target)
 
+    def has_form(self) -> bool:
+        """Whether the document contains an AcroForm dictionary."""
+        return self._form()["has_form"]
+
+    def has_form_on_page(self, *, page_no: int) -> bool:
+        """Whether an AcroForm field has a widget on the given one-based page."""
+        index = self._page_no_index(page_no=page_no)
+        return any(index in field["pages"] for field in self._form()["fields"])
+
+    def has_xfa(self) -> bool:
+        """Whether the document's AcroForm contains an XFA definition."""
+        return self._form()["has_xfa"]
+
     def get_fields(self) -> dict[str, dict[str, Any]]:
-        """Form fields by fully qualified name, with one-based page lists."""
+        """Form fields by fully qualified name, with distinct one-based pages
+        and a bounding box for each widget.
+        """
         return {
-            name: {**field, "pages": [index + 1 for index in field["pages"]]}
+            name: {
+                **field,
+                "pages": [index + 1 for index in field["pages"]],
+                "bboxes": [PdfBox(*rect) for rect in field["rects"]],
+            }
             for name, field in self._get_fields().items()
         }
 
@@ -671,7 +690,15 @@ class PdfEditor(_PdfEditing):
     def update_form_field_values(
         self, *, fields: dict[str, str | bool], flatten: bool = False
     ) -> int:
-        'Fill in form fields, by fully qualified name; a partial name works\nwhen only one field has it.\n\nText and choice fields take a string. A checkbox takes True, False,\nor one of its states; a radio group takes the state to select\n("/Choice1", or "Choice1"), or "/Off". The fields\' appearances are\nregenerated so the values show in every viewer.\n\nWith `flatten`, the form is then turned into page content. Returns\nthe number of fields set; an unknown name raises `PdfEditError`.'
+        """Fill fields by fully qualified or unambiguous partial name.
+
+        Text and choice fields take a string. Checkboxes take a boolean or
+        state name. Radio buttons take a state name or `/Off`.
+
+        With `flatten=True`, paint the form widgets into page content and
+        keep other annotations. Use an empty mapping to flatten current
+        values. Return the number of supplied fields updated.
+        """
         return _PdfEditing._update_form_field_values(
             self, fields=fields, flatten=flatten
         )

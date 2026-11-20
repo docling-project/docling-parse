@@ -14,6 +14,7 @@
 #include <nlohmann/json.hpp>
 
 #define POINTERHOLDER_TRANSITION 0 // eliminate warnings from QPDF
+#include <qpdf/BufferInputSource.hh>
 #include <qpdf/QPDF.hh>
 #include <qpdf/QPDFAcroFormDocumentHelper.hh>
 #include <qpdf/QPDFAnnotationObjectHelper.hh>
@@ -21,6 +22,7 @@
 #include <qpdf/QPDFObjectHandle.hh>
 #include <qpdf/QPDFPageDocumentHelper.hh>
 #include <qpdf/QPDFPageObjectHelper.hh>
+#include <qpdf/QPDFTokenizer.hh>
 #include <qpdf/QUtil.hh>
 
 #include <edit/edit_error.h>
@@ -49,9 +51,11 @@ namespace pdflib
     // when it identifies exactly one field. Text and choice fields take the
     // value as text. A checkbox or radio group takes one of its states
     // ("/Yes", or "Yes"), or "/Off"; for a checkbox, "true"/"false" select
-    // its on state and "/Off". Appearance streams are regenerated. Returns
-    // the number of fields set; an unknown name is an error.
-    static int set_values(QPDF& qpdf, const std::map<std::string, std::string>& values);
+    // its on state and "/Off". Prepare appearances before applying values.
+    // When flatten_fields is true, paint the widgets with their new values
+    // and retain other annotations. Returns the number of supplied fields.
+    static int set_values(QPDF& qpdf, const std::map<std::string, std::string>& values,
+                          bool flatten_fields = false);
 
     static void set_need_appearances(QPDF& qpdf, bool value);
 
@@ -95,6 +99,40 @@ namespace pdflib
     static void detach_widgets(QPDF& qpdf, const std::vector<QPDFObjectHandle>& widgets);
 
   private:
+
+    struct field_update
+    {
+      QPDFFormFieldObjectHelper field;
+      QPDFObjectHandle value;
+      QPDFObjectHandle indices;
+    };
+
+    struct widget_update
+    {
+      QPDFObjectHandle widget;
+      QPDFObjectHandle appearance;
+      QPDFObjectHandle state;
+      bool needs_viewer = false;
+    };
+
+    static nlohmann::json read_value(QPDFObjectHandle value);
+    static int choice_index(QPDFObjectHandle options, const std::string& value);
+    static QPDFObjectHandle choice_indices(QPDFFormFieldObjectHelper& field,
+                                           QPDFObjectHandle options,
+                                           const std::string& value);
+    static std::string choice_label(QPDFObjectHandle options, const std::string& value);
+    static std::string appearance_font(const std::string& appearance);
+    static QPDFObjectHandle prepare_text_appearance(QPDF& qpdf,
+                                                     QPDFFormFieldObjectHelper& field,
+                                                     QPDFAnnotationObjectHelper& widget,
+                                                     QPDFObjectHandle value,
+                                                     QPDFObjectHandle options);
+    static widget_update prepare_widget(QPDF& qpdf, QPDFFormFieldObjectHelper& field,
+                                        QPDFAnnotationObjectHelper& widget,
+                                        QPDFObjectHandle value, bool redraw,
+                                        QPDFObjectHandle options = QPDFObjectHandle::newNull());
+    static void flatten_widgets(QPDF& qpdf, QPDFAcroFormDocumentHelper& acroform,
+                                const std::vector<field_update>& updates);
 
     static bool prune_widgets(QPDFObjectHandle fields,
                               const std::vector<QPDFObjectHandle>& widgets,
@@ -317,12 +355,8 @@ namespace pdflib
 
         // A button's value is a name (/Yes, /Off); text and choice values
         // are strings.
-        QPDFObjectHandle value = field.getValue();
-        entry["value"] = value.isName() ? value.getName() : field.getValueAsString();
-
-        QPDFObjectHandle default_value = field.getDefaultValue();
-        entry["default_value"] = default_value.isName() ?
-          default_value.getName() : field.getDefaultValueAsString();
+        entry["value"] = read_value(field.getValue());
+        entry["default_value"] = read_value(field.getDefaultValue());
 
         int flags = field.getFlags();
         entry["flags"] = flags;
@@ -365,7 +399,308 @@ namespace pdflib
     return result;
   }
 
-  inline int pdf_form_ops::set_values(QPDF& qpdf, const std::map<std::string, std::string>& values)
+  inline nlohmann::json pdf_form_ops::read_value(QPDFObjectHandle value)
+  {
+    if(value.isArray())
+      {
+        nlohmann::json values = nlohmann::json::array();
+        for(auto item : value.getArrayAsVector())
+          {
+            if(item.isString())
+              {
+                values.push_back(item.getUTF8Value());
+              }
+          }
+        return values;
+      }
+    if(value.isName())
+      {
+        return value.getName();
+      }
+    return value.isString() ? value.getUTF8Value() : std::string();
+  }
+
+  inline int pdf_form_ops::choice_index(QPDFObjectHandle options, const std::string& value)
+  {
+    if(options.isArray())
+      {
+        for(int i = 0; i < options.getArrayNItems(); ++i)
+          {
+            auto option = options.getArrayItem(i);
+            if(option.isArray() and option.getArrayNItems() == 2)
+              {
+                option = option.getArrayItem(0);
+              }
+            if(option.isString() and option.getUTF8Value() == value)
+              {
+                return i;
+              }
+          }
+      }
+    return -1;
+  }
+
+  inline QPDFObjectHandle pdf_form_ops::choice_indices(QPDFFormFieldObjectHelper& field,
+                                                        QPDFObjectHandle options,
+                                                        const std::string& value)
+  {
+    if((field.getFlags() & ff_ch_multi_select) or field.getValue().isArray())
+      {
+        throw pdf_edit_error(load_error::UNSUPPORTED, "editing a multi-select choice field is unsupported");
+      }
+    int index = choice_index(options, value);
+    if(index >= 0)
+      {
+        return (field.getFlags() & ff_ch_combo) ? QPDFObjectHandle::newNull()
+            : QPDFObjectHandle::newArray({QPDFObjectHandle::newInteger(index)});
+      }
+    if(not value.empty() and not ((field.getFlags() & ff_ch_combo) and (field.getFlags() & ff_ch_edit)))
+      {
+        throw pdf_edit_error(edit_error::INVALID_EDIT,
+                             "'" + value + "' is not one of the options of choice field '" +
+                             field.getFullyQualifiedName() + "'");
+      }
+    return QPDFObjectHandle::newNull();
+  }
+
+  inline std::string pdf_form_ops::choice_label(QPDFObjectHandle options, const std::string& value)
+  {
+    if(options.isArray())
+      {
+        for(auto option : options.getArrayAsVector())
+          {
+            if(option.isArray() and option.getArrayNItems() == 2)
+              {
+                auto exported = option.getArrayItem(0);
+                auto display = option.getArrayItem(1);
+                if(exported.isString() and display.isString() and exported.getUTF8Value() == value)
+                  {
+                    return display.getUTF8Value();
+                  }
+              }
+          }
+      }
+    return value;
+  }
+
+  inline std::string pdf_form_ops::appearance_font(const std::string& appearance)
+  {
+    BufferInputSource source("form default appearance", appearance);
+    QPDFTokenizer tokenizer;
+    tokenizer.allowEOF();
+    QPDFTokenizer::Token first, second;
+    std::string font;
+    while(true)
+      {
+        auto token = tokenizer.readToken(source, "form default appearance", true);
+        if(token.getType() == QPDFTokenizer::tt_eof or token.getType() == QPDFTokenizer::tt_bad)
+          {
+            return font;
+          }
+        if(token.getType() == QPDFTokenizer::tt_word and token.getValue() == "Tf" and
+           first.getType() == QPDFTokenizer::tt_name and
+           (second.getType() == QPDFTokenizer::tt_real or second.getType() == QPDFTokenizer::tt_integer))
+          {
+            font = first.getValue();
+          }
+        first = second;
+        second = token;
+      }
+  }
+
+  inline QPDFObjectHandle pdf_form_ops::prepare_text_appearance(
+    QPDF& qpdf, QPDFFormFieldObjectHelper& field, QPDFAnnotationObjectHelper& widget,
+    QPDFObjectHandle value, QPDFObjectHandle options)
+  {
+    if(value.isArray())
+      {
+        return QPDFObjectHandle::newNull();
+      }
+    if(options.isNull())
+      {
+        options = field.getInheritableFieldValue("/Opt");
+      }
+    auto appearance = widget.getAppearanceStream("/N");
+    auto original = widget.getAppearanceDictionary();
+    auto widget_field = QPDFFormFieldObjectHelper(widget.getObjectHandle());
+    std::string da = widget_field.getDefaultAppearance();
+    auto font_name = appearance_font(da);
+
+    auto original_resources = appearance.isStream() ? appearance.getDict().getKey("/Resources")
+                                                     : QPDFObjectHandle::newNull();
+    auto resources = original_resources.isDictionary() ? original_resources.unsafeShallowCopy()
+                                                       : QPDFObjectHandle::newDictionary();
+    auto fonts = resources.getKey("/Font");
+    fonts = fonts.isDictionary() ? fonts.unsafeShallowCopy() : QPDFObjectHandle::newDictionary();
+    auto font = font_name.empty() ? QPDFObjectHandle::newNull() : fonts.getKey(font_name);
+    auto defaults = field.getDefaultResources();
+    if(not font.isDictionary() and not font_name.empty() and defaults.isDictionary())
+      {
+        auto default_fonts = defaults.getKey("/Font");
+        if(default_fonts.isDictionary())
+          {
+            font = default_fonts.getKey(font_name);
+          }
+      }
+    if(not font.isDictionary())
+      {
+        font_name = "/Helv";
+        da = "/Helv 12 Tf 0 g";
+        font = pdf_page_ops::make_standard_font(qpdf, "Helvetica");
+      }
+
+    auto subtype = font.getKey("/Subtype");
+    auto encoding = font.getKey("/Encoding");
+    auto supports = [&](const std::string& text) {
+      if(text.empty())
+        {
+          return true;
+        }
+      if(subtype.isNameAndEquals("/Type0") or subtype.isNameAndEquals("/Type3") or
+         (not encoding.isNull() and not encoding.isNameAndEquals("/WinAnsiEncoding") and
+          not encoding.isNameAndEquals("/MacRomanEncoding") and not encoding.isNameAndEquals("/StandardEncoding")))
+        {
+          return false;
+        }
+      auto base = font.getKey("/BaseFont");
+      if(base.isNameAndEquals("/Symbol") or base.isNameAndEquals("/ZapfDingbats"))
+        {
+          return false;
+        }
+      std::string encoded;
+      bool encodable = encoding.isNameAndEquals("/WinAnsiEncoding") ? QUtil::utf8_to_win_ansi(text, encoded) :
+                       encoding.isNameAndEquals("/MacRomanEncoding") ? QUtil::utf8_to_mac_roman(text, encoded) :
+                       QUtil::utf8_to_ascii(text, encoded);
+      auto first = font.getKey("/FirstChar");
+      auto last = font.getKey("/LastChar");
+      auto widths = font.getKey("/Widths");
+      if(first.isInteger() and last.isInteger())
+        {
+          for(unsigned char byte : encoded)
+            {
+              if(byte == '\n' or byte == '\r' or byte == '\t')
+                {
+                  continue;
+                }
+              if(byte < first.getIntValue() or byte > last.getIntValue())
+                {
+                  return false;
+                }
+              if(widths.isArray())
+                {
+                  auto index = byte - first.getIntValue();
+                  if(index >= widths.getArrayNItems())
+                    {
+                      return false;
+                    }
+                  auto width = widths.getArrayItem(static_cast<int>(index));
+                  if(not width.isNumber() or width.getNumericValue() <= 0)
+                    {
+                      return false;
+                    }
+                }
+            }
+        }
+      return encodable;
+    };
+
+    std::string text = value.isString() ? value.getUTF8Value() : std::string();
+    if(field.isChoice())
+      {
+        text = choice_label(options, text);
+        if(not (field.getFlags() & ff_ch_combo) and options.isArray())
+          {
+            for(auto option : options.getArrayAsVector())
+              {
+                if(option.isArray() and option.getArrayNItems() == 2)
+                  {
+                    option = option.getArrayItem(1);
+                  }
+                if(option.isString() and not supports(option.getUTF8Value()))
+                  {
+                    return QPDFObjectHandle::newNull();
+                  }
+              }
+          }
+      }
+    if(not supports(text))
+      {
+        return QPDFObjectHandle::newNull();
+      }
+
+    fonts.replaceKey(font_name, font);
+    resources.replaceKey("/Font", fonts);
+    if(appearance.isStream() and appearance.getDict().getKey("/BBox").isRectangle())
+      {
+        appearance = appearance.copyStream();
+      }
+    else
+      {
+        auto rect = widget.getRect();
+        double width = rect.urx - rect.llx;
+        double height = rect.ury - rect.lly;
+        if(not (width > 0.0 and height > 0.0 and std::isfinite(width) and std::isfinite(height)))
+          {
+            return QPDFObjectHandle::newNull();
+          }
+        appearance = make_appearance(qpdf, width, height, "/Tx BMC\nEMC\n", font);
+      }
+    appearance.getDict().replaceKey("/Resources", resources);
+
+    // Generate on a detached widget. QPDF changes the appearance stream in
+    // place and may replace /AP, so the real widget must not be used here.
+    auto proxy = qpdf.makeIndirectObject(QPDFObjectHandle::newDictionary());
+    auto ap = original.isDictionary() ? original.unsafeShallowCopy() : QPDFObjectHandle::newDictionary();
+    ap.replaceKey("/N", appearance);
+    proxy.replaceKey("/AP", ap);
+    proxy.replaceKey("/FT", QPDFObjectHandle::newName(field.getFieldType()));
+    proxy.replaceKey("/Ff", QPDFObjectHandle::newInteger(field.getFlags()));
+    proxy.replaceKey("/DA", QPDFObjectHandle::newString(da));
+    proxy.replaceKey("/Opt", options);
+    proxy.replaceKey("/V", QPDFObjectHandle::newUnicodeString(text));
+    QPDFAnnotationObjectHelper annotation(proxy);
+    QPDFFormFieldObjectHelper(proxy).generateAppearance(annotation);
+    return proxy.getKey("/AP");
+  }
+
+  inline pdf_form_ops::widget_update pdf_form_ops::prepare_widget(
+    QPDF& qpdf, QPDFFormFieldObjectHelper& field, QPDFAnnotationObjectHelper& widget,
+    QPDFObjectHandle value, bool redraw, QPDFObjectHandle options)
+  {
+    widget_update result{widget.getObjectHandle(), QPDFObjectHandle::newNull(), QPDFObjectHandle::newNull()};
+    if(field.isCheckbox() or field.isRadioButton())
+      {
+        std::string state = value.isName() ? value.getName() : "/Off";
+        auto ap = widget.getAppearanceDictionary();
+        auto normal = ap.isDictionary() ? ap.getKey("/N") : QPDFObjectHandle::newNull();
+        if(state != "/Off" and normal.isDictionary() and not normal.getKey(state).isStream())
+          {
+            std::string local = "/Off";
+            if(field.isCheckbox())
+              {
+                for(const auto& key : normal.getKeys())
+                  {
+                    if(key != "/Off" and normal.getKey(key).isStream())
+                      {
+                        local = key;
+                        break;
+                      }
+                  }
+              }
+            state = local;
+          }
+        result.state = QPDFObjectHandle::newName(state);
+      }
+    else if(redraw and (field.isText() or field.isChoice()))
+      {
+        result.appearance = prepare_text_appearance(qpdf, field, widget, value, options);
+        result.needs_viewer = result.appearance.isNull();
+      }
+    return result;
+  }
+
+  inline int pdf_form_ops::set_values(QPDF& qpdf, const std::map<std::string, std::string>& values,
+                                      bool flatten_fields)
   {
     QPDFAcroFormDocumentHelper acroform(qpdf);
 
@@ -376,13 +711,20 @@ namespace pdflib
 
     std::vector<QPDFFormFieldObjectHelper> fields = fields_of(acroform);
 
-    std::vector<std::pair<QPDFFormFieldObjectHelper, QPDFObjectHandle> > prepared;
+    auto form = qpdf.getRoot().getKey("/AcroForm");
+    if(flatten_fields and form.hasKey("/XFA"))
+      {
+        throw pdf_edit_error(load_error::UNSUPPORTED, "flattening an XFA form is unsupported");
+      }
+
+    std::vector<field_update> prepared;
     prepared.reserve(values.size());
 
     for(const auto& [name, value] : values)
       {
         QPDFFormFieldObjectHelper field = find_field(fields, name);
         QPDFObjectHandle field_value;
+        auto indices = QPDFObjectHandle::newNull();
         if(field.isCheckbox() or field.isRadioButton())
           {
             std::set<std::string> states = states_of(acroform, field);
@@ -417,20 +759,219 @@ namespace pdflib
           }
         else
           {
-            field_value = QPDFObjectHandle::newUnicodeString(value);
+            if(field.isChoice())
+              {
+                indices = choice_indices(field, field.getInheritableFieldValue("/Opt"), value);
+              }
+            field_value = field.isChoice() and value.empty() and
+                          choice_index(field.getInheritableFieldValue("/Opt"), value) < 0
+                            ? QPDFObjectHandle::newNull() : QPDFObjectHandle::newUnicodeString(value);
           }
 
-        prepared.emplace_back(field, field_value);
+        prepared.push_back({field, field_value, indices});
       }
 
-    for(auto& [field, value] : prepared)
+    if(flatten_fields)
       {
-        field.setV(value, true);
+        flatten_widgets(qpdf, acroform, prepared);
+        return static_cast<int>(prepared.size());
       }
 
-    acroform.generateAppearancesIfNeeded();
+    std::vector<widget_update> widgets;
+    bool needs_viewer = acroform.getNeedAppearances();
+    for(auto& update : prepared)
+      {
+        for(auto& widget : widgets_of(acroform, update.field))
+          {
+            auto staged = prepare_widget(qpdf, update.field, widget, update.value, true);
+            needs_viewer = needs_viewer or staged.needs_viewer;
+            widgets.push_back(staged);
+          }
+      }
 
+    for(auto& update : prepared)
+      {
+        auto field = update.field.getObjectHandle();
+        field.replaceKey("/V", update.value);
+        if(update.field.isChoice())
+          {
+            field.replaceKey("/I", update.indices);
+          }
+      }
+    for(auto& widget : widgets)
+      {
+        if(not widget.appearance.isNull())
+          {
+            widget.widget.replaceKey("/AP", widget.appearance);
+          }
+        if(not widget.state.isNull())
+          {
+            widget.widget.replaceKey("/AS", widget.state);
+          }
+      }
+
+    acroform.setNeedAppearances(needs_viewer);
     return static_cast<int>(prepared.size());
+  }
+
+  inline void pdf_form_ops::flatten_widgets(QPDF& qpdf, QPDFAcroFormDocumentHelper& acroform,
+                                            const std::vector<field_update>& updates)
+  {
+    struct page_update
+    {
+      QPDFObjectHandle page;
+      QPDFObjectHandle annotations;
+      QPDFObjectHandle resources;
+      QPDFObjectHandle contents;
+      std::vector<QPDFObjectHandle> widgets;
+    };
+
+    std::map<QPDFObjGen, QPDFObjectHandle> values;
+    for(const auto& update : updates)
+      {
+        values.insert_or_assign(update.field.getObjectHandle().getObjGen(), update.value);
+      }
+    std::vector<page_update> prepared;
+    for(auto page : QPDFPageDocumentHelper(qpdf).getAllPages())
+      {
+        auto object = page.getObjectHandle();
+        auto annots = object.getKey("/Annots");
+        if(not annots.isArray())
+          {
+            continue;
+          }
+
+        auto resources = page.getAttribute("/Resources", false);
+        resources = resources.isDictionary() ? resources.unsafeShallowCopy() : QPDFObjectHandle::newDictionary();
+        auto xobjects = resources.getKey("/XObject");
+        xobjects = xobjects.isDictionary() ? xobjects.unsafeShallowCopy() : QPDFObjectHandle::newDictionary();
+        resources.replaceKey("/XObject", xobjects);
+
+        auto kept = QPDFObjectHandle::newArray();
+        std::vector<QPDFObjectHandle> widgets;
+        std::string painting;
+        int suffix = 1;
+        for(auto item : annots.getArrayAsVector())
+          {
+            if(not item.isDictionary() or not item.getKey("/Subtype").isNameAndEquals("/Widget"))
+              {
+                kept.appendItem(item);
+                continue;
+              }
+            widgets.push_back(item);
+            QPDFAnnotationObjectHelper widget(item);
+            if(widget.getFlags() & (an_hidden | an_invisible))
+              {
+                continue;
+              }
+            auto field = field_of(acroform.getFieldForAnnotation(widget));
+            if(field.isNull())
+              {
+                throw pdf_edit_error(load_error::UNSUPPORTED, "cannot flatten a widget without a form field");
+              }
+
+            auto override_value = values.find(field.getObjectHandle().getObjGen());
+            bool updated = override_value != values.end();
+            auto value = updated ? override_value->second : field.getValue();
+            bool redraw = updated or acroform.getNeedAppearances() or not widget.getAppearanceStream("/N").isStream();
+            auto staged = prepare_widget(qpdf, field, widget, value, redraw);
+            auto proxy = item.unsafeShallowCopy();
+            if(not staged.appearance.isNull())
+              {
+                proxy.replaceKey("/AP", staged.appearance);
+              }
+            if(not staged.state.isNull())
+              {
+                proxy.replaceKey("/AS", staged.state);
+              }
+            QPDFAnnotationObjectHelper annotation(proxy);
+            auto appearance = annotation.getAppearanceStream("/N");
+            if(not appearance.isStream() and staged.state.isNameAndEquals("/Off"))
+              {
+                continue;
+              }
+            if(staged.needs_viewer or not appearance.isStream())
+              {
+                throw pdf_edit_error(load_error::UNSUPPORTED, "cannot flatten field '" +
+                                     field.getFullyQualifiedName() + "' without a usable appearance");
+              }
+
+            // qpdf changes the selected stream's /Subtype during placement.
+            // Give it a private copy even when no default resources are needed.
+            appearance = appearance.copyStream();
+            auto ap = QPDFObjectHandle::newDictionary();
+            ap.replaceKey("/N", appearance);
+            proxy.replaceKey("/AP", ap);
+
+            auto rect = annotation.getRect();
+            double width = rect.urx - rect.llx;
+            double height = rect.ury - rect.lly;
+            if(not (width > 0 and height > 0 and std::isfinite(width) and std::isfinite(height)))
+              {
+                throw pdf_edit_error(load_error::UNSUPPORTED, "cannot place the appearance of field '" +
+                                     field.getFullyQualifiedName() + "'");
+              }
+            auto rotation = page.getAttribute("/Rotate", false);
+            std::string name = resources.getUniqueResourceName("/Fxo", suffix);
+            auto content = annotation.getPageContentForAppearance(
+              name, rotation.isInteger() ? rotation.getIntValueAsInt() : 0, 0, 0);
+            if(content.empty())
+              {
+                throw pdf_edit_error(load_error::UNSUPPORTED, "cannot place the appearance of field '" +
+                                     field.getFullyQualifiedName() + "'");
+              }
+            appearance.getStreamData(qpdf_dl_all);
+
+            auto defaults = field.getDefaultResources();
+            if(defaults.isDictionary())
+              {
+                auto dictionary = appearance.getDict();
+                auto local = dictionary.getKey("/Resources");
+                local = local.isDictionary() ? local.shallowCopy() : QPDFObjectHandle::newDictionary();
+                local.mergeResources(defaults);
+                dictionary.replaceKey("/Resources", local);
+              }
+            xobjects.replaceKey(name, appearance);
+            painting += content;
+          }
+        if(widgets.empty())
+          {
+            continue;
+          }
+        auto contents = QPDFObjectHandle::newNull();
+        if(not painting.empty())
+          {
+            auto streams = page.getPageContents();
+            streams.insert(streams.begin(), qpdf.newStream("q\n"));
+            streams.push_back(qpdf.newStream("\nQ\n" + painting));
+            contents = QPDFObjectHandle::newArray(streams);
+          }
+        prepared.push_back({object, kept, resources, contents, std::move(widgets)});
+      }
+
+    for(auto& page : prepared)
+      {
+        if(not page.contents.isNull())
+          {
+            page.page.replaceKey("/Contents", page.contents);
+            page.page.replaceKey("/Resources", page.resources);
+          }
+        if(page.annotations.getArrayNItems() == 0)
+          {
+            page.page.removeKey("/Annots");
+          }
+        else
+          {
+            page.page.replaceKey("/Annots", page.annotations);
+          }
+        for(auto& widget : page.widgets)
+          {
+            widget.removeKey("/P");
+            widget.removeKey("/Parent");
+          }
+      }
+    qpdf.getRoot().removeKey("/AcroForm");
+    acroform.invalidateCache();
   }
 
   inline void pdf_form_ops::set_need_appearances(QPDF& qpdf, bool value)
@@ -447,14 +988,11 @@ namespace pdflib
 
   inline void pdf_form_ops::flatten(QPDF& qpdf)
   {
-    {
-      QPDFAcroFormDocumentHelper acroform(qpdf);
-      if(acroform.hasAcroForm())
-        {
-          acroform.generateAppearancesIfNeeded();
-        }
-    }
-
+    QPDFAcroFormDocumentHelper acroform(qpdf);
+    if(acroform.hasAcroForm())
+      {
+        set_values(qpdf, {}, true);
+      }
     QPDFPageDocumentHelper(qpdf).flattenAnnotations();
   }
 
@@ -704,7 +1242,17 @@ namespace pdflib
     widget.replaceKey("/AP", appearances);
 
     QPDFAnnotationObjectHelper annotation(widget);
-    QPDFFormFieldObjectHelper(widget).generateAppearance(annotation);
+    QPDFFormFieldObjectHelper field(widget);
+    auto prepared = prepare_text_appearance(qpdf, field, annotation, field.getValue(),
+                                            QPDFObjectHandle::newNull());
+    if(prepared.isNull())
+      {
+        QPDFAcroFormDocumentHelper(qpdf).setNeedAppearances(true);
+      }
+    else
+      {
+        widget.replaceKey("/AP", prepared);
+      }
   }
 
   inline void pdf_form_ops::append_widget(QPDFPageObjectHelper page, QPDFObjectHandle widget)
@@ -1091,6 +1639,33 @@ namespace pdflib
         throw pdf_edit_error(edit_error::INVALID_EDIT, "a form field tooltip must be text");
       }
 
+    auto selection = field.getValue();
+    auto indices = QPDFObjectHandle::newNull();
+    std::vector<widget_update> refreshed;
+    bool needs_viewer = acroform.getNeedAppearances();
+    if(options.isArray())
+      {
+        auto value = field.getValueAsString();
+        if(choice_index(options, value) < 0 and
+           not ((field.getFlags() & ff_ch_combo) and (field.getFlags() & ff_ch_edit)))
+          {
+            value.clear();
+            selection = QPDFObjectHandle::newNull();
+          }
+        // Also rejects multi-select fields before any part of the update.
+        indices = choice_indices(field, options, value);
+        if(selection.isNull())
+          {
+            indices = QPDFObjectHandle::newNull();
+          }
+        for(auto& widget : widgets)
+          {
+            auto prepared = prepare_widget(qpdf, field, widget, selection, true, options);
+            needs_viewer = needs_viewer or prepared.needs_viewer;
+            refreshed.push_back(prepared);
+          }
+      }
+
     // ---- apply ----
 
     if(flags_changed)
@@ -1113,6 +1688,16 @@ namespace pdflib
     if(options.isArray())
       {
         field_object.replaceKey("/Opt", options);
+        field_object.replaceKey("/V", selection);
+        field_object.replaceKey("/I", indices);
+        for(auto& widget : refreshed)
+          {
+            if(not widget.appearance.isNull())
+              {
+                widget.widget.replaceKey("/AP", widget.appearance);
+              }
+          }
+        acroform.setNeedAppearances(needs_viewer);
       }
 
     if(changes.contains("rect"))

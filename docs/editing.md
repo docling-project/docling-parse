@@ -71,8 +71,11 @@ These properties are available on Reader, Writer and Editor:
 | `named_destinations`, `open_destination` | Resolved destinations |
 | `page_labels` | Display labels, one per page |
 | `page_layout`, `page_mode`, `viewer_preferences` | Viewer settings |
-| `has_form`, `has_xfa` | AcroForm/XFA presence |
 | `attachment_info`, `attachments`, `javascript` | Embedded-file metadata, bytes and scripts |
+
+Use `editor.has_form()`, `editor.has_form_on_page(page_no=1)`, and
+`editor.has_xfa()` to check for form data. Reader and Writer expose `has_form`
+and `has_xfa` as properties. [Form inspection](editing/forms.md#read-fields)
 
 These are detached Python values, not pypdf's `DocumentInformation`,
 `Destination` or `Field` objects. Editing a returned dictionary does not edit

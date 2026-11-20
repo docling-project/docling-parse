@@ -12,29 +12,48 @@ from docling_parse import PdfEditor
 with PdfEditor(source="form.pdf") as editor:
     fields = editor.get_fields()
     for name, field in fields.items():
-        print(name, field["kind"], field["value"], field["states"], field["pages"])
+        print(
+            name, field["kind"], field["value"], field["states"],
+            field["pages"], field["bboxes"]
+        )
     print(editor.get_form_text_fields())
     print(editor.get_pages_showing_field(name="name"))
-    print(editor.has_form, editor.has_xfa)
+    print(editor.has_form(), editor.has_form_on_page(page_no=1), editor.has_xfa())
 ```
 
 `get_fields()` returns a dictionary keyed by fully qualified field name.
 Each field reports `kind`, `value`, `default_value`, `choices`, `states`,
-`flags`, `read_only`, `rects`, `pages` and its names. Editor `pages` results
-contain one-based page numbers. Reader and Writer results contain zero-based
-indices.
-Radio groups report their combined selectable states and all widget rectangles.
+`flags`, `read_only`, its names, and information about where it appears.
+
+A field holds one logical value. A widget is a page annotation that gives
+the field a position and an appearance. A radio group with three choices on
+page 1 has one selected value, `pages=[1]`, and three `bboxes`. Each choice
+needs its own clickable area. A text field shown on pages 1 and 3 can have
+two widgets that display the same value and update together. The distinction
+lets the PDF store shared field data alongside each widget's placement and
+appearance.
+
+`pages` lists distinct one-based page numbers. `bboxes` contains one `PdfBox`
+per widget, with `left`, `bottom`, `right`, and `top` coordinates in default
+PDF user space. Each box comes from the widget's PDF `/Rect` entry. The
+lists cannot be paired by position because several widgets can occupy the
+same page. Reader and Writer report zero-based `pages` and raw `rects`.
 
 Editor `get_pages_showing_field(name="name")` returns read-only page views.
 Reader and Writer accept a field dictionary or a name in
 `get_pages_showing_field(field)`.
+
+`has_form()` checks for the document's AcroForm dictionary.
+`has_form_on_page(page_no=...)` checks for a field widget on a specific page.
+`has_xfa()` checks for an XFA definition at the document level. The editor
+reports XFA presence only. Reader and Writer expose `has_form` and `has_xfa`
+as properties.
 
 Removing a widget through `PdfEditor.remove_annotations(subtypes="/Widget")`
 prunes its field only when the field has no remaining widgets. Moving a
 single widget with `update_form_field(rect=...)` preserves its appearance.
 
 Kinds include text, checkbox, radio, choice, pushbutton and signature.
-XFA presence is reported; XFA data is not parsed or updated.
 The compatibility `get_fields` signature accepts pypdf's traversal arguments,
 but non-default subtree traversal is unsupported.
 
@@ -115,14 +134,22 @@ with PdfEditor(source="created-form.pdf") as editor:
 
 Fields are addressed by fully qualified name, such as `address.street`.
 An unambiguous partial name also works. Unknown names and button states raise
-`PdfEditError`. Text and choice values are strings; checkbox values can be
-booleans or state names. A radio value selects a named state, with or without
-its leading slash; `/Off` clears the selection.
+`PdfEditError`. Checkboxes accept booleans or state names and update every
+widget of the field. A radio value selects a named state, with or without
+its leading slash. `/Off` clears the selection.
 
-Values update the appearance streams. `update_form_field` changes only the
-arguments supplied. `rect` requires a single widget; it cannot resize an
-entire multi-widget radio group. `options` applies to choice fields.
-Removal takes all of the field's widgets off their pages.
+Text and choice values are strings. Use an option's export value when a
+PDF defines separate export and display values. An editable combo box also
+accepts unlisted text. Replacing options clears a removed selection and
+updates any selection indices. Multi-select values are returned as lists.
+Changing a multi-select field's selection or options raises `PdfUnsupportedError`.
+
+The editor generates an appearance when the field's font can represent the
+text. Otherwise it preserves the Unicode value and sets `NeedAppearances`
+so a viewer can redraw it.
+
+`update_form_field` changes the supplied properties. `rect` requires a
+single widget. Removing a field takes all of its widgets off their pages.
 
 Reader/Writer's `get_form_text_fields()` defaults to partial names, adding
 suffixes to distinguish duplicate partial names.
@@ -130,6 +157,9 @@ suffixes to distinguish duplicate partial names.
 `get_form_text_fields()` returns fully qualified names.
 
 ## Flatten
+
+Flattening paints the widgets into page content and removes the interactive
+form fields.
 
 ```python
 from docling_parse import PdfEditor
@@ -139,7 +169,11 @@ with PdfEditor(source="filled.pdf") as editor:
     editor.write(target="flattened.pdf")
 ```
 
-Alternatively call `editor.flatten_annotations()`. Flattening draws visible
-annotations, including form appearances, into page content and removes the
-interactive annotations. It affects other visible annotations as well as forms.
+Use `fields={}` to flatten the current values. The editor prepares missing
+appearances for visible widgets and paints them into the page. Other
+annotations stay interactive. XFA forms and widgets that cannot be painted
+raise `PdfUnsupportedError` before values or pages change.
+
+`editor.flatten_annotations()` also flattens non-form annotations that
+have appearances.
 

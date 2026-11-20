@@ -63,6 +63,14 @@ class _PdfReaderCompat(_PdfDocument):
     def get_pages_showing_field(self, field: Any) -> list[PdfPage]:
         return self._editor._compat_pages_showing_field(field=field)
 
+    @property
+    def has_form(self) -> bool:
+        return self._editor.has_form()
+
+    @property
+    def has_xfa(self) -> bool:
+        return self._editor.has_xfa()
+
     def get_fields(
         self,
         tree=None,

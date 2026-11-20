@@ -255,7 +255,7 @@ namespace docling
 
     // ---- forms, annotations, attachments, scripts ----
 
-    int set_form_values(std::map<std::string, std::string> values);
+    int set_form_values(std::map<std::string, std::string> values, bool flatten);
     void set_need_appearances(bool value);
     void flatten_annotations();
 
@@ -1926,10 +1926,10 @@ namespace docling
     });
   }
 
-  inline int docling_editor::set_form_values(std::map<std::string, std::string> values)
+  inline int docling_editor::set_form_values(std::map<std::string, std::string> values, bool flatten)
   {
     return stage_edit([&](QPDF& qpdf) {
-      int updated = pdflib::pdf_form_ops::set_values(qpdf, values);
+      int updated = pdflib::pdf_form_ops::set_values(qpdf, values, flatten);
       touch(false);
       return updated;
     });
@@ -1944,8 +1944,9 @@ namespace docling
 
   inline void docling_editor::flatten_annotations()
   {
-    edit_document([](QPDF& qpdf) {
+    stage_edit([&](QPDF& qpdf) {
       pdflib::pdf_form_ops::flatten(qpdf);
+      touch(false);
     });
   }
 

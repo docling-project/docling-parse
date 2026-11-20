@@ -854,16 +854,6 @@ class _PdfDocument:
         }
 
     @property
-    def has_form(self) -> bool:
-        return self._form()["has_form"]
-
-    @property
-    def has_xfa(self) -> bool:
-        """Whether the form carries an XFA definition. XFA is reported, not
-        interpreted: values set here do not reach the XFA data."""
-        return self._form()["has_xfa"]
-
-    @property
     def attachment_info(self) -> list[dict[str, Any]]:
         """The embedded files: "name", "filename", "description", "size",
         "mime_type", "creation_date" and "modification_date" of each."""
@@ -1452,11 +1442,11 @@ class _PdfEditing(_PdfDocument):
 
         Text and choice fields take a string. A checkbox takes True, False,
         or one of its states; a radio group takes the state to select
-        ("/Choice1", or "Choice1"), or "/Off". The fields' appearances are
-        regenerated so the values show in every viewer.
+        ("/Choice1", or "Choice1"), or "/Off". Values the appearance font
+        cannot display are stored for the viewer to render.
 
-        With `flatten`, the form is then turned into page content. Returns
-        the number of fields set; an unknown name raises `PdfEditError`.
+        With `flatten`, the widgets become page content and other annotations
+        are preserved. Returns the number of fields set.
         """
         values = {
             name: ("true" if value else "false")
@@ -1465,10 +1455,7 @@ class _PdfEditing(_PdfDocument):
             for name, value in fields.items()
         }
         with _native_errors():
-            updated = self._native.set_form_values(values)
-        if flatten:
-            self._flatten_annotations()
-        return updated
+            return self._native.set_form_values(values, flatten=flatten)
 
     def _add_field(
         self,
