@@ -240,3 +240,80 @@ def test_bfrange_bounds_in_surrogate_range_are_mapped():
         )
     )
     assert text == "AB", f"expected the range to map to 'AB', got {text!r}"
+
+
+_SINGLE_BLOCK_CODESPACE = (
+    "2 begincodespacerange\n<0001> <0002>\n<083f> <0840>\nendcodespacerange"
+)
+_TWO_BLOCK_CODESPACE = (
+    "1 begincodespacerange\n<0001> <0002>\nendcodespacerange\n"
+    "1 begincodespacerange\n<083f> <0840>\nendcodespacerange"
+)
+_BFRANGE_TWO_RANGES = (
+    "1 beginbfrange\n<0001> <0002> <0041>\nendbfrange\n"
+    "1 beginbfrange\n<083f> <0840> <2002>\nendbfrange"
+)
+
+
+def _two_range_cmap(
+    mappings: str,
+    codespaces: str = _SINGLE_BLOCK_CODESPACE,
+) -> str:
+    """A ToUnicode CMap with multiple codespace ranges."""
+    return f"""/CIDInit /ProcSet findresource begin
+12 dict begin
+begincmap
+/CMapName /Test-UCS2-TwoRanges def
+/CMapType 2 def
+{codespaces}
+{mappings}
+endcmap
+CMapName currentdict /CMap defineresource pop
+end
+end"""
+
+
+@pytest.mark.parametrize(
+    ("codespaces", "mappings"),
+    [
+        (
+            _SINGLE_BLOCK_CODESPACE,
+            "3 beginbfchar\n<0001> <0041>\n<0002> <0042>\n<0840> <2003>\nendbfchar",
+        ),
+        (_SINGLE_BLOCK_CODESPACE, _BFRANGE_TWO_RANGES),
+        (_TWO_BLOCK_CODESPACE, _BFRANGE_TWO_RANGES),
+    ],
+    ids=["bfchar", "bfrange-single-block", "bfrange-two-blocks"],
+)
+def test_codes_in_a_second_codespace_range_are_mapped(codespaces: str, mappings: str):
+    """Every codespace range counts, not only the first.
+
+    BOE PDFs put the en and em spaces of their Arimo subsets in a second range;
+    keeping only the first one dropped those mappings, and the codes came out
+    as U+083F and U+0840 (a Mandaic letter).
+    """
+    text = _text(
+        _identity_h_pdf(
+            text_bytes="000108400002",
+            to_unicode=True,
+            to_unicode_cmap=_two_range_cmap(mappings, codespaces),
+        )
+    )
+    assert "\u0840" not in text, f"the raw code leaked into the text: {text!r}"
+    assert text in ("A\u2003B", "A B"), f"expected 'A', an em space, 'B': {text!r}"
+
+
+def test_bfrange_outside_all_codespace_ranges_is_dropped():
+    """A bfrange entry outside every codespace range stays ignored."""
+    codespaces = (
+        "2 begincodespacerange\n<0001> <0002>\n<0010> <0011>\nendcodespacerange"
+    )
+    text = _text(
+        _identity_h_pdf(
+            text_bytes="000108400002",
+            to_unicode=True,
+            to_unicode_cmap=_two_range_cmap(_BFRANGE_TWO_RANGES, codespaces),
+        )
+    )
+    assert "\u2003" not in text, f"out-of-codespace mapping applied: {text!r}"
+    assert "\u0840" in text, f"expected raw U+0840 fallback, got {text!r}"

@@ -63,6 +63,9 @@ namespace pdflib
 
     static bool is_valid_range(uint32_t begin, uint32_t end);
 
+    // Whether a source code lies in any of the CMap's codespace ranges.
+    bool in_codespace(uint32_t code) const;
+
     // Helper to remove trailing null bytes from a string
     static void remove_trailing_nulls(std::string& str);
 
@@ -89,7 +92,7 @@ namespace pdflib
     uint32_t                      char_count;
 
     uint32_t                      csr_cnt;
-    std::pair<uint32_t, uint32_t> csr_range;
+    std::vector<std::pair<uint32_t, uint32_t>> csr_ranges;
 
     uint32_t                      bf_cnt;
     std::pair<uint32_t, uint32_t> bf_range;
@@ -397,13 +400,14 @@ namespace pdflib
   {
     if(begin==0 and
        end==65535 and
-       csr_range.first==0 and
-       csr_range.second==65535 and
+       csr_ranges.size()==1 and
+       csr_ranges.front().first==0 and
+       csr_ranges.front().second==65535 and
        tgts.size()==1 and tgts.at(0)==0)
       {
         // Identity mapping detected: cmap_value will compute UTF-8 on the fly
         LOG_S(INFO) << "identity mapping detected, using cmap_value identity mode";
-        _cmap = cmap_value(true, csr_range, {});
+        _cmap = cmap_value(true, csr_ranges.front(), {});
         return;
       }
 
@@ -418,17 +422,15 @@ namespace pdflib
       {
         uint32_t src_codepoint = begin + i;
 
-        if(not (csr_range.first <= src_codepoint and src_codepoint <= csr_range.second))
+        if(not in_codespace(src_codepoint))
           {
             if(is_identity)
               {
-                LOG_S(WARNING) << "index " << src_codepoint << " is out of bounds ["
-                               << csr_range.first << ", " << csr_range.second << "]";
+                LOG_S(WARNING) << "index " << src_codepoint << " is outside the codespace ranges";
               }
             else
               {
-                LOG_S(ERROR) << "index " << src_codepoint << " is out of bounds ["
-                             << csr_range.first << ", " << csr_range.second << "]";
+                LOG_S(ERROR) << "index " << src_codepoint << " is outside the codespace ranges";
               }
 
             if(not is_identity)
@@ -643,16 +645,23 @@ namespace pdflib
         LOG_S(ERROR) << message;
         throw std::logic_error(message);
       }
-    else if(parameters.size()>num_params)
+    else if(parameters.size()%2!=0)
       {
-        LOG_S(WARNING) << "parameters.size() > " << num_params;
+        LOG_S(WARNING) << "odd number of codespace bounds, ignoring the last one";
       }
 
-    csr_range.first  = cmap_parser::to_uint32(parameters[0].obj);
-    csr_range.second = cmap_parser::to_uint32(parameters[1].obj);
+    // A block lists its ranges as low/high pairs; keep every one of them, and
+    // the ranges of earlier blocks too.
+    for(std::size_t i=0; i+1<parameters.size(); i+=2)
+      {
+        std::pair<uint32_t, uint32_t> range(cmap_parser::to_uint32(parameters[i].obj),
+                                            cmap_parser::to_uint32(parameters[i+1].obj));
 
-    LOG_S(INFO) << parameters[0].obj.unparse() << "\t" << csr_range.first;
-    LOG_S(INFO) << parameters[1].obj.unparse() << "\t" << csr_range.second;
+        LOG_S(INFO) << parameters[i].obj.unparse() << "\t" << range.first;
+        LOG_S(INFO) << parameters[i+1].obj.unparse() << "\t" << range.second;
+
+        csr_ranges.push_back(range);
+      }
   }
 
   void cmap_parser::parse_beginbfrange(std::vector<qpdf_stream_instruction>& parameters)
@@ -798,9 +807,9 @@ namespace pdflib
   {
     //LOG_S(INFO) << __FUNCTION__ << ": " << c << " -> " << tgt;
 
-    if(not (csr_range.first<=c and c<=csr_range.second))
+    if(not in_codespace(c))
       {
-        LOG_S(ERROR) << c << " is going out of bounds: " << csr_range.first << "," << csr_range.second;
+        LOG_S(ERROR) << c << " is outside the codespace ranges";
       }
 
     if(_map.count(c)==1)
@@ -810,6 +819,18 @@ namespace pdflib
 
     LOG_S(INFO) << "cmap-ind:" << c << " -> target: " << tgt;
     _map[c] = tgt;
+  }
+
+  bool cmap_parser::in_codespace(uint32_t code) const
+  {
+    for(const auto& range : csr_ranges)
+      {
+        if(range.first<=code and code<=range.second)
+          {
+            return true;
+          }
+      }
+    return false;
   }
 
   bool cmap_parser::is_valid_range(uint32_t begin, uint32_t end)
