@@ -17,13 +17,18 @@ with PdfEditor(source="document.pdf") as editor:
     pdf_bytes = editor.to_bytes()
 ```
 
-Path output uses a temporary sibling and atomic replacement, so a failed
-serialization does not leave a partially written target. Writing to the
-source path is supported because input is already in memory.
+Path output stages the PDF in a private temporary file beside the resolved
+target. It syncs the file before replacement and syncs the parent directory
+where supported. An existing target keeps its permissions, ownership, and
+access ACL on supported filesystems. A new file has owner-only access.
+Symbolic links are followed, including links to a new file in an existing
+directory. A destination with multiple hard links raises `PdfWriteError`.
+Writing to the source path is supported because input is already in memory.
 
-Stream output serializes to memory and performs a Python write; the stream
-is not closed. Output-sized memory is needed, and a stream failure can leave
-partial output in that stream. `PdfEditor.write` returns `None`.
+Stream output serializes to memory and retries short writes until the PDF is
+complete. A stream that reports no progress raises `PdfWriteError`. A failed
+stream write can leave partial output in the stream. The caller owns the
+stream, and `PdfEditor.write` returns `None`.
 
 The Writer compatibility return value follows pypdf:
 
@@ -41,6 +46,11 @@ with PdfWriter(clone_from="document.pdf") as writer:
 For path output, the returned flag is `True` and the returned file object is
 closed. For a caller-supplied stream, it is `False` and the stream remains open.
 
+`with PdfWriter(fileobj=target) as writer:` writes the PDF at context exit
+when starting from an empty or new target, including when the body raises.
+A Writer initialized by cloning uses an explicit `write()` call. A
+caller-supplied output stream remains open in either case.
+
 ## Metadata and output options
 
 ```python
@@ -56,7 +66,9 @@ with PdfEditor(source="document.pdf") as editor:
 ```
 
 Metadata keys accept an optional leading slash. A `None` value removes an
-entry. XMP is supplied as a raw string or byte packet; `None` removes it.
+entry. XMP takes a text or byte packet. Text is written using its XML
+encoding declaration or UTF-8 by default. Reading recognizes a byte-order
+mark and the XML declaration. Pass `None` to remove the packet.
 
 Streams are compressed by default. `object_streams` is `"preserve"` (default),
 `"generate"` or `"disable"`. `linearize=True` enables fast-web-view ordering.
@@ -101,13 +113,25 @@ with PdfWriter(clone_from="document.pdf") as writer:
     writer.write("protected-compat.pdf")
 ```
 
-Accepted algorithm names are `"RC4-40"`, `"RC4-128"`, `"AES-128"`,
-`"AES-256-R5"` and `"AES-256"`. The older schemes exist for compatibility;
-AES-256 is the current editor default.
+| Algorithm | PDF security revision | Text password encoding |
+|---|---|---|
+| `RC4-40` | 2 | Latin-1, with UTF-8 fallback |
+| `RC4-128` | 3 | Latin-1, with UTF-8 fallback |
+| `AES-128` | 4 | Latin-1, with UTF-8 fallback |
+| `AES-256-R5` | 5 | SASLprep and UTF-8 |
+| `AES-256` | 6 | SASLprep and UTF-8 |
+
+These text encodings follow pypdf. A text password that fails SASLprep
+uses plain UTF-8. Supply `bytes` to use the original encoded password
+directly, including when opening legacy files that use PDFDocEncoding.
+The native password API rejects embedded NUL bytes. PDF applies its own
+length limit of 32 bytes for revisions 2–4 and 127 bytes for revisions 5–6.
 
 `remove_encryption()` clears requested output encryption. Output is
 unencrypted unless `encrypt` was called, including when the input was encrypted.
-While editing, `is_encrypted` and `encryption` describe the planned output.
+On an untouched Editor, `is_encrypted` and `encryption` describe the input.
+Once editing starts, they describe the planned output. `to_bytes()` and
+`write()` preserve that session state and keep existing page handles valid.
 
 To clone a protected document through Writer, open a Reader with its password
 and pass that Reader as `clone_from`; the Writer constructor has no password

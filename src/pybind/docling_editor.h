@@ -6,14 +6,11 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
-#include <filesystem>
-#include <fstream>
 #include <map>
 #include <limits>
 #include <memory>
 #include <mutex>
 #include <optional>
-#include <random>
 #include <set>
 #include <sstream>
 #include <string>
@@ -80,8 +77,10 @@ namespace docling
 
     // ---- lifecycle ----
 
-    bool open_file(std::string filename, std::optional<std::string> password);
-    bool open_buffer(std::shared_ptr<std::string> buffer, std::optional<std::string> password);
+    bool open_file(std::string filename, std::optional<std::string> password,
+                   const std::vector<std::string>& alternatives = {});
+    bool open_buffer(std::shared_ptr<std::string> buffer, std::optional<std::string> password,
+                     const std::vector<std::string>& alternatives = {});
     bool open_source(const pdflib::pdf_source& source);
 
     // {"category": ..., "message": ...} of the last failed open, or empty.
@@ -286,7 +285,7 @@ namespace docling
                         std::string mime_type);
     bool remove_attachment(std::string name);
 
-    void add_javascript(std::string name, std::string script);
+    void add_javascript(std::optional<std::string> name, std::string script);
     int remove_javascript();
 
     // ---- output ----
@@ -296,7 +295,7 @@ namespace docling
     // opens the document; an empty one lets anyone open it. The owner
     // password defaults to the user password.
     void set_encryption(std::string user_password,
-                        std::string owner_password,
+                        std::optional<std::string> owner_password,
                         pdflib::pdf_permissions permissions,
                         std::string algorithm = "AES-256");
     void clear_encryption();
@@ -311,10 +310,6 @@ namespace docling
     // was called, whatever the source was. The returned buffer is immutable
     // and shared with later callers until the next edit.
     std::shared_ptr<std::string> write_to_memory();
-
-    // Writes a temporary sibling file and renames it over `filename`, so a
-    // failed write never leaves a truncated file behind.
-    void write_to_file(std::string filename);
 
   private:
 
@@ -352,6 +347,12 @@ namespace docling
     document_decoder_ptr_type require_source_decoder();
 
     // Clone the opened source into a destination, if there is none yet.
+    std::unique_ptr<QPDF> clone_source();
+
+    template<typename load_type>
+    bool load_with_passwords(load_type&& load,
+                             const std::optional<std::string>& password,
+                             const std::vector<std::string>& alternatives);
     void ensure_destination(bool keep_source_decoder = false);
     std::vector<QPDFPageObjectHelper> destination_pages();
 
@@ -378,9 +379,6 @@ namespace docling
                                                  QPDFPageObjectHelper source_page,
                                                  bool fit,
                                                  bool crop);
-
-    static std::filesystem::path to_path(const std::string& filename);
-    static std::string random_suffix();
 
   private:
 
@@ -662,13 +660,8 @@ namespace docling
     return decoder;
   }
 
-  inline void docling_editor::ensure_destination(bool keep_source_decoder)
+  inline std::unique_ptr<QPDF> docling_editor::clone_source()
   {
-    if(destination != nullptr)
-      {
-        return;
-      }
-
     require_open();
 
     // Clone: a second parse of the same immutable bytes. Everything the file
@@ -691,8 +684,18 @@ namespace docling
                                 buffer->size());
       }
 
-    destination_buffer = buffer;
-    destination = std::move(qpdf);
+    return qpdf;
+  }
+
+  inline void docling_editor::ensure_destination(bool keep_source_decoder)
+  {
+    if(destination != nullptr)
+      {
+        return;
+      }
+
+    destination = clone_source();
+    destination_buffer = source.get_buffer();
 
     // The page list is the same, so page handles stay valid; from here on the
     // destination is the document and the source decoder is not needed.
@@ -719,8 +722,6 @@ namespace docling
 
   inline void docling_editor::ensure_snapshot()
   {
-    ensure_destination();
-
     if(snapshot != nullptr and snapshot_revision == current_revision)
       {
         return;
@@ -728,7 +729,10 @@ namespace docling
 
     try
       {
-        QPDFWriter writer(*destination);
+        // QPDFWriter can modify its QPDF. Give it a separate copy when
+        // serializing an untouched document.
+        auto clone = destination == nullptr ? clone_source() : nullptr;
+        QPDFWriter writer(clone == nullptr ? *destination : *clone);
         writer.setOutputMemory();
 
         writer.setCompressStreams(output_compress_streams);
@@ -852,34 +856,40 @@ namespace docling
     return document;
   }
 
-  inline std::filesystem::path docling_editor::to_path(const std::string& filename)
+  template<typename load_type>
+  bool docling_editor::load_with_passwords(load_type&& load,
+                                           const std::optional<std::string>& password,
+                                           const std::vector<std::string>& alternatives)
   {
-    // The filename is UTF-8; see pdf_decoder<DOCUMENT>::process_document_from_file
-    // for why Windows needs the explicit conversion.
-#ifdef _WIN32
-    return std::filesystem::path(std::u8string(filename.begin(), filename.end()));
-#else
-    return std::filesystem::path(filename);
-#endif
+    if(load(password))
+      {
+        return true;
+      }
+    for(const auto& candidate : alternatives)
+      {
+        auto failure = load_errors.find(SOURCE_KEY);
+        if(failure == load_errors.end() or failure->second.at("category") != pdflib::load_error::PASSWORD)
+          {
+            break;
+          }
+        if(load(candidate))
+          {
+            return true;
+          }
+      }
+    return false;
   }
 
-  inline std::string docling_editor::random_suffix()
-  {
-    std::random_device device;
-
-    std::stringstream stream;
-    stream << std::hex << device() << device();
-
-    return stream.str();
-  }
-
-  inline bool docling_editor::open_file(std::string filename, std::optional<std::string> password)
+  inline bool docling_editor::open_file(std::string filename, std::optional<std::string> password,
+                                        const std::vector<std::string>& alternatives)
   {
     std::lock_guard<std::recursive_mutex> lock(parser_mutex);
 
     reset_state();
 
-    if(not load_document(SOURCE_KEY, filename, password))
+    if(not load_with_passwords([&](const std::optional<std::string>& candidate) {
+      return load_document(SOURCE_KEY, filename, candidate);
+    }, password, alternatives))
       {
         return false;
       }
@@ -891,18 +901,21 @@ namespace docling
   }
 
   inline bool docling_editor::open_buffer(std::shared_ptr<std::string> buffer,
-                                          std::optional<std::string> password)
+                                          std::optional<std::string> password,
+                                          const std::vector<std::string>& alternatives)
   {
     std::lock_guard<std::recursive_mutex> lock(parser_mutex);
 
     reset_state();
 
-    if(not load_document_from_buffer(SOURCE_KEY, buffer, password))
+    if(not load_with_passwords([&](const std::optional<std::string>& candidate) {
+      return load_document_from_buffer(SOURCE_KEY, buffer, candidate);
+    }, password, alternatives))
       {
         return false;
       }
 
-    source = pdflib::pdf_source(buffer, password);
+    source = pdflib::pdf_source(buffer, get_document_decoder(SOURCE_KEY)->get_password());
 
     return true;
   }
@@ -1713,7 +1726,7 @@ namespace docling
   }
 
   inline void docling_editor::set_encryption(std::string user_password,
-                                             std::string owner_password,
+                                             std::optional<std::string> owner_password,
                                              pdflib::pdf_permissions permissions,
                                              std::string algorithm)
   {
@@ -1731,7 +1744,7 @@ namespace docling
                                        "the print permission is 0 (full), 1 (low resolution) or 2 (none)");
         }
 
-      if(user_password.empty() and owner_password.empty())
+      if(user_password.empty() and (not owner_password or owner_password->empty()))
         {
           throw pdflib::pdf_edit_error(pdflib::edit_error::INVALID_EDIT,
                                        "encryption needs a user password, an owner password, or both");
@@ -1742,7 +1755,7 @@ namespace docling
       output_encrypted = true;
       output_algorithm = algorithm;
       output_user_password = user_password;
-      output_owner_password = owner_password.empty() ? user_password : owner_password;
+      output_owner_password = owner_password.value_or(user_password);
       output_permissions = permissions;
 
       touch(false);
@@ -1772,44 +1785,6 @@ namespace docling
       ensure_snapshot();
       return snapshot;
     });
-  }
-
-  inline void docling_editor::write_to_file(std::string filename)
-  {
-    // The bytes are immutable once produced, so the file is written without
-    // the lock: a slow disk does not stall other threads using this editor.
-    std::shared_ptr<std::string> bytes = write_to_memory();
-
-    std::filesystem::path target = to_path(filename);
-    std::filesystem::path temporary = to_path(filename + ".tmp-" + random_suffix());
-
-    try
-      {
-        {
-          std::ofstream stream(temporary, std::ios::binary | std::ios::trunc);
-          if(not stream.is_open())
-            {
-              throw std::runtime_error("could not open " + filename + " for writing");
-            }
-
-          stream.write(bytes->data(), static_cast<std::streamsize>(bytes->size()));
-          stream.close();
-
-          if(stream.fail())
-            {
-              throw std::runtime_error("could not write " + filename);
-            }
-        }
-
-        std::filesystem::rename(temporary, target);
-      }
-    catch(const std::exception& exc)
-      {
-        std::error_code ignored;
-        std::filesystem::remove(temporary, ignored);
-
-        throw pdflib::pdf_edit_error(pdflib::edit_error::WRITE, exc.what());
-      }
   }
 
   // ---------------------------------------------------------------------------
@@ -2033,7 +2008,7 @@ namespace docling
     });
   }
 
-  inline void docling_editor::add_javascript(std::string name, std::string script)
+  inline void docling_editor::add_javascript(std::optional<std::string> name, std::string script)
   {
     edit_document([&name, &script](QPDF& qpdf) {
       pdflib::pdf_attachment_ops::add_javascript(qpdf, name, script);

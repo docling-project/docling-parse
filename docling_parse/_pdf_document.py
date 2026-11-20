@@ -11,16 +11,21 @@ Nothing here imports docling-core, pydantic or PIL, and nothing imports
 
 from __future__ import annotations
 
+import codecs
 import math
 import os
+import re
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from contextlib import contextmanager
+from io import FileIO
 from typing import Any, BinaryIO, NamedTuple, Union, overload
 
 from docling_parse import (
     _pdf_images,
     pdf_parsers as _native,  # type: ignore[attr-defined]
 )
+from docling_parse._pdf_output import write_all, write_path
+from docling_parse._pdf_password import input_passwords, output_password
 from docling_parse.pdf_errors import (
     PdfEditError,
     PdfEditErrorCategory,
@@ -108,11 +113,34 @@ def _native_errors() -> Iterator[None]:
         raise _ERROR_TYPES.get(category, PdfEditError)(category, detail) from None
 
 
-def _pdf_syntax(value: Any) -> str:
+_PDF_TEXT_KEYS = {
+    "Contents",
+    "URI",
+    "T",
+    "TU",
+    "TM",
+    "Subj",
+    "RC",
+    "M",
+    "NM",
+    "DA",
+    "DS",
+    "JS",
+    "Lang",
+    "F",
+    "UF",
+    "Desc",
+    "Reason",
+    "ContactInfo",
+    "Location",
+}
+
+
+def _pdf_syntax(value: Any, *, key: str = "") -> str:
     """Write a Python value as a PDF object, for the native calls that take a
     dictionary: annotations and viewer preferences.
 
-    A `str` starting with "/" is a PDF name, any other `str` a text string.
+    Known text entries use PDF strings. Elsewhere a leading "/" denotes a name.
     `bool`, `int`, `float`, `None`, lists/tuples and dicts map to their PDF
     counterparts; dict keys are names, with or without their slash.
     """
@@ -127,7 +155,7 @@ def _pdf_syntax(value: Any) -> str:
             raise ValueError("a PDF number must be finite")
         return f"{value:.6f}".rstrip("0").rstrip(".") or "0"
     if isinstance(value, str):
-        if value.startswith("/"):
+        if value.startswith("/") and key not in _PDF_TEXT_KEYS:
             return _pdf_name(value)
         # Hexadecimal strings need no escaping. Text outside ASCII is written
         # as UTF-16BE with its byte order mark (ISO 32000-1, 7.9.2.2).
@@ -140,10 +168,39 @@ def _pdf_syntax(value: Any) -> str:
         return "[" + " ".join(_pdf_syntax(item) for item in value) + "]"
     if isinstance(value, dict):
         items = " ".join(
-            f"{_pdf_name(str(key))} {_pdf_syntax(item)}" for key, item in value.items()
+            f"{_pdf_name(str(name))} {_pdf_syntax(item, key=str(name).removeprefix('/'))}"
+            for name, item in value.items()
         )
         return f"<< {items} >>"
     raise TypeError(f"cannot write {type(value).__name__} as a PDF object")
+
+
+_XML_ENCODING = re.compile(r"""^<\?xml\s+[^?]*?\bencoding\s*=\s*["']([\w.-]+)["']""")
+
+
+def _declared_xml_encoding(text: str) -> str:
+    declaration = _XML_ENCODING.match(text.removeprefix("\ufeff"))
+    return declaration[1] if declaration else "utf-8"
+
+
+def _decode_xmp(data: bytes) -> str:
+    for signatures, encoding in (
+        ((codecs.BOM_UTF32_LE, codecs.BOM_UTF32_BE), "utf-32"),
+        ((codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE), "utf-16"),
+        ((codecs.BOM_UTF8,), "utf-8-sig"),
+        ((b"\x00\x00\x00<",), "utf-32-be"),
+        ((b"<\x00\x00\x00",), "utf-32-le"),
+        ((b"\x00<",), "utf-16-be"),
+        ((b"<\x00",), "utf-16-le"),
+    ):
+        if data.startswith(signatures):
+            return data.decode(encoding, errors="replace")
+    # XML declarations in ASCII-compatible encodings are ASCII.
+    declared = _declared_xml_encoding(data[:256].decode("ascii", errors="replace"))
+    try:
+        return data.decode(declared, errors="replace")
+    except LookupError:
+        return data.decode("utf-8", errors="replace")
 
 
 def _pdf_name(name: str) -> str:
@@ -655,8 +712,9 @@ class _PdfDocument:
     def __init__(self, loglevel: str = "fatal"):
         self._native = self._native_class(loglevel)
 
-    def _open(self, source: Any, password: str | None) -> None:
+    def _open(self, source: Any, password: str | bytes | None) -> None:
         native = self._native
+        primary, alternatives = input_passwords(password)
 
         if isinstance(source, _PdfDocument):
             description = repr(source)
@@ -664,16 +722,16 @@ class _PdfDocument:
                 opened = native.open_source(source._native)
         elif isinstance(source, (str, os.PathLike)):
             description = os.fspath(source)
-            opened = native.open_file(description, password)
+            opened = native.open_file(description, primary, alternatives)
         elif isinstance(source, (bytes, bytearray, memoryview)):
             description = "<bytes>"
-            opened = native.open_bytes(bytes(source), password)
+            opened = native.open_bytes(bytes(source), primary, alternatives)
         elif hasattr(source, "read"):
             # The stream stays the caller's: it is read, never closed.
             description = getattr(source, "name", "<stream>")
             if hasattr(source, "seek") and source.seekable():
                 source.seek(0)
-            opened = native.open_bytes(bytes(source.read()), password)
+            opened = native.open_bytes(bytes(source.read()), primary, alternatives)
         else:
             raise TypeError(
                 f"cannot open a PDF from {type(source).__name__}: expected a path, "
@@ -683,7 +741,7 @@ class _PdfDocument:
         if not opened:
             raise self._load_error(str(description), password)
 
-    def _load_error(self, key: str, password: str | None) -> PdfLoadError:
+    def _load_error(self, key: str, password: str | bytes | None) -> PdfLoadError:
         info = self._native.take_open_error()
         try:
             category = PdfLoadErrorCategory(info.get("category", "unknown"))
@@ -776,7 +834,7 @@ class _PdfDocument:
     def xmp_metadata(self) -> str | None:
         """The XMP metadata packet, or None when the document has none."""
         xmp = self._document_info()["xmp"]
-        return None if xmp is None else xmp.decode("utf-8", errors="replace")
+        return None if xmp is None else _decode_xmp(xmp)
 
     @property
     def permissions(self) -> dict[str, bool] | None:
@@ -895,7 +953,7 @@ class _PdfEditing(_PdfDocument):
     _page_class = PdfEditablePage
 
     def _import_source(
-        self, source: Any, password: str | None
+        self, source: Any, password: str | bytes | None
     ) -> tuple[Any, _PdfDocument | None]:
         """The native object to import from, and a reader to close if one was
         opened just for this call."""
@@ -912,7 +970,7 @@ class _PdfEditing(_PdfDocument):
         pages: Iterable[int] | slice | None = None,
         *,
         index: int | None = None,
-        password: str | None = None,
+        password: str | bytes | None = None,
         import_outline: bool = True,
     ) -> None:
         """Copy pages of another PDF into this document.
@@ -952,7 +1010,7 @@ class _PdfEditing(_PdfDocument):
         fileobj: Any,
         pages: Iterable[int] | slice | None = None,
         *,
-        password: str | None = None,
+        password: str | bytes | None = None,
         import_outline: bool = True,
     ) -> None:
         """Copy pages of another PDF into this document at `position`
@@ -1132,7 +1190,11 @@ class _PdfEditing(_PdfDocument):
 
     def _set_xmp_metadata(self, packet: str | bytes | None) -> None:
         """Replace the XMP metadata packet, or remove it with None."""
-        data = packet.encode("utf-8") if isinstance(packet, str) else packet
+        data = (
+            packet.removeprefix("\ufeff").encode(_declared_xml_encoding(packet))
+            if isinstance(packet, str)
+            else packet
+        )
         with _native_errors():
             self._native.set_xmp(data)
 
@@ -1747,8 +1809,6 @@ class _PdfEditing(_PdfDocument):
     def _add_js(self, javascript: str, name: str | None = None) -> None:
         """Add a document-level script, which a viewer runs when it opens
         the document. docling-parse stores the script and never runs it."""
-        if name is None:
-            name = f"script-{len(self.javascript) + 1}"
         with _native_errors():
             self._native.add_javascript(name, javascript)
 
@@ -1762,8 +1822,8 @@ class _PdfEditing(_PdfDocument):
 
     def _encrypt(
         self,
-        user_password: str,
-        owner_password: str | None = None,
+        user_password: str | bytes,
+        owner_password: str | bytes | None = None,
         *,
         algorithm: str = "AES-256",
         allow_print: bool | str = True,
@@ -1776,11 +1836,10 @@ class _PdfEditing(_PdfDocument):
     ) -> None:
         """Protect everything written from now on with a password.
 
-        The output is encrypted with AES-256, the only password scheme PDF
-        2.0 keeps; older, weaker algorithms are not offered. `user_password`
-        is needed to open the document; pass "" together with an
-        `owner_password` to let anyone open it. `owner_password` defaults to
-        the user password.
+        The Editor defaults to AES-256. Earlier revisions are available for
+        compatibility. Text is encoded for the selected revision. Pass
+        bytes to use an already encoded password. An empty user password
+        permits opening the document without credentials.
 
         The `allow_*` arguments say what someone who opens the document with
         the user password may do. `allow_print` is True, False, or "low" for
@@ -1799,8 +1858,10 @@ class _PdfEditing(_PdfDocument):
 
         with _native_errors():
             self._native.set_encryption(
-                user_password,
-                owner_password or "",
+                output_password(user_password, algorithm),
+                None
+                if owner_password is None
+                else output_password(owner_password, algorithm),
                 print=print_level,
                 modify=allow_modify,
                 extract=allow_extract,
@@ -1839,18 +1900,17 @@ class _PdfEditing(_PdfDocument):
         with _native_errors():
             return self._native.write_to_bytes()
 
-    def _write(self, target: str | os.PathLike[str] | BinaryIO) -> None:
+    def _write(self, target: str | os.PathLike[str] | BinaryIO) -> FileIO | None:
         """Write the document to a path or a binary stream.
 
         A path is written through a temporary sibling file that replaces the
-        target only once it is complete. A stream receives the whole file in
-        one `write` call and is not closed.
+        target once complete. Binary streams remain open.
         """
         if isinstance(target, (str, os.PathLike)):
-            with _native_errors():
-                self._native.write_to_file(os.fspath(target))
+            return write_path(target, self._to_bytes())
         elif hasattr(target, "write"):
-            target.write(self._to_bytes())
+            write_all(target, self._to_bytes())
+            return None
         else:
             raise TypeError(
                 f"cannot write a PDF to {type(target).__name__}: "

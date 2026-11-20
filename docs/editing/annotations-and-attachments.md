@@ -39,8 +39,9 @@ with PdfEditor(source="document.pdf") as editor:
     editor.write(target="annotated.pdf")
 ```
 
-Rectangles are `(left, bottom, right, top)`. For dictionary input, strings
-starting with `/` represent PDF names; other strings represent text.
+Rectangles are `(left, bottom, right, top)`. In dictionary input, name
+values such as `"/Text"` use a leading slash. Text entries such as
+`/Contents` and `/URI` accept the slash as part of the text.
 `/Subtype` and `/Rect` are required for generic annotations.
 A URI link has no border unless `border` is supplied to `add_uri`.
 
@@ -107,7 +108,8 @@ with PdfEditor(source="document.pdf") as editor:
     editor.write(target="without-scripts.pdf")
 ```
 
-Scripts are never executed by docling-parse. `remove_javascript()` removes
+When `name` is omitted, the editor uses the first available `script-N`
+name. Scripts are stored as data. `remove_javascript()` removes
 document-level scripts, a scripted open action and document additional actions.
 It does not promise to sanitize every page, annotation or nested action graph.
 

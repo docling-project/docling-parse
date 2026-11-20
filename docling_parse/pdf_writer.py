@@ -68,7 +68,7 @@ class PdfWriter(_PdfWriterCompat):
         incremental_clone_object_id_limit: int | None = 1000000,
     ):
         super().__init__()
-        self._editor._compat_init_writer(
+        cloned = self._editor._compat_init_writer(
             fileobj=fileobj,
             clone_from=clone_from,
             incremental=incremental,
@@ -78,3 +78,11 @@ class PdfWriter(_PdfWriterCompat):
             incremental_clone_object_count_limit=incremental_clone_object_count_limit,
             incremental_clone_object_id_limit=incremental_clone_object_id_limit,
         )
+        self._context_target = None if cloned else fileobj
+
+    def __exit__(self, *exc_info: object) -> None:
+        try:
+            if self._context_target is not None and self._context_target != "":
+                self.write(self._context_target)
+        finally:
+            super().__exit__(*exc_info)

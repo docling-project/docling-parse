@@ -135,23 +135,27 @@ namespace docling
              pybind11::arg("loglevel") = "fatal")
 
         .def("open_file",
-             [](class_type& self, const std::string& filename, std::optional<std::string> password) -> bool {
+             [](class_type& self, const std::string& filename, std::optional<std::string> password,
+                const std::vector<std::string>& alternatives) -> bool {
                pybind11::gil_scoped_release release;
-               return self.open_file(filename, password);
+               return self.open_file(filename, password, alternatives);
              },
              pybind11::arg("filename"),
              pybind11::arg("password") = pybind11::none(),
+             pybind11::arg("alternatives") = std::vector<std::string>{},
              "Open a PDF file. Returns False on failure; see take_open_error().")
 
         .def("open_bytes",
-             [](class_type& self, pybind11::bytes data, std::optional<std::string> password) -> bool {
+             [](class_type& self, pybind11::bytes data, std::optional<std::string> password,
+                const std::vector<std::string>& alternatives) -> bool {
                auto buffer = std::make_shared<std::string>(data.cast<std::string>());
 
                pybind11::gil_scoped_release release;
-               return self.open_buffer(buffer, password);
+               return self.open_buffer(buffer, password, alternatives);
              },
              pybind11::arg("data"),
              pybind11::arg("password") = pybind11::none(),
+             pybind11::arg("alternatives") = std::vector<std::string>{},
              "Open a PDF held in a bytes object. Returns False on failure; see take_open_error().")
 
         .def("take_open_error",
@@ -848,7 +852,7 @@ namespace docling
              "Remove an embedded file; False if there is none of that name.")
 
         .def("add_javascript",
-             [](class_type& self, const std::string& name, const std::string& script) -> void {
+             [](class_type& self, const std::optional<std::string>& name, const std::string& script) -> void {
                pybind11::gil_scoped_release release;
                self.add_javascript(name, script);
              },
@@ -876,7 +880,7 @@ namespace docling
         .def("set_encryption",
              [](class_type& self,
                 const std::string& user_password,
-                const std::string& owner_password,
+                const std::optional<std::string>& owner_password,
                 int print,
                 bool modify,
                 bool extract,
@@ -898,7 +902,7 @@ namespace docling
                self.set_encryption(user_password, owner_password, permissions, algorithm);
              },
              pybind11::arg("user_password"),
-             pybind11::arg("owner_password") = "",
+             pybind11::arg("owner_password") = pybind11::none(),
              pybind11::arg("print") = 0,
              pybind11::arg("modify") = true,
              pybind11::arg("extract") = true,
@@ -924,14 +928,7 @@ namespace docling
                  data = self.write_to_memory();
                }
                return pybind11::bytes(*data);
-             })
-
-        .def("write_to_file",
-             [](class_type& self, const std::string& filename) -> void {
-               pybind11::gil_scoped_release release;
-               self.write_to_file(filename);
-             },
-             pybind11::arg("filename"));
+             });
     }
 
     // Operations with no pypdf counterpart: bound on the editor only.

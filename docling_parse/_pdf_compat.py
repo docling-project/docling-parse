@@ -252,8 +252,8 @@ class _PdfWriterCompat(_PdfReaderCompat, _PdfEditing):
 
     def encrypt(
         self,
-        user_password: str,
-        owner_password: str | None = None,
+        user_password: str | bytes,
+        owner_password: str | bytes | None = None,
         use_128bit: bool = True,
         permissions_flag: int = 4294967292,
         *,

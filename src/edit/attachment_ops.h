@@ -5,6 +5,7 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 
 #include <nlohmann/json.hpp>
@@ -51,7 +52,8 @@ namespace pdflib
     static nlohmann::json javascript(QPDF& qpdf);
 
     // Register a script that a viewer runs when it opens the document.
-    static void add_javascript(QPDF& qpdf, const std::string& name, const std::string& script);
+    static void add_javascript(QPDF& qpdf, const std::optional<std::string>& name,
+                               const std::string& script);
 
     // Remove the document-level scripts, a scripted open action and the
     // document's additional actions. Returns the number of entries removed.
@@ -211,10 +213,10 @@ namespace pdflib
   }
 
   inline void pdf_attachment_ops::add_javascript(QPDF& qpdf,
-                                                 const std::string& name,
+                                                 const std::optional<std::string>& name,
                                                  const std::string& script)
   {
-    if(name.empty())
+    if(name and name->empty())
       {
         throw pdf_edit_error(edit_error::INVALID_EDIT, "a script needs a name");
       }
@@ -235,15 +237,16 @@ namespace pdflib
       }
 
     QPDFObjectHandle existing = names.getKey("/JavaScript");
-    if(existing.isDictionary())
+    auto tree = existing.isDictionary() ? QPDFNameTreeObjectHelper(existing, qpdf)
+                                        : QPDFNameTreeObjectHelper::newEmpty(qpdf);
+    std::string key = name.value_or("script-1");
+    for(std::size_t number = 2; not name and tree.hasName(key); ++number)
       {
-        QPDFNameTreeObjectHelper tree(existing, qpdf);
-        tree.insert(name, action);
+        key = "script-" + std::to_string(number);
       }
-    else
+    tree.insert(key, action);
+    if(not existing.isDictionary())
       {
-        QPDFNameTreeObjectHelper tree = QPDFNameTreeObjectHelper::newEmpty(qpdf);
-        tree.insert(name, action);
         names.replaceKey("/JavaScript", tree.getObjectHandle());
       }
   }

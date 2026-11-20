@@ -95,7 +95,6 @@ namespace docling
     using docling_editor::set_encryption;
     using docling_editor::clear_encryption;
     using docling_editor::write_to_memory;
-    using docling_editor::write_to_file;
   };
 
   inline pdf_writer::pdf_writer(std::string loglevel):

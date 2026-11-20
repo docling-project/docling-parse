@@ -158,7 +158,7 @@ with PdfReader("document.pdf") as reader, PdfWriter() as writer:
 |---|---|---|
 | Open, count and select pages | `PdfReader(source)`, `get_num_pages()`, `get_page(0)`, `pages[-1]`, `pages[:2]` | Reader and Writer page indices and page numbers are zero-based. |
 | Extract text | `page.extract_text()`, `page.extract_text(extraction_mode="layout")` | Returns docling-parse text in the selected mode. |
-| Assemble and write | `add_page`, `insert_page`, `append`, `merge`, `add_blank_page`, `insert_blank_page`, `remove_page`, `write` | Call `write` explicitly. It returns `(opened_by_writer, stream)`. |
+| Assemble and write | `add_page`, `insert_page`, `append`, `merge`, `add_blank_page`, `insert_blank_page`, `remove_page`, `write` | `write` returns `(opened_by_writer, stream)`. A Writer bound to a new or empty target writes at context exit. |
 | Compose pages | `writer.pages[i].merge_page(page2, expand=False, over=True)` | Positional arguments follow pypdf. The source is clipped to its CropBox. Expansion grows the destination MediaBox. |
 | Inspect forms | `get_fields`, `get_form_text_fields`, `get_pages_showing_field` | Fields are detached Python dictionaries. |
 | Encrypt output | `writer.encrypt(..., algorithm=...)` | Accepts pypdf's algorithm and permission flags. |

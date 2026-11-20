@@ -115,7 +115,7 @@ class PdfEditor(_PdfEditing):
         self,
         *,
         source: PdfSource | _PdfDocument | None = None,
-        password: str | None = None,
+        password: str | bytes | None = None,
         loglevel: str = "fatal",
     ):
         super().__init__(loglevel)
@@ -201,7 +201,7 @@ class PdfEditor(_PdfEditing):
             return self._native.annotations()
 
     def open(
-        self, *, source: PdfSource | _PdfDocument, password: str | None = None
+        self, *, source: PdfSource | _PdfDocument, password: str | bytes | None = None
     ) -> None:
         """Open a document, replacing the current state."""
         self._open(source, password)
@@ -378,7 +378,7 @@ class PdfEditor(_PdfEditing):
         source: Any,
         page_nos: Iterable[int] | None = None,
         before_page_no: int | None = None,
-        password: str | None = None,
+        password: str | bytes | None = None,
         import_outline: bool = True,
     ) -> None:
         "Append. Page numbers start at 1."
@@ -401,7 +401,7 @@ class PdfEditor(_PdfEditing):
         before_page_no: int | None,
         fileobj: Any,
         page_nos: Iterable[int] | None = None,
-        password: str | None = None,
+        password: str | bytes | None = None,
         import_outline: bool = True,
     ) -> None:
         "Merge. Page numbers start at 1."
@@ -943,8 +943,8 @@ class PdfEditor(_PdfEditing):
     def encrypt(
         self,
         *,
-        user_password: str,
-        owner_password: str | None = None,
+        user_password: str | bytes,
+        owner_password: str | bytes | None = None,
         algorithm: str = "AES-256",
         allow_print: bool | str = True,
         allow_modify: bool = True,
@@ -954,7 +954,13 @@ class PdfEditor(_PdfEditing):
         allow_accessibility: bool = True,
         allow_assemble: bool = True,
     ) -> None:
-        'Protect everything written from now on with a password.\n\nThe output is encrypted with AES-256, the only password scheme PDF\n2.0 keeps; older, weaker algorithms are not offered. `user_password`\nis needed to open the document; pass "" together with an\n`owner_password` to let anyone open it. `owner_password` defaults to\nthe user password.\n\nThe `allow_*` arguments say what someone who opens the document with\nthe user password may do. `allow_print` is True, False, or "low" for\nlow-resolution printing only. Viewers honor these flags; they are\nnot access control.\n\nWithout this call the output is unencrypted, even when the source was\nencrypted.'
+        """Encrypt output with the selected algorithm, defaulting to AES-256.
+
+        Text passwords use the revision's encoding. Bytes are passed through.
+        An omitted owner password defaults to the user password.
+        Pass an empty user password and a nonempty owner password to allow
+        opening the file without credentials.
+        """
         return _PdfEditing._encrypt(
             self,
             user_password=user_password,
@@ -997,8 +1003,8 @@ class PdfEditor(_PdfEditing):
         )
 
     def write(self, *, target: str | os.PathLike[str] | BinaryIO) -> None:
-        "Write the document to a path or a binary stream.\n\nA path is written through a temporary sibling file that replaces the\ntarget only once it is complete. A stream receives the whole file in\none `write` call and is not closed."
-        return _PdfEditing._write(self, target=target)
+        """Write a complete PDF to an atomically replaced path or an open binary stream."""
+        _PdfEditing._write(self, target=target)
 
     # Compatibility policy belongs here. Reader and writer adapters only bind
     # pypdf-shaped arguments and forward them to these named operations.
@@ -1015,12 +1021,7 @@ class PdfEditor(_PdfEditing):
                 PdfEditErrorCategory.UNSUPPORTED,
                 "qpdf does not expose pypdf's root-object recovery limit",
             )
-        self.open(
-            source=stream,
-            password=password.decode("latin-1")
-            if isinstance(password, bytes)
-            else password,
-        )
+        self.open(source=stream, password=password)
         if strict:
             try:
                 with _native_errors():
@@ -1042,7 +1043,7 @@ class PdfEditor(_PdfEditing):
         keep_initial_header: bool,
         incremental_clone_object_count_limit: int | None,
         incremental_clone_object_id_limit: int | None,
-    ) -> None:
+    ) -> bool:
         if incremental or full:
             raise PdfUnsupportedError(
                 PdfEditErrorCategory.UNSUPPORTED,
@@ -1062,17 +1063,21 @@ class PdfEditor(_PdfEditing):
             if isinstance(fileobj, (str, os.PathLike)):
                 if os.path.isfile(fileobj) and os.path.getsize(fileobj):
                     source = fileobj
-            elif hasattr(fileobj, "read"):
+            elif (
+                hasattr(fileobj, "read")
+                and getattr(fileobj, "seekable", lambda: True)()
+            ):
                 position = fileobj.tell()
                 if fileobj.seek(0, 2):
                     source = fileobj
                 fileobj.seek(position)
-            else:
+            elif not hasattr(fileobj, "write"):
                 source = fileobj
         if source is None:
             self._native.create_empty()
         else:
             self._compat_open(stream=source, strict=strict)
+        return source is not None
 
     def _compat_get_fields(
         self,
@@ -1264,8 +1269,8 @@ class PdfEditor(_PdfEditing):
     def _compat_encrypt(
         self,
         *,
-        user_password: str,
-        owner_password: str | None,
+        user_password: str | bytes,
+        owner_password: str | bytes | None,
         use_128bit: bool,
         permissions_flag: int,
         algorithm: str | None,
@@ -1287,10 +1292,8 @@ class PdfEditor(_PdfEditing):
     def _compat_write(self, *, stream: Any) -> tuple[bool, Any]:
         if stream == "":
             raise ValueError("output path is empty")
-        self.write(target=stream)
-        if isinstance(stream, (str, os.PathLike)):
-            with open(stream, "rb+") as result:
-                result.seek(0, 2)
+        result = self._write(target=stream)
+        if result is not None:
             return True, result
         if hasattr(stream, "flush"):
             stream.flush()
