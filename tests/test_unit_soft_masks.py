@@ -561,7 +561,9 @@ def test_mask_on_an_oversized_canvas_paints_unmasked(
         media_box=f"[0 0 100 {TALL_HEIGHT}]",
         extra_objects=[
             _smask("6 0 R"),
-            _group(f"0.5 g 0 0 100 {TALL_HEIGHT} re f", bbox=f"[0 0 100 {TALL_HEIGHT}]"),
+            _group(
+                f"0.5 g 0 0 100 {TALL_HEIGHT} re f", bbox=f"[0 0 100 {TALL_HEIGHT}]"
+            ),
             _stream(
                 "/Type /XObject /Subtype /Image /Width 1 /Height 1 "
                 "/ColorSpace /DeviceRGB /BitsPerComponent 8",
