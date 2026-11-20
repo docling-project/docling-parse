@@ -12,7 +12,10 @@ photo. These tests assert on rendered pixels, since compositing has no other
 output.
 """
 
+import subprocess
+import sys
 from io import BytesIO
+from pathlib import Path
 from typing import List, Tuple
 
 import pytest
@@ -24,6 +27,7 @@ from docling_parse.pdf_parser import (
     RenderConfig,
     ThreadedPdfParserConfig,
 )
+from tests.pdf_builder import simple_page_pdf
 
 PAGE_WIDTH = 200
 PAGE_HEIGHT = 100
@@ -512,3 +516,75 @@ def test_decodes_per_page_are_capped():
     image = _render(pdf)
     _assert_color(_pixel(image, 50, 50), HALF_BLUE_ON_RED, "under the first mask")
     _assert_color(_pixel(image, 150, 50), BLUE, "past the per-page cap")
+
+
+# ---------------------------------------------------------------------------
+# a canvas too large for a mask plane
+# ---------------------------------------------------------------------------
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+TALL_HEIGHT = 8193  # one pixel past the 8192 px a mask plane may have per side
+
+TALL_RENDER_CHILD = """
+import sys
+from pathlib import Path
+
+from tests.pdf_builder import render_page
+
+image = render_page(Path(sys.argv[1]).read_bytes(), scale=1.0).get_image()
+width, height = image.size
+red, green, blue = image.convert("RGB").getpixel((50, height // 2))[:3]
+print(width, height, red, green, blue)
+"""
+
+
+@pytest.mark.parametrize(
+    "paint, xobjects",
+    [
+        (f"0 0 1 rg 25 0 50 {TALL_HEIGHT} re f", ""),
+        (f"q 50 0 0 {TALL_HEIGHT} 25 0 cm /Im1 Do Q", "/XObject << /Im1 7 0 R >>"),
+    ],
+    ids=["shape", "image"],
+)
+def test_mask_on_an_oversized_canvas_paints_unmasked(
+    tmp_path: Path, paint: str, xobjects: str
+) -> None:
+    """docling-parse #479: past 8192 px a side there is no mask plane, and the
+    masked instruction is painted unmasked instead. That fallback re-entered
+    the instruction's paint routine with the mask still in force, which sent it
+    back to the mask until the stack overflowed and the process died. The
+    render runs in a child process so that shows up as a failed assertion."""
+    pdf = simple_page_pdf(
+        f"1 0 0 rg 0 0 100 {TALL_HEIGHT} re f /G1 gs {paint}",
+        resources=f"/ExtGState << /G1 5 0 R >> {xobjects}",
+        media_box=f"[0 0 100 {TALL_HEIGHT}]",
+        extra_objects=[
+            _smask("6 0 R"),
+            _group(
+                f"0.5 g 0 0 100 {TALL_HEIGHT} re f", bbox=f"[0 0 100 {TALL_HEIGHT}]"
+            ),
+            _stream(
+                "/Type /XObject /Subtype /Image /Width 1 /Height 1 "
+                "/ColorSpace /DeviceRGB /BitsPerComponent 8",
+                "\x00\x00\xff",
+            ),
+        ],
+    )
+    pdf_path = tmp_path / "tall_soft_mask.pdf"
+    pdf_path.write_bytes(pdf)
+
+    completed = subprocess.run(
+        [sys.executable, "-c", TALL_RENDER_CHILD, str(pdf_path)],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+    assert completed.returncode == 0, (
+        f"render exited with {completed.returncode} "
+        f"(negative values are signals; -11 is SIGSEGV)\n{completed.stderr[-2000:]}"
+    )
+    width, height, *rgb = (int(v) for v in completed.stdout.split())
+    assert (width, height) == (100, TALL_HEIGHT)
+    _assert_color((rgb[0], rgb[1], rgb[2]), BLUE, "painted unmasked")

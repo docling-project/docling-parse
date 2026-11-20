@@ -215,6 +215,28 @@ namespace pdflib
       BLContext*  saved_;
     };
 
+    // Set while paint_through_soft_mask paints an instruction unmasked
+    // because the mask could not be applied. The instruction re-enters its
+    // paint routine on the page context, so context_override_ is not set and
+    // only this keeps soft_mask_applies() from sending it back to the mask.
+    bool painting_unmasked_ = false;
+
+    struct painting_unmasked_scope
+    {
+      explicit painting_unmasked_scope(bool& flag):
+        flag_(flag), saved_(flag)
+      {
+        flag_ = true;
+      }
+      ~painting_unmasked_scope() { flag_ = saved_; }
+
+      painting_unmasked_scope(const painting_unmasked_scope&) = delete;
+      painting_unmasked_scope& operator=(const painting_unmasked_scope&) = delete;
+
+      bool& flag_;
+      bool  saved_;
+    };
+
     // Canvas-sized A8 coverage of every soft mask met on this page, keyed by
     // the mask. One mask covers many objects (a shadow per photo, a feather
     // per figure) and the group render behind the plane is the costly part.
@@ -934,6 +956,7 @@ namespace pdflib
       return instr.has_soft_mask()
          and config_.render_soft_masks
          and context_override_ == nullptr
+         and not painting_unmasked_
          and has_canvas();
     }
 
@@ -4617,6 +4640,7 @@ namespace pdflib
       {
         // reported by soft_mask_plane; unmasked paint is what the page got
         // before masks were composited at all
+        const painting_unmasked_scope unmasked(painting_unmasked_);
         paint();
         return;
       }
@@ -4629,6 +4653,7 @@ namespace pdflib
       {
         LOG_S(WARNING) << "paint_through_soft_mask: could not allocate a "
                        << area.w << "x" << area.h << " layer, painting unmasked";
+        const painting_unmasked_scope unmasked(painting_unmasked_);
         paint();
         return;
       }
