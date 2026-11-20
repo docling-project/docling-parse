@@ -25,6 +25,7 @@ It does not update the documentation. Full runs can take hours.
 | `run_performance_analysis.py` | Replay slow pages for detailed native timings | Comparison per-page CSV and original PDFs | Analysis CSV or detailed timing table |
 | `run_editing_benchmark.py` | Measure Editor performance at several sizes | Generated PDFs with text, widgets, links and bookmarks | JSONL with open, operation and write times plus peak RSS |
 | `run_quality_benchmarking.py` | Compare text and raster quality | PDFs or HF dataset | Quality CSVs and comparison visualizations |
+| `run_text_extraction_quality.py` | Compare plain and layout text extraction | PDFs or the pinned regression corpus | F1 histograms and a report with raw text links |
 
 ## Editing benchmark
 
@@ -62,6 +63,34 @@ At 512 pages, opening took 2.7–2.9 ms on both revisions. The final write
 after rotate and extract rose from 0.93 ms to 13.18 ms, and the write
 after encrypted metadata reads rose from 1.24 ms to 15.50 ms. Those operations
 now defer serialization to the write phase.
+
+## Text extraction quality
+
+Compare `PdfEditor` and pypdf on the 957 scheduled pages of the pinned
+regression corpus. The `perf` group includes the benchmark dependencies.
+
+```sh
+uv sync --group perf
+uv run --no-sync python scripts/benchmarking/run_text_extraction_quality.py \
+  --pinned --output scratch-text-extraction-f1
+```
+
+For a local PDF or directory, pass its path in place of `--pinned` and add
+`--recursive` to include subdirectories. Choose a new output directory for
+each run.
+
+Open `report.md` for a Layout section and a Plain section. Each has an F1
+histogram and a page table sorted by descending F1. The table links
+directly to `docling.txt` and `pypdf.txt` under the mode, PDF name, and page
+number. It also shows the source file name and one-based page number, with
+a link to that page of the original PDF. If extraction fails, the row
+appears as `N/A` at the bottom and links to the backend's error file.
+
+F1 measures overlap between unique whitespace-delimited tokens after
+Unicode NFC normalization. Two empty outputs score 1.0, and one empty
+output scores 0.0. The linked text files preserve spacing and reading
+order. Lone Unicode surrogates are escaped in the files and replaced with
+U+FFFD for scoring.
 
 ## Install and rebuild
 

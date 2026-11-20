@@ -277,6 +277,42 @@ def test_layout_text_keeps_columns_and_spacing():
     assert len(rows) >= 3 and all(row == "" for row in rows[1:-1])
 
 
+def test_layout_text_preserves_gutters_without_padding_ordinary_rows():
+    content = (
+        "BT /F1 24 Tf 20 195 Td (Wide title) Tj ET "
+        "BT /F1 12 Tf 20 160 Td (Left one) Tj 0 -16 Td (Left two) Tj "
+        "0 -16 Td (Left three) Tj ET "
+        "BT /F1 12 Tf 140 160 Td (Right one) Tj 0 -16 Td (Right two) Tj "
+        "0 -16 Td (Right three) Tj ET "
+        "BT /F1 12 Tf 20 80 Td (Later block) Tj ET"
+    )
+    pdf = simple_page_pdf(
+        content,
+        resources="/Font << /F1 5 0 R >>",
+        media_box="[0 0 300 240]",
+        extra_objects=["<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>"],
+    )
+
+    with PdfEditor(source=pdf) as editor:
+        layout = editor.extract_text(
+            page_no=1, extraction_mode=PdfExtractionMode.LAYOUT
+        )
+
+    rows = layout.splitlines()
+    assert rows[0] == "Wide title"
+    first_body_row = next(
+        index for index, row in enumerate(rows) if row.startswith("Left")
+    )
+    assert rows[first_body_row:] == [
+        f"{'Left one':20}Right one",
+        f"{'Left two':20}Right two",
+        f"{'Left three':20}Right three",
+        "",
+        "",
+        "Later block",
+    ]
+
+
 @pytest.mark.parametrize("kind", ["bytes", "stream", "path", "reader"])
 def test_reader_sources(kind, tmp_path):
     if kind == "bytes":

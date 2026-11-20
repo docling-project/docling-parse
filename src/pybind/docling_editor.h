@@ -1103,6 +1103,7 @@ namespace docling
           std::vector<std::string> texts;
           std::vector<pdflib::pdf_text_layout::box_type> boxes;
           std::vector<int> lengths;
+          std::vector<double> space_widths;
 
           for(auto itr = word_cells.begin(); itr != word_cells.end(); ++itr)
             {
@@ -1110,9 +1111,10 @@ namespace docling
               boxes.push_back({std::min(itr->x0, itr->x1), std::min(itr->y0, itr->y1),
                                std::max(itr->x0, itr->x1), std::max(itr->y0, itr->y1)});
               lengths.push_back(itr->number_of_chars());
+              space_widths.push_back(itr->space_width);
             }
 
-          return pdflib::pdf_text_layout::render(texts, boxes, lengths);
+          return pdflib::pdf_text_layout::render(texts, boxes, lengths, space_widths);
         }
 
       auto& line_cells = page_decoder->get_line_cells();

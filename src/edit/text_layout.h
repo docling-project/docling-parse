@@ -7,6 +7,7 @@
 #include <array>
 #include <cmath>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace pdflib
@@ -21,10 +22,11 @@ namespace pdflib
 
     typedef std::array<double, 4> box_type; // x0, y0, x1, y1; y grows upwards
 
-    // `texts[i]` occupies `boxes[i]` and is `lengths[i]` characters long.
+    // Each run supplies its text, bounding box, character count and font space width.
     static std::string render(const std::vector<std::string>& texts,
                               const std::vector<box_type>& boxes,
-                              const std::vector<int>& lengths);
+                              const std::vector<int>& lengths,
+                              const std::vector<double>& space_widths);
 
   private:
 
@@ -50,7 +52,8 @@ namespace pdflib
 
   inline std::string pdf_text_layout::render(const std::vector<std::string>& texts,
                                              const std::vector<box_type>& boxes,
-                                             const std::vector<int>& lengths)
+                                             const std::vector<int>& lengths,
+                                             const std::vector<double>& space_widths)
   {
     std::size_t number_of_runs = texts.size();
     if(number_of_runs == 0)
@@ -82,6 +85,8 @@ namespace pdflib
     // 6 x 12 points: a 10-point fixed-pitch face, when the page gives no measure
     double char_width = median(char_widths, 6.0);
     double line_height = median(line_heights, 12.0);
+    // Use a finer grid for indents and gutters beside variable-width text.
+    const double grid_width = 0.85 * char_width;
 
     // top to bottom, then left to right
     std::vector<std::size_t> order(number_of_runs);
@@ -113,16 +118,31 @@ namespace pdflib
         rows.back().push_back(index);
       }
 
+    // Sample ordinary row spacing. Close offsets and large block gaps do not
+    // represent the line pitch, and one gap alone is not enough to infer it.
+    std::vector<double> row_gaps;
+    for(std::size_t row = 1; row < row_centers.size(); ++row)
+      {
+        const double gap = row_centers[row - 1] - row_centers[row];
+        if(gap >= line_height and gap <= 2.0 * line_height)
+          {
+            row_gaps.push_back(gap);
+          }
+      }
+    const double line_pitch = row_gaps.size() >= 2 ?
+      median(std::move(row_gaps), line_height) : line_height;
+
     std::string result;
 
     for(std::size_t row = 0; row < rows.size(); row++)
       {
         if(row > 0)
           {
-            int blank_lines = static_cast<int>(std::lround((row_centers[row - 1] - row_centers[row]) / line_height)) - 1;
-            blank_lines = std::max(0, std::min(blank_lines, MAX_BLANK_LINES));
+            const double spacing = (row_centers[row - 1] - row_centers[row]) / line_pitch;
+            const auto blank_lines = static_cast<std::size_t>(
+              std::clamp(std::floor(spacing) - 1.0, 0.0, static_cast<double>(MAX_BLANK_LINES)));
 
-            result += std::string(static_cast<std::size_t>(blank_lines) + 1, '\n');
+            result += std::string(blank_lines + 1, '\n');
           }
 
         std::vector<std::size_t>& runs = rows[row];
@@ -131,17 +151,25 @@ namespace pdflib
         });
 
         int cursor = 0; // characters written on this row so far
+        std::size_t previous = runs.front();
+        bool first = true;
         for(std::size_t index : runs)
           {
-            int column = static_cast<int>(std::lround((boxes[index][0] - left) / char_width));
-
-            // Runs that the grid would overlap still stay apart by one space.
-            int padding = (column > cursor) ? (column - cursor) : ((cursor > 0) ? 1 : 0);
+            int padding = 1;
+            const double gap = boxes[index][0] - boxes[previous][2];
+            const double word_space = std::max({char_width, space_widths[previous], space_widths[index]});
+            if(first or gap > 1.5 * word_space)
+              {
+                const int column = static_cast<int>(std::lround((boxes[index][0] - left) / grid_width));
+                padding = std::max(first ? 0 : 2, column - cursor);
+              }
 
             result += std::string(static_cast<std::size_t>(padding), ' ');
             result += texts[index];
 
             cursor += padding + lengths[index];
+            previous = index;
+            first = false;
           }
       }
 
