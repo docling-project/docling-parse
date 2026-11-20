@@ -3,6 +3,7 @@
 #ifndef PDF_DOCUMENT_INFO_H
 #define PDF_DOCUMENT_INFO_H
 
+#include <algorithm>
 #include <map>
 #include <optional>
 #include <string>
@@ -14,6 +15,7 @@
 
 namespace pdflib
 {
+  class pdf_permissions;
   // The /Encrypt parameters of a document (ISO 32000-1, 7.6). The permission
   // flags are reported as stored; nothing in docling-parse enforces them.
   class pdf_encryption_info
@@ -23,6 +25,8 @@ namespace pdflib
     pdf_encryption_info();
 
     static pdf_encryption_info read(QPDF& qpdf);
+    static pdf_encryption_info configured(const std::string& algorithm,
+                                          const pdf_permissions& options);
 
     bool is_encrypted() const;
 
@@ -229,6 +233,41 @@ namespace pdflib
   }
 
   inline bool pdf_encryption_info::is_encrypted() const { return encrypted; }
+
+  inline pdf_encryption_info pdf_encryption_info::configured(
+    const std::string& algorithm, const pdf_permissions& options)
+  {
+    pdf_encryption_info result;
+    result.encrypted = true;
+    result.revision = algorithm == "RC4-40" ? 2 :
+      algorithm == "RC4-128" ? 3 : algorithm == "AES-128" ? 4 :
+      algorithm == "AES-256-R5" ? 5 : 6;
+    result.version = result.revision < 4 ? result.revision - 1 : std::min(5, result.revision);
+    if(result.revision >= 4)
+      {
+        result.stream_method = result.string_method = result.file_method =
+          result.revision == 4 ? "aes" : "aesv3";
+      }
+
+    // The Standard security handler reserves the first two permission bits.
+    // QPDF keeps bit 10 enabled on revisions 4 and later.
+    result.permissions = -4;
+    auto allow = [&](int bit, bool enabled) {
+      if(not enabled) { result.permissions &= ~(1 << (bit - 1)); }
+    };
+    allow(3, options.get_print() != 2);
+    allow(4, options.get_modify());
+    allow(5, options.get_extract());
+    allow(6, options.get_annotate());
+    if(result.revision >= 3)
+      {
+        allow(9, options.get_fill_forms());
+        allow(10, result.revision >= 4 or options.get_accessibility());
+        allow(11, options.get_assemble());
+        allow(12, options.get_print() == 0);
+      }
+    return result;
+  }
 
   inline int pdf_encryption_info::get_revision() const { return revision; }
 

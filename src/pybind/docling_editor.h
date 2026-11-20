@@ -6,6 +6,7 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <deque>
 #include <map>
 #include <limits>
 #include <memory>
@@ -24,7 +25,8 @@
 #include <qpdf/QPDFPageObjectHelper.hh>
 #include <qpdf/QPDFWriter.hh>
 
-#include <pybind/docling_parser.h>
+#include <parse.h>
+#include <pybind/docling_resources.h>
 
 #include <edit.h>
 #include <render/blend2d_renderer.h>
@@ -38,14 +40,14 @@ namespace docling
   // States. An editor is closed, reading or editing:
   //
   //   - reading: a source was opened and nothing was changed. The document is
-  //     the inherited parser's decoder under SOURCE_KEY.
+  //     a document-owned decoder.
   //   - editing: the editor owns a destination QPDF. It gets one from
   //     create_empty(), or on the first mutating call after an open, which
   //     parses the source bytes a second time (a clone: the whole document
   //     survives, nothing is remapped). The source bytes are never modified.
   //
   // Thread safety. Not multi-threaded, but thread safe: every public method
-  // holds the inherited parser_mutex for its whole duration, so calls from
+  // holds the document mutex for its whole duration, so calls from
   // several threads on one instance are serialized. Two editors never share a
   // QPDF: what crosses between them is a pdf_source (immutable bytes), which
   // the receiver parses for itself, so no operation takes two editors' locks.
@@ -59,8 +61,8 @@ namespace docling
   //
   // Errors. Every failure leaves as pdflib::pdf_edit_error (category plus
   // message); open_* instead return false and record the reason, like the
-  // inherited load_document.
-  class docling_editor: public docling_parser
+  // document decoder.
+  class docling_editor: private docling_resources
   {
     typedef pdflib::pdf_decoder<pdflib::DOCUMENT> document_decoder_type;
     typedef std::shared_ptr<document_decoder_type> document_decoder_ptr_type;
@@ -124,7 +126,6 @@ namespace docling
     // The images the page draws, in drawing order, with their encoded bytes.
     std::vector<pdflib::pdf_exported_image> page_images(int page, std::int64_t expected_generation);
 
-    nlohmann::json outline();
     nlohmann::json annotations();
 
     // Document-level content, read from the document as it currently is.
@@ -135,7 +136,9 @@ namespace docling
     nlohmann::json named_destinations();
     nlohmann::json outline_tree();        // pdf_outline_ops::read
     nlohmann::json form();                // pdf_form_ops::read
-    std::pair<nlohmann::json, std::int64_t> form_state();
+    std::pair<bool, bool> form_flags();
+    std::pair<std::optional<std::vector<int> >, std::int64_t> field_pages(const std::string& name);
+    bool has_form_on_page(int page);
     nlohmann::json page_annotations(int page, std::int64_t expected_generation);
     nlohmann::json attachments();         // pdf_attachment_ops::read
     std::string attachment_data(std::string name);
@@ -149,6 +152,7 @@ namespace docling
     // one a page handle of this document was taken from. Used when another
     // editor is about to read one of this document's pages by index.
     pdflib::pdf_source get_source(std::int64_t expected_generation);
+    pdflib::pdf_source take_import_source(std::int64_t expected_generation);
 
     // ---- editing ----
 
@@ -242,9 +246,6 @@ namespace docling
 
     void set_page_label(int from, int to, std::string style, std::string prefix, int start);
     void add_named_destination(std::string name, int page);
-
-    // Returns the id of the new item, usable as `parent` of later items.
-    int add_outline_item(std::string title, int page, int parent);
 
     // Outline editing; the JSON entries are documented on
     // pdf_outline_ops::add_item and update_item.
@@ -340,26 +341,30 @@ namespace docling
     template<typename function_type>
     decltype(auto) edit_page(int page, std::int64_t expected_generation, function_type&& function);
 
+    template<typename function_type>
+    void stage_page_edit(int page, std::int64_t expected_generation, function_type&& function);
+
     void require_open();
     void check_generation(std::int64_t expected_generation);
     void check_page(int page, int number_of_pages);
+    QPDFPageObjectHelper page_at(QPDF& qpdf, int page);
 
     document_decoder_ptr_type require_source_decoder();
 
     // Clone the opened source into a destination, if there is none yet.
     std::unique_ptr<QPDF> clone_source();
 
-    template<typename load_type>
-    bool load_with_passwords(load_type&& load,
-                             const std::optional<std::string>& password,
-                             const std::vector<std::string>& alternatives);
+    bool load_buffer(const std::shared_ptr<std::string>& buffer,
+                     const std::optional<std::string>& password,
+                     const std::vector<std::string>& alternatives,
+                     const std::string& description);
     void ensure_destination(bool keep_source_decoder = false);
     std::vector<QPDFPageObjectHelper> destination_pages();
 
     void touch(bool page_list_changed);
+    const std::map<std::string, std::vector<int> >& field_page_index();
 
     void ensure_snapshot();
-    std::string decode_key();
 
     // The password that opens the snapshot, if it is encrypted and needs one.
     std::optional<std::string> snapshot_password() const;
@@ -382,23 +387,17 @@ namespace docling
 
   private:
 
-    static constexpr const char* SOURCE_KEY = "docling-editor-source";
-    static constexpr const char* SNAPSHOT_KEY = "docling-editor-snapshot";
-
-    // Decoded pages kept by the inherited cache; text extraction needs none
-    // of them once the text is returned.
-    static constexpr int PAGE_CACHE_SIZE = 4;
-
-    // All guarded by the inherited parser_mutex; the editor adds no second lock.
+    std::recursive_mutex parser_mutex;
+    document_decoder_ptr_type source_decoder;
+    std::map<std::string, std::string> open_error;
 
     pdflib::pdf_source source;
 
-    // Order matters: the destination reads lazily from destination_buffer
-    // (qpdf does not copy the bytes it parses) and from the imported
-    // documents (foreign stream data is copied at write time), so it is
-    // declared last and therefore destroyed first.
+    // The destination reads lazily from destination_buffer. Foreign
+    // streams are owned by the destination after import.
     std::shared_ptr<std::string> destination_buffer;
     std::map<const std::string*, import_document_ptr_type> imports;
+    std::deque<const std::string*> import_order;
     std::unique_ptr<QPDF> destination;
 
     // Pages of imported documents already turned into form XObjects of the
@@ -415,15 +414,14 @@ namespace docling
     const bool preserve_page_labels;
     std::int64_t current_generation; // page-list identity, for page handles
     std::int64_t current_revision;   // any change, for the snapshot
+    std::int64_t field_page_revision = -1;
+    std::map<std::string, std::vector<int> > pages_by_field;
 
-    // The destination serialized at snapshot_revision. It backs write, text
-    // extraction and get_source(), so each edit is serialized at most once.
+    // The destination serialized at snapshot_revision for output and transfer.
     std::shared_ptr<std::string> snapshot;
     std::int64_t snapshot_revision;
-    bool snapshot_loaded; // registered with the parser under SNAPSHOT_KEY
 
-    // Output encryption, off by default. The snapshot is the output, so it is
-    // encrypted too and read back with the user password.
+    // Output encryption, off by default.
     bool output_encrypted;
     std::string output_algorithm = "AES-256";
     std::string output_user_password;
@@ -435,8 +433,8 @@ namespace docling
     bool output_linearize;
   };
 
-  inline docling_editor::docling_editor(std::string loglevel, bool preserve_page_labels):
-    docling_parser(loglevel, PAGE_CACHE_SIZE),
+  inline docling_editor::docling_editor(std::string /* loglevel */, bool preserve_page_labels):
+    docling_resources(),
     source(),
     destination_buffer(nullptr),
     imports({}),
@@ -448,7 +446,6 @@ namespace docling
     current_revision(0),
     snapshot(nullptr),
     snapshot_revision(-1),
-    snapshot_loaded(false),
     output_encrypted(false),
     output_user_password(""),
     output_owner_password(""),
@@ -456,7 +453,14 @@ namespace docling
     output_compress_streams(true),
     output_object_streams(qpdf_o_preserve),
     output_linearize(false)
-  {}
+  {
+    static std::once_flag initialization;
+    std::call_once(initialization, [this] {
+      const auto key = pdflib::pdf_resource<pdflib::PAGE_FONT>::RESOURCE_DIR_KEY;
+      std::unordered_map<std::string, double> timings;
+      pdflib::pdf_resource<pdflib::PAGE_FONT>::initialise({{key, get_resources_path()}}, timings);
+    });
+  }
 
   inline docling_editor::~docling_editor()
   {}
@@ -535,7 +539,7 @@ namespace docling
       auto finish = [&]() {
         if(first_edit)
           {
-            unload_document(SOURCE_KEY);
+            source_decoder.reset();
           }
       };
       try
@@ -576,17 +580,31 @@ namespace docling
       check_generation(expected_generation);
       ensure_destination();
 
-      std::vector<QPDFPageObjectHelper> pages = destination_pages();
-      check_page(page, static_cast<int>(pages.size()));
+      auto target = page_at(*destination, page);
 
       touch(false);
 
-      return function(*destination, pages.at(page));
+      return function(*destination, target);
+    });
+  }
+
+  template<typename function_type>
+  void docling_editor::stage_page_edit(int page, std::int64_t expected_generation,
+                                        function_type&& function)
+  {
+    stage_edit([&](QPDF& qpdf) {
+      check_generation(expected_generation);
+      function(qpdf, page_at(qpdf, page));
+      touch(false);
     });
   }
 
   inline void docling_editor::reset_state()
   {
+    source_decoder.reset();
+    open_error.clear();
+    pages_by_field.clear();
+    field_page_revision = -1;
     source = pdflib::pdf_source();
 
     // destination before what it reads from, as in the destructor
@@ -594,11 +612,11 @@ namespace docling
     standard_fonts.clear();
     destination.reset();
     imports.clear();
+    import_order.clear();
     destination_buffer.reset();
 
     snapshot.reset();
     snapshot_revision = -1;
-    snapshot_loaded = false;
 
     output_encrypted = false;
     output_user_password.clear();
@@ -614,7 +632,6 @@ namespace docling
     current_generation += 1;
     current_revision += 1;
 
-    unload_documents();
   }
 
   inline void docling_editor::require_open()
@@ -646,18 +663,24 @@ namespace docling
       }
   }
 
+  inline QPDFPageObjectHelper docling_editor::page_at(QPDF& qpdf, int page)
+  {
+    const auto& pages = qpdf.getAllPages();
+    check_page(page, static_cast<int>(pages.size()));
+    return QPDFPageObjectHelper(pages.at(page));
+  }
+
   inline docling_editor::document_decoder_ptr_type docling_editor::require_source_decoder()
   {
     require_open();
 
-    document_decoder_ptr_type decoder = get_document_decoder(SOURCE_KEY);
-    if(decoder == nullptr)
+    if(source_decoder == nullptr)
       {
         throw pdflib::pdf_edit_error(pdflib::edit_error::INVALID_EDIT,
                                      "no document is open");
       }
 
-    return decoder;
+    return source_decoder;
   }
 
   inline std::unique_ptr<QPDF> docling_editor::clone_source()
@@ -699,9 +722,9 @@ namespace docling
 
     // The page list is the same, so page handles stay valid; from here on the
     // destination is the document and the source decoder is not needed.
-    if(not keep_source_decoder and is_loaded(SOURCE_KEY))
+    if(not keep_source_decoder)
       {
-        unload_document(SOURCE_KEY);
+        source_decoder.reset();
       }
   }
 
@@ -803,7 +826,6 @@ namespace docling
         snapshot = std::make_shared<std::string>(reinterpret_cast<const char*>(out->getBuffer()),
                                                  out->getSize());
         snapshot_revision = current_revision;
-        snapshot_loaded = false;
       }
     catch(const std::exception& exc)
       {
@@ -811,37 +833,16 @@ namespace docling
       }
   }
 
-  inline std::string docling_editor::decode_key()
-  {
-    if(destination == nullptr)
-      {
-        require_source_decoder();
-        return SOURCE_KEY;
-      }
-
-    // Decoding reads a finished PDF, so an edited document is decoded from
-    // its serialized state.
-    ensure_snapshot();
-
-    if(not snapshot_loaded)
-      {
-        if(not load_document_from_buffer(SNAPSHOT_KEY, snapshot, snapshot_password()))
-          {
-            std::map<std::string, std::string> error = take_load_error(SNAPSHOT_KEY);
-            throw pdflib::pdf_edit_error(pdflib::edit_error::WRITE,
-                                         "the edited document could not be read back: " + error["message"]);
-          }
-        snapshot_loaded = true;
-      }
-
-    return SNAPSHOT_KEY;
-  }
 
   inline docling_editor::import_document_ptr_type
   docling_editor::find_or_create_import(const pdflib::pdf_source& other)
   {
     // One parsed QPDF per distinct byte buffer: pages imported in several
     // calls then share the objects qpdf already copied for the first one.
+    if(other.get_prepared())
+      {
+        return std::make_shared<pdflib::pdf_import_document>(other, "docling-editor import");
+      }
     const std::string* identity = other.get_buffer().get();
 
     auto itr = imports.find(identity);
@@ -851,31 +852,46 @@ namespace docling
       }
 
     auto document = std::make_shared<pdflib::pdf_import_document>(other, "docling-editor import");
+    constexpr std::size_t capacity = 8;
+    if(import_order.size() == capacity)
+      {
+        const auto oldest = import_order.front();
+        std::erase_if(overlay_forms, [oldest](const auto& entry) {
+          return std::get<0>(entry.first) == oldest;
+        });
+        imports.erase(oldest);
+        import_order.pop_front();
+      }
     imports[identity] = document;
+    import_order.push_back(identity);
 
     return document;
   }
 
-  template<typename load_type>
-  bool docling_editor::load_with_passwords(load_type&& load,
+  inline bool docling_editor::load_buffer(const std::shared_ptr<std::string>& buffer,
                                            const std::optional<std::string>& password,
-                                           const std::vector<std::string>& alternatives)
+                                           const std::vector<std::string>& alternatives,
+                                           const std::string& description)
   {
-    if(load(password))
-      {
-        return true;
-      }
+    auto try_open = [&](std::optional<std::string> candidate) {
+      auto decoder = std::make_shared<document_decoder_type>();
+      if(decoder->process_document_from_bytesio(buffer, candidate, description))
+        {
+          source = pdflib::pdf_source(buffer, candidate);
+          source_decoder = std::move(decoder);
+          open_error.clear();
+          return true;
+        }
+      open_error = {{"category", decoder->get_load_error_category()},
+                    {"message", decoder->get_load_error_message()}};
+      return false;
+    };
+
+    if(try_open(password)) { return true; }
     for(const auto& candidate : alternatives)
       {
-        auto failure = load_errors.find(SOURCE_KEY);
-        if(failure == load_errors.end() or failure->second.at("category") != pdflib::load_error::PASSWORD)
-          {
-            break;
-          }
-        if(load(candidate))
-          {
-            return true;
-          }
+        if(open_error.at("category") != pdflib::load_error::PASSWORD) { break; }
+        if(try_open(candidate)) { return true; }
       }
     return false;
   }
@@ -884,20 +900,18 @@ namespace docling
                                         const std::vector<std::string>& alternatives)
   {
     std::lock_guard<std::recursive_mutex> lock(parser_mutex);
-
     reset_state();
-
-    if(not load_with_passwords([&](const std::optional<std::string>& candidate) {
-      return load_document(SOURCE_KEY, filename, candidate);
-    }, password, alternatives))
+    std::shared_ptr<std::string> buffer;
+    try
       {
+        buffer = utils::filesystem::read_binary_file(filename);
+      }
+    catch(const std::exception& exc)
+      {
+        open_error = {{"category", pdflib::load_error::IO}, {"message", exc.what()}};
         return false;
       }
-
-    document_decoder_ptr_type decoder = get_document_decoder(SOURCE_KEY);
-    source = pdflib::pdf_source(decoder->get_source_buffer(), decoder->get_password());
-
-    return true;
+    return load_buffer(buffer, password, alternatives, "processing file " + filename);
   }
 
   inline bool docling_editor::open_buffer(std::shared_ptr<std::string> buffer,
@@ -905,19 +919,8 @@ namespace docling
                                           const std::vector<std::string>& alternatives)
   {
     std::lock_guard<std::recursive_mutex> lock(parser_mutex);
-
     reset_state();
-
-    if(not load_with_passwords([&](const std::optional<std::string>& candidate) {
-      return load_document_from_buffer(SOURCE_KEY, buffer, candidate);
-    }, password, alternatives))
-      {
-        return false;
-      }
-
-    source = pdflib::pdf_source(buffer, get_document_decoder(SOURCE_KEY)->get_password());
-
-    return true;
+    return load_buffer(buffer, password, alternatives, "PDF buffer");
   }
 
   inline bool docling_editor::open_source(const pdflib::pdf_source& source_)
@@ -927,7 +930,8 @@ namespace docling
 
   inline std::map<std::string, std::string> docling_editor::take_open_error()
   {
-    return take_load_error(SOURCE_KEY);
+    std::lock_guard<std::recursive_mutex> lock(parser_mutex);
+    return std::exchange(open_error, {});
   }
 
   inline void docling_editor::create_empty()
@@ -973,7 +977,7 @@ namespace docling
     return guarded([this]() -> int {
       if(destination != nullptr)
         {
-          return static_cast<int>(destination_pages().size());
+          return static_cast<int>(destination->getAllPages().size());
         }
 
       return require_source_decoder()->get_number_of_pages();
@@ -1011,21 +1015,9 @@ namespace docling
 
       if(destination != nullptr)
         {
-          // While editing, report the encryption of what will be written,
-          // not of what was opened: none by default, and with set_encryption
-          // exactly what the serialized document declares.
-          pdflib::pdf_encryption_info encryption;
-          if(output_encrypted)
-            {
-              document_decoder_ptr_type decoder = get_document_decoder(decode_key());
-              if(decoder != nullptr)
-                {
-                  encryption = decoder->with_qpdf([](QPDF& qpdf) {
-                    return pdflib::pdf_encryption_info::read(qpdf);
-                  });
-                }
-            }
-          info.set_encryption(encryption);
+          info.set_encryption(output_encrypted ?
+            pdflib::pdf_encryption_info::configured(output_algorithm, output_permissions) :
+            pdflib::pdf_encryption_info());
         }
 
       return info;
@@ -1050,10 +1042,7 @@ namespace docling
       check_generation(expected_generation);
 
       return with_document([this, page](QPDF& qpdf) {
-        std::vector<QPDFPageObjectHelper> pages = QPDFPageDocumentHelper(qpdf).getAllPages();
-        check_page(page, static_cast<int>(pages.size()));
-
-        return pdflib::pdf_page_info::read(pages.at(page));
+        return pdflib::pdf_page_info::read(page_at(qpdf, page));
       });
     });
   }
@@ -1183,22 +1172,19 @@ namespace docling
   inline std::shared_ptr<pdflib::pdf_decoder<pdflib::PAGE> >
   docling_editor::decode_page(int page, const pdflib::decode_config& config)
   {
-    std::string key = decode_key();
-
-    // The inherited cache is keyed by page only, not by config: a page
-    // decoded for its text must not be handed back when its images are asked
-    // for. The editor returns owned copies and keeps no decoded page, so the
-    // cached entry is dropped and the page decoded as asked.
-    unload_document_page(key, page);
-
-    auto page_decoder = get_page_decoder(key, page, config);
-    if(page_decoder == nullptr)
+    if(destination == nullptr)
       {
-        throw pdflib::pdf_edit_error(pdflib::load_error::UNKNOWN,
-                                     "the page could not be decoded");
+        require_source_decoder()->ensure_page_content_present(page);
       }
-
-    return page_decoder;
+    // The caller holds the document lock through decode and result copying.
+    return with_document([&](QPDF& qpdf) {
+      auto decoder = std::make_shared<pdflib::pdf_decoder<pdflib::PAGE> >(
+        qpdf.getAllPages().at(page), page, true);
+      decoder->decode_page(config);
+      if(config.create_word_cells) { decoder->create_word_cells(config); }
+      if(config.create_line_cells) { decoder->create_line_cells(config); }
+      return decoder;
+    });
   }
 
   inline std::vector<pdflib::pdf_exported_image>
@@ -1241,21 +1227,20 @@ namespace docling
     });
   }
 
-  inline nlohmann::json docling_editor::outline()
-  {
-    std::lock_guard<std::recursive_mutex> lock(parser_mutex);
-
-    return guarded([this]() {
-      return get_table_of_contents(decode_key());
-    });
-  }
-
   inline nlohmann::json docling_editor::annotations()
   {
     std::lock_guard<std::recursive_mutex> lock(parser_mutex);
-
     return guarded([this]() {
-      return get_annotations(decode_key());
+      if(destination == nullptr)
+        {
+          return require_source_decoder()->get_annotations();
+        }
+      auto root = destination->getRoot();
+      auto result = pdflib::extract_document_annotations_in_json(*destination, root);
+      auto pages = destination->getAllPages();
+      result["table_of_contents"] = pdflib::pdf_outline(*destination, pages).get();
+      result["structure"] = pdflib::pdf_structure(*destination, pages).get();
+      return result;
     });
   }
 
@@ -1285,6 +1270,21 @@ namespace docling
     });
 
     return get_source();
+  }
+
+  inline pdflib::pdf_source docling_editor::take_import_source(std::int64_t expected_generation)
+  {
+    std::lock_guard<std::recursive_mutex> lock(parser_mutex);
+    return guarded([&]() {
+      check_generation(expected_generation);
+      auto decoder = require_source_decoder();
+      auto prepared = decoder->with_qpdf([&](QPDF& qpdf) {
+        return std::shared_ptr<QPDF>(decoder, &qpdf);
+      });
+      pdflib::pdf_source result(source.get_buffer(), source.get_password(), std::move(prepared));
+      reset_state();
+      return result;
+    });
   }
 
   inline int docling_editor::insertion_position(int at, int number_of_pages, bool& at_end)
@@ -1332,13 +1332,8 @@ namespace docling
                                              std::int64_t expected_generation,
                                              std::array<double, 6> matrix)
   {
-    stage_edit([&](QPDF& qpdf) {
-      check_generation(expected_generation);
-      std::vector<QPDFPageObjectHelper> pages = destination_pages();
-      check_page(page, static_cast<int>(pages.size()));
-
-      pdflib::pdf_page_ops::transform(qpdf, pages.at(page), matrix);
-      touch(false);
+    stage_page_edit(page, expected_generation, [&](QPDF& qpdf, QPDFPageObjectHelper target) {
+      pdflib::pdf_page_ops::transform(qpdf, target, matrix);
     });
   }
 
@@ -1347,18 +1342,13 @@ namespace docling
                                          double sx,
                                          double sy)
   {
-    stage_edit([&](QPDF& qpdf) {
-      check_generation(expected_generation);
-      std::vector<QPDFPageObjectHelper> pages = destination_pages();
-      check_page(page, static_cast<int>(pages.size()));
-
+    stage_page_edit(page, expected_generation, [&](QPDF& qpdf, QPDFPageObjectHelper target) {
       if(not (sx > 0.0 and sy > 0.0))
         {
           throw pdflib::pdf_edit_error(pdflib::edit_error::INVALID_EDIT,
                                        "page scale factors must be positive");
         }
-      pdflib::pdf_page_ops::transform(qpdf, pages.at(page), {sx, 0, 0, sy, 0, 0}, true);
-      touch(false);
+      pdflib::pdf_page_ops::transform(qpdf, target, {sx, 0, 0, sy, 0, 0}, true);
     });
   }
 
@@ -1402,13 +1392,8 @@ namespace docling
 
   inline void docling_editor::flatten_page_rotation(int page, std::int64_t expected_generation)
   {
-    stage_edit([&](QPDF& qpdf) {
-      check_generation(expected_generation);
-      std::vector<QPDFPageObjectHelper> pages = destination_pages();
-      check_page(page, static_cast<int>(pages.size()));
-
-      pdflib::pdf_page_ops::flatten_rotation(qpdf, pages.at(page));
-      touch(false);
+    stage_page_edit(page, expected_generation, [&](QPDF& qpdf, QPDFPageObjectHelper target) {
+      pdflib::pdf_page_ops::flatten_rotation(qpdf, target);
     });
   }
 
@@ -1477,10 +1462,7 @@ namespace docling
       check_generation(expected_generation);
       ensure_destination();
 
-      std::vector<QPDFPageObjectHelper> pages = destination_pages();
-      check_page(page, static_cast<int>(pages.size()));
-
-      auto removed_page = pages.at(page);
+      auto removed_page = page_at(*destination, page);
       auto removed_id = removed_page.getObjectHandle().getObjGen();
       touch(true);
       if(detach_references)
@@ -1548,17 +1530,8 @@ namespace docling
                                           int angle,
                                           bool relative)
   {
-    std::lock_guard<std::recursive_mutex> lock(parser_mutex);
-
-    guarded([this, page, expected_generation, angle, relative]() {
-      check_generation(expected_generation);
-      ensure_destination();
-
-      std::vector<QPDFPageObjectHelper> pages = destination_pages();
-      check_page(page, static_cast<int>(pages.size()));
-
-      pdflib::pdf_page_ops::rotate(pages.at(page), angle, relative);
-      touch(false);
+    stage_page_edit(page, expected_generation, [&](QPDF&, QPDFPageObjectHelper target) {
+      pdflib::pdf_page_ops::rotate(target, angle, relative);
     });
   }
 
@@ -1567,13 +1540,8 @@ namespace docling
                                            std::string box,
                                            std::array<double, 4> rectangle)
   {
-    stage_edit([&](QPDF&) {
-      check_generation(expected_generation);
-      std::vector<QPDFPageObjectHelper> pages = destination_pages();
-      check_page(page, static_cast<int>(pages.size()));
-
-      pdflib::pdf_page_ops::set_box(pages.at(page), box, rectangle);
-      touch(false);
+    stage_page_edit(page, expected_generation, [&](QPDF&, QPDFPageObjectHelper target) {
+      pdflib::pdf_page_ops::set_box(target, box, rectangle);
     });
   }
 
@@ -1600,10 +1568,13 @@ namespace docling
                                        "the document to import from is not open");
         }
 
-      ensure_destination();
+      int number_of_pages = page_count();
+      bool at_end = false;
+      int first = insertion_position(at, number_of_pages, at_end);
+      if(pages and pages->empty()) { return {first, current_generation}; }
 
       import_document_ptr_type import = find_or_create_import(other);
-      std::vector<QPDFPageObjectHelper> import_pages = import->get_pages();
+      const auto& import_pages = import->get_qpdf().getAllPages();
       int number_of_import_pages = static_cast<int>(import_pages.size());
 
       std::vector<int> selection;
@@ -1624,16 +1595,15 @@ namespace docling
           check_page(index, number_of_import_pages);
         }
 
-      QPDFPageDocumentHelper helper(*destination);
-      int number_of_pages = static_cast<int>(helper.getAllPages().size());
-
-      bool at_end = false;
-      int first = insertion_position(at, number_of_pages, at_end);
-
       if(selection.empty())
         {
           return {first, current_generation};
         }
+
+      ensure_destination();
+      QPDFPageDocumentHelper helper(*destination);
+      QPDFPageObjectHelper anchor(at_end ? QPDFObjectHandle::newNull()
+                                         : destination->getAllPages().at(first));
 
       // Before the first change: a failure half way must still invalidate
       // the snapshot and, when inserting, the page handles.
@@ -1648,7 +1618,7 @@ namespace docling
       auto shift_labels = [&]() {
         if(preserve_page_labels and not at_end)
           {
-            int inserted = static_cast<int>(helper.getAllPages().size()) - number_of_pages;
+            int inserted = static_cast<int>(destination->getAllPages().size()) - number_of_pages;
             pdflib::pdf_catalog_ops::splice_page_labels(*destination, first, 0, inserted);
           }
       };
@@ -1657,7 +1627,7 @@ namespace docling
         {
           for(int index : selection)
             {
-              QPDFPageObjectHelper import_page = import_pages.at(index);
+              QPDFPageObjectHelper import_page(import_pages.at(index));
 
               // where this page of the other document ends up here; a page
               // copied twice is found at its first copy
@@ -1665,14 +1635,13 @@ namespace docling
 
               // qpdf copies a page of another QPDF into this one, and makes a
               // shallow copy when the same page is added a second time.
-              std::vector<QPDFPageObjectHelper> current = helper.getAllPages();
-              if(position >= static_cast<int>(current.size()))
+              if(at_end)
                 {
                   helper.addPage(import_page, false);
                 }
               else
                 {
-                  helper.addPageAt(import_page, true, current.at(position));
+                  helper.addPageAt(import_page, true, anchor);
                 }
 
               // Widgets were copied with the page, but their fields still belong
@@ -1686,8 +1655,7 @@ namespace docling
                       destination_acroform = std::make_unique<QPDFAcroFormDocumentHelper>(*destination);
                     }
 
-                  QPDFPageObjectHelper new_page = helper.getAllPages().at(position);
-                  destination_acroform->fixCopiedAnnotations(new_page.getObjectHandle(),
+                  destination_acroform->fixCopiedAnnotations(destination->getAllPages().at(position),
                                                              import_page.getObjectHandle(),
                                                              import->get_acroform());
                 }
@@ -1826,10 +1794,43 @@ namespace docling
     });
   }
 
-  inline std::pair<nlohmann::json, std::int64_t> docling_editor::form_state()
+  inline std::pair<bool, bool> docling_editor::form_flags()
+  {
+    return read_document(pdflib::pdf_form_ops::flags);
+  }
+
+  inline const std::map<std::string, std::vector<int> >& docling_editor::field_page_index()
+  {
+    if(field_page_revision != current_revision)
+      {
+        pages_by_field = with_document(pdflib::pdf_form_ops::field_pages);
+        field_page_revision = current_revision;
+      }
+    return pages_by_field;
+  }
+
+  inline std::pair<std::optional<std::vector<int> >, std::int64_t>
+  docling_editor::field_pages(const std::string& name)
   {
     std::lock_guard<std::recursive_mutex> lock(parser_mutex);
-    return {form(), current_generation};
+    return guarded([&]() -> std::pair<std::optional<std::vector<int> >, std::int64_t> {
+      const auto& fields = field_page_index();
+      auto match = fields.find(name);
+      if(match == fields.end()) { return {std::nullopt, current_generation}; }
+      return {match->second, current_generation};
+    });
+  }
+
+  inline bool docling_editor::has_form_on_page(int page)
+  {
+    std::lock_guard<std::recursive_mutex> lock(parser_mutex);
+    return guarded([&]() {
+      check_page(page, page_count());
+      const auto& fields = field_page_index();
+      return std::any_of(fields.begin(), fields.end(), [page](const auto& field) {
+        return std::binary_search(field.second.begin(), field.second.end(), page);
+      });
+    });
   }
 
   inline nlohmann::json docling_editor::page_annotations(int page, std::int64_t expected_generation)
@@ -1840,10 +1841,7 @@ namespace docling
       check_generation(expected_generation);
 
       return with_document([this, page](QPDF& qpdf) {
-        std::vector<QPDFPageObjectHelper> pages = QPDFPageDocumentHelper(qpdf).getAllPages();
-        check_page(page, static_cast<int>(pages.size()));
-
-        return pdflib::pdf_annotation_ops::read(qpdf, pages.at(page));
+        return pdflib::pdf_annotation_ops::read(qpdf, page_at(qpdf, page));
       });
     });
   }
@@ -1926,13 +1924,6 @@ namespace docling
   {
     edit_document([&name, page](QPDF& qpdf) {
       pdflib::pdf_catalog_ops::add_named_destination(qpdf, name, page);
-    });
-  }
-
-  inline int docling_editor::add_outline_item(std::string title, int page, int parent)
-  {
-    return edit_document([&title, page, parent](QPDF& qpdf) {
-      return pdflib::pdf_outline_ops::add_item(qpdf, title, page, parent);
     });
   }
 

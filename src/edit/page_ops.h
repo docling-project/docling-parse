@@ -129,6 +129,8 @@ namespace pdflib
                                     const std::string& prefix,
                                     QPDFObjectHandle resource);
 
+    static QPDFObjectHandle own_resources(QPDFPageObjectHelper page);
+
     // Draw `text` (UTF-8) with its baseline starting at (x, y), in `font`
     // (from make_standard_font) at `size` points, filled with `color`
     // (red, green, blue in 0..1). A line feed starts a new line 1.2 x size
@@ -579,12 +581,7 @@ namespace pdflib
 
     // The page gets a /Resources dictionary of its own: adding a name to one
     // inherited from /Pages would add it to every sibling page.
-    QPDFObjectHandle resources = page.getAttribute("/Resources", true);
-    if(not resources.isDictionary())
-      {
-        resources = QPDFObjectHandle::newDictionary();
-        page.getObjectHandle().replaceKey("/Resources", resources);
-      }
+    QPDFObjectHandle resources = own_resources(page);
 
     int min_suffix = 1;
     std::string name = resources.getUniqueResourceName("/Fx", min_suffix);
@@ -637,8 +634,7 @@ namespace pdflib
       {
         // The existing content may leave any graphics state behind: close it
         // off before drawing on top.
-        page.addPageContents(qpdf.newStream(std::string("q\n")), true);
-        page.addPageContents(qpdf.newStream(std::string("\nQ\n") + content), false);
+        append_content(qpdf, page, content);
       }
     if(not expanded_box.isNull())
       {
@@ -693,18 +689,23 @@ namespace pdflib
     return qpdf.makeIndirectObject(font);
   }
 
-  inline std::string pdf_page_ops::add_resource(QPDFPageObjectHelper page,
-                                                const std::string& kind,
-                                                const std::string& prefix,
-                                                QPDFObjectHandle resource)
+  inline QPDFObjectHandle pdf_page_ops::own_resources(QPDFPageObjectHelper page)
   {
-    // A dictionary of the page's own, as in overlay().
     QPDFObjectHandle resources = page.getAttribute("/Resources", true);
     if(not resources.isDictionary())
       {
         resources = QPDFObjectHandle::newDictionary();
         page.getObjectHandle().replaceKey("/Resources", resources);
       }
+    return resources;
+  }
+
+  inline std::string pdf_page_ops::add_resource(QPDFPageObjectHelper page,
+                                                const std::string& kind,
+                                                const std::string& prefix,
+                                                QPDFObjectHandle resource)
+  {
+    QPDFObjectHandle resources = own_resources(page);
 
     resources.mergeResources(QPDFObjectHandle::parse("<< " + kind + " << >> >>"));
     QPDFObjectHandle entries = resources.getKey(kind);

@@ -85,14 +85,16 @@ document's form, language, XMP, outline and structure information.
 
 ## Behavior to know about
 
-- **Lazy work.** Opening parses document structure; text, image and render
-  requests decode pages on demand. Editing and serialization run in C++.
-  Measured comparisons of these editing workflows against pypdf are still
-  outstanding; no speedup is claimed here.
+- **Lazy work.** Opening parses document structure. Text, image and render
+  requests decode the current page directly. Editing and serialization run
+  in C++. The editing benchmark measures opening, operations and writing
+  separately. [Editing benchmark](../scripts/benchmarking/README.md#editing-benchmark)
 - **Source ownership.** Input streams are read and never closed by the library.
   An opened document costs at least its input byte size in memory. An editor
-  starts a separate editing copy on its first change. Imported source
-  documents remain alive until the importing document closes.
+  starts a separate editing copy on its first change. Copied page streams
+  belong to the destination, and the cache of parsed import sources is bounded.
+- **Logging.** Creating an Editor, Reader or Writer preserves the process
+  logging level. Editor calls use the existing native logging configuration.
 - **Page handles.** Removing or moving pages, or inserting before existing
   pages, invalidates old handles with `PdfStaleHandleError`. Take a new handle
   afterward. In-place edits and appending at the end keep them valid.

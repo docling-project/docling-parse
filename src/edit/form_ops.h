@@ -46,6 +46,8 @@ namespace pdflib
     // can take besides /Off. "pages" are the pages showing a widget of the
     // field.
     static nlohmann::json read(QPDF& qpdf);
+    static std::pair<bool, bool> flags(QPDF& qpdf);
+    static std::map<std::string, std::vector<int> > field_pages(QPDF& qpdf);
 
     // Set field values by fully qualified name; a partial name is accepted
     // when it identifies exactly one field. Text and choice fields take the
@@ -147,6 +149,8 @@ namespace pdflib
     static std::vector<QPDFFormFieldObjectHelper> fields_of(QPDFAcroFormDocumentHelper& acroform);
     static std::vector<QPDFAnnotationObjectHelper> widgets_of(QPDFAcroFormDocumentHelper& acroform,
                                                               QPDFFormFieldObjectHelper& field);
+    static std::map<QPDFObjGen, std::set<int> > widget_pages(
+      QPDF& qpdf, QPDFAcroFormDocumentHelper& acroform);
 
     // The names of a widget's normal appearances other than /Off.
     static std::set<std::string> states_of(QPDFAcroFormDocumentHelper& acroform,
@@ -310,26 +314,16 @@ namespace pdflib
     return states;
   }
 
-  inline nlohmann::json pdf_form_ops::read(QPDF& qpdf)
+  inline std::pair<bool, bool> pdf_form_ops::flags(QPDF& qpdf)
   {
-    nlohmann::json result = nlohmann::json::object();
-    result["fields"] = nlohmann::json::array();
+    auto root = qpdf.getRoot();
+    auto form = root.getKey("/AcroForm");
+    return {root.hasKey("/AcroForm"), form.isDictionary() and form.hasKey("/XFA")};
+  }
 
-    QPDFAcroFormDocumentHelper acroform(qpdf);
-
-    result["has_form"] = acroform.hasAcroForm();
-    result["has_xfa"] = false;
-    result["need_appearances"] = false;
-
-    if(not acroform.hasAcroForm())
-      {
-        return result;
-      }
-
-    QPDFObjectHandle form = qpdf.getRoot().getKey("/AcroForm");
-    result["has_xfa"] = (form.isDictionary() and form.hasKey("/XFA"));
-    result["need_appearances"] = acroform.getNeedAppearances();
-
+  inline std::map<QPDFObjGen, std::set<int> > pdf_form_ops::widget_pages(
+    QPDF& qpdf, QPDFAcroFormDocumentHelper& acroform)
+  {
     // Index widgets themselves: qpdf's page lookup may return a top-level
     // field while its field lookup returns a terminal child.
     std::map<QPDFObjGen, std::set<int> > pages_of;
@@ -342,6 +336,41 @@ namespace pdflib
           }
         page_index += 1;
       }
+    return pages_of;
+  }
+
+  inline std::map<std::string, std::vector<int> > pdf_form_ops::field_pages(QPDF& qpdf)
+  {
+    std::map<std::string, std::vector<int> > fields;
+    if(not flags(qpdf).first) { return fields; }
+    QPDFAcroFormDocumentHelper acroform(qpdf);
+    auto pages_of = widget_pages(qpdf, acroform);
+    for(auto& field : fields_of(acroform))
+      {
+        std::set<int> pages;
+        for(auto& widget : widgets_of(acroform, field))
+          {
+            auto match = pages_of.find(widget.getObjectHandle().getObjGen());
+            if(match != pages_of.end())
+              {
+                pages.insert(match->second.begin(), match->second.end());
+              }
+          }
+        fields.try_emplace(field.getFullyQualifiedName(), pages.begin(), pages.end());
+      }
+    return fields;
+  }
+
+  inline nlohmann::json pdf_form_ops::read(QPDF& qpdf)
+  {
+    auto [has_form, has_xfa] = flags(qpdf);
+    nlohmann::json result = {{"has_form", has_form}, {"has_xfa", has_xfa},
+                            {"need_appearances", false}, {"fields", nlohmann::json::array()}};
+    if(not has_form) { return result; }
+
+    QPDFAcroFormDocumentHelper acroform(qpdf);
+    result["need_appearances"] = acroform.getNeedAppearances();
+    auto pages_of = widget_pages(qpdf, acroform);
 
     for(QPDFFormFieldObjectHelper& field : fields_of(acroform))
       {

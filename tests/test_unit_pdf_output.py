@@ -269,6 +269,29 @@ def test_read_only_serialization_keeps_source_state_and_handles():
         assert editor.extract_text(page_no=1) == "alpha"
 
 
+@pytest.mark.parametrize(
+    "algorithm", ["RC4-40", "RC4-128", "AES-128", "AES-256-R5", "AES-256"]
+)
+def test_live_encryption_metadata_matches_the_serialized_permissions(algorithm):
+    with PdfEditor(source=THREE) as editor:
+        editor.encrypt(
+            user_password="secret",
+            algorithm=algorithm,
+            allow_print="low",
+            allow_modify=False,
+            allow_accessibility=False,
+            allow_annotate=False,
+            allow_fill_forms=False,
+            allow_extract=False,
+            allow_assemble=False,
+        )
+        editor.add_metadata(infos={"Title": "Edited"})
+        assert editor.metadata["Title"] == "Edited"
+        projected = editor.encryption
+        with PdfReader(editor.to_bytes(), password="secret") as output:
+            assert output.encryption == projected
+
+
 def test_embedded_nul_password_is_rejected_instead_of_truncated():
     with PdfEditor(source=THREE) as editor:
         with pytest.raises(ValueError, match="NUL"):

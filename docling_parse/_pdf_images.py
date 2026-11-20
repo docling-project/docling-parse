@@ -11,6 +11,7 @@ from __future__ import annotations
 import math
 import os
 from collections.abc import Iterator, Sequence
+from contextlib import nullcontext
 from io import BytesIO
 from typing import Any, BinaryIO, NamedTuple, Union
 
@@ -32,11 +33,6 @@ PAGE_SIZES: dict[str, tuple[float, float]] = {
 # rotation that undoes them; those images are decoded and turned instead.
 _ORIENTATION_TO_ROTATION = {1: 0, 3: 180, 6: 90, 8: 270}
 
-# JPEG start-of-frame markers: baseline, extended, progressive and lossless,
-# Huffman and arithmetic coded (ITU T.81, table B.1).
-_SOF_MARKERS = {0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7}
-_SOF_MARKERS |= {0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF}
-
 
 class Picture(NamedTuple):
     """One image prepared for insertion as a PDF page."""
@@ -50,14 +46,6 @@ class Picture(NamedTuple):
     alpha: bytes | None  # width x height opacity samples
     dpi: tuple[float, float] | None
     rotate: int  # clockwise page rotation that shows the image upright
-
-
-class JpegHeader(NamedTuple):
-    width: int
-    height: int
-    components: int
-    precision: int
-    adobe: bool
 
 
 def read_source(source: ImageSource) -> bytes | Any:
@@ -80,49 +68,6 @@ def read_source(source: ImageSource) -> bytes | Any:
     )
 
 
-def parse_jpeg_header(data: bytes) -> JpegHeader | None:
-    """Size, components and sample precision of a JPEG file, or None when
-    `data` is not a JPEG file with a frame header."""
-    if not data.startswith(b"\xff\xd8"):
-        return None
-
-    adobe = False
-    position = 2
-    while position + 4 <= len(data):
-        if data[position] != 0xFF:
-            return None
-        marker = data[position + 1]
-
-        # fill bytes, and markers that have no segment
-        if marker == 0xFF:
-            position += 1
-            continue
-        if marker == 0x01 or 0xD0 <= marker <= 0xD7:
-            position += 2
-            continue
-
-        length = int.from_bytes(data[position + 2 : position + 4], "big")
-        segment = data[position + 4 : position + 2 + length]
-
-        if marker == 0xEE and segment.startswith(b"Adobe"):
-            adobe = True
-        elif marker in _SOF_MARKERS and len(segment) >= 6:
-            return JpegHeader(
-                width=int.from_bytes(segment[3:5], "big"),
-                height=int.from_bytes(segment[1:3], "big"),
-                components=segment[5],
-                precision=segment[0],
-                adobe=adobe,
-            )
-        elif marker == 0xDA:
-            # start of scan without a frame header
-            return None
-
-        position += 2 + length
-
-    return None
-
-
 def _dpi_of(info: Any) -> tuple[float, float] | None:
     dpi = info.get("dpi")
     if not dpi:
@@ -136,34 +81,30 @@ def _dpi_of(info: Any) -> tuple[float, float] | None:
     return (x, y)
 
 
-def _from_jpeg(data: bytes, header: JpegHeader) -> Picture | None:
+def _from_jpeg(data: bytes, image: Any) -> Picture | None:
     """The JPEG file as it is, or None when it has to be decoded instead."""
     colorspaces = {1: "gray", 3: "rgb", 4: "cmyk"}
 
     # PDF readers decode 8-bit DCT data only.
-    if header.precision != 8 or header.components not in colorspaces:
+    if image.bits != 8 or image.layers not in colorspaces:
         return None
 
-    from PIL import Image
-
-    with Image.open(BytesIO(data)) as image:
-        orientation = image.getexif().get(0x0112, 1)
-        dpi = _dpi_of(image.info)
+    orientation = image.getexif().get(0x0112, 1)
 
     rotation = _ORIENTATION_TO_ROTATION.get(orientation)
     if rotation is None:
         return None
 
     return Picture(
-        width=header.width,
-        height=header.height,
-        colorspace=colorspaces[header.components],
+        width=image.width,
+        height=image.height,
+        colorspace=colorspaces[image.layers],
         data=data,
         is_jpeg=True,
         # Adobe applications store CMYK JPEG samples inverted.
-        invert=header.components == 4 and header.adobe,
+        invert=image.layers == 4 and "adobe" in image.info,
         alpha=None,
-        dpi=dpi,
+        dpi=_dpi_of(image.info),
         rotate=rotation,
     )
 
@@ -216,21 +157,22 @@ def pictures(source: ImageSource) -> Iterator[Picture]:
     multi-page TIFF and animated GIF files."""
     content = read_source(source)
 
-    if isinstance(content, bytes):
-        header = parse_jpeg_header(content)
-        if header is not None:
-            picture = _from_jpeg(content, header)
+    from PIL import Image, ImageOps, ImageSequence
+
+    with (
+        Image.open(BytesIO(content))
+        if isinstance(content, bytes)
+        else nullcontext(content) as image
+    ):
+        if isinstance(content, bytes) and image.format == "JPEG":
+            picture = _from_jpeg(content, image)
             if picture is not None:
                 yield picture
                 return
-
-    from PIL import Image, ImageOps, ImageSequence
-
-    image = Image.open(BytesIO(content)) if isinstance(content, bytes) else content
-    for frame in ImageSequence.Iterator(image):
-        dpi = _dpi_of(frame.info) or _dpi_of(image.info)
-        upright = ImageOps.exif_transpose(frame)
-        yield _from_pil(upright if upright is not None else frame, dpi)
+        for frame in ImageSequence.Iterator(image):
+            dpi = _dpi_of(frame.info) or _dpi_of(image.info)
+            upright = ImageOps.exif_transpose(frame)
+            yield _from_pil(upright if upright is not None else frame, dpi)
 
 
 class PageLayout(NamedTuple):

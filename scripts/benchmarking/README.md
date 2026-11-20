@@ -23,7 +23,45 @@ It does not update the documentation. Full runs can take hours.
 | `run_performance_benchmarking.py` | Python API scaling and cross-package measurement | PDFs or HF dataset | Console tables and per-page CSV |
 | `run_performance_eval.py` | Explore Python comparison page timings | Comparison per-page CSV | Histograms, scaling/correlation PNGs, document statistics |
 | `run_performance_analysis.py` | Replay slow pages for detailed native timings | Comparison per-page CSV and original PDFs | Analysis CSV or detailed timing table |
+| `run_editing_benchmark.py` | Measure Editor performance at several sizes | Generated PDFs with text, widgets, links and bookmarks | JSONL with open, operation and write times plus peak RSS |
 | `run_quality_benchmarking.py` | Compare text and raster quality | PDFs or HF dataset | Quality CSVs and comparison visualizations |
+
+## Editing benchmark
+
+```sh
+python scripts/benchmarking/run_editing_benchmark.py \
+  --sizes 16 128 512 --samples 3 --iterations 10 > editing.jsonl
+```
+
+Run against the locally built extension on macOS or Linux. Each sample runs
+in a fresh process with the same logging and font initialization.
+The first phase opens the source and initializes the destination when
+needed. The second measures the edits or lookups. The third writes one PDF
+to disk. RSS is the worker's peak across all three phases. The output holds
+medians for each workload and size. Append and append-with-outline each copy
+the full source once per sample. The other workloads repeat the selected
+operation up to `--iterations` times.
+
+For the PR #467 editing refactor, the comparison used commit `4d4cfd9` and
+the Step 6 changes on macOS arm64. Values below are the median operation
+times in milliseconds over three samples. Each page contributes one widget,
+one link, and one bookmark. The 16-, 128-, and 512-page fixtures contain
+134, 1,030, and 4,102 PDF objects respectively.
+
+| Workload | 16 pages | 128 pages | 512 pages | Peak RSS at 512 pages (MiB) |
+|---|---:|---:|---:|---:|
+| Delete | 0.63 → 0.59 | 3.25 → 3.29 | 12.07 → 12.12 | 49.2 → 49.0 |
+| Append | 0.77 → 0.80 | 5.56 → 5.57 | 22.81 → 21.17 | 62.0 → 61.3 |
+| Append with bookmarks | 0.86 → 0.90 | 5.80 → 6.01 | 23.61 → 22.17 | 62.8 → 62.2 |
+| Form lookup | 3.46 → 0.23 | 68.34 → 2.83 | 877.56 → 31.18 | 54.7 → 54.0 |
+| Rotate and extract | 8.17 → 2.24 | 42.76 → 2.80 | 166.50 → 4.92 | 60.3 → 49.8 |
+| Encrypted metadata | 173.61 → 0.45 | 195.36 → 2.82 | 269.74 → 10.86 | 54.6 → 50.5 |
+| Empty append | 2.22 → 0.01 | 13.33 → 0.02 | 52.98 → 0.02 | 74.9 → 51.0 |
+
+At 512 pages, opening took 2.7–2.9 ms on both revisions. The final write
+after rotate and extract rose from 0.93 ms to 13.18 ms, and the write
+after encrypted metadata reads rose from 1.24 ms to 15.50 ms. Those operations
+now defer serialization to the write phase.
 
 ## Install and rebuild
 

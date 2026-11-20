@@ -1,5 +1,9 @@
 """Regressions for page identity, atomic edits and retained PDF references."""
 
+import os
+import subprocess
+import sys
+import textwrap
 from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 from threading import Event
@@ -278,6 +282,131 @@ def test_removing_nested_widget_annotations_prunes_the_fields():
         saved = pdf_reader(editor)
         assert all("/Annots" not in page for page in saved.pages)
         assert not saved.trailer["/Root"]["/AcroForm"]["/Fields"]
+
+
+def test_field_page_lookup_tracks_the_live_page_list():
+    with PdfEditor(source=nested_form_pdf()) as editor:
+        assert [
+            p.page_no for p in editor.get_pages_showing_field(name="group.shared")
+        ] == [1, 2]
+        editor.insert_blank_page(before_page_no=1, width=100, height=100)
+        assert not editor.has_form_on_page(page_no=1)
+        assert [
+            p.page_no for p in editor.get_pages_showing_field(name="group.shared")
+        ] == [2, 3]
+        editor.remove_annotations(subtypes="/Widget")
+        with pytest.raises(KeyError, match=r"group\.shared"):
+            editor.get_pages_showing_field(name="group.shared")
+
+
+def test_empty_append_does_not_open_a_source_or_start_an_edit(tmp_path):
+    absent = tmp_path / "does-not-exist.pdf"
+    with PdfEditor(source=THREE) as editor, PdfWriter(THREE) as writer:
+        editor.append(source=absent, page_nos=[])
+        writer.append(absent, pages=[])
+        assert not editor.is_modified
+        assert editor.page_count() == writer.get_num_pages() == 3
+
+
+def test_imported_streams_survive_source_removal_and_cache_eviction(tmp_path):
+    path = tmp_path / "café-東京-𐐀.pdf"
+    path.write_bytes(THREE)
+    with PdfEditor() as result:
+        result.append(source=path, page_nos=[2])
+        path.unlink()
+        for _ in range(10):
+            with PdfReader(THREE) as source:
+                result.append(source=source, page_nos=[1])
+        with PdfReader(result.to_bytes()) as saved:
+            assert [p.extract_text() for p in saved.pages] == [
+                "beta",
+                *(["alpha"] * 10),
+            ]
+
+
+def test_legacy_parser_opens_a_unicode_path(tmp_path):
+    from docling_parse.pdf_parser import DoclingPdfParser
+
+    path = tmp_path / "café-東京-𐐀.pdf"
+    path.write_bytes(THREE)
+    parser = DoclingPdfParser()
+    document = parser.load(path)
+    assert document.number_of_pages() == 3
+
+
+def test_editor_construction_and_import_preserve_parser_logging(tmp_path):
+    path = tmp_path / "source.pdf"
+    path.write_bytes(THREE)
+    program = textwrap.dedent(
+        """
+        import sys
+        from docling_parse import PdfEditor, pdf_parsers
+
+        parser = pdf_parsers.pdf_parser("info")
+        with PdfEditor(loglevel="fatal") as editor:
+            editor.append(source=sys.argv[1], page_nos=[1])
+        assert parser.load_document("logging-test", sys.argv[1])
+        """
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", program, str(path)],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=8,
+    )
+    assert "by reading into memory" in result.stderr
+
+
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="Requires a POSIX FIFO")
+@pytest.mark.parametrize("getter", ["is_open", "is_editing"])
+def test_blocked_editor_getter_releases_the_gil(tmp_path, getter):
+    fifo = tmp_path / "input.pdf"
+    os.mkfifo(fifo)
+    program = textwrap.dedent(
+        """
+        import os
+        import sys
+        from threading import Event, Thread
+        from time import sleep
+
+        from docling_parse import PdfEditor
+        from docling_parse.pdf_errors import PdfLoadError
+
+        editor = PdfEditor()
+        loading, querying, queried, heartbeat = Event(), Event(), Event(), Event()
+
+        def load():
+            loading.set()
+            try:
+                editor.open(source=sys.argv[1])
+            except PdfLoadError:
+                pass
+
+        def query():
+            querying.set()
+            getattr(editor._native, sys.argv[2])()
+            queried.set()
+
+        loader = Thread(target=load, daemon=True)
+        loader.start()
+        assert loading.wait(2)
+        sleep(0.1)  # open blocks on the FIFO while holding the document lock
+        reader = Thread(target=query, daemon=True)
+        reader.start()
+        assert querying.wait(2)
+        sleep(0.05)
+        Thread(target=heartbeat.set).start()
+        assert heartbeat.wait(2) and not queried.is_set()
+        os.close(os.open(sys.argv[1], os.O_WRONLY))
+        loader.join(2)
+        reader.join(2)
+        assert queried.is_set()
+        """
+    )
+    subprocess.run(
+        [sys.executable, "-c", program, str(fifo), getter], check=True, timeout=8
+    )
 
 
 @pytest.mark.parametrize("clean", [False, True])

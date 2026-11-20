@@ -233,14 +233,7 @@ namespace docling
       load_errors.erase(key);
     }
 
-#ifdef _WIN32
-    // Convert UTF-8 string to UTF-16 wstring
-    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t> > converter;
-    std::wstring wide_filename = converter.from_bytes(filename);
-    std::filesystem::path path_filename(wide_filename);
-#else
-    std::filesystem::path path_filename(filename);
-#endif
+    auto path_filename = utils::filesystem::from_utf8(filename);
 
     if (std::filesystem::exists(path_filename))
       {

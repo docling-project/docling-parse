@@ -160,11 +160,15 @@ namespace docling
 
         .def("take_open_error",
              [](class_type& self) -> std::map<std::string, std::string> {
+               pybind11::gil_scoped_release release;
                return self.take_open_error();
              },
              "Return and clear why the last open failed: {'category': ..., 'message': ...}.")
 
-        .def("is_open", [](class_type& self) -> bool { return self.is_open(); })
+        .def("is_open", [](class_type& self) -> bool {
+          pybind11::gil_scoped_release release;
+          return self.is_open();
+        })
 
         .def("close",
              [](class_type& self) -> void {
@@ -297,15 +301,18 @@ namespace docling
              },
              "The interactive form: flags and fields.")
 
-        .def("form_state",
-             [](class_type& self) {
-               std::pair<nlohmann::json, std::int64_t> state;
-               {
-                 pybind11::gil_scoped_release release;
-                 state = self.form_state();
-               }
-               return pybind11::make_tuple(pyjson::from_json(state.first), state.second);
-             })
+        .def("form_flags", [](class_type& self) {
+          pybind11::gil_scoped_release release;
+          return self.form_flags();
+        })
+        .def("field_pages", [](class_type& self, const std::string& name) {
+          pybind11::gil_scoped_release release;
+          return self.field_pages(name);
+        })
+        .def("has_form_on_page", [](class_type& self, int page) {
+          pybind11::gil_scoped_release release;
+          return self.has_form_on_page(page);
+        })
 
         .def("page_annotations",
              [](class_type& self, int page, std::int64_t generation) -> pybind11::object {
@@ -352,17 +359,7 @@ namespace docling
                }
                return pyjson::from_json(result);
              },
-             "Document-level scripts: {name: script}.")
-
-        .def("outline",
-             [](class_type& self) -> pybind11::object {
-               nlohmann::json outline;
-               {
-                 pybind11::gil_scoped_release release;
-                 outline = self.outline();
-               }
-               return pyjson::from_json(outline);
-             });
+             "Document-level scripts: {name: script}.");
     }
 
     // open_source(other): one overload per kind of document that can be read
@@ -389,9 +386,12 @@ namespace docling
                  int at,
                  std::int64_t other_generation,
                  bool import_outline,
-                 const std::optional<std::string>& outline_item) {
+                 const std::optional<std::string>& outline_item,
+                 bool transient) {
                 pybind11::gil_scoped_release release;
-                return self.append_pages(other.get_source(other_generation),
+                auto source = transient ? other.take_import_source(other_generation)
+                                        : other.get_source(other_generation);
+                return self.append_pages(source,
                                          pages,
                                          at,
                                          import_outline, outline_item);
@@ -402,6 +402,7 @@ namespace docling
               pybind11::arg("other_generation") = other_type::ANY_GENERATION,
               pybind11::arg("import_outline") = false,
               pybind11::arg("outline_item") = pybind11::none(),
+              pybind11::arg("transient") = false,
               "Copy pages and return the first new index and generation.");
     }
 
@@ -755,16 +756,6 @@ namespace docling
              pybind11::arg("generation") = class_type::ANY_GENERATION,
              "Draw text on a page in a standard font.")
 
-        .def("add_outline_item",
-             [](class_type& self, const std::string& title, int page, int parent) -> int {
-               pybind11::gil_scoped_release release;
-               return self.add_outline_item(title, page, parent);
-             },
-             pybind11::arg("title"),
-             pybind11::arg("page") = -1,
-             pybind11::arg("parent") = 0,
-             "Add a bookmark; returns its id.")
-
         .def("set_form_values",
              [](class_type& self, std::map<std::string, std::string> values, bool flatten) -> int {
                pybind11::gil_scoped_release release;
@@ -952,7 +943,10 @@ namespace docling
              pybind11::arg("scale") = 1.0,
              "Render the current page to RGBA bytes and shape; page_no starts at 1.")
 
-        .def("is_editing", [](docling_editor& self) -> bool { return self.is_editing(); },
+        .def("is_editing", [](docling_editor& self) -> bool {
+          pybind11::gil_scoped_release release;
+          return self.is_editing();
+        },
              "True once the editor works on its own copy of the document.")
 
         .def("object_json",
@@ -1002,6 +996,18 @@ namespace docling
           }
       });
     }
+    template<typename class_type, typename... source_types>
+    void bind_document(pybind11::class_<class_type>& cls)
+    {
+      bind_inspection(cls);
+      (bind_open_source<class_type, source_types>(cls), ...);
+      if constexpr(not std::is_same_v<class_type, pdf_reader>)
+        {
+          bind_editing(cls);
+          (bind_append_pages<class_type, source_types>(cls), ...);
+          (bind_overlay_page<class_type, source_types>(cls), ...);
+        }
+    }
   }
 
   // Called once from the module definition in app/pybind_parse.cpp.
@@ -1016,40 +1022,9 @@ namespace docling
     pybind11::class_<docling_editor> editor(m, "pdf_editor",
       "Full PDF editor; the native half of docling_parse.pdf_editor.PdfEditor.");
 
-    edit_bindings::bind_inspection(reader);
-    edit_bindings::bind_inspection(writer);
-    edit_bindings::bind_inspection(editor);
-
-    edit_bindings::bind_open_source<pdf_reader, pdf_reader>(reader);
-    edit_bindings::bind_open_source<pdf_reader, pdf_writer>(reader);
-    edit_bindings::bind_open_source<pdf_reader, docling_editor>(reader);
-
-    edit_bindings::bind_open_source<pdf_writer, pdf_reader>(writer);
-    edit_bindings::bind_open_source<pdf_writer, pdf_writer>(writer);
-    edit_bindings::bind_open_source<pdf_writer, docling_editor>(writer);
-
-    edit_bindings::bind_open_source<docling_editor, pdf_reader>(editor);
-    edit_bindings::bind_open_source<docling_editor, pdf_writer>(editor);
-    edit_bindings::bind_open_source<docling_editor, docling_editor>(editor);
-
-    edit_bindings::bind_editing(writer);
-    edit_bindings::bind_editing(editor);
-
-    edit_bindings::bind_append_pages<pdf_writer, pdf_reader>(writer);
-    edit_bindings::bind_append_pages<pdf_writer, pdf_writer>(writer);
-    edit_bindings::bind_append_pages<pdf_writer, docling_editor>(writer);
-
-    edit_bindings::bind_append_pages<docling_editor, pdf_reader>(editor);
-    edit_bindings::bind_append_pages<docling_editor, pdf_writer>(editor);
-    edit_bindings::bind_append_pages<docling_editor, docling_editor>(editor);
-
-    edit_bindings::bind_overlay_page<pdf_writer, pdf_reader>(writer);
-    edit_bindings::bind_overlay_page<pdf_writer, pdf_writer>(writer);
-    edit_bindings::bind_overlay_page<pdf_writer, docling_editor>(writer);
-
-    edit_bindings::bind_overlay_page<docling_editor, pdf_reader>(editor);
-    edit_bindings::bind_overlay_page<docling_editor, pdf_writer>(editor);
-    edit_bindings::bind_overlay_page<docling_editor, docling_editor>(editor);
+    edit_bindings::bind_document<pdf_reader, pdf_reader, pdf_writer, docling_editor>(reader);
+    edit_bindings::bind_document<pdf_writer, pdf_reader, pdf_writer, docling_editor>(writer);
+    edit_bindings::bind_document<docling_editor, pdf_reader, pdf_writer, docling_editor>(editor);
 
     edit_bindings::bind_editor_only(editor);
   }

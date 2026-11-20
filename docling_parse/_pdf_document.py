@@ -706,7 +706,6 @@ class _PdfDocument:
     """Opening, closing and inspection: common to reader, writer and editor."""
 
     _native_class: type
-    _page_owner: _PdfDocument
     _page_class: type[PdfPage] = PdfPage
 
     def __init__(self, loglevel: str = "fatal"):
@@ -769,7 +768,7 @@ class _PdfDocument:
 
     @property
     def _pages(self) -> PdfPages:
-        return PdfPages(getattr(self, "_page_owner", self))
+        return PdfPages(self)
 
     def _get_page(self, page_number: int) -> PdfPage:
         """The page at a zero-based position; same as `self._pages[page_number]`."""
@@ -777,12 +776,12 @@ class _PdfDocument:
 
     def _get_page_number(self, page: _PageView) -> int:
         """The zero-based position of a page of this document."""
-        if page._owner is not getattr(self, "_page_owner", self):
+        if page._owner is not self:
             raise ValueError("the page belongs to another document")
         return page._checked_index()
 
     def _page_handle(self, page: _PageView) -> tuple[int, int]:
-        if page._owner is not getattr(self, "_page_owner", self):
+        if page._owner is not self:
             raise PdfStaleHandleError(
                 PdfEditErrorCategory.STALE_HANDLE,
                 "the page handle belongs to another document",
@@ -791,16 +790,15 @@ class _PdfDocument:
 
     def _get_pages_showing_field(self, name: str) -> list[PdfPage]:
         """The pages that show the form field with this fully qualified name."""
-        owner = getattr(self, "_page_owner", self)
         with _native_errors():
-            form, generation = owner._native.form_state()
-        for field in form["fields"]:
-            if field["name"] == name:
-                return [
-                    owner._page_class(owner, index, generation)
-                    for index in field["pages"]
-                ]
-        raise KeyError(name)
+            pages, generation = self._native.field_pages(name)
+        if pages is None:
+            raise KeyError(name)
+        return [self._page_class(self, index, generation) for index in pages]
+
+    def _form_flags(self) -> tuple[bool, bool]:
+        with _native_errors():
+            return self._native.form_flags()
 
     @property
     def pdf_header(self) -> str:
@@ -983,6 +981,8 @@ class _PdfEditing(_PdfDocument):
         With `import_outline`, the source's bookmarks that lead to a copied
         page are added to this document's outline, pointing at the copies.
         """
+        if isinstance(pages, Sequence) and not pages:
+            return
         native, temporary = self._import_source(source, password)
         try:
             with _native_errors():
@@ -999,29 +999,11 @@ class _PdfEditing(_PdfDocument):
                     selection,
                     -1 if index is None else self._position(index),
                     import_outline=import_outline,
+                    transient=temporary is not None,
                 )
         finally:
             if temporary is not None:
                 temporary.close()
-
-    def _merge(
-        self,
-        position: int | None,
-        fileobj: Any,
-        pages: Iterable[int] | slice | None = None,
-        *,
-        password: str | bytes | None = None,
-        import_outline: bool = True,
-    ) -> None:
-        """Copy pages of another PDF into this document at `position`
-        (None for the end). Same as `append(fileobj, pages, index=position)`."""
-        self._append(
-            fileobj,
-            pages,
-            index=position,
-            password=password,
-            import_outline=import_outline,
-        )
 
     def _add_page(self, page: _PageView) -> PdfEditablePage:
         """Append a copy of a page of any reader, writer or editor."""
@@ -1029,8 +1011,7 @@ class _PdfEditing(_PdfDocument):
 
     def _edit_result(self, handle: tuple[int, int]) -> PdfEditablePage:
         index, generation = handle
-        owner = getattr(self, "_page_owner", self)
-        return PdfEditablePage(owner, index, generation)
+        return PdfEditablePage(self, index, generation)
 
     def _insert_page(self, page: _PageView, index: int | None = 0) -> PdfEditablePage:
         """Insert a copy of a page of any reader, writer or editor so that it

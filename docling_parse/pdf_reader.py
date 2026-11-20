@@ -47,7 +47,7 @@ class PdfReader(_PdfReaderCompat):
         root_object_recovery_limit: int | None = 10000,
     ):
         super().__init__()
-        self._editor._compat_open(
+        self._compat_open(
             stream=stream,
             strict=strict,
             password=password,

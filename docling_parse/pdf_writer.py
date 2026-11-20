@@ -68,7 +68,7 @@ class PdfWriter(_PdfWriterCompat):
         incremental_clone_object_id_limit: int | None = 1000000,
     ):
         super().__init__()
-        cloned = self._editor._compat_init_writer(
+        cloned = self._compat_init_writer(
             fileobj=fileobj,
             clone_from=clone_from,
             incremental=incremental,

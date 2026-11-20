@@ -35,14 +35,16 @@ namespace docling
     using docling_editor::page_info;
     using docling_editor::extract_text;
     using docling_editor::page_images;
-    using docling_editor::outline;
     using docling_editor::get_source;
+    using docling_editor::take_import_source;
     using docling_editor::document_settings;
     using docling_editor::page_labels;
     using docling_editor::named_destinations;
     using docling_editor::outline_tree;
     using docling_editor::form;
-    using docling_editor::form_state;
+    using docling_editor::form_flags;
+    using docling_editor::field_pages;
+    using docling_editor::has_form_on_page;
     using docling_editor::page_annotations;
     using docling_editor::attachments;
     using docling_editor::attachment_data;
