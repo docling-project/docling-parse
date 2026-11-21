@@ -161,7 +161,8 @@ namespace pdflib
           QPDFObjectHandle stream = QPDFObjectHandle::newStream(&scratch);
           stream.replaceStreamData(data, filter_array, parms_array);
 
-          auto decoded = to_shared_ptr(stream.getStreamData());
+          // qpdf_dl_specialized so that /RunLengthDecode is undone as well.
+          auto decoded = to_shared_ptr(stream.getStreamData(qpdf_dl_specialized));
 
           LOG_S(INFO) << "apply_filters: undid " << count << " transport filter(s), "
                       << data->getSize() << " -> "

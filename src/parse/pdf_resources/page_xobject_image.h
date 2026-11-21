@@ -1135,7 +1135,10 @@ namespace pdflib
 
     try
       {
-        decoded_stream_data = to_shared_ptr(qpdf_xobject.getStreamData());
+        // qpdf_dl_specialized adds /RunLengthDecode to the lossless filters
+        // QPDF undoes by default; at the default level the stream is reported
+        // unfilterable and the image is not drawn.
+        decoded_stream_data = to_shared_ptr(qpdf_xobject.getStreamData(qpdf_dl_specialized));
         LOG_S(INFO) << "decoded stream size: " << decoded_stream_data->getSize() << " bytes";
       }
     catch(std::exception const& e)
