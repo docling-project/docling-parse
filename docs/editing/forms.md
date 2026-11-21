@@ -176,4 +176,3 @@ raise `PdfUnsupportedError` before values or pages change.
 
 `editor.flatten_annotations()` also flattens non-form annotations that
 have appearances.
-

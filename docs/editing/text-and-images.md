@@ -105,4 +105,3 @@ Page sizes are `"A3"`, `"A4"`, `"A5"`, `"Letter"`, `"Legal"` or
 Creating an image page does not place an image onto an existing page:
 replacement, recompression and drawing new images on existing pages are not
 currently exposed.
-

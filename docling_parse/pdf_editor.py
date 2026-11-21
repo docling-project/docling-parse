@@ -103,8 +103,8 @@ class PdfEditor(_PdfEditing):
     editor continues on its own complete copy. The source is never modified
     unless `write` is pointed at its path.
 
-    Output is a full, unencrypted rewrite: signatures of the source do not
-    stay valid, and an encrypted source is written in the clear.
+    Writing creates a complete PDF and invalidates existing signatures.
+    Call `encrypt()` before writing to encrypt the output.
 
     One editor may be shared between threads: calls are serialized.
     """
@@ -380,7 +380,12 @@ class PdfEditor(_PdfEditing):
         password: str | bytes | None = None,
         import_outline: bool = True,
     ) -> None:
-        "Append. Page numbers start at 1."
+        """Copy selected pages into this document.
+
+        `page_nos` uses one-based numbers in the source. Omit it to copy
+        every page. An empty selection leaves the document alone.
+        `before_page_no` selects an insertion point in this document.
+        """
         return self._append(
             source=source,
             pages=self._selection(page_nos=page_nos),
@@ -416,7 +421,11 @@ class PdfEditor(_PdfEditing):
         return self._page_view(self._add_page(page))
 
     def insert_page(self, *, page: _PageView, before_page_no: int = 1) -> PdfEditorPage:
-        "Insert page. Page numbers start at 1."
+        """Copy a page before the given one-based position.
+
+        Returns a view of the inserted page. A stale source view raises
+        `PdfStaleHandleError`.
+        """
         return self._page_view(
             self._insert_page(
                 page, self._page_no_index(page_no=before_page_no, insertion=True)
@@ -430,7 +439,10 @@ class PdfEditor(_PdfEditing):
     def insert_blank_page(
         self, *, before_page_no: int, width: float, height: float
     ) -> PdfEditorPage:
-        "Insert blank page. Page numbers start at 1."
+        """Insert a blank page before the given position and return its view.
+
+        Supply finite, positive dimensions in PDF points.
+        """
         return self._page_view(
             self._insert_blank_page(
                 self._page_no_index(page_no=before_page_no, insertion=True),
@@ -448,7 +460,11 @@ class PdfEditor(_PdfEditing):
         margin: float = 0,
         dpi: float | None = None,
     ) -> list[PdfEditorPage]:
-        "Add image. Page numbers start at 1."
+        """Create PDF pages from an image and return their page views.
+
+        Multi-frame images produce one page per frame. Omit
+        `before_page_no` to append the pages.
+        """
         pages = self._add_image(
             image=image,
             index=(
@@ -479,7 +495,7 @@ class PdfEditor(_PdfEditing):
     def duplicate_page(
         self, *, page_no: int, before_page_no: int | None = None
     ) -> PdfEditorPage:
-        "Duplicate page. Page numbers start at 1."
+        """Copy a page within this document and return the new page view."""
         page = self._duplicate_page(
             index=self._page_no_index(page_no=page_no, insertion=False),
             to=(
@@ -491,21 +507,28 @@ class PdfEditor(_PdfEditing):
         return self._page_view(page)
 
     def remove_page(self, *, page_no: int, clean: bool = False) -> None:
-        "Remove page. Page numbers start at 1."
+        """Delete the specified page and detach its document references.
+
+        Existing page views become stale.
+        """
         return self._remove_page(
             index=self._page_no_index(page_no=page_no, insertion=False),
             clean=clean,
         )
 
     def move_page(self, *, page_no: int, to_page_no: int) -> None:
-        "Move page. Page numbers start at 1."
+        """Move a page to its final one-based position in the new order."""
         return self._move_page(
             from_index=self._page_no_index(page_no=page_no, insertion=False),
             to_index=self._page_no_index(page_no=to_page_no, insertion=False),
         )
 
     def add_metadata(self, *, infos: dict[str, str | None]) -> None:
-        'Set entries of the document information dictionary. Keys may be\nwritten "Title" or "/Title"; a value of None removes the entry.'
+        """Update the document information dictionary.
+
+        Keys accept an optional leading slash. A value of `None` removes
+        the entry.
+        """
         return self._add_metadata(infos=infos)
 
     def set_xmp_metadata(self, *, packet: str | bytes | None) -> None:
@@ -513,19 +536,31 @@ class PdfEditor(_PdfEditing):
         return self._set_xmp_metadata(packet=packet)
 
     def set_page_layout(self, *, layout: str | None) -> None:
-        'Set how pages are laid out when the document opens: "/SinglePage",\n"/OneColumn", "/TwoColumnLeft", "/TwoColumnRight", "/TwoPageLeft" or\n"/TwoPageRight". None removes the setting.'
+        """Set how a viewer arranges pages when the document opens.
+
+        Supported values include `/SinglePage`, `/OneColumn`, `/TwoColumnLeft`,
+        `/TwoColumnRight`, `/TwoPageLeft`, and `/TwoPageRight`. Use `None`
+        to clear the setting.
+        """
         return self._set_page_layout(layout=layout)
 
     def set_page_mode(self, *, mode: str | None) -> None:
-        'Set what a viewer shows beside the pages: "/UseNone",\n"/UseOutlines", "/UseThumbs", "/FullScreen", "/UseOC" or\n"/UseAttachments". None removes the setting.'
+        """Set which panel or mode a viewer opens with the document.
+
+        Values include `/UseNone`, `/UseOutlines`, `/UseThumbs`, `/FullScreen`,
+        `/UseOC`, and `/UseAttachments`. Use `None` to clear the setting.
+        """
         return self._set_page_mode(mode=mode)
 
     def set_viewer_preferences(self, *, preferences: dict[str, Any] | None) -> None:
-        'Replace the viewer preferences, for example\n`{"/HideToolbar": True, "/Direction": "/R2L"}`. None removes them.'
+        """Replace viewer preferences such as toolbar visibility or direction.
+
+        Use `None` to remove the preferences dictionary.
+        """
         return self._set_viewer_preferences(preferences=preferences)
 
     def set_open_destination(self, *, page_no: int | None) -> None:
-        "Set open destination. Page numbers start at 1."
+        """Choose the page displayed on open, or clear it with `None`."""
         return self._set_open_destination(
             page_number=(
                 None
@@ -543,7 +578,7 @@ class PdfEditor(_PdfEditing):
         prefix: str | None = None,
         start: int | None = None,
     ) -> None:
-        "Set page label. Page numbers start at 1."
+        """Set the label style, prefix, and starting number for a page range."""
         return self._set_page_label(
             page_index_from=self._page_no_index(page_no=first_page_no, insertion=False),
             page_index_to=self._page_no_index(page_no=last_page_no, insertion=False),
@@ -553,7 +588,7 @@ class PdfEditor(_PdfEditing):
         )
 
     def add_named_destination(self, *, title: str, page_no: int) -> None:
-        "Add named destination. Page numbers start at 1."
+        """Register a named destination for a page in this document."""
         return self._add_named_destination(
             title=title,
             page_number=(
@@ -578,7 +613,11 @@ class PdfEditor(_PdfEditing):
         italic: bool = False,
         is_open: bool = True,
     ) -> int:
-        "Add outline item. Page numbers start at 1."
+        """Add a bookmark and return its ID for later edits.
+
+        Use `parent` to add it under an existing bookmark. For a URL
+        destination, pass `page_no=None` and supply `url`.
+        """
         return self._add_outline_item(
             title=title,
             page_number=(
@@ -612,7 +651,10 @@ class PdfEditor(_PdfEditing):
         italic: bool = _UNSET,
         is_open: bool = _UNSET,
     ) -> None:
-        "Update outline item. Page numbers start at 1."
+        """Change the supplied attributes on an existing bookmark.
+
+        A removed or unknown `item_id` raises `PdfEditError`.
+        """
         return self._update_outline_item(
             item_id=item_id,
             title=title,
@@ -638,7 +680,11 @@ class PdfEditor(_PdfEditing):
     def move_outline_item(
         self, *, item_id: int, parent: int | None = None, index: int | None = None
     ) -> None:
-        "Move a bookmark below `parent` (None: the top level), at position\n`index` among its new siblings (None: last). Its children move with\nit."
+        """Move a bookmark and its children under a new parent.
+
+        `parent=None` moves it to the top level. `index` is the zero-based
+        position among its new siblings and defaults to the end.
+        """
         return self._move_outline_item(item_id=item_id, parent=parent, index=index)
 
     def clear_outline(self) -> None:
@@ -655,7 +701,11 @@ class PdfEditor(_PdfEditing):
         max_depth: int | None = None,
         page_size: str | Sequence[float] | None = None,
     ) -> list[PdfEditorPage]:
-        "Add table of contents. Page numbers start at 1."
+        """Insert linked contents pages built from the outline.
+
+        Returns the inserted page views. Text must be encodable by the
+        selected standard font.
+        """
         pages = self._add_table_of_contents(
             index=self._page_no_index(page_no=before_page_no, insertion=True),
             title=title,
@@ -693,7 +743,7 @@ class PdfEditor(_PdfEditing):
         required: bool = False,
         tooltip: str | None = None,
     ) -> None:
-        "Add text field. Page numbers start at 1."
+        """Create a text field with one widget at `rect` on the given page."""
         return self._add_text_field(
             page_number=self._page_no_index(page_no=page_no, insertion=False),
             name=name,
@@ -717,7 +767,7 @@ class PdfEditor(_PdfEditing):
         required: bool = False,
         tooltip: str | None = None,
     ) -> None:
-        "Add checkbox. Page numbers start at 1."
+        """Create a checkbox and set its initial checked state."""
         return self._add_checkbox(
             page_number=self._page_no_index(page_no=page_no, insertion=False),
             name=name,
@@ -742,7 +792,11 @@ class PdfEditor(_PdfEditing):
         required: bool = False,
         tooltip: str | None = None,
     ) -> None:
-        "Add choice field. Page numbers start at 1."
+        """Create a single-selection choice field from `options`.
+
+        With `editable=False`, the selected value must be one of the
+        listed choices.
+        """
         return self._add_choice_field(
             page_number=self._page_no_index(page_no=page_no, insertion=False),
             name=name,
@@ -767,7 +821,7 @@ class PdfEditor(_PdfEditing):
         required: bool = False,
         tooltip: str | None = None,
     ) -> None:
-        "Add radio group. Page numbers start at 1."
+        """Create a radio field with a rectangle for each named state."""
         return self._add_radio_group(
             page_number=self._page_no_index(page_no=page_no, insertion=False),
             name=name,
@@ -787,7 +841,7 @@ class PdfEditor(_PdfEditing):
         required: bool = False,
         tooltip: str | None = None,
     ) -> None:
-        "Add signature field. Page numbers start at 1."
+        """Create an empty signature field for signing in a PDF viewer."""
         return self._add_signature_field(
             page_number=self._page_no_index(page_no=page_no, insertion=False),
             name=name,
@@ -807,7 +861,12 @@ class PdfEditor(_PdfEditing):
         tooltip: str | None = _UNSET,
         options: Sequence[str] = _UNSET,
     ) -> None:
-        "Change a form field. Only the arguments given change.\n\n`new_name` renames the field (its last name part). `rect` moves or\nresizes a field that has one widget. `tooltip` None removes it.\n`options` replaces the entries of a choice field."
+        """Change the supplied attributes on a form field.
+
+        `new_name` changes the last component of its name. Set `rect` to move
+        or resize a single-widget field, and `tooltip=None` to clear the
+        tooltip. `options` replaces the choices on a choice field.
+        """
         return self._update_form_field(
             name=name,
             new_name=new_name,
@@ -823,15 +882,15 @@ class PdfEditor(_PdfEditing):
         return self._remove_form_field(name=name)
 
     def set_need_appearances_writer(self, *, state: bool = True) -> None:
-        "Set the form's NeedAppearances flag, which asks a viewer to build\nthe field appearances itself."
+        """Set whether the form asks a viewer to build its field appearances."""
         return self._set_need_appearances_writer(state=state)
 
     def flatten_annotations(self) -> None:
-        "Draw every visible annotation, form fields included, into its\npage and remove the annotations. Values stay visible; the document\nis no longer interactive."
+        """Paint visible annotations, including form widgets, into page content."""
         return self._flatten_annotations()
 
     def add_annotation(self, *, page_no: int, annotation: dict[str, Any]) -> None:
-        "Add annotation. Page numbers start at 1."
+        """Add an annotation from a dictionary of PDF entries."""
         self._add_annotation(
             page_number=self._page_no_index(page_no=page_no, insertion=False),
             annotation=annotation,
@@ -845,7 +904,7 @@ class PdfEditor(_PdfEditing):
         rect: Sequence[float],
         border: Sequence[float] | None = None,
     ) -> None:
-        "Add uri. Page numbers start at 1."
+        """Add a link to an external URI at the rectangle on the page."""
         return self._add_uri(
             page_number=self._page_no_index(page_no=page_no, insertion=False),
             uri=uri,
@@ -856,7 +915,7 @@ class PdfEditor(_PdfEditing):
     def add_link(
         self, *, page_no: int, rect: Sequence[float], target_page_no: int
     ) -> None:
-        "Add link. Page numbers start at 1."
+        """Add a link at `rect` that jumps to another page in this document."""
         return self._add_link(
             page_number=self._page_no_index(page_no=page_no, insertion=False),
             rect=rect,
@@ -866,7 +925,11 @@ class PdfEditor(_PdfEditing):
         )
 
     def remove_annotations(self, *, subtypes: Iterable[str] | str | None = None) -> int:
-        'Remove annotations from every page: those of the given subtypes\n("/Link", "/Highlight", ...), or with None all of them except form\nfields. Naming "/Widget" removes form fields too. Returns the number\nremoved.'
+        """Remove annotations of the selected subtypes and return the count.
+
+        With `subtypes=None`, form widgets are preserved. Include `/Widget`
+        to remove widgets and prune fields that lose their last widget.
+        """
         return self._remove_annotations(subtypes=subtypes)
 
     def remove_links(self) -> int:
@@ -881,7 +944,7 @@ class PdfEditor(_PdfEditing):
         description: str | None = None,
         mime_type: str | None = None,
     ) -> None:
-        "Embed a file in the document. An attachment of the same name is\nreplaced."
+        """Embed a file, replacing any attachment registered under its name."""
         return self._add_attachment(
             filename=filename,
             data=data,
@@ -894,11 +957,11 @@ class PdfEditor(_PdfEditing):
         return self._remove_attachment(name=name)
 
     def add_js(self, *, javascript: str, name: str | None = None) -> None:
-        "Add a document-level script, which a viewer runs when it opens\nthe document. docling-parse stores the script and never runs it."
+        """Store a script that a PDF viewer can run when opening the document."""
         return self._add_js(javascript=javascript, name=name)
 
     def remove_javascript(self) -> int:
-        "Remove the document-level scripts and scripted document actions.\nReturns the number of entries removed."
+        """Remove document scripts and scripted actions and return the count."""
         return self._remove_javascript()
 
     def encrypt(
@@ -942,7 +1005,12 @@ class PdfEditor(_PdfEditing):
         object_streams: str = "preserve",
         linearize: bool = False,
     ) -> None:
-        'Choose how the file is written.\n\n`compress_streams` compresses streams that are stored uncompressed.\n`object_streams` is "preserve", "generate" (pack objects into\ncompressed object streams: smaller files) or "disable" (larger, and\nreadable by PDF 1.4 software). `linearize` orders the file so a\nviewer can show the first page before the rest has arrived.'
+        """Set stream compression and fast-web-view ordering for output.
+
+        `object_streams` accepts `"preserve"`, `"generate"`, or `"disable"`.
+        Use `linearize=True` to let a viewer load the first page early.
+        Each call supplies the complete set of output options.
+        """
         return self._set_output_options(
             compress_streams=compress_streams,
             object_streams=object_streams,
@@ -958,5 +1026,9 @@ class PdfEditor(_PdfEditing):
         return self._to_bytes()
 
     def write(self, *, target: str | os.PathLike[str] | BinaryIO) -> None:
-        """Write a complete PDF to an atomically replaced path or an open binary stream."""
+        """Write a complete PDF to an atomically replaced path or a binary stream.
+
+        A caller-owned stream stays open. A stalled write raises
+        `PdfWriteError` and can leave partial data in the stream.
+        """
         self._write(target=target)

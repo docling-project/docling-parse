@@ -1,4 +1,4 @@
-"""The public migration API implements a tested subset of pypdf 6.21.1."""
+"""Check the public migration API against pypdf 6.21.1 from the dev group."""
 
 import inspect
 import re

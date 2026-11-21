@@ -1,14 +1,22 @@
 """Scoring, text files and report ordering for the extraction benchmark."""
 
+import importlib
 import re
+import sys
 from contextlib import contextmanager
+from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
 import pytest
 
 pytest.importorskip("matplotlib")
 
-from scripts.benchmarking import run_text_extraction_quality as quality
+_SCRIPTS = Path(__file__).parents[1] / "scripts/benchmarking"
+sys.path.insert(0, str(_SCRIPTS))
+try:
+    quality = importlib.import_module("run_text_extraction_quality")
+finally:
+    sys.path.pop(0)
 
 
 @pytest.mark.parametrize(

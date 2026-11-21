@@ -69,4 +69,3 @@ or `RenderConfig` argument. `PdfReader` and `PdfWriter` do not expose
 A zero or negative page number raises `ValueError`; an out-of-range positive
 number raises `PdfEditError`. Non-integer page numbers raise `TypeError`, and
 non-finite or non-positive scales raise `ValueError`.
-

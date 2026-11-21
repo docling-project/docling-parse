@@ -161,4 +161,3 @@ tagged-structure repair are not implemented.
 
 These preservation limits also apply when contents pages or other insertions
 change page positions. See [output and signatures](output-and-encryption.md#signatures-and-unsupported-output).
-

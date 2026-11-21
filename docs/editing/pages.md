@@ -157,4 +157,3 @@ and graphics are drawn; interactive links and controls require separate edits.
 `PdfWriter` page merges clip the source content to its effective CropBox
 before applying the placement transform. `expand=True` grows the destination
 MediaBox to include the transformed source MediaBox.
-

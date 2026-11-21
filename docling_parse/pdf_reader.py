@@ -29,7 +29,7 @@ __all__ = ["PdfBox", "PdfImage", "PdfPage", "PdfPages", "PdfReader"]
 class PdfReader(_PdfReaderCompat):
     """A read-only PDF document with a zero-based pypdf-style page sequence.
 
-    `source` is a path, bytes, a binary stream (read, never closed), or
+    `stream` is a path, bytes, a binary stream (read, never closed), or
     another PdfReader, PdfWriter or PdfEditor. Opening parses the document
     structure only; a page is decoded when its text is asked for.
 

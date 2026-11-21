@@ -44,11 +44,11 @@ class PdfWriter(_PdfWriterCompat):
 
     `PdfWriter()` starts empty; pages are added with `append` and
     `add_blank_page`. `PdfWriter(clone_from=...)` starts from a complete copy
-    of an existing document, keeping everything it contains (forms, outline,
-    structure, attachments), and never modifies that source.
+    of an existing document, including its forms, outline, structure, and
+    attachments.
 
-    Output is a full, unencrypted rewrite: signatures of the source do not
-    stay valid, and an encrypted source is written in the clear.
+    Writing creates a complete PDF and invalidates existing signatures.
+    Call `encrypt()` before writing to encrypt the output.
 
     One writer may be shared between threads: calls are serialized.
     """

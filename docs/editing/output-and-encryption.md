@@ -162,4 +162,3 @@ The other pypdf-shaped constructor options do not add an incremental serializer
 or editable PDF object model. Use the documented workflows rather than
 assuming that accepting a constructor signature implies every corresponding
 pypdf mode is implemented.
-

@@ -117,4 +117,3 @@ Cloning retains document-level scripts and embedded files initially.
 `append()` and `merge()` do **not** import these document-level collections.
 Page-local actions or file-attachment annotations may still arrive with copied
 pages. See [assembly preservation](navigation.md#what-assembly-preserves).
-
