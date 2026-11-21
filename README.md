@@ -256,6 +256,26 @@ options:
   -p PDF, --pdf PDF  Path to the PDF file
 ```
 
+## PDF reading and editing
+
+Use `PdfEditor` for PDF inspection, text extraction, editing and output.
+Its methods take named arguments and one-based page numbers.
+
+```python
+from docling_parse import PdfEditor, PdfExtractionMode
+
+with PdfEditor(source="document.pdf") as editor:
+    print(editor.page_count(), editor.metadata.get("Title"))
+    print(editor.extract_text(page_no=1, extraction_mode=PdfExtractionMode.LAYOUT))
+    editor.rotate_page(page_no=1, angle=90)
+    editor.write(target="changed.pdf")
+```
+
+For existing pypdf applications, `PdfReader` and `PdfWriter` support a subset
+of pypdf workflows, including zero-based `pages` sequences. See the
+[editing guide](./docs/editing.md) and its
+[pypdf migration section](./docs/editing.md#migrate-from-pypdf).
+
 ## System fonts
 
 A PDF may name a font without embedding it. There is then nothing in the file

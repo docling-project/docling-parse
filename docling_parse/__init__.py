@@ -2,6 +2,7 @@
 
 import locale as _locale
 import logging as _logging
+from typing import TYPE_CHECKING
 
 _log = _logging.getLogger(__name__)
 
@@ -40,3 +41,31 @@ def _ensure_safe_numeric_locale() -> None:
 
 
 _ensure_safe_numeric_locale()
+
+if TYPE_CHECKING:
+    from docling_parse.pdf_editor import (
+        PdfEditor as PdfEditor,
+        PdfExtractionMode as PdfExtractionMode,
+    )
+    from docling_parse.pdf_reader import PdfReader as PdfReader
+    from docling_parse.pdf_writer import PdfWriter as PdfWriter
+
+# Load the PDF editing API only when it is first used.
+_LAZY_EXPORTS = {
+    "PdfReader": "docling_parse.pdf_reader",
+    "PdfWriter": "docling_parse.pdf_writer",
+    "PdfEditor": "docling_parse.pdf_editor",
+    "PdfExtractionMode": "docling_parse.pdf_editor",
+}
+
+
+def __getattr__(name: str):
+    module_name = _LAZY_EXPORTS.get(name)
+    if module_name is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+    import importlib
+
+    value = getattr(importlib.import_module(module_name), name)
+    globals()[name] = value
+    return value

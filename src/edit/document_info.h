@@ -1,0 +1,361 @@
+//-*-C++-*-
+
+#ifndef PDF_DOCUMENT_INFO_H
+#define PDF_DOCUMENT_INFO_H
+
+#include <algorithm>
+#include <map>
+#include <optional>
+#include <string>
+
+#define POINTERHOLDER_TRANSITION 0 // eliminate warnings from QPDF
+#include <qpdf/QPDF.hh>
+#include <qpdf/QPDFObjectHandle.hh>
+#include <qpdf/Buffer.hh>
+
+namespace pdflib
+{
+  class pdf_permissions;
+  // The /Encrypt parameters of a document (ISO 32000-1, 7.6). The permission
+  // flags are reported as stored; nothing in docling-parse enforces them.
+  class pdf_encryption_info
+  {
+  public:
+
+    pdf_encryption_info();
+
+    static pdf_encryption_info read(QPDF& qpdf);
+    static pdf_encryption_info configured(const std::string& algorithm,
+                                          const pdf_permissions& options);
+
+    bool is_encrypted() const;
+
+    int get_revision() const;    // /R
+    int get_version() const;     // /V
+    int get_permissions() const; // /P, the raw signed flag word
+
+    // "none", "rc4", "aes", "aesv3" or "unknown"
+    const std::string& get_stream_method() const;
+    const std::string& get_string_method() const;
+    const std::string& get_file_method() const;
+
+  private:
+
+    static std::string method_name(QPDF::encryption_method_e method);
+
+  private:
+
+    bool encrypted;
+
+    int revision;
+    int version;
+    int permissions;
+
+    std::string stream_method;
+    std::string string_method;
+    std::string file_method;
+  };
+
+  // What the holder of the user password may do with an encrypted document
+  // (ISO 32000-1, table 22). Everything is allowed unless turned off. A
+  // conforming viewer honors these; they are not access control.
+  class pdf_permissions
+  {
+  public:
+
+    pdf_permissions();
+
+    // 0: full-quality printing, 1: low resolution only, 2: no printing
+    int get_print() const;
+    void set_print(int level);
+
+    bool get_modify() const;        // change the document's content
+    void set_modify(bool allowed);
+
+    bool get_extract() const;       // copy text and graphics out
+    void set_extract(bool allowed);
+
+    bool get_annotate() const;      // add or change annotations and form fields
+    void set_annotate(bool allowed);
+
+    bool get_fill_forms() const;    // fill in existing form fields
+    void set_fill_forms(bool allowed);
+
+    bool get_accessibility() const; // extract for assistive technology
+    void set_accessibility(bool allowed);
+
+    bool get_assemble() const;      // insert, rotate and delete pages
+    void set_assemble(bool allowed);
+
+  private:
+
+    int print;
+
+    bool modify;
+    bool extract;
+    bool annotate;
+    bool fill_forms;
+    bool accessibility;
+    bool assemble;
+  };
+
+  // Document-scoped facts that belong to no page: header version, the trailer
+  // /Info dictionary (ISO 32000-1, 14.3.3), the XMP packet (14.3.2) and the
+  // encryption parameters. Typed, self-contained and detached from the QPDF it
+  // was read from.
+  class pdf_document_info
+  {
+  public:
+
+    pdf_document_info();
+
+    // Caller serializes access to `qpdf`.
+    static pdf_document_info read(QPDF& qpdf);
+
+    const std::string& get_pdf_version() const;
+    int get_extension_level() const;
+
+    int get_number_of_pages() const;
+
+    // /Info entries with a string value, keys without the leading slash
+    // ("Title", "Author", ...), values in UTF-8.
+    const std::map<std::string, std::string>& get_info() const;
+
+    // The raw XMP packet of the catalog's /Metadata stream, if there is one.
+    const std::optional<std::string>& get_xmp() const;
+
+    const pdf_encryption_info& get_encryption() const;
+
+    // For a document being edited, the encryption that matters is the one
+    // its output will have, which the editor knows and the in-memory QPDF
+    // does not.
+    void set_encryption(const pdf_encryption_info& encryption_);
+
+  private:
+
+    std::string pdf_version;
+    int extension_level;
+
+    int number_of_pages;
+
+    std::map<std::string, std::string> info;
+    std::optional<std::string> xmp;
+
+    pdf_encryption_info encryption;
+  };
+
+  inline pdf_permissions::pdf_permissions():
+    print(0),
+    modify(true),
+    extract(true),
+    annotate(true),
+    fill_forms(true),
+    accessibility(true),
+    assemble(true)
+  {}
+
+  inline int pdf_permissions::get_print() const { return print; }
+
+  inline void pdf_permissions::set_print(int level) { print = level; }
+
+  inline bool pdf_permissions::get_modify() const { return modify; }
+
+  inline void pdf_permissions::set_modify(bool allowed) { modify = allowed; }
+
+  inline bool pdf_permissions::get_extract() const { return extract; }
+
+  inline void pdf_permissions::set_extract(bool allowed) { extract = allowed; }
+
+  inline bool pdf_permissions::get_annotate() const { return annotate; }
+
+  inline void pdf_permissions::set_annotate(bool allowed) { annotate = allowed; }
+
+  inline bool pdf_permissions::get_fill_forms() const { return fill_forms; }
+
+  inline void pdf_permissions::set_fill_forms(bool allowed) { fill_forms = allowed; }
+
+  inline bool pdf_permissions::get_accessibility() const { return accessibility; }
+
+  inline void pdf_permissions::set_accessibility(bool allowed) { accessibility = allowed; }
+
+  inline bool pdf_permissions::get_assemble() const { return assemble; }
+
+  inline void pdf_permissions::set_assemble(bool allowed) { assemble = allowed; }
+
+  inline pdf_encryption_info::pdf_encryption_info():
+    encrypted(false),
+    revision(0),
+    version(0),
+    permissions(0),
+    stream_method("none"),
+    string_method("none"),
+    file_method("none")
+  {}
+
+  inline std::string pdf_encryption_info::method_name(QPDF::encryption_method_e method)
+  {
+    switch(method)
+      {
+      case QPDF::e_none:  return "none";
+      case QPDF::e_rc4:   return "rc4";
+      case QPDF::e_aes:   return "aes";
+      case QPDF::e_aesv3: return "aesv3";
+      default:            return "unknown";
+      }
+  }
+
+  inline pdf_encryption_info pdf_encryption_info::read(QPDF& qpdf)
+  {
+    pdf_encryption_info result;
+
+    int R = 0;
+    int P = 0;
+    int V = 0;
+
+    QPDF::encryption_method_e stream_method = QPDF::e_none;
+    QPDF::encryption_method_e string_method = QPDF::e_none;
+    QPDF::encryption_method_e file_method = QPDF::e_none;
+
+    result.encrypted = qpdf.isEncrypted(R, P, V, stream_method, string_method, file_method);
+
+    if(result.encrypted)
+      {
+        result.revision = R;
+        result.version = V;
+        result.permissions = P;
+
+        result.stream_method = method_name(stream_method);
+        result.string_method = method_name(string_method);
+        result.file_method = method_name(file_method);
+      }
+
+    return result;
+  }
+
+  inline bool pdf_encryption_info::is_encrypted() const { return encrypted; }
+
+  inline pdf_encryption_info pdf_encryption_info::configured(
+    const std::string& algorithm, const pdf_permissions& options)
+  {
+    pdf_encryption_info result;
+    result.encrypted = true;
+    result.revision = algorithm == "RC4-40" ? 2 :
+      algorithm == "RC4-128" ? 3 : algorithm == "AES-128" ? 4 :
+      algorithm == "AES-256-R5" ? 5 : 6;
+    result.version = result.revision < 4 ? result.revision - 1 : std::min(5, result.revision);
+    if(result.revision >= 4)
+      {
+        result.stream_method = result.string_method = result.file_method =
+          result.revision == 4 ? "aes" : "aesv3";
+      }
+
+    // The Standard security handler reserves the first two permission bits.
+    // QPDF keeps bit 10 enabled on revisions 4 and later.
+    result.permissions = -4;
+    auto allow = [&](int bit, bool enabled) {
+      if(not enabled) { result.permissions &= ~(1 << (bit - 1)); }
+    };
+    allow(3, options.get_print() != 2);
+    allow(4, options.get_modify());
+    allow(5, options.get_extract());
+    allow(6, options.get_annotate());
+    if(result.revision >= 3)
+      {
+        allow(9, options.get_fill_forms());
+        allow(10, result.revision >= 4 or options.get_accessibility());
+        allow(11, options.get_assemble());
+        allow(12, options.get_print() == 0);
+      }
+    return result;
+  }
+
+  inline int pdf_encryption_info::get_revision() const { return revision; }
+
+  inline int pdf_encryption_info::get_version() const { return version; }
+
+  inline int pdf_encryption_info::get_permissions() const { return permissions; }
+
+  inline const std::string& pdf_encryption_info::get_stream_method() const { return stream_method; }
+
+  inline const std::string& pdf_encryption_info::get_string_method() const { return string_method; }
+
+  inline const std::string& pdf_encryption_info::get_file_method() const { return file_method; }
+
+  inline pdf_document_info::pdf_document_info():
+    pdf_version(""),
+    extension_level(0),
+    number_of_pages(0),
+    info({}),
+    xmp(std::nullopt),
+    encryption()
+  {}
+
+  inline pdf_document_info pdf_document_info::read(QPDF& qpdf)
+  {
+    pdf_document_info result;
+
+    result.pdf_version = qpdf.getPDFVersion();
+    result.extension_level = qpdf.getExtensionLevel();
+
+    result.number_of_pages = static_cast<int>(qpdf.getAllPages().size());
+
+    result.encryption = pdf_encryption_info::read(qpdf);
+
+    // /Info is optional and, in damaged files, not always a dictionary.
+    QPDFObjectHandle trailer = qpdf.getTrailer();
+    if(trailer.isDictionary() and trailer.hasKey("/Info"))
+      {
+        QPDFObjectHandle info_dict = trailer.getKey("/Info");
+        if(info_dict.isDictionary())
+          {
+            for(const std::string& key : info_dict.getKeys())
+              {
+                QPDFObjectHandle value = info_dict.getKey(key);
+                if(value.isString())
+                  {
+                    // keys are PDF names: drop the leading slash
+                    std::string name = (key.size()>0 and key.front()=='/') ? key.substr(1) : key;
+                    result.info[name] = value.getUTF8Value();
+                  }
+              }
+          }
+      }
+
+    QPDFObjectHandle root = qpdf.getRoot();
+    if(root.isDictionary() and root.hasKey("/Metadata"))
+      {
+        QPDFObjectHandle metadata = root.getKey("/Metadata");
+        if(metadata.isStream())
+          {
+            std::shared_ptr<Buffer> data = metadata.getStreamData();
+            if(data != nullptr)
+              {
+                result.xmp = std::string(reinterpret_cast<const char*>(data->getBuffer()),
+                                         data->getSize());
+              }
+          }
+      }
+
+    return result;
+  }
+
+  inline const std::string& pdf_document_info::get_pdf_version() const { return pdf_version; }
+
+  inline int pdf_document_info::get_extension_level() const { return extension_level; }
+
+  inline int pdf_document_info::get_number_of_pages() const { return number_of_pages; }
+
+  inline const std::map<std::string, std::string>& pdf_document_info::get_info() const { return info; }
+
+  inline const std::optional<std::string>& pdf_document_info::get_xmp() const { return xmp; }
+
+  inline const pdf_encryption_info& pdf_document_info::get_encryption() const { return encryption; }
+
+  inline void pdf_document_info::set_encryption(const pdf_encryption_info& encryption_)
+  {
+    encryption = encryption_;
+  }
+
+}
+
+#endif

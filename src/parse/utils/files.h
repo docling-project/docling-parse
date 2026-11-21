@@ -4,7 +4,9 @@
 #ifndef PDF_UTILS_FILES_H
 #define PDF_UTILS_FILES_H
 
-//#include <fstream>
+#include <fstream>
+#include <memory>
+#include <stdexcept>
 //#include <algorithm>
 //#include <dirent.h>
 //#include <sys/stat.h>
@@ -13,6 +15,26 @@ namespace utils
 {
   namespace filesystem
   {
+    inline std::shared_ptr<std::string> read_binary_file(const std::string& filename)
+    {
+      std::ifstream input(from_utf8(filename), std::ios::binary | std::ios::ate);
+      if(not input.is_open())
+        {
+          throw std::runtime_error("could not open file: " + filename);
+        }
+      auto size = input.tellg();
+      if(size < 0 or not input.seekg(0, std::ios::beg))
+        {
+          throw std::runtime_error("could not read file: " + filename);
+        }
+      auto buffer = std::make_shared<std::string>(size, '\0');
+      if(not input.read(buffer->data(), size))
+        {
+          throw std::runtime_error("could not read file: " + filename);
+        }
+      return buffer;
+    }
+
     /*
       bool is_dir(std::string file_name)
       {

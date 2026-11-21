@@ -145,9 +145,13 @@ def _validate_names(
 
 def scheduled_pages(
     pdf_schedule: list[tuple[Path, list[int] | None]],
+    *,
+    known_page_counts: Mapping[Path, int] | None = None,
 ) -> list[ScheduledPage]:
     pages: list[ScheduledPage] = []
     for pdf_path, page_numbers in pdf_schedule:
+        if page_numbers is None and known_page_counts is not None:
+            page_numbers = list(range(1, known_page_counts[pdf_path] + 1))
         if page_numbers is None:
             from docling_parse.pdf_parser import DoclingPdfParser
 

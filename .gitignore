@@ -29,6 +29,9 @@ scratch*
 docs/performance_benchmarks/*.csv
 
 # Published benchmark figures and compact provenance.
+!docs/quality_benchmarks/rendering-examples/*.png
+!docs/quality_benchmarks/text/histogram-f1-layout.pdf
+!docs/quality_benchmarks/text/histogram-f1-plain.pdf
 !docs/performance_benchmarks/*/*/assets/*.png
 !docs/performance_benchmarks/*/*/provenance.json
 !docs/performance_benchmarks/*/*/publication.json

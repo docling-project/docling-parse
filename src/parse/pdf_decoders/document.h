@@ -36,6 +36,19 @@ namespace pdflib
 
     std::string get_filename() { return filename; }
 
+    // The bytes this document was parsed from and the password it was opened
+    // with. Both are set once at load time and never change afterwards, so a
+    // second QPDF can be parsed from the same bytes without copying them
+    // (the editor clones and imports documents this way).
+    std::shared_ptr<std::string> get_source_buffer() { return buffer; }
+    std::optional<std::string> get_password() { return password; }
+
+    // Run function(QPDF&) on the parsed document while holding the document
+    // mutex, which is what serializes every other use of that QPDF. The
+    // callable must not keep a QPDFObjectHandle beyond its own return.
+    template<typename function_type>
+    decltype(auto) with_qpdf(function_type&& function);
+
     // Why the last process_document_* call returned false: a category
     // from load_error and the message of the underlying failure. Both
     // are empty while no load has failed.
@@ -68,6 +81,9 @@ namespace pdflib
                                  const decode_config& config);
     page_decoder_ptr make_thread_safe_page_decoder(int page_number,
                                                    bool keep_qpdf_warnings);
+
+    // Throws when a page references an object missing from the source file.
+    void ensure_page_content_present(int page_number);
     
     // New: Direct access to page decoders (typed API)
     bool has_page_decoder(int page_number);
@@ -91,10 +107,6 @@ namespace pdflib
     void ensure_structure_loaded();
     void load_annots();
     nlohmann::json annots_field(const char* key) const;
-
-    // Throws missing_page_object_error when the page references an
-    // object the file does not contain (docling-parse#374).
-    void ensure_page_content_present(int page_number);
 
     void record_load_error(const std::string& category, const std::string& message);
 
@@ -185,6 +197,13 @@ namespace pdflib
 
   pdf_decoder<DOCUMENT>::~pdf_decoder()
   {}
+
+  template<typename function_type>
+  decltype(auto) pdf_decoder<DOCUMENT>::with_qpdf(function_type&& function)
+  {
+    std::lock_guard<std::mutex> lock(thread_safe_buffer_mutex);
+    return function(qpdf_document);
+  }
 
   void pdf_decoder<DOCUMENT>::ensure_annots_loaded()
   {
@@ -297,39 +316,17 @@ namespace pdflib
 
     utils::timer timer;
 
-    // Read the file into a buffer.
-    //
-    // The filename arrives UTF-8 encoded from the Python layer. On Windows a
-    // narrow ifstream hands it to the ANSI codepage (GBK, cp1252, ...), so any
-    // non-ASCII path fails to open (docling-parse#324; regression from #274,
-    // which replaced qpdf's UTF-8-aware processFile with this read). Build a
-    // std::filesystem::path from the bytes as UTF-8 so MSVC opens via the
-    // wide-char API; POSIX keeps byte-passthrough semantics either way.
-#ifdef _WIN32
-    std::filesystem::path fs_path(
-      std::u8string(filename.begin(), filename.end()));
-#else
-    std::filesystem::path fs_path(filename);
-#endif
-    std::ifstream ifs(fs_path, std::ios::binary | std::ios::ate);
-    if(!ifs.is_open())
+    std::shared_ptr<std::string> file_buffer;
+    try
       {
-        record_load_error(load_error::IO, "could not open file: " + filename);
-        LOG_S(ERROR) << "could not open file: " << filename;
+        file_buffer = utils::filesystem::read_binary_file(filename);
+      }
+    catch(const std::exception& exc)
+      {
+        record_load_error(load_error::IO, exc.what());
+        LOG_S(ERROR) << exc.what();
         return false;
       }
-
-    auto file_size = ifs.tellg();
-    ifs.seekg(0, std::ios::beg);
-
-    auto file_buffer = std::make_shared<std::string>(file_size, '\0');
-    if(!ifs.read(file_buffer->data(), file_size))
-      {
-        record_load_error(load_error::IO, "could not read file: " + filename);
-        LOG_S(ERROR) << "could not read file: " << filename;
-        return false;
-      }
-    ifs.close();
 
     std::string description = "processing file " + filename;
     bool result = process_document_from_bytesio(file_buffer,

@@ -1144,7 +1144,13 @@ def row_ink_profile(
     """Per-row ink pixel counts, top to bottom."""
     mask = ink_mask(image, threshold=threshold)
     width = mask.width
-    data = list(mask.getdata())
+    # get_flattened_data() requires Pillow 12.1.0; we still support Pillow 10.
+    # Remove the hasattr check and getdata() fallback when the minimum is >=12.1.0.
+    data = (
+        mask.get_flattened_data()
+        if hasattr(mask, "get_flattened_data")
+        else list(mask.getdata())
+    )
     return [
         sum(1 for value in data[y * width : (y + 1) * width] if value)
         for y in range(mask.height)
@@ -1157,7 +1163,13 @@ def column_ink_profile(
     """Per-column ink pixel counts, left to right."""
     mask = ink_mask(image, threshold=threshold)
     width, height = mask.size
-    data = list(mask.getdata())
+    # get_flattened_data() requires Pillow 12.1.0; we still support Pillow 10.
+    # Remove the hasattr check and getdata() fallback when the minimum is >=12.1.0.
+    data = (
+        mask.get_flattened_data()
+        if hasattr(mask, "get_flattened_data")
+        else list(mask.getdata())
+    )
     return [sum(1 for y in range(height) if data[y * width + x]) for x in range(width)]
 
 
