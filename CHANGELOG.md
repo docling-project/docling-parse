@@ -1,3 +1,11 @@
+## [v7.27.1](https://github.com/docling-project/docling-parse/releases/tag/v7.27.1) - 2026-11-22
+
+### Fix
+
+* **fonts:** Keep every codespace range of a ToUnicode CMap ([#485](https://github.com/docling-project/docling-parse/issues/485)) ([`b39611c`](https://github.com/docling-project/docling-parse/commit/b39611c1d813b99652c0f07f6cc52c78762e9b07))
+* Decode /RunLengthDecode images ([#486](https://github.com/docling-project/docling-parse/issues/486)) ([`78a47a0`](https://github.com/docling-project/docling-parse/commit/78a47a05d8a5024a74ebbc2a08dc9c4e22b2b981))
+* **render:** Stop the soft-mask fallback from recursing past 8192 px ([#481](https://github.com/docling-project/docling-parse/issues/481)) ([`fab61f4`](https://github.com/docling-project/docling-parse/commit/fab61f43a343aedf2591f0c7f73dd3433616de21))
+
 ## [v7.27.0](https://github.com/docling-project/docling-parse/releases/tag/v7.27.0) - 2026-11-19
 
 ### Feature
