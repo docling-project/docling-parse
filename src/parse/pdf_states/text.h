@@ -926,6 +926,7 @@ namespace pdflib
 
       {
 	cell.text = text;
+        cell.source_glyph_code = glyph_code;
 	cell.text_is_suppressed_glyph = text_is_suppressed_glyph;
 	cell.is_pdf_word_space = is_pdf_word_space;
 	cell.rendering_mode = rendering_mode;

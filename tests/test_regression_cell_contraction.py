@@ -64,6 +64,19 @@ def test_clipped_overprints_keep_complete_text():
     assert not {"NFORCED", "pecifies", "sabled"}.intersection(words)
 
 
+def test_offset_overprints_preserve_chart_headings():
+    page = _page("07f5395c8b3e7d1c_0001.pdf", 1)
+    lines = {" ".join(cell.text.split()) for cell in page.textline_cells}
+    assert {
+        "1. GDP 成長率と需要項目別寄与度 (%)",
+        "2. GDP成長率産業別寄与度(%)",
+        "3. 工業生産/固定資本投資(%)",
+        "4. 消費者物価指数とリファイナンスレート (%)",
+        "5. 消費者物価指数とマネーサプライ推移(%)",
+        "6. 小売売上高/ 実質賃金/失業率(%)",
+    } <= lines
+
+
 def _pdf_with_code_32_period() -> BytesIO:
     """Map source byte 32 to a dot through /ToUnicode."""
     cmap = (
