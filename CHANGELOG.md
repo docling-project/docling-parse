@@ -1,3 +1,14 @@
+## [v7.28.0](https://github.com/docling-project/docling-parse/releases/tag/v7.28.0) - 2026-11-24
+
+### Feature
+
+* Add native PDF editing and pypdf migration APIs ([#467](https://github.com/docling-project/docling-parse/issues/467)) ([`f906bc4`](https://github.com/docling-project/docling-parse/commit/f906bc42f8e7c722564e25dd0928940caa4729e4))
+
+### Fix
+
+* Missing first letters and duplicate text ([#490](https://github.com/docling-project/docling-parse/issues/490)) ([`5fe7b72`](https://github.com/docling-project/docling-parse/commit/5fe7b72fe49a229747e594663779f8337c09f195))
+* Keep short CJK runs set with one character spacing whole ([#488](https://github.com/docling-project/docling-parse/issues/488)) ([`7f1f767`](https://github.com/docling-project/docling-parse/commit/7f1f76741cdf03f8be22daf9067c523bcb6ee21b))
+
 ## [v7.27.1](https://github.com/docling-project/docling-parse/releases/tag/v7.27.1) - 2026-11-22
 
 ### Fix
