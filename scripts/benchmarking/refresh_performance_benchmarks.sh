@@ -13,7 +13,7 @@ Usage: bash scripts/benchmarking/refresh_performance_benchmarks.sh [--memory-mod
 Environment:
   REPEATS=1                  Fresh-process repetitions (use 3 for publication)
   THREADS=1,4,8,12            Unique positive thread counts; lowest count anchors scaling
-  RUN_COMPARISON=0            Set to 1 to also measure the five reference packages
+  RUN_COMPARISON=0            -1: Docling only, 0: also replay PDFium, 1: also run the reference suite
   BENCHMARK_OUTPUT=compact    compact: progress/results; full: include configs/timings
   BUILD_MODE=incremental      Reuse build/externals; clean archives and rebuilds them
   BUILD_THREADS=8             Parallel build jobs
@@ -117,13 +117,14 @@ for value in "$REPEATS" "$BUILD_THREADS"; do
     exit 2
   fi
 done
-if [[ $RUN_COMPARISON != 0 && $RUN_COMPARISON != 1 ]]; then
-  echo "RUN_COMPARISON must be 0 or 1." >&2
+if [[ $RUN_COMPARISON != -1 && $RUN_COMPARISON != 0 && $RUN_COMPARISON != 1 ]]; then
+  echo "RUN_COMPARISON must be -1, 0, or 1." >&2
   exit 2
 fi
-if [[ $native_render_only == 1 ]]; then
+if [[ $native_render_only == 1 && $RUN_COMPARISON == 1 ]]; then
   RUN_COMPARISON=0
 fi
+pdfium_replay=$((RUN_COMPARISON != -1 && native_render_only == 0))
 IFS=, read -r -a thread_counts <<< "$THREADS"
 seen_threads=,
 for count in "${thread_counts[@]}"; do
@@ -157,7 +158,7 @@ case "$OUT/" in
     ;;
 esac
 export MPLCONFIGDIR=${MPLCONFIGDIR:-"$OUT/matplotlib-cache"}
-echo "Repetitions: $REPEATS; threads: $THREADS; cross-package suite: $RUN_COMPARISON"
+echo "Repetitions: $REPEATS; threads: $THREADS; PDFium replay: $pdfium_replay; cross-package suite: $((RUN_COMPARISON == 1))"
 echo "Dataset: $DATASET_REPOSITORY at $DATASET_REVISION"
 echo "Benchmark output: $BENCHMARK_OUTPUT"
 echo "Build mode: $BUILD_MODE"
@@ -305,7 +306,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-import pypdfium2
 from huggingface_hub import snapshot_download
 from tqdm import tqdm
 
@@ -317,10 +317,25 @@ snapshot = Path(snapshot_download(
     revision=revision, allow_patterns=["pdf/**"],
 ))
 root = snapshot / "pdf"
+docling_only = sys.argv[5] == "-1"
+if docling_only:
+    from docling_parse.pdf_parser import DoclingPdfParser
+
+    parser = DoclingPdfParser()
+else:
+    import pypdfium2
+
 files = []
 for path in tqdm(sorted(root.rglob("*.pdf")), desc="Verify PDFs and count pages", unit="PDF"):
-    with pypdfium2.PdfDocument(path) as document:
-        pages = len(document)
+    if docling_only:
+        document = parser.load(path)
+        try:
+            pages = document.number_of_pages()
+        finally:
+            document.unload()
+    else:
+        with pypdfium2.PdfDocument(path) as document:
+            pages = len(document)
     files.append({"name": str(path.relative_to(root)), "path": str(path),
                   "resolved_path": str(path.resolve()), "pages": pages,
                   "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
@@ -353,7 +368,8 @@ metadata = {
         "requested_revision": revision, "revision": snapshot.name,
         "root": str(root), "files": files},
     "repeats": int(sys.argv[3]), "threads": [int(x) for x in sys.argv[4].split(",")],
-    "comparison": sys.argv[5] == "1", "scale": 1.0, "max_concurrent_results": 32,
+    "comparison": sys.argv[5] == "1", "pdfium_replay": not docling_only and sys.argv[8] != "1",
+    "scale": 1.0, "max_concurrent_results": 32,
     "build_mode": os.environ.get("BUILD_MODE", "incremental"),
     "native_profiles": {
         "render-only": {"create_word_cells": False, "create_line_cells": False},
@@ -420,7 +436,7 @@ if [[ $native_render_only == 1 ]]; then
   total_experiments=$((REPEATS * ${#thread_counts[@]}))
 else
   native_profiles+=(render-with-text)
-  total_experiments=$((REPEATS * (3 * ${#thread_counts[@]} + 1 + 2 * RUN_COMPARISON)))
+  total_experiments=$((REPEATS * (3 * ${#thread_counts[@]} + pdfium_replay + 2 * (RUN_COMPARISON == 1))))
 fi
 run_experiment() {
   local log=$1
@@ -469,11 +485,13 @@ for (( repetition=1; repetition<=REPEATS; repetition++ )); do
   fi
   replay_dir="$OUT/replay/r$repetition"
   mkdir -p "$replay_dir"
-  run_experiment "$replay_dir/pdfium.log" \
-    "Repetition $repetition/$REPEATS: Python backend replay, PDFium, 1 worker" \
-    "${replay_runner[@]}" \
-    "$PDF_ROOT" --backend pdfium --dataset-revision "$DATASET_REVISION" \
-    --output-dir "$replay_dir/pdfium"
+  if [[ $pdfium_replay == 1 ]]; then
+    run_experiment "$replay_dir/pdfium.log" \
+      "Repetition $repetition/$REPEATS: Python backend replay, PDFium, 1 worker" \
+      "${replay_runner[@]}" \
+      "$PDF_ROOT" --backend pdfium --dataset-revision "$DATASET_REVISION" \
+      --output-dir "$replay_dir/pdfium"
+  fi
   for count in "${thread_counts[@]}"; do
     run_experiment "$replay_dir/t$count.log" \
       "Repetition $repetition/$REPEATS: Python backend replay, docling-parse, $count thread(s)" \

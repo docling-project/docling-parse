@@ -58,6 +58,7 @@ import collections
 import ctypes
 import hashlib
 import importlib.metadata
+import importlib.util
 import json
 import logging
 import os
@@ -74,10 +75,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from importlib.metadata import version
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
-import pypdfium2 as pdfium
-import pypdfium2.raw as pdfium_c
 from docling_core.types.doc import BoundingBox, CoordOrigin, Size
 from docling_core.types.doc.page import (
     BoundingRectangle,
@@ -89,8 +88,6 @@ from docling_core.types.doc.page import (
     TextCell,
 )
 from PIL import Image
-from pypdfium2 import PdfTextPage
-from pypdfium2._helpers.misc import PdfiumError
 from rtree import index
 from tqdm import tqdm
 
@@ -98,21 +95,20 @@ from docling_parse.pdf_parser import (
     ContentConfig,
     ContentLevel,
     DecodeConfig,
+    DoclingPdfParser,
     DoclingThreadedPdfParser,
     PageParseResult,
     RenderConfig,
     ThreadedPdfParserConfig,
 )
 
+if TYPE_CHECKING:
+    import pypdfium2 as pdfium
+    from pypdfium2 import PdfTextPage
+
 pypdfium2_lock = threading.Lock()
 _log = logging.getLogger(__name__)
 _PYPDFIUM2_MAJOR_VERSION = int(version("pypdfium2").split(".")[0])
-_INVISIBLE_TEXT_RENDER_MODES = frozenset(
-    {
-        pdfium_c.FPDF_TEXTRENDERMODE_INVISIBLE,
-        pdfium_c.FPDF_TEXTRENDERMODE_CLIP,
-    }
-)
 _INVISIBLE_RENDERING_MODES = frozenset(
     {
         PdfCellRenderingMode.INVISIBLE,
@@ -369,6 +365,8 @@ class _PageChars:
     @classmethod
     def from_text_page(cls, text_page: PdfTextPage) -> _PageChars:
         """Read every character of ``text_page``. The caller holds the PDFium lock."""
+        import pypdfium2.raw as pdfium_c
+
         units: list[int] = []
         baselines: list[float] = []
         centres: list[tuple[float, float, int]] = []
@@ -458,6 +456,8 @@ class PyPdfiumPageBackend(ManagedPdfiumPageBackend):
         document_hash: str,
         page_no: int,
     ):
+        from pypdfium2._helpers.misc import PdfiumError
+
         super().__init__()
         self._page_no = page_no
         # Note: lock applied by the caller
@@ -661,6 +661,8 @@ class PyPdfiumPageBackend(ManagedPdfiumPageBackend):
         if bucket is not None:
             return bucket
 
+        import pypdfium2.raw as pdfium_c
+
         page_size = self.get_size()  # acquires the lock; must be outside the block
 
         with pypdfium2_lock:
@@ -672,11 +674,15 @@ class PyPdfiumPageBackend(ManagedPdfiumPageBackend):
             page = self._require_page()
             rotation = page.get_rotation()
             origin = page.get_bbox()[:2]
+            invisible_modes = (
+                pdfium_c.FPDF_TEXTRENDERMODE_INVISIBLE,
+                pdfium_c.FPDF_TEXTRENDERMODE_CLIP,
+            )
             for obj in page.get_objects(filter=[obj_type]):
                 invisible = (
                     obj_type == pdfium_c.FPDF_PAGEOBJ_TEXT
                     and pdfium_c.FPDFTextObj_GetTextRenderMode(obj.raw)
-                    in _INVISIBLE_TEXT_RENDER_MODES
+                    in invisible_modes
                 )
 
                 if _PYPDFIUM2_MAJOR_VERSION >= 5:
@@ -710,6 +716,8 @@ class PyPdfiumPageBackend(ManagedPdfiumPageBackend):
             yield bbox
 
     def get_bitmap_rects(self, scale: float = 1) -> Iterable[BoundingBox]:
+        import pypdfium2.raw as pdfium_c
+
         AREA_THRESHOLD = 0  # 32 * 32
 
         for cropbox in self._object_rects(pdfium_c.FPDF_PAGEOBJ_IMAGE):
@@ -731,6 +739,8 @@ class PyPdfiumPageBackend(ManagedPdfiumPageBackend):
         clipped away or fully transparent. Text rendering mode is the one visibility signal
         it does expose, and invisible text is skipped just like docling-parse does.
         """
+        import pypdfium2.raw as pdfium_c
+
         if not self.valid:
             return False
 
@@ -766,6 +776,8 @@ class PyPdfiumPageBackend(ManagedPdfiumPageBackend):
         Unlike the docling-parse implementation this sees neither clip state nor stroke
         width, so the regions are the union of raw path bounding boxes.
         """
+        import pypdfium2.raw as pdfium_c
+
         if not self.valid:
             return []
 
@@ -1171,6 +1183,7 @@ def provenance():
     import docling_parse.pdf_parser as parser_module
 
     extension = importlib.import_module("docling_parse.pdf_parsers")
+    pdfium_spec = importlib.util.find_spec("pypdfium2")
 
     packages = {}
     for name in ("docling-parse", "docling-core", "pypdfium2", "pillow", "rtree"):
@@ -1184,7 +1197,7 @@ def provenance():
         "imports": {
             "parser": parser_module.__file__,
             "extension": extension.__file__,
-            "pypdfium2": pdfium.__file__,
+            "pypdfium2": pdfium_spec.origin if pdfium_spec else None,
             "docling_core": docling_core.__file__,
         },
         "parse_git": git_state(Path(parser_module.__file__).parent),
@@ -1260,6 +1273,8 @@ def measure(path, pages, backend, parser_config, decode, output, progress=None):
             for result in parser.iterate_results()
         )
     else:
+        import pypdfium2 as pdfium
+
         with pypdfium2_lock:
             document = pdfium.PdfDocument(path)
             selected = pages if pages is not None else range(1, len(document) + 1)
@@ -1561,15 +1576,25 @@ def main():
         flush=True,
     )
     total_pages = 0
+    page_counter = DoclingPdfParser() if args.backend == "threaded" else None
+    if page_counter is None:
+        import pypdfium2 as pdfium
+
     for name, pages in ProgressBar(
         selection.items(), desc="counting pages", unit="doc"
     ):
         if pages is not None:
             total_pages += len(pages)
+        elif page_counter is not None:
+            document = page_counter.load(name)
+            try:
+                total_pages += document.number_of_pages()
+            finally:
+                document.unload()
         else:
             with pypdfium2_lock:
-                with pdfium.PdfDocument(name) as document:
-                    total_pages += len(document)
+                with pdfium.PdfDocument(name) as pdfium_document:
+                    total_pages += len(pdfium_document)
     print_settings(args.backend, threads, args.threads, suppress=args.suppress_config)
     meta = provenance()
     reports = []
