@@ -573,6 +573,20 @@ namespace pdflib
                             const page_item<PAGE_CELL>& rhs);
 
     /**
+     * @brief Tracking of a short run set with one character spacing (Tc).
+     *
+     * Returns the gap in em when every cell of `run` has placement metadata,
+     * the same positive Tc and no space glyph between them, and each of the
+     * `expected_gaps` gaps is that Tc (within 0.02 em, so that a pair kern
+     * such as `[(用語) -10 (集)] TJ` still counts) and touches a CJK
+     * character; 0 otherwise.
+     *
+     * @par Complexity O(n).
+     */
+    static double constant_char_spacing_em(const line_run& run,
+                                           std::size_t expected_gaps);
+
+    /**
      * @brief Letter spacing and word-gap threshold of a run without space
      * glyphs, in em.
      *
@@ -588,6 +602,9 @@ namespace pdflib
      *   of the gaps are zero (letters that touch are not letter-spaced) and
      *   the value lies in (0.03, 0.2] em. Wider tracking is not recognised,
      *   because positioned mathematics reaches the same gaps.
+     *
+     * A run with fewer gaps is tracked only when one character spacing (Tc)
+     * sets every gap of a CJK run (`constant_char_spacing_em()`).
      *
      * Ordinary lines have a tracking of 0. For them, the threshold
      * (`word_gap`) starts at `unspaced_word_gap_em` and follows the line's
@@ -1157,6 +1174,51 @@ namespace pdflib
     return edge_is_cjk(lhs.text, true) or edge_is_cjk(rhs.text, false);
   }
 
+  inline double page_item_sanitator<PAGE_CELLS>::constant_char_spacing_em(
+      const line_run& run, std::size_t expected_gaps)
+  {
+    const page_item<PAGE_CELL>* previous = nullptr;
+    double char_spacing = 0.0;
+    double tracking = 0.0;
+    std::size_t gaps = 0;
+
+    for(const auto& cell : run.cells)
+      {
+        if(is_semantic_space(cell) or not cell.has_text_placement)
+          {
+            return 0.0;
+          }
+        if(previous == nullptr)
+          {
+            char_spacing = cell.text_char_spacing;
+            if(char_spacing <= 0.0)
+              {
+                return 0.0;
+              }
+          }
+        else
+          {
+            const double em = std::max(
+              1.e-6, 0.5 * (previous->nominal_text_height +
+                            cell.nominal_text_height));
+            const double gap = std::max(0.0, forward_gap(*previous, cell));
+            if(not touches_cjk(*previous, cell) or
+               clip_boundary(*previous, cell) or
+               not word_baselines_compatible(*previous, cell) or
+               std::abs(cell.text_char_spacing - char_spacing) > 0.01 * em or
+               std::abs(gap - char_spacing) > 0.02 * em)
+              {
+                return 0.0;
+              }
+            tracking = std::max(tracking, gap / em);
+            ++gaps;
+          }
+        previous = &cell;
+      }
+
+    return gaps == expected_gaps ? std::min(0.5, tracking) : 0.0;
+  }
+
   inline typename page_item_sanitator<PAGE_CELLS>::unspaced_gap_profile
   page_item_sanitator<PAGE_CELLS>::infer_unspaced_gap_profile(
       const line_run& run)
@@ -1193,6 +1255,17 @@ namespace pdflib
 
     if(gaps.size() < 4)
       {
+        // Too few gaps to infer the tracking from them, but a short CJK run
+        // can still say what its tracking is: `0.175 Tc (股本重組) Tj` is
+        // one word (#483). That holds only when one character spacing (Tc)
+        // is in force over the whole run and every gap is it, give or take a
+        // pair kern of 0.02 em, and touches a CJK character. Tools that
+        // place each pair of glyphs with its own Tc and a Td use Tc for word
+        // gaps as well, positioned mathematics uses it to leave room for
+        // what is set between two glyphs (`(` and `)`), and a wider TJ
+        // adjustment or a new text position makes a gap something other
+        // than Tc.
+        profile.tracking = constant_char_spacing_em(run, gaps.size());
         return profile;
       }
     std::sort(gaps.begin(), gaps.end());

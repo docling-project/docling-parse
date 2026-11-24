@@ -898,6 +898,21 @@ namespace pdflib
         nominal_top_x - cell.text_origin_x,
         nominal_top_y - cell.text_origin_y);
 
+      // Character spacing is added after every glyph (ISO 32000-1, 9.3.2),
+      // in the same direction the cursor moves after this one.
+      if(cell.has_text_placement and char_spacing != 0.0)
+        {
+          double spaced_end_x = 0.0;
+          double spaced_end_y = 0.0;
+          map_text_point(
+            placement_end_x + (vertical_mode ? 0.0 : char_spacing * h_scaling),
+            placement_end_y + (vertical_mode ? -char_spacing : 0.0),
+            spaced_end_x, spaced_end_y);
+          cell.text_char_spacing =
+            (spaced_end_x - cell.text_advance_x) * cell.writing_axis_x +
+            (spaced_end_y - cell.text_advance_y) * cell.writing_axis_y;
+        }
+
       // LOG_S(INFO) << "base_x0_old: " << base[0] << ", base_y0_old: " << base[1];
       // LOG_S(INFO) << "base_x0_new: " << d_base_x << ", base_y0_new: " << d_base_y;
       
