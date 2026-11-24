@@ -2026,10 +2026,6 @@ namespace pdflib
       		<< bbox.at(2) << ", "
       		<< bbox.at(3) << "]";
 
-    // check if (1) we keep data outside the page_boundary and
-    // (2) if bbox is outside of page_boundary
-    // please implement
-
     // create child resources with parent link (no deep copy)
     auto page_fonts_       = std::make_shared<pdf_resource<PAGE_FONTS>>(page_fonts);
     auto page_grphs_       = std::make_shared<pdf_resource<PAGE_GRPHS>>(page_grphs);
@@ -2119,6 +2115,10 @@ namespace pdflib
         new_stream.soft_mask_depth_ = soft_mask_depth_;
 
         bool updated_stack = new_stream.update_stack(stack, stack_count);
+        if(xobj.has_bbox())
+          {
+            new_stream.current_shape_state().clip_form_bbox(bbox);
+          }
         // Form content inherits the caller's effective linkage. Local BDC
         // entries override it without copying the caller's ActualText spans.
         new_stream.inherited_marked_content.mcid = active_marked_content().mcid;

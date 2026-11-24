@@ -1,0 +1,60 @@
+//-*-C++-*-
+
+#ifndef PYBIND_PDF_READER_H
+#define PYBIND_PDF_READER_H
+
+#include <pybind/docling_editor.h>
+
+namespace docling
+{
+  // The read-only face of docling_editor. It implements nothing: protected
+  // inheritance hides the editor, and the using-declarations publish the
+  // operations that cannot change a document. Add logic to docling_editor,
+  // never here.
+  class pdf_reader: protected docling_editor
+  {
+  public:
+
+    pdf_reader(std::string loglevel = "fatal");
+
+    using docling_editor::ANY_GENERATION;
+
+    using docling_editor::open_file;
+    using docling_editor::open_buffer;
+    using docling_editor::open_source;
+    using docling_editor::take_open_error;
+    using docling_editor::is_open;
+    using docling_editor::close;
+
+    using docling_editor::page_count;
+    using docling_editor::generation;
+    using docling_editor::page_list_state;
+    using docling_editor::validate_page_handle;
+    using docling_editor::document_info;
+    using docling_editor::validate_strict;
+    using docling_editor::page_info;
+    using docling_editor::extract_text;
+    using docling_editor::page_images;
+    using docling_editor::get_source;
+    using docling_editor::take_import_source;
+    using docling_editor::document_settings;
+    using docling_editor::page_labels;
+    using docling_editor::named_destinations;
+    using docling_editor::outline_tree;
+    using docling_editor::form;
+    using docling_editor::form_flags;
+    using docling_editor::field_pages;
+    using docling_editor::has_form_on_page;
+    using docling_editor::page_annotations;
+    using docling_editor::attachments;
+    using docling_editor::attachment_data;
+    using docling_editor::javascript;
+  };
+
+  inline pdf_reader::pdf_reader(std::string loglevel):
+    docling_editor(loglevel)
+  {}
+
+}
+
+#endif
