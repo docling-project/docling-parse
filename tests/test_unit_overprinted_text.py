@@ -69,6 +69,20 @@ def test_a_line_painted_three_times_in_succession(decode_config):
     assert _lines([(72, 700, FIRST)] * 3, decode_config) == expected
 
 
+def test_dense_overprinting_keeps_one_complete_line():
+    text = "Committee Participant benefits illegible"
+    page = _page(_pdf([(72, 700, text)] * 1024))
+    assert [cell.text for cell in page.textline_cells] == [text]
+    assert "".join(cell.text for cell in page.char_cells) == text
+
+
+@pytest.mark.parametrize("offset", [0.0, 0.3])
+def test_a_single_letter_painted_twice(offset):
+    page = _page(_pdf([(72, 700, "A"), (72 + offset, 700, "A")]))
+    assert [cell.text for cell in page.textline_cells] == ["A"]
+    assert [cell.text for cell in page.char_cells] == ["A"]
+
+
 def test_a_block_painted_three_times(decode_config):
     block = [(72, 700, FIRST), (72, 660, SECOND)]
 
@@ -92,10 +106,13 @@ def test_a_copy_shifted_by_one_point_is_kept(decode_config):
     assert _lines([(72, 700, FIRST), (73, 700, FIRST)], decode_config) == [FIRST, FIRST]
 
 
-def test_a_different_word_overlapping_within_tolerance_keeps_its_letters(decode_config):
+@pytest.mark.parametrize("offset", [0.0, 0.3])
+def test_a_different_word_overlapping_within_tolerance_keeps_its_letters(
+    decode_config, offset
+):
     """B and P are equally wide, so the A and T of both words lie 0.3 apart."""
     lines = _lines(
-        [(72, 700, "BAT"), (72, 660, SECOND), (72.3, 700, "PAT")], decode_config
+        [(72, 700, "BAT"), (72, 660, SECOND), (72 + offset, 700, "PAT")], decode_config
     )
 
     assert sorted(lines) == sorted(["BAT", SECOND, "PAT"])
