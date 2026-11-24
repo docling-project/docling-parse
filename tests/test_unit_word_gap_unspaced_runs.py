@@ -20,6 +20,8 @@ font for the CJK cases, so each test reads as the content stream it is about.
 At 12 pt a TJ adjustment of -1000 moves the next glyph by one em.
 """
 
+import pytest
+
 from tests.pdf_builder import parse_page, simple_page_pdf
 
 HELVETICA = (
@@ -175,3 +177,44 @@ def test_a_wider_gap_in_justified_cjk_text_still_splits():
 def test_touching_cjk_characters_stay_one_cell():
     words, _ = _cells(f"({_gbk('中文排版测试')}) Tj", font="/F3")
     assert words == ["中文排版测试"]
+
+
+@pytest.mark.parametrize("text", ["中文", "中文排", "中文排版"])
+def test_a_letter_spaced_short_cjk_run_stays_whole(text):
+    # `0.175 Tc (股本重組) Tj` (#483): a run of fewer than five characters has
+    # too few gaps to infer its tracking from, and 7.25.0 reads one word per
+    # character. One Tc spaces every character, so the run is one word.
+    words, lines = _cells(f"2.1 Tc ({_gbk(text)}) Tj", font="/F3")
+    assert words == [text]
+    assert lines == [text]
+
+
+def test_a_pair_kern_in_a_letter_spaced_short_cjk_run_stays_joined():
+    # The heading `用語集` of 5081873815222802242-2.pdf p1 is
+    # `0.165 Tc [(用語) -10 (集)] TJ`: a pair kern of 0.01 em on top of the Tc.
+    words, _ = _cells(f"2.1 Tc [({_gbk('中文')}) -10 ({_gbk('排')})] TJ", font="/F3")
+    assert words == ["中文排"]
+
+
+def test_a_word_gap_in_a_letter_spaced_short_cjk_run_still_splits():
+    # A TJ adjustment of a quarter em on top of the Tc is a word gap.
+    words, _ = _cells(f"2.1 Tc [({_gbk('中文')}) -250 ({_gbk('排')})] TJ", font="/F3")
+    assert words == ["中", "文", "排"]
+
+
+def test_a_short_cjk_run_with_a_tc_per_glyph_pair_is_not_tracked():
+    # Tools that place each pair of glyphs with its own Tc and a Td use Tc for
+    # whatever gap the pair has: here every gap is the Tc in force, 0.5 em
+    # after `中` and `文`, 0.175 em after `排`. Only one Tc over the whole run
+    # is tracking, so the run is judged as before.
+    words, _ = _cells(
+        f"6 Tc ({_gbk('中文')}) Tj 36 0 Td 2.1 Tc ({_gbk('排版')}) Tj", font="/F3"
+    )
+    assert words == ["中", "文", "排", "版"]
+
+
+def test_brackets_spaced_apart_with_tc_stay_apart():
+    # Positioned mathematics leaves room between `(` and `)` with Tc for what
+    # is set between them elsewhere; that gap is not letter spacing.
+    words, _ = _cells(r"6 Tc (\(\)) Tj")
+    assert words == ["(", ")"]

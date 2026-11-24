@@ -130,6 +130,10 @@ namespace pdflib
     double writing_axis_x = 1.0;
     double writing_axis_y = 0.0;
     double nominal_text_height = 0.0;
+    // How far the character spacing (Tc) in force moves the next glyph
+    // after this one, along the writing axis, in page units. A gap of
+    // exactly this much is letter spacing, not a word gap.
+    double text_char_spacing = 0.0;
 
     // tagged-PDF linkage (PDF 32000-2, 14.7.5): the /MCID of the innermost
     // marked-content sequence the glyph was drawn in (-1 when untagged), and
