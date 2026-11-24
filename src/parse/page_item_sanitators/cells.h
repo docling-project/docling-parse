@@ -3,6 +3,8 @@
 #ifndef PAGE_ITEM_CELLS_SANITATOR_H
 #define PAGE_ITEM_CELLS_SANITATOR_H
 
+#include <string_view>
+
 namespace pdflib
 {
 
@@ -56,8 +58,7 @@ namespace pdflib
      * @return Newly allocated cells containing one entry per inferred word.
      *
      * @par Complexity
-     * Contraction is linear in the input size. Optional duplicate removal
-     * indexes the resulting words by text, font and position.
+     * O(n log n) time, including gap inference and optional duplicate removal.
      */
     page_item<PAGE_CELLS> create_word_cells(page_item<PAGE_CELLS>& cells,
                                              const decode_config& config);
@@ -79,8 +80,7 @@ namespace pdflib
      * @return Newly allocated cells containing one entry per inferred line.
      *
      * @par Complexity
-     * Contraction is linear in the input size. Optional duplicate removal
-     * indexes the resulting lines by text, font and position.
+     * O(n log n) time, including gap inference and optional duplicate removal.
      */
     page_item<PAGE_CELLS> create_line_cells(page_item<PAGE_CELLS>& cells,
                                              const decode_config& config);
@@ -102,36 +102,14 @@ namespace pdflib
     void remove_adjacent_cells(page_item<PAGE_CELLS>& cells, double eps);
 
     /**
-     * @brief Removes matching cells that may be separated in the sequence.
+     * @brief Removes confirmed overprinted runs from the source glyph sequence.
      *
-     * A later cell equal to an earlier one in text, font name and every rotated
-     * corner is removed wherever it falls in the sequence: a block of lines
-     * painted more than once at the same position interleaves the copies of
-     * each line with the block's other lines.
-     *
-     * For every active cell, later cells with identical text and font name are
-     * also compared corner by corner. A later cell is removed when every rotated
-     * corner lies within @p eps of the earlier cell. When @p same_line is true,
-     * the scan stops after the rotated y-coordinate differs by more than
-     * @p eps; this assumes the input is ordered by line position.
-     *
-     * Corner distances must also be less than half the earlier cell's width:
-     * on tiny text the next identical letter can be closer than @p eps.
-     * An exact match still counts when the glyph has zero width.
-     *
-     * This compatibility cleanup is intentionally separate from word and line
-     * construction so its quadratic worst-case cost is not paid by contraction.
-     *
-     * @param[in,out] cells Cell sequence to deduplicate in place.
-     * @param eps Maximum Euclidean distance between corresponding corners.
-     * @param same_line Restrict comparisons to the current ordered text line.
-     *
-     * @par Complexity
-     * O(n^2) in the worst case; the same-line early exit can reduce the scan.
+     * Assemble provisional words and lines before matching. A shorter run can
+     * be removed only when all its glyphs map in order to a retained line and
+     * clipping or a stroke/fill pair explains the repeated paint. Ambiguous
+     * runs survive. Rendering instructions are independent of these cells.
      */
-    void remove_duplicate_cells(page_item<PAGE_CELLS>& cells,
-                                double eps,
-                                bool same_line);
+    void remove_overprinted_runs(page_item<PAGE_CELLS>& cells);
 
     /**
      * @brief Removes nearly coincident copies of complete words or lines.
@@ -144,8 +122,8 @@ namespace pdflib
      * qualify. Character cells and render instructions are not modified.
      *
      * Candidates are indexed by text, font and a position grid, independently
-     * of content-stream order. Cost is O(n log n + k), where k is the number
-     * of candidates in neighboring buckets with the same text and font.
+     * of content-stream order. Each lookup examines a bounded number of
+     * candidates in neighboring buckets with the same text and font.
      */
     void remove_overlapping_text_cells(page_item<PAGE_CELLS>& cells, double eps);
 
@@ -210,6 +188,8 @@ namespace pdflib
     {
       std::vector<page_item<PAGE_CELL>> cells;
       bool has_semantic_spaces = false;
+      std::size_t source_begin = 0;
+      std::size_t source_end = 0;
     };
 
     /**
@@ -222,6 +202,7 @@ namespace pdflib
     {
       page_item<PAGE_CELLS> words;
       page_item<PAGE_CELLS> lines;
+      std::vector<std::pair<std::size_t, std::size_t>> line_sources;
     };
 
     /**
@@ -511,7 +492,8 @@ namespace pdflib
      * @return Ordered maximal line runs containing copied cells.
      * @par Complexity O(n), since only trailing explicit spaces are skipped.
      */
-    static std::vector<line_run> collect_line_runs(page_item<PAGE_CELLS>& cells);
+    static std::vector<line_run> collect_line_runs(page_item<PAGE_CELLS>& cells,
+                                                   bool split_overprints);
 
     /**
      * @brief Unmarked gap between two cells in units of their advances.
@@ -618,6 +600,8 @@ namespace pdflib
      */
     static unspaced_gap_profile infer_unspaced_gap_profile(const line_run& run);
 
+    using text_prefixes = std::vector<std::pair<std::string_view, bool>>;
+
     /**
      * @brief Appends one cell to a text aggregate and expands its geometry.
      *
@@ -631,11 +615,15 @@ namespace pdflib
      * @param[in,out] aggregate Existing word or line to extend.
      * @param next Cell or word being incorporated; it is not modified.
      * @param insert_space Insert one space between the two text fragments.
-     * @par Complexity O(1).
+     * @param prefixes Deferred right-to-left text, in source order.
      */
     static void append_cell(page_item<PAGE_CELL>& aggregate,
-                            page_item<PAGE_CELL>& next,
-                            bool insert_space);
+                            const page_item<PAGE_CELL>& next,
+                            bool insert_space,
+                            text_prefixes& prefixes);
+
+    static void finish_text(page_item<PAGE_CELL>& aggregate,
+                            text_prefixes& prefixes);
 
     /**
      * @brief Constructs word and line cells in a single contraction pass.
@@ -659,7 +647,18 @@ namespace pdflib
      * @return Word and line collections derived from the same analysis.
      * @par Complexity O(n), including fixed-iteration gap clustering.
      */
-    static contraction_result contract(page_item<PAGE_CELLS>& cells);
+    static contraction_result contract(page_item<PAGE_CELLS>& cells,
+                                       bool split_overprints = false);
+
+    static void remove_embedded_overprints(page_item<PAGE_CELLS>& cells);
+
+    static bool same_paint_context(const page_item<PAGE_CELL>& lhs,
+                                   const page_item<PAGE_CELL>& rhs,
+                                   bool match_mcid = true);
+    static bool stroke_and_fill(const page_item<PAGE_CELL>& lhs,
+                                const page_item<PAGE_CELL>& rhs);
+    static double corner_distance(const page_item<PAGE_CELL>& lhs,
+                                  const page_item<PAGE_CELL>& rhs);
   };
 
   inline double page_item_sanitator<PAGE_CELLS>::cell_height(
@@ -1047,12 +1046,24 @@ namespace pdflib
 
   inline std::vector<typename page_item_sanitator<PAGE_CELLS>::line_run>
   page_item_sanitator<PAGE_CELLS>::collect_line_runs(
-      page_item<PAGE_CELLS>& cells)
+      page_item<PAGE_CELLS>& cells, bool split_overprints)
   {
+    auto restarts_at_same_glyph = [](const auto& lhs, const auto& rhs) {
+      if(lhs.instr_count == rhs.instr_count or lhs.text != rhs.text or
+         lhs.font_name != rhs.font_name or not lhs.has_text_placement or not rhs.has_text_placement)
+        {
+          return false;
+        }
+      const double advance = std::min(cell_advance_length(lhs), cell_advance_length(rhs));
+      const double offset = std::hypot(lhs.text_origin_x - rhs.text_origin_x,
+                                       lhs.text_origin_y - rhs.text_origin_y);
+      return offset < std::min(0.5, 0.5 * advance);
+    };
     std::vector<line_run> runs;
-    for(auto& cell : cells)
+    for(std::size_t i = 0; i < cells.size(); ++i)
       {
-        if(not cell.active or cell.text.empty())
+        auto& cell = cells[i];
+        if(not cell.active or cell.omit_from_text_runs or cell.text.empty())
           {
             continue;
           }
@@ -1060,6 +1071,7 @@ namespace pdflib
         if(runs.empty())
           {
             runs.emplace_back();
+            runs.back().source_begin = i;
           }
 
         // Explicit spaces are semantic boundary markers. Some PDFs give them
@@ -1069,6 +1081,7 @@ namespace pdflib
           {
             runs.back().has_semantic_spaces = true;
             runs.back().cells.push_back(cell);
+            runs.back().source_end = i + 1;
             continue;
           }
 
@@ -1083,11 +1096,28 @@ namespace pdflib
               }
           }
         if(previous_visible != nullptr and
-           not continues_line(*previous_visible, cell))
+           (not continues_line(*previous_visible, cell) or
+            (split_overprints and restarts_at_same_glyph(*previous_visible, cell))))
           {
+            std::size_t source_begin = i;
+            // A leading space in the same drawing instruction as the new
+            // run belongs to that copy when projecting back to glyphs.
+            if(split_overprints)
+              {
+                const auto& previous = runs.back();
+                while(source_begin > previous.source_begin and
+                      cells[source_begin - 1].instr_count == cell.instr_count and
+                      is_semantic_space(cells[source_begin - 1]))
+                  {
+                    --source_begin;
+                  }
+                runs.back().source_end = source_begin;
+              }
             runs.emplace_back();
+            runs.back().source_begin = source_begin;
           }
         runs.back().cells.push_back(cell);
+        runs.back().source_end = i + 1;
       }
     return runs;
   }
@@ -1318,8 +1348,9 @@ namespace pdflib
 
   inline void page_item_sanitator<PAGE_CELLS>::append_cell(
       page_item<PAGE_CELL>& aggregate,
-      page_item<PAGE_CELL>& next,
-      bool insert_space)
+      const page_item<PAGE_CELL>& next,
+      bool insert_space,
+      text_prefixes& prefixes)
   {
     // Right-to-left text is prepended when the stream paints it in visual
     // order. A stream in logical order places each cell before the text
@@ -1355,7 +1386,9 @@ namespace pdflib
       }
     else
       {
-        aggregate.text = next.text + (insert_space ? " " : "") + aggregate.text;
+        // Copying the accumulated text on every prepend is quadratic for
+        // a long right-to-left word or line. Resolve the prefixes once.
+        prefixes.emplace_back(next.text, insert_space);
       }
     if(not ltr)
       {
@@ -1439,11 +1472,30 @@ namespace pdflib
       aggregate.text_is_suppressed_glyph and next.text_is_suppressed_glyph;
   }
 
+  inline void page_item_sanitator<PAGE_CELLS>::finish_text(
+      page_item<PAGE_CELL>& aggregate, text_prefixes& prefixes)
+  {
+    if(prefixes.empty()) { return; }
+    std::size_t size = aggregate.text.size();
+    for(const auto& [text, space] : prefixes) { size += text.size() + space; }
+    std::string combined;
+    combined.reserve(size);
+    for(auto part = prefixes.rbegin(); part != prefixes.rend(); ++part)
+      {
+        combined.append(part->first);
+        if(part->second) { combined.push_back(' '); }
+      }
+    combined += aggregate.text;
+    aggregate.text = std::move(combined);
+    prefixes.clear();
+  }
+
   inline typename page_item_sanitator<PAGE_CELLS>::contraction_result
-  page_item_sanitator<PAGE_CELLS>::contract(page_item<PAGE_CELLS>& cells)
+  page_item_sanitator<PAGE_CELLS>::contract(page_item<PAGE_CELLS>& cells,
+                                          bool split_overprints)
   {
     contraction_result result;
-    for(auto& run : collect_line_runs(cells))
+    for(auto& run : collect_line_runs(cells, split_overprints))
       {
         // Explicit PDF spaces remain authoritative boundaries, and the
         // unmarked gaps between them are judged in character advances,
@@ -1459,6 +1511,7 @@ namespace pdflib
           ? infer_spaced_word_gap(run)
           : spaced_word_gap_advances;
         std::vector<page_item<PAGE_CELL>> words;
+        text_prefixes prefixes;
         page_item<PAGE_CELL>* previous_visible = nullptr;
         bool explicit_boundary = false;
 
@@ -1505,15 +1558,14 @@ namespace pdflib
                   }
               }
 
-            page_item<PAGE_CELL> aggregate_cell = cell;
-
             if(starts_word)
               {
-                words.push_back(std::move(aggregate_cell));
+                if(not words.empty()) { finish_text(words.back(), prefixes); }
+                words.push_back(cell);
               }
             else
               {
-                append_cell(words.back(), aggregate_cell, false);
+                append_cell(words.back(), cell, false, prefixes);
               }
             previous_visible = &cell;
             explicit_boundary = false;
@@ -1524,6 +1576,7 @@ namespace pdflib
             continue;
           }
 
+        finish_text(words.back(), prefixes);
         page_item<PAGE_CELL> line = words.front();
         if(not words.front().text.empty())
           {
@@ -1537,11 +1590,16 @@ namespace pdflib
               }
             const bool insert_space =
               not line.text.empty() and not words[i].text.empty();
-            append_cell(line, words[i], insert_space);
+            append_cell(line, words[i], insert_space, prefixes);
           }
+        finish_text(line, prefixes);
         if(not line.text.empty())
           {
             result.lines.push_back(line);
+            if(split_overprints)
+              {
+                result.line_sources.emplace_back(run.source_begin, run.source_end);
+              }
           }
       }
     return result;
@@ -1636,60 +1694,467 @@ namespace pdflib
     cells.remove_inactive_cells();
   }
 
-  inline void page_item_sanitator<PAGE_CELLS>::remove_duplicate_cells(
-      page_item<PAGE_CELLS>& cells,
-      double eps,
-      bool same_line)
+  inline bool page_item_sanitator<PAGE_CELLS>::same_paint_context(
+      const page_item<PAGE_CELL>& lhs, const page_item<PAGE_CELL>& rhs,
+      bool match_mcid)
   {
-    // Retained for compatibility with the decode cleanup path. Word/line
-    // construction itself does not call this quadratic routine.
+    return lhs.left_to_right == rhs.left_to_right and lhs.widget == rhs.widget and
+           (not match_mcid or lhs.mcid == rhs.mcid) and
+           lhs.get_artifact_type() == rhs.get_artifact_type() and
+           lhs.get_artifact_subtype() == rhs.get_artifact_subtype();
+  }
 
-    // A glyph painted again at exactly the same place, wherever its copy
-    // falls in the sequence. Only an exact match counts here: a different
-    // text overlapping this one can put an equal glyph within eps of it.
-    typedef std::tuple<std::string, std::string,
-                       double, double, double, double,
-                       double, double, double, double> painted_glyph;
-    std::set<painted_glyph> painted;
-    for(std::size_t i = 0; i < cells.size(); ++i)
+  inline bool page_item_sanitator<PAGE_CELLS>::stroke_and_fill(
+      const page_item<PAGE_CELL>& lhs, const page_item<PAGE_CELL>& rhs)
+  {
+    auto fills = [](int mode) { return mode == -1 or mode == 0; };
+    return (lhs.rendering_mode == 1 and fills(rhs.rendering_mode)) or
+           (rhs.rendering_mode == 1 and fills(lhs.rendering_mode));
+  }
+
+  inline double page_item_sanitator<PAGE_CELLS>::corner_distance(
+      const page_item<PAGE_CELL>& lhs, const page_item<PAGE_CELL>& rhs)
+  {
+    return std::max({std::hypot(lhs.r_x0 - rhs.r_x0, lhs.r_y0 - rhs.r_y0),
+                     std::hypot(lhs.r_x1 - rhs.r_x1, lhs.r_y1 - rhs.r_y1),
+                     std::hypot(lhs.r_x2 - rhs.r_x2, lhs.r_y2 - rhs.r_y2),
+                     std::hypot(lhs.r_x3 - rhs.r_x3, lhs.r_y3 - rhs.r_y3)});
+  }
+
+  inline void page_item_sanitator<PAGE_CELLS>::remove_overprinted_runs(
+      page_item<PAGE_CELLS>& cells)
+  {
+    if(cells.size() < 2) { return; }
+
+    auto provisional = contract(cells, true);
+    if(provisional.lines.size() < 2)
       {
-        auto& cell = cells[i];
-        if(not cell.active) { continue; }
-        if(not painted.emplace(cell.text, cell.font_name,
-                               cell.r_x0, cell.r_y0, cell.r_x1, cell.r_y1,
-                               cell.r_x2, cell.r_y2, cell.r_x3, cell.r_y3).second)
-          {
-            cell.active = false;
-          }
+        remove_embedded_overprints(cells);
+        cells.remove_inactive_cells();
+        return;
       }
 
-    for(std::size_t i = 0; i < cells.size(); ++i)
+    struct glyph_run
+    {
+      std::size_t line;
+      std::vector<std::size_t> glyphs;
+    };
+    std::vector<glyph_run> runs;
+    for(std::size_t line = 0; line < provisional.line_sources.size(); ++line)
       {
-        if(not cells[i].active) { continue; }
-        const double width = utils::values::distance(
-          cells[i].r_x0, cells[i].r_y0, cells[i].r_x1, cells[i].r_y1);
-        const double tol = std::min(eps, 0.5 * width);
-        auto overlaps = [tol](double distance)
-          { return distance < tol or distance == 0.0; };
-        for(std::size_t j = i + 1; j < cells.size(); ++j)
+        const auto [begin, end] = provisional.line_sources[line];
+        glyph_run run{line, {}};
+        for(std::size_t i = begin; i < end; ++i)
           {
-            if(same_line and std::abs(cells[i].r_y0 - cells[j].r_y0) > eps)
+            const auto& glyph = cells[i];
+            if(glyph.active and not glyph.text.empty() and not is_semantic_space(glyph))
               {
-                break;
-              }
-            if(not cells[j].active) { continue; }
-            if(cells[i].font_name == cells[j].font_name and
-               cells[i].text == cells[j].text and
-               overlaps(utils::values::distance(cells[i].r_x0, cells[i].r_y0, cells[j].r_x0, cells[j].r_y0)) and
-               overlaps(utils::values::distance(cells[i].r_x1, cells[i].r_y1, cells[j].r_x1, cells[j].r_y1)) and
-               overlaps(utils::values::distance(cells[i].r_x2, cells[i].r_y2, cells[j].r_x2, cells[j].r_y2)) and
-               overlaps(utils::values::distance(cells[i].r_x3, cells[i].r_y3, cells[j].r_x3, cells[j].r_y3)))
-              {
-                cells[j].active = false;
+                run.glyphs.push_back(i);
               }
           }
+        if(not run.glyphs.empty()) { runs.push_back(std::move(run)); }
       }
+    // Prefer complete runs, retaining source order for equally long runs.
+    std::stable_sort(runs.begin(), runs.end(), [](const auto& lhs, const auto& rhs) {
+      return lhs.glyphs.size() > rhs.glyphs.size();
+    });
+
+    constexpr double eps = 0.5;
+    constexpr std::size_t max_candidates = 8;
+    using bucket_key = std::tuple<std::string_view, std::string_view, double, double>;
+    using position = std::pair<std::size_t, std::size_t>;
+    using postings = std::vector<position>;
+    std::map<bucket_key, postings> index;
+
+    auto bucket = [=](const auto& glyph, int dx, int dy) -> bucket_key {
+      return {glyph.text, glyph.font_name,
+              std::floor(glyph.r_x0 / eps) + dx, std::floor(glyph.r_y0 / eps) + dy};
+    };
+    auto has_position = [](const auto& glyph) {
+      return std::isfinite(glyph.r_x0) and std::isfinite(glyph.r_y0);
+    };
+    auto visit_neighbors = [&](const auto& glyph, auto visit) {
+      if(not has_position(glyph)) { return false; }
+      for(int dx = -1; dx <= 1; ++dx)
+        {
+          for(int dy = -1; dy <= 1; ++dy)
+            {
+              const auto found = index.find(bucket(glyph, dx, dy));
+              if(found != index.end() and visit(found->second)) { return true; }
+            }
+        }
+      return false;
+    };
+
+    auto clipped_across_writing_axis = [](const auto& glyph) {
+      if(not glyph.has_clip_bbox or clip_hides(glyph)) { return false; }
+      double ux = glyph.r_x1 - glyph.r_x0;
+      double uy = glyph.r_y1 - glyph.r_y0;
+      const double norm = std::hypot(ux, uy);
+      if(norm <= 1.e-9) { return false; }
+      ux /= norm;
+      uy /= norm;
+      const auto clip = std::minmax({-uy * glyph.clip_x0 + ux * glyph.clip_y0,
+                                    -uy * glyph.clip_x0 + ux * glyph.clip_y1,
+                                    -uy * glyph.clip_x1 + ux * glyph.clip_y0,
+                                    -uy * glyph.clip_x1 + ux * glyph.clip_y1});
+      const auto extent = std::minmax({-uy * glyph.r_x0 + ux * glyph.r_y0,
+                                      -uy * glyph.r_x1 + ux * glyph.r_y1,
+                                      -uy * glyph.r_x2 + ux * glyph.r_y2,
+                                      -uy * glyph.r_x3 + ux * glyph.r_y3});
+      const double height = extent.second - extent.first;
+      const double visible = std::min(clip.second, extent.second) -
+                             std::max(clip.first, extent.first);
+      return height > 1.e-9 and visible > 0.0 and visible < 0.9 * height;
+    };
+    auto paint_matches = [&](const auto& lhs, const auto& rhs,
+                             bool& exact, bool& repeated_paint) {
+      if(not same_paint_context(lhs, rhs)) { return false; }
+
+      const double width = std::min(std::hypot(lhs.r_x1 - lhs.r_x0, lhs.r_y1 - lhs.r_y0),
+                                    std::hypot(rhs.r_x1 - rhs.r_x0, rhs.r_y1 - rhs.r_y0));
+      const double distance = corner_distance(lhs, rhs);
+      if(distance != 0.0 and not (distance < std::min(eps, 0.5 * width))) { return false; }
+
+      const bool paired_paint = stroke_and_fill(lhs, rhs);
+      const bool different_clips = clips_differ(lhs, rhs);
+      const bool clipped_paint = different_clips and
+        (clipped_across_writing_axis(lhs) or clipped_across_writing_axis(rhs));
+      if(different_clips and not (paired_paint or clipped_paint)) { return false; }
+
+      exact = exact and distance == 0.0;
+      repeated_paint = repeated_paint or paired_paint or clipped_paint;
+      return true;
+    };
+
+    auto matches_run = [&](const glyph_run& run, position anchor) {
+      const auto& retained = runs[anchor.first];
+      const bool whole_line = run.glyphs.size() == retained.glyphs.size();
+      if(whole_line and (anchor.second != 0 or
+                         provisional.lines[run.line].text != provisional.lines[retained.line].text))
+        {
+          return false;
+        }
+      if(retained.glyphs.size() - anchor.second < run.glyphs.size()) { return false; }
+
+      bool exact = true;
+      bool repeated_paint = false;
+      const auto& first = cells[run.glyphs.front()];
+      if(not paint_matches(first, cells[retained.glyphs[anchor.second]], exact, repeated_paint))
+        {
+          return false;
+        }
+
+      std::size_t next = anchor.second + 1;
+      for(std::size_t i = 1; i < run.glyphs.size(); ++i)
+        {
+          const auto& glyph = cells[run.glyphs[i]];
+          if(whole_line)
+            {
+              const auto& other = cells[retained.glyphs[next++]];
+              if(glyph.text != other.text or glyph.font_name != other.font_name or
+                 not paint_matches(glyph, other, exact, repeated_paint))
+                {
+                  return false;
+                }
+              continue;
+            }
+
+          // Find the next matching glyph in this retained run. Binary search
+          // avoids rescanning a long line for each of its clipped fragments.
+          std::size_t matched = retained.glyphs.size();
+          bool matched_exact = exact;
+          bool matched_paint = repeated_paint;
+          visit_neighbors(glyph, [&](const postings& candidates) {
+            const auto begin = std::lower_bound(candidates.begin(), candidates.end(),
+                                                position{anchor.first, next});
+            for(auto pos = begin; pos != candidates.end() and pos->first == anchor.first and
+                pos->second < matched and pos - begin < max_candidates; ++pos)
+              {
+                bool candidate_exact = exact;
+                bool candidate_paint = repeated_paint;
+                if(paint_matches(glyph, cells[retained.glyphs[pos->second]],
+                                 candidate_exact, candidate_paint))
+                  {
+                    matched = pos->second;
+                    matched_exact = candidate_exact;
+                    matched_paint = candidate_paint;
+                    break;
+                  }
+              }
+            return false;
+          });
+          if(matched == retained.glyphs.size()) { return false; }
+          exact = matched_exact;
+          repeated_paint = matched_paint;
+          next = matched + 1;
+        }
+
+      // Complete, slightly shifted copies elsewhere in the stream can still
+      // be collapsed in the word and line views. Preserve their glyph view
+      // unless paint evidence or proximity in source order confirms a repeat.
+      const auto source_distance = std::max(run.line, retained.line) -
+                                   std::min(run.line, retained.line);
+      return repeated_paint or (whole_line and (exact or source_distance == 1));
+    };
+
+    for(std::size_t rank = 0; rank < runs.size(); ++rank)
+      {
+        const auto& run = runs[rank];
+        const bool duplicate = visit_neighbors(cells[run.glyphs.front()], [&](const postings& candidates) {
+          const auto end = candidates.begin() + std::min(candidates.size(), max_candidates);
+          return std::any_of(candidates.begin(), end, [&](auto anchor) {
+            return matches_run(run, anchor);
+          });
+        });
+
+        if(duplicate)
+          {
+            const auto [begin, end] = provisional.line_sources[run.line];
+            for(std::size_t i = begin; i < end; ++i) { cells[i].active = false; }
+            continue;
+          }
+        for(std::size_t offset = 0; offset < run.glyphs.size(); ++offset)
+          {
+            const auto& glyph = cells[run.glyphs[offset]];
+            if(has_position(glyph)) { index[bucket(glyph, 0, 0)].emplace_back(rank, offset); }
+          }
+      }
+    remove_embedded_overprints(cells);
     cells.remove_inactive_cells();
+  }
+
+  inline void page_item_sanitator<PAGE_CELLS>::remove_embedded_overprints(
+      page_item<PAGE_CELLS>& cells)
+  {
+    struct glyph_position
+    {
+      std::size_t source;
+      std::size_t span;
+      std::size_t run;
+    };
+    struct text_span
+    {
+      std::size_t begin;
+      std::size_t end;
+    };
+    std::vector<glyph_position> glyphs;
+    std::vector<text_span> spans;
+    std::size_t run = 0;
+    const page_item<PAGE_CELL>* previous_raw = nullptr;
+    const page_item<PAGE_CELL>* previous_active = nullptr;
+    for(std::size_t i = 0; i < cells.size(); ++i)
+      {
+        const auto& cell = cells[i];
+        if(cell.text.empty() or is_semantic_space(cell)) { continue; }
+        if(previous_raw == nullptr or not cell.has_text_placement or
+           not previous_raw->has_text_placement or
+           previous_raw->instr_count != cell.instr_count)
+          {
+            spans.push_back({glyphs.size(), glyphs.size()});
+          }
+        if(cell.active)
+          {
+            if(previous_active != nullptr and not continues_line(*previous_active, cell)) { ++run; }
+            previous_active = &cell;
+          }
+        glyphs.push_back({i, spans.size() - 1, run});
+        ++spans.back().end;
+        previous_raw = &cell;
+      }
+
+    constexpr double distance_limit = 0.5;
+    constexpr std::size_t candidate_limit = 8;
+    using bucket_key = std::tuple<std::string_view, std::string_view, int, double, double>;
+    std::map<bucket_key, std::vector<std::size_t>> index;
+    auto glyph = [&](std::size_t i) -> page_item<PAGE_CELL>& { return cells[glyphs[i].source]; };
+    auto normalization_source = [](const auto& cell) {
+      return cell.text_was_normalized ? cell.source_glyph_code : -1;
+    };
+    auto bucket = [=](const auto& cell, int dx, int dy) -> bucket_key {
+      return {cell.text, cell.font_name, normalization_source(cell),
+              std::floor(cell.r_x0 / distance_limit) + dx,
+              std::floor(cell.r_y0 / distance_limit) + dy};
+    };
+    auto finite_origin = [](const auto& cell) {
+      return std::isfinite(cell.r_x0) and std::isfinite(cell.r_y0);
+    };
+    for(std::size_t i = 0; i < glyphs.size(); ++i)
+      {
+        const auto& cell = glyph(i);
+        if(finite_origin(cell)) { index[bucket(cell, 0, 0)].push_back(i); }
+      }
+    // Preserve original placements as evidence of repeated paint. A glyph can
+    // be removed only in favor of an earlier survivor.
+    auto visit_neighbors = [&](const auto& cell, auto visit) {
+      if(not finite_origin(cell)) { return false; }
+      for(int dx = -1; dx <= 1; ++dx)
+        {
+          for(int dy = -1; dy <= 1; ++dy)
+            {
+              const auto hit = index.find(bucket(cell, dx, dy));
+              if(hit == index.end()) { continue; }
+              const auto& positions = hit->second;
+              const std::size_t limit = std::min(positions.size(), candidate_limit);
+              for(std::size_t j = 0; j < limit; ++j)
+                {
+                  if(visit(positions[j])) { return true; }
+                }
+            }
+        }
+      return false;
+    };
+    auto overlapping = [&](const auto& lhs, const auto& rhs, double offset) {
+      const double advance = std::min(cell_advance_length(lhs), cell_advance_length(rhs));
+      return offset < std::min(distance_limit, 0.5 * advance);
+    };
+
+    // Match a complete show span once, charging each candidate comparison
+    // to the glyphs in the current span. The spans partition the input.
+    for(const auto& span : spans)
+      {
+        const std::size_t length = span.end - span.begin;
+        if(length < 2 or not glyph(span.begin).active) { continue; }
+        const auto& first = glyph(span.begin);
+        const bool duplicate = visit_neighbors(first, [&](std::size_t j) {
+          if(j >= span.begin) { return false; }
+          const auto& other = spans[glyphs[j].span];
+          if(j != other.begin or length != other.end - other.begin or not glyph(j).active)
+            {
+              return false;
+            }
+          const double dx = first.r_x0 - glyph(j).r_x0;
+          const double dy = first.r_y0 - glyph(j).r_y0;
+          if(std::hypot(dx, dy) > 0.0 and
+             glyphs[span.begin].span - glyphs[j].span > 1 and
+             glyphs[span.begin].run != glyphs[j].run and
+             not stroke_and_fill(first, glyph(j)))
+            {
+              return false;
+            }
+          constexpr double translation_slack = 0.07;
+          for(std::size_t k = 0; k < length; ++k)
+            {
+              const auto& lhs = glyph(span.begin + k);
+              const auto& rhs = glyph(j + k);
+              const double offset = corner_distance(lhs, rhs);
+              if(not rhs.active or lhs.text != rhs.text or lhs.font_name != rhs.font_name or
+                 normalization_source(lhs) != normalization_source(rhs) or
+                 not same_paint_context(lhs, rhs) or clips_differ(lhs, rhs) or
+                 (offset != 0.0 and not overlapping(lhs, rhs, offset)) or
+                 std::hypot(lhs.r_x0 - rhs.r_x0 - dx, lhs.r_y0 - rhs.r_y0 - dy) > translation_slack)
+                {
+                  return false;
+                }
+            }
+          return true;
+        });
+        if(duplicate)
+          {
+            for(std::size_t i = span.begin; i < span.end; ++i) { glyph(i).active = false; }
+          }
+      }
+
+    auto has_offset_pattern = [&](const auto& first, const auto& second) {
+      // Some producers simulate bold by painting at the four corners of a
+      // small rectangle. These copies may be split across differently sized
+      // spans. Require both axial offsets and their sum in the source.
+      constexpr double slack = 0.025;
+      constexpr double minimum_offset = 0.08;
+      std::array<std::pair<double, double>, candidate_limit> offsets;
+      std::size_t count = 0;
+      visit_neighbors(first, [&](std::size_t j) {
+        const auto& other = glyph(j);
+        if(same_paint_context(first, other) and not clips_differ(first, other) and
+           overlapping(first, other, corner_distance(first, other)))
+          {
+            offsets[count++] = {other.r_x0 - first.r_x0, other.r_y0 - first.r_y0};
+          }
+        return count == offsets.size();
+      });
+      const double dx = second.r_x0 - first.r_x0;
+      const double dy = second.r_y0 - first.r_y0;
+      auto has_offset = [&](double x, double y) {
+        return std::any_of(offsets.begin(), offsets.begin() + count, [&](const auto& p) {
+          return std::abs(p.first - x) <= slack and std::abs(p.second - y) <= slack;
+        });
+      };
+      for(std::size_t x = 0; x < count; ++x)
+        {
+          if(std::abs(offsets[x].first) < minimum_offset or std::abs(offsets[x].second) > slack)
+            { continue; }
+          for(std::size_t y = 0; y < count; ++y)
+            {
+              if(std::abs(offsets[y].second) < minimum_offset or std::abs(offsets[y].first) > slack)
+                { continue; }
+              const double vx = offsets[x].first;
+              const double vy = offsets[y].second;
+              const bool belongs_to_pattern =
+                ((std::abs(dx) <= slack or std::abs(dx - vx) <= slack) and
+                 (std::abs(dy) <= slack or std::abs(dy - vy) <= slack));
+              if(belongs_to_pattern and has_offset(vx, vy)) { return true; }
+            }
+        }
+      return false;
+    };
+
+    for(std::size_t i = 0; i < glyphs.size(); ++i)
+      {
+        auto& cell = glyph(i);
+        if(not cell.active) { continue; }
+        const bool duplicate = visit_neighbors(cell, [&](std::size_t j) {
+          if(j >= i or not glyph(j).active or glyph(j).omit_from_text_runs) { return false; }
+          const auto& earlier = glyph(j);
+          const double offset = corner_distance(cell, earlier);
+          if(offset != 0.0 and not overlapping(cell, earlier, offset)) { return false; }
+
+          const bool same_span = glyphs[i].span == glyphs[j].span;
+          const bool same_run = glyphs[i].run == glyphs[j].run;
+          const auto& span = spans[glyphs[i].span];
+          const auto& prior_span = spans[glyphs[j].span];
+          const bool singleton_pair = span.end - span.begin == 1 and
+                                      prior_span.end - prior_span.begin == 1;
+          const bool adjacent = i == j + 1;
+          const bool different_clips = clips_differ(cell, earlier);
+          if(not same_paint_context(cell, earlier))
+            {
+              if(offset == 0.0 and singleton_pair and not different_clips and
+                 cell.mcid >= 0 and earlier.mcid >= 0 and
+                 same_paint_context(cell, earlier, false) and
+                 cell.rendering_mode == earlier.rendering_mode and
+                 cell.rgb_filling_ops == earlier.rgb_filling_ops and
+                 cell.rgb_stroking_ops == earlier.rgb_stroking_ops)
+                {
+                  cell.omit_from_text_runs = true;
+                }
+              return false;
+            }
+          if(stroke_and_fill(cell, earlier) and (singleton_pair or (same_run and adjacent)) and
+             (not different_clips or
+              (offset == 0.0 and not clip_hides(cell) and not clip_hides(earlier))))
+            { return true; }
+          if(different_clips) { return false; }
+          if(offset == 0.0 and (same_span or singleton_pair or (same_run and adjacent)))
+            { return true; }
+          if(adjacent and same_run)
+            {
+              if(same_span) { return true; }
+              // Some RTL producers change show instructions in the middle of
+              // an elongation. A preceding advance in a chain of the same
+              // source glyph supplies the local scale across that boundary.
+              if(not cell.left_to_right and j > 0 and glyphs[j - 1].run == glyphs[j].run)
+                {
+                  const auto& neighbor = glyph(j - 1);
+                  if(neighbor.text == earlier.text and neighbor.font_name == earlier.font_name and
+                     normalization_source(neighbor) == normalization_source(earlier) and
+                     corner_distance(earlier, neighbor) >= 2.0 * offset)
+                    { return true; }
+                }
+            }
+          return offset != 0.0 and has_offset_pattern(earlier, cell);
+        });
+        if(duplicate) { cell.active = false; }
+      }
   }
 
   inline void page_item_sanitator<PAGE_CELLS>::remove_overlapping_text_cells(
@@ -1761,8 +2226,8 @@ namespace pdflib
           }
         else
           {
-            buckets[bucket_key(cell.text, cell.font_name, column, row)]
-              .push_back({i, width, height});
+            auto& candidates = buckets[bucket_key(cell.text, cell.font_name, column, row)];
+            if(candidates.size() < 8) { candidates.push_back({i, width, height}); }
           }
       }
     cells.remove_inactive_cells();
@@ -1772,9 +2237,11 @@ namespace pdflib
       page_item<PAGE_CELLS>& cells,
       bool do_char_normalization)
   {
+    static const std::regex pattern(R"(^\/([A-Za-z])_([A-Za-z])(_([A-Za-z]))?$)");
     for(auto& cell : cells)
       {
         if(cell.text.empty()) { continue; }
+        const auto source_text = cell.text;
         for(const auto& pair : text_constants::replacements)
           {
             utils::string::replace(cell.text, pair.first, pair.second);
@@ -1786,18 +2253,16 @@ namespace pdflib
                 utils::string::replace(cell.text, pair.first, pair.second);
               }
           }
-      }
-
-    static const std::regex pattern(R"(^\/([A-Za-z])_([A-Za-z])(_([A-Za-z]))?$)");
-    for(auto& cell : cells)
-      {
-        if(cell.text.empty() or cell.text[0] != '/') { continue; }
-        std::smatch match;
-        if(std::regex_match(cell.text, match, pattern))
+        if(not cell.text.empty() and cell.text[0] == '/')
           {
-            cell.text = match[1].str() + match[2].str();
-            if(match[3].matched) { cell.text += match[4].str(); }
+            std::smatch match;
+            if(std::regex_match(cell.text, match, pattern))
+              {
+                cell.text = match[1].str() + match[2].str();
+                if(match[3].matched) { cell.text += match[4].str(); }
+              }
           }
+        cell.text_was_normalized = cell.text_was_normalized or cell.text != source_text;
       }
   }
 

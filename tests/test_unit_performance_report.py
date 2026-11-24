@@ -224,6 +224,27 @@ def test_native_profiles_remain_distinct_and_required(tmp_path: Path):
         inputs.load()
 
 
+def test_docling_only_bundle_reports_and_recovers_without_pdfium(tmp_path: Path):
+    inputs = _profiled_bundle(tmp_path)
+    inputs.metadata["pdfium_replay"] = False
+    shutil.rmtree(tmp_path / "replay/r1/pdfium")
+
+    measurements = inputs.load()
+    assert [(m.workload, m.backend) for m in measurements] == [
+        ("native", "docling-parse"),
+        ("native", "docling-parse"),
+        ("replay", "threaded"),
+    ]
+    report = "\n".join(_REPORT.figure_sections(inputs.metadata, measurements, []))
+    assert "RUN_COMPARISON=-1" in report
+    assert "--backend threaded" in report
+    assert "--backend pdfium" not in report
+    jobs = _recovery_module().core_jobs(inputs.metadata)
+    assert [job.artifact for job in jobs if job.workload == "replay"] == [
+        Path("replay/r1/t1/report.json")
+    ]
+
+
 def test_render_only_rejects_word_line_work(tmp_path: Path):
     inputs = _profiled_bundle(tmp_path)
     path = tmp_path / "native/render-only/r1/t1.csv"
@@ -1366,9 +1387,12 @@ def test_replay_config_suppression_preserves_parser_initialization(suppress, cap
 @pytest.mark.skipif(os.name == "nt", reason="The Bash launcher targets macOS and Linux")
 @pytest.mark.parametrize("output_mode", ["", "full"])
 @pytest.mark.parametrize("build_mode", ["", "clean"])
-@pytest.mark.parametrize("native_render_only", [False, True])
+@pytest.mark.parametrize(
+    "native_render_only,comparison",
+    [(False, "-1"), (False, "0"), (False, "1"), (True, "-1"), (True, "1")],
+)
 def test_launcher_routes_output_options_to_all_runners(
-    tmp_path: Path, output_mode, build_mode, native_render_only
+    tmp_path: Path, output_mode, build_mode, native_render_only, comparison
 ):
     # Exercise the complete launcher with fake commands. No real build, PDF
     # processing, network access or report generation takes place.
@@ -1428,7 +1452,7 @@ esac
             "FIXTURE_PDFS": str(tmp_path / "pdf"),
             "REPEATS": "1",
             "THREADS": thread_count,
-            "RUN_COMPARISON": "1",
+            "RUN_COMPARISON": comparison,
             "BUILD_THREADS": "1",
             "BUILD_MODE": build_mode,
             "DATASET": "bo20",
@@ -1474,21 +1498,31 @@ esac
     logs = [
         out / f"native/render-only/r1/t{thread_count}.log",
         out / f"native/render-with-text/r1/t{thread_count}.log",
-        out / "replay/r1/pdfium.log",
         out / f"replay/r1/t{thread_count}.log",
-        out / "comparison/r1/render/run.log",
-        out / "comparison/r1/parse-without-bitmap/run.log",
     ]
+    pdfium_log = out / "replay/r1/pdfium.log"
+    if comparison == "-1":
+        assert not pdfium_log.exists()
+    else:
+        logs.append(pdfium_log)
+    if comparison == "1":
+        logs.extend(
+            out / f"comparison/r1/{mode}/run.log"
+            for mode in ("render", "parse-without-bitmap")
+        )
+        assert result.stdout.index("Reference preflight passed") < result.stdout.index(
+            "Experiment 1/6"
+        )
+    else:
+        assert not (out / "comparison").exists()
+        assert not (out / "reference-preflight.log").exists()
     for log in logs:
         assert ("--suppress-config" in log.read_text()) == compact
     for profile, value in (("render-only", "false"), ("render-with-text", "true")):
         profile_log = (out / f"native/{profile}/r1/t{thread_count}.log").read_text()
         assert f"--create-word-cells={value}" in profile_log
         assert f"--create-line-cells={value}" in profile_log
-    assert "Experiment 6/6" in result.stdout
-    assert result.stdout.index("Reference preflight passed") < result.stdout.index(
-        "Experiment 1/6"
-    )
+    assert f"Experiment {len(logs)}/{len(logs)}" in result.stdout
 
 
 @pytest.mark.skipif(os.name == "nt", reason="The Bash launcher targets macOS and Linux")

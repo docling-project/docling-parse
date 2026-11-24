@@ -69,6 +69,93 @@ def test_a_line_painted_three_times_in_succession(decode_config):
     assert _lines([(72, 700, FIRST)] * 3, decode_config) == expected
 
 
+def test_dense_overprinting_keeps_one_complete_line():
+    text = "Committee Participant benefits illegible"
+    page = _page(_pdf([(72, 700, text)] * 1024))
+    assert [cell.text for cell in page.textline_cells] == [text]
+    assert "".join(cell.text for cell in page.char_cells) == text
+
+
+@pytest.mark.parametrize("offset", [0.0, 0.3])
+def test_a_single_letter_painted_twice(offset):
+    page = _page(_pdf([(72, 700, "A"), (72 + offset, 700, "A")]))
+    assert [cell.text for cell in page.textline_cells] == ["A"]
+    assert [cell.text for cell in page.char_cells] == ["A"]
+
+
+@pytest.mark.parametrize("adjustment", [667, 650], ids=["exact", "shifted"])
+def test_overlapping_letters_inside_one_text_show(adjustment, decode_config):
+    content = f"BT /F1 12 Tf 72 100 Td [(A) {adjustment} (ABC)] TJ ET"
+    page = _page(
+        simple_page_pdf(content, resources=HELVETICA, extra_objects=[FONT_OBJECT]),
+        decode_config,
+    )
+    expected = "ABC" if decode_config.do_remove_duplicate_cells else "AABC"
+    assert [cell.text for cell in page.textline_cells] == [expected]
+
+
+@pytest.mark.parametrize("clipped_stroke", [False, True])
+def test_stroke_and_fill_interleaved_with_text(clipped_stroke):
+    stroke = "BT /F1 12 Tf 1 Tr 1 0 0 1 80.004 100 Tm (B) Tj ET"
+    if clipped_stroke:
+        stroke = f"q 0 0 150 150 re W n {stroke} Q"
+    content = (
+        f"BT /F1 12 Tf 1 0 0 1 72 100 Tm (A) Tj ET {stroke} "
+        "BT /F1 12 Tf 0 Tr 1 0 0 1 80.004 100 Tm (BC) Tj ET"
+    )
+    page = _page(
+        simple_page_pdf(content, resources=HELVETICA, extra_objects=[FONT_OBJECT])
+    )
+    assert [cell.text for cell in page.textline_cells] == ["ABC"]
+
+
+def test_distinct_source_quotes_keep_both_glyphs_after_normalization():
+    content = r"BT /F1 12 Tf 72 100 Td [(\224) 320 (\223)] TJ ET"
+    page = _page(
+        simple_page_pdf(content, resources=HELVETICA, extra_objects=[FONT_OBJECT])
+    )
+    assert [cell.text for cell in page.textline_cells] == ['""']
+
+
+def test_coincident_tagged_digits_keep_their_character_cells(decode_config):
+    content = (
+        "/P << /MCID 0 >> BDC BT /F1 12 Tf 72 100 Td (0) Tj ET EMC "
+        "/P << /MCID 1 >> BDC BT /F1 12 Tf 72 100 Td (0) Tj ET EMC"
+    )
+    page = _page(
+        simple_page_pdf(content, resources=HELVETICA, extra_objects=[FONT_OBJECT]),
+        decode_config,
+    )
+    expected = "0" if decode_config.do_remove_duplicate_cells else "00"
+    assert [cell.text for cell in page.textline_cells] == [expected]
+    assert [cell.text for cell in page.char_cells] == ["0", "0"]
+
+
+def test_shifted_paint_pass_can_continue_into_the_next_fragment():
+    page = _page(
+        _pdf(
+            [
+                (72, 700, "AB"),
+                (71.76, 699.76, "AB"),
+                (72, 699.76, "AB"),
+                (71.76, 700, "ABC"),
+            ]
+        )
+    )
+    assert [cell.text for cell in page.textline_cells] == ["ABC"]
+
+
+def test_stroke_and_fill_preserve_distinct_overlapping_labels():
+    content = (
+        "BT /F1 12 Tf 1 Tr 1 0 0 1 72 100 Tm (ALPHA) Tj ET "
+        "BT /F1 12 Tf 0 Tr 1 0 0 1 72 100 Tm (ALPINE) Tj ET"
+    )
+    page = _page(
+        simple_page_pdf(content, resources=HELVETICA, extra_objects=[FONT_OBJECT])
+    )
+    assert [cell.text for cell in page.textline_cells] == ["ALPHA", "ALPINE"]
+
+
 def test_a_block_painted_three_times(decode_config):
     block = [(72, 700, FIRST), (72, 660, SECOND)]
 
@@ -92,10 +179,13 @@ def test_a_copy_shifted_by_one_point_is_kept(decode_config):
     assert _lines([(72, 700, FIRST), (73, 700, FIRST)], decode_config) == [FIRST, FIRST]
 
 
-def test_a_different_word_overlapping_within_tolerance_keeps_its_letters(decode_config):
+@pytest.mark.parametrize("offset", [0.0, 0.3])
+def test_a_different_word_overlapping_within_tolerance_keeps_its_letters(
+    decode_config, offset
+):
     """B and P are equally wide, so the A and T of both words lie 0.3 apart."""
     lines = _lines(
-        [(72, 700, "BAT"), (72, 660, SECOND), (72.3, 700, "PAT")], decode_config
+        [(72, 700, "BAT"), (72, 660, SECOND), (72 + offset, 700, "PAT")], decode_config
     )
 
     assert sorted(lines) == sorted(["BAT", SECOND, "PAT"])

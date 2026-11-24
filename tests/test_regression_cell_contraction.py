@@ -52,6 +52,31 @@ def test_fake_bold_is_read_once():
     assert len(lines) == 12
 
 
+def test_clipped_overprints_keep_complete_text():
+    page = _page("redp5110_sampled.pdf", 10)
+    lines = [cell.text for cell in page.textline_cells]
+    words = [cell.text for cell in page.word_cells]
+    sentence = "Specifies that the row permission is to be initially disabled"
+    assert lines.count("ENFORCED FOR ALL ACCESS") == 1
+    assert lines.count(sentence) == 1
+    assert not any(line.startswith(("NFORCED", "pecifies", "S ifi")) for line in lines)
+    assert "disabled" in words
+    assert not {"NFORCED", "pecifies", "sabled"}.intersection(words)
+
+
+def test_offset_overprints_preserve_chart_headings():
+    page = _page("07f5395c8b3e7d1c_0001.pdf", 1)
+    lines = {" ".join(cell.text.split()) for cell in page.textline_cells}
+    assert {
+        "1. GDP 成長率と需要項目別寄与度 (%)",
+        "2. GDP成長率産業別寄与度(%)",
+        "3. 工業生産/固定資本投資(%)",
+        "4. 消費者物価指数とリファイナンスレート (%)",
+        "5. 消費者物価指数とマネーサプライ推移(%)",
+        "6. 小売売上高/ 実質賃金/失業率(%)",
+    } <= lines
+
+
 def _pdf_with_code_32_period() -> BytesIO:
     """Map source byte 32 to a dot through /ToUnicode."""
     cmap = (

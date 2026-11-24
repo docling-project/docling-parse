@@ -96,6 +96,9 @@ class CoreJob:
 
 def core_jobs(metadata: dict[str, Any]) -> list[CoreJob]:
     jobs = []
+    replays = [("threaded", threads) for threads in metadata["threads"]]
+    if metadata.get("pdfium_replay", True):
+        replays.insert(0, ("pdfium", 1))
     for repetition in range(1, metadata["repeats"] + 1):
         for profile in metadata.get("native_profiles", {"render": {}}):
             for threads in metadata["threads"]:
@@ -111,10 +114,7 @@ def core_jobs(metadata: dict[str, Any]) -> list[CoreJob]:
                         parent / f"r{repetition}/t{threads}.csv",
                     )
                 )
-        for backend, threads in [
-            ("pdfium", 1),
-            *(("threaded", t) for t in metadata["threads"]),
-        ]:
+        for backend, threads in replays:
             name = "pdfium" if backend == "pdfium" else f"t{threads}"
             jobs.append(
                 CoreJob(

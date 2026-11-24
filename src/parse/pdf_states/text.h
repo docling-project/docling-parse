@@ -112,8 +112,8 @@ namespace pdflib
     // show-string, so operator= does not copy it.
     std::vector<type3_procedure> pending_type3_procedures;
 
-    static int block_count;
-    static int instr_count;
+    static thread_local int block_count;
+    static thread_local int instr_count;
 
     const decode_config& config;
     const pdf_state<GRPH>& grph_state;
@@ -155,8 +155,8 @@ namespace pdflib
     double vertical_displacement  = 0.0;
   };
 
-  int pdf_state<TEXT>::block_count = 0;
-  int pdf_state<TEXT>::instr_count = 0;
+  thread_local int pdf_state<TEXT>::block_count = 0;
+  thread_local int pdf_state<TEXT>::instr_count = 0;
 
   pdf_state<TEXT>::pdf_state(const decode_config& config_,
                              const pdf_state<GRPH>& grph_state_,
@@ -926,6 +926,7 @@ namespace pdflib
 
       {
 	cell.text = text;
+        cell.source_glyph_code = glyph_code;
 	cell.text_is_suppressed_glyph = text_is_suppressed_glyph;
 	cell.is_pdf_word_space = is_pdf_word_space;
 	cell.rendering_mode = rendering_mode;

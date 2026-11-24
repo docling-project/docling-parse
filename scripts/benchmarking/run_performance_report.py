@@ -716,7 +716,8 @@ class ReportInputs:
                 if self.metadata["comparison"] and include_comparison:
                     for task in ("parse", "parse+render"):
                         expected.add((("comparison", "docling-parse", task, t), r))
-            expected.add((("replay", "pdfium", "render", 1), r))
+            if self.metadata.get("pdfium_replay", True):
+                expected.add((("replay", "pdfium", "render", 1), r))
             if self.metadata["comparison"] and include_comparison:
                 for backend in (
                     "pymupdf",
@@ -1277,10 +1278,13 @@ def reproduction_commands(meta: dict[str, Any], workload: str, task: str) -> lis
             command = ".venv/bin/python scripts/benchmarking/run_performance_benchmarking_with_docling_settings.py"
             pdfium_command = f'observe "$REPRO_OUT/r${{r}}-pdfium" {command}'
             threaded_command = f'observe "$REPRO_OUT/r${{r}}-t${{t}}" {command}'
+        if meta.get("pdfium_replay", True):
+            lines += [
+                f'  {pdfium_command} "$PDF_ROOT" \\',
+                f"    --backend pdfium --dataset-revision {revision} \\",
+                '    --output-dir "$REPRO_OUT/r${r}-pdfium" 2>&1 | tee "$REPRO_OUT/r${r}-pdfium.log"',
+            ]
         lines += [
-            f'  {pdfium_command} "$PDF_ROOT" \\',
-            f"    --backend pdfium --dataset-revision {revision} \\",
-            '    --output-dir "$REPRO_OUT/r${r}-pdfium" 2>&1 | tee "$REPRO_OUT/r${r}-pdfium.log"',
             f"  for t in {threads}; do",
             f'    {threaded_command} "$PDF_ROOT" \\',
             f'      --backend threaded --threads "$t" --dataset-revision {revision} \\',
@@ -1308,6 +1312,7 @@ def reproduction_commands(meta: dict[str, Any], workload: str, task: str) -> lis
 def figure_sections(
     meta: dict[str, Any], measurements: list[Measurement], figures: list[Path]
 ) -> list[str]:
+    comparison_mode = int(meta["comparison"]) if meta.get("pdfium_replay", True) else -1
     lines = [
         "## Figures",
         "",
@@ -1325,7 +1330,7 @@ def figure_sections(
         f"DATASET={shlex.quote(meta['dataset']['repository'].rsplit('-', 1)[-1])} "
         f"DATASET_REVISION={shlex.quote(meta['dataset']['revision'])} \\",
         f"  REPEATS={int(meta['repeats'])} THREADS={','.join(str(int(t)) for t in meta['threads'])} "
-        f"RUN_COMPARISON={int(meta['comparison'])} \\",
+        f"RUN_COMPARISON={comparison_mode} \\",
         f"  MEMORY_MODE={meta.get('memory_collection', {}).get('mode', 'off')} "
         f"MEMORY_INTERVAL_MS={meta.get('memory_collection', {}).get('interval_ms') or 50} \\",
         "  bash scripts/benchmarking/refresh_performance_benchmarks.sh",
