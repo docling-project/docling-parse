@@ -79,10 +79,11 @@ def exception_message(error: Exception) -> str:
 def extract_pages(
     path: Path,
     pages: list[int] | None,
-    backends: Mapping[
-        str, Callable[[Path], AbstractContextManager[OpenDocument]]
-    ] = BACKENDS,
+    backends: Mapping[str, Callable[[Path], AbstractContextManager[OpenDocument]]]
+    | None = None,
 ) -> Iterator[tuple[int | None, PdfExtractionMode, dict[str, Extraction]]]:
+    if backends is None:
+        backends = BACKENDS
     with ExitStack() as stack:
         opened = {}
         errors = {}
