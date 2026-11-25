@@ -1,5 +1,21 @@
 # Quality Benchmarks
 
+Run the pinned regression corpus and review the report in its scratch directory.
+
+```sh
+./scripts/benchmarking/refresh_quality_benchmarks.sh
+```
+
+Add `--text-backends pypdfium2,pypdf` to include pypdf. Add
+`--update-docs` to publish the summary, charts, image panels and text excerpts.
+Choose `--dataset bo20`, `--dataset bo767`, or `--dataset bo10k` to compare
+the pinned performance corpora. Run `--help` to see revisions and page counts.
+Each corpus has its own published report.
+
+<!-- quality-benchmark-results -->
+
+The results below are historical snapshots.
+
 ## Text extraction agreement
 
 The histograms show page-level token F1 between `PdfEditor` and pypdf on the
