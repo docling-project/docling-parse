@@ -1476,16 +1476,90 @@ namespace pdflib
       page_item<PAGE_CELL>& aggregate, text_prefixes& prefixes)
   {
     if(prefixes.empty()) { return; }
-    std::size_t size = aggregate.text.size();
-    for(const auto& [text, space] : prefixes) { size += text.size() + space; }
+
+    // The prepended cells are joined in reverse visual order, which is the
+    // logical order of right-to-left text. A number inside right-to-left
+    // text is still written left to right, so every run of digit cells,
+    // with single separators between them, goes back to visual order.
+    text_prefixes parts(prefixes.rbegin(), prefixes.rend());
+    parts.emplace_back(aggregate.text, false);
+
+    enum class part_kind { other, digits, separator };
+    std::vector<part_kind> kinds;
+    kinds.reserve(parts.size());
+    for(const auto& [text, space] : parts)
+      {
+        std::vector<uint32_t> code_points;
+        if(not text.empty() and utf8::is_valid(text.begin(), text.end()))
+          {
+            utf8::utf8to32(text.begin(), text.end(),
+                           std::back_inserter(code_points));
+          }
+        part_kind kind = code_points.empty() ? part_kind::other
+                                             : part_kind::digits;
+        if(code_points.size() == 1 and
+           utils::string::is_number_separator_char(code_points.front()))
+          {
+            kind = part_kind::separator;
+          }
+        for(uint32_t code_point : code_points)
+          {
+            if(kind == part_kind::digits and
+               not utils::string::is_digit_char(code_point))
+              {
+                kind = part_kind::other;
+              }
+          }
+        kinds.push_back(kind);
+      }
+
+    for(std::size_t begin = 0; begin < parts.size();)
+      {
+        if(kinds[begin] != part_kind::digits)
+          {
+            ++begin;
+            continue;
+          }
+        std::size_t end = begin + 1;
+        while(end < parts.size() and not parts[end - 1].second)
+          {
+            if(kinds[end] == part_kind::digits)
+              {
+                ++end;
+              }
+            else if(kinds[end] == part_kind::separator and
+                    end + 1 < parts.size() and not parts[end].second and
+                    kinds[end + 1] == part_kind::digits)
+              {
+                end += 2;
+              }
+            else
+              {
+                break;
+              }
+          }
+        if(end - begin > 1)
+          {
+            const bool trailing_space = parts[end - 1].second;
+            std::reverse(parts.begin() + begin, parts.begin() + end);
+            for(std::size_t i = begin; i < end; ++i)
+              {
+                parts[i].second = false;
+              }
+            parts[end - 1].second = trailing_space;
+          }
+        begin = end;
+      }
+
+    std::size_t size = 0;
+    for(const auto& [text, space] : parts) { size += text.size() + space; }
     std::string combined;
     combined.reserve(size);
-    for(auto part = prefixes.rbegin(); part != prefixes.rend(); ++part)
+    for(const auto& [text, space] : parts)
       {
-        combined.append(part->first);
-        if(part->second) { combined.push_back(' '); }
+        combined.append(text);
+        if(space) { combined.push_back(' '); }
       }
-    combined += aggregate.text;
     aggregate.text = std::move(combined);
     prefixes.clear();
   }
