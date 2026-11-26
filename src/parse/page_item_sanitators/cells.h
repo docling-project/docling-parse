@@ -1964,6 +1964,7 @@ namespace pdflib
       }
 
     constexpr double distance_limit = 0.5;
+    constexpr double translation_slack = 0.07;
     constexpr std::size_t candidate_limit = 8;
     using bucket_key = std::tuple<std::string_view, std::string_view, int, double, double>;
     std::map<bucket_key, std::vector<std::size_t>> index;
@@ -2032,7 +2033,6 @@ namespace pdflib
             {
               return false;
             }
-          constexpr double translation_slack = 0.07;
           for(std::size_t k = 0; k < length; ++k)
             {
               const auto& lhs = glyph(span.begin + k);
@@ -2053,6 +2053,46 @@ namespace pdflib
           {
             for(std::size_t i = span.begin; i < span.end; ++i) { glyph(i).active = false; }
           }
+      }
+
+    // A producer can move back over the glyphs it has just drawn on a line,
+    // paint them again and continue with new text, e.g. LaTeX around a
+    // cross-reference number: `[(\(Exercise)-396.4(32)]TJ 18.684 0 TD [(32\)) ...]TJ`.
+    // Remove the repaint only if it repeats every glyph from the earlier copy
+    // up to itself, in order and under one translation, and that stretch lies
+    // on one line, so a copy of earlier lines keeps its glyphs.
+    for(std::size_t i = 1; i < glyphs.size(); ++i)
+      {
+        if(not glyph(i).active) { continue; }
+        std::size_t repainted = 0;
+        visit_neighbors(glyph(i), [&](std::size_t j) {
+          if(j >= i or i + (i - j) > glyphs.size() or glyphs[j].run != glyphs[i - 1].run)
+            {
+              return false;
+            }
+          const std::size_t length = i - j;
+          const double dx = glyph(i).r_x0 - glyph(j).r_x0;
+          const double dy = glyph(i).r_y0 - glyph(j).r_y0;
+          for(std::size_t k = 0; k < length; ++k)
+            {
+              const auto& lhs = glyph(i + k);
+              const auto& rhs = glyph(j + k);
+              const double offset = corner_distance(lhs, rhs);
+              if(not lhs.active or not rhs.active or rhs.omit_from_text_runs or
+                 lhs.text != rhs.text or lhs.font_name != rhs.font_name or
+                 normalization_source(lhs) != normalization_source(rhs) or
+                 lhs.rendering_mode != rhs.rendering_mode or
+                 not same_paint_context(lhs, rhs) or clips_differ(lhs, rhs) or
+                 (offset != 0.0 and not overlapping(lhs, rhs, offset)) or
+                 std::hypot(lhs.r_x0 - rhs.r_x0 - dx, lhs.r_y0 - rhs.r_y0 - dy) > translation_slack)
+                {
+                  return false;
+                }
+            }
+          repainted = length;
+          return true;
+        });
+        for(std::size_t k = 0; k < repainted; ++k) { glyph(i + k).active = false; }
       }
 
     auto has_offset_pattern = [&](const auto& first, const auto& second) {
