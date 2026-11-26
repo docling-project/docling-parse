@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import csv
 import hashlib
+import json
 import math
 import os
 import platform
@@ -677,19 +678,24 @@ def summarize_render(
     return sections
 
 
+def publication_target(docs: Path, dataset: str, mode: str) -> Path:
+    directory = "latest" if dataset == "regression" else dataset
+    if mode != "both":
+        directory = f"{directory}-{mode}"
+    return docs / "quality_benchmarks" / directory
+
+
 def publish_docs(
     source: Path, docs: Path, dataset: str = "regression", mode: str = "both"
 ) -> Path:
     import fcntl
 
-    directory = "latest" if dataset == "regression" else dataset
     label = "Latest quality benchmark results"
     if dataset != "regression":
         label = f"Latest {dataset} quality benchmark results"
     if mode != "both":
-        directory = f"{directory}-{mode}"
         label = f"{label} ({mode} only)"
-    target = docs / "quality_benchmarks" / directory
+    target = publication_target(docs, dataset, mode)
     entry = docs / "quality_benchmarks.md"
     link = f"[{label}](./{(target / 'index.md').relative_to(docs).as_posix()})"
     lock = os.open(docs, os.O_RDONLY)
@@ -734,6 +740,89 @@ def replace_publication(source: Path, target: Path, entry: Path, link: str) -> P
     return target / "index.md"
 
 
+def saved_publication(run_dir: Path) -> tuple[Path, str, str]:
+    """Find a completed publication and recover its dataset and mode."""
+    metadata = json.loads((run_dir / "metadata.json").read_text(encoding="utf-8"))
+    dataset_info = metadata.get("dataset", {})
+    dataset = dataset_info.get("name")
+    mode = metadata.get("mode")
+    if dataset != "regression" and dataset not in PERFORMANCE_DATASET_PINS:
+        raise ValueError(f"{run_dir}: publication requires a pinned dataset")
+    if mode not in ("render", "text", "both"):
+        raise ValueError(f"{run_dir}: unknown saved benchmark mode {mode!r}")
+    if metadata.get("max_pages") is not None:
+        raise ValueError(f"{run_dir}: publication requires an uncapped run")
+
+    documents = metadata.get("files", [])
+    pages = {(item["name"], str(page)) for item in documents for page in item["pages"]}
+    if dataset == "regression":
+        if "max_pages" not in metadata:
+            raise ValueError(
+                f"{run_dir}: this regression run did not record its page limit"
+            )
+        repository, revision = HF_DATASET_REPO_ID, HF_DATASET_REVISION
+    else:
+        revision, expected_documents, expected_pages = PERFORMANCE_DATASET_PINS[dataset]
+        repository = f"docling-project/performance-dataset-{dataset}"
+        if (len(documents), len(pages)) != (expected_documents, expected_pages):
+            raise ValueError(
+                f"{run_dir}: incomplete coverage of pinned dataset {dataset}"
+            )
+    if (
+        dataset_info.get("repository") != repository
+        or dataset_info.get("revision") != revision
+    ):
+        raise ValueError(
+            f"{run_dir}: dataset does not match the current pin for {dataset}"
+        )
+
+    publication = run_dir / "publication"
+    if not pages or not (run_dir / "report.md").is_file():
+        raise ValueError(f"{run_dir}: missing completed benchmark report")
+    if GENERATED_MARKER not in (publication / "index.md").read_text(encoding="utf-8"):
+        raise ValueError(f"{run_dir}: expected a generated publication")
+
+    if mode in ("render", "both"):
+        with (run_dir / "render_quality.csv").open(
+            newline="", encoding="utf-8"
+        ) as stream:
+            reader = csv.DictReader(stream)
+            rendered: Counter[tuple[str, str]] = Counter()
+            has_success = False
+            for row in reader:
+                rendered[row["document"], row["page_number"]] += 1
+                has_success |= row["success"] == "True"
+        if rendered != Counter(pages) or not has_success:
+            raise ValueError(f"{run_dir}: incomplete render comparisons")
+
+    if mode in ("text", "both"):
+        backends = metadata.get("text_backends", [])
+        groups = {
+            (backend, text_mode.value)
+            for backend in backends
+            for text_mode in PdfExtractionMode
+        }
+        expected_text = Counter(
+            (document, page, backend, text_mode)
+            for document, page in pages
+            for backend, text_mode in groups
+        )
+        with (run_dir / "text_quality.csv").open(
+            newline="", encoding="utf-8"
+        ) as stream:
+            extracted: Counter[tuple[str, str, str, str]] = Counter()
+            scored: set[tuple[str, str]] = set()
+            for row in csv.DictReader(stream):
+                group = row["reference"], row["mode"]
+                extracted[(row["document"], row["page"], *group)] += 1
+                if row["token_f1"]:
+                    scored.add(group)
+        if not groups or extracted != expected_text or scored != groups:
+            raise ValueError(f"{run_dir}: incomplete text comparisons")
+
+    return publication, dataset, mode
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     pins = [
         "Default dataset pins (PDFs / pages)",
@@ -759,6 +848,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         choices=("regression", *PERFORMANCE_DATASET_PINS),
         default="regression",
         help="Pinned dataset (default: %(default)s)",
+    )
+    sources.add_argument(
+        "--from-run",
+        type=Path,
+        action="append",
+        metavar="DIR",
+        help="Preview publishing a saved run (repeat for multiple runs)",
     )
     parser.add_argument(
         "-m",
@@ -825,7 +921,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--update-docs",
         action="store_true",
-        help="Publish an uncapped pinned run to docs (default: off)",
+        help="Publish an uncapped pinned run or apply a --from-run preview",
     )
     args = parser.parse_args(argv)
     args.text_backends = list(
@@ -945,6 +1041,7 @@ def run(args: argparse.Namespace) -> tuple[Path, Path | None]:
             "dataset": dataset_info,
             "machine": machine,
             "mode": args.mode,
+            "max_pages": args.max_pages,
             "scale": args.scale,
             "workers": args.workers,
             "docling_render_threads": args.docling_render_threads,
@@ -1077,6 +1174,21 @@ def run(args: argparse.Namespace) -> tuple[Path, Path | None]:
 def main() -> None:
     args = parse_args()
     try:
+        if args.from_run:
+            docs = ROOT / "docs"
+            try:
+                publications = [
+                    saved_publication(directory) for directory in args.from_run
+                ]
+            except (KeyError, TypeError) as error:
+                raise ValueError(f"Malformed saved benchmark data: {error}") from error
+            for source, dataset, mode in publications:
+                if args.update_docs:
+                    print(f"Published: {publish_docs(source, docs, dataset, mode)}")
+                else:
+                    target = publication_target(docs, dataset, mode)
+                    print(f"Would publish {source} to {target}")
+            return
         report, published = run(args)
     except (OSError, ValueError, RuntimeError) as error:
         raise SystemExit(str(error)) from error

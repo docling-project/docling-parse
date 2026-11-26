@@ -542,6 +542,19 @@ Select `--dataset regression` (the default), `bo20`, `bo767`, or `bo10k`.
 Each Bo dataset uses the same revision as the performance launcher.
 `--max-pages` caps comparisons after resolving the selected snapshot.
 
+Publish a completed quality run from its saved report and figures.
+
+```sh
+./scripts/benchmarking/refresh_quality_benchmarks.sh --from-run scratch-quality-refresh-RUN
+./scripts/benchmarking/refresh_quality_benchmarks.sh --from-run scratch-quality-refresh-RUN --update-docs
+```
+
+Repeat `--from-run` to publish multiple runs. The publisher checks coverage
+against the dataset pin and saved comparison CSVs. It copies the report and
+figures from `publication/` without rerunning comparisons. Saved regression runs
+must record the page limit in `metadata.json`. Earlier Bo runs can use the full
+pinned dataset counts.
+
 With `--update-docs`, an uncapped pinned run publishes a compact summary,
 charts, image panels and text excerpts. The regression report goes under
 `docs/quality_benchmarks/latest/`. Bo reports use `docs/quality_benchmarks/<dataset>/`.
