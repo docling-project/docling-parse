@@ -1261,17 +1261,17 @@ namespace pdflib
                     // the standard has nothing to say about a file that already
                     // broke it.
                     const bool dictionary_says_cmyk = (cs == jpeg::ColorSpace::CMYK);
-                    const bool stored_inverted =
-                      decoded.adobe_marker and not dictionary_says_cmyk;
-
-                    // An inverting /Decode has already been applied to these
-                    // samples by the JPEG decoder, so it flips the reading
-                    // rather than setting it.
+                    // The JPEG decoder already applied /Decode. For a
+                    // declared CMYK space its output is always process ink.
+                    // In the fallback for a mismatched declaration, /Decode
+                    // can flip the polarity inferred from the JPEG marker.
                     const bool decode_inverts =
                       image.decode_present
                       and has_default_adobe_cmyk_decode(image.decode_array);
 
-                    cmyk_conv = (stored_inverted != decode_inverts)
+                    const bool read_inverted =
+                      not dictionary_says_cmyk and (decoded.adobe_marker != decode_inverts);
+                    cmyk_conv = read_inverted
                       ? CMYK_CONVENTION_ADOBE_INVERTED
                       : CMYK_CONVENTION_PROCESS;
 

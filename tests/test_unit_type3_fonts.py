@@ -289,3 +289,15 @@ def test_image_charproc_is_a_glyph_not_a_page_image():
 
     artifacts = render_page(pdf)._export_bitmap_artifacts()
     assert [artifact.get("source") for artifact in artifacts] == ["type3_glyph"]
+
+
+def test_type3_clip_path_is_not_painted():
+    charproc = stream_object(
+        "",
+        b"1000 0 0 0 1000 1000 d1\n"
+        b"0 0 750 1000 re W n\n"
+        b"500 0 500 1000 re f\n",
+    )
+    image = region_image(render_page(_type3_pdf(charproc)), GLYPH_BOX)
+
+    assert coverage_ratio(image) == pytest.approx(0.25, abs=0.02)

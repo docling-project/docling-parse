@@ -695,7 +695,7 @@ def run_page_job(job: PageJob) -> PageResult:
                 output_path = None
                 if job.visualization_pdf_name is not None:
                     output_path = job.viz_dir / (
-                        f"{row.mean_abs_error:.4f}-{job.visualization_pdf_name}-"
+                        f"{comparison.normalized_delta:.4f}-{job.visualization_pdf_name}-"
                         f"{job.page_number}.png"
                     )
                 visualization = write_comparison_visualization(

@@ -759,9 +759,8 @@ namespace pdflib
     // or unsupported clip paths return false so callers can skip them without
     // corrupting the Blend2D clip state.
     //
-    // The detection is purely geometric (every vertex on the bbox edge):
-    // most rectangular clips are built with m/l/l/l/h rather than `re`, so
-    // gating on shape_type == RECTANGLE would reject them.
+    // Accept path-built rectangles as well as `re`. A path must trace all
+    // four bounding-box sides so a diagonal between corners stays a mask.
     bool get_axis_aligned_clip_rect(const clip_path_instruction& clip,
                                     BLRect& rect) const
     {
@@ -795,20 +794,37 @@ namespace pdflib
           return false;
         }
 
+      unsigned corners = 0;
+      int first = -1;
+      int previous = -1;
+      int sides = 0;
       for(size_t i = 0; i < n; i++)
         {
           const double x = canvas_x(xs[i]);
           const double y = canvas_y(ys[i]);
-          const bool on_vertical_edge =
-            nearly_equal(x, x_min, 1e-4) or nearly_equal(x, x_max, 1e-4);
-          const bool on_horizontal_edge =
-            nearly_equal(y, y_min, 1e-4) or nearly_equal(y, y_max, 1e-4);
-
-          if(not (on_vertical_edge and on_horizontal_edge))
+          const bool right = nearly_equal(x, x_max, 1e-4);
+          const bool bottom = nearly_equal(y, y_max, 1e-4);
+          if((not right and not nearly_equal(x, x_min, 1e-4))
+             or (not bottom and not nearly_equal(y, y_min, 1e-4)))
             {
               return false;
             }
+
+          const int corner = (right ? 1 : 0) | (bottom ? 2 : 0);
+          if(previous == corner) { continue; }
+          if(first < 0) { first = corner; }
+          else
+            {
+              if((previous ^ corner) == 3) { return false; }
+              ++sides;
+            }
+          previous = corner;
+          corners |= 1u << corner;
         }
+
+      if((previous ^ first) == 3) { return false; }
+      if(previous != first) { ++sides; }
+      if(corners != 0xFu or sides != 4) { return false; }
 
       rect = BLRect(x_min, y_min, x_max - x_min, y_max - y_min);
       return true;

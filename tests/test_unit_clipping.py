@@ -378,3 +378,16 @@ def test_stroke_reaching_into_a_rectangular_clip_is_kept():
         "the part of the stroke inside the clip was dropped"
     )
     assert coverage_ratio(region_image(result, (60.0, 150.5, 140.0, 156.0))) < 0.001
+
+
+def test_triangle_with_corners_on_its_bounding_box_clips_an_image():
+    pdf = simple_page_pdf(
+        "q 50 50 m 150 50 l 150 150 l h W n 100 0 0 100 50 50 cm /Im0 Do Q",
+        resources="/XObject << /Im0 5 0 R >>",
+        extra_objects=[_red_image_object()],
+    )
+
+    image = region_image(render_page(pdf), DISC_BOX)
+    assert coverage_ratio(image) == pytest.approx(0.5, abs=0.02)
+    assert image.getpixel((20, 20)) == (255, 255, 255)
+    assert image.getpixel((image.width - 20, image.height - 20)) == (255, 0, 0)

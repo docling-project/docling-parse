@@ -282,3 +282,33 @@ def test_encoded_byte_align_skips_the_padding_between_rows():
         assert_rectangle_rendered(
             result, f"a CCITT image with /EncodedByteAlign {byte_align}"
         )
+
+
+@pytest.mark.parametrize("end_of_line", [False, True])
+@pytest.mark.parametrize("inline", [False, True])
+def test_group3_one_dimensional_rows(inline: bool, end_of_line: bool):
+    writer = BitWriter()
+    for row in range(16):
+        if end_of_line:
+            writer.write("000000000001")
+        if row in middle_half(16):
+            writer.write(MH_CODES[("white", 4)] + MH_CODES[("black", 8)])
+            writer.write(MH_CODES[("white", 4)])
+        else:
+            writer.write("101010")  # white run of 16 pixels
+
+    payload = writer.to_bytes()
+    decode_parms = "<< /Columns 16 /EndOfLine " + str(end_of_line).lower() + " >>"
+    if inline:
+        pdf = simple_page_pdf(
+            "q 100 0 0 100 50 50 cm\n"
+            "BI /W 16 /H 16 /CS /G /BPC 1 /F /CCF "
+            f"/DP {decode_parms} ID\n{payload.decode('latin-1')}\nEI\nQ"
+        )
+    else:
+        pdf = ccitt_page(
+            payload, width=16, height=16,
+            filters="/CCITTFaxDecode", decode_parms=decode_parms,
+        )
+
+    assert_rectangle_rendered(render_page(pdf), "Group 3 1-D")
