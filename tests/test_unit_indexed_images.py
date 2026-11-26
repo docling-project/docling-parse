@@ -166,6 +166,39 @@ def test_sub_byte_soft_mask_is_applied():
 
 
 @pytest.mark.parametrize(
+    ("color_space", "matte", "sample", "expected"),
+    [
+        ("/DeviceRGB", "0 0 0", bytes([100, 50, 25]), (227, 177, 152)),
+        ("/DeviceRGB", "1 0 0", bytes([227, 50, 25]), (227, 177, 152)),
+        ("/DeviceGray", "0.25", bytes([82]), (177, 177, 177)),
+    ],
+)
+def test_image_soft_mask_removes_the_matte(
+    color_space: str, matte: str, sample: bytes, expected: tuple[int, int, int]
+) -> None:
+    image = stream_object(
+        "/Type /XObject /Subtype /Image /Width 2 /Height 2 "
+        f"/ColorSpace {color_space} /BitsPerComponent 8 /SMask 6 0 R",
+        sample * 4,
+    )
+    mask = stream_object(
+        "/Type /XObject /Subtype /Image /Width 2 /Height 2 "
+        f"/ColorSpace /DeviceGray /BitsPerComponent 8 /Matte [{matte}]",
+        bytes([128] * 4),
+    )
+    pdf = simple_page_pdf(
+        "q 100 0 0 100 50 50 cm /Im0 Do Q",
+        resources="/XObject << /Im0 5 0 R >>",
+        extra_objects=[image, mask],
+    )
+    result = render_page(pdf, scale=1.0)
+    pixel = result.get_image().convert("RGB").getpixel((100, 100))
+
+    assert pixel == pytest.approx(expected, abs=2)
+    assert bytes(result._export_bitmap_artifacts()[0]["raw_data"]) == sample * 4
+
+
+@pytest.mark.parametrize(
     "image_format, filters, wrap, invert",
     [
         ("JPEG", "/DCTDecode", False, False),

@@ -1425,6 +1425,35 @@ namespace pdflib
     return true;
   }
 
+  namespace
+  {
+    clip_state_instruction clip_shading_bbox(clip_state_instruction clip,
+                                             const pdf_resource<PAGE_SHADING>& shading,
+                                             const std::array<double, 6>& matrix)
+    {
+      if(not shading.has_bbox()) { return clip; }
+
+      const auto& bbox = shading.get_bbox();
+      const double xs[4] = {bbox[0], bbox[2], bbox[2], bbox[0]};
+      const double ys[4] = {bbox[1], bbox[1], bbox[3], bbox[3]};
+      std::vector<double> px, py;
+      for(int i = 0; i < 4; ++i)
+        {
+          px.push_back(matrix[0]*xs[i] + matrix[2]*ys[i] + matrix[4]);
+          py.push_back(matrix[1]*xs[i] + matrix[3]*ys[i] + matrix[5]);
+        }
+
+      std::vector<clip_path_instruction> capture;
+      // W and W* captures use nonnegative group IDs. The shading BBox
+      // is a separate clip and intersects all of those captures.
+      constexpr int bbox_clip_group = -1;
+      capture.emplace_back(std::move(px), std::move(py), CLOSED, RECTANGLE,
+                           bbox_clip_group);
+      return clip.appended(clip.has_clip() ? clip.get_rule() : CLIP_RULE_NONZERO,
+                           std::move(capture));
+    }
+  }
+
   // 8.7.4.5: `sh` paints the named shading over the whole current clip
   // region, taking its colours from the shading's own colour space and
   // function rather than from the current fill colour.
@@ -1474,20 +1503,22 @@ namespace pdflib
 
         const std::array<double, 9>& m = pattern.get_matrix();
         std::array<double, 6> matrix = {m[0], m[1], m[3], m[4], m[6], m[7]};
-        clip_state_instruction clip_state = current_shape_state().get_clip_state();
+        auto clip_state = current_shape_state().get_clip_state();
+        if(shading.get_tensor_mesh())
+          {
+            clip_state = clip_shading_bbox(std::move(clip_state), shading, matrix);
+          }
 
         shading_instruction shinstr(
           pattern_name,
-          shading.get_shading_type() == SHADING_AXIAL
-            ? SHADING_GEOMETRY_AXIAL
-            : SHADING_GEOMETRY_RADIAL,
+          shading.get_geometry(),
           shading.get_coords(),
           matrix,
           shading.get_stops(),
           shading.get_extend_start(),
           shading.get_extend_end(),
           current_graphic_state().get_fill_alpha(),
-          std::move(clip_state));
+          std::move(clip_state), shading.get_tensor_mesh());
         shinstr.set_blend_mode(current_graphic_state().get_blend_mode());
         shinstr.set_soft_mask(current_graphic_state().get_soft_mask_instruction());
         instructions.add_shading_instruction(std::move(shinstr));
@@ -1950,33 +1981,8 @@ namespace pdflib
                                     trafo[3], trafo[4],
                                     trafo[6], trafo[7]};
 
-    clip_state_instruction clip_state = current_shape_state().get_clip_state();
-
-    // A shading /BBox is expressed in shading space and bounds the paint just
-    // like a clip path does, so it is transformed and appended to the clip
-    // (which the renderer intersects).
-    if(shading->has_bbox())
-      {
-        const std::array<double, 4>& bbox = shading->get_bbox();
-
-        const double xs[4] = {bbox[0], bbox[2], bbox[2], bbox[0]};
-        const double ys[4] = {bbox[1], bbox[1], bbox[3], bbox[3]};
-
-        std::vector<double> px, py;
-        for(int c = 0; c < 4; c++)
-          {
-            px.push_back(matrix[0]*xs[c] + matrix[2]*ys[c] + matrix[4]);
-            py.push_back(matrix[1]*xs[c] + matrix[3]*ys[c] + matrix[5]);
-          }
-
-        std::vector<clip_path_instruction> capture;
-        capture.emplace_back(std::move(px), std::move(py), CLOSED, RECTANGLE);
-
-        // the /BBox always bounds, so an unclipped shading becomes clipped
-        clip_rule rule = clip_state.has_clip() ? clip_state.get_rule()
-                                               : CLIP_RULE_NONZERO;
-        clip_state = clip_state.appended(rule, std::move(capture));
-      }
+    auto clip_state = clip_shading_bbox(current_shape_state().get_clip_state(),
+                                       *shading, matrix);
 
     LOG_S(INFO) << "sh " << sh_name << ": " << to_string(shading->get_shading_type())
                 << ", #-stops: " << shading->get_stops().size()
@@ -1987,16 +1993,14 @@ namespace pdflib
                 << matrix[4] << ", " << matrix[5] << "]";
 
     shading_instruction shinstr(sh_name,
-                                shading->get_shading_type() == SHADING_AXIAL
-                                  ? SHADING_GEOMETRY_AXIAL
-                                  : SHADING_GEOMETRY_RADIAL,
+                                shading->get_geometry(),
                                 shading->get_coords(),
                                 matrix,
                                 shading->get_stops(),
                                 shading->get_extend_start(),
                                 shading->get_extend_end(),
                                 current_graphic_state().get_fill_alpha(),
-                                std::move(clip_state));
+                                std::move(clip_state), shading->get_tensor_mesh());
 
     shinstr.set_blend_mode(current_graphic_state().get_blend_mode());
     shinstr.set_soft_mask(current_graphic_state().get_soft_mask_instruction());
@@ -2983,7 +2987,7 @@ namespace pdflib
       case pdf_operator::ET:
         {
           LOG_S(INFO) << "executing " << to_string(name);
-          current_text_state().ET();
+          current_shape_state().clip_text_outline(current_text_state().ET());
         }
         break;
 

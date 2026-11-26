@@ -337,6 +337,10 @@ namespace pdflib
     bool applied_clip = false;
     for(const auto& clip_path : clip_state.get_paths())
       {
+        // Glyph outlines are collected by the renderer. Keep the extracted
+        // image placement consistent with the parse-only pipeline.
+        if(not clip_path.get_outline().is_empty()) { continue; }
+
         std::array<double, 4> clip_bbox = {0.0, 0.0, 0.0, 0.0};
         if(not get_clip_path_bbox(clip_path, clip_bbox))
           {
@@ -391,6 +395,7 @@ namespace pdflib
       image.soft_mask_data     = xobj.get_soft_mask_data();
       image.soft_mask_width    = xobj.get_soft_mask_width();
       image.soft_mask_height   = xobj.get_soft_mask_height();
+      image.soft_mask_matte    = xobj.get_soft_mask_matte();
 
       LOG_S(INFO) << "image with ("
 		  << image.x0 << ", " << image.y0 << ") x ("
@@ -633,6 +638,7 @@ namespace pdflib
     binstr.set_blend_mode(grph_state.get_blend_mode());
     binstr.set_soft_mask(grph_state.get_soft_mask_instruction());
     binstr.set_filters(image.filters);
+    binstr.set_matte_color(image.soft_mask_matte);
 
     // The reduced samples fit a render at the configured scale only. A later
     // render at a finer scale (PageParseResult.get_image(scale=...)) decodes

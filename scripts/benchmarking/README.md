@@ -513,11 +513,13 @@ and content/decode flags explicitly; defaults may differ from the original run.
 
 ## Quality benchmarking
 
-Run the pinned regression page selection for both rendering and text extraction.
+Run the pinned regression page selection for rendering and text extraction.
+Use `-m` or `--mode` to select `render`, `text`, or `both` (the default).
 
 ```sh
 ./scripts/benchmarking/refresh_quality_benchmarks.sh
-./scripts/benchmarking/refresh_quality_benchmarks.sh --dataset bo20 --max-pages 10
+./scripts/benchmarking/refresh_quality_benchmarks.sh ./pdfs --mode=render
+./scripts/benchmarking/refresh_quality_benchmarks.sh --dataset bo20 --max-pages 10 -m text
 ./scripts/benchmarking/refresh_quality_benchmarks.sh ./pdfs --recursive --max-pages 10 \
   --text-backends pypdfium2,pypdf
 ./scripts/benchmarking/refresh_quality_benchmarks.sh --update-docs
@@ -543,6 +545,8 @@ Each Bo dataset uses the same revision as the performance launcher.
 With `--update-docs`, an uncapped pinned run publishes a compact summary,
 charts, image panels and text excerpts. The regression report goes under
 `docs/quality_benchmarks/latest/`. Bo reports use `docs/quality_benchmarks/<dataset>/`.
+Single-mode publications use the same directory name with a `-render` or
+`-text` suffix.
 
 For individual comparisons, run the standalone quality benchmark.
 

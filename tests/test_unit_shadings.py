@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import pytest
 
-from tests.pdf_builder import render_page, simple_page_pdf
+from tests.pdf_builder import render_page, simple_page_pdf, stream_object
 from tests.rendering_regression import (
     center_color,
     coverage_ratio,
@@ -41,7 +41,7 @@ RIGHT_BOX = (155.0, 80.0, 175.0, 120.0)
 BAND_BOX = (20.0, 60.0, 180.0, 140.0)
 
 
-def _shading_page(content: str, shading: str = AXIAL_SHADING) -> bytes:
+def _shading_page(content: str, shading: str | bytes = AXIAL_SHADING) -> bytes:
     return simple_page_pdf(
         content,
         resources="/Shading << /Sh0 5 0 R >>",
@@ -95,3 +95,57 @@ def test_page_wide_shading_at_page_start_is_a_background():
         f"a page-wide shading at page start did not paint the background: "
         f"left {left}, right {right}"
     )
+
+
+@pytest.mark.parametrize("coordinate_bits", [8, 32])
+def test_tensor_mesh_shading_with_shared_edge(coordinate_bits: int):
+    first_points = [
+        (30, 30), (50, 30), (70, 30), (90, 30),
+        (90, 50), (90, 70), (90, 90), (70, 90),
+        (50, 90), (30, 90), (30, 70), (30, 50),
+        (50, 50), (70, 50), (70, 70), (50, 70),
+    ]
+    second_points = [
+        (110, 90), (130, 90), (150, 90), (150, 70),
+        (150, 50), (150, 30), (130, 30), (110, 30),
+        (110, 50), (110, 70), (130, 70), (130, 50),
+    ]
+    maximum = (1 << coordinate_bits) - 1
+
+    def patch(flag, points, colors):
+        coordinates = "".join(
+            f"{round(value * maximum / 255):0{coordinate_bits}b}"
+            for point in points
+            for value in point
+        )
+        return f"{flag:02b}" + coordinates + "".join(
+            f"{value:08b}" for color in colors for value in color
+        )
+
+    bits = patch(0, first_points, [RED] * 4) + patch(1, second_points, [BLUE] * 2)
+    bits += "0" * (-len(bits) % 8)
+    data = bytes(int(bits[i : i + 8], 2) for i in range(0, len(bits), 8))
+    shading = stream_object(
+        "/ShadingType 7 /ColorSpace /DeviceRGB /BitsPerFlag 2 "
+        f"/BitsPerCoordinate {coordinate_bits} /BitsPerComponent 8 "
+        "/Decode [0 255 0 255 0 1 0 1 0 1] /BBox [20 35 145 75]",
+        data,
+    )
+    content = "q 20 40 130 25 re W n /Sh0 sh Q"
+    image = render_page(_shading_page(content, shading), scale=1.0).get_image().convert("RGB")
+
+    assert image.getpixel((60, 145)) == RED
+    assert image.getpixel((130, 145)) == pytest.approx((83, 0, 172), abs=5)
+    assert image.getpixel((147, 145)) == (255, 255, 255)
+    assert image.getpixel((60, 126)) == (255, 255, 255)
+
+
+def test_shading_respects_compound_clip():
+    content = "q 20 60 40 80 re 140 60 40 80 re W n /Sh0 sh Q"
+    image = render_page(_shading_page(content), scale=1.0).get_image().convert("RGB")
+
+    left = image.getpixel((30, 100))
+    right = image.getpixel((165, 100))
+    assert left[0] > 200 and left[2] < 60
+    assert right[2] > 200 and right[0] < 60
+    assert image.getpixel((100, 100)) == (255, 255, 255)

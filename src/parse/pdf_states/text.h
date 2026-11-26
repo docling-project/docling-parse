@@ -28,7 +28,7 @@ namespace pdflib
     pdf_state<TEXT>& operator=(const pdf_state<TEXT>& other);
 
     void BT();
-    void ET();
+    BLPath ET();
 
     void Tc(std::vector<qpdf_stream_instruction>& instructions);
 
@@ -131,6 +131,9 @@ namespace pdflib
     // symbols should resolve their embedded outline only once.
     std::shared_ptr<freetype_font_cache> glyph_metrics_cache;
 
+    // The current text object owns this path across graphics-state saves.
+    std::shared_ptr<BLPath> text_clip_outline;
+
     std::array<double, 9> text_matrix;
     std::array<double, 9> line_matrix;
 
@@ -229,6 +232,7 @@ namespace pdflib
     this->vertical_origin_y = other.vertical_origin_y;
     this->vertical_displacement = other.vertical_displacement;
     this->glyph_metrics_cache = other.glyph_metrics_cache;
+    this->text_clip_outline = other.text_clip_outline;
 
     return *this;
   }
@@ -269,6 +273,8 @@ namespace pdflib
     //LOG_S(INFO) << "\ttrafo_matrix[" << l << "]\t" << trafo_matrix[l];
 
     block_count += 1;
+    if(config.keep_shapes and config.extract_font_programs)
+      { text_clip_outline = std::make_shared<BLPath>(); }
 
     text_matrix = {{1.0, 0.0, 0.0,
                       0.0, 1.0, 0.0,
@@ -279,8 +285,15 @@ namespace pdflib
                       0.0, 0.0, 1.0}};
   }
 
-  void pdf_state<TEXT>::ET()
+  BLPath pdf_state<TEXT>::ET()
   {
+    BLPath outline;
+    if(text_clip_outline)
+      {
+        outline = std::move(*text_clip_outline);
+        text_clip_outline.reset();
+      }
+    return outline;
   }
 
   void pdf_state<TEXT>::Tc(std::vector<qpdf_stream_instruction>& instructions)
@@ -855,6 +868,31 @@ namespace pdflib
         dx = T_ctm[0] * tx + T_ctm[3] * ty + T_ctm[6];
         dy = T_ctm[1] * tx + T_ctm[4] * ty + T_ctm[7];
       };
+
+      if(text_clip_outline and rendering_mode >= 4 and rendering_mode <= 7 and
+         not font.is_type3() and glyph_code >= 0)
+        {
+          auto blob = font.get_embedded_font_blob();
+          if(blob and blob->has_bytes())
+            {
+              if(not glyph_metrics_cache)
+                { glyph_metrics_cache = std::make_shared<freetype_font_cache>(); }
+
+              BLPath glyph;
+              if(glyph_metrics_cache->build_text_path(
+                   blob, text, glyph_code,
+                   font.get_glyph_name(static_cast<uint32_t>(glyph_code)),
+                   1.0, glyph) and not glyph.is_empty())
+                {
+                  double x0, y0, xx, xy, yx, yy;
+                  map_text_point(g_base_x, g_base_y, x0, y0);
+                  map_text_point(g_base_x + font_size * h_scaling, g_base_y, xx, xy);
+                  map_text_point(g_base_x, g_base_y - font_size, yx, yy);
+                  text_clip_outline->add_path(
+                    glyph, BLMatrix2D(xx - x0, xy - y0, yx - x0, yy - y0, x0, y0));
+                }
+            }
+        }
 
       const double placement_end_x = vertical_mode ? 0.0 : width;
       const double placement_end_y = vertical_mode

@@ -98,6 +98,34 @@ def test_shared_selected_widget_appearance_uses_the_font_fallback_chain(
     ]
 
 
+def test_signature_widget_local_form_keeps_page_text_unchanged():
+    pdf = build_pdf(
+        [
+            "<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [5 0 R] >> >>",
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] "
+            "/Contents 4 0 R /Annots [5 0 R] /Resources << /Font << /F1 8 0 R >> >> >>",
+            content_stream("BT /F1 12 Tf 40 150 Td (Page text) Tj ET"),
+            "<< /Type /Annot /Subtype /Widget /FT /Sig /T (signature) "
+            "/Rect [20 40 120 80] /AP << /N 6 0 R >> >>",
+            stream_object(
+                "/Type /XObject /Subtype /Form /BBox [0 0 100 40] "
+                "/Resources << /XObject << /FRM 7 0 R >> >>",
+                b"/FRM Do",
+            ),
+            stream_object(
+                "/Type /XObject /Subtype /Form /BBox [0 0 100 40] "
+                "/Resources << /Font << /F1 8 0 R >> >>",
+                b"BT /F1 12 Tf 10 10 Td (Digitally signed) Tj ET",
+            ),
+            FONT,
+        ]
+    )
+
+    page = parse_page(pdf)
+    assert [cell.text for cell in page.textline_cells] == ["Page text"]
+
+
 def test_damaged_appearance_prefix_does_not_capture_the_next_annotation():
     encoder = zlib.compressobj()
     content = (

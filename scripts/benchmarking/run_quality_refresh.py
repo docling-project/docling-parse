@@ -645,46 +645,52 @@ def summarize_render(
                 "|---|---:|---:|---:|---|",
             ]
         )
-    for index, (row, job) in enumerate(ranked[:examples], start=1):
-        panel = problem_panels.get((row.document, row.page_number))
-        if panel is None:
-            panel = (
-                run_page_job(
-                    replace(
-                        job,
-                        visualizations="all",
-                        viz_dir=directory.parent / "panels" / row.document,
-                        visualization_pdf_name=None,
+    with tempfile.TemporaryDirectory(prefix="docling-quality-examples-") as temporary:
+        for index, (row, job) in enumerate(ranked[:examples], start=1):
+            panel = problem_panels.get((row.document, row.page_number))
+            if panel is None:
+                panel = (
+                    run_page_job(
+                        replace(
+                            job,
+                            visualizations="all",
+                            viz_dir=Path(temporary),
+                            visualization_pdf_name=None,
+                        )
                     )
+                    .renders[0]
+                    .visualization
                 )
-                .renders[0]
-                .visualization
+            if panel is None:
+                raise RuntimeError(
+                    f"Could not recreate panels for {row.document} page {row.page_number}"
+                )
+            filename = f"example-{index:02d}.png"
+            with Image.open(panel) as image:
+                image.thumbnail((1800, 1100))
+                image.save(directory / filename, optimize=True)
+            document = markdown_cell(row.document)
+            sections.append(
+                f"| {document} | {row.page_number} | {number(row.normalized_delta)} | "
+                f"{number(row.mean_abs_error)} | [Panels]({filename}) |"
             )
-        if panel is None:
-            raise RuntimeError(
-                f"Could not recreate panels for {row.document} page {row.page_number}"
-            )
-        filename = f"example-{index:02d}.png"
-        with Image.open(panel) as image:
-            image.thumbnail((1800, 1100))
-            image.save(directory / filename, optimize=True)
-        document = markdown_cell(row.document)
-        sections.append(
-            f"| {document} | {row.page_number} | {number(row.normalized_delta)} | "
-            f"{number(row.mean_abs_error)} | [Panels]({filename}) |"
-        )
     return sections
 
 
-def publish_docs(source: Path, docs: Path, dataset: str = "regression") -> Path:
+def publish_docs(
+    source: Path, docs: Path, dataset: str = "regression", mode: str = "both"
+) -> Path:
     import fcntl
 
     directory = "latest" if dataset == "regression" else dataset
-    target = docs / "quality_benchmarks" / directory
-    entry = docs / "quality_benchmarks.md"
     label = "Latest quality benchmark results"
     if dataset != "regression":
         label = f"Latest {dataset} quality benchmark results"
+    if mode != "both":
+        directory = f"{directory}-{mode}"
+        label = f"{label} ({mode} only)"
+    target = docs / "quality_benchmarks" / directory
+    entry = docs / "quality_benchmarks.md"
     link = f"[{label}](./{(target / 'index.md').relative_to(docs).as_posix()})"
     lock = os.open(docs, os.O_RDONLY)
     try:
@@ -753,6 +759,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         choices=("regression", *PERFORMANCE_DATASET_PINS),
         default="regression",
         help="Pinned dataset (default: %(default)s)",
+    )
+    parser.add_argument(
+        "-m",
+        "--mode",
+        choices=("render", "text", "both"),
+        default="both",
+        help="Benchmark phase to run (default: %(default)s)",
     )
     parser.add_argument(
         "--recursive",
@@ -882,6 +895,9 @@ def create_timestamped_output(root: Path) -> Path:
 
 
 def run(args: argparse.Namespace) -> tuple[Path, Path | None]:
+    run_render = args.mode in ("render", "both")
+    run_text = args.mode in ("text", "both")
+    text_backends = args.text_backends if run_text else []
     if args.output_dir is None:
         output = create_timestamped_output(ROOT)
     else:
@@ -901,19 +917,19 @@ def run(args: argparse.Namespace) -> tuple[Path, Path | None]:
     )
     if not schedule:
         raise ValueError(f"No benchmark pages found. Unavailable PDFs: {unavailable}")
+    pages, pdfs = sum(len(page_numbers) for _, page_numbers in schedule), len(schedule)
     if (
         args.input is None
         and args.dataset in PERFORMANCE_DATASET_PINS
         and args.max_pages is None
     ):
         _, expected_pdfs, expected_pages = PERFORMANCE_DATASET_PINS[args.dataset]
-        page_count = sum(len(pages) for _, pages in schedule)
-        if (len(schedule), page_count) != (expected_pdfs, expected_pages):
+        if (pdfs, pages) != (expected_pdfs, expected_pages):
             raise ValueError(
                 f"Expected {expected_pdfs:,} PDFs / {expected_pages:,} pages for {args.dataset}, "
-                f"scheduled {len(schedule):,} PDFs / {page_count:,} pages"
+                f"scheduled {pdfs:,} PDFs / {pages:,} pages"
             )
-    provenance = build_provenance(args.text_backends)
+    provenance = build_provenance(text_backends)
     architecture = platform.machine()
     logical_cpus = os.cpu_count()
     machine = {
@@ -928,10 +944,11 @@ def run(args: argparse.Namespace) -> tuple[Path, Path | None]:
             "source": provenance,
             "dataset": dataset_info,
             "machine": machine,
+            "mode": args.mode,
             "scale": args.scale,
             "workers": args.workers,
             "docling_render_threads": args.docling_render_threads,
-            "text_backends": args.text_backends,
+            "text_backends": text_backends,
             "unavailable_documents": unavailable,
             "files": [
                 {"name": names[path], "sha256": digest(path), "pages": pages}
@@ -940,19 +957,19 @@ def run(args: argparse.Namespace) -> tuple[Path, Path | None]:
         },
     )
 
-    options = DoclingRenderOptions(
-        scale=args.scale, threads=args.docling_render_threads
+    render_rows, jobs, problem_panels = [], [], {}
+    if run_render:
+        options = DoclingRenderOptions(
+            scale=args.scale, threads=args.docling_render_threads
+        )
+        render_rows, jobs, problem_panels = write_render_results(
+            output, schedule, names, options, args.workers
+        )
+    text_rows = (
+        write_text_results(output, schedule, names, text_backends) if run_text else []
     )
-    render_rows, jobs, problem_panels = write_render_results(
-        output, schedule, names, options, args.workers
-    )
-    text_rows = write_text_results(output, schedule, names, args.text_backends)
     publication = output / "publication"
     publication.mkdir()
-    (publication / "panels").mkdir()
-    text_examples = write_worst_text_examples(
-        output, publication, text_rows, args.text_backends, args.text_examples
-    )
     dataset = "Local PDFs"
     if "revision" in dataset_info:
         label = "Regression suite" if args.dataset == "regression" else args.dataset
@@ -960,7 +977,7 @@ def run(args: argparse.Namespace) -> tuple[Path, Path | None]:
     relevant_packages = (
         "docling-parse",
         "pypdfium2",
-        *(("pypdf",) if "pypdf" in args.text_backends else ()),
+        *(("pypdf",) if "pypdf" in text_backends else ()),
     )
     packages = " · ".join(
         f"`{name}` {provenance['packages'][name]}" for name in relevant_packages
@@ -975,16 +992,20 @@ def run(args: argparse.Namespace) -> tuple[Path, Path | None]:
     if logical_cpus is not None:
         unit = "CPU" if logical_cpus == 1 else "CPUs"
         hardware.append(f"{logical_cpus:,} logical {unit}")
-    pages, pdfs = len(jobs), len(schedule)
     page_label = "page" if pages == 1 else "pages"
     pdf_label = "PDF" if pdfs == 1 else "PDFs"
     run_details = [
         "| Run details | Value |",
         "|---|---|",
         f"| Corpus | {dataset} |",
+        f"| Mode | {args.mode} |",
         f"| Coverage | {pages:,} scheduled {page_label} across {pdfs:,} {pdf_label} |",
         f"| Unavailable PDFs | {len(unavailable):,} |",
-        f"| Render scale | {args.scale:g}\N{MULTIPLICATION SIGN} ({72 * args.scale:g} dpi) |",
+        *(
+            [f"| Render scale | {args.scale:g}\N{MULTIPLICATION SIGN} ({72 * args.scale:g} dpi) |"]
+            if run_render
+            else []
+        ),
         f"| Operating system | {operating_system or machine['operating_system']} |",
         f"| Hardware | {' · '.join(hardware) or '—'} |",
         f"| Source commit | `{provenance['source_revision']}` |",
@@ -997,47 +1018,50 @@ def run(args: argparse.Namespace) -> tuple[Path, Path | None]:
         GENERATED_MARKER,
         "",
         run_details_markdown,
-        "",
-        *summarize_render(
-            publication, render_rows, jobs, problem_panels, args.examples
-        ),
-        "",
-        *summarize_text(publication, text_rows),
     ]
-    summary.extend(text_examples)
+    summary_label = "Summary and comparison panels" if run_render else "Summary"
+    links = [f"- [{summary_label}](publication/index.md)"]
+    if run_render:
+        (publication / "panels").mkdir()
+        summary.append("")
+        summary.extend(
+            summarize_render(publication, render_rows, jobs, problem_panels, args.examples)
+        )
+        links.append("- [Per-page rendering metrics](render_quality.csv)")
+        if problem_panels:
+            links.append("- [Above-tolerance render panels](panels/problems/)")
+    if run_text:
+        text_examples = write_worst_text_examples(
+            output, publication, text_rows, text_backends, args.text_examples
+        )
+        summary.extend(["", *summarize_text(publication, text_rows), *text_examples])
+        links.extend(
+            [
+                "- [Per-page text comparison and outputs](text.md)",
+                "- [Per-page text metrics](text_quality.csv)",
+            ]
+        )
+        if text_examples:
+            links.append("- [Pages with the lowest text F1](text-examples.md)")
+    links.append("- [Inputs and build provenance](metadata.json)")
     (publication / "index.md").write_text("\n".join(summary) + "\n", encoding="utf-8")
     report = output / "report.md"
-    sample_link = (
-        "- [Pages with the lowest text F1](text-examples.md)\n" if text_examples else ""
-    )
-    problem_link = (
-        "- [Above-tolerance render panels](panels/problems/)\n"
-        if problem_panels
-        else ""
-    )
+    report_lines = ["# Quality benchmark report", "", run_details_markdown, "", *links]
     report.write_text(
-        "# Quality benchmark report\n\n"
-        f"{run_details_markdown}\n\n"
-        "- [Summary and comparison panels](publication/index.md)\n"
-        "- [Per-page rendering metrics](render_quality.csv)\n"
-        f"{problem_link}"
-        "- [Per-page text comparison and outputs](text.md)\n"
-        "- [Per-page text metrics](text_quality.csv)\n"
-        f"{sample_link}"
-        "- [Inputs and build provenance](metadata.json)\n",
+        "\n".join(report_lines) + "\n",
         encoding="utf-8",
     )
-    if not any(row.success for row in render_rows):
+    if run_render and not any(row.success for row in render_rows):
         raise ValueError(f"No images could be compared. See {report}")
     missing_text = {
         (reference, mode.value)
-        for reference in args.text_backends
+        for reference in text_backends
         for mode in PdfExtractionMode
     } - {(row.reference, row.mode) for row in text_rows if row.token_f1 is not None}
     if missing_text:
         raise ValueError(f"No text scores for {sorted(missing_text)}. See {report}")
     published = (
-        publish_docs(publication, ROOT / "docs", args.dataset)
+        publish_docs(publication, ROOT / "docs", args.dataset, args.mode)
         if args.update_docs
         else None
     )

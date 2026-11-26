@@ -88,6 +88,7 @@ namespace pdflib
 
     // Begin a Form XObject with an empty path and its bounding box clip.
     void clip_form_bbox(const std::array<double, 4>& bbox);
+    void clip_text_outline(BLPath outline);
 
     // The clip paths for a render instruction. Without shapes the paths are
     // tracked for the box of text cells only (keep_clips) and the render
@@ -480,22 +481,7 @@ namespace pdflib
         return clip_state_instruction();
       }
 
-    if(clipping_path_mode == NO_CLIPPING_PATH_RULE or clipping_state.get_paths().empty())
-      {
-        return clip_state_instruction();
-      }
-
-    clip_rule rule = CLIP_RULE_NONE;
-    if(clipping_path_mode == NONZERO_WINDING_NUMBER_RULE)
-      {
-        rule = CLIP_RULE_NONZERO;
-      }
-    else if(clipping_path_mode == EVEN_ODD_RULE)
-      {
-        rule = CLIP_RULE_EVEN_ODD;
-      }
-
-    return clipping_state.with_rule(rule);
+    return clipping_state;
   }
 
   bool pdf_state<SHAPE>::get_clip_bbox(std::array<double, 4>& bbox) const
@@ -576,6 +562,19 @@ namespace pdflib
     if(clipping_path_mode == EVEN_ODD_RULE) { WStar(no_parameters); }
     else                                   { W(no_parameters);     }
     n(no_parameters);
+  }
+
+  void pdf_state<SHAPE>::clip_text_outline(BLPath outline)
+  {
+    if(outline.is_empty()) { return; }
+
+    BLBox bounds;
+    if(outline.get_bounding_box(&bounds) != BL_SUCCESS) { return; }
+
+    std::vector<clip_path_instruction> capture;
+    capture.emplace_back(std::move(outline), bounds, next_clip_group++);
+    clipping_state = clipping_state.appended(CLIP_RULE_NONZERO, std::move(capture));
+    intersect_clip_bbox({bounds.x0, bounds.y0, bounds.x1, bounds.y1});
   }
 
   void pdf_state<SHAPE>::capture_pending_clip(bool already_transformed)

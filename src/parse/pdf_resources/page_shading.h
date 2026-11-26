@@ -13,8 +13,7 @@ namespace pdflib
   //
   // Axial (/ShadingType 2) and radial (/ShadingType 3) shadings are decoded
   // into a colour ramp of `num_stops` samples that the renderer turns into a
-  // gradient. The other shading types are recognised but not painted; they
-  // report themselves through get_reason() so the omission is visible.
+  // gradient. Type 7 shadings carry tensor-product patches for rasterisation.
   template<>
   class pdf_resource<PAGE_SHADING>
   {
@@ -33,6 +32,14 @@ namespace pdflib
     const std::string& get_key() const { return key_; }
 
     shading_type_name get_shading_type() const { return shading_type_; }
+
+    shading_geometry get_geometry() const
+    {
+      if(shading_type_ == SHADING_TENSOR_PATCH) { return SHADING_GEOMETRY_TENSOR_PATCH; }
+      return shading_type_ == SHADING_AXIAL ? SHADING_GEOMETRY_AXIAL : SHADING_GEOMETRY_RADIAL;
+    }
+
+    const std::shared_ptr<const tensor_mesh>& get_tensor_mesh() const { return mesh_; }
 
     // True when this shading can be painted. When false, get_reason() says why.
     bool is_paintable() const { return paintable_; }
@@ -54,7 +61,8 @@ namespace pdflib
 
   private:
 
-    void parse(QPDFObjectHandle dict);
+    void parse(QPDFObjectHandle object);
+    bool parse_tensor_mesh(QPDFObjectHandle stream, QPDFObjectHandle dict);
 
     bool parse_functions(QPDFObjectHandle dict);
     bool parse_coords(QPDFObjectHandle dict, std::size_t expected);
@@ -93,6 +101,7 @@ namespace pdflib
     std::array<double, 4> bbox_;
 
     std::vector<shading_stop> stops_;
+    std::shared_ptr<const tensor_mesh> mesh_;
   };
 
   pdf_resource<PAGE_SHADING>::pdf_resource():
@@ -128,7 +137,7 @@ namespace pdflib
     try
       {
         // types 4-7 are streams; types 1-3 are plain dictionaries
-        parse(qpdf_obj.isStream() ? qpdf_obj.getDict() : qpdf_obj);
+        parse(qpdf_obj);
       }
     catch(const std::exception& e)
       {
@@ -149,8 +158,9 @@ namespace pdflib
       }
   }
 
-  void pdf_resource<PAGE_SHADING>::parse(QPDFObjectHandle dict)
+  void pdf_resource<PAGE_SHADING>::parse(QPDFObjectHandle object)
   {
+    QPDFObjectHandle dict = object.isStream() ? object.getDict() : object;
     if(not dict.isDictionary())
       {
         reject("shading object is neither a dictionary nor a stream");
@@ -166,7 +176,8 @@ namespace pdflib
     shading_type_ =
       to_shading_type_name(static_cast<int>(dict.getKey("/ShadingType").getIntValue()));
 
-    if(shading_type_ != SHADING_AXIAL and shading_type_ != SHADING_RADIAL)
+    if(shading_type_ != SHADING_AXIAL and shading_type_ != SHADING_RADIAL
+       and shading_type_ != SHADING_TENSOR_PATCH)
       {
         reject("unsupported /ShadingType: " + to_string(shading_type_));
         return;
@@ -183,6 +194,27 @@ namespace pdflib
        colorspace_.get_family() == COLOR_SPACE_PATTERN)
       {
         reject("shading has an unsupported /ColorSpace");
+        return;
+      }
+
+    if(dict.hasKey("/BBox"))
+      {
+        QPDFObjectHandle qpdf_bbox = dict.getKey("/BBox");
+        if(qpdf_bbox.isArray() and qpdf_bbox.getArrayNItems() >= 4)
+          {
+            for(int d = 0; d < 4; d++)
+              {
+                bbox_[static_cast<std::size_t>(d)] =
+                  qpdf_bbox.getArrayItem(d).getNumericValue();
+              }
+            has_bbox_ = true;
+          }
+      }
+
+    if(shading_type_ == SHADING_TENSOR_PATCH)
+      {
+        paintable_ = parse_tensor_mesh(object, dict);
+        if(paintable_) { reason_.clear(); }
         return;
       }
 
@@ -219,20 +251,6 @@ namespace pdflib
           }
       }
 
-    if(dict.hasKey("/BBox"))
-      {
-        QPDFObjectHandle qpdf_bbox = dict.getKey("/BBox");
-        if(qpdf_bbox.isArray() and qpdf_bbox.getArrayNItems() >= 4)
-          {
-            for(int d = 0; d < 4; d++)
-              {
-                bbox_[static_cast<std::size_t>(d)] =
-                  qpdf_bbox.getArrayItem(d).getNumericValue();
-              }
-            has_bbox_ = true;
-          }
-      }
-
     // /Background is deliberately not read: 8.7.4.3 says it shall be ignored
     // by the sh operator, which is the only caller here.
 
@@ -243,6 +261,135 @@ namespace pdflib
 
     paintable_ = true;
     reason_ = "";
+  }
+
+  bool pdf_resource<PAGE_SHADING>::parse_tensor_mesh(QPDFObjectHandle stream,
+                                                        QPDFObjectHandle dict)
+  {
+    if(not stream.isStream() or dict.hasKey("/Function"))
+      {
+        reject("Type 7 shading requires a stream with direct corner colors");
+        return false;
+      }
+
+    const auto bit_width = [&](const char* key)
+      {
+        auto value = dict.getKey(key);
+        return value.isInteger() ? value.getIntValue() : 0;
+      };
+    const auto coord_bits = bit_width("/BitsPerCoordinate");
+    const auto color_bits = bit_width("/BitsPerComponent");
+    const auto flag_bits = bit_width("/BitsPerFlag");
+    constexpr std::array<int, 8> coordinate_widths = {1, 2, 4, 8, 12, 16, 24, 32};
+    constexpr std::array<int, 6> component_widths = {1, 2, 4, 8, 12, 16};
+    if(std::find(coordinate_widths.begin(), coordinate_widths.end(), coord_bits)
+         == coordinate_widths.end()
+       or std::find(component_widths.begin(), component_widths.end(), color_bits)
+         == component_widths.end()
+       or (flag_bits != 2 and flag_bits != 4 and flag_bits != 8))
+      {
+        reject("Type 7 shading has invalid sample bit widths");
+        return false;
+      }
+
+    const int components = colorspace_.get_num_components();
+    auto decode_array = dict.getKey("/Decode");
+    if(components <= 0 or not decode_array.isArray()
+       or decode_array.getArrayNItems() != 4 + 2 * components)
+      {
+        reject("Type 7 shading has an invalid /Decode array");
+        return false;
+      }
+
+    std::vector<double> decode;
+    for(int i = 0; i < decode_array.getArrayNItems(); ++i)
+      {
+        auto value = decode_array.getArrayItem(i);
+        if(not value.isNumber() or not std::isfinite(value.getNumericValue()))
+          {
+            reject("Type 7 shading has a nonnumeric /Decode value");
+            return false;
+          }
+        decode.push_back(value.getNumericValue());
+      }
+
+    const auto buffer = to_shared_ptr(stream.getStreamData(qpdf_dl_all));
+    const auto* bytes = buffer->getBuffer();
+    const std::size_t bit_size = buffer->getSize() * 8;
+    std::size_t bit_offset = 0;
+    const auto read_bits = [&](int width)
+      {
+        std::uint32_t value = 0;
+        for(int bit = 0; bit < width; ++bit, ++bit_offset)
+          {
+            value = (value << 1) | ((bytes[bit_offset / 8] >> (7 - bit_offset % 8)) & 1u);
+          }
+        return value;
+      };
+    const auto sample = [&](int width, std::size_t range)
+      {
+        const double t = static_cast<double>(read_bits(width))
+          / static_cast<double>((std::uint64_t{1} << width) - 1u);
+        return (1.0 - t) * decode[range] + t * decode[range + 1];
+      };
+
+    auto mesh = std::make_shared<tensor_mesh>();
+    std::vector<double> color(static_cast<std::size_t>(components));
+    // Patch records are packed consecutively. Only the end of the stream is padded.
+    while(bit_size - bit_offset >= 8)
+      {
+        const auto flag = read_bits(static_cast<int>(flag_bits)) & 3u;
+        const std::size_t first_point = flag == 0 ? 0 : 4;
+        const std::size_t first_color = flag == 0 ? 0 : 2;
+        const std::size_t patch_bits = (16 - first_point) * 2 * coord_bits
+          + (4 - first_color) * components * color_bits;
+        if(bit_size - bit_offset < patch_bits or (flag != 0 and mesh->empty()))
+          {
+            reject("Type 7 shading has an incomplete or unconnected patch");
+            return false;
+          }
+
+        tensor_patch patch;
+        if(flag != 0)
+          {
+            const auto& previous = mesh->back();
+            for(std::size_t i = 0; i < first_point; ++i)
+              {
+                patch.points[i] = previous.points[(3 * flag + i) % 12];
+              }
+            patch.colors[0] = previous.colors[flag];
+            patch.colors[1] = previous.colors[(flag + 1) % 4];
+          }
+
+        for(std::size_t i = first_point; i < patch.points.size(); ++i)
+          {
+            patch.points[i] = {sample(static_cast<int>(coord_bits), 0),
+                               sample(static_cast<int>(coord_bits), 2)};
+          }
+
+        for(std::size_t i = first_color; i < patch.colors.size(); ++i)
+          {
+            for(std::size_t c = 0; c < color.size(); ++c)
+              {
+                color[c] = sample(static_cast<int>(color_bits), 4 + 2 * c);
+              }
+            if(not colorspace_.map_to_rgb(color, patch.colors[i]))
+              {
+                reject("Type 7 shading corner color could not be mapped");
+                return false;
+              }
+          }
+        mesh->push_back(patch);
+      }
+
+    if(mesh->empty())
+      {
+        reject("Type 7 shading has no complete patches");
+        return false;
+      }
+
+    mesh_ = std::move(mesh);
+    return true;
   }
 
   bool pdf_resource<PAGE_SHADING>::parse_functions(QPDFObjectHandle dict)

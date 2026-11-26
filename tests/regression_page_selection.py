@@ -9,6 +9,29 @@ have exposed a defect. Re-run the script after adding documents to
 from typing import Dict, List
 
 REGRESSION_PAGE_SELECTION: Dict[str, List[int]] = {
+    "1096078.pdf": [1, 2], # large difference in quality control
+    "1687911.pdf": [8, 23, 43], # large difference in quality control
+    "1064120.pdf": [1, 28, 34], # large difference in quality control
+    "2212867.pdf": [1], # large difference in quality control
+    "2102641.pdf": [5, 10, 23, 13], # large difference in quality control
+    "2312271.pdf": [25, 41, 98, 96, 72, 74], # large difference in quality control
+    "1662984.pdf": [27], # large difference in quality control
+    "1468459.pdf": [18, 1, 15], # large difference in quality control
+    "1167316.pdf": [51], # large difference in quality control
+    "1275901.pdf": [42], # large difference in quality control
+    "1170211.pdf": [4, 15], # large difference in quality control
+    "1408320.pdf": [87, 105, 91], # large difference in quality control
+    "1460829.pdf": [1], # large difference in quality control
+    "1067785.pdf": [28], # large difference in quality control
+    "1293644.pdf": [387], # large difference in quality control
+    "1680225.pdf": [1], # large difference in quality control
+    "1678786.pdf": [21], # large difference in quality control
+    "2033290.pdf": [34], # large difference in quality control
+    "2232872.pdf": [1], # large difference in quality control
+    "2182429.pdf": [1], # large difference in quality control
+
+    "boe-a-2022-7191-p1.pdf": [1],
+
     "IterMethBook_2ndEd.pdf": [1],
     "PLAW-117publ169.pdf": [1, 2, 3],
     "tr254.pdf": [1, 2, 3],

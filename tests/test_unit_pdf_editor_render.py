@@ -4,7 +4,7 @@ import pytest
 
 from docling_parse.pdf_editor import PdfEditor
 from docling_parse.pdf_errors import PdfEditError
-from tests.pdf_builder import simple_page_pdf, stream_object
+from tests.pdf_builder import build_pdf, simple_page_objects, simple_page_pdf, stream_object
 from tests.test_unit_pdf_editor import BLUE, RED, THREE, WHITE, color_at, rendered
 
 
@@ -49,6 +49,36 @@ def test_render_form_clips_to_bbox_in_transformed_form_space():
         assert color_at(result, 105, 62) == WHITE
         assert color_at(result, 62, 50) == WHITE
         assert color_at(result, 130, 135) == RED
+
+
+def test_render_annotation_uses_its_image_resources_and_paint_order():
+    image_dictionary = (
+        "/Type /XObject /Subtype /Image /Width 1 /Height 1 "
+        "/ColorSpace /DeviceRGB /BitsPerComponent 8"
+    )
+    objects = simple_page_objects(
+        "",
+        resources="/XObject << /Im0 8 0 R >>",
+        extra_objects=[
+            "<< /Type /Annot /Subtype /Stamp /Rect [40 50 120 110] /AP << /N 6 0 R >> >>",
+            stream_object(
+                "/Type /XObject /Subtype /Form /BBox [0 0 20 20] "
+                "/Resources << /XObject << /Im0 7 0 R >> >>",
+                b"q 20 0 0 20 0 0 cm /Im0 Do Q 1 0 0 rg 10 0 10 20 re f",
+            ),
+            stream_object(image_dictionary, bytes(BLUE)),
+            stream_object(image_dictionary, bytes(RED)),
+        ],
+    )
+    objects[2] = objects[2].replace("/Contents 4 0 R", "/Contents 4 0 R /Annots [5 0 R]")
+    source = build_pdf(objects)
+
+    with PdfEditor(source=source) as editor:
+        image = editor.render_page(page_no=1).convert("RGB")
+    for result in (image, rendered(source)):
+        assert color_at(result, 60, 75) == BLUE
+        assert color_at(result, 100, 75) == RED
+        assert color_at(result, 35, 75) == WHITE
 
 
 @pytest.mark.parametrize("page_no", [0, -1])

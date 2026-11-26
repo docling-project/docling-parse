@@ -6,8 +6,10 @@
 #include <parse/utils/ccitt/ccitt_utils.h>
 #include <third_party/pdfium_jbig2.h>
 
+#include <array>
 #include <cstdint>
 #include <cstring>
+#include <optional>
 
 #include <parse/utils/color/icc_utils.h>
 #include <parse/utils/jpeg/jpeg_utils.h>
@@ -208,6 +210,8 @@ namespace pdflib
     std::shared_ptr<std::vector<uint8_t>> get_soft_mask_data() const;
     int get_soft_mask_width() const { load_pixels(); return soft_mask_width; }
     int get_soft_mask_height() const { load_pixels(); return soft_mask_height; }
+    const std::optional<std::array<double, 3>>& get_soft_mask_matte() const
+    { load_pixels(); return soft_mask_matte; }
 
     // Determine file extension from filters (e.g. ".jpg", ".jp2", ".jb2", ".bin")
     std::string pick_extension() const;
@@ -284,6 +288,7 @@ namespace pdflib
 
     mutable std::shared_ptr<Buffer> decoded_stream_data;
     mutable std::shared_ptr<std::vector<uint8_t>> soft_mask_data;
+    mutable std::optional<std::array<double, 3>> soft_mask_matte;
 
     // set() argument, kept so load_pixels() can consult it
     bool extract_pixels_ = true;
@@ -1201,6 +1206,7 @@ namespace pdflib
   void pdf_resource<PAGE_XOBJECT_IMAGE>::init_soft_mask_data() const
   {
     soft_mask_data.reset();
+    soft_mask_matte.reset();
 
     // /SMask carries alpha directly. /Mask (as a stream) is a stencil: a
     // 1-bit image mask whose 1-samples knock the corresponding image pixels
@@ -1466,6 +1472,28 @@ namespace pdflib
 
     LOG_S(INFO) << "decoded SMask for xobject_key=" << xobject_key
                 << " alpha_size=" << soft_mask_data->size();
+
+    // /Matte components are in the base image's color space. Gray and RGB
+    // remain in those spaces until premultiplication in the renderer.
+    if(not stencil and (color_space == "/DeviceGray" or color_space == "/DeviceRGB"))
+      {
+        auto matte = qpdf_smask.getDict().getKey("/Matte");
+        const int components = color_space == "/DeviceGray" ? 1 : 3;
+        if(matte.isArray() and matte.getArrayNItems() == components)
+          {
+            std::array<double, 3> values{};
+            for(int i = 0; i < components; ++i)
+              {
+                auto component = matte.getArrayItem(i);
+                if(not component.isNumber()) { return; }
+                const double value = utils::numeric::locale_safe_numeric_value(component);
+                if(not (0.0 <= value and value <= 1.0)) { return; }
+                values[i] = value;
+              }
+            if(components == 1) { values.fill(values[0]); }
+            soft_mask_matte = values;
+          }
+      }
   }
 
   // --- Getters ---
