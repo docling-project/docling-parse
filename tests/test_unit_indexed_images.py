@@ -13,7 +13,11 @@ every colour is drawn from the wrong palette slot.
 
 from __future__ import annotations
 
+import io
+import zlib
+
 import pytest
+from PIL import Image
 
 from tests.pdf_builder import render_page, simple_page_pdf, stream_object
 from tests.rendering_regression import assert_color_near, center_color, region_image
@@ -158,4 +162,50 @@ def test_sub_byte_soft_mask_is_applied():
     )
     assert min(dropped) > 200, (
         f"the transparent half of the soft mask still painted: {dropped}"
+    )
+
+
+@pytest.mark.parametrize(
+    "image_format, filters, wrap, invert",
+    [
+        ("JPEG", "/DCTDecode", False, False),
+        ("JPEG", "[/FlateDecode /DCTDecode]", True, True),
+        ("JPEG2000", "/JPXDecode", False, False),
+    ],
+)
+def test_codec_compressed_image_soft_mask(
+    image_format: str, filters: str, wrap: bool, invert: bool
+):
+    mask_image = Image.new("L", (32, 16))
+    mask_image.paste(255, (0, 0, 16, 16))
+    encoded = io.BytesIO()
+    mask_image.save(encoded, format=image_format)
+    payload = zlib.compress(encoded.getvalue()) if wrap else encoded.getvalue()
+    decode = " /Decode [1 0]" if invert else ""
+    mask = stream_object(
+        "/Type /XObject /Subtype /Image /Width 32 /Height 16 "
+        f"/ColorSpace /DeviceGray /BitsPerComponent 8 /Filter {filters}{decode}",
+        payload,
+    )
+    image = stream_object(
+        "/Type /XObject /Subtype /Image /Width 2 /Height 2 "
+        "/ColorSpace /DeviceRGB /BitsPerComponent 8 /SMask 6 0 R",
+        bytes([255, 0, 0] * 4),
+    )
+    pdf = simple_page_pdf(
+        "q\n100 0 0 100 50 50 cm\n/Im0 Do\nQ\n",
+        resources="/XObject << /Im0 5 0 R >>",
+        extra_objects=[image, mask],
+    )
+
+    result = render_page(pdf)
+    opaque, transparent = (RIGHT_BAND, LEFT_BAND) if invert else (LEFT_BAND, RIGHT_BAND)
+    assert_color_near(
+        center_color(region_image(result, opaque)), RED, tolerance=5, what="opaque half"
+    )
+    assert_color_near(
+        center_color(region_image(result, transparent)),
+        (255, 255, 255),
+        tolerance=5,
+        what="transparent half",
     )
