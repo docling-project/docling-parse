@@ -635,6 +635,7 @@ class PageJob:
     visualizations: str
     viz_dir: Path
     text_normalization: str
+    visualization_pdf_name: str | None = None
 
 
 @dataclass(frozen=True)
@@ -691,6 +692,12 @@ def run_page_job(job: PageJob) -> PageResult:
                 job.visualizations == "above-tolerance" and row.above_tolerance
             )
             if wanted:
+                output_path = None
+                if job.visualization_pdf_name is not None:
+                    output_path = job.viz_dir / (
+                        f"{row.mean_abs_error:.4f}-{job.visualization_pdf_name}-"
+                        f"{job.page_number}.png"
+                    )
                 visualization = write_comparison_visualization(
                     safe_name(comparison.document),
                     job.page_number,
@@ -700,6 +707,7 @@ def run_page_job(job: PageJob) -> PageResult:
                     reference_label=job.reference_renderer,
                     actual_label=actual_renderer,
                     folder=job.viz_dir,
+                    output_path=output_path,
                 )
 
         renders.append(RenderResult(row, comparison, visualization))

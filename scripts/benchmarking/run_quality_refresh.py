@@ -14,7 +14,7 @@ import shutil
 import subprocess
 import tempfile
 import unicodedata
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Iterator
 from contextlib import closing, contextmanager
 from dataclasses import asdict, dataclass, replace
@@ -28,7 +28,7 @@ from urllib.parse import quote
 
 import pypdfium2 as pdfium
 import pypdfium2.raw as pdfium_c
-from _common import ProgressBar, find_pdfs
+from _common import ProgressBar, find_pdfs, safe_name
 from _performance_runtime import atomic_json, digest
 from PIL import Image
 
@@ -266,7 +266,19 @@ def write_render_results(
     names: dict[Path, str],
     options: DoclingRenderOptions,
     workers: int,
-) -> tuple[list[RenderQualityRow], list[PageJob]]:
+) -> tuple[list[RenderQualityRow], list[PageJob], dict[tuple[str, int], Path]]:
+    base_names = {path: safe_name(path.stem)[:175] + path.suffix for path in names}
+    counts = Counter(name.casefold() for name in base_names.values())
+    problem_names = {
+        path: (
+            filename
+            if counts[filename.casefold()] == 1
+            else f"{filename}-{hashlib.sha256(names[path].encode()).hexdigest()[:12]}"
+        )
+        for path, filename in base_names.items()
+    }
+    problems = output / "panels" / "problems"
+    problems.mkdir(parents=True)
     jobs = [
         PageJob(
             pdf_path=path,
@@ -276,24 +288,30 @@ def write_render_results(
             parsers=(),
             reference_parser="pypdfium2",
             docling_options=options,
-            visualizations="none",
-            viz_dir=output / "panels",
+            visualizations="above-tolerance",
+            viz_dir=problems,
             text_normalization="none",
+            visualization_pdf_name=problem_names[path],
         )
         for path, pages in schedule
         for page in pages
     ]
     rows = []
+    problem_panels = {}
     with ProgressBar(
         total=len(jobs), desc="Render comparison", unit="page"
     ) as progress:
         for job, result in zip(
             jobs, imap_jobs(run_page_job, jobs, workers), strict=True
         ):
-            rows.append(replace(result.renders[0].row, document=names[job.pdf_path]))
+            render = result.renders[0]
+            row = replace(render.row, document=names[job.pdf_path])
+            rows.append(row)
+            if render.visualization is not None:
+                problem_panels[row.document, row.page_number] = render.visualization
             progress.update(1)
     write_render_csv(output / "render_quality.csv", rows)
-    return rows, jobs
+    return rows, jobs, problem_panels
 
 
 def build_schedule(
@@ -558,7 +576,11 @@ def write_worst_text_examples(
 
 
 def summarize_render(
-    directory: Path, rows: list[RenderQualityRow], jobs: list[PageJob], examples: int
+    directory: Path,
+    rows: list[RenderQualityRow],
+    jobs: list[PageJob],
+    problem_panels: dict[tuple[str, int], Path],
+    examples: int,
 ) -> list[str]:
     ranked = sorted(
         ((row, job) for row, job in zip(rows, jobs, strict=True) if row.success),
@@ -603,6 +625,7 @@ def summarize_render(
                 else None
             ),
             threshold_label="reporting cut-off",
+            bins=200 if metric == "normalized_delta" else 40,
         )
         if histogram:
             sections.append(
@@ -623,15 +646,26 @@ def summarize_render(
             ]
         )
     for index, (row, job) in enumerate(ranked[:examples], start=1):
-        result = run_page_job(
-            replace(job, visualizations="all", viz_dir=job.viz_dir / row.document)
-        ).renders[0]
-        if result.visualization is None:
+        panel = problem_panels.get((row.document, row.page_number))
+        if panel is None:
+            panel = (
+                run_page_job(
+                    replace(
+                        job,
+                        visualizations="all",
+                        viz_dir=directory.parent / "panels" / row.document,
+                        visualization_pdf_name=None,
+                    )
+                )
+                .renders[0]
+                .visualization
+            )
+        if panel is None:
             raise RuntimeError(
                 f"Could not recreate panels for {row.document} page {row.page_number}"
             )
         filename = f"example-{index:02d}.png"
-        with Image.open(result.visualization) as image:
+        with Image.open(panel) as image:
             image.thumbnail((1800, 1100))
             image.save(directory / filename, optimize=True)
         document = markdown_cell(row.document)
@@ -909,7 +943,7 @@ def run(args: argparse.Namespace) -> tuple[Path, Path | None]:
     options = DoclingRenderOptions(
         scale=args.scale, threads=args.docling_render_threads
     )
-    render_rows, jobs = write_render_results(
+    render_rows, jobs, problem_panels = write_render_results(
         output, schedule, names, options, args.workers
     )
     text_rows = write_text_results(output, schedule, names, args.text_backends)
@@ -964,7 +998,9 @@ def run(args: argparse.Namespace) -> tuple[Path, Path | None]:
         "",
         run_details_markdown,
         "",
-        *summarize_render(publication, render_rows, jobs, args.examples),
+        *summarize_render(
+            publication, render_rows, jobs, problem_panels, args.examples
+        ),
         "",
         *summarize_text(publication, text_rows),
     ]
@@ -974,11 +1010,17 @@ def run(args: argparse.Namespace) -> tuple[Path, Path | None]:
     sample_link = (
         "- [Pages with the lowest text F1](text-examples.md)\n" if text_examples else ""
     )
+    problem_link = (
+        "- [Above-tolerance render panels](panels/problems/)\n"
+        if problem_panels
+        else ""
+    )
     report.write_text(
         "# Quality benchmark report\n\n"
         f"{run_details_markdown}\n\n"
         "- [Summary and comparison panels](publication/index.md)\n"
         "- [Per-page rendering metrics](render_quality.csv)\n"
+        f"{problem_link}"
         "- [Per-page text comparison and outputs](text.md)\n"
         "- [Per-page text metrics](text_quality.csv)\n"
         f"{sample_link}"

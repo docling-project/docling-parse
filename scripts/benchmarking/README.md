@@ -526,7 +526,9 @@ Run the pinned regression page selection for both rendering and text extraction.
 Open `report.md` for the summary, image panels, per-page metrics and extracted
 text. Set `--text-examples` to choose how many pages with the lowest text F1
 to show per mode. Each sample includes every enabled text extractor, and its
-rank uses the lowest token F1 against Docling. By default, results go to a new
+rank uses the lowest token F1 against Docling. Full-resolution render comparisons
+above tolerance are saved under `panels/problems/` as
+`<mean-absolute-error>-<filename>-<page>.png`. By default, results go to a new
 `scratch-quality-refresh-YYYY-MM-DD-HH-MM-SS` directory in the repository root.
 Pass `--output-dir` or set `OUT` to specify a new directory. Set `UV_NO_SYNC=1`
 to reuse an environment that already has
