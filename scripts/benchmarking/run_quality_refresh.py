@@ -957,7 +957,9 @@ def run(args: argparse.Namespace) -> tuple[Path, Path | None]:
         },
     )
 
-    render_rows, jobs, problem_panels = [], [], {}
+    render_rows: list[RenderQualityRow] = []
+    jobs: list[PageJob] = []
+    problem_panels: dict[tuple[str, int], Path] = {}
     if run_render:
         options = DoclingRenderOptions(
             scale=args.scale, threads=args.docling_render_threads
@@ -1002,7 +1004,9 @@ def run(args: argparse.Namespace) -> tuple[Path, Path | None]:
         f"| Coverage | {pages:,} scheduled {page_label} across {pdfs:,} {pdf_label} |",
         f"| Unavailable PDFs | {len(unavailable):,} |",
         *(
-            [f"| Render scale | {args.scale:g}\N{MULTIPLICATION SIGN} ({72 * args.scale:g} dpi) |"]
+            [
+                f"| Render scale | {args.scale:g}\N{MULTIPLICATION SIGN} ({72 * args.scale:g} dpi) |"
+            ]
             if run_render
             else []
         ),
@@ -1025,7 +1029,9 @@ def run(args: argparse.Namespace) -> tuple[Path, Path | None]:
         (publication / "panels").mkdir()
         summary.append("")
         summary.extend(
-            summarize_render(publication, render_rows, jobs, problem_panels, args.examples)
+            summarize_render(
+                publication, render_rows, jobs, problem_panels, args.examples
+            )
         )
         links.append("- [Per-page rendering metrics](render_quality.csv)")
         if problem_panels:

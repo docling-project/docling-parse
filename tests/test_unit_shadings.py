@@ -100,15 +100,36 @@ def test_page_wide_shading_at_page_start_is_a_background():
 @pytest.mark.parametrize("coordinate_bits", [8, 32])
 def test_tensor_mesh_shading_with_shared_edge(coordinate_bits: int):
     first_points = [
-        (30, 30), (50, 30), (70, 30), (90, 30),
-        (90, 50), (90, 70), (90, 90), (70, 90),
-        (50, 90), (30, 90), (30, 70), (30, 50),
-        (50, 50), (70, 50), (70, 70), (50, 70),
+        (30, 30),
+        (50, 30),
+        (70, 30),
+        (90, 30),
+        (90, 50),
+        (90, 70),
+        (90, 90),
+        (70, 90),
+        (50, 90),
+        (30, 90),
+        (30, 70),
+        (30, 50),
+        (50, 50),
+        (70, 50),
+        (70, 70),
+        (50, 70),
     ]
     second_points = [
-        (110, 90), (130, 90), (150, 90), (150, 70),
-        (150, 50), (150, 30), (130, 30), (110, 30),
-        (110, 50), (110, 70), (130, 70), (130, 50),
+        (110, 90),
+        (130, 90),
+        (150, 90),
+        (150, 70),
+        (150, 50),
+        (150, 30),
+        (130, 30),
+        (110, 30),
+        (110, 50),
+        (110, 70),
+        (130, 70),
+        (130, 50),
     ]
     maximum = (1 << coordinate_bits) - 1
 
@@ -118,8 +139,10 @@ def test_tensor_mesh_shading_with_shared_edge(coordinate_bits: int):
             for point in points
             for value in point
         )
-        return f"{flag:02b}" + coordinates + "".join(
-            f"{value:08b}" for color in colors for value in color
+        return (
+            f"{flag:02b}"
+            + coordinates
+            + "".join(f"{value:08b}" for color in colors for value in color)
         )
 
     bits = patch(0, first_points, [RED] * 4) + patch(1, second_points, [BLUE] * 2)
@@ -132,7 +155,11 @@ def test_tensor_mesh_shading_with_shared_edge(coordinate_bits: int):
         data,
     )
     content = "q 20 40 130 25 re W n /Sh0 sh Q"
-    image = render_page(_shading_page(content, shading), scale=1.0).get_image().convert("RGB")
+    image = (
+        render_page(_shading_page(content, shading), scale=1.0)
+        .get_image()
+        .convert("RGB")
+    )
 
     assert image.getpixel((60, 145)) == RED
     assert image.getpixel((130, 145)) == pytest.approx((83, 0, 172), abs=5)

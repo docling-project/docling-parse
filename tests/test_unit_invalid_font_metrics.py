@@ -148,7 +148,9 @@ def test_embedded_glyph_clip_bounds_an_image_until_graphics_restore(
 
     assert result.getpixel((40, 110)) == (255, 0, 0)
     assert result.getpixel((110, 120)) == (255, 0, 0)
-    assert result.getpixel((52, 110)) == ((255, 255, 255) if even_odd_clip else (255, 0, 0))
+    assert result.getpixel((52, 110)) == (
+        (255, 255, 255) if even_odd_clip else (255, 0, 0)
+    )
     assert result.getpixel((80, 110)) == (255, 255, 255)
     assert result.getpixel((150, 45)) == (0, 0, 255)
 

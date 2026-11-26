@@ -158,8 +158,7 @@ def test_normal_blend_replaces_what_is_underneath():
 
 def test_soft_light_blends_with_painted_background_only():
     image = _render(
-        "1 1 1 rg 100 0 100 100 re f\n"
-        "q /GSs gs 0.25 0.5 0.75 rg 0 10 200 80 re f Q\n"
+        "1 1 1 rg 100 0 100 100 re f\nq /GSs gs 0.25 0.5 0.75 rg 0 10 200 80 re f Q\n"
     )
 
     _assert_color(image.getpixel((50, 50)), (64, 128, 191), "unpainted backdrop")

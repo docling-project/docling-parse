@@ -4,7 +4,12 @@ import pytest
 
 from docling_parse.pdf_editor import PdfEditor
 from docling_parse.pdf_errors import PdfEditError
-from tests.pdf_builder import build_pdf, simple_page_objects, simple_page_pdf, stream_object
+from tests.pdf_builder import (
+    build_pdf,
+    simple_page_objects,
+    simple_page_pdf,
+    stream_object,
+)
 from tests.test_unit_pdf_editor import BLUE, RED, THREE, WHITE, color_at, rendered
 
 
@@ -70,7 +75,9 @@ def test_render_annotation_uses_its_image_resources_and_paint_order():
             stream_object(image_dictionary, bytes(RED)),
         ],
     )
-    objects[2] = objects[2].replace("/Contents 4 0 R", "/Contents 4 0 R /Annots [5 0 R]")
+    objects[2] = objects[2].replace(
+        "/Contents 4 0 R", "/Contents 4 0 R /Annots [5 0 R]"
+    )
     source = build_pdf(objects)
 
     with PdfEditor(source=source) as editor:

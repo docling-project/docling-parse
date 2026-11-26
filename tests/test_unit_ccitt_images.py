@@ -307,8 +307,11 @@ def test_group3_one_dimensional_rows(inline: bool, end_of_line: bool):
         )
     else:
         pdf = ccitt_page(
-            payload, width=16, height=16,
-            filters="/CCITTFaxDecode", decode_parms=decode_parms,
+            payload,
+            width=16,
+            height=16,
+            filters="/CCITTFaxDecode",
+            decode_parms=decode_parms,
         )
 
     assert_rectangle_rendered(render_page(pdf), "Group 3 1-D")

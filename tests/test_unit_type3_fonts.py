@@ -294,9 +294,7 @@ def test_image_charproc_is_a_glyph_not_a_page_image():
 def test_type3_clip_path_is_not_painted():
     charproc = stream_object(
         "",
-        b"1000 0 0 0 1000 1000 d1\n"
-        b"0 0 750 1000 re W n\n"
-        b"500 0 500 1000 re f\n",
+        b"1000 0 0 0 1000 1000 d1\n0 0 750 1000 re W n\n500 0 500 1000 re f\n",
     )
     image = region_image(render_page(_type3_pdf(charproc)), GLYPH_BOX)
 
