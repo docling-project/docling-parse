@@ -10,8 +10,8 @@ import os
 import re
 import sys
 import unicodedata
-from collections.abc import Callable, Iterator
-from contextlib import ExitStack, contextmanager
+from collections.abc import Callable, Iterator, Mapping
+from contextlib import AbstractContextManager, ExitStack, contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import quote
@@ -22,8 +22,6 @@ for directory in (ROOT, Path(__file__).resolve().parent):
         sys.path.insert(0, str(directory))
 
 from _common import ProgressBar
-from matplotlib.backends.backend_agg import FigureCanvasAgg
-from matplotlib.figure import Figure
 from pypdf import PdfReader
 from run_quality_benchmarking import resolve_quality_pdf_inputs, scheduled_pages
 
@@ -79,12 +77,17 @@ def exception_message(error: Exception) -> str:
 
 
 def extract_pages(
-    path: Path, pages: list[int] | None
+    path: Path,
+    pages: list[int] | None,
+    backends: Mapping[str, Callable[[Path], AbstractContextManager[OpenDocument]]]
+    | None = None,
 ) -> Iterator[tuple[int | None, PdfExtractionMode, dict[str, Extraction]]]:
+    if backends is None:
+        backends = BACKENDS
     with ExitStack() as stack:
         opened = {}
         errors = {}
-        for name, open_pdf in BACKENDS.items():
+        for name, open_pdf in backends.items():
             try:
                 opened[name] = stack.enter_context(open_pdf(path))
             except Exception as error:
@@ -96,7 +99,7 @@ def extract_pages(
         for page in page_numbers or [None]:
             for mode in MODES:
                 outputs = {}
-                for name in BACKENDS:
+                for name in backends:
                     if name in errors:
                         result = Extraction(error=errors[name])
                     elif page is None or page > opened[name].page_count:
@@ -132,7 +135,7 @@ class Row:
     source: Path
 
 
-def save_text(output: Path, folder: Path, name: str, extraction: Extraction) -> str:
+def write_text_artifact(folder: Path, name: str, extraction: Extraction) -> Path:
     if extraction.text is None:
         filename = f"{name}-error.txt"
         content = extraction.error or "No text was returned"
@@ -142,7 +145,12 @@ def save_text(output: Path, folder: Path, name: str, extraction: Extraction) -> 
     path = folder / filename
     # An invalid Unicode code unit is written visibly as an escape.
     path.write_bytes(content.encode("utf-8", errors="backslashreplace"))
-    return f"[{filename}]({quote(path.relative_to(output).as_posix())})"
+    return path
+
+
+def save_text(output: Path, folder: Path, name: str, extraction: Extraction) -> str:
+    path = write_text_artifact(folder, name, extraction)
+    return f"[{path.name}]({quote(path.relative_to(output).as_posix())})"
 
 
 def link_pdf(output: Path, path: Path, page: int | None) -> str:
@@ -156,7 +164,16 @@ def link_pdf(output: Path, path: Path, page: int | None) -> str:
     return f"[Open PDF]({target})"
 
 
-def write_histogram(path: Path, mode: PdfExtractionMode, scores: list[float]) -> None:
+def write_histogram(
+    path: Path,
+    mode: PdfExtractionMode,
+    scores: list[float],
+    *,
+    title: str | None = None,
+) -> None:
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
+    from matplotlib.figure import Figure
+
     figure = Figure(figsize=(7, 3.5), layout="constrained")
     FigureCanvasAgg(figure)
     axes = figure.subplots()
@@ -166,7 +183,12 @@ def write_histogram(path: Path, mode: PdfExtractionMode, scores: list[float]) ->
         color="#286f85",
         edgecolor="white",
     )
-    axes.set(xlim=(0, 1), xlabel="F1", ylabel="Pages", title=f"{mode.value.title()} F1")
+    axes.set(
+        xlim=(0, 1),
+        xlabel="F1",
+        ylabel="Pages",
+        title=title or f"{mode.value.title()} F1",
+    )
     figure.savefig(path, dpi=150)
 
 

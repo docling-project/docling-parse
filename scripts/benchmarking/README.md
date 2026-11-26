@@ -513,6 +513,36 @@ and content/decode flags explicitly; defaults may differ from the original run.
 
 ## Quality benchmarking
 
+Run the pinned regression page selection for both rendering and text extraction.
+
+```sh
+./scripts/benchmarking/refresh_quality_benchmarks.sh
+./scripts/benchmarking/refresh_quality_benchmarks.sh --dataset bo20 --max-pages 10
+./scripts/benchmarking/refresh_quality_benchmarks.sh ./pdfs --recursive --max-pages 10 \
+  --text-backends pypdfium2,pypdf
+./scripts/benchmarking/refresh_quality_benchmarks.sh --update-docs
+```
+
+Open `report.md` for the summary, image panels, per-page metrics and extracted
+text. Set `--text-examples` to choose how many pages with the lowest text F1
+to show per mode. Each sample includes every enabled text extractor, and its
+rank uses the lowest token F1 against Docling. By default, results go to a new
+`scratch-quality-refresh-YYYY-MM-DD-HH-MM-SS` directory in the repository root.
+Pass `--output-dir` or set `OUT` to specify a new directory. Set `UV_NO_SYNC=1`
+to reuse an environment that already has
+the benchmark dependencies. Rebuild the native extension with `local_build.py`
+after changing C++ code.
+
+Select `--dataset regression` (the default), `bo20`, `bo767`, or `bo10k`.
+Each Bo dataset uses the same revision as the performance launcher.
+`--max-pages` caps comparisons after resolving the selected snapshot.
+
+With `--update-docs`, an uncapped pinned run publishes a compact summary,
+charts, image panels and text excerpts. The regression report goes under
+`docs/quality_benchmarks/latest/`. Bo reports use `docs/quality_benchmarks/<dataset>/`.
+
+For individual comparisons, run the standalone quality benchmark.
+
 ```sh
 uv run --group perf python scripts/benchmarking/run_quality_benchmarking.py ./pdfs
 uv run --group perf python scripts/benchmarking/run_quality_benchmarking.py ./pdfs \
