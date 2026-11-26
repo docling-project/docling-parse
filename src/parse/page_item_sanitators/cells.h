@@ -382,6 +382,26 @@ namespace pdflib
     static bool clip_boundary(const page_item<PAGE_CELL>& lhs,
                               const page_item<PAGE_CELL>& rhs);
 
+    /**
+     * @brief Tests whether two glyphs fall in different visibility classes.
+     *
+     * Text rendering modes fall in three classes (PDF 32000-1, 9.3.6):
+     * invisible (mode 3) paints nothing; clip-only (mode 7) paints nothing
+     * but adds the glyph to the clipping path, so it can outline what a later
+     * picture shows; painted is every other mode, including the unset mode.
+     * Consumers keep or drop these classes separately, and a word or a line
+     * takes its rendering mode from its first glyph, so glyphs of different
+     * classes never join, whatever the geometry says. Painted modes (fill,
+     * stroke, both, with or without clipping) join each other freely:
+     * producers mix them inside one word, for example to embolden part of it
+     * with a stroke.
+     *
+     * @return True when the two glyphs are in different visibility classes.
+     * @par Complexity O(1).
+     */
+    static bool visibility_class_boundary(const page_item<PAGE_CELL>& lhs,
+                                          const page_item<PAGE_CELL>& rhs);
+
     // Fraction of a glyph's extent along the writing axis (or of its nominal
     // text height, whichever is larger) that a box must hide before the glyph
     // counts as cut.
@@ -642,8 +662,16 @@ namespace pdflib
      * replacement character, so their aggregates remain honest, non-empty
      * public cells. Blank unresolved glyph programs are classified earlier as
      * semantic spaces and remain boundaries rather than words.
+     * A visibility class boundary, see `visibility_class_boundary()`, ends a
+     * word and a line, so neither mixes painted, invisible and clip-only
+     * glyphs.
      *
      * @param cells Character cells in content/reading order; not modified.
+     * @param split_overprints Set by the provisional pass of
+     * remove_overprinted_runs(): line runs then also restart at a repeated
+     * glyph, and each line covers its whole run, whose source range it
+     * records in `line_sources`. Visibility boundaries do not apply there:
+     * an invisible copy of a visible run is still a copy of it.
      * @return Word and line collections derived from the same analysis.
      * @par Complexity O(n), including fixed-iteration gap clustering.
      */
@@ -871,6 +899,17 @@ namespace pdflib
       }
     return cut_by(other, {clipped.clip_x0, clipped.clip_y0,
                           clipped.clip_x1, clipped.clip_y1});
+  }
+
+  inline bool page_item_sanitator<PAGE_CELLS>::visibility_class_boundary(
+      const page_item<PAGE_CELL>& lhs,
+      const page_item<PAGE_CELL>& rhs)
+  {
+    auto visibility_class = [](int mode) {
+      return (mode == 3 or mode == 7) ? mode : 0;
+    };
+    return visibility_class(lhs.rendering_mode) !=
+      visibility_class(rhs.rendering_mode);
   }
 
   inline bool page_item_sanitator<PAGE_CELLS>::word_baselines_compatible(
@@ -1495,6 +1534,7 @@ namespace pdflib
                                           bool split_overprints)
   {
     contraction_result result;
+    const bool split_visibility = not split_overprints;
     for(auto& run : collect_line_runs(cells, split_overprints))
       {
         // Explicit PDF spaces remain authoritative boundaries, and the
@@ -1541,6 +1581,7 @@ namespace pdflib
             if(not starts_word and previous_visible != nullptr)
               {
                 if(clip_boundary(*previous_visible, cell) or
+                   (split_visibility and visibility_class_boundary(*previous_visible, cell)) or
                    not word_baselines_compatible(*previous_visible, cell))
                   {
                     starts_word = true;
@@ -1587,6 +1628,13 @@ namespace pdflib
             if(not words[i].text.empty())
               {
                 result.words.push_back(words[i]);
+              }
+            if(split_visibility and visibility_class_boundary(line, words[i]))
+              {
+                finish_text(line, prefixes);
+                if(not line.text.empty()) { result.lines.push_back(line); }
+                line = words[i];
+                continue;
               }
             const bool insert_space =
               not line.text.empty() and not words[i].text.empty();
