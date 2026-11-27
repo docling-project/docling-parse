@@ -1059,6 +1059,40 @@ namespace pdflib
                                        lhs.text_origin_y - rhs.text_origin_y);
       return offset < std::min(0.5, 0.5 * advance);
     };
+    // Word paints a right-to-left line as
+    // runs whose glyphs go left to right, the runs following each other right
+    // to left. A glyph that jumps back past the left end of such a run starts
+    // the next run; touching right-to-left runs are joined below.
+    auto is_horizontal = [](const page_item<PAGE_CELL>& c) {
+      return c.has_text_placement and c.writing_axis_x > 0.999;
+    };
+    auto starts_leftward_run = [&](const line_run& run,
+                                   const page_item<PAGE_CELL>& prev,
+                                   const page_item<PAGE_CELL>& next) {
+      if(prev.left_to_right or next.left_to_right or
+         not is_horizontal(prev) or not is_horizontal(next))
+        {
+          return false;
+        }
+      const page_item<PAGE_CELL>* before = nullptr;
+      double run_left = std::numeric_limits<double>::infinity();
+      bool seen_prev = false;
+      for(auto itr = run.cells.rbegin(); itr != run.cells.rend(); ++itr)
+        {
+          if(is_semantic_space(*itr)) { continue; }
+          run_left = std::min(run_left, itr->text_origin_x);
+          if(not seen_prev) { seen_prev = true; continue; }
+          if(before == nullptr) { before = &*itr; }
+        }
+      if(before == nullptr or prev.text_origin_x <= before->text_origin_x)
+        {
+          return false; // the run is not painted left to right
+        }
+      const double advance = std::max(1.e-6, cell_advance_length(next));
+      return next.text_origin_x < prev.text_origin_x and
+             next.text_advance_x <= run_left + 0.5 * advance;
+    };
+
     std::vector<line_run> runs;
     for(std::size_t i = 0; i < cells.size(); ++i)
       {
@@ -1097,6 +1131,7 @@ namespace pdflib
           }
         if(previous_visible != nullptr and
            (not continues_line(*previous_visible, cell) or
+            starts_leftward_run(runs.back(), *previous_visible, cell) or
             (split_overprints and restarts_at_same_glyph(*previous_visible, cell))))
           {
             std::size_t source_begin = i;
@@ -1118,6 +1153,148 @@ namespace pdflib
           }
         runs.back().cells.push_back(cell);
         runs.back().source_end = i + 1;
+      }
+
+    if(split_overprints) { return runs; }
+
+    struct extent { int kind; double left, right, base, height, advance; };
+    auto measure = [&](const line_run& run) {
+      extent e{0, std::numeric_limits<double>::infinity(),
+               -std::numeric_limits<double>::infinity(), 0.0, 0.0, 0.0};
+      std::size_t n = 0, rtl = 0, strong = 0;
+      for(const auto& c : run.cells)
+        {
+          if(is_semantic_space(c)) { continue; }
+          if(not is_horizontal(c)) { e.kind = 0; return e; }
+          ++n;
+          if(not c.left_to_right) { ++rtl; }
+          for(unsigned char ch : c.text)
+            {
+              if(ch >= 0x80 or std::isalpha(ch)) { if(c.left_to_right) { ++strong; } break; }
+            }
+          e.left = std::min(e.left, c.text_origin_x);
+          e.right = std::max(e.right, c.text_advance_x);
+          e.base += c.text_origin_y;
+          e.height = std::max(e.height, c.nominal_text_height);
+          e.advance += cell_advance_length(c);
+        }
+      if(n == 0) { return e; }
+      e.base /= n;
+      e.advance /= n;
+      if(2 * rtl > n) { e.kind = 1; }
+      else if(rtl == 0 and strong == 0) { e.kind = 2; }
+      return e;
+    };
+    std::vector<bool> merged_flag(runs.size(), false);
+    bool joined = true;
+    while(joined)
+      {
+        joined = false;
+        std::vector<extent> ext;
+        ext.reserve(runs.size());
+        for(const auto& run : runs) { ext.push_back(measure(run)); }
+        for(std::size_t a = 0; a < runs.size() and not joined; ++a)
+          {
+            if(ext[a].kind == 0) { continue; }
+            for(std::size_t b = 0; b < runs.size(); ++b)
+              {
+                if(a == b or ext[b].kind == 0 or
+                   (ext[a].kind != 1 and ext[b].kind != 1))
+                  {
+                    continue;
+                  }
+                // the baselines must agree within a tenth of the smaller
+                // text height, so a small label next to large text stays apart
+                const double h = std::min(ext[a].height, ext[b].height);
+                const double adv = std::min(ext[a].advance, ext[b].advance);
+                const double gap = ext[a].left - ext[b].right;
+                // consecutive runs: the same gap bounds as continues_line();
+                // runs painted apart: only when they touch
+                const bool consecutive = (b == a + 1);
+                const bool near = consecutive
+                  ? (-adv <= gap and gap <= 4.0 * adv)
+                  : (std::abs(gap) <= 0.5 * adv);
+                if(h <= 0.0 or std::abs(ext[a].base - ext[b].base) > 0.1 * h or
+                   not near)
+                  {
+                    continue;
+                  }
+                // run b ends where run a starts: b is the left part. Spaces
+                // that end run b but are painted left of it go first.
+                line_run merged;
+                std::vector<page_item<PAGE_CELL>> left_cells = runs[b].cells;
+                std::vector<page_item<PAGE_CELL>> moved;
+                while(not left_cells.empty() and is_semantic_space(left_cells.back()) and
+                      left_cells.back().has_text_placement and
+                      left_cells.back().text_origin_x < ext[b].left)
+                  {
+                    moved.insert(moved.begin(), left_cells.back());
+                    left_cells.pop_back();
+                  }
+                merged.cells = moved;
+                merged.cells.insert(merged.cells.end(), left_cells.begin(), left_cells.end());
+                merged.cells.insert(merged.cells.end(), runs[a].cells.begin(),
+                                    runs[a].cells.end());
+                merged.has_semantic_spaces =
+                  runs[a].has_semantic_spaces or runs[b].has_semantic_spaces;
+                merged.source_begin = std::min(runs[a].source_begin, runs[b].source_begin);
+                merged.source_end = std::max(runs[a].source_end, runs[b].source_end);
+                const std::size_t keep = std::min(a, b), drop = std::max(a, b);
+                runs[keep] = std::move(merged);
+                runs.erase(runs.begin() + drop);
+                merged_flag[keep] = true;
+                merged_flag.erase(merged_flag.begin() + drop);
+                joined = true;
+                break;
+              }
+          }
+      }
+    // A joined line goes in visual order, left to right on the page: cut it
+    // into pieces that are painted left to right, keep the paint order inside
+    // each piece, and sort the pieces by their left end.
+    for(std::size_t r = 0; r < runs.size(); ++r)
+      {
+        if(not merged_flag[r]) { continue; }
+        auto& run_cells = runs[r].cells;
+        std::vector<std::vector<page_item<PAGE_CELL>>> pieces;
+        std::vector<double> piece_left;
+        bool has_last = false;
+        double last_origin = 0.0, last_end = 0.0, last_advance = 0.0;
+        for(const auto& c : run_cells)
+          {
+            // a new piece starts where the paint order jumps back, or jumps
+            // forward over a gap that another glyph may fill later
+            const double advance = std::max(last_advance, cell_advance_length(c));
+            const bool jump = has_last and c.has_text_placement and
+              (c.text_origin_x < last_origin - 0.5 * last_advance or
+               c.text_origin_x > last_end + 0.1 * advance);
+            if(pieces.empty() or jump)
+              {
+                pieces.emplace_back();
+                piece_left.push_back(std::numeric_limits<double>::infinity());
+              }
+            pieces.back().push_back(c);
+            if(c.has_text_placement)
+              {
+                piece_left.back() = std::min(piece_left.back(), c.text_origin_x);
+                has_last = true;
+                last_origin = c.text_origin_x;
+                last_end = c.text_advance_x;
+                last_advance = std::max(1.e-6, cell_advance_length(c));
+              }
+          }
+        std::vector<std::size_t> order(pieces.size());
+        for(std::size_t k = 0; k < order.size(); ++k) { order[k] = k; }
+        std::stable_sort(order.begin(), order.end(), [&](std::size_t x, std::size_t y) {
+          return piece_left[x] < piece_left[y];
+        });
+        std::vector<page_item<PAGE_CELL>> sorted;
+        sorted.reserve(run_cells.size());
+        for(std::size_t k : order)
+          {
+            sorted.insert(sorted.end(), pieces[k].begin(), pieces[k].end());
+          }
+        run_cells = std::move(sorted);
       }
     return runs;
   }
