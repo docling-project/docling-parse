@@ -11,7 +11,7 @@
 //
 // Supported /K values (from /DecodeParms):
 //   K < 0  : Group 4 / T.6 (pure 2-D) — the common PDF case
-//   K = 0  : Group 3 / T.4 1-D (MH), with per-row EOL markers
+//   K = 0  : Group 3 / T.4 1-D (MH), with optional per-row EOL markers
 //   K > 0  : treated as Group 3 1-D for simplicity
 // ---------------------------------------------------------------------------
 
@@ -950,31 +950,23 @@ inline std::vector<uint8_t> decode(const uint8_t*           raw_data,
         }
       else
         {
-          // Group 3 1-D: skip EOL marker (12-bit: 000000000001) before each row
-          bool found_eol = false;
-          int  zeros     = 0;
-          while(not br.at_end() and not found_eol)
+          // Group 3 1-D rows may start directly with run codes. Consume a
+          // leading EOL and its zero padding only if the marker is present.
+          auto after_eol = br;
+          std::size_t zeros = 0;
+          int bit = after_eol.read_bit();
+          while(bit == 0)
             {
-              int b = br.read_bit();
-              if(b == 0)
-                {
-                  ++zeros;
-                }
-              else if(b == 1 and zeros >= 11)
-                {
-                  found_eol = true;
-                }
-              else
-                {
-                  zeros = 0;
-                }
+              ++zeros;
+              bit = after_eol.read_bit();
             }
+          if(bit == 1 and zeros >= 11) { br = after_eol; }
           ok = decode_1d_row(br, cur, columns);
         }
 
       if(not ok)
         {
-          LOG_S(WARNING) << "ccitt::decode: decode_g4_row returned false at row " << row
+          LOG_S(WARNING) << "ccitt::decode: could not decode row " << row
                          << " (" << rows_decoded << " rows decoded so far"
                          << ", bit_pos=" << br.bits_read() << ")";
           if(row == 0)

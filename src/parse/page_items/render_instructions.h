@@ -16,6 +16,8 @@
 #include <unordered_map>
 #include <utility>
 
+#include <blend2d/blend2d.h>
+
 #include <parse/enums.h>
 #include <parse/page_items/embedded_font_blob.h>
 
@@ -58,6 +60,7 @@ namespace pdflib
                           page_shape_closing_type closing_type,
                           page_shape_type shape_type,
                           int clip_group = 0);
+    clip_path_instruction(BLPath outline, const BLBox& bounds, int clip_group);
 
     // Subpaths captured by ONE W/W* operation share a group: together they
     // form a single clip path under the clip's fill rule. Only paths of
@@ -66,6 +69,9 @@ namespace pdflib
     // text-shaped clip) into an empty region, and the fill through it
     // disappeared.
     int get_clip_group() const { return clip_group; }
+    clip_rule get_rule() const { return rule; }
+    void set_rule(clip_rule value) { rule = value; }
+    const BLPath& get_outline() const { return outline; }
 
     const std::vector<double>& get_x() const { return x; }
     const std::vector<double>& get_y() const { return y; }
@@ -82,8 +88,12 @@ namespace pdflib
       std::vector<double> x_(x), y_(y);
       for(auto& v : x_) { v += dx; }
       for(auto& v : y_) { v += dy; }
-      return clip_path_instruction(std::move(x_), std::move(y_),
+      clip_path_instruction result(std::move(x_), std::move(y_),
                                    closing_type, shape_type, clip_group);
+      result.rule = rule;
+      if(not outline.is_empty())
+        { result.outline.add_path(outline, BLMatrix2D::make_translation(dx, dy)); }
+      return result;
     }
 
   private:
@@ -92,6 +102,8 @@ namespace pdflib
     page_shape_closing_type closing_type;
     page_shape_type shape_type;
     int clip_group = 0;
+    clip_rule rule = CLIP_RULE_NONE;
+    BLPath outline;
   };
 
   inline clip_path_instruction::clip_path_instruction():
@@ -111,6 +123,16 @@ namespace pdflib
     closing_type(closing_type_),
     shape_type(shape_type_),
     clip_group(clip_group_)
+  {}
+
+  inline clip_path_instruction::clip_path_instruction(
+      BLPath outline_, const BLBox& bounds, int clip_group_):
+    x{bounds.x0, bounds.x1, bounds.x1, bounds.x0},
+    y{bounds.y0, bounds.y0, bounds.y1, bounds.y1},
+    closing_type(CLOSED),
+    shape_type(BEZIER),
+    clip_group(clip_group_),
+    outline(std::move(outline_))
   {}
 
   namespace detail
@@ -139,6 +161,7 @@ namespace pdflib
           {
             point_count += path.size();
             logical_bytes += (path.get_x().capacity() + path.get_y().capacity()) * sizeof(double);
+            logical_bytes += path.get_outline().capacity() * (sizeof(BLPoint) + sizeof(uint8_t));
           }
       }
 
@@ -386,6 +409,7 @@ namespace pdflib
       auto result = with_rule(rule_);
       if(not capture.empty())
         {
+          for(auto& path : capture) { path.set_rule(rule_); }
           result.paths.head = std::make_shared<detail::clip_history_node>(paths.head, std::move(capture));
         }
       return result;
@@ -449,7 +473,10 @@ namespace pdflib
     rule(rule_)
   {
     if(not paths_.empty())
-      { paths.head = std::make_shared<detail::clip_history_node>(nullptr, std::move(paths_)); }
+      {
+        for(auto& path : paths_) { path.set_rule(rule_); }
+        paths.head = std::make_shared<detail::clip_history_node>(nullptr, std::move(paths_));
+      }
   }
 
   enum RENDER_INSTRUCTION_NAME {
@@ -484,10 +511,19 @@ namespace pdflib
     std::array<int, 3> rgb_;
   };
 
+  struct tensor_patch
+  {
+    std::array<std::array<double, 2>, 16> points;
+    std::array<std::array<int, 3>, 4> colors;
+  };
+
+  using tensor_mesh = std::vector<tensor_patch>;
+
   // Which geometry the coordinates of a shading_instruction describe.
   enum shading_geometry {
     SHADING_GEOMETRY_AXIAL,  // coords: [x0, y0, x1, y1]
     SHADING_GEOMETRY_RADIAL, // coords: [x0, y0, r0, x1, y1, r1]
+    SHADING_GEOMETRY_TENSOR_PATCH,
   };
 
   class instruction
@@ -865,6 +901,8 @@ namespace pdflib
 
     const std::shared_ptr<std::vector<uint8_t> >& get_data() const { return data; }
     const std::shared_ptr<std::vector<uint8_t> >& get_alpha_data() const { return alpha_data; }
+    const std::optional<std::array<double, 3>>& get_matte_color() const { return matte_color; }
+    void set_matte_color(std::optional<std::array<double, 3>> value) { matte_color = value; }
     cmyk_convention get_cmyk_convention() const { return cmyk_conv; }
     const std::array<int, 3>& get_shape() const { return shape; }
     pixel_format get_pixel_format() const { return fmt; }
@@ -902,6 +940,7 @@ namespace pdflib
                               source, clip_state.translated(dx, dy, cache));
       copy.blend_mode_ = blend_mode_;
       copy.filters_ = filters_;
+      copy.matte_color = matte_color;
       return copy;
     }
 
@@ -977,6 +1016,7 @@ namespace pdflib
     std::shared_ptr<soft_mask_instruction> soft_mask_;
     std::vector<std::string> filters_;
 
+    std::optional<std::array<double, 3>> matte_color;
     const std::string xobject_key;
     
     std::shared_ptr<std::vector<uint8_t> > data;
@@ -1299,7 +1339,8 @@ namespace pdflib
                         bool                    extend_start,
                         bool                    extend_end,
                         double                  fill_alpha,
-                        clip_state_instruction  clip_state = clip_state_instruction()):
+                        clip_state_instruction  clip_state = clip_state_instruction(),
+                        std::shared_ptr<const tensor_mesh> mesh = {}):
       shading_key(std::move(shading_key)),
       geometry(geometry),
       coords(std::move(coords)),
@@ -1308,9 +1349,11 @@ namespace pdflib
       extend_start(extend_start),
       extend_end(extend_end),
       fill_alpha(fill_alpha),
-      clip_state(std::move(clip_state)) {}
+      clip_state(std::move(clip_state)),
+      mesh(std::move(mesh)) {}
 
     const std::string& get_key() const { return shading_key; }
+    const std::shared_ptr<const tensor_mesh>& get_tensor_mesh() const { return mesh; }
 
     shading_geometry get_geometry() const { return geometry; }
 
@@ -1342,7 +1385,7 @@ namespace pdflib
 
       shading_instruction copy(shading_key, geometry, coords, matrix_, stops,
                                extend_start, extend_end, fill_alpha,
-                               clip_state.translated(dx, dy, cache));
+                               clip_state.translated(dx, dy, cache), mesh);
       copy.blend_mode_ = blend_mode_;
       // the mask is anchored in page space, so a moved copy keeps it as is
       copy.soft_mask_ = soft_mask_;
@@ -1377,6 +1420,7 @@ namespace pdflib
     const bool                      extend_end;
     const double                    fill_alpha;
     const clip_state_instruction    clip_state;
+    const std::shared_ptr<const tensor_mesh> mesh;
   };
 
   class pdf_render_instructions

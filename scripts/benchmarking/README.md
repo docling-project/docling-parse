@@ -513,11 +513,13 @@ and content/decode flags explicitly; defaults may differ from the original run.
 
 ## Quality benchmarking
 
-Run the pinned regression page selection for both rendering and text extraction.
+Run the pinned regression page selection for rendering and text extraction.
+Use `-m` or `--mode` to select `render`, `text`, or `both` (the default).
 
 ```sh
 ./scripts/benchmarking/refresh_quality_benchmarks.sh
-./scripts/benchmarking/refresh_quality_benchmarks.sh --dataset bo20 --max-pages 10
+./scripts/benchmarking/refresh_quality_benchmarks.sh ./pdfs --mode=render
+./scripts/benchmarking/refresh_quality_benchmarks.sh --dataset bo20 --max-pages 10 -m text
 ./scripts/benchmarking/refresh_quality_benchmarks.sh ./pdfs --recursive --max-pages 10 \
   --text-backends pypdfium2,pypdf
 ./scripts/benchmarking/refresh_quality_benchmarks.sh --update-docs
@@ -526,7 +528,10 @@ Run the pinned regression page selection for both rendering and text extraction.
 Open `report.md` for the summary, image panels, per-page metrics and extracted
 text. Set `--text-examples` to choose how many pages with the lowest text F1
 to show per mode. Each sample includes every enabled text extractor, and its
-rank uses the lowest token F1 against Docling. By default, results go to a new
+rank uses the lowest token F1 against Docling. Full-resolution render comparisons
+above tolerance are saved under `panels/problems/` as
+`<normalized-pixel-delta>-<filename>-<page>.png`, with the delta shown to four
+decimal places on a scale from 0 to 1. By default, results go to a new
 `scratch-quality-refresh-YYYY-MM-DD-HH-MM-SS` directory in the repository root.
 Pass `--output-dir` or set `OUT` to specify a new directory. Set `UV_NO_SYNC=1`
 to reuse an environment that already has
@@ -537,9 +542,24 @@ Select `--dataset regression` (the default), `bo20`, `bo767`, or `bo10k`.
 Each Bo dataset uses the same revision as the performance launcher.
 `--max-pages` caps comparisons after resolving the selected snapshot.
 
+Publish a completed quality run from its saved report and figures.
+
+```sh
+./scripts/benchmarking/refresh_quality_benchmarks.sh --from-run scratch-quality-refresh-RUN
+./scripts/benchmarking/refresh_quality_benchmarks.sh --from-run scratch-quality-refresh-RUN --update-docs
+```
+
+Repeat `--from-run` to publish multiple runs. The publisher checks coverage
+against the dataset pin and saved comparison CSVs. It copies the report and
+figures from `publication/` without rerunning comparisons. Saved regression runs
+must record the page limit in `metadata.json`. Earlier Bo runs can use the full
+pinned dataset counts.
+
 With `--update-docs`, an uncapped pinned run publishes a compact summary,
 charts, image panels and text excerpts. The regression report goes under
 `docs/quality_benchmarks/latest/`. Bo reports use `docs/quality_benchmarks/<dataset>/`.
+Single-mode publications use the same directory name with a `-render` or
+`-text` suffix.
 
 For individual comparisons, run the standalone quality benchmark.
 

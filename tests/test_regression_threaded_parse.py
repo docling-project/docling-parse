@@ -131,7 +131,7 @@ def test_threaded_reference_documents_from_filenames():
     key_to_path: dict[str, str] = {}
 
     for pdf_doc_path in pdf_docs:
-        print(f"parsing {pdf_doc_path}")
+        print(f"parsing {pdf_doc_path}", flush=True)
         rname = os.path.basename(pdf_doc_path)
         try:
             # page_numbers=None decodes the whole document; restricted documents
@@ -150,12 +150,13 @@ def test_threaded_reference_documents_from_filenames():
     results: dict[str, dict[int, SegmentedPdfPage]] = {}
     for result in parser.iterate_results():
         assert result.doc_key != "", "doc_key should not be empty"
+        pdf_doc_path = key_to_path.get(result.doc_key, result.doc_key)
+        print(f"Received {pdf_doc_path}, page {result.page_number}", flush=True)
         if result.success:
             results.setdefault(result.doc_key, {})[result.page_number] = (
                 result.get_page()
             )
         else:
-            pdf_doc_path = key_to_path.get(result.doc_key, result.doc_key)
             err = AssertionError(result.error_message)
             if first_failure is None:
                 first_failure = (err, err.__traceback__)
@@ -186,7 +187,10 @@ def test_threaded_reference_documents_from_filenames():
         rname = os.path.basename(pdf_doc_path)
 
         for page_no, pred_page in sorted(results.get(key, {}).items()):
-            print(f" -> Page {page_no} has {len(pred_page.textline_cells)} cells.")
+            print(
+                f"Verifying {rname}, page {page_no} ({len(pred_page.textline_cells)} text lines)",
+                flush=True,
+            )
 
             if (
                 rname in PARSER_PAGE_RESTRICTIONS

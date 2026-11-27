@@ -841,6 +841,7 @@ def write_comparison_visualization(
     actual_label: str = "docling-parse",
     folder: Path = RENDER_VISUALIZATION_FOLDER,
     gap: int = 8,
+    output_path: Path | None = None,
 ) -> Path:
     """Write a three-panel png: reference, actual and their amplified difference."""
     reference_rgb = flatten_on_white(reference)
@@ -902,7 +903,7 @@ def write_comparison_visualization(
     for index, panel in enumerate(panels):
         canvas.paste(panel, (index * (panel_width + gap), 0))
 
-    path = visualization_path(doc_name, page_no, delta, folder=folder)
+    path = output_path or visualization_path(doc_name, page_no, delta, folder=folder)
     path.parent.mkdir(parents=True, exist_ok=True)
     canvas.save(path)
     return path

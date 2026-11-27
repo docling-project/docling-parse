@@ -3,6 +3,9 @@
 #ifndef PAGE_ITEM_IMAGE_H
 #define PAGE_ITEM_IMAGE_H
 
+#include <array>
+#include <optional>
+
 // JPEG correction helpers
 #include <parse/utils/jpeg/jpeg_utils.h>
 
@@ -92,6 +95,7 @@ namespace pdflib
 
     std::shared_ptr<Buffer>  decoded_stream_data;
     std::shared_ptr<std::vector<uint8_t>> soft_mask_data;
+    std::optional<std::array<double, 3>> soft_mask_matte;
     int soft_mask_width = 0;
     int soft_mask_height = 0;
 

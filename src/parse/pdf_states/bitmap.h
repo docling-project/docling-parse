@@ -337,6 +337,10 @@ namespace pdflib
     bool applied_clip = false;
     for(const auto& clip_path : clip_state.get_paths())
       {
+        // Glyph outlines are collected by the renderer. Keep the extracted
+        // image placement consistent with the parse-only pipeline.
+        if(not clip_path.get_outline().is_empty()) { continue; }
+
         std::array<double, 4> clip_bbox = {0.0, 0.0, 0.0, 0.0};
         if(not get_clip_path_bbox(clip_path, clip_bbox))
           {
@@ -391,6 +395,7 @@ namespace pdflib
       image.soft_mask_data     = xobj.get_soft_mask_data();
       image.soft_mask_width    = xobj.get_soft_mask_width();
       image.soft_mask_height   = xobj.get_soft_mask_height();
+      image.soft_mask_matte    = xobj.get_soft_mask_matte();
 
       LOG_S(INFO) << "image with ("
 		  << image.x0 << ", " << image.y0 << ") x ("
@@ -633,6 +638,7 @@ namespace pdflib
     binstr.set_blend_mode(grph_state.get_blend_mode());
     binstr.set_soft_mask(grph_state.get_soft_mask_instruction());
     binstr.set_filters(image.filters);
+    binstr.set_matte_color(image.soft_mask_matte);
 
     // The reduced samples fit a render at the configured scale only. A later
     // render at a finer scale (PageParseResult.get_image(scale=...)) decodes
@@ -1261,17 +1267,17 @@ namespace pdflib
                     // the standard has nothing to say about a file that already
                     // broke it.
                     const bool dictionary_says_cmyk = (cs == jpeg::ColorSpace::CMYK);
-                    const bool stored_inverted =
-                      decoded.adobe_marker and not dictionary_says_cmyk;
-
-                    // An inverting /Decode has already been applied to these
-                    // samples by the JPEG decoder, so it flips the reading
-                    // rather than setting it.
+                    // The JPEG decoder already applied /Decode. For a
+                    // declared CMYK space its output is always process ink.
+                    // In the fallback for a mismatched declaration, /Decode
+                    // can flip the polarity inferred from the JPEG marker.
                     const bool decode_inverts =
                       image.decode_present
                       and has_default_adobe_cmyk_decode(image.decode_array);
 
-                    cmyk_conv = (stored_inverted != decode_inverts)
+                    const bool read_inverted =
+                      not dictionary_says_cmyk and (decoded.adobe_marker != decode_inverts);
+                    cmyk_conv = read_inverted
                       ? CMYK_CONVENTION_ADOBE_INVERTED
                       : CMYK_CONVENTION_PROCESS;
 
