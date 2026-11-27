@@ -6,11 +6,14 @@
 #include <parse/utils/ccitt/ccitt_utils.h>
 #include <third_party/pdfium_jbig2.h>
 
+#include <array>
 #include <cstdint>
 #include <cstring>
+#include <optional>
 
 #include <parse/utils/color/icc_utils.h>
 #include <parse/utils/jpeg/jpeg_utils.h>
+#include <parse/utils/jpx/jpx_utils.h>
 #include <parse/qpdf/qpdf_compat.h>
 #include <parse/qpdf/stream_filters.h>
 
@@ -207,6 +210,8 @@ namespace pdflib
     std::shared_ptr<std::vector<uint8_t>> get_soft_mask_data() const;
     int get_soft_mask_width() const { load_pixels(); return soft_mask_width; }
     int get_soft_mask_height() const { load_pixels(); return soft_mask_height; }
+    const std::optional<std::array<double, 3>>& get_soft_mask_matte() const
+    { load_pixels(); return soft_mask_matte; }
 
     // Determine file extension from filters (e.g. ".jpg", ".jp2", ".jb2", ".bin")
     std::string pick_extension() const;
@@ -283,6 +288,7 @@ namespace pdflib
 
     mutable std::shared_ptr<Buffer> decoded_stream_data;
     mutable std::shared_ptr<std::vector<uint8_t>> soft_mask_data;
+    mutable std::optional<std::array<double, 3>> soft_mask_matte;
 
     // set() argument, kept so load_pixels() can consult it
     bool extract_pixels_ = true;
@@ -1200,6 +1206,7 @@ namespace pdflib
   void pdf_resource<PAGE_XOBJECT_IMAGE>::init_soft_mask_data() const
   {
     soft_mask_data.reset();
+    soft_mask_matte.reset();
 
     // /SMask carries alpha directly. /Mask (as a stream) is a stencil: a
     // 1-bit image mask whose 1-samples knock the corresponding image pixels
@@ -1276,55 +1283,59 @@ namespace pdflib
         return;
       }
 
-    // A stencil mask is very often CCITTFax- or JBIG2-compressed, which qpdf
-    // cannot defilter; decode it here into one byte per pixel with 0 = dark.
+    // Decode image codecs into one byte per pixel before applying /Decode.
     std::vector<uint8_t> mask_samples;
     if(not smask.has_decoded_stream_data())
       {
-        QPDFObjectHandle mdict = qpdf_smask.getDict();
-        const std::string filter =
-          mdict.hasKey("/Filter") ? mdict.getKey("/Filter").unparse() : "";
-        if(filter.find("CCITTFaxDecode") != std::string::npos and
-           smask.has_codec_stream_data())
+        const auto encoded = smask.get_codec_stream_data();
+        const auto& filters = smask.image_filters;
+        const auto codec_index = stream_filters::image_codec_index(filters);
+        if(not encoded or encoded->getSize() == 0 or codec_index == filters.size())
           {
-            ccitt::decode_parameters ccitt_parms;
-            QPDFObjectHandle dp = mdict.getKey("/DecodeParms");
-            if(dp.isArray() and dp.getArrayNItems() > 0) { dp = dp.getArrayItem(0); }
-            if(dp.isDictionary())
-              {
-                if(dp.hasKey("/K") and dp.getKey("/K").isInteger())
-                  { ccitt_parms.k = static_cast<int>(dp.getKey("/K").getIntValue()); }
-                if(dp.hasKey("/BlackIs1") and dp.getKey("/BlackIs1").isBool())
-                  { ccitt_parms.black_is_1 = dp.getKey("/BlackIs1").getBoolValue(); }
-                if(dp.hasKey("/Columns") and dp.getKey("/Columns").isInteger())
-                  { ccitt_parms.columns = static_cast<int>(dp.getKey("/Columns").getIntValue()); }
-                if(dp.hasKey("/EncodedByteAlign") and dp.getKey("/EncodedByteAlign").isBool())
-                  { ccitt_parms.encoded_byte_align = dp.getKey("/EncodedByteAlign").getBoolValue(); }
-              }
+            LOG_S(WARNING) << "SMask has no decoded stream data for xobject_key=" << xobject_key;
+            return;
+          }
 
-            auto encoded = smask.get_codec_stream_data();
-            mask_samples = ccitt::decode(
-              reinterpret_cast<const uint8_t*>(encoded->getBuffer()),
-              encoded->getSize(), sm_w, sm_h, ccitt_parms);
+        const auto* bytes = reinterpret_cast<const uint8_t*>(encoded->getBuffer());
+        const auto& codec = filters[codec_index];
+        if(codec == "/DCTDecode" or codec == "/DCT")
+          {
+            jpeg::jpeg_parameters params;
+            params.color_space = jpeg::ColorSpace::Gray;
+            auto decoded = jpeg::decode_jpeg_to_raw_pixels(bytes, encoded->getSize(), params);
+            if(decoded.width == sm_w and decoded.height == sm_h and decoded.components == 1)
+              {
+                mask_samples = std::move(decoded.pixels);
+              }
+          }
+        else if(codec == "/JPXDecode")
+          {
+            auto decoded = jpx::decode_jpx_to_raw_pixels(bytes, encoded->getSize());
+            if(decoded.width == sm_w and decoded.height == sm_h and decoded.components == 1)
+              {
+                mask_samples = std::move(decoded.pixels);
+              }
+          }
+        else if(codec == "/CCITTFaxDecode" or codec == "/CCF")
+          {
+            mask_samples = ccitt::decode(bytes, encoded->getSize(), sm_w, sm_h,
+                                         smask.get_ccitt_parameters());
             if(mask_samples.size() < static_cast<size_t>(sm_w) * sm_h)
               {
                 LOG_S(WARNING) << "mask CCITT decode too small for xobject_key="
                                << xobject_key;
                 return;
               }
-            smask_bpc = 8;
           }
-        else if(filter.find("JBIG2Decode") != std::string::npos and
-                smask.has_codec_stream_data())
+        else if(codec == "/JBIG2Decode")
           {
             // MRC scans stencil their foreground layer with a JBIG2 mask.
             // `jbig2_decode` returns packed 1bpp rows with 0 = black, so
             // expanding each bit to 0x00/0xFF matches the CCITT samples above.
-            auto encoded = smask.get_codec_stream_data();
             auto globals = smask.get_jbig2_globals_data();
             const bool has_globals = globals and globals->getSize() > 0;
             auto bits = jbig2_decode(
-              {reinterpret_cast<const uint8_t*>(encoded->getBuffer()), encoded->getSize()},
+              {bytes, encoded->getSize()},
               {has_globals ? reinterpret_cast<const uint8_t*>(globals->getBuffer()) : nullptr,
                has_globals ? globals->getSize() : 0},
               static_cast<uint32_t>(sm_w), static_cast<uint32_t>(sm_h));
@@ -1347,13 +1358,14 @@ namespace pdflib
                     mask_samples[static_cast<size_t>(row) * sm_w + col] = bit ? 0xFFu : 0x00u;
                   }
               }
-            smask_bpc = 8;
           }
-        else
+
+        if(mask_samples.empty())
           {
-            LOG_S(WARNING) << "SMask has no decoded stream data for xobject_key=" << xobject_key;
+            LOG_S(WARNING) << "SMask " << codec << " decode failed for xobject_key=" << xobject_key;
             return;
           }
+        smask_bpc = 8;
       }
 
     auto smask_buf = smask.has_decoded_stream_data()
@@ -1460,6 +1472,28 @@ namespace pdflib
 
     LOG_S(INFO) << "decoded SMask for xobject_key=" << xobject_key
                 << " alpha_size=" << soft_mask_data->size();
+
+    // /Matte components are in the base image's color space. Gray and RGB
+    // remain in those spaces until premultiplication in the renderer.
+    if(not stencil and (color_space == "/DeviceGray" or color_space == "/DeviceRGB"))
+      {
+        auto matte = qpdf_smask.getDict().getKey("/Matte");
+        const int components = color_space == "/DeviceGray" ? 1 : 3;
+        if(matte.isArray() and matte.getArrayNItems() == components)
+          {
+            std::array<double, 3> values{};
+            for(int i = 0; i < components; ++i)
+              {
+                auto component = matte.getArrayItem(i);
+                if(not component.isNumber()) { return; }
+                const double value = utils::numeric::locale_safe_numeric_value(component);
+                if(not (0.0 <= value and value <= 1.0)) { return; }
+                values[i] = value;
+              }
+            if(components == 1) { values.fill(values[0]); }
+            soft_mask_matte = values;
+          }
+      }
   }
 
   // --- Getters ---

@@ -102,3 +102,31 @@ def test_inline_rgb_png_predictors_restore_samples(height: int, filter_chain: st
     artifacts = result._export_bitmap_artifacts()
     assert len(artifacts) == 1
     assert bytes(artifacts[0]["raw_data"]) == b"".join(rows)
+
+
+def test_subpixel_image_strips_cover_complete_pixel_rows() -> None:
+    dark_rgb = (51, 49, 51)
+    blue_rgb = (0, 0, 255)
+    dark = stream_object(
+        "/Type /XObject /Subtype /Image /Width 1 /Height 1 "
+        "/ColorSpace /DeviceRGB /BitsPerComponent 8",
+        bytes(dark_rgb),
+    )
+    blue = "BI /W 1 /H 1 /BPC 8 /CS /RGB /F /AHx ID 0000ff> EI"
+    content = (
+        "q 25 90 130 20 re W n "
+        "q 140 0 0 .72 20 100 cm /Dark Do Q "
+        "q 140 0 0 .72 20 100.72 cm /Dark Do Q "
+        "q 140 0 0 .72 20 101.44 cm /Dark Do Q "
+        f"q 140 0 0 .72 20 102.16 cm {blue} Q Q"
+    )
+    pdf = simple_page_pdf(
+        content, resources="/XObject << /Dark 5 0 R >>", extra_objects=[dark]
+    )
+    image = render_page(pdf, scale=1.0).get_image().convert("RGB")
+
+    assert image.getpixel((50, 97)) == blue_rgb
+    assert image.getpixel((50, 98)) == dark_rgb
+    assert image.getpixel((50, 99)) == dark_rgb
+    assert image.getpixel((50, 100)) == (255, 255, 255)
+    assert image.getpixel((22, 98)) == (255, 255, 255)

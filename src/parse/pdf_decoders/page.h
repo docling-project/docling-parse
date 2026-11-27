@@ -1796,6 +1796,7 @@ namespace pdflib
     auto ap_grphs = std::make_shared<pdf_resource<PAGE_GRPHS>>(page_grphs);
     auto ap_shadings = std::make_shared<pdf_resource<PAGE_SHADINGS>>(page_shadings);
     auto ap_patterns = std::make_shared<pdf_resource<PAGE_PATTERNS>>(page_patterns);
+    auto ap_xobjects = page_xobjects;
     auto ap_dict = ap_stream.getDict();
     if(ap_dict.isDictionary() and ap_dict.hasKey("/Resources"))
       {
@@ -1814,6 +1815,15 @@ namespace pdflib
           {
             auto ap_grph_dict = ap_resources.getKey("/ExtGState");
             ap_grphs->set(ap_grph_dict, timings);
+          }
+        // Local artwork from markup and media appearances is page paint.
+        // Widgets retain their field-specific appearance handling.
+        if(not is_widget and ap_resources.isDictionary() and ap_resources.hasKey("/XObject"))
+          {
+            ap_xobjects = std::make_shared<pdf_resource<PAGE_XOBJECTS>>(page_xobjects);
+            auto ap_xobject_dict = ap_resources.getKey("/XObject");
+            ap_xobjects->set(ap_xobject_dict, timings,
+                             page_config.keep_bitmaps and page_config.extract_bitmap_pixels);
           }
         if(ap_resources.isDictionary() and ap_resources.hasKey("/Shading"))
           {
@@ -1846,7 +1856,7 @@ namespace pdflib
                                        ap_colorspaces,
                                        ap_shadings,
                                        ap_patterns,
-                                       page_xobjects,
+                                       ap_xobjects,
                                        ap_instructions,
                                        timings);
 
@@ -1870,10 +1880,7 @@ namespace pdflib
     stream_decoder.set_base_matrix(ap_matrix);
     stream_decoder.decode_and_interprete(ap_stream, parameters);
 
-    // Shapes drawn by the appearance stream (field borders, backgrounds,
-    // check marks drawn as paths, ...): keep them in the parsed output and
-    // re-emit them for the renderer before the text cells, so the field
-    // value stays on top of background fills.
+    // Keep appearance shapes such as field borders in the parsed output.
     for(auto& shape : ap_shapes)
       {
         page_shapes.push_back(shape);
@@ -1936,29 +1943,44 @@ namespace pdflib
               std::abs(y1 - bbox[3]) <= tol);
     };
 
-    for(const auto& shape_instr : ap_instructions.get_shape_instructions())
+    if(is_widget)
       {
-        if(traces_the_widget_rect(shape_instr))
+        // Widgets keep their field rendering order and omit the frame.
+        for(const auto& shape : ap_instructions.get_shape_instructions())
           {
-            LOG_S(INFO) << "skipping the frame of a widget appearance stream";
-            continue;
+            if(not traces_the_widget_rect(shape))
+              { instructions.add_shape_instruction(shape); }
           }
-
-        instructions.add_shape_instruction(shape_instr);
+        for(const auto& shading : ap_instructions.get_shading_instructions())
+          { instructions.add_shading_instruction(shading); }
+        for(const auto& text : ap_instructions.get_text_instructions())
+          { instructions.add_text_instruction(text); }
       }
-
-    for(const auto& shading_instr : ap_instructions.get_shading_instructions())
+    else
       {
-        instructions.add_shading_instruction(shading_instr);
-      }
+        // The normal appearance is already in page space. Keep its paint order.
+        struct appearance_instruction_sink
+        {
+          pdf_render_instructions& destination;
 
-    // Re-emit the text instructions of the sub-decode in page coordinates
-    // so the renderer draws the glyphs on top of the widget rect; the
-    // translated copies keep the fill color, embedded font program and
-    // char codes that a reconstruction from the cells would lose.
-    for(const auto& text_instr : ap_instructions.get_text_instructions())
-      {
-        instructions.add_text_instruction(text_instr);
+          void render_shape(shape_instruction& shape)
+          { destination.add_shape_instruction(std::move(shape)); }
+
+          void render_shading(shading_instruction& shading)
+          { destination.add_shading_instruction(std::move(shading)); }
+
+          void render_text(text_instruction& text)
+          { destination.add_text_instruction(std::move(text)); }
+
+          void render_bitmap(bitmap_instruction& bitmap)
+          { destination.add_bitmap_instruction(std::move(bitmap)); }
+
+          void render_widget(text_widget_instruction& widget)
+          { destination.add_widget_instruction(std::move(widget)); }
+        };
+
+        appearance_instruction_sink sink{instructions};
+        ap_instructions.iterate_over_content(sink);
       }
 
     for(auto& cell : ap_cells)

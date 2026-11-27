@@ -17,7 +17,7 @@ from base64 import b64decode
 import pytest
 from docling_core.types.doc.page import TextCellUnit
 
-from tests.pdf_builder import parse_page, simple_page_pdf, stream_object
+from tests.pdf_builder import parse_page, render_page, simple_page_pdf, stream_object
 
 # An original, synthetic OpenType/CFF font with two rectangular outlines:
 # summation spans y=-400..0, while parenleft spans y=-900..100. Keeping the
@@ -108,6 +108,58 @@ def test_invalid_metrics_use_embedded_glyph_vertical_bounds() -> None:
     assert (summation.b, summation.t) == pytest.approx((96.0, 100.0))
     assert (parenthesis.l, parenthesis.r) == pytest.approx((70.0, 77.0))
     assert (parenthesis.b, parenthesis.t) == pytest.approx((91.0, 101.0))
+
+
+@pytest.mark.parametrize("even_odd_clip", [False, True])
+def test_embedded_glyph_clip_bounds_an_image_until_graphics_restore(
+    even_odd_clip: bool,
+) -> None:
+    font = (
+        "<< /Type /Font /Subtype /Type1 /BaseFont /SyntheticMath-Regular "
+        "/FirstChar 65 /LastChar 66 /Widths [700 700] "
+        "/Encoding << /Type /Encoding /Differences [65 /summation /parenleft] >> "
+        "/FontDescriptor 6 0 R >>"
+    )
+    descriptor = (
+        "<< /Type /FontDescriptor /FontName /SyntheticMath-Regular /Flags 4 "
+        "/FontBBox [0 -900 700 100] /ItalicAngle 0 "
+        "/Ascent 700 /Descent -900 /CapHeight 100 /StemV 80 /FontFile3 7 0 R >>"
+    )
+    font_program = stream_object("/Subtype /OpenType", _SYNTHETIC_MATH_OTF)
+    red_image = stream_object(
+        "/Type /XObject /Subtype /Image /Width 1 /Height 1 "
+        "/ColorSpace /DeviceRGB /BitsPerComponent 8",
+        bytes((255, 0, 0)),
+    )
+    outer_clip = "0 0 200 200 re 49 85 7 10 re W* n " if even_odd_clip else ""
+    content = (
+        f"q {outer_clip}"
+        "BT /F1 50 Tf 7 Tr 25 100 Td (A) Tj 75 0 Td (B) Tj ET "
+        "200 0 0 200 0 0 cm /Im0 Do Q "
+        "0 0 1 rg 130 130 40 40 re f"
+    )
+    pdf = simple_page_pdf(
+        content,
+        resources="/Font << /F1 5 0 R >> /XObject << /Im0 8 0 R >>",
+        extra_objects=[font, descriptor, font_program, red_image],
+    )
+    rendered = render_page(pdf, scale=1.0)
+    result = rendered.get_image().convert("RGB")
+
+    assert result.getpixel((40, 110)) == (255, 0, 0)
+    assert result.getpixel((110, 120)) == (255, 0, 0)
+    assert result.getpixel((52, 110)) == (
+        (255, 255, 255) if even_odd_clip else (255, 0, 0)
+    )
+    assert result.getpixel((80, 110)) == (255, 255, 255)
+    assert result.getpixel((150, 45)) == (0, 0, 255)
+
+    parsed_rect = parse_page(pdf).bitmap_resources[0].rect
+    rendered_rect = rendered.get_page().bitmap_resources[0].rect
+    for actual, expected in zip(
+        rendered_rect.to_polygon(), parsed_rect.to_polygon(), strict=True
+    ):
+        assert actual == pytest.approx(expected)
 
 
 @pytest.mark.parametrize(

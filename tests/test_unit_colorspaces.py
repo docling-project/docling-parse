@@ -173,22 +173,15 @@ def test_iccbased_fill_is_colour_managed():
     )
 
 
-def test_cmyk_jpeg_keeps_its_ink():
-    """A CMYK JPEG decodes to the ink actually stored in it.
-
-    The bytes in the file are process ink: (0, 255, 255, 0) is red. Inverting
-    them on the way in -- which an Adobe marker was once taken to require --
-    turns that red into cyan, which is what the corpus photographs looked like.
-
-    Pillow writes CMYK JPEGs with the values inverted, so the source image is
-    inverted here first; what lands in the file is the process ink above. The
-    same file renders red in pypdfium2, which is the reference this was
-    settled against.
-    """
+@pytest.mark.parametrize("invert_decode", [False, True])
+def test_cmyk_jpeg_keeps_its_ink(invert_decode: bool):
+    """Process CMYK and inverted CMYK with an explicit /Decode both paint red."""
     from PIL import Image, ImageChops
 
-    # inverted on the way in, so the file stores (0, 255, 255, 0) = red
-    source = ImageChops.invert(Image.new("CMYK", (16, 16), (0, 255, 255, 0)))
+    ink = Image.new("CMYK", (16, 16), (0, 255, 255, 0))
+    # Pillow writes inverted CMYK. Invert first if /Decode is the identity.
+    source = ink if invert_decode else ImageChops.invert(ink)
+    decode = " /Decode [1 0 1 0 1 0 1 0]" if invert_decode else ""
     buffer = io.BytesIO()
     source.save(buffer, format="JPEG", quality=95)
 
@@ -198,7 +191,7 @@ def test_cmyk_jpeg_keeps_its_ink():
         extra_objects=[
             stream_object(
                 "/Type /XObject /Subtype /Image /Width 16 /Height 16 "
-                "/ColorSpace /DeviceCMYK /BitsPerComponent 8 /Filter /DCTDecode",
+                f"/ColorSpace /DeviceCMYK /BitsPerComponent 8 /Filter /DCTDecode{decode}",
                 buffer.getvalue(),
             )
         ],

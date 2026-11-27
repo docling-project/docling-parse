@@ -3748,6 +3748,11 @@ namespace pdflib
             cx = x3; cy = y3;
           }
         else if(op == "h") { if(not cur.empty()) { cur.push_back(cur.front()); } }
+        else if(op == "W" or op == "W*")
+          {
+            // Let the full charproc decoder handle changes to the clip.
+            return nullptr;
+          }
         else if(op == "f" or op == "f*" or op == "F" or op == "b" or op == "b*" or op == "B" or op == "B*")
           {
             close_cur();

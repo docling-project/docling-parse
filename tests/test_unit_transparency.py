@@ -55,10 +55,10 @@ def _build_pdf(content: str) -> bytes:
         "<< /Type /Catalog /Pages 2 0 R >>",
         "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
         f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {PAGE_WIDTH} {PAGE_HEIGHT}] "
-        "/Resources << /ExtGState << /GSm 6 0 R /GSa 7 0 R /GSn 8 0 R >> "
+        "/Resources << /ExtGState << /GSs 5 0 R /GSm 6 0 R /GSa 7 0 R /GSn 8 0 R >> "
         "/XObject << /Fm0 9 0 R >> >> /Contents 4 0 R >>",
         f"<< /Length {len(content)} >>\nstream\n{content}\nendstream",
-        "<< >>",
+        "<< /Type /ExtGState /BM /SoftLight /ca 1 >>",
         "<< /Type /ExtGState /BM /Multiply /ca 1.0 >>",
         "<< /Type /ExtGState /BM /Normal /ca 0.5 >>",
         "<< /Type /ExtGState /BM /Normal /ca 1.0 >>",
@@ -154,6 +154,16 @@ def test_normal_blend_replaces_what_is_underneath():
     image = _render(_cover("GSn", "0.5 0.5 0.5"))
 
     _assert_color(_center_pixel(image), (128, 128, 128), "grey over red")
+
+
+def test_soft_light_blends_with_painted_background_only():
+    image = _render(
+        "1 1 1 rg 100 0 100 100 re f\nq /GSs gs 0.25 0.5 0.75 rg 0 10 200 80 re f Q\n"
+    )
+
+    _assert_color(image.getpixel((50, 50)), (64, 128, 191), "unpainted backdrop")
+    _assert_color(image.getpixel((150, 50)), (255, 255, 255), "painted white")
+    _assert_color(image.getpixel((50, 5)), (255, 255, 255), "white page output")
 
 
 @pytest.mark.parametrize(

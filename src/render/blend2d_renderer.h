@@ -124,6 +124,8 @@ namespace pdflib
     // region is the only bound on the paint, so a non-rectangular clip becomes
     // the filled outline rather than a reason to skip the shading.
     void render_shading(shading_instruction& instr);
+    void render_tensor_mesh(const shading_instruction& instr, const BLMatrix2D& transform,
+                            double alpha);
 
     // Draw debug quads expressed in the normalized, display-oriented page
     // frame used by parsed cells. This is intentionally separate from text
@@ -759,13 +761,12 @@ namespace pdflib
     // or unsupported clip paths return false so callers can skip them without
     // corrupting the Blend2D clip state.
     //
-    // The detection is purely geometric (every vertex on the bbox edge):
-    // most rectangular clips are built with m/l/l/l/h rather than `re`, so
-    // gating on shape_type == RECTANGLE would reject them.
+    // Accept path-built rectangles as well as `re`. A path must trace all
+    // four bounding-box sides so a diagonal between corners stays a mask.
     bool get_axis_aligned_clip_rect(const clip_path_instruction& clip,
                                     BLRect& rect) const
     {
-      if(clip.size() < 4)
+      if(not clip.get_outline().is_empty() or clip.size() < 4)
         {
           return false;
         }
@@ -795,42 +796,40 @@ namespace pdflib
           return false;
         }
 
+      unsigned corners = 0;
+      int first = -1;
+      int previous = -1;
+      int sides = 0;
       for(size_t i = 0; i < n; i++)
         {
           const double x = canvas_x(xs[i]);
           const double y = canvas_y(ys[i]);
-          const bool on_vertical_edge =
-            nearly_equal(x, x_min, 1e-4) or nearly_equal(x, x_max, 1e-4);
-          const bool on_horizontal_edge =
-            nearly_equal(y, y_min, 1e-4) or nearly_equal(y, y_max, 1e-4);
-
-          if(not (on_vertical_edge and on_horizontal_edge))
+          const bool right = nearly_equal(x, x_max, 1e-4);
+          const bool bottom = nearly_equal(y, y_max, 1e-4);
+          if((not right and not nearly_equal(x, x_min, 1e-4))
+             or (not bottom and not nearly_equal(y, y_min, 1e-4)))
             {
               return false;
             }
+
+          const int corner = (right ? 1 : 0) | (bottom ? 2 : 0);
+          if(previous == corner) { continue; }
+          if(first < 0) { first = corner; }
+          else
+            {
+              if((previous ^ corner) == 3) { return false; }
+              ++sides;
+            }
+          previous = corner;
+          corners |= 1u << corner;
         }
+
+      if((previous ^ first) == 3) { return false; }
+      if(previous != first) { ++sides; }
+      if(corners != 0xFu or sides != 4) { return false; }
 
       rect = BLRect(x_min, y_min, x_max - x_min, y_max - y_min);
       return true;
-    }
-
-    // Builds a canvas-space BLPath from a clip path's flattened polyline.
-    static BLPath make_clip_path(const clip_path_instruction& clip_path,
-                                 const renderer<BLEND2D>* self)
-    {
-      BLPath path;
-      const std::vector<double>& xs = clip_path.get_x();
-      const std::vector<double>& ys = clip_path.get_y();
-      const size_t n = std::min(xs.size(), ys.size());
-      if(n < 3) { return path; }
-
-      path.move_to(self->canvas_x(xs[0]), self->canvas_y(ys[0]));
-      for(size_t i = 1; i < n; i++)
-        {
-          path.line_to(self->canvas_x(xs[i]), self->canvas_y(ys[i]));
-        }
-      path.close();
-      return path;
     }
 
     // Multiplies `dst`'s coverage by `src`'s, pixel by pixel.
@@ -1164,6 +1163,8 @@ namespace pdflib
       for(const auto& path : pb)
         {
           if(ia->get_clip_group() != path.get_clip_group() or
+             ia->get_rule() != path.get_rule() or
+             ia->get_outline() != path.get_outline() or
              ia->get_x() != path.get_x() or
              ia->get_y() != path.get_y())
             {
@@ -1248,10 +1249,6 @@ namespace pdflib
           return result;
         }
 
-      const BLFillRule clip_fill_rule =
-        clip_state.get_rule() == CLIP_RULE_EVEN_ODD ? BL_FILL_RULE_EVEN_ODD
-                                                    : BL_FILL_RULE_NON_ZERO;
-
       // LOG_S(INFO) << "build_clip_mask: creating mask context";
       // LOG_S(INFO) << "build_clip_mask: clearing mask";
       if(not fill_a8(mask, 0))
@@ -1313,7 +1310,13 @@ namespace pdflib
             }
         }
 
-      std::vector<std::pair<int, BLPath> > group_paths;
+      struct mask_path
+      {
+        int group;
+        BLPath path;
+        BLFillRule fill_rule;
+      };
+      std::vector<mask_path> group_paths;
       [[maybe_unused]] size_t clip_index = 0;
       for(const auto& clip_path : paths)
         {
@@ -1355,7 +1358,7 @@ namespace pdflib
 
           // LOG_S(INFO) << "build_clip_mask: path " << clip_index
           //             << " make_clip_path begin";
-          BLPath sub = make_clip_path(clip_path, this);
+          BLPath sub = make_clip_path(clip_path);
           // LOG_S(INFO) << "build_clip_mask: path " << clip_index
           //             << " make_clip_path done empty="
           //             << (sub.is_empty() ? "true" : "false");
@@ -1368,12 +1371,14 @@ namespace pdflib
           BLPath* dst = nullptr;
           for(auto& gp : group_paths)
             {
-              if(gp.first == clip_path.get_clip_group()) { dst = &gp.second; break; }
+              if(gp.group == clip_path.get_clip_group()) { dst = &gp.path; break; }
             }
           if(dst == nullptr)
             {
-              group_paths.emplace_back(clip_path.get_clip_group(), BLPath());
-              dst = &group_paths.back().second;
+              const BLFillRule fill_rule = clip_path.get_rule() == CLIP_RULE_EVEN_ODD
+                ? BL_FILL_RULE_EVEN_ODD : BL_FILL_RULE_NON_ZERO;
+              group_paths.push_back({clip_path.get_clip_group(), BLPath(), fill_rule});
+              dst = &group_paths.back().path;
             }
           dst->add_path(sub);
           // LOG_S(INFO) << "build_clip_mask: path " << clip_index
@@ -1387,11 +1392,11 @@ namespace pdflib
       for(auto& gp : group_paths)
         {
           // LOG_S(INFO) << "build_clip_mask: raster group " << group_index
-          //             << " group_id=" << gp.first;
+          //             << " group_id=" << gp.group;
           BLPath shifted;
           // LOG_S(INFO) << "build_clip_mask: group " << group_index
           //             << " shifting path";
-          shifted.add_path(gp.second, BLMatrix2D::make_translation(-area.x, -area.y));
+          shifted.add_path(gp.path, BLMatrix2D::make_translation(-area.x, -area.y));
           // LOG_S(INFO) << "build_clip_mask: group " << group_index
           //             << " shifted";
 
@@ -1399,7 +1404,7 @@ namespace pdflib
             {
               // LOG_S(INFO) << "build_clip_mask: group " << group_index
               //             << " filling base mask";
-              if(not rasterize_path_to_a8(mask, shifted, clip_fill_rule))
+              if(not rasterize_path_to_a8(mask, shifted, gp.fill_rule))
                 {
                   LOG_S(WARNING) << "build_clip_mask: could not rasterize base mask";
                   group_index++;
@@ -1427,7 +1432,7 @@ namespace pdflib
           {
             // LOG_S(INFO) << "build_clip_mask: group " << group_index
             //             << " filling plane";
-            if(not rasterize_path_to_a8(plane, shifted, clip_fill_rule))
+            if(not rasterize_path_to_a8(plane, shifted, gp.fill_rule))
               {
                 LOG_S(WARNING) << "build_clip_mask: could not rasterize plane";
                 group_index++;
@@ -1515,13 +1520,18 @@ namespace pdflib
       return applied_clip ? CLIP_APPLIED : CLIP_NONE;
     }
 
-    // Builds a closed canvas-space path from a clip path. The parse layer
-    // stores clip geometry as a flattened polyline, so curved clip outlines
-    // arrive already sampled. A fill treats every subpath as closed (8.5.3.2),
-    // hence the unconditional close().
+    // Glyph clips carry native curves. Regular clip paths use page vertices
+    // and are implicitly closed for filling.
     BLPath make_clip_path(const clip_path_instruction& clip) const
     {
       BLPath path;
+      if(not clip.get_outline().is_empty())
+        {
+          path.add_path(clip.get_outline(),
+                        BLMatrix2D(scale_x_, 0.0, 0.0, -scale_y_,
+                                   canvas_x(0.0), canvas_y(0.0)));
+          return path;
+        }
 
       const auto& xs = clip.get_x();
       const auto& ys = clip.get_y();
@@ -2249,7 +2259,7 @@ namespace pdflib
         image_.create(width, height, BL_FORMAT_PRGB32);
       }
 
-    // Initialise canvas to opaque white.
+    // Render the page as an isolated transparency group (11.4.7).
     const BLResult ctx_res = context_.begin(image_);
     if (ctx_res != BL_SUCCESS)
       {
@@ -2260,8 +2270,7 @@ namespace pdflib
     context_active_ = true;
 
     context_.set_comp_op(BL_COMP_OP_SRC_COPY);
-    context_.set_fill_style(BLRgba32(0xFFFFFFFFu));
-    context_.fill_all();
+    context_.fill_all(BLRgba32(0x00000000u));
     context_.set_comp_op(BL_COMP_OP_SRC_OVER);
   }
 
@@ -2668,9 +2677,10 @@ namespace pdflib
         return src_img;
       }
 
-    // Convert one source sample to the exact PRGB32 value the old full-size
-    // intermediate used. The downsample path below averages these values
-    // directly, so it is pixel-equivalent while avoiding that intermediate.
+    const auto& matte = instr.get_matte_color();
+    const bool preblended = use_soft_mask_alpha and matte.has_value();
+
+    // Convert source pixels to PRGB32 before averaging in the downsample path.
     const auto source_to_prgb32 = [&](int row, int col) -> uint32_t
       {
         const int idx = (row * sw + col) * sc;
@@ -2709,9 +2719,28 @@ namespace pdflib
             a = alpha_data->at(static_cast<size_t>(row) * sw + col);
           }
 
-        const uint32_t pm_r = static_cast<uint32_t>(r) * a / 255u;
-        const uint32_t pm_g = static_cast<uint32_t>(g) * a / 255u;
-        const uint32_t pm_b = static_cast<uint32_t>(b) * a / 255u;
+        uint32_t pm_r, pm_g, pm_b;
+        if(preblended)
+          {
+            // The sample already includes alpha times the source color.
+            // Subtract the matte's contribution to recover that product
+            // directly, in the representable premultiplied range [0, a].
+            const auto remove_matte = [a](uint8_t value, double matte_component)
+              {
+                const int premultiplied =
+                  static_cast<int>(std::lround(value - (255 - a) * matte_component));
+                return static_cast<uint32_t>(std::clamp(premultiplied, 0, static_cast<int>(a)));
+              };
+            pm_r = remove_matte(r, (*matte)[0]);
+            pm_g = remove_matte(g, (*matte)[1]);
+            pm_b = remove_matte(b, (*matte)[2]);
+          }
+        else
+          {
+            pm_r = static_cast<uint32_t>(r) * a / 255u;
+            pm_g = static_cast<uint32_t>(g) * a / 255u;
+            pm_b = static_cast<uint32_t>(b) * a / 255u;
+          }
         return (static_cast<uint32_t>(a) << 24)
           | (pm_r                     << 16)
           | (pm_g                     <<  8)
@@ -3940,6 +3969,23 @@ namespace pdflib
         return;
       }
 
+    // Opaque scanline strips commonly tile a single raster. Fractional
+    // coverage on each blit leaves seams between adjacent strips. Paint
+    // complete pixel rows in stream order and preserve horizontal sampling.
+    if(can_use_axis_aligned_fast_path and sh == 1 and fill_alpha == 1.0 and
+       not image_mask and not instr.has_alpha_data() and not instr.has_soft_mask() and
+       instr.get_blend_mode() == BLEND_MODE_NORMAL)
+      {
+        constexpr double pixel_edge_tolerance = 1e-6;
+        const double top = std::floor(q.y1 + pixel_edge_tolerance);
+        const double bottom = std::ceil(q.y0 - pixel_edge_tolerance);
+        if(bottom > top)
+          {
+            q.y1 = q.y2 = top;
+            q.y0 = q.y3 = bottom;
+          }
+      }
+
     // The save/restore pairs nest: the alpha is pushed inside the clip, and
     // the clip inside the blend mode. Each is a scope, so every exit below
     // unwinds them in that order without a restore to remember.
@@ -4205,15 +4251,6 @@ namespace pdflib
     try
       {
         tile.set_size(size);
-
-        // Transparent, not the opaque white a page starts on: the fill
-        // region shows through between the cell's marks.
-        {
-          BLContext& ctx = tile.page_context();
-          ctx.set_comp_op(BL_COMP_OP_SRC_COPY);
-          ctx.fill_all(BLRgba32(0x00000000u));
-          ctx.set_comp_op(BL_COMP_OP_SRC_OVER);
-        }
 
         // A cell wider than its step overlaps its neighbours (8.7.3.1), so
         // what spills past the step box is drawn again shifted by a step and
@@ -4984,6 +5021,178 @@ namespace pdflib
       }
   }
 
+  inline void renderer<BLEND2D>::render_tensor_mesh(const shading_instruction& instr,
+                                                    const BLMatrix2D& transform,
+                                                    double alpha)
+  {
+    const auto& mesh = *instr.get_tensor_mesh();
+    using control_points = std::array<BLPoint, 16>;
+    std::vector<control_points> patches;
+    patches.reserve(mesh.size());
+    double left = canvas_width_, top = canvas_height_, right = 0.0, bottom = 0.0;
+    for(const auto& patch : mesh)
+      {
+        auto& points = patches.emplace_back();
+        for(std::size_t i = 0; i < points.size(); ++i)
+          {
+            auto p = transform.map_point(patch.points[i][0], patch.points[i][1]);
+            if(not std::isfinite(p.x) or not std::isfinite(p.y)) { return; }
+            points[i] = p;
+            left = std::min(left, p.x);
+            top = std::min(top, p.y);
+            right = std::max(right, p.x);
+            bottom = std::max(bottom, p.y);
+          }
+      }
+
+    left = std::max(0.0, left);
+    top = std::max(0.0, top);
+    right = std::min(static_cast<double>(canvas_width_), right);
+    bottom = std::min(static_cast<double>(canvas_height_), bottom);
+    if(left >= right or top >= bottom) { return; }
+    const BLRectI area = canvas_clamped_rect(BLRect(left, top, right - left, bottom - top));
+
+    BLContext& ctx = page_context();
+    const blend_mode_scope blend(ctx, instr.get_blend_mode());
+    const context_state_scope state(ctx, true);
+    if(apply_clip_state(ctx, instr.get_clip_state(), BLRect(left, top, right - left, bottom - top))
+         == CLIP_EMPTY)
+      {
+        return;
+      }
+
+    BLImage image;
+    BLImageData data;
+    if(image.create(area.w, area.h, BL_FORMAT_PRGB32) != BL_SUCCESS
+       or image.make_mutable(&data) != BL_SUCCESS)
+      {
+        return;
+      }
+    auto* pixels = static_cast<std::uint8_t*>(data.pixel_data);
+    for(int y = 0; y < area.h; ++y)
+      {
+        std::memset(pixels + y * data.stride, 0, static_cast<std::size_t>(area.w) * 4u);
+      }
+
+    struct vertex
+    {
+      BLPoint p;
+      std::array<double, 3> rgb;
+    };
+
+    // Rasterise into one opaque layer and apply the shading's opacity after
+    // the mesh is complete. A shared edge must not blend with the page twice.
+    const auto triangle = [&](const vertex& a, const vertex& b, const vertex& c)
+      {
+        const double ux = b.p.x - a.p.x, uy = b.p.y - a.p.y;
+        const double vx = c.p.x - a.p.x, vy = c.p.y - a.p.y;
+        const double det = ux * vy - uy * vx;
+        if(not std::isfinite(det) or std::abs(det) < 1e-12) { return; }
+
+        const int x0 = static_cast<int>(std::clamp(
+          std::floor(std::min({a.p.x, b.p.x, c.p.x})), 0.0, static_cast<double>(area.w)));
+        const int x1 = static_cast<int>(std::clamp(
+          std::ceil(std::max({a.p.x, b.p.x, c.p.x})), 0.0, static_cast<double>(area.w)));
+        const int y0 = static_cast<int>(std::clamp(
+          std::floor(std::min({a.p.y, b.p.y, c.p.y})), 0.0, static_cast<double>(area.h)));
+        const int y1 = static_cast<int>(std::clamp(
+          std::ceil(std::max({a.p.y, b.p.y, c.p.y})), 0.0, static_cast<double>(area.h)));
+        constexpr double edge_epsilon = 1e-8;
+
+        for(int y = y0; y < y1; ++y)
+          {
+            auto* row = reinterpret_cast<std::uint32_t*>(pixels + y * data.stride);
+            const double dy = y + 0.5 - a.p.y;
+            for(int x = x0; x < x1; ++x)
+              {
+                const double dx = x + 0.5 - a.p.x;
+                const double wb = (dx * vy - dy * vx) / det;
+                const double wc = (ux * dy - uy * dx) / det;
+                const double wa = 1.0 - wb - wc;
+                if(not (wa >= -edge_epsilon and wb >= -edge_epsilon and wc >= -edge_epsilon))
+                  {
+                    continue;
+                  }
+
+                std::uint32_t pixel = 255u;
+                for(std::size_t ch = 0; ch < a.rgb.size(); ++ch)
+                  {
+                    const double val = wa * a.rgb[ch] + wb * b.rgb[ch] + wc * c.rgb[ch];
+                    pixel = (pixel << 8) | static_cast<std::uint32_t>(std::lround(
+                      std::clamp(val, 0.0, 255.0)));
+                  }
+                row[x] = pixel;
+              }
+          }
+      };
+
+    // Control-point indices in the four rows of the tensor-product surface.
+    constexpr int control[4][4] = {{0, 11, 10, 9}, {1, 12, 15, 8},
+                                  {2, 13, 14, 7}, {3, 4, 5, 6}};
+    constexpr int steps = 16;
+    std::array<std::array<double, 4>, steps + 1> basis;
+    for(int i = 0; i <= steps; ++i)
+      {
+        const double t = static_cast<double>(i) / steps;
+        const double r = 1.0 - t;
+        basis[i] = {r*r*r, 3.0*r*r*t, 3.0*r*t*t, t*t*t};
+      }
+
+    for(std::size_t patch_index = 0; patch_index < mesh.size(); ++patch_index)
+      {
+        const auto& points = patches[patch_index];
+        const auto& corners = mesh[patch_index].colors;
+        std::array<std::array<vertex, steps + 1>, steps + 1> grid;
+        for(int row = 0; row <= steps; ++row)
+          {
+            const double v = static_cast<double>(row) / steps;
+            for(int col = 0; col <= steps; ++col)
+              {
+                const double u = static_cast<double>(col) / steps;
+                auto& vert = grid[row][col];
+                vert.p = BLPoint(0.0, 0.0);
+                for(int j = 0; j < 4; ++j)
+                  {
+                    for(int i = 0; i < 4; ++i)
+                      {
+                        const auto& p = points[control[j][i]];
+                        const double weight = basis[row][j] * basis[col][i];
+                        vert.p.x += weight * p.x;
+                        vert.p.y += weight * p.y;
+                      }
+                  }
+                vert.p.x -= area.x;
+                vert.p.y -= area.y;
+
+                for(std::size_t ch = 0; ch < vert.rgb.size(); ++ch)
+                  {
+                    vert.rgb[ch] = (1.0 - v) * ((1.0 - u) * corners[0][ch] + u * corners[3][ch])
+                      + v * ((1.0 - u) * corners[1][ch] + u * corners[2][ch]);
+                  }
+              }
+          }
+
+        for(int j = 0; j < steps; ++j)
+          {
+            for(int i = 0; i < steps; ++i)
+              {
+                triangle(grid[j][i], grid[j][i + 1], grid[j + 1][i + 1]);
+                triangle(grid[j][i], grid[j + 1][i + 1], grid[j + 1][i]);
+              }
+          }
+      }
+
+    if(config_.render_non_rect_clip_masks and clip_state_has_non_rect(instr.get_clip_state()))
+      {
+        const auto clip = build_clip_mask(instr.get_clip_state(), area);
+        if(clip.empty_clip or clip.image.is_empty()
+           or not multiply_prgb32_by_a8(image, clip.image)) { return; }
+      }
+
+    ctx.set_global_alpha(alpha);
+    ctx.blit_image(BLPointI(area.x, area.y), image);
+  }
+
   // ---------------------------------------------------------------------------
   // render_shading
   //
@@ -5016,21 +5225,6 @@ namespace pdflib
     if (not has_canvas()) { return; }
     if (not config_.render_shadings) { return; }
 
-    const std::vector<shading_stop>& stops = instr.get_stops();
-    const std::vector<double>& coords = instr.get_coords();
-
-    LOG_S(INFO) << __FUNCTION__ << ": key='" << instr.get_key() << "'"
-                << ", geometry: " << static_cast<int>(instr.get_geometry())
-                << ", #-stops: " << stops.size()
-                << ", alpha: " << instr.get_fill_alpha();
-
-    if (stops.size() < 2)
-      {
-        LOG_S(WARNING) << "render_shading: shading " << instr.get_key()
-                       << " has fewer than two colour stops, skipping";
-        return;
-      }
-
     static constexpr double min_visible_alpha = 1.0 / 512.0;
     const double fill_alpha =
       std::min(1.0, std::max(0.0, instr.get_fill_alpha()));
@@ -5050,6 +5244,27 @@ namespace pdflib
        scale_x_ * m[2], -scale_y_ * m[3],
        scale_x_ * (m[4] - origin_x_),
        static_cast<double>(canvas_height_) - scale_y_ * (m[5] - origin_y_));
+
+    if(instr.get_tensor_mesh())
+      {
+        render_tensor_mesh(instr, transform, fill_alpha);
+        return;
+      }
+
+    const std::vector<shading_stop>& stops = instr.get_stops();
+    const std::vector<double>& coords = instr.get_coords();
+
+    LOG_S(INFO) << __FUNCTION__ << ": key='" << instr.get_key() << "'"
+                << ", geometry: " << static_cast<int>(instr.get_geometry())
+                << ", #-stops: " << stops.size()
+                << ", alpha: " << instr.get_fill_alpha();
+
+    if (stops.size() < 2)
+      {
+        LOG_S(WARNING) << "render_shading: shading " << instr.get_key()
+                       << " has fewer than two colour stops, skipping";
+        return;
+      }
 
     // Average canvas-space scale of that transform, used to size the guard
     // band of a non-extended end in axis units.
@@ -5203,6 +5418,30 @@ namespace pdflib
 
     BLContext& ctx = page_context();
 
+    // The subpaths of a W/W* capture form one clip. Use the same
+    // coverage mask as bitmap and shape fills for compound shading clips.
+    const auto& clip_state = instr.get_clip_state();
+    if(config_.render_non_rect_clip_masks and clip_state_has_non_rect(clip_state))
+      {
+        BLRect clip_bbox;
+        if(not clip_state_canvas_bbox(clip_state, clip_bbox)) { return; }
+
+        const auto area = canvas_clamped_rect(clip_bbox);
+        const auto mask = build_clip_mask(clip_state, area);
+        if(mask.empty_clip) { return; }
+
+        if(not mask.image.is_empty())
+          {
+            const blend_mode_scope blend(ctx, instr.get_blend_mode());
+            const context_state_scope clip_scope(ctx, true);
+            if(apply_clip_state(ctx, clip_state, clip_bbox) != CLIP_EMPTY)
+              {
+                ctx.fill_mask(BLPointI(area.x, area.y), mask.image, gradient);
+              }
+            return;
+          }
+      }
+
     const bool blend_active = push_blend_mode(ctx, instr.get_blend_mode());
 
     shading_clip clip;
@@ -5261,9 +5500,7 @@ namespace pdflib
   // ---------------------------------------------------------------------------
   // get_canvas
   //
-  // Extracts the internal PRGB32 canvas as straight RGBA bytes.
-  // Since the canvas is always opaque (alpha == 255 everywhere), no
-  // un-premultiplication is necessary.
+  // Composites the finished PRGB32 page onto white and returns RGBA bytes.
   // ---------------------------------------------------------------------------
 
   inline std::shared_ptr<std::vector<uint8_t>> renderer<BLEND2D>::get_canvas() const
@@ -5297,12 +5534,13 @@ namespace pdflib
 
         for (int col = 0; col < w; ++col)
           {
-            // BL_FORMAT_PRGB32 value = A<<24 | R<<16 | G<<8 | B  (little-endian)
+            // Premultiplied color needs only the uncovered portion of white.
             const uint32_t px = src_row[col];
-            dst_row[col * 4 + 0] = static_cast<uint8_t>((px >> 16) & 0xFFu); // R
-            dst_row[col * 4 + 1] = static_cast<uint8_t>((px >>  8) & 0xFFu); // G
-            dst_row[col * 4 + 2] = static_cast<uint8_t>((px >>  0) & 0xFFu); // B
-            dst_row[col * 4 + 3] = static_cast<uint8_t>((px >> 24) & 0xFFu); // A
+            const uint32_t white = 255u - (px >> 24);
+            dst_row[col * 4 + 0] = static_cast<uint8_t>(((px >> 16) & 0xFFu) + white);
+            dst_row[col * 4 + 1] = static_cast<uint8_t>(((px >>  8) & 0xFFu) + white);
+            dst_row[col * 4 + 2] = static_cast<uint8_t>((px & 0xFFu) + white);
+            dst_row[col * 4 + 3] = 255u;
           }
       }
 
@@ -5323,7 +5561,17 @@ namespace pdflib
 
     finish_page_context();
 
-    const BLResult err = image_.write_to_file(path.c_str());
+    BLImage output = image_;
+    BLContext background;
+    BLResult err = background.begin(output);
+    if (err == BL_SUCCESS)
+      {
+        background.set_comp_op(BL_COMP_OP_DST_OVER);
+        const BLResult fill_err = background.fill_all(BLRgba32(0xFFFFFFFFu));
+        err = background.end();
+        if (fill_err != BL_SUCCESS) { err = fill_err; }
+      }
+    if (err == BL_SUCCESS) { err = output.write_to_file(path.c_str()); }
     if (err != BL_SUCCESS)
       {
         throw std::runtime_error(

@@ -177,16 +177,20 @@ def write_histogram(
     figure = Figure(figsize=(7, 3.5), layout="constrained")
     FigureCanvasAgg(figure)
     axes = figure.subplots()
+    if not scores:
+        axes.set_ylim(0.5, 10)
     axes.hist(
         scores,
-        bins=[index / 10 for index in range(11)],
+        bins=[index / 100 for index in range(101)],
+        log=True,
         color="#286f85",
         edgecolor="white",
     )
+    axes.set_ylim(bottom=0.5)
     axes.set(
         xlim=(0, 1),
         xlabel="F1",
-        ylabel="Pages",
+        ylabel="Pages (log scale)",
         title=title or f"{mode.value.title()} F1",
     )
     figure.savefig(path, dpi=150)

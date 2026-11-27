@@ -13,7 +13,11 @@ every colour is drawn from the wrong palette slot.
 
 from __future__ import annotations
 
+import io
+import zlib
+
 import pytest
+from PIL import Image
 
 from tests.pdf_builder import render_page, simple_page_pdf, stream_object
 from tests.rendering_regression import assert_color_near, center_color, region_image
@@ -158,4 +162,83 @@ def test_sub_byte_soft_mask_is_applied():
     )
     assert min(dropped) > 200, (
         f"the transparent half of the soft mask still painted: {dropped}"
+    )
+
+
+@pytest.mark.parametrize(
+    ("color_space", "matte", "sample", "expected"),
+    [
+        ("/DeviceRGB", "0 0 0", bytes([100, 50, 25]), (227, 177, 152)),
+        ("/DeviceRGB", "1 0 0", bytes([227, 50, 25]), (227, 177, 152)),
+        ("/DeviceGray", "0.25", bytes([82]), (177, 177, 177)),
+    ],
+)
+def test_image_soft_mask_removes_the_matte(
+    color_space: str, matte: str, sample: bytes, expected: tuple[int, int, int]
+) -> None:
+    image = stream_object(
+        "/Type /XObject /Subtype /Image /Width 2 /Height 2 "
+        f"/ColorSpace {color_space} /BitsPerComponent 8 /SMask 6 0 R",
+        sample * 4,
+    )
+    mask = stream_object(
+        "/Type /XObject /Subtype /Image /Width 2 /Height 2 "
+        f"/ColorSpace /DeviceGray /BitsPerComponent 8 /Matte [{matte}]",
+        bytes([128] * 4),
+    )
+    pdf = simple_page_pdf(
+        "q 100 0 0 100 50 50 cm /Im0 Do Q",
+        resources="/XObject << /Im0 5 0 R >>",
+        extra_objects=[image, mask],
+    )
+    result = render_page(pdf, scale=1.0)
+    pixel = result.get_image().convert("RGB").getpixel((100, 100))
+
+    assert pixel == pytest.approx(expected, abs=2)
+    assert bytes(result._export_bitmap_artifacts()[0]["raw_data"]) == sample * 4
+
+
+@pytest.mark.parametrize(
+    "image_format, filters, wrap, invert",
+    [
+        ("JPEG", "/DCTDecode", False, False),
+        ("JPEG", "[/FlateDecode /DCTDecode]", True, True),
+        ("JPEG2000", "/JPXDecode", False, False),
+    ],
+)
+def test_codec_compressed_image_soft_mask(
+    image_format: str, filters: str, wrap: bool, invert: bool
+):
+    mask_image = Image.new("L", (32, 16))
+    mask_image.paste(255, (0, 0, 16, 16))
+    encoded = io.BytesIO()
+    mask_image.save(encoded, format=image_format)
+    payload = zlib.compress(encoded.getvalue()) if wrap else encoded.getvalue()
+    decode = " /Decode [1 0]" if invert else ""
+    mask = stream_object(
+        "/Type /XObject /Subtype /Image /Width 32 /Height 16 "
+        f"/ColorSpace /DeviceGray /BitsPerComponent 8 /Filter {filters}{decode}",
+        payload,
+    )
+    image = stream_object(
+        "/Type /XObject /Subtype /Image /Width 2 /Height 2 "
+        "/ColorSpace /DeviceRGB /BitsPerComponent 8 /SMask 6 0 R",
+        bytes([255, 0, 0] * 4),
+    )
+    pdf = simple_page_pdf(
+        "q\n100 0 0 100 50 50 cm\n/Im0 Do\nQ\n",
+        resources="/XObject << /Im0 5 0 R >>",
+        extra_objects=[image, mask],
+    )
+
+    result = render_page(pdf)
+    opaque, transparent = (RIGHT_BAND, LEFT_BAND) if invert else (LEFT_BAND, RIGHT_BAND)
+    assert_color_near(
+        center_color(region_image(result, opaque)), RED, tolerance=5, what="opaque half"
+    )
+    assert_color_near(
+        center_color(region_image(result, transparent)),
+        (255, 255, 255),
+        tolerance=5,
+        what="transparent half",
     )
