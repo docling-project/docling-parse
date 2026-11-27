@@ -156,6 +156,79 @@ def test_stroke_and_fill_preserve_distinct_overlapping_labels():
     assert [cell.text for cell in page.textline_cells] == ["ALPHA", "ALPINE"]
 
 
+def _show(content: str) -> SegmentedPdfPage:
+    return _page(
+        simple_page_pdf(
+            content,
+            resources=HELVETICA,
+            media_box="[0 0 612 792]",
+            extra_objects=[FONT_OBJECT],
+        )
+    )
+
+
+# Helvetica advances at 10 pt: "(Exercise" is 41.67 pt and the space 2.78 pt.
+REPAINTED_NUMBER = {
+    "Tj-Td-Tj": "BT /F1 10 Tf 72 700 Td (\\(Exercise 32) Tj {x:.3f} 0 Td "
+    "(32\\) was proposed) Tj ET",
+    "TJ-TD-TJ": "BT /F1 10 Tf 72 700 Td [(\\(Exercise) -396.4 (32)] TJ {x:.3f} 0 TD "
+    "[(32\\)) -396.5 (was proposed)] TJ ET",
+    "one-TJ": "BT /F1 10 Tf 72 700 Td [(\\(Exercise 32) {back:g} "
+    "(32\\) was proposed)] TJ ET",
+}
+
+
+@pytest.mark.parametrize("offset", [0.0, 0.02], ids=["exact", "shifted"])
+@pytest.mark.parametrize("shape", REPAINTED_NUMBER)
+def test_a_repainted_number_that_continues_the_line_is_read_once(shape, offset):
+    to_number = 44.45 if shape == "Tj-Td-Tj" else 41.67 + 3.964
+    content = REPAINTED_NUMBER[shape].format(
+        x=to_number + offset, back=1112 - 100 * offset
+    )
+    page = _show(content)
+    assert [c.text for c in page.textline_cells] == ["(Exercise 32) was proposed"]
+    assert [c.text for c in page.word_cells] == ["(Exercise", "32)", "was", "proposed"]
+
+
+@pytest.mark.parametrize("offset", [0.0, 0.02], ids=["exact", "shifted"])
+def test_a_repainted_digit_does_not_fuse_into_the_next_word(offset):
+    page = _show(
+        f"BT /F1 10 Tf 72 700 Td (\\(Exercise 2) Tj {44.45 + offset:.2f} 0 Td "
+        "(2\\);) Tj ET"
+    )
+    assert [c.text for c in page.textline_cells] == ["(Exercise 2);"]
+
+
+def test_a_number_repeated_at_its_own_advance_is_kept():
+    page = _show("BT /F1 10 Tf 72 700 Td (\\(Exercise 32 ) Tj (32\\) was) Tj ET")
+    assert [c.text for c in page.textline_cells] == ["(Exercise 32 32) was"]
+
+
+def test_a_show_overprinting_only_part_of_the_glyphs_before_it_is_kept():
+    # PHI starts on the P of ALPHA, but its I is not the A drawn there.
+    page = _show("BT /F1 10 Tf 72 700 Td (ALPHA) Tj 12.23 0 Td (PHI) Tj ET")
+    assert "".join(c.text for c in page.char_cells) == "ALPHAPHI"
+
+
+def test_partial_copies_across_an_intervening_line_keep_every_letter():
+    page = _show(
+        "BT /F1 12 Tf 72 700 Td (ENFORCED FOR ALL ACCESS) Tj ET\n"
+        "BT /F1 12 Tf 72 680 Td (Another line in between) Tj ET\n"
+        "BT /F1 12 Tf 0.01 Tc 72 700 Td (ENFORCED FOR ALL ACCESS) Tj 0 Tc ET\n"
+        "BT /F1 12 Tf 72 600 Td (S) Tj ET\n"
+        "BT /F1 12 Tf 99.348 600 Td (ifi) Tj ET\n"
+        "BT /F1 12 Tf 72 580 Td (Another line in between) Tj ET\n"
+        "BT /F1 12 Tf 72 600 Td (Specifies that the row permission is enabled) Tj ET\n"
+    )
+    assert [c.text for c in page.textline_cells] == [
+        "ENFORCED FOR ALL ACCESS",
+        "Another line in between",
+        "S ifi",
+        "Another line in between",
+        "Specifies that the row permission is enabled",
+    ]
+
+
 def test_a_block_painted_three_times(decode_config):
     block = [(72, 700, FIRST), (72, 660, SECOND)]
 
