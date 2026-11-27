@@ -361,6 +361,27 @@ namespace utils
         (ch >= 0x07C0 && ch <= 0x07FF);    // N’Ko
     }
     
+    // European, Arabic-Indic and extended Arabic-Indic (Persian, Urdu)
+    // digits. A run of them is written left to right even inside
+    // right-to-left text.
+    bool is_digit_char(uint32_t ch)
+    {
+      return
+        (ch >= 0x0030 && ch <= 0x0039) ||  // 0-9
+        (ch >= 0x0660 && ch <= 0x0669) ||  // Arabic-Indic digits
+        (ch >= 0x06F0 && ch <= 0x06F9);    // extended Arabic-Indic digits
+    }
+
+    // Separators that stay inside a number when they stand between two
+    // digits, such as 9٬039٬000, 3.5, 1401/05/12 or 12:30.
+    bool is_number_separator_char(uint32_t ch)
+    {
+      return
+        ch == 0x002C || ch == 0x002E || ch == 0x002F || ch == 0x003A ||
+        ch == 0x066B ||  // Arabic decimal separator
+        ch == 0x066C;    // Arabic thousands separator
+    }
+
     // Function to check if a Unicode character is a CJK character: Han,
     // Hiragana, Katakana, Hangul, Bopomofo, the CJK symbol and punctuation
     // block, and the halfwidth/fullwidth forms. Justified CJK text spreads
