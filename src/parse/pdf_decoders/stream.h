@@ -2656,7 +2656,30 @@ namespace pdflib
         return;
       }
 
-    if(chars.size()==num_cells)
+    // A span with a combining mark (eg base letter + kasra) may
+    // paint the mark first, so its characters cannot be mapped to the glyphs
+    // in paint order.
+    bool has_mark = false;
+    for(const auto& ch : chars)
+      {
+        std::vector<uint32_t> cps;
+        if(utf8::is_valid(ch.begin(), ch.end()))
+          {
+            utf8::utf8to32(ch.begin(), ch.end(), std::back_inserter(cps));
+          }
+        for(uint32_t c : cps)
+          {
+            if((c >= 0x0300 && c <= 0x036F) || (c >= 0x0610 && c <= 0x061A) ||
+               (c >= 0x064B && c <= 0x065F) || c == 0x0670 ||
+               (c >= 0x06D6 && c <= 0x06ED && c != 0x06DD && c != 0x06DE &&
+                c != 0x06E5 && c != 0x06E6 && c != 0x06E9))
+              {
+                has_mark = true;
+              }
+          }
+      }
+
+    if(chars.size()==num_cells and not has_mark)
       {
         // preserve the per-glyph geometry
         for(std::size_t i=0; i<num_cells; i++)
@@ -2680,6 +2703,25 @@ namespace pdflib
     // union of the span geometry, the remaining cells are removed
     LOG_S(INFO) << "/ActualText substitution: " << num_cells << " cell(s) -> '"
                 << entry.actual_text << "'";
+
+    // A zero-advance mark painted before its base letter has no
+    // baseline direction; anchor the span on the widest glyph instead.
+    {
+      std::size_t anchor = begin;
+      double widest = page_cells[begin].length();
+      for(std::size_t i=begin+1; i<end; i++)
+        {
+          if(page_cells[i].length() > widest)
+            {
+              widest = page_cells[i].length();
+              anchor = i;
+            }
+        }
+      if(anchor != begin and page_cells[begin].length() < 1.e-3)
+        {
+          std::swap(page_cells[begin], page_cells[anchor]);
+        }
+    }
 
     page_item<PAGE_CELL>& first = page_cells[begin];
 
