@@ -74,4 +74,4 @@ jobs:
         env:
           DOCLING_PARSE_CJK_FALLBACK_FONT: /usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc
         run: |
-          /usr/bin/time -v uv run pytest -v tests/test_regression_*.py
+          /usr/bin/time -v uv run pytest -vvv -s tests/test_regression_*.py
